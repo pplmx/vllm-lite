@@ -24,8 +24,8 @@ impl<M: ModelBackend> Engine<M> {
         }
     }
 
-    pub fn add_request(&mut self, req: Request) {
-        self.scheduler.add_request(req);
+    pub fn add_request(&mut self, req: Request) -> SeqId {
+        self.scheduler.add_request(req)
     }
 
     pub fn step(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
