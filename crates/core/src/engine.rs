@@ -38,7 +38,15 @@ impl<M: ModelBackend> Engine<M> {
             .model
             .forward(&batch.seq_ids, &batch.input_tokens, &batch.positions)?;
 
-        self.scheduler.update(&batch.seq_ids, &output.next_tokens);
+        self.scheduler.update(
+            &batch.seq_ids,
+            &output.next_tokens,
+            &batch
+                .input_tokens
+                .iter()
+                .map(|t| t.len())
+                .collect::<Vec<_>>(),
+        );
         Ok(batch.seq_ids.into_iter().zip(output.next_tokens).collect())
     }
 

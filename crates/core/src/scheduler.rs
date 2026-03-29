@@ -127,11 +127,18 @@ impl Scheduler {
         }
     }
 
-    pub fn update(&mut self, seq_ids: &[SeqId], next_tokens: &[TokenId]) {
-        for (seq_id, token) in seq_ids.iter().zip(next_tokens) {
+    pub fn update(
+        &mut self,
+        seq_ids: &[SeqId],
+        next_tokens: &[TokenId],
+        input_token_counts: &[usize],
+    ) {
+        for ((seq_id, token), &input_count) in
+            seq_ids.iter().zip(next_tokens).zip(input_token_counts)
+        {
             if let Some(seq) = self.running.iter_mut().find(|s| s.id == *seq_id) {
                 if seq.status == Status::Prefilling {
-                    seq.num_computed_tokens = seq.tokens.len();
+                    seq.num_computed_tokens += input_count;
                     if seq.num_computed_tokens >= seq.tokens.len() {
                         seq.status = Status::Decoding;
                     }
@@ -192,7 +199,15 @@ mod tests {
         let mut sched = Scheduler::new();
         sched.add_request(Request::new(1, vec![10], 5));
         let batch = sched.build_batch();
-        sched.update(&batch.seq_ids, &[99]); // now decoding
+        sched.update(
+            &batch.seq_ids,
+            &[99],
+            &batch
+                .input_tokens
+                .iter()
+                .map(|t| t.len())
+                .collect::<Vec<_>>(),
+        );
 
         sched.add_request(Request::new(2, vec![20, 30, 40], 5));
 
@@ -229,9 +244,30 @@ mod tests {
         // Step 1: chunk 3 tokens
         let batch = sched.build_batch();
         assert_eq!(batch.input_tokens[0], vec![10, 20, 30]);
-        sched.update(&batch.seq_ids, &[99]);
+        sched.update(
+            &batch.seq_ids,
+            &[99],
+            &batch
+                .input_tokens
+                .iter()
+                .map(|t| t.len())
+                .collect::<Vec<_>>(),
+        );
 
-        // Step 2: now decoding (all prompt tokens computed)
+        // Step 2: process remaining 2 tokens [40, 50] + 1 new token (99)
+        let batch = sched.build_batch();
+        assert_eq!(batch.input_tokens[0], vec![40, 50, 99]);
+        sched.update(
+            &batch.seq_ids,
+            &[99],
+            &batch
+                .input_tokens
+                .iter()
+                .map(|t| t.len())
+                .collect::<Vec<_>>(),
+        );
+
+        // Step 3: now decoding (all prompt tokens computed)
         let batch = sched.build_batch();
         assert_eq!(batch.input_tokens[0], vec![99]);
     }
