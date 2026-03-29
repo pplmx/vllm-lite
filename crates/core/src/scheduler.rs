@@ -1,4 +1,4 @@
-use crate::kv_cache::BlockAllocator;
+use crate::kv_cache::{hash_tokens, BlockAllocator, PrefixCache};
 use crate::types::{Batch, Request, SchedulerConfig, SeqId, Sequence, Status, TokenId, BLOCK_SIZE};
 use std::collections::VecDeque;
 
@@ -9,6 +9,7 @@ pub struct Scheduler {
     next_seq_id: SeqId,
     config: SchedulerConfig,
     kv_allocator: BlockAllocator,
+    prefix_cache: PrefixCache,
 }
 
 impl Default for Scheduler {
@@ -30,6 +31,7 @@ impl Scheduler {
             next_seq_id: 1,
             config,
             kv_allocator: BlockAllocator::new(num_kv_blocks),
+            prefix_cache: PrefixCache::new(),
         }
     }
 
@@ -42,7 +44,30 @@ impl Scheduler {
             req.id
         };
 
+        // Check prefix cache
+        let key = hash_tokens(&req.prompt);
+        if let Some(entry) = self.prefix_cache.get(key) {
+            let seq = Sequence {
+                id,
+                tokens: req.prompt,
+                kv_blocks: entry.blocks.clone(),
+                num_computed_tokens: entry.token_count,
+                status: Status::Decoding,
+                max_tokens: req.max_tokens,
+                sampling_params: req.sampling_params,
+            };
+            self.running.push(seq);
+            return id;
+        }
+
+        // Cache miss - allocate new blocks
         let num_blocks_needed = req.prompt.len().div_ceil(BLOCK_SIZE);
+
+        // Evict if needed before allocation
+        if self.kv_allocator.available() < num_blocks_needed {
+            self.prefix_cache.evict(&mut self.kv_allocator);
+        }
+
         let blocks = self
             .kv_allocator
             .allocate(num_blocks_needed)
@@ -173,15 +198,28 @@ impl Scheduler {
             }
         }
 
+        let mut newly_finished = Vec::new();
         let mut i = 0;
         while i < self.running.len() {
             if self.running[i].status == Status::Finished {
                 let seq = self.running.remove(i);
-                self.finished.push(seq);
+                newly_finished.push(seq);
             } else {
                 i += 1;
             }
         }
+
+        // Store in cache
+        for seq in newly_finished.iter() {
+            let key = hash_tokens(&seq.tokens);
+            if !self.prefix_cache.contains_key(&key) {
+                self.prefix_cache
+                    .insert(key, seq.kv_blocks.clone(), seq.tokens.len());
+            }
+        }
+
+        // Move to finished list
+        self.finished.extend(newly_finished);
     }
 
     pub fn has_pending(&self) -> bool {

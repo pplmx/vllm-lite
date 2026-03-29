@@ -80,6 +80,10 @@ impl PrefixCache {
     pub fn len(&self) -> usize {
         self.entries.len()
     }
+
+    pub fn contains_key(&self, key: &CacheKey) -> bool {
+        self.entries.contains_key(key)
+    }
 }
 
 impl Default for PrefixCache {
