@@ -1,4 +1,5 @@
-use crate::types::{Batch, Request, SchedulerConfig, SeqId, Sequence, Status, TokenId};
+use crate::kv_cache::BlockAllocator;
+use crate::types::{Batch, Request, SchedulerConfig, SeqId, Sequence, Status, TokenId, BLOCK_SIZE};
 use std::collections::VecDeque;
 
 pub struct Scheduler {
@@ -7,6 +8,7 @@ pub struct Scheduler {
     finished: Vec<Sequence>,
     next_seq_id: SeqId,
     config: SchedulerConfig,
+    kv_allocator: BlockAllocator,
 }
 
 impl Default for Scheduler {
@@ -17,16 +19,17 @@ impl Default for Scheduler {
 
 impl Scheduler {
     pub fn new() -> Self {
-        Self::with_config(SchedulerConfig::default())
+        Self::with_config(SchedulerConfig::default(), 1024)
     }
 
-    pub fn with_config(config: SchedulerConfig) -> Self {
+    pub fn with_config(config: SchedulerConfig, num_kv_blocks: usize) -> Self {
         Self {
             waiting: VecDeque::new(),
             running: Vec::new(),
             finished: Vec::new(),
             next_seq_id: 1,
             config,
+            kv_allocator: BlockAllocator::new(num_kv_blocks),
         }
     }
 
@@ -39,9 +42,16 @@ impl Scheduler {
             req.id
         };
 
+        let num_blocks_needed = (req.prompt.len() + BLOCK_SIZE - 1) / BLOCK_SIZE;
+        let blocks = self
+            .kv_allocator
+            .allocate(num_blocks_needed)
+            .unwrap_or_default();
+
         let seq = Sequence {
             id,
             tokens: req.prompt,
+            kv_blocks: blocks,
             num_computed_tokens: 0,
             status: Status::Waiting,
             max_tokens: req.max_tokens,
@@ -147,6 +157,16 @@ impl Scheduler {
 
                 seq.tokens.push(*token);
 
+                let new_total = seq.tokens.len();
+                let blocks_needed = (new_total + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                while seq.kv_blocks.len() < blocks_needed {
+                    if let Some(new_block) = self.kv_allocator.allocate(1) {
+                        seq.kv_blocks.extend(new_block);
+                    } else {
+                        break;
+                    }
+                }
+
                 if seq.tokens.len() >= seq.max_tokens {
                     seq.status = Status::Finished;
                 }
@@ -223,7 +243,7 @@ mod tests {
             max_num_seqs: 1,
             max_num_batched_tokens: 4096,
         };
-        let mut sched = Scheduler::with_config(config);
+        let mut sched = Scheduler::with_config(config, 1024);
         sched.add_request(Request::new(1, vec![10], 5));
         sched.add_request(Request::new(2, vec![20], 5));
 
@@ -239,7 +259,7 @@ mod tests {
             max_num_seqs: 256,
             max_num_batched_tokens: 3,
         };
-        let mut sched = Scheduler::with_config(config);
+        let mut sched = Scheduler::with_config(config, 1024);
         sched.add_request(Request::new(1, vec![10, 20, 30, 40, 50], 10));
 
         // Step 1: chunk 3 tokens
