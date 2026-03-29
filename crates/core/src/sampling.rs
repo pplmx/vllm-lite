@@ -49,4 +49,21 @@ mod tests {
         let logits = vec![vec![0.1, 0.9], vec![0.8, 0.2]];
         assert_eq!(sample_batch(&logits, 0.0), vec![1, 0]);
     }
+
+    #[test]
+    fn test_greedy_all_same_logit() {
+        assert_eq!(greedy_sample(&[0.5, 0.5, 0.5]), 0);
+    }
+
+    #[test]
+    fn test_greedy_negative_logits() {
+        assert_eq!(greedy_sample(&[-1.0, -0.5, 0.0]), 2);
+    }
+
+    #[test]
+    fn test_greedy_large_vocab() {
+        let mut logits = vec![0.0; 10000];
+        logits[9999] = 1.0;
+        assert_eq!(greedy_sample(&logits), 9999);
+    }
 }
