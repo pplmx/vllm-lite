@@ -4,16 +4,35 @@ use axum::{routing::post, Router};
 use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
 use vllm_core::types::{EngineMessage, SchedulerConfig};
-use vllm_model::fake::FakeModel;
+use vllm_model::qwen3::model::Qwen3Model;
+use vllm_model::config::Qwen3Config;
+use candle_core::Device;
 
 #[tokio::main]
 async fn main() {
-    let model = FakeModel::new(32000);
-    let config = SchedulerConfig {
+    let device = Device::cuda_if_available(0).unwrap_or_else(|_| Device::Cpu);
+
+    let config = Qwen3Config {
+        vocab_size: 151936,
+        hidden_size: 3584,
+        num_hidden_layers: 28,
+        num_attention_heads: 28,
+        num_key_value_heads: 8,
+        intermediate_size: 18944,
+        sliding_window: Some(32768),
+        rope_theta: 10000.0,
+        max_position_embeddings: 32768,
+        rms_norm_eps: 1e-6,
+    };
+
+    let model = Qwen3Model::new(config, device).unwrap();
+
+    let sched_config = SchedulerConfig {
         max_num_seqs: 256,
         max_num_batched_tokens: 4096,
     };
-    let mut engine = Engine::with_config(model, config, 1024);
+
+    let mut engine = Engine::with_config(model, sched_config, 1024);
 
     let (msg_tx, msg_rx) = mpsc::unbounded_channel::<EngineMessage>();
 

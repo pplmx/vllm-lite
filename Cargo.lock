@@ -1691,6 +1691,7 @@ name = "vllm-server"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "candle-core",
  "futures",
  "serde",
  "serde_json",
