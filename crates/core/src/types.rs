@@ -74,3 +74,18 @@ pub struct BatchOutput {
     pub seq_ids: Vec<SeqId>,
     pub next_tokens: Vec<TokenId>,
 }
+
+#[derive(Clone, Debug)]
+pub struct SchedulerConfig {
+    pub max_num_seqs: usize,
+    pub max_num_batched_tokens: usize,
+}
+
+impl Default for SchedulerConfig {
+    fn default() -> Self {
+        Self {
+            max_num_seqs: 256,
+            max_num_batched_tokens: 4096,
+        }
+    }
+}
