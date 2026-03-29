@@ -1,3 +1,36 @@
 [workspace]
 members = ["crates/core", "crates/model", "crates/server"]
 resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["vLLM-lite Team"]
+license = "MIT"
+repository = "https://github.com/vllm-lite/vllm-lite"
+homepage = "https://github.com/vllm-lite/vllm-lite"
+
+[workspace.metadata]
+rust-version = "1.75"
+description = "A lightweight LLM inference engine in Rust implementing vLLM innovations"
+keywords = ["llm", "inference", "vllm", "rust", "machine-learning"]
+categories = ["machine-learning", "api-bindings"]
+
+[workspace.dependencies]
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+rand = "0.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Build
+rust-version = "1.75"
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
