@@ -18,11 +18,9 @@ pub fn sample_batch(logits_list: &[Vec<f32>], temperature: f32) -> Vec<TokenId> 
     logits_list
         .iter()
         .map(|logits| {
-            if temperature == 0.0 {
-                greedy_sample(logits)
-            } else {
-                greedy_sample(logits) // TODO: temperature sampling in Phase 2
-            }
+            // TODO: temperature sampling in Phase 2
+            let _ = temperature;
+            greedy_sample(logits)
         })
         .collect()
 }
