@@ -2,6 +2,8 @@ use crate::config::Qwen3Config;
 use crate::kv_cache::PagedKvCache;
 use candle_core::{DType, Device, Result, Tensor};
 use candle_nn::{Embedding, LayerNorm, Linear};
+#[allow(unused_imports)]
+use std::collections::HashMap;
 use vllm_core::engine::ModelBackend;
 use vllm_core::error::Result as EngineResult;
 use vllm_core::types::{BatchOutput, SeqId, TokenId};
@@ -17,6 +19,29 @@ pub struct Qwen3Model {
     kv_cache: PagedKvCache,
     device: Device,
 }
+
+// TODO: Load actual weights from SafeTensors
+// For full inference, weights should be loaded via ModelLoader and passed to new():
+//   pub fn new(config: Qwen3Config, device: Device, weights: HashMap<String, Tensor>) -> Result<Self>
+//
+// Weight names follow Qwen3 naming convention:
+//   - "model.embed_tokens.weight" -> embed_tokens
+//   - "model.layers.{i}.attn.q_proj.weight" -> layers[i].attn.q_proj
+//   - "model.layers.{i}.attn.k_proj.weight" -> layers[i].attn.k_proj
+//   - "model.layers.{i}.attn.v_proj.weight" -> layers[i].attn.v_proj
+//   - "model.layers.{i}.attn.o_proj.weight" -> layers[i].attn.o_proj
+//   - "model.layers.{i}.mlp.gate_proj.weight" -> layers[i].mlp.gate_proj
+//   - "model.layers.{i}.mlp.up_proj.weight" -> layers[i].mlp.up_proj
+//   - "model.layers.{i}.mlp.down_proj.weight" -> layers[i].mlp.down_proj
+//   - "model.layers.{i}.input_layernorm.weight" -> layers[i].input_layernorm
+//   - "model.layers.{i}.post_attention_layernorm.weight" -> layers[i].post_attention_layernorm
+//   - "model.norm.weight" -> norm
+//   - "lm_head.weight" -> lm_head
+//
+// Implementation approach:
+//   1. Add weights: HashMap<String, Tensor> field to Qwen3Model
+//   2. Modify new() to accept weights parameter
+//   3. Use weights.get("key") to retrieve and initialize layers instead of VarBuilder::zeros()
 
 impl Qwen3Model {
     pub fn new(config: Qwen3Config, device: Device) -> Result<Self> {
