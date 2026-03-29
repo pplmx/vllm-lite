@@ -25,7 +25,7 @@ fn test_prefix_cache_hit() {
         max_num_seqs: 256,
         max_num_batched_tokens: 4096,
     };
-    let mut engine = Engine::with_config(StubModel, config, 100);
+    let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
     let (tx1, _rx1) = mpsc::unbounded_channel();
     let (tx2, _rx2) = mpsc::unbounded_channel();
@@ -51,7 +51,7 @@ fn test_cache_after_completion() {
         max_num_seqs: 256,
         max_num_batched_tokens: 4096,
     };
-    let mut engine = Engine::with_config(StubModel, config, 100);
+    let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
     let (tx, _rx) = mpsc::unbounded_channel();
 
