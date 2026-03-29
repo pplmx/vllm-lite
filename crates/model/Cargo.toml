@@ -6,3 +6,6 @@ edition = "2021"
 [dependencies]
 vllm-core = { path = "../core" }
 rand = "0.10"
+candle-core = "0.8"
+candle-nn = "0.8"
+thiserror = "2"
