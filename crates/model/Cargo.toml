@@ -1,0 +1,8 @@
+[package]
+name = "vllm-model"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vllm-core = { path = "../core" }
+rand = "0.10"
