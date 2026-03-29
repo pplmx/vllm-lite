@@ -42,7 +42,7 @@ impl Scheduler {
             req.id
         };
 
-        let num_blocks_needed = (req.prompt.len() + BLOCK_SIZE - 1) / BLOCK_SIZE;
+        let num_blocks_needed = req.prompt.len().div_ceil(BLOCK_SIZE);
         let blocks = self
             .kv_allocator
             .allocate(num_blocks_needed)
@@ -158,7 +158,7 @@ impl Scheduler {
                 seq.tokens.push(*token);
 
                 let new_total = seq.tokens.len();
-                let blocks_needed = (new_total + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                let blocks_needed = new_total.div_ceil(BLOCK_SIZE);
                 while seq.kv_blocks.len() < blocks_needed {
                     if let Some(new_block) = self.kv_allocator.allocate(1) {
                         seq.kv_blocks.extend(new_block);

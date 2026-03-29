@@ -1,8 +1,8 @@
 use candle_core::{DType, Device, Result, Tensor};
-use vllm_core::types::BlockId;
 
 pub const BLOCK_SIZE: usize = 16;
 
+#[allow(dead_code)]
 pub struct PagedKvCache {
     key_cache: Vec<Tensor>,
     value_cache: Vec<Tensor>,
