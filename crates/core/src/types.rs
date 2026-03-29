@@ -1,3 +1,5 @@
+use tokio::sync::mpsc;
+
 pub type TokenId = u32;
 pub type SeqId = u64;
 pub type BlockId = usize;
@@ -88,4 +90,12 @@ impl Default for SchedulerConfig {
             max_num_batched_tokens: 4096,
         }
     }
+}
+
+pub enum EngineMessage {
+    AddRequest {
+        request: Request,
+        response_tx: mpsc::UnboundedSender<TokenId>,
+    },
+    Shutdown,
 }
