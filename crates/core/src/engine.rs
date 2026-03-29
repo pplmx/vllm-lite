@@ -280,4 +280,14 @@ mod tests {
         // Done
         assert!(!engine.has_pending());
     }
+
+    #[test]
+    fn test_engine_no_requests() {
+        let stub = StubModel {
+            token_to_return: 42,
+        };
+        let mut engine = Engine::new(stub.clone(), stub);
+        let out = engine.step().unwrap();
+        assert!(out.is_empty());
+    }
 }

@@ -342,4 +342,48 @@ mod tests {
         let batch = sched.build_batch();
         assert_eq!(batch.input_tokens[0], vec![99]);
     }
+
+    #[test]
+    fn test_multi_sequence_batch_order() {
+        let mut sched = Scheduler::new();
+        sched.add_request(Request::new(1, vec![10], 5));
+        let batch1 = sched.build_batch();
+        sched.update(
+            &batch1.seq_ids,
+            &[99],
+            &batch1
+                .input_tokens
+                .iter()
+                .map(|t| t.len())
+                .collect::<Vec<_>>(),
+        );
+
+        sched.add_request(Request::new(2, vec![20, 30], 5));
+
+        let batch = sched.build_batch();
+        assert_eq!(batch.seq_ids[0], 1);
+    }
+
+    #[test]
+    fn test_max_batched_tokens_limit() {
+        let config = SchedulerConfig {
+            max_num_seqs: 10,
+            max_num_batched_tokens: 2,
+        };
+        let mut sched = Scheduler::with_config(config, 100);
+
+        sched.add_request(Request::new(1, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 5));
+
+        let batch = sched.build_batch();
+        let total_tokens: usize = batch.input_tokens.iter().map(|v| v.len()).sum();
+        assert!(total_tokens <= 2);
+    }
+
+    #[test]
+    fn test_empty_prompt_request() {
+        let mut sched = Scheduler::new();
+        sched.add_request(Request::new(1, vec![], 5));
+        let batch = sched.build_batch();
+        assert!(batch.is_empty() || batch.input_tokens[0].is_empty());
+    }
 }
