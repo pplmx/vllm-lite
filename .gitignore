@@ -1,1 +1,29 @@
-/target
+# Build artifacts
+/target/
+**/target/
+
+# Cargo lock (optional, usually committed for release)
+# Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+
+# Test coverage
+coverage/
+
+# Benchmarks
+benches/
