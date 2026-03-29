@@ -2,6 +2,7 @@ pub type TokenId = u32;
 pub type SeqId = u64;
 pub type BlockId = usize;
 
+#[derive(Clone, Debug)]
 pub struct Request {
     pub id: SeqId,
     pub prompt: Vec<TokenId>,
@@ -55,6 +56,7 @@ pub enum Status {
     Finished,
 }
 
+#[derive(Clone, Debug)]
 pub struct Batch {
     pub seq_ids: Vec<SeqId>,
     pub input_tokens: Vec<Vec<TokenId>>,
@@ -67,6 +69,7 @@ impl Batch {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct BatchOutput {
     pub seq_ids: Vec<SeqId>,
     pub next_tokens: Vec<TokenId>,
