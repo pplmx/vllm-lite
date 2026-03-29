@@ -47,6 +47,7 @@ pub struct Sequence {
     pub tokens: Vec<TokenId>,
     pub kv_blocks: Vec<BlockId>,
     pub num_computed_tokens: usize,
+    pub prompt_len: usize,
     pub status: Status,
     pub max_tokens: usize,
     pub sampling_params: SamplingParams,

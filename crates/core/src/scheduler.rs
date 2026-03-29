@@ -45,6 +45,7 @@ impl Scheduler {
         };
 
         // Check prefix cache
+        let prompt_len = req.prompt.len();
         let key = hash_tokens(&req.prompt);
         if let Some(entry) = self.prefix_cache.get(key) {
             let seq = Sequence {
@@ -52,6 +53,7 @@ impl Scheduler {
                 tokens: req.prompt,
                 kv_blocks: entry.blocks.clone(),
                 num_computed_tokens: entry.token_count,
+                prompt_len,
                 status: Status::Decoding,
                 max_tokens: req.max_tokens,
                 sampling_params: req.sampling_params,
@@ -78,6 +80,7 @@ impl Scheduler {
             tokens: req.prompt,
             kv_blocks: blocks,
             num_computed_tokens: 0,
+            prompt_len,
             status: Status::Waiting,
             max_tokens: req.max_tokens,
             sampling_params: req.sampling_params,
@@ -211,10 +214,11 @@ impl Scheduler {
 
         // Store in cache
         for seq in newly_finished.iter() {
-            let key = hash_tokens(&seq.tokens);
+            let prompt_tokens = &seq.tokens[..seq.prompt_len];
+            let key = hash_tokens(prompt_tokens);
             if !self.prefix_cache.contains_key(&key) {
                 self.prefix_cache
-                    .insert(key, seq.kv_blocks.clone(), seq.tokens.len());
+                    .insert(key, seq.kv_blocks.clone(), seq.prompt_len);
             }
         }
 
@@ -236,6 +240,14 @@ impl Scheduler {
 
     pub fn finished_sequences(&self) -> &[Sequence] {
         &self.finished
+    }
+
+    pub fn running(&self) -> &[Sequence] {
+        &self.running
+    }
+
+    pub fn prefix_cache(&self) -> &PrefixCache {
+        &self.prefix_cache
     }
 }
 
