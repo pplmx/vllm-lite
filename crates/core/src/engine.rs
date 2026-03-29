@@ -28,9 +28,9 @@ impl<M: ModelBackend> Engine<M> {
         }
     }
 
-    pub fn with_config(model: M, config: SchedulerConfig) -> Self {
+    pub fn with_config(model: M, config: SchedulerConfig, num_kv_blocks: usize) -> Self {
         Self {
-            scheduler: Scheduler::with_config(config),
+            scheduler: Scheduler::with_config(config, num_kv_blocks),
             model,
             response_txs: HashMap::new(),
         }

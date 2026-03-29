@@ -13,7 +13,7 @@ async fn main() {
         max_num_seqs: 256,
         max_num_batched_tokens: 4096,
     };
-    let mut engine = Engine::with_config(model, config);
+    let mut engine = Engine::with_config(model, config, 1024);
 
     let (msg_tx, msg_rx) = mpsc::unbounded_channel::<EngineMessage>();
 

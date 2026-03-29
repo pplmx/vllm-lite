@@ -25,7 +25,7 @@ fn test_continuous_batching_with_streaming() {
         max_num_seqs: 2,
         max_num_batched_tokens: 100,
     };
-    let mut engine = Engine::with_config(IncrementModel, config);
+    let mut engine = Engine::with_config(IncrementModel, config, 1024);
 
     let (tx1, mut rx1) = mpsc::unbounded_channel();
     let (tx2, mut rx2) = mpsc::unbounded_channel();
@@ -67,7 +67,7 @@ fn test_chunked_prefill_integration() {
         max_num_seqs: 256,
         max_num_batched_tokens: 10,
     };
-    let mut engine = Engine::with_config(IncrementModel, config);
+    let mut engine = Engine::with_config(IncrementModel, config, 1024);
 
     let (tx, mut rx) = mpsc::unbounded_channel();
     // 4 prompt + 10 max_tokens = 14 total tokens (need 10 decode steps)

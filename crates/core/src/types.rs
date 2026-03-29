@@ -3,6 +3,7 @@ use tokio::sync::mpsc;
 pub type TokenId = u32;
 pub type SeqId = u64;
 pub type BlockId = usize;
+pub use crate::kv_cache::BLOCK_SIZE;
 
 #[derive(Clone, Debug)]
 pub struct Request {
@@ -44,6 +45,7 @@ impl Default for SamplingParams {
 pub struct Sequence {
     pub id: SeqId,
     pub tokens: Vec<TokenId>,
+    pub kv_blocks: Vec<BlockId>,
     pub num_computed_tokens: usize,
     pub status: Status,
     pub max_tokens: usize,
