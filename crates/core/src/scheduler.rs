@@ -63,6 +63,7 @@ impl Scheduler {
         }
     }
 
+    #[allow(dead_code)]
     fn pending_tokens(seq: &Sequence) -> usize {
         if seq.status == Status::Prefilling {
             seq.tokens.len() - seq.num_computed_tokens

@@ -17,6 +17,7 @@ pub struct CompletionRequest {
     #[serde(default = "default_max_tokens")]
     pub max_tokens: usize,
     #[serde(default)]
+    #[allow(dead_code)]
     pub stream: bool,
 }
 
