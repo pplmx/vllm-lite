@@ -1,19 +1,17 @@
 mod api;
 
 use axum::{routing::post, Router};
-use std::sync::Arc;
 use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
 use vllm_core::types::{EngineMessage, SchedulerConfig};
 use vllm_model::qwen3::model::Qwen3Model;
-use vllm_model::config::Qwen3Config;
 use candle_core::Device;
 
 #[tokio::main]
 async fn main() {
     let device = Device::cuda_if_available(0).unwrap_or_else(|_| Device::Cpu);
-
-    let config = Qwen3Config {
+    
+    let config = vllm_model::config::Qwen3Config {
         vocab_size: 151936,
         hidden_size: 3584,
         num_hidden_layers: 28,
@@ -25,16 +23,22 @@ async fn main() {
         max_position_embeddings: 32768,
         rms_norm_eps: 1e-6,
     };
-
-    let model = Qwen3Model::new(config, device).unwrap();
-    let model = Arc::new(model);
-
+    
+    let target_model = Qwen3Model::new(config.clone(), device.clone()).unwrap();
+    let draft_model = Qwen3Model::new(config, device.clone()).unwrap();
+    
     let sched_config = SchedulerConfig {
         max_num_seqs: 256,
         max_num_batched_tokens: 4096,
     };
-
-    let mut engine = Engine::with_config_arc(model.clone(), model, sched_config, 4, 1024);
+    
+    let mut engine = Engine::with_config(
+        target_model,
+        draft_model,
+        sched_config,
+        4,  // max_draft_tokens
+        1024,
+    );
 
     let (msg_tx, msg_rx) = mpsc::unbounded_channel::<EngineMessage>();
 
@@ -47,6 +51,6 @@ async fn main() {
         .with_state(msg_tx);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8000").await.unwrap();
-    println!("vllm-lite listening on http://0.0.0.0:8000");
+    println!("vllm-lite (speculative decoding) listening on http://0.0.0.0:8000");
     axum::serve(listener, app).await.unwrap();
 }
