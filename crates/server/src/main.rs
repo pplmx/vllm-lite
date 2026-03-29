@@ -1,6 +1,7 @@
 mod api;
 
 use axum::{routing::post, Router};
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
 use vllm_core::types::{EngineMessage, SchedulerConfig};
@@ -26,13 +27,14 @@ async fn main() {
     };
 
     let model = Qwen3Model::new(config, device).unwrap();
+    let model = Arc::new(model);
 
     let sched_config = SchedulerConfig {
         max_num_seqs: 256,
         max_num_batched_tokens: 4096,
     };
 
-    let mut engine = Engine::with_config(model, sched_config, 1024);
+    let mut engine = Engine::with_config_arc(model.clone(), model, sched_config, 4, 1024);
 
     let (msg_tx, msg_rx) = mpsc::unbounded_channel::<EngineMessage>();
 

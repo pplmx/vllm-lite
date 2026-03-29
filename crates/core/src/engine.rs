@@ -2,6 +2,7 @@ use crate::error::Result;
 use crate::scheduler::Scheduler;
 use crate::types::{BatchOutput, EngineMessage, Request, SchedulerConfig, SeqId, TokenId};
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 
 pub trait ModelBackend: Send + Sync {
@@ -15,23 +16,61 @@ pub trait ModelBackend: Send + Sync {
 
 pub struct Engine<M: ModelBackend> {
     pub scheduler: Scheduler,
-    pub model: M,
+    pub target_model: Arc<M>,
+    pub draft_model: Arc<M>,
+    pub max_draft_tokens: usize,
     response_txs: HashMap<SeqId, mpsc::UnboundedSender<TokenId>>,
 }
 
 impl<M: ModelBackend> Engine<M> {
-    pub fn new(model: M) -> Self {
+    pub fn new(target_model: M, draft_model: M) -> Self {
         Self {
             scheduler: Scheduler::new(),
-            model,
+            target_model: Arc::new(target_model),
+            draft_model: Arc::new(draft_model),
+            max_draft_tokens: 4,
             response_txs: HashMap::new(),
         }
     }
 
-    pub fn with_config(model: M, config: SchedulerConfig, num_kv_blocks: usize) -> Self {
+    pub fn with_config(
+        target_model: M,
+        draft_model: M,
+        config: SchedulerConfig,
+        max_draft_tokens: usize,
+        num_kv_blocks: usize,
+    ) -> Self {
         Self {
             scheduler: Scheduler::with_config(config, num_kv_blocks),
-            model,
+            target_model: Arc::new(target_model),
+            draft_model: Arc::new(draft_model),
+            max_draft_tokens,
+            response_txs: HashMap::new(),
+        }
+    }
+
+    pub fn from_arc(target_model: Arc<M>, draft_model: Arc<M>) -> Self {
+        Self {
+            scheduler: Scheduler::new(),
+            target_model,
+            draft_model,
+            max_draft_tokens: 4,
+            response_txs: HashMap::new(),
+        }
+    }
+
+    pub fn with_config_arc(
+        target_model: Arc<M>,
+        draft_model: Arc<M>,
+        config: SchedulerConfig,
+        max_draft_tokens: usize,
+        num_kv_blocks: usize,
+    ) -> Self {
+        Self {
+            scheduler: Scheduler::with_config(config, num_kv_blocks),
+            target_model,
+            draft_model,
+            max_draft_tokens,
             response_txs: HashMap::new(),
         }
     }
@@ -52,9 +91,9 @@ impl<M: ModelBackend> Engine<M> {
             return Ok(vec![]);
         }
 
-        let output = self
-            .model
-            .forward(&batch.seq_ids, &batch.input_tokens, &batch.positions)?;
+        let output =
+            self.target_model
+                .forward(&batch.seq_ids, &batch.input_tokens, &batch.positions)?;
 
         let input_counts: Vec<usize> = batch
             .input_tokens
@@ -77,6 +116,61 @@ impl<M: ModelBackend> Engine<M> {
         // Clean up channels for finished sequences
         for seq in self.scheduler.finished_sequences() {
             self.response_txs.remove(&seq.id);
+        }
+
+        Ok(results)
+    }
+
+    fn greedy_sample(logits: &[f32]) -> TokenId {
+        logits
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
+            .map(|(i, _)| i as TokenId)
+            .unwrap_or(0)
+    }
+
+    pub fn step_speculative(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
+        let batch = self.scheduler.build_batch();
+        if batch.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let mut draft_outputs: Vec<Vec<TokenId>> = Vec::new();
+        for ((seq_id, tokens), positions) in batch
+            .seq_ids
+            .iter()
+            .zip(batch.input_tokens.iter())
+            .zip(batch.positions.iter())
+        {
+            let mut draft = Vec::new();
+            let mut current_tokens = tokens.clone();
+
+            for _ in 0..self.max_draft_tokens {
+                let output = self.draft_model.forward(
+                    &[*seq_id],
+                    &[current_tokens.clone()],
+                    &[positions.clone()],
+                )?;
+                let token = *output.next_tokens.first().unwrap_or(&0);
+                draft.push(token);
+                current_tokens.push(token);
+            }
+            draft_outputs.push(draft);
+        }
+
+        let target_output =
+            self.target_model
+                .forward(&batch.seq_ids, &batch.input_tokens, &batch.positions)?;
+
+        let mut results = Vec::new();
+        for (i, seq_id) in batch.seq_ids.iter().enumerate() {
+            for &tok in &draft_outputs[i] {
+                results.push((*seq_id, tok));
+            }
+            if let Some(&tok) = target_output.next_tokens.get(i) {
+                results.push((*seq_id, tok));
+            }
         }
 
         Ok(results)
@@ -117,6 +211,7 @@ mod tests {
     use crate::types::Request;
     use tokio::sync::mpsc;
 
+    #[derive(Clone)]
     struct StubModel {
         token_to_return: TokenId,
     }
@@ -137,9 +232,10 @@ mod tests {
 
     #[test]
     fn test_engine_streaming() {
-        let mut engine = Engine::new(StubModel {
+        let stub = StubModel {
             token_to_return: 42,
-        });
+        };
+        let mut engine = Engine::new(stub.clone(), stub);
         let (tx, mut rx) = mpsc::unbounded_channel();
 
         engine.add_request(Request::new(1, vec![10, 20], 5), tx);
@@ -161,9 +257,10 @@ mod tests {
 
     #[test]
     fn test_engine_multi_request() {
-        let mut engine = Engine::new(StubModel {
+        let stub = StubModel {
             token_to_return: 10,
-        });
+        };
+        let mut engine = Engine::new(stub.clone(), stub);
         let (tx1, mut rx1) = mpsc::unbounded_channel();
         let (tx2, mut rx2) = mpsc::unbounded_channel();
 
