@@ -80,3 +80,8 @@ cargo test -p vllm-server
 ## License
 
 MIT
+
+## Links
+
+- [GitHub](https://github.com/pplmx/vllm-lite)
+- [Documentation](https://pplmx.github.io/vllm-lite)
