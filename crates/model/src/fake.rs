@@ -1,5 +1,5 @@
-use crate::ModelBackend;
 use rand::RngExt;
+use vllm_core::engine::ModelBackend;
 use vllm_core::error::Result;
 use vllm_core::types::{BatchOutput, SeqId, TokenId};
 
