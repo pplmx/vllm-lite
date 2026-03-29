@@ -1,104 +1,52 @@
-use candle_core::{Device, Result};
+use candle_core::{Device, Result, Tensor};
 use safetensors::SafeTensors;
+use std::collections::HashMap;
+use std::path::Path;
 
-pub struct ModelWeights {
-    pub embed_tokens: candle_core::Tensor,
-    pub layers: Vec<LayerWeights>,
-    pub norm: candle_core::Tensor,
-    pub lm_head: candle_core::Tensor,
+use crate::config::Qwen3Config;
+
+pub struct ModelLoader {
+    device: Device,
 }
 
-pub struct LayerWeights {
-    pub attn_q_proj: candle_core::Tensor,
-    pub attn_k_proj: candle_core::Tensor,
-    pub attn_v_proj: candle_core::Tensor,
-    pub attn_o_proj: candle_core::Tensor,
-    pub mlp_gate_proj: candle_core::Tensor,
-    pub mlp_up_proj: candle_core::Tensor,
-    pub mlp_down_proj: candle_core::Tensor,
-    pub input_layernorm: candle_core::Tensor,
-    pub post_attention_layernorm: candle_core::Tensor,
-}
-
-impl ModelWeights {
-    pub fn load(path: &str, device: &Device) -> Result<Self> {
-        let data = std::fs::read(path).map_err(|e| candle_core::Error::msg(e.to_string()))?;
-        let file =
-            SafeTensors::deserialize(&data).map_err(|e| candle_core::Error::msg(e.to_string()))?;
-
-        let embed_tokens = Self::tensor(&file, "model.embed_tokens.weight", device)?;
-        let norm = Self::tensor(&file, "model.norm.weight", device)?;
-        let lm_head = Self::tensor(&file, "lm_head.weight", device)?;
-
-        let mut layers = Vec::new();
-        for i in 0..28 {
-            let layer = LayerWeights {
-                attn_q_proj: Self::tensor(
-                    &file,
-                    &format!("model.layers.{}.attn.q_proj.weight", i),
-                    device,
-                )?,
-                attn_k_proj: Self::tensor(
-                    &file,
-                    &format!("model.layers.{}.attn.k_proj.weight", i),
-                    device,
-                )?,
-                attn_v_proj: Self::tensor(
-                    &file,
-                    &format!("model.layers.{}.attn.v_proj.weight", i),
-                    device,
-                )?,
-                attn_o_proj: Self::tensor(
-                    &file,
-                    &format!("model.layers.{}.attn.o_proj.weight", i),
-                    device,
-                )?,
-                mlp_gate_proj: Self::tensor(
-                    &file,
-                    &format!("model.layers.{}.mlp.gate_proj.weight", i),
-                    device,
-                )?,
-                mlp_up_proj: Self::tensor(
-                    &file,
-                    &format!("model.layers.{}.mlp.up_proj.weight", i),
-                    device,
-                )?,
-                mlp_down_proj: Self::tensor(
-                    &file,
-                    &format!("model.layers.{}.mlp.down_proj.weight", i),
-                    device,
-                )?,
-                input_layernorm: Self::tensor(
-                    &file,
-                    &format!("model.layers.{}.input_layernorm.weight", i),
-                    device,
-                )?,
-                post_attention_layernorm: Self::tensor(
-                    &file,
-                    &format!("model.layers.{}.post_attention_layernorm.weight", i),
-                    device,
-                )?,
-            };
-            layers.push(layer);
-        }
-
-        Ok(Self {
-            embed_tokens,
-            layers,
-            norm,
-            lm_head,
-        })
+impl ModelLoader {
+    pub fn new(device: Device) -> Self {
+        Self { device }
     }
 
-    fn tensor(file: &SafeTensors, name: &str, device: &Device) -> Result<candle_core::Tensor> {
-        let view = file
-            .tensor(name)
-            .map_err(|e| candle_core::Error::msg(e.to_string()))?;
-        let data: &[u8] = view.data();
-        let shape = view.shape().to_vec();
-        let n = data.len() / 4;
-        let data_f32 = unsafe { std::slice::from_raw_parts(data.as_ptr() as *const f32, n) };
-        candle_core::Tensor::from_slice(data_f32, shape, device)
-            .map_err(|e| candle_core::Error::msg(e.to_string()))
+    pub fn load_config(&self, model_dir: &str) -> Result<Qwen3Config> {
+        let config_path = Path::new(model_dir).join("config.json");
+        let content = std::fs::read_to_string(config_path)
+            .map_err(|e| candle_core::Error::msg(format!("Failed to read config: {}", e)))?;
+        let config: Qwen3Config = serde_json::from_str(&content)
+            .map_err(|e| candle_core::Error::msg(format!("Failed to parse config: {}", e)))?;
+        Ok(config)
+    }
+
+    pub fn load_weights(&self, model_dir: &str) -> Result<HashMap<String, Tensor>> {
+        let model_path = Path::new(model_dir).join("model.safetensors");
+        let data = std::fs::read(model_path)
+            .map_err(|e| candle_core::Error::msg(format!("Failed to read safetensors: {}", e)))?;
+        let file = SafeTensors::deserialize(&data)
+            .map_err(|e| candle_core::Error::msg(format!("Failed to load safetensors: {}", e)))?;
+
+        let mut weights: HashMap<String, Tensor> = HashMap::new();
+        for (name, view) in file.tensors() {
+            let tensor_data: &[u8] = view.data();
+            let shape = view.shape().to_vec();
+            let n = tensor_data.len() / 4;
+            let data_f32 =
+                unsafe { std::slice::from_raw_parts(tensor_data.as_ptr() as *const f32, n) };
+            let tensor = candle_core::Tensor::from_slice(data_f32, shape, &self.device)
+                .map_err(|e| candle_core::Error::msg(format!("Failed to create tensor: {}", e)))?;
+            weights.insert(name.clone(), tensor);
+        }
+        Ok(weights)
+    }
+
+    pub fn load(&self, model_dir: &str) -> Result<(Qwen3Config, HashMap<String, Tensor>)> {
+        let config = self.load_config(model_dir)?;
+        let weights = self.load_weights(model_dir)?;
+        Ok((config, weights))
     }
 }
