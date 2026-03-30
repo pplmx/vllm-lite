@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 use crate::kv_cache::PagedKvCache;
 use candle_core::{Device, Module, Result, Tensor};
 use candle_nn::Linear;
@@ -146,8 +148,7 @@ impl GqaAttention {
         // Group tokens by block and write in batches
         let mut block_tokens: std::collections::HashMap<usize, Vec<usize>> =
             std::collections::HashMap::new();
-        for token_idx in 0..seq_len {
-            let block_id = block_ids[token_idx];
+        for (token_idx, &block_id) in block_ids.iter().take(seq_len).enumerate() {
             block_tokens.entry(block_id).or_default().push(token_idx);
         }
 
