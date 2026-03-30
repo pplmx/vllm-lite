@@ -125,3 +125,45 @@ impl TransformerBlock {
         x.add(&residual)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use candle_core::DType;
+
+    #[test]
+    fn test_transformer_block_forward() -> Result<()> {
+        let device = Device::Cpu;
+        let block = TransformerBlock::new(256, 4, 2, 64, 512, 1e-6, None)?;
+
+        let x = Tensor::ones((1, 2, 256), DType::F32, &device)?;
+        let output = block.forward(&x)?;
+
+        assert_eq!(output.dims(), &[1, 2, 256]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_transformer_block_batch_forward() -> Result<()> {
+        let device = Device::Cpu;
+        let block = TransformerBlock::new(128, 4, 2, 32, 256, 1e-6, None)?;
+
+        let x = Tensor::ones((4, 3, 128), DType::F32, &device)?;
+        let output = block.forward(&x)?;
+
+        assert_eq!(output.dims(), &[4, 3, 128]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_transformer_block_output_shape() -> Result<()> {
+        let device = Device::Cpu;
+        let block = TransformerBlock::new(128, 4, 2, 32, 256, 1e-6, None)?;
+
+        let x = Tensor::zeros((2, 1, 128), DType::F32, &device)?;
+        let output = block.forward(&x)?;
+
+        assert_eq!(output.dims(), &[2, 1, 128]);
+        Ok(())
+    }
+}

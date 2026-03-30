@@ -17,7 +17,7 @@ pub fn greedy_sample(logits: &[f32]) -> TokenId {
 }
 
 pub fn temperature_sample(logits: &[f32], temperature: f32) -> TokenId {
-    if temperature <= 0.0 {
+    if temperature <= 0.0 || logits.is_empty() {
         return greedy_sample(logits);
     }
 
@@ -40,7 +40,7 @@ pub fn temperature_sample(logits: &[f32], temperature: f32) -> TokenId {
 }
 
 pub fn top_p_sample(logits: &[f32], top_p: f32) -> TokenId {
-    if top_p >= 1.0 {
+    if top_p >= 1.0 || logits.is_empty() {
         return greedy_sample(logits);
     }
 
@@ -133,5 +133,71 @@ mod tests {
         let mut logits = vec![0.0; 10000];
         logits[9999] = 1.0;
         assert_eq!(greedy_sample(&logits), 9999);
+    }
+
+    #[test]
+    fn test_temperature_one_unchanged() {
+        let logits = &[0.1, 0.5, 0.3];
+        let result = temperature_sample(logits, 1.0);
+        assert!(result < 3);
+    }
+
+    #[test]
+    fn test_temperature_zero_reverts_to_greedy() {
+        let logits = &[0.1, 0.9, 0.3];
+        let result = temperature_sample(logits, 0.0);
+        assert_eq!(result, 1);
+    }
+
+    #[test]
+    fn test_temperature_very_small() {
+        let logits = &[0.1, 0.9, 0.3];
+        let result = temperature_sample(logits, 0.01);
+        assert!(result < 3);
+    }
+
+    #[test]
+    fn test_temperature_very_large() {
+        let logits = &[0.1, 0.9, 0.3];
+        let _result = temperature_sample(logits, 10.0);
+    }
+
+    #[test]
+    fn test_temperature_empty() {
+        let result = temperature_sample(&[], 1.0);
+        assert_eq!(result, 0);
+    }
+
+    #[test]
+    fn test_top_p_one_equals_greedy() {
+        let logits = &[0.1, 0.9, 0.3];
+        let result = top_p_sample(logits, 1.0);
+        assert_eq!(result, 1);
+    }
+
+    #[test]
+    fn test_top_p_small() {
+        let logits = &[0.9, 0.05, 0.05];
+        let result = top_p_sample(logits, 0.5);
+        assert_eq!(result, 0);
+    }
+
+    #[test]
+    fn test_top_p_empty() {
+        let result = top_p_sample(&[], 0.9);
+        assert_eq!(result, 0);
+    }
+
+    #[test]
+    fn test_sample_batch_greedy() {
+        let logits = vec![vec![0.1, 0.9], vec![0.8, 0.2], vec![0.3, 0.7]];
+        let result = sample_batch(&logits, 0.0, 1.0);
+        assert_eq!(result, vec![1, 0, 1]);
+    }
+
+    #[test]
+    fn test_sample_batch_temperature_and_top_p() {
+        let logits = vec![vec![0.1, 0.9], vec![0.5, 0.5]];
+        let _result = sample_batch(&logits, 0.5, 0.8);
     }
 }

@@ -90,3 +90,41 @@ pub async fn shutdown(State(engine_tx): State<EngineHandle>) -> &'static str {
     let _ = engine_tx.send(EngineMessage::Shutdown);
     "Shutting down"
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_max_tokens() {
+        assert_eq!(default_max_tokens(), 100);
+    }
+
+    #[test]
+    fn test_completion_chunk_serialization() {
+        let chunk = CompletionChunk {
+            id: "test-id".to_string(),
+            choices: vec![Choice {
+                text: "hello".to_string(),
+                index: 0,
+            }],
+        };
+
+        let json = serde_json::to_string(&chunk).unwrap();
+        assert!(json.contains("test-id"));
+        assert!(json.contains("hello"));
+    }
+
+    #[test]
+    fn test_completion_request_defaults() {
+        let req: CompletionRequest = serde_json::from_str(r#"{"prompt": "test"}"#).unwrap();
+        assert_eq!(req.max_tokens, 100);
+        assert_eq!(req.prompt, "test");
+    }
+
+    #[test]
+    fn test_completion_request_with_max_tokens() {
+        let req: CompletionRequest = serde_json::from_str(r#"{"prompt": "test", "max_tokens": 50}"#).unwrap();
+        assert_eq!(req.max_tokens, 50);
+    }
+}

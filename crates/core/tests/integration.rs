@@ -164,3 +164,73 @@ fn test_single_token_prefill_then_decode() {
     // Should have received all tokens
     assert!(!engine.has_pending(), "should be finished after 4 steps");
 }
+
+#[test]
+fn test_concurrent_requests_finish_together() {
+    let config = SchedulerConfig {
+        max_num_seqs: 10,
+        max_num_batched_tokens: 100,
+        max_consecutive_decode: 10,
+    };
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    let (tx1, _rx1) = mpsc::unbounded_channel();
+    let (tx2, _rx2) = mpsc::unbounded_channel();
+
+    engine.add_request(Request::new(1, vec![10], 2), tx1);
+    engine.add_request(Request::new(2, vec![20], 2), tx2);
+
+    engine.step().unwrap();
+    engine.step().unwrap();
+
+    assert!(!engine.has_pending(), "both requests should finish");
+}
+
+#[test]
+fn test_batch_full_new_request_waits() {
+    let config = SchedulerConfig {
+        max_num_seqs: 1,
+        max_num_batched_tokens: 100,
+        max_consecutive_decode: 10,
+    };
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    let (tx1, _rx1) = mpsc::unbounded_channel();
+    let (tx2, _rx2) = mpsc::unbounded_channel();
+
+    engine.add_request(Request::new(1, vec![10], 5), tx1);
+    let batch1 = engine.scheduler.build_batch();
+    engine.scheduler.update(
+        &batch1.seq_ids,
+        &[99],
+        &[batch1.input_tokens.iter().map(|v| v.len()).sum()],
+    );
+
+    engine.add_request(Request::new(2, vec![20], 5), tx2);
+
+    assert!(engine.scheduler.waiting_count() > 0);
+}
+
+#[test]
+fn test_prefix_cache_hit_directly_decoding() {
+    let config = SchedulerConfig {
+        max_num_seqs: 10,
+        max_num_batched_tokens: 4096,
+        max_consecutive_decode: 10,
+    };
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    let (tx1, _rx1) = mpsc::unbounded_channel();
+    let (tx2, _rx2) = mpsc::unbounded_channel();
+
+    engine.add_request(Request::new(1, vec![10, 20], 3), tx1);
+    while engine.has_pending() {
+        engine.step().unwrap();
+    }
+
+    engine.add_request(Request::new(2, vec![10, 20], 5), tx2);
+
+    assert_eq!(engine.scheduler.running().len(), 1);
+    let seq = &engine.scheduler.running()[0];
+    assert_eq!(seq.status, vllm_core::types::Status::Decoding);
+}
