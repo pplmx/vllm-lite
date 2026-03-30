@@ -52,17 +52,19 @@ vllm-lite/
 |-------|---------|--------|
 | 1 | MVP (single request, fake model) | ✅ Done |
 | 2-3 | Continuous Batching | ✅ Done |
-| 4 | Paged KV Cache | 📋 Spec+Plan |
-| 5 | Qwen3 Model (fake) | ✅ Done |
-| 5 | Qwen3 Model (real weights) | 📋 Plan |
-| 6 | Prefix Caching | 📋 Spec+Plan |
-| 7 | Speculative Decoding | 📋 Spec+Plan |
+| 4 | Paged KV Cache | ✅ Done |
+| 5 | Qwen3 Model (real weights) | ✅ Done |
+| 6 | Prefix Caching | ✅ Done |
+| 7 | Speculative Decoding | ✅ Done |
 
 ## Implemented Features
 
 - [x] Continuous batching with decode-priority scheduling
 - [x] Fairness-aware scheduling (max_consecutive_decode)
 - [x] Chunked prefill processing
+- [x] Paged KV Cache (GPU memory management)
+- [x] Prefix Caching (exact match + prefix hit)
+- [x] Speculative Decoding (draft-target verification)
 - [x] Temperature and top-p sampling
 - [x] Error tracking in Engine
 - [x] Graceful shutdown
