@@ -57,6 +57,7 @@ impl Scheduler {
                 status: Status::Decoding,
                 max_tokens: req.max_tokens,
                 sampling_params: req.sampling_params,
+                consecutive_decode_rounds: 0,
             };
             self.running.push(seq);
             return id;
@@ -84,6 +85,7 @@ impl Scheduler {
             status: Status::Waiting,
             max_tokens: req.max_tokens,
             sampling_params: req.sampling_params,
+            consecutive_decode_rounds: 0,
         };
         self.waiting.push_back(seq);
         id
@@ -292,6 +294,7 @@ mod tests {
         let config = SchedulerConfig {
             max_num_seqs: 1,
             max_num_batched_tokens: 4096,
+            max_consecutive_decode: 10,
         };
         let mut sched = Scheduler::with_config(config, 1024);
         sched.add_request(Request::new(1, vec![10], 5));
@@ -308,6 +311,7 @@ mod tests {
         let config = SchedulerConfig {
             max_num_seqs: 256,
             max_num_batched_tokens: 3,
+            max_consecutive_decode: 10,
         };
         let mut sched = Scheduler::with_config(config, 1024);
         sched.add_request(Request::new(1, vec![10, 20, 30, 40, 50], 10));
@@ -369,6 +373,7 @@ mod tests {
         let config = SchedulerConfig {
             max_num_seqs: 10,
             max_num_batched_tokens: 2,
+            max_consecutive_decode: 10,
         };
         let mut sched = Scheduler::with_config(config, 100);
 

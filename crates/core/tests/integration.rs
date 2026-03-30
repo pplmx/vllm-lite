@@ -24,6 +24,7 @@ fn test_continuous_batching_with_streaming() {
     let config = SchedulerConfig {
         max_num_seqs: 2,
         max_num_batched_tokens: 100,
+        max_consecutive_decode: 10,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -66,6 +67,7 @@ fn test_chunked_prefill_integration() {
     let config = SchedulerConfig {
         max_num_seqs: 256,
         max_num_batched_tokens: 10,
+        max_consecutive_decode: 10,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
