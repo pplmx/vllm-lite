@@ -20,39 +20,34 @@ docs/
 |------|-------------|--------|
 | `2026-03-29-vllm-lite-design.md` | Overall architecture design | ✅ Implemented |
 | `2026-03-30-continuous-batching.md` | Continuous batching design | ✅ Implemented |
-| `2026-03-30-prefix-caching.md` | Prefix caching design | 📋 Planned |
-| `2026-03-30-qwen3-integration.md` | Qwen3 model integration | 📋 Planned |
-| `2026-03-30-speculative-decoding.md` | Speculative decoding design | 📋 Planned |
+| `2026-03-30-paged-attention.md` | Paged KV Cache design | ✅ Implemented |
+| `2026-03-30-prefix-caching.md` | Prefix caching design (incl. prefix hit) | ✅ Implemented |
+| `2026-03-30-qwen3-integration.md` | Qwen3 model integration | ✅ Implemented |
+| `2026-03-30-speculative-decoding.md` | Speculative decoding design | ✅ Implemented |
 
 ## Plans (Implementation Plans)
 
 ### Completed
 
-- `2026-03-30-continuous-batching.md` - Continuous batching implementation (commit: d22d3e3)
-- `2026-03-30-code-quality-improvements.md` - Code quality improvements
+- `2026-03-30-continuous-batching.md` - Continuous batching
+- `2026-03-30-paged-attention.md` - Paged KV Cache with paged attention
+- `2026-03-30-prefix-caching-phase2.md` - Prefix hit implementation
+- `2026-03-30-speculative-decoding.md` - Speculative decoding
 
 ### Pending
 
-- `2026-03-29-phase1-mvp.md` - Phase 1 MVP (done)
-- `2026-03-29-phase2-continuous-batching.md` - Phase 2 continuous batching (simplified version done)
-- `2026-03-29-phase4-paged-kv-cache.md` - Paged KV cache
-- `2026-03-30-phase5-qwen3-integration.md` - Qwen3 real weights
-- `2026-03-30-prefix-caching.md` - Prefix caching
-- `2026-03-30-real-weights.md` - Real model weights loading
-- `2026-03-30-speculative-decoding.md` - Speculative decoding
-- `2026-03-30-test-coverage.md` - Test coverage improvements
+- (All features implemented!)
 
 ## Implementation Status
 
-| Feature | Status | Commit |
-|---------|--------|--------|
-| Phase 1 MVP | ✅ Done | - |
-| Continuous Batching | ✅ Done | d22d3e3 |
-| Fake Model (Qwen3) | ✅ Done | - |
-| Real Model Weights | 📋 Planned | - |
-| Paged KV Cache | 📋 Planned | - |
-| Prefix Caching | 📋 Planned | - |
-| Speculative Decoding | 📋 Planned | - |
+| Feature | Status |
+|---------|--------|
+| Phase 1 MVP | ✅ Done |
+| Continuous Batching | ✅ Done |
+| Paged KV Cache | ✅ Done |
+| Prefix Caching | ✅ Done |
+| Speculative Decoding | ✅ Done |
+| Real Model Weights | ✅ Done |
 
 ## Adding New Features
 
