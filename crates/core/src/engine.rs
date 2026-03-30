@@ -20,6 +20,8 @@ pub struct Engine<M: ModelBackend> {
     pub draft_model: Arc<M>,
     pub max_draft_tokens: usize,
     pub speculative_mode: bool,
+    pub error_count: usize,
+    pub last_error: Option<String>,
     response_txs: HashMap<SeqId, mpsc::UnboundedSender<TokenId>>,
 }
 
@@ -47,12 +49,22 @@ impl<M: ModelBackend> Engine<M> {
             draft_model: Arc::new(draft_model),
             max_draft_tokens,
             speculative_mode: false,
+            error_count: 0,
+            last_error: None,
             response_txs: HashMap::new(),
         }
     }
 
     pub fn enable_speculative(&mut self) {
         self.speculative_mode = true;
+    }
+
+    pub fn is_healthy(&self) -> bool {
+        self.error_count < 10
+    }
+
+    pub fn get_last_error(&self) -> Option<&str> {
+        self.last_error.as_deref()
     }
 
     pub fn add_request(
@@ -178,6 +190,8 @@ impl<M: ModelBackend> Engine<M> {
                     self.step()
                 };
                 if let Err(e) = result {
+                    self.error_count += 1;
+                    self.last_error = Some(e.to_string());
                     eprintln!("Engine step error: {}", e);
                 }
             }
