@@ -227,17 +227,7 @@ impl ModelBackend for Qwen3Model {
                 continue;
             }
 
-            let hidden_states = if tokens.len() == 1 {
-                let token_tensor = Tensor::new(&[tokens[0]], &self.device)
-                    .map_err(|e| EngineError::ModelError(e.to_string()))?;
-                let embed = self
-                    .embed_tokens
-                    .forward(&token_tensor)
-                    .map_err(|e| EngineError::ModelError(e.to_string()))?;
-                embed
-                    .unsqueeze(0)
-                    .map_err(|e| EngineError::ModelError(e.to_string()))?
-            } else {
+            let hidden_states = {
                 let token_tensor = Tensor::new(tokens.as_slice(), &self.device)
                     .map_err(|e| EngineError::ModelError(e.to_string()))?;
                 let embed = self
@@ -272,20 +262,12 @@ impl ModelBackend for Qwen3Model {
                 .map_err(|e| EngineError::ModelError(e.to_string()))?;
 
             let vocab_size = self.config.vocab_size();
-            let mut max_logit = f32::NEG_INFINITY;
-            let mut max_idx = 0u32;
 
-            for i in 0..vocab_size {
-                let val = last_logits
-                    .get(i)
-                    .map_err(|e| EngineError::ModelError(e.to_string()))?
-                    .to_scalar::<f32>()
-                    .unwrap_or(f32::NEG_INFINITY);
-                if val > max_logit {
-                    max_logit = val;
-                    max_idx = i as u32;
-                }
-            }
+            let max_idx = last_logits
+                .argmax(0)
+                .map_err(|e| EngineError::ModelError(e.to_string()))?
+                .to_scalar::<u32>()
+                .unwrap_or(0);
 
             next_tokens.push(max_idx as TokenId);
         }

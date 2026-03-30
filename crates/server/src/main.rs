@@ -48,7 +48,7 @@ async fn main() {
         4,
         1024,
     );
-    engine.enable_speculative();
+    // engine.enable_speculative();
 
     let (msg_tx, msg_rx) = mpsc::unbounded_channel::<EngineMessage>();
 
