@@ -22,22 +22,22 @@ pub struct Qwen3Model {
 
 impl Qwen3Model {
     pub fn new(config: Qwen3Config, device: Device) -> CandleResult<Self> {
-        let vocab_size = config.vocab_size;
-        let hidden_size = config.hidden_size;
+        let vocab_size = config.vocab_size();
+        let hidden_size = config.hidden_size();
 
         let embeddings =
             Tensor::zeros((vocab_size, hidden_size), candle_core::DType::F32, &device)?;
         let embed_tokens = Embedding::new(embeddings, hidden_size);
 
         let mut layers = Vec::new();
-        for _ in 0..config.num_hidden_layers {
+        for _ in 0..config.num_hidden_layers() {
             let layer = TransformerBlock::new(
                 hidden_size,
-                config.num_attention_heads,
-                config.num_key_value_heads,
-                hidden_size / config.num_attention_heads,
-                config.intermediate_size,
-                config.rms_norm_eps as f64,
+                config.num_attention_heads(),
+                config.num_key_value_heads(),
+                hidden_size / config.num_attention_heads(),
+                config.intermediate_size(),
+                config.rms_norm_eps(),
                 None,
             )?;
             layers.push(layer);
@@ -45,7 +45,7 @@ impl Qwen3Model {
 
         let norm = candle_nn::layer_norm(
             hidden_size,
-            config.rms_norm_eps as f64,
+            config.rms_norm_eps(),
             candle_nn::VarBuilder::zeros(candle_core::DType::F32, &device),
         )?;
         let lm_head = candle_nn::linear(
@@ -55,9 +55,9 @@ impl Qwen3Model {
         )?;
 
         let kv_cache = PagedKvCache::new(
-            config.num_hidden_layers,
-            config.num_key_value_heads,
-            hidden_size / config.num_attention_heads,
+            config.num_hidden_layers(),
+            config.num_key_value_heads(),
+            hidden_size / config.num_attention_heads(),
             1024,
             device.clone(),
         )?;
@@ -87,8 +87,8 @@ impl Qwen3Model {
         device: Device,
         weights: HashMap<String, Tensor>,
     ) -> CandleResult<Self> {
-        let vocab_size = config.vocab_size;
-        let hidden_size = config.hidden_size;
+        let vocab_size = config.vocab_size();
+        let hidden_size = config.hidden_size();
 
         let embed_key = "model.embed_tokens.weight";
         let embed_tokens = if let Some(w) = weights.get(embed_key) {
@@ -101,7 +101,7 @@ impl Qwen3Model {
         };
 
         let mut layers = Vec::new();
-        for i in 0..config.num_hidden_layers {
+        for i in 0..config.num_hidden_layers() {
             let q_key = Self::get_weight(
                 &weights,
                 &[
@@ -158,11 +158,11 @@ impl Qwen3Model {
 
             let layer = TransformerBlock::new_with_weights(
                 hidden_size,
-                config.num_attention_heads,
-                config.num_key_value_heads,
-                hidden_size / config.num_attention_heads,
-                config.intermediate_size,
-                config.rms_norm_eps as f64,
+                config.num_attention_heads(),
+                config.num_key_value_heads(),
+                hidden_size / config.num_attention_heads(),
+                config.intermediate_size(),
+                config.rms_norm_eps(),
                 layer_weights,
             )?;
             layers.push(layer);
@@ -171,21 +171,11 @@ impl Qwen3Model {
         let norm_key = "model.norm.weight";
         let norm = if let Some(w) = weights.get(norm_key) {
             let bias = Tensor::zeros(w.dim(0).unwrap_or(hidden_size), w.dtype(), &device)?;
-            LayerNorm::new(w.clone(), bias, config.rms_norm_eps as f64)
+            LayerNorm::new(w.clone(), bias, config.rms_norm_eps())
         } else {
             return Err(candle_core::Error::msg(format!(
                 "Missing weight: {}",
                 norm_key
-            )));
-        };
-
-        let lm_head_key = "lm_head.weight";
-        let lm_head = if let Some(w) = weights.get(lm_head_key) {
-            Linear::new(w.clone(), None)
-        } else {
-            return Err(candle_core::Error::msg(format!(
-                "Missing weight: {}",
-                lm_head_key
             )));
         };
 
@@ -194,16 +184,18 @@ impl Qwen3Model {
             &["lm_head.weight", "output.weight", "model.lm_head.weight"],
         ) {
             Linear::new(w.clone(), None)
+        } else if let Some(embed) = weights.get("model.embed_tokens.weight") {
+            Linear::new(embed.clone(), None)
         } else {
             return Err(candle_core::Error::msg(
-                "Missing lm_head weight".to_string(),
+                "Missing lm_head weight (or tied embedding)".to_string(),
             ));
         };
 
         let kv_cache = PagedKvCache::new(
-            config.num_hidden_layers,
-            config.num_key_value_heads,
-            hidden_size / config.num_attention_heads,
+            config.num_hidden_layers(),
+            config.num_key_value_heads(),
+            hidden_size / config.num_attention_heads(),
             1024,
             device.clone(),
         )?;
@@ -279,7 +271,7 @@ impl ModelBackend for Qwen3Model {
                 .get(logits.dims()[0] - 1)
                 .map_err(|e| EngineError::ModelError(e.to_string()))?;
 
-            let vocab_size = self.config.vocab_size;
+            let vocab_size = self.config.vocab_size();
             let mut max_logit = f32::NEG_INFINITY;
             let mut max_idx = 0u32;
 
