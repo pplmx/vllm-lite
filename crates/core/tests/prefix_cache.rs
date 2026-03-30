@@ -157,3 +157,48 @@ fn test_prefix_cache_multiple_shared() {
     let cache = engine.scheduler.prefix_cache();
     assert!(cache.len() >= 1, "cache should have entries");
 }
+
+#[test]
+fn test_prefix_hit_partial_prefill() {
+    let config = SchedulerConfig {
+        max_num_seqs: 256,
+        max_num_batched_tokens: 4096,
+        max_consecutive_decode: 10,
+    };
+    let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
+
+    let (tx1, _rx1) = mpsc::unbounded_channel();
+
+    // First request: complete it to populate cache
+    engine.add_request(Request::new(1, vec![10, 20], 3), tx1);
+    while engine.has_pending() {
+        engine.step().unwrap();
+    }
+
+    // Check cache has the entry
+    assert!(
+        engine.scheduler.prefix_cache().len() > 0,
+        "cache should have entry after first request"
+    );
+
+    // Second request: longer prompt starting with same tokens
+    // Use max_tokens=10 (> prompt_len=5) to avoid immediate finish
+    let (tx2, _rx2) = mpsc::unbounded_channel();
+    engine.add_request(Request::new(2, vec![10, 20, 30, 40, 50], 10), tx2);
+
+    // Should have pending work (sequence in waiting)
+    assert!(
+        engine.has_pending(),
+        "should have pending after adding second request"
+    );
+
+    engine.step().unwrap();
+
+    // After one step, should have 1 sequence in running
+    // The sequence should be in Decoding state after processing the remaining 3 tokens
+    // (num_computed_tokens went from 2 to 5, then became Decoding)
+    assert_eq!(engine.scheduler.running().len(), 1);
+    let seq = &engine.scheduler.running()[0];
+    assert_eq!(seq.status, vllm_core::types::Status::Decoding);
+    assert_eq!(seq.num_computed_tokens, 5); // 2 cached + 3 processed = 5
+}
