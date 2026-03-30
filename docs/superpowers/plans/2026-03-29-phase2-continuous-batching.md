@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task.
 
+**Status:** ⚠️ Partially implemented (simplified version in commit d22d3e3, see `2026-03-30-continuous-batching.md`)
+
 **Goal:** Multi-sequence continuous batching with chunked prefill, decode-priority scheduling, and SSE streaming API.
 
 **Architecture:** Refactor Scheduler to support budget-driven batching (max_num_seqs + max_num_batched_tokens). Engine gains channel-based streaming. Server converts to SSE.

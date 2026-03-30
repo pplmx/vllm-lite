@@ -1,7 +1,7 @@
 # Continuous Batching Design
 
 **Date:** 2026-03-30  
-**Status:** Reviewed  
+**Status:** Implemented (commit: d22d3e3)  
 **Author:** vllm-lite team
 
 ## 1. Overview

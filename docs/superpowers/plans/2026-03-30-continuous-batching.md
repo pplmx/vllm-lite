@@ -4,9 +4,17 @@
 
 **Goal:** Implement continuous batching with separate prefill/decode queues and fairness-aware scheduling
 
+**Status:** ✅ Implemented (2026-03-30, commit: d22d3e3)
+
 **Architecture:** Maintain two queues (prefill/decode) in Scheduler. Prefill requests get priority to minimize latency for new requests. Decode requests have a consecutive round limit to prevent starvation.
 
 **Tech Stack:** Rust, cargo test
+
+**Implementation Summary:**
+- Added `consecutive_decode_rounds` field to Sequence
+- Added `max_consecutive_decode` config (default: 10)
+- Separate prefill_queue and decode_queue in Scheduler
+- Continuous batching with decode-first priority and fairness limit
 
 ---
 
