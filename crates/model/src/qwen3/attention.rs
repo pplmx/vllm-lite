@@ -1,5 +1,5 @@
 #![allow(clippy::all, unused)]
-use candle_core::{Module, Result, Tensor};
+use candle_core::{Module, Result, Shape, Tensor};
 use candle_nn::Linear;
 
 pub struct GqaAttention {
@@ -66,24 +66,48 @@ impl GqaAttention {
     }
 
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
+        let batch_size = x.dims()[0];
+        let seq_len = x.dims()[1];
+
         let q = self.q_proj.forward(x)?;
         let k = self.k_proj.forward(x)?;
         let v = self.v_proj.forward(x)?;
 
-        let q = q.reshape((q.dims()[0], self.num_heads, self.head_dim))?;
-        let k = k.reshape((k.dims()[0], self.num_kv_heads, self.head_dim))?;
-        let v = v.reshape((v.dims()[0], self.num_kv_heads, self.head_dim))?;
+        let q = q.reshape((batch_size, seq_len, self.num_heads, self.head_dim))?;
+        let k = k.reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?;
+        let v = v.reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?;
+
+        let k = self.expand_kv(&k, self.num_heads, self.num_kv_heads)?;
+        let v = self.expand_kv(&v, self.num_heads, self.num_kv_heads)?;
+
+        let k = k.transpose(2, 3)?;
+        let qk = Tensor::matmul(&q, &k)?;
 
         let scale = 1.0 / (self.head_dim as f32).sqrt();
-        let qk = Tensor::matmul(&q, &k.transpose(1, 2)?)?;
         let qk = qk.mul(&Tensor::new(&[scale], q.device())?)?;
-        let attn_weights = candle_nn::ops::softmax(&qk, 2)?;
+        let attn_weights = candle_nn::ops::softmax(&qk, 3)?;
 
         let attn_output = Tensor::matmul(&attn_weights, &v)?;
+
         let attn_output =
-            attn_output.reshape((attn_output.dims()[0], self.num_heads * self.head_dim))?;
+            attn_output.reshape((batch_size, seq_len, self.num_heads * self.head_dim))?;
 
         let o = self.o_proj.forward(&attn_output)?;
         Ok(o)
+    }
+
+    fn expand_kv(&self, kv: &Tensor, num_q_heads: usize, num_kv_heads: usize) -> Result<Tensor> {
+        if num_q_heads == num_kv_heads {
+            return Ok(kv.clone());
+        }
+
+        let repeat_factor = num_q_heads / num_kv_heads;
+        let (batch, seq, heads, dim) = kv.dims4()?;
+
+        let new_shape = vec![batch, seq, heads * repeat_factor, dim];
+        let kv = kv.repeat(Shape::from(new_shape.as_slice()))?;
+        let kv = kv.reshape((batch, seq, num_q_heads, dim))?;
+
+        Ok(kv)
     }
 }
