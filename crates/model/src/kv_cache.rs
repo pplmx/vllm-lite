@@ -62,91 +62,119 @@ impl PagedKvCache {
         k: &Tensor,
         v: &Tensor,
     ) -> Result<()> {
-        let num_kv_heads = self.num_heads;
-        let head_dim = self.head_dim;
-        let block = self.block_size;
+        if layer_idx >= self.num_layers {
+            return Err(candle_core::Error::msg(format!(
+                "layer_idx {} out of bounds for {} layers",
+                layer_idx, self.num_layers
+            )));
+        }
 
-        let layer_key = self.key_cache[layer_idx].clone();
-        let layer_value = self.value_cache[layer_idx].clone();
+        let num_blocks = self.num_blocks();
+        if block_id >= num_blocks {
+            return Err(candle_core::Error::msg(format!(
+                "block_id {} out of bounds for {} blocks",
+                block_id, num_blocks
+            )));
+        }
 
-        let mut new_blocks = Vec::new();
-        for b in 0..self.num_blocks() {
+        if token_offset >= self.block_size {
+            return Err(candle_core::Error::msg(format!(
+                "token_offset {} out of bounds for block size {}",
+                token_offset, self.block_size
+            )));
+        }
+
+        let k_dims = k.dims();
+        if k_dims.len() != 3 {
+            return Err(candle_core::Error::msg(format!(
+                "Expected k to have 3 dimensions, got {}",
+                k_dims.len()
+            )));
+        }
+        if k_dims[0] != 1 || k_dims[1] != self.num_heads || k_dims[2] != self.head_dim {
+            return Err(candle_core::Error::msg(format!(
+                "Expected k shape [1, {}, {}], got {:?}",
+                self.num_heads, self.head_dim, k_dims
+            )));
+        }
+
+        let v_dims = v.dims();
+        if v_dims.len() != 3 {
+            return Err(candle_core::Error::msg(format!(
+                "Expected v to have 3 dimensions, got {}",
+                v_dims.len()
+            )));
+        }
+        if v_dims[0] != 1 || v_dims[1] != self.num_heads || v_dims[2] != self.head_dim {
+            return Err(candle_core::Error::msg(format!(
+                "Expected v shape [1, {}, {}], got {:?}",
+                self.num_heads, self.head_dim, v_dims
+            )));
+        }
+
+        let key_block = self.key_cache[layer_idx]
+            .narrow(0, block_id, 1)?
+            .squeeze(0)?;
+        let value_block = self.value_cache[layer_idx]
+            .narrow(0, block_id, 1)?
+            .squeeze(0)?;
+
+        let mut k_block_3d: Vec<Vec<Vec<f32>>> = key_block.to_vec3()?;
+        let mut v_block_3d: Vec<Vec<Vec<f32>>> = value_block.to_vec3()?;
+
+        let k_squeezed = k.squeeze(0)?;
+        let v_squeezed = v.squeeze(0)?;
+
+        for h in 0..self.num_heads {
+            let k_head = k_squeezed.narrow(0, h, 1)?.squeeze(0)?.to_vec1()?;
+            let v_head = v_squeezed.narrow(0, h, 1)?.squeeze(0)?.to_vec1()?;
+
+            k_block_3d[h][token_offset][..self.head_dim].copy_from_slice(&k_head);
+            v_block_3d[h][token_offset][..self.head_dim].copy_from_slice(&v_head);
+        }
+
+        let k_flat: Vec<f32> = k_block_3d
+            .into_iter()
+            .flat_map(|inner| inner.into_iter().flatten())
+            .collect();
+        let v_flat: Vec<f32> = v_block_3d
+            .into_iter()
+            .flat_map(|inner| inner.into_iter().flatten())
+            .collect();
+
+        let updated_key_block = Tensor::from_slice(
+            &k_flat,
+            (self.num_heads, self.block_size, self.head_dim),
+            &self.device,
+        )?;
+        let updated_value_block = Tensor::from_slice(
+            &v_flat,
+            (self.num_heads, self.block_size, self.head_dim),
+            &self.device,
+        )?;
+
+        let mut key_parts = Vec::new();
+        let mut value_parts = Vec::new();
+        for b in 0..num_blocks {
             if b == block_id {
-                let mut new_heads = Vec::new();
-                for h in 0..num_kv_heads {
-                    let k_head: Vec<f32> = k.squeeze(0)?.narrow(0, h, 1)?.squeeze(0)?.to_vec1()?;
-                    let v_head: Vec<f32> = v.squeeze(0)?.narrow(0, h, 1)?.squeeze(0)?.to_vec1()?;
-
-                    let mut k_data = vec![0.0f32; block * head_dim];
-                    let mut v_data = vec![0.0f32; block * head_dim];
-
-                    for i in 0..block {
-                        for d in 0..head_dim {
-                            let existing: f32 = layer_key
-                                .narrow(0, block_id, 1)?
-                                .narrow(1, h, 1)?
-                                .narrow(2, i, 1)?
-                                .narrow(3, d, 1)?
-                                .squeeze(0)?
-                                .squeeze(0)?
-                                .squeeze(0)?
-                                .squeeze(0)?
-                                .to_vec0()?;
-                            k_data[i * head_dim + d] = existing;
-                            let existing: f32 = layer_value
-                                .narrow(0, block_id, 1)?
-                                .narrow(1, h, 1)?
-                                .narrow(2, i, 1)?
-                                .narrow(3, d, 1)?
-                                .squeeze(0)?
-                                .squeeze(0)?
-                                .squeeze(0)?
-                                .squeeze(0)?
-                                .to_vec0()?;
-                            v_data[i * head_dim + d] = existing;
-                        }
-                    }
-
-                    if token_offset < block {
-                        for d in 0..head_dim {
-                            k_data[token_offset * head_dim + d] = k_head[d];
-                            v_data[token_offset * head_dim + d] = v_head[d];
-                        }
-                    }
-
-                    let k_tensor =
-                        Tensor::from_vec(k_data.clone(), (block, head_dim), &self.device)?;
-                    let v_tensor =
-                        Tensor::from_vec(v_data.clone(), (block, head_dim), &self.device)?;
-
-                    new_heads.push((k_tensor, v_tensor));
-                }
-
-                let mut k_parts = Vec::new();
-                let mut v_parts = Vec::new();
-                for (k_t, v_t) in new_heads {
-                    k_parts.push(k_t);
-                    v_parts.push(v_t);
-                }
-                let key_block = Tensor::stack(&k_parts, 0)?;
-                let value_block = Tensor::stack(&v_parts, 0)?;
-                new_blocks.push((key_block, value_block));
+                key_parts.push(updated_key_block.unsqueeze(0)?);
+                value_parts.push(updated_value_block.unsqueeze(0)?);
             } else {
-                let key_block = layer_key.narrow(0, b, 1)?.squeeze(0)?;
-                let value_block = layer_value.narrow(0, b, 1)?.squeeze(0)?;
-                new_blocks.push((key_block, value_block));
+                let kb = self.key_cache[layer_idx]
+                    .narrow(0, b, 1)?
+                    .squeeze(0)?
+                    .unsqueeze(0)?;
+                let vb = self.value_cache[layer_idx]
+                    .narrow(0, b, 1)?
+                    .squeeze(0)?
+                    .unsqueeze(0)?;
+                key_parts.push(kb);
+                value_parts.push(vb);
             }
         }
 
-        let mut new_key_parts = Vec::new();
-        let mut new_value_parts = Vec::new();
-        for (kb, vb) in new_blocks {
-            new_key_parts.push(kb.unsqueeze(0)?);
-            new_value_parts.push(vb.unsqueeze(0)?);
-        }
-
-        self.key_cache[layer_idx] = Tensor::cat(&new_key_parts, 0)?;
-        self.value_cache[layer_idx] = Tensor::cat(&new_value_parts, 0)?;
+        self.key_cache[layer_idx] = Tensor::cat(&key_parts, 0)?;
+        self.value_cache[layer_idx] = Tensor::cat(&value_parts, 0)?;
 
         Ok(())
     }
@@ -283,6 +311,71 @@ mod tests {
         let (k_out, _v_out) = cache.read_kv(0, &[0, 1], 32)?;
         assert_eq!(k_out.dims(), &[32, 2, 4]);
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_kv_invalid_layer_idx() -> Result<()> {
+        let device = Device::Cpu;
+        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone())?;
+
+        let k = Tensor::ones((1, 2, 4), DType::F32, &device)?;
+        let v = Tensor::ones((1, 2, 4), DType::F32, &device)?;
+
+        let result = cache.write_kv(1, 0, 0, &k, &v);
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_kv_invalid_block_id() -> Result<()> {
+        let device = Device::Cpu;
+        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone())?;
+
+        let k = Tensor::ones((1, 2, 4), DType::F32, &device)?;
+        let v = Tensor::ones((1, 2, 4), DType::F32, &device)?;
+
+        let result = cache.write_kv(0, 4, 0, &k, &v);
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_kv_invalid_token_offset() -> Result<()> {
+        let device = Device::Cpu;
+        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone())?;
+
+        let k = Tensor::ones((1, 2, 4), DType::F32, &device)?;
+        let v = Tensor::ones((1, 2, 4), DType::F32, &device)?;
+
+        let result = cache.write_kv(0, 0, 16, &k, &v);
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_kv_invalid_k_shape() -> Result<()> {
+        let device = Device::Cpu;
+        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone())?;
+
+        let k = Tensor::ones((1, 3, 4), DType::F32, &device)?;
+        let v = Tensor::ones((1, 2, 4), DType::F32, &device)?;
+
+        let result = cache.write_kv(0, 0, 0, &k, &v);
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_kv_invalid_v_shape() -> Result<()> {
+        let device = Device::Cpu;
+        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone())?;
+
+        let k = Tensor::ones((1, 2, 4), DType::F32, &device)?;
+        let v = Tensor::ones((1, 2, 5), DType::F32, &device)?;
+
+        let result = cache.write_kv(0, 0, 0, &k, &v);
+        assert!(result.is_err());
         Ok(())
     }
 }
