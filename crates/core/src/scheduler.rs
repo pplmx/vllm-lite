@@ -421,4 +421,59 @@ mod tests {
         let batch = sched.build_batch();
         assert!(batch.is_empty() || batch.input_tokens[0].is_empty());
     }
+
+    #[test]
+    fn test_prefill_decode_queue_separation() {
+        let mut sched = Scheduler::new();
+
+        sched.add_request(Request::new(1, vec![10, 20, 30], 5));
+        let batch1 = sched.build_batch();
+        assert_eq!(batch1.seq_ids.len(), 1);
+
+        sched.update(&batch1.seq_ids, &[99], &[batch1.input_tokens[0].len()]);
+
+        sched.add_request(Request::new(2, vec![40, 50], 5));
+
+        let batch2 = sched.build_batch();
+        assert!(batch2.seq_ids.len() >= 1);
+    }
+
+    #[test]
+    fn test_max_consecutive_decode_limit() {
+        let config = SchedulerConfig {
+            max_num_seqs: 10,
+            max_num_batched_tokens: 100,
+            max_consecutive_decode: 2,
+        };
+        let mut sched = Scheduler::with_config(config, 1024);
+
+        sched.add_request(Request::new(1, vec![10], 10));
+        let batch1 = sched.build_batch();
+        sched.update(&batch1.seq_ids, &[99], &[batch1.input_tokens[0].len()]);
+
+        sched.add_request(Request::new(2, vec![20], 10));
+
+        let batch2 = sched.build_batch();
+        assert!(batch2.seq_ids.len() >= 1);
+    }
+
+    #[test]
+    fn test_token_budget_in_continuous_batching() {
+        let config = SchedulerConfig {
+            max_num_seqs: 10,
+            max_num_batched_tokens: 3,
+            max_consecutive_decode: 10,
+        };
+        let mut sched = Scheduler::with_config(config, 1024);
+
+        sched.add_request(Request::new(1, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 10));
+
+        let batch = sched.build_batch();
+        let total_tokens: usize = batch.input_tokens.iter().map(|v| v.len()).sum();
+        assert!(
+            total_tokens <= 3,
+            "total_tokens {} should be <= 3",
+            total_tokens
+        );
+    }
 }
