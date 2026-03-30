@@ -24,6 +24,7 @@ fn test_prefix_cache_hit() {
     let config = SchedulerConfig {
         max_num_seqs: 256,
         max_num_batched_tokens: 4096,
+        max_consecutive_decode: 10,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
@@ -50,6 +51,7 @@ fn test_cache_after_completion() {
     let config = SchedulerConfig {
         max_num_seqs: 256,
         max_num_batched_tokens: 4096,
+        max_consecutive_decode: 10,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 

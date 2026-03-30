@@ -51,6 +51,7 @@ pub struct Sequence {
     pub status: Status,
     pub max_tokens: usize,
     pub sampling_params: SamplingParams,
+    pub consecutive_decode_rounds: u32,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -84,6 +85,7 @@ pub struct BatchOutput {
 pub struct SchedulerConfig {
     pub max_num_seqs: usize,
     pub max_num_batched_tokens: usize,
+    pub max_consecutive_decode: u32,
 }
 
 impl Default for SchedulerConfig {
@@ -91,6 +93,7 @@ impl Default for SchedulerConfig {
         Self {
             max_num_seqs: 256,
             max_num_batched_tokens: 4096,
+            max_consecutive_decode: 10,
         }
     }
 }
