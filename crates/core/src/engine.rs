@@ -136,14 +136,16 @@ impl<M: ModelBackend> Engine<M> {
             .zip(batch.input_tokens.iter())
             .zip(batch.positions.iter())
         {
+            #[allow(clippy::cloned_ref_to_slice_refs)]
             let mut draft = Vec::new();
             let mut current_tokens = tokens.clone();
 
             for _ in 0..self.max_draft_tokens {
+                #[allow(clippy::cloned_ref_to_slice_refs)]
                 let output = self.draft_model.forward(
                     &[*seq_id],
-                    std::slice::from_ref(&current_tokens),
-                    std::slice::from_ref(positions),
+                    &[current_tokens.clone()],
+                    &[positions.clone()],
                 )?;
                 let token = *output.next_tokens.first().unwrap_or(&0);
                 draft.push(token);
