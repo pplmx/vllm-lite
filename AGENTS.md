@@ -42,7 +42,41 @@ cargo run -p vllm-server
 1. **New Feature**: Use brainstorming skill to design, then writing-plans skill for implementation plan
 2. **Implementation**: Use subagent-driven-development skill for task execution
 3. **Code Review**: Two-stage review (spec compliance → code quality)
-4. **Commit**: Detailed commit messages with body explaining changes
+4. **Commit**: Follow conventional commits format (see below)
+
+## Commit Message Format
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) format:
+
+```
+<type>(<scope>): <subject>
+
+<body>
+```
+
+**Types:**
+- `feat`: New feature
+- `fix`: Bug fix
+- `refactor`: Code refactoring
+- `test`: Adding tests
+- `docs`: Documentation
+- `chore`: Maintenance
+- `spec`: Design specification
+- `plan`: Implementation plan
+
+**Examples:**
+```bash
+git commit -m "feat(model): add forward_prefill to GqaAttention"
+git commit -m "fix(core): resolve prefix cache eviction bug"
+git commit -m "spec(prefix-caching): add Phase 2 prefix hit design"
+git commit -m "plan(paged-attention): add implementation plan"
+```
+
+**Rules:**
+- Use lowercase for subject
+- No period at end of subject
+- Scope is optional but recommended (e.g., model, core, server)
+- Body explaining what and why (not how)
 
 ## Crate Responsibilities
 
