@@ -84,3 +84,8 @@ pub async fn completions(
 
     Sse::new(stream)
 }
+
+pub async fn shutdown(State(engine_tx): State<EngineHandle>) -> &'static str {
+    let _ = engine_tx.send(EngineMessage::Shutdown);
+    "Shutting down"
+}
