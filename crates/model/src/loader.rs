@@ -120,3 +120,43 @@ impl ModelLoader {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_find_safetensors_single_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let model_dir = temp_dir.path();
+
+        fs::write(model_dir.join("model.safetensors"), b"test").unwrap();
+
+        let files = find_safetensors_files(model_dir).unwrap();
+        assert_eq!(files.len(), 1);
+        assert!(files[0].to_string_lossy().ends_with("model.safetensors"));
+    }
+
+    #[test]
+    fn test_find_safetensors_sharded_files() {
+        let temp_dir = TempDir::new().unwrap();
+        let model_dir = temp_dir.path();
+
+        fs::write(model_dir.join("model-00001-of-00002.safetensors"), b"test1").unwrap();
+        fs::write(model_dir.join("model-00002-of-00002.safetensors"), b"test2").unwrap();
+
+        let files = find_safetensors_files(model_dir).unwrap();
+        assert_eq!(files.len(), 2);
+    }
+
+    #[test]
+    fn test_find_safetensors_no_files() {
+        let temp_dir = TempDir::new().unwrap();
+        let model_dir = temp_dir.path();
+
+        let result = find_safetensors_files(model_dir);
+        assert!(result.is_err());
+    }
+}
