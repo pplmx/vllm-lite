@@ -257,11 +257,15 @@ impl ModelBackend for Qwen3Model {
                 .forward(&hidden_states)
                 .map_err(|e| EngineError::ModelError(e.to_string()))?;
 
+            // logits shape: [batch=1, seq_len, vocab_size]
+            // Get the last token's logits: [vocab_size]
+            let batch_size = logits.dims()[0];
+            let seq_len = logits.dims()[1];
             let last_logits = logits
-                .get(logits.dims()[0] - 1)
+                .get(batch_size - 1)
+                .map_err(|e| EngineError::ModelError(e.to_string()))?
+                .get(seq_len - 1)
                 .map_err(|e| EngineError::ModelError(e.to_string()))?;
-
-            let vocab_size = self.config.vocab_size();
 
             let max_idx = last_logits
                 .argmax(0)
