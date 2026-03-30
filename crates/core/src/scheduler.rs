@@ -63,6 +63,40 @@ impl Scheduler {
             return id;
         }
 
+        // Check for prefix match
+        if let Some(entry) = self.prefix_cache.find_prefix_match(&req.prompt) {
+            let cached_len = entry.token_count;
+            let cached_blocks = entry.blocks.clone();
+            let remaining_len = req.prompt.len() - cached_len;
+
+            let num_blocks_needed = remaining_len.div_ceil(BLOCK_SIZE);
+            if self.kv_allocator.available() < num_blocks_needed {
+                self.prefix_cache.evict(&mut self.kv_allocator);
+            }
+
+            let blocks = self
+                .kv_allocator
+                .allocate(num_blocks_needed)
+                .unwrap_or_default();
+
+            let mut all_blocks = cached_blocks;
+            all_blocks.extend(blocks);
+
+            let seq = Sequence {
+                id,
+                tokens: req.prompt,
+                kv_blocks: all_blocks,
+                num_computed_tokens: cached_len,
+                prompt_len,
+                status: Status::Prefilling,
+                max_tokens: req.max_tokens,
+                sampling_params: req.sampling_params,
+                consecutive_decode_rounds: 0,
+            };
+            self.waiting.push_back(seq);
+            return id;
+        }
+
         // Cache miss - allocate new blocks
         let num_blocks_needed = req.prompt.len().div_ceil(BLOCK_SIZE);
 
