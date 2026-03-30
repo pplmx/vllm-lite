@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::config::Qwen3Config;
+use crate::qwen3::model::Qwen3Model;
 
 fn find_safetensors_files(model_dir: &Path) -> Result<Vec<std::path::PathBuf>> {
     let single = model_dir.join("model.safetensors");
@@ -97,6 +98,14 @@ impl ModelLoader {
         let config = self.load_config(model_dir)?;
         let weights = self.load_weights(model_dir)?;
         Ok((config, weights))
+    }
+
+    pub fn load_model(&self, model_dir: &str) -> Result<Qwen3Model> {
+        let config = self.load_config(model_dir)?;
+        let weights = self.load_weights(model_dir)?;
+
+        Qwen3Model::from_weights(config, self.device.clone(), weights)
+            .map_err(|e| candle_core::Error::msg(format!("Failed to create model: {}", e)))
     }
 
     pub fn print_weight_keys(weights: &HashMap<String, Tensor>) {
