@@ -48,6 +48,14 @@ pub struct Qwen3Config {
     pub rms_norm_eps: Option<f32>,
     #[serde(default)]
     pub text_config: Option<TextConfig>,
+    #[serde(default)]
+    pub q_len: Option<usize>,
+    #[serde(default)]
+    pub qk_nope_dim: Option<usize>,
+    #[serde(default)]
+    pub qk_rope_dim: Option<usize>,
+    #[serde(default)]
+    pub kv_len: Option<usize>,
 }
 
 impl TextConfig {
@@ -151,4 +159,24 @@ impl Qwen3Config {
             .or(self.text_config.as_ref().map(|c| c.rms_norm_eps() as f32))
             .unwrap_or(1e-6) as f64
     }
+
+    pub fn attention_type(&self) -> AttentionType {
+        if self.q_len.is_some() || self.kv_len.is_some() {
+            AttentionType::MLA
+        } else if self.num_key_value_heads() == 1 {
+            AttentionType::MQA
+        } else if self.num_attention_heads() == self.num_key_value_heads() {
+            AttentionType::MHA
+        } else {
+            AttentionType::GQA
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttentionType {
+    MHA,
+    MQA,
+    GQA,
+    MLA,
 }
