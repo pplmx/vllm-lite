@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use super::{attention::GqaAttention, mlp::SwiGLU};
 use crate::kv_cache::PagedKvCache;
 use candle_core::{Device, Module, Result, Tensor};
