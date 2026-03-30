@@ -92,7 +92,7 @@ impl TextConfig {
     }
 
     pub fn rms_norm_eps(&self) -> f32 {
-        self.rms_norm_eps.unwrap_or(1e-6) as f32
+        self.rms_norm_eps.unwrap_or(1e-6)
     }
 }
 
@@ -156,7 +156,7 @@ impl Qwen3Config {
 
     pub fn rms_norm_eps(&self) -> f64 {
         self.rms_norm_eps
-            .or(self.text_config.as_ref().map(|c| c.rms_norm_eps() as f32))
+            .or(self.text_config.as_ref().map(|c| c.rms_norm_eps()))
             .unwrap_or(1e-6) as f64
     }
 
