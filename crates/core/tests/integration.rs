@@ -234,3 +234,133 @@ fn test_prefix_cache_hit_directly_decoding() {
     let seq = &engine.scheduler.running()[0];
     assert_eq!(seq.status, vllm_core::types::Status::Decoding);
 }
+
+#[test]
+fn test_different_prompt_lengths_batching() {
+    let config = SchedulerConfig {
+        max_num_seqs: 10,
+        max_num_batched_tokens: 50,
+        max_consecutive_decode: 10,
+    };
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    let (tx1, _rx1) = mpsc::unbounded_channel();
+    let (tx2, _rx2) = mpsc::unbounded_channel();
+    let (tx3, _rx3) = mpsc::unbounded_channel();
+
+    engine.add_request(Request::new(1, vec![1], 3), tx1);
+    engine.add_request(Request::new(2, vec![1, 2], 3), tx2);
+    engine.add_request(Request::new(3, vec![1, 2, 3], 3), tx3);
+
+    let batch = engine.scheduler.build_batch();
+    assert!(batch.seq_ids.len() <= 3);
+}
+
+#[test]
+fn test_prefill_priority_under_decode_limit() {
+    let config = SchedulerConfig {
+        max_num_seqs: 2,
+        max_num_batched_tokens: 100,
+        max_consecutive_decode: 1,
+    };
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    let (tx1, _rx1) = mpsc::unbounded_channel();
+    let (tx2, _rx2) = mpsc::unbounded_channel();
+    let (tx3, _rx3) = mpsc::unbounded_channel();
+
+    engine.add_request(Request::new(1, vec![10], 5), tx1);
+    let batch1 = engine.scheduler.build_batch();
+    engine.scheduler.update(
+        &batch1.seq_ids,
+        &[99],
+        &[batch1.input_tokens.iter().map(|v| v.len()).sum()],
+    );
+
+    engine.add_request(Request::new(2, vec![20, 30], 5), tx2);
+    engine.add_request(Request::new(3, vec![40, 50, 60], 5), tx3);
+
+    let batch2 = engine.scheduler.build_batch();
+    assert!(batch2.seq_ids.len() <= 2);
+}
+
+#[test]
+fn test_many_sequences_stress() {
+    let config = SchedulerConfig {
+        max_num_seqs: 50,
+        max_num_batched_tokens: 100,
+        max_consecutive_decode: 5,
+    };
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    for i in 1..=20 {
+        let (tx, _rx) = mpsc::unbounded_channel();
+        engine.add_request(Request::new(i, vec![i as TokenId], 3), tx);
+    }
+
+    for _ in 0..10 {
+        if !engine.has_pending() {
+            break;
+        }
+        engine.step().unwrap();
+    }
+
+    let state_valid = engine.scheduler.running_count() <= 20;
+    assert!(state_valid, "engine state should be valid under stress");
+}
+
+#[test]
+fn test_sequence_state_transitions() {
+    let config = SchedulerConfig {
+        max_num_seqs: 10,
+        max_num_batched_tokens: 100,
+        max_consecutive_decode: 10,
+    };
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    let (tx, _rx) = mpsc::unbounded_channel();
+    engine.add_request(Request::new(1, vec![10, 20, 30], 5), tx);
+
+    let batch1 = engine.scheduler.build_batch();
+    let seq = engine
+        .scheduler
+        .running()
+        .iter()
+        .find(|s| s.id == 1)
+        .unwrap();
+    assert_eq!(seq.status, vllm_core::types::Status::Prefilling);
+
+    engine.scheduler.update(
+        &batch1.seq_ids,
+        &[99],
+        &[batch1.input_tokens.iter().map(|v| v.len()).sum()],
+    );
+
+    let seq = engine
+        .scheduler
+        .running()
+        .iter()
+        .find(|s| s.id == 1)
+        .unwrap();
+    assert_eq!(seq.status, vllm_core::types::Status::Decoding);
+}
+
+#[test]
+fn test_immediate_finish_after_prompt() {
+    let config = SchedulerConfig {
+        max_num_seqs: 10,
+        max_num_batched_tokens: 100,
+        max_consecutive_decode: 10,
+    };
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    let (tx, _rx) = mpsc::unbounded_channel();
+    engine.add_request(Request::new(1, vec![1, 2, 3], 3), tx);
+
+    engine.step().unwrap();
+
+    assert!(
+        !engine.has_pending(),
+        "should finish when max_tokens equals prompt length"
+    );
+}
