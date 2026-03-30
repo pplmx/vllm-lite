@@ -22,7 +22,7 @@ async fn main() {
     let model_path = env::var("MODEL_PATH")
         .unwrap_or_else(|_| "./models/qwen3-7b".to_string());
     
-    let device = Device::cuda_if_available(0).unwrap_or_else(|_| Device::Cpu);
+    let device = Device::cuda_if_available(0).unwrap_or(Device::Cpu);
     let loader = ModelLoader::new(device.clone());
     
     println!("Loading model from: {}", model_path);
@@ -38,6 +38,7 @@ async fn main() {
     let sched_config = SchedulerConfig {
         max_num_seqs: 256,
         max_num_batched_tokens: 4096,
+        max_consecutive_decode: 10,
     };
     let mut engine = Engine::with_config(
         model,

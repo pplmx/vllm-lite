@@ -4,8 +4,6 @@ use std::collections::VecDeque;
 
 pub struct Scheduler {
     waiting: VecDeque<Sequence>,
-    prefill_queue: VecDeque<Sequence>,
-    decode_queue: VecDeque<Sequence>,
     running: Vec<Sequence>,
     finished: Vec<Sequence>,
     next_seq_id: SeqId,
@@ -28,8 +26,6 @@ impl Scheduler {
     pub fn with_config(config: SchedulerConfig, num_kv_blocks: usize) -> Self {
         Self {
             waiting: VecDeque::new(),
-            prefill_queue: VecDeque::new(),
-            decode_queue: VecDeque::new(),
             running: Vec::new(),
             finished: Vec::new(),
             next_seq_id: 1,
@@ -95,18 +91,6 @@ impl Scheduler {
         id
     }
 
-    fn admit_waiting(&mut self) {
-        while self.running.len() < self.config.max_num_seqs {
-            match self.waiting.pop_front() {
-                Some(mut seq) => {
-                    seq.status = Status::Prefilling;
-                    self.running.push(seq);
-                }
-                None => break,
-            }
-        }
-    }
-
     #[allow(dead_code)]
     fn pending_tokens(seq: &Sequence) -> usize {
         if seq.status == Status::Prefilling {
@@ -119,50 +103,92 @@ impl Scheduler {
     }
 
     pub fn build_batch(&mut self) -> Batch {
-        self.admit_waiting();
+        let mut newly_finished = Vec::new();
+        let mut i = 0;
+        while i < self.running.len() {
+            if self.running[i].status == Status::Finished {
+                let seq = self.running.remove(i);
+                newly_finished.push(seq);
+            } else {
+                i += 1;
+            }
+        }
+
+        for seq in newly_finished.iter() {
+            let prompt_tokens = &seq.tokens[..seq.prompt_len];
+            let key = hash_tokens(prompt_tokens);
+            if !self.prefix_cache.contains_key(&key) {
+                self.prefix_cache
+                    .insert(key, seq.kv_blocks.clone(), seq.prompt_len);
+            }
+        }
+        self.finished.extend(newly_finished);
+
+        while self.running.len() < self.config.max_num_seqs {
+            match self.waiting.pop_front() {
+                Some(mut seq) => {
+                    seq.status = Status::Prefilling;
+                    self.running.push(seq);
+                }
+                None => break,
+            }
+        }
 
         let mut seq_ids = vec![];
         let mut input_tokens = vec![];
         let mut positions = vec![];
         let mut budget = self.config.max_num_batched_tokens;
+        let max_seqs = self.config.max_num_seqs;
+        let decode_limit = self.config.max_consecutive_decode;
 
-        // Phase 1: Decode sequences first (1 token each)
         for seq in &self.running {
-            if seq.status != Status::Decoding {
-                continue;
+            if seq_ids.len() >= max_seqs {
+                break;
             }
             if budget == 0 {
                 break;
             }
 
-            let last = *seq.tokens.last().unwrap();
-            let pos = seq.tokens.len() - 1;
-            seq_ids.push(seq.id);
-            input_tokens.push(vec![last]);
-            positions.push(vec![pos]);
-            budget = budget.saturating_sub(1);
+            if seq.status == Status::Decoding {
+                if seq.consecutive_decode_rounds >= decode_limit {
+                    continue;
+                }
+
+                let last = *seq.tokens.last().unwrap();
+                let pos = seq.tokens.len() - 1;
+
+                seq_ids.push(seq.id);
+                input_tokens.push(vec![last]);
+                positions.push(vec![pos]);
+                budget = budget.saturating_sub(1);
+            }
         }
 
-        // Phase 2: Prefill sequences with remaining budget
         for seq in &self.running {
-            if seq.status != Status::Prefilling {
-                continue;
+            if seq_ids.len() >= max_seqs {
+                break;
             }
             if budget == 0 {
                 break;
             }
 
-            let start = seq.num_computed_tokens;
-            let remaining = seq.tokens.len() - start;
-            let chunk_size = remaining.min(budget);
+            if seq.status == Status::Prefilling {
+                let start = seq.num_computed_tokens;
+                let remaining = seq.tokens.len() - start;
+                let chunk_size = remaining.min(budget);
 
-            let tokens = seq.tokens[start..start + chunk_size].to_vec();
-            let pos: Vec<usize> = (start..start + chunk_size).collect();
+                if chunk_size == 0 {
+                    continue;
+                }
 
-            seq_ids.push(seq.id);
-            input_tokens.push(tokens);
-            positions.push(pos);
-            budget = budget.saturating_sub(chunk_size);
+                let tokens = seq.tokens[start..start + chunk_size].to_vec();
+                let pos: Vec<usize> = (start..start + chunk_size).collect();
+
+                seq_ids.push(seq.id);
+                input_tokens.push(tokens);
+                positions.push(pos);
+                budget = budget.saturating_sub(chunk_size);
+            }
         }
 
         Batch {
