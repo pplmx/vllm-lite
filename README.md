@@ -2,11 +2,13 @@
 
 A lightweight LLM inference engine written in Rust, implementing key vLLM innovations:
 
-- **Continuous Batching** - Dynamic batch scheduling
+- **Continuous Batching** - Dynamic batch scheduling with fairness
 - **Paged KV Cache** - Memory-efficient cache management  
 - **Prefix Caching** - Cache repeated prompts
 - **Speculative Decoding** - Accelerated token generation
 - **OpenAI-compatible API** - `/v1/completions`, `/v1/chat/completions`
+
+**Latest:** Continuous batching implemented (commit: d22d3e3)
 
 ## Features
 
@@ -48,12 +50,23 @@ vllm-lite/
 
 | Phase | Feature | Status |
 |-------|---------|--------|
-| 1 | MVP (single request, fake model) | ✅ |
-| 2-3 | Continuous Batching | ✅ |
-| 4 | Paged KV Cache | ✅ |
-| 5 | Qwen3 Model | ✅ |
-| 6 | Prefix Caching | ✅ |
-| 7 | Speculative Decoding | ✅ |
+| 1 | MVP (single request, fake model) | ✅ Done |
+| 2-3 | Continuous Batching | ✅ Done |
+| 4 | Paged KV Cache | 📋 Spec+Plan |
+| 5 | Qwen3 Model (fake) | ✅ Done |
+| 5 | Qwen3 Model (real weights) | 📋 Plan |
+| 6 | Prefix Caching | 📋 Spec+Plan |
+| 7 | Speculative Decoding | 📋 Spec+Plan |
+
+## Implemented Features
+
+- [x] Continuous batching with decode-priority scheduling
+- [x] Fairness-aware scheduling (max_consecutive_decode)
+- [x] Chunked prefill processing
+- [x] Temperature and top-p sampling
+- [x] Error tracking in Engine
+- [x] Graceful shutdown
+- [x] Fake model for testing
 
 ## Development
 
