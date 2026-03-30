@@ -48,7 +48,7 @@ pub async fn completions(
         .map(|(i, _)| (i + 1) as u32)
         .collect();
 
-    let max_tokens = prompt_tokens.len() + req.max_tokens;
+    let max_tokens = req.max_tokens;
     let request = Request::new(0, prompt_tokens, max_tokens);
 
     let (response_tx, response_rx) = mpsc::unbounded_channel();
