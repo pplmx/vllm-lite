@@ -5,6 +5,36 @@ use std::path::Path;
 
 use crate::config::Qwen3Config;
 
+fn find_safetensors_files(model_dir: &Path) -> Result<Vec<std::path::PathBuf>> {
+    let single = model_dir.join("model.safetensors");
+    if single.exists() {
+        return Ok(vec![single]);
+    }
+
+    let mut files = Vec::new();
+    let entries = std::fs::read_dir(model_dir)
+        .map_err(|e| candle_core::Error::msg(format!("Failed to read model directory: {}", e)))?;
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if name.starts_with("model-") && name.ends_with(".safetensors") {
+                files.push(path);
+            }
+        }
+    }
+
+    if files.is_empty() {
+        return Err(candle_core::Error::msg(format!(
+            "No model weights found in {}",
+            model_dir.display()
+        )));
+    }
+
+    files.sort();
+    Ok(files)
+}
+
 pub struct ModelLoader {
     device: Device,
 }
@@ -24,23 +54,43 @@ impl ModelLoader {
     }
 
     pub fn load_weights(&self, model_dir: &str) -> Result<HashMap<String, Tensor>> {
-        let model_path = Path::new(model_dir).join("model.safetensors");
-        let data = std::fs::read(model_path)
-            .map_err(|e| candle_core::Error::msg(format!("Failed to read safetensors: {}", e)))?;
-        let file = SafeTensors::deserialize(&data)
-            .map_err(|e| candle_core::Error::msg(format!("Failed to load safetensors: {}", e)))?;
+        let model_path = Path::new(model_dir);
+        let files = find_safetensors_files(model_path)?;
 
         let mut weights: HashMap<String, Tensor> = HashMap::new();
-        for (name, view) in file.tensors() {
-            let tensor_data: &[u8] = view.data();
-            let shape = view.shape().to_vec();
-            let n = tensor_data.len() / 4;
-            let data_f32 =
-                unsafe { std::slice::from_raw_parts(tensor_data.as_ptr() as *const f32, n) };
-            let tensor = candle_core::Tensor::from_slice(data_f32, shape, &self.device)
-                .map_err(|e| candle_core::Error::msg(format!("Failed to create tensor: {}", e)))?;
-            weights.insert(name.clone(), tensor);
+
+        for file_path in files {
+            let data = std::fs::read(&file_path).map_err(|e| {
+                candle_core::Error::msg(format!("Failed to read {}: {}", file_path.display(), e))
+            })?;
+            let file = SafeTensors::deserialize(&data).map_err(|e| {
+                candle_core::Error::msg(format!("Failed to load {}: {}", file_path.display(), e))
+            })?;
+
+            for (name, view) in file.tensors() {
+                if weights.contains_key(&name) {
+                    return Err(candle_core::Error::msg(format!(
+                        "Duplicate weight '{}' found in sharded files",
+                        name
+                    )));
+                }
+
+                let tensor_data: &[u8] = view.data();
+                let shape = view.shape().to_vec();
+                let n = tensor_data.len() / 4;
+                let data_f32 =
+                    unsafe { std::slice::from_raw_parts(tensor_data.as_ptr() as *const f32, n) };
+                let tensor = candle_core::Tensor::from_slice(data_f32, shape, &self.device)
+                    .map_err(|e| {
+                        candle_core::Error::msg(format!(
+                            "Failed to create tensor for {}: {}",
+                            name, e
+                        ))
+                    })?;
+                weights.insert(name.clone(), tensor);
+            }
         }
+
         Ok(weights)
     }
 
