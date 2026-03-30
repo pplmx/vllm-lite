@@ -56,3 +56,45 @@ impl SwiGLU {
         self.down_proj.forward(&activated)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use candle_core::DType;
+
+    #[test]
+    fn test_swiglu_forward_single_token() -> Result<()> {
+        let device = candle_core::Device::Cpu;
+        let mlp = SwiGLU::new(256, 512, None)?;
+
+        let x = Tensor::ones((1, 256), DType::F32, &device)?;
+        let output = mlp.forward(&x)?;
+
+        assert_eq!(output.dims(), &[1, 256]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_swiglu_forward_batch() -> Result<()> {
+        let device = candle_core::Device::Cpu;
+        let mlp = SwiGLU::new(256, 512, None)?;
+
+        let x = Tensor::ones((4, 256), DType::F32, &device)?;
+        let output = mlp.forward(&x)?;
+
+        assert_eq!(output.dims(), &[4, 256]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_swiglu_output_shape() -> Result<()> {
+        let device = candle_core::Device::Cpu;
+        let mlp = SwiGLU::new(128, 256, None)?;
+
+        let x = Tensor::zeros((2, 128), DType::F32, &device)?;
+        let output = mlp.forward(&x)?;
+
+        assert_eq!(output.dims(), &[2, 128]);
+        Ok(())
+    }
+}

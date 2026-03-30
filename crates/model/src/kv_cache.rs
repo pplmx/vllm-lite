@@ -54,3 +54,41 @@ impl PagedKvCache {
         self.num_layers
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_paged_kv_cache_creation() -> Result<()> {
+        let device = Device::Cpu;
+        let cache = PagedKvCache::new(2, 4, 32, 10, device)?;
+
+        assert_eq!(cache.num_layers(), 2);
+        assert_eq!(cache.num_blocks(), 10);
+        Ok(())
+    }
+
+    #[test]
+    fn test_paged_kv_cache_single_layer() -> Result<()> {
+        let device = Device::Cpu;
+        let cache = PagedKvCache::new(1, 8, 64, 5, device)?;
+
+        assert_eq!(cache.num_layers(), 1);
+        assert_eq!(cache.num_blocks(), 5);
+        Ok(())
+    }
+
+    #[test]
+    fn test_paged_kv_cache_tensor_shapes() -> Result<()> {
+        let device = Device::Cpu;
+        let cache = PagedKvCache::new(2, 4, 32, 10, device)?;
+
+        let key_shape = cache.key_cache[0].dims();
+        assert_eq!(key_shape, &[10, 4, 16, 32]);
+
+        let value_shape = cache.value_cache[0].dims();
+        assert_eq!(value_shape, &[10, 4, 16, 32]);
+        Ok(())
+    }
+}

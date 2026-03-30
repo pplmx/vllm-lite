@@ -205,4 +205,72 @@ mod tests {
         assert!(cache.get(2).is_none());
         assert!(cache.get(3).is_some());
     }
+
+    #[test]
+    fn test_shared_block_reference_count() {
+        let mut cache = PrefixCache::new();
+
+        cache.insert(1, vec![1, 2, 3], 3);
+        cache.insert(2, vec![1, 2, 3], 3);
+
+        let mut alloc = BlockAllocator::new(10);
+        cache.evict(&mut alloc);
+
+        assert!(cache.get(2).is_some());
+    }
+
+    #[test]
+    fn test_multiple_evictions_release_all_blocks() {
+        let mut cache = PrefixCache::new();
+
+        cache.insert(1, vec![1, 2], 2);
+        cache.insert(2, vec![3, 4], 2);
+        assert_eq!(cache.len(), 2);
+
+        cache.evict(&mut BlockAllocator::new(10));
+        assert_eq!(cache.len(), 1);
+
+        cache.evict(&mut BlockAllocator::new(10));
+        assert_eq!(cache.len(), 0);
+    }
+
+    #[test]
+    fn test_cache_get_updates_lru() {
+        let mut cache = PrefixCache::new();
+        cache.insert(1, vec![1], 1);
+        cache.insert(2, vec![2], 1);
+
+        cache.get(1);
+        cache.get(2);
+        cache.get(1);
+
+        let mut alloc = BlockAllocator::new(10);
+        cache.evict(&mut alloc);
+
+        assert!(cache.get(2).is_none());
+        assert!(cache.get(1).is_some());
+    }
+
+    #[test]
+    fn test_block_allocation_exact_fit() {
+        let mut alloc = BlockAllocator::new(3);
+        let blocks = alloc.allocate(3).unwrap();
+        assert_eq!(blocks.len(), 3);
+        assert_eq!(alloc.available(), 0);
+    }
+
+    #[test]
+    fn test_cache_contains_key() {
+        let mut cache = PrefixCache::new();
+        cache.insert(100, vec![1], 1);
+
+        assert!(cache.contains_key(&100));
+        assert!(!cache.contains_key(&200));
+    }
+
+    #[test]
+    fn test_cache_is_empty() {
+        let cache = PrefixCache::new();
+        assert!(cache.is_empty());
+    }
 }

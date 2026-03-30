@@ -22,3 +22,38 @@ pub fn precompute_rope_cache(seq_len: usize, head_dim: usize, theta: f32) -> Vec
     }
     cache
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_precompute_rope_cache_length() {
+        let cache = precompute_rope_cache(10, 64, 10000.0);
+        assert_eq!(cache.len(), 10 * 32);
+    }
+
+    #[test]
+    fn test_precompute_rope_cache_first_position() {
+        let cache = precompute_rope_cache(1, 64, 10000.0);
+        assert_eq!(cache.len(), 32);
+    }
+
+    #[test]
+    fn test_precompute_rope_cache_values() {
+        let cache = precompute_rope_cache(10, 64, 10000.0);
+        assert_eq!(cache.len(), 320);
+    }
+
+    #[test]
+    fn test_apply_rope_returns_same_shape() {
+        use candle_core::{DType, Device, Tensor};
+
+        let device = Device::Cpu;
+        let query = Tensor::ones((2, 4, 64), DType::F32, &device).unwrap();
+        let position_ids = Tensor::new(&[0i64, 1i64], &device).unwrap();
+
+        let result = apply_rope(&query, &position_ids, 10000.0).unwrap();
+        assert_eq!(result.dims(), query.dims());
+    }
+}
