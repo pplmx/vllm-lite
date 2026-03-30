@@ -96,7 +96,12 @@ impl GqaAttention {
         Ok(o)
     }
 
-    fn expand_kv(&self, kv: &Tensor, num_q_heads: usize, num_kv_heads: usize) -> Result<Tensor> {
+    pub fn expand_kv(
+        &self,
+        kv: &Tensor,
+        num_q_heads: usize,
+        num_kv_heads: usize,
+    ) -> Result<Tensor> {
         if num_q_heads == num_kv_heads {
             return Ok(kv.clone());
         }

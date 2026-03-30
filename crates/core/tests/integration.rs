@@ -90,3 +90,77 @@ fn test_chunked_prefill_integration() {
     // Should have done more than just prefill
     assert!(steps > 1, "should have multiple steps, got {}", steps);
 }
+
+#[test]
+fn test_max_tokens_includes_prompt() {
+    // This test verifies the fix: max_tokens should represent total sequence length
+    let config = SchedulerConfig {
+        max_num_seqs: 256,
+        max_num_batched_tokens: 100,
+        max_consecutive_decode: 10,
+    };
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    let (tx, _rx) = mpsc::unbounded_channel();
+
+    // Prompt: 3 tokens, max_new_tokens: 2
+    // Total should be: 3 + 2 = 5 tokens before finishing
+    let prompt = vec![10, 20, 30];
+    let max_new_tokens = 2;
+    let total_max = prompt.len() + max_new_tokens; // This is what the API should send
+
+    engine.add_request(Request::new(1, prompt, total_max), tx);
+
+    let mut steps = 0;
+    while engine.has_pending() {
+        engine.step().unwrap();
+        steps += 1;
+        if steps > 10 {
+            panic!("Too many steps - max_tokens might not include prompt");
+        }
+    }
+
+    // Should finish in exactly 3 steps:
+    // Step 1: prompt(3) -> tokens=4 (still prefill/decode), wait for status update
+    // Actually: prompt processing + decoding until 5 total tokens
+    assert!(
+        steps <= 5,
+        "should finish within expected steps, got {}",
+        steps
+    );
+}
+
+#[test]
+fn test_single_token_prefill_then_decode() {
+    // Test the case where prompt is single token (our bug scenario)
+    let config = SchedulerConfig {
+        max_num_seqs: 256,
+        max_num_batched_tokens: 100,
+        max_consecutive_decode: 10,
+    };
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    // Single token prompt
+    let prompt = vec![100];
+    let max_new_tokens = 3;
+    let total_max = prompt.len() + max_new_tokens;
+
+    engine.add_request(Request::new(1, prompt, total_max), tx);
+
+    // Step 1: Process prompt token
+    engine.step().unwrap();
+    assert!(rx.try_recv().is_ok(), "should get first token");
+
+    // Step 2-4: Decode
+    for _ in 2..=4 {
+        if !engine.has_pending() {
+            break;
+        }
+        engine.step().unwrap();
+    }
+
+    // Should have received all tokens
+    assert!(!engine.has_pending(), "should be finished after 4 steps");
+}
