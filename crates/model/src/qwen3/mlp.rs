@@ -1,3 +1,4 @@
+#![allow(clippy::all, unused)]
 use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;
 
@@ -11,11 +12,33 @@ impl SwiGLU {
     pub fn new(
         hidden_size: usize,
         intermediate_size: usize,
-        vb: candle_nn::VarBuilder,
+        vb: Option<candle_nn::VarBuilder>,
     ) -> Result<Self> {
+        let vb = vb.unwrap_or_else(|| {
+            candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu)
+        });
+
         let gate_proj = candle_nn::linear(hidden_size, intermediate_size, vb.pp("gate_proj"))?;
         let up_proj = candle_nn::linear(hidden_size, intermediate_size, vb.pp("up_proj"))?;
         let down_proj = candle_nn::linear(intermediate_size, hidden_size, vb.pp("down_proj"))?;
+        Ok(Self {
+            gate_proj,
+            up_proj,
+            down_proj,
+        })
+    }
+
+    pub fn new_with_weights(
+        hidden_size: usize,
+        intermediate_size: usize,
+        gate_weight: Tensor,
+        up_weight: Tensor,
+        down_weight: Tensor,
+    ) -> Result<Self> {
+        let gate_proj = Linear::new(gate_weight, None);
+        let up_proj = Linear::new(up_weight, None);
+        let down_proj = Linear::new(down_weight, None);
+
         Ok(Self {
             gate_proj,
             up_proj,

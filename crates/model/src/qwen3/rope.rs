@@ -1,3 +1,4 @@
+#![allow(clippy::all, unused)]
 use candle_core::{Result, Tensor};
 
 pub fn apply_rope(query: &Tensor, position_ids: &Tensor, theta: f32) -> Result<Tensor> {
