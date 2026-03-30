@@ -84,7 +84,7 @@ impl GqaAttention {
         let qk = Tensor::matmul(&q, &k)?;
 
         let scale = 1.0 / (self.head_dim as f32).sqrt();
-        let qk = qk.mul(&Tensor::new(&[scale], q.device())?)?;
+        let qk = qk.mul(&Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?)?;
         let attn_weights = candle_nn::ops::softmax(&qk, 3)?;
 
         let attn_output = Tensor::matmul(&attn_weights, &v)?;
@@ -104,10 +104,29 @@ impl GqaAttention {
         let repeat_factor = num_q_heads / num_kv_heads;
         let (batch, seq, heads, dim) = kv.dims4()?;
 
-        let new_shape = vec![batch, seq, heads * repeat_factor, dim];
-        let kv = kv.repeat(Shape::from(new_shape.as_slice()))?;
-        let kv = kv.reshape((batch, seq, num_q_heads, dim))?;
+        // Manual expansion: repeat each KV head repeat_factor times
+        // Input: [batch, seq, num_kv_heads, head_dim]
+        // Output: [batch, seq, num_q_heads, head_dim]
 
-        Ok(kv)
+        // Flatten batch*seq, then repeat each head
+        let kv = kv.reshape((batch * seq, heads, dim))?; // [batch*seq, heads, dim]
+
+        // Create output by repeating each head
+        let mut result_parts = Vec::with_capacity(batch * seq * heads * repeat_factor);
+        for i in 0..(batch * seq) {
+            for h in 0..heads {
+                let head_data = kv.narrow(0, i, 1)?.squeeze(0)?; // [heads, dim]
+                let head_data = head_data.narrow(0, h, 1)?.squeeze(0)?; // [dim]
+                for _ in 0..repeat_factor {
+                    result_parts.push(head_data.clone());
+                }
+            }
+        }
+
+        // Stack back: [batch*seq, heads*repeat_factor, dim]
+        let expanded = Tensor::stack(&result_parts, 0)?;
+        let expanded = expanded.reshape((batch, seq, heads * repeat_factor, dim))?;
+
+        Ok(expanded)
     }
 }

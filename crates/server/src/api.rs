@@ -45,8 +45,9 @@ pub async fn completions(
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let prompt_tokens = state.tokenizer.encode(&req.prompt);
 
-    let max_tokens = req.max_tokens;
-    let request = Request::new(0, prompt_tokens, max_tokens);
+    let max_new_tokens = req.max_tokens;
+    let total_max_tokens = prompt_tokens.len() + max_new_tokens;
+    let request = Request::new(0, prompt_tokens, total_max_tokens);
 
     let (response_tx, response_rx) = mpsc::unbounded_channel();
 

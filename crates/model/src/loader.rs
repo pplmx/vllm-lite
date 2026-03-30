@@ -19,9 +19,9 @@ fn find_safetensors_files(model_dir: &Path) -> Result<Vec<std::path::PathBuf>> {
     for entry in entries.flatten() {
         let path = entry.path();
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if name.starts_with("model-") && name.ends_with(".safetensors") {
-                files.push(path);
-            } else if name.starts_with("model.safetensors-") && name.ends_with(".safetensors") {
+            if (name.starts_with("model-") || name.starts_with("model.safetensors-"))
+                && name.ends_with(".safetensors")
+            {
                 files.push(path);
             }
         }
