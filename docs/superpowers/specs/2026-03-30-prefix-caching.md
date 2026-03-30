@@ -189,23 +189,31 @@ pub fn update(&mut self, seq_ids: &[SeqId], next_tokens: &[TokenId], input_count
 请求2: "Hello world how are you" → 复用 ["Hello world"] 的 blocks，只需 prefill " how are you"
 ```
 
-**实现方案:**
+**实现方案: 前缀匹配**
 
-当完整 hash 未命中时，遍历缓存查找最长前缀匹配：
+当完整 hash 未命中时，尝试查找最长前缀匹配：
+
+1. 尝试对 prompt 的所有前缀计算 hash
+2. 从长到短，找到第一个匹配的缓存条目
+3. 复用已分配的 KV blocks，只需 prefill 额外部分
 
 ```rust
 fn find_prefix_match(&self, tokens: &[TokenId]) -> Option<&CachedEntry> {
-    // 尝试匹配完整前缀
-    // 返回最长匹配
-    self.entries.values()
-        .filter(|e| tokens.starts_with(&self.tokens_for_key(e.key)))
-        .max_by_key(|e| e.token_count)
+    // 从长到短尝试所有前缀
+    for prefix_len in (1..=tokens.len()).rev() {
+        let prefix = &tokens[..prefix_len];
+        let key = hash_tokens(prefix);
+        if let Some(entry) = self.entries.get(&key) {
+            return Some(entry);
+        }
+    }
+    None
 }
 ```
 
 **关键点:**
 - 缓存的 key 是完整序列的 hash
-- 需要反向查找：从长到短尝试匹配
+- 从最长前缀开始匹配，确保复用最多已计算的 KV
 - 复用已分配的 KV blocks，只需 prefill 额外部分
 
 ### 测试 3: LRU 淘汰
@@ -226,7 +234,7 @@ fn find_prefix_match(&self, tokens: &[TokenId]) -> Option<&CachedEntry> {
 - [x] Scheduler 集成
 - [x] 测试
 
-### Phase 2 (当前)
+### 前缀命中 (当前)
 - [ ] PrefixCache 添加 find_prefix_match 方法
 - [ ] Scheduler add_request 支持前缀命中
 - [ ] 处理 num_computed_tokens 正确设置
