@@ -1,5 +1,4 @@
-use candle_core::{DType, Device, Tensor};
-use vllm_core::types::{Batch, Request};
+use candle_core::{Device, Tensor};
 
 #[test]
 fn test_logits_extraction_1d() {
@@ -90,7 +89,7 @@ fn test_wrong_dimension_argmax() {
     // logits.get(0) -> [3, 4] (all seqs for first batch)
     // argmax(0) -> reduces seq dim -> [4] (one max per vocab)
     let wrong_way = logits.get(0).unwrap();
-    let wrong_max = wrong_way.argmax(0).unwrap();
+    let _wrong_max = wrong_way.argmax(0).unwrap();
     // wrong_max is [4], each value is max from each vocab position across seqs
 
     // RIGHT: Get last token then argmax over vocab

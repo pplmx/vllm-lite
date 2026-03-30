@@ -1,4 +1,3 @@
-use rand::RngExt;
 use vllm_core::engine::ModelBackend;
 use vllm_core::error::Result;
 use vllm_core::types::{BatchOutput, SeqId, TokenId};
@@ -20,10 +19,9 @@ impl ModelBackend for FakeModel {
         _input_tokens: &[Vec<TokenId>],
         _positions: &[Vec<usize>],
     ) -> Result<BatchOutput> {
-        let mut rng = rand::rng();
         let next_tokens: Vec<TokenId> = seq_ids
             .iter()
-            .map(|_| rng.random_range(0..self.vocab_size) as TokenId)
+            .map(|&id| ((id as usize) % self.vocab_size) as TokenId)
             .collect();
 
         Ok(BatchOutput {

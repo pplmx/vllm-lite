@@ -12,3 +12,59 @@ fn test_fake_model_output_count() {
     assert_eq!(output.seq_ids.len(), 3);
     assert_eq!(output.next_tokens.len(), 3);
 }
+
+#[test]
+fn test_fake_model_deterministic() {
+    let model = FakeModel::new(42);
+    let seq_ids = vec![1u64];
+    let input_tokens = vec![vec![1u32, 2, 3]];
+    let positions = vec![vec![0usize, 1, 2]];
+
+    let output1 = model.forward(&seq_ids, &input_tokens, &positions).unwrap();
+    let output2 = model.forward(&seq_ids, &input_tokens, &positions).unwrap();
+
+    // Same input should produce same output
+    assert_eq!(output1.next_tokens, output2.next_tokens);
+}
+
+#[test]
+fn test_fake_model_different_seqs_different_output() {
+    let model = FakeModel::new(100);
+    let seq_ids = vec![1u64, 2u64];
+    let input_tokens = vec![vec![1u32], vec![1u32]];
+    let positions = vec![vec![0usize], vec![0usize]];
+
+    let output = model.forward(&seq_ids, &input_tokens, &positions).unwrap();
+
+    // Different sequence IDs should produce different tokens
+    assert_ne!(
+        output.next_tokens[0], output.next_tokens[1],
+        "different seq_ids should produce different tokens"
+    );
+}
+
+#[test]
+fn test_fake_model_batch_size_respected() {
+    let model = FakeModel::new(1000);
+
+    // Test various batch sizes
+    for batch_size in [1, 2, 5, 10] {
+        let seq_ids: Vec<u64> = (0..batch_size).map(|i| i as u64).collect();
+        let input_tokens: Vec<Vec<u32>> = (0..batch_size).map(|_| vec![1]).collect();
+        let positions: Vec<Vec<usize>> = (0..batch_size).map(|_| vec![0]).collect();
+
+        let output = model.forward(&seq_ids, &input_tokens, &positions).unwrap();
+        assert_eq!(
+            output.seq_ids.len(),
+            batch_size,
+            "batch size {} not respected",
+            batch_size
+        );
+        assert_eq!(
+            output.next_tokens.len(),
+            batch_size,
+            "batch size {} not respected",
+            batch_size
+        );
+    }
+}
