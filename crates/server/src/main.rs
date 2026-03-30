@@ -1,6 +1,6 @@
 mod api;
 
-use axum::{routing::post, Router};
+use axum::{routing::{get, post}, Router};
 use std::env;
 use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
@@ -50,6 +50,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/v1/completions", post(api::completions))
+        .route("/shutdown", get(api::shutdown))
         .with_state(msg_tx);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8000").await.unwrap();
