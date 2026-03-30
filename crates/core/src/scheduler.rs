@@ -560,4 +560,72 @@ mod tests {
         sched.update(&batch.seq_ids, &[99], &[5]);
         assert!(!sched.running().is_empty());
     }
+
+    #[test]
+    fn test_empty_prompt_handling() {
+        let mut sched = Scheduler::new();
+        sched.add_request(Request::new(1, vec![], 5));
+
+        let batch = sched.build_batch();
+        assert!(batch.is_empty(), "empty prompt should produce empty batch");
+    }
+
+    #[test]
+    fn test_single_token_prompt() {
+        let mut sched = Scheduler::new();
+        sched.add_request(Request::new(1, vec![42], 3));
+
+        let batch = sched.build_batch();
+        assert_eq!(batch.input_tokens[0], vec![42]);
+
+        sched.update(&batch.seq_ids, &[99], &[1]);
+
+        // Should transition to decoding after single token
+        let batch2 = sched.build_batch();
+        assert!(!batch2.is_empty());
+    }
+
+    #[test]
+    fn test_max_tokens_exactly_reached() {
+        let config = SchedulerConfig {
+            max_num_seqs: 10,
+            max_num_batched_tokens: 100,
+            max_consecutive_decode: 10,
+        };
+        let mut sched = Scheduler::with_config(config, 1024);
+
+        // prompt length = 2, max_tokens = 2 (exactly)
+        // Need at least one decode token to trigger finish check
+        sched.add_request(Request::new(1, vec![10, 20], 2));
+
+        let batch = sched.build_batch();
+        // Push one token to make tokens.len() == max_tokens (2 == 2)
+        sched.update(&batch.seq_ids, &[99], &[2]);
+
+        // Should be finished now
+        assert!(!sched.has_pending());
+    }
+
+    #[test]
+    fn test_premature_completion_in_prefill() {
+        // When max_tokens <= prompt_len, should finish immediately after prefill
+        let config = SchedulerConfig {
+            max_num_seqs: 10,
+            max_num_batched_tokens: 100,
+            max_consecutive_decode: 10,
+        };
+        let mut sched = Scheduler::with_config(config, 1024);
+
+        // max_tokens = 3, prompt_len = 3
+        sched.add_request(Request::new(1, vec![1, 2, 3], 3));
+
+        let batch = sched.build_batch();
+        assert_eq!(batch.input_tokens[0], vec![1, 2, 3]);
+
+        // Push one token to trigger finish check: 3 + 1 = 4 >= 3
+        sched.update(&batch.seq_ids, &[99], &[3]);
+
+        // Should be done immediately
+        assert!(!sched.has_pending());
+    }
 }
