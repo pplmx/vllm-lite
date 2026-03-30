@@ -4,6 +4,8 @@ use std::collections::VecDeque;
 
 pub struct Scheduler {
     waiting: VecDeque<Sequence>,
+    prefill_queue: VecDeque<Sequence>,
+    decode_queue: VecDeque<Sequence>,
     running: Vec<Sequence>,
     finished: Vec<Sequence>,
     next_seq_id: SeqId,
@@ -26,6 +28,8 @@ impl Scheduler {
     pub fn with_config(config: SchedulerConfig, num_kv_blocks: usize) -> Self {
         Self {
             waiting: VecDeque::new(),
+            prefill_queue: VecDeque::new(),
+            decode_queue: VecDeque::new(),
             running: Vec::new(),
             finished: Vec::new(),
             next_seq_id: 1,
