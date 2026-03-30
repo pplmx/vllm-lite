@@ -127,4 +127,38 @@ mod tests {
         let req: CompletionRequest = serde_json::from_str(r#"{"prompt": "test", "max_tokens": 50}"#).unwrap();
         assert_eq!(req.max_tokens, 50);
     }
+
+    #[test]
+    fn test_completion_request_invalid_json() {
+        let result: Result<CompletionRequest, _> = serde_json::from_str("{invalid}");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_completion_request_missing_prompt() {
+        let result: Result<CompletionRequest, _> = serde_json::from_str("{}");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_completion_request_negative_max_tokens() {
+        let result: Result<CompletionRequest, _> = serde_json::from_str(r#"{"prompt": "test", "max_tokens": -1}"#);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_completion_request_very_long_max_tokens() {
+        let req: CompletionRequest = serde_json::from_str(r#"{"prompt": "test", "max_tokens": 100000}"#).unwrap();
+        assert_eq!(req.max_tokens, 100000);
+    }
+
+    #[test]
+    fn test_completion_chunk_empty_choices() {
+        let chunk = CompletionChunk {
+            id: "test".to_string(),
+            choices: vec![],
+        };
+        let json = serde_json::to_string(&chunk).unwrap();
+        assert!(json.contains("\"choices\":[]"));
+    }
 }
