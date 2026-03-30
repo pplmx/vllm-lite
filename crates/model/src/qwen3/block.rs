@@ -1,4 +1,3 @@
-#![allow(clippy::all, unused)]
 use super::{attention::GqaAttention, mlp::SwiGLU};
 use crate::kv_cache::PagedKvCache;
 use candle_core::{Device, Module, Result, Tensor};
@@ -127,7 +126,7 @@ impl TransformerBlock {
     }
 
     pub fn forward_prefill(
-        &mut self,
+        &self,
         x: &Tensor,
         kv_cache: &mut PagedKvCache,
         layer_idx: usize,
