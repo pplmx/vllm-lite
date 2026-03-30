@@ -1,4 +1,6 @@
 use crate::types::TokenId;
+use rand::thread_rng;
+use rand::Rng;
 
 pub fn greedy_sample(logits: &[f32]) -> TokenId {
     logits
@@ -14,13 +16,79 @@ pub fn greedy_sample(logits: &[f32]) -> TokenId {
         .0 as TokenId
 }
 
-pub fn sample_batch(logits_list: &[Vec<f32>], temperature: f32) -> Vec<TokenId> {
+pub fn temperature_sample(logits: &[f32], temperature: f32) -> TokenId {
+    if temperature <= 0.0 {
+        return greedy_sample(logits);
+    }
+
+    let scaled: Vec<f32> = logits.iter().map(|x| x / temperature).collect();
+    let max_val = scaled.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+    let exp: Vec<f32> = scaled.iter().map(|x| (x - max_val).exp()).collect();
+    let sum: f32 = exp.iter().sum();
+    let probs: Vec<f32> = exp.iter().map(|x| x / sum).collect();
+
+    let mut rng = thread_rng();
+    let r: f32 = rng.gen_range(0.0..1.0);
+    let mut cumsum = 0.0;
+    for (i, &p) in probs.iter().enumerate() {
+        cumsum += p;
+        if r <= cumsum {
+            return i as TokenId;
+        }
+    }
+    (probs.len() - 1) as TokenId
+}
+
+pub fn top_p_sample(logits: &[f32], top_p: f32) -> TokenId {
+    if top_p >= 1.0 {
+        return greedy_sample(logits);
+    }
+
+    let mut indexed: Vec<(usize, f32)> = logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
+    indexed.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+    let max_val = indexed[0].1;
+    let exp: Vec<f32> = indexed.iter().map(|(_, v)| (v - max_val).exp()).collect();
+    let sum: f32 = exp.iter().sum();
+    let mut probs: Vec<f32> = exp.iter().map(|x| x / sum).collect();
+
+    let mut cumsum = 0.0;
+    let mut cutoff = probs.len();
+    for (i, &p) in probs.iter().enumerate() {
+        cumsum += p;
+        if cumsum > top_p {
+            cutoff = i + 1;
+            break;
+        }
+    }
+
+    probs.truncate(cutoff);
+    let total: f32 = probs.iter().sum();
+    probs.iter_mut().for_each(|p| *p /= total);
+
+    let mut rng = thread_rng();
+    let r: f32 = rng.gen_range(0.0..1.0);
+    let mut cumsum = 0.0;
+    for (i, &p) in probs.iter().enumerate() {
+        cumsum += p;
+        if r <= cumsum {
+            return indexed[i].0 as TokenId;
+        }
+    }
+    indexed[probs.len() - 1].0 as TokenId
+}
+
+pub fn sample_batch(logits_list: &[Vec<f32>], temperature: f32, top_p: f32) -> Vec<TokenId> {
     logits_list
         .iter()
         .map(|logits| {
-            // TODO: temperature sampling in Phase 2
-            let _ = temperature;
-            greedy_sample(logits)
+            if top_p < 1.0 {
+                top_p_sample(logits, top_p)
+            } else if temperature > 0.0 {
+                temperature_sample(logits, temperature)
+            } else {
+                greedy_sample(logits)
+            }
         })
         .collect()
 }
@@ -47,7 +115,7 @@ mod tests {
     #[test]
     fn test_sample_batch() {
         let logits = vec![vec![0.1, 0.9], vec![0.8, 0.2]];
-        assert_eq!(sample_batch(&logits, 0.0), vec![1, 0]);
+        assert_eq!(sample_batch(&logits, 0.0, 1.0), vec![1, 0]);
     }
 
     #[test]
