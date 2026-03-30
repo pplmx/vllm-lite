@@ -1,6 +1,5 @@
-#![allow(clippy::all, unused)]
 use crate::kv_cache::PagedKvCache;
-use candle_core::{Device, Module, Result, Shape, Tensor};
+use candle_core::{Device, Module, Result, Tensor};
 use candle_nn::Linear;
 
 pub struct GqaAttention {
@@ -41,7 +40,7 @@ impl GqaAttention {
     }
 
     pub fn new_with_weights(
-        hidden_size: usize,
+        _hidden_size: usize,
         num_heads: usize,
         num_kv_heads: usize,
         head_dim: usize,
@@ -163,7 +162,7 @@ impl GqaAttention {
             let v_block = v_block.transpose(0, 1)?;
 
             // Write all tokens in this block at once
-            for (offset, &token_idx) in token_indices.iter().enumerate() {
+            for (offset, &_token_idx) in token_indices.iter().enumerate() {
                 let k_slice = k_block.narrow(1, offset, 1)?.squeeze(1)?;
                 let v_slice = v_block.narrow(1, offset, 1)?.squeeze(1)?;
                 let k_slice = k_slice.reshape((1, self.num_kv_heads, self.head_dim))?;
