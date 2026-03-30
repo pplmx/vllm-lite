@@ -6,7 +6,7 @@ use candle_nn::{Embedding, LayerNorm, Linear};
 use std::collections::HashMap;
 use vllm_core::engine::ModelBackend;
 use vllm_core::error::{EngineError, Result as EngineResult};
-use vllm_core::types::{BatchOutput, SeqId, TokenId};
+use vllm_core::types::{BatchOutput, BlockId, SeqId, TokenId};
 
 use super::block::TransformerBlock;
 
@@ -209,6 +209,60 @@ impl Qwen3Model {
             kv_cache,
             device,
         })
+    }
+
+    pub fn forward_with_cache(
+        &mut self,
+        tokens: &[TokenId],
+        num_computed_tokens: usize,
+        block_ids: &[BlockId],
+        is_prefill: bool,
+    ) -> EngineResult<(Tensor, Tensor)> {
+        if tokens.is_empty() {
+            return Err(EngineError::ModelError("Empty tokens".to_string()));
+        }
+
+        let token_tensor = Tensor::new(tokens, &self.device)
+            .map_err(|e| EngineError::ModelError(e.to_string()))?;
+        let hidden = self
+            .embed_tokens
+            .forward(&token_tensor)
+            .map_err(|e| EngineError::ModelError(e.to_string()))?
+            .unsqueeze(0)
+            .map_err(|e| EngineError::ModelError(e.to_string()))?;
+
+        let mut hidden = hidden;
+
+        if is_prefill {
+            for (layer_idx, layer) in self.layers.iter_mut().enumerate() {
+                hidden = layer
+                    .forward_prefill(&hidden, &mut self.kv_cache, layer_idx, block_ids)
+                    .map_err(|e| EngineError::ModelError(e.to_string()))?;
+            }
+        } else {
+            for (layer_idx, layer) in self.layers.iter_mut().enumerate() {
+                hidden = layer
+                    .forward_decode(
+                        &hidden,
+                        &self.kv_cache,
+                        layer_idx,
+                        block_ids,
+                        num_computed_tokens,
+                    )
+                    .map_err(|e| EngineError::ModelError(e.to_string()))?;
+            }
+        }
+
+        hidden = self
+            .norm
+            .forward(&hidden)
+            .map_err(|e| EngineError::ModelError(e.to_string()))?;
+        let logits = self
+            .lm_head
+            .forward(&hidden)
+            .map_err(|e| EngineError::ModelError(e.to_string()))?;
+
+        Ok((logits, hidden))
     }
 }
 
