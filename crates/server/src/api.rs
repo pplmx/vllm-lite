@@ -9,6 +9,8 @@ use std::convert::Infallible;
 use tokio::sync::mpsc;
 use vllm_core::types::{EngineMessage, Request};
 
+use crate::ApiState;
+
 pub type EngineHandle = mpsc::UnboundedSender<EngineMessage>;
 
 #[derive(Deserialize)]
@@ -38,46 +40,44 @@ struct Choice {
 }
 
 pub async fn completions(
-    State(engine_tx): State<EngineHandle>,
+    State(state): State<ApiState>,
     Json(req): Json<CompletionRequest>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let prompt_tokens: Vec<u32> = req
-        .prompt
-        .split_whitespace()
-        .enumerate()
-        .map(|(i, _)| (i + 1) as u32)
-        .collect();
+    let prompt_tokens = state.tokenizer.encode(&req.prompt);
 
     let max_tokens = req.max_tokens;
     let request = Request::new(0, prompt_tokens, max_tokens);
 
     let (response_tx, response_rx) = mpsc::unbounded_channel();
 
-    engine_tx
+    state
+        .engine_tx
         .send(EngineMessage::AddRequest {
             request,
             response_tx,
         })
-        .unwrap();
+        .expect("Engine channel should be available");
 
-    let stream = stream::unfold((response_rx, false), |(mut rx, sent_done)| async move {
-        if sent_done {
-            return None;
-        }
-        match rx.recv().await {
-            Some(token) => {
-                let chunk = CompletionChunk {
-                    id: "cmpl-0".to_string(),
-                    choices: vec![Choice {
-                        text: format!("token_{}", token),
-                        index: 0,
-                    }],
-                };
-                let data = serde_json::to_string(&chunk).unwrap();
-                Some((Ok(Event::default().data(data)), (rx, false)))
+    let tokenizer = state.tokenizer.clone();
+    let stream = stream::unfold((response_rx, false), move |(mut rx, sent_done)| {
+        let tokenizer = tokenizer.clone();
+        async move {
+            if sent_done {
+                return None;
             }
-            None => {
-                Some((Ok(Event::default().data("[DONE]")), (rx, true)))
+            match rx.recv().await {
+                Some(token) => {
+                    let text = tokenizer.decode(&[token]);
+                    let chunk = CompletionChunk {
+                        id: "cmpl-0".to_string(),
+                        choices: vec![Choice { text, index: 0 }],
+                    };
+                    let data = serde_json::to_string(&chunk).unwrap();
+                    Some((Ok(Event::default().data(data)), (rx, false)))
+                }
+                None => {
+                    Some((Ok(Event::default().data("[DONE]")), (rx, true)))
+                }
             }
         }
     });
