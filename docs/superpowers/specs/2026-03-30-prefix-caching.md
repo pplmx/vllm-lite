@@ -186,9 +186,27 @@ pub fn update(&mut self, seq_ids: &[SeqId], next_tokens: &[TokenId], input_count
 
 ```
 请求1: "Hello world" → cache ["Hello world"]
-请求2: "Hello world how are you" → 可以复用部分
-(Phase 2 实现)
+请求2: "Hello world how are you" → 复用 ["Hello world"] 的 blocks，只需 prefill " how are you"
 ```
+
+**实现方案:**
+
+当完整 hash 未命中时，遍历缓存查找最长前缀匹配：
+
+```rust
+fn find_prefix_match(&self, tokens: &[TokenId]) -> Option<&CachedEntry> {
+    // 尝试匹配完整前缀
+    // 返回最长匹配
+    self.entries.values()
+        .filter(|e| tokens.starts_with(&self.tokens_for_key(e.key)))
+        .max_by_key(|e| e.token_count)
+}
+```
+
+**关键点:**
+- 缓存的 key 是完整序列的 hash
+- 需要反向查找：从长到短尝试匹配
+- 复用已分配的 KV blocks，只需 prefill 额外部分
 
 ### 测试 3: LRU 淘汰
 
@@ -201,11 +219,18 @@ pub fn update(&mut self, seq_ids: &[SeqId], next_tokens: &[TokenId], input_count
 
 ## 7. 实现计划
 
-- [ ] 修改 BlockAllocator: 增加引用计数
-- [ ] 实现 PrefixCache 结构
-- [ ] 实现 get/insert/evict
-- [ ] Scheduler 集成
-- [ ] 测试
+### Phase 1 (已完成)
+- [x] 修改 BlockAllocator: 增加引用计数
+- [x] 实现 PrefixCache 结构
+- [x] 实现 get/insert/evict
+- [x] Scheduler 集成
+- [x] 测试
+
+### Phase 2 (当前)
+- [ ] PrefixCache 添加 find_prefix_match 方法
+- [ ] Scheduler add_request 支持前缀命中
+- [ ] 处理 num_computed_tokens 正确设置
+- [ ] 测试前缀命中场景
 
 ## 8. 边界情况
 
