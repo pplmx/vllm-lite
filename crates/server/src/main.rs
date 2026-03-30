@@ -26,10 +26,11 @@ async fn main() {
     let loader = ModelLoader::new(device.clone());
     
     println!("Loading model from: {}", model_path);
-    let (config, weights) = loader.load(&model_path).expect("Failed to load model");
+    let config = loader.load_config(&model_path).expect("Failed to load config");
+    let weights = loader.load_weights(&model_path).expect("Failed to load weights");
     println!("Loaded config: {:?}", config);
     println!("Loaded {} weights", weights.len());
-    
+
     let model = Qwen3Model::from_weights(config.clone(), device.clone(), weights.clone())
         .expect("Failed to create model");
     let draft_model = Qwen3Model::from_weights(config, device, weights)
