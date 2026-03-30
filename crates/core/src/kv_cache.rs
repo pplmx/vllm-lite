@@ -88,6 +88,21 @@ impl PrefixCache {
     pub fn contains_key(&self, key: &CacheKey) -> bool {
         self.entries.contains_key(key)
     }
+
+    pub fn find_prefix_match(&self, tokens: &[TokenId]) -> Option<&CachedEntry> {
+        if tokens.is_empty() {
+            return None;
+        }
+
+        for prefix_len in (1..=tokens.len()).rev() {
+            let prefix = &tokens[..prefix_len];
+            let key = hash_tokens(prefix);
+            if let Some(entry) = self.entries.get(&key) {
+                return Some(entry);
+            }
+        }
+        None
+    }
 }
 
 impl Default for PrefixCache {
@@ -272,5 +287,19 @@ mod tests {
     fn test_cache_is_empty() {
         let cache = PrefixCache::new();
         assert!(cache.is_empty());
+    }
+
+    #[test]
+    fn test_prefix_match() {
+        let mut cache = PrefixCache::new();
+
+        cache.insert(hash_tokens(&[1, 2]), vec![1], 2);
+
+        let result = cache.find_prefix_match(&[1, 2, 3]);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().token_count, 2);
+
+        let result = cache.find_prefix_match(&[3, 4]);
+        assert!(result.is_none());
     }
 }
