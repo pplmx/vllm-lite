@@ -49,4 +49,16 @@ impl ModelLoader {
         let weights = self.load_weights(model_dir)?;
         Ok((config, weights))
     }
+
+    pub fn print_weight_keys(weights: &HashMap<String, Tensor>) {
+        let mut keys: Vec<_> = weights.keys().collect();
+        keys.sort();
+        println!("Loaded weight keys ({} total):", keys.len());
+        for key in keys.iter() {
+            if let Some(t) = weights.get(*key) {
+                let dims: Vec<usize> = (0..t.dims().len()).map(|i| t.dims()[i]).collect();
+                println!("  {}: {:?}", key, dims);
+            }
+        }
+    }
 }

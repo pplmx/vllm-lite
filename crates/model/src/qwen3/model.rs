@@ -1,11 +1,11 @@
+#![allow(clippy::all, unused)]
 use crate::config::Qwen3Config;
 use crate::kv_cache::PagedKvCache;
-use candle_core::{DType, Device, Result, Tensor};
+use candle_core::{Device, Module, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, LayerNorm, Linear};
-#[allow(unused_imports)]
 use std::collections::HashMap;
 use vllm_core::engine::ModelBackend;
-use vllm_core::error::Result as EngineResult;
+use vllm_core::error::{EngineError, Result as EngineResult};
 use vllm_core::types::{BatchOutput, SeqId, TokenId};
 
 use super::block::TransformerBlock;
@@ -20,35 +20,13 @@ pub struct Qwen3Model {
     device: Device,
 }
 
-// TODO: Load actual weights from SafeTensors
-// For full inference, weights should be loaded via ModelLoader and passed to new():
-//   pub fn new(config: Qwen3Config, device: Device, weights: HashMap<String, Tensor>) -> Result<Self>
-//
-// Weight names follow Qwen3 naming convention:
-//   - "model.embed_tokens.weight" -> embed_tokens
-//   - "model.layers.{i}.attn.q_proj.weight" -> layers[i].attn.q_proj
-//   - "model.layers.{i}.attn.k_proj.weight" -> layers[i].attn.k_proj
-//   - "model.layers.{i}.attn.v_proj.weight" -> layers[i].attn.v_proj
-//   - "model.layers.{i}.attn.o_proj.weight" -> layers[i].attn.o_proj
-//   - "model.layers.{i}.mlp.gate_proj.weight" -> layers[i].mlp.gate_proj
-//   - "model.layers.{i}.mlp.up_proj.weight" -> layers[i].mlp.up_proj
-//   - "model.layers.{i}.mlp.down_proj.weight" -> layers[i].mlp.down_proj
-//   - "model.layers.{i}.input_layernorm.weight" -> layers[i].input_layernorm
-//   - "model.layers.{i}.post_attention_layernorm.weight" -> layers[i].post_attention_layernorm
-//   - "model.norm.weight" -> norm
-//   - "lm_head.weight" -> lm_head
-//
-// Implementation approach:
-//   1. Add weights: HashMap<String, Tensor> field to Qwen3Model
-//   2. Modify new() to accept weights parameter
-//   3. Use weights.get("key") to retrieve and initialize layers instead of VarBuilder::zeros()
-
 impl Qwen3Model {
-    pub fn new(config: Qwen3Config, device: Device) -> Result<Self> {
+    pub fn new(config: Qwen3Config, device: Device) -> CandleResult<Self> {
         let vocab_size = config.vocab_size;
         let hidden_size = config.hidden_size;
 
-        let embeddings = Tensor::zeros((vocab_size, hidden_size), DType::F32, &device)?;
+        let embeddings =
+            Tensor::zeros((vocab_size, hidden_size), candle_core::DType::F32, &device)?;
         let embed_tokens = Embedding::new(embeddings, hidden_size);
 
         let mut layers = Vec::new();
@@ -60,7 +38,7 @@ impl Qwen3Model {
                 hidden_size / config.num_attention_heads,
                 config.intermediate_size,
                 config.rms_norm_eps as f64,
-                candle_nn::VarBuilder::zeros(DType::F32, &device),
+                None,
             )?;
             layers.push(layer);
         }
@@ -68,13 +46,159 @@ impl Qwen3Model {
         let norm = candle_nn::layer_norm(
             hidden_size,
             config.rms_norm_eps as f64,
-            candle_nn::VarBuilder::zeros(DType::F32, &device),
+            candle_nn::VarBuilder::zeros(candle_core::DType::F32, &device),
         )?;
         let lm_head = candle_nn::linear(
             hidden_size,
             vocab_size,
-            candle_nn::VarBuilder::zeros(DType::F32, &device),
+            candle_nn::VarBuilder::zeros(candle_core::DType::F32, &device),
         )?;
+
+        let kv_cache = PagedKvCache::new(
+            config.num_hidden_layers,
+            config.num_key_value_heads,
+            hidden_size / config.num_attention_heads,
+            1024,
+            device.clone(),
+        )?;
+
+        Ok(Self {
+            config,
+            embed_tokens,
+            layers,
+            norm,
+            lm_head,
+            kv_cache,
+            device,
+        })
+    }
+
+    fn get_weight<'a>(weights: &'a HashMap<String, Tensor>, keys: &[&str]) -> Option<&'a Tensor> {
+        for key in keys {
+            if let Some(w) = weights.get(*key) {
+                return Some(w);
+            }
+        }
+        None
+    }
+
+    pub fn from_weights(
+        config: Qwen3Config,
+        device: Device,
+        weights: HashMap<String, Tensor>,
+    ) -> CandleResult<Self> {
+        let vocab_size = config.vocab_size;
+        let hidden_size = config.hidden_size;
+
+        let embed_key = "model.embed_tokens.weight";
+        let embed_tokens = if let Some(w) = weights.get(embed_key) {
+            Embedding::new(w.clone(), hidden_size)
+        } else {
+            return Err(candle_core::Error::msg(format!(
+                "Missing weight: {}",
+                embed_key
+            )));
+        };
+
+        let mut layers = Vec::new();
+        for i in 0..config.num_hidden_layers {
+            let q_key = Self::get_weight(
+                &weights,
+                &[
+                    &format!("model.layers.{}.self_attn.q_proj.weight", i),
+                    &format!("model.layers.{}.attn.q_proj.weight", i),
+                ],
+            );
+            let k_key = Self::get_weight(
+                &weights,
+                &[
+                    &format!("model.layers.{}.self_attn.k_proj.weight", i),
+                    &format!("model.layers.{}.attn.k_proj.weight", i),
+                ],
+            );
+            let v_key = Self::get_weight(
+                &weights,
+                &[
+                    &format!("model.layers.{}.self_attn.v_proj.weight", i),
+                    &format!("model.layers.{}.attn.v_proj.weight", i),
+                ],
+            );
+            let o_key = Self::get_weight(
+                &weights,
+                &[
+                    &format!("model.layers.{}.self_attn.o_proj.weight", i),
+                    &format!("model.layers.{}.attn.o_proj.weight", i),
+                ],
+            );
+
+            let layer_weights = Some((
+                q_key.cloned(),
+                k_key.cloned(),
+                v_key.cloned(),
+                o_key.cloned(),
+                weights
+                    .get(&format!("model.layers.{}.mlp.gate_proj.weight", i))
+                    .cloned(),
+                weights
+                    .get(&format!("model.layers.{}.mlp.up_proj.weight", i))
+                    .cloned(),
+                weights
+                    .get(&format!("model.layers.{}.mlp.down_proj.weight", i))
+                    .cloned(),
+                weights
+                    .get(&format!("model.layers.{}.input_layernorm.weight", i))
+                    .cloned(),
+                weights
+                    .get(&format!(
+                        "model.layers.{}.post_attention_layernorm.weight",
+                        i
+                    ))
+                    .cloned(),
+            ));
+
+            let layer = TransformerBlock::new_with_weights(
+                hidden_size,
+                config.num_attention_heads,
+                config.num_key_value_heads,
+                hidden_size / config.num_attention_heads,
+                config.intermediate_size,
+                config.rms_norm_eps as f64,
+                layer_weights,
+            )?;
+            layers.push(layer);
+        }
+
+        let norm_key = "model.norm.weight";
+        let norm = if let Some(w) = weights.get(norm_key) {
+            let bias = Tensor::zeros(w.dim(0).unwrap_or(hidden_size), w.dtype(), &device)?;
+            LayerNorm::new(w.clone(), bias, config.rms_norm_eps as f64)
+        } else {
+            return Err(candle_core::Error::msg(format!(
+                "Missing weight: {}",
+                norm_key
+            )));
+        };
+
+        let lm_head_key = "lm_head.weight";
+        let lm_head = if let Some(w) = weights.get(lm_head_key) {
+            Linear::new(w.clone(), None)
+        } else {
+            return Err(candle_core::Error::msg(format!(
+                "Missing weight: {}",
+                lm_head_key
+            )));
+        };
+
+        let lm_head = if let Some(w) = Self::get_weight(
+            &weights,
+            &["lm_head.weight", "output.weight", "model.lm_head.weight"],
+        ) {
+            Linear::new(w.clone(), None)
+        } else {
+            return Err(candle_core::Error::msg(
+                "Missing lm_head weight".to_string(),
+            ));
+        };
 
         let kv_cache = PagedKvCache::new(
             config.num_hidden_layers,
@@ -103,12 +227,76 @@ impl ModelBackend for Qwen3Model {
         input_tokens: &[Vec<TokenId>],
         _positions: &[Vec<usize>],
     ) -> EngineResult<BatchOutput> {
-        use rand::RngExt;
-        let mut rng = rand::rng();
-        let next_tokens: Vec<TokenId> = seq_ids
-            .iter()
-            .map(|_| rng.random_range(0..self.config.vocab_size) as TokenId)
-            .collect();
+        let mut next_tokens = Vec::with_capacity(seq_ids.len());
+
+        for (seq_idx, tokens) in input_tokens.iter().take(seq_ids.len()).enumerate() {
+            if tokens.is_empty() {
+                next_tokens.push(0);
+                continue;
+            }
+
+            let hidden_states = if tokens.len() == 1 {
+                let token_tensor = Tensor::new(&[tokens[0]], &self.device)
+                    .map_err(|e| EngineError::ModelError(e.to_string()))?;
+                let embed = self
+                    .embed_tokens
+                    .forward(&token_tensor)
+                    .map_err(|e| EngineError::ModelError(e.to_string()))?;
+                embed
+                    .unsqueeze(0)
+                    .map_err(|e| EngineError::ModelError(e.to_string()))?
+            } else {
+                let token_tensor = Tensor::new(tokens.as_slice(), &self.device)
+                    .map_err(|e| EngineError::ModelError(e.to_string()))?;
+                let embed = self
+                    .embed_tokens
+                    .forward(&token_tensor)
+                    .map_err(|e| EngineError::ModelError(e.to_string()))?;
+                embed
+                    .unsqueeze(0)
+                    .map_err(|e| EngineError::ModelError(e.to_string()))?
+            };
+
+            let mut hidden_states = hidden_states;
+
+            for layer in &self.layers {
+                hidden_states = layer
+                    .forward(&hidden_states)
+                    .map_err(|e| EngineError::ModelError(e.to_string()))?;
+            }
+
+            hidden_states = self
+                .norm
+                .forward(&hidden_states)
+                .map_err(|e| EngineError::ModelError(e.to_string()))?;
+
+            let logits = self
+                .lm_head
+                .forward(&hidden_states)
+                .map_err(|e| EngineError::ModelError(e.to_string()))?;
+
+            let last_logits = logits
+                .get(logits.dims()[0] - 1)
+                .map_err(|e| EngineError::ModelError(e.to_string()))?;
+
+            let vocab_size = self.config.vocab_size;
+            let mut max_logit = f32::NEG_INFINITY;
+            let mut max_idx = 0u32;
+
+            for i in 0..vocab_size {
+                let val = last_logits
+                    .get(i)
+                    .map_err(|e| EngineError::ModelError(e.to_string()))?
+                    .to_scalar::<f32>()
+                    .unwrap_or(f32::NEG_INFINITY);
+                if val > max_logit {
+                    max_logit = val;
+                    max_idx = i as u32;
+                }
+            }
+
+            next_tokens.push(max_idx as TokenId);
+        }
 
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),

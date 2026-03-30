@@ -19,6 +19,7 @@ pub struct Engine<M: ModelBackend> {
     pub target_model: Arc<M>,
     pub draft_model: Arc<M>,
     pub max_draft_tokens: usize,
+    pub speculative_mode: bool,
     response_txs: HashMap<SeqId, mpsc::UnboundedSender<TokenId>>,
 }
 
@@ -29,6 +30,7 @@ impl<M: ModelBackend> Engine<M> {
             target_model: Arc::new(target_model),
             draft_model: Arc::new(draft_model),
             max_draft_tokens: 4,
+            speculative_mode: false,
             response_txs: HashMap::new(),
         }
     }
@@ -45,6 +47,7 @@ impl<M: ModelBackend> Engine<M> {
             target_model: Arc::new(target_model),
             draft_model: Arc::new(draft_model),
             max_draft_tokens,
+            speculative_mode: false,
             response_txs: HashMap::new(),
         }
     }
@@ -55,6 +58,7 @@ impl<M: ModelBackend> Engine<M> {
             target_model,
             draft_model,
             max_draft_tokens: 4,
+            speculative_mode: false,
             response_txs: HashMap::new(),
         }
     }
@@ -71,8 +75,13 @@ impl<M: ModelBackend> Engine<M> {
             target_model,
             draft_model,
             max_draft_tokens,
+            speculative_mode: false,
             response_txs: HashMap::new(),
         }
+    }
+
+    pub fn enable_speculative(&mut self) {
+        self.speculative_mode = true;
     }
 
     pub fn add_request(
@@ -121,6 +130,7 @@ impl<M: ModelBackend> Engine<M> {
         Ok(results)
     }
 
+    #[allow(dead_code)]
     fn greedy_sample(logits: &[f32]) -> TokenId {
         logits
             .iter()
@@ -149,8 +159,8 @@ impl<M: ModelBackend> Engine<M> {
             for _ in 0..self.max_draft_tokens {
                 let output = self.draft_model.forward(
                     &[*seq_id],
-                    &[current_tokens.clone()],
-                    &[positions.clone()],
+                    std::slice::from_ref(&current_tokens),
+                    std::slice::from_ref(positions),
                 )?;
                 let token = *output.next_tokens.first().unwrap_or(&0);
                 draft.push(token);
@@ -191,7 +201,12 @@ impl<M: ModelBackend> Engine<M> {
             }
 
             if self.scheduler.has_pending() {
-                if let Err(e) = self.step() {
+                let result = if self.speculative_mode {
+                    self.step_speculative()
+                } else {
+                    self.step()
+                };
+                if let Err(e) = result {
                     eprintln!("Engine step error: {}", e);
                 }
             }
