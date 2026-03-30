@@ -59,17 +59,15 @@ Use [Conventional Commits](https://www.conventionalcommits.org/) format:
 - `fix`: Bug fix
 - `refactor`: Code refactoring
 - `test`: Adding tests
-- `docs`: Documentation
+- `docs`: Documentation (specs, plans, README, etc.)
 - `chore`: Maintenance
-- `spec`: Design specification
-- `plan`: Implementation plan
 
 **Examples:**
 ```bash
 git commit -m "feat(model): add forward_prefill to GqaAttention"
 git commit -m "fix(core): resolve prefix cache eviction bug"
-git commit -m "spec(prefix-caching): add Phase 2 prefix hit design"
-git commit -m "plan(paged-attention): add implementation plan"
+git commit -m "docs(prefix-caching): add Phase 2 prefix hit design"
+git commit -m "docs(paged-attention): add implementation plan"
 ```
 
 **Rules:**
