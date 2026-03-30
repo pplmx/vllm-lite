@@ -13,7 +13,6 @@ vllm-lite/
 │   ├── superpowers/
 │   │   ├── specs/      # Design documents
 │   │   └── plans/      # Implementation plans
-│   └── README.md       # This file
 └── tests/              # Integration tests
 ```
 
