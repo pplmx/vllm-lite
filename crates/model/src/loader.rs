@@ -68,17 +68,11 @@ impl ModelLoader {
             })?;
 
             for (name, view) in file.tensors() {
-                if weights.contains_key(&name) {
-                    return Err(candle_core::Error::msg(format!(
-                        "Duplicate weight '{}' found in sharded files",
-                        name
-                    )));
-                }
-
                 let tensor_data: &[u8] = view.data();
                 let shape = view.shape().to_vec();
                 let n = tensor_data.len() / 4;
-                let data_f32 =
+                // SafeTensors stores tensors in FP32 format (f32), so casting bytes to f32 is safe.
+                let data_f32: &[f32] =
                     unsafe { std::slice::from_raw_parts(tensor_data.as_ptr() as *const f32, n) };
                 let tensor = candle_core::Tensor::from_slice(data_f32, shape, &self.device)
                     .map_err(|e| {
@@ -87,7 +81,12 @@ impl ModelLoader {
                             name, e
                         ))
                     })?;
-                weights.insert(name.clone(), tensor);
+                if weights.insert(name.clone(), tensor).is_some() {
+                    return Err(candle_core::Error::msg(format!(
+                        "Duplicate weight '{}' found in sharded files",
+                        name
+                    )));
+                }
             }
         }
 
