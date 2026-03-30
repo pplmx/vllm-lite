@@ -1,5 +1,6 @@
 #![allow(clippy::all, unused)]
 use super::{attention::GqaAttention, mlp::SwiGLU};
+use crate::kv_cache::PagedKvCache;
 use candle_core::{Device, Module, Result, Tensor};
 use candle_nn::LayerNorm;
 
@@ -123,6 +124,55 @@ impl TransformerBlock {
         let x = self.post_attention_layernorm.forward(&x)?;
         let x = self.mlp.forward(&x)?;
         x.add(&residual)
+    }
+
+    pub fn forward_prefill(
+        &mut self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+    ) -> Result<Tensor> {
+        let residual = x.clone();
+        let x = self.input_layernorm.forward(x)?;
+        let x = self
+            .attention
+            .forward_prefill(&x, kv_cache, layer_idx, block_ids)?;
+        let x = (&x + &residual)?;
+
+        let residual = x.clone();
+        let x = self.post_attention_layernorm.forward(&x)?;
+        let x = self.mlp.forward(&x)?;
+        let x = (&x + &residual)?;
+
+        Ok(x)
+    }
+
+    pub fn forward_decode(
+        &self,
+        x: &Tensor,
+        kv_cache: &PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        num_computed_tokens: usize,
+    ) -> Result<Tensor> {
+        let residual = x.clone();
+        let x = self.input_layernorm.forward(x)?;
+        let x = self.attention.forward_decode(
+            &x,
+            kv_cache,
+            layer_idx,
+            block_ids,
+            num_computed_tokens,
+        )?;
+        let x = (&x + &residual)?;
+
+        let residual = x.clone();
+        let x = self.post_attention_layernorm.forward(&x)?;
+        let x = self.mlp.forward(&x)?;
+        let x = (&x + &residual)?;
+
+        Ok(x)
     }
 }
 
