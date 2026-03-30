@@ -110,27 +110,11 @@ impl GqaAttention {
         let repeat_factor = num_q_heads / num_kv_heads;
         let (batch, seq, heads, dim) = kv.dims4()?;
 
-        // Manual expansion: repeat each KV head repeat_factor times
         // Input: [batch, seq, num_kv_heads, head_dim]
         // Output: [batch, seq, num_q_heads, head_dim]
-
-        // Flatten batch*seq, then repeat each head
-        let kv = kv.reshape((batch * seq, heads, dim))?; // [batch*seq, heads, dim]
-
-        // Create output by repeating each head
-        let mut result_parts = Vec::with_capacity(batch * seq * heads * repeat_factor);
-        for i in 0..(batch * seq) {
-            for h in 0..heads {
-                let head_data = kv.narrow(0, i, 1)?.squeeze(0)?; // [heads, dim]
-                let head_data = head_data.narrow(0, h, 1)?.squeeze(0)?; // [dim]
-                for _ in 0..repeat_factor {
-                    result_parts.push(head_data.clone());
-                }
-            }
-        }
-
-        // Stack back: [batch*seq, heads*repeat_factor, dim]
-        let expanded = Tensor::stack(&result_parts, 0)?;
+        // Use reshape + broadcast_as to expand the heads dimension
+        let kv = kv.reshape((batch, seq, heads, 1, dim))?; // [batch, seq, heads, 1, dim]
+        let expanded = kv.broadcast_as((batch, seq, heads, repeat_factor, dim))?; // [batch, seq, heads, repeat, dim]
         let expanded = expanded.reshape((batch, seq, heads * repeat_factor, dim))?;
 
         Ok(expanded)
@@ -160,17 +144,32 @@ impl GqaAttention {
             .reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?
             .transpose(1, 2)?;
 
+        // Group tokens by block and write in batches
+        let mut block_tokens: std::collections::HashMap<usize, Vec<usize>> =
+            std::collections::HashMap::new();
         for token_idx in 0..seq_len {
-            let block_id = token_idx / crate::kv_cache::BLOCK_SIZE;
-            let offset = token_idx % crate::kv_cache::BLOCK_SIZE;
+            let block_id = block_ids[token_idx];
+            block_tokens.entry(block_id).or_default().push(token_idx);
+        }
 
-            let k_slice = k.narrow(2, token_idx, 1)?.transpose(0, 1)?;
-            let v_slice = v.narrow(2, token_idx, 1)?.transpose(0, 1)?;
+        for (&block_id, token_indices) in &block_tokens {
+            // Get all tokens for this block
+            let indices_vec: Vec<u32> = token_indices.iter().map(|&i| i as u32).collect();
+            let indices_tensor = Tensor::new(indices_vec.as_slice(), k.device())?;
+            let k_block = k.index_select(&indices_tensor, 2)?;
+            let v_block = v.index_select(&indices_tensor, 2)?;
 
-            let k_slice = k_slice.reshape((1, self.num_kv_heads, self.head_dim))?;
-            let v_slice = v_slice.reshape((1, self.num_kv_heads, self.head_dim))?;
+            let k_block = k_block.transpose(0, 1)?; // [num_kv_heads, tokens, head_dim]
+            let v_block = v_block.transpose(0, 1)?;
 
-            kv_cache.write_kv(layer_idx, block_id, offset, &k_slice, &v_slice)?;
+            // Write all tokens in this block at once
+            for (offset, &token_idx) in token_indices.iter().enumerate() {
+                let k_slice = k_block.narrow(1, offset, 1)?.squeeze(1)?;
+                let v_slice = v_block.narrow(1, offset, 1)?.squeeze(1)?;
+                let k_slice = k_slice.reshape((1, self.num_kv_heads, self.head_dim))?;
+                let v_slice = v_slice.reshape((1, self.num_kv_heads, self.head_dim))?;
+                kv_cache.write_kv(layer_idx, block_id, offset, &k_slice, &v_slice)?;
+            }
         }
 
         let k_expanded = self.expand_kv(&k.transpose(1, 2)?, self.num_heads, self.num_kv_heads)?;
@@ -235,9 +234,14 @@ impl GqaAttention {
     }
 
     fn causal_mask(&self, seq_len: usize, device: &Device) -> Result<Tensor> {
-        let mask: Vec<f32> = (0..seq_len)
-            .flat_map(|i| (0..seq_len).map(move |j| if i >= j { 0.0 } else { f32::NEG_INFINITY }))
-            .collect();
-        Tensor::from_slice(&mask, (1, 1, seq_len, seq_len), device)
+        let row_indices =
+            Tensor::arange(0u32, seq_len as u32, device)?.reshape((1, 1, seq_len, 1))?;
+        let col_indices =
+            Tensor::arange(0u32, seq_len as u32, device)?.reshape((1, 1, 1, seq_len))?;
+        let mask = row_indices.ge(&col_indices)?;
+        let zero = Tensor::new(0.0f32, device)?;
+        let neg_inf = Tensor::new(f32::NEG_INFINITY, device)?;
+        let mask = mask.where_cond(&zero, &neg_inf)?;
+        Ok(mask)
     }
 }
