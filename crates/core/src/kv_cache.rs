@@ -46,6 +46,17 @@ impl PrefixCache {
     }
 
     pub fn insert(&mut self, key: CacheKey, blocks: Vec<BlockId>, token_count: usize) {
+        if let Some(old_entry) = self.entries.remove(&key) {
+            for &block in &old_entry.blocks {
+                if let Some(count) = self.block_refs.get_mut(&block) {
+                    *count -= 1;
+                    if *count == 0 {
+                        self.block_refs.remove(&block);
+                    }
+                }
+            }
+        }
+
         for &block in &blocks {
             *self.block_refs.entry(block).or_insert(0) += 1;
         }
@@ -57,6 +68,7 @@ impl PrefixCache {
             last_access: Instant::now(),
         };
         self.entries.insert(key, entry);
+        self.lru_order.retain(|k| *k != key);
         self.lru_order.push_front(key);
     }
 
