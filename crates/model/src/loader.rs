@@ -21,6 +21,8 @@ fn find_safetensors_files(model_dir: &Path) -> Result<Vec<std::path::PathBuf>> {
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
             if name.starts_with("model-") && name.ends_with(".safetensors") {
                 files.push(path);
+            } else if name.starts_with("model.safetensors-") && name.ends_with(".safetensors") {
+                files.push(path);
             }
         }
     }
@@ -68,20 +70,50 @@ impl ModelLoader {
                 candle_core::Error::msg(format!("Failed to load {}: {}", file_path.display(), e))
             })?;
 
+            let mut loaded = 0;
             for (name, view) in file.tensors() {
+                if name.contains("visual.") || name.contains("vision_") || name.contains("img_") {
+                    continue;
+                }
+                loaded += 1;
+                if loaded % 20 == 0 {
+                    eprintln!("Loaded {}/? weights...", loaded);
+                }
+
                 let tensor_data: &[u8] = view.data();
                 let shape = view.shape().to_vec();
-                let n = tensor_data.len() / 4;
-                // SafeTensors stores tensors in FP32 format (f32), so casting bytes to f32 is safe.
-                let data_f32: &[f32] =
-                    unsafe { std::slice::from_raw_parts(tensor_data.as_ptr() as *const f32, n) };
-                let tensor = candle_core::Tensor::from_slice(data_f32, shape, &self.device)
-                    .map_err(|e| {
-                        candle_core::Error::msg(format!(
-                            "Failed to create tensor for {}: {}",
-                            name, e
-                        ))
-                    })?;
+                let dtype = view.dtype();
+
+                let tensor = match dtype {
+                    safetensors::Dtype::BF16 | safetensors::Dtype::F16 => {
+                        let n = tensor_data.len() / 2;
+                        let data_u16: &[u16] = unsafe {
+                            std::slice::from_raw_parts(tensor_data.as_ptr() as *const u16, n)
+                        };
+                        let mut data_f32_vec = Vec::with_capacity(n);
+                        for &bits in data_u16 {
+                            let f32_val = half::f16::from_bits(bits).to_f32();
+                            data_f32_vec.push(f32_val);
+                        }
+                        candle_core::Tensor::from_slice(&data_f32_vec, shape, &self.device)
+                    }
+                    safetensors::Dtype::F32 => {
+                        let n = tensor_data.len() / 4;
+                        let data_f32: &[f32] = unsafe {
+                            std::slice::from_raw_parts(tensor_data.as_ptr() as *const f32, n)
+                        };
+                        candle_core::Tensor::from_slice(data_f32, shape, &self.device)
+                    }
+                    _ => {
+                        return Err(candle_core::Error::msg(format!(
+                            "Unsupported dtype {:?} for weight {}",
+                            dtype, name
+                        )));
+                    }
+                }
+                .map_err(|e| {
+                    candle_core::Error::msg(format!("Failed to create tensor for {}: {}", name, e))
+                })?;
                 if weights.insert(name.clone(), tensor).is_some() {
                     return Err(candle_core::Error::msg(format!(
                         "Duplicate weight '{}' found in sharded files",
