@@ -25,14 +25,13 @@ pub struct Engine<M: ModelBackend> {
 
 impl<M: ModelBackend> Engine<M> {
     pub fn new(target_model: M, draft_model: M) -> Self {
-        Self {
-            scheduler: Scheduler::new(),
-            target_model: Arc::new(target_model),
-            draft_model: Arc::new(draft_model),
-            max_draft_tokens: 4,
-            speculative_mode: false,
-            response_txs: HashMap::new(),
-        }
+        Self::with_config(
+            target_model,
+            draft_model,
+            SchedulerConfig::default(),
+            4,
+            1024,
+        )
     }
 
     pub fn with_config(
@@ -46,34 +45,6 @@ impl<M: ModelBackend> Engine<M> {
             scheduler: Scheduler::with_config(config, num_kv_blocks),
             target_model: Arc::new(target_model),
             draft_model: Arc::new(draft_model),
-            max_draft_tokens,
-            speculative_mode: false,
-            response_txs: HashMap::new(),
-        }
-    }
-
-    pub fn from_arc(target_model: Arc<M>, draft_model: Arc<M>) -> Self {
-        Self {
-            scheduler: Scheduler::new(),
-            target_model,
-            draft_model,
-            max_draft_tokens: 4,
-            speculative_mode: false,
-            response_txs: HashMap::new(),
-        }
-    }
-
-    pub fn with_config_arc(
-        target_model: Arc<M>,
-        draft_model: Arc<M>,
-        config: SchedulerConfig,
-        max_draft_tokens: usize,
-        num_kv_blocks: usize,
-    ) -> Self {
-        Self {
-            scheduler: Scheduler::with_config(config, num_kv_blocks),
-            target_model,
-            draft_model,
             max_draft_tokens,
             speculative_mode: false,
             response_txs: HashMap::new(),
