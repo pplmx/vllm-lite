@@ -1,5 +1,17 @@
 use serde::Deserialize;
 
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct RopeScaling {
+    #[serde(default)]
+    pub rope_type: Option<String>,
+    #[serde(default)]
+    pub factor: Option<f32>,
+    #[serde(default)]
+    pub original_max_position_embeddings: Option<usize>,
+    #[serde(default)]
+    pub attn_factor: Option<f32>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct TextConfig {
     #[serde(default)]
@@ -60,6 +72,8 @@ pub struct Qwen3Config {
     pub tie_word_embeddings: Option<bool>,
     #[serde(default)]
     pub has_qk_norm: Option<bool>,
+    #[serde(default)]
+    pub rope_scaling: Option<RopeScaling>,
 }
 
 impl TextConfig {
@@ -172,6 +186,10 @@ impl Qwen3Config {
         self.has_qk_norm.unwrap_or(false)
     }
 
+    pub fn rope_scaling(&self) -> Option<&RopeScaling> {
+        self.rope_scaling.as_ref()
+    }
+
     pub fn attention_type(&self) -> AttentionType {
         if self.q_len.is_some() || self.kv_len.is_some() {
             AttentionType::MLA
@@ -217,6 +235,7 @@ mod tests {
             kv_len: None,
             tie_word_embeddings: None,
             has_qk_norm: None,
+            rope_scaling: None,
         };
 
         assert_eq!(config.vocab_size(), 151936);
@@ -247,6 +266,7 @@ mod tests {
             kv_len: None,
             tie_word_embeddings: Some(true),
             has_qk_norm: Some(true),
+            rope_scaling: None,
         };
 
         assert_eq!(config.vocab_size(), 1000);
@@ -291,6 +311,7 @@ mod tests {
             kv_len: None,
             tie_word_embeddings: None,
             has_qk_norm: None,
+            rope_scaling: None,
         };
 
         assert_eq!(config.vocab_size(), 500);

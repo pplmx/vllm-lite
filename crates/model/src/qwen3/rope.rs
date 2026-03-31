@@ -1,5 +1,27 @@
 #![allow(clippy::all, unused)]
+use crate::config::Qwen3Config;
 use candle_core::{Result, Tensor};
+
+pub struct RoPE {
+    theta: f32,
+    dim: usize,
+    scaling_factor: f32,
+}
+
+impl RoPE {
+    pub fn new(config: &Qwen3Config) -> Self {
+        let rope_scaling = config.rope_scaling();
+        Self {
+            theta: config.rope_theta(),
+            dim: config.hidden_size() / config.num_attention_heads(),
+            scaling_factor: rope_scaling.and_then(|r| r.factor).unwrap_or(1.0),
+        }
+    }
+
+    pub fn scaling_factor(&self) -> f32 {
+        self.scaling_factor
+    }
+}
 
 pub fn apply_rope(query: &Tensor, position_ids: &Tensor, theta: f32) -> Result<Tensor> {
     // RoPE: Apply rotary position embedding to query and key
