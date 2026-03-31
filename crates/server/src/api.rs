@@ -19,13 +19,16 @@ pub struct CompletionRequest {
     pub prompt: String,
     #[serde(default = "default_max_tokens")]
     pub max_tokens: usize,
-    #[serde(default)]
-    #[allow(dead_code)]
+    #[serde(default = "default_stream")]
     pub stream: bool,
 }
 
 fn default_max_tokens() -> usize {
     100
+}
+
+fn default_stream() -> bool {
+    false
 }
 
 #[derive(Serialize)]
@@ -38,6 +41,12 @@ struct CompletionChunk {
 struct Choice {
     text: String,
     index: usize,
+}
+
+#[derive(Serialize)]
+struct CompletionResponse {
+    id: String,
+    choices: Vec<Choice>,
 }
 
 pub async fn completions(
@@ -61,24 +70,45 @@ pub async fn completions(
         .expect("Engine channel should be available");
 
     let tokenizer = state.tokenizer.clone();
-    let stream = stream::unfold((response_rx, false), move |(mut rx, sent_done)| {
+    let stream = stream::unfold((response_rx, req.stream, Vec::new()), move |(mut rx, streaming, mut tokens)| {
         let tokenizer = tokenizer.clone();
         async move {
-            if sent_done {
-                return None;
+            if !streaming && !tokens.is_empty() {
+                let text = tokenizer.decode(&tokens);
+                let response = CompletionResponse {
+                    id: "cmpl-0".to_string(),
+                    choices: vec![Choice { text, index: 0 }],
+                };
+                let data = serde_json::to_string(&response).unwrap();
+                return Some((Ok(Event::default().data(data)), (rx, streaming, tokens)));
             }
             match rx.recv().await {
                 Some(token) => {
-                    let text = tokenizer.decode(&[token]);
-                    let chunk = CompletionChunk {
-                        id: "cmpl-0".to_string(),
-                        choices: vec![Choice { text, index: 0 }],
-                    };
-                    let data = serde_json::to_string(&chunk).unwrap();
-                    Some((Ok(Event::default().data(data)), (rx, false)))
+                    if streaming {
+                        let text = tokenizer.decode(&[token]);
+                        let chunk = CompletionChunk {
+                            id: "cmpl-0".to_string(),
+                            choices: vec![Choice { text, index: 0 }],
+                        };
+                        let data = serde_json::to_string(&chunk).unwrap();
+                        Some((Ok(Event::default().data(data)), (rx, streaming, tokens)))
+                    } else {
+                        tokens.push(token);
+                        Some((Ok(Event::default().data("".to_string())), (rx, streaming, tokens)))
+                    }
                 }
                 None => {
-                    Some((Ok(Event::default().data("[DONE]")), (rx, true)))
+                    if !streaming {
+                        let text = tokenizer.decode(&tokens);
+                        let response = CompletionResponse {
+                            id: "cmpl-0".to_string(),
+                            choices: vec![Choice { text, index: 0 }],
+                        };
+                        let data = serde_json::to_string(&response).unwrap();
+                        Some((Ok(Event::default().data(data)), (rx, true, tokens)))
+                    } else {
+                        Some((Ok(Event::default().data("[DONE]")), (rx, true, tokens)))
+                    }
                 }
             }
         }
