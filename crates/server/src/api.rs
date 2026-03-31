@@ -31,6 +31,8 @@ fn default_stream() -> bool {
     false
 }
 
+const MAX_MAX_TOKENS: usize = 8192;
+
 #[derive(Serialize)]
 struct CompletionChunk {
     id: String,
