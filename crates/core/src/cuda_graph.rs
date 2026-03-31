@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_cuda_graph_not_captured_error() {
-        let mut graph = CudaGraph::new();
+        let graph = CudaGraph::new();
 
         let result = graph.execute(&mut []);
         assert!(result.is_err());
