@@ -1,4 +1,5 @@
 use crate::error::Result;
+use crate::metrics::MetricsCollector;
 use crate::scheduler::Scheduler;
 use crate::types::{BatchOutput, EngineMessage, Request, SchedulerConfig, SeqId, TokenId};
 use std::collections::HashMap;
@@ -22,6 +23,7 @@ pub struct Engine<M: ModelBackend> {
     pub speculative_mode: bool,
     pub error_count: usize,
     pub last_error: Option<String>,
+    pub metrics: MetricsCollector,
     response_txs: HashMap<SeqId, mpsc::UnboundedSender<TokenId>>,
 }
 
@@ -51,6 +53,7 @@ impl<M: ModelBackend> Engine<M> {
             speculative_mode: false,
             error_count: 0,
             last_error: None,
+            metrics: MetricsCollector::new(),
             response_txs: HashMap::new(),
         }
     }
@@ -78,6 +81,7 @@ impl<M: ModelBackend> Engine<M> {
     }
 
     pub fn step(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
+        let start = std::time::Instant::now();
         let batch = self.scheduler.build_batch();
         if batch.is_empty() {
             return Ok(vec![]);
@@ -108,6 +112,18 @@ impl<M: ModelBackend> Engine<M> {
         // Clean up channels for finished sequences
         for seq in self.scheduler.finished_sequences() {
             self.response_txs.remove(&seq.id);
+        }
+
+        // Record metrics
+        if !batch.seq_ids.is_empty() {
+            let total_tokens: usize = batch.input_tokens.iter().map(|t| t.len()).sum();
+            self.metrics.record_tokens(total_tokens as u64);
+            self.metrics.record_batch_size(batch.seq_ids.len());
+        }
+
+        let elapsed = start.elapsed().as_millis() as f64;
+        if elapsed > 0.0 {
+            self.metrics.record_latency(elapsed);
         }
 
         Ok(results)
