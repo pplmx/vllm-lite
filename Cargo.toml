@@ -4,7 +4,7 @@ resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["vLLM-lite Team"]
 license = "MIT"
 repository = "https://github.com/vllm-lite/vllm-lite"
@@ -34,3 +34,4 @@ debug = true
 opt-level = 3
 lto = "thin"
 codegen-units = 1
+
