@@ -7,6 +7,7 @@ use futures::stream::{self, Stream};
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use tokio::sync::mpsc;
+use vllm_core::metrics::MetricsSnapshot;
 use vllm_core::types::{EngineMessage, Request};
 
 use crate::ApiState;
@@ -89,6 +90,54 @@ pub async fn completions(
 pub async fn shutdown(State(engine_tx): State<EngineHandle>) -> &'static str {
     let _ = engine_tx.send(EngineMessage::Shutdown);
     "Shutting down"
+}
+
+pub async fn get_stats(State(state): State<ApiState>) -> Json<MetricsSnapshot> {
+    let (response_tx, mut response_rx) = mpsc::unbounded_channel();
+    state
+        .engine_tx
+        .send(EngineMessage::GetMetrics { response_tx })
+        .expect("Engine channel should be available");
+    let snapshot = response_rx.recv().await.unwrap_or(MetricsSnapshot {
+        tokens_total: 0,
+        requests_total: 0,
+        avg_latency_ms: 0.0,
+        p50_latency_ms: 0.0,
+        p90_latency_ms: 0.0,
+        p99_latency_ms: 0.0,
+        avg_batch_size: 0.0,
+        current_batch_size: 0,
+    });
+    Json(snapshot)
+}
+
+pub async fn get_prometheus(State(state): State<ApiState>) -> String {
+    let (response_tx, mut response_rx) = mpsc::unbounded_channel();
+    state
+        .engine_tx
+        .send(EngineMessage::GetMetrics { response_tx })
+        .expect("Engine channel should be available");
+    let m = response_rx.recv().await.unwrap_or(MetricsSnapshot {
+        tokens_total: 0,
+        requests_total: 0,
+        avg_latency_ms: 0.0,
+        p50_latency_ms: 0.0,
+        p90_latency_ms: 0.0,
+        p99_latency_ms: 0.0,
+        avg_batch_size: 0.0,
+        current_batch_size: 0,
+    });
+    format!(
+        "vllm_tokens_total {}\nvllm_requests_total {}\nvllm_avg_latency_ms {:.2}\nvllm_p50_latency_ms {:.2}\nvllm_p90_latency_ms {:.2}\nvllm_p99_latency_ms {:.2}\nvllm_avg_batch_size {:.2}\nvllm_current_batch_size {}\n",
+        m.tokens_total,
+        m.requests_total,
+        m.avg_latency_ms,
+        m.p50_latency_ms,
+        m.p90_latency_ms,
+        m.p99_latency_ms,
+        m.avg_batch_size,
+        m.current_batch_size
+    )
 }
 
 #[cfg(test)]

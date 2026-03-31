@@ -48,6 +48,8 @@ async fn main() {
 
     let app = Router::new()
         .route("/v1/completions", post(api::completions))
+        .route("/v1/stats", get(api::get_stats))
+        .route("/metrics", get(api::get_prometheus))
         .with_state(state);
 
     let app = app.route("/shutdown", get(api::shutdown).with_state(msg_tx));

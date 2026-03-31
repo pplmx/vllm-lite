@@ -316,7 +316,7 @@ impl GqaAttention {
     fn causal_mask_tile(
         &self,
         batch_size: usize,
-        num_heads: usize,
+        _num_heads: usize,
         tile_len: usize,
         device: &Device,
     ) -> Result<Tensor> {
