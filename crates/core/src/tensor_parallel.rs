@@ -420,4 +420,202 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_device_mesh_first_last_rank() -> Result<(), TensorParallelError> {
+        let mesh0 = DeviceMesh::new(4, 0, vec![0, 1, 2, 3])?;
+        assert!(mesh0.is_first_rank());
+        assert!(!mesh0.is_last_rank());
+
+        let mesh3 = DeviceMesh::new(4, 3, vec![0, 1, 2, 3])?;
+        assert!(!mesh3.is_first_rank());
+        assert!(mesh3.is_last_rank());
+
+        let mesh1 = DeviceMesh::new(4, 1, vec![0, 1, 2, 3])?;
+        assert!(!mesh1.is_first_rank());
+        assert!(!mesh1.is_last_rank());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_device_mesh_local_device_id() -> Result<(), TensorParallelError> {
+        let mesh = DeviceMesh::new(4, 2, vec![10, 11, 12, 13])?;
+        assert_eq!(mesh.local_device_id(), 12);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_column_parallel_large_batch() -> Result<(), TensorParallelError> {
+        let mesh = Arc::new(DeviceMesh::new(4, 0, vec![0, 1, 2, 3])?);
+        let all_reduce = Arc::new(NcclAllReduce::new(mesh.clone()));
+        let linear = ColumnParallelLinear::new(1024, 2048, mesh.clone(), all_reduce);
+
+        assert_eq!(linear.output_size_per_rank(), 512);
+
+        let input = vec![1.0f32; 1024];
+        let output = linear.forward(&input)?;
+
+        assert_eq!(output.len(), 512);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_row_parallel_large_batch() -> Result<(), TensorParallelError> {
+        let mesh = Arc::new(DeviceMesh::new(4, 0, vec![0, 1, 2, 3])?);
+        let all_reduce = Arc::new(NcclAllReduce::new(mesh.clone()));
+        let linear = RowParallelLinear::new(2048, 1024, mesh.clone(), all_reduce);
+
+        assert_eq!(linear.input_size_per_rank(), 512);
+
+        let input = vec![1.0f32; 512];
+        let output = linear.forward(&input)?;
+
+        assert_eq!(output.len(), 1024);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_column_parallel_single_gpu() -> Result<(), TensorParallelError> {
+        let mesh = Arc::new(DeviceMesh::new(1, 0, vec![0])?);
+        let all_reduce = Arc::new(NcclAllReduce::new(mesh.clone()));
+        let linear = ColumnParallelLinear::new(8, 16, mesh.clone(), all_reduce);
+
+        assert_eq!(linear.output_size_per_rank(), 16);
+
+        let input = vec![1.0; 8];
+        let output = linear.forward(&input)?;
+
+        assert_eq!(output.len(), 16);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_column_parallel_output_values() -> Result<(), TensorParallelError> {
+        let mesh = Arc::new(DeviceMesh::new(2, 0, vec![0, 1])?);
+
+        struct IdentityAllReduce;
+
+        impl AllReduce for IdentityAllReduce {
+            fn all_reduce(
+                &self,
+                input: &[f32],
+                _op: ReduceOp,
+            ) -> Result<Vec<f32>, TensorParallelError> {
+                Ok(input.to_vec())
+            }
+
+            fn all_reduce_inplace(
+                &self,
+                _input: &mut [f32],
+                _op: ReduceOp,
+            ) -> Result<(), TensorParallelError> {
+                Ok(())
+            }
+        }
+
+        let identity_all_reduce = Arc::new(IdentityAllReduce);
+        let linear = ColumnParallelLinear::new(2, 2, mesh.clone(), identity_all_reduce);
+
+        let input = vec![1.0, 2.0];
+        let output = linear.forward(&input)?;
+
+        for v in output.iter() {
+            assert!(*v > 0.0);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_row_parallel_input_error() -> Result<(), TensorParallelError> {
+        let mesh = Arc::new(DeviceMesh::new(2, 0, vec![0, 1])?);
+        let all_reduce = Arc::new(NcclAllReduce::new(mesh.clone()));
+        let linear = RowParallelLinear::new(4, 4, mesh.clone(), all_reduce);
+
+        let wrong_input = vec![1.0, 2.0, 3.0];
+        let result = linear.forward(&wrong_input);
+
+        assert!(result.is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_all_reduce_inplace() -> Result<(), TensorParallelError> {
+        let mesh = DeviceMesh::new(2, 0, vec![0, 1])?;
+        let all_reduce = NcclAllReduce::new(mesh.into());
+
+        let mut input = vec![1.0, 2.0, 3.0];
+        all_reduce.all_reduce_inplace(&mut input, ReduceOp::Sum)?;
+
+        let sum: f32 = 6.0;
+        for v in input.iter() {
+            assert_eq!(*v, sum);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_tensor_parallel_manager_mesh_access() -> Result<(), TensorParallelError> {
+        let manager = TensorParallelManager::new(8, 3, vec![0, 1, 2, 3, 4, 5, 6, 7])?;
+
+        let mesh = manager.mesh();
+        assert_eq!(mesh.world_size, 8);
+        assert_eq!(mesh.rank, 3);
+        assert_eq!(mesh.local_device_id(), 3);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_tensor_parallel_4_gpu() -> Result<(), TensorParallelError> {
+        let manager = TensorParallelManager::new(4, 1, vec![0, 1, 2, 3])?;
+
+        let col_linear = manager.create_column_parallel(16, 16);
+        assert_eq!(col_linear.output_size_per_rank(), 4);
+
+        let row_linear = manager.create_row_parallel(16, 16);
+        assert_eq!(row_linear.input_size_per_rank(), 4);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_column_parallel_8_gpu() -> Result<(), TensorParallelError> {
+        let manager = TensorParallelManager::new(8, 5, vec![0, 1, 2, 3, 4, 5, 6, 7])?;
+
+        let col_linear = manager.create_column_parallel(64, 128);
+        assert_eq!(col_linear.output_size_per_rank(), 16);
+
+        assert_eq!(manager.mesh().rank, 5);
+        assert_eq!(manager.mesh().local_device_id(), 5);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_all_reduce_different_world_sizes() -> Result<(), TensorParallelError> {
+        let sizes = vec![1, 2, 4, 8];
+
+        for size in sizes {
+            let mesh = DeviceMesh::new(size, 0, (0..size).collect())?;
+            let all_reduce = NcclAllReduce::new(mesh.into());
+
+            let input = vec![1.0, 2.0, 3.0];
+            let result = all_reduce.all_reduce(&input, ReduceOp::Sum)?;
+
+            let expected: f32 = input.iter().sum();
+            for v in result.iter() {
+                assert_eq!(*v, expected);
+            }
+        }
+
+        Ok(())
+    }
 }
