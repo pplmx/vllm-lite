@@ -32,6 +32,7 @@ pub struct SamplingParams {
     pub repeat_penalty: f32,
     pub beam_width: usize,
     pub length_penalty: f32,
+    pub max_retries: u32,
 }
 
 impl Default for SamplingParams {
@@ -43,6 +44,7 @@ impl Default for SamplingParams {
             repeat_penalty: 1.0,
             beam_width: 1,
             length_penalty: 0.6,
+            max_retries: 0,
         }
     }
 }
