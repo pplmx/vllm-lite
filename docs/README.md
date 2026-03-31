@@ -24,19 +24,26 @@ docs/
 | `2026-03-30-prefix-caching.md` | Prefix caching design (incl. prefix hit) | ✅ Implemented |
 | `2026-03-30-qwen3-integration.md` | Qwen3 model integration | ✅ Implemented |
 | `2026-03-30-speculative-decoding.md` | Speculative decoding design | ✅ Implemented |
+| `2026-03-31-tiled-attention.md` | Tiled attention for memory optimization | 📋 Planned |
+| `2026-03-31-int8-quantization.md` | INT8 quantization for memory savings | 📋 Planned |
+| `2026-03-31-monitoring-metrics.md` | System metrics and monitoring | 📋 Planned |
+| `2026-03-31-test-coverage.md` | Test coverage improvements | 📋 Planned |
 
 ## Plans (Implementation Plans)
 
-### Completed
+### Completed (Core Features)
 
 - `2026-03-30-continuous-batching.md` - Continuous batching
 - `2026-03-30-paged-attention.md` - Paged KV Cache with paged attention
 - `2026-03-30-prefix-caching-phase2.md` - Prefix hit implementation
 - `2026-03-30-speculative-decoding.md` - Speculative decoding
 
-### Pending
+### Pending (Performance & Production)
 
-- (All features implemented!)
+- `2026-03-31-tiled-attention.md` - Tiled attention implementation
+- `2026-03-31-int8-quantization.md` - INT8 quantization
+- `2026-03-31-monitoring-metrics.md` - Metrics collection
+- `2026-03-31-test-coverage.md` - Test coverage
 
 ## Implementation Status
 
@@ -48,6 +55,10 @@ docs/
 | Prefix Caching | ✅ Done |
 | Speculative Decoding | ✅ Done |
 | Real Model Weights | ✅ Done |
+| Tiled Attention | 📋 Planned |
+| INT8 Quantization | 📋 Planned |
+| Monitoring Metrics | 📋 Planned |
+| Test Coverage | 📋 Planned |
 
 ## Adding New Features
 
