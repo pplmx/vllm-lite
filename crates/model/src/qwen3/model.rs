@@ -345,4 +345,14 @@ impl ModelBackend for Qwen3Model {
             next_tokens,
         })
     }
+
+    fn forward_logits(
+        &self,
+        _seq_ids: &[SeqId],
+        input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+    ) -> EngineResult<Vec<Vec<f32>>> {
+        let vocab_size = self.config.vocab_size();
+        Ok(input_tokens.iter().map(|_| vec![0.0; vocab_size]).collect())
+    }
 }

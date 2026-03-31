@@ -257,6 +257,18 @@ mod tests {
                 next_tokens: seq_ids.iter().map(|_| self.token_to_return).collect(),
             })
         }
+
+        fn forward_logits(
+            &self,
+            _seq_ids: &[SeqId],
+            input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+        ) -> Result<Vec<Vec<f32>>> {
+            Ok(input_tokens
+                .iter()
+                .map(|tokens| tokens.iter().map(|_| 0.0).collect())
+                .collect())
+        }
     }
 
     #[test]
