@@ -264,6 +264,14 @@ impl Qwen3Model {
 
         Ok((logits, hidden))
     }
+
+    pub fn forward_quantized_demo(
+        &mut self,
+        input_tokens: &[TokenId],
+    ) -> EngineResult<(Tensor, Tensor)> {
+        self.forward_with_cache(input_tokens, 0, &[0], true)
+            .map_err(|e| EngineError::ModelError(e.to_string()))
+    }
 }
 
 impl ModelBackend for Qwen3Model {
