@@ -58,6 +58,25 @@ impl ScaledDotProductAttention {
         let scale = 1.0 / (head_dim as f32).sqrt();
         Self { scale }
     }
+
+    pub fn compute_sliding_window(
+        &self,
+        q: &Tensor,
+        k: &Tensor,
+        v: &Tensor,
+        window_size: usize,
+    ) -> Result<Tensor> {
+        let k_len = k.dims()[2];
+
+        if k_len <= window_size {
+            return self.forward(q, k, v);
+        }
+
+        let k_window = k.narrow(2, k_len.saturating_sub(window_size), window_size)?;
+        let v_window = v.narrow(2, k_len.saturating_sub(window_size), window_size)?;
+
+        self.forward(q, &k_window, &v_window)
+    }
 }
 
 fn softmax_last_dim(t: &Tensor) -> Result<Tensor> {
@@ -148,6 +167,89 @@ mod tests {
     }
 
     #[test]
+    fn test_scaled_dot_product_attention_small_head_dim() -> Result<()> {
+        let sdpa = ScaledDotProductAttention::new(32);
+
+        let q = Tensor::ones((1, 2, 5, 32), candle_core::DType::F32, &Device::Cpu)?;
+        let k = Tensor::ones((1, 2, 5, 32), candle_core::DType::F32, &Device::Cpu)?;
+        let v = Tensor::ones((1, 2, 5, 32), candle_core::DType::F32, &Device::Cpu)?;
+
+        let output = sdpa.forward(&q, &k, &v)?;
+
+        assert_eq!(output.dims(), &[1, 2, 5, 32]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_scaled_dot_product_attention_large_head_dim() -> Result<()> {
+        let sdpa = ScaledDotProductAttention::new(128);
+
+        let q = Tensor::ones((1, 4, 8, 128), candle_core::DType::F32, &Device::Cpu)?;
+        let k = Tensor::ones((1, 4, 8, 128), candle_core::DType::F32, &Device::Cpu)?;
+        let v = Tensor::ones((1, 4, 8, 128), candle_core::DType::F32, &Device::Cpu)?;
+
+        let output = sdpa.forward(&q, &k, &v)?;
+
+        assert_eq!(output.dims(), &[1, 4, 8, 128]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_scaled_dot_product_attention_known_values() -> Result<()> {
+        let head_dim = 4;
+        let sdpa = ScaledDotProductAttention::new(head_dim);
+
+        let q_data: Vec<f32> = vec![1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+        let q = Tensor::from_slice(&q_data, (1, 1, 2, head_dim), &Device::Cpu)?;
+
+        let k_data: Vec<f32> = vec![1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+        let k = Tensor::from_slice(&k_data, (1, 1, 2, head_dim), &Device::Cpu)?;
+
+        let v_data: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        let v = Tensor::from_slice(&v_data, (1, 1, 2, head_dim), &Device::Cpu)?;
+
+        let output = sdpa.forward(&q, &k, &v)?;
+
+        assert_eq!(output.dims(), &[1, 1, 2, head_dim]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_scaled_dot_product_batch() -> Result<()> {
+        let sdpa = ScaledDotProductAttention::new(32);
+
+        let batch_size = 4;
+        let num_heads = 4;
+        let seq_len = 8;
+        let head_dim = 32;
+
+        let q = Tensor::ones(
+            (batch_size, num_heads, seq_len, head_dim),
+            candle_core::DType::F32,
+            &Device::Cpu,
+        )?;
+        let k = Tensor::ones(
+            (batch_size, num_heads, seq_len, head_dim),
+            candle_core::DType::F32,
+            &Device::Cpu,
+        )?;
+        let v = Tensor::ones(
+            (batch_size, num_heads, seq_len, head_dim),
+            candle_core::DType::F32,
+            &Device::Cpu,
+        )?;
+
+        let output = sdpa.forward(&q, &k, &v)?;
+
+        assert_eq!(output.dims(), &[batch_size, num_heads, seq_len, head_dim]);
+
+        Ok(())
+    }
+
+    #[test]
     fn test_flash_attention_config() {
         let config = FlashAttentionConfig::new()
             .with_flash()
@@ -156,5 +258,123 @@ mod tests {
         assert_eq!(config.variant, AttentionVariant::Flash);
         assert_eq!(config.sliding_window_size, 512);
         assert!(config.use_sliding_window);
+    }
+
+    #[test]
+    fn test_flash_attention_config_default() {
+        let config = FlashAttentionConfig::new();
+
+        assert_eq!(config.variant, AttentionVariant::Standard);
+        assert_eq!(config.flash_block_size, 128);
+        assert!(!config.use_sliding_window);
+        assert_eq!(config.sliding_window_size, 512);
+    }
+
+    #[test]
+    fn test_attention_variant_defaults() {
+        assert_eq!(AttentionVariant::default(), AttentionVariant::Standard);
+    }
+
+    #[test]
+    fn test_flash_attention_kernel_creation() {
+        let config = FlashAttentionConfig::new().with_flash();
+        let kernel = FlashAttentionKernel::new(64, config);
+
+        assert_eq!(kernel.config.variant, AttentionVariant::Flash);
+    }
+
+    #[test]
+    fn test_flash_attention_kernel_forward() -> Result<()> {
+        let config = FlashAttentionConfig::new();
+        let kernel = FlashAttentionKernel::new(64, config);
+
+        let q = Tensor::ones((1, 2, 4, 64), candle_core::DType::F32, &Device::Cpu)?;
+        let k = Tensor::ones((1, 2, 4, 64), candle_core::DType::F32, &Device::Cpu)?;
+        let v = Tensor::ones((1, 2, 4, 64), candle_core::DType::F32, &Device::Cpu)?;
+
+        let output = kernel.forward(&q, &k, &v)?;
+
+        assert_eq!(output.dims(), &[1, 2, 4, 64]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_flash_attention_kernel_sliding_window() -> Result<()> {
+        let config = FlashAttentionConfig::new().with_sliding_window(2);
+        let kernel = FlashAttentionKernel::new(64, config);
+
+        let q = Tensor::ones((1, 1, 4, 64), candle_core::DType::F32, &Device::Cpu)?;
+        let k = Tensor::ones((1, 1, 4, 64), candle_core::DType::F32, &Device::Cpu)?;
+        let v = Tensor::ones((1, 1, 4, 64), candle_core::DType::F32, &Device::Cpu)?;
+
+        let output = kernel.forward(&q, &k, &v)?;
+
+        assert_eq!(output.dims(), &[1, 1, 4, 64]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_sliding_window_small_seq() -> Result<()> {
+        let sdpa = ScaledDotProductAttention::new(32);
+
+        let q = Tensor::ones((1, 1, 3, 32), candle_core::DType::F32, &Device::Cpu)?;
+        let k = Tensor::ones((1, 1, 3, 32), candle_core::DType::F32, &Device::Cpu)?;
+        let v = Tensor::ones((1, 1, 3, 32), candle_core::DType::F32, &Device::Cpu)?;
+
+        let output = sdpa.compute_sliding_window(&q, &k, &v, 5)?;
+
+        assert_eq!(output.dims(), &[1, 1, 3, 32]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_sliding_window_large_seq() -> Result<()> {
+        let sdpa = ScaledDotProductAttention::new(32);
+
+        let q = Tensor::ones((1, 1, 10, 32), candle_core::DType::F32, &Device::Cpu)?;
+        let k = Tensor::ones((1, 1, 10, 32), candle_core::DType::F32, &Device::Cpu)?;
+        let v = Tensor::ones((1, 1, 10, 32), candle_core::DType::F32, &Device::Cpu)?;
+
+        let output = sdpa.compute_sliding_window(&q, &k, &v, 4)?;
+
+        assert_eq!(output.dims(), &[1, 1, 10, 32]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_softmax_output_range() -> Result<()> {
+        let sdpa = ScaledDotProductAttention::new(8);
+
+        let q_data: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        let q = Tensor::from_slice(&q_data, (1, 1, 1, 8), &Device::Cpu)?;
+
+        let k_data: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        let k = Tensor::from_slice(&k_data, (1, 1, 1, 8), &Device::Cpu)?;
+
+        let v_data: Vec<f32> = vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+        let v = Tensor::from_slice(&v_data, (1, 1, 1, 8), &Device::Cpu)?;
+
+        let output = sdpa.forward(&q, &k, &v)?;
+
+        let output_data: Vec<f32> = output.flatten_all()?.to_vec1()?;
+
+        for val in output_data.iter() {
+            assert!(
+                *val >= 0.0,
+                "Softmax output should be non-negative: {}",
+                val
+            );
+            assert!(
+                *val <= 100.0,
+                "Softmax output should be reasonable: {}",
+                val
+            );
+        }
+
+        Ok(())
     }
 }
