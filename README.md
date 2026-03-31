@@ -10,6 +10,10 @@ A lightweight LLM inference engine written in Rust, implementing key vLLM innova
 
 **Latest:** Continuous batching implemented (commit: d22d3e3)
 
+## Roadmap
+
+See [ROADMAP.md](./ROADMAP.md) for detailed development plan.
+
 ## Features
 
 - 🚀 Fast Rust implementation
