@@ -109,6 +109,9 @@ pub struct SchedulerConfig {
     pub prefill_chunk_size: usize,
     pub decode_preference_ratio: f32,
     pub enable_priority_scheduling: bool,
+    pub enable_dynamic_batching: bool,
+    pub min_batch_size: usize,
+    pub max_batch_size: usize,
 }
 
 impl Default for SchedulerConfig {
@@ -121,6 +124,9 @@ impl Default for SchedulerConfig {
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
             enable_priority_scheduling: false,
+            enable_dynamic_batching: true,
+            min_batch_size: 1,
+            max_batch_size: 256,
         }
     }
 }

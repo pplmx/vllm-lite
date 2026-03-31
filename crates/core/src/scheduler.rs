@@ -186,7 +186,14 @@ impl Scheduler {
         let mut input_tokens = vec![];
         let mut positions = vec![];
         let mut budget = self.config.max_num_batched_tokens;
-        let max_seqs = self.config.max_num_seqs;
+
+        let effective_max_seqs = if self.config.enable_dynamic_batching {
+            self.adjust_batch_size()
+        } else {
+            self.config.max_num_seqs
+        };
+
+        let max_seqs = effective_max_seqs;
         let decode_limit = self.config.max_consecutive_decode;
 
         let has_decode = self.running.iter().any(|s| s.status == Status::Decoding);
@@ -372,6 +379,27 @@ impl Scheduler {
         !self.waiting.is_empty() || !self.running.is_empty()
     }
 
+    fn adjust_batch_size(&self) -> usize {
+        let available_blocks = self.kv_allocator.available();
+        let waiting_count = self.waiting.len();
+        let running_count = self.running.len();
+
+        let base_batch = self.config.max_num_seqs;
+
+        if available_blocks < 10 {
+            return self.config.min_batch_size;
+        }
+
+        let memory_factor = (available_blocks as f32 / 1024.0).min(1.0);
+        let target_batch = (self.config.max_batch_size as f32 * memory_factor) as usize;
+
+        let max_possible = waiting_count + running_count;
+        target_batch
+            .min(max_possible)
+            .max(self.config.min_batch_size)
+            .min(base_batch)
+    }
+
     pub fn running_count(&self) -> usize {
         self.running.len()
     }
@@ -440,6 +468,9 @@ mod tests {
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
             enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
         };
         let mut sched = Scheduler::with_config(config, 1024);
         sched.add_request(Request::new(1, vec![10], 5));
@@ -461,6 +492,9 @@ mod tests {
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
             enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
         };
         let mut sched = Scheduler::with_config(config, 1024);
         sched.add_request(Request::new(1, vec![10, 20, 30, 40, 50], 10));
@@ -527,6 +561,9 @@ mod tests {
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
             enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
         };
         let mut sched = Scheduler::with_config(config, 100);
 
@@ -571,6 +608,9 @@ mod tests {
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
             enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -594,6 +634,9 @@ mod tests {
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
             enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -618,6 +661,9 @@ mod tests {
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
             enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -645,6 +691,9 @@ mod tests {
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
             enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -669,6 +718,9 @@ mod tests {
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
             enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -696,6 +748,9 @@ mod tests {
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
             enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
         };
         let mut sched = Scheduler::with_config(config, 10);
 
@@ -742,6 +797,9 @@ mod tests {
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
             enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -768,6 +826,9 @@ mod tests {
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
             enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -794,6 +855,9 @@ mod tests {
             prefill_chunk_size: 2,
             decode_preference_ratio: 0.5,
             enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -825,6 +889,9 @@ mod tests {
             prefill_chunk_size: 2,
             decode_preference_ratio: 0.7,
             enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -849,6 +916,9 @@ mod tests {
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
             enable_priority_scheduling: true,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -875,5 +945,35 @@ mod tests {
             batch.seq_ids[0], 2,
             "Highest priority request should be first"
         );
+    }
+
+    #[test]
+    fn test_dynamic_batching() {
+        let config = SchedulerConfig {
+            max_num_seqs: 10,
+            max_num_batched_tokens: 100,
+            max_consecutive_decode: 10,
+            enable_pd_separation: false,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
+            enable_dynamic_batching: true,
+            min_batch_size: 1,
+            max_batch_size: 10,
+        };
+        let mut sched = Scheduler::with_config(config, 100);
+
+        // Add multiple requests
+        for i in 1..=5 {
+            sched.add_request(Request::new(i, vec![i as TokenId], 3));
+        }
+
+        // Build batch - should respect dynamic batching
+        let batch = sched.build_batch();
+
+        // With enough KV blocks, should process up to 5 requests
+        // But also limited by waiting + running
+        assert!(batch.seq_ids.len() >= 1);
+        assert!(batch.seq_ids.len() <= 5);
     }
 }

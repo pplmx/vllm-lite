@@ -41,6 +41,9 @@ fn test_continuous_batching_with_streaming() {
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
         enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -88,6 +91,9 @@ fn test_chunked_prefill_integration() {
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
         enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -122,6 +128,9 @@ fn test_max_tokens_includes_prompt() {
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
         enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -165,6 +174,9 @@ fn test_single_token_prefill_then_decode() {
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
         enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -203,6 +215,9 @@ fn test_concurrent_requests_finish_together() {
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
         enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -228,6 +243,9 @@ fn test_batch_full_new_request_waits() {
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
         enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -257,6 +275,9 @@ fn test_prefix_cache_hit_directly_decoding() {
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
         enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -285,6 +306,9 @@ fn test_different_prompt_lengths_batching() {
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
         enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -310,6 +334,9 @@ fn test_prefill_priority_under_decode_limit() {
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
         enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -342,6 +369,9 @@ fn test_many_sequences_stress() {
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
         enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -371,6 +401,9 @@ fn test_sequence_state_transitions() {
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
         enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -411,6 +444,9 @@ fn test_immediate_finish_after_prompt() {
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
         enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
