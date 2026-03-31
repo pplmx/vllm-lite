@@ -5,6 +5,7 @@ pub mod kv_cache;
 pub mod loader;
 pub mod quantize;
 pub mod qwen3;
+pub mod qwen3_5;
 pub mod tokenizer;
 
 pub use flash_attention::{
