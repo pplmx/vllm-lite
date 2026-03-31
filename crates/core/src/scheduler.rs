@@ -880,6 +880,87 @@ mod tests {
     }
 
     #[test]
+    fn test_pd_separation_decode_only() {
+        let config = SchedulerConfig {
+            max_num_seqs: 10,
+            max_num_batched_tokens: 10,
+            max_consecutive_decode: 10,
+            enable_pd_separation: true,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
+        };
+        let mut sched = Scheduler::with_config(config, 1024);
+
+        sched.add_request(Request::new(1, vec![1, 2], 5));
+        let batch1 = sched.build_batch();
+        assert_eq!(batch1.input_tokens[0], vec![1, 2]);
+
+        sched.update(&batch1.seq_ids, &[99], &[2]);
+
+        let batch2 = sched.build_batch();
+        assert_eq!(batch2.input_tokens[0].len(), 1);
+
+        sched.update(&batch2.seq_ids, &[100], &[1]);
+
+        let batch3 = sched.build_batch();
+        assert_eq!(batch3.input_tokens[0].len(), 1);
+    }
+
+    #[test]
+    fn test_pd_separation_prefill_only() {
+        let config = SchedulerConfig {
+            max_num_seqs: 10,
+            max_num_batched_tokens: 10,
+            max_consecutive_decode: 10,
+            enable_pd_separation: true,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
+        };
+        let mut sched = Scheduler::with_config(config, 1024);
+
+        sched.add_request(Request::new(1, vec![1, 2, 3, 4, 5], 3));
+
+        let batch = sched.build_batch();
+
+        assert!(batch.input_tokens[0].len() >= 1);
+    }
+
+    #[test]
+    fn test_pd_separation_decode_preference_ratio() {
+        let config = SchedulerConfig {
+            max_num_seqs: 10,
+            max_num_batched_tokens: 10,
+            max_consecutive_decode: 10,
+            enable_pd_separation: true,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.9,
+            enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
+        };
+        let mut sched = Scheduler::with_config(config, 1024);
+
+        sched.add_request(Request::new(1, vec![1], 5));
+        let batch1 = sched.build_batch();
+        sched.update(&batch1.seq_ids, &[10], &[1]);
+
+        sched.add_request(Request::new(2, vec![2, 3], 3));
+
+        let batch2 = sched.build_batch();
+
+        assert!(batch2.seq_ids.len() >= 1);
+    }
+
+    #[test]
     fn test_chunked_prefill_limits_tokens() {
         let config = SchedulerConfig {
             max_num_seqs: 256,
