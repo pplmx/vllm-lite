@@ -7,12 +7,28 @@ This directory contains design documents and implementation plans for vllm-lite.
 ## Directory Structure
 
 ```
-docs/
-├── superpowers/
-│   ├── specs/     # Design specifications
-│   └── plans/     # Implementation plans
-└── README.md      # This file
+vllm-lite/
+├── crates/
+│   ├── core/       # Scheduler, Engine, KV Cache, Types
+│   ├── model/      # Qwen3, Attention, MLP, Quantization
+│   └── server/     # HTTP API (axum)
+├── docs/
+│   ├── superpowers/
+│   │   ├── specs/     # Design specifications
+│   │   └── plans/     # Implementation plans
+│   └── README.md      # This file
+└── tests/          # Integration tests
 ```
+
+## Architecture
+
+The project follows a clean separation of concerns:
+
+- **core**: Core inference engine (scheduling, memory management)
+- **model**: ML model implementations (Qwen3, attention)
+- **server**: HTTP API layer (OpenAI-compatible endpoints)
+
+See [suprpowers/specs/2026-03-29-vllm-lite-design.md](./superpowers/specs/2026-03-29-vllm-lite-design.md) for detailed architecture.
 
 ## Specs (Design Documents)
 
