@@ -7,9 +7,9 @@ Thank you for your interest in contributing!
 1. **Fork** the repository
 2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
 3. **Follow** the development workflow:
-   - Use `brainstorming` skill to design new features
-   - Use `writing-plans` skill to create implementation plans
-   - Use `subagent-driven-development` for implementation
+    - Use `brainstorming` skill to design new features
+    - Use `writing-plans` skill to create implementation plans
+    - Use `subagent-driven-development` for implementation
 4. **Commit** your changes (`git commit -m 'feat: add amazing feature'`)
 5. **Push** to the branch (`git push origin feature/amazing-feature`)
 6. **Create** a Pull Request
@@ -24,7 +24,7 @@ Thank you for your interest in contributing!
 
 ## Commit Message Format
 
-```
+```text
 type(scope): description
 
 [optional body]
@@ -33,6 +33,7 @@ type(scope): description
 ```
 
 Types:
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation changes
@@ -41,7 +42,8 @@ Types:
 - `chore`: Build/CI changes
 
 Example:
-```
+
+```text
 feat(scheduler): add decode-priority batching
 
 - Prioritize decode sequences over prefill

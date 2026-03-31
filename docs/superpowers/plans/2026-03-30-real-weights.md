@@ -24,6 +24,7 @@
 ### Task W-1: Add Sharded File Support
 
 **Files:**
+
 - Modify: `crates/model/src/loader.rs`
 
 - [ ] **Step 1: Add find_safetensors_files function**
@@ -40,7 +41,7 @@ fn find_safetensors_files(model_dir: &Path) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     let entries = std::fs::read_dir(model_dir)
         .map_err(|e| candle_core::Error::msg(format!("Failed to read model directory: {}", e)))?;
-    
+
     for entry in entries.flatten() {
         let path = entry.path();
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
@@ -49,13 +50,13 @@ fn find_safetensors_files(model_dir: &Path) -> Result<Vec<PathBuf>> {
             }
         }
     }
-    
+
     if files.is_empty() {
         return Err(candle_core::Error::msg(
             format!("No model weights found in {}", model_dir.display())
         ));
     }
-    
+
     files.sort();
     Ok(files)
 }
@@ -69,9 +70,9 @@ Replace existing `load_weights` method:
 pub fn load_weights(&self, model_dir: &str) -> Result<HashMap<String, Tensor>> {
     let model_path = Path::new(model_dir);
     let files = find_safetensors_files(model_path)?;
-    
+
     let mut weights: HashMap<String, Tensor> = HashMap::new();
-    
+
     for file_path in files {
         let data = std::fs::read(&file_path)
             .map_err(|e| candle_core::Error::msg(format!("Failed to read {}: {}", file_path.display(), e)))?;
@@ -84,7 +85,7 @@ pub fn load_weights(&self, model_dir: &str) -> Result<HashMap<String, Tensor>> {
                     format!("Duplicate weight '{}' found in sharded files", name)
                 ));
             }
-            
+
             let tensor_data: &[u8] = view.data();
             let shape = view.shape().to_vec();
             let n = tensor_data.len() / 4;
@@ -94,7 +95,7 @@ pub fn load_weights(&self, model_dir: &str) -> Result<HashMap<String, Tensor>> {
             weights.insert(name.clone(), tensor);
         }
     }
-    
+
     Ok(weights)
 }
 ```
@@ -117,6 +118,7 @@ git commit -m "feat(model): add sharded safetensors file support to ModelLoader"
 ### Task W-2: Add load_model Method
 
 **Files:**
+
 - Modify: `crates/model/src/loader.rs`
 
 - [ ] **Step 1: Add load_model method**
@@ -127,7 +129,7 @@ Add to `ModelLoader` impl block in `crates/model/src/loader.rs`:
 pub fn load_model(&self, model_dir: &str) -> Result<crate::qwen3::model::Qwen3Model> {
     let config = self.load_config(model_dir)?;
     let weights = self.load_weights(model_dir)?;
-    
+
     crate::qwen3::model::Qwen3Model::from_weights(config, self.device.clone(), weights)
         .map_err(|e| candle_core::Error::msg(format!("Failed to create model: {}", e)))
 }
@@ -161,6 +163,7 @@ git commit -m "feat(model): add load_model method to ModelLoader"
 ### Task W-3: Fix Server Integration
 
 **Files:**
+
 - Modify: `crates/server/src/main.rs`
 
 - [ ] **Step 1: Fix weights clone bug**
@@ -212,6 +215,7 @@ git commit -m "fix(server): fix weights clone bug in model loading"
 ### Task W-4: Add Unit Tests
 
 **Files:**
+
 - Modify: `crates/model/src/loader.rs`
 
 - [ ] **Step 1: Add test module**
@@ -229,9 +233,9 @@ mod tests {
     fn test_find_safetensors_single_file() {
         let temp_dir = TempDir::new().unwrap();
         let model_dir = temp_dir.path();
-        
+
         fs::write(model_dir.join("model.safetensors"), b"test").unwrap();
-        
+
         let files = find_safetensors_files(model_dir).unwrap();
         assert_eq!(files.len(), 1);
         assert!(files[0].to_string_lossy().ends_with("model.safetensors"));
@@ -241,10 +245,10 @@ mod tests {
     fn test_find_safetensors_sharded_files() {
         let temp_dir = TempDir::new().unwrap();
         let model_dir = temp_dir.path();
-        
+
         fs::write(model_dir.join("model-00001-of-00002.safetensors"), b"test1").unwrap();
         fs::write(model_dir.join("model-00002-of-00002.safetensors"), b"test2").unwrap();
-        
+
         let files = find_safetensors_files(model_dir).unwrap();
         assert_eq!(files.len(), 2);
     }
@@ -253,7 +257,7 @@ mod tests {
     fn test_find_safetensors_no_files() {
         let temp_dir = TempDir::new().unwrap();
         let model_dir = temp_dir.path();
-        
+
         let result = find_safetensors_files(model_dir);
         assert!(result.is_err());
     }
@@ -306,11 +310,11 @@ Expected: Model generates coherent text (not random tokens).
 
 ## Spec Coverage
 
-| Spec Section | Covered By |
-|---|---|
-| Sharded file support | Task W-1 |
-| Single file support | Task W-1 |
-| load_model method | Task W-2 |
-| Error handling | Task W-1 |
-| Server integration | Task W-3 |
-| Unit tests | Task W-4 |
+| Spec Section         | Covered By |
+| -------------------- | ---------- |
+| Sharded file support | Task W-1   |
+| Single file support  | Task W-1   |
+| load_model method    | Task W-2   |
+| Error handling       | Task W-1   |
+| Server integration   | Task W-3   |
+| Unit tests           | Task W-4   |

@@ -13,6 +13,7 @@
 ## Task 1: 添加 AttentionConfig
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/attention.rs`
 
 - [ ] **Step 1: 添加配置结构**
@@ -53,6 +54,7 @@ git commit -m "feat(model): add AttentionConfig for tiled attention"
 ## Task 2: 实现 tiled_attention
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/attention.rs`
 
 - [ ] **Step 1: 实现核心算法**
@@ -66,7 +68,7 @@ fn tiled_attention(
     seq_len: usize,
 ) -> Result<Tensor> {
     let tile_size = self.config.tile_size.unwrap_or(16);
-    
+
     // 分块计算
     // ...
 }
@@ -97,6 +99,7 @@ git commit -m "feat(model): implement tiled attention kernel"
 ## Task 3: 自动选择逻辑
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/attention.rs`
 
 - [ ] **Step 1: 添加 forward 方法**
@@ -109,7 +112,7 @@ pub fn forward(
     // ...
 ) -> Result<Tensor> {
     let tile_size = self.config.tile_size.unwrap_or(16);
-    
+
     // 短序列用标准，长序列用 tiled
     if seq_len > tile_size {
         self.tiled_attention(...)
@@ -130,6 +133,7 @@ git commit -m "feat(model): add automatic attention strategy selection"
 ## Task 4: 测试验证
 
 **Files:**
+
 - Add: `crates/model/tests/tiled_attention.rs`
 
 - [ ] **Step 1: 添加测试**

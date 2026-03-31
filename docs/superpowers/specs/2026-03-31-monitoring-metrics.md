@@ -5,6 +5,7 @@
 添加完整的监控指标，为生产环境提供系统状态可视化。
 
 **目标：**
+
 - 吞吐量 (tokens/sec)
 - 延迟分布 (P50, P90, P99)
 - GPU 利用率
@@ -85,16 +86,16 @@ pub struct Engine<M: ModelBackend> {
 impl<M: ModelBackend> Engine<M> {
     pub fn step(&mut self) -> Result<()> {
         let start = Instant::now();
-        
+
         // ... existing logic
-        
+
         self.metrics_collector.record_batch(
             batch_size,
             prefill_tokens,
             decode_tokens,
             elapsed,
         );
-        
+
         Ok(())
     }
 }
@@ -112,7 +113,7 @@ pub struct MetricsCollector {
 
 impl MetricsCollector {
     pub fn new() -> Self { ... }
-    
+
     pub fn record_batch(&self, size: usize, prefill: usize, decode: usize, elapsed: Duration) { ... }
     pub fn record_latency(&self, phase: &str, ms: f64) { ... }
     pub fn get_metrics(&self) -> MetricsSnapshot { ... }
@@ -156,7 +157,7 @@ impl MetricsCollector {
 
 ### 4.2 Prometheus 格式
 
-```
+```text
 # HELP vllm_tokens_per_second Total tokens processed per second
 # TYPE vllm_tokens_per_second gauge
 vllm_tokens_per_second 150.5
@@ -179,10 +180,10 @@ pub struct MetricsCollector {
     // 滑动窗口计数器
     tokens_total: AtomicU64,
     requests_total: AtomicU64,
-    
+
     // 延迟直方图 (简化的)
     latencies: Mutex<Vec<f64>>,
-    
+
     // 资源监控
     resource_stats: Mutex<ResourceStats>,
 }
@@ -202,7 +203,7 @@ impl LatencyHistogram {
         }
         Self { buckets, total: 0 }
     }
-    
+
     pub fn record(&mut self, ms: f64) {
         // 找到合适的 bucket
         for (&threshold, count) in self.buckets.iter_mut() {
@@ -213,7 +214,7 @@ impl LatencyHistogram {
         }
         self.total += 1;
     }
-    
+
     pub fn percentile(&self, p: f64) -> f64 {
         let target = (self.total as f64 * p).ceil() as u64;
         let mut cumsum = 0;
@@ -263,20 +264,21 @@ async fn metrics() -> String {
 
 ### Test 1: 吞吐量计算
 
-```
+```text
 发送 100 个请求
 期望: tokens_per_second 正确计算
 ```
 
 ### Test 2: 延迟分位数
 
-```
+```text
 发送 1000 个请求，延迟随机
 期望: P50/P90/P99 正确
 ```
 
 ### Test 3: 资源监控
 
-```
+```text
 运行推理
 期望: GPU 显存使用正确反映
+```

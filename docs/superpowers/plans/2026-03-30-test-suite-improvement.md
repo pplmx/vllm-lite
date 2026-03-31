@@ -12,20 +12,21 @@
 
 ## Test File Analysis Summary
 
-| File | Issue | Priority |
-|------|-------|----------|
-| `crates/model/tests/logits.rs` | 3 warnings (unused imports/vars) | High |
-| `crates/model/tests/attention.rs` | Only shape checks | High |
-| `crates/model/tests/model.rs` | Only counts, no correctness | High |
-| `crates/core/tests/prefix_cache.rs` | Only 2 tests | Medium |
-| `crates/core/src/scheduler.rs` | Missing edge cases | Medium |
-| `crates/server/src/api.rs` | Only serialization | Low |
+| File                                | Issue                            | Priority |
+| ----------------------------------- | -------------------------------- | -------- |
+| `crates/model/tests/logits.rs`      | 3 warnings (unused imports/vars) | High     |
+| `crates/model/tests/attention.rs`   | Only shape checks                | High     |
+| `crates/model/tests/model.rs`       | Only counts, no correctness      | High     |
+| `crates/core/tests/prefix_cache.rs` | Only 2 tests                     | Medium   |
+| `crates/core/src/scheduler.rs`      | Missing edge cases               | Medium   |
+| `crates/server/src/api.rs`          | Only serialization               | Low      |
 
 ---
 
 ### Task 1: Fix Test Warnings in logits.rs
 
 **Files:**
+
 - Modify: `crates/model/tests/logits.rs:1-2`
 - Modify: `crates/model/tests/logits.rs:93`
 
@@ -63,6 +64,7 @@ Expected: PASS with no warnings
 ### Task 2: Strengthen Attention Tests
 
 **Files:**
+
 - Modify: `crates/model/tests/attention.rs`
 
 - [ ] **Step 1: Add actual computation verification test**
@@ -77,7 +79,7 @@ fn test_attention_output_is_different_from_input() {
 
     // Create deterministic input
     let x = Tensor::zeros((1, 2, 256), DType::F32, &device).unwrap();
-    
+
     let output = attn.forward(&x).unwrap();
 
     // Attention should produce different output from input
@@ -126,6 +128,7 @@ Expected: All 9 tests pass
 ### Task 3: Strengthen Model Tests
 
 **Files:**
+
 - Modify: `crates/model/tests/model.rs`
 
 - [ ] **Step 1: Add FakeModel correctness test**
@@ -179,7 +182,7 @@ fn test_fake_model_different_seqs_different_output() {
 #[test]
 fn test_fake_model_batch_size_respected() {
     let model = FakeModel::new(1000);
-    
+
     // Test various batch sizes
     for batch_size in [1, 2, 5, 10] {
         let seq_ids: Vec<u64> = (0..batch_size).map(|i| i as u64).collect();
@@ -206,6 +209,7 @@ Expected: All 4 tests pass
 ### Task 4: Expand Prefix Cache Tests
 
 **Files:**
+
 - Modify: `crates/core/tests/prefix_cache.rs`
 
 - [ ] **Step 1: Add more prefix cache edge cases**
@@ -379,6 +383,7 @@ Expected: All 5 tests pass
 ### Task 5: Add Edge Case Tests to Scheduler
 
 **Files:**
+
 - Modify: `crates/core/src/scheduler.rs` (add to existing test module at line 286)
 
 - [ ] **Step 1: Add edge case tests**
@@ -390,7 +395,7 @@ Add after line 562:
     fn test_empty_prompt_handling() {
         let mut sched = Scheduler::new();
         sched.add_request(Request::new(1, vec![], 5));
-        
+
         let batch = sched.build_batch();
         // Empty prompt should still be processed
         assert!(batch.is_empty() || batch.input_tokens.iter().all(|t| t.is_empty()));
@@ -400,12 +405,12 @@ Add after line 562:
     fn test_single_token_prompt() {
         let mut sched = Scheduler::new();
         sched.add_request(Request::new(1, vec![42], 3));
-        
+
         let batch = sched.build_batch();
         assert_eq!(batch.input_tokens[0], vec![42]);
-        
+
         sched.update(&batch.seq_ids, &[99], &[1]);
-        
+
         // Should transition to decoding after single token
         let batch2 = sched.build_batch();
         assert!(!batch2.is_empty());
@@ -422,10 +427,10 @@ Add after line 562:
 
         // prompt length = 2, max_tokens = 2 (exactly)
         sched.add_request(Request::new(1, vec![10, 20], 2));
-        
+
         let batch = sched.build_batch();
         sched.update(&batch.seq_ids, &[], &[2]);  // Signal prompt done
-        
+
         // Should be finished
         assert!(!sched.has_pending());
     }
@@ -441,13 +446,13 @@ Add after line 562:
         let mut sched = Scheduler::with_config(config, 1024);
 
         sched.add_request(Request::new(1, vec![1, 2, 3], 3));
-        
+
         let batch = sched.build_batch();
         assert_eq!(batch.input_tokens[0], vec![1, 2, 3]);
-        
+
         // After prefill with exact token count
         sched.update(&batch.seq_ids, &[], &[3]);
-        
+
         // Should be done immediately
         assert!(!sched.has_pending());
     }
@@ -466,6 +471,7 @@ Expected: All 20+ tests pass
 ### Task 6: Add API Validation Tests
 
 **Files:**
+
 - Modify: `crates/server/src/api.rs`
 
 - [ ] **Step 1: Add validation tests**
@@ -523,6 +529,7 @@ Expected: All 9 tests pass
 ### Task 7: Final Verification
 
 **Files:**
+
 - All test files
 
 - [ ] **Step 1: Run all tests**
@@ -553,12 +560,12 @@ Expected: Should be > 114 (previous count was 114)
 
 ### Summary of Changes
 
-| Task | Files Modified | Tests Added | Warnings Fixed |
-|------|---------------|-------------|----------------|
-| 1. Fix warnings | 1 | 0 | 3 |
-| 2. Strengthen attention | 1 | 2 | 0 |
-| 3. Strengthen model | 1 | 3 | 0 |
-| 4. Prefix cache | 1 | 3 | 0 |
-| 5. Scheduler edge cases | 1 | 4 | 0 |
-| 6. API validation | 1 | 5 | 0 |
-| **Total** | **6** | **17** | **3** |
+| Task                    | Files Modified | Tests Added | Warnings Fixed |
+| ----------------------- | -------------- | ----------- | -------------- |
+| 1. Fix warnings         | 1              | 0           | 3              |
+| 2. Strengthen attention | 1              | 2           | 0              |
+| 3. Strengthen model     | 1              | 3           | 0              |
+| 4. Prefix cache         | 1              | 3           | 0              |
+| 5. Scheduler edge cases | 1              | 4           | 0              |
+| 6. API validation       | 1              | 5           | 0              |
+| **Total**               | **6**          | **17**      | **3**          |

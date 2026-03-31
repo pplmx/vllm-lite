@@ -24,15 +24,15 @@
 
 ## 2. 技术选型
 
-| 维度 | 选择 | 理由 |
-|------|------|------|
-| 语言 | Rust | 学习目标 |
-| ML 后端 | Candle | 纯 Rust，CUDA 支持，无 FFI |
-| 模型 | Qwen3 初始，后续 DeepSeek | 热门开源模型 |
-| 权重格式 | SafeTensors | HuggingFace 标准，Candle 原生支持 |
-| HTTP 框架 | axum | tokio 生态，简洁 |
-| 并发 | tokio + 单线程 GPU worker | vLLM 原始架构 |
-| 量化 | 暂不支持 | 聚焦核心调度逻辑 |
+| 维度      | 选择                      | 理由                              |
+| --------- | ------------------------- | --------------------------------- |
+| 语言      | Rust                      | 学习目标                          |
+| ML 后端   | Candle                    | 纯 Rust，CUDA 支持，无 FFI        |
+| 模型      | Qwen3 初始，后续 DeepSeek | 热门开源模型                      |
+| 权重格式  | SafeTensors               | HuggingFace 标准，Candle 原生支持 |
+| HTTP 框架 | axum                      | tokio 生态，简洁                  |
+| 并发      | tokio + 单线程 GPU worker | vLLM 原始架构                     |
+| 量化      | 暂不支持                  | 聚焦核心调度逻辑                  |
 
 ---
 
@@ -40,7 +40,7 @@
 
 ### Crate 结构
 
-```
+```text
 vllm-lite/
 ├── Cargo.toml              # workspace root
 ├── crates/
@@ -86,7 +86,7 @@ vllm-lite/
 
 ### 并发模型
 
-```
+```text
 ┌──────────────────────────────────────────────────┐
 │  tokio runtime (server crate)                     │
 │                                                   │
@@ -104,7 +104,7 @@ vllm-lite/
 
 ### 数据流
 
-```
+```text
 Request (HTTP)
   → Tokenize (server 层，tokenizers crate)
   → Request { id, prompt_tokens, max_tokens, sampling_params }
@@ -177,6 +177,7 @@ pub struct BatchOutput {
 ```
 
 关键设计：
+
 - `input_tokens: Vec<Vec<TokenId>>` — 保留序列边界，不同序列可能处于不同阶段
 - `positions: Vec<Vec<usize>>` — 显式传位置，支持 RoPE
 - `num_computed_tokens` — 跟踪已完成 prefill 的 token 数，为 chunked prefill 准备
@@ -202,18 +203,18 @@ pub struct Scheduler {
 
 1. 从 waiting 队列取序列加入 running（不超过 max_num_seqs）
 2. `build_batch()`:
-   - 收集所有 running 序列
-   - Waiting/Prefilling 序列: 传待处理的 prompt tokens（分块）
-   - Decoding 序列: 只传最后一个 token
-   - 检查 max_num_batched_tokens 上限
+    - 收集所有 running 序列
+    - Waiting/Prefilling 序列: 传待处理的 prompt tokens（分块）
+    - Decoding 序列: 只传最后一个 token
+    - 检查 max_num_batched_tokens 上限
 3. 模型 forward 后 `update()`:
-   - 追加生成的 token
-   - 检查终止条件（max_tokens、EOS）
-   - Finished 的序列移出，释放 KV blocks
+    - 追加生成的 token
+    - 检查终止条件（max_tokens、EOS）
+    - Finished 的序列移出，释放 KV blocks
 
 ### 调度策略
 
-```
+```text
 decode 优先，prefill 填充剩余容量
 ```
 
@@ -336,7 +337,7 @@ impl Engine {
 
 ### Prefill vs Decode
 
-```
+```text
 Prefill (序列刚进来):
   input_tokens = [完整 prompt 或分块]
   positions = [0, 1, ..., n-1]
@@ -352,7 +353,7 @@ Decode (后续每步):
 
 长 prompt 分多个 step 完成，每个 step 可同时处理 decode 序列（混合 batch）：
 
-```
+```text
 Step 1: prefill [0..1024]
 Step 2: prefill [1024..2048] + decode seq_A, seq_B
 Step 3: prefill [2048..3072] + decode seq_A, seq_B, seq_C
@@ -379,6 +380,7 @@ pub fn sample(logits: &[f32], params: &SamplingParams) -> TokenId {
 ```
 
 实现顺序：
+
 1. Phase 1: `greedy_sample`（argmax）
 2. Phase 2: + `temperature` + `top_k`
 3. Phase 3: + `top_p` + `repetition_penalty`
@@ -389,16 +391,17 @@ pub fn sample(logits: &[f32], params: &SamplingParams) -> TokenId {
 
 ### Endpoints
 
-| Method | Path | 说明 |
-|--------|------|------|
-| POST | /v1/completions | 文本补全 |
-| POST | /v1/chat/completions | 对话补全 |
-| GET | /v1/models | 列出可用模型 |
-| GET | /metrics | 运行时指标 |
+| Method | Path                 | 说明         |
+| ------ | -------------------- | ------------ |
+| POST   | /v1/completions      | 文本补全     |
+| POST   | /v1/chat/completions | 对话补全     |
+| GET    | /v1/models           | 列出可用模型 |
+| GET    | /metrics             | 运行时指标   |
 
 ### /v1/completions
 
 Request:
+
 ```json
 {
   "model": "qwen3",
@@ -411,7 +414,8 @@ Request:
 ```
 
 Streaming Response (SSE):
-```
+
+```text
 data: {"id":"...","choices":[{"text":" there"}]}\n\n
 data: {"id":"...","choices":[{"text":" was"}]}\n\n
 data: [DONE]\n\n
@@ -420,6 +424,7 @@ data: [DONE]\n\n
 ### /v1/chat/completions
 
 Request:
+
 ```json
 {
   "model": "qwen3",
@@ -430,7 +435,8 @@ Request:
 ```
 
 Streaming Response (SSE):
-```
+
+```text
 data: {"id":"...","choices":[{"delta":{"content":"Hi"}}]}\n\n
 data: [DONE]\n\n
 ```
@@ -491,10 +497,10 @@ pub struct Metrics {
 
 ## 12. 依赖汇总
 
-| Crate | 关键依赖 |
-|-------|---------|
-| core | tokio, thiserror, parking_lot |
-| model | core, candle-core, candle-nn, candle-transformers, safetensors |
+| Crate  | 关键依赖                                                        |
+| ------ | --------------------------------------------------------------- |
+| core   | tokio, thiserror, parking_lot                                   |
+| model  | core, candle-core, candle-nn, candle-transformers, safetensors  |
 | server | core, model, axum, tokio, serde, tokenizers, eventsource-stream |
 
 ---

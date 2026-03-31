@@ -12,7 +12,7 @@
 
 ## Key Design: Paged KV Cache
 
-```
+```text
 KV Cache Layout (per layer):
 
 block_0   [seq1_k, seq1_v, seq2_k, seq2_v, ...]  # 16 tokens
@@ -30,11 +30,13 @@ block_2   [seq3_k, seq3_v, ...]                  # different seq
 ### Task P4-1: BlockAllocator in core crate
 
 **Files:**
+
 - Create: `crates/core/src/kv_cache.rs`
 
 - [ ] **Step 1: Add BlockAllocator**
 
 `crates/core/src/kv_cache.rs`:
+
 ```rust
 use crate::types::BlockId;
 
@@ -81,7 +83,7 @@ mod tests {
     #[test]
     fn test_allocate_and_free() {
         let mut alloc = BlockAllocator::new(10);
-        
+
         let blocks = alloc.allocate(3).unwrap();
         assert_eq!(blocks.len(), 3);
         assert_eq!(alloc.available(), 7);
@@ -102,6 +104,7 @@ mod tests {
 - [ ] **Step 2: Update lib.rs**
 
 `crates/core/src/lib.rs`:
+
 ```rust
 pub mod error;
 pub mod types;
@@ -129,12 +132,14 @@ git commit -m "feat(core): add BlockAllocator for KV cache blocks"
 ### Task P4-2: PagedKvCache in model crate
 
 **Files:**
+
 - Modify: `crates/model/Cargo.toml` (add candle dependencies)
 - Create: `crates/model/src/kv_cache.rs`
 
 - [ ] **Step 1: Add candle dependencies**
 
 `crates/model/Cargo.toml`:
+
 ```toml
 [package]
 name = "vllm-model"
@@ -152,6 +157,7 @@ thiserror = "2"
 - [ ] **Step 2: Implement PagedKvCache**
 
 `crates/model/src/kv_cache.rs`:
+
 ```rust
 use candle_core::{Device, Tensor, Result, DType};
 use vllm_core::types::BlockId;
@@ -255,6 +261,7 @@ impl PagedKvCache {
 - [ ] **Step 3: Update model lib.rs**
 
 `crates/model/src/lib.rs`:
+
 ```rust
 pub mod fake;
 pub mod kv_cache;
@@ -278,12 +285,14 @@ git commit -m "feat(model): add PagedKvCache with Candle Tensor storage"
 ### Task P4-3: Integrate with Scheduler
 
 **Files:**
+
 - Modify: `crates/core/src/types.rs` (Sequence has kv_blocks field)
 - Modify: `crates/core/src/scheduler.rs` (allocate/free blocks)
 
 - [ ] **Step 1: Update Sequence to include kv_blocks**
 
 In `crates/core/src/types.rs`, add to Sequence struct:
+
 ```rust
 pub struct Sequence {
     pub id: SeqId,
@@ -299,6 +308,7 @@ pub struct Sequence {
 - [ ] **Step 2: Update Scheduler to manage blocks**
 
 Add field to Scheduler:
+
 ```rust
 pub struct Scheduler {
     // ... existing fields
@@ -307,26 +317,28 @@ pub struct Scheduler {
 ```
 
 Update `add_request` to pre-allocate blocks:
+
 ```rust
 pub fn add_request(&mut self, req: Request) -> SeqId {
     // ... existing code ...
-    
+
     // Pre-allocate blocks for prompt tokens
     let num_blocks_needed = (seq.tokens.len() + BLOCK_SIZE - 1) / BLOCK_SIZE;
     let blocks = self.kv_allocator.allocate(num_blocks_needed).unwrap_or_default();
     seq.kv_blocks = blocks;
-    
+
     // ... rest
 }
 ```
 
 Update `update` to allocate new blocks for decoded tokens:
+
 ```rust
 pub fn update(&mut self, seq_ids: &[SeqId], next_tokens: &[TokenId], input_counts: &[usize]) {
     for ((seq_id, token), &input_count) in seq_ids.iter().zip(next_tokens).zip(input_counts) {
         if let Some(seq) = self.running.iter_mut().find(|s| s.id == *seq_id) {
             // ... existing logic ...
-            
+
             // Allocate new block if needed for the new token
             let new_total = seq.tokens.len();
             let blocks_needed = (new_total + BLOCK_SIZE - 1) / BLOCK_SIZE;
@@ -340,12 +352,13 @@ pub fn update(&mut self, seq_ids: &[SeqId], next_tokens: &[TokenId], input_count
             }
         }
     }
-    
+
     // ... rest
 }
 ```
 
 Also update Scheduler constructor:
+
 ```rust
 pub fn new() -> Self {
     Self::with_config(SchedulerConfig::default(), 1024) // 1024 blocks default
@@ -377,6 +390,7 @@ git commit -m "feat(core): integrate BlockAllocator with Scheduler"
 ### Task P4-4: End-to-end verification
 
 **Files:**
+
 - Run full test suite
 - Manual test
 

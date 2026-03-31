@@ -17,6 +17,7 @@
 ## Key Design: Budget-Driven Batching
 
 Each step has a token budget (`max_num_batched_tokens`, default 4096):
+
 1. **Decode first**: Each running decode sequence costs 1 token. Add all decode sequences.
 2. **Prefill with remaining budget**: Each prefill sequence costs `num_uncomputed_tokens`. Add prefill sequences chunked to fit remaining budget.
 3. **New sequences**: Waiting sequences join when budget allows.
@@ -26,12 +27,14 @@ Each step has a token budget (`max_num_batched_tokens`, default 4096):
 ### Task P2-1: Refactor Scheduler for continuous batching
 
 **Files:**
+
 - Modify: `crates/core/src/scheduler.rs`
 - Modify: `crates/core/src/types.rs` (add SchedulerConfig)
 
 - [ ] **Step 1: Add SchedulerConfig to types.rs**
 
 Append to `crates/core/src/types.rs`:
+
 ```rust
 #[derive(Clone, Debug)]
 pub struct SchedulerConfig {
@@ -52,6 +55,7 @@ impl Default for SchedulerConfig {
 - [ ] **Step 2: Refactor Scheduler**
 
 Rewrite `crates/core/src/scheduler.rs`:
+
 ```rust
 use crate::types::{Batch, Request, SchedulerConfig, SeqId, Sequence, Status, TokenId};
 use std::collections::VecDeque;
@@ -370,12 +374,14 @@ git commit -m "feat(core): refactor Scheduler for continuous batching with budge
 ### Task P2-2: Engine streaming with channels
 
 **Files:**
+
 - Modify: `crates/core/src/engine.rs`
 - Modify: `crates/core/src/types.rs` (add EngineMessage)
 
 - [ ] **Step 1: Add EngineMessage to types.rs**
 
 Append to `crates/core/src/types.rs`:
+
 ```rust
 use tokio::sync::mpsc;
 
@@ -389,6 +395,7 @@ pub enum EngineMessage {
 ```
 
 Note: This adds `tokio` as a dependency to core. Add to `crates/core/Cargo.toml`:
+
 ```toml
 [dependencies]
 thiserror = "2"
@@ -398,6 +405,7 @@ tokio = { version = "1", features = ["sync"] }
 - [ ] **Step 2: Refactor Engine for streaming**
 
 Rewrite `crates/core/src/engine.rs`:
+
 ```rust
 use crate::error::Result;
 use crate::scheduler::Scheduler;
@@ -605,6 +613,7 @@ git commit -m "feat(core): add channel-based streaming to Engine"
 ### Task P2-3: Server SSE streaming
 
 **Files:**
+
 - Modify: `crates/server/src/api.rs`
 - Modify: `crates/server/src/main.rs`
 - Modify: `crates/server/Cargo.toml` (add eventsource-stream or use manual SSE)
@@ -612,6 +621,7 @@ git commit -m "feat(core): add channel-based streaming to Engine"
 - [ ] **Step 1: Rewrite api.rs for SSE**
 
 `crates/server/src/api.rs`:
+
 ```rust
 use axum::{
     extract::State,
@@ -704,6 +714,7 @@ pub async fn completions(
 - [ ] **Step 2: Update main.rs**
 
 `crates/server/src/main.rs`:
+
 ```rust
 mod api;
 
@@ -743,6 +754,7 @@ async fn main() {
 - [ ] **Step 3: Update Cargo.toml dependencies**
 
 `crates/server/Cargo.toml`:
+
 ```toml
 [package]
 name = "vllm-server"
@@ -793,11 +805,13 @@ git commit -m "feat(server): SSE streaming for /v1/completions"
 ### Task P2-4: Integration test + cleanup
 
 **Files:**
+
 - Create: `crates/core/tests/integration.rs`
 
 - [ ] **Step 1: Write end-to-end integration test**
 
 `crates/core/tests/integration.rs`:
+
 ```rust
 use vllm_core::engine::{Engine, ModelBackend};
 use vllm_core::error::Result;

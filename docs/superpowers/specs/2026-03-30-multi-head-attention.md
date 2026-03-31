@@ -7,24 +7,26 @@ Support MHA, GQA, MQA, and MLA attention mechanisms in Qwen3 model inference.
 ## Problem
 
 Current implementation fails with:
-```
+
+```text
 shape mismatch in reshape, lhs: [1, 4, 896], rhs: [1, 14, 64]
 ```
+
 - Qwen2.5-0.5B has 14 query heads, 2 KV heads (GQA)
 - Current code doesn't expand KV heads to match Q heads
 
 ## Attention Types
 
-| Type | num_q_heads | num_kv_heads | KV Expansion |
-|------|-------------|--------------|--------------|
-| MHA | N | N | None (1:1) |
-| MQA | N | 1 | Repeat N times |
-| GQA | N | M (M < N) | Repeat N/M times |
-| MLA | Compressed | Compressed | Decompress from latent |
+| Type | num_q_heads | num_kv_heads | KV Expansion           |
+| ---- | ----------- | ------------ | ---------------------- |
+| MHA  | N           | N            | None (1:1)             |
+| MQA  | N           | 1            | Repeat N times         |
+| GQA  | N           | M (M < N)    | Repeat N/M times       |
+| MLA  | Compressed  | Compressed   | Decompress from latent |
 
 ## Architecture
 
-```
+```text
 GqaAttention
 ├── q_proj: Linear(hidden_size, num_q_heads * head_dim)
 ├── k_proj: Linear(hidden_size, num_kv_heads * head_dim)  
@@ -145,7 +147,7 @@ enum AttentionType {
 
 ## File Changes
 
-```
+```text
 crates/model/src/qwen3/
 ├── attention.rs       # MODIFY: Fix reshape, add expand_kv, tile_heads, MLA forward
 ├── block.rs           # MODIFY: Pass correct num_kv_heads
@@ -157,6 +159,7 @@ crates/model/src/qwen3/
 ### Candle Tensor Operations
 
 Need to verify available operations:
+
 - `repeat` or `tile` for head expansion
 - `reshape` with proper dimensions
 - 4D tensor handling for attention
@@ -175,6 +178,7 @@ Need to verify available operations:
 ## Testing
 
 Test with different models:
+
 - Qwen2.5-0.5B: GQA (14 Q heads, 2 KV heads)
 - Qwen2-7B: GQA (32 Q heads, 2 KV heads)
 - Qwen2-0.5B: MHA (14 Q heads, 14 KV heads)

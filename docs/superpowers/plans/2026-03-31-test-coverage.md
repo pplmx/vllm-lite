@@ -9,6 +9,7 @@
 ## Task 1: 单元测试补充
 
 **Files:**
+
 - Modify: 各模块的 `#[cfg(test)]` 模块
 
 - [ ] **Step 1: kv_cache 测试**
@@ -44,6 +45,7 @@ git commit -m "test(core): add boundary case unit tests"
 ## Task 2: 集成测试
 
 **Files:**
+
 - Add: `crates/core/tests/streaming.rs`
 - Add: `crates/server/tests/error_handling.rs`
 
@@ -79,6 +81,7 @@ git commit -m "test: add integration tests for streaming and errors"
 ## Task 3: 压力测试
 
 **Files:**
+
 - Add: `tests/stress/mod.rs`
 - Add: `tests/stress/high_concurrency.rs`
 
@@ -112,6 +115,7 @@ git commit -m "test: add stress tests for high concurrency"
 ## Task 4: CI 配置
 
 **Files:**
+
 - Add: `.github/workflows/test.yml`
 
 - [ ] **Step 1: 添加 CI**

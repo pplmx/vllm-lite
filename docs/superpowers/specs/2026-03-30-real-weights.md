@@ -13,7 +13,7 @@ Load real Qwen3 model weights from SafeTensors files to enable meaningful infere
 
 ## Architecture
 
-```
+```text
 ModelLoader
 ├── load_model(model_dir) -> Qwen3Model
 ├── load_config(model_dir) -> Qwen3Config
@@ -24,7 +24,7 @@ ModelLoader
 
 ## File Structure
 
-```
+```text
 crates/model/src/
 ├── loader.rs          # NEW: ModelLoader
 └── qwen3/
@@ -45,6 +45,7 @@ crates/model/src/
 ### File Discovery Strategy
 
 支持两种模式：
+
 1. **单文件**: `model.safetensors`
 2. **分片文件**: `model-00001-of-00004.safetensors`
 
@@ -95,23 +96,23 @@ fn load_and_merge_weights(files: &[PathBuf], device: &Device) -> Result<HashMap<
 
 ### Error Types
 
-| Error | Cause | User Message |
-|-------|-------|--------------|
-| ConfigNotFound | config.json missing | "Model config not found at {path}" |
-| ConfigParseError | Invalid JSON | "Failed to parse config.json: {details}" |
-| WeightsNotFound | No .safetensors files | "No model weights found in {path}" |
-| DuplicateWeight | Same weight in multiple shards | "Duplicate weight '{name}' in sharded files" |
-| MissingRequiredWeight | Key weight missing | "Required weight '{name}' not found" |
-| DeviceError | CUDA/GPU error | "Failed to load weights to {device}: {details}" |
+| Error                 | Cause                          | User Message                                    |
+| --------------------- | ------------------------------ | ----------------------------------------------- |
+| ConfigNotFound        | config.json missing            | "Model config not found at {path}"              |
+| ConfigParseError      | Invalid JSON                   | "Failed to parse config.json: {details}"        |
+| WeightsNotFound       | No .safetensors files          | "No model weights found in {path}"              |
+| DuplicateWeight       | Same weight in multiple shards | "Duplicate weight '{name}' in sharded files"    |
+| MissingRequiredWeight | Key weight missing             | "Required weight '{name}' not found"            |
+| DeviceError           | CUDA/GPU error                 | "Failed to load weights to {device}: {details}" |
 
 ### Validation
 
 - Validate config.json before loading weights
 - Check required weights after loading:
-  - `model.embed_tokens.weight`
-  - `model.norm.weight` (or `lm_head.weight`)
-  - `lm_head.weight` or `output.weight` (vocab projection)
-  - For each layer i: `model.layers.{i}.*` (q/k/v/o_proj, mlp gates)
+    - `model.embed_tokens.weight`
+    - `model.norm.weight` (or `lm_head.weight`)
+    - `lm_head.weight` or `output.weight` (vocab projection)
+    - For each layer i: `model.layers.{i}.*` (q/k/v/o_proj, mlp gates)
 - Report all missing weights at once, not one by one
 
 > Note: Qwen3 uses weight key aliases (e.g., `attn.q_proj` vs `self_attn.q_proj`), ModelLoader should handle both.
@@ -119,6 +120,7 @@ fn load_and_merge_weights(files: &[PathBuf], device: &Device) -> Result<HashMap<
 ## Tokenizer (Related)
 
 推理需要 tokenizer 将文本转为 token IDs。Tokenizer 文件通常在模型目录：
+
 - `tokenizer.json` - 完整定义
 - `tokenizer_config.json` - 配置
 - `vocab.json` / `merges.txt` - BPE vocab

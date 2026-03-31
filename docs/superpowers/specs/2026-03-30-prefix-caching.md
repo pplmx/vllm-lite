@@ -5,6 +5,7 @@
 实现 Prefix Caching, 让相同 token 序列的请求共享 KV cache, 避免重复计算。
 
 **目标:**
+
 - 多个请求如果有相同的前缀 (prompt + generated tokens), 共享 KV blocks
 - 基于 hash 的快速查找
 - LRU 淘汰策略
@@ -65,7 +66,7 @@ pub fn insert(&mut self, key: CacheKey, blocks: Vec<BlockId>, token_count: usize
     for &block in &blocks {
         *self.block_refs.entry(block).or_insert(0) += 1;
     }
-    
+
     // 插入缓存
     let entry = CachedEntry {
         key,
@@ -117,7 +118,7 @@ pub struct Scheduler {
 pub fn add_request(&mut self, req: Request) -> SeqId {
     // 计算 prompt hash
     let key = hash_tokens(&req.prompt);
-    
+
     // 查缓存
     if let Some(entry) = self.prefix_cache.get(key) {
         // 命中! 复用 blocks
@@ -141,7 +142,7 @@ pub fn add_request(&mut self, req: Request) -> SeqId {
 ```rust
 pub fn update(&mut self, seq_ids: &[SeqId], next_tokens: &[TokenId], input_counts: &[usize]) {
     // ... existing logic
-    
+
     // 对于新完成的序列, 存入缓存
     for seq in finished_sequences {
         let key = hash_tokens(&seq.tokens);
@@ -152,7 +153,7 @@ pub fn update(&mut self, seq_ids: &[SeqId], next_tokens: &[TokenId], input_count
 
 ## 5. 完整流程
 
-```
+```text
 1. 请求到达
    └─ compute hash(prompt)
    └─ check prefix_cache.get(hash)
@@ -177,14 +178,14 @@ pub fn update(&mut self, seq_ids: &[SeqId], next_tokens: &[TokenId], input_count
 
 ### 测试 1: 相同 prompt 命中
 
-```
+```text
 请求1: "Hello" → 缓存 miss → prefill → cache ["Hello"]
 请求2: "Hello" → 缓存 hit! → 直接 decode
 ```
 
 ### 测试 2: 前缀命中
 
-```
+```text
 请求1: "Hello world" → cache ["Hello world"]
 请求2: "Hello world how are you" → 复用 ["Hello world"] 的 blocks，只需 prefill " how are you"
 ```
@@ -212,13 +213,14 @@ fn find_prefix_match(&self, tokens: &[TokenId]) -> Option<&CachedEntry> {
 ```
 
 **关键点:**
+
 - 缓存的 key 是完整序列的 hash
 - 从最长前缀开始匹配，确保复用最多已计算的 KV
 - 复用已分配的 KV blocks，只需 prefill 额外部分
 
 ### 测试 3: LRU 淘汰
 
-```
+```text
 缓存 100 个序列
 新请求进来, OOM
 → 淘汰最老的缓存
@@ -228,6 +230,7 @@ fn find_prefix_match(&self, tokens: &[TokenId]) -> Option<&CachedEntry> {
 ## 7. 实现计划
 
 ### Phase 1 (已完成)
+
 - [x] 修改 BlockAllocator: 增加引用计数
 - [x] 实现 PrefixCache 结构
 - [x] 实现 get/insert/evict
@@ -235,6 +238,7 @@ fn find_prefix_match(&self, tokens: &[TokenId]) -> Option<&CachedEntry> {
 - [x] 测试
 
 ### 前缀命中 (当前)
+
 - [ ] PrefixCache 添加 find_prefix_match 方法
 - [ ] Scheduler add_request 支持前缀命中
 - [ ] 处理 num_computed_tokens 正确设置
