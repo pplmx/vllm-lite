@@ -10,6 +10,7 @@ use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
 use vllm_core::types::EngineMessage;
 use vllm_model::config::Qwen3Config;
+use vllm_model::loader::ModelLoader;
 use vllm_model::qwen3::model::Qwen3Model;
 use vllm_model::tokenizer::Tokenizer;
 use candle_core::Device;
@@ -42,6 +43,14 @@ fn load_config() -> config::AppConfig {
     config
 }
 
+fn get_model_path() -> String {
+    let args: Vec<String> = std::env::args().collect();
+    args.iter()
+        .position(|a| a == "--model")
+        .and_then(|i| args.get(i + 1).cloned())
+        .unwrap_or_else(|| "/models/Qwen2.5-0.5B-Instruct".to_string())
+}
+
 #[tokio::main]
 async fn main() {
     let app_config = load_config();
@@ -57,12 +66,14 @@ async fn main() {
 
     let device = Device::cuda_if_available(0).unwrap_or(Device::Cpu);
 
-    let config = Qwen3Config::default();
-    tracing::debug!(config = ?config, "Model config loaded");
+    let model_path = get_model_path();
+    tracing::info!(model_path = %model_path, "Loading model from");
 
-    let model = Qwen3Model::new(config.clone(), device.clone())
-        .expect("Failed to create model");
-    let draft_model = Qwen3Model::new(config, device)
+    let loader = ModelLoader::new(device.clone());
+    let model = loader.load_model(&model_path)
+        .expect("Failed to load model");
+
+    let draft_model = Qwen3Model::new(Qwen3Config::default(), device.clone())
         .expect("Failed to create draft model");
 
     let mut engine = Engine::new(model, draft_model);
