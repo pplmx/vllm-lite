@@ -60,6 +60,7 @@ impl Qwen3Model {
             hidden_size / config.num_attention_heads(),
             1024,
             device.clone(),
+            false,
         )?;
 
         Ok(Self {
@@ -198,6 +199,7 @@ impl Qwen3Model {
             hidden_size / config.num_attention_heads(),
             1024,
             device.clone(),
+            false,
         )?;
 
         Ok(Self {
