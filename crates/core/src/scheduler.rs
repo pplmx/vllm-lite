@@ -58,6 +58,7 @@ impl Scheduler {
                 max_tokens: req.max_tokens,
                 sampling_params: req.sampling_params,
                 consecutive_decode_rounds: 0,
+                priority: req.priority,
             };
             self.running.push(seq);
             return id;
@@ -92,6 +93,7 @@ impl Scheduler {
                 max_tokens: req.max_tokens,
                 sampling_params: req.sampling_params,
                 consecutive_decode_rounds: 0,
+                priority: req.priority,
             };
             self.waiting.push_back(seq);
             return id;
@@ -120,6 +122,7 @@ impl Scheduler {
             max_tokens: req.max_tokens,
             sampling_params: req.sampling_params,
             consecutive_decode_rounds: 0,
+            priority: req.priority,
         };
         self.waiting.push_back(seq);
         id
@@ -157,6 +160,14 @@ impl Scheduler {
             }
         }
         self.finished.extend(newly_finished);
+
+        // Sort waiting queue by priority (highest priority first)
+        // Lower Priority value = higher priority
+        if self.config.enable_priority_scheduling {
+            let mut waiting_vec: Vec<_> = self.waiting.drain(..).collect();
+            waiting_vec.sort_by(|a, b| a.priority.cmp(&b.priority));
+            self.waiting = waiting_vec.into();
+        }
 
         while self.running.len() < self.config.max_num_seqs {
             match self.waiting.pop_front() {
@@ -385,6 +396,7 @@ impl Scheduler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Priority;
 
     #[test]
     fn test_single_request_prefill() {
@@ -427,6 +439,7 @@ mod tests {
             enable_pd_separation: false,
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
         };
         let mut sched = Scheduler::with_config(config, 1024);
         sched.add_request(Request::new(1, vec![10], 5));
@@ -447,6 +460,7 @@ mod tests {
             enable_pd_separation: false,
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
         };
         let mut sched = Scheduler::with_config(config, 1024);
         sched.add_request(Request::new(1, vec![10, 20, 30, 40, 50], 10));
@@ -512,6 +526,7 @@ mod tests {
             enable_pd_separation: false,
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
         };
         let mut sched = Scheduler::with_config(config, 100);
 
@@ -555,6 +570,7 @@ mod tests {
             enable_pd_separation: false,
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -577,6 +593,7 @@ mod tests {
             enable_pd_separation: false,
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -600,6 +617,7 @@ mod tests {
             enable_pd_separation: false,
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -626,6 +644,7 @@ mod tests {
             enable_pd_separation: false,
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -649,6 +668,7 @@ mod tests {
             enable_pd_separation: false,
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -675,6 +695,7 @@ mod tests {
             enable_pd_separation: false,
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
         };
         let mut sched = Scheduler::with_config(config, 10);
 
@@ -720,6 +741,7 @@ mod tests {
             enable_pd_separation: false,
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -745,6 +767,7 @@ mod tests {
             enable_pd_separation: false,
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -770,6 +793,7 @@ mod tests {
             enable_pd_separation: true,
             prefill_chunk_size: 2,
             decode_preference_ratio: 0.5,
+            enable_priority_scheduling: false,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -800,6 +824,7 @@ mod tests {
             enable_pd_separation: false,
             prefill_chunk_size: 2,
             decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -812,5 +837,43 @@ mod tests {
         // The minimum should be 2
         let total_tokens: usize = batch.input_tokens.iter().map(|v| v.len()).sum();
         assert!(total_tokens <= 3, "Should respect max_num_batched_tokens");
+    }
+
+    #[test]
+    fn test_priority_scheduling() {
+        let config = SchedulerConfig {
+            max_num_seqs: 10,
+            max_num_batched_tokens: 100,
+            max_consecutive_decode: 10,
+            enable_pd_separation: false,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
+            enable_priority_scheduling: true,
+        };
+        let mut sched = Scheduler::with_config(config, 1024);
+
+        // Add requests with different priorities
+        // Lower Priority value = higher priority
+        let mut req1 = Request::new(1, vec![1], 5);
+        req1.priority = Priority(2);
+
+        let mut req2 = Request::new(2, vec![2], 5);
+        req2.priority = Priority(1); // Higher priority than req1
+
+        let mut req3 = Request::new(3, vec![3], 5);
+        req3.priority = Priority(3); // Lowest priority
+
+        sched.add_request(req1);
+        sched.add_request(req2);
+        sched.add_request(req3);
+
+        let batch = sched.build_batch();
+
+        // With priority scheduling, request 2 (priority 1) should be processed first
+        // The first request in batch should have id 2
+        assert_eq!(
+            batch.seq_ids[0], 2,
+            "Highest priority request should be first"
+        );
     }
 }

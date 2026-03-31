@@ -9,3 +9,4 @@ pub mod types;
 
 pub use beam::BeamSequence;
 pub use metrics::{MetricsCollector, MetricsSnapshot};
+pub use types::Priority;
