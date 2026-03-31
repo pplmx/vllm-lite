@@ -3,6 +3,22 @@ use candle_core::{DType, Device, Result, Tensor};
 pub const BLOCK_SIZE: usize = 16;
 
 #[allow(dead_code)]
+fn quantize_block(data: &[f32]) -> (Vec<i8>, f32) {
+    let max_abs = data.iter().map(|v| v.abs()).fold(0.0f32, f32::max);
+    if max_abs == 0.0 {
+        return (vec![0; data.len()], 1.0);
+    }
+    let scale = max_abs / 127.0;
+    let quantized: Vec<i8> = data.iter().map(|v| (v / scale).round() as i8).collect();
+    (quantized, scale)
+}
+
+#[allow(dead_code)]
+fn dequantize_block(data: &[i8], scale: f32) -> Vec<f32> {
+    data.iter().map(|&v| v as f32 * scale).collect()
+}
+
+#[allow(dead_code)]
 pub struct PagedKvCache {
     key_cache: Vec<Tensor>,
     value_cache: Vec<Tensor>,
@@ -59,6 +75,16 @@ impl PagedKvCache {
 
     pub fn num_layers(&self) -> usize {
         self.num_layers
+    }
+
+    pub fn get_scale(&self, layer_idx: usize) -> f32 {
+        self.scales.get(layer_idx).copied().unwrap_or(1.0)
+    }
+
+    fn update_scale(&mut self, layer_idx: usize, new_scale: f32) {
+        if layer_idx < self.scales.len() {
+            self.scales[layer_idx] = new_scale;
+        }
     }
 
     pub fn write_kv(
@@ -149,13 +175,28 @@ impl PagedKvCache {
             .flat_map(|inner| inner.into_iter().flatten())
             .collect();
 
+        let (k_final, v_final, _scale) = if self.quantized {
+            let k_max = k_flat.iter().map(|v| v.abs()).fold(0.0f32, f32::max);
+            let v_max = v_flat.iter().map(|v| v.abs()).fold(0.0f32, f32::max);
+            let max_val = k_max.max(v_max);
+            let scale = if max_val > 0.0 { max_val / 127.0 } else { 1.0 };
+
+            let k_quant: Vec<f32> = k_flat.iter().map(|v| (*v / scale).round()).collect();
+            let v_quant: Vec<f32> = v_flat.iter().map(|v| (*v / scale).round()).collect();
+
+            self.update_scale(layer_idx, scale);
+            (k_quant, v_quant, scale)
+        } else {
+            (k_flat, v_flat, 1.0)
+        };
+
         let updated_key_block = Tensor::from_slice(
-            &k_flat,
+            &k_final,
             (self.num_heads, self.block_size, self.head_dim),
             &self.device,
         )?;
         let updated_value_block = Tensor::from_slice(
-            &v_flat,
+            &v_final,
             (self.num_heads, self.block_size, self.head_dim),
             &self.device,
         )?;
@@ -219,7 +260,24 @@ impl PagedKvCache {
         let k = Tensor::cat(&k_parts, 1)?.transpose(0, 1)?;
         let v = Tensor::cat(&v_parts, 1)?.transpose(0, 1)?;
 
-        Ok((k, v))
+        if self.quantized {
+            let scale = self.get_scale(layer_idx);
+            let k_data: Vec<f32> = k.flatten_all()?.to_vec1()?;
+            let v_data: Vec<f32> = v.flatten_all()?.to_vec1()?;
+
+            let k_dequant: Vec<f32> = k_data.iter().map(|x| x * scale).collect();
+            let v_dequant: Vec<f32> = v_data.iter().map(|x| x * scale).collect();
+
+            let k_shape = k.dims();
+            let v_shape = v.dims();
+
+            let k = Tensor::from_slice(&k_dequant, k_shape, &self.device)?;
+            let v = Tensor::from_slice(&v_dequant, v_shape, &self.device)?;
+
+            Ok((k, v))
+        } else {
+            Ok((k, v))
+        }
     }
 }
 
@@ -383,6 +441,33 @@ mod tests {
 
         let result = cache.write_kv(0, 0, 0, &k, &v);
         assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_quantized_kv_cache() -> Result<()> {
+        let device = Device::Cpu;
+        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone(), true)?;
+
+        let k_data = vec![10.0f32; 8];
+        let k = Tensor::from_slice(&k_data, (1, 2, 4), &device)?;
+        let v_data = vec![20.0f32; 8];
+        let v = Tensor::from_slice(&v_data, (1, 2, 4), &device)?;
+
+        cache.write_kv(0, 0, 0, &k, &v)?;
+
+        let (k_out, v_out) = cache.read_kv(0, &[0], 1)?;
+
+        let k_out_data: Vec<f32> = k_out.flatten_all()?.to_vec1()?;
+        let v_out_data: Vec<f32> = v_out.flatten_all()?.to_vec1()?;
+
+        for val in k_out_data.iter() {
+            assert!((val - 10.0).abs() < 0.1, "Expected ~10.0, got {}", val);
+        }
+        for val in v_out_data.iter() {
+            assert!((val - 20.0).abs() < 0.1, "Expected ~20.0, got {}", val);
+        }
+
         Ok(())
     }
 }
