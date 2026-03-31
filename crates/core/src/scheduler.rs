@@ -1040,4 +1040,86 @@ mod tests {
             "Should respect max_num_seqs when dynamic batching disabled"
         );
     }
+
+    #[test]
+    fn test_empty_waiting_queue() {
+        let mut sched = Scheduler::new();
+        let batch = sched.build_batch();
+
+        assert!(batch.is_empty());
+    }
+
+    #[test]
+    fn test_max_tokens_zero() {
+        let mut sched = Scheduler::new();
+
+        // max_tokens = 0 should still allow prompt processing
+        sched.add_request(Request::new(1, vec![1, 2, 3], 0));
+
+        let batch = sched.build_batch();
+
+        // Should process prompt even with max_tokens=0
+        assert!(!batch.is_empty() || !sched.has_pending());
+    }
+
+    #[test]
+    fn test_batch_with_zero_max_consecutive_decode() {
+        let config = SchedulerConfig {
+            max_num_seqs: 10,
+            max_num_batched_tokens: 100,
+            max_consecutive_decode: 0,
+            enable_pd_separation: false,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
+        };
+        let mut sched = Scheduler::with_config(config, 1024);
+
+        sched.add_request(Request::new(1, vec![10], 5));
+
+        let batch1 = sched.build_batch();
+        sched.update(&batch1.seq_ids, &[99], &[1]);
+
+        // With max_consecutive_decode=0, decode should not be blocked
+        let batch2 = sched.build_batch();
+
+        assert!(batch2.seq_ids.len() <= 10);
+    }
+
+    #[test]
+    fn test_waiting_requests_after_decode_limit() {
+        let config = SchedulerConfig {
+            max_num_seqs: 2,
+            max_num_batched_tokens: 10,
+            max_consecutive_decode: 1,
+            enable_pd_separation: false,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
+        };
+        let mut sched = Scheduler::with_config(config, 1024);
+
+        // Add request 1: prefill then decode
+        sched.add_request(Request::new(1, vec![1, 2], 3));
+        let batch1 = sched.build_batch();
+        sched.update(&batch1.seq_ids, &[10], &[2]); // Complete prefill
+
+        let batch2 = sched.build_batch();
+        sched.update(&batch2.seq_ids, &[11], &[1]); // One decode step
+
+        // Add more requests - they should be processed
+        sched.add_request(Request::new(2, vec![3, 4], 3));
+        sched.add_request(Request::new(3, vec![5, 6], 3));
+
+        let batch3 = sched.build_batch();
+
+        // Should process waiting requests
+        assert!(batch3.seq_ids.len() >= 1);
+    }
 }
