@@ -11,6 +11,8 @@ pub struct PagedKvCache {
     head_dim: usize,
     block_size: usize,
     device: Device,
+    pub quantized: bool,
+    pub scales: Vec<f32>,
 }
 
 impl PagedKvCache {
@@ -20,6 +22,7 @@ impl PagedKvCache {
         head_dim: usize,
         num_blocks: usize,
         device: Device,
+        quantized: bool,
     ) -> Result<Self> {
         let mut key_cache = Vec::with_capacity(num_layers);
         let mut value_cache = Vec::with_capacity(num_layers);
@@ -32,6 +35,8 @@ impl PagedKvCache {
             value_cache.push(value);
         }
 
+        let scales = vec![1.0f32; num_layers];
+
         Ok(Self {
             key_cache,
             value_cache,
@@ -40,6 +45,8 @@ impl PagedKvCache {
             head_dim,
             block_size: BLOCK_SIZE,
             device,
+            quantized,
+            scales,
         })
     }
 
@@ -223,7 +230,7 @@ mod tests {
     #[test]
     fn test_paged_kv_cache_creation() -> Result<()> {
         let device = Device::Cpu;
-        let cache = PagedKvCache::new(2, 4, 32, 10, device)?;
+        let cache = PagedKvCache::new(2, 4, 32, 10, device, false)?;
 
         assert_eq!(cache.num_layers(), 2);
         assert_eq!(cache.num_blocks(), 10);
@@ -233,7 +240,7 @@ mod tests {
     #[test]
     fn test_paged_kv_cache_single_layer() -> Result<()> {
         let device = Device::Cpu;
-        let cache = PagedKvCache::new(1, 8, 64, 5, device)?;
+        let cache = PagedKvCache::new(1, 8, 64, 5, device, false)?;
 
         assert_eq!(cache.num_layers(), 1);
         assert_eq!(cache.num_blocks(), 5);
@@ -243,7 +250,7 @@ mod tests {
     #[test]
     fn test_paged_kv_cache_tensor_shapes() -> Result<()> {
         let device = Device::Cpu;
-        let cache = PagedKvCache::new(2, 4, 32, 10, device)?;
+        let cache = PagedKvCache::new(2, 4, 32, 10, device, false)?;
 
         let key_shape = cache.key_cache[0].dims();
         assert_eq!(key_shape, &[10, 4, 16, 32]);
@@ -256,7 +263,7 @@ mod tests {
     #[test]
     fn test_write_kv_basic() -> Result<()> {
         let device = Device::Cpu;
-        let mut cache = PagedKvCache::new(1, 2, 8, 4, device.clone())?;
+        let mut cache = PagedKvCache::new(1, 2, 8, 4, device.clone(), false)?;
 
         let k = Tensor::ones((1, 2, 8), DType::F32, &device)?;
         let v = Tensor::ones((1, 2, 8), DType::F32, &device)?;
@@ -273,7 +280,7 @@ mod tests {
     #[test]
     fn test_write_kv_and_read_kv() -> Result<()> {
         let device = Device::Cpu;
-        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone())?;
+        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone(), false)?;
 
         let k_data = vec![1.0f32; 8];
         let k = Tensor::from_slice(&k_data, (1, 2, 4), &device)?;
@@ -298,7 +305,7 @@ mod tests {
     #[test]
     fn test_read_kv_multiple_blocks() -> Result<()> {
         let device = Device::Cpu;
-        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone())?;
+        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone(), false)?;
 
         let k_data = vec![1.0f32; 8];
         let k = Tensor::from_slice(&k_data, (1, 2, 4), &device)?;
@@ -317,7 +324,7 @@ mod tests {
     #[test]
     fn test_write_kv_invalid_layer_idx() -> Result<()> {
         let device = Device::Cpu;
-        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone())?;
+        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone(), false)?;
 
         let k = Tensor::ones((1, 2, 4), DType::F32, &device)?;
         let v = Tensor::ones((1, 2, 4), DType::F32, &device)?;
@@ -330,7 +337,7 @@ mod tests {
     #[test]
     fn test_write_kv_invalid_block_id() -> Result<()> {
         let device = Device::Cpu;
-        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone())?;
+        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone(), false)?;
 
         let k = Tensor::ones((1, 2, 4), DType::F32, &device)?;
         let v = Tensor::ones((1, 2, 4), DType::F32, &device)?;
@@ -343,7 +350,7 @@ mod tests {
     #[test]
     fn test_write_kv_invalid_token_offset() -> Result<()> {
         let device = Device::Cpu;
-        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone())?;
+        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone(), false)?;
 
         let k = Tensor::ones((1, 2, 4), DType::F32, &device)?;
         let v = Tensor::ones((1, 2, 4), DType::F32, &device)?;
@@ -356,7 +363,7 @@ mod tests {
     #[test]
     fn test_write_kv_invalid_k_shape() -> Result<()> {
         let device = Device::Cpu;
-        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone())?;
+        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone(), false)?;
 
         let k = Tensor::ones((1, 3, 4), DType::F32, &device)?;
         let v = Tensor::ones((1, 2, 4), DType::F32, &device)?;
@@ -369,7 +376,7 @@ mod tests {
     #[test]
     fn test_write_kv_invalid_v_shape() -> Result<()> {
         let device = Device::Cpu;
-        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone())?;
+        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone(), false)?;
 
         let k = Tensor::ones((1, 2, 4), DType::F32, &device)?;
         let v = Tensor::ones((1, 2, 5), DType::F32, &device)?;
