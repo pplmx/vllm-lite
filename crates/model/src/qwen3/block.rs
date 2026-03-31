@@ -1,6 +1,9 @@
 #![allow(clippy::type_complexity)]
 
-use super::{attention::GqaAttention, mlp::SwiGLU};
+use super::{
+    attention::{AttentionConfig, GqaAttention},
+    mlp::SwiGLU,
+};
 use crate::kv_cache::PagedKvCache;
 use candle_core::{Device, Module, Result, Tensor};
 use candle_nn::LayerNorm;
@@ -38,6 +41,7 @@ impl TransformerBlock {
             num_kv_heads,
             head_dim,
             Some(vb_attn),
+            AttentionConfig::default(),
         )?;
 
         let vb_mlp = vb.pp("mlp");
@@ -103,6 +107,7 @@ impl TransformerBlock {
             k_w,
             v_w,
             o_w,
+            AttentionConfig::default(),
         )?;
 
         let mlp = SwiGLU::new_with_weights(hidden_size, intermediate_size, gate_w, up_w, down_w)?;

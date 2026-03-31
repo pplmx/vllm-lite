@@ -4,6 +4,21 @@ use crate::kv_cache::PagedKvCache;
 use candle_core::{Device, Module, Result, Tensor};
 use candle_nn::Linear;
 
+#[derive(Debug, Clone)]
+pub struct AttentionConfig {
+    pub tile_size: Option<usize>,
+    pub use_fused: bool,
+}
+
+impl Default for AttentionConfig {
+    fn default() -> Self {
+        Self {
+            tile_size: None,
+            use_fused: true,
+        }
+    }
+}
+
 pub struct GqaAttention {
     q_proj: Linear,
     k_proj: Linear,
@@ -12,6 +27,7 @@ pub struct GqaAttention {
     num_heads: usize,
     num_kv_heads: usize,
     head_dim: usize,
+    config: AttentionConfig,
 }
 
 impl GqaAttention {
@@ -21,6 +37,7 @@ impl GqaAttention {
         num_kv_heads: usize,
         head_dim: usize,
         vb: Option<candle_nn::VarBuilder>,
+        config: AttentionConfig,
     ) -> Result<Self> {
         let vb = vb.unwrap_or_else(|| {
             candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu)
@@ -38,6 +55,7 @@ impl GqaAttention {
             num_heads,
             num_kv_heads,
             head_dim,
+            config,
         })
     }
 
@@ -50,6 +68,7 @@ impl GqaAttention {
         k_weight: Tensor,
         v_weight: Tensor,
         o_weight: Tensor,
+        config: AttentionConfig,
     ) -> Result<Self> {
         let q_proj = Linear::new(q_weight, None);
         let k_proj = Linear::new(k_weight, None);
@@ -64,6 +83,7 @@ impl GqaAttention {
             num_heads,
             num_kv_heads,
             head_dim,
+            config,
         })
     }
 
