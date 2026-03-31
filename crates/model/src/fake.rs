@@ -29,4 +29,22 @@ impl ModelBackend for FakeModel {
             next_tokens,
         })
     }
+
+    fn forward_logits(
+        &self,
+        _seq_ids: &[SeqId],
+        input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+    ) -> Result<Vec<Vec<f32>>> {
+        let vocab_size = 32000;
+        Ok(input_tokens
+            .iter()
+            .map(|tokens| {
+                tokens
+                    .iter()
+                    .map(|_| rand::random::<f32>() * vocab_size as f32)
+                    .collect()
+            })
+            .collect())
+    }
 }
