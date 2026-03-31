@@ -119,6 +119,22 @@ pub async fn completions(
     Sse::new(stream)
 }
 
+#[derive(Serialize)]
+pub struct HealthResponse {
+    pub status: String,
+}
+
+pub async fn health() -> Json<HealthResponse> {
+    Json(HealthResponse { status: "ok".to_string() })
+}
+
+pub async fn ready(State(state): State<ApiState>) -> Json<HealthResponse> {
+    let _ = state.engine_tx.send(EngineMessage::GetMetrics {
+        response_tx: tokio::sync::mpsc::unbounded_channel().0,
+    });
+    Json(HealthResponse { status: "ok".to_string() })
+}
+
 pub async fn shutdown(State(engine_tx): State<EngineHandle>) -> &'static str {
     let _ = engine_tx.send(EngineMessage::Shutdown);
     "Shutting down"
