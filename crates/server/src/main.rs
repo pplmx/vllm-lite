@@ -57,6 +57,8 @@ async fn main() {
     let app = app.route("/shutdown", get(api::shutdown).with_state(msg_tx));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8000").await.unwrap();
-    println!("vllm-lite (real weights) listening on http://0.0.0.0:8000");
+    println!("vllm-lite listening on http://0.0.0.0:8000");
+    println!("Health check: curl http://localhost:8000/health");
+
     axum::serve(listener, app).await.unwrap();
 }
