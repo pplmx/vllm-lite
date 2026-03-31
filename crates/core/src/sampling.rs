@@ -93,6 +93,20 @@ pub fn sample_batch(logits_list: &[Vec<f32>], temperature: f32, top_p: f32) -> V
         .collect()
 }
 
+pub fn apply_repeat_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penalty: f32) {
+    if penalty == 1.0 || seen_tokens.is_empty() || logits.is_empty() {
+        return;
+    }
+
+    let mut seen = std::collections::HashSet::new();
+    for &token in seen_tokens {
+        let idx = token as usize;
+        if idx < logits.len() && seen.insert(token) {
+            logits[idx] /= penalty;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,5 +213,24 @@ mod tests {
     fn test_sample_batch_temperature_and_top_p() {
         let logits = vec![vec![0.1, 0.9], vec![0.5, 0.5]];
         let _result = sample_batch(&logits, 0.5, 0.8);
+    }
+
+    #[test]
+    fn test_repeat_penalty_basic() {
+        let mut logits = vec![0.5, 0.5, 0.5];
+        let seen = vec![1];
+        apply_repeat_penalty(&mut logits, &seen, 2.0);
+        assert!(logits[1] < 0.5);
+        assert_eq!(logits[0], 0.5);
+        assert_eq!(logits[2], 0.5);
+    }
+
+    #[test]
+    fn test_repeat_penalty_no_effect_at_one() {
+        let mut logits = vec![0.5, 0.5];
+        let seen = vec![0];
+        apply_repeat_penalty(&mut logits, &seen, 1.0);
+        assert_eq!(logits[0], 0.5);
+        assert_eq!(logits[1], 0.5);
     }
 }
