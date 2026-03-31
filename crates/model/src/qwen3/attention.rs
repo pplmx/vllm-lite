@@ -150,6 +150,7 @@ impl GqaAttention {
     ) -> Result<Tensor> {
         let batch_size = x.dims()[0];
         let seq_len = x.dims()[1];
+        let tile_size = self.config.tile_size.unwrap_or(16);
 
         let q = self.q_proj.forward(x)?;
         let k = self.k_proj.forward(x)?;
@@ -197,7 +198,11 @@ impl GqaAttention {
         let k_expanded = k_expanded.transpose(1, 2)?;
         let v_expanded = v_expanded.transpose(1, 2)?;
 
-        self.paged_attention(&q, &k_expanded, &v_expanded, seq_len)
+        if seq_len > tile_size {
+            self.tiled_attention(&q, &k_expanded, &v_expanded, seq_len)
+        } else {
+            self.paged_attention(&q, &k_expanded, &v_expanded, seq_len)
+        }
     }
 
     pub fn forward_decode(
@@ -209,6 +214,8 @@ impl GqaAttention {
         num_computed_tokens: usize,
     ) -> Result<Tensor> {
         let batch_size = x.dims()[0];
+        let seq_len = num_computed_tokens + 1;
+        let tile_size = self.config.tile_size.unwrap_or(16);
 
         let q = self.q_proj.forward(x)?;
         let q = q
@@ -225,7 +232,11 @@ impl GqaAttention {
         let k_expanded = k_expanded.transpose(1, 2)?;
         let v_expanded = v_expanded.transpose(1, 2)?;
 
-        self.paged_attention(&q, &k_expanded, &v_expanded, num_computed_tokens + 1)
+        if seq_len > tile_size {
+            self.tiled_attention(&q, &k_expanded, &v_expanded, seq_len)
+        } else {
+            self.paged_attention(&q, &k_expanded, &v_expanded, seq_len)
+        }
     }
 
     fn paged_attention(
