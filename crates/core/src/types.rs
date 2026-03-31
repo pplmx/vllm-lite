@@ -98,10 +98,15 @@ impl Default for SchedulerConfig {
     }
 }
 
+use crate::metrics::MetricsSnapshot;
+
 pub enum EngineMessage {
     AddRequest {
         request: Request,
         response_tx: mpsc::UnboundedSender<TokenId>,
+    },
+    GetMetrics {
+        response_tx: mpsc::UnboundedSender<MetricsSnapshot>,
     },
     Shutdown,
 }

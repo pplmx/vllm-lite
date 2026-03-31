@@ -197,6 +197,10 @@ impl<M: ModelBackend> Engine<M> {
                     } => {
                         self.add_request(request, response_tx);
                     }
+                    EngineMessage::GetMetrics { response_tx } => {
+                        let snapshot = self.metrics.snapshot();
+                        let _ = response_tx.send(snapshot);
+                    }
                     EngineMessage::Shutdown => return,
                 }
             }
