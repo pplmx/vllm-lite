@@ -1,4 +1,4 @@
-use vllm_core::sampling::{apply_repeat_penalty, greedy_sample, sample_batch, top_k_sample};
+use vllm_core::sampling::{apply_repeat_penalty, sample_batch, top_k_sample};
 
 #[test]
 fn test_top_k_basic() {

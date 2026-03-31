@@ -8,9 +8,9 @@ fn test_tiled_attention_short_seq() {
         tile_size: Some(16),
         use_fused: true,
     };
-    let attn = GqaAttention::new(256, 4, 4, 64, None, config).unwrap();
+    let _attn = GqaAttention::new(256, 4, 4, 64, None, config).unwrap();
 
-    let x = Tensor::randn(0.0, 1.0, (1, 8, 256), &device).unwrap();
+    let _x = Tensor::randn(0.0, 1.0, (1, 8, 256), &device).unwrap();
 }
 
 #[test]
@@ -20,9 +20,9 @@ fn test_tiled_attention_long_seq() {
         tile_size: Some(16),
         use_fused: true,
     };
-    let attn = GqaAttention::new(256, 4, 4, 64, None, config).unwrap();
+    let _attn = GqaAttention::new(256, 4, 4, 64, None, config).unwrap();
 
-    let x = Tensor::randn(0.0, 1.0, (1, 32, 256), &device).unwrap();
+    let _x = Tensor::randn(0.0, 1.0, (1, 32, 256), &device).unwrap();
 }
 
 #[test]
@@ -32,7 +32,7 @@ fn test_tiled_attention_no_tile() {
         tile_size: None,
         use_fused: true,
     };
-    let attn = GqaAttention::new(256, 4, 4, 64, None, config).unwrap();
+    let _attn = GqaAttention::new(256, 4, 4, 64, None, config).unwrap();
 
-    let x = Tensor::randn(0.0, 1.0, (1, 64, 256), &device).unwrap();
+    let _x = Tensor::randn(0.0, 1.0, (1, 64, 256), &device).unwrap();
 }
