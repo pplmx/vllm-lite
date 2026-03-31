@@ -1,4 +1,45 @@
 use candle_core::{Device, Module, Result, Tensor};
+use std::collections::HashMap;
+
+pub struct QuantizationCalibrator {
+    max_values: HashMap<String, f32>,
+}
+
+impl QuantizationCalibrator {
+    pub fn new() -> Self {
+        Self {
+            max_values: HashMap::new(),
+        }
+    }
+
+    pub fn observe(&mut self, name: &str, tensor: &Tensor) -> Result<()> {
+        let data: Vec<f32> = tensor.flatten_all()?.to_vec1()?;
+        let max_abs = data.iter().map(|v| v.abs()).fold(0.0f32, f32::max);
+
+        let current_max = self.max_values.get(name).copied().unwrap_or(0.0);
+        if max_abs > current_max {
+            self.max_values.insert(name.to_string(), max_abs);
+        }
+        Ok(())
+    }
+
+    pub fn compute_scales(&self) -> HashMap<String, f32> {
+        self.max_values
+            .iter()
+            .map(|(k, v)| (k.clone(), v / 127.0))
+            .collect()
+    }
+
+    pub fn reset(&mut self) {
+        self.max_values.clear();
+    }
+}
+
+impl Default for QuantizationCalibrator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 pub struct QuantizedTensor {
     pub data: Vec<i8>,
@@ -171,6 +212,32 @@ mod tests {
 
         assert!(quantized.data.is_empty());
         assert_eq!(quantized.scale, 1.0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_quantization_calibrator() -> Result<()> {
+        let mut calibrator = QuantizationCalibrator::new();
+
+        let t1_data: Vec<f32> = vec![1.0, 2.0, 3.0];
+        let t1 = Tensor::from_slice(&t1_data, &[3], &Device::Cpu)?;
+        calibrator.observe("layer1", &t1)?;
+
+        let t2_data: Vec<f32> = vec![5.0, 6.0];
+        let t2 = Tensor::from_slice(&t2_data, &[2], &Device::Cpu)?;
+        calibrator.observe("layer1", &t2)?;
+
+        let scales = calibrator.compute_scales();
+
+        let layer1_scale = scales.get("layer1").unwrap();
+        assert!(*layer1_scale > 0.0);
+
+        let t3_data: Vec<f32> = vec![10.0];
+        let t3 = Tensor::from_slice(&t3_data, &[1], &Device::Cpu)?;
+        calibrator.observe("layer2", &t3)?;
+
+        assert_eq!(calibrator.max_values.len(), 2);
 
         Ok(())
     }
