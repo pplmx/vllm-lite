@@ -8,6 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+#### Phase 4: Performance Optimization
+- **Quantization Support**
+  - FP16 support
+  - INT8 Weight-Only quantization (`QuantizedLinear`, `quantize_2d`)
+  - INT8 KV Cache with per-layer scaling
+  - QuantizationCalibrator for calibration
+- **Compute Optimization**
+  - Flash Attention framework with software fallback (`FlashAttention`, `ScaledDotProductAttention`)
+  - Sliding window attention support
+  - CUDA Graph framework (`CudaGraph`, `CudaGraphExecutor`)
+- **Scheduling Optimization**
+  - PD Separation (Prefill/Decode separation)
+  - Chunked Prefill with configurable chunk size
+  - Dynamic Batch Size based on available KV blocks
+  - Priority-based scheduling (`Priority`, `enable_priority_scheduling`)
+- **Distributed**
+  - Multi-GPU Tensor Parallelism (`DeviceMesh`, `ColumnParallelLinear`, `RowParallelLinear`, `AllReduce`)
+
+#### Phase 5: Production Readiness
+- Request timeout support (`timeout` parameter)
+- Graceful shutdown (SIGINT/SIGTERM handling)
+- YAML configuration file support
+- Environment variable overrides (`VLLM_HOST`, `VLLM_PORT`, etc.)
+- Structured JSON logging with file rotation
+- Grafana dashboard (`docs/grafana/dashboard.json`)
+- Config validation on startup
+- Error retry support (`retries` parameter)
+
+#### Core Features
 - Real-time metrics collection with `/v1/stats` and `/metrics` endpoints
 - Quantization utilities (`crates/model/src/quantize.rs`)
 - Tiled Attention for memory optimization
