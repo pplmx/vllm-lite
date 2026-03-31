@@ -41,6 +41,9 @@ fn test_prefix_cache_hit() {
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
         enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
@@ -72,6 +75,9 @@ fn test_cache_after_completion() {
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
         enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
@@ -97,6 +103,9 @@ fn test_prefix_cache_partial_hit() {
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
         enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
@@ -129,6 +138,9 @@ fn test_prefix_cache_no_hit_different_prefix() {
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
         enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
@@ -161,6 +173,9 @@ fn test_prefix_cache_multiple_shared() {
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
         enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
@@ -200,6 +215,9 @@ fn test_prefix_hit_partial_prefill() {
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
         enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
