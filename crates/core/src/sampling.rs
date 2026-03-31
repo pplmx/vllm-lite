@@ -98,16 +98,49 @@ pub fn top_k_sample(logits: &[f32], k: usize) -> TokenId {
     temperature_sample(&masked, 1.0)
 }
 
-pub fn sample_batch(logits_list: &[Vec<f32>], temperature: f32, top_p: f32) -> Vec<TokenId> {
+pub fn sample_batch(
+    logits_list: &[Vec<f32>],
+    temperature: f32,
+    top_p: f32,
+    top_k: usize,
+    repeat_penalty: f32,
+    seen_tokens: &[Vec<TokenId>],
+) -> Vec<TokenId> {
     logits_list
         .iter()
-        .map(|logits| {
+        .zip(seen_tokens.iter())
+        .map(|(logits, seen)| {
+            let mut logits = logits.clone();
+
+            if repeat_penalty != 1.0 && !seen.is_empty() {
+                apply_repeat_penalty(&mut logits, seen, repeat_penalty);
+            }
+
+            if temperature > 0.0 && temperature != 1.0 {
+                for l in logits.iter_mut() {
+                    *l /= temperature;
+                }
+            }
+
+            if top_k > 0 {
+                let k = top_k.min(logits.len());
+                let mut indexed: Vec<(usize, f32)> =
+                    logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
+                indexed.select_nth_unstable_by(k - 1, |a, b| b.1.partial_cmp(&a.1).unwrap());
+                let threshold = indexed[k - 1].1;
+                for l in logits.iter_mut() {
+                    if *l < threshold {
+                        *l = f32::NEG_INFINITY;
+                    }
+                }
+            }
+
             if top_p < 1.0 {
-                top_p_sample(logits, top_p)
+                top_p_sample(&logits, top_p)
             } else if temperature > 0.0 {
-                temperature_sample(logits, temperature)
+                temperature_sample(&logits, temperature)
             } else {
-                greedy_sample(logits)
+                greedy_sample(&logits)
             }
         })
         .collect()
@@ -148,7 +181,8 @@ pub fn apply_repeat_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penalty
         #[test]
         fn test_sample_batch() {
             let logits = vec![vec![0.1, 0.9], vec![0.8, 0.2]];
-            assert_eq!(sample_batch(&logits, 0.0, 1.0), vec![1, 0]);
+            let seen = vec![vec![], vec![]];
+            assert_eq!(sample_batch(&logits, 0.0, 1.0, 0, 1.0, &seen), vec![1, 0]);
         }
 
         #[test]
@@ -224,14 +258,32 @@ pub fn apply_repeat_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penalty
         #[test]
         fn test_sample_batch_greedy() {
             let logits = vec![vec![0.1, 0.9], vec![0.8, 0.2], vec![0.3, 0.7]];
-            let result = sample_batch(&logits, 0.0, 1.0);
+            let seen = vec![vec![], vec![], vec![]];
+            let result = sample_batch(&logits, 0.0, 1.0, 0, 1.0, &seen);
             assert_eq!(result, vec![1, 0, 1]);
         }
 
         #[test]
         fn test_sample_batch_temperature_and_top_p() {
             let logits = vec![vec![0.1, 0.9], vec![0.5, 0.5]];
-            let _result = sample_batch(&logits, 0.5, 0.8);
+            let seen = vec![vec![], vec![]];
+            let _result = sample_batch(&logits, 0.5, 0.8, 0, 1.0, &seen);
+        }
+
+        #[test]
+        fn test_sample_batch_with_top_k() {
+            let logits = vec![vec![0.1, 0.9, 0.3, 0.05, 0.05]];
+            let seen = vec![vec![]];
+            let result = sample_batch(&logits, 0.0, 1.0, 2, 1.0, &seen);
+            assert!(result[0] == 1 || result[0] == 2);
+        }
+
+        #[test]
+        fn test_sample_batch_with_repeat_penalty() {
+            let mut logits = vec![vec![0.5, 0.5, 0.5]];
+            let seen = vec![vec![1]];
+            let result = sample_batch(&mut logits, 0.0, 1.0, 0, 2.0, &seen);
+            assert_eq!(result.len(), 1);
         }
 
         #[test]
