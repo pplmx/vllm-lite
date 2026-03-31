@@ -1,4 +1,5 @@
 pub mod beam;
+pub mod cuda_graph;
 pub mod engine;
 pub mod error;
 pub mod kv_cache;
@@ -8,5 +9,8 @@ pub mod scheduler;
 pub mod types;
 
 pub use beam::BeamSequence;
+pub use cuda_graph::{
+    CudaGraph, CudaGraphError, CudaGraphExecutor, CudaGraphNode, CudaGraphTensor,
+};
 pub use metrics::{MetricsCollector, MetricsSnapshot};
 pub use types::Priority;
