@@ -29,6 +29,7 @@ pub struct SamplingParams {
     pub temperature: f32,
     pub top_k: usize,
     pub top_p: f32,
+    pub repeat_penalty: f32,
 }
 
 impl Default for SamplingParams {
@@ -37,6 +38,7 @@ impl Default for SamplingParams {
             temperature: 0.0,
             top_k: 0,
             top_p: 1.0,
+            repeat_penalty: 1.0,
         }
     }
 }
