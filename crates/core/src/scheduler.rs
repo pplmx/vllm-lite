@@ -948,7 +948,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dynamic_batching() {
+    fn test_dynamic_batching_with_low_memory() {
         let config = SchedulerConfig {
             max_num_seqs: 10,
             max_num_batched_tokens: 100,
@@ -961,19 +961,83 @@ mod tests {
             min_batch_size: 1,
             max_batch_size: 10,
         };
-        let mut sched = Scheduler::with_config(config, 100);
+        // Only 5 KV blocks - very limited memory
+        let mut sched = Scheduler::with_config(config, 5);
 
         // Add multiple requests
         for i in 1..=5 {
             sched.add_request(Request::new(i, vec![i as TokenId], 3));
         }
 
-        // Build batch - should respect dynamic batching
         let batch = sched.build_batch();
 
-        // With enough KV blocks, should process up to 5 requests
-        // But also limited by waiting + running
-        assert!(batch.seq_ids.len() >= 1);
-        assert!(batch.seq_ids.len() <= 5);
+        // With only 5 KV blocks and min_batch_size=1, should allow at least 1
+        assert!(
+            batch.seq_ids.len() >= 1,
+            "Should allow at least min_batch_size"
+        );
+    }
+
+    #[test]
+    fn test_dynamic_batching_with_high_memory() {
+        let config = SchedulerConfig {
+            max_num_seqs: 10,
+            max_num_batched_tokens: 100,
+            max_consecutive_decode: 10,
+            enable_pd_separation: false,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
+            enable_dynamic_batching: true,
+            min_batch_size: 2,
+            max_batch_size: 10,
+        };
+        // Lots of KV blocks available
+        let mut sched = Scheduler::with_config(config, 1000);
+
+        // Add 3 requests
+        for i in 1..=3 {
+            sched.add_request(Request::new(i, vec![i as TokenId], 3));
+        }
+
+        let batch = sched.build_batch();
+
+        // With plenty of memory, should process all 3 requests
+        assert_eq!(
+            batch.seq_ids.len(),
+            3,
+            "Should process all requests with enough memory"
+        );
+    }
+
+    #[test]
+    fn test_dynamic_batching_disabled() {
+        let config = SchedulerConfig {
+            max_num_seqs: 3,
+            max_num_batched_tokens: 100,
+            max_consecutive_decode: 10,
+            enable_pd_separation: false,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
+        };
+        let mut sched = Scheduler::with_config(config, 5);
+
+        // Add 5 requests
+        for i in 1..=5 {
+            sched.add_request(Request::new(i, vec![i as TokenId], 3));
+        }
+
+        let batch = sched.build_batch();
+
+        // Without dynamic batching, should respect max_num_seqs=3
+        assert_eq!(
+            batch.seq_ids.len(),
+            3,
+            "Should respect max_num_seqs when dynamic batching disabled"
+        );
     }
 }
