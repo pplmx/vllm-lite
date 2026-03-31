@@ -56,6 +56,8 @@ pub struct Qwen3Config {
     pub qk_rope_dim: Option<usize>,
     #[serde(default)]
     pub kv_len: Option<usize>,
+    #[serde(default)]
+    pub tie_word_embeddings: Option<bool>,
 }
 
 impl TextConfig {
@@ -160,6 +162,10 @@ impl Qwen3Config {
             .unwrap_or(1e-6) as f64
     }
 
+    pub fn tie_word_embeddings(&self) -> bool {
+        self.tie_word_embeddings.unwrap_or(false)
+    }
+
     pub fn attention_type(&self) -> AttentionType {
         if self.q_len.is_some() || self.kv_len.is_some() {
             AttentionType::MLA
@@ -203,9 +209,11 @@ mod tests {
             qk_nope_dim: None,
             qk_rope_dim: None,
             kv_len: None,
+            tie_word_embeddings: None,
         };
 
         assert_eq!(config.vocab_size(), 151936);
+        assert_eq!(config.tie_word_embeddings(), false);
         assert_eq!(config.hidden_size(), 4096);
         assert_eq!(config.num_hidden_layers(), 32);
         assert_eq!(config.num_attention_heads(), 32);
@@ -230,10 +238,12 @@ mod tests {
             qk_nope_dim: None,
             qk_rope_dim: None,
             kv_len: None,
+            tie_word_embeddings: Some(true),
         };
 
         assert_eq!(config.vocab_size(), 1000);
         assert_eq!(config.hidden_size(), 512);
+        assert_eq!(config.tie_word_embeddings(), true);
         assert_eq!(config.num_hidden_layers(), 4);
         assert_eq!(config.num_attention_heads(), 8);
         assert_eq!(config.num_key_value_heads(), 2);
@@ -271,6 +281,7 @@ mod tests {
             qk_nope_dim: None,
             qk_rope_dim: None,
             kv_len: None,
+            tie_word_embeddings: None,
         };
 
         assert_eq!(config.vocab_size(), 500);
