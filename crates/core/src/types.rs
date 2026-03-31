@@ -94,6 +94,9 @@ pub struct SchedulerConfig {
     pub max_num_seqs: usize,
     pub max_num_batched_tokens: usize,
     pub max_consecutive_decode: u32,
+    pub enable_pd_separation: bool,
+    pub prefill_chunk_size: usize,
+    pub decode_preference_ratio: f32,
 }
 
 impl Default for SchedulerConfig {
@@ -102,6 +105,9 @@ impl Default for SchedulerConfig {
             max_num_seqs: 256,
             max_num_batched_tokens: 4096,
             max_consecutive_decode: 10,
+            enable_pd_separation: true,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
         }
     }
 }

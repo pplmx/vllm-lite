@@ -37,6 +37,9 @@ fn test_prefix_cache_hit() {
         max_num_seqs: 256,
         max_num_batched_tokens: 4096,
         max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
@@ -64,6 +67,9 @@ fn test_cache_after_completion() {
         max_num_seqs: 256,
         max_num_batched_tokens: 4096,
         max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
@@ -85,6 +91,9 @@ fn test_prefix_cache_partial_hit() {
         max_num_seqs: 256,
         max_num_batched_tokens: 4096,
         max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
@@ -113,6 +122,9 @@ fn test_prefix_cache_no_hit_different_prefix() {
         max_num_seqs: 256,
         max_num_batched_tokens: 4096,
         max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
@@ -141,6 +153,9 @@ fn test_prefix_cache_multiple_shared() {
         max_num_seqs: 256,
         max_num_batched_tokens: 4096,
         max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
@@ -176,6 +191,9 @@ fn test_prefix_hit_partial_prefill() {
         max_num_seqs: 256,
         max_num_batched_tokens: 4096,
         max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 

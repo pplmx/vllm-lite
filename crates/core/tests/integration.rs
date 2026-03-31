@@ -37,6 +37,9 @@ fn test_continuous_batching_with_streaming() {
         max_num_seqs: 2,
         max_num_batched_tokens: 100,
         max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -80,6 +83,9 @@ fn test_chunked_prefill_integration() {
         max_num_seqs: 256,
         max_num_batched_tokens: 10,
         max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -110,6 +116,9 @@ fn test_max_tokens_includes_prompt() {
         max_num_seqs: 256,
         max_num_batched_tokens: 100,
         max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -149,6 +158,9 @@ fn test_single_token_prefill_then_decode() {
         max_num_seqs: 256,
         max_num_batched_tokens: 100,
         max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -183,6 +195,9 @@ fn test_concurrent_requests_finish_together() {
         max_num_seqs: 10,
         max_num_batched_tokens: 100,
         max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -204,6 +219,9 @@ fn test_batch_full_new_request_waits() {
         max_num_seqs: 1,
         max_num_batched_tokens: 100,
         max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -229,6 +247,9 @@ fn test_prefix_cache_hit_directly_decoding() {
         max_num_seqs: 10,
         max_num_batched_tokens: 4096,
         max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -253,6 +274,9 @@ fn test_different_prompt_lengths_batching() {
         max_num_seqs: 10,
         max_num_batched_tokens: 50,
         max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -274,6 +298,9 @@ fn test_prefill_priority_under_decode_limit() {
         max_num_seqs: 2,
         max_num_batched_tokens: 100,
         max_consecutive_decode: 1,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -302,6 +329,9 @@ fn test_many_sequences_stress() {
         max_num_seqs: 50,
         max_num_batched_tokens: 100,
         max_consecutive_decode: 5,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -327,6 +357,9 @@ fn test_sequence_state_transitions() {
         max_num_seqs: 10,
         max_num_batched_tokens: 100,
         max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -363,6 +396,9 @@ fn test_immediate_finish_after_prompt() {
         max_num_seqs: 10,
         max_num_batched_tokens: 100,
         max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
