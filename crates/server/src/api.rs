@@ -6,7 +6,9 @@ use axum::{
 use futures::stream::{self, Stream};
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
+use std::time::Duration;
 use tokio::sync::mpsc;
+use tokio::time::timeout;
 use vllm_core::metrics::MetricsSnapshot;
 use vllm_core::types::{EngineMessage, Request};
 
@@ -21,6 +23,18 @@ pub struct CompletionRequest {
     pub max_tokens: usize,
     #[serde(default = "default_stream")]
     pub stream: bool,
+    #[serde(default = "default_timeout")]
+    pub timeout: Option<u64>,
+    #[serde(default = "default_retries")]
+    pub retries: Option<u32>,
+}
+
+fn default_retries() -> Option<u32> {
+    None
+}
+
+fn default_timeout() -> Option<u64> {
+    None
 }
 
 fn default_max_tokens() -> usize {
@@ -31,6 +45,7 @@ fn default_stream() -> bool {
     false
 }
 
+#[allow(dead_code)]
 const MAX_MAX_TOKENS: usize = 8192;
 
 #[derive(Serialize)]
@@ -55,11 +70,17 @@ pub async fn completions(
     State(state): State<ApiState>,
     Json(req): Json<CompletionRequest>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let timeout_ms = req.timeout.map(Duration::from_millis);
+
     let prompt_tokens = state.tokenizer.encode(&req.prompt);
 
     let max_new_tokens = req.max_tokens;
     let total_max_tokens = prompt_tokens.len() + max_new_tokens;
-    let request = Request::new(0, prompt_tokens, total_max_tokens);
+    let mut request = Request::new(0, prompt_tokens, total_max_tokens);
+
+    if let Some(retries) = req.retries {
+        request.sampling_params.max_retries = retries;
+    }
 
     let (response_tx, response_rx) = mpsc::unbounded_channel();
 
@@ -72,51 +93,67 @@ pub async fn completions(
         .expect("Engine channel should be available");
 
     let tokenizer = state.tokenizer.clone();
-    let stream = stream::unfold((response_rx, req.stream, Vec::new()), move |(mut rx, streaming, mut tokens)| {
-        let tokenizer = tokenizer.clone();
-        async move {
-            if !streaming && !tokens.is_empty() {
-                let text = tokenizer.decode(&tokens);
-                let response = CompletionResponse {
-                    id: "cmpl-0".to_string(),
-                    choices: vec![Choice { text, index: 0 }],
-                };
-                let data = serde_json::to_string(&response).unwrap();
-                return Some((Ok(Event::default().data(data)), (rx, streaming, tokens)));
-            }
-            match rx.recv().await {
-                Some(token) => {
-                    if streaming {
-                        let text = tokenizer.decode(&[token]);
-                        let chunk = CompletionChunk {
-                            id: "cmpl-0".to_string(),
-                            choices: vec![Choice { text, index: 0 }],
-                        };
-                        let data = serde_json::to_string(&chunk).unwrap();
-                        Some((Ok(Event::default().data(data)), (rx, streaming, tokens)))
-                    } else {
-                        tokens.push(token);
-                        Some((Ok(Event::default().data("".to_string())), (rx, streaming, tokens)))
-                    }
+    let response_stream = stream::unfold(
+        (response_rx, req.stream, Vec::new(), timeout_ms, false),
+        move |(mut rx, streaming, mut tokens, timeout_duration, timed_out)| {
+            let tokenizer = tokenizer.clone();
+            async move {
+                if timed_out {
+                    return None;
                 }
-                None => {
-                    if !streaming {
-                        let text = tokenizer.decode(&tokens);
-                        let response = CompletionResponse {
-                            id: "cmpl-0".to_string(),
-                            choices: vec![Choice { text, index: 0 }],
-                        };
-                        let data = serde_json::to_string(&response).unwrap();
-                        Some((Ok(Event::default().data(data)), (rx, true, tokens)))
-                    } else {
-                        Some((Ok(Event::default().data("[DONE]")), (rx, true, tokens)))
-                    }
+                if !streaming && !tokens.is_empty() {
+                    let text = tokenizer.decode(&tokens);
+                    let response = CompletionResponse {
+                        id: "cmpl-0".to_string(),
+                        choices: vec![Choice { text, index: 0 }],
+                    };
+                    let data = serde_json::to_string(&response).unwrap();
+                    return Some((Ok(Event::default().data(data)), (rx, streaming, tokens, timeout_duration, true)));
                 }
-            }
-        }
-    });
 
-    Sse::new(stream)
+                let recv_result = if let Some(duration) = timeout_duration {
+                    timeout(duration, rx.recv()).await
+                } else {
+                    Ok(rx.recv().await)
+                };
+
+                match recv_result {
+                    Ok(Some(token)) => {
+                        if streaming {
+                            let text = tokenizer.decode(&[token]);
+                            let chunk = CompletionChunk {
+                                id: "cmpl-0".to_string(),
+                                choices: vec![Choice { text, index: 0 }],
+                            };
+                            let data = serde_json::to_string(&chunk).unwrap();
+                            Some((Ok(Event::default().data(data)), (rx, streaming, tokens, timeout_duration, false)))
+                        } else {
+                            tokens.push(token);
+                            Some((Ok(Event::default().data("")), (rx, streaming, tokens, timeout_duration, false)))
+                        }
+                    }
+                    Ok(None) => {
+                        if !streaming {
+                            let text = tokenizer.decode(&tokens);
+                            let response = CompletionResponse {
+                                id: "cmpl-0".to_string(),
+                                choices: vec![Choice { text, index: 0 }],
+                            };
+                            let data = serde_json::to_string(&response).unwrap();
+                            Some((Ok(Event::default().data(data)), (rx, true, tokens, timeout_duration, true)))
+                        } else {
+                            Some((Ok(Event::default().data("[DONE]")), (rx, true, tokens, timeout_duration, true)))
+                        }
+                    }
+                    Err(_) => {
+                        let error = r#"{"error":"Request timeout"}"#;
+                        Some((Ok(Event::default().data(error)), (rx, streaming, tokens, timeout_duration, true)))
+                    }
+                }
+            }
+        },
+    );
+    Sse::new(response_stream)
 }
 
 #[derive(Serialize)]
