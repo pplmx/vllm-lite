@@ -58,6 +58,8 @@ pub struct Qwen3Config {
     pub kv_len: Option<usize>,
     #[serde(default)]
     pub tie_word_embeddings: Option<bool>,
+    #[serde(default)]
+    pub has_qk_norm: Option<bool>,
 }
 
 impl TextConfig {
@@ -166,6 +168,10 @@ impl Qwen3Config {
         self.tie_word_embeddings.unwrap_or(false)
     }
 
+    pub fn has_qk_norm(&self) -> bool {
+        self.has_qk_norm.unwrap_or(false)
+    }
+
     pub fn attention_type(&self) -> AttentionType {
         if self.q_len.is_some() || self.kv_len.is_some() {
             AttentionType::MLA
@@ -210,6 +216,7 @@ mod tests {
             qk_rope_dim: None,
             kv_len: None,
             tie_word_embeddings: None,
+            has_qk_norm: None,
         };
 
         assert_eq!(config.vocab_size(), 151936);
@@ -239,6 +246,7 @@ mod tests {
             qk_rope_dim: None,
             kv_len: None,
             tie_word_embeddings: Some(true),
+            has_qk_norm: Some(true),
         };
 
         assert_eq!(config.vocab_size(), 1000);
@@ -282,6 +290,7 @@ mod tests {
             qk_rope_dim: None,
             kv_len: None,
             tie_word_embeddings: None,
+            has_qk_norm: None,
         };
 
         assert_eq!(config.vocab_size(), 500);

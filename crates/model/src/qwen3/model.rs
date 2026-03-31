@@ -39,6 +39,7 @@ impl Qwen3Model {
                 config.intermediate_size(),
                 config.rms_norm_eps(),
                 None,
+                config.has_qk_norm(),
             )?;
             layers.push(layer);
         }
@@ -133,6 +134,11 @@ impl Qwen3Model {
                 ],
             );
 
+            let q_norm_key = format!("model.layers.{}.self_attn.q_norm.weight", i);
+            let k_norm_key = format!("model.layers.{}.self_attn.k_norm.weight", i);
+            let q_norm_weight = weights.get(&q_norm_key).cloned();
+            let k_norm_weight = weights.get(&k_norm_key).cloned();
+
             let layer_weights = Some((
                 q_key.cloned(),
                 k_key.cloned(),
@@ -156,6 +162,8 @@ impl Qwen3Model {
                         i
                     ))
                     .cloned(),
+                q_norm_weight,
+                k_norm_weight,
             ));
 
             let layer = TransformerBlock::new_with_weights(
@@ -165,6 +173,7 @@ impl Qwen3Model {
                 hidden_size / config.num_attention_heads(),
                 config.intermediate_size(),
                 config.rms_norm_eps(),
+                config.has_qk_norm(),
                 layer_weights,
             )?;
             layers.push(layer);

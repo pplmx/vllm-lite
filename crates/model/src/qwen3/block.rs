@@ -16,6 +16,7 @@ pub struct TransformerBlock {
 }
 
 impl TransformerBlock {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         hidden_size: usize,
         num_heads: usize,
@@ -24,6 +25,7 @@ impl TransformerBlock {
         intermediate_size: usize,
         rms_norm_eps: f64,
         vb: Option<candle_nn::VarBuilder>,
+        has_qk_norm: bool,
     ) -> Result<Self> {
         let vb = vb.unwrap_or_else(|| {
             candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu)
@@ -42,6 +44,7 @@ impl TransformerBlock {
             head_dim,
             Some(vb_attn),
             AttentionConfig::default(),
+            has_qk_norm,
         )?;
 
         let vb_mlp = vb.pp("mlp");
@@ -55,6 +58,7 @@ impl TransformerBlock {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_weights(
         hidden_size: usize,
         num_heads: usize,
@@ -62,6 +66,7 @@ impl TransformerBlock {
         head_dim: usize,
         intermediate_size: usize,
         rms_norm_eps: f64,
+        has_qk_norm: bool,
         weights: Option<(
             Option<Tensor>, // q_proj
             Option<Tensor>, // k_proj
@@ -72,6 +77,8 @@ impl TransformerBlock {
             Option<Tensor>, // down_proj
             Option<Tensor>, // input_layernorm
             Option<Tensor>, // post_attention_layernorm
+            Option<Tensor>, // q_norm
+            Option<Tensor>, // k_norm
         )>,
     ) -> Result<Self> {
         let Some((
@@ -84,6 +91,8 @@ impl TransformerBlock {
             Some(down_w),
             Some(input_ln_w),
             Some(post_attn_ln_w),
+            q_norm_w,
+            k_norm_w,
         )) = weights
         else {
             return Err(candle_core::Error::msg("Missing layer weights"));
@@ -108,6 +117,9 @@ impl TransformerBlock {
             v_w,
             o_w,
             AttentionConfig::default(),
+            has_qk_norm,
+            q_norm_w,
+            k_norm_w,
         )?;
 
         let mlp = SwiGLU::new_with_weights(hidden_size, intermediate_size, gate_w, up_w, down_w)?;
@@ -190,7 +202,7 @@ mod tests {
     #[test]
     fn test_transformer_block_forward() -> Result<()> {
         let device = Device::Cpu;
-        let block = TransformerBlock::new(256, 4, 2, 64, 512, 1e-6, None)?;
+        let block = TransformerBlock::new(256, 4, 2, 64, 512, 1e-6, None, false)?;
 
         let x = Tensor::ones((1, 2, 256), DType::F32, &device)?;
         let output = block.forward(&x)?;
@@ -202,7 +214,7 @@ mod tests {
     #[test]
     fn test_transformer_block_batch_forward() -> Result<()> {
         let device = Device::Cpu;
-        let block = TransformerBlock::new(128, 4, 2, 32, 256, 1e-6, None)?;
+        let block = TransformerBlock::new(128, 4, 2, 32, 256, 1e-6, None, false)?;
 
         let x = Tensor::ones((4, 3, 128), DType::F32, &device)?;
         let output = block.forward(&x)?;
@@ -214,7 +226,7 @@ mod tests {
     #[test]
     fn test_transformer_block_output_shape() -> Result<()> {
         let device = Device::Cpu;
-        let block = TransformerBlock::new(128, 4, 2, 32, 256, 1e-6, None)?;
+        let block = TransformerBlock::new(128, 4, 2, 32, 256, 1e-6, None, false)?;
 
         let x = Tensor::zeros((2, 1, 128), DType::F32, &device)?;
         let output = block.forward(&x)?;

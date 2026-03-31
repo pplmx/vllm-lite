@@ -2,7 +2,7 @@
 
 use crate::kv_cache::PagedKvCache;
 use candle_core::{Device, Module, Result, Tensor};
-use candle_nn::Linear;
+use candle_nn::{LayerNorm, Linear};
 
 #[derive(Debug, Clone)]
 pub struct AttentionConfig {
@@ -28,6 +28,8 @@ pub struct GqaAttention {
     num_kv_heads: usize,
     head_dim: usize,
     config: AttentionConfig,
+    q_norm: Option<LayerNorm>,
+    k_norm: Option<LayerNorm>,
 }
 
 impl GqaAttention {
@@ -38,6 +40,7 @@ impl GqaAttention {
         head_dim: usize,
         vb: Option<candle_nn::VarBuilder>,
         config: AttentionConfig,
+        has_qk_norm: bool,
     ) -> Result<Self> {
         let vb = vb.unwrap_or_else(|| {
             candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu)
@@ -47,6 +50,18 @@ impl GqaAttention {
         let k_proj = candle_nn::linear(hidden_size, num_kv_heads * head_dim, vb.pp("k_proj"))?;
         let v_proj = candle_nn::linear(hidden_size, num_kv_heads * head_dim, vb.pp("v_proj"))?;
         let o_proj = candle_nn::linear(num_heads * head_dim, hidden_size, vb.pp("o_proj"))?;
+
+        let q_norm = if has_qk_norm {
+            Some(candle_nn::layer_norm(head_dim, 1e-6, vb.pp("q_norm"))?)
+        } else {
+            None
+        };
+        let k_norm = if has_qk_norm {
+            Some(candle_nn::layer_norm(head_dim, 1e-6, vb.pp("k_norm"))?)
+        } else {
+            None
+        };
+
         Ok(Self {
             q_proj,
             k_proj,
@@ -56,6 +71,8 @@ impl GqaAttention {
             num_kv_heads,
             head_dim,
             config,
+            q_norm,
+            k_norm,
         })
     }
 
@@ -69,11 +86,31 @@ impl GqaAttention {
         v_weight: Tensor,
         o_weight: Tensor,
         config: AttentionConfig,
+        has_qk_norm: bool,
+        q_norm_weight: Option<Tensor>,
+        k_norm_weight: Option<Tensor>,
     ) -> Result<Self> {
         let q_proj = Linear::new(q_weight, None);
         let k_proj = Linear::new(k_weight, None);
         let v_proj = Linear::new(v_weight, None);
         let o_proj = Linear::new(o_weight, None);
+
+        let q_norm = if has_qk_norm {
+            let q_norm_weight =
+                q_norm_weight.ok_or_else(|| candle_core::Error::msg("Missing q_norm weight"))?;
+            let q_norm_bias = Tensor::zeros(head_dim, q_norm_weight.dtype(), &Device::Cpu)?;
+            Some(LayerNorm::new(q_norm_weight, q_norm_bias, 1e-6))
+        } else {
+            None
+        };
+        let k_norm = if has_qk_norm {
+            let k_norm_weight =
+                k_norm_weight.ok_or_else(|| candle_core::Error::msg("Missing k_norm weight"))?;
+            let k_norm_bias = Tensor::zeros(head_dim, k_norm_weight.dtype(), &Device::Cpu)?;
+            Some(LayerNorm::new(k_norm_weight, k_norm_bias, 1e-6))
+        } else {
+            None
+        };
 
         Ok(Self {
             q_proj,
@@ -84,6 +121,8 @@ impl GqaAttention {
             num_kv_heads,
             head_dim,
             config,
+            q_norm,
+            k_norm,
         })
     }
 
@@ -98,6 +137,9 @@ impl GqaAttention {
         let q = q.reshape((batch_size, seq_len, self.num_heads, self.head_dim))?;
         let k = k.reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?;
         let v = v.reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?;
+
+        let q = self.apply_q_norm(q, batch_size, seq_len)?;
+        let k = self.apply_k_norm(k, batch_size, seq_len)?;
 
         let k = self.expand_kv(&k, self.num_heads, self.num_kv_heads)?;
         let v = self.expand_kv(&v, self.num_heads, self.num_kv_heads)?;
@@ -141,6 +183,32 @@ impl GqaAttention {
         Ok(expanded)
     }
 
+    fn apply_q_norm(&self, q: Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
+        if let Some(ref q_norm) = self.q_norm {
+            let q = q.transpose(1, 2)?; // [batch, num_heads, seq, head_dim]
+            let q = q.reshape((batch_size * self.num_heads * seq_len, self.head_dim))?;
+            let q = q_norm.forward(&q)?;
+            let q = q.reshape((batch_size, self.num_heads, seq_len, self.head_dim))?;
+            let q = q.transpose(1, 2)?; // [batch, seq, num_heads, head_dim]
+            Ok(q)
+        } else {
+            Ok(q)
+        }
+    }
+
+    fn apply_k_norm(&self, k: Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
+        if let Some(ref k_norm) = self.k_norm {
+            let k = k.transpose(1, 2)?; // [batch, num_kv_heads, seq, head_dim]
+            let k = k.reshape((batch_size * self.num_kv_heads * seq_len, self.head_dim))?;
+            let k = k_norm.forward(&k)?;
+            let k = k.reshape((batch_size, self.num_kv_heads, seq_len, self.head_dim))?;
+            let k = k.transpose(1, 2)?; // [batch, seq, num_kv_heads, head_dim]
+            Ok(k)
+        } else {
+            Ok(k)
+        }
+    }
+
     pub fn forward_prefill(
         &self,
         x: &Tensor,
@@ -156,15 +224,17 @@ impl GqaAttention {
         let k = self.k_proj.forward(x)?;
         let v = self.v_proj.forward(x)?;
 
-        let q = q
-            .reshape((batch_size, seq_len, self.num_heads, self.head_dim))?
-            .transpose(1, 2)?;
-        let k = k
-            .reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?
-            .transpose(1, 2)?;
+        let q = q.reshape((batch_size, seq_len, self.num_heads, self.head_dim))?;
+        let k = k.reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?;
         let v = v
             .reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?
             .transpose(1, 2)?;
+
+        let q = self.apply_q_norm(q, batch_size, seq_len)?;
+        let k = self.apply_k_norm(k, batch_size, seq_len)?;
+
+        let q = q.transpose(1, 2)?;
+        let k = k.transpose(1, 2)?;
 
         // Group tokens by block and write in batches
         let mut block_tokens: std::collections::HashMap<usize, Vec<usize>> =
@@ -218,9 +288,10 @@ impl GqaAttention {
         let tile_size = self.config.tile_size.unwrap_or(16);
 
         let q = self.q_proj.forward(x)?;
-        let q = q
-            .reshape((batch_size, 1, self.num_heads, self.head_dim))?
-            .transpose(1, 2)?;
+        let q = q.reshape((batch_size, 1, self.num_heads, self.head_dim))?;
+
+        let q = self.apply_q_norm(q, batch_size, 1)?;
+        let q = q.transpose(1, 2)?;
 
         let (k, v) = kv_cache.read_kv(layer_idx, block_ids, num_computed_tokens)?;
 
