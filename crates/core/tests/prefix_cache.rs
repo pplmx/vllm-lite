@@ -40,6 +40,7 @@ fn test_prefix_cache_hit() {
         enable_pd_separation: false,
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
+        enable_priority_scheduling: false,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
@@ -70,6 +71,7 @@ fn test_cache_after_completion() {
         enable_pd_separation: false,
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
+        enable_priority_scheduling: false,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
@@ -94,6 +96,7 @@ fn test_prefix_cache_partial_hit() {
         enable_pd_separation: false,
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
+        enable_priority_scheduling: false,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
@@ -125,6 +128,7 @@ fn test_prefix_cache_no_hit_different_prefix() {
         enable_pd_separation: false,
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
+        enable_priority_scheduling: false,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
@@ -156,6 +160,7 @@ fn test_prefix_cache_multiple_shared() {
         enable_pd_separation: false,
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
+        enable_priority_scheduling: false,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
@@ -194,6 +199,7 @@ fn test_prefix_hit_partial_prefill() {
         enable_pd_separation: false,
         prefill_chunk_size: 512,
         decode_preference_ratio: 0.7,
+        enable_priority_scheduling: false,
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 

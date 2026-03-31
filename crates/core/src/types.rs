@@ -5,12 +5,16 @@ pub type SeqId = u64;
 pub type BlockId = usize;
 pub use crate::kv_cache::BLOCK_SIZE;
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub struct Priority(pub u8);
+
 #[derive(Clone, Debug)]
 pub struct Request {
     pub id: SeqId,
     pub prompt: Vec<TokenId>,
     pub max_tokens: usize,
     pub sampling_params: SamplingParams,
+    pub priority: Priority,
 }
 
 impl Request {
@@ -20,7 +24,13 @@ impl Request {
             prompt,
             max_tokens,
             sampling_params: SamplingParams::default(),
+            priority: Priority::default(),
         }
+    }
+
+    pub fn with_priority(mut self, priority: Priority) -> Self {
+        self.priority = priority;
+        self
     }
 }
 
@@ -60,6 +70,7 @@ pub struct Sequence {
     pub max_tokens: usize,
     pub sampling_params: SamplingParams,
     pub consecutive_decode_rounds: u32,
+    pub priority: Priority,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -97,6 +108,7 @@ pub struct SchedulerConfig {
     pub enable_pd_separation: bool,
     pub prefill_chunk_size: usize,
     pub decode_preference_ratio: f32,
+    pub enable_priority_scheduling: bool,
 }
 
 impl Default for SchedulerConfig {
@@ -108,6 +120,7 @@ impl Default for SchedulerConfig {
             enable_pd_separation: true,
             prefill_chunk_size: 512,
             decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
         }
     }
 }
