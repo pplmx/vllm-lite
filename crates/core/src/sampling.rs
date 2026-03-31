@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
+
 use crate::types::TokenId;
 use rand::thread_rng;
 use rand::Rng;
