@@ -203,10 +203,22 @@ mod tests {
     }
 
     #[test]
-    fn test_cuda_graph_add_node() {
+    fn test_cuda_graph_execute_shape_mismatch() {
         let mut graph = CudaGraph::new();
         graph.add_node(Arc::new(AddNode), vec![0, 1], vec![2]);
-        assert_eq!(graph.nodes.len(), 1);
+        graph.capture().unwrap();
+
+        let t1 = MockTensor::new(vec![1.0, 2.0], vec![2]);
+        let t2 = MockTensor::new(vec![3.0, 4.0, 5.0], vec![3]);
+
+        let mut tensors: Vec<Box<dyn CudaGraphTensor>> = vec![
+            Box::new(t1),
+            Box::new(t2),
+            Box::new(MockTensor::new(vec![0.0, 0.0], vec![2])),
+        ];
+
+        let result = graph.execute(&mut tensors);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -225,6 +237,43 @@ mod tests {
         ];
 
         graph.execute(&mut tensors).unwrap();
+
+        let output = tensors[2].shape();
+        assert_eq!(output, &[2]);
+    }
+
+    #[test]
+    fn test_cuda_graph_multiple_nodes() {
+        struct MultiplyNode;
+
+        impl CudaGraphNode for MultiplyNode {
+            fn execute(
+                &self,
+                inputs: &[&dyn CudaGraphTensor],
+            ) -> Result<Vec<Box<dyn CudaGraphTensor>>, CudaGraphError> {
+                let t1 = inputs[0];
+                let result = vec![10.0f32; t1.shape().iter().product()];
+                Ok(vec![Box::new(MockTensor::new(result, t1.shape().to_vec()))])
+            }
+        }
+
+        let mut graph = CudaGraph::new();
+        graph.add_node(Arc::new(AddNode), vec![0, 1], vec![2]);
+        graph.add_node(Arc::new(MultiplyNode), vec![2], vec![3]);
+        graph.capture().unwrap();
+
+        let t1 = MockTensor::new(vec![1.0, 2.0], vec![2]);
+        let t2 = MockTensor::new(vec![3.0, 4.0], vec![2]);
+
+        let mut tensors: Vec<Box<dyn CudaGraphTensor>> = vec![
+            Box::new(t1),
+            Box::new(t2),
+            Box::new(MockTensor::new(vec![0.0, 0.0], vec![2])),
+            Box::new(MockTensor::new(vec![0.0, 0.0], vec![2])),
+        ];
+
+        graph.execute(&mut tensors).unwrap();
+        assert_eq!(tensors[3].shape(), &[2]);
     }
 
     #[test]
@@ -246,6 +295,14 @@ mod tests {
         executor.register_graph("test_graph".to_string(), graph);
 
         assert!(executor.has_graph("test_graph"));
+    }
+
+    #[test]
+    fn test_cuda_graph_executor_graph_not_found() {
+        let executor = CudaGraphExecutor::new(true);
+
+        let result = executor.execute_graph("nonexistent", &mut []);
+        assert!(result.is_err());
     }
 
     #[test]
