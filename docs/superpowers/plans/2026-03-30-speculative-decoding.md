@@ -14,7 +14,7 @@
 
 ## File Structure
 
-```
+```text
 crates/core/src/
 ├── engine.rs      # Add draft_model, step_speculative
 └── types.rs       # Maybe add speculative config
@@ -25,6 +25,7 @@ crates/core/src/
 ### Task SD-1: Engine Extension
 
 **Files:**
+
 - Modify: `crates/core/src/engine.rs`
 
 - [ ] **Step 1: Add draft_model field**
@@ -52,7 +53,7 @@ impl<M: ModelBackend> Engine<M> {
             response_txs: HashMap::new(),
         }
     }
-    
+
     pub fn with_config(
         target_model: M, 
         draft_model: M,
@@ -89,7 +90,7 @@ pub fn step_speculative(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
         // Generate draft tokens using draft_model
         let mut draft = Vec::new();
         let mut current_tokens = tokens.clone();
-        
+
         for _ in 0..self.max_draft_tokens {
             let output = self.draft_model.forward(
                 &[*seq_id],
@@ -109,18 +110,18 @@ pub fn step_speculative(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
         let draft = &draft_outputs[i];
         let full_tokens = [&batch.input_tokens[i][..], draft].concat();
         let full_positions: Vec<usize> = (0..full_tokens.len()).collect();
-        
+
         let target_output = self.target_model.forward(
             &[*seq_id],
             &[full_tokens],
             &[full_positions],
         )?;
-        
+
         // Acceptance check (simplified: just use first token for now)
         // In full impl, check each draft token
         let accepted = draft[..draft.len().saturating_sub(1)].to_vec();
         let final_token = target_output.next_tokens[0];
-        
+
         for &tok in &accepted {
             results.push((*seq_id, tok));
         }
@@ -162,11 +163,13 @@ git commit -m "feat(core): add speculative decoding infrastructure
 ### Task SD-2: Server Integration
 
 **Files:**
+
 - Modify: `crates/server/src/main.rs`
 
 - [ ] **Step 1: Update server to use speculative mode**
 
 Update main.rs to create Engine with draft and target models:
+
 ```rust
 // For MVP, use same model as both draft and target
 let model = Qwen3Model::new(config.clone(), &device)?;
@@ -205,10 +208,10 @@ curl -X POST http://localhost:8000/v1/completions \
 
 ## Spec Coverage
 
-| Spec Section | Covered By |
-|---|---|
-| Draft model field | Task SD-1 |
-| Target model field | Task SD-1 |
-| step_speculative method | Task SD-1 |
-| Acceptance logic | Task SD-1 |
-| Server integration | Task SD-2 |
+| Spec Section            | Covered By |
+| ----------------------- | ---------- |
+| Draft model field       | Task SD-1  |
+| Target model field      | Task SD-1  |
+| step_speculative method | Task SD-1  |
+| Acceptance logic        | Task SD-1  |
+| Server integration      | Task SD-2  |

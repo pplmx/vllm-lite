@@ -3,6 +3,7 @@
 ## 1. Overview
 
 Implement Qwen3 model inference with Candle, supporting:
+
 - GQA (Grouped Query Attention)
 - Sliding Window Attention
 - RoPE (Rotary Position Embedding)
@@ -14,13 +15,13 @@ Implement Qwen3 model inference with Candle, supporting:
 
 ## 2. Technical Stack
 
-| Component | Choice | Rationale |
-|-----------|--------|-----------|
-| Model | Qwen3 | Popular, well-documented |
-| Backend | Candle | Pure Rust, CUDA support |
-| Weights | SafeTensors | HuggingFace standard |
-| Device | CUDA | Fast inference |
-| Tokenizer | tokenizers crate | HuggingFace compatible |
+| Component | Choice           | Rationale                |
+| --------- | ---------------- | ------------------------ |
+| Model     | Qwen3            | Popular, well-documented |
+| Backend   | Candle           | Pure Rust, CUDA support  |
+| Weights   | SafeTensors      | HuggingFace standard     |
+| Device    | CUDA             | Fast inference           |
+| Tokenizer | tokenizers crate | HuggingFace compatible   |
 
 ---
 
@@ -28,7 +29,7 @@ Implement Qwen3 model inference with Candle, supporting:
 
 ### 3.1 Model Crate Structure
 
-```
+```text
 crates/model/src/
 ├── lib.rs
 ├── loader.rs           # SafeTensors loading
@@ -89,13 +90,13 @@ pub struct LayerWeights {
 ### 4.2 GQA + Sliding Window Attention
 
 - **GQA**: num_key_value_heads < num_attention_heads
-  - K, V 在 head 维度投影 num_key_value_heads
-  - Q 投影 num_attention_heads
-  - 推理时 expand K, V 到 Q 的 head 数
+    - K, V 在 head 维度投影 num_key_value_heads
+    - Q 投影 num_attention_heads
+    - 推理时 expand K, V 到 Q 的 head 数
 
 - **Sliding Window**: 每个 token 只看前后 `sliding_window` 个 token
-  - 超过 window 的位置 mask 掉
-  - Qwen3 典型值: 32768
+    - 超过 window 的位置 mask 掉
+    - Qwen3 典型值: 32768
 
 ### 4.3 RoPE
 
@@ -105,7 +106,7 @@ pub struct LayerWeights {
 
 ### 4.4 SwiGLU MLP
 
-```
+```text
 FFN(x) = SwiGLU(x) = SiLU(x @ W_gate) * (x @ W_up) @ W_down
 intermediate_size = 4 * hidden_size (not 2*)
 ```
@@ -114,7 +115,7 @@ intermediate_size = 4 * hidden_size (not 2*)
 
 ## 5. Forward Pass
 
-```
+```text
 Input: batch.input_ids [batch_size, seq_len]
 Output: logits [batch_size, vocab_size]
 
@@ -132,7 +133,7 @@ Output: logits [batch_size, vocab_size]
    h. attn_output = attention(q, k, v)
    i. attn_output = attn_output @ o_proj.weight
    j. hidden = hidden + attn_output (residual)
-   
+
    k. normalized = rms_norm(hidden, post_layernorm.weight)
    l. mlp_output = swiglu(normalized)
    m. hidden = hidden + mlp_output (residual)
@@ -193,26 +194,31 @@ thiserror = "2"
 ## 8. Implementation Plan
 
 ### Phase 5.1: Infrastructure
+
 - [ ] Add dependencies to Cargo.toml
 - [ ] Implement Qwen3Config
 - [ ] Implement SafeTensors loader
 
 ### Phase 5.2: Core Components
+
 - [ ] Implement RoPE
 - [ ] Implement RMSNorm
 - [ ] Implement SwiGLU MLP
 
 ### Phase 5.3: Attention
+
 - [ ] Implement GQA
 - [ ] Implement Sliding Window Attention
 - [ ] Implement full Transformer Block
 
 ### Phase 5.4: Model Integration
+
 - [ ] Implement Qwen3Model
 - [ ] Implement ModelBackend trait
 - [ ] Connect to Engine
 
 ### Phase 5.5: Server Integration
+
 - [ ] Update server to load real model
 - [ ] Add tokenizer
 - [ ] End-to-end test

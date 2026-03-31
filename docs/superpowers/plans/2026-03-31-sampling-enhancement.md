@@ -9,6 +9,7 @@
 ## Task 1: 更新 SamplingParams
 
 **Files:**
+
 - Modify: `crates/core/src/types.rs`
 
 - [ ] **Step 1: 添加 repeat_penalty 字段**
@@ -49,6 +50,7 @@ git commit -m "feat(core): add repeat_penalty to SamplingParams"
 ## Task 2: 实现 repeat_penalty
 
 **Files:**
+
 - Modify: `crates/core/src/sampling.rs`
 
 - [ ] **Step 1: 添加 apply_repeat_penalty 函数**
@@ -58,7 +60,7 @@ pub fn apply_repeat_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penalty
     if penalty == 1.0 || seen_tokens.is_empty() || logits.is_empty() {
         return;
     }
-    
+
     let mut seen = std::collections::HashSet::new();
     for &token in seen_tokens {
         if token < logits.len() {
@@ -106,6 +108,7 @@ git commit -m "feat(core): add repeat penalty to sampling"
 ## Task 3: 实现 top_k_sample
 
 **Files:**
+
 - Modify: `crates/core/src/sampling.rs`
 
 - [ ] **Step 1: 添加 top_k_sample 函数**
@@ -115,23 +118,23 @@ pub fn top_k_sample(logits: &[f32], k: usize) -> TokenId {
     if k == 0 || logits.is_empty() {
         return greedy_sample(logits);
     }
-    
+
     let k = k.min(logits.len());
-    
+
     // 使用 partition 找 top-k (O(n))
     let mut indexed: Vec<(usize, f32)> = logits.iter().enumerate()
         .map(|(i, &v)| (i, v))
         .collect();
-    
+
     // partial sort: 把最大的 k 个元素放到前面
     indexed.select_nth_unstable_by(k - 1, |a, b| b.1.partial_cmp(&a.1).unwrap());
     let threshold = indexed[k - 1].1;
-    
+
     // 设置非 top-k 为 -inf，然后采样
     let mut masked: Vec<f32> = logits.iter()
         .map(|&v| if v >= threshold { v } else { f32::NEG_INFINITY })
         .collect();
-    
+
     temperature_sample(&mut masked, 1.0)
 }
 ```
@@ -166,6 +169,7 @@ git commit -m "feat(core): add top-k sampling"
 ## Task 4: 修改 sample_batch
 
 **Files:**
+
 - Modify: `crates/core/src/sampling.rs`
 
 - [ ] **Step 1: 修改 sample_batch 签名**
@@ -184,19 +188,19 @@ pub fn sample_batch(
         .zip(seen_tokens.iter())
         .map(|(logits, seen)| {
             let mut logits = logits.clone();
-            
+
             // 1. Apply repeat penalty
             if repeat_penalty != 1.0 && !seen.is_empty() {
                 apply_repeat_penalty(&mut logits, seen, repeat_penalty);
             }
-            
+
             // 2. Apply temperature
             if temperature > 0.0 && temperature != 1.0 {
                 for l in logits.iter_mut() {
                     *l /= temperature;
                 }
             }
-            
+
             // 3. Top-k then Top-p
             if top_k > 0 {
                 // 临时用 top_k 实现
@@ -211,7 +215,7 @@ pub fn sample_batch(
                     }
                 }
             }
-            
+
             // 4. Final sampling
             if top_p < 1.0 {
                 top_p_sample(&logits, top_p)

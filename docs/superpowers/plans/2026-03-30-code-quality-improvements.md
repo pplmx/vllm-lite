@@ -10,7 +10,7 @@
 
 ---
 
-### File Structure
+## File Structure
 
 - `crates/server/src/api.rs` - Fix tokenization and response
 - `crates/core/src/engine.rs` - Wire speculative decoding, consolidate constructors
@@ -25,6 +25,7 @@
 ### Task 1: Fix API max_tokens Calculation
 
 **Files:**
+
 - Modify: `crates/server/src/api.rs:51`
 
 - [ ] **Step 1: Read current code**
@@ -39,11 +40,13 @@ The bug is on line 51: `let max_tokens = prompt_tokens.len() + req.max_tokens;`
 This incorrectly adds prompt length to max_tokens. Should just use `req.max_tokens`.
 
 Replace:
+
 ```rust
 let max_tokens = prompt_tokens.len() + req.max_tokens;
 ```
 
 With:
+
 ```rust
 let max_tokens = req.max_tokens;
 ```
@@ -60,6 +63,7 @@ git commit -m "fix(api): correct max_tokens calculation"
 ### Task 2: Add Real Tokenization
 
 **Files:**
+
 - Modify: `Cargo.toml` (add dependency)
 - Create: `crates/model/src/tokenizer.rs`
 - Modify: `crates/server/src/api.rs` (use tokenizer)
@@ -68,6 +72,7 @@ git commit -m "fix(api): correct max_tokens calculation"
 - [ ] **Step 1: Add tiktoken dependency**
 
 Modify `crates/model/Cargo.toml`, add under `[dependencies]`:
+
 ```toml
 tiktoken = { version = "0.7", optional = true }
 
@@ -150,6 +155,7 @@ use vllm_model::tokenizer::Tokenizer;
 ```
 
 In `main()` after device setup:
+
 ```rust
 let tokenizer = Tokenizer::new();
 ```
@@ -173,6 +179,7 @@ pub struct ApiState {
 Update main.rs to create ApiState and pass it.
 
 Then in completions function:
+
 ```rust
 let prompt_tokens = req.prompt.encode();
 ```
@@ -195,6 +202,7 @@ git commit -m "feat(model): add tokenizer with tiktoken support"
 ### Task 3: Fix API Response to Return Decoded Text
 
 **Files:**
+
 - Modify: `crates/server/src/api.rs`
 
 - [ ] **Step 1: Read current api.rs response handling**
@@ -264,6 +272,7 @@ git commit -m "fix(api): return decoded text instead of placeholder"
 ### Task 4: Fix Prefix Cache Retrieval
 
 **Files:**
+
 - Modify: `crates/core/src/scheduler.rs`
 
 - [ ] **Step 1: Read scheduler.rs add_request function**
@@ -278,7 +287,7 @@ Actually the logic looks correct - on new request, it checks cache (lines 49-63)
 
 Let me verify the actual behavior by looking more carefully... Actually wait - in line 219, it checks `contains_key` before inserting. But the real issue might be that the cache entry is being stored but not retrieved properly on subsequent identical prompts.
 
-The code looks correct. Maybe I misidentified this. Let me re-verify by looking at what happens: when a request comes in with prompt [1,2,3], it hashes and checks cache. If hit, it uses cached blocks. When sequence finishes, it stores in cache with key = hash(prompt_tokens). 
+The code looks correct. Maybe I misidentified this. Let me re-verify by looking at what happens: when a request comes in with prompt [1,2,3], it hashes and checks cache. If hit, it uses cached blocks. When sequence finishes, it stores in cache with key = hash(prompt_tokens).
 
 Actually wait - there's a potential bug in line 217: it only caches the prompt, not the full sequence. But when retrieving (line 54), it uses the full prompt as key. This should work for exact matches.
 
@@ -290,7 +299,7 @@ Let me remove this task and focus on the others.
 
 (Actually, I'll mark this as not needed since the code appears correct - the prefix cache is being checked and stored properly. Let me continue to the next task.)
 
-- [ ] **Skip this task - code is correct** 
+- [ ] **Skip this task - code is correct**
 
 The prefix cache implementation appears sound. Moving to next task.
 
@@ -299,6 +308,7 @@ The prefix cache implementation appears sound. Moving to next task.
 ### Task 5: Wire Up Speculative Decoding
 
 **Files:**
+
 - Modify: `crates/core/src/engine.rs:195`
 
 - [ ] **Step 1: Read engine.rs run loop**
@@ -308,6 +318,7 @@ Lines 180-202 show the run loop. Line 195 calls `self.step()` but should call `s
 - [ ] **Step 2: Add speculative mode flag to Engine**
 
 Add a field to Engine struct:
+
 ```rust
 pub struct Engine<M: ModelBackend> {
     pub scheduler: Scheduler,
@@ -322,6 +333,7 @@ pub struct Engine<M: ModelBackend> {
 Update constructors to set `speculative_mode: false` by default.
 
 In `with_config`, allow setting it:
+
 ```rust
 pub fn with_config(
     target_model: M,
@@ -342,6 +354,7 @@ pub fn with_config(
 ```
 
 Add a setter:
+
 ```rust
 impl<M: ModelBackend> Engine<M> {
     pub fn enable_speculative(&mut self) {
@@ -353,11 +366,13 @@ impl<M: ModelBackend> Engine<M> {
 - [ ] **Step 3: Modify run loop to use speculative step**
 
 In run() function, change line 195 from:
+
 ```rust
 if let Err(e) = self.step() {
 ```
 
 To:
+
 ```rust
 let result = if self.speculative_mode {
     self.step_speculative()
@@ -370,6 +385,7 @@ if let Err(e) = result {
 - [ ] **Step 4: Enable speculative mode in server**
 
 In `crates/server/src/main.rs`, after creating engine:
+
 ```rust
 let mut engine = Engine::with_config(
     model,
@@ -399,6 +415,7 @@ git commit -m "feat(core): wire up speculative decoding in engine run loop"
 ### Task 6: Implement Temperature/Top-p Sampling
 
 **Files:**
+
 - Modify: `crates/core/src/sampling.rs`
 
 - [ ] **Step 1: Read current sampling.rs**
@@ -508,6 +525,7 @@ pub fn sample_batch(logits_list: &[Vec<f32>], temperature: f32, top_p: f32) -> V
 - [ ] **Step 3: Update tests**
 
 The existing test at line 48-51 needs updating:
+
 ```rust
 #[test]
 fn test_sample_batch() {
@@ -534,6 +552,7 @@ git commit -m "feat(core): implement temperature and top-p sampling"
 ### Task 7: Consolidate Engine Constructors
 
 **Files:**
+
 - Modify: `crates/core/src/engine.rs`
 
 - [ ] **Step 1: Read engine.rs constructors**
@@ -591,6 +610,7 @@ git commit -m "refactor(core): consolidate Engine constructors"
 ### Task 8: Add Model Crate Tests
 
 **Files:**
+
 - Create: `crates/model/tests/qwen3.rs`
 - Create: `crates/model/tests/loader.rs`
 
@@ -668,6 +688,7 @@ git commit -t "test(model): add Qwen3 and loader tests"
 ### Task 9: Improve Error Handling in Engine
 
 **Files:**
+
 - Modify: `crates/core/src/engine.rs`
 
 - [ ] **Step 1: Read error handling in run loop**
@@ -690,12 +711,12 @@ impl<M: ModelBackend> Engine<M> {
         self.last_error = Some(e.to_string());
         eprintln!("Engine step error: {}", e);
     }
-    
+
     // Add method to check health
     pub fn is_healthy(&self) -> bool {
         self.error_count < 10
     }
-    
+
     pub fn get_last_error(&self) -> Option<&str> {
         self.last_error.as_deref()
     }
@@ -714,6 +735,7 @@ git commit -m "feat(core): improve engine error handling"
 ### Task 10: Add Graceful Shutdown Support
 
 **Files:**
+
 - Modify: `crates/server/src/api.rs`
 - Modify: `crates/server/src/main.rs`
 
@@ -733,6 +755,7 @@ pub async fn shutdown(State(engine_tx): State<EngineHandle>) -> &'static str {
 - [ ] **Step 2: Add shutdown route**
 
 In main.rs:
+
 ```rust
 let app = Router::new()
     .route("/v1/completions", post(api::completions))

@@ -5,6 +5,7 @@
 添加完整的测试覆盖，确保生产就绪。
 
 **目标：**
+
 - 单元测试：边界情况、错误处理
 - 集成测试：API 端到端
 - 压力测试：高并发、大 batch
@@ -15,14 +16,14 @@
 
 针对每个模块的独立测试：
 
-| 模块 | 测试覆盖 |
-|------|---------|
-| kv_cache.rs | allocate, free, evict, prefix_cache, hash |
-| scheduler.rs | add_request, build_batch, prefill/decode |
-| engine.rs | step, add_request, streaming |
-| sampling.rs | greedy, top_k, top_p, temperature |
-| attention.rs | forward, paged_attention, causal_mask |
-| model.rs | forward, weight loading |
+| 模块         | 测试覆盖                                  |
+| ------------ | ----------------------------------------- |
+| kv_cache.rs  | allocate, free, evict, prefix_cache, hash |
+| scheduler.rs | add_request, build_batch, prefill/decode  |
+| engine.rs    | step, add_request, streaming              |
+| sampling.rs  | greedy, top_k, top_p, temperature         |
+| attention.rs | forward, paged_attention, causal_mask     |
+| model.rs     | forward, weight loading                   |
 
 ### 2.2 集成测试
 
@@ -114,11 +115,11 @@ fn test_config() -> SchedulerConfig {
 
 ## 5. 覆盖率目标
 
-| 类型 | 目标 |
-|------|------|
-| 单元测试覆盖率 | > 80% |
-| 集成测试 | 核心流程全覆盖 |
-| 压力测试 | 3 个场景 |
+| 类型           | 目标           |
+| -------------- | -------------- |
+| 单元测试覆盖率 | > 80%          |
+| 集成测试       | 核心流程全覆盖 |
+| 压力测试       | 3 个场景       |
 
 ## 6. 持续集成
 
@@ -157,8 +158,8 @@ test:
 
 ## 8. 测试矩阵
 
-| 场景 | Batch | Seq Len | 并发 | 预期 |
-|------|-------|---------|------|------|
-| Decode | 1-8 | 1-32 | 10 | 正常 |
-| Prefill | 1-4 | 128-512 | 5 | 正常 |
-| 压力 | 64+ | 128 | 100+ | 稳定 |
+| 场景    | Batch | Seq Len | 并发 | 预期 |
+| ------- | ----- | ------- | ---- | ---- |
+| Decode  | 1-8   | 1-32    | 10   | 正常 |
+| Prefill | 1-4   | 128-512 | 5    | 正常 |
+| 压力    | 64+   | 128     | 100+ | 稳定 |

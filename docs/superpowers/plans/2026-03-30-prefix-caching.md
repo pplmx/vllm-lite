@@ -14,7 +14,7 @@
 
 ## File Structure
 
-```
+```text
 crates/core/src/
 ├── kv_cache.rs      # Modify: add PrefixCache + refcount
 ├── scheduler.rs     # Modify: integrate with add_request/update
@@ -26,11 +26,13 @@ crates/core/src/
 ### Task PC-1: PrefixCache Structure
 
 **Files:**
+
 - Modify: `crates/core/src/kv_cache.rs`
 
 - [ ] **Step 1: Add CacheKey type and hash function**
 
 Add to `crates/core/src/kv_cache.rs`:
+
 ```rust
 use std::time::Instant;
 use std::collections::{HashMap, VecDeque};
@@ -147,7 +149,7 @@ mod tests {
     fn test_cache_insert_and_get() {
         let mut cache = PrefixCache::new();
         cache.insert(123, vec![1, 2], 2);
-        
+
         assert!(cache.get(123).is_some());
         assert!(cache.get(456).is_none());
     }
@@ -158,14 +160,14 @@ mod tests {
         cache.insert(1, vec![1], 1);
         cache.insert(2, vec![2], 1);
         cache.insert(3, vec![3], 1);
-        
+
         // Access 1 to make it recently used
         cache.get(1);
-        
+
         // Evict should remove 2 (oldest after 1 was accessed)
         let mut alloc = BlockAllocator::new(10);
         cache.evict(&mut alloc);
-        
+
         assert!(cache.get(1).is_some());
         assert!(cache.get(2).is_none());
         assert!(cache.get(3).is_some());
@@ -196,11 +198,13 @@ git commit -m "feat(core): add PrefixCache with hash lookup and LRU eviction
 ### Task PC-2: Scheduler Integration
 
 **Files:**
+
 - Modify: `crates/core/src/scheduler.rs`
 
 - [ ] **Step 1: Add prefix_cache field to Scheduler**
 
 Update Scheduler struct:
+
 ```rust
 pub struct Scheduler {
     // ... existing fields
@@ -209,6 +213,7 @@ pub struct Scheduler {
 ```
 
 Update constructors:
+
 ```rust
 pub fn new() -> Self {
     Self::with_config(SchedulerConfig::default(), 1024)
@@ -225,6 +230,7 @@ pub fn with_config(config: SchedulerConfig, num_kv_blocks: usize) -> Self {
 - [ ] **Step 2: Modify add_request to check cache**
 
 Update `add_request` method:
+
 ```rust
 pub fn add_request(&mut self, req: Request) -> SeqId {
     let id = if req.id == 0 {
@@ -276,6 +282,7 @@ pub fn add_request(&mut self, req: Request) -> SeqId {
 - [ ] **Step 3: Modify update to store completed sequences**
 
 Update `update` method, add before finished handling:
+
 ```rust
 // Cache completed sequences
 for seq in self.running.iter().filter(|s| s.status == Status::Finished) {
@@ -289,6 +296,7 @@ for seq in self.running.iter().filter(|s| s.status == Status::Finished) {
 - [ ] **Step 4: Add OOM handling with cache eviction**
 
 In `add_request`, before allocating new blocks:
+
 ```rust
 let num_blocks_needed = req.prompt.len().div_ceil(BLOCK_SIZE);
 
@@ -307,6 +315,7 @@ let blocks = self
 - [ ] **Step 5: Import hash_tokens**
 
 Add import at top:
+
 ```rust
 use crate::kv_cache::{hash_tokens, PrefixCache};
 ```
@@ -335,6 +344,7 @@ git commit -m "feat(core): integrate PrefixCache with Scheduler
 ### Task PC-3: Integration Test + Verification
 
 **Files:**
+
 - Create: `crates/core/tests/prefix_cache.rs`
 
 - [ ] **Step 1: Write integration test**
@@ -381,7 +391,7 @@ fn test_prefix_cache_hit() {
 
     // Second request with same prompt: cache hit
     engine.add_request(Request::new(2, vec![10, 20], 5), tx2);
-    
+
     // Should go directly to decode (status == Decoding)
     let batch = engine.scheduler.build_batch();
     // The second request should be in Decoding status
@@ -395,18 +405,18 @@ fn test_cache_eviction() {
         max_num_batched_tokens: 4096,
     };
     let mut engine = Engine::with_config(StubModel, config, 2);  // Only 2 blocks
-    
+
     let (tx1, _rx1) = mpsc::unbounded_channel();
     let (tx2, _rx2) = mpsc::unbounded_channel();
 
     // First request
     engine.add_request(Request::new(1, vec![10, 20, 30], 5), tx1);
     engine.step().unwrap();
-    
+
     // Second request
     engine.add_request(Request::new(2, vec![40, 50, 60], 5), tx2);
     engine.step().unwrap();
-    
+
     // Should evict and work
     assert!(engine.scheduler.has_pending() || engine.scheduler.prefix_cache.len() > 0);
 }
@@ -455,12 +465,12 @@ curl -X POST http://localhost:8000/v1/completions \
 
 ## Spec Coverage
 
-| Spec Section | Covered By |
-|---|---|
-| CacheKey hash | Task PC-1 |
-| PrefixCache get/insert/evict | Task PC-1 |
-| LRU eviction | Task PC-1 |
-| Scheduler add_request cache check | Task PC-2 |
-| Scheduler update cache store | Task PC-2 |
-| OOM eviction | Task PC-2 |
-| Integration tests | Task PC-3 |
+| Spec Section                      | Covered By |
+| --------------------------------- | ---------- |
+| CacheKey hash                     | Task PC-1  |
+| PrefixCache get/insert/evict      | Task PC-1  |
+| LRU eviction                      | Task PC-1  |
+| Scheduler add_request cache check | Task PC-2  |
+| Scheduler update cache store      | Task PC-2  |
+| OOM eviction                      | Task PC-2  |
+| Integration tests                 | Task PC-3  |

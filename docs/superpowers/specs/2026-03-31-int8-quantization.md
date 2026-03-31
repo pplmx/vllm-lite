@@ -5,6 +5,7 @@
 实现 INT8 量化支持，显著减少显存使用和提升推理速度。
 
 **目标：**
+
 - 量化模型权重到 INT8
 - 量化 KV cache 到 INT8
 - 保持推理精度在可接受范围（< 1% 损失）
@@ -15,7 +16,7 @@
 
 只量化权重，激活值保持 FP16/FP32：
 
-```
+```text
 原: W_fp16 (2 bytes/param)
 量: W_int8 (1 byte/param) + scale (2 bytes/param)
 节省: 50%
@@ -34,6 +35,7 @@ pub struct QuantizedTensor {
 ### 2.3 量化方法
 
 使用对称量化：
+
 ```rust
 fn quantize_fp16_to_int8(tensor: &Tensor, scale: f32) -> Vec<i8> {
     (tensor / scale).round().clamp(-128.0, 127.0) as Vec<i8>
@@ -46,9 +48,9 @@ fn dequantize_int8_to_fp16(data: &[i8], scale: f32) -> Tensor {
 
 ### 2.4 Per-Tensor vs Per-Channel
 
-| 方式 | 精度 | 压缩率 |
-|------|------|--------|
-| Per-tensor | 较低 | 50% |
+| 方式        | 精度 | 压缩率                |
+| ----------- | ---- | --------------------- |
+| Per-tensor  | 较低 | 50%                   |
 | Per-channel | 较高 | 50% (+ tiny metadata) |
 
 推荐 **Per-tensor** 简化实现，后续可升级到 per-channel。
@@ -64,13 +66,13 @@ pub fn quantize_tensor(tensor: &Tensor) -> Result<QuantizedTensor> {
         .flat_map(|b| b.iter().flat_map(|h| h.iter()))
         .map(|v| v.abs())
         .fold(0.0f32, |a, b| a.max(b));
-    
+
     let scale = max_abs / 127.0;
     let data_int8: Vec<i8> = data_fp32.iter()
         .flat_map(|b| b.iter().flat_map(|h| h.iter()))
         .map(|v| (v / scale).round() as i8)
         .collect();
-    
+
     Ok(QuantizedTensor { data: data_int8, scale, zero_point: 0 })
 }
 ```
@@ -93,17 +95,17 @@ pub struct Qwen3Model {
 fn forward_quantized(&self, input: &Tensor) -> Result<Tensor> {
     // 输入保持 FP16
     let hidden = self.embed_tokens.forward(input)?;
-    
+
     for layer in &self.layers {
         // 权重反量化到 FP16 进行计算
         let w_int8 = layer.quant_weight.as_ref().unwrap();
         let w_fp16 = dequantize(w_int8);
-        
+
         // 正常计算
         let out = linear_fp16(&hidden, &w_fp16)?;
         hidden = layer.forward(out)?;
     }
-    
+
     Ok(hidden)
 }
 ```
@@ -130,7 +132,7 @@ fn attention_with_quantized_kv(
     // 反量化 K, V
     let k = dequantize(&quantized_kv.key_cache[layer_idx], scale);
     let v = dequantize(&quantized_kv.value_cache[layer_idx], scale);
-    
+
     // 标准 attention
     // ...
 }
@@ -144,12 +146,12 @@ fn attention_with_quantized_kv(
 fn calibrate(model: &Qwen3Model, calibration_data: &[Vec<TokenId>]) {
     // 收集激活值统计
     let mut max_values = HashMap::new();
-    
+
     for tokens in calibration_data {
         let output = model.forward(tokens);
         // 记录每层的 max value
     }
-    
+
     // 计算 scales
     for (name, max_val) in max_values {
         let scale = max_val / 127.0;
@@ -166,7 +168,7 @@ fn calibrate(model: &Qwen3Model, calibration_data: &[Vec<TokenId>]) {
 
 ### Test 1: 量化精度
 
-```
+```text
 输入: 标准 FP16 推理
 量化: INT8 推理
 期望: 输出 token 差异 < 1%
@@ -174,7 +176,7 @@ fn calibrate(model: &Qwen3Model, calibration_data: &[Vec<TokenId>]) {
 
 ### Test 2: 显存节省
 
-```
+```text
 模型: Qwen2.5-0.5B
 原始显存: ~1GB
 量化后: ~500MB
@@ -183,7 +185,7 @@ fn calibrate(model: &Qwen3Model, calibration_data: &[Vec<TokenId>]) {
 
 ### Test 3: 性能
 
-```
+```text
 batch=1, seq=512
 FP16 延迟: 100ms
 INT8 延迟: < 80ms

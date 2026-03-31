@@ -6,7 +6,7 @@ This directory contains design documents and implementation plans for vllm-lite.
 
 ## Directory Structure
 
-```
+```text
 vllm-lite/
 ├── crates/
 │   ├── core/       # Scheduler, Engine, KV Cache, Types
@@ -32,18 +32,18 @@ See [suprpowers/specs/2026-03-29-vllm-lite-design.md](./superpowers/specs/2026-0
 
 ## Specs (Design Documents)
 
-| File | Description | Status |
-|------|-------------|--------|
-| `2026-03-29-vllm-lite-design.md` | Overall architecture design | ✅ Implemented |
-| `2026-03-30-continuous-batching.md` | Continuous batching design | ✅ Implemented |
-| `2026-03-30-paged-attention.md` | Paged KV Cache design | ✅ Implemented |
-| `2026-03-30-prefix-caching.md` | Prefix caching design (incl. prefix hit) | ✅ Implemented |
-| `2026-03-30-qwen3-integration.md` | Qwen3 model integration | ✅ Implemented |
-| `2026-03-30-speculative-decoding.md` | Speculative decoding design | ✅ Implemented |
-| `2026-03-31-tiled-attention.md` | Tiled attention for memory optimization | 📋 Planned |
-| `2026-03-31-int8-quantization.md` | INT8 quantization for memory savings | 📋 Planned |
-| `2026-03-31-monitoring-metrics.md` | System metrics and monitoring | 📋 Planned |
-| `2026-03-31-test-coverage.md` | Test coverage improvements | 📋 Planned |
+| File                                 | Description                              | Status         |
+| ------------------------------------ | ---------------------------------------- | -------------- |
+| `2026-03-29-vllm-lite-design.md`     | Overall architecture design              | ✅ Implemented |
+| `2026-03-30-continuous-batching.md`  | Continuous batching design               | ✅ Implemented |
+| `2026-03-30-paged-attention.md`      | Paged KV Cache design                    | ✅ Implemented |
+| `2026-03-30-prefix-caching.md`       | Prefix caching design (incl. prefix hit) | ✅ Implemented |
+| `2026-03-30-qwen3-integration.md`    | Qwen3 model integration                  | ✅ Implemented |
+| `2026-03-30-speculative-decoding.md` | Speculative decoding design              | ✅ Implemented |
+| `2026-03-31-tiled-attention.md`      | Tiled attention for memory optimization  | 📋 Planned     |
+| `2026-03-31-int8-quantization.md`    | INT8 quantization for memory savings     | 📋 Planned     |
+| `2026-03-31-monitoring-metrics.md`   | System metrics and monitoring            | 📋 Planned     |
+| `2026-03-31-test-coverage.md`        | Test coverage improvements               | 📋 Planned     |
 
 ## Plans (Implementation Plans)
 
@@ -63,18 +63,18 @@ See [suprpowers/specs/2026-03-29-vllm-lite-design.md](./superpowers/specs/2026-0
 
 ## Implementation Status
 
-| Feature | Status |
-|---------|--------|
-| Phase 1 MVP | ✅ Done |
-| Continuous Batching | ✅ Done |
-| Paged KV Cache | ✅ Done |
-| Prefix Caching | ✅ Done |
-| Speculative Decoding | ✅ Done |
-| Real Model Weights | ✅ Done |
-| Tiled Attention | 📋 Planned |
-| INT8 Quantization | 📋 Planned |
-| Monitoring Metrics | 📋 Planned |
-| Test Coverage | 📋 Planned |
+| Feature              | Status     |
+| -------------------- | ---------- |
+| Phase 1 MVP          | ✅ Done    |
+| Continuous Batching  | ✅ Done    |
+| Paged KV Cache       | ✅ Done    |
+| Prefix Caching       | ✅ Done    |
+| Speculative Decoding | ✅ Done    |
+| Real Model Weights   | ✅ Done    |
+| Tiled Attention      | 📋 Planned |
+| INT8 Quantization    | 📋 Planned |
+| Monitoring Metrics   | 📋 Planned |
+| Test Coverage        | 📋 Planned |
 
 ## Adding New Features
 

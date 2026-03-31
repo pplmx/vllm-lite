@@ -5,6 +5,7 @@
 实现 Beam Search，生成更高质量的文本序列。
 
 **目标：**
+
 - 添加 beam_width 参数到 SamplingParams
 - 扩展 ModelBackend trait 添加 forward_logits
 - 在 Engine 中实现 step_beam 方法
@@ -14,7 +15,7 @@
 
 ### 2.1 Beam Search 流程
 
-```
+```text
 输入: prompt, beam_width=4, max_tokens=20
 
 Step 0: prompt = "The cat"
@@ -22,7 +23,7 @@ Step 1:
   - 扩展 "The cat" → ["sat", "is", "on", "the"]
   - 计算 log probabilities
   - 保留 top-4: ["sat", "is", "on", "the"]
-  
+
 Step 2:
   - 扩展 "The cat sat" → ["on", "the", "mat", ...]
   - 扩展 "The cat is" → ["very", "a", "the", ...]
@@ -38,7 +39,7 @@ Step 2:
 
 ### 2.2 累积分数
 
-```
+```text
 score = sum(log_probs) / (len^length_penalty)
 ```
 
@@ -51,7 +52,7 @@ score = sum(log_probs) / (len^length_penalty)
 ```rust
 pub trait ModelBackend: Send + Sync {
     fn forward(&self, ...) -> Result<BatchOutput>;
-    
+
     /// 返回原始 logits，用于 beam search
     /// 返回: Vec<Vec<f32>> - 每个 sequence 的 logits [vocab_size]
     fn forward_logits(&self, seq_ids: &[SeqId], input_tokens: &[Vec<TokenId>], positions: &[Vec<usize>]) -> Result<Vec<Vec<f32>>>;
@@ -75,17 +76,17 @@ pub struct BeamSequence {
 impl<M: ModelBackend> Engine<M> {
     pub fn step_beam(&mut self, beam_width: usize, length_penalty: f32) -> Result<Vec<BeamSequence>> {
         let batch = self.scheduler.build_batch();
-        
+
         // 对每个序列执行 beam search
         let mut results = Vec::new();
         for seq in batch.sequences {
             let beam = self.beam_search(&seq, beam_width, length_penalty)?;
             results.push(beam);
         }
-        
+
         Ok(results)
     }
-    
+
     fn beam_search(&self, initial: &Sequence, beam_width: usize, length_penalty: f32) -> Result<BeamSequence> {
         // 实现 beam search 逻辑
     }
@@ -133,7 +134,7 @@ fn normalize_score(score: f32, length: usize, penalty: f32) -> f32 {
 
 ## 4. 数据流
 
-```
+```text
 User Request (beam_width=4)
     ↓
 Engine.step_beam()
@@ -152,13 +153,13 @@ Return best beam sequence
 
 ## 5. 边界情况
 
-| 场景 | 处理 |
-|------|------|
-| beam_width = 1 | 等同于 greedy |
-| beam_width > max_seqs | 用 max_seqs |
-| 所有候选 EOS | 提前结束 |
-| KV cache OOM | 减少 beam_width 或 evict |
-| length_penalty = 0 | 不惩罚长度 |
+| 场景                  | 处理                     |
+| --------------------- | ------------------------ |
+| beam_width = 1        | 等同于 greedy            |
+| beam_width > max_seqs | 用 max_seqs              |
+| 所有候选 EOS          | 提前结束                 |
+| KV cache OOM          | 减少 beam_width 或 evict |
+| length_penalty = 0    | 不惩罚长度               |
 
 ## 6. 实现计划
 

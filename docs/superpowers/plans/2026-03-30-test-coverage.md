@@ -14,7 +14,7 @@
 
 ## Current Test Status
 
-```
+```text
 vllm-core: 16 tests
 vllm-model: 0 tests  
 vllm-server: 0 tests
@@ -26,6 +26,7 @@ Total: ~20 tests (many in core)
 ### Task TC-1: Scheduler Tests
 
 **Files:**
+
 - Modify: `crates/core/src/scheduler.rs`
 
 - [ ] **Step 1: Add more scheduler tests**
@@ -39,9 +40,9 @@ fn test_multi_sequence_batch_order() {
     sched.add_request(Request::new(1, vec![10], 5));
     let batch1 = sched.build_batch();
     sched.update(&batch1.seq_ids, &[99]);
-    
+
     sched.add_request(Request::new(2, vec![20, 30], 5));
-    
+
     let batch = sched.build_batch();
     // Seq1 is decoding (1 token), Seq2 is prefill (2 tokens)
     // Decode should come first
@@ -55,10 +56,10 @@ fn test_max_batched_tokens_limit() {
         max_num_batched_tokens: 2,  // Very small
     };
     let mut sched = Scheduler::with_config(config, 100);
-    
+
     // Add sequence with 10 tokens prompt
     sched.add_request(Request::new(1, vec![1,2,3,4,5,6,7,8,9,10], 5));
-    
+
     let batch = sched.build_batch();
     // Should only include 2 tokens due to budget
     let total_tokens: usize = batch.input_tokens.iter().map(|v| v.len()).sum();
@@ -78,11 +79,11 @@ fn test_empty_prompt_request() {
 fn test_finishes_at_exact_max_tokens() {
     let mut sched = Scheduler::new();
     sched.add_request(Request::new(1, vec![10, 20], 3)); // max_tokens = prompt + 1 = 3
-    
+
     // prefill step
     let batch = sched.build_batch();
     sched.update(&batch.seq_ids, &[30]); // tokens: [10,20,30] = max_tokens
-    
+
     assert!(!sched.has_pending());
     assert_eq!(sched.finished_sequences().len(), 1);
 }
@@ -106,6 +107,7 @@ git commit -m "test(core): add scheduler edge case tests"
 ### Task TC-2: Sampling Tests
 
 **Files:**
+
 - Modify: `crates/core/src/sampling.rs`
 
 - [ ] **Step 1: Add more sampling tests**
@@ -158,6 +160,7 @@ git commit -m "test(core): add sampling edge case tests"
 ### Task TC-3: Engine Integration Tests
 
 **Files:**
+
 - Modify: `crates/core/src/engine.rs`
 
 - [ ] **Step 1: Add engine tests**
@@ -177,12 +180,12 @@ fn test_engine_early_finish() {
     // Request with max_tokens=1 should finish after prefill
     let mut engine = Engine::new(StubModel { token_to_return: 42 });
     let (tx, _rx) = mpsc::unbounded_channel();
-    
+
     engine.add_request(Request::new(1, vec![10], 2), tx);
-    
+
     let out1 = engine.step().unwrap(); // prefill + token
     assert!(!out1.is_empty());
-    
+
     let out2 = engine.step().unwrap(); // token 2 - finishes
     assert!(out2.is_empty() || !engine.has_pending());
 }
@@ -192,9 +195,9 @@ fn test_engine_max_tokens_zero() {
     // Edge case: max_tokens = 0
     let mut engine = Engine::new(StubModel { token_to_return: 42 });
     let (tx, _rx) = mpsc::unbounded_channel();
-    
+
     engine.add_request(Request::new(1, vec![10], 0), tx);
-    
+
     // Should finish immediately
     engine.step().unwrap();
     assert!(!engine.has_pending());
@@ -219,6 +222,7 @@ git commit -m "test(core): add engine edge case tests"
 ### Task TC-4: Model Tests
 
 **Files:**
+
 - Create: `crates/model/src/lib.rs` tests (if needed)
 - Create: `crates/model/tests/model.rs`
 
@@ -238,9 +242,9 @@ fn test_fake_model_output_count() {
         input_tokens: vec![vec![1,2], vec![3,4], vec![5,6]],
         positions: vec![vec![0,1], vec![0,1], vec![0,1]],
     };
-    
+
     let output = model.forward(&batch).unwrap();
-    
+
     assert_eq!(output.seq_ids.len(), 3);
     assert_eq!(output.next_tokens.len(), 3);
 }
@@ -253,7 +257,7 @@ fn test_fake_model_vocab_size() {
         input_tokens: vec![vec![1]],
         positions: vec![vec![0]],
     };
-    
+
     let output = model.forward(&batch).unwrap();
     // All tokens should be < 5000
     for &token in &output.next_tokens {

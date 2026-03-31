@@ -11,6 +11,7 @@
 **Tech Stack:** Rust, cargo test
 
 **Implementation Summary:**
+
 - Added `consecutive_decode_rounds` field to Sequence
 - Added `max_consecutive_decode` config (default: 10)
 - Separate prefill_queue and decode_queue in Scheduler
@@ -18,9 +19,10 @@
 
 ---
 
-### Task 1: Add new fields to types
+## Task 1: Add new fields to types
 
 **Files:**
+
 - Modify: `crates/core/src/types.rs:44-54`
 - Modify: `crates/core/src/types.rs:84-96`
 
@@ -83,6 +85,7 @@ git commit -m "feat(core): add consecutive_decode_rounds and max_consecutive_dec
 ### Task 2: Modify Scheduler to use separate queues
 
 **Files:**
+
 - Modify: `crates/core/src/scheduler.rs:5-13`
 
 - [ ] **Step 1: Add prefill_queue and decode_queue to Scheduler struct**
@@ -136,6 +139,7 @@ git commit -m "feat(core): add prefill_queue and decode_queue to Scheduler"
 ### Task 3: Implement continuous batching algorithm
 
 **Files:**
+
 - Modify: `crates/core/src/scheduler.rs:92-167`
 
 - [ ] **Step 1: Replace admit_waiting with new queue-based logic**
@@ -147,7 +151,7 @@ fn drain_and_requeue(&mut self) {
     // Move finished sequences to completed list
     let mut newly_finished = Vec::new();
     let mut remaining = Vec::new();
-    
+
     for seq in self.running.drain(..) {
         if seq.status == Status::Finished {
             newly_finished.push(seq);
@@ -160,7 +164,7 @@ fn drain_and_requeue(&mut self) {
             self.waiting.push_back(seq);
         }
     }
-    
+
     // Store in prefix cache
     for seq in newly_finished.iter() {
         let prompt_tokens = &seq.tokens[..seq.prompt_len];
@@ -170,7 +174,7 @@ fn drain_and_requeue(&mut self) {
                 .insert(key, seq.kv_blocks.clone(), seq.prompt_len);
         }
     }
-    
+
     self.finished.extend(newly_finished);
 }
 ```
@@ -182,28 +186,28 @@ Replace the current `build_batch` method:
 ```rust
 pub fn build_batch(&mut self) -> Batch {
     self.drain_and_requeue();
-    
+
     // Move waiting to prefill queue
     while let Some(seq) = self.waiting.pop_front() {
         let mut seq = seq;
         seq.status = Status::Prefilling;
         self.prefill_queue.push_back(seq);
     }
-    
+
     let mut seq_ids = vec![];
     let mut input_tokens = vec![];
     let mut positions = vec![];
     let mut budget = self.config.max_num_batched_tokens;
     let max_seqs = self.config.max_num_seqs;
     let decode_limit = self.config.max_consecutive_decode;
-    
+
     // Phase 1: Prefill sequences (priority for new requests)
     while seq_ids.len() < max_seqs {
         match self.prefill_queue.pop_front() {
             Some(mut seq) => {
                 let remaining = seq.tokens.len() - seq.num_computed_tokens;
                 let chunk_size = remaining.min(budget);
-                
+
                 if chunk_size == 0 {
                     // Prefill complete, switch to decode
                     seq.status = Status::Decoding;
@@ -211,16 +215,16 @@ pub fn build_batch(&mut self) -> Batch {
                     self.decode_queue.push_back(seq);
                     continue;
                 }
-                
+
                 let start = seq.num_computed_tokens;
                 let tokens = seq.tokens[start..start + chunk_size].to_vec();
                 let pos: Vec<usize> = (start..start + chunk_size).collect();
-                
+
                 seq_ids.push(seq.id);
                 input_tokens.push(tokens);
                 positions.push(pos);
                 budget = budget.saturating_sub(chunk_size);
-                
+
                 // Put back if more prefill needed
                 seq.num_computed_tokens += chunk_size;
                 if seq.num_computed_tokens < seq.tokens.len() {
@@ -234,12 +238,12 @@ pub fn build_batch(&mut self) -> Batch {
             }
             None => break,
         }
-        
+
         if budget == 0 {
             break;
         }
     }
-    
+
     // Phase 2: Decode sequences (with fairness limit)
     while seq_ids.len() < max_seqs && budget > 0 {
         match self.decode_queue.pop_front() {
@@ -250,23 +254,23 @@ pub fn build_batch(&mut self) -> Batch {
                     self.decode_queue.push_back(seq);
                     break;
                 }
-                
+
                 let last = *seq.tokens.last().unwrap();
                 let pos = seq.tokens.len() - 1;
-                
+
                 seq_ids.push(seq.id);
                 input_tokens.push(vec![last]);
                 positions.push(vec![pos]);
                 budget = budget.saturating_sub(1);
                 seq.consecutive_decode_rounds += 1;
-                
+
                 // Add back for next round
                 self.decode_queue.push_back(seq);
             }
             None => break,
         }
     }
-    
+
     Batch {
         seq_ids,
         input_tokens,
@@ -297,6 +301,7 @@ git commit -m "feat(core): implement continuous batching with prefill/decode que
 ### Task 4: Add continuous batching tests
 
 **Files:**
+
 - Modify: `crates/core/src/scheduler.rs:254-389`
 
 - [ ] **Step 1: Add test for prefill/decode queue separation**
@@ -307,22 +312,22 @@ Add this test to the test module:
 #[test]
 fn test_prefill_decode_queue_separation() {
     let mut sched = Scheduler::new();
-    
+
     // Add request 1 - will be prefill then decode
     sched.add_request(Request::new(1, vec![10, 20, 30], 5));
     let batch1 = sched.build_batch();
     assert_eq!(batch1.seq_ids.len(), 1);
-    
+
     // Complete prefill
     sched.update(
         &batch1.seq_ids,
         &[99],
         &[batch1.input_tokens[0].len()],
     );
-    
+
     // Add request 2 - should go to prefill queue
     sched.add_request(Request::new(2, vec![40, 50], 5));
-    
+
     let batch2 = sched.build_batch();
     // Should have decode (seq 1) first, then prefill (seq 2)
     assert!(batch2.seq_ids.len() >= 1);
@@ -340,7 +345,7 @@ fn test_max_consecutive_decode_limit() {
         max_consecutive_decode: 2,
     };
     let mut sched = Scheduler::with_config(config, 1024);
-    
+
     // Add two requests
     sched.add_request(Request::new(1, vec![10], 10));
     let batch1 = sched.build_batch();
@@ -349,9 +354,9 @@ fn test_max_consecutive_decode_limit() {
         &[99],
         &[batch1.input_tokens[0].len()],
     );
-    
+
     sched.add_request(Request::new(2, vec![20], 10));
-    
+
     // First batch after prefill should include both
     let batch2 = sched.build_batch();
     assert!(batch2.seq_ids.len() >= 1);
@@ -369,10 +374,10 @@ fn test_token_budget_in_continuous_batching() {
         max_consecutive_decode: 10,
     };
     let mut sched = Scheduler::with_config(config, 1024);
-    
+
     // Large prompt
     sched.add_request(Request::new(1, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 10));
-    
+
     let batch = sched.build_batch();
     let total_tokens: usize = batch.input_tokens.iter().map(|v| v.len()).sum();
     assert!(total_tokens <= 3, "total_tokens {} should be <= 3", total_tokens);
@@ -396,6 +401,7 @@ git commit -m "test(core): add continuous batching tests"
 ### Task 5: Run full test suite and lint
 
 **Files:**
+
 - Run commands
 
 - [ ] **Step 1: Run full workspace tests**
@@ -420,6 +426,7 @@ git commit -m "test: run full test suite for continuous batching"
 ## Implementation Complete
 
 After all tasks complete, continuous batching will:
+
 1. Maintain separate prefill and decode queues
 2. Prioritize prefill for new requests
 3. Limit consecutive decode rounds to prevent starvation

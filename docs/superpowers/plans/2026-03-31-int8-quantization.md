@@ -11,6 +11,7 @@
 ## Task 1: 量化工具函数
 
 **Files:**
+
 - Create: `crates/model/src/quantize.rs`
 
 - [ ] **Step 1: 添加 QuantizedTensor 结构**
@@ -41,6 +42,7 @@ git commit -m "feat(model): add quantization utilities"
 ## Task 2: 模型权重量化
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/model.rs`
 
 - [ ] **Step 1: 添加量化字段**
@@ -78,6 +80,7 @@ git commit -m "feat(model): add quantized weight loading"
 ## Task 3: KV Cache 量化
 
 **Files:**
+
 - Modify: `crates/model/src/kv_cache.rs`
 
 - [ ] **Step 1: 添加量化支持**
@@ -109,6 +112,7 @@ git commit -m "feat(model): add quantized KV cache support"
 ## Task 4: 校准脚本
 
 **Files:**
+
 - Create: `crates/model/examples/calibrate.rs`
 
 - [ ] **Step 1: 实现校准**
@@ -131,6 +135,7 @@ git commit -m "feat(model): add quantization calibration"
 ## Task 5: 测试
 
 **Files:**
+
 - Add: `crates/model/tests/quantize.rs`
 
 - [ ] **Step 1: 添加测试**

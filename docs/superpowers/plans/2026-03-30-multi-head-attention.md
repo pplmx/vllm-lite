@@ -23,6 +23,7 @@
 ### Task MHA-1: Fix Reshape to Preserve Sequence Length
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/attention.rs:68-88`
 
 - [ ] **Step 1: Fix forward method reshape**
@@ -112,6 +113,7 @@ git commit -m "fix(model): fix seq_len in attention reshape, add KV expansion fo
 ### Task MHA-2: Add MLA Config Fields
 
 **Files:**
+
 - Modify: `crates/model/src/config.rs`
 
 - [ ] **Step 1: Add MLA fields to Qwen3Config**
@@ -183,6 +185,7 @@ git commit -m "feat(model): add MLA config fields and attention_type detection"
 ### Task MHA-3: Add MLA Attention Support (Phase 3)
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/attention.rs`
 
 This is more complex and can be done after Phase 1-2 are working.
@@ -212,10 +215,10 @@ Expected: No shape mismatch error, generates coherent text.
 
 ## Spec Coverage
 
-| Spec Section | Covered By |
-|---|---|
-| Fix seq_len in reshape | Task MHA-1 |
+| Spec Section             | Covered By |
+| ------------------------ | ---------- |
+| Fix seq_len in reshape   | Task MHA-1 |
 | KV expansion for GQA/MQA | Task MHA-1 |
-| MLA config fields | Task MHA-2 |
+| MLA config fields        | Task MHA-2 |
 | Attention type detection | Task MHA-2 |
-| MLA forward (future) | Task MHA-3 |
+| MLA forward (future)     | Task MHA-3 |

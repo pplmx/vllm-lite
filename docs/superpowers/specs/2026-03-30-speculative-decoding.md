@@ -5,6 +5,7 @@
 Speculative Decoding 使用小模型 (draft) 预测多个 token, 大模型 (target) 一次验证, 加速生成。
 
 **核心思想:**
+
 - Draft 模型快速生成候选 token 序列
 - Target 模型验证每个候选 token
 - 只接受验证通过的 token (P > 0.5)
@@ -12,7 +13,7 @@ Speculative Decoding 使用小模型 (draft) 预测多个 token, 大模型 (targ
 
 ## 2. 核心流程
 
-```
+```text
 1. Draft 阶段:
    prompt → draft_model → [d1, d2, d3, d4] (4 个 draft tokens)
 
@@ -35,7 +36,7 @@ Speculative Decoding 使用小模型 (draft) 预测多个 token, 大模型 (targ
 fn accept_token(draft_prob: f32, target_prob: f32, threshold: f32) -> bool {
     // 方法 1: 直接用 target 概率
     target_prob > threshold
-    
+
     // 方法 2: 比较 draft vs target (更严格)
     // target_prob > draft_prob * threshold
 }
@@ -45,7 +46,7 @@ MVP 使用方法 1: `target_prob > 0.5`
 
 ### 示例
 
-```
+```text
 Draft tokens:    [the,  cat,  is,   sleeping]
 Target probs:   [0.9,  0.8,  0.3, 0.6]
 Decision:       [✓,    ✓,   ✗,   ✓]
@@ -70,6 +71,7 @@ pub struct Engine<M: ModelBackend> {
 ### MVP 实现
 
 MVP 阶段简化:
+
 - Draft 和 Target 用同一个模型
 - Draft: 循环调用 model 多次生成多个 token
 - Target: 一次 forward 验证所有 draft tokens
@@ -85,7 +87,7 @@ fn verify_draft_tokens(
 ) -> (Vec<TokenId>, TokenId) {
     let mut accepted = Vec::new();
     let mut reject_idx = None;
-    
+
     for (i, &token) in draft_tokens.iter().enumerate() {
         if target_logits[i] > threshold {
             accepted.push(token);
@@ -94,7 +96,7 @@ fn verify_draft_tokens(
             break;
         }
     }
-    
+
     // 第一个拒绝位置的 token 由 target 生成
     let final_token = if let Some(idx) = reject_idx {
         // 从 target logits 中采样或 greedy
@@ -103,7 +105,7 @@ fn verify_draft_tokens(
         // 全部接受, 再生成一个
         token_from_logits(&target_logits[draft_tokens.len()..])
     };
-    
+
     (accepted, final_token)
 }
 ```
@@ -111,10 +113,12 @@ fn verify_draft_tokens(
 ## 6. 性能收益
 
 理论上:
+
 - 如果 draft 接受率 70%, 每次可节省 ~3x token 生成时间
 - Target 模型一次 forward 可以验证多个 token
 
 实际收益取决于:
+
 - Draft 模型质量
 - Target 分布与 Draft 分布的差异
 - 阈值设置

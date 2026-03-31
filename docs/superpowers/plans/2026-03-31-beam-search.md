@@ -9,6 +9,7 @@
 ## Task 1: 更新 SamplingParams
 
 **Files:**
+
 - Modify: `crates/core/src/types.rs`
 
 - [ ] **Step 1: 添加 beam_width 和 length_penalty**
@@ -52,6 +53,7 @@ git commit -m "feat(core): add beam_width and length_penalty to SamplingParams"
 ## Task 2: 扩展 ModelBackend
 
 **Files:**
+
 - Modify: `crates/core/src/engine.rs`
 
 - [ ] **Step 1: 添加 forward_logits 方法**
@@ -59,7 +61,7 @@ git commit -m "feat(core): add beam_width and length_penalty to SamplingParams"
 ```rust
 pub trait ModelBackend: Send + Sync {
     fn forward(&self, seq_ids: &[SeqId], input_tokens: &[Vec<TokenId>], positions: &[Vec<usize>]) -> Result<BatchOutput>;
-    
+
     fn forward_logits(&self, seq_ids: &[SeqId], input_tokens: &[Vec<TokenId>], positions: &[Vec<usize>]) -> Result<Vec<Vec<f32>>>;
 }
 ```
@@ -75,6 +77,7 @@ git commit -m "feat(core): add forward_logits to ModelBackend trait"
 ## Task 3: 实现 StubModel
 
 **Files:**
+
 - Modify: `crates/model/src/fake.rs`
 
 - [ ] **Step 1: 实现 forward_logits**
@@ -84,7 +87,7 @@ impl ModelBackend for FakeModel {
     fn forward(&self, seq_ids: &[SeqId], input_tokens: &[Vec<TokenId>], positions: &[Vec<usize>]) -> Result<BatchOutput> {
         // 现有实现
     }
-    
+
     fn forward_logits(&self, seq_ids: &[SeqId], input_tokens: &[Vec<TokenId>], positions: &[Vec<usize>]) -> Result<Vec<Vec<f32>>> {
         let vocab_size = 32000;
         Ok(input_tokens.iter().map(|tokens| {
@@ -105,6 +108,7 @@ git commit -m "feat(model): implement forward_logits for FakeModel"
 ## Task 4: BeamSequence 结构
 
 **Files:**
+
 - Create: `crates/core/src/beam.rs`
 
 - [ ] **Step 1: 添加 BeamSequence**
@@ -130,6 +134,7 @@ git commit -m "feat(core): add BeamSequence structure"
 ## Task 5: beam_search 逻辑
 
 **Files:**
+
 - Modify: `crates/core/src/engine.rs`
 
 - [ ] **Step 1: 实现 beam_search**
@@ -147,19 +152,19 @@ impl<M: ModelBackend> Engine<M> {
             score: 0.0,
             kv_blocks: initial.kv_blocks.clone(),
         }];
-        
+
         for _ in 0..initial.max_tokens {
             let mut candidates = Vec::new();
-            
+
             for beam in &beams {
                 let logits = self.target_model.forward_logits(
                     &[beam.tokens.last().copied().unwrap_or(0)],
                     &[vec![beam.tokens.last().copied().unwrap_or(0)]],
                     &[vec![beam.tokens.len()]],
                 )?;
-                
+
                 let top_k = self.get_top_k(&logits[0], beam_width);
-                
+
                 for (token, log_prob) in top_k {
                     let new_tokens = [beam.tokens.clone(), vec![token]].concat();
                     let new_score = beam.score + log_prob;
@@ -170,12 +175,12 @@ impl<M: ModelBackend> Engine<M> {
                     });
                 }
             }
-            
+
             // 按分数排序，保留 top beam_width
             candidates.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
             beams = candidates.into_iter().take(beam_width).collect();
         }
-        
+
         // 应用 length penalty，选最佳
         let best = beams.into_iter()
             .max_by(|a, b| {
@@ -184,10 +189,10 @@ impl<M: ModelBackend> Engine<M> {
                 sa.partial_cmp(&sb).unwrap()
             })
             .unwrap();
-        
+
         Ok(best)
     }
-    
+
     fn get_top_k(&self, logits: &[f32], k: usize) -> Vec<(TokenId, f32)> {
         let mut indexed: Vec<(usize, f32)> = logits.iter().enumerate()
             .map(|(i, &v)| (i, v))
@@ -209,6 +214,7 @@ git commit -m "feat(core): implement beam search logic"
 ## Task 6: 测试
 
 **Files:**
+
 - Add: `crates/core/tests/beam_search.rs`
 
 - [ ] **Step 1: 添加测试**

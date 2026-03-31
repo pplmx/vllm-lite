@@ -4,7 +4,8 @@
 
 **Goal:** 实现真正的 Paged Attention - 让 KV cache 写入 GPU paged memory，decode 阶段复用缓存的 KV
 
-**Architecture:** 
+**Architecture:**
+
 - 增强 PagedKvCache 添加 write_kv/read_kv 方法
 - 修改 GqaAttention 支持 prefill（写 cache）和 decode（读 cache）
 - 修改 Qwen3Model/TransformerBlock 封装 prefill/decode 路径
@@ -16,7 +17,7 @@
 
 ## File Structure
 
-```
+```text
 crates/model/src/kv_cache.rs     # 增强: write_kv, read_kv
 crates/model/src/qwen3/attention.rs  # 新增: forward_prefill, forward_decode
 crates/model/src/qwen3/block.rs  # 新增: forward_prefill, forward_decode
@@ -31,6 +32,7 @@ crates/core/src/types.rs         # 可能需要添加 is_prefill 字段
 ## Task 1: 增强 PagedKvCache
 
 **Files:**
+
 - Modify: `crates/model/src/kv_cache.rs:1-94`
 
 - [ ] **Step 1: Read current PagedKvCache implementation**
@@ -57,11 +59,11 @@ pub fn write_kv(
     // Write to key_cache[layer_idx][block_id, :, token_offset, :]
     let num_kv_heads = self.num_kv_heads;
     let head_dim = self.head_dim;
-    
+
     for h in 0..num_kv_heads {
         let k_head = k.squeeze(0)?.narrow(0, h, 1)?.squeeze(0)?; // [head_dim]
         let v_head = v.squeeze(0)?.narrow(0, h, 1)?.squeeze(0)?; // [head_dim]
-        
+
         // Write to cache[block, head, offset, :]
         self.key_cache[layer_idx] = self.key_cache[layer_idx].index_set(
             &[
@@ -94,36 +96,36 @@ pub fn read_kv(
 ) -> Result<(Tensor, Tensor)> {
     let mut k_parts = Vec::new();
     let mut v_parts = Vec::new();
-    
+
     let num_blocks = block_ids.len();
-    
+
     for block_idx in 0..num_blocks {
         let block_id = block_ids[block_idx];
         let start_token = block_idx * self.block_size;
         let end_token = std::cmp::min(start_token + self.block_size, seq_len);
         let block_len = end_token - start_token;
-        
+
         // Read K: [block_len, num_kv_heads, head_dim]
         let k_block = self.key_cache[layer_idx]
             .narrow(0, block_id, 1)?
             .narrow(1, 0, self.num_kv_heads)?
             .narrow(2, 0, block_len)?
             .squeeze(0)?;
-            
+
         let v_block = self.value_cache[layer_idx]
             .narrow(0, block_id, 1)?
             .narrow(1, 0, self.num_kv_heads)?
             .narrow(2, 0, block_len)?
             .squeeze(0)?;
-            
+
         k_parts.push(k_block);
         v_parts.push(v_block);
     }
-    
+
     // Concatenate: [seq_len, num_kv_heads, head_dim]
     let k = Tensor::cat(&k_parts, 0)?;
     let v = Tensor::cat(&v_parts, 0)?;
-    
+
     Ok((k, v))
 }
 ```
@@ -146,6 +148,7 @@ git commit -m "feat(model): add write_kv and read_kv to PagedKvCache"
 ## Task 2: 修改 GqaAttention 支持 Paged Attention
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/attention.rs:1-137`
 
 - [ ] **Step 1: Read current attention implementation**
@@ -291,6 +294,7 @@ fn causal_mask(&self, seq_len: usize, device: &Device) -> Result<Tensor> {
 - [ ] **Step 5: 添加必要的 import**
 
 确保文件顶部有:
+
 ```rust
 use crate::kv_cache::PagedKvCache;
 use candle_core::Device;
@@ -314,6 +318,7 @@ git commit -m "feat(model): add forward_prefill and forward_decode to GqaAttenti
 ## Task 3: 修改 TransformerBlock
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/block.rs`
 
 - [ ] **Step 1: Read current block implementation**
@@ -395,6 +400,7 @@ git commit -m "feat(model): add forward_prefill and forward_decode to Transforme
 ## Task 4: 修改 Qwen3Model
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/model.rs:215-284`
 
 - [ ] **Step 1: 添加 forward_with_cache 方法**
@@ -469,7 +475,7 @@ impl ModelBackend for Qwen3Model {
 
             // Create single-element blocks
             let block_ids: Vec<BlockId> = (0..tokens.len().div_ceil(16)).collect();
-            
+
             let (logits, _) = self.forward_with_cache(tokens, 0, &block_ids, true)?;
 
             let last_logits = logits.squeeze(0)
@@ -496,6 +502,7 @@ impl ModelBackend for Qwen3Model {
 - [ ] **Step 3: 添加 BlockId import**
 
 在文件顶部添加:
+
 ```rust
 use crate::types::BlockId;
 ```
@@ -518,6 +525,7 @@ git commit -m "feat(model): add forward_with_cache to Qwen3Model"
 ## Task 5: 集成测试
 
 **Files:**
+
 - Test: `crates/model/src/kv_cache.rs` (add tests)
 
 - [ ] **Step 1: 添加 write_kv/read_kv 测试**

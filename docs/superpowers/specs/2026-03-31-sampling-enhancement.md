@@ -5,6 +5,7 @@
 增强采样策略：添加 Top-K Sampling 和 Repeat Penalty。
 
 **当前状态：**
+
 - Greedy ✅
 - Temperature ✅
 - Top-P ✅
@@ -12,13 +13,14 @@
 - Repeat Penalty ❌
 
 **目标：**
+
 - 添加 Top-K 截断
 - 添加 Repeat Penalty
 - 支持组合使用 (temperature + top_k + top_p + repeat_penalty)
 
 ## 2. 正确采样流水线
 
-```
+```text
 logits → apply repeat penalty → apply temperature → top-k filter → top-p filter → sample
 ```
 
@@ -33,14 +35,14 @@ fn top_k_sample(logits: &[f32], k: usize) -> TokenId {
     if k == 0 || logits.is_empty() {
         return greedy_sample(logits);
     }
-    
+
     let k = k.min(logits.len());
-    
+
     // 找出 top-k 索引 (使用 partial sort)
     let mut indexed: Vec<(usize, f32)> = logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
     indexed.select_nth_unstable_by(k - 1, |a, b| b.1.partial_cmp(&a.1).unwrap());
     indexed.truncate(k);
-    
+
     // 设置非 top-k 为 -inf
     let mut masked = logits.to_vec();
     let threshold = indexed[k-1].1;
@@ -49,7 +51,7 @@ fn top_k_sample(logits: &[f32], k: usize) -> TokenId {
             *v = f32::NEG_INFINITY;
         }
     }
-    
+
     // 转成概率采样
     temperature_sample(&masked, 1.0)
 }
@@ -57,11 +59,11 @@ fn top_k_sample(logits: &[f32], k: usize) -> TokenId {
 
 ### 3.2 Edge Cases
 
-| Input | Behavior |
-|-------|----------|
-| k == 0 | 跳过 top-k，使用 greedy |
-| k >= vocab_size | 等同于无限制 |
-| k == 1 | 等同于 greedy |
+| Input           | Behavior                |
+| --------------- | ----------------------- |
+| k == 0          | 跳过 top-k，使用 greedy |
+| k >= vocab_size | 等同于无限制            |
+| k == 1          | 等同于 greedy           |
 
 ## 4. Repeat Penalty
 
@@ -72,7 +74,7 @@ fn apply_repeat_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penalty: f3
     if penalty == 1.0 || seen_tokens.is_empty() || logits.is_empty() {
         return;
     }
-    
+
     // 使用 HashSet 去重（只惩罚出现过的 token，不累加）
     let mut seen = std::collections::HashSet::new();
     for &token in seen_tokens {
@@ -95,12 +97,12 @@ fn apply_repeat_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penalty: f3
 
 ### 4.3 Edge Cases
 
-| Input | Behavior |
-|-------|----------|
-| penalty == 1.0 | 跳过，无效果 |
-| penalty == 0 | 设为 -inf，完全禁止 |
-| empty seen_tokens | 跳过 |
-| token >= vocab | 忽略 |
+| Input             | Behavior            |
+| ----------------- | ------------------- |
+| penalty == 1.0    | 跳过，无效果        |
+| penalty == 0      | 设为 -inf，完全禁止 |
+| empty seen_tokens | 跳过                |
+| token >= vocab    | 忽略                |
 
 ## 5. 修改 SamplingParams
 
@@ -138,26 +140,26 @@ pub fn sample_batch(
         .zip(seen_tokens.iter())
         .map(|(logits, seen)| {
             let mut logits = logits.clone();
-            
+
             // 1. Apply repeat penalty
             if params.repeat_penalty != 1.0 && !seen.is_empty() {
                 apply_repeat_penalty(&mut logits, seen, params.repeat_penalty);
             }
-            
+
             // 2. Apply temperature
             let logits = if params.temperature > 0.0 && params.temperature != 1.0 {
                 logits.iter().map(|x| x / params.temperature).collect()
             } else {
                 logits
             };
-            
+
             // 3. Top-k filter
             let logits = if params.top_k > 0 {
                 apply_top_k(&logits, params.top_k)
             } else {
                 logits
             };
-            
+
             // 4. Top-p filter + sample
             if params.top_p < 1.0 {
                 top_p_sample(&logits, params.top_p)
@@ -179,7 +181,7 @@ fn apply_top_k(logits: &[f32], k: usize) -> Vec<f32> {
 
 ### Test 1: Top-K 只返回 top-k 中的 token
 
-```
+```text
 logits = [0.1, 0.9, 0.3, 0.05, 0.05]
 k = 2
 期望: 只从 [0.9, 0.3] 中采样
@@ -187,7 +189,7 @@ k = 2
 
 ### Test 2: Repeat Penalty 降低重复 token 概率
 
-```
+```text
 之前生成的: [10, 20, 10]
 新 logits = [0.1, 0.9, 0.3, 0.1, ...]  (token 10 在位置 0 和 3)
 penalty = 0.8  (降低 20%)
@@ -196,7 +198,7 @@ penalty = 0.8  (降低 20%)
 
 ### Test 3: 组合使用
 
-```
+```text
 temperature = 0.7, top_k = 20, top_p = 0.9, repeat_penalty = 1.2
 期望: 所有参数都生效
 ```

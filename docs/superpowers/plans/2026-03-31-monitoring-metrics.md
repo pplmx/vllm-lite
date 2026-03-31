@@ -11,6 +11,7 @@
 ## Task 1: MetricsCollector 结构
 
 **Files:**
+
 - Create: `crates/core/src/metrics.rs`
 
 - [ ] **Step 1: 定义指标结构**
@@ -50,6 +51,7 @@ git commit -m "feat(core): add metrics collector"
 ## Task 2: Engine 集成
 
 **Files:**
+
 - Modify: `crates/core/src/engine.rs`
 
 - [ ] **Step 1: 添加 metrics 字段**
@@ -67,13 +69,13 @@ pub struct Engine<M: ModelBackend> {
 pub fn step(&mut self) -> Result<()> {
     let batch = self.scheduler.build_batch();
     let start = Instant::now();
-    
+
     // ... existing
-    
+
     self.metrics.record_batch_size(batch.seq_ids.len());
     self.metrics.record_tokens(total_tokens);
     self.metrics.record_latency(start.elapsed().as_millis() as f64);
-    
+
     Ok(())
 }
 ```
@@ -89,6 +91,7 @@ git commit -m "feat(core): integrate metrics collection in engine"
 ## Task 3: API 端点
 
 **Files:**
+
 - Modify: `crates/server/src/api.rs`
 
 - [ ] **Step 1: 添加 stats 端点**
@@ -126,6 +129,7 @@ git commit -m "feat(server): add metrics API endpoints"
 ## Task 4: 测试
 
 **Files:**
+
 - Add: `crates/server/tests/metrics.rs`
 
 - [ ] **Step 1: 添加测试**

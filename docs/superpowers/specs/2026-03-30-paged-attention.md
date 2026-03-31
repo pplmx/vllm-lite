@@ -5,11 +5,13 @@
 实现真正的 Paged Attention，让 KV cache 写入 GPU paged memory，decode 阶段复用缓存的 KV，避免重复计算。
 
 **当前问题：**
+
 - `PagedKvCache` 已分配 GPU 内存但从未使用
 - 每次 forward 都重新计算完整 attention
 - Prefix cache (block ID) 与 GPU paged cache 脱节
 
 **目标：**
+
 - Prefill: 计算 KV 并写入 paged cache
 - Decode: 从 paged cache 读取 KV 进行 attention
 - 简单 block 管理（固定大小）
@@ -18,7 +20,7 @@
 
 ### 2.1 数据流
 
-```
+```text
 Request arrives
     │
     ├─ Prefill phase
@@ -332,7 +334,7 @@ pub fn build_batch(&mut self) -> Option<Batch> {
 
     // Build prefill batch from waiting
     // Build decode batch from running
-    
+
     // Process separately or combined (chunks)
 }
 ```
@@ -344,7 +346,7 @@ pub fn build_batch(&mut self) -> Option<Batch> {
 
 fn step(&mut self) -> EngineResult<()> {
     let batch = self.scheduler.build_batch()?;
-    
+
     if let Some(batch) = batch {
         if batch.has_prefill() {
             // Prefill: compute KV and cache
@@ -359,7 +361,7 @@ fn step(&mut self) -> EngineResult<()> {
                 // Update sequence
             }
         }
-        
+
         if batch.has_decode() {
             // Decode: read from cache
             for seq in batch.decode_sequences() {
@@ -374,7 +376,7 @@ fn step(&mut self) -> EngineResult<()> {
             }
         }
     }
-    
+
     Ok(())
 }
 ```
@@ -383,7 +385,7 @@ fn step(&mut self) -> EngineResult<()> {
 
 ### 测试 1: Prefill 写入 cache
 
-```
+```text
 输入: "Hello world"
 期望: KV 写入 paged cache, block 0 包含所有 KV
 验证: read_kv 返回正确数据
@@ -391,7 +393,7 @@ fn step(&mut self) -> EngineResult<()> {
 
 ### 测试 2: Decode 读取 cache
 
-```
+```text
 输入: prompt="Hello", 已 prefill
 期望: decode 读取 prompt 的 KV, 计算 self-attention
 验证: 输出与完整序列计算一致
@@ -399,7 +401,7 @@ fn step(&mut self) -> EngineResult<()> {
 
 ### 测试 3: 多 block 序列
 
-```
+```text
 输入: 长度 32 的序列
 期望: 使用 block 0 和 block 1
 验证: 32 个 token 的 KV 都能正确读写
@@ -407,7 +409,7 @@ fn step(&mut self) -> EngineResult<()> {
 
 ### 测试 4: 混合 prefill/decode batch
 
-```
+```text
 输入: waiting=[seq1], running=[seq2, seq3]
 期望: 分别处理, 正确更新 kv_blocks
 验证: 两者都能继续生成

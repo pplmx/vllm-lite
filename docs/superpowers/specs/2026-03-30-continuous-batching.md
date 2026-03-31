@@ -9,6 +9,7 @@
 Continuous batching enables overlapping processing of multiple sequences with different lengths and stages (prefill/decode). Unlike static batching which waits for all requests to complete before starting new ones, continuous batching dynamically constructs batches each scheduling cycle to maximize GPU utilization while maintaining fair latency.
 
 **Goals:**
+
 - Maximize GPU throughput while preventing memory overflow
 - Ensure short requests complete quickly (fairness)
 - Prevent long-running requests from starving other sequences
@@ -22,12 +23,12 @@ struct Scheduler {
     // Existing fields - convert to VecDeque for queue operations
     waiting: VecDeque<Sequence>,    // Waiting for scheduling (becomes prefill/decode queue)
     running: Vec<Sequence>,         // Currently executing
-    
+
     // New fields for continuous batching
     prefill_queue: VecDeque<Sequence>,   // Requests needing prefill (new or expanding)
     decode_queue: VecDeque<Sequence>,    // Requests in decode phase
     finished: Vec<Sequence>,             // Completed sequences
-    
+
     // Configuration (reuse existing SchedulerConfig)
     // max_num_seqs: maps to max_batch_size
     // max_num_batched_tokens: maps to max_tokens_per_batch
@@ -37,7 +38,7 @@ struct Scheduler {
 
 ### 2.2 Sequence States
 
-```
+```text
 NEW -> PREFILL -> RUNNING -> DECODE -> COMPLETED
                      ^          |
                      |__________| (continue decode)
@@ -63,7 +64,7 @@ struct Batch {
 
 Each engine loop iteration:
 
-```
+```text
 1. DRAIN COMPLETED
    - Move finished sequences to completed list
    - Free their KV cache blocks
@@ -100,7 +101,7 @@ Each engine loop iteration:
 ```rust
 fn build_batch(&mut self) -> Option<Batch> {
     let mut batch = Batch::new();
-    
+
     // Phase 1: Prefill (highest priority for new requests)
     while let Some(mut seq) = self.prefill_queue.pop_front() {
         let seq_tokens = seq.prompt_len - seq.num_computed_tokens;
@@ -110,7 +111,7 @@ fn build_batch(&mut self) -> Option<Batch> {
         }
         batch.add_prefill(seq);
     }
-    
+
     // Phase 2: Decode (with fairness limit)
     let decode_limit = self.max_consecutive_decode;
     while let Some(mut seq) = self.decode_queue.pop_front() {
@@ -119,7 +120,7 @@ fn build_batch(&mut self) -> Option<Batch> {
             self.decode_queue.push_back(seq);
             continue;
         }
-        
+
         let seq_tokens = 1; // One new token per decode step
         if batch.would_overflow(seq_tokens) {
             self.decode_queue.push_front(seq);
@@ -127,7 +128,7 @@ fn build_batch(&mut self) -> Option<Batch> {
         }
         batch.add_decode(seq);
     }
-    
+
     // Require at least one sequence
     if batch.is_empty() {
         None
@@ -140,6 +141,7 @@ fn build_batch(&mut self) -> Option<Batch> {
 ### 4.2 Preemption Prevention (Simplified)
 
 For this phase, we implement a simple admission control:
+
 - Check total token count before adding to batch
 - If insufficient capacity, request waits in queue
 - No actual preemption (killing running requests) - can add later
@@ -154,7 +156,7 @@ impl Engine {
         loop {
             // Accept new requests from API
             self.accept_new_requests();
-            
+
             // Build and execute batch
             if let Some(batch) = self.scheduler.build_batch() {
                 self.execute_batch(batch);
@@ -162,7 +164,7 @@ impl Engine {
                 // No work available - small sleep to avoid busy loop
                 std::thread::sleep(Duration::from_millis(10));
             }
-            
+
             // Check shutdown signal
             if self.should_shutdown() {
                 break;
@@ -174,11 +176,11 @@ impl Engine {
 
 ### 5.2 Request State Transitions
 
-| Current State | After Prefill | After Decode |
-|---------------|---------------|--------------|
-| NEW | PREFILL | - |
-| PREFILL | RUNNING (if more prefill needed) | DECODE |
-| DECODE | - | DECODE (if not done) or COMPLETED |
+| Current State | After Prefill                    | After Decode                      |
+| ------------- | -------------------------------- | --------------------------------- |
+| NEW           | PREFILL                          | -                                 |
+| PREFILL       | RUNNING (if more prefill needed) | DECODE                            |
+| DECODE        | -                                | DECODE (if not done) or COMPLETED |
 
 ## 6. Error Handling
 
@@ -189,30 +191,32 @@ impl Engine {
 ## 7. Testing Strategy
 
 1. **Unit tests for Scheduler**
-   - Batch construction with various sizes
-   - Sequence state transitions
-   - Queue ordering
+    - Batch construction with various sizes
+    - Sequence state transitions
+    - Queue ordering
 
 2. **Integration tests**
-   - Multiple concurrent requests
-   - Mix of short/long prompts
-   - Verify no deadlock or starvation
+    - Multiple concurrent requests
+    - Mix of short/long prompts
+    - Verify no deadlock or starvation
 
 3. **Load test**
-   - High concurrency (100+ requests)
-   - Measure throughput and latency distribution
+    - High concurrency (100+ requests)
+    - Measure throughput and latency distribution
 
 ## 8. Configuration
 
 ### 8.1 SchedulerConfig (existing)
 
 The existing `SchedulerConfig` fields are used:
+
 - `max_num_seqs` → maps to max_batch_size (default: 16)
 - `max_num_batched_tokens` → maps to max_tokens_per_batch (default: 4096)
 
 ### 8.2 New Field
 
 Add to `SchedulerConfig`:
+
 ```rust
 pub max_consecutive_decode: u32,  // Default: 10
 ```
@@ -220,6 +224,7 @@ pub max_consecutive_decode: u32,  // Default: 10
 ### 8.3 Sequence Extension
 
 Add to `Sequence` struct:
+
 ```rust
 pub consecutive_decode_rounds: u32,  // Track decode rounds since last prefill
 ```

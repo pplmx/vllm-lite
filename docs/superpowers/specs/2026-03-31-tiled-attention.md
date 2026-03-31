@@ -5,10 +5,12 @@
 实现 Tiled Attention，减小 attention 计算的显存占用，同时优化 decode 和 prefill 性能。
 
 **当前问题：**
+
 - 标准 attention 显存 O(n²)，长序列时显存爆炸
 - 当前 paged attention 已经实现了 KV 分页，但 attention 计算仍是标准实现
 
 **目标：**
+
 - 显存从 O(n²) 降到 O(tile_size × n)
 - Decode 阶段：优化单 token 场景
 - Prefill 阶段：优化长序列场景
@@ -18,7 +20,7 @@
 
 ### 2.1 Tiled Attention 原理
 
-```
+```text
 标准 attention:
 Q @ K^T → O(n²) 显存
 
@@ -36,11 +38,11 @@ Q @ K_1^T → softmax → @ V_1
 
 ### 2.2 显存节省
 
-| 序列长度 | 标准 Attention | Tiled (16) | 节省 |
-|---------|---------------|------------|------|
-| 128 | 256 KB | 64 KB | 75% |
-| 512 | 4 MB | 256 KB | 93.75% |
-| 2048 | 64 MB | 1 MB | 98.4% |
+| 序列长度 | 标准 Attention | Tiled (16) | 节省   |
+| -------- | -------------- | ---------- | ------ |
+| 128      | 256 KB         | 64 KB      | 75%    |
+| 512      | 4 MB           | 256 KB     | 93.75% |
+| 2048     | 64 MB          | 1 MB       | 98.4%  |
 
 ## 3. 实现方案
 
@@ -64,40 +66,40 @@ fn tiled_attention(
 ) -> Result<Tensor> {
     let seq_len = q.dims()[2];
     let num_tiles = seq_len.div_ceil(tile_size);
-    
+
     let mut output_parts = Vec::new();
-    
+
     for tile_idx in 0..num_tiles {
         let start = tile_idx * tile_size;
         let end = (start + tile_size).min(seq_len);
         let tile_len = end - start;
-        
+
         // 获取当前 tile 的 K, V
         let k_tile = k.narrow(2, start, tile_len)?;
         let v_tile = v.narrow(2, start, tile_len)?;
-        
+
         // Q @ K_tile^T: [batch, num_heads, 1, tile_len]
         let qk = Tensor::matmul(q, &k_tile.transpose(2, 3)?)?;
-        
+
         // 添加 causal mask (仅当前 tile 内的 token)
         let mask = causal_mask_tile(q.dims()[0], self.num_heads, tile_len, q.device())?;
         let qk = (&qk + &mask)?;
-        
+
         // Softmax
         let scale = 1.0 / (self.head_dim as f32).sqrt();
         let qk = qk.mul(&Tensor::new(&[scale], q.device())?)?;
         let attn = candle_nn::ops::softmax(&qk, 3)?;
-        
+
         // @ V_tile: [batch, num_heads, 1, head_dim]
         let out = Tensor::matmul(&attn, &v_tile)?;
-        
+
         output_parts.push(out);
     }
-    
+
     // 合并所有 tile 的输出 (用加权平均，因为 softmax 是分 tile 计算的)
     // 注意：真正的 Flash Attention 会在最后做 global softmax
     // 这里简化处理：直接求和（假设 softmax 系数已归一化）
-    
+
     Tensor::cat(&output_parts, 2)
 }
 ```
@@ -124,7 +126,7 @@ impl GqaAttention {
         is_prefill: bool,
     ) -> Result<Tensor> {
         let tile_size = self.config.tile_size.unwrap_or(16);
-        
+
         // 长序列用 tiled，短序列用标准（减少 overhead）
         let seq_len = x.dims()[1];
         if seq_len > tile_size && is_prefill {
@@ -140,11 +142,11 @@ impl GqaAttention {
 
 ### 4.1 显存
 
-| 场景 | 标准 | Tiled | 改善 |
-|------|------|-------|------|
-| Decode (1 token) | O(1) | O(1) | 无变化 |
-| Prefill (128) | O(16K) | O(4K) | 75% |
-| Prefill (512) | O(256K) | O(16K) | 93.75% |
+| 场景             | 标准    | Tiled  | 改善   |
+| ---------------- | ------- | ------ | ------ |
+| Decode (1 token) | O(1)    | O(1)   | 无变化 |
+| Prefill (128)    | O(16K)  | O(4K)  | 75%    |
+| Prefill (512)    | O(256K) | O(16K) | 93.75% |
 
 ### 4.2 时间
 
@@ -156,21 +158,21 @@ impl GqaAttention {
 
 ### Test 1: 短序列 (decode)
 
-```
+```text
 输入: 1 token
 期望: 使用标准 attention，输出正确
 ```
 
 ### Test 2: 长序列 prefill
 
-```
+```text
 输入: 128 tokens
 期望: 使用 tiled attention，与标准 attention 结果接近
 ```
 
 ### Test 3: 混合 batch
 
-```
+```text
 输入: [1, 32, 128] tokens 混合 batch
 期望: 自动选择最优 attention 策略
 ```

@@ -4,16 +4,16 @@ This guide helps AI agents and developers work effectively with the vLLM-lite co
 
 ## Quick Reference
 
-| Task | Skill | Command |
-|------|-------|---------|
-| Design new feature | `brainstorming` | Load skill → discuss → get approval |
-| Write implementation plan | `writing-plans` | Load skill → spec approved → write plan |
-| Execute implementation | `subagent-driven-development` | Load skill → task list → execute tasks |
-| Debug issues | `systematic-debugging` | Load skill → reproduce → diagnose → fix |
+| Task                      | Skill                         | Command                                 |
+| ------------------------- | ----------------------------- | --------------------------------------- |
+| Design new feature        | `brainstorming`               | Load skill → discuss → get approval     |
+| Write implementation plan | `writing-plans`               | Load skill → spec approved → write plan |
+| Execute implementation    | `subagent-driven-development` | Load skill → task list → execute tasks  |
+| Debug issues              | `systematic-debugging`        | Load skill → reproduce → diagnose → fix |
 
 ## Project Structure
 
-```
+```text
 vllm-lite/
 ├── Cargo.toml              # Workspace root
 ├── ROADMAP.md              # Development roadmap
@@ -76,7 +76,8 @@ cargo check -p vllm-model
 ## Development Workflow
 
 ### 1. New Feature
-```
+
+```text
 1. Load brainstorming skill
 2. Explore project context (files, docs, recent commits)
 3. Ask clarifying questions (one at a time)
@@ -92,7 +93,8 @@ cargo check -p vllm-model
 ```
 
 ### 2. Bug Fix
-```
+
+```text
 1. Load systematic-debugging skill
 2. Reproduce the issue
 3. Identify root cause
@@ -102,7 +104,7 @@ cargo check -p vllm-model
 
 ## Commit Message Format
 
-```
+```text
 <type>(<scope>): <subject>
 
 <body>
@@ -111,6 +113,7 @@ cargo check -p vllm-model
 **Types:** `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 
 **Examples:**
+
 ```bash
 git commit -m "feat(model): add forward_prefill to GqaAttention"
 git commit -m "fix(core): resolve prefix cache eviction bug"
@@ -123,6 +126,7 @@ git commit -m "test(core): add prefix cache hit test"
 ## Crate API Reference
 
 ### core/engine.rs
+
 ```rust
 pub struct Engine<M: ModelBackend> {
     pub scheduler: Scheduler,
@@ -143,6 +147,7 @@ impl<M: ModelBackend> Engine<M> {
 ```
 
 ### core/scheduler.rs
+
 ```rust
 pub struct Scheduler {
     pub config: SchedulerConfig,
@@ -161,6 +166,7 @@ impl Scheduler {
 ```
 
 ### model/kv_cache.rs (PagedKvCache)
+
 ```rust
 impl PagedKvCache {
     pub fn new(num_layers: usize, num_kv_heads: usize, head_dim: usize, num_blocks: usize, device: Device) -> Result<Self>
@@ -170,6 +176,7 @@ impl PagedKvCache {
 ```
 
 ### model/qwen3/attention.rs
+
 ```rust
 pub struct GqaAttention {
     q_proj: Linear,
@@ -192,16 +199,19 @@ impl GqaAttention {
 ## Testing Guidelines
 
 ### Unit Tests
+
 - Add to `#[cfg(test)]` module in the same file
 - Use `FakeModel` or create minimal test fixtures
 - Name: `test_<function>_<expected_behavior>`
 
 ### Integration Tests
+
 - Add to `crates/*/tests/*.rs`
 - Use `Engine::with_config()` with `StubModel` or `FakeModel`
 - Test full workflows (add_request → step → verify)
 
 ### Running Tests
+
 ```bash
 # All tests
 cargo test --workspace
@@ -217,15 +227,18 @@ cargo test -p vllm-model -- attention
 ## Common Patterns
 
 ### Adding a new type
+
 1. Add to `crates/core/src/types.rs`
 2. Export in `crates/core/src/lib.rs`
 
 ### Adding a new model
+
 1. Create directory `crates/model/src/<model_name>/`
 2. Implement `ModelBackend` trait
 3. Add to model `lib.rs`
 
 ### Adding API endpoint
+
 1. Add handler to `crates/server/src/api.rs`
 2. Register route in `crates/server/src/main.rs`
 
@@ -240,12 +253,12 @@ cargo test -p vllm-model -- attention
 
 ## Documentation Standards
 
-| Document | Location | When to Update |
-|----------|----------|----------------|
-| Spec | `docs/superpowers/specs/` | Before implementation |
-| Plan | `docs/superpowers/plans/` | After spec approved |
-| CHANGELOG.md | Root | For any user-facing changes |
-| README.md | Root | For major features |
+| Document     | Location                  | When to Update              |
+| ------------ | ------------------------- | --------------------------- |
+| Spec         | `docs/superpowers/specs/` | Before implementation       |
+| Plan         | `docs/superpowers/plans/` | After spec approved         |
+| CHANGELOG.md | Root                      | For any user-facing changes |
+| README.md    | Root                      | For major features          |
 
 ## Notes
 

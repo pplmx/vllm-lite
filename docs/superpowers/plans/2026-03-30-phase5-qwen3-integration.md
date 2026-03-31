@@ -14,7 +14,7 @@
 
 ## File Structure
 
-```
+```text
 crates/model/src/
 ├── lib.rs                    # Export modules
 ├── loader.rs                 # SafeTensors weight loading
@@ -33,6 +33,7 @@ crates/model/src/
 ### Task P5-1: Infrastructure - Dependencies + Config + Loader
 
 **Files:**
+
 - Modify: `crates/model/Cargo.toml`
 - Create: `crates/model/src/config.rs`
 - Create: `crates/model/src/loader.rs`
@@ -60,6 +61,7 @@ serde_json = "1"
 - [ ] **Step 2: Create config.rs**
 
 `crates/model/src/config.rs`:
+
 ```rust
 use serde::Deserialize;
 
@@ -90,6 +92,7 @@ impl Qwen3Config {
 - [ ] **Step 3: Create loader.rs**
 
 `crates/model/src/loader.rs`:
+
 ```rust
 use candle_core::{Device, Tensor, Result};
 use safetensors::SafeTensors;
@@ -116,11 +119,11 @@ pub struct LayerWeights {
 impl ModelWeights {
     pub fn load(path: &str, device: &Device) -> Result<Self> {
         let file = SafeTensors::read(path).map_err(|e| candle_core::Error::msg(e.to_string()))?;
-        
+
         let embed_tokens = Self::tensor(&file, "model.embed_tokens.weight", device)?;
         let norm = Self::tensor(&file, "model.norm.weight", device)?;
         let lm_head = Self::tensor(&file, "lm_head.weight", device)?;
-        
+
         // Load layers (assume 28 layers for Qwen3-7B, make configurable later)
         let mut layers = Vec::new();
         for i in 0..28 {
@@ -137,10 +140,10 @@ impl ModelWeights {
             };
             layers.push(layer);
         }
-        
+
         Ok(Self { embed_tokens, layers, norm, lm_head })
     }
-    
+
     fn tensor(file: &SafeTensors, name: &str, device: &Device) -> Result<Tensor> {
         file.tensor(name)
             .map_err(|e| candle_core::Error::msg(e.to_string()))?
@@ -153,6 +156,7 @@ impl ModelWeights {
 - [ ] **Step 4: Update lib.rs**
 
 `crates/model/src/lib.rs`:
+
 ```rust
 pub mod fake;
 pub mod kv_cache;
@@ -178,37 +182,39 @@ git commit -m "feat(model): add Qwen3Config and SafeTensors loader
 ### Task P5-2: RoPE + RMSNorm Implementation
 
 **Files:**
+
 - Create: `crates/model/src/qwen3/rope.rs`
 - Create: `crates/model/src/qwen3/mod.rs`
 
 - [ ] **Step 1: Create rope.rs**
 
 `crates/model/src/qwen3/rope.rs`:
+
 ```rust
 use candle_core::{Tensor, Result};
 use std::f32::consts::PI;
 
 pub fn apply_rope(query: &Tensor, position_ids: &Tensor, theta: f32) -> Result<Tensor> {
     let (batch, num_heads, seq_len, head_dim) = query.dims4()?;
-    
+
     // Compute cos and sin
     let positions = position_ids.to_vec1::<i64>()?;
     let mut cos_sin = Vec::with_capacity(seq_len * head_dim / 2);
-    
+
     for &pos in &positions {
         for i in 0..head_dim / 2 {
             let freq = (pos as f32).powf(-2.0 * (i as f32) / (head_dim as f32)) * theta;
             cos_sin.push((freq.cos(), freq.sin()));
         }
     }
-    
+
     // Reshape for rotation
     let q = query.reshape((batch, num_heads, seq_len, head_dim / 2, 2))?;
     // Apply rotation using complex number trick
     // For each head dimension pair (d0, d1): 
     // new_d0 = d0 * cos - d1 * sin
     // new_d1 = d0 * sin + d1 * cos
-    
+
     // Simplified: just return query for now, full RoPE in next phase
     // This is a placeholder to make the code compile
     Ok(query.clone())
@@ -218,6 +224,7 @@ pub fn apply_rope(query: &Tensor, position_ids: &Tensor, theta: f32) -> Result<T
 - [ ] **Step 2: Create mod.rs**
 
 `crates/model/src/qwen3/mod.rs`:
+
 ```rust
 pub mod attention;
 pub mod mlp;
@@ -242,12 +249,14 @@ git commit -m "feat(model/qwen3): add RoPE module placeholder
 ### Task P5-3: MLP (SwiGLU) + Attention
 
 **Files:**
+
 - Create: `crates/model/src/qwen3/mlp.rs`
 - Create: `crates/model/src/qwen3/attention.rs`
 
 - [ ] **Step 1: Create mlp.rs**
 
 `crates/model/src/qwen3/mlp.rs`:
+
 ```rust
 use candle_core::{Tensor, Result};
 use candle_nn::Linear;
@@ -265,7 +274,7 @@ impl SwiGLU {
         let down_proj = candle_nn::linear(intermediate_size, hidden_size, vb.pp("down_proj"))?;
         Ok(Self { gate_proj, up_proj, down_proj })
     }
-    
+
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let gate = self.gate_proj.forward(x)?;
         let up = self.up_proj.forward(x)?;
@@ -279,6 +288,7 @@ impl SwiGLU {
 - [ ] **Step 2: Create attention.rs**
 
 `crates/model/src/qwen3/attention.rs`:
+
 ```rust
 use candle_core::{Tensor, Result};
 use candle_nn::Linear;
@@ -307,7 +317,7 @@ impl GqaAttention {
         let o_proj = candle_nn::linear(num_heads * head_dim, hidden_size, vb.pp("o_proj"))?;
         Ok(Self { q_proj, k_proj, v_proj, o_proj, num_heads, num_kv_heads, head_dim })
     }
-    
+
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         // Simplified: placeholder for now
         // Full implementation needs GQA expansion and attention computation
@@ -336,12 +346,14 @@ git commit -m "feat(model/qwen3): add SwiGLU MLP and GQA Attention placeholders
 ### Task P5-4: Transformer Block + Model
 
 **Files:**
+
 - Create: `crates/model/src/qwen3/block.rs`
 - Create: `crates/model/src/qwen3/model.rs`
 
 - [ ] **Step 1: Create block.rs**
 
 `crates/model/src/qwen3/block.rs`:
+
 ```rust
 use super::{attention::GqaAttention, mlp::SwiGLU};
 use candle_core::{Tensor, Result};
@@ -364,14 +376,14 @@ impl TransformerBlock {
         let mlp = SwiGLU::new(hidden_size, intermediate_size, vb.pp("mlp"))?;
         Ok(Self { input_layernorm, post_attention_layernorm, attention, mlp })
     }
-    
+
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         // Simplified: placeholder
         let residual = x.clone();
         let x = self.input_layernorm.forward(x)?;
         let x = self.attention.forward(&x)?;
         let x = (x + residual)?;
-        
+
         let residual = x.clone();
         let x = self.post_attention_layernorm.forward(&x)?;
         let x = self.mlp.forward(&x)?;
@@ -383,6 +395,7 @@ impl TransformerBlock {
 - [ ] **Step 2: Create model.rs**
 
 `crates/model/src/qwen3/model.rs`:
+
 ```rust
 use super::{block::TransformerBlock, config::Qwen3Config, loader::ModelWeights};
 use crate::kv_cache::PagedKvCache;
@@ -406,10 +419,10 @@ impl Qwen3Model {
     pub fn new(config: Qwen3Config, device: Device) -> Result<Self> {
         let vocab_size = config.vocab_size;
         let hidden_size = config.hidden_size;
-        
+
         // Create embeddings (random init for now)
         let embed_tokens = Embedding::new(vocab_size, hidden_size, candle_nn::VarBuilder::zeros(&device)?);
-        
+
         // Create layers
         let mut layers = Vec::new();
         for _ in 0..config.num_hidden_layers {
@@ -424,11 +437,11 @@ impl Qwen3Model {
             )?;
             layers.push(layer);
         }
-        
+
         // Create norm and lm_head
         let norm = candle_nn::layer_norm(hidden_size, config.rms_norm_eps, candle_nn::VarBuilder::zeros(&device)?)?;
         let lm_head = candle_nn::linear(hidden_size, vocab_size, candle_nn::VarBuilder::zeros(&device)?)?;
-        
+
         // Create KV cache (placeholder)
         let kv_cache = PagedKvCache::new(
             config.num_hidden_layers,
@@ -437,7 +450,7 @@ impl Qwen3Model {
             1024, // num_blocks
             &device,
         )?;
-        
+
         Ok(Self { config, embed_tokens, layers, norm, lm_head, kv_cache, device })
     }
 }
@@ -455,7 +468,7 @@ impl ModelBackend for Qwen3Model {
         let next_tokens: Vec<TokenId> = seq_ids.iter()
             .map(|_| rng.random_range(0..self.config.vocab_size) as TokenId)
             .collect();
-        
+
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
             next_tokens,
@@ -481,12 +494,14 @@ git commit -m "feat(model/qwen3): add TransformerBlock and Qwen3Model
 ### Task P5-5: Server Integration + End-to-End Test
 
 **Files:**
+
 - Modify: `crates/server/src/main.rs`
 - Modify: `crates/server/src/api.rs`
 
 - [ ] **Step 1: Update main.rs to use Qwen3Model**
 
 `crates/server/src/main.rs`:
+
 ```rust
 mod api;
 
@@ -513,9 +528,9 @@ async fn main() {
         max_position_embeddings: 32768,
         rms_norm_eps: 1e-6,
     };
-    
+
     let model = Qwen3Model::new(config, device).unwrap();
-    
+
     let config = SchedulerConfig {
         max_num_seqs: 256,
         max_num_batched_tokens: 4096,
@@ -541,6 +556,7 @@ async fn main() {
 - [ ] **Step 2: Update Cargo.toml for device detection**
 
 Add to server Cargo.toml:
+
 ```toml
 candle-core = "0.8"
 ```
@@ -587,15 +603,15 @@ curl -X POST http://localhost:8000/v1/completions \
 
 ## Spec Coverage
 
-| Spec Section | Covered By |
-|---|---|
-| Qwen3Config | Task P5-1 |
-| Weight Loading | Task P5-1 |
-| RoPE | Task P5-2 |
-| SwiGLU MLP | Task P5-3 |
-| GQA + Sliding Window | Task P5-3 |
-| Transformer Block | Task P5-4 |
-| Model Backend | Task P5-4 |
-| Server Integration | Task P5-5 |
+| Spec Section         | Covered By |
+| -------------------- | ---------- |
+| Qwen3Config          | Task P5-1  |
+| Weight Loading       | Task P5-1  |
+| RoPE                 | Task P5-2  |
+| SwiGLU MLP           | Task P5-3  |
+| GQA + Sliding Window | Task P5-3  |
+| Transformer Block    | Task P5-4  |
+| Model Backend        | Task P5-4  |
+| Server Integration   | Task P5-5  |
 
 Note: This Phase 5 implementation uses placeholder weights (random initialization). Full weight loading from SafeTensors files will be implemented in a follow-up phase.

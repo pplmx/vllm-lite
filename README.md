@@ -35,12 +35,12 @@ curl -X POST http://localhost:8000/v1/completions \
 
 ## Documentation
 
-| File | Description |
-|------|-------------|
-| [ROADMAP.md](./ROADMAP.md) | Development roadmap and milestones |
-| [CHANGELOG.md](./CHANGELOG.md) | Version history and changes |
-| [AGENTS.md](./AGENTS.md) | Developer guide and conventions |
-| [docs/](./docs/) | Design specs and implementation plans |
+| File                           | Description                           |
+| ------------------------------ | ------------------------------------- |
+| [ROADMAP.md](./ROADMAP.md)     | Development roadmap and milestones    |
+| [CHANGELOG.md](./CHANGELOG.md) | Version history and changes           |
+| [AGENTS.md](./AGENTS.md)       | Developer guide and conventions       |
+| [docs/](./docs/)               | Design specs and implementation plans |
 
 ## Tech Stack
 
