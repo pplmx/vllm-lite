@@ -760,4 +760,57 @@ mod tests {
         // Should be done immediately
         assert!(!sched.has_pending());
     }
+
+    #[test]
+    fn test_pd_separation_with_config() {
+        let config = SchedulerConfig {
+            max_num_seqs: 10,
+            max_num_batched_tokens: 10,
+            max_consecutive_decode: 10,
+            enable_pd_separation: true,
+            prefill_chunk_size: 2,
+            decode_preference_ratio: 0.5,
+        };
+        let mut sched = Scheduler::with_config(config, 1024);
+
+        // First request: prefill
+        sched.add_request(Request::new(1, vec![1, 2, 3, 4, 5], 3));
+        let batch1 = sched.build_batch();
+
+        // With prefill_chunk_size=2, should only process 2 tokens
+        assert!(batch1.input_tokens[0].len() <= 2);
+
+        // Update to complete first 2 tokens
+        sched.update(&batch1.seq_ids, &[99], &[2]);
+
+        // Second request: new prefill
+        sched.add_request(Request::new(2, vec![10, 20], 3));
+
+        // First request is still prefill (3 more tokens), second is prefill (2 tokens)
+        let batch2 = sched.build_batch();
+        assert!(batch2.seq_ids.len() >= 1);
+    }
+
+    #[test]
+    fn test_chunked_prefill_limits_tokens() {
+        let config = SchedulerConfig {
+            max_num_seqs: 256,
+            max_num_batched_tokens: 3,
+            max_consecutive_decode: 10,
+            enable_pd_separation: false,
+            prefill_chunk_size: 2,
+            decode_preference_ratio: 0.7,
+        };
+        let mut sched = Scheduler::with_config(config, 1024);
+
+        // Add a request with 10 tokens
+        sched.add_request(Request::new(1, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 5));
+
+        let batch = sched.build_batch();
+
+        // Should be limited by max_num_batched_tokens (3) AND prefill_chunk_size (2)
+        // The minimum should be 2
+        let total_tokens: usize = batch.input_tokens.iter().map(|v| v.len()).sum();
+        assert!(total_tokens <= 3, "Should respect max_num_batched_tokens");
+    }
 }
