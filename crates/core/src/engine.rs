@@ -1,3 +1,4 @@
+use crate::beam::BeamSequence;
 use crate::error::Result;
 use crate::metrics::MetricsCollector;
 use crate::scheduler::Scheduler;
@@ -231,6 +232,98 @@ impl<M: ModelBackend> Engine<M> {
 
     pub fn has_pending(&self) -> bool {
         self.scheduler.has_pending()
+    }
+
+    pub fn step_beam(
+        &mut self,
+        beam_width: usize,
+        length_penalty: f32,
+        max_tokens: usize,
+    ) -> Result<Vec<BeamSequence>> {
+        let _batch = self.scheduler.build_batch();
+
+        let mut results = Vec::new();
+        for seq in self.scheduler.running() {
+            let beam = self.beam_search(seq, beam_width, length_penalty, max_tokens)?;
+            results.push(beam);
+        }
+
+        Ok(results)
+    }
+
+    fn beam_search(
+        &self,
+        initial: &crate::types::Sequence,
+        beam_width: usize,
+        length_penalty: f32,
+        max_tokens: usize,
+    ) -> Result<BeamSequence> {
+        let mut beams = vec![BeamSequence::new(
+            initial.tokens.clone(),
+            0.0,
+            initial.kv_blocks.clone(),
+        )];
+
+        for _ in 0..max_tokens {
+            let mut all_candidates = Vec::new();
+
+            for beam in &beams {
+                if beam.tokens.is_empty() {
+                    continue;
+                }
+
+                let logits = self.target_model.forward_logits(
+                    &[0],
+                    &[vec![beam.tokens.last().copied().unwrap_or(0)]],
+                    &[vec![beam.tokens.len()]],
+                )?;
+
+                let top_k = self.get_top_k(&logits[0], beam_width);
+
+                for (token, log_prob) in top_k {
+                    let mut new_tokens = beam.tokens.clone();
+                    new_tokens.push(token);
+                    all_candidates.push(BeamSequence::new(
+                        new_tokens,
+                        beam.score + log_prob,
+                        beam.kv_blocks.clone(),
+                    ));
+                }
+            }
+
+            if all_candidates.is_empty() {
+                break;
+            }
+
+            all_candidates.sort_by(|a, b| {
+                let sa = a.score / (a.tokens.len() as f32).powf(length_penalty);
+                let sb = b.score / (b.tokens.len() as f32).powf(length_penalty);
+                sb.partial_cmp(&sa).unwrap()
+            });
+
+            beams = all_candidates.into_iter().take(beam_width).collect();
+        }
+
+        Ok(beams
+            .into_iter()
+            .max_by(|a, b| {
+                let sa = a.score / (a.tokens.len() as f32).powf(length_penalty);
+                let sb = b.score / (b.tokens.len() as f32).powf(length_penalty);
+                sa.partial_cmp(&sb).unwrap()
+            })
+            .unwrap())
+    }
+
+    fn get_top_k(&self, logits: &[f32], k: usize) -> Vec<(TokenId, f32)> {
+        let k = k.min(logits.len());
+        let mut indexed: Vec<(usize, f32)> =
+            logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
+        indexed.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        indexed
+            .into_iter()
+            .take(k)
+            .map(|(i, v)| (i as TokenId, v))
+            .collect()
     }
 }
 
