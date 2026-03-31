@@ -13,6 +13,13 @@ pub trait ModelBackend: Send + Sync {
         input_tokens: &[Vec<TokenId>],
         positions: &[Vec<usize>],
     ) -> Result<BatchOutput>;
+
+    fn forward_logits(
+        &self,
+        seq_ids: &[SeqId],
+        input_tokens: &[Vec<TokenId>],
+        positions: &[Vec<usize>],
+    ) -> Result<Vec<Vec<f32>>>;
 }
 
 pub struct Engine<M: ModelBackend> {
