@@ -264,4 +264,54 @@ impl GqaAttention {
         let mask = mask.where_cond(&zero, &neg_inf)?;
         Ok(mask)
     }
+
+    fn tiled_attention(
+        &self,
+        q: &Tensor,
+        k: &Tensor,
+        v: &Tensor,
+        seq_len: usize,
+    ) -> Result<Tensor> {
+        let tile_size = self.config.tile_size.unwrap_or(16);
+
+        let num_tiles = seq_len.div_ceil(tile_size);
+        let mut output_parts = Vec::new();
+
+        for tile_idx in 0..num_tiles {
+            let start = tile_idx * tile_size;
+            let end = (start + tile_size).min(seq_len);
+            let tile_len = end - start;
+
+            let k_tile = k.narrow(2, start, tile_len)?;
+            let v_tile = v.narrow(2, start, tile_len)?;
+
+            let qk = Tensor::matmul(q, &k_tile.transpose(2, 3)?)?;
+
+            let mask = self.causal_mask_tile(q.dims()[0], self.num_heads, tile_len, q.device())?;
+            let qk = (&qk + &mask)?;
+
+            let scale = 1.0 / (self.head_dim as f32).sqrt();
+            let qk = qk.mul(&Tensor::new(&[scale], q.device())?)?;
+            let attn = candle_nn::ops::softmax(&qk, 3)?;
+
+            let out = Tensor::matmul(&attn, &v_tile)?;
+
+            output_parts.push(out);
+        }
+
+        Tensor::cat(&output_parts, 2)
+    }
+
+    fn causal_mask_tile(
+        &self,
+        batch_size: usize,
+        num_heads: usize,
+        tile_len: usize,
+        device: &Device,
+    ) -> Result<Tensor> {
+        let mask: Vec<f32> = (0..tile_len)
+            .flat_map(|i| (0..tile_len).map(move |j| if i >= j { 0.0 } else { f32::NEG_INFINITY }))
+            .collect();
+        Tensor::from_slice(&mask, (batch_size, 1, tile_len, tile_len), device)
+    }
 }
