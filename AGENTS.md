@@ -1,5 +1,16 @@
 # vLLM-lite Development Guide
 
+This guide helps AI agents and developers work effectively with the vLLM-lite codebase.
+
+## Quick Reference
+
+| Task | Skill | Command |
+|------|-------|---------|
+| Design new feature | `brainstorming` | Load skill → discuss → get approval |
+| Write implementation plan | `writing-plans` | Load skill → spec approved → write plan |
+| Execute implementation | `subagent-driven-development` | Load skill → task list → execute tasks |
+| Debug issues | `systematic-debugging` | Load skill → reproduce → diagnose → fix |
+
 ## Project Structure
 
 ```
@@ -10,16 +21,19 @@ vllm-lite/
 ├── AGENTS.md               # This guide
 ├── crates/
 │   ├── core/               # Core engine
-│   │   ├── src/
-│   │   │   ├── engine.rs   # Engine loop, ModelBackend trait
-│   │   │   ├── scheduler.rs # Batch scheduling
-│   │   │   ├── kv_cache.rs # BlockAllocator, PrefixCache
-│   │   │   ├── metrics.rs  # MetricsCollector
-│   │   │   ├── types.rs    # Core types
-│   │   │   └── sampling.rs # Sampling strategies
+│   │   └── src/
+│   │       ├── engine.rs   # Engine loop, ModelBackend trait
+│   │       ├── scheduler.rs # Batch scheduling
+│   │       ├── kv_cache.rs # BlockAllocator, PrefixCache
+│   │       ├── metrics.rs  # MetricsCollector
+│   │       ├── types.rs    # Core types
+│   │       └── sampling.rs # Sampling strategies
 │   ├── model/              # ML models
 │   │   └── src/
 │   │       ├── qwen3/      # Qwen3 implementation
+│   │       │   ├── attention.rs # GqaAttention, tiled attention
+│   │       │   ├── block.rs    # TransformerBlock
+│   │       │   └── model.rs    # Qwen3Model
 │   │       ├── kv_cache.rs # PagedKvCache (GPU)
 │   │       ├── quantize.rs # INT8 quantization
 │   │       ├── loader.rs   # SafeTensors loading
@@ -30,43 +44,63 @@ vllm-lite/
 ├── docs/
 │   ├── README.md           # Documentation index
 │   └── superpowers/
-│       ├── specs/          # Design documents
-│       └── plans/          # Implementation plans
+│       ├── specs/          # Design specs (YYYY-MM-DD-*.md)
+│       └── plans/          # Implementation plans (YYYY-MM-DD-*.md)
 └── tests/                  # Integration tests
 ```
 
 ## Key Commands
 
 ```bash
-# Build all crates
+# Build
 cargo build --workspace
 
-# Run tests
+# Test
 cargo test --workspace
 
-# Run clippy
+# Clippy (required before commit)
 cargo clippy --workspace -- -D warnings
 
-# Run specific crate
+# Specific crate
 cargo test -p vllm-core
 cargo test -p vllm-model  
 cargo test -p vllm-server
 
 # Run server
 cargo run -p vllm-server
+
+# Check only (faster than build)
+cargo check -p vllm-model
 ```
 
 ## Development Workflow
 
-1. **New Feature**: Use brainstorming skill to design, then writing-plans skill for implementation plan
-2. **Implementation**: Use subagent-driven-development skill for task execution
-3. **Code Review**: Two-stage review (spec compliance → code quality)
-4. **Commit**: Follow conventional commits format (see below)
-5. **Update**: Update CHANGELOG.md for significant changes
+### 1. New Feature
+```
+1. Load brainstorming skill
+2. Explore project context (files, docs, recent commits)
+3. Ask clarifying questions (one at a time)
+4. Propose approaches with trade-offs
+5. Get user approval on design
+6. Write spec to docs/superpowers/specs/YYYY-MM-DD-feature-name.md
+7. Commit with: git commit -m "docs(spec): add <feature> design"
+8. Load writing-plans skill
+9. Write plan to docs/superpowers/plans/YYYY-MM-DD-feature-name.md
+10. Commit with: git commit -m "docs(plan): add <feature> implementation plan"
+11. Load subagent-driven-development skill
+12. Execute tasks one by one with reviews
+```
+
+### 2. Bug Fix
+```
+1. Load systematic-debugging skill
+2. Reproduce the issue
+3. Identify root cause
+4. Fix and test
+5. Commit with: git commit -m "fix(<scope>): <description>"
+```
 
 ## Commit Message Format
-
-Use [Conventional Commits](https://www.conventionalcommits.org/) format:
 
 ```
 <type>(<scope>): <subject>
@@ -74,13 +108,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/) format:
 <body>
 ```
 
-**Types:**
-- `feat`: New feature
-- `fix`: Bug fix
-- `refactor`: Code refactoring
-- `test`: Adding tests
-- `docs`: Documentation (specs, plans, README, CHANGELOG, etc.)
-- `chore`: Maintenance
+**Types:** `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 
 **Examples:**
 ```bash
@@ -89,53 +117,91 @@ git commit -m "fix(core): resolve prefix cache eviction bug"
 git commit -m "docs(spec): add Phase 2 prefix hit design"
 git commit -m "docs(plan): add paged attention implementation plan"
 git commit -m "chore: update dependencies"
+git commit -m "test(core): add prefix cache hit test"
 ```
 
-**Rules:**
-- Use lowercase for subject
-- No period at end of subject
-- Scope is optional but recommended (e.g., model, core, server)
-- Body explaining what and why (not how)
+## Crate API Reference
 
-## Crate Responsibilities
+### core/engine.rs
+```rust
+pub struct Engine<M: ModelBackend> {
+    pub scheduler: Scheduler,
+    pub target_model: M,
+    pub draft_model: M,
+    pub max_draft_tokens: usize,
+    pub metrics: MetricsCollector,
+}
 
-### core
-- `engine.rs`: Engine loop, ModelBackend trait
-- `scheduler.rs`: Batch scheduling, decode-priority
-- `kv_cache.rs`: BlockAllocator, PrefixCache
-- `metrics.rs`: MetricsCollector, MetricsSnapshot
-- `types.rs`: Core types (Request, Sequence, Batch, etc.)
-- `sampling.rs`: Sampling strategies
+// Methods
+impl<M: ModelBackend> Engine<M> {
+    pub fn new(model: M, draft_model: M) -> Self
+    pub fn with_config(model: M, draft_model: M, config: SchedulerConfig, max_draft_tokens: usize, num_kv_blocks: usize) -> Self
+    pub fn add_request(&mut self, request: Request, response_tx: mpsc::UnboundedSender<TokenId>) -> SeqId
+    pub fn step(&mut self) -> Result<BatchOutput>
+    pub fn has_pending(&self) -> bool
+}
+```
 
-### model
-- `qwen3/`: Qwen3 model implementation
-- `kv_cache.rs`: PagedKvCache (GPU tensors)
-- `quantize.rs`: INT8 quantization utilities
-- `loader.rs`: SafeTensors weight loading
-- `fake.rs`: FakeModel for testing
+### core/scheduler.rs
+```rust
+pub struct Scheduler {
+    pub config: SchedulerConfig,
+    pub waiting: VecDeque<Sequence>,
+    pub running: VecDeque<Sequence>,
+    pub finished: VecDeque<Sequence>,
+    pub prefix_cache: PrefixCache,
+    pub kv_allocator: BlockAllocator,
+}
 
-### server
-- `main.rs`: Server entry point
-- `api.rs`: HTTP handlers, OpenAI-compatible endpoints
+impl Scheduler {
+    pub fn add_request(&mut self, request: Request) -> SeqId
+    pub fn build_batch(&mut self) -> Option<Batch>
+    pub fn get_sequence(&self, id: SeqId) -> Option<&Sequence>
+}
+```
 
-## Key Design Decisions
+### model/kv_cache.rs (PagedKvCache)
+```rust
+impl PagedKvCache {
+    pub fn new(num_layers: usize, num_kv_heads: usize, head_dim: usize, num_blocks: usize, device: Device) -> Result<Self>
+    pub fn write_kv(&mut self, layer_idx: usize, block_id: usize, token_offset: usize, k: &Tensor, v: &Tensor) -> Result<()>
+    pub fn read_kv(&self, layer_idx: usize, block_ids: &[usize], seq_len: usize) -> Result<(Tensor, Tensor)>
+}
+```
 
-- Single GPU worker thread (avoid GPU contention)
-- Workspace structure: 3 crates (core/model/server)
-- Block size: 16 tokens per KV block
-- Max batched tokens: 4096 default
-- Max concurrent sequences: 256 default
+### model/qwen3/attention.rs
+```rust
+pub struct GqaAttention {
+    q_proj: Linear,
+    k_proj: Linear,
+    v_proj: Linear,
+    o_proj: Linear,
+    num_heads: usize,
+    num_kv_heads: usize,
+    head_dim: usize,
+    config: AttentionConfig,
+}
 
-## Common Patterns
+impl GqaAttention {
+    pub fn new(hidden_size: usize, num_heads: usize, num_kv_heads: usize, head_dim: usize, vb: Option<VarBuilder>, config: AttentionConfig) -> Result<Self>
+    pub fn forward_prefill(&self, x: &Tensor, kv_cache: &mut PagedKvCache, layer_idx: usize, block_ids: &[usize]) -> Result<Tensor>
+    pub fn forward_decode(&self, x: &Tensor, kv_cache: &PagedKvCache, layer_idx: usize, block_ids: &[usize], num_computed_tokens: usize) -> Result<Tensor>
+}
+```
 
-### Adding a new feature
-1. Write spec to `docs/superpowers/specs/YYYY-MM-DD-feature-name.md`
-2. Write plan to `docs/superpowers/plans/YYYY-MM-DD-feature-name.md`
-3. Implement in appropriate module
-4. Add tests
-5. Update CHANGELOG.md if significant
+## Testing Guidelines
 
-### Running tests
+### Unit Tests
+- Add to `#[cfg(test)]` module in the same file
+- Use `FakeModel` or create minimal test fixtures
+- Name: `test_<function>_<expected_behavior>`
+
+### Integration Tests
+- Add to `crates/*/tests/*.rs`
+- Use `Engine::with_config()` with `StubModel` or `FakeModel`
+- Test full workflows (add_request → step → verify)
+
+### Running Tests
 ```bash
 # All tests
 cargo test --workspace
@@ -143,23 +209,48 @@ cargo test --workspace
 # With output
 cargo test --workspace -- --nocapture
 
-# Specific test
-cargo test -p vllm-core -- scheduler
+# Specific
+cargo test -p vllm-core -- prefix_cache
+cargo test -p vllm-model -- attention
 ```
 
-## Documentation
+## Common Patterns
 
-| File | Purpose |
-|------|---------|
-| ROADMAP.md | Long-term development plan |
-| CHANGELOG.md | Version history |
-| AGENTS.md | Developer guide (this file) |
-| docs/README.md | Documentation index |
-| docs/specs/ | Feature specifications |
-| docs/plans/ | Implementation plans |
+### Adding a new type
+1. Add to `crates/core/src/types.rs`
+2. Export in `crates/core/src/lib.rs`
+
+### Adding a new model
+1. Create directory `crates/model/src/<model_name>/`
+2. Implement `ModelBackend` trait
+3. Add to model `lib.rs`
+
+### Adding API endpoint
+1. Add handler to `crates/server/src/api.rs`
+2. Register route in `crates/server/src/main.rs`
+
+## Key Design Decisions
+
+- Single GPU worker thread (avoid GPU contention)
+- 3 crates: core (engine), model (ML), server (HTTP)
+- Block size: 16 tokens per KV block
+- Max batched tokens: 4096 default
+- Max concurrent sequences: 256 default
+- Use `ModelBackend` trait for model abstraction
+
+## Documentation Standards
+
+| Document | Location | When to Update |
+|----------|----------|----------------|
+| Spec | `docs/superpowers/specs/` | Before implementation |
+| Plan | `docs/superpowers/plans/` | After spec approved |
+| CHANGELOG.md | Root | For any user-facing changes |
+| README.md | Root | For major features |
 
 ## Notes
 
 - Uses Rust edition 2021
 - CUDA support via Candle
 - Follow TDD pattern where possible
+- Always run clippy before commit
+- Use `cargo check` for fast validation
