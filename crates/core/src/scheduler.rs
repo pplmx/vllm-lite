@@ -168,6 +168,9 @@ impl Scheduler {
             }
         }
 
+        let pd_separation = self.config.enable_pd_separation;
+        let decode_preference = self.config.decode_preference_ratio;
+
         let mut seq_ids = vec![];
         let mut input_tokens = vec![];
         let mut positions = vec![];
@@ -175,53 +178,115 @@ impl Scheduler {
         let max_seqs = self.config.max_num_seqs;
         let decode_limit = self.config.max_consecutive_decode;
 
-        for seq in &self.running {
-            if seq_ids.len() >= max_seqs {
-                break;
-            }
-            if budget == 0 {
-                break;
-            }
+        let has_decode = self.running.iter().any(|s| s.status == Status::Decoding);
+        let has_prefill = self.running.iter().any(|s| s.status == Status::Prefilling);
 
-            if seq.status == Status::Decoding {
-                if seq.consecutive_decode_rounds >= decode_limit {
-                    continue;
+        if pd_separation && has_decode && has_prefill {
+            let decode_budget = (budget as f32 * decode_preference) as usize;
+            let prefill_budget = budget.saturating_sub(decode_budget);
+
+            let mut decode_count = 0;
+            for seq in &self.running {
+                if decode_count >= decode_budget {
+                    break;
+                }
+                if budget == 0 {
+                    break;
                 }
 
-                let last = *seq.tokens.last().unwrap();
-                let pos = seq.tokens.len() - 1;
+                if seq.status == Status::Decoding {
+                    if seq.consecutive_decode_rounds >= decode_limit {
+                        continue;
+                    }
 
-                seq_ids.push(seq.id);
-                input_tokens.push(vec![last]);
-                positions.push(vec![pos]);
-                budget = budget.saturating_sub(1);
-            }
-        }
+                    let last = *seq.tokens.last().unwrap();
+                    let pos = seq.tokens.len() - 1;
 
-        for seq in &self.running {
-            if seq_ids.len() >= max_seqs {
-                break;
-            }
-            if budget == 0 {
-                break;
+                    seq_ids.push(seq.id);
+                    input_tokens.push(vec![last]);
+                    positions.push(vec![pos]);
+                    budget = budget.saturating_sub(1);
+                    decode_count += 1;
+                }
             }
 
-            if seq.status == Status::Prefilling {
-                let start = seq.num_computed_tokens;
-                let remaining = seq.tokens.len() - start;
-                let chunk_size = remaining.min(budget);
-
-                if chunk_size == 0 {
-                    continue;
+            for seq in &self.running {
+                if seq_ids.len() >= max_seqs {
+                    break;
+                }
+                if budget == 0 {
+                    break;
                 }
 
-                let tokens = seq.tokens[start..start + chunk_size].to_vec();
-                let pos: Vec<usize> = (start..start + chunk_size).collect();
+                if seq.status == Status::Prefilling {
+                    let start = seq.num_computed_tokens;
+                    let remaining = seq.tokens.len() - start;
+                    let chunk_size = remaining
+                        .min(prefill_budget)
+                        .min(self.config.prefill_chunk_size);
 
-                seq_ids.push(seq.id);
-                input_tokens.push(tokens);
-                positions.push(pos);
-                budget = budget.saturating_sub(chunk_size);
+                    if chunk_size == 0 {
+                        continue;
+                    }
+
+                    let tokens = seq.tokens[start..start + chunk_size].to_vec();
+                    let pos: Vec<usize> = (start..start + chunk_size).collect();
+
+                    seq_ids.push(seq.id);
+                    input_tokens.push(tokens);
+                    positions.push(pos);
+                    budget = budget.saturating_sub(chunk_size);
+                }
+            }
+        } else {
+            for seq in &self.running {
+                if seq_ids.len() >= max_seqs {
+                    break;
+                }
+                if budget == 0 {
+                    break;
+                }
+
+                if seq.status == Status::Decoding {
+                    if seq.consecutive_decode_rounds >= decode_limit {
+                        continue;
+                    }
+
+                    let last = *seq.tokens.last().unwrap();
+                    let pos = seq.tokens.len() - 1;
+
+                    seq_ids.push(seq.id);
+                    input_tokens.push(vec![last]);
+                    positions.push(vec![pos]);
+                    budget = budget.saturating_sub(1);
+                }
+            }
+
+            for seq in &self.running {
+                if seq_ids.len() >= max_seqs {
+                    break;
+                }
+                if budget == 0 {
+                    break;
+                }
+
+                if seq.status == Status::Prefilling {
+                    let start = seq.num_computed_tokens;
+                    let remaining = seq.tokens.len() - start;
+                    let chunk_size = remaining.min(budget).min(self.config.prefill_chunk_size);
+
+                    if chunk_size == 0 {
+                        continue;
+                    }
+
+                    let tokens = seq.tokens[start..start + chunk_size].to_vec();
+                    let pos: Vec<usize> = (start..start + chunk_size).collect();
+
+                    seq_ids.push(seq.id);
+                    input_tokens.push(tokens);
+                    positions.push(pos);
+                    budget = budget.saturating_sub(chunk_size);
+                }
             }
         }
 
@@ -359,6 +424,9 @@ mod tests {
             max_num_seqs: 1,
             max_num_batched_tokens: 4096,
             max_consecutive_decode: 10,
+            enable_pd_separation: false,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
         };
         let mut sched = Scheduler::with_config(config, 1024);
         sched.add_request(Request::new(1, vec![10], 5));
@@ -376,6 +444,9 @@ mod tests {
             max_num_seqs: 256,
             max_num_batched_tokens: 3,
             max_consecutive_decode: 10,
+            enable_pd_separation: false,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
         };
         let mut sched = Scheduler::with_config(config, 1024);
         sched.add_request(Request::new(1, vec![10, 20, 30, 40, 50], 10));
@@ -438,6 +509,9 @@ mod tests {
             max_num_seqs: 10,
             max_num_batched_tokens: 2,
             max_consecutive_decode: 10,
+            enable_pd_separation: false,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
         };
         let mut sched = Scheduler::with_config(config, 100);
 
@@ -478,6 +552,9 @@ mod tests {
             max_num_seqs: 10,
             max_num_batched_tokens: 100,
             max_consecutive_decode: 2,
+            enable_pd_separation: false,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -497,6 +574,9 @@ mod tests {
             max_num_seqs: 10,
             max_num_batched_tokens: 3,
             max_consecutive_decode: 10,
+            enable_pd_separation: false,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -517,6 +597,9 @@ mod tests {
             max_num_seqs: 10,
             max_num_batched_tokens: 100,
             max_consecutive_decode: 10,
+            enable_pd_separation: false,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -540,6 +623,9 @@ mod tests {
             max_num_seqs: 2,
             max_num_batched_tokens: 100,
             max_consecutive_decode: 1,
+            enable_pd_separation: false,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -560,6 +646,9 @@ mod tests {
             max_num_seqs: 10,
             max_num_batched_tokens: 100,
             max_consecutive_decode: 10,
+            enable_pd_separation: false,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -583,6 +672,9 @@ mod tests {
             max_num_seqs: 10,
             max_num_batched_tokens: 100,
             max_consecutive_decode: 10,
+            enable_pd_separation: false,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
         };
         let mut sched = Scheduler::with_config(config, 10);
 
@@ -625,6 +717,9 @@ mod tests {
             max_num_seqs: 10,
             max_num_batched_tokens: 100,
             max_consecutive_decode: 10,
+            enable_pd_separation: false,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
@@ -647,6 +742,9 @@ mod tests {
             max_num_seqs: 10,
             max_num_batched_tokens: 100,
             max_consecutive_decode: 10,
+            enable_pd_separation: false,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
         };
         let mut sched = Scheduler::with_config(config, 1024);
 
