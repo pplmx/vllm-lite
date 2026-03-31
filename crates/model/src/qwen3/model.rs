@@ -92,7 +92,8 @@ impl Qwen3Model {
         let hidden_size = config.hidden_size();
 
         let embed_key = "model.embed_tokens.weight";
-        let embed_tokens = if let Some(w) = weights.get(embed_key) {
+        let embed_weight = weights.get(embed_key).cloned();
+        let embed_tokens = if let Some(w) = embed_weight.as_ref() {
             Embedding::new(w.clone(), hidden_size)
         } else {
             return Err(candle_core::Error::msg(format!(
@@ -180,16 +181,22 @@ impl Qwen3Model {
             )));
         };
 
-        let lm_head = if let Some(w) = Self::get_weight(
+        let lm_head = if config.tie_word_embeddings() {
+            if let Some(embed_w) = embed_weight.as_ref() {
+                Linear::new(embed_w.clone(), None)
+            } else {
+                return Err(candle_core::Error::msg(
+                    "tie_word_embeddings is true but embed_tokens.weight not found".to_string(),
+                ));
+            }
+        } else if let Some(w) = Self::get_weight(
             &weights,
             &["lm_head.weight", "output.weight", "model.lm_head.weight"],
         ) {
             Linear::new(w.clone(), None)
-        } else if let Some(embed) = weights.get("model.embed_tokens.weight") {
-            Linear::new(embed.clone(), None)
         } else {
             return Err(candle_core::Error::msg(
-                "Missing lm_head weight (or tied embedding)".to_string(),
+                "Missing lm_head.weight and tie_word_embeddings is false".to_string(),
             ));
         };
 
