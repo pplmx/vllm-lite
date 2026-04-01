@@ -1,6 +1,7 @@
 use tokio::sync::mpsc;
 use vllm_core::engine::{Engine, ModelBackend};
 use vllm_core::error::Result;
+use vllm_core::kv_cache::{hash_tokens, BlockAllocator, PrefixCache};
 use vllm_core::types::{BatchOutput, Request, SchedulerConfig, SeqId, TokenId};
 
 struct StubModel;
@@ -255,4 +256,36 @@ fn test_prefix_hit_partial_prefill() {
     let seq = &engine.scheduler.running()[0];
     assert_eq!(seq.status, vllm_core::types::Status::Decoding);
     assert_eq!(seq.num_computed_tokens, 5); // 2 cached + 3 processed = 5
+}
+
+#[test]
+fn test_prefix_match_caching() {
+    let mut cache = PrefixCache::new();
+    let _alloc = BlockAllocator::new(1000);
+
+    // Insert prefixes - more entries to make O(n) slower
+    for i in 0usize..500 {
+        let tokens: Vec<u32> = (0u32..(i as u32) + 1).collect();
+        let key = hash_tokens(&tokens);
+        cache.insert(key, vec![i], i + 1);
+    }
+
+    // Find same prefix multiple times - should hit cache
+    let search_tokens: Vec<u32> = (0u32..250).collect();
+
+    // Warm up
+    let _ = cache.find_prefix_match(&search_tokens);
+
+    let start = std::time::Instant::now();
+    for _ in 0..1000 {
+        let _ = cache.find_prefix_match(&search_tokens);
+    }
+    let elapsed = start.elapsed();
+
+    // With caching, 1000 lookups should be very fast
+    assert!(
+        elapsed.as_millis() < 100,
+        "Caching should make repeated lookups fast: {:?}",
+        elapsed
+    );
 }
