@@ -3,6 +3,7 @@ mod config;
 mod logging;
 pub mod openai;
 
+use crate::openai::batch::manager::BatchManager;
 use axum::{routing::get, routing::post, Router};
 use candle_core::Device;
 use std::path::PathBuf;
@@ -13,7 +14,6 @@ use vllm_core::engine::Engine;
 use vllm_core::types::EngineMessage;
 use vllm_model::loader::ModelLoader;
 use vllm_model::tokenizer::Tokenizer;
-use crate::openai::batch::manager::BatchManager;
 
 #[derive(Clone)]
 pub struct ApiState {
@@ -98,12 +98,10 @@ async fn main() {
         batch_manager,
     };
 
+    use openai::batch::handler::{create_batch, get_batch, get_batch_results, list_batches};
     use openai::chat::chat_completions;
     use openai::completions::completions as openai_completions;
     use openai::embeddings::embeddings;
-    use openai::batch::handler::{
-        create_batch, get_batch, get_batch_results, list_batches,
-    };
 
     let app = Router::new()
         // OpenAI API

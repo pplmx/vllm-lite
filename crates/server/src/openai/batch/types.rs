@@ -92,3 +92,81 @@ impl BatchJob {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_simple_batch_request_serialization() {
+        let req = SimpleBatchRequest {
+            prompts: vec!["Hello".to_string(), "World".to_string()],
+            endpoint: "chat".to_string(),
+            model: Some("qwen".to_string()),
+            max_tokens: Some(100),
+            temperature: Some(0.7),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("\"prompts\""));
+        assert!(json.contains("\"endpoint\":\"chat\""));
+    }
+
+    #[test]
+    fn test_simple_batch_request_deserialization() {
+        let json = r#"{"prompts":["test"],"endpoint":"completions"}"#;
+        let req: SimpleBatchRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.prompts.len(), 1);
+        assert_eq!(req.endpoint, "completions");
+    }
+
+    #[test]
+    fn test_batch_response_serialization() {
+        let resp = BatchResponse {
+            id: "batch_123".to_string(),
+            object: "batch".to_string(),
+            endpoint: "chat".to_string(),
+            status: "pending".to_string(),
+            created_at: 1000,
+            expires_at: 2000,
+            completed_at: None,
+            request_counts: Some(RequestCounts {
+                total: 10,
+                completed: 5,
+                failed: 1,
+            }),
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"id\":\"batch_123\""));
+        assert!(json.contains("\"status\":\"pending\""));
+    }
+
+    #[test]
+    fn test_batch_job_creation() {
+        let job = BatchJob::new(
+            "batch_test".to_string(),
+            "chat".to_string(),
+            vec!["prompt1".to_string()],
+            Some("qwen".to_string()),
+            Some(100),
+            Some(0.5),
+        );
+        assert_eq!(job.id, "batch_test");
+        assert_eq!(job.endpoint, "chat");
+        assert_eq!(job.prompts.len(), 1);
+        assert!(matches!(job.status, BatchStatus::Pending));
+    }
+
+    #[test]
+    fn test_batch_status_default() {
+        let job = BatchJob::new(
+            "batch_default".to_string(),
+            "completions".to_string(),
+            vec![],
+            None,
+            None,
+            None,
+        );
+        assert!(matches!(job.status, BatchStatus::Pending));
+        assert!(job.completed_at.is_none());
+    }
+}

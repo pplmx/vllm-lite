@@ -1,7 +1,4 @@
-use axum::{
-    extract::State,
-    Json,
-};
+use axum::{extract::State, Json};
 
 use super::types::*;
 use crate::openai::types::ErrorResponse;
@@ -14,14 +11,20 @@ pub async fn create_batch(
     if req.prompts.is_empty() {
         return Err((
             axum::http::StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new("prompts is required", "invalid_request_error")),
+            Json(ErrorResponse::new(
+                "prompts is required",
+                "invalid_request_error",
+            )),
         ));
     }
 
     if req.endpoint != "chat" && req.endpoint != "completions" {
         return Err((
             axum::http::StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new("endpoint must be 'chat' or 'completions'", "invalid_request_error")),
+            Json(ErrorResponse::new(
+                "endpoint must be 'chat' or 'completions'",
+                "invalid_request_error",
+            )),
         ));
     }
 
@@ -64,7 +67,10 @@ pub async fn get_batch(
 ) -> Result<Json<BatchResponse>, (axum::http::StatusCode, Json<ErrorResponse>)> {
     let job = state.batch_manager.get_job(&id).await.ok_or((
         axum::http::StatusCode::NOT_FOUND,
-        Json(ErrorResponse::new("batch not found", "invalid_request_error")),
+        Json(ErrorResponse::new(
+            "batch not found",
+            "invalid_request_error",
+        )),
     ))?;
 
     let status = match job.status {
@@ -99,7 +105,10 @@ pub async fn get_batch_results(
 ) -> Result<Json<BatchResults>, (axum::http::StatusCode, Json<ErrorResponse>)> {
     let job = state.batch_manager.get_job(&id).await.ok_or((
         axum::http::StatusCode::NOT_FOUND,
-        Json(ErrorResponse::new("batch not found", "invalid_request_error")),
+        Json(ErrorResponse::new(
+            "batch not found",
+            "invalid_request_error",
+        )),
     ))?;
 
     let status = match job.status {
@@ -116,9 +125,7 @@ pub async fn get_batch_results(
     }))
 }
 
-pub async fn list_batches(
-    State(state): State<ApiState>,
-) -> Json<Vec<BatchResponse>> {
+pub async fn list_batches(State(state): State<ApiState>) -> Json<Vec<BatchResponse>> {
     let jobs = state.batch_manager.get_all_jobs().await;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
