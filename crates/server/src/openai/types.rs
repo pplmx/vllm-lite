@@ -41,3 +41,86 @@ impl ErrorResponse {
         }
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatMessage {
+    pub role: String,
+    pub content: String,
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatRequest {
+    pub model: String,
+    pub messages: Vec<ChatMessage>,
+    pub temperature: Option<f32>,
+    pub top_p: Option<f32>,
+    pub max_tokens: Option<usize>,
+    pub stream: Option<bool>,
+    pub n: Option<usize>,
+    pub stop: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatChoice {
+    pub index: usize,
+    pub message: ChatMessage,
+    pub finish_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatResponse {
+    pub id: String,
+    pub object: String,
+    pub created: u64,
+    pub model: String,
+    pub choices: Vec<ChatChoice>,
+    pub usage: Usage,
+}
+
+impl ChatResponse {
+    pub fn new(id: String, model: String, choices: Vec<ChatChoice>, usage: Usage) -> Self {
+        Self {
+            id,
+            object: "chat.completion".to_string(),
+            created: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            model,
+            choices,
+            usage,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatChunkChoice {
+    pub index: usize,
+    pub delta: ChatMessage,
+    pub finish_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatChunk {
+    pub id: String,
+    pub object: String,
+    pub created: u64,
+    pub model: String,
+    pub choices: Vec<ChatChunkChoice>,
+}
+
+impl ChatChunk {
+    pub fn new(id: String, model: String, choice: ChatChunkChoice) -> Self {
+        Self {
+            id,
+            object: "chat.completion.chunk".to_string(),
+            created: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            model,
+            choices: vec![choice],
+        }
+    }
+}
