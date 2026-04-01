@@ -16,6 +16,7 @@ use crate::ApiState;
 
 pub type EngineHandle = mpsc::UnboundedSender<EngineMessage>;
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub struct CompletionRequest {
     pub prompt: String,
@@ -29,18 +30,22 @@ pub struct CompletionRequest {
     pub retries: Option<u32>,
 }
 
+#[allow(dead_code)]
 fn default_retries() -> Option<u32> {
     None
 }
 
+#[allow(dead_code)]
 fn default_timeout() -> Option<u64> {
     None
 }
 
+#[allow(dead_code)]
 fn default_max_tokens() -> usize {
     100
 }
 
+#[allow(dead_code)]
 fn default_stream() -> bool {
     false
 }
@@ -48,24 +53,28 @@ fn default_stream() -> bool {
 #[allow(dead_code)]
 const MAX_MAX_TOKENS: usize = 8192;
 
+#[allow(dead_code)]
 #[derive(Serialize)]
 struct CompletionChunk {
     id: String,
     choices: Vec<Choice>,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize)]
 struct Choice {
     text: String,
     index: usize,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize)]
 struct CompletionResponse {
     id: String,
     choices: Vec<Choice>,
 }
 
+#[allow(dead_code)]
 pub async fn completions(
     State(state): State<ApiState>,
     Json(req): Json<CompletionRequest>,
@@ -165,6 +174,7 @@ pub async fn health() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok".to_string() })
 }
 
+#[allow(dead_code)]
 pub async fn ready(State(state): State<ApiState>) -> Json<HealthResponse> {
     let _ = state.engine_tx.send(EngineMessage::GetMetrics {
         response_tx: tokio::sync::mpsc::unbounded_channel().0,
@@ -177,6 +187,7 @@ pub async fn shutdown(State(engine_tx): State<EngineHandle>) -> &'static str {
     "Shutting down"
 }
 
+#[allow(dead_code)]
 pub async fn get_stats(State(state): State<ApiState>) -> Json<MetricsSnapshot> {
     let (response_tx, mut response_rx) = mpsc::unbounded_channel();
     state
