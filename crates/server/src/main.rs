@@ -96,12 +96,18 @@ async fn main() {
         tokenizer,
     };
 
+    use openai::chat::chat_completions;
+    use openai::completions::completions as openai_completions;
+    use openai::embeddings::embeddings;
+
     let app = Router::new()
-        .route("/v1/completions", post(api::completions))
-        .route("/v1/stats", get(api::get_stats))
+        // OpenAI API
+        .route("/v1/chat/completions", post(chat_completions))
+        .route("/v1/completions", post(openai_completions))
+        .route("/v1/embeddings", post(embeddings))
+        // 运维 (保留 api.rs)
         .route("/metrics", get(api::get_prometheus))
         .route("/health", get(api::health))
-        .route("/ready", get(api::ready))
         .with_state(state);
 
     let app = app.route("/shutdown", get(api::shutdown).with_state(msg_tx));
