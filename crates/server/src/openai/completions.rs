@@ -1,14 +1,17 @@
 use axum::{
     extract::State,
-    response::{sse::{Event, Sse}, IntoResponse},
+    response::{
+        sse::{Event, Sse},
+        IntoResponse,
+    },
     Json,
 };
 use futures::stream;
 use std::convert::Infallible;
 use tokio::sync::mpsc;
 
-use crate::ApiState;
 use super::types::*;
+use crate::ApiState;
 
 pub async fn completions(
     State(state): State<ApiState>,
@@ -17,10 +20,13 @@ pub async fn completions(
     if req.prompt.is_empty() {
         return Err((
             axum::http::StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new("prompt is required", "invalid_request_error")),
+            Json(ErrorResponse::new(
+                "prompt is required",
+                "invalid_request_error",
+            )),
         ));
     }
-    
+
     let is_streaming = req.stream.unwrap_or(false);
     let prompt = req.prompt;
     let prompt_tokens = state.tokenizer.encode(&prompt);
@@ -36,7 +42,8 @@ pub async fn completions(
 
     let (response_tx, mut response_rx) = mpsc::unbounded_channel();
 
-    state.engine_tx
+    state
+        .engine_tx
         .send(vllm_core::types::EngineMessage::AddRequest {
             request,
             response_tx,
@@ -70,13 +77,11 @@ pub async fn completions(
                         let data = chunk.to_string();
                         Some((Ok(Event::default().data(data)), rx))
                     }
-                    None => {
-                        Some((Ok(Event::default().data("[DONE]")), rx))
-                    }
+                    None => Some((Ok(Event::default().data("[DONE]")), rx)),
                 }
             }
         });
-        
+
         return Ok(Sse::new(Box::pin(stream)).into_response());
     }
 

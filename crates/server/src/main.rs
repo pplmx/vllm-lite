@@ -1,9 +1,10 @@
 mod api;
-pub mod openai;
 mod config;
 mod logging;
+pub mod openai;
 
 use axum::{routing::get, routing::post, Router};
+use candle_core::Device;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::signal;
@@ -12,7 +13,6 @@ use vllm_core::engine::Engine;
 use vllm_core::types::EngineMessage;
 use vllm_model::loader::ModelLoader;
 use vllm_model::tokenizer::Tokenizer;
-use candle_core::Device;
 
 #[derive(Clone)]
 pub struct ApiState {
@@ -54,11 +54,7 @@ fn get_model_path() -> String {
 async fn main() {
     let app_config = load_config();
 
-    let log_dir = app_config
-        .server
-        .log_dir
-        .as_ref()
-        .map(PathBuf::from);
+    let log_dir = app_config.server.log_dir.as_ref().map(PathBuf::from);
     logging::init_logging(log_dir, &app_config.server.log_level);
 
     tracing::info!(config = ?app_config, "Starting vllm-lite");
@@ -70,13 +66,15 @@ async fn main() {
     tracing::info!(model_path = %model_path, "Loading model from");
 
     let loader = ModelLoader::new(device.clone());
-    let model = loader.load_model(&model_path)
+    let model = loader
+        .load_model(&model_path)
         .expect("Failed to load model");
 
     // For speculative decoding, we need a proper draft model
     // For now, disable speculative mode by using the same model as draft
     // (this doubles memory but ensures compatibility)
-    let draft_model = loader.load_model(&model_path)
+    let draft_model = loader
+        .load_model(&model_path)
         .expect("Failed to load draft model");
 
     let mut engine = Engine::new(model, draft_model);
