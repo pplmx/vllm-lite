@@ -5,7 +5,7 @@ use super::{
     mlp::SwiGLU,
 };
 use crate::kv_cache::PagedKvCache;
-use candle_core::{Device, Module, Result, Tensor};
+use candle_core::{Module, Result, Tensor};
 use candle_nn::LayerNorm;
 
 pub struct TransformerBlock {
@@ -99,11 +99,15 @@ impl TransformerBlock {
         };
 
         let input_ln_dim = input_ln_w.dim(0).unwrap_or(hidden_size);
-        let input_ln_bias = Tensor::zeros(input_ln_dim, input_ln_w.dtype(), &Device::Cpu)?;
+        let input_ln_bias = Tensor::zeros(input_ln_dim, input_ln_w.dtype(), input_ln_w.device())?;
         let input_layernorm = LayerNorm::new(input_ln_w.clone(), input_ln_bias, rms_norm_eps);
 
         let post_attn_dim = post_attn_ln_w.dim(0).unwrap_or(hidden_size);
-        let post_attn_bias = Tensor::zeros(post_attn_dim, post_attn_ln_w.dtype(), &Device::Cpu)?;
+        let post_attn_bias = Tensor::zeros(
+            post_attn_dim,
+            post_attn_ln_w.dtype(),
+            post_attn_ln_w.device(),
+        )?;
         let post_attention_layernorm =
             LayerNorm::new(post_attn_ln_w.clone(), post_attn_bias, rms_norm_eps);
 
@@ -197,7 +201,7 @@ impl TransformerBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candle_core::DType;
+    use candle_core::{DType, Device};
 
     #[test]
     fn test_transformer_block_forward() -> Result<()> {

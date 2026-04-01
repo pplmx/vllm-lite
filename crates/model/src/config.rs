@@ -74,6 +74,8 @@ pub struct Qwen3Config {
     pub has_qk_norm: Option<bool>,
     #[serde(default)]
     pub rope_scaling: Option<RopeScaling>,
+    #[serde(default)]
+    pub head_dim: Option<usize>,
 }
 
 impl TextConfig {
@@ -190,6 +192,11 @@ impl Qwen3Config {
         self.rope_scaling.as_ref()
     }
 
+    pub fn head_dim(&self) -> usize {
+        self.head_dim
+            .unwrap_or_else(|| self.hidden_size() / self.num_attention_heads())
+    }
+
     pub fn attention_type(&self) -> AttentionType {
         if self.q_len.is_some() || self.kv_len.is_some() {
             AttentionType::MLA
@@ -236,6 +243,7 @@ mod tests {
             tie_word_embeddings: None,
             has_qk_norm: None,
             rope_scaling: None,
+            head_dim: None,
         };
 
         assert_eq!(config.vocab_size(), 151936);
@@ -267,6 +275,7 @@ mod tests {
             tie_word_embeddings: Some(true),
             has_qk_norm: Some(true),
             rope_scaling: None,
+            head_dim: None,
         };
 
         assert_eq!(config.vocab_size(), 1000);
@@ -312,6 +321,7 @@ mod tests {
             tie_word_embeddings: None,
             has_qk_norm: None,
             rope_scaling: None,
+            head_dim: None,
         };
 
         assert_eq!(config.vocab_size(), 500);

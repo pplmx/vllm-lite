@@ -6,8 +6,8 @@ edition = "2021"
 [dependencies]
 vllm-core = { path = "../core" }
 rand = "0.10"
-candle-core = "0.8"
-candle-nn = "0.8"
+candle-core = { version = "0.9", features = ["cuda"] }
+candle-nn = { version = "0.9", features = ["cuda"] }
 thiserror = "2"
 safetensors = "0.4"
 serde = { version = "1", features = ["derive"] }
