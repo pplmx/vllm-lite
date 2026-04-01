@@ -87,6 +87,80 @@ impl PagedKvCache {
         }
     }
 
+    pub fn write_kv_batch(
+        &mut self,
+        layer_idx: usize,
+        block_id: usize,
+        token_offset: usize,
+        k_batch: &Tensor,
+        v_batch: &Tensor,
+    ) -> Result<()> {
+        if layer_idx >= self.num_layers {
+            return Err(candle_core::Error::msg(format!(
+                "layer_idx {} out of bounds for {} layers",
+                layer_idx, self.num_layers
+            )));
+        }
+
+        let k_dims = k_batch.dims();
+        let v_dims = v_batch.dims();
+
+        if k_dims.len() != 4 || v_dims.len() != 4 {
+            return Err(candle_core::Error::msg("Expected 4D tensors for batch"));
+        }
+
+        if k_dims != v_dims {
+            return Err(candle_core::Error::msg(format!(
+                "k_batch and v_batch must have same dimensions, got {:?} vs {:?}",
+                k_dims, v_dims
+            )));
+        }
+
+        if k_dims[2] != self.num_heads || k_dims[3] != self.head_dim {
+            return Err(candle_core::Error::msg(format!(
+                "Expected k_batch shape [1, *, {}, {}], got {:?}",
+                self.num_heads, self.head_dim, k_dims
+            )));
+        }
+
+        let batch_size = k_dims[0];
+        let num_tokens = k_dims[1];
+
+        if batch_size != 1 {
+            return Err(candle_core::Error::msg("Batch size must be 1 for now"));
+        }
+
+        let num_blocks = self.num_blocks();
+        let max_possible_tokens = (num_blocks - block_id) * self.block_size;
+        if token_offset + num_tokens > max_possible_tokens {
+            return Err(candle_core::Error::msg(format!(
+                "Token offset {} + num_tokens {} exceeds available space {}",
+                token_offset, num_tokens, max_possible_tokens
+            )));
+        }
+
+        // Write each token in the batch, handling multi-block spanning
+        let mut current_block = block_id;
+        let mut current_offset = token_offset;
+
+        for i in 0..num_tokens {
+            let k_slice = k_batch.narrow(1, i, 1)?.squeeze(1)?;
+            let v_slice = v_batch.narrow(1, i, 1)?.squeeze(1)?;
+            let k_slice = k_slice.reshape((1, self.num_heads, self.head_dim))?;
+            let v_slice = v_slice.reshape((1, self.num_heads, self.head_dim))?;
+            self.write_kv(layer_idx, current_block, current_offset, &k_slice, &v_slice)?;
+
+            // Move to next block if needed
+            current_offset += 1;
+            if current_offset >= self.block_size {
+                current_block += 1;
+                current_offset = 0;
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn write_kv(
         &mut self,
         layer_idx: usize,
