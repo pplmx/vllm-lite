@@ -1,4 +1,5 @@
 mod api;
+pub mod openai;
 mod config;
 mod logging;
 
