@@ -13,11 +13,13 @@ use vllm_core::engine::Engine;
 use vllm_core::types::EngineMessage;
 use vllm_model::loader::ModelLoader;
 use vllm_model::tokenizer::Tokenizer;
+use crate::openai::batch::manager::BatchManager;
 
 #[derive(Clone)]
 pub struct ApiState {
     pub engine_tx: api::EngineHandle,
     pub tokenizer: Arc<Tokenizer>,
+    pub batch_manager: Arc<BatchManager>,
 }
 
 fn load_config() -> config::AppConfig {
@@ -89,20 +91,30 @@ async fn main() {
     });
 
     let tokenizer = Arc::new(Tokenizer::new());
+    let batch_manager = Arc::new(BatchManager::new());
     let state = ApiState {
         engine_tx: msg_tx.clone(),
         tokenizer,
+        batch_manager,
     };
 
     use openai::chat::chat_completions;
     use openai::completions::completions as openai_completions;
     use openai::embeddings::embeddings;
+    use openai::batch::handler::{
+        create_batch, get_batch, get_batch_results, list_batches,
+    };
 
     let app = Router::new()
         // OpenAI API
         .route("/v1/chat/completions", post(chat_completions))
         .route("/v1/completions", post(openai_completions))
         .route("/v1/embeddings", post(embeddings))
+        // Batch API
+        .route("/v1/batches", post(create_batch))
+        .route("/v1/batches", get(list_batches))
+        .route("/v1/batches/:id", get(get_batch))
+        .route("/v1/batches/:id/results", get(get_batch_results))
         // 运维 (保留 api.rs)
         .route("/metrics", get(api::get_prometheus))
         .route("/health", get(api::health))

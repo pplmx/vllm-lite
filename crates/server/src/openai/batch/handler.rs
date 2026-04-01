@@ -2,14 +2,13 @@ use axum::{
     extract::State,
     Json,
 };
-use std::sync::Arc;
 
 use super::types::*;
-use super::manager::BatchManager;
 use crate::openai::types::ErrorResponse;
+use crate::ApiState;
 
 pub async fn create_batch(
-    State(manager): State<Arc<BatchManager>>,
+    State(state): State<ApiState>,
     Json(req): Json<SimpleBatchRequest>,
 ) -> Result<Json<BatchResponse>, (axum::http::StatusCode, Json<ErrorResponse>)> {
     if req.prompts.is_empty() {
@@ -26,7 +25,8 @@ pub async fn create_batch(
         ));
     }
 
-    let id = manager
+    let id = state
+        .batch_manager
         .create_job(
             req.endpoint.clone(),
             req.prompts,
@@ -36,7 +36,7 @@ pub async fn create_batch(
         )
         .await;
 
-    let job = manager.get_job(&id).await.unwrap();
+    let job = state.batch_manager.get_job(&id).await.unwrap();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -59,10 +59,10 @@ pub async fn create_batch(
 }
 
 pub async fn get_batch(
-    State(manager): State<Arc<BatchManager>>,
+    State(state): State<ApiState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<Json<BatchResponse>, (axum::http::StatusCode, Json<ErrorResponse>)> {
-    let job = manager.get_job(&id).await.ok_or((
+    let job = state.batch_manager.get_job(&id).await.ok_or((
         axum::http::StatusCode::NOT_FOUND,
         Json(ErrorResponse::new("batch not found", "invalid_request_error")),
     ))?;
@@ -94,10 +94,10 @@ pub async fn get_batch(
 }
 
 pub async fn get_batch_results(
-    State(manager): State<Arc<BatchManager>>,
+    State(state): State<ApiState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<Json<BatchResults>, (axum::http::StatusCode, Json<ErrorResponse>)> {
-    let job = manager.get_job(&id).await.ok_or((
+    let job = state.batch_manager.get_job(&id).await.ok_or((
         axum::http::StatusCode::NOT_FOUND,
         Json(ErrorResponse::new("batch not found", "invalid_request_error")),
     ))?;
@@ -117,9 +117,9 @@ pub async fn get_batch_results(
 }
 
 pub async fn list_batches(
-    State(manager): State<Arc<BatchManager>>,
+    State(state): State<ApiState>,
 ) -> Json<Vec<BatchResponse>> {
-    let jobs = manager.get_all_jobs().await;
+    let jobs = state.batch_manager.get_all_jobs().await;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
