@@ -80,17 +80,28 @@ impl ErrorResponse {
 }
 ```
 
-- [ ] **Step 4: 在 main.rs 添加模块声明**
+- [ ] **Step 4: 检查并添加 uuid 依赖**
+
+```bash
+grep -n "uuid" crates/server/Cargo.toml
+```
+
+如果没找到，在 `[dependencies]` 添加:
+```toml
+uuid = { version = "1", features = ["v4"] }
+```
+
+- [ ] **Step 5: 在 main.rs 添加模块声明**
 
 在 `mod api;` 后添加:
 ```rust
 pub mod openai;
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add crates/server/src/openai/ crates/server/src/main.rs
+git add crates/server/src/openai/ crates/server/src/main.rs crates/server/Cargo.toml
 git commit -m "feat(server): create openai module structure"
 ```
 
@@ -104,24 +115,6 @@ git commit -m "feat(server): create openai module structure"
 - [ ] **Step 1: 添加 Chat 消息类型**
 
 ```rust
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum Role {
-    System,
-    User,
-    Assistant,
-}
-
-impl Role {
-    pub fn as_str(&self) -> &str {
-        match self {
-            Role::System => "system",
-            Role::User => "user",
-            Role::Assistant => "assistant",
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role: String,
@@ -357,7 +350,57 @@ pub async fn chat_completions(
 }
 ```
 
-- [ ] **Step 2: 实现非流式响应**
+- [ ] **Step 2: 添加请求验证和消息处理辅助函数**
+
+在 chat.rs 中添加:
+
+```rust
+fn build_prompt_from_messages(messages: &[ChatMessage]) -> String {
+    let mut prompt = String::new();
+    
+    for msg in messages {
+        match msg.role.as_str() {
+            "system" => {
+                prompt.push_str("System: ");
+                prompt.push_str(&msg.content);
+                prompt.push_str("\n\n");
+            }
+            "user" => {
+                prompt.push_str("User: ");
+                prompt.push_str(&msg.content);
+                prompt.push_str("\n\n");
+            }
+            "assistant" => {
+                prompt.push_str("Assistant: ");
+                prompt.push_str(&msg.content);
+                prompt.push_str("\n\n");
+            }
+            _ => {}
+        }
+    }
+    
+    prompt.push_str("Assistant: ");
+    prompt
+}
+
+fn validate_chat_request(req: &ChatRequest) -> Result<(), (axum::http::StatusCode, Json<ErrorResponse>)> {
+    if req.model.is_empty() {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new("model is required", "invalid_request_error")),
+        ));
+    }
+    if req.messages.is_empty() {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new("messages is required", "invalid_request_error")),
+        ));
+    }
+    Ok(())
+}
+```
+
+- [ ] **Step 3: 实现非流式响应**
 
 ```rust
 // 在 chat.rs 中添加
@@ -365,13 +408,10 @@ async fn handle_chat(
     state: &ApiState,
     req: ChatRequest,
 ) -> Result<ChatResponse, (axum::http::StatusCode, Json<ErrorResponse>)> {
-    // 提取最后 user message 作为 prompt
-    let prompt = req.messages
-        .iter()
-        .rev()
-        .find(|m| m.role == "user")
-        .map(|m| m.content.clone())
-        .unwrap_or_default();
+    validate_chat_request(&req)?;
+    
+    // 构建 prompt (包含 system 和历史消息)
+    let prompt = build_prompt_from_messages(&req.messages);
 
     let prompt_tokens = state.tokenizer.encode(&prompt);
     let max_tokens = req.max_tokens.unwrap_or(100);
@@ -425,7 +465,7 @@ async fn handle_chat(
 }
 ```
 
-- [ ] **Step 3: 实现流式响应**
+- [ ] **Step 4: 实现流式响应**
 
 在 `chat_completions` 函数中添加:
 
@@ -444,6 +484,9 @@ if is_streaming {
             match rx.recv().await {
                 Some(token) => {
                     let text = tokenizer.decode(&[token]);
+                    if text.is_empty() {
+                        return Some((Ok(Event::default().data("")), rx));
+                    }
                     let chunk = ChatChunk::new(
                         "chatcmpl-stream".to_string(),
                         req.model.clone(),
@@ -458,7 +501,7 @@ if is_streaming {
                         },
                     );
                     let data = serde_json::to_string(&chunk).unwrap();
-                    Some((Ok(Event::default().data(data)), rx))
+                    Some((Ok(Event::default().data(format!("data: {}\n\n", data))), rx))
                 }
                 None => {
                     // 发送结束 chunk
@@ -476,7 +519,7 @@ if is_streaming {
                         },
                     );
                     let data = serde_json::to_string(&chunk).unwrap();
-                    Some((Ok(Event::default().data(data)), rx))
+                    Some((Ok(Event::default().data(format!("data: {}\n\ndata: [DONE]\n\n", data))), rx))
                 }
             }
         }
@@ -493,22 +536,10 @@ Ok(Sse::new(stream::once(async move {
 })))
 ```
 
-- [ ] **Step 4: 添加 uuid 依赖**
-
-检查 Cargo.toml 是否已有 uuid:
-```bash
-grep -n "uuid" crates/server/Cargo.toml
-```
-
-如果没找到，在 `[dependencies]` 添加:
-```toml
-uuid = { version = "1", features = ["v4"] }
-```
-
 - [ ] **Step 5: Commit**
 
 ```bash
-git add crates/server/src/openai/chat.rs crates/server/Cargo.toml
+git add crates/server/src/openai/chat.rs
 git commit -m "feat(server): implement chat completions handler"
 ```
 
@@ -538,6 +569,13 @@ pub async fn completions(
     State(state): State<ApiState>,
     Json(req): Json<CompletionRequest>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    if req.prompt.is_empty() {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new("prompt is required", "invalid_request_error")),
+        ));
+    }
+    
     let is_streaming = req.stream.unwrap_or(false);
     let prompt = req.prompt;
     let prompt_tokens = state.tokenizer.encode(&prompt);
@@ -572,6 +610,9 @@ pub async fn completions(
                 match rx.recv().await {
                     Some(token) => {
                         let text = tokenizer.decode(&[token]);
+                        if text.is_empty() {
+                            return Some((Ok(Event::default().data("")), rx));
+                        }
                         let chunk = serde_json::json!({
                             "id": "cmpl-stream",
                             "object": "text_completion",
@@ -581,7 +622,7 @@ pub async fn completions(
                             }]
                         });
                         let data = chunk.to_string();
-                        Some((Ok(Event::default().data(data)), rx))
+                        Some((Ok(Event::default().data(format!("data: {}\n\n", data))), rx))
                     }
                     None => {
                         Some((Ok(Event::default().data("data: [DONE]\n\n")), rx))
@@ -649,6 +690,19 @@ pub async fn embeddings(
     State(state): State<ApiState>,
     Json(req): Json<EmbeddingsRequest>,
 ) -> Result<Json<EmbeddingsResponse>, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    if req.model.is_empty() {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new("model is required", "invalid_request_error")),
+        ));
+    }
+    if req.input.is_empty() {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new("input is required", "invalid_request_error")),
+        ));
+    }
+    
     // TODO: 实现 embedding 生成
     // 暂时返回占位数据
     
@@ -676,17 +730,10 @@ git commit -m "feat(server): implement embeddings handler (placeholder)"
 **Files:**
 - Modify: `crates/server/src/main.rs`
 
-- [ ] **Step 1: 添加路由**
+- [ ] **Step 1: 更新路由**
 
-将现有的:
-```rust
-let app = Router::new()
-    .route("/v1/completions", post(api::completions))
-    .route("/v1/stats", get(api::get_stats))
-    ...
-```
+现有 api.rs 保留 health 和 get_prometheus，新增 OpenAI API 路由:
 
-替换为:
 ```rust
 use vllm_server::openai::{
     chat::chat_completions,
@@ -699,14 +746,14 @@ let app = Router::new()
     .route("/v1/chat/completions", post(chat_completions))
     .route("/v1/completions", post(completions))
     .route("/v1/embeddings", post(embeddings))
-    // 运维
+    // 运维 (保留在 api.rs)
     .route("/metrics", get(api::get_prometheus))
     .route("/health", get(api::health))
     .with_state(state);
-
-// 移除 shutdown 路由，或保留但简化
-let app = app.route("/shutdown", get(api::shutdown).with_state(msg_tx));
 ```
+
+- 可选: 移除旧的 completions 路由或标记废弃
+- 可选: 移除 shutdown 路由 (用信号关闭即可)
 
 - [ ] **Step 2: 确保 ApiState 可访问**
 

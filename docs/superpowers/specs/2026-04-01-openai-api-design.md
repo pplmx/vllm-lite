@@ -11,13 +11,12 @@
 ```
 crates/server/src/
 ├── main.rs           # 路由注册
-├── error.rs          # 错误定义
+├── api.rs            # health, metrics (保留)
 ├── logging.rs        # 日志
 ├── config.rs         # 配置
-├── tokenizer.rs      # Tokenizer 封装
 └── openai/
     ├── mod.rs        # 模块入口
-    ├── types.rs      # 请求/响应类型
+    ├── types.rs      # 请求/响应类型 + 错误类型
     ├── chat.rs       # /v1/chat/completions
     ├── completions.rs # /v1/completions
     └── embeddings.rs # /v1/embeddings
@@ -29,7 +28,7 @@ crates/server/src/
 |------|------|------|
 | `/v1/chat/completions` | POST | Chat Completions |
 | `/v1/completions` | POST | Text Completions |
-| `/v1/embeddings` | POST | Embeddings |
+| `/v1/embeddings` | POST | Embeddings (占位实现) |
 | `/health` | GET | 健康检查 |
 | `/metrics` | GET | Prometheus 指标 |
 
@@ -156,26 +155,35 @@ pub struct ErrorDetail {
 
 ### 1. Message 处理
 
-- 合并 system message 到 prompt 前缀
-- 支持多轮对话上下文
-- 提取 last user message 作为实际 prompt
+- system message: 拼接为 "System: ...\n\n"
+- user message: 拼接为 "User: ...\n\n"
+- assistant message: 拼接为 "Assistant: ...\n\n" (历史上下文)
+- 最终 prompt 以 "Assistant: " 结尾，等待模型续写
 
 ### 2. Streaming
 
 - 使用 Server-Sent Events (SSE)
 - 格式: `data: {...}\n\n`
-- 结束: `data: [DONE]`
+- 结束: `data: {...}\n\ndata: [DONE]\n\n`
 
 ### 3. Embeddings
 
 - 使用 model 的 hidden state 获取 embedding
 - 直接返回向量，不经过 sampling
+- 暂时返回占位数据
 
 ### 4. 错误处理
 
-- 400: 无效请求
-- 500: 内部错误
-- 返回 JSON 格式错误
+- 400: invalid_request_error (缺少字段、格式错误)
+- 500: internal_error (引擎不可用)
+- 错误格式: `{error: {message, type, code}}`
+
+### 5. 请求验证
+
+- model: 必填
+- messages: 必填，非空
+- prompt (completions): 必填
+- input (embeddings): 必填，非空
 
 ## 测试
 
