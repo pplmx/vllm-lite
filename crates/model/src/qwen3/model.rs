@@ -372,3 +372,74 @@ impl ModelBackend for Qwen3Model {
         Ok(input_tokens.iter().map(|_| vec![0.0; vocab_size]).collect())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Qwen3Config;
+    use vllm_core::engine::ModelBackend;
+
+    #[test]
+    fn test_qwen3_model_forward_cpu() {
+        let config = Qwen3Config {
+            vocab_size: Some(1000),
+            hidden_size: Some(128),
+            num_hidden_layers: Some(2),
+            num_attention_heads: Some(4),
+            num_key_value_heads: Some(2),
+            intermediate_size: Some(256),
+            ..Default::default()
+        };
+
+        let device = Device::Cpu;
+        let model = Qwen3Model::new(config, device).unwrap();
+
+        // Test forward with single token
+        let output = model.forward(&[1], &[vec![42]], &[vec![0]]).unwrap();
+        assert_eq!(output.next_tokens.len(), 1);
+        assert!(output.next_tokens[0] < 1000);
+    }
+
+    #[test]
+    fn test_qwen3_model_forward_qk_norm() {
+        // Qwen3-0.6B uses q_norm/k_norm
+        let config = Qwen3Config {
+            vocab_size: Some(1000),
+            hidden_size: Some(128),
+            num_hidden_layers: Some(2),
+            num_attention_heads: Some(4),
+            num_key_value_heads: Some(2),
+            intermediate_size: Some(256),
+            has_qk_norm: Some(true),
+            ..Default::default()
+        };
+
+        let device = Device::Cpu;
+        let model = Qwen3Model::new(config, device).unwrap();
+
+        let output = model.forward(&[1], &[vec![42]], &[vec![0]]).unwrap();
+        assert_eq!(output.next_tokens.len(), 1);
+    }
+
+    #[test]
+    fn test_qwen3_model_custom_head_dim() {
+        // Qwen3-0.6B: hidden=1024, heads=16, head_dim=128 (not 1024/16=64)
+        let config = Qwen3Config {
+            vocab_size: Some(1000),
+            hidden_size: Some(1024),
+            num_hidden_layers: Some(2),
+            num_attention_heads: Some(16),
+            num_key_value_heads: Some(8),
+            intermediate_size: Some(3072),
+            head_dim: Some(128),
+            has_qk_norm: Some(true),
+            ..Default::default()
+        };
+
+        let device = Device::Cpu;
+        let model = Qwen3Model::new(config, device).unwrap();
+
+        let output = model.forward(&[1], &[vec![42]], &[vec![0]]).unwrap();
+        assert_eq!(output.next_tokens.len(), 1);
+    }
+}

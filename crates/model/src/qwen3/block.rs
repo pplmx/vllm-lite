@@ -238,4 +238,32 @@ mod tests {
         assert_eq!(output.dims(), &[2, 1, 128]);
         Ok(())
     }
+
+    #[test]
+    fn test_transformer_block_with_qk_norm() -> Result<()> {
+        // Qwen3-0.6B uses q_norm/k_norm
+        let device = Device::Cpu;
+        let block = TransformerBlock::new(128, 4, 2, 32, 256, 1e-6, None, true)?;
+
+        let x = Tensor::ones((1, 2, 128), DType::F32, &device)?;
+        let output = block.forward(&x)?;
+
+        assert_eq!(output.dims(), &[1, 2, 128]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_transformer_block_with_custom_head_dim() -> Result<()> {
+        // Qwen3-0.6B has head_dim=128 but hidden/heads=1024/16=64
+        // This test verifies custom head_dim works
+        let device = Device::Cpu;
+        // hidden=1024, heads=16, kv_heads=8, head_dim=128, intermediate=3072
+        let block = TransformerBlock::new(1024, 16, 8, 128, 3072, 1e-6, None, true)?;
+
+        let x = Tensor::ones((1, 4, 1024), DType::F32, &device)?;
+        let output = block.forward(&x)?;
+
+        assert_eq!(output.dims(), &[1, 4, 1024]);
+        Ok(())
+    }
 }
