@@ -10,9 +10,10 @@
 
 ---
 
-### Task 1: 创建 openai 模块目录和 types
+## Task 1: 创建 openai 模块目录和 types
 
 **Files:**
+
 - Create: `crates/server/src/openai/mod.rs`
 - Create: `crates/server/src/openai/types.rs`
 - Modify: `crates/server/src/main.rs` (添加模块声明)
@@ -87,6 +88,7 @@ grep -n "uuid" crates/server/Cargo.toml
 ```
 
 如果没找到，在 `[dependencies]` 添加:
+
 ```toml
 uuid = { version = "1", features = ["v4"] }
 ```
@@ -94,6 +96,7 @@ uuid = { version = "1", features = ["v4"] }
 - [ ] **Step 5: 在 main.rs 添加模块声明**
 
 在 `mod api;` 后添加:
+
 ```rust
 pub mod openai;
 ```
@@ -110,6 +113,7 @@ git commit -m "feat(server): create openai module structure"
 ### Task 2: 实现 Chat 类型定义
 
 **Files:**
+
 - Modify: `crates/server/src/openai/types.rs`
 
 - [ ] **Step 1: 添加 Chat 消息类型**
@@ -215,6 +219,7 @@ git commit -m "feat(server): add Chat types"
 ### Task 3: 实现 Completions 和 Embeddings 类型
 
 **Files:**
+
 - Modify: `crates/server/src/openai/types.rs`
 
 - [ ] **Step 1: 添加 Completions 类型**
@@ -300,9 +305,9 @@ impl EmbeddingsResponse {
                 index: i,
             })
             .collect();
-        
+
         let total_tokens = data.iter().map(|d| d.embedding.len()).sum();
-        
+
         Self {
             object: "list".to_string(),
             data,
@@ -325,6 +330,7 @@ git commit -m "feat(server): add Completions and Embeddings types"
 ### Task 4: 实现 Chat Completions Handler
 
 **Files:**
+
 - Create: `crates/server/src/openai/chat.rs`
 
 - [ ] **Step 1: 创建 chat.rs 骨架**
@@ -357,7 +363,7 @@ pub async fn chat_completions(
 ```rust
 fn build_prompt_from_messages(messages: &[ChatMessage]) -> String {
     let mut prompt = String::new();
-    
+
     for msg in messages {
         match msg.role.as_str() {
             "system" => {
@@ -378,7 +384,7 @@ fn build_prompt_from_messages(messages: &[ChatMessage]) -> String {
             _ => {}
         }
     }
-    
+
     prompt.push_str("Assistant: ");
     prompt
 }
@@ -409,7 +415,7 @@ async fn handle_chat(
     req: ChatRequest,
 ) -> Result<ChatResponse, (axum::http::StatusCode, Json<ErrorResponse>)> {
     validate_chat_request(&req)?;
-    
+
     // 构建 prompt (包含 system 和历史消息)
     let prompt = build_prompt_from_messages(&req.messages);
 
@@ -474,7 +480,7 @@ let is_streaming = req.stream.unwrap_or(false);
 
 if is_streaming {
     let (response_tx, response_rx) = mpsc::unbounded_channel();
-    
+
     // ... 相同的 request 创建逻辑 ...
 
     let tokenizer = state.tokenizer.clone();
@@ -524,7 +530,7 @@ if is_streaming {
             }
         }
     });
-    
+
     return Ok(Sse::new(stream));
 }
 
@@ -548,6 +554,7 @@ git commit -m "feat(server): implement chat completions handler"
 ### Task 5: 实现 Completions Handler
 
 **Files:**
+
 - Create: `crates/server/src/openai/completions.rs`
 
 - [ ] **Step 1: 创建 completions.rs**
@@ -575,7 +582,7 @@ pub async fn completions(
             Json(ErrorResponse::new("prompt is required", "invalid_request_error")),
         ));
     }
-    
+
     let is_streaming = req.stream.unwrap_or(false);
     let prompt = req.prompt;
     let prompt_tokens = state.tokenizer.encode(&prompt);
@@ -630,7 +637,7 @@ pub async fn completions(
                 }
             }
         });
-        
+
         return Ok(Sse::new(stream));
     }
 
@@ -674,6 +681,7 @@ git commit -m "feat(server): implement completions handler"
 ### Task 6: 实现 Embeddings Handler
 
 **Files:**
+
 - Create: `crates/server/src/openai/embeddings.rs`
 
 - [ ] **Step 1: 创建 embeddings.rs**
@@ -702,10 +710,10 @@ pub async fn embeddings(
             Json(ErrorResponse::new("input is required", "invalid_request_error")),
         ));
     }
-    
+
     // TODO: 实现 embedding 生成
     // 暂时返回占位数据
-    
+
     let embedding_dim = 512; // 需要从 model 获取
     let embeddings: Vec<Vec<f32>> = req.input
         .iter()
@@ -728,6 +736,7 @@ git commit -m "feat(server): implement embeddings handler (placeholder)"
 ### Task 7: 更新 main.rs 路由
 
 **Files:**
+
 - Modify: `crates/server/src/main.rs`
 
 - [ ] **Step 1: 更新路由**
@@ -758,6 +767,7 @@ let app = Router::new()
 - [ ] **Step 2: 确保 ApiState 可访问**
 
 修改 `main.rs` 中的 `ApiState` 为 pub:
+
 ```rust
 #[derive(Clone)]
 pub struct ApiState {
@@ -784,6 +794,7 @@ git commit -m "feat(server): register OpenAI API routes"
 ### Task 8: 测试验证
 
 **Files:**
+
 - Run: 编译和基本测试
 
 - [ ] **Step 1: 编译项目**

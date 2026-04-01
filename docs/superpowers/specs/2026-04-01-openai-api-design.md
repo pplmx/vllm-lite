@@ -8,7 +8,7 @@
 
 ## 目录结构
 
-```
+```text
 crates/server/src/
 ├── main.rs           # 路由注册
 ├── api.rs            # health, metrics (保留)
@@ -24,13 +24,13 @@ crates/server/src/
 
 ## API 端点
 
-| 端点 | 方法 | 说明 |
-|------|------|------|
-| `/v1/chat/completions` | POST | Chat Completions |
-| `/v1/completions` | POST | Text Completions |
-| `/v1/embeddings` | POST | Embeddings (占位实现) |
-| `/health` | GET | 健康检查 |
-| `/metrics` | GET | Prometheus 指标 |
+| 端点                   | 方法 | 说明                  |
+| ---------------------- | ---- | --------------------- |
+| `/v1/chat/completions` | POST | Chat Completions      |
+| `/v1/completions`      | POST | Text Completions      |
+| `/v1/embeddings`       | POST | Embeddings (占位实现) |
+| `/health`              | GET  | 健康检查              |
+| `/metrics`             | GET  | Prometheus 指标       |
 
 ## 类型定义
 

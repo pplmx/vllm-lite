@@ -7,16 +7,17 @@
 
 让 vLLM-lite 支持部署以下四个模型，并能正常使用 GPU 进行推理：
 
-| Model | Path | Architecture | Vocab | Layers | Hidden | Size |
-|-------|------|--------------|-------|--------|--------|------|
-| Qwen3-0.6B | /models/Qwen3-0.6B | Qwen3 (GQA) | 151936 | 28 | 1024 | ~1.5GB |
-| Qwen2.5-0.5B-Instruct | /models/Qwen2.5-0.5B-Instruct | Qwen2 (GQA) | 151936 | 24 | 896 | ~1GB |
-| DeepSeek-R1-0528-Qwen3-8B | /models/DeepSeek-R1-0528-Qwen3-8B | Qwen3 (GQA+YARN) | 151936 | 36 | 4096 | ~16GB |
-| Qwen3.5-0.8B | /models/Qwen3.5-0.8B | Qwen3.5 (Mamba/SSM) | 248320 | 24 | 1024 | ~1.7GB |
+| Model                     | Path                              | Architecture        | Vocab  | Layers | Hidden | Size   |
+| ------------------------- | --------------------------------- | ------------------- | ------ | ------ | ------ | ------ |
+| Qwen3-0.6B                | /models/Qwen3-0.6B                | Qwen3 (GQA)         | 151936 | 28     | 1024   | ~1.5GB |
+| Qwen2.5-0.5B-Instruct     | /models/Qwen2.5-0.5B-Instruct     | Qwen2 (GQA)         | 151936 | 24     | 896    | ~1GB   |
+| DeepSeek-R1-0528-Qwen3-8B | /models/DeepSeek-R1-0528-Qwen3-8B | Qwen3 (GQA+YARN)    | 151936 | 36     | 4096   | ~16GB  |
+| Qwen3.5-0.8B              | /models/Qwen3.5-0.8B              | Qwen3.5 (Mamba/SSM) | 248320 | 24     | 1024   | ~1.7GB |
 
 ## Current State
 
 ### Already Working
+
 - `ModelLoader::load_weights()` - 可加载 safetensors 权重 ✅
 - Qwen2.5-0.5B 权重加载验证通过 (290 weights, 29s) ✅
 - Qwen3.5-0.8B 权重加载验证通过 (335 weights, 45s) ✅
@@ -24,14 +25,15 @@
 
 ### 实际权重结构分析
 
-| 模型 | 权重 Key 格式 | 需要改动 |
-|------|--------------|----------|
-| Qwen3-0.6B | `model.layers.{i}.self_attn.*` + `q_norm`, `k_norm` | 需加 QKNorm |
-| Qwen2.5-0.5B | `model.layers.{i}.self_attn.{q,k,v,o}_proj.*` | 基本兼容 |
-| DeepSeek-R1 | `model.layers.{i}.self_attn.*` + `q_norm`, `k_norm` + YARN | 需加 QKNorm + RoPE |
-| Qwen3.5-0.8B | `model.language_model.layers.{i}.linear_attn.*` (Mamba) | 需新模型 |
+| 模型         | 权重 Key 格式                                              | 需要改动           |
+| ------------ | ---------------------------------------------------------- | ------------------ |
+| Qwen3-0.6B   | `model.layers.{i}.self_attn.*` + `q_norm`, `k_norm`        | 需加 QKNorm        |
+| Qwen2.5-0.5B | `model.layers.{i}.self_attn.{q,k,v,o}_proj.*`              | 基本兼容           |
+| DeepSeek-R1  | `model.layers.{i}.self_attn.*` + `q_norm`, `k_norm` + YARN | 需加 QKNorm + RoPE |
+| Qwen3.5-0.8B | `model.language_model.layers.{i}.linear_attn.*` (Mamba)    | 需新模型           |
 
 ### Issues to Fix
+
 1. `main.rs` 未使用 loader，只创建零张量
 2. 需要支持 `tie_word_embeddings` (部分模型 weight sharing)
 3. Qwen3 需要支持 q_norm/k_norm (Qwen3-0.6B, DeepSeek-R1)
@@ -42,7 +44,7 @@
 
 ### File Changes
 
-```
+```text
 crates/model/src/
 ├── config.rs          # 添加 model_type, rope_scaling, vision_config
 ├── loader.rs          # 添加 key 前缀适配
@@ -64,13 +66,13 @@ crates/model/src/
 #[derive(Debug, Clone, Deserialize)]
 pub struct Qwen3Config {
     // 现有字段...
-    
+
     #[serde(default)]
     pub model_type: Option<String>,
-    
+
     #[serde(default)]
     pub rope_scaling: Option<RopeScaling>,
-    
+
     #[serde(default)]
     pub vision_config: Option<VisionConfig>,
 }
@@ -125,14 +127,14 @@ impl ModelRegistry {
             }
         }
     }
-    
+
     pub fn load_model(
         model_dir: &str,
         device: Device,
     ) -> Result<Box<dyn ModelBackend>, Box<dyn std::error::Error>> {
         let loader = ModelLoader::new(device);
         let config = loader.load_config(model_dir)?;
-        
+
         match config.model_type() {
             ModelType::Qwen2 | ModelType::Qwen3 => {
                 let weights = loader.load_weights(model_dir)?;
@@ -174,12 +176,12 @@ impl GqaAttention {
 
 Different models have different `tie_word_embeddings` settings:
 
-| Model | tie_word_embeddings |
-|-------|---------------------|
-| Qwen3-0.6B | true |
-| Qwen2.5-0.5B | true |
-| DeepSeek-R1 | false |
-| Qwen3.5 | true |
+| Model        | tie_word_embeddings |
+| ------------ | ------------------- |
+| Qwen3-0.6B   | true                |
+| Qwen2.5-0.5B | true                |
+| DeepSeek-R1  | false               |
+| Qwen3.5      | true                |
 
 ```rust
 pub struct Qwen3Model {
@@ -232,6 +234,7 @@ pub struct MambaBlock {
 ```
 
 权重加载 key 对照:
+
 - `model.language_model.layers.{i}.linear_attn.in_proj_qkv` → `in_proj_qkv`
 - `model.language_model.layers.{i}.linear_attn.A_log` → `A_log`
 - `model.language_model.layers.{i}.linear_attn.dt_bias` → `dt_bias`
@@ -250,7 +253,7 @@ pub struct RoPE {
 impl RoPE {
     pub fn new(config: &Qwen3Config) -> Self {
         let rope_scaling = config.rope_scaling.as_ref();
-        
+
         Self {
             theta: config.rope_theta(),
             scaling_factor: rope_scaling.map(|r| r.factor).unwrap_or(1.0),
@@ -260,7 +263,7 @@ impl RoPE {
             attn_factor: rope_scaling.and_then(|r| r.attn_factor),
         }
     }
-    
+
     pub fn apply(&self, query: &Tensor, position_ids: &Tensor) -> Result<Tensor> {
         // YARN scaling implementation
         // 1. Extend position range by scaling_factor
@@ -288,17 +291,17 @@ fn main() {
         .position(|a| a == "--model")
         .and_then(|i| args.get(i + 1))
         .unwrap_or("/models/Qwen2.5-0.5B-Instruct");
-    
+
     let enable_speculative = args.iter().any(|a| a == "--speculative");
-    
+
     let device = Device::cuda_if_available(0).unwrap_or(Device::Cpu);
     tracing::info!(device = ?device, "Using device");
-    
+
     // Load model with real weights
     let loader = ModelLoader::new(device.clone());
     let model = loader.load_model(model_path)
         .expect("Failed to load model");
-    
+
     // For speculative decoding, create a smaller draft model
     // or reuse the same model if --speculative not specified
     let draft_model = if enable_speculative {
@@ -307,7 +310,7 @@ fn main() {
     } else {
         None
     };
-    
+
     // ... rest of initialization
 }
 ```
@@ -315,6 +318,7 @@ fn main() {
 ## Implementation Phases
 
 ### Phase 1: Basic Integration + Qwen2 (Priority: High)
+
 - [ ] Modify main.rs to accept `--model` parameter
 - [ ] Integrate ModelLoader to load real weights
 - [ ] Add tie_word_embeddings support to Qwen3Model
@@ -324,11 +328,13 @@ fn main() {
 - [ ] 确保 GPU 正常使用
 
 ### Phase 2: DeepSeek-R1 YARN Support (Priority: High)
+
 - [ ] Add RoPE YARN scaling to rope.rs
 - [ ] Test DeepSeek-R1-0528-Qwen3-8B
 - [ ] Verify extended context (131K tokens)
 
 ### Phase 3: Qwen3.5 Support (Priority: Medium)
+
 - [ ] Create qwen3_5/ module
 - [ ] Implement MambaBlock (not TransformerBlock)
 - [ ] Handle linear_attn weights (完全不同的结构)

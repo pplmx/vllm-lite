@@ -10,9 +10,10 @@
 
 ---
 
-### Task 1: 创建 Batch 类型定义
+## Task 1: 创建 Batch 类型定义
 
 **Files:**
+
 - Create: `crates/server/src/openai/batch/types.rs`
 - Modify: `crates/server/src/openai/batch/mod.rs`
 
@@ -141,6 +142,7 @@ git commit -m "feat(server): add Batch API types"
 ### Task 2: 实现 BatchManager
 
 **Files:**
+
 - Create: `crates/server/src/openai/batch/manager.rs`
 
 - [ ] **Step 1: 创建 manager.rs**
@@ -237,6 +239,7 @@ git commit -m "feat(server): add BatchManager"
 ### Task 3: 实现 Batch Handler
 
 **Files:**
+
 - Create: `crates/server/src/openai/batch/handler.rs`
 
 - [ ] **Step 1: 创建 handler.rs**
@@ -422,6 +425,7 @@ git commit -m "feat(server): add Batch handler"
 ### Task 4: 注册路由
 
 **Files:**
+
 - Modify: `crates/server/src/main.rs`
 - Modify: `crates/server/src/openai/mod.rs`
 
@@ -438,6 +442,7 @@ pub mod batch;
 - [ ] **Step 2: 在 main.rs 注册路由**
 
 添加 BatchManager 到 ApiState:
+
 ```rust
 use vllm_server::openai::batch::manager::BatchManager;
 
@@ -450,6 +455,7 @@ pub struct ApiState {
 ```
 
 修改 main.rs:
+
 ```rust
 use openai::batch::handler::{
     create_batch, get_batch, get_batch_results, list_batches,
@@ -497,6 +503,7 @@ git commit -m "feat(server): register Batch API routes"
 ### Task 5: 测试验证
 
 **Files:**
+
 - Run: 编译和测试
 
 - [ ] **Step 1: 编译项目**
