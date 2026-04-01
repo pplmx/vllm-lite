@@ -10,7 +10,7 @@ path = "src/main.rs"
 [dependencies]
 vllm-core = { path = "../core" }
 vllm-model = { path = "../model" }
-candle-core = "0.8"
+candle-core = { version = "0.9", features = ["cuda"] }
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.8", features = ["tokio"] }
 futures = "0.3"

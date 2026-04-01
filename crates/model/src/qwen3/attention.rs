@@ -98,7 +98,8 @@ impl GqaAttention {
         let q_norm = if has_qk_norm {
             let q_norm_weight =
                 q_norm_weight.ok_or_else(|| candle_core::Error::msg("Missing q_norm weight"))?;
-            let q_norm_bias = Tensor::zeros(head_dim, q_norm_weight.dtype(), &Device::Cpu)?;
+            let q_norm_bias =
+                Tensor::zeros(head_dim, q_norm_weight.dtype(), q_norm_weight.device())?;
             Some(LayerNorm::new(q_norm_weight, q_norm_bias, 1e-6))
         } else {
             None
@@ -106,7 +107,8 @@ impl GqaAttention {
         let k_norm = if has_qk_norm {
             let k_norm_weight =
                 k_norm_weight.ok_or_else(|| candle_core::Error::msg("Missing k_norm weight"))?;
-            let k_norm_bias = Tensor::zeros(head_dim, k_norm_weight.dtype(), &Device::Cpu)?;
+            let k_norm_bias =
+                Tensor::zeros(head_dim, k_norm_weight.dtype(), k_norm_weight.device())?;
             Some(LayerNorm::new(k_norm_weight, k_norm_bias, 1e-6))
         } else {
             None

@@ -35,7 +35,7 @@ impl Qwen3Model {
                 hidden_size,
                 config.num_attention_heads(),
                 config.num_key_value_heads(),
-                hidden_size / config.num_attention_heads(),
+                config.head_dim(),
                 config.intermediate_size(),
                 config.rms_norm_eps(),
                 None,
@@ -58,7 +58,7 @@ impl Qwen3Model {
         let kv_cache = PagedKvCache::new(
             config.num_hidden_layers(),
             config.num_key_value_heads(),
-            hidden_size / config.num_attention_heads(),
+            config.head_dim(),
             1024,
             device.clone(),
             false,
@@ -170,7 +170,7 @@ impl Qwen3Model {
                 hidden_size,
                 config.num_attention_heads(),
                 config.num_key_value_heads(),
-                hidden_size / config.num_attention_heads(),
+                config.head_dim(),
                 config.intermediate_size(),
                 config.rms_norm_eps(),
                 config.has_qk_norm(),
@@ -181,7 +181,7 @@ impl Qwen3Model {
 
         let norm_key = "model.norm.weight";
         let norm = if let Some(w) = weights.get(norm_key) {
-            let bias = Tensor::zeros(w.dim(0).unwrap_or(hidden_size), w.dtype(), &device)?;
+            let bias = Tensor::zeros(w.dim(0).unwrap_or(hidden_size), w.dtype(), w.device())?;
             LayerNorm::new(w.clone(), bias, config.rms_norm_eps())
         } else {
             return Err(candle_core::Error::msg(format!(
@@ -301,7 +301,7 @@ impl ModelBackend for Qwen3Model {
     ) -> EngineResult<BatchOutput> {
         let mut next_tokens = Vec::with_capacity(seq_ids.len());
 
-        for (seq_idx, tokens) in input_tokens.iter().take(seq_ids.len()).enumerate() {
+        for (_seq_idx, tokens) in input_tokens.iter().take(seq_ids.len()).enumerate() {
             if tokens.is_empty() {
                 next_tokens.push(0);
                 continue;

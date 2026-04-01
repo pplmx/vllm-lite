@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::derivable_impls)]
 pub struct ServerConfig {
     #[serde(default = "default_host")]
     pub host: String,
@@ -11,6 +12,17 @@ pub struct ServerConfig {
     pub log_level: String,
     #[serde(default)]
     pub log_dir: Option<String>,
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            host: default_host(),
+            port: default_port(),
+            log_level: default_log_level(),
+            log_dir: None,
+        }
+    }
 }
 
 fn default_host() -> String {
@@ -25,7 +37,8 @@ fn default_log_level() -> String {
     "info".to_string()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::derivable_impls)]
 pub struct EngineConfig {
     #[serde(default = "default_max_draft_tokens")]
     pub max_draft_tokens: usize,
@@ -35,6 +48,17 @@ pub struct EngineConfig {
     pub max_batch_size: usize,
     #[serde(default = "default_max_waiting_batches")]
     pub max_waiting_batches: usize,
+}
+
+impl Default for EngineConfig {
+    fn default() -> Self {
+        Self {
+            max_draft_tokens: default_max_draft_tokens(),
+            num_kv_blocks: default_num_kv_blocks(),
+            max_batch_size: default_max_batch_size(),
+            max_waiting_batches: default_max_waiting_batches(),
+        }
+    }
 }
 
 fn default_max_draft_tokens() -> usize {
@@ -53,12 +77,23 @@ fn default_max_waiting_batches() -> usize {
     10
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::derivable_impls)]
 pub struct AppConfig {
     #[serde(default)]
     pub server: ServerConfig,
     #[serde(default)]
     pub engine: EngineConfig,
+}
+
+impl Default for AppConfig {
+    #[allow(clippy::derivable_impls)]
+    fn default() -> Self {
+        Self {
+            server: ServerConfig::default(),
+            engine: EngineConfig::default(),
+        }
+    }
 }
 
 impl AppConfig {

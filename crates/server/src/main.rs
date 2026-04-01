@@ -9,9 +9,7 @@ use tokio::signal;
 use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
 use vllm_core::types::EngineMessage;
-use vllm_model::config::Qwen3Config;
 use vllm_model::loader::ModelLoader;
-use vllm_model::qwen3::model::Qwen3Model;
 use vllm_model::tokenizer::Tokenizer;
 use candle_core::Device;
 
@@ -65,6 +63,7 @@ async fn main() {
     tracing::info!(config = ?app_config, "Starting vllm-lite");
 
     let device = Device::cuda_if_available(0).unwrap_or(Device::Cpu);
+    tracing::info!(device = ?device, "Using device");
 
     let model_path = get_model_path();
     tracing::info!(model_path = %model_path, "Loading model from");
@@ -73,11 +72,15 @@ async fn main() {
     let model = loader.load_model(&model_path)
         .expect("Failed to load model");
 
-    let draft_model = Qwen3Model::new(Qwen3Config::default(), device.clone())
-        .expect("Failed to create draft model");
+    // For speculative decoding, we need a proper draft model
+    // For now, disable speculative mode by using the same model as draft
+    // (this doubles memory but ensures compatibility)
+    let draft_model = loader.load_model(&model_path)
+        .expect("Failed to load draft model");
 
     let mut engine = Engine::new(model, draft_model);
-    engine.enable_speculative();
+    // Don't enable speculative mode - it causes hangs with mismatched draft model
+    // engine.enable_speculative();
 
     let (msg_tx, msg_rx) = mpsc::unbounded_channel::<EngineMessage>();
     let engine_shutdown_tx = msg_tx.clone();
