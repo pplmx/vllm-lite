@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+/// Token usage statistics for API responses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Usage {
     pub prompt_tokens: i64,
@@ -19,6 +20,7 @@ impl Usage {
     }
 }
 
+/// Error details following OpenAI API error format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorDetail {
     pub message: String,
@@ -27,6 +29,7 @@ pub struct ErrorDetail {
     pub code: Option<String>,
 }
 
+/// Error response wrapper following OpenAI API format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorResponse {
     pub error: ErrorDetail,
@@ -44,6 +47,7 @@ impl ErrorResponse {
     }
 }
 
+/// A message in a chat conversation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role: String,
@@ -51,6 +55,7 @@ pub struct ChatMessage {
     pub name: Option<String>,
 }
 
+/// Request body for chat completions endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatRequest {
     pub model: String,
@@ -63,6 +68,7 @@ pub struct ChatRequest {
     pub stop: Option<Vec<String>>,
 }
 
+/// A choice in a chat completion response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChoice {
     pub index: i32,
@@ -70,6 +76,7 @@ pub struct ChatChoice {
     pub finish_reason: Option<String>,
 }
 
+/// Response from chat completions endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatResponse {
     pub id: String,
@@ -127,6 +134,7 @@ impl ChatChunk {
     }
 }
 
+/// Request body for text completions endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompletionRequest {
     pub model: Option<String>,
@@ -145,6 +153,7 @@ pub struct CompletionChoice {
     pub finish_reason: Option<String>,
 }
 
+/// Response from text completions endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompletionResponse {
     pub id: String,
@@ -171,6 +180,7 @@ impl CompletionResponse {
     }
 }
 
+/// Request body for embeddings endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingsRequest {
     pub model: String,
@@ -184,6 +194,7 @@ pub struct EmbeddingData {
     pub index: i32,
 }
 
+/// Response from embeddings endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingsResponse {
     pub object: String,
