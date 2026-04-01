@@ -24,6 +24,7 @@ pub struct PrefixCache {
     entries: HashMap<CacheKey, CachedEntry>,
     lru_order: VecDeque<CacheKey>,
     block_refs: HashMap<BlockId, usize>,
+    prefix_match_cache: HashMap<CacheKey, CacheKey>,
 }
 
 impl PrefixCache {
@@ -32,6 +33,7 @@ impl PrefixCache {
             entries: HashMap::new(),
             lru_order: VecDeque::new(),
             block_refs: HashMap::new(),
+            prefix_match_cache: HashMap::new(),
         }
     }
 
@@ -70,6 +72,7 @@ impl PrefixCache {
         self.entries.insert(key, entry);
         self.lru_order.retain(|k| *k != key);
         self.lru_order.push_front(key);
+        self.prefix_match_cache.clear();
     }
 
     pub fn evict(&mut self, allocator: &mut BlockAllocator) {
@@ -101,15 +104,23 @@ impl PrefixCache {
         self.entries.contains_key(key)
     }
 
-    pub fn find_prefix_match(&self, tokens: &[TokenId]) -> Option<&CachedEntry> {
+    pub fn find_prefix_match(&mut self, tokens: &[TokenId]) -> Option<&CachedEntry> {
         if tokens.is_empty() {
             return None;
+        }
+
+        let query_key = hash_tokens(tokens);
+        if let Some(&matched_key) = self.prefix_match_cache.get(&query_key) {
+            self.lru_order.retain(|k| *k != matched_key);
+            self.lru_order.push_front(matched_key);
+            return self.entries.get(&matched_key);
         }
 
         for prefix_len in (1..=tokens.len()).rev() {
             let prefix = &tokens[..prefix_len];
             let key = hash_tokens(prefix);
             if let Some(entry) = self.entries.get(&key) {
+                self.prefix_match_cache.insert(query_key, key);
                 return Some(entry);
             }
         }
