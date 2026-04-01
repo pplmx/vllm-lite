@@ -51,6 +51,7 @@ pub enum BatchStatus {
     Failed,
 }
 
+#[derive(Clone)]
 pub struct BatchJob {
     pub id: String,
     pub endpoint: String,
