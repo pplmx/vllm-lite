@@ -2,8 +2,15 @@
 #![allow(unused_variables)]
 
 use crate::types::TokenId;
-use rand::thread_rng;
-use rand::Rng;
+
+fn random_f32() -> f32 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .subsec_nanos();
+    (nanos as f32) / (u32::MAX as f32)
+}
 
 pub fn greedy_sample(logits: &[f32]) -> TokenId {
     logits
@@ -30,8 +37,7 @@ pub fn temperature_sample(logits: &[f32], temperature: f32) -> TokenId {
     let sum: f32 = exp.iter().sum();
     let probs: Vec<f32> = exp.iter().map(|x| x / sum).collect();
 
-    let mut rng = thread_rng();
-    let r: f32 = rng.gen_range(0.0..1.0);
+    let r = random_f32();
     let mut cumsum = 0.0;
     for (i, &p) in probs.iter().enumerate() {
         cumsum += p;
@@ -69,8 +75,7 @@ pub fn top_p_sample(logits: &[f32], top_p: f32) -> TokenId {
     let total: f32 = probs.iter().sum();
     probs.iter_mut().for_each(|p| *p /= total);
 
-    let mut rng = thread_rng();
-    let r: f32 = rng.gen_range(0.0..1.0);
+    let r = random_f32();
     let mut cumsum = 0.0;
     for (i, &p) in probs.iter().enumerate() {
         cumsum += p;
