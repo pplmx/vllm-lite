@@ -8,18 +8,19 @@
 
 ## API Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/v1/batches` | POST | 提交批量任务 |
-| `/v1/batches/{id}` | GET | 查询任务状态 |
-| `/v1/batches/{id}/results` | GET | 获取任务结果 |
-| `/v1/batches` | GET | 列出所有批量任务 |
+| Endpoint                   | Method | Description      |
+| -------------------------- | ------ | ---------------- |
+| `/v1/batches`              | POST   | 提交批量任务     |
+| `/v1/batches/{id}`         | GET    | 查询任务状态     |
+| `/v1/batches/{id}/results` | GET    | 获取任务结果     |
+| `/v1/batches`              | GET    | 列出所有批量任务 |
 
 ## Request/Response Types
 
 ### POST /v1/batches
 
 **Request:**
+
 ```rust
 pub struct CreateBatchRequest {
     pub input_file_id: String,  // 或 inline 输入
@@ -39,6 +40,7 @@ pub struct SimpleBatchRequest {
 ```
 
 **Response:**
+
 ```rust
 pub struct BatchResponse {
     pub id: String,           // "batch_xxx"
@@ -84,7 +86,7 @@ pub struct BatchResultItem {
 
 ## Status Flow
 
-```
+```text
 pending → in_progress → completed
                       → failed
 ```
@@ -94,6 +96,7 @@ pending → in_progress → completed
 ### 1. Batch Manager
 
 创建 `BatchManager` 管理批量任务：
+
 - 存储任务状态 (内存或文件)
 - 后台处理队列
 - 定期写入结果

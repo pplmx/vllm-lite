@@ -4,7 +4,8 @@
 
 **Goal:** 让 vLLM-lite 支持部署 4 个模型 (Qwen3-0.6B, Qwen2.5-0.5B, DeepSeek-R1-8B, Qwen3.5-0.8B)，能正常使用 GPU
 
-**Architecture:** 
+**Architecture:**
+
 1. main.rs 集成 ModelLoader 支持 `--model` 参数
 2. Qwen3Model 添加 tie_word_embeddings 和 q_norm/k_norm 支持
 3. 添加 RoPE YARN scaling 支持
@@ -19,6 +20,7 @@
 ### Task 1: Add --model parameter to main.rs
 
 **Files:**
+
 - Modify: `crates/server/src/main.rs:1-30`
 - Test: Manual test with `cargo run --package vllm-server -- --model /models/Qwen2.5-0.5B-Instruct`
 
@@ -29,6 +31,7 @@ Run: `cat crates/server/src/main.rs | head -80`
 - [ ] **Step 2: Add ModelLoader import**
 
 Add after existing imports:
+
 ```rust
 use vllm_model::loader::ModelLoader;
 ```
@@ -36,6 +39,7 @@ use vllm_model::loader::ModelLoader;
 - [ ] **Step 3: Parse --model argument**
 
 Replace the config loading section (around line 60-68):
+
 ```rust
 fn get_model_path() -> String {
     std::env::args()
@@ -86,6 +90,7 @@ git commit -m "feat(server): add --model parameter to load real weights"
 ### Task 2: Add tie_word_embeddings support to Qwen3Model
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/model.rs:1-80`
 - Modify: `crates/model/src/config.rs:1-30`
 - Test: `cargo test -p vllm-model qwen3 -- --nocapture 2>&1 | tail -10`
@@ -93,6 +98,7 @@ git commit -m "feat(server): add --model parameter to load real weights"
 - [ ] **Step 1: Add tie_word_embeddings to config.rs**
 
 Add to Qwen3Config struct:
+
 ```rust
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Qwen3Config {
@@ -111,6 +117,7 @@ impl Qwen3Config {
 - [ ] **Step 2: Modify Qwen3Model::from_weights to handle tie_word_embeddings**
 
 Find the lm_head loading section in model.rs and modify:
+
 ```rust
 let lm_head_key = "lm_head.weight";
 let lm_head = if let Some(w) = weights.get(lm_head_key) {
@@ -141,6 +148,7 @@ let lm_head = if let Some(w) = weights.get(lm_head_key) {
 
 Run: `cargo build --package vllm-model 2>&1 | grep -i "from_embedding\|error"`
 If error, modify to:
+
 ```rust
 // Alternative: Create lm_head that shares weights
 let lm_head = if config.tie_word_embeddings() {
@@ -168,6 +176,7 @@ git commit -m "feat(model): add tie_word_embeddings support"
 ### Task 3: Add q_norm/k_norm support to GqaAttention
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/attention.rs:1-60`
 - Test: `cargo test -p vllm-model attention -- --nocapture`
 
@@ -241,6 +250,7 @@ impl GqaAttention {
 - [ ] **Step 3: Apply q_norm/k_norm in forward method**
 
 Find the forward method and add after q/k projection:
+
 ```rust
 let q = self.q_proj.forward(x)?;
 let k = self.k_proj.forward(x)?;
@@ -287,6 +297,7 @@ git commit -m "feat(model): add q_norm/k_norm support for Qwen3"
 ### Task 4: Test Qwen2.5 and Qwen3-0.6B
 
 **Files:**
+
 - Test: Manual test with each model
 
 - [ ] **Step 1: Test Qwen2.5-0.5B**
@@ -296,6 +307,7 @@ Run: `cargo run --package vllm-server -- --model /models/Qwen2.5-0.5B-Instruct 2
 - [ ] **Step 2: Check if server starts, if yes test inference**
 
 If server starts, in another terminal:
+
 ```bash
 curl -X POST http://localhost:8000/v1/completions \
   -H "Content-Type: application/json" \
@@ -309,6 +321,7 @@ Run: `cargo run --package vllm-server -- --model /models/Qwen3-0.6B 2>&1 | head 
 - [ ] **Step 4: Debug any issues**
 
 Common issues:
+
 - Missing weights → check weight key names
 - Shape mismatch → check hidden_size, num_heads settings
 
@@ -321,6 +334,7 @@ Common issues:
 ### Task 5: Add RoPE YARN scaling to rope.rs
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/rope.rs:1-60`
 - Modify: `crates/model/src/config.rs`
 - Test: Build test
@@ -328,6 +342,7 @@ Common issues:
 - [ ] **Step 1: Add RopeScaling config**
 
 In config.rs, add:
+
 ```rust
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct RopeScaling {
@@ -339,6 +354,7 @@ pub struct RopeScaling {
 ```
 
 And in Qwen3Config:
+
 ```rust
 #[serde(default)]
 pub rope_scaling: Option<RopeScaling>,
@@ -365,7 +381,7 @@ impl RoPE {
         let scaling_factor = rope_scaling
             .and_then(|r| r.factor)
             .unwrap_or(1.0);
-        
+
         Self {
             theta: config.rope_theta(),
             dim: config.hidden_size() / config.num_attention_heads(),
@@ -381,14 +397,14 @@ impl RoPE {
         // Simplified YARN: just apply standard RoPE for now
         // Full YARN requires complex frequency adjustment
         // For now, standard RoPE works for most cases
-        
+
         let seq_len = query.dims()[1];
         let head_dim = query.dims()[3];
-        
+
         // Standard RoPE implementation
         // Step 1: Compute rotation angles
         // Step 2: Apply rotation to query/key
-        
+
         apply_rope(query, position_ids, self.theta)
     }
 }
@@ -430,6 +446,7 @@ Common issue: q_norm/k_norm not loaded. Check weight keys in model.safetensors.i
 ### Task 7: Create Qwen3.5 Mamba model
 
 **Files:**
+
 - Create: `crates/model/src/qwen3_5/mod.rs`
 - Create: `crates/model/src/qwen3_5/model.rs`
 - Create: `crates/model/src/qwen3_5/mamba.rs`
@@ -449,6 +466,7 @@ pub use model::Qwen35Model;
 - [ ] **Step 2: Implement MambaBlock in mamba.rs]
 
 This is the core Mamba/SSM layer. Key weights from earlier analysis:
+
 - `linear_attn.in_proj_qkv` - combined QKV projection
 - `linear_attn.in_proj_z` - gating projection
 - `linear_attn.A_log` - SSM A matrix (log)
@@ -558,12 +576,12 @@ git commit -m "feat: multi-model support - all 4 models working"
 
 ## Summary
 
-| Phase | Tasks | Description |
-|-------|-------|-------------|
-| 1 | 1-4 | Basic integration, tie_word_embeddings, q_norm, test Qwen2/Qwen3 |
-| 2 | 5-6 | YARN scaling, DeepSeek-R1 |
-| 3 | 7 | Qwen3.5 Mamba |
-| 4 | 8 | Final verification |
+| Phase | Tasks | Description                                                      |
+| ----- | ----- | ---------------------------------------------------------------- |
+| 1     | 1-4   | Basic integration, tie_word_embeddings, q_norm, test Qwen2/Qwen3 |
+| 2     | 5-6   | YARN scaling, DeepSeek-R1                                        |
+| 3     | 7     | Qwen3.5 Mamba                                                    |
+| 4     | 8     | Final verification                                               |
 
 **Expected total tasks:** ~25-30 steps
 **Complexity:** Medium (Phase 3 is hardest - Mamba architecture)
