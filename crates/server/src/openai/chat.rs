@@ -1,11 +1,10 @@
 use axum::{
     extract::State,
-    response::sse::{Event, Sse},
+    response::{sse::{Event, Sse}, IntoResponse},
     Json,
 };
-use futures::stream::{self, Stream};
+use futures::stream;
 use std::convert::Infallible;
-use std::pin::Pin;
 use tokio::sync::mpsc;
 
 use crate::ApiState;
@@ -117,7 +116,7 @@ async fn handle_chat(
 pub async fn chat_completions(
     State(state): State<ApiState>,
     Json(req): Json<ChatRequest>,
-) -> Result<Sse<Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>>>, (axum::http::StatusCode, Json<ErrorResponse>)> {
+) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
     let is_streaming = req.stream.unwrap_or(false);
 
     if is_streaming {
@@ -157,7 +156,7 @@ pub async fn chat_completions(
                     Some(token) => {
                         let text = tokenizer.decode(&[token]);
                         if text.is_empty() {
-                            return Some((Ok(Event::default().data("")), rx));
+                            return Some((Ok::<Event, Infallible>(Event::default().data("")), rx));
                         }
                         let chunk = ChatChunk::new(
                             "chatcmpl-stream".to_string(),
@@ -173,7 +172,7 @@ pub async fn chat_completions(
                             },
                         );
                         let data = serde_json::to_string(&chunk).unwrap();
-                        Some((Ok(Event::default().data(format!("data: {}\n\n", data))), rx))
+                        Some((Ok(Event::default().data(data)), rx))
                     }
                     None => {
                         let chunk = ChatChunk::new(
@@ -190,18 +189,16 @@ pub async fn chat_completions(
                             },
                         );
                         let data = serde_json::to_string(&chunk).unwrap();
-                        Some((Ok(Event::default().data(format!("data: {}\n\ndata: [DONE]\n\n", data))), rx))
+                        Some((Ok(Event::default().data(format!("{data}\n\n[DONE]"))), rx))
                     }
                 }
             }
         });
         
-        return Ok(Sse::new(Box::pin(stream)));
+        return Ok(Sse::new(Box::pin(stream)).into_response());
     }
 
-    // 非流式
+    // 非流式 - 返回普通 JSON
     let response = handle_chat(&state, req).await?;
-    let data = serde_json::to_string(&response).unwrap();
-    let stream = stream::iter(vec![Ok(Event::default().data(data)) as Result<Event, Infallible>]);
-    Ok(Sse::new(Box::pin(stream)))
+    Ok(Json(response).into_response())
 }
