@@ -139,7 +139,7 @@ impl Scheduler {
         }
     }
 
-    pub fn build_batch(&mut self) -> Batch {
+    fn process_finished_sequences(&mut self) {
         let mut newly_finished = Vec::new();
         let mut i = 0;
         while i < self.running.len() {
@@ -160,9 +160,9 @@ impl Scheduler {
             }
         }
         self.finished.extend(newly_finished);
+    }
 
-        // Sort waiting queue by priority (highest priority first)
-        // Lower Priority value = higher priority
+    fn promote_waiting_to_running(&mut self) {
         if self.config.enable_priority_scheduling {
             let mut waiting_vec: Vec<_> = self.waiting.drain(..).collect();
             waiting_vec.sort_by(|a, b| a.priority.cmp(&b.priority));
@@ -178,14 +178,17 @@ impl Scheduler {
                 None => break,
             }
         }
+    }
 
-        let pd_separation = self.config.enable_pd_separation;
-        let decode_preference = self.config.decode_preference_ratio;
-
-        let mut seq_ids = vec![];
-        let mut input_tokens = vec![];
-        let mut positions = vec![];
-        let mut budget = self.config.max_num_batched_tokens;
+    #[allow(clippy::type_complexity)]
+    fn build_decode_batch(
+        &self,
+        budget: usize,
+    ) -> (Vec<SeqId>, Vec<Vec<TokenId>>, Vec<Vec<usize>>, usize) {
+        let mut seq_ids = Vec::new();
+        let mut input_tokens = Vec::new();
+        let mut positions = Vec::new();
+        let decode_limit = self.config.max_consecutive_decode;
 
         let effective_max_seqs = if self.config.enable_dynamic_batching {
             self.adjust_batch_size()
@@ -193,125 +196,149 @@ impl Scheduler {
             self.config.max_num_seqs
         };
 
-        let max_seqs = effective_max_seqs;
-        let decode_limit = self.config.max_consecutive_decode;
+        let mut remaining_budget = budget;
 
-        let has_decode = self.running.iter().any(|s| s.status == Status::Decoding);
-        let has_prefill = self.running.iter().any(|s| s.status == Status::Prefilling);
-
-        if pd_separation && has_decode && has_prefill {
-            let decode_budget = (budget as f32 * decode_preference) as usize;
-            let prefill_budget = budget.saturating_sub(decode_budget);
-
-            let mut decode_count = 0;
-            for seq in &self.running {
-                if decode_count >= decode_budget {
-                    break;
-                }
-                if budget == 0 {
-                    break;
-                }
-
-                if seq.status == Status::Decoding {
-                    if seq.consecutive_decode_rounds >= decode_limit {
-                        continue;
-                    }
-
-                    let last = *seq.tokens.last().unwrap();
-                    let pos = seq.tokens.len() - 1;
-
-                    seq_ids.push(seq.id);
-                    input_tokens.push(vec![last]);
-                    positions.push(vec![pos]);
-                    budget = budget.saturating_sub(1);
-                    decode_count += 1;
-                }
+        for seq in &self.running {
+            if seq_ids.len() >= effective_max_seqs {
+                break;
+            }
+            if remaining_budget == 0 {
+                break;
             }
 
-            for seq in &self.running {
-                if seq_ids.len() >= max_seqs {
-                    break;
-                }
-                if budget == 0 {
-                    break;
+            if seq.status == Status::Decoding {
+                if seq.consecutive_decode_rounds >= decode_limit {
+                    continue;
                 }
 
-                if seq.status == Status::Prefilling {
-                    let start = seq.num_computed_tokens;
-                    let remaining = seq.tokens.len() - start;
-                    let chunk_size = remaining
-                        .min(prefill_budget)
-                        .min(self.config.prefill_chunk_size);
+                let last = *seq.tokens.last().unwrap();
+                let pos = seq.tokens.len() - 1;
 
-                    if chunk_size == 0 {
-                        continue;
-                    }
-
-                    let tokens = seq.tokens[start..start + chunk_size].to_vec();
-                    let pos: Vec<usize> = (start..start + chunk_size).collect();
-
-                    seq_ids.push(seq.id);
-                    input_tokens.push(tokens);
-                    positions.push(pos);
-                    budget = budget.saturating_sub(chunk_size);
-                }
-            }
-        } else {
-            for seq in &self.running {
-                if seq_ids.len() >= max_seqs {
-                    break;
-                }
-                if budget == 0 {
-                    break;
-                }
-
-                if seq.status == Status::Decoding {
-                    if seq.consecutive_decode_rounds >= decode_limit {
-                        continue;
-                    }
-
-                    let last = *seq.tokens.last().unwrap();
-                    let pos = seq.tokens.len() - 1;
-
-                    seq_ids.push(seq.id);
-                    input_tokens.push(vec![last]);
-                    positions.push(vec![pos]);
-                    budget = budget.saturating_sub(1);
-                }
-            }
-
-            for seq in &self.running {
-                if seq_ids.len() >= max_seqs {
-                    break;
-                }
-                if budget == 0 {
-                    break;
-                }
-
-                if seq.status == Status::Prefilling {
-                    let start = seq.num_computed_tokens;
-                    let remaining = seq.tokens.len() - start;
-                    let chunk_size = remaining.min(budget).min(self.config.prefill_chunk_size);
-
-                    if chunk_size == 0 {
-                        continue;
-                    }
-
-                    let tokens = seq.tokens[start..start + chunk_size].to_vec();
-                    let pos: Vec<usize> = (start..start + chunk_size).collect();
-
-                    seq_ids.push(seq.id);
-                    input_tokens.push(tokens);
-                    positions.push(pos);
-                    budget = budget.saturating_sub(chunk_size);
-                }
+                seq_ids.push(seq.id);
+                input_tokens.push(vec![last]);
+                positions.push(vec![pos]);
+                remaining_budget = remaining_budget.saturating_sub(1);
             }
         }
+
+        (seq_ids, input_tokens, positions, remaining_budget)
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn build_prefill_batch(
+        &self,
+        budget: usize,
+        exclude_count: usize,
+    ) -> (Vec<SeqId>, Vec<Vec<TokenId>>, Vec<Vec<usize>>, usize) {
+        let mut seq_ids = Vec::new();
+        let mut input_tokens = Vec::new();
+        let mut positions = Vec::new();
+
+        let effective_max_seqs = if self.config.enable_dynamic_batching {
+            self.adjust_batch_size()
+        } else {
+            self.config.max_num_seqs
+        };
+
+        let mut remaining_budget = budget;
+        let max_seqs = effective_max_seqs.saturating_sub(exclude_count);
+
+        for seq in &self.running {
+            if seq_ids.len() >= max_seqs {
+                break;
+            }
+            if remaining_budget == 0 {
+                break;
+            }
+
+            if seq.status == Status::Prefilling {
+                let start = seq.num_computed_tokens;
+                let remaining = seq.tokens.len() - start;
+                let chunk_size = remaining
+                    .min(remaining_budget)
+                    .min(self.config.prefill_chunk_size);
+
+                if chunk_size == 0 {
+                    continue;
+                }
+
+                let tokens = seq.tokens[start..start + chunk_size].to_vec();
+                let pos: Vec<usize> = (start..start + chunk_size).collect();
+
+                seq_ids.push(seq.id);
+                input_tokens.push(tokens);
+                positions.push(pos);
+                remaining_budget = remaining_budget.saturating_sub(chunk_size);
+            }
+        }
+
+        (seq_ids, input_tokens, positions, remaining_budget)
+    }
+
+    fn build_batch_with_pd_separation(&mut self) -> Batch {
+        let budget = self.config.max_num_batched_tokens;
+        let decode_preference = self.config.decode_preference_ratio;
+
+        let decode_budget = (budget as f32 * decode_preference) as usize;
+        let prefill_budget = budget.saturating_sub(decode_budget);
+
+        let (decode_ids, decode_tokens, decode_pos, _remaining) =
+            self.build_decode_batch(decode_budget);
+
+        let (prefill_ids, prefill_tokens, prefill_pos, _) =
+            self.build_prefill_batch(prefill_budget, decode_ids.len());
+
+        let mut seq_ids = decode_ids;
+        seq_ids.extend(prefill_ids);
+        let mut input_tokens = decode_tokens;
+        input_tokens.extend(prefill_tokens);
+        let mut positions = decode_pos;
+        positions.extend(prefill_pos);
 
         Batch {
             seq_ids,
             input_tokens,
             positions,
+        }
+    }
+
+    fn build_batch_mixed(&mut self) -> Batch {
+        let budget = self.config.max_num_batched_tokens;
+
+        let (decode_ids, decode_tokens, decode_pos, remaining) = self.build_decode_batch(budget);
+
+        let (prefill_ids, prefill_tokens, prefill_pos, _) =
+            self.build_prefill_batch(remaining, decode_ids.len());
+
+        let mut seq_ids = decode_ids;
+        seq_ids.extend(prefill_ids);
+        let mut input_tokens = decode_tokens;
+        input_tokens.extend(prefill_tokens);
+        let mut positions = decode_pos;
+        positions.extend(prefill_pos);
+
+        Batch {
+            seq_ids,
+            input_tokens,
+            positions,
+        }
+    }
+
+    pub fn build_batch(&mut self) -> Batch {
+        self.process_finished_sequences();
+        self.promote_waiting_to_running();
+
+        if self.config.enable_pd_separation {
+            let has_decode = self.running.iter().any(|s| s.status == Status::Decoding);
+            let has_prefill = self.running.iter().any(|s| s.status == Status::Prefilling);
+
+            if has_decode && has_prefill {
+                self.build_batch_with_pd_separation()
+            } else {
+                self.build_batch_mixed()
+            }
+        } else {
+            self.build_batch_mixed()
         }
     }
 
