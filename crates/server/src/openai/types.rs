@@ -124,3 +124,91 @@ impl ChatChunk {
         }
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompletionRequest {
+    pub model: Option<String>,
+    pub prompt: String,
+    pub temperature: Option<f32>,
+    pub max_tokens: Option<usize>,
+    pub stream: Option<bool>,
+    pub n: Option<usize>,
+    pub stop: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompletionChoice {
+    pub text: String,
+    pub index: usize,
+    pub finish_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompletionResponse {
+    pub id: String,
+    pub object: String,
+    pub created: u64,
+    pub model: String,
+    pub choices: Vec<CompletionChoice>,
+    pub usage: Usage,
+}
+
+impl CompletionResponse {
+    pub fn new(id: String, model: String, choices: Vec<CompletionChoice>, usage: Usage) -> Self {
+        Self {
+            id,
+            object: "text_completion".to_string(),
+            created: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            model,
+            choices,
+            usage,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmbeddingsRequest {
+    pub model: String,
+    pub input: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmbeddingData {
+    pub object: String,
+    pub embedding: Vec<f32>,
+    pub index: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmbeddingsResponse {
+    pub object: String,
+    pub data: Vec<EmbeddingData>,
+    pub model: String,
+    pub usage: Usage,
+}
+
+impl EmbeddingsResponse {
+    pub fn new(embeddings: Vec<Vec<f32>>, model: String) -> Self {
+        let data: Vec<EmbeddingData> = embeddings
+            .into_iter()
+            .enumerate()
+            .map(|(i, e)| EmbeddingData {
+                object: "embedding".to_string(),
+                embedding: e,
+                index: i,
+            })
+            .collect();
+
+        let total_tokens = data.iter().map(|d| d.embedding.len()).sum();
+
+        Self {
+            object: "list".to_string(),
+            data,
+            model,
+            usage: Usage::new(total_tokens, 0),
+        }
+    }
+}
