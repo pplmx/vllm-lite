@@ -1,18 +1,21 @@
 use axum::{
     extract::State,
-    response::{sse::{Event, Sse}, IntoResponse},
+    response::{
+        sse::{Event, Sse},
+        IntoResponse,
+    },
     Json,
 };
 use futures::stream;
 use std::convert::Infallible;
 use tokio::sync::mpsc;
 
-use crate::ApiState;
 use super::types::*;
+use crate::ApiState;
 
 fn build_prompt_from_messages(messages: &[ChatMessage]) -> String {
     let mut prompt = String::new();
-    
+
     for msg in messages {
         match msg.role.as_str() {
             "system" => {
@@ -33,22 +36,30 @@ fn build_prompt_from_messages(messages: &[ChatMessage]) -> String {
             _ => {}
         }
     }
-    
+
     prompt.push_str("Assistant: ");
     prompt
 }
 
-fn validate_chat_request(req: &ChatRequest) -> Result<(), (axum::http::StatusCode, Json<ErrorResponse>)> {
+fn validate_chat_request(
+    req: &ChatRequest,
+) -> Result<(), (axum::http::StatusCode, Json<ErrorResponse>)> {
     if req.model.is_empty() {
         return Err((
             axum::http::StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new("model is required", "invalid_request_error")),
+            Json(ErrorResponse::new(
+                "model is required",
+                "invalid_request_error",
+            )),
         ));
     }
     if req.messages.is_empty() {
         return Err((
             axum::http::StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new("messages is required", "invalid_request_error")),
+            Json(ErrorResponse::new(
+                "messages is required",
+                "invalid_request_error",
+            )),
         ));
     }
     Ok(())
@@ -59,7 +70,7 @@ async fn handle_chat(
     req: ChatRequest,
 ) -> Result<ChatResponse, (axum::http::StatusCode, Json<ErrorResponse>)> {
     validate_chat_request(&req)?;
-    
+
     let prompt = build_prompt_from_messages(&req.messages);
 
     let prompt_tokens = state.tokenizer.encode(&prompt);
@@ -75,7 +86,8 @@ async fn handle_chat(
 
     let (response_tx, mut response_rx) = mpsc::unbounded_channel();
 
-    state.engine_tx
+    state
+        .engine_tx
         .send(vllm_core::types::EngineMessage::AddRequest {
             request,
             response_tx,
@@ -124,7 +136,7 @@ pub async fn chat_completions(
         let prompt_tokens = state.tokenizer.encode(&prompt);
         let max_tokens = req.max_tokens.unwrap_or(100) as usize;
         let total_max = prompt_tokens.len() + max_tokens;
-        
+
         let model = req.model.clone();
 
         let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
@@ -135,7 +147,8 @@ pub async fn chat_completions(
 
         let (response_tx, response_rx) = mpsc::unbounded_channel();
 
-        state.engine_tx
+        state
+            .engine_tx
             .send(vllm_core::types::EngineMessage::AddRequest {
                 request,
                 response_tx,
@@ -194,7 +207,7 @@ pub async fn chat_completions(
                 }
             }
         });
-        
+
         return Ok(Sse::new(Box::pin(stream)).into_response());
     }
 

@@ -117,7 +117,10 @@ pub async fn completions(
                         choices: vec![Choice { text, index: 0 }],
                     };
                     let data = serde_json::to_string(&response).unwrap();
-                    return Some((Ok(Event::default().data(data)), (rx, streaming, tokens, timeout_duration, true)));
+                    return Some((
+                        Ok(Event::default().data(data)),
+                        (rx, streaming, tokens, timeout_duration, true),
+                    ));
                 }
 
                 let recv_result = if let Some(duration) = timeout_duration {
@@ -135,10 +138,16 @@ pub async fn completions(
                                 choices: vec![Choice { text, index: 0 }],
                             };
                             let data = serde_json::to_string(&chunk).unwrap();
-                            Some((Ok(Event::default().data(data)), (rx, streaming, tokens, timeout_duration, false)))
+                            Some((
+                                Ok(Event::default().data(data)),
+                                (rx, streaming, tokens, timeout_duration, false),
+                            ))
                         } else {
                             tokens.push(token);
-                            Some((Ok(Event::default().data("")), (rx, streaming, tokens, timeout_duration, false)))
+                            Some((
+                                Ok(Event::default().data("")),
+                                (rx, streaming, tokens, timeout_duration, false),
+                            ))
                         }
                     }
                     Ok(None) => {
@@ -149,14 +158,23 @@ pub async fn completions(
                                 choices: vec![Choice { text, index: 0 }],
                             };
                             let data = serde_json::to_string(&response).unwrap();
-                            Some((Ok(Event::default().data(data)), (rx, true, tokens, timeout_duration, true)))
+                            Some((
+                                Ok(Event::default().data(data)),
+                                (rx, true, tokens, timeout_duration, true),
+                            ))
                         } else {
-                            Some((Ok(Event::default().data("[DONE]")), (rx, true, tokens, timeout_duration, true)))
+                            Some((
+                                Ok(Event::default().data("[DONE]")),
+                                (rx, true, tokens, timeout_duration, true),
+                            ))
                         }
                     }
                     Err(_) => {
                         let error = r#"{"error":"Request timeout"}"#;
-                        Some((Ok(Event::default().data(error)), (rx, streaming, tokens, timeout_duration, true)))
+                        Some((
+                            Ok(Event::default().data(error)),
+                            (rx, streaming, tokens, timeout_duration, true),
+                        ))
                     }
                 }
             }
@@ -171,7 +189,9 @@ pub struct HealthResponse {
 }
 
 pub async fn health() -> Json<HealthResponse> {
-    Json(HealthResponse { status: "ok".to_string() })
+    Json(HealthResponse {
+        status: "ok".to_string(),
+    })
 }
 
 #[allow(dead_code)]
@@ -179,7 +199,9 @@ pub async fn ready(State(state): State<ApiState>) -> Json<HealthResponse> {
     let _ = state.engine_tx.send(EngineMessage::GetMetrics {
         response_tx: tokio::sync::mpsc::unbounded_channel().0,
     });
-    Json(HealthResponse { status: "ok".to_string() })
+    Json(HealthResponse {
+        status: "ok".to_string(),
+    })
 }
 
 pub async fn shutdown(State(engine_tx): State<EngineHandle>) -> &'static str {
@@ -269,7 +291,8 @@ mod tests {
 
     #[test]
     fn test_completion_request_with_max_tokens() {
-        let req: CompletionRequest = serde_json::from_str(r#"{"prompt": "test", "max_tokens": 50}"#).unwrap();
+        let req: CompletionRequest =
+            serde_json::from_str(r#"{"prompt": "test", "max_tokens": 50}"#).unwrap();
         assert_eq!(req.max_tokens, 50);
     }
 
@@ -287,13 +310,15 @@ mod tests {
 
     #[test]
     fn test_completion_request_negative_max_tokens() {
-        let result: Result<CompletionRequest, _> = serde_json::from_str(r#"{"prompt": "test", "max_tokens": -1}"#);
+        let result: Result<CompletionRequest, _> =
+            serde_json::from_str(r#"{"prompt": "test", "max_tokens": -1}"#);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_completion_request_very_long_max_tokens() {
-        let req: CompletionRequest = serde_json::from_str(r#"{"prompt": "test", "max_tokens": 100000}"#).unwrap();
+        let req: CompletionRequest =
+            serde_json::from_str(r#"{"prompt": "test", "max_tokens": 100000}"#).unwrap();
         assert_eq!(req.max_tokens, 100000);
     }
 
