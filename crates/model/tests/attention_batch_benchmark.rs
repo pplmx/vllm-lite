@@ -1,0 +1,35 @@
+use candle_core::{DType, Device, Result, Tensor};
+use vllm_model::kv_cache::PagedKvCache;
+use vllm_model::qwen3::attention::GqaAttention;
+
+#[test]
+fn test_forward_prefill_batch_performance() -> Result<()> {
+    let device = Device::Cpu;
+
+    let config = vllm_model::qwen3::attention::AttentionConfig {
+        tile_size: Some(256),
+        use_fused: true,
+    };
+    let attn = GqaAttention::new(896, 8, 2, 112, None, config.clone(), false)?;
+
+    let mut kv_cache = PagedKvCache::new(28, 2, 112, 1024, device.clone(), false)?;
+
+    // Test input: 256 tokens (use tiled attention path with tile_size=256)
+    let x = Tensor::ones((1, 256, 896), DType::F32, &device)?;
+    let block_ids: Vec<usize> = (0..256).map(|i| i / 16).collect();
+
+    let start = std::time::Instant::now();
+    let _output = attn.forward_prefill(&x, &mut kv_cache, 0, &block_ids)?;
+    let elapsed = start.elapsed();
+
+    println!("forward_prefill for 256 tokens took: {:?}", elapsed);
+
+    // Verify KV cache was correctly written
+    let (k_read, _v_read) = kv_cache.read_kv(0, &(0..16).collect::<Vec<_>>(), 256)?;
+    assert_eq!(k_read.dims(), &[256, 2, 112]);
+
+    // Should complete in reasonable time (< 10 seconds on CPU)
+    assert!(elapsed.as_secs() < 10);
+
+    Ok(())
+}
