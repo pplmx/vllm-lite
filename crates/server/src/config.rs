@@ -178,3 +178,34 @@ impl AppConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_app_config_defaults() {
+        let config = AppConfig::default();
+        assert_eq!(config.server.host, "0.0.0.0");
+        assert_eq!(config.server.port, 8000);
+        assert_eq!(config.server.log_level, "info");
+        assert_eq!(config.engine.max_draft_tokens, 8);
+        assert_eq!(config.engine.num_kv_blocks, 1024);
+        assert_eq!(config.engine.max_batch_size, 256);
+        assert_eq!(config.engine.max_waiting_batches, 10);
+    }
+
+    #[test]
+    fn test_app_config_validate_passes() {
+        let config = AppConfig::default();
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_app_config_validate_fails_zero_port() {
+        let mut config = AppConfig::default();
+        config.server.port = 0;
+        let errors = config.validate().unwrap_err();
+        assert!(errors.iter().any(|e| e.contains("server.port")));
+    }
+}
