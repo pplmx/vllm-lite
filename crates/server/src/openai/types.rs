@@ -2,13 +2,15 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Usage {
-    pub prompt_tokens: usize,
-    pub completion_tokens: usize,
-    pub total_tokens: usize,
+    pub prompt_tokens: i64,
+    pub completion_tokens: i64,
+    pub total_tokens: i64,
 }
 
 impl Usage {
     pub fn new(prompt: usize, completion: usize) -> Self {
+        let prompt = prompt as i64;
+        let completion = completion as i64;
         Self {
             prompt_tokens: prompt,
             completion_tokens: completion,
@@ -55,15 +57,15 @@ pub struct ChatRequest {
     pub messages: Vec<ChatMessage>,
     pub temperature: Option<f32>,
     pub top_p: Option<f32>,
-    pub max_tokens: Option<usize>,
+    pub max_tokens: Option<i64>,
     pub stream: Option<bool>,
-    pub n: Option<usize>,
+    pub n: Option<i64>,
     pub stop: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChoice {
-    pub index: usize,
+    pub index: i32,
     pub message: ChatMessage,
     pub finish_reason: Option<String>,
 }
@@ -72,7 +74,7 @@ pub struct ChatChoice {
 pub struct ChatResponse {
     pub id: String,
     pub object: String,
-    pub created: u64,
+    pub created: i64,
     pub model: String,
     pub choices: Vec<ChatChoice>,
     pub usage: Usage,
@@ -85,8 +87,8 @@ impl ChatResponse {
             object: "chat.completion".to_string(),
             created: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0),
             model,
             choices,
             usage,
@@ -96,7 +98,7 @@ impl ChatResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChunkChoice {
-    pub index: usize,
+    pub index: i32,
     pub delta: ChatMessage,
     pub finish_reason: Option<String>,
 }
@@ -105,7 +107,7 @@ pub struct ChatChunkChoice {
 pub struct ChatChunk {
     pub id: String,
     pub object: String,
-    pub created: u64,
+    pub created: i64,
     pub model: String,
     pub choices: Vec<ChatChunkChoice>,
 }
@@ -117,8 +119,8 @@ impl ChatChunk {
             object: "chat.completion.chunk".to_string(),
             created: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0),
             model,
             choices: vec![choice],
         }
@@ -130,16 +132,16 @@ pub struct CompletionRequest {
     pub model: Option<String>,
     pub prompt: String,
     pub temperature: Option<f32>,
-    pub max_tokens: Option<usize>,
+    pub max_tokens: Option<i64>,
     pub stream: Option<bool>,
-    pub n: Option<usize>,
+    pub n: Option<i64>,
     pub stop: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompletionChoice {
     pub text: String,
-    pub index: usize,
+    pub index: i32,
     pub finish_reason: Option<String>,
 }
 
@@ -147,7 +149,7 @@ pub struct CompletionChoice {
 pub struct CompletionResponse {
     pub id: String,
     pub object: String,
-    pub created: u64,
+    pub created: i64,
     pub model: String,
     pub choices: Vec<CompletionChoice>,
     pub usage: Usage,
@@ -160,8 +162,8 @@ impl CompletionResponse {
             object: "text_completion".to_string(),
             created: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0),
             model,
             choices,
             usage,
@@ -179,7 +181,7 @@ pub struct EmbeddingsRequest {
 pub struct EmbeddingData {
     pub object: String,
     pub embedding: Vec<f32>,
-    pub index: usize,
+    pub index: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -198,17 +200,17 @@ impl EmbeddingsResponse {
             .map(|(i, e)| EmbeddingData {
                 object: "embedding".to_string(),
                 embedding: e,
-                index: i,
+                index: i as i32,
             })
             .collect();
 
-        let total_tokens = data.iter().map(|d| d.embedding.len()).sum();
+        let total_tokens: i64 = data.iter().map(|d| d.embedding.len() as i64).sum();
 
         Self {
             object: "list".to_string(),
             data,
             model,
-            usage: Usage::new(total_tokens, 0),
+            usage: Usage::new(total_tokens as usize, 0),
         }
     }
 }
