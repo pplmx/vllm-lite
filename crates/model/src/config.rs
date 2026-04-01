@@ -369,4 +369,27 @@ mod tests {
         };
         assert_eq!(config.attention_type(), AttentionType::MLA);
     }
+
+    #[test]
+    fn test_head_dim_default_computed() {
+        // When head_dim not specified, compute from hidden_size / num_attention_heads
+        let config = Qwen3Config {
+            hidden_size: Some(1024),
+            num_attention_heads: Some(16),
+            ..Default::default()
+        };
+        assert_eq!(config.head_dim(), 64); // 1024 / 16
+    }
+
+    #[test]
+    fn test_head_dim_from_config() {
+        // Qwen3-0.6B specifies head_dim=128 explicitly
+        let config = Qwen3Config {
+            hidden_size: Some(1024),
+            num_attention_heads: Some(16),
+            head_dim: Some(128),
+            ..Default::default()
+        };
+        assert_eq!(config.head_dim(), 128); // Uses explicit value, not 1024/16=64
+    }
 }
