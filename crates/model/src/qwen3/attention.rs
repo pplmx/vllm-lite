@@ -238,31 +238,27 @@ impl GqaAttention {
         let q = q.transpose(1, 2)?;
         let k = k.transpose(1, 2)?;
 
-        // Group tokens by block and write in batches
-        let mut block_tokens: std::collections::HashMap<usize, Vec<usize>> =
-            std::collections::HashMap::new();
+        let mut block_groups: std::collections::BTreeMap<usize, Vec<usize>> =
+            std::collections::BTreeMap::new();
         for (token_idx, &block_id) in block_ids.iter().take(seq_len).enumerate() {
-            block_tokens.entry(block_id).or_default().push(token_idx);
+            block_groups.entry(block_id).or_default().push(token_idx);
         }
 
-        for (&block_id, token_indices) in &block_tokens {
-            // Get all tokens for this block
-            let indices_vec: Vec<u32> = token_indices.iter().map(|&i| i as u32).collect();
-            let indices_tensor = Tensor::new(indices_vec.as_slice(), k.device())?;
-            let k_block = k.index_select(&indices_tensor, 2)?;
-            let v_block = v.index_select(&indices_tensor, 2)?;
+        let k_t = k.transpose(1, 2)?.contiguous()?;
+        let v_t = v.transpose(1, 2)?.contiguous()?;
 
-            let k_block = k_block.transpose(0, 1)?; // [num_kv_heads, tokens, head_dim]
-            let v_block = v_block.transpose(0, 1)?;
-
-            // Write all tokens in this block at once
-            for (offset, &_token_idx) in token_indices.iter().enumerate() {
-                let k_slice = k_block.narrow(1, offset, 1)?.squeeze(1)?;
-                let v_slice = v_block.narrow(1, offset, 1)?.squeeze(1)?;
-                let k_slice = k_slice.reshape((1, self.num_kv_heads, self.head_dim))?;
-                let v_slice = v_slice.reshape((1, self.num_kv_heads, self.head_dim))?;
-                kv_cache.write_kv(layer_idx, block_id, offset, &k_slice, &v_slice)?;
+        for (block_id, token_indices) in &block_groups {
+            if token_indices.is_empty() {
+                continue;
             }
+
+            let indices: Vec<u32> = token_indices.iter().map(|&i| i as u32).collect();
+            let indices_tensor = Tensor::new(indices.as_slice(), k.device())?;
+
+            let k_block = k_t.index_select(&indices_tensor, 1)?;
+            let v_block = v_t.index_select(&indices_tensor, 1)?;
+
+            kv_cache.write_kv_batch(layer_idx, *block_id, 0, &k_block, &v_block)?;
         }
 
         let k_expanded = self.expand_kv(&k.transpose(1, 2)?, self.num_heads, self.num_kv_heads)?;
@@ -322,16 +318,20 @@ impl GqaAttention {
         let qk = Tensor::matmul(q, &k.transpose(2, 3)?)?;
 
         let mask = self.causal_mask(seq_len, q.device())?;
+        let mask = mask.broadcast_as(qk.dims())?;
         let qk = (&qk + &mask)?;
 
         let scale = 1.0 / (self.head_dim as f32).sqrt();
-        let qk = qk.mul(&Tensor::new(&[scale], q.device())?)?;
+        let scale_tensor = Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?;
+        let qk = qk.mul(&scale_tensor)?;
         let attn_weights = candle_nn::ops::softmax(&qk, 3)?;
 
         let attn_output = Tensor::matmul(&attn_weights, v)?;
 
         let attn_output = attn_output.transpose(1, 2)?;
-        let attn_output = attn_output.reshape((q.dims()[0], 1, self.num_heads * self.head_dim))?;
+        let seq_len = attn_output.dims()[1];
+        let attn_output =
+            attn_output.reshape((q.dims()[0], seq_len, self.num_heads * self.head_dim))?;
 
         let o = self.o_proj.forward(&attn_output)?;
         Ok(o)
@@ -342,9 +342,12 @@ impl GqaAttention {
             Tensor::arange(0u32, seq_len as u32, device)?.reshape((1, 1, seq_len, 1))?;
         let col_indices =
             Tensor::arange(0u32, seq_len as u32, device)?.reshape((1, 1, 1, seq_len))?;
+        let row_indices = row_indices.broadcast_as((1, 1, seq_len, seq_len))?;
+        let col_indices = col_indices.broadcast_as((1, 1, seq_len, seq_len))?;
         let mask = row_indices.ge(&col_indices)?;
-        let zero = Tensor::new(0.0f32, device)?;
-        let neg_inf = Tensor::new(f32::NEG_INFINITY, device)?;
+        let zero = Tensor::new(0.0f32, device)?.broadcast_as((1, 1, seq_len, seq_len))?;
+        let neg_inf =
+            Tensor::new(f32::NEG_INFINITY, device)?.broadcast_as((1, 1, seq_len, seq_len))?;
         let mask = mask.where_cond(&zero, &neg_inf)?;
         Ok(mask)
     }
@@ -366,16 +369,24 @@ impl GqaAttention {
             let end = (start + tile_size).min(seq_len);
             let tile_len = end - start;
 
-            let k_tile = k.narrow(2, start, tile_len)?;
-            let v_tile = v.narrow(2, start, tile_len)?;
+            // Narrow q to current tile (query tokens for this tile)
+            let q_tile = q.narrow(2, start, tile_len)?;
+            // Keys/values include all tokens up to end of tile
+            let k_tile = k.narrow(2, 0, end)?;
+            let v_tile = v.narrow(2, 0, end)?;
 
-            let qk = Tensor::matmul(q, &k_tile.transpose(2, 3)?)?;
+            let qk = Tensor::matmul(&q_tile, &k_tile.transpose(2, 3)?)?;
 
-            let mask = self.causal_mask_tile(q.dims()[0], self.num_heads, tile_len, q.device())?;
+            // Causal mask for tile: [batch, 1, tile_len, end]
+            // start is the global position where this tile begins
+            let mask = self.causal_mask_tile(q.dims()[0], start, tile_len, end, q.device())?;
+            // Broadcast mask to match qk shape [batch, num_heads, tile_len, key_len]
+            let mask = mask.broadcast_as(qk.dims())?;
             let qk = (&qk + &mask)?;
 
             let scale = 1.0 / (self.head_dim as f32).sqrt();
-            let qk = qk.mul(&Tensor::new(&[scale], q.device())?)?;
+            let scale_tensor = Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?;
+            let qk = qk.mul(&scale_tensor)?;
             let attn = candle_nn::ops::softmax(&qk, 3)?;
 
             let out = Tensor::matmul(&attn, &v_tile)?;
@@ -389,13 +400,26 @@ impl GqaAttention {
     fn causal_mask_tile(
         &self,
         batch_size: usize,
-        _num_heads: usize,
+        start: usize,
         tile_len: usize,
+        key_len: usize,
         device: &Device,
     ) -> Result<Tensor> {
+        // Causal mask: query positions (tile_len) x key positions (key_len)
+        // Query at local position i corresponds to global position start + i
+        // Valid if key position j <= start + i (causal: can only attend to earlier keys)
         let mask: Vec<f32> = (0..tile_len)
-            .flat_map(|i| (0..tile_len).map(move |j| if i >= j { 0.0 } else { f32::NEG_INFINITY }))
+            .flat_map(|i| {
+                let global_q = start + i;
+                (0..key_len).map(move |j| {
+                    if j <= global_q {
+                        0.0
+                    } else {
+                        f32::NEG_INFINITY
+                    }
+                })
+            })
             .collect();
-        Tensor::from_slice(&mask, (batch_size, 1, tile_len, tile_len), device)
+        Tensor::from_slice(&mask, (batch_size, 1, tile_len, key_len), device)
     }
 }
