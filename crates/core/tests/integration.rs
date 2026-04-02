@@ -507,3 +507,110 @@ fn test_speculative_decoding_verification() {
     // Should return at least one token (target)
     assert!(!results.is_empty());
 }
+
+#[test]
+fn test_concurrent_requests_different_prompts() {
+    let config = SchedulerConfig {
+        max_num_seqs: 10,
+        max_num_batched_tokens: 100,
+        max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
+        enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
+    };
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    let (tx1, _rx1) = mpsc::unbounded_channel();
+    let (tx2, _rx2) = mpsc::unbounded_channel();
+    let (tx3, _rx3) = mpsc::unbounded_channel();
+
+    engine.add_request(Request::new(1, vec![10, 20], 5), tx1);
+    engine.add_request(Request::new(2, vec![30, 40, 50, 60], 6), tx2);
+    engine.add_request(Request::new(3, vec![70], 4), tx3);
+
+    assert!(
+        engine.scheduler.waiting_count() + engine.scheduler.running_count() == 3,
+        "all 3 requests should be pending"
+    );
+
+    for _ in 0..5 {
+        if !engine.has_pending() {
+            break;
+        }
+        engine.step().unwrap();
+    }
+
+    assert!(!engine.has_pending(), "all requests should finish");
+}
+
+#[test]
+fn test_rapid_request_addition() {
+    let config = SchedulerConfig {
+        max_num_seqs: 20,
+        max_num_batched_tokens: 200,
+        max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
+        enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
+    };
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    for i in 1..=10 {
+        let (tx, _rx) = mpsc::unbounded_channel();
+        engine.add_request(Request::new(i, vec![i as TokenId], 4), tx);
+    }
+
+    assert!(
+        engine.scheduler.waiting_count() + engine.scheduler.running_count() == 10,
+        "all 10 requests should be pending"
+    );
+
+    for _ in 0..10 {
+        if !engine.has_pending() {
+            break;
+        }
+        engine.step().unwrap();
+    }
+
+    assert!(!engine.has_pending(), "all 10 requests should finish");
+}
+
+#[test]
+fn test_request_cancellation() {
+    let config = SchedulerConfig {
+        max_num_seqs: 10,
+        max_num_batched_tokens: 100,
+        max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
+        enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
+    };
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    let (tx1, _rx1) = mpsc::unbounded_channel();
+    let (tx2, rx2) = mpsc::unbounded_channel();
+
+    engine.add_request(Request::new(1, vec![10, 20], 5), tx1);
+    engine.add_request(Request::new(2, vec![30, 40], 5), tx2);
+
+    engine.step().unwrap();
+
+    drop(rx2);
+
+    engine.step().unwrap();
+    engine.step().unwrap();
+
+    assert!(!engine.has_pending(), "remaining request should finish");
+}
