@@ -6,6 +6,7 @@ rust-version.workspace = true
 
 [dependencies]
 vllm-traits = { path = "../traits" }
+vllm-dist = { path = "../dist" }
 rand = "0.10"
 candle-core = { version = "0.10.1", features = ["cuda"] }
 candle-nn = { version = "0.10.1", features = ["cuda"] }
