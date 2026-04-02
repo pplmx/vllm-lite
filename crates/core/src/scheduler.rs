@@ -1233,4 +1233,56 @@ mod tests {
         // Should process waiting requests
         assert!(batch3.seq_ids.len() >= 1);
     }
+
+    #[test]
+    fn test_add_request_zero_prompt() {
+        let mut sched = Scheduler::new();
+        let id = sched.add_request(Request::new(1, vec![], 5));
+        assert_eq!(id, 1);
+        assert!(sched.has_pending());
+    }
+
+    #[test]
+    fn test_add_request_duplicate_id() {
+        let mut sched = Scheduler::new();
+        sched.add_request(Request::new(1, vec![1, 2], 5));
+        let id = sched.add_request(Request::new(1, vec![3, 4], 5));
+        // Current behavior: uses provided ID if non-zero
+        assert_eq!(id, 1);
+    }
+
+    #[test]
+    fn test_build_batch_empty() {
+        let mut sched = Scheduler::new();
+        let batch = sched.build_batch();
+        assert!(batch.is_empty());
+    }
+
+    #[test]
+    fn test_update_nonexistent_seq() {
+        let mut sched = Scheduler::new();
+        sched.update(&[999], &[1], &[1]);
+        assert!(!sched.has_pending());
+    }
+
+    #[test]
+    fn test_running_after_all_finished() {
+        let config = SchedulerConfig {
+            max_num_seqs: 10,
+            max_num_batched_tokens: 100,
+            max_consecutive_decode: 10,
+            enable_pd_separation: false,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
+        };
+        let mut sched = Scheduler::with_config(config, 10);
+        sched.add_request(Request::new(1, vec![1], 1));
+        let batch = sched.build_batch();
+        sched.update(&batch.seq_ids, &[99], &[batch.input_tokens[0].len()]);
+        assert!(!sched.has_pending());
+    }
 }
