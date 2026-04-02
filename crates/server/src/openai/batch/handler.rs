@@ -1,8 +1,8 @@
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 
 use super::types::*;
-use crate::openai::types::ErrorResponse;
 use crate::ApiState;
+use crate::openai::types::ErrorResponse;
 
 pub async fn create_batch(
     State(state): State<ApiState>,

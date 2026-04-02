@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     extract::State,
     response::sse::{Event, Sse},
-    Json,
 };
 use futures::stream::{self, Stream};
 use serde::{Deserialize, Serialize};

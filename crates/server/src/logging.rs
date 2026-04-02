@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 pub fn init_logging(log_dir: Option<PathBuf>, log_level: &str) {
     let env_filter =

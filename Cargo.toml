@@ -4,15 +4,14 @@ resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["vLLM-lite Team"]
 license = "MIT"
 repository = "https://github.com/pplmx/vllm-lite"
 homepage = "https://github.com/pplmx/vllm-lite"
-rust-version = "1.75"
+rust-version = "1.85"
 
 [workspace.metadata]
-msrv = "1.75"
 description = "A lightweight LLM inference engine in Rust implementing vLLM innovations"
 keywords = ["llm", "inference", "vllm", "rust", "machine-learning"]
 categories = ["machine-learning", "api-bindings"]

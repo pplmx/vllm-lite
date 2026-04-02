@@ -6,7 +6,7 @@ pub mod openai;
 
 use crate::auth::AuthMiddleware;
 use crate::openai::batch::manager::BatchManager;
-use axum::{routing::get, routing::post, Router};
+use axum::{Router, routing::get, routing::post};
 use candle_core::Device;
 use std::path::PathBuf;
 use std::sync::Arc;
