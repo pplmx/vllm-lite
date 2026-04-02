@@ -41,22 +41,27 @@ If model uses `core::TensorParallelManager`, dependency direction violates clean
 
 ### Solution
 
-Move tensor parallel to independent crate:
+Move tensor parallel to independent crate (`vllm-dist`), which will also contain DP, PP, CP, EP in future:
 
 ```
-vllm-tp (NEW)
+vllm-dist (NEW)
 ├── Cargo.toml
 └── src/
     ├── lib.rs
-    ├── device_mesh.rs
-    ├── all_reduce.rs
-    └── parallel_linear.rs
+    ├── tensor_parallel/
+    │   ├── mod.rs
+    │   ├── device_mesh.rs
+    │   ├── all_reduce.rs
+    │   └── parallel_linear.rs
+    ├── pipeline_parallel.rs   # future
+    ├── data_parallel.rs       # future
+    └── ...
 ```
 
 ```toml
-# vllm-tp/Cargo.toml
+# vllm-dist/Cargo.toml
 [package]
-name = "vllm-tp"
+name = "vllm-dist"
 version = "0.1.0"
 
 [dependencies]
@@ -455,8 +460,8 @@ Each process:
 
 ### Phase 1 (Current)
 
-1. [ ] Create `vllm-tp` crate
-2. [ ] Move tensor_parallel code to vllm-tp
+1. [ ] Create `vllm-dist` crate
+2. [ ] Move tensor_parallel code to vllm-dist/tensor_parallel/
 3. [ ] Add `--tensor-parallel-size` CLI arg
 4. [ ] Implement TensorParallelConfig
 5. [ ] Modify TransformerBlock to accept TP config
