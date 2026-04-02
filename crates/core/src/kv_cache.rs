@@ -1,5 +1,6 @@
 use crate::types::{BlockId, TokenId};
 use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 use std::time::Instant;
 
 pub const BLOCK_SIZE: usize = 16;
@@ -15,7 +16,7 @@ pub fn hash_tokens(tokens: &[TokenId]) -> CacheKey {
 #[derive(Clone)]
 pub struct CachedEntry {
     pub key: CacheKey,
-    pub blocks: Vec<BlockId>,
+    pub blocks: Arc<Vec<BlockId>>,
     pub token_count: usize,
     pub last_access: Instant,
 }
@@ -48,8 +49,12 @@ impl PrefixCache {
     }
 
     pub fn insert(&mut self, key: CacheKey, blocks: Vec<BlockId>, token_count: usize) {
+        self.insert_arc(key, Arc::new(blocks), token_count);
+    }
+
+    pub fn insert_arc(&mut self, key: CacheKey, blocks: Arc<Vec<BlockId>>, token_count: usize) {
         if let Some(old_entry) = self.entries.remove(&key) {
-            for &block in &old_entry.blocks {
+            for &block in old_entry.blocks.as_ref() {
                 if let Some(count) = self.block_refs.get_mut(&block) {
                     *count -= 1;
                     if *count == 0 {
@@ -59,7 +64,7 @@ impl PrefixCache {
             }
         }
 
-        for &block in &blocks {
+        for &block in blocks.as_ref() {
             *self.block_refs.entry(block).or_insert(0) += 1;
         }
 
@@ -78,7 +83,7 @@ impl PrefixCache {
     pub fn evict(&mut self, allocator: &mut BlockAllocator) {
         while let Some(oldest_key) = self.lru_order.pop_back() {
             if let Some(entry) = self.entries.remove(&oldest_key) {
-                for &block in &entry.blocks {
+                for &block in entry.blocks.as_ref() {
                     if let Some(count) = self.block_refs.get_mut(&block) {
                         *count -= 1;
                         if *count == 0 {

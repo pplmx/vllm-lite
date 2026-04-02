@@ -1,10 +1,11 @@
 use crate::types::{BlockId, TokenId};
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct BeamSequence {
     pub tokens: Vec<TokenId>,
     pub score: f32,
-    pub kv_blocks: Vec<BlockId>,
+    pub kv_blocks: Arc<Vec<BlockId>>,
 }
 
 impl BeamSequence {
@@ -12,7 +13,7 @@ impl BeamSequence {
         Self {
             tokens,
             score,
-            kv_blocks,
+            kv_blocks: Arc::new(kv_blocks),
         }
     }
 

@@ -5,7 +5,7 @@ fn test_beam_sequence_new() {
     let beam = BeamSequence::new(vec![1, 2, 3], 0.5, vec![0, 1]);
     assert_eq!(beam.tokens, vec![1, 2, 3]);
     assert_eq!(beam.score, 0.5);
-    assert_eq!(beam.kv_blocks, vec![0, 1]);
+    assert_eq!(beam.kv_blocks.as_ref(), &vec![0, 1]);
 }
 
 #[test]
