@@ -1,0 +1,16 @@
+[package]
+name = "vllm-dist"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+candle-core = "0.8"
+thiserror = "2"
+
+[dependencies.vllm-traits]
+path = "../traits"
