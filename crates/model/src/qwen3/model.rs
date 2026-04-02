@@ -456,4 +456,30 @@ mod tests {
         let output = model.forward(&[1], &[vec![42]], &[vec![0]]).unwrap();
         assert_eq!(output.next_tokens.len(), 1);
     }
+
+    #[test]
+    fn test_qwen3_model_batch_forward() {
+        let config = Qwen3Config {
+            vocab_size: Some(1000),
+            hidden_size: Some(128),
+            num_hidden_layers: Some(2),
+            num_attention_heads: Some(4),
+            num_key_value_heads: Some(2),
+            intermediate_size: Some(256),
+            ..Default::default()
+        };
+
+        let device = Device::Cpu;
+        let model = Qwen3Model::new(config, device).unwrap();
+
+        // Test with batch size 3
+        let seq_ids = vec![1u64, 2, 3];
+        let input_tokens = vec![vec![1], vec![2], vec![3]];
+        let positions = vec![vec![0], vec![0], vec![0]];
+
+        let output = model.forward(&seq_ids, &input_tokens, &positions).unwrap();
+
+        assert_eq!(output.seq_ids.len(), 3);
+        assert_eq!(output.next_tokens.len(), 3);
+    }
 }
