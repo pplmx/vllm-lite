@@ -64,7 +64,7 @@ async fn main() {
 
     tracing::info!(config = ?app_config, "Starting vllm-lite");
 
-    let device = Device::cuda_if_available(0).unwrap_or(Device::Cpu);
+    let device = Device::cuda_if_available(0).unwrap_or_else(|_| Device::Cpu);
     tracing::info!(device = ?device, "Using device");
 
     let model_path = get_model_path();
@@ -73,14 +73,13 @@ async fn main() {
     let loader = ModelLoader::new(device.clone());
     let model = loader
         .load_model(&model_path, app_config.engine.num_kv_blocks)
-        .expect("Failed to load model");
+        .unwrap_or_else(|e| panic!("Failed to load model: {}", e));
 
     // For speculative decoding, we need a proper draft model
-    // For now, disable speculative mode by using the same model as draft
-    // (this doubles memory but ensures compatibility)
+    // Note: Loading twice doubles memory - consider optimizing for production
     let draft_model = loader
         .load_model(&model_path, app_config.engine.num_kv_blocks)
-        .expect("Failed to load draft model");
+        .unwrap_or_else(|e| panic!("Failed to load draft model: {}", e));
 
     let mut engine = Engine::new(model, draft_model);
     // Don't enable speculative mode - it causes hangs with mismatched draft model
