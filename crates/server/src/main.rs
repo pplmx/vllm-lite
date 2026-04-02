@@ -87,13 +87,13 @@ async fn main() {
 
     let loader = ModelLoader::new(device.clone());
     let model = loader
-        .load_model(&model_path, app_config.engine.num_kv_blocks)
+        .load_model(&model_path, app_config.engine.num_kv_blocks, app_config.engine.kv_quantization)
         .unwrap_or_else(|e| panic!("Failed to load model: {}", e));
 
     // For speculative decoding, we need a proper draft model
     // Note: Loading twice doubles memory - consider optimizing for production
     let draft_model = loader
-        .load_model(&model_path, app_config.engine.num_kv_blocks)
+        .load_model(&model_path, app_config.engine.num_kv_blocks, app_config.engine.kv_quantization)
         .unwrap_or_else(|e| panic!("Failed to load draft model: {}", e));
 
     let mut engine = Engine::new(model, draft_model);

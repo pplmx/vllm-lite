@@ -132,12 +132,23 @@ impl ModelLoader {
         Ok((config, weights))
     }
 
-    pub fn load_model(&self, model_dir: &str, num_kv_blocks: usize) -> Result<Qwen3Model> {
+    pub fn load_model(
+        &self,
+        model_dir: &str,
+        num_kv_blocks: usize,
+        kv_quantization: bool,
+    ) -> Result<Qwen3Model> {
         let config = self.load_config(model_dir)?;
         let weights = self.load_weights(model_dir)?;
 
-        Qwen3Model::from_weights(config, self.device.clone(), weights, num_kv_blocks)
-            .map_err(|e| candle_core::Error::msg(format!("Failed to create model: {}", e)))
+        Qwen3Model::from_weights(
+            config,
+            self.device.clone(),
+            weights,
+            num_kv_blocks,
+            kv_quantization,
+        )
+        .map_err(|e| candle_core::Error::msg(format!("Failed to create model: {}", e)))
     }
 
     pub fn print_weight_keys(weights: &HashMap<String, Tensor>) {

@@ -163,6 +163,7 @@ impl Qwen3Model {
         device: Device,
         weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
+        kv_quantization: bool,
     ) -> CandleResult<Self> {
         let _vocab_size = config.vocab_size();
         let hidden_size = config.hidden_size();
@@ -292,7 +293,7 @@ impl Qwen3Model {
             hidden_size / config.num_attention_heads(),
             num_kv_blocks,
             device.clone(),
-            false,
+            kv_quantization,
         )?;
 
         Ok(Self {

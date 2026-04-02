@@ -78,6 +78,8 @@ pub struct EngineConfig {
     pub max_waiting_batches: usize,
     #[serde(default = "default_tensor_parallel_size")]
     pub tensor_parallel_size: usize,
+    #[serde(default = "default_kv_quantization")]
+    pub kv_quantization: bool,
 }
 
 impl Default for EngineConfig {
@@ -88,6 +90,7 @@ impl Default for EngineConfig {
             max_batch_size: default_max_batch_size(),
             max_waiting_batches: default_max_waiting_batches(),
             tensor_parallel_size: default_tensor_parallel_size(),
+            kv_quantization: default_kv_quantization(),
         }
     }
 }
@@ -110,6 +113,10 @@ fn default_max_waiting_batches() -> usize {
 
 fn default_tensor_parallel_size() -> usize {
     1
+}
+
+fn default_kv_quantization() -> bool {
+    false
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -175,6 +182,11 @@ impl AppConfig {
         if let Ok(tp_size) = std::env::var("VLLM_TENSOR_PARALLEL_SIZE") {
             if let Ok(v) = tp_size.parse() {
                 config.engine.tensor_parallel_size = v;
+            }
+        }
+        if let Ok(quant) = std::env::var("VLLM_KV_QUANTIZATION") {
+            if let Ok(v) = quant.parse() {
+                config.engine.kv_quantization = v;
             }
         }
 
