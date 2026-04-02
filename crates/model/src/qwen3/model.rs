@@ -299,6 +299,17 @@ impl Qwen3Model {
         self.forward_with_cache(input_tokens, 0, &[0], &positions, true)
             .map_err(|e| EngineError::new(e.to_string()))
     }
+
+    fn stack_tokens(&self, tokens: &[Vec<TokenId>]) -> EngineResult<Tensor> {
+        let batch_size = tokens.len();
+        let token_ids: Vec<u32> = tokens
+            .iter()
+            .map(|t| t.last().copied().unwrap_or(0))
+            .collect();
+
+        Tensor::from_slice(&token_ids, &[batch_size], &self.device)
+            .map_err(|e| EngineError::new(e.to_string()))
+    }
 }
 
 impl ModelBackend for Qwen3Model {
