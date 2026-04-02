@@ -53,6 +53,7 @@ impl<M: ModelBackend> Engine<M> {
         max_draft_tokens: usize,
         num_kv_blocks: usize,
     ) -> Self {
+        let max_seqs = config.max_num_seqs;
         Self {
             scheduler: Scheduler::with_config(config, num_kv_blocks),
             target_model: Arc::new(target_model),
@@ -62,7 +63,7 @@ impl<M: ModelBackend> Engine<M> {
             error_count: 0,
             last_error: None,
             metrics: MetricsCollector::new(),
-            response_txs: HashMap::new(),
+            response_txs: HashMap::with_capacity(max_seqs),
         }
     }
 
@@ -205,8 +206,8 @@ impl<M: ModelBackend> Engine<M> {
             for _ in 0..self.max_draft_tokens {
                 let output = self.draft_model.forward(
                     &[*seq_id],
-                    &[current_tokens.clone()],
-                    &[current_positions.clone()],
+                    std::slice::from_ref(&current_tokens),
+                    std::slice::from_ref(&current_positions),
                 )?;
                 let token = *output.next_tokens.first().unwrap_or(&0);
                 draft.push(token);
@@ -232,8 +233,8 @@ impl<M: ModelBackend> Engine<M> {
             if drafts.is_empty() {
                 let target_output = self.target_model.forward(
                     &[*seq_id],
-                    &[batch.input_tokens[i].clone()],
-                    &[batch.positions[i].clone()],
+                    std::slice::from_ref(&batch.input_tokens[i]),
+                    std::slice::from_ref(&batch.positions[i]),
                 )?;
                 if let Some(&token) = target_output.next_tokens.first() {
                     results.push((*seq_id, token));
@@ -248,8 +249,8 @@ impl<M: ModelBackend> Engine<M> {
 
             let target_output = self.target_model.forward(
                 &[*seq_id],
-                &[verify_tokens.clone()],
-                &[verify_positions],
+                std::slice::from_ref(&verify_tokens),
+                std::slice::from_ref(&verify_positions),
             )?;
 
             let target_tokens = &target_output.next_tokens;
@@ -339,7 +340,7 @@ impl<M: ModelBackend> Engine<M> {
         let mut beams = vec![BeamSequence::new(
             initial.tokens.clone(),
             0.0,
-            initial.kv_blocks.clone(),
+            initial.kv_blocks.as_ref().clone(),
         )];
 
         for _ in 0..max_tokens {
@@ -364,7 +365,7 @@ impl<M: ModelBackend> Engine<M> {
                     all_candidates.push(BeamSequence::new(
                         new_tokens,
                         beam.score + log_prob,
-                        beam.kv_blocks.clone(),
+                        beam.kv_blocks.as_ref().clone(),
                     ));
                 }
             }

@@ -1,6 +1,7 @@
 use crate::kv_cache::{hash_tokens, BlockAllocator, PrefixCache};
 use crate::types::{Batch, Request, SchedulerConfig, SeqId, Sequence, Status, TokenId, BLOCK_SIZE};
 use std::collections::VecDeque;
+use std::sync::Arc;
 
 pub struct Scheduler {
     waiting: VecDeque<Sequence>,
@@ -67,7 +68,7 @@ impl Scheduler {
         // Check for prefix match
         if let Some(entry) = self.prefix_cache.find_prefix_match(&req.prompt) {
             let cached_len = entry.token_count;
-            let cached_blocks = entry.blocks.clone();
+            let cached_blocks = entry.blocks.as_ref().clone();
             let remaining_len = req.prompt.len() - cached_len;
 
             let num_blocks_needed = remaining_len.div_ceil(BLOCK_SIZE);
@@ -86,7 +87,7 @@ impl Scheduler {
             let seq = Sequence {
                 id,
                 tokens: req.prompt,
-                kv_blocks: all_blocks,
+                kv_blocks: Arc::new(all_blocks),
                 num_computed_tokens: cached_len,
                 prompt_len,
                 status: Status::Prefilling,
@@ -115,7 +116,7 @@ impl Scheduler {
         let seq = Sequence {
             id,
             tokens: req.prompt,
-            kv_blocks: blocks,
+            kv_blocks: Arc::new(blocks),
             num_computed_tokens: 0,
             prompt_len,
             status: Status::Waiting,
@@ -140,7 +141,7 @@ impl Scheduler {
     }
 
     fn process_finished_sequences(&mut self) {
-        let mut newly_finished = Vec::new();
+        let mut newly_finished = Vec::with_capacity(self.running.len());
         let mut i = 0;
         while i < self.running.len() {
             if self.running[i].status == Status::Finished {
@@ -156,7 +157,7 @@ impl Scheduler {
             let key = hash_tokens(prompt_tokens);
             if !self.prefix_cache.contains_key(&key) {
                 self.prefix_cache
-                    .insert(key, seq.kv_blocks.clone(), seq.prompt_len);
+                    .insert_arc(key, seq.kv_blocks.clone(), seq.prompt_len);
             }
         }
         self.finished.extend(newly_finished);
@@ -185,16 +186,16 @@ impl Scheduler {
         &self,
         budget: usize,
     ) -> (Vec<SeqId>, Vec<Vec<TokenId>>, Vec<Vec<usize>>, usize) {
-        let mut seq_ids = Vec::new();
-        let mut input_tokens = Vec::new();
-        let mut positions = Vec::new();
-        let decode_limit = self.config.max_consecutive_decode;
-
         let effective_max_seqs = if self.config.enable_dynamic_batching {
             self.adjust_batch_size()
         } else {
             self.config.max_num_seqs
         };
+
+        let mut seq_ids = Vec::with_capacity(effective_max_seqs);
+        let mut input_tokens = Vec::with_capacity(effective_max_seqs);
+        let mut positions = Vec::with_capacity(effective_max_seqs);
+        let decode_limit = self.config.max_consecutive_decode;
 
         let mut remaining_budget = budget;
 
@@ -211,7 +212,10 @@ impl Scheduler {
                     continue;
                 }
 
-                let last = *seq.tokens.last().unwrap();
+                let Some(last) = seq.tokens.last() else {
+                    continue;
+                };
+                let last = *last;
                 let pos = seq.tokens.len() - 1;
 
                 seq_ids.push(seq.id);
@@ -230,18 +234,18 @@ impl Scheduler {
         budget: usize,
         exclude_count: usize,
     ) -> (Vec<SeqId>, Vec<Vec<TokenId>>, Vec<Vec<usize>>, usize) {
-        let mut seq_ids = Vec::new();
-        let mut input_tokens = Vec::new();
-        let mut positions = Vec::new();
-
         let effective_max_seqs = if self.config.enable_dynamic_batching {
             self.adjust_batch_size()
         } else {
             self.config.max_num_seqs
         };
 
-        let mut remaining_budget = budget;
         let max_seqs = effective_max_seqs.saturating_sub(exclude_count);
+        let mut seq_ids = Vec::with_capacity(max_seqs);
+        let mut input_tokens = Vec::with_capacity(max_seqs);
+        let mut positions = Vec::with_capacity(max_seqs);
+
+        let mut remaining_budget = budget;
 
         for seq in &self.running {
             if seq_ids.len() >= max_seqs {
@@ -365,7 +369,7 @@ impl Scheduler {
                 let blocks_needed = new_total.div_ceil(BLOCK_SIZE);
                 while seq.kv_blocks.len() < blocks_needed {
                     if let Some(new_block) = self.kv_allocator.allocate(1) {
-                        seq.kv_blocks.extend(new_block);
+                        Arc::make_mut(&mut seq.kv_blocks).extend(new_block);
                     } else {
                         break;
                     }
@@ -377,7 +381,7 @@ impl Scheduler {
             }
         }
 
-        let mut newly_finished = Vec::new();
+        let mut newly_finished = Vec::with_capacity(self.running.len());
         let mut i = 0;
         while i < self.running.len() {
             if self.running[i].status == Status::Finished {
@@ -388,13 +392,12 @@ impl Scheduler {
             }
         }
 
-        // Store in cache
         for seq in newly_finished.iter() {
             let prompt_tokens = &seq.tokens[..seq.prompt_len];
             let key = hash_tokens(prompt_tokens);
             if !self.prefix_cache.contains_key(&key) {
                 self.prefix_cache
-                    .insert(key, seq.kv_blocks.clone(), seq.prompt_len);
+                    .insert_arc(key, seq.kv_blocks.clone(), seq.prompt_len);
             }
         }
 

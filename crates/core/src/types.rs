@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use tokio::sync::mpsc;
 
 pub type TokenId = u32;
@@ -63,7 +64,7 @@ impl Default for SamplingParams {
 pub struct Sequence {
     pub id: SeqId,
     pub tokens: Vec<TokenId>,
-    pub kv_blocks: Vec<BlockId>,
+    pub kv_blocks: Arc<Vec<BlockId>>,
     pub num_computed_tokens: usize,
     pub prompt_len: usize,
     pub status: Status,

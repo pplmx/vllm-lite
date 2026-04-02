@@ -66,61 +66,47 @@ impl MetricsCollector {
         let tokens = self.tokens_total.load(Ordering::Relaxed);
         let requests = self.requests_total.load(Ordering::Relaxed);
 
-        let avg_latency = self
+        let (avg_latency, p50, p90, p99) = self
             .latencies
             .lock()
             .map(|latencies| {
                 if latencies.is_empty() {
-                    0.0
+                    (0.0, 0.0, 0.0, 0.0)
                 } else {
-                    latencies.iter().sum::<f64>() / latencies.len() as f64
-                }
-            })
-            .unwrap_or(0.0);
+                    let len = latencies.len();
+                    let sum: f64 = latencies.iter().sum();
+                    let avg = sum / len as f64;
 
-        let (p50, p90, p99) = self
-            .latencies
-            .lock()
-            .map(|latencies| {
-                if latencies.is_empty() {
-                    (0.0, 0.0, 0.0)
-                } else {
-                    let mut sorted = latencies.clone();
+                    let mut sorted = Vec::with_capacity(len);
+                    sorted.clone_from(&latencies);
                     sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-                    let _len = sorted.len();
+
                     fn get_p(xs: &[f64], p: f64) -> f64 {
-                        if xs.is_empty() {
-                            0.0
-                        } else {
-                            xs[(p * xs.len() as f64).min(xs.len() as f64 - 1.0) as usize]
-                        }
+                        xs[(p * xs.len() as f64).min(xs.len() as f64 - 1.0) as usize]
                     }
+
                     (
+                        avg,
                         get_p(&sorted, 0.5),
                         get_p(&sorted, 0.9),
                         get_p(&sorted, 0.99),
                     )
                 }
             })
-            .unwrap_or((0.0, 0.0, 0.0));
+            .unwrap_or((0.0, 0.0, 0.0, 0.0));
 
-        let avg_batch = self
+        let (avg_batch, current_batch) = self
             .batch_sizes
             .lock()
             .map(|sizes| {
                 if sizes.is_empty() {
-                    0.0
+                    (0.0, 0)
                 } else {
-                    sizes.iter().sum::<usize>() as f64 / sizes.len() as f64
+                    let sum: usize = sizes.iter().sum();
+                    (sum as f64 / sizes.len() as f64, *sizes.last().unwrap_or(&0))
                 }
             })
-            .unwrap_or(0.0);
-
-        let current_batch = self
-            .batch_sizes
-            .lock()
-            .map(|sizes| sizes.last().copied().unwrap_or(0))
-            .unwrap_or(0);
+            .unwrap_or((0.0, 0));
 
         MetricsSnapshot {
             tokens_total: tokens,
