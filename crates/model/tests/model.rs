@@ -68,3 +68,41 @@ fn test_fake_model_batch_size_respected() {
         );
     }
 }
+
+#[test]
+fn test_model_empty_batch() {
+    let model = FakeModel::new(1000);
+    let seq_ids: Vec<u64> = vec![];
+    let input_tokens: Vec<Vec<u32>> = vec![];
+    let positions: Vec<Vec<usize>> = vec![];
+
+    let output = model.forward(&seq_ids, &input_tokens, &positions).unwrap();
+    assert_eq!(output.seq_ids.len(), 0);
+    assert_eq!(output.next_tokens.len(), 0);
+}
+
+#[test]
+fn test_model_single_token_batch() {
+    let model = FakeModel::new(1000);
+    let seq_ids = vec![1u64];
+    let input_tokens = vec![vec![42u32]];
+    let positions = vec![vec![0usize]];
+
+    let output = model.forward(&seq_ids, &input_tokens, &positions).unwrap();
+    assert_eq!(output.seq_ids.len(), 1);
+    assert_eq!(output.next_tokens.len(), 1);
+    assert_eq!(output.next_tokens[0], 1);
+}
+
+#[test]
+fn test_model_large_batch() {
+    let model = FakeModel::new(1000);
+    let batch_size = 32;
+    let seq_ids: Vec<u64> = (0..batch_size).map(|i| i as u64).collect();
+    let input_tokens: Vec<Vec<u32>> = (0..batch_size).map(|i| vec![i as u32]).collect();
+    let positions: Vec<Vec<usize>> = (0..batch_size).map(|_| vec![0]).collect();
+
+    let output = model.forward(&seq_ids, &input_tokens, &positions).unwrap();
+    assert_eq!(output.seq_ids.len(), batch_size);
+    assert_eq!(output.next_tokens.len(), batch_size);
+}
