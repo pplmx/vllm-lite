@@ -9,10 +9,13 @@ struct StubModel;
 
 impl ModelBackend for StubModel {
     fn forward(
-        &self,
+        &mut self,
         seq_ids: &[SeqId],
         _input_tokens: &[Vec<TokenId>],
         _positions: &[Vec<usize>],
+        _kv_block_ids: &[Vec<usize>],
+        _num_computed_tokens: &[usize],
+        _is_prefill: &[bool],
     ) -> Result<BatchOutput> {
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
@@ -25,6 +28,9 @@ impl ModelBackend for StubModel {
         _seq_ids: &[SeqId],
         input_tokens: &[Vec<TokenId>],
         _positions: &[Vec<usize>],
+        _kv_block_ids: &[Vec<usize>],
+        _num_computed_tokens: &[usize],
+        _is_prefill: &[bool],
     ) -> Result<Vec<Vec<f32>>> {
         Ok(input_tokens
             .iter()

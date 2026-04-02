@@ -47,21 +47,25 @@ impl<M: ModelBackend> super::Engine<M> {
     fn generate_draft_tokens(&mut self, batch: &Batch) -> Result<Vec<Vec<TokenId>>> {
         let mut draft_outputs = Vec::new();
 
-        for ((seq_id, tokens), positions) in batch
+        for (i, ((seq_id, tokens), positions)) in batch
             .seq_ids
             .iter()
             .zip(batch.input_tokens.iter())
             .zip(batch.positions.iter())
+            .enumerate()
         {
             let mut draft = Vec::new();
             let mut current_tokens = tokens.clone();
             let mut current_positions = positions.clone();
 
             for _ in 0..self.max_draft_tokens {
-                let output = self.draft_model.forward(
+                let output = self.draft_model.borrow_mut().forward(
                     &[*seq_id],
                     std::slice::from_ref(&current_tokens),
                     std::slice::from_ref(&current_positions),
+                    std::slice::from_ref(&batch.kv_block_ids[i]),
+                    std::slice::from_ref(&batch.num_computed_tokens[i]),
+                    std::slice::from_ref(&batch.is_prefill[i]),
                 )?;
                 let token = *output.next_tokens.first().unwrap_or(&0);
                 draft.push(token);
@@ -85,10 +89,13 @@ impl<M: ModelBackend> super::Engine<M> {
             let drafts = &draft_outputs[i];
 
             if drafts.is_empty() {
-                let target_output = self.target_model.forward(
+                let target_output = self.target_model.borrow_mut().forward(
                     &[*seq_id],
                     std::slice::from_ref(&batch.input_tokens[i]),
                     std::slice::from_ref(&batch.positions[i]),
+                    std::slice::from_ref(&batch.kv_block_ids[i]),
+                    std::slice::from_ref(&batch.num_computed_tokens[i]),
+                    std::slice::from_ref(&batch.is_prefill[i]),
                 )?;
                 if let Some(&token) = target_output.next_tokens.first() {
                     results.push((*seq_id, token));
@@ -100,11 +107,17 @@ impl<M: ModelBackend> super::Engine<M> {
             verify_tokens.extend(drafts.iter().cloned());
 
             let verify_positions: Vec<usize> = (0..verify_tokens.len()).collect();
+            let verify_kv_block_ids: Vec<Vec<usize>> = vec![batch.kv_block_ids[i].clone(); verify_tokens.len()];
+            let verify_num_computed: Vec<usize> = vec![batch.num_computed_tokens[i] + drafts.len(); verify_tokens.len()];
+            let verify_is_prefill: Vec<bool> = vec![false; verify_tokens.len()];
 
-            let target_output = self.target_model.forward(
+            let target_output = self.target_model.borrow_mut().forward(
                 &[*seq_id],
                 std::slice::from_ref(&verify_tokens),
                 std::slice::from_ref(&verify_positions),
+                &verify_kv_block_ids,
+                &verify_num_computed,
+                &verify_is_prefill,
             )?;
 
             let target_tokens = &target_output.next_tokens;
