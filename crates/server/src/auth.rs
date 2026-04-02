@@ -85,3 +85,77 @@ pub async fn auth_middleware(
         Err(status) => Response::builder().status(status).body("".into()).unwrap(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::header::AUTHORIZATION;
+    use axum::http::HeaderMap;
+    use tokio::time::{sleep, Duration};
+
+    #[tokio::test]
+    async fn test_rate_limiter_allows_within_limit() {
+        let mut limiter = RateLimiter::new(3, 60);
+        assert!(limiter.check_rate_limit("key1").await);
+        assert!(limiter.check_rate_limit("key1").await);
+        assert!(limiter.check_rate_limit("key1").await);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_blocks_over_limit() {
+        let mut limiter = RateLimiter::new(2, 60);
+        assert!(limiter.check_rate_limit("key1").await);
+        assert!(limiter.check_rate_limit("key1").await);
+        assert!(!limiter.check_rate_limit("key1").await);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_separate_keys() {
+        let mut limiter = RateLimiter::new(1, 60);
+        assert!(limiter.check_rate_limit("key1").await);
+        assert!(limiter.check_rate_limit("key2").await);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_window_expiry() {
+        let mut limiter = RateLimiter::new(1, 0);
+        assert!(limiter.check_rate_limit("key1").await);
+        sleep(Duration::from_millis(10)).await;
+        assert!(limiter.check_rate_limit("key1").await);
+    }
+
+    #[tokio::test]
+    async fn test_auth_middleware_valid_key() {
+        let auth = AuthMiddleware::new(vec!["test_key".to_string()], 10, 60);
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer test_key".parse().unwrap());
+        let result = auth.verify(&headers).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_auth_middleware_invalid_key() {
+        let auth = AuthMiddleware::new(vec!["test_key".to_string()], 10, 60);
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer wrong_key".parse().unwrap());
+        let result = auth.verify(&headers).await;
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_auth_middleware_no_key() {
+        let auth = AuthMiddleware::new(vec!["test_key".to_string()], 10, 60);
+        let headers = HeaderMap::new();
+        let result = auth.verify(&headers).await;
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_auth_middleware_no_keys_allow_all() {
+        let auth = AuthMiddleware::new(vec![], 10, 60);
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer any_key".parse().unwrap());
+        let result = auth.verify(&headers).await;
+        assert!(result.is_ok());
+    }
+}
