@@ -625,7 +625,7 @@ mod tests {
         sched.add_request(Request::new(2, vec![40, 50], 5));
 
         let batch2 = sched.build_batch();
-        assert!(batch2.seq_ids.len() >= 1);
+        assert!(!batch2.seq_ids.is_empty());
     }
 
     #[test]
@@ -651,7 +651,7 @@ mod tests {
         sched.add_request(Request::new(2, vec![20], 10));
 
         let batch2 = sched.build_batch();
-        assert!(batch2.seq_ids.len() >= 1);
+        assert!(!batch2.seq_ids.is_empty());
     }
 
     #[test]
@@ -906,7 +906,7 @@ mod tests {
 
         // First request is still prefill (3 more tokens), second is prefill (2 tokens)
         let batch2 = sched.build_batch();
-        assert!(batch2.seq_ids.len() >= 1);
+        assert!(!batch2.seq_ids.is_empty());
     }
 
     #[test]
@@ -960,7 +960,7 @@ mod tests {
 
         let batch = sched.build_batch();
 
-        assert!(batch.input_tokens[0].len() >= 1);
+        assert!(!batch.input_tokens[0].is_empty());
     }
 
     #[test]
@@ -987,7 +987,7 @@ mod tests {
 
         let batch2 = sched.build_batch();
 
-        assert!(batch2.seq_ids.len() >= 1);
+        assert!(!batch2.seq_ids.is_empty());
     }
 
     #[test]
@@ -1084,7 +1084,7 @@ mod tests {
 
         // With only 5 KV blocks and min_batch_size=1, should allow at least 1
         assert!(
-            batch.seq_ids.len() >= 1,
+            !batch.seq_ids.is_empty(),
             "Should allow at least min_batch_size"
         );
     }
@@ -1231,7 +1231,7 @@ mod tests {
         let batch3 = sched.build_batch();
 
         // Should process waiting requests
-        assert!(batch3.seq_ids.len() >= 1);
+        assert!(!batch3.seq_ids.is_empty());
     }
 
     #[test]

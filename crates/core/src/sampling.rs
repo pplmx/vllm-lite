@@ -288,9 +288,9 @@ pub fn apply_repeat_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penalty
 
         #[test]
         fn test_sample_batch_with_repeat_penalty() {
-            let mut logits = vec![vec![0.5, 0.5, 0.5]];
+            let logits = vec![vec![0.5, 0.5, 0.5]];
             let seen = vec![vec![1]];
-            let result = sample_batch(&mut logits, 0.0, 1.0, 0, 2.0, &seen);
+            let result = sample_batch(&logits, 0.0, 1.0, 0, 2.0, &seen);
             assert_eq!(result.len(), 1);
         }
 
