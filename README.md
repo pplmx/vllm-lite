@@ -14,13 +14,108 @@ A lightweight LLM inference engine written in Rust, implementing key vLLM innova
 # Build
 cargo build --workspace
 
-# Run server
+# Run server (default: /models/Qwen2.5-0.5B-Instruct)
 cargo run -p vllm-server
+
+# Or specify model path
+cargo run -p vllm-server -- --model /path/to/your/model
 
 # Test
 curl -X POST http://localhost:8000/v1/completions \
   -H "Content-Type: application/json" \
   -d '{"prompt": "Hello, how are you?", "max_tokens": 50, "stream": true}'
+```
+
+## Configuration
+
+Configuration can be provided via YAML file or environment variables:
+
+```yaml
+# config.yaml
+server:
+  host: "0.0.0.0"
+  port: 8000
+  log_level: "info"
+
+engine:
+  max_draft_tokens: 8
+  num_kv_blocks: 1024
+  max_batch_size: 256
+  tensor_parallel_size: 1
+
+auth:
+  api_keys: []
+  rate_limit_requests: 100
+  rate_limit_window_secs: 60
+```
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VLLM_HOST` | Server host | `0.0.0.0` |
+| `VLLM_PORT` | Server port | `8000` |
+| `VLLM_LOG_LEVEL` | Log level | `info` |
+| `VLLM_MAX_DRAFT_TOKENS` | Max speculative tokens | `8` |
+| `VLLM_KV_BLOCKS` | Number of KV blocks | `1024` |
+| `VLLM_TENSOR_PARALLEL_SIZE` | Tensor parallel size | `1` |
+
+### CLI Options
+
+```bash
+cargo run -p vllm-server -- --help
+```
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/chat/completions` | POST | Chat completion |
+| `/v1/completions` | POST | Text completion |
+| `/v1/embeddings` | POST | Get embeddings |
+| `/v1/batches` | POST/GET | Batch requests |
+| `/metrics` | GET | Prometheus metrics |
+| `/health` | GET | Health check |
+| `/shutdown` | GET | Shutdown server |
+
+## Examples
+
+### Chat Completion
+
+```bash
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"role": "user", "content": "What is Rust?"}
+    ],
+    "max_tokens": 100
+  }'
+```
+
+### Streaming
+
+```bash
+curl -X POST http://localhost:8000/v1/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Once upon a time",
+    "max_tokens": 50,
+    "stream": true
+  }'
+```
+
+### With Authentication
+
+```bash
+# Set API key
+export VLLM_API_KEY=your-secret-key
+
+# Use with requests
+curl -X POST http://localhost:8000/v1/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-secret-key" \
+  -d '{"prompt": "Hello", "max_tokens": 10}'
 ```
 
 ## Features
