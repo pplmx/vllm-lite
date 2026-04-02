@@ -27,4 +27,3 @@ pub use engine::Engine;
 pub use metrics::{MetricsCollector, MetricsSnapshot};
 pub use scheduler::Scheduler;
 pub use types::Priority;
-pub use vllm_traits::Result;
