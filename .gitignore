@@ -28,3 +28,4 @@ coverage/
 # Benchmarks
 benches/
 .worktrees/
+.worktrees/
