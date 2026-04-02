@@ -4,14 +4,15 @@ resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 authors = ["vLLM-lite Team"]
 license = "MIT"
 repository = "https://github.com/pplmx/vllm-lite"
 homepage = "https://github.com/pplmx/vllm-lite"
+rust-version = "1.75"
 
 [workspace.metadata]
-rust-version = "1.75"
+msrv = "1.75"
 description = "A lightweight LLM inference engine in Rust implementing vLLM innovations"
 keywords = ["llm", "inference", "vllm", "rust", "machine-learning"]
 categories = ["machine-learning", "api-bindings"]
@@ -22,9 +23,6 @@ tokio = { version = "1", features = ["full"] }
 rand = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
-# Build
-rust-version = "1.75"
 
 [profile.dev]
 opt-level = 0
