@@ -23,7 +23,7 @@ pub struct Qwen3Model {
 }
 
 impl Qwen3Model {
-    pub fn new(config: Qwen3Config, device: Device) -> CandleResult<Self> {
+    pub fn new(config: Qwen3Config, device: Device, num_kv_blocks: usize) -> CandleResult<Self> {
         let vocab_size = config.vocab_size();
         let hidden_size = config.hidden_size();
 
@@ -63,7 +63,7 @@ impl Qwen3Model {
             config.num_hidden_layers(),
             config.num_key_value_heads(),
             config.head_dim(),
-            1024,
+            num_kv_blocks,
             device.clone(),
             false,
         )?;
@@ -406,7 +406,7 @@ mod tests {
         };
 
         let device = Device::Cpu;
-        let model = Qwen3Model::new(config, device).unwrap();
+        let model = Qwen3Model::new(config, device, 16).unwrap();
 
         // Test forward with single token
         let output = model.forward(&[1], &[vec![42]], &[vec![0]]).unwrap();
@@ -429,7 +429,7 @@ mod tests {
         };
 
         let device = Device::Cpu;
-        let model = Qwen3Model::new(config, device).unwrap();
+        let model = Qwen3Model::new(config, device, 16).unwrap();
 
         let output = model.forward(&[1], &[vec![42]], &[vec![0]]).unwrap();
         assert_eq!(output.next_tokens.len(), 1);
@@ -451,7 +451,7 @@ mod tests {
         };
 
         let device = Device::Cpu;
-        let model = Qwen3Model::new(config, device).unwrap();
+        let model = Qwen3Model::new(config, device, 16).unwrap();
 
         let output = model.forward(&[1], &[vec![42]], &[vec![0]]).unwrap();
         assert_eq!(output.next_tokens.len(), 1);
@@ -470,7 +470,7 @@ mod tests {
         };
 
         let device = Device::Cpu;
-        let model = Qwen3Model::new(config, device).unwrap();
+        let model = Qwen3Model::new(config, device, 16).unwrap();
 
         // Test with batch size 3
         let seq_ids = vec![1u64, 2, 3];
