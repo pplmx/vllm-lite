@@ -30,6 +30,7 @@ impl Qwen3Model {
         let embed_tokens = Embedding::new(embeddings, hidden_size);
 
         let mut layers = Vec::new();
+        let theta = config.rope_theta();
         for _ in 0..config.num_hidden_layers() {
             let layer = TransformerBlock::new(
                 hidden_size,
@@ -37,6 +38,7 @@ impl Qwen3Model {
                 config.num_key_value_heads(),
                 config.head_dim(),
                 config.intermediate_size(),
+                theta,
                 config.rms_norm_eps(),
                 None,
                 config.has_qk_norm(),
@@ -166,12 +168,14 @@ impl Qwen3Model {
                 k_norm_weight,
             ));
 
+            let theta = config.rope_theta();
             let layer = TransformerBlock::new_with_weights(
                 hidden_size,
                 config.num_attention_heads(),
                 config.num_key_value_heads(),
                 config.head_dim(),
                 config.intermediate_size(),
+                theta,
                 config.rms_norm_eps(),
                 config.has_qk_norm(),
                 layer_weights,
@@ -234,6 +238,7 @@ impl Qwen3Model {
         tokens: &[TokenId],
         num_computed_tokens: usize,
         block_ids: &[BlockId],
+        positions: &[usize],
         is_prefill: bool,
     ) -> EngineResult<(Tensor, Tensor)> {
         if tokens.is_empty() {
@@ -254,7 +259,7 @@ impl Qwen3Model {
         if is_prefill {
             for (layer_idx, layer) in self.layers.iter_mut().enumerate() {
                 hidden = layer
-                    .forward_prefill(&hidden, &mut self.kv_cache, layer_idx, block_ids)
+                    .forward_prefill(&hidden, &mut self.kv_cache, layer_idx, block_ids, positions)
                     .map_err(|e| EngineError::ModelError(e.to_string()))?;
             }
         } else {
@@ -266,6 +271,7 @@ impl Qwen3Model {
                         layer_idx,
                         block_ids,
                         num_computed_tokens,
+                        positions,
                     )
                     .map_err(|e| EngineError::ModelError(e.to_string()))?;
             }
@@ -287,7 +293,8 @@ impl Qwen3Model {
         &mut self,
         input_tokens: &[TokenId],
     ) -> EngineResult<(Tensor, Tensor)> {
-        self.forward_with_cache(input_tokens, 0, &[0], true)
+        let positions: Vec<usize> = (0..input_tokens.len()).collect();
+        self.forward_with_cache(input_tokens, 0, &[0], &positions, true)
             .map_err(|e| EngineError::ModelError(e.to_string()))
     }
 }

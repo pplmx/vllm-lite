@@ -1,12 +1,24 @@
 use candle_core::{DType, Device, Tensor};
 use vllm_model::qwen3::attention::{AttentionConfig, GqaAttention};
 
+const THETA: f32 = 10000.0;
+
 #[test]
 fn test_gqa_expand_kv_same_heads() {
     let device = Device::Cpu;
 
     // MHA: 4 query heads, 4 KV heads (same)
-    let attn = GqaAttention::new(256, 4, 4, 64, None, AttentionConfig::default(), false).unwrap();
+    let attn = GqaAttention::new(
+        256,
+        4,
+        4,
+        64,
+        THETA,
+        None,
+        AttentionConfig::default(),
+        false,
+    )
+    .unwrap();
 
     // Input: [batch=1, seq=2, num_kv_heads=4, head_dim=64]
     let kv = Tensor::ones((1, 2, 4, 64), DType::F32, &device).unwrap();
@@ -22,7 +34,17 @@ fn test_gqa_expand_kv_gqa() {
     let device = Device::Cpu;
 
     // GQA: 8 query heads, 2 KV heads
-    let attn = GqaAttention::new(512, 8, 2, 64, None, AttentionConfig::default(), false).unwrap();
+    let attn = GqaAttention::new(
+        512,
+        8,
+        2,
+        64,
+        THETA,
+        None,
+        AttentionConfig::default(),
+        false,
+    )
+    .unwrap();
 
     // Input: [batch=1, seq=2, num_kv_heads=2, head_dim=64]
     let kv = Tensor::ones((1, 2, 2, 64), DType::F32, &device).unwrap();
@@ -38,7 +60,17 @@ fn test_gqa_expand_kv_mqa() {
     let device = Device::Cpu;
 
     // MQA: 8 query heads, 1 KV head
-    let attn = GqaAttention::new(512, 8, 1, 64, None, AttentionConfig::default(), false).unwrap();
+    let attn = GqaAttention::new(
+        512,
+        8,
+        1,
+        64,
+        THETA,
+        None,
+        AttentionConfig::default(),
+        false,
+    )
+    .unwrap();
 
     // Input: [batch=2, seq=3, num_kv_heads=1, head_dim=64]
     let kv = Tensor::ones((2, 3, 1, 64), DType::F32, &device).unwrap();
@@ -54,7 +86,17 @@ fn test_gqa_attention_forward_single_token() {
     let device = Device::Cpu;
 
     // Qwen2.5-0.5B config: 14 Q heads, 2 KV heads, 64 head_dim
-    let attn = GqaAttention::new(896, 14, 2, 64, None, AttentionConfig::default(), false).unwrap();
+    let attn = GqaAttention::new(
+        896,
+        14,
+        2,
+        64,
+        THETA,
+        None,
+        AttentionConfig::default(),
+        false,
+    )
+    .unwrap();
 
     // Input: [batch=1, seq=1, hidden=896] - use F32 explicitly
     let x = Tensor::randn(0.0, 1.0, (1, 1, 896), &device)
@@ -95,6 +137,7 @@ fn test_attention_computes_attention_weights() {
         2,
         2,
         64,
+        THETA,
         q_weight,
         k_weight,
         v_weight,
@@ -143,7 +186,17 @@ fn test_attention_computes_attention_weights() {
 fn test_gqa_attention_forward_multiple_tokens() {
     let device = Device::Cpu;
 
-    let attn = GqaAttention::new(896, 14, 2, 64, None, AttentionConfig::default(), false).unwrap();
+    let attn = GqaAttention::new(
+        896,
+        14,
+        2,
+        64,
+        THETA,
+        None,
+        AttentionConfig::default(),
+        false,
+    )
+    .unwrap();
 
     // Input: [batch=1, seq=4, hidden=896]
     let x = Tensor::randn(0.0, 1.0, (1, 4, 896), &device)
@@ -160,7 +213,17 @@ fn test_gqa_attention_forward_multiple_tokens() {
 fn test_gqa_attention_forward_batch() {
     let device = Device::Cpu;
 
-    let attn = GqaAttention::new(512, 8, 2, 64, None, AttentionConfig::default(), false).unwrap();
+    let attn = GqaAttention::new(
+        512,
+        8,
+        2,
+        64,
+        THETA,
+        None,
+        AttentionConfig::default(),
+        false,
+    )
+    .unwrap();
 
     // Input: [batch=3, seq=2, hidden=512]
     let x = Tensor::randn(0.0, 1.0, (3, 2, 512), &device)
@@ -186,7 +249,17 @@ fn test_qwen2_config_gqa() {
 #[test]
 fn test_attention_output_is_different_from_input() {
     let device = Device::Cpu;
-    let attn = GqaAttention::new(256, 4, 2, 64, None, AttentionConfig::default(), false).unwrap();
+    let attn = GqaAttention::new(
+        256,
+        4,
+        2,
+        64,
+        THETA,
+        None,
+        AttentionConfig::default(),
+        false,
+    )
+    .unwrap();
 
     // Use non-zero input to ensure attention computation happens
     let x = Tensor::ones((1, 2, 256), DType::F32, &device).unwrap();
@@ -229,6 +302,7 @@ fn test_attention_causal_mask_behavior() {
         2,
         2,
         64,
+        THETA,
         q_weight,
         k_weight,
         v_weight,

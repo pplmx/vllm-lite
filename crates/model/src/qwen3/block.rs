@@ -23,6 +23,7 @@ impl TransformerBlock {
         num_kv_heads: usize,
         head_dim: usize,
         intermediate_size: usize,
+        theta: f32,
         rms_norm_eps: f64,
         vb: Option<candle_nn::VarBuilder>,
         has_qk_norm: bool,
@@ -42,6 +43,7 @@ impl TransformerBlock {
             num_heads,
             num_kv_heads,
             head_dim,
+            theta,
             Some(vb_attn),
             AttentionConfig::default(),
             has_qk_norm,
@@ -65,6 +67,7 @@ impl TransformerBlock {
         num_kv_heads: usize,
         head_dim: usize,
         intermediate_size: usize,
+        theta: f32,
         rms_norm_eps: f64,
         has_qk_norm: bool,
         weights: Option<(
@@ -116,6 +119,7 @@ impl TransformerBlock {
             num_heads,
             num_kv_heads,
             head_dim,
+            theta,
             q_w,
             k_w,
             v_w,
@@ -154,12 +158,13 @@ impl TransformerBlock {
         kv_cache: &mut PagedKvCache,
         layer_idx: usize,
         block_ids: &[usize],
+        positions: &[usize],
     ) -> Result<Tensor> {
         let residual = x.clone();
         let x = self.input_layernorm.forward(x)?;
         let x = self
             .attention
-            .forward_prefill(&x, kv_cache, layer_idx, block_ids)?;
+            .forward_prefill(&x, kv_cache, layer_idx, block_ids, positions)?;
         let x = (&x + &residual)?;
 
         let residual = x.clone();
@@ -177,6 +182,7 @@ impl TransformerBlock {
         layer_idx: usize,
         block_ids: &[usize],
         num_computed_tokens: usize,
+        positions: &[usize],
     ) -> Result<Tensor> {
         let residual = x.clone();
         let x = self.input_layernorm.forward(x)?;
@@ -186,6 +192,7 @@ impl TransformerBlock {
             layer_idx,
             block_ids,
             num_computed_tokens,
+            positions,
         )?;
         let x = (&x + &residual)?;
 
@@ -206,7 +213,7 @@ mod tests {
     #[test]
     fn test_transformer_block_forward() -> Result<()> {
         let device = Device::Cpu;
-        let block = TransformerBlock::new(256, 4, 2, 64, 512, 1e-6, None, false)?;
+        let block = TransformerBlock::new(256, 4, 2, 64, 512, 10000.0, 1e-6, None, false)?;
 
         let x = Tensor::ones((1, 2, 256), DType::F32, &device)?;
         let output = block.forward(&x)?;
@@ -218,7 +225,7 @@ mod tests {
     #[test]
     fn test_transformer_block_batch_forward() -> Result<()> {
         let device = Device::Cpu;
-        let block = TransformerBlock::new(128, 4, 2, 32, 256, 1e-6, None, false)?;
+        let block = TransformerBlock::new(128, 4, 2, 32, 256, 10000.0, 1e-6, None, false)?;
 
         let x = Tensor::ones((4, 3, 128), DType::F32, &device)?;
         let output = block.forward(&x)?;
@@ -230,7 +237,7 @@ mod tests {
     #[test]
     fn test_transformer_block_output_shape() -> Result<()> {
         let device = Device::Cpu;
-        let block = TransformerBlock::new(128, 4, 2, 32, 256, 1e-6, None, false)?;
+        let block = TransformerBlock::new(128, 4, 2, 32, 256, 10000.0, 1e-6, None, false)?;
 
         let x = Tensor::zeros((2, 1, 128), DType::F32, &device)?;
         let output = block.forward(&x)?;
@@ -243,7 +250,7 @@ mod tests {
     fn test_transformer_block_with_qk_norm() -> Result<()> {
         // Qwen3-0.6B uses q_norm/k_norm
         let device = Device::Cpu;
-        let block = TransformerBlock::new(128, 4, 2, 32, 256, 1e-6, None, true)?;
+        let block = TransformerBlock::new(128, 4, 2, 32, 256, 10000.0, 1e-6, None, true)?;
 
         let x = Tensor::ones((1, 2, 128), DType::F32, &device)?;
         let output = block.forward(&x)?;
@@ -258,7 +265,7 @@ mod tests {
         // This test verifies custom head_dim works
         let device = Device::Cpu;
         // hidden=1024, heads=16, kv_heads=8, head_dim=128, intermediate=3072
-        let block = TransformerBlock::new(1024, 16, 8, 128, 3072, 1e-6, None, true)?;
+        let block = TransformerBlock::new(1024, 16, 8, 128, 3072, 10000.0, 1e-6, None, true)?;
 
         let x = Tensor::ones((1, 4, 1024), DType::F32, &device)?;
         let output = block.forward(&x)?;
