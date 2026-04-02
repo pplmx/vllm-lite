@@ -9,6 +9,7 @@ use candle_core::{Module, Result, Tensor};
 use candle_nn::LayerNorm;
 use vllm_dist::TensorParallelConfig;
 
+#[allow(dead_code)]
 pub struct TransformerBlock {
     input_layernorm: LayerNorm,
     post_attention_layernorm: LayerNorm,
@@ -63,6 +64,7 @@ impl TransformerBlock {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_tp(
         hidden_size: usize,
         num_heads: usize,
