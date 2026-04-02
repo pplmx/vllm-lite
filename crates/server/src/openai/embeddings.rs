@@ -1,6 +1,6 @@
 use super::types::*;
 use crate::ApiState;
-use axum::{extract::State, response::IntoResponse, Json};
+use axum::{Json, extract::State, response::IntoResponse};
 
 pub async fn embeddings(
     State(_state): State<ApiState>,

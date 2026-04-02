@@ -1,6 +1,6 @@
 use axum::{
     extract::Request,
-    http::{header::AUTHORIZATION, HeaderMap, StatusCode},
+    http::{HeaderMap, StatusCode, header::AUTHORIZATION},
     middleware::Next,
     response::Response,
 };
@@ -87,9 +87,9 @@ pub async fn auth_middleware(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::http::header::AUTHORIZATION;
     use axum::http::HeaderMap;
-    use tokio::time::{sleep, Duration};
+    use axum::http::header::AUTHORIZATION;
+    use tokio::time::{Duration, sleep};
 
     #[tokio::test]
     async fn test_rate_limiter_allows_within_limit() {

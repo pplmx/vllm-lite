@@ -1,10 +1,10 @@
 use axum::{
+    Json,
     extract::State,
     response::{
-        sse::{Event, Sse},
         IntoResponse,
+        sse::{Event, Sse},
     },
-    Json,
 };
 use futures::stream;
 use std::convert::Infallible;
