@@ -1,6 +1,6 @@
 use crate::kv_cache::{BlockAllocator, PrefixCache, hash_tokens};
 use crate::types::{BLOCK_SIZE, Batch, Request, SchedulerConfig, SeqId, Sequence, Status, TokenId};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
 pub struct Scheduler {
@@ -299,10 +299,35 @@ impl Scheduler {
         let mut positions = decode_pos;
         positions.extend(prefill_pos);
 
+        // Build index mapping to maintain order
+        let batch_len = seq_ids.len();
+        let seq_id_to_idx: HashMap<SeqId, usize> = seq_ids
+            .iter()
+            .enumerate()
+            .map(|(i, &id)| (id, i))
+            .collect();
+
+        // Pre-allocate vectors
+        let mut kv_block_ids: Vec<Vec<usize>> = vec![vec![]; batch_len];
+        let mut num_computed_tokens: Vec<usize> = vec![0; batch_len];
+        let mut is_prefill: Vec<bool> = vec![false; batch_len];
+
+        // Populate using index mapping
+        for seq in &self.running {
+            if let Some(&idx) = seq_id_to_idx.get(&seq.id) {
+                kv_block_ids[idx] = seq.kv_blocks.as_ref().clone();
+                num_computed_tokens[idx] = seq.num_computed_tokens;
+                is_prefill[idx] = seq.status == Status::Prefilling;
+            }
+        }
+
         Batch {
             seq_ids,
             input_tokens,
             positions,
+            kv_block_ids,
+            num_computed_tokens,
+            is_prefill,
         }
     }
 
@@ -321,10 +346,35 @@ impl Scheduler {
         let mut positions = decode_pos;
         positions.extend(prefill_pos);
 
+        // Build index mapping to maintain order
+        let batch_len = seq_ids.len();
+        let seq_id_to_idx: HashMap<SeqId, usize> = seq_ids
+            .iter()
+            .enumerate()
+            .map(|(i, &id)| (id, i))
+            .collect();
+
+        // Pre-allocate vectors
+        let mut kv_block_ids: Vec<Vec<usize>> = vec![vec![]; batch_len];
+        let mut num_computed_tokens: Vec<usize> = vec![0; batch_len];
+        let mut is_prefill: Vec<bool> = vec![false; batch_len];
+
+        // Populate using index mapping
+        for seq in &self.running {
+            if let Some(&idx) = seq_id_to_idx.get(&seq.id) {
+                kv_block_ids[idx] = seq.kv_blocks.as_ref().clone();
+                num_computed_tokens[idx] = seq.num_computed_tokens;
+                is_prefill[idx] = seq.status == Status::Prefilling;
+            }
+        }
+
         Batch {
             seq_ids,
             input_tokens,
             positions,
+            kv_block_ids,
+            num_computed_tokens,
+            is_prefill,
         }
     }
 
