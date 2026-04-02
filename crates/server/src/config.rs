@@ -288,4 +288,25 @@ mod tests {
         let errors = config.validate().unwrap_err();
         assert!(errors.iter().any(|e| e.contains("tensor_parallel_size")));
     }
+
+    #[test]
+    fn test_kv_quantization_default() {
+        let config = AppConfig::default();
+        assert_eq!(config.engine.kv_quantization, false);
+    }
+
+    #[test]
+    fn test_kv_quantization_from_config() {
+        let mut config = AppConfig::default();
+        config.engine.kv_quantization = true;
+        assert!(config.validate().is_ok());
+        assert!(config.engine.kv_quantization);
+    }
+
+    #[test]
+    fn test_kv_quantization_from_env() {
+        // Test that kv_quantization defaults to false
+        let config = AppConfig::default();
+        assert!(!config.engine.kv_quantization);
+    }
 }

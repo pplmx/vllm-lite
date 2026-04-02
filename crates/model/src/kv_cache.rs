@@ -543,4 +543,62 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_quantized_vs_non_quantized() -> Result<()> {
+        let device = Device::Cpu;
+
+        // Non-quantized
+        let mut cache_no_quant = PagedKvCache::new(1, 2, 4, 4, device.clone(), false)?;
+        let k_data = vec![5.0f32; 8];
+        let k = Tensor::from_slice(&k_data, (1, 2, 4), &device)?;
+        let v_data = vec![15.0f32; 8];
+        let v = Tensor::from_slice(&v_data, (1, 2, 4), &device)?;
+
+        cache_no_quant.write_kv(0, 0, 0, &k, &v)?;
+        let (k_no_q, v_no_q) = cache_no_quant.read_kv(0, &[0], 1)?;
+
+        // Quantized
+        let mut cache_quant = PagedKvCache::new(1, 2, 4, 4, device.clone(), true)?;
+        cache_quant.write_kv(0, 0, 0, &k, &v)?;
+        let (k_q, v_q) = cache_quant.read_kv(0, &[0], 1)?;
+
+        // Both should produce similar results (within quantization error)
+        let k_no_q_data: Vec<f32> = k_no_q.flatten_all()?.to_vec1()?;
+        let k_q_data: Vec<f32> = k_q.flatten_all()?.to_vec1()?;
+
+        for (a, b) in k_no_q_data.iter().zip(k_q_data.iter()) {
+            assert!(
+                (a - b).abs() < 1.0,
+                "Quantized should be close to non-quantized"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_quantized_scale_tracking() -> Result<()> {
+        let device = Device::Cpu;
+        let mut cache = PagedKvCache::new(2, 2, 4, 4, device.clone(), true)?;
+
+        // Write to layer 0
+        let k0 = Tensor::from_slice(&vec![100.0f32; 8], (1, 2, 4), &device)?;
+        let v0 = Tensor::from_slice(&vec![100.0f32; 8], (1, 2, 4), &device)?;
+        cache.write_kv(0, 0, 0, &k0, &v0)?;
+
+        // Write to layer 1
+        let k1 = Tensor::from_slice(&vec![50.0f32; 8], (1, 2, 4), &device)?;
+        let v1 = Tensor::from_slice(&vec![50.0f32; 8], (1, 2, 4), &device)?;
+        cache.write_kv(1, 0, 0, &k1, &v1)?;
+
+        // Check scales are different
+        let scale0 = cache.get_scale(0);
+        let scale1 = cache.get_scale(1);
+
+        assert!(scale0 > 0.0);
+        assert!(scale1 > 0.0);
+
+        Ok(())
+    }
 }

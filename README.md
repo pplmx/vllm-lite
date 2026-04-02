@@ -42,6 +42,7 @@ engine:
   num_kv_blocks: 1024
   max_batch_size: 256
   tensor_parallel_size: 1
+  kv_quantization: false  # Enable INT8 KV cache quantization
 
 auth:
   api_keys: []
@@ -59,6 +60,7 @@ auth:
 | `VLLM_MAX_DRAFT_TOKENS` | Max speculative tokens | `8` |
 | `VLLM_KV_BLOCKS` | Number of KV blocks | `1024` |
 | `VLLM_TENSOR_PARALLEL_SIZE` | Tensor parallel size | `1` |
+| `VLLM_KV_QUANTIZATION` | Enable INT8 KV cache quantization | `false` |
 
 ### CLI Options
 
