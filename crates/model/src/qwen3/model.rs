@@ -407,7 +407,7 @@ mod tests {
         };
 
         let device = Device::Cpu;
-        let model = Qwen3Model::new(config, device, 16).unwrap();
+        let model = Qwen3Model::new(config, device, 1024).unwrap();
 
         // Test forward with single token
         let output = model.forward(&[1], &[vec![42]], &[vec![0]]).unwrap();
@@ -430,7 +430,7 @@ mod tests {
         };
 
         let device = Device::Cpu;
-        let model = Qwen3Model::new(config, device, 16).unwrap();
+        let model = Qwen3Model::new(config, device, 1024).unwrap();
 
         let output = model.forward(&[1], &[vec![42]], &[vec![0]]).unwrap();
         assert_eq!(output.next_tokens.len(), 1);
@@ -452,7 +452,7 @@ mod tests {
         };
 
         let device = Device::Cpu;
-        let model = Qwen3Model::new(config, device, 16).unwrap();
+        let model = Qwen3Model::new(config, device, 1024).unwrap();
 
         let output = model.forward(&[1], &[vec![42]], &[vec![0]]).unwrap();
         assert_eq!(output.next_tokens.len(), 1);
@@ -471,7 +471,7 @@ mod tests {
         };
 
         let device = Device::Cpu;
-        let model = Qwen3Model::new(config, device, 16).unwrap();
+        let model = Qwen3Model::new(config, device, 1024).unwrap();
 
         // Test with batch size 3
         let seq_ids = vec![1u64, 2, 3];
