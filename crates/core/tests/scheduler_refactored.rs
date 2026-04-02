@@ -69,7 +69,7 @@ fn test_pd_separation_refactored() {
 
     // Should have both decode (request 1) and prefill (request 2)
     assert!(
-        batch2.seq_ids.len() >= 1,
+        !batch2.seq_ids.is_empty(),
         "Should process at least one sequence"
     );
 
