@@ -472,8 +472,8 @@ fn test_speculative_decoding_verification() {
         fn forward(
             &self,
             seq_ids: &[SeqId],
-            input_tokens: &[Vec<TokenId>],
-            positions: &[Vec<usize>],
+            _input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
         ) -> Result<BatchOutput> {
             Ok(BatchOutput {
                 seq_ids: seq_ids.to_vec(),
