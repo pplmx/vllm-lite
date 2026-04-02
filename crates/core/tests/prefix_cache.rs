@@ -289,3 +289,99 @@ fn test_prefix_match_caching() {
         elapsed
     );
 }
+
+#[test]
+fn test_prefix_cache_high_volume() {
+    let config = SchedulerConfig {
+        max_num_seqs: 256,
+        max_num_batched_tokens: 4096,
+        max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
+        enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
+    };
+    let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 200);
+
+    // Add 50 different requests with different tokens
+    for i in 0..50 {
+        let tokens: Vec<TokenId> = (0..10).map(|j| (i * 100 + j) as TokenId).collect();
+        engine.add_request(
+            Request::new(i as SeqId, tokens, 3),
+            mpsc::unbounded_channel().0,
+        );
+    }
+
+    // Process all to completion
+    let mut steps = 0;
+    while engine.has_pending() {
+        engine.step().unwrap();
+        steps += 1;
+        if steps > 10000 {
+            panic!("Too many steps - possible infinite loop");
+        }
+    }
+
+    // All 50 requests should have completed
+    let cache = engine.scheduler.prefix_cache();
+    assert!(
+        cache.len() > 0,
+        "cache should have entries after high volume"
+    );
+}
+
+#[test]
+fn test_prefix_cache_many_sequences_same_prefix() {
+    let config = SchedulerConfig {
+        max_num_seqs: 256,
+        max_num_batched_tokens: 4096,
+        max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
+        enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
+    };
+    let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 200);
+
+    let common_prefix = vec![100, 200, 300];
+
+    // First request: populate cache with common prefix
+    engine.add_request(
+        Request::new(0, common_prefix.clone(), 3),
+        mpsc::unbounded_channel().0,
+    );
+    while engine.has_pending() {
+        engine.step().unwrap();
+    }
+
+    // Add 10 requests with same prefix but different completions
+    for i in 1..=10 {
+        let mut tokens = common_prefix.clone();
+        tokens.push(i as TokenId);
+        tokens.push((i + 100) as TokenId);
+        engine.add_request(
+            Request::new(i as SeqId, tokens, 3),
+            mpsc::unbounded_channel().0,
+        );
+    }
+
+    // Process all to completion
+    let mut steps = 0;
+    while engine.has_pending() {
+        engine.step().unwrap();
+        steps += 1;
+        if steps > 10000 {
+            panic!("Too many steps - possible infinite loop");
+        }
+    }
+
+    // Cache should have entries from the common prefix
+    let cache = engine.scheduler.prefix_cache();
+    assert!(cache.len() > 0, "cache should have entries");
+}
