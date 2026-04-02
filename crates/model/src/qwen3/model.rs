@@ -319,62 +319,56 @@ impl ModelBackend for Qwen3Model {
         input_tokens: &[Vec<TokenId>],
         _positions: &[Vec<usize>],
     ) -> EngineResult<BatchOutput> {
-        let mut next_tokens = Vec::with_capacity(seq_ids.len());
-
-        for (_seq_idx, tokens) in input_tokens.iter().take(seq_ids.len()).enumerate() {
-            if tokens.is_empty() {
-                next_tokens.push(0);
-                continue;
-            }
-
-            let hidden_states = {
-                let token_tensor = Tensor::new(tokens.as_slice(), &self.device)
-                    .map_err(|e| EngineError::new(e.to_string()))?;
-                let embed = self
-                    .embed_tokens
-                    .forward(&token_tensor)
-                    .map_err(|e| EngineError::new(e.to_string()))?;
-                embed
-                    .unsqueeze(0)
-                    .map_err(|e| EngineError::new(e.to_string()))?
-            };
-
-            let mut hidden_states = hidden_states;
-
-            for layer in &self.layers {
-                hidden_states = layer
-                    .forward(&hidden_states)
-                    .map_err(|e| EngineError::new(e.to_string()))?;
-            }
-
-            hidden_states = self
-                .norm
-                .forward(&hidden_states)
-                .map_err(|e| EngineError::new(e.to_string()))?;
-
-            let logits = self
-                .lm_head
-                .forward(&hidden_states)
-                .map_err(|e| EngineError::new(e.to_string()))?;
-
-            // logits shape: [batch=1, seq_len, vocab_size]
-            // Get the last token's logits: [vocab_size]
-            let batch_size = logits.dims()[0];
-            let seq_len = logits.dims()[1];
-            let last_logits = logits
-                .get(batch_size - 1)
-                .map_err(|e| EngineError::new(e.to_string()))?
-                .get(seq_len - 1)
-                .map_err(|e| EngineError::new(e.to_string()))?;
-
-            let max_idx = last_logits
-                .argmax(0)
-                .map_err(|e| EngineError::new(e.to_string()))?
-                .to_scalar::<u32>()
-                .unwrap_or(0);
-
-            next_tokens.push(max_idx as TokenId);
+        if seq_ids.is_empty() {
+            return Ok(BatchOutput {
+                seq_ids: vec![],
+                next_tokens: vec![],
+            });
         }
+
+        let batch_size = seq_ids.len();
+        let token_ids: Vec<u32> = input_tokens
+            .iter()
+            .map(|t| t.last().copied().unwrap_or(0))
+            .collect();
+
+        let token_tensor = Tensor::from_slice(&token_ids, &[batch_size], &self.device)
+            .map_err(|e| EngineError::new(e.to_string()))?;
+
+        let mut hidden_states = self
+            .embed_tokens
+            .forward(&token_tensor)
+            .map_err(|e| EngineError::new(e.to_string()))?
+            .unsqueeze(1)
+            .map_err(|e| EngineError::new(e.to_string()))?;
+
+        for layer in &self.layers {
+            hidden_states = layer
+                .forward(&hidden_states)
+                .map_err(|e| EngineError::new(e.to_string()))?;
+        }
+
+        hidden_states = self
+            .norm
+            .forward(&hidden_states)
+            .map_err(|e| EngineError::new(e.to_string()))?;
+
+        let logits = self
+            .lm_head
+            .forward(&hidden_states)
+            .map_err(|e| EngineError::new(e.to_string()))?;
+
+        use candle_core::D;
+        let next_tokens: Vec<TokenId> = logits
+            .argmax(D::Minus1)
+            .map_err(|e| EngineError::new(e.to_string()))?
+            .squeeze(1)
+            .map_err(|e| EngineError::new(e.to_string()))?
+            .to_vec1::<u32>()
+            .map_err(|e| EngineError::new(e.to_string()))?
+            .into_iter()
+            .map(|t| t as TokenId)
+            .collect();
 
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
