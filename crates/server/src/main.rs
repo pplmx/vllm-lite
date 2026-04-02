@@ -134,7 +134,10 @@ async fn main() {
         .with_state(state);
 
     if let Some(auth) = auth_middleware {
-        app = app.layer(axum::middleware::from_fn_with_state(auth, auth::auth_middleware));
+        app = app.layer(axum::middleware::from_fn_with_state(
+            auth,
+            auth::auth_middleware,
+        ));
     }
 
     let app = app.route("/shutdown", get(api::shutdown).with_state(msg_tx));
