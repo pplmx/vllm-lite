@@ -31,14 +31,11 @@ doc-check:
     RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --all-features --workspace
 
 # Run all CI checks locally (excluding msrv-check - requires special workspace setup)
-ci: fmt-check clippy doc-check test
-
-# Check Minimum Supported Rust Version (MSRV)
-msrv-check:
-    cargo msrv verify
+ci: fmt-check clippy doc-check nextest
 
 # Auto-fix clippy warnings and format
 fix:
+    cargo fix --allow-dirty --allow-staged --all-targets --all-features --workspace
     cargo clippy --fix --allow-dirty --allow-staged --all-targets --all-features --workspace -- -D warnings
     cargo fmt --all
 
@@ -47,7 +44,7 @@ doc:
     cargo doc --no-deps --open
 
 # Generate coverage report (requires cargo-tarpaulin)
-coverage:
+cov:
     cargo tarpaulin --all-features --workspace --exclude-files 'src/bin/*'
 
 # Clean build artifacts
