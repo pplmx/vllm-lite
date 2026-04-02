@@ -76,6 +76,8 @@ pub struct EngineConfig {
     pub max_batch_size: usize,
     #[serde(default = "default_max_waiting_batches")]
     pub max_waiting_batches: usize,
+    #[serde(default = "default_tensor_parallel_size")]
+    pub tensor_parallel_size: usize,
 }
 
 impl Default for EngineConfig {
@@ -85,6 +87,7 @@ impl Default for EngineConfig {
             num_kv_blocks: default_num_kv_blocks(),
             max_batch_size: default_max_batch_size(),
             max_waiting_batches: default_max_waiting_batches(),
+            tensor_parallel_size: default_tensor_parallel_size(),
         }
     }
 }
@@ -103,6 +106,10 @@ fn default_max_batch_size() -> usize {
 
 fn default_max_waiting_batches() -> usize {
     10
+}
+
+fn default_tensor_parallel_size() -> usize {
+    1
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -165,6 +172,11 @@ impl AppConfig {
                 config.engine.num_kv_blocks = v;
             }
         }
+        if let Ok(tp_size) = std::env::var("VLLM_TENSOR_PARALLEL_SIZE") {
+            if let Ok(v) = tp_size.parse() {
+                config.engine.tensor_parallel_size = v;
+            }
+        }
 
         config
     }
@@ -200,6 +212,10 @@ impl AppConfig {
 
         if self.engine.max_batch_size == 0 {
             errors.push("engine.max_batch_size must be > 0".to_string());
+        }
+
+        if self.engine.tensor_parallel_size == 0 {
+            errors.push("engine.tensor_parallel_size must be > 0".to_string());
         }
 
         if errors.is_empty() {

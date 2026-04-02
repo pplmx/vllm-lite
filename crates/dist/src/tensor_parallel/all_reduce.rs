@@ -1,6 +1,5 @@
-use std::sync::Arc;
-
 use super::device_mesh::{DeviceMesh, TensorParallelError};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReduceOp {
