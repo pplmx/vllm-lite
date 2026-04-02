@@ -301,11 +301,8 @@ impl Scheduler {
 
         // Build index mapping to maintain order
         let batch_len = seq_ids.len();
-        let seq_id_to_idx: HashMap<SeqId, usize> = seq_ids
-            .iter()
-            .enumerate()
-            .map(|(i, &id)| (id, i))
-            .collect();
+        let seq_id_to_idx: HashMap<SeqId, usize> =
+            seq_ids.iter().enumerate().map(|(i, &id)| (id, i)).collect();
 
         // Pre-allocate vectors
         let mut kv_block_ids: Vec<Vec<usize>> = vec![vec![]; batch_len];
@@ -348,11 +345,8 @@ impl Scheduler {
 
         // Build index mapping to maintain order
         let batch_len = seq_ids.len();
-        let seq_id_to_idx: HashMap<SeqId, usize> = seq_ids
-            .iter()
-            .enumerate()
-            .map(|(i, &id)| (id, i))
-            .collect();
+        let seq_id_to_idx: HashMap<SeqId, usize> =
+            seq_ids.iter().enumerate().map(|(i, &id)| (id, i)).collect();
 
         // Pre-allocate vectors
         let mut kv_block_ids: Vec<Vec<usize>> = vec![vec![]; batch_len];

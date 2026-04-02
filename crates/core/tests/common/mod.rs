@@ -86,7 +86,14 @@ mod tests {
     fn test_increment_model() {
         let mut model = IncrementModel;
         let output = model
-            .forward(&[1, 2], &[vec![1], vec![2]], &[vec![0], vec![0]], &[vec![0], vec![0]], &[0, 0], &[true, true])
+            .forward(
+                &[1, 2],
+                &[vec![1], vec![2]],
+                &[vec![0], vec![0]],
+                &[vec![0], vec![0]],
+                &[0, 0],
+                &[true, true],
+            )
             .unwrap();
         assert_eq!(output.next_tokens, vec![1, 2]);
     }
@@ -94,7 +101,9 @@ mod tests {
     #[test]
     fn test_const_model() {
         let mut model = ConstModel::new(42);
-        let output = model.forward(&[1], &[vec![1]], &[vec![0]], &[vec![0]], &[0], &[true]).unwrap();
+        let output = model
+            .forward(&[1], &[vec![1]], &[vec![0]], &[vec![0]], &[0], &[true])
+            .unwrap();
         assert_eq!(output.next_tokens, vec![42]);
     }
 }
