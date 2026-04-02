@@ -6,15 +6,15 @@ use crate::error::Result;
 use crate::metrics::MetricsCollector;
 use crate::scheduler::Scheduler;
 use crate::types::{EngineMessage, Request, SchedulerConfig};
+use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::Arc;
 use tokio::sync::mpsc;
 use vllm_traits::{ModelBackend, SeqId, TokenId};
 
 pub struct Engine<M: ModelBackend> {
     pub scheduler: Scheduler,
-    pub target_model: Arc<M>,
-    pub draft_model: Arc<M>,
+    pub target_model: RefCell<Box<M>>,
+    pub draft_model: RefCell<Box<M>>,
     pub max_draft_tokens: usize,
     pub speculative_mode: bool,
     pub error_count: usize,
@@ -44,8 +44,8 @@ impl<M: ModelBackend> Engine<M> {
         let max_seqs = config.max_num_seqs;
         Self {
             scheduler: Scheduler::with_config(config, num_kv_blocks),
-            target_model: Arc::new(target_model),
-            draft_model: Arc::new(draft_model),
+            target_model: RefCell::new(Box::new(target_model)),
+            draft_model: RefCell::new(Box::new(draft_model)),
             max_draft_tokens,
             speculative_mode: false,
             error_count: 0,
