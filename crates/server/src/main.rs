@@ -72,14 +72,14 @@ async fn main() {
 
     let loader = ModelLoader::new(device.clone());
     let model = loader
-        .load_model(&model_path)
+        .load_model(&model_path, app_config.engine.num_kv_blocks)
         .expect("Failed to load model");
 
     // For speculative decoding, we need a proper draft model
     // For now, disable speculative mode by using the same model as draft
     // (this doubles memory but ensures compatibility)
     let draft_model = loader
-        .load_model(&model_path)
+        .load_model(&model_path, app_config.engine.num_kv_blocks)
         .expect("Failed to load draft model");
 
     let mut engine = Engine::new(model, draft_model);
