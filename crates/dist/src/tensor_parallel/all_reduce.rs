@@ -66,3 +66,90 @@ impl AllReduce for NcclAllReduce {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_all_reduce_sum() -> Result<(), TensorParallelError> {
+        let mesh = DeviceMesh::new(2, 0, vec![0, 1])?;
+        let all_reduce = NcclAllReduce::new(mesh.into());
+
+        let input = vec![1.0, 2.0, 3.0];
+        let result = all_reduce.all_reduce(&input, ReduceOp::Sum)?;
+
+        let expected: f32 = input.iter().sum();
+        for v in result.iter() {
+            assert_eq!(*v, expected);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_all_reduce_avg() -> Result<(), TensorParallelError> {
+        let mesh = DeviceMesh::new(2, 0, vec![0, 1])?;
+        let all_reduce = NcclAllReduce::new(mesh.into());
+
+        let input = vec![2.0, 4.0, 6.0];
+        let result = all_reduce.all_reduce(&input, ReduceOp::Avg)?;
+
+        let expected: f32 = input.iter().sum::<f32>() / 2.0;
+        for v in result.iter() {
+            assert_eq!(*v, expected);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_all_reduce_max() -> Result<(), TensorParallelError> {
+        let mesh = DeviceMesh::new(2, 0, vec![0, 1])?;
+        let all_reduce = NcclAllReduce::new(mesh.into());
+
+        let input = vec![1.0, 5.0, 3.0];
+        let result = all_reduce.all_reduce(&input, ReduceOp::Max)?;
+
+        let expected = *input
+            .iter()
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap();
+        for v in result.iter() {
+            assert_eq!(*v, expected);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_all_reduce_inplace() -> Result<(), TensorParallelError> {
+        let mesh = DeviceMesh::new(2, 0, vec![0, 1])?;
+        let all_reduce = NcclAllReduce::new(mesh.into());
+
+        let mut input = vec![1.0, 2.0, 3.0];
+        all_reduce.all_reduce_inplace(&mut input, ReduceOp::Sum)?;
+
+        let sum: f32 = 6.0;
+        for v in input.iter() {
+            assert_eq!(*v, sum);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_all_reduce_different_world_sizes() -> Result<(), TensorParallelError> {
+        let sizes = vec![1, 2, 4, 8];
+
+        for size in sizes {
+            let mesh = DeviceMesh::new(size, 0, (0..size).collect())?;
+            let all_reduce = NcclAllReduce::new(mesh.into());
+
+            let input = vec![1.0, 2.0, 3.0];
+            let result = all_reduce.all_reduce(&input, ReduceOp::Sum)?;
+
+            let expected: f32 = input.iter().sum();
+            for v in result.iter() {
+                assert_eq!(*v, expected);
+            }
+        }
+        Ok(())
+    }
+}
