@@ -23,10 +23,13 @@ pub type Result<T> = std::result::Result<T, ModelError>;
 
 pub trait ModelBackend: Send + Sync {
     fn forward(
-        &self,
+        &mut self,
         seq_ids: &[SeqId],
         input_tokens: &[Vec<TokenId>],
         positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
     ) -> Result<BatchOutput>;
 
     fn forward_logits(
@@ -34,5 +37,8 @@ pub trait ModelBackend: Send + Sync {
         seq_ids: &[SeqId],
         input_tokens: &[Vec<TokenId>],
         positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
     ) -> Result<Vec<Vec<f32>>>;
 }
