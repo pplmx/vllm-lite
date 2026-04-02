@@ -152,4 +152,25 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_apply_rope_deterministic() -> Result<()> {
+        use candle_core::{DType, Device, Tensor};
+
+        let device = Device::Cpu;
+        let query = Tensor::ones((1, 2, 2, 4), DType::F32, &device)?;
+        let position_ids = Tensor::new(&[0i64, 1i64], &device)?;
+
+        let out1 = apply_rope(&query, &position_ids, 10000.0)?;
+        let out2 = apply_rope(&query, &position_ids, 10000.0)?;
+
+        let diff = (out1 - out2)?.abs()?.sum_all()?;
+        assert_eq!(
+            diff.to_scalar::<f32>()?,
+            0.0,
+            "RoPE should be deterministic"
+        );
+
+        Ok(())
+    }
 }
