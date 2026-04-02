@@ -154,10 +154,13 @@ impl<M: ModelBackend> Engine<M> {
                     continue;
                 }
 
-                let logits = self.target_model.forward_logits(
+                let logits = self.target_model.borrow().forward_logits(
                     &[0],
                     &[vec![beam.tokens.last().copied().unwrap_or(0)]],
                     &[vec![beam.tokens.len()]],
+                    &[vec![beam.kv_blocks.last().copied().unwrap_or(0)]],
+                    &[beam.tokens.len()],
+                    &[false],
                 )?;
 
                 let top_k = self.get_top_k(&logits[0], beam_width);
@@ -223,10 +226,13 @@ mod tests {
 
     impl ModelBackend for StubModel {
         fn forward(
-            &self,
+            &mut self,
             seq_ids: &[SeqId],
             _input_tokens: &[Vec<TokenId>],
             _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
         ) -> Result<BatchOutput> {
             Ok(BatchOutput {
                 seq_ids: seq_ids.to_vec(),
@@ -239,6 +245,9 @@ mod tests {
             _seq_ids: &[SeqId],
             input_tokens: &[Vec<TokenId>],
             _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
         ) -> Result<Vec<Vec<f32>>> {
             Ok(input_tokens
                 .iter()

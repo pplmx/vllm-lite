@@ -9,9 +9,14 @@ impl<M: ModelBackend> super::Engine<M> {
             return Ok(vec![]);
         }
 
-        let output =
-            self.target_model
-                .forward(&batch.seq_ids, &batch.input_tokens, &batch.positions)?;
+        let output = self.target_model.borrow_mut().forward(
+            &batch.seq_ids,
+            &batch.input_tokens,
+            &batch.positions,
+            &batch.kv_block_ids,
+            &batch.num_computed_tokens,
+            &batch.is_prefill,
+        )?;
 
         let input_counts: Vec<usize> = batch
             .input_tokens
