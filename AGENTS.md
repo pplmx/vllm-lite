@@ -16,18 +16,25 @@ This guide helps AI agents and developers work effectively with the vLLM-lite co
 ```text
 vllm-lite/
 ├── Cargo.toml              # Workspace root
+├── justfile                # Build automation
 ├── ROADMAP.md              # Development roadmap
 ├── CHANGELOG.md            # Version history
 ├── AGENTS.md               # This guide
 ├── crates/
+│   ├── traits/             # Interface definitions (NEW)
+│   │   └── src/
+│   │       ├── model.rs    # ModelBackend trait
+│   │       └── types.rs    # Shared types (SeqId, TokenId, Batch)
 │   ├── core/               # Core engine
 │   │   └── src/
-│   │       ├── engine.rs   # Engine loop, ModelBackend trait
+│   │       ├── engine/     # Engine submodules
+│   │       │   ├── engine.rs   # Main Engine struct
+│   │       │   ├── batch.rs    # Batch processing
+│   │       │   └── speculative.rs # Speculative decoding
 │   │       ├── scheduler.rs # Batch scheduling
 │   │       ├── kv_cache.rs # BlockAllocator, PrefixCache
 │   │       ├── metrics.rs  # MetricsCollector
-│   │       ├── types.rs    # Core types
-│   │       └── sampling.rs # Sampling strategies
+│   │       └── types.rs    # Core types
 │   ├── model/              # ML models
 │   │   └── src/
 │   │       ├── qwen3/      # Qwen3 implementation
@@ -245,11 +252,12 @@ cargo test -p vllm-model -- attention
 ## Key Design Decisions
 
 - Single GPU worker thread (avoid GPU contention)
-- 3 crates: core (engine), model (ML), server (HTTP)
+- 4 crates: traits (interfaces), core (engine), model (ML), server (HTTP)
 - Block size: 16 tokens per KV block
 - Max batched tokens: 4096 default
 - Max concurrent sequences: 256 default
 - Use `ModelBackend` trait for model abstraction
+- `vllm-traits` defines interfaces, `vllm-core` implements engine, `vllm-model` implements models
 
 ## Documentation Standards
 
@@ -260,10 +268,67 @@ cargo test -p vllm-model -- attention
 | CHANGELOG.md | Root                      | For any user-facing changes |
 | README.md    | Root                      | For major features          |
 
+## Verification Guide (Required Before Commit)
+
+Always verify code changes before committing. Use `just` commands from project root:
+
+### Quick Verify (Recommended)
+
+```bash
+# Format check
+just fmt-check
+
+# Run clippy (code quality)
+just clippy
+
+# Run tests
+just test
+
+# Check documentation
+just doc-check
+```
+
+### Full CI Check
+
+```bash
+# Run all CI checks locally
+just ci
+```
+
+This runs: `fmt-check` → `clippy` → `doc-check` → `msrv-check` → `test`
+
+### Individual Commands
+
+```bash
+# Format code (auto-fix)
+just fmt
+
+# Fix clippy issues automatically
+just fix
+
+# Run tests with nextest (faster)
+just nextest
+
+# Generate documentation
+just doc
+
+# Clean build
+just clean
+```
+
+### Note on `--all-features`
+
+Some commands use `--all-features` which enables the `real_weights` feature:
+- `just clippy`
+- `just test`
+- `just doc-check`
+
+This may show different warnings than without the flag due to optional dependencies.
+
 ## Notes
 
 - Uses Rust edition 2021
 - CUDA support via Candle
 - Follow TDD pattern where possible
-- Always run clippy before commit
+- **Always run verification before commit**
 - Use `cargo check` for fast validation
