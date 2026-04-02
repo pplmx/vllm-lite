@@ -13,10 +13,13 @@ impl FakeModel {
 
 impl ModelBackend for FakeModel {
     fn forward(
-        &self,
+        &mut self,
         seq_ids: &[SeqId],
         _input_tokens: &[Vec<TokenId>],
         _positions: &[Vec<usize>],
+        _kv_block_ids: &[Vec<usize>],
+        _num_computed_tokens: &[usize],
+        _is_prefill: &[bool],
     ) -> Result<BatchOutput> {
         let next_tokens: Vec<TokenId> = seq_ids
             .iter()
@@ -34,6 +37,9 @@ impl ModelBackend for FakeModel {
         _seq_ids: &[SeqId],
         input_tokens: &[Vec<TokenId>],
         _positions: &[Vec<usize>],
+        _kv_block_ids: &[Vec<usize>],
+        _num_computed_tokens: &[usize],
+        _is_prefill: &[bool],
     ) -> Result<Vec<Vec<f32>>> {
         let vocab_size = 32000;
         Ok(input_tokens
