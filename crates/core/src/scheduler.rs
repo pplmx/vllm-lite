@@ -1269,15 +1269,7 @@ mod tests {
     fn test_running_after_all_finished() {
         let config = SchedulerConfig {
             max_num_seqs: 10,
-            max_num_batched_tokens: 100,
-            max_consecutive_decode: 10,
-            enable_pd_separation: false,
-            prefill_chunk_size: 512,
-            decode_preference_ratio: 0.7,
-            enable_priority_scheduling: false,
-            enable_dynamic_batching: false,
-            min_batch_size: 1,
-            max_batch_size: 256,
+            ..Default::default()
         };
         let mut sched = Scheduler::with_config(config, 10);
         sched.add_request(Request::new(1, vec![1], 1));
