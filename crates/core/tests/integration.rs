@@ -460,3 +460,50 @@ fn test_immediate_finish_after_prompt() {
         "should finish when max_tokens equals prompt length"
     );
 }
+
+#[test]
+fn test_speculative_decoding_verification() {
+    #[derive(Clone)]
+    struct MockModel {
+        return_token: TokenId,
+    }
+
+    impl ModelBackend for MockModel {
+        fn forward(
+            &self,
+            seq_ids: &[SeqId],
+            input_tokens: &[Vec<TokenId>],
+            positions: &[Vec<usize>],
+        ) -> Result<BatchOutput> {
+            Ok(BatchOutput {
+                seq_ids: seq_ids.to_vec(),
+                next_tokens: seq_ids.iter().map(|_| self.return_token).collect(),
+            })
+        }
+
+        fn forward_logits(
+            &self,
+            _seq_ids: &[SeqId],
+            input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+        ) -> Result<Vec<Vec<f32>>> {
+            Ok(input_tokens
+                .iter()
+                .map(|t| t.iter().map(|_| 0.0).collect())
+                .collect())
+        }
+    }
+
+    let model = MockModel { return_token: 42 };
+    let mut engine = Engine::new(model.clone(), model);
+    engine.enable_speculative();
+
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    engine.add_request(Request::new(1, vec![1, 2, 3], 10), tx);
+
+    // Run speculative step
+    let results = engine.step_speculative().unwrap();
+
+    // Should return at least one token (target)
+    assert!(!results.is_empty());
+}
