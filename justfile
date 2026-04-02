@@ -30,8 +30,8 @@ clippy:
 doc-check:
     RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --all-features --workspace
 
-# Run all CI checks locally
-ci: fmt-check clippy doc-check msrv-check test
+# Run all CI checks locally (excluding msrv-check - requires special workspace setup)
+ci: fmt-check clippy doc-check test
 
 # Check Minimum Supported Rust Version (MSRV)
 msrv-check:
