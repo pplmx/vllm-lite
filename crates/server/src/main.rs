@@ -1,8 +1,10 @@
 mod api;
+mod auth;
 mod config;
 mod logging;
 pub mod openai;
 
+use crate::auth::AuthMiddleware;
 use crate::openai::batch::manager::BatchManager;
 use axum::{routing::get, routing::post, Router};
 use candle_core::Device;
@@ -20,6 +22,7 @@ pub struct ApiState {
     pub engine_tx: api::EngineHandle,
     pub tokenizer: Arc<Tokenizer>,
     pub batch_manager: Arc<BatchManager>,
+    pub auth: Option<Arc<AuthMiddleware>>,
 }
 
 fn load_config() -> config::AppConfig {
@@ -92,10 +95,22 @@ async fn main() {
 
     let tokenizer = Arc::new(Tokenizer::new());
     let batch_manager = Arc::new(BatchManager::new());
+
+    let auth_middleware = if !app_config.auth.api_keys.is_empty() {
+        Some(Arc::new(AuthMiddleware::new(
+            app_config.auth.api_keys.clone(),
+            app_config.auth.rate_limit_requests,
+            app_config.auth.rate_limit_window_secs,
+        )))
+    } else {
+        None
+    };
+
     let state = ApiState {
         engine_tx: msg_tx.clone(),
         tokenizer,
         batch_manager,
+        auth: auth_middleware.clone(),
     };
 
     use openai::batch::handler::{create_batch, get_batch, get_batch_results, list_batches};
@@ -103,7 +118,7 @@ async fn main() {
     use openai::completions::completions as openai_completions;
     use openai::embeddings::embeddings;
 
-    let app = Router::new()
+    let mut app = Router::new()
         // OpenAI API
         .route("/v1/chat/completions", post(chat_completions))
         .route("/v1/completions", post(openai_completions))
@@ -117,6 +132,10 @@ async fn main() {
         .route("/metrics", get(api::get_prometheus))
         .route("/health", get(api::health))
         .with_state(state);
+
+    if let Some(auth) = auth_middleware {
+        app = app.layer(axum::middleware::from_fn_with_state(auth, auth::auth_middleware));
+    }
 
     let app = app.route("/shutdown", get(api::shutdown).with_state(msg_tx));
 

@@ -38,6 +38,34 @@ fn default_log_level() -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthConfig {
+    #[serde(default)]
+    pub api_keys: Vec<String>,
+    #[serde(default = "default_rate_limit_requests")]
+    pub rate_limit_requests: usize,
+    #[serde(default = "default_rate_limit_window")]
+    pub rate_limit_window_secs: u64,
+}
+
+impl Default for AuthConfig {
+    fn default() -> Self {
+        Self {
+            api_keys: vec![],
+            rate_limit_requests: 100,
+            rate_limit_window_secs: 60,
+        }
+    }
+}
+
+fn default_rate_limit_requests() -> usize {
+    100
+}
+
+fn default_rate_limit_window() -> u64 {
+    60
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::derivable_impls)]
 pub struct EngineConfig {
     #[serde(default = "default_max_draft_tokens")]
@@ -84,6 +112,8 @@ pub struct AppConfig {
     pub server: ServerConfig,
     #[serde(default)]
     pub engine: EngineConfig,
+    #[serde(default)]
+    pub auth: AuthConfig,
 }
 
 impl Default for AppConfig {
@@ -92,6 +122,7 @@ impl Default for AppConfig {
         Self {
             server: ServerConfig::default(),
             engine: EngineConfig::default(),
+            auth: AuthConfig::default(),
         }
     }
 }
