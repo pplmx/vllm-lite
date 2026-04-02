@@ -1,5 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 
+use super::rope::apply_rope;
 use crate::kv_cache::PagedKvCache;
 use candle_core::{Device, Module, Result, Tensor};
 use candle_nn::{LayerNorm, Linear};
@@ -27,6 +28,7 @@ pub struct GqaAttention {
     num_heads: usize,
     num_kv_heads: usize,
     head_dim: usize,
+    theta: f32,
     config: AttentionConfig,
     q_norm: Option<LayerNorm>,
     k_norm: Option<LayerNorm>,
@@ -38,6 +40,7 @@ impl GqaAttention {
         num_heads: usize,
         num_kv_heads: usize,
         head_dim: usize,
+        theta: f32,
         vb: Option<candle_nn::VarBuilder>,
         config: AttentionConfig,
         has_qk_norm: bool,
@@ -70,6 +73,7 @@ impl GqaAttention {
             num_heads,
             num_kv_heads,
             head_dim,
+            theta,
             config,
             q_norm,
             k_norm,
@@ -81,6 +85,7 @@ impl GqaAttention {
         num_heads: usize,
         num_kv_heads: usize,
         head_dim: usize,
+        theta: f32,
         q_weight: Tensor,
         k_weight: Tensor,
         v_weight: Tensor,
@@ -122,6 +127,7 @@ impl GqaAttention {
             num_heads,
             num_kv_heads,
             head_dim,
+            theta,
             config,
             q_norm,
             k_norm,
@@ -217,6 +223,7 @@ impl GqaAttention {
         kv_cache: &mut PagedKvCache,
         layer_idx: usize,
         block_ids: &[usize],
+        positions: &[usize],
     ) -> Result<Tensor> {
         let batch_size = x.dims()[0];
         let seq_len = x.dims()[1];
@@ -234,6 +241,11 @@ impl GqaAttention {
 
         let q = self.apply_q_norm(q, batch_size, seq_len)?;
         let k = self.apply_k_norm(k, batch_size, seq_len)?;
+
+        let position_ids: Vec<i64> = positions.iter().map(|&p| p as i64).collect();
+        let position_ids = Tensor::new(position_ids.as_slice(), q.device())?;
+        let q = apply_rope(&q, &position_ids, self.theta)?;
+        let k = apply_rope(&k, &position_ids, self.theta)?;
 
         let q = q.transpose(1, 2)?;
         let k = k.transpose(1, 2)?;
@@ -280,6 +292,7 @@ impl GqaAttention {
         layer_idx: usize,
         block_ids: &[usize],
         num_computed_tokens: usize,
+        positions: &[usize],
     ) -> Result<Tensor> {
         let batch_size = x.dims()[0];
         let seq_len = num_computed_tokens + 1;
@@ -291,10 +304,16 @@ impl GqaAttention {
         let q = self.apply_q_norm(q, batch_size, 1)?;
         let q = q.transpose(1, 2)?;
 
+        let position_ids: Vec<i64> = positions.iter().map(|&p| p as i64).collect();
+        let position_ids = Tensor::new(position_ids.as_slice(), q.device())?;
+        let q = apply_rope(&q, &position_ids, self.theta)?;
+
         let (k, v) = kv_cache.read_kv(layer_idx, block_ids, num_computed_tokens)?;
 
         let k = k.transpose(0, 1)?.transpose(1, 2)?;
         let v = v.transpose(0, 1)?.transpose(1, 2)?;
+
+        let k = apply_rope(&k, &position_ids, self.theta)?;
 
         let k_expanded = self.expand_kv(&k, self.num_heads, self.num_kv_heads)?;
         let v_expanded = self.expand_kv(&v, self.num_heads, self.num_kv_heads)?;
