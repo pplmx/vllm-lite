@@ -89,10 +89,13 @@ impl Qwen35Model {
 
 impl ModelBackend for Qwen35Model {
     fn forward(
-        &self,
+        &mut self,
         seq_ids: &[SeqId],
         input_tokens: &[Vec<TokenId>],
         _positions: &[Vec<usize>],
+        _kv_block_ids: &[Vec<usize>],
+        _num_computed_tokens: &[usize],
+        _is_prefill: &[bool],
     ) -> EngineResult<BatchOutput> {
         if seq_ids.is_empty() {
             return Ok(BatchOutput {
@@ -163,6 +166,9 @@ impl ModelBackend for Qwen35Model {
         _seq_ids: &[SeqId],
         input_tokens: &[Vec<TokenId>],
         _positions: &[Vec<usize>],
+        _kv_block_ids: &[Vec<usize>],
+        _num_computed_tokens: &[usize],
+        _is_prefill: &[bool],
     ) -> EngineResult<Vec<Vec<f32>>> {
         let vocab_size = self.config.vocab_size();
         Ok(input_tokens

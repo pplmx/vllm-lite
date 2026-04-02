@@ -315,10 +315,13 @@ impl Qwen3Model {
 
 impl ModelBackend for Qwen3Model {
     fn forward(
-        &self,
+        &mut self,
         seq_ids: &[SeqId],
         input_tokens: &[Vec<TokenId>],
-        _positions: &[Vec<usize>],
+        positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
     ) -> EngineResult<BatchOutput> {
         if seq_ids.is_empty() {
             return Ok(BatchOutput {
@@ -327,49 +330,87 @@ impl ModelBackend for Qwen3Model {
             });
         }
 
-        let batch_size = seq_ids.len();
-        let token_ids: Vec<u32> = input_tokens
-            .iter()
-            .map(|t| t.last().copied().unwrap_or(0))
-            .collect();
+        // Group indices by prefill/decode status
+        let mut prefill_indices: Vec<usize> = vec![];
+        let mut decode_indices: Vec<usize> = vec![];
 
-        let token_tensor = Tensor::from_slice(&token_ids, &[batch_size], &self.device)
-            .map_err(|e| EngineError::new(e.to_string()))?;
-
-        let mut hidden_states = self
-            .embed_tokens
-            .forward(&token_tensor)
-            .map_err(|e| EngineError::new(e.to_string()))?
-            .unsqueeze(1)
-            .map_err(|e| EngineError::new(e.to_string()))?;
-
-        for layer in &self.layers {
-            hidden_states = layer
-                .forward(&hidden_states)
-                .map_err(|e| EngineError::new(e.to_string()))?;
+        for (i, &is_pf) in is_prefill.iter().enumerate() {
+            if is_pf {
+                prefill_indices.push(i);
+            } else {
+                decode_indices.push(i);
+            }
         }
 
-        hidden_states = self
-            .norm
-            .forward(&hidden_states)
-            .map_err(|e| EngineError::new(e.to_string()))?;
+        let mut next_tokens = vec![0u32; seq_ids.len()];
 
-        let logits = self
-            .lm_head
-            .forward(&hidden_states)
-            .map_err(|e| EngineError::new(e.to_string()))?;
+        // Process prefill sequences
+        if !prefill_indices.is_empty() {
+            for &idx in &prefill_indices {
+                let tokens = &input_tokens[idx];
+                let pos = &positions[idx];
+                let blocks = &kv_block_ids[idx];
+                let computed = num_computed_tokens[idx];
 
-        use candle_core::D;
-        let next_tokens: Vec<TokenId> = logits
-            .argmax(D::Minus1)
-            .map_err(|e| EngineError::new(e.to_string()))?
-            .squeeze(1)
-            .map_err(|e| EngineError::new(e.to_string()))?
-            .to_vec1::<u32>()
-            .map_err(|e| EngineError::new(e.to_string()))?
-            .into_iter()
-            .map(|t| t as TokenId)
-            .collect();
+                let (logits, _) = self.forward_with_cache(
+                    tokens,
+                    computed,
+                    blocks,
+                    pos,
+                    true, // is_prefill
+                )
+                .map_err(|e| EngineError::new(e.to_string()))?;
+
+                use candle_core::D;
+                // logits shape: [batch=1, seq_len, vocab_size]
+                // argmax on last dim gives [batch=1, seq_len]
+                // We need to squeeze both dims to get scalar
+                let next = logits
+                    .argmax(D::Minus1)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .squeeze(1) // Remove seq_len dim
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .squeeze(0) // Remove batch dim
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .to_vec0::<u32>()
+                    .map_err(|e| EngineError::new(e.to_string()))?;
+                next_tokens[idx] = next;
+            }
+        }
+
+        // Process decode sequences
+        if !decode_indices.is_empty() {
+            for &idx in &decode_indices {
+                let tokens = &input_tokens[idx];
+                let pos = &positions[idx];
+                let blocks = &kv_block_ids[idx];
+                let computed = num_computed_tokens[idx];
+
+                let (logits, _) = self.forward_with_cache(
+                    tokens,
+                    computed,
+                    blocks,
+                    pos,
+                    false, // is_decode
+                )
+                .map_err(|e| EngineError::new(e.to_string()))?;
+
+                use candle_core::D;
+                // logits shape: [batch=1, seq_len, vocab_size]
+                // argmax on last dim gives [batch=1, seq_len]
+                // We need to squeeze both dims to get scalar
+                let next = logits
+                    .argmax(D::Minus1)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .squeeze(1) // Remove seq_len dim
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .squeeze(0) // Remove batch dim
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .to_vec0::<u32>()
+                    .map_err(|e| EngineError::new(e.to_string()))?;
+                next_tokens[idx] = next;
+            }
+        }
 
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
@@ -382,7 +423,13 @@ impl ModelBackend for Qwen3Model {
         _seq_ids: &[SeqId],
         input_tokens: &[Vec<TokenId>],
         _positions: &[Vec<usize>],
+        _kv_block_ids: &[Vec<usize>],
+        _num_computed_tokens: &[usize],
+        _is_prefill: &[bool],
     ) -> EngineResult<Vec<Vec<f32>>> {
+        // Note: forward_logits takes &self but forward_with_cache needs &mut self.
+        // Return zeros for now - a proper implementation would require
+        // either changing the trait or using interior mutability.
         let vocab_size = self.config.vocab_size();
         Ok(input_tokens.iter().map(|_| vec![0.0; vocab_size]).collect())
     }
@@ -407,10 +454,16 @@ mod tests {
         };
 
         let device = Device::Cpu;
-        let model = Qwen3Model::new(config, device, 1024).unwrap();
+        let mut model = Qwen3Model::new(config, device, 1024).unwrap();
 
         // Test forward with single token
-        let output = model.forward(&[1], &[vec![42]], &[vec![0]]).unwrap();
+        let kv_block_ids = vec![vec![0usize]];
+        let num_computed_tokens = vec![0usize];
+        let is_prefill = vec![true];
+
+        let output = model
+            .forward(&[1], &[vec![42]], &[vec![0]], &kv_block_ids, &num_computed_tokens, &is_prefill)
+            .unwrap();
         assert_eq!(output.next_tokens.len(), 1);
         assert!(output.next_tokens[0] < 1000);
     }
@@ -430,9 +483,15 @@ mod tests {
         };
 
         let device = Device::Cpu;
-        let model = Qwen3Model::new(config, device, 1024).unwrap();
+        let mut model = Qwen3Model::new(config, device, 1024).unwrap();
 
-        let output = model.forward(&[1], &[vec![42]], &[vec![0]]).unwrap();
+        let kv_block_ids = vec![vec![0usize]];
+        let num_computed_tokens = vec![0usize];
+        let is_prefill = vec![true];
+
+        let output = model
+            .forward(&[1], &[vec![42]], &[vec![0]], &kv_block_ids, &num_computed_tokens, &is_prefill)
+            .unwrap();
         assert_eq!(output.next_tokens.len(), 1);
     }
 
@@ -452,9 +511,15 @@ mod tests {
         };
 
         let device = Device::Cpu;
-        let model = Qwen3Model::new(config, device, 1024).unwrap();
+        let mut model = Qwen3Model::new(config, device, 1024).unwrap();
 
-        let output = model.forward(&[1], &[vec![42]], &[vec![0]]).unwrap();
+        let kv_block_ids = vec![vec![0usize]];
+        let num_computed_tokens = vec![0usize];
+        let is_prefill = vec![true];
+
+        let output = model
+            .forward(&[1], &[vec![42]], &[vec![0]], &kv_block_ids, &num_computed_tokens, &is_prefill)
+            .unwrap();
         assert_eq!(output.next_tokens.len(), 1);
     }
 
@@ -471,14 +536,19 @@ mod tests {
         };
 
         let device = Device::Cpu;
-        let model = Qwen3Model::new(config, device, 1024).unwrap();
+        let mut model = Qwen3Model::new(config, device, 1024).unwrap();
 
         // Test with batch size 3
         let seq_ids = vec![1u64, 2, 3];
         let input_tokens = vec![vec![1], vec![2], vec![3]];
         let positions = vec![vec![0], vec![0], vec![0]];
+        let kv_block_ids = vec![vec![0usize], vec![0], vec![0]];
+        let num_computed_tokens = vec![0usize, 0, 0];
+        let is_prefill = vec![true, true, true];
 
-        let output = model.forward(&seq_ids, &input_tokens, &positions).unwrap();
+        let output = model
+            .forward(&seq_ids, &input_tokens, &positions, &kv_block_ids, &num_computed_tokens, &is_prefill)
+            .unwrap();
 
         assert_eq!(output.seq_ids.len(), 3);
         assert_eq!(output.next_tokens.len(), 3);
