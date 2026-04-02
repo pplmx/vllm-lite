@@ -80,7 +80,10 @@ async fn main() {
     tracing::info!(model_path = %model_path, "Loading model from");
 
     let tensor_parallel_size = get_tensor_parallel_size();
-    tracing::info!(tensor_parallel_size = tensor_parallel_size, "Tensor parallel size");
+    tracing::info!(
+        tensor_parallel_size = tensor_parallel_size,
+        "Tensor parallel size"
+    );
 
     let loader = ModelLoader::new(device.clone());
     let model = loader
