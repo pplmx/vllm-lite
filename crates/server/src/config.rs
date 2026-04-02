@@ -255,4 +255,25 @@ mod tests {
         let errors = config.validate().unwrap_err();
         assert!(errors.iter().any(|e| e.contains("server.port")));
     }
+
+    #[test]
+    fn test_tensor_parallel_size_default() {
+        let config = AppConfig::default();
+        assert_eq!(config.engine.tensor_parallel_size, 1);
+    }
+
+    #[test]
+    fn test_tensor_parallel_size_from_config() {
+        let mut config = AppConfig::default();
+        config.engine.tensor_parallel_size = 4;
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_tensor_parallel_size_validate_fails_zero() {
+        let mut config = AppConfig::default();
+        config.engine.tensor_parallel_size = 0;
+        let errors = config.validate().unwrap_err();
+        assert!(errors.iter().any(|e| e.contains("tensor_parallel_size")));
+    }
 }

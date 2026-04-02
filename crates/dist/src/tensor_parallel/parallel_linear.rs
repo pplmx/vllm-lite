@@ -144,3 +144,95 @@ impl TensorParallelManager {
         &self.mesh
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_column_parallel_output_size() -> Result<(), TensorParallelError> {
+        let mesh = Arc::new(DeviceMesh::new(2, 0, vec![0, 1])?);
+        let all_reduce = Arc::new(NcclAllReduce::new(mesh.clone()));
+        let linear = ColumnParallelLinear::new(8, 16, mesh.clone(), all_reduce);
+
+        assert_eq!(linear.output_size_per_rank(), 8);
+        Ok(())
+    }
+
+    #[test]
+    fn test_row_parallel_input_size() -> Result<(), TensorParallelError> {
+        let mesh = Arc::new(DeviceMesh::new(2, 0, vec![0, 1])?);
+        let all_reduce = Arc::new(NcclAllReduce::new(mesh.clone()));
+        let linear = RowParallelLinear::new(16, 8, mesh.clone(), all_reduce);
+
+        assert_eq!(linear.input_size_per_rank(), 8);
+        Ok(())
+    }
+
+    #[test]
+    fn test_column_parallel_forward() -> Result<(), TensorParallelError> {
+        let mesh = Arc::new(DeviceMesh::new(2, 0, vec![0, 1])?);
+        let all_reduce = Arc::new(NcclAllReduce::new(mesh.clone()));
+        let linear = ColumnParallelLinear::new(4, 4, mesh.clone(), all_reduce);
+
+        let input = vec![1.0, 2.0, 3.0, 4.0];
+        let output = linear.forward(&input)?;
+
+        assert_eq!(output.len(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn test_row_parallel_forward() -> Result<(), TensorParallelError> {
+        let mesh = Arc::new(DeviceMesh::new(2, 0, vec![0, 1])?);
+        let all_reduce = Arc::new(NcclAllReduce::new(mesh.clone()));
+        let linear = RowParallelLinear::new(4, 4, mesh.clone(), all_reduce);
+
+        let input = vec![1.0, 2.0];
+        let output = linear.forward(&input)?;
+
+        assert_eq!(output.len(), 4);
+        Ok(())
+    }
+
+    #[test]
+    fn test_tensor_parallel_manager() -> Result<(), TensorParallelError> {
+        let manager = TensorParallelManager::new(4, 0, vec![0, 1, 2, 3])?;
+
+        let col_linear = manager.create_column_parallel(8, 16);
+        assert_eq!(col_linear.output_size_per_rank(), 4);
+
+        let row_linear = manager.create_row_parallel(16, 8);
+        assert_eq!(row_linear.input_size_per_rank(), 4);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_row_parallel_input_error() -> Result<(), TensorParallelError> {
+        let mesh = Arc::new(DeviceMesh::new(2, 0, vec![0, 1])?);
+        let all_reduce = Arc::new(NcclAllReduce::new(mesh.clone()));
+        let linear = RowParallelLinear::new(4, 4, mesh.clone(), all_reduce);
+
+        let wrong_input = vec![1.0, 2.0, 3.0];
+        let result = linear.forward(&wrong_input);
+
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_column_parallel_large_batch() -> Result<(), TensorParallelError> {
+        let mesh = Arc::new(DeviceMesh::new(4, 0, vec![0, 1, 2, 3])?);
+        let all_reduce = Arc::new(NcclAllReduce::new(mesh.clone()));
+        let linear = ColumnParallelLinear::new(1024, 2048, mesh.clone(), all_reduce);
+
+        assert_eq!(linear.output_size_per_rank(), 512);
+
+        let input = vec![1.0f32; 1024];
+        let output = linear.forward(&input)?;
+
+        assert_eq!(output.len(), 512);
+        Ok(())
+    }
+}
