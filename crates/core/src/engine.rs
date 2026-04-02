@@ -313,4 +313,58 @@ mod tests {
         let out = engine.step().unwrap();
         assert!(out.is_empty());
     }
+
+    #[test]
+    fn test_engine_max_draft_tokens_config() {
+        let stub = StubModel {
+            token_to_return: 42,
+        };
+        let config = SchedulerConfig {
+            max_num_seqs: 10,
+            max_num_batched_tokens: 100,
+            max_consecutive_decode: 10,
+            enable_pd_separation: true,
+            prefill_chunk_size: 512,
+            decode_preference_ratio: 0.7,
+            enable_priority_scheduling: false,
+            enable_dynamic_batching: false,
+            min_batch_size: 1,
+            max_batch_size: 256,
+        };
+        let engine = Engine::with_config(stub.clone(), stub, config, 8, 1024);
+        assert_eq!(engine.max_draft_tokens, 8);
+    }
+
+    #[test]
+    fn test_engine_error_tracking() {
+        let stub = StubModel {
+            token_to_return: 42,
+        };
+        let mut engine = Engine::new(stub.clone(), stub);
+        let (tx, _rx) = mpsc::unbounded_channel();
+        engine.add_request(Request::new(1, vec![10], 3), tx);
+
+        let _ = engine.step();
+
+        assert_eq!(engine.error_count, 0);
+    }
+
+    #[test]
+    fn test_engine_response_channel_cleanup() {
+        let stub = StubModel {
+            token_to_return: 42,
+        };
+        let mut engine = Engine::new(stub.clone(), stub);
+        let (tx1, _rx1) = mpsc::unbounded_channel();
+        let (tx2, _rx2) = mpsc::unbounded_channel();
+
+        engine.add_request(Request::new(1, vec![10], 1), tx1);
+        engine.add_request(Request::new(2, vec![20], 1), tx2);
+
+        for _ in 0..3 {
+            let _ = engine.step();
+        }
+
+        assert!(!engine.has_pending());
+    }
 }

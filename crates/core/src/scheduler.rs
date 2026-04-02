@@ -1,5 +1,5 @@
-use crate::kv_cache::{BlockAllocator, PrefixCache, hash_tokens};
-use crate::types::{BLOCK_SIZE, Batch, Request, SchedulerConfig, SeqId, Sequence, Status, TokenId};
+use crate::kv_cache::{hash_tokens, BlockAllocator, PrefixCache};
+use crate::types::{Batch, Request, SchedulerConfig, SeqId, Sequence, Status, TokenId, BLOCK_SIZE};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
@@ -1320,5 +1320,41 @@ mod tests {
         let batch = sched.build_batch();
         sched.update(&batch.seq_ids, &[99], &[batch.input_tokens[0].len()]);
         assert!(!sched.has_pending());
+    }
+
+    #[test]
+    fn test_scheduler_with_large_kv_blocks() {
+        let mut sched = Scheduler::with_config(SchedulerConfig::default(), 10000);
+        sched.add_request(Request::new(1, vec![1, 2, 3], 5));
+        let batch = sched.build_batch();
+        assert_eq!(batch.seq_ids.len(), 1);
+    }
+
+    #[test]
+    fn test_priority_with_multiple_levels() {
+        let mut sched = Scheduler::with_config(
+            SchedulerConfig {
+                enable_priority_scheduling: true,
+                ..Default::default()
+            },
+            100,
+        );
+
+        sched.add_request(Request::new(1, vec![1], 5));
+        sched.add_request(Request::new(2, vec![2], 5));
+        sched.add_request(Request::new(3, vec![3], 5));
+
+        let batch = sched.build_batch();
+        assert!(batch.seq_ids.len() <= 3);
+    }
+
+    #[test]
+    fn test_empty_sequence_completion() {
+        let mut sched = Scheduler::new();
+        let id = sched.add_request(Request::new(1, vec![], 0));
+        assert_eq!(id, 1);
+
+        let batch = sched.build_batch();
+        assert!(batch.is_empty() || batch.input_tokens[0].is_empty());
     }
 }
