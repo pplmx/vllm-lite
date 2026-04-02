@@ -92,7 +92,7 @@ fn test_cache_after_completion() {
     }
 
     // Cache should have entry
-    assert!(engine.scheduler.prefix_cache().len() > 0);
+    assert!(!engine.scheduler.prefix_cache().is_empty());
 }
 
 #[test]
@@ -204,7 +204,7 @@ fn test_prefix_cache_multiple_shared() {
 
     // Should all share the common prefix [1, 2]
     let cache = engine.scheduler.prefix_cache();
-    assert!(cache.len() >= 1, "cache should have entries");
+    assert!(!cache.is_empty(), "cache should have entries");
 }
 
 #[test]
@@ -233,7 +233,7 @@ fn test_prefix_hit_partial_prefill() {
 
     // Check cache has the entry
     assert!(
-        engine.scheduler.prefix_cache().len() > 0,
+        !engine.scheduler.prefix_cache().is_empty(),
         "cache should have entry after first request"
     );
 
@@ -329,7 +329,7 @@ fn test_prefix_cache_high_volume() {
     // All 50 requests should have completed
     let cache = engine.scheduler.prefix_cache();
     assert!(
-        cache.len() > 0,
+        !cache.is_empty(),
         "cache should have entries after high volume"
     );
 }
@@ -384,5 +384,5 @@ fn test_prefix_cache_many_sequences_same_prefix() {
 
     // Cache should have entries from the common prefix
     let cache = engine.scheduler.prefix_cache();
-    assert!(cache.len() > 0, "cache should have entries");
+    assert!(!cache.is_empty(), "cache should have entries");
 }
