@@ -247,7 +247,7 @@ mod tests {
         };
 
         assert_eq!(config.vocab_size(), 151936);
-        assert_eq!(config.tie_word_embeddings(), false);
+        assert!(!config.tie_word_embeddings());
         assert_eq!(config.hidden_size(), 4096);
         assert_eq!(config.num_hidden_layers(), 32);
         assert_eq!(config.num_attention_heads(), 32);
@@ -280,7 +280,7 @@ mod tests {
 
         assert_eq!(config.vocab_size(), 1000);
         assert_eq!(config.hidden_size(), 512);
-        assert_eq!(config.tie_word_embeddings(), true);
+        assert!(config.tie_word_embeddings());
         assert_eq!(config.num_hidden_layers(), 4);
         assert_eq!(config.num_attention_heads(), 8);
         assert_eq!(config.num_key_value_heads(), 2);
