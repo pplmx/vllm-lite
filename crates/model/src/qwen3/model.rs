@@ -1,4 +1,4 @@
-#![allow(clippy::all, unused)]
+#![allow(dead_code)]
 use crate::config::Qwen3Config;
 use crate::kv_cache::PagedKvCache;
 use candle_core::{Device, Module, Result as CandleResult, Tensor};
@@ -94,7 +94,7 @@ impl Qwen3Model {
         weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
     ) -> CandleResult<Self> {
-        let vocab_size = config.vocab_size();
+        let _vocab_size = config.vocab_size();
         let hidden_size = config.hidden_size();
 
         let embed_key = "model.embed_tokens.weight";
