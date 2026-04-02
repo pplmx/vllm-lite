@@ -47,3 +47,52 @@ pub fn compute_vocab_shard(vocab_size: usize, world_size: usize, rank: usize) ->
 
     (my_vocab_size, offset)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_vocab_shard_even() {
+        let (size, offset) = compute_vocab_shard(100, 4, 0);
+        assert_eq!(size, 25);
+        assert_eq!(offset, 0);
+    }
+
+    #[test]
+    fn test_vocab_shard_remainder() {
+        let (size, offset) = compute_vocab_shard(100, 3, 0);
+        assert_eq!(size, 34);
+        assert_eq!(offset, 0);
+    }
+
+    #[test]
+    fn test_vocab_shard_remainder_rank2() {
+        let (size, offset) = compute_vocab_shard(100, 3, 2);
+        assert_eq!(size, 33);
+        assert_eq!(offset, 67);
+    }
+
+    #[test]
+    fn test_tensor_parallel_config_creation() {
+        let config = TensorParallelConfig::new(2, 0, vec![0, 1]);
+        assert!(config.is_some());
+
+        let config = config.unwrap();
+        assert_eq!(config.world_size, 2);
+        assert_eq!(config.rank, 0);
+        assert!(config.is_first_rank());
+    }
+
+    #[test]
+    fn test_tensor_parallel_config_invalid() {
+        let config = TensorParallelConfig::new(0, 0, vec![]);
+        assert!(config.is_none());
+
+        let config = TensorParallelConfig::new(2, 3, vec![0, 1]);
+        assert!(config.is_none());
+
+        let config = TensorParallelConfig::new(2, 0, vec![0]);
+        assert!(config.is_none());
+    }
+}

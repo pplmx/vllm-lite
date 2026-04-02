@@ -4,6 +4,7 @@ use crate::kv_cache::PagedKvCache;
 use candle_core::{Device, Module, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, LayerNorm, Linear};
 use std::collections::HashMap;
+use vllm_dist::TensorParallelConfig;
 use vllm_traits::{BatchOutput, SeqId, TokenId};
 use vllm_traits::{ModelBackend, Result as EngineResult};
 
@@ -12,6 +13,7 @@ pub type EngineError = vllm_traits::ModelError;
 
 use super::block::TransformerBlock;
 
+#[allow(dead_code)]
 pub struct Qwen3Model {
     config: Qwen3Config,
     embed_tokens: Embedding,
@@ -20,6 +22,7 @@ pub struct Qwen3Model {
     lm_head: Linear,
     kv_cache: PagedKvCache,
     device: Device,
+    tp_config: Option<TensorParallelConfig>,
 }
 
 impl Qwen3Model {
@@ -76,6 +79,73 @@ impl Qwen3Model {
             lm_head,
             kv_cache,
             device,
+            tp_config: None,
+        })
+    }
+
+    pub fn new_with_tp(
+        config: Qwen3Config,
+        tp_config: Option<TensorParallelConfig>,
+        num_kv_blocks: usize,
+    ) -> CandleResult<Self> {
+        let device = tp_config
+            .as_ref()
+            .map(|tp| tp.local_device())
+            .unwrap_or(Device::Cpu);
+
+        let vocab_size = config.vocab_size();
+        let hidden_size = config.hidden_size();
+
+        let embeddings =
+            Tensor::zeros((vocab_size, hidden_size), candle_core::DType::F32, &device)?;
+        let embed_tokens = Embedding::new(embeddings, hidden_size);
+
+        let mut layers = Vec::new();
+        let theta = config.rope_theta();
+        for _ in 0..config.num_hidden_layers() {
+            let layer = TransformerBlock::new_with_tp(
+                hidden_size,
+                config.num_attention_heads(),
+                config.num_key_value_heads(),
+                config.head_dim(),
+                config.intermediate_size(),
+                theta,
+                config.rms_norm_eps(),
+                tp_config.clone(),
+                config.has_qk_norm(),
+            )?;
+            layers.push(layer);
+        }
+
+        let norm = candle_nn::layer_norm(
+            hidden_size,
+            config.rms_norm_eps(),
+            candle_nn::VarBuilder::zeros(candle_core::DType::F32, &device),
+        )?;
+        let lm_head = candle_nn::linear(
+            hidden_size,
+            vocab_size,
+            candle_nn::VarBuilder::zeros(candle_core::DType::F32, &device),
+        )?;
+
+        let kv_cache = PagedKvCache::new(
+            config.num_hidden_layers(),
+            config.num_key_value_heads(),
+            config.head_dim(),
+            num_kv_blocks,
+            device.clone(),
+            false,
+        )?;
+
+        Ok(Self {
+            config,
+            embed_tokens,
+            layers,
+            norm,
+            lm_head,
+            kv_cache,
+            device,
+            tp_config,
         })
     }
 
@@ -233,6 +303,7 @@ impl Qwen3Model {
             lm_head,
             kv_cache,
             device,
+            tp_config: None,
         })
     }
 

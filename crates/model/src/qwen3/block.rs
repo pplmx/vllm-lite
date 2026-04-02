@@ -7,12 +7,15 @@ use super::{
 use crate::kv_cache::PagedKvCache;
 use candle_core::{Module, Result, Tensor};
 use candle_nn::LayerNorm;
+use vllm_dist::TensorParallelConfig;
 
+#[allow(dead_code)]
 pub struct TransformerBlock {
     input_layernorm: LayerNorm,
     post_attention_layernorm: LayerNorm,
     attention: GqaAttention,
     mlp: SwiGLU,
+    tp_config: Option<TensorParallelConfig>,
 }
 
 impl TransformerBlock {
@@ -57,6 +60,50 @@ impl TransformerBlock {
             post_attention_layernorm,
             attention,
             mlp,
+            tp_config: None,
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_tp(
+        hidden_size: usize,
+        num_heads: usize,
+        num_kv_heads: usize,
+        head_dim: usize,
+        intermediate_size: usize,
+        theta: f32,
+        rms_norm_eps: f64,
+        tp_config: Option<TensorParallelConfig>,
+        has_qk_norm: bool,
+    ) -> Result<Self> {
+        let vb = candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu);
+
+        let input_layernorm =
+            candle_nn::layer_norm(hidden_size, rms_norm_eps, vb.pp("input_layernorm"))?;
+        let post_attention_layernorm =
+            candle_nn::layer_norm(hidden_size, rms_norm_eps, vb.pp("post_attention_layernorm"))?;
+
+        let vb_attn = vb.pp("attn");
+        let attention = GqaAttention::new(
+            hidden_size,
+            num_heads,
+            num_kv_heads,
+            head_dim,
+            theta,
+            Some(vb_attn),
+            AttentionConfig::default(),
+            has_qk_norm,
+        )?;
+
+        let vb_mlp = vb.pp("mlp");
+        let mlp = SwiGLU::new(hidden_size, intermediate_size, Some(vb_mlp))?;
+
+        Ok(Self {
+            input_layernorm,
+            post_attention_layernorm,
+            attention,
+            mlp,
+            tp_config,
         })
     }
 
@@ -137,6 +184,7 @@ impl TransformerBlock {
             post_attention_layernorm,
             attention,
             mlp,
+            tp_config: None,
         })
     }
 

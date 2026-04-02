@@ -2444,6 +2444,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "vllm-dist"
+version = "0.1.0"
+dependencies = [
+ "candle-core",
+ "thiserror 2.0.18",
+ "vllm-traits",
+]
+
+[[package]]
 name = "vllm-model"
 version = "0.1.0"
 dependencies = [
@@ -2457,6 +2466,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tiktoken",
+ "vllm-dist",
  "vllm-traits",
 ]
 

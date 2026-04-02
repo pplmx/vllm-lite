@@ -55,6 +55,15 @@ fn get_model_path() -> String {
         .unwrap_or_else(|| "/models/Qwen2.5-0.5B-Instruct".to_string())
 }
 
+fn get_tensor_parallel_size() -> usize {
+    let args: Vec<String> = std::env::args().collect();
+    args.iter()
+        .position(|a| a == "--tensor-parallel-size")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1)
+}
+
 #[tokio::main]
 async fn main() {
     let app_config = load_config();
@@ -69,6 +78,9 @@ async fn main() {
 
     let model_path = get_model_path();
     tracing::info!(model_path = %model_path, "Loading model from");
+
+    let tensor_parallel_size = get_tensor_parallel_size();
+    tracing::info!(tensor_parallel_size = tensor_parallel_size, "Tensor parallel size");
 
     let loader = ModelLoader::new(device.clone());
     let model = loader
