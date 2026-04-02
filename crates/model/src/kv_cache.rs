@@ -1,5 +1,5 @@
 use candle_core::{DType, Device, Result, Tensor};
-pub use vllm_core::kv_cache::BLOCK_SIZE;
+pub use vllm_traits::BLOCK_SIZE;
 
 #[allow(dead_code)]
 fn quantize_block(data: &[f32]) -> (Vec<i8>, f32) {

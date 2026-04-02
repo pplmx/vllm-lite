@@ -4,9 +4,10 @@ use crate::kv_cache::PagedKvCache;
 use candle_core::{Device, Module, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, LayerNorm, Linear, VarBuilder};
 use std::collections::HashMap;
-use vllm_core::engine::ModelBackend;
-use vllm_core::error::{EngineError, Result as EngineResult};
-use vllm_core::types::{BatchOutput, SeqId, TokenId};
+use vllm_traits::{BatchOutput, SeqId, TokenId};
+use vllm_traits::{ModelBackend, Result as EngineResult};
+
+pub type EngineError = vllm_traits::ModelError;
 
 pub struct Qwen35Model {
     config: Qwen3Config,
@@ -112,39 +113,39 @@ impl ModelBackend for Qwen35Model {
             }
 
             let token_tensor = Tensor::new(tokens.as_slice(), &self.device)
-                .map_err(|e| EngineError::ModelError(e.to_string()))?;
+                .map_err(|e| EngineError::new(e.to_string()))?;
 
             let hidden = self
                 .embed_tokens
                 .forward(&token_tensor)
-                .map_err(|e| EngineError::ModelError(e.to_string()))?;
+                .map_err(|e| EngineError::new(e.to_string()))?;
 
             let mut hidden = hidden;
             for layer in &self.layers {
                 hidden = layer
                     .linear
                     .forward(&hidden)
-                    .map_err(|e| EngineError::ModelError(e.to_string()))?;
+                    .map_err(|e| EngineError::new(e.to_string()))?;
             }
 
             hidden = self
                 .norm
                 .forward(&hidden)
-                .map_err(|e| EngineError::ModelError(e.to_string()))?;
+                .map_err(|e| EngineError::new(e.to_string()))?;
 
             let logits = self
                 .lm_head
                 .forward(&hidden)
-                .map_err(|e| EngineError::ModelError(e.to_string()))?;
+                .map_err(|e| EngineError::new(e.to_string()))?;
 
             let seq_len = logits.dims()[0];
             let last_logits = logits
                 .get(seq_len - 1)
-                .map_err(|e| EngineError::ModelError(e.to_string()))?;
+                .map_err(|e| EngineError::new(e.to_string()))?;
 
             let max_idx = last_logits
                 .argmax(0)
-                .map_err(|e| EngineError::ModelError(e.to_string()))?
+                .map_err(|e| EngineError::new(e.to_string()))?
                 .to_scalar::<u32>()
                 .unwrap_or(0);
 

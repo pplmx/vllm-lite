@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Instant;
 
-pub const BLOCK_SIZE: usize = 16;
+pub use vllm_traits::BLOCK_SIZE;
 
 pub type CacheKey = u64;
 

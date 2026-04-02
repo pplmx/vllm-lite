@@ -4,9 +4,11 @@ use crate::kv_cache::PagedKvCache;
 use candle_core::{Device, Module, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, LayerNorm, Linear};
 use std::collections::HashMap;
-use vllm_core::engine::ModelBackend;
-use vllm_core::error::{EngineError, Result as EngineResult};
-use vllm_core::types::{BatchOutput, BlockId, SeqId, TokenId};
+use vllm_traits::{BatchOutput, SeqId, TokenId};
+use vllm_traits::{ModelBackend, Result as EngineResult};
+
+pub type BlockId = usize;
+pub type EngineError = vllm_traits::ModelError;
 
 use super::block::TransformerBlock;
 
@@ -242,17 +244,17 @@ impl Qwen3Model {
         is_prefill: bool,
     ) -> EngineResult<(Tensor, Tensor)> {
         if tokens.is_empty() {
-            return Err(EngineError::ModelError("Empty tokens".to_string()));
+            return Err(EngineError::new("Empty tokens"));
         }
 
-        let token_tensor = Tensor::new(tokens, &self.device)
-            .map_err(|e| EngineError::ModelError(e.to_string()))?;
+        let token_tensor =
+            Tensor::new(tokens, &self.device).map_err(|e| EngineError::new(e.to_string()))?;
         let hidden = self
             .embed_tokens
             .forward(&token_tensor)
-            .map_err(|e| EngineError::ModelError(e.to_string()))?
+            .map_err(|e| EngineError::new(e.to_string()))?
             .unsqueeze(0)
-            .map_err(|e| EngineError::ModelError(e.to_string()))?;
+            .map_err(|e| EngineError::new(e.to_string()))?;
 
         let mut hidden = hidden;
 
@@ -260,7 +262,7 @@ impl Qwen3Model {
             for (layer_idx, layer) in self.layers.iter_mut().enumerate() {
                 hidden = layer
                     .forward_prefill(&hidden, &mut self.kv_cache, layer_idx, block_ids, positions)
-                    .map_err(|e| EngineError::ModelError(e.to_string()))?;
+                    .map_err(|e| EngineError::new(e.to_string()))?;
             }
         } else {
             for (layer_idx, layer) in self.layers.iter_mut().enumerate() {
@@ -273,18 +275,18 @@ impl Qwen3Model {
                         num_computed_tokens,
                         positions,
                     )
-                    .map_err(|e| EngineError::ModelError(e.to_string()))?;
+                    .map_err(|e| EngineError::new(e.to_string()))?;
             }
         }
 
         hidden = self
             .norm
             .forward(&hidden)
-            .map_err(|e| EngineError::ModelError(e.to_string()))?;
+            .map_err(|e| EngineError::new(e.to_string()))?;
         let logits = self
             .lm_head
             .forward(&hidden)
-            .map_err(|e| EngineError::ModelError(e.to_string()))?;
+            .map_err(|e| EngineError::new(e.to_string()))?;
 
         Ok((logits, hidden))
     }
@@ -295,7 +297,7 @@ impl Qwen3Model {
     ) -> EngineResult<(Tensor, Tensor)> {
         let positions: Vec<usize> = (0..input_tokens.len()).collect();
         self.forward_with_cache(input_tokens, 0, &[0], &positions, true)
-            .map_err(|e| EngineError::ModelError(e.to_string()))
+            .map_err(|e| EngineError::new(e.to_string()))
     }
 }
 
@@ -316,14 +318,14 @@ impl ModelBackend for Qwen3Model {
 
             let hidden_states = {
                 let token_tensor = Tensor::new(tokens.as_slice(), &self.device)
-                    .map_err(|e| EngineError::ModelError(e.to_string()))?;
+                    .map_err(|e| EngineError::new(e.to_string()))?;
                 let embed = self
                     .embed_tokens
                     .forward(&token_tensor)
-                    .map_err(|e| EngineError::ModelError(e.to_string()))?;
+                    .map_err(|e| EngineError::new(e.to_string()))?;
                 embed
                     .unsqueeze(0)
-                    .map_err(|e| EngineError::ModelError(e.to_string()))?
+                    .map_err(|e| EngineError::new(e.to_string()))?
             };
 
             let mut hidden_states = hidden_states;
@@ -331,18 +333,18 @@ impl ModelBackend for Qwen3Model {
             for layer in &self.layers {
                 hidden_states = layer
                     .forward(&hidden_states)
-                    .map_err(|e| EngineError::ModelError(e.to_string()))?;
+                    .map_err(|e| EngineError::new(e.to_string()))?;
             }
 
             hidden_states = self
                 .norm
                 .forward(&hidden_states)
-                .map_err(|e| EngineError::ModelError(e.to_string()))?;
+                .map_err(|e| EngineError::new(e.to_string()))?;
 
             let logits = self
                 .lm_head
                 .forward(&hidden_states)
-                .map_err(|e| EngineError::ModelError(e.to_string()))?;
+                .map_err(|e| EngineError::new(e.to_string()))?;
 
             // logits shape: [batch=1, seq_len, vocab_size]
             // Get the last token's logits: [vocab_size]
@@ -350,13 +352,13 @@ impl ModelBackend for Qwen3Model {
             let seq_len = logits.dims()[1];
             let last_logits = logits
                 .get(batch_size - 1)
-                .map_err(|e| EngineError::ModelError(e.to_string()))?
+                .map_err(|e| EngineError::new(e.to_string()))?
                 .get(seq_len - 1)
-                .map_err(|e| EngineError::ModelError(e.to_string()))?;
+                .map_err(|e| EngineError::new(e.to_string()))?;
 
             let max_idx = last_logits
                 .argmax(0)
-                .map_err(|e| EngineError::ModelError(e.to_string()))?
+                .map_err(|e| EngineError::new(e.to_string()))?
                 .to_scalar::<u32>()
                 .unwrap_or(0);
 
@@ -384,7 +386,7 @@ impl ModelBackend for Qwen3Model {
 mod tests {
     use super::*;
     use crate::config::Qwen3Config;
-    use vllm_core::engine::ModelBackend;
+    use vllm_traits::ModelBackend;
 
     #[test]
     fn test_qwen3_model_forward_cpu() {

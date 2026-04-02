@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-vllm-core = { path = "../core" }
+vllm-traits = { path = "../traits" }
 rand = "0.10"
 candle-core = { version = "0.10.1", features = ["cuda"] }
 candle-nn = { version = "0.10.1", features = ["cuda"] }

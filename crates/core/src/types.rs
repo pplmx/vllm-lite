@@ -1,8 +1,7 @@
 use std::sync::Arc;
 use tokio::sync::mpsc;
+pub use vllm_traits::{Batch, BatchOutput, SeqId, TokenId};
 
-pub type TokenId = u32;
-pub type SeqId = u64;
 pub type BlockId = usize;
 pub use crate::kv_cache::BLOCK_SIZE;
 
@@ -80,25 +79,6 @@ pub enum Status {
     Prefilling,
     Decoding,
     Finished,
-}
-
-#[derive(Clone, Debug)]
-pub struct Batch {
-    pub seq_ids: Vec<SeqId>,
-    pub input_tokens: Vec<Vec<TokenId>>,
-    pub positions: Vec<Vec<usize>>,
-}
-
-impl Batch {
-    pub fn is_empty(&self) -> bool {
-        self.seq_ids.is_empty()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct BatchOutput {
-    pub seq_ids: Vec<SeqId>,
-    pub next_tokens: Vec<TokenId>,
 }
 
 #[derive(Clone, Debug)]

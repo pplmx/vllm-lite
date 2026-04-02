@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+vllm-traits = { path = "../traits" }
 thiserror = "2"
 tokio = { version = "1", features = ["sync"] }
 rand = { version = "0.10", features = ["std"] }

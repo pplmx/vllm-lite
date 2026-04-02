@@ -1,5 +1,5 @@
-use vllm_core::engine::ModelBackend;
 use vllm_model::fake::FakeModel;
+use vllm_traits::ModelBackend;
 
 #[test]
 fn test_fake_model_output_count() {

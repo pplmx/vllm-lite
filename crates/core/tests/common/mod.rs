@@ -1,6 +1,5 @@
-use vllm_core::engine::ModelBackend;
-use vllm_core::error::Result;
-use vllm_core::types::{BatchOutput, SeqId, TokenId};
+use vllm_traits::{BatchOutput, SeqId, TokenId};
+use vllm_traits::{ModelBackend, Result};
 
 pub struct IncrementModel;
 

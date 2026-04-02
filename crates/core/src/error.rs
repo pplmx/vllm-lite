@@ -10,6 +10,12 @@ pub enum EngineError {
     SamplingError(String),
 }
 
+impl From<vllm_traits::ModelError> for EngineError {
+    fn from(err: vllm_traits::ModelError) -> Self {
+        EngineError::ModelError(err.to_string())
+    }
+}
+
 pub type Result<T> = std::result::Result<T, EngineError>;
 
 #[cfg(test)]
