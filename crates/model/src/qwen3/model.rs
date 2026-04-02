@@ -352,14 +352,11 @@ impl ModelBackend for Qwen3Model {
                 let blocks = &kv_block_ids[idx];
                 let computed = num_computed_tokens[idx];
 
-                let (logits, _) = self.forward_with_cache(
-                    tokens,
-                    computed,
-                    blocks,
-                    pos,
-                    true, // is_prefill
-                )
-                .map_err(|e| EngineError::new(e.to_string()))?;
+                let (logits, _) = self
+                    .forward_with_cache(
+                        tokens, computed, blocks, pos, true, // is_prefill
+                    )
+                    .map_err(|e| EngineError::new(e.to_string()))?;
 
                 use candle_core::D;
                 // logits shape: [batch=1, seq_len, vocab_size]
@@ -386,14 +383,11 @@ impl ModelBackend for Qwen3Model {
                 let blocks = &kv_block_ids[idx];
                 let computed = num_computed_tokens[idx];
 
-                let (logits, _) = self.forward_with_cache(
-                    tokens,
-                    computed,
-                    blocks,
-                    pos,
-                    false, // is_decode
-                )
-                .map_err(|e| EngineError::new(e.to_string()))?;
+                let (logits, _) = self
+                    .forward_with_cache(
+                        tokens, computed, blocks, pos, false, // is_decode
+                    )
+                    .map_err(|e| EngineError::new(e.to_string()))?;
 
                 use candle_core::D;
                 // logits shape: [batch=1, seq_len, vocab_size]
@@ -462,7 +456,14 @@ mod tests {
         let is_prefill = vec![true];
 
         let output = model
-            .forward(&[1], &[vec![42]], &[vec![0]], &kv_block_ids, &num_computed_tokens, &is_prefill)
+            .forward(
+                &[1],
+                &[vec![42]],
+                &[vec![0]],
+                &kv_block_ids,
+                &num_computed_tokens,
+                &is_prefill,
+            )
             .unwrap();
         assert_eq!(output.next_tokens.len(), 1);
         assert!(output.next_tokens[0] < 1000);
@@ -490,7 +491,14 @@ mod tests {
         let is_prefill = vec![true];
 
         let output = model
-            .forward(&[1], &[vec![42]], &[vec![0]], &kv_block_ids, &num_computed_tokens, &is_prefill)
+            .forward(
+                &[1],
+                &[vec![42]],
+                &[vec![0]],
+                &kv_block_ids,
+                &num_computed_tokens,
+                &is_prefill,
+            )
             .unwrap();
         assert_eq!(output.next_tokens.len(), 1);
     }
@@ -518,7 +526,14 @@ mod tests {
         let is_prefill = vec![true];
 
         let output = model
-            .forward(&[1], &[vec![42]], &[vec![0]], &kv_block_ids, &num_computed_tokens, &is_prefill)
+            .forward(
+                &[1],
+                &[vec![42]],
+                &[vec![0]],
+                &kv_block_ids,
+                &num_computed_tokens,
+                &is_prefill,
+            )
             .unwrap();
         assert_eq!(output.next_tokens.len(), 1);
     }
@@ -547,7 +562,14 @@ mod tests {
         let is_prefill = vec![true, true, true];
 
         let output = model
-            .forward(&seq_ids, &input_tokens, &positions, &kv_block_ids, &num_computed_tokens, &is_prefill)
+            .forward(
+                &seq_ids,
+                &input_tokens,
+                &positions,
+                &kv_block_ids,
+                &num_computed_tokens,
+                &is_prefill,
+            )
             .unwrap();
 
         assert_eq!(output.seq_ids.len(), 3);

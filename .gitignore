@@ -29,3 +29,4 @@ coverage/
 benches/
 .worktrees/
 .worktrees/
+.claude/
