@@ -1,19 +1,30 @@
+//! vLLM-lite Core Engine
+//!
+//! A lightweight LLM inference engine implementing vLLM innovations:
+//! - Continuous batching
+//! - PagedAttention KV cache management
+//! - Prefix caching
+//! - Speculative decoding (in progress)
+//!
+//! # Core Components
+//!
+//! - [`Engine`] - Main inference engine
+//! - [`Scheduler`] - Request scheduling and batch building
+//! - [`MetricsCollector`] - Performance metrics
+//! - [`kv_cache`] - Block allocation and prefix cache
+
 pub mod beam;
-pub mod cuda_graph;
 pub mod engine;
 pub mod error;
 pub mod kv_cache;
 pub mod metrics;
 pub mod sampling;
 pub mod scheduler;
-pub mod tensor_parallel;
 pub mod types;
 
 pub use beam::BeamSequence;
-pub use cuda_graph::{
-    CudaGraph, CudaGraphError, CudaGraphExecutor, CudaGraphNode, CudaGraphTensor,
-};
+pub use engine::Engine;
 pub use metrics::{MetricsCollector, MetricsSnapshot};
-pub use tensor_parallel::{DeviceMesh, ReduceOp, TensorParallelError, TensorParallelManager};
+pub use scheduler::Scheduler;
 pub use types::Priority;
-pub use vllm_traits::{Batch, BatchOutput, ModelBackend, SeqId, TokenId};
+pub use vllm_traits::Result;
