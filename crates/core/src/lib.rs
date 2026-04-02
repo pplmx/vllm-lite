@@ -16,3 +16,4 @@ pub use cuda_graph::{
 pub use metrics::{MetricsCollector, MetricsSnapshot};
 pub use tensor_parallel::{DeviceMesh, ReduceOp, TensorParallelError, TensorParallelManager};
 pub use types::Priority;
+pub use vllm_traits::{Batch, BatchOutput, ModelBackend, SeqId, TokenId};

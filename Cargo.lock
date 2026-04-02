@@ -2440,6 +2440,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.18",
  "tokio",
+ "vllm-traits",
 ]
 
 [[package]]
@@ -2456,7 +2457,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tiktoken",
- "vllm-core",
+ "vllm-traits",
 ]
 
 [[package]]
@@ -2476,6 +2477,15 @@ dependencies = [
  "uuid",
  "vllm-core",
  "vllm-model",
+ "vllm-traits",
+]
+
+[[package]]
+name = "vllm-traits"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

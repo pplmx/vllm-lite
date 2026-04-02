@@ -1,27 +1,15 @@
+mod batch;
+mod speculative;
+
 use crate::beam::BeamSequence;
 use crate::error::Result;
 use crate::metrics::MetricsCollector;
 use crate::scheduler::Scheduler;
-use crate::types::{Batch, BatchOutput, EngineMessage, Request, SchedulerConfig, SeqId, TokenId};
+use crate::types::{EngineMessage, Request, SchedulerConfig};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-
-pub trait ModelBackend: Send + Sync {
-    fn forward(
-        &self,
-        seq_ids: &[SeqId],
-        input_tokens: &[Vec<TokenId>],
-        positions: &[Vec<usize>],
-    ) -> Result<BatchOutput>;
-
-    fn forward_logits(
-        &self,
-        seq_ids: &[SeqId],
-        input_tokens: &[Vec<TokenId>],
-        positions: &[Vec<usize>],
-    ) -> Result<Vec<Vec<f32>>>;
-}
+use vllm_traits::{ModelBackend, SeqId, TokenId};
 
 pub struct Engine<M: ModelBackend> {
     pub scheduler: Scheduler,
@@ -87,191 +75,6 @@ impl<M: ModelBackend> Engine<M> {
         let seq_id = self.scheduler.add_request(req);
         self.response_txs.insert(seq_id, response_tx);
         seq_id
-    }
-
-    pub fn step(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
-        let start = std::time::Instant::now();
-        let batch = self.scheduler.build_batch();
-        if batch.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let output =
-            self.target_model
-                .forward(&batch.seq_ids, &batch.input_tokens, &batch.positions)?;
-
-        let input_counts: Vec<usize> = batch
-            .input_tokens
-            .iter()
-            .map(|v| v.len())
-            .collect::<Vec<_>>();
-
-        self.scheduler
-            .update(&batch.seq_ids, &output.next_tokens, &input_counts);
-
-        // Send tokens to response channels
-        let mut results = Vec::new();
-        for (seq_id, token) in batch.seq_ids.iter().zip(output.next_tokens.iter()) {
-            if let Some(tx) = self.response_txs.get(seq_id) {
-                let _ = tx.send(*token);
-            }
-            results.push((*seq_id, *token));
-        }
-
-        // Clean up channels for finished sequences
-        for seq in self.scheduler.finished_sequences() {
-            self.response_txs.remove(&seq.id);
-        }
-
-        // Record metrics
-        if !batch.seq_ids.is_empty() {
-            let total_tokens: usize = batch.input_tokens.iter().map(|t| t.len()).sum();
-            self.metrics.record_tokens(total_tokens as u64);
-            self.metrics.record_batch_size(batch.seq_ids.len());
-        }
-
-        let elapsed = start.elapsed().as_millis() as f64;
-        if elapsed > 0.0 {
-            self.metrics.record_latency(elapsed);
-        }
-
-        Ok(results)
-    }
-
-    #[allow(dead_code)]
-    fn greedy_sample(logits: &[f32]) -> TokenId {
-        logits
-            .iter()
-            .enumerate()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-            .map(|(i, _)| i as TokenId)
-            .unwrap_or(0)
-    }
-
-    pub fn step_speculative(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
-        let start = std::time::Instant::now();
-        let batch = self.scheduler.build_batch();
-        if batch.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let draft_outputs = self.generate_draft_tokens(&batch)?;
-
-        let verified_outputs = self.verify_draft_tokens(&batch, &draft_outputs)?;
-
-        let mut results = Vec::new();
-        for (seq_id, token) in verified_outputs {
-            if let Some(tx) = self.response_txs.get(&seq_id) {
-                let _ = tx.send(token);
-            }
-            results.push((seq_id, token));
-        }
-
-        let seq_ids: Vec<SeqId> = results.iter().map(|(id, _)| *id).collect();
-        let tokens: Vec<TokenId> = results.iter().map(|(_, t)| *t).collect();
-        let input_counts: Vec<usize> = vec![1; tokens.len()];
-        self.scheduler.update(&seq_ids, &tokens, &input_counts);
-
-        for seq in self.scheduler.finished_sequences() {
-            self.response_txs.remove(&seq.id);
-        }
-
-        if !batch.seq_ids.is_empty() {
-            let total_tokens: usize = batch.input_tokens.iter().map(|t| t.len()).sum();
-            self.metrics.record_tokens(total_tokens as u64);
-            self.metrics.record_batch_size(batch.seq_ids.len());
-        }
-
-        let elapsed = start.elapsed().as_millis() as f64;
-        if elapsed > 0.0 {
-            self.metrics.record_latency(elapsed);
-        }
-
-        Ok(results)
-    }
-
-    fn generate_draft_tokens(&mut self, batch: &Batch) -> Result<Vec<Vec<TokenId>>> {
-        let mut draft_outputs = Vec::new();
-
-        for ((seq_id, tokens), positions) in batch
-            .seq_ids
-            .iter()
-            .zip(batch.input_tokens.iter())
-            .zip(batch.positions.iter())
-        {
-            let mut draft = Vec::new();
-            let mut current_tokens = tokens.clone();
-            let mut current_positions = positions.clone();
-
-            for _ in 0..self.max_draft_tokens {
-                let output = self.draft_model.forward(
-                    &[*seq_id],
-                    std::slice::from_ref(&current_tokens),
-                    std::slice::from_ref(&current_positions),
-                )?;
-                let token = *output.next_tokens.first().unwrap_or(&0);
-                draft.push(token);
-                current_tokens.push(token);
-                current_positions.push(current_positions.len());
-            }
-            draft_outputs.push(draft);
-        }
-
-        Ok(draft_outputs)
-    }
-
-    fn verify_draft_tokens(
-        &mut self,
-        batch: &Batch,
-        draft_outputs: &[Vec<TokenId>],
-    ) -> Result<Vec<(SeqId, TokenId)>> {
-        let mut results = Vec::new();
-
-        for (i, seq_id) in batch.seq_ids.iter().enumerate() {
-            let drafts = &draft_outputs[i];
-
-            if drafts.is_empty() {
-                let target_output = self.target_model.forward(
-                    &[*seq_id],
-                    std::slice::from_ref(&batch.input_tokens[i]),
-                    std::slice::from_ref(&batch.positions[i]),
-                )?;
-                if let Some(&token) = target_output.next_tokens.first() {
-                    results.push((*seq_id, token));
-                }
-                continue;
-            }
-
-            let mut verify_tokens = batch.input_tokens[i].clone();
-            verify_tokens.extend(drafts.iter().cloned());
-
-            let verify_positions: Vec<usize> = (0..verify_tokens.len()).collect();
-
-            let target_output = self.target_model.forward(
-                &[*seq_id],
-                std::slice::from_ref(&verify_tokens),
-                std::slice::from_ref(&verify_positions),
-            )?;
-
-            let target_tokens = &target_output.next_tokens;
-
-            for (j, &draft_token) in drafts.iter().enumerate() {
-                if j < target_tokens.len() && target_tokens[j] == draft_token {
-                    results.push((*seq_id, draft_token));
-                } else {
-                    break;
-                }
-            }
-
-            let target_idx = drafts.len();
-            if target_idx < target_tokens.len() {
-                results.push((*seq_id, target_tokens[target_idx]));
-            } else if let Some(&first) = target_tokens.first() {
-                results.push((*seq_id, first));
-            }
-        }
-
-        Ok(results)
     }
 
     pub fn run(&mut self, mut msg_rx: mpsc::UnboundedReceiver<EngineMessage>) {
@@ -411,6 +214,7 @@ mod tests {
     use super::*;
     use crate::types::Request;
     use tokio::sync::mpsc;
+    use vllm_traits::{BatchOutput, Result, TokenId};
 
     #[derive(Clone)]
     struct StubModel {
@@ -480,17 +284,14 @@ mod tests {
         engine.add_request(Request::new(1, vec![10], 3), tx1);
         engine.add_request(Request::new(2, vec![20], 3), tx2);
 
-        // Step 1: both prefill
         engine.step().unwrap();
         assert_eq!(rx1.try_recv().unwrap(), 10);
         assert_eq!(rx2.try_recv().unwrap(), 10);
 
-        // Step 2: both decode
         engine.step().unwrap();
         assert_eq!(rx1.try_recv().unwrap(), 10);
         assert_eq!(rx2.try_recv().unwrap(), 10);
 
-        // Done
         assert!(!engine.has_pending());
     }
 
