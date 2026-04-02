@@ -1,35 +1,9 @@
+mod common;
+
+use common::{ConstModel, IncrementModel};
 use tokio::sync::mpsc;
-use vllm_core::engine::{Engine, ModelBackend};
-use vllm_core::error::Result;
-use vllm_core::types::{BatchOutput, Request, SchedulerConfig, SeqId, TokenId};
-
-struct IncrementModel;
-
-impl ModelBackend for IncrementModel {
-    fn forward(
-        &self,
-        seq_ids: &[SeqId],
-        _input_tokens: &[Vec<TokenId>],
-        _positions: &[Vec<usize>],
-    ) -> Result<BatchOutput> {
-        Ok(BatchOutput {
-            seq_ids: seq_ids.to_vec(),
-            next_tokens: seq_ids.iter().map(|id| *id as TokenId).collect(),
-        })
-    }
-
-    fn forward_logits(
-        &self,
-        _seq_ids: &[SeqId],
-        input_tokens: &[Vec<TokenId>],
-        _positions: &[Vec<usize>],
-    ) -> Result<Vec<Vec<f32>>> {
-        Ok(input_tokens
-            .iter()
-            .map(|tokens| tokens.iter().map(|_| 0.0).collect())
-            .collect())
-    }
-}
+use vllm_core::engine::Engine;
+use vllm_core::types::{Request, SchedulerConfig, TokenId};
 
 #[test]
 fn test_continuous_batching_with_streaming() {
@@ -463,38 +437,7 @@ fn test_immediate_finish_after_prompt() {
 
 #[test]
 fn test_speculative_decoding_verification() {
-    #[derive(Clone)]
-    struct MockModel {
-        return_token: TokenId,
-    }
-
-    impl ModelBackend for MockModel {
-        fn forward(
-            &self,
-            seq_ids: &[SeqId],
-            _input_tokens: &[Vec<TokenId>],
-            _positions: &[Vec<usize>],
-        ) -> Result<BatchOutput> {
-            Ok(BatchOutput {
-                seq_ids: seq_ids.to_vec(),
-                next_tokens: seq_ids.iter().map(|_| self.return_token).collect(),
-            })
-        }
-
-        fn forward_logits(
-            &self,
-            _seq_ids: &[SeqId],
-            input_tokens: &[Vec<TokenId>],
-            _positions: &[Vec<usize>],
-        ) -> Result<Vec<Vec<f32>>> {
-            Ok(input_tokens
-                .iter()
-                .map(|t| t.iter().map(|_| 0.0).collect())
-                .collect())
-        }
-    }
-
-    let model = MockModel { return_token: 42 };
+    let model = ConstModel::new(42);
     let mut engine = Engine::new(model.clone(), model);
     engine.enable_speculative();
 
