@@ -52,4 +52,22 @@ impl ModelBackend for FakeModel {
             })
             .collect())
     }
+
+    fn embed(
+        &mut self,
+        input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+    ) -> Result<Vec<Vec<f32>>> {
+        let hidden_size = 1024;
+        Ok(input_tokens
+            .iter()
+            .map(|tokens| {
+                if tokens.is_empty() {
+                    vec![0.0; hidden_size]
+                } else {
+                    (0..hidden_size).map(|_| rand::random::<f32>()).collect()
+                }
+            })
+            .collect())
+    }
 }

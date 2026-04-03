@@ -176,4 +176,52 @@ impl ModelBackend for Qwen35Model {
             .map(|t| vec![0.0; vocab_size * t.len()])
             .collect())
     }
+
+    fn embed(
+        &mut self,
+        input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+    ) -> EngineResult<Vec<Vec<f32>>> {
+        let mut embeddings = Vec::with_capacity(input_tokens.len());
+        let hidden_size = self.config.hidden_size();
+
+        for tokens in input_tokens {
+            if tokens.is_empty() {
+                embeddings.push(vec![0.0; hidden_size]);
+                continue;
+            }
+
+            let token_tensor = Tensor::new(tokens.as_slice(), &self.device)
+                .map_err(|e| EngineError::new(e.to_string()))?;
+
+            let mut hidden = self
+                .embed_tokens
+                .forward(&token_tensor)
+                .map_err(|e| EngineError::new(e.to_string()))?;
+
+            for layer in &self.layers {
+                hidden = layer
+                    .linear
+                    .forward(&hidden)
+                    .map_err(|e| EngineError::new(e.to_string()))?;
+            }
+
+            hidden = self
+                .norm
+                .forward(&hidden)
+                .map_err(|e| EngineError::new(e.to_string()))?;
+
+            let pooled: Vec<f32> = hidden
+                .mean(0)
+                .map_err(|e| EngineError::new(e.to_string()))?
+                .flatten_all()
+                .map_err(|e| EngineError::new(e.to_string()))?
+                .to_vec1::<f32>()
+                .map_err(|e| EngineError::new(e.to_string()))?;
+
+            embeddings.push(pooled);
+        }
+
+        Ok(embeddings)
+    }
 }
