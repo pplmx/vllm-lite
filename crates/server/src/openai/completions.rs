@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use axum::{
     Json,
     extract::State,
@@ -13,6 +15,7 @@ use tokio::sync::mpsc;
 use super::types::*;
 use crate::ApiState;
 
+#[allow(dead_code)]
 pub(crate) async fn completions(
     State(state): State<ApiState>,
     Json(req): Json<CompletionRequest>,
@@ -111,6 +114,7 @@ pub(crate) async fn completions(
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[tokio::test]

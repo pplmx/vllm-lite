@@ -1,9 +1,12 @@
+#![allow(dead_code)]
+
 use super::types::*;
 use crate::ApiState;
 use axum::{Json, extract::State, response::IntoResponse};
 use tokio::sync::mpsc;
 use vllm_core::types::EngineMessage;
 
+#[allow(dead_code)]
 pub(crate) async fn embeddings(
     State(state): State<ApiState>,
     Json(req): Json<EmbeddingsRequest>,

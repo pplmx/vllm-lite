@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use axum::{
     extract::Request,
     http::{HeaderMap, StatusCode, header::AUTHORIZATION},

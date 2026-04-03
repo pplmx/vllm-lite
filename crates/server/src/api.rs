@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use axum::{Json, extract::State};
 use serde::Serialize;
 use tokio::sync::mpsc;
