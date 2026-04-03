@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::collections::HashMap;
+
 use crate::config::ModelConfig;
 use crate::qwen3::attention::GqaAttention;
 use crate::qwen3::mlp::SwiGLU;
@@ -49,6 +51,14 @@ impl LlamaBlock {
             attention,
             mlp,
         })
+    }
+
+    pub fn from_weights(
+        config: &ModelConfig,
+        layer_idx: usize,
+        _weights: &HashMap<String, Tensor>,
+    ) -> Result<Self> {
+        Self::new(config, layer_idx)
     }
 
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
