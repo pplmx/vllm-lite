@@ -15,7 +15,7 @@ impl Gemma4Block {
     /// Create a new Gemma4Block.
     pub fn new() -> Self {
         Self {
-            _attention: Gemma4Attention,
+            _attention: Gemma4Attention::default(),
             _mlp: None,
             _rope: Gemma4RoPE::default(),
         }
