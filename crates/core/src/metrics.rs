@@ -67,6 +67,9 @@ impl MetricsCollector {
 
     pub fn record_latency(&self, ms: f64) {
         if let Ok(mut latencies) = self.latencies.lock() {
+            if latencies.capacity() == 0 {
+                latencies.reserve(1000);
+            }
             latencies.push(ms);
             if latencies.len() > 10000 {
                 latencies.drain(0..1000);
@@ -76,6 +79,9 @@ impl MetricsCollector {
 
     pub fn record_batch_size(&self, size: usize) {
         if let Ok(mut sizes) = self.batch_sizes.lock() {
+            if sizes.capacity() == 0 {
+                sizes.reserve(1000);
+            }
             sizes.push(size);
             if sizes.len() > 10000 {
                 sizes.drain(0..1000);
@@ -114,6 +120,9 @@ impl MetricsCollector {
 
     pub fn record_scheduler_wait_time(&self, ms: f64) {
         if let Ok(mut times) = self.scheduler_wait_times.lock() {
+            if times.capacity() == 0 {
+                times.reserve(1000);
+            }
             times.push(ms);
             if times.len() > 10000 {
                 times.drain(0..1000);
