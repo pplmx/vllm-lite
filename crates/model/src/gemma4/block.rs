@@ -1,6 +1,7 @@
 //! Gemma4 Transformer Block implementation.
 
 #![allow(dead_code)]
+#![allow(unused_variables)]
 
 use crate::config::{LayerType, ModelConfig, RoPEConfig};
 use crate::gemma4::attention::Gemma4Attention;
@@ -91,7 +92,6 @@ impl Gemma4Block {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::config::{Architecture, LayerType, ModelConfig, RoPEConfig};
 
     #[test]
