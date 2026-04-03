@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::sync::{
-    atomic::{AtomicU64, Ordering},
     Arc, Mutex,
+    atomic::{AtomicU64, Ordering},
 };
 
 #[derive(Clone, Serialize)]
