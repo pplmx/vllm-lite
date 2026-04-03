@@ -1,4 +1,4 @@
-use vllm_traits::{Batch, BatchOutput, ModelError, SeqId, TokenId, BLOCK_SIZE};
+use vllm_traits::{BLOCK_SIZE, Batch, BatchOutput, ModelError, SeqId, TokenId};
 
 #[test]
 fn test_batch_output_creation() {
