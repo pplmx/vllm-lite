@@ -1,3 +1,8 @@
+//! Model architecture types.
+//!
+//! Defines the Architecture enum and related types for supporting
+//! multiple model architectures.
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Architecture {
     Qwen3,
