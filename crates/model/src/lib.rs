@@ -2,6 +2,7 @@ pub mod components;
 pub mod config;
 pub mod fake;
 pub mod flash_attention;
+pub mod gemma4;
 pub mod kv_cache;
 pub mod llama;
 pub mod loader;
@@ -16,5 +17,5 @@ pub mod tokenizer;
 pub use flash_attention::{
     AttentionVariant, FlashAttention, FlashAttentionConfig, FlashAttentionKernel,
 };
-pub use quantize::{QuantizedTensor, dequantize, quantize};
+pub use quantize::{dequantize, quantize, QuantizedTensor};
 pub use registry::{ModelFactory, ModelInfo, ModelRegistry};
