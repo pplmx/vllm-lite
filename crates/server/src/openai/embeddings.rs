@@ -4,7 +4,7 @@ use axum::{Json, extract::State, response::IntoResponse};
 use tokio::sync::mpsc;
 use vllm_core::types::EngineMessage;
 
-pub async fn embeddings(
+pub(crate) async fn embeddings(
     State(state): State<ApiState>,
     Json(req): Json<EmbeddingsRequest>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
@@ -51,4 +51,66 @@ pub async fn embeddings(
     })?;
 
     Ok(Json(EmbeddingsResponse::new(embeddings, req.model)).into_response())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ApiState;
+    use axum::http::StatusCode;
+    use std::sync::Arc;
+    use tokio::sync::mpsc;
+    use vllm_model::tokenizer::Tokenizer;
+
+    fn create_test_state() -> ApiState {
+        let (engine_tx, _rx) = mpsc::unbounded_channel();
+        ApiState {
+            engine_tx,
+            tokenizer: Arc::new(Tokenizer::new()),
+            batch_manager: Arc::new(crate::openai::batch::manager::BatchManager::new()),
+            auth: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_embeddings_empty_model() {
+        let state = create_test_state();
+        let req = EmbeddingsRequest {
+            model: String::new(),
+            input: vec!["test input".to_string()],
+        };
+
+        let result = embeddings(State(state), Json(req)).await;
+        assert!(result.is_err());
+        let (status, _) = result.unwrap_err();
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_embeddings_empty_input() {
+        let state = create_test_state();
+        let req = EmbeddingsRequest {
+            model: "test-model".to_string(),
+            input: vec![],
+        };
+
+        let result = embeddings(State(state), Json(req)).await;
+        assert!(result.is_err());
+        let (status, _) = result.unwrap_err();
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_embeddings_multiple_inputs() {
+        let state = create_test_state();
+        let req = EmbeddingsRequest {
+            model: "test-model".to_string(),
+            input: vec!["input1".to_string(), "input2".to_string()],
+        };
+
+        let result = embeddings(State(state), Json(req)).await;
+        assert!(result.is_err());
+        let (status, _) = result.unwrap_err();
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    }
 }
