@@ -1,6 +1,7 @@
 //! Gemma4 Model implementation.
 
 #![allow(dead_code)]
+#![allow(unused_variables)]
 
 use crate::config::ModelConfig;
 use crate::gemma4::block::Gemma4Block;

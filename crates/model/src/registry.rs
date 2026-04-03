@@ -1,4 +1,5 @@
 use crate::config::ModelConfig as LlamaMistralConfig;
+use crate::gemma4::Gemma4Model;
 use crate::llama::LlamaModel;
 use crate::mistral::MistralModel;
 use crate::qwen3_config::Qwen3Config;
@@ -98,6 +99,14 @@ impl ModelFactory {
         num_kv_blocks: usize,
     ) -> Result<MistralModel> {
         MistralModel::new(config, device, num_kv_blocks)
+    }
+
+    pub fn create_gemma4(
+        config: LlamaMistralConfig,
+        device: Device,
+        num_kv_blocks: usize,
+    ) -> Result<Gemma4Model> {
+        Gemma4Model::new(config, device, num_kv_blocks)
     }
 }
 

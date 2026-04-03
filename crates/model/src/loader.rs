@@ -5,6 +5,7 @@ use std::path::Path;
 
 use crate::config::Architecture;
 use crate::config::ModelConfig;
+use crate::gemma4::Gemma4Model;
 use crate::llama::LlamaModel;
 use crate::mistral::MistralModel;
 use crate::qwen3::model::Qwen3Model;
@@ -21,6 +22,7 @@ pub fn detect_architecture(config: &serde_json::Value) -> Architecture {
         "llama" | "llama2" | "llama3" => Architecture::Llama,
         "mistral" | "mixtral" => Architecture::Mistral,
         "qwen2" | "qwen2.5" => Architecture::Qwen3,
+        "gemma2" | "gemma3" | "gemma4" => Architecture::Gemma4,
         _ => Architecture::Llama,
     }
 }
@@ -186,7 +188,11 @@ impl ModelLoader {
                 )?;
                 Ok(Box::new(model))
             }
-            Architecture::Gemma4 => todo!("Gemma4 model loading not yet implemented"),
+            Architecture::Gemma4 => {
+                let model =
+                    Gemma4Model::from_weights(config, self.device.clone(), weights, num_kv_blocks)?;
+                Ok(Box::new(model))
+            }
         }
     }
 
