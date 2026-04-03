@@ -1,9 +1,7 @@
 #![allow(clippy::type_complexity)]
 
-use super::{
-    attention::{AttentionConfig, GqaAttention},
-    mlp::SwiGLU,
-};
+use super::{attention::GqaAttention, mlp::SwiGLU};
+use crate::components::AttentionConfig;
 use crate::kv_cache::PagedKvCache;
 use candle_core::{Module, Result, Tensor};
 use candle_nn::LayerNorm;

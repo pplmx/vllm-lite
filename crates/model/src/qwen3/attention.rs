@@ -1,24 +1,11 @@
 #![allow(clippy::too_many_arguments)]
 
 use super::rope::apply_rope;
+pub use crate::components::AttentionConfig;
+use crate::components::{expand_kv, paged_attention, tiled_attention};
 use crate::kv_cache::PagedKvCache;
-use candle_core::{Device, Module, Result, Tensor};
+use candle_core::{Module, Result, Tensor};
 use candle_nn::{LayerNorm, Linear};
-
-#[derive(Debug, Clone)]
-pub struct AttentionConfig {
-    pub tile_size: Option<usize>,
-    pub use_fused: bool,
-}
-
-impl Default for AttentionConfig {
-    fn default() -> Self {
-        Self {
-            tile_size: None,
-            use_fused: true,
-        }
-    }
-}
 
 pub struct GqaAttention {
     q_proj: Linear,
@@ -174,21 +161,7 @@ impl GqaAttention {
         num_q_heads: usize,
         num_kv_heads: usize,
     ) -> Result<Tensor> {
-        if num_q_heads == num_kv_heads {
-            return Ok(kv.clone());
-        }
-
-        let repeat_factor = num_q_heads / num_kv_heads;
-        let (batch, seq, heads, dim) = kv.dims4()?;
-
-        // Input: [batch, seq, num_kv_heads, head_dim]
-        // Output: [batch, seq, num_q_heads, head_dim]
-        // Use reshape + broadcast_as to expand the heads dimension
-        let kv = kv.reshape((batch, seq, heads, 1, dim))?; // [batch, seq, heads, 1, dim]
-        let expanded = kv.broadcast_as((batch, seq, heads, repeat_factor, dim))?; // [batch, seq, heads, repeat, dim]
-        let expanded = expanded.reshape((batch, seq, heads * repeat_factor, dim))?;
-
-        Ok(expanded)
+        expand_kv(kv, num_q_heads, num_kv_heads)
     }
 
     fn apply_q_norm(&self, q: Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
@@ -330,43 +303,11 @@ impl GqaAttention {
         q: &Tensor,
         k: &Tensor,
         v: &Tensor,
-        seq_len: usize,
+        _seq_len: usize,
     ) -> Result<Tensor> {
-        let qk = Tensor::matmul(q, &k.transpose(2, 3)?)?;
-
-        let mask = self.causal_mask(seq_len, q.device())?;
-        let mask = mask.broadcast_as(qk.dims())?;
-        let qk = (&qk + &mask)?;
-
-        let scale = 1.0 / (self.head_dim as f32).sqrt();
-        let scale_tensor = Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?;
-        let qk = qk.mul(&scale_tensor)?;
-        let attn_weights = candle_nn::ops::softmax(&qk, 3)?;
-
-        let attn_output = Tensor::matmul(&attn_weights, v)?;
-
-        let attn_output = attn_output.transpose(1, 2)?;
-        let seq_len = attn_output.dims()[1];
-        let attn_output =
-            attn_output.reshape((q.dims()[0], seq_len, self.num_heads * self.head_dim))?;
-
+        let attn_output = paged_attention(q, k, v, self.num_heads, self.head_dim)?;
         let o = self.o_proj.forward(&attn_output)?;
         Ok(o)
-    }
-
-    fn causal_mask(&self, seq_len: usize, device: &Device) -> Result<Tensor> {
-        let row_indices =
-            Tensor::arange(0u32, seq_len as u32, device)?.reshape((1, 1, seq_len, 1))?;
-        let col_indices =
-            Tensor::arange(0u32, seq_len as u32, device)?.reshape((1, 1, 1, seq_len))?;
-        let row_indices = row_indices.broadcast_as((1, 1, seq_len, seq_len))?;
-        let col_indices = col_indices.broadcast_as((1, 1, seq_len, seq_len))?;
-        let mask = row_indices.ge(&col_indices)?;
-        let zero = Tensor::new(0.0f32, device)?.broadcast_as((1, 1, seq_len, seq_len))?;
-        let neg_inf =
-            Tensor::new(f32::NEG_INFINITY, device)?.broadcast_as((1, 1, seq_len, seq_len))?;
-        let mask = mask.where_cond(&zero, &neg_inf)?;
-        Ok(mask)
     }
 
     fn tiled_attention(
@@ -374,69 +315,11 @@ impl GqaAttention {
         q: &Tensor,
         k: &Tensor,
         v: &Tensor,
-        seq_len: usize,
+        _seq_len: usize,
     ) -> Result<Tensor> {
         let tile_size = self.config.tile_size.unwrap_or(16);
-
-        let num_tiles = seq_len.div_ceil(tile_size);
-        let mut output_parts = Vec::new();
-
-        for tile_idx in 0..num_tiles {
-            let start = tile_idx * tile_size;
-            let end = (start + tile_size).min(seq_len);
-            let tile_len = end - start;
-
-            // Narrow q to current tile (query tokens for this tile)
-            let q_tile = q.narrow(2, start, tile_len)?;
-            // Keys/values include all tokens up to end of tile
-            let k_tile = k.narrow(2, 0, end)?;
-            let v_tile = v.narrow(2, 0, end)?;
-
-            let qk = Tensor::matmul(&q_tile, &k_tile.transpose(2, 3)?)?;
-
-            // Causal mask for tile: [batch, 1, tile_len, end]
-            // start is the global position where this tile begins
-            let mask = self.causal_mask_tile(q.dims()[0], start, tile_len, end, q.device())?;
-            // Broadcast mask to match qk shape [batch, num_heads, tile_len, key_len]
-            let mask = mask.broadcast_as(qk.dims())?;
-            let qk = (&qk + &mask)?;
-
-            let scale = 1.0 / (self.head_dim as f32).sqrt();
-            let scale_tensor = Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?;
-            let qk = qk.mul(&scale_tensor)?;
-            let attn = candle_nn::ops::softmax(&qk, 3)?;
-
-            let out = Tensor::matmul(&attn, &v_tile)?;
-
-            output_parts.push(out);
-        }
-
-        Tensor::cat(&output_parts, 2)
-    }
-
-    fn causal_mask_tile(
-        &self,
-        batch_size: usize,
-        start: usize,
-        tile_len: usize,
-        key_len: usize,
-        device: &Device,
-    ) -> Result<Tensor> {
-        // Causal mask: query positions (tile_len) x key positions (key_len)
-        // Query at local position i corresponds to global position start + i
-        // Valid if key position j <= start + i (causal: can only attend to earlier keys)
-        let mask: Vec<f32> = (0..tile_len)
-            .flat_map(|i| {
-                let global_q = start + i;
-                (0..key_len).map(move |j| {
-                    if j <= global_q {
-                        0.0
-                    } else {
-                        f32::NEG_INFINITY
-                    }
-                })
-            })
-            .collect();
-        Tensor::from_slice(&mask, (batch_size, 1, tile_len, key_len), device)
+        let attn_output = tiled_attention(q, k, v, self.num_heads, tile_size)?;
+        let o = self.o_proj.forward(&attn_output)?;
+        Ok(o)
     }
 }
