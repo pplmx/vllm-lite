@@ -142,15 +142,15 @@ impl Scheduler {
 
     fn process_finished_sequences(&mut self) {
         let mut newly_finished = Vec::with_capacity(self.running.len());
-        let mut i = 0;
-        while i < self.running.len() {
-            if self.running[i].status == Status::Finished {
-                let seq = self.running.remove(i);
-                newly_finished.push(seq);
+
+        self.running.retain(|seq| {
+            if seq.status == Status::Finished {
+                newly_finished.push(seq.clone());
+                false
             } else {
-                i += 1;
+                true
             }
-        }
+        });
 
         for seq in newly_finished.iter() {
             let prompt_tokens = &seq.tokens[..seq.prompt_len];
