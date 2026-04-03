@@ -259,4 +259,74 @@ mod tests {
         let result = find_safetensors_files(model_dir);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_load_qwen2_model_integration() {
+        // This test requires the model to exist at /models/Qwen2.5-0.5B-Instruct
+        // Skip if model doesn't exist
+        let model_path = "/models/Qwen2.5-0.5B-Instruct";
+        if !std::path::Path::new(model_path).exists() {
+            eprintln!("Model not found at {}, skipping test", model_path);
+            return;
+        }
+
+        let loader = ModelLoader::new(Device::Cpu);
+
+        // Test config loading
+        let config = loader
+            .load_config(model_path)
+            .expect("Failed to load config");
+        eprintln!(
+            "Loaded Qwen3 config: hidden_size={}, num_layers={}, num_heads={}",
+            config.hidden_size(),
+            config.num_hidden_layers(),
+            config.num_attention_heads()
+        );
+
+        // Test weight loading
+        let weights = loader
+            .load_weights(model_path)
+            .expect("Failed to load weights");
+        eprintln!("Loaded {} weight tensors", weights.len());
+
+        // Verify some key weights exist
+        assert!(weights.contains_key("model.embed_tokens.weight"));
+
+        // Test full model loading
+        let _model = loader
+            .load_model(model_path, 128, false)
+            .expect("Failed to create model");
+        eprintln!("Model created successfully!");
+    }
+
+    #[test]
+    fn test_detect_architecture_qwen2() {
+        let config_json = serde_json::json!({
+            "model_type": "qwen2"
+        });
+        let arch = detect_architecture(&config_json);
+        assert_eq!(arch, Architecture::Qwen3);
+    }
+
+    #[test]
+    fn test_detect_architecture_llama() {
+        for model_type in ["llama", "llama2", "llama3"] {
+            let config_json = serde_json::json!({
+                "model_type": model_type
+            });
+            let arch = detect_architecture(&config_json);
+            assert_eq!(arch, Architecture::Llama, "Failed for {}", model_type);
+        }
+    }
+
+    #[test]
+    fn test_detect_architecture_mistral() {
+        for model_type in ["mistral", "mixtral"] {
+            let config_json = serde_json::json!({
+                "model_type": model_type
+            });
+            let arch = detect_architecture(&config_json);
+            assert_eq!(arch, Architecture::Mistral, "Failed for {}", model_type);
+        }
+    }
 }
