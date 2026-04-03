@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::sync::{
-    Arc, Mutex,
     atomic::{AtomicU64, Ordering},
+    Arc, Mutex,
 };
 
 #[derive(Clone, Serialize)]
@@ -14,6 +14,12 @@ pub struct MetricsSnapshot {
     pub p99_latency_ms: f64,
     pub avg_batch_size: f64,
     pub current_batch_size: usize,
+    pub requests_in_flight: u64,
+    pub kv_cache_usage_percent: f64,
+    pub prefix_cache_hit_rate: f64,
+    pub prefill_throughput: f64,
+    pub decode_throughput: f64,
+    pub avg_scheduler_wait_time_ms: f64,
 }
 
 pub struct MetricsCollector {
@@ -21,8 +27,15 @@ pub struct MetricsCollector {
     requests_total: Arc<AtomicU64>,
     latencies: Arc<Mutex<Vec<f64>>>,
     batch_sizes: Arc<Mutex<Vec<usize>>>,
-    #[allow(dead_code)]
     start_time: std::time::Instant,
+    requests_in_flight: Arc<AtomicU64>,
+    kv_cache_blocks_used: Arc<AtomicU64>,
+    kv_cache_blocks_total: Arc<AtomicU64>,
+    prefix_cache_hits: Arc<AtomicU64>,
+    prefix_cache_requests: Arc<AtomicU64>,
+    prefill_tokens: Arc<AtomicU64>,
+    decode_tokens: Arc<AtomicU64>,
+    scheduler_wait_times: Arc<Mutex<Vec<f64>>>,
 }
 
 impl MetricsCollector {
@@ -33,6 +46,14 @@ impl MetricsCollector {
             latencies: Arc::new(Mutex::new(Vec::new())),
             batch_sizes: Arc::new(Mutex::new(Vec::new())),
             start_time: std::time::Instant::now(),
+            requests_in_flight: Arc::new(AtomicU64::new(0)),
+            kv_cache_blocks_used: Arc::new(AtomicU64::new(0)),
+            kv_cache_blocks_total: Arc::new(AtomicU64::new(0)),
+            prefix_cache_hits: Arc::new(AtomicU64::new(0)),
+            prefix_cache_requests: Arc::new(AtomicU64::new(0)),
+            prefill_tokens: Arc::new(AtomicU64::new(0)),
+            decode_tokens: Arc::new(AtomicU64::new(0)),
+            scheduler_wait_times: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -58,6 +79,44 @@ impl MetricsCollector {
             sizes.push(size);
             if sizes.len() > 10000 {
                 sizes.drain(0..1000);
+            }
+        }
+    }
+
+    pub fn record_request_start(&self) {
+        self.requests_in_flight.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_request_end(&self) {
+        self.requests_in_flight.fetch_sub(1, Ordering::Relaxed);
+    }
+
+    pub fn record_kv_cache_usage(&self, used: u64, total: u64) {
+        self.kv_cache_blocks_used.store(used, Ordering::Relaxed);
+        self.kv_cache_blocks_total.store(total, Ordering::Relaxed);
+    }
+
+    pub fn record_prefix_cache_hit(&self) {
+        self.prefix_cache_hits.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_prefix_cache_request(&self) {
+        self.prefix_cache_requests.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_prefill_tokens(&self, count: u64) {
+        self.prefill_tokens.fetch_add(count, Ordering::Relaxed);
+    }
+
+    pub fn record_decode_tokens(&self, count: u64) {
+        self.decode_tokens.fetch_add(count, Ordering::Relaxed);
+    }
+
+    pub fn record_scheduler_wait_time(&self, ms: f64) {
+        if let Ok(mut times) = self.scheduler_wait_times.lock() {
+            times.push(ms);
+            if times.len() > 10000 {
+                times.drain(0..1000);
             }
         }
     }
@@ -108,6 +167,48 @@ impl MetricsCollector {
             })
             .unwrap_or((0.0, 0));
 
+        let requests_in_flight = self.requests_in_flight.load(Ordering::Relaxed);
+
+        let kv_used = self.kv_cache_blocks_used.load(Ordering::Relaxed);
+        let kv_total = self.kv_cache_blocks_total.load(Ordering::Relaxed);
+        let kv_cache_usage_percent = if kv_total > 0 {
+            (kv_used as f64 / kv_total as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        let hits = self.prefix_cache_hits.load(Ordering::Relaxed);
+        let total_reqs = self.prefix_cache_requests.load(Ordering::Relaxed);
+        let prefix_cache_hit_rate = if total_reqs > 0 {
+            (hits as f64 / total_reqs as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        let uptime = self.start_time.elapsed().as_secs_f64();
+        let prefill_throughput = if uptime > 0.0 {
+            self.prefill_tokens.load(Ordering::Relaxed) as f64 / uptime
+        } else {
+            0.0
+        };
+        let decode_throughput = if uptime > 0.0 {
+            self.decode_tokens.load(Ordering::Relaxed) as f64 / uptime
+        } else {
+            0.0
+        };
+
+        let avg_wait = self
+            .scheduler_wait_times
+            .lock()
+            .map(|times| {
+                if times.is_empty() {
+                    0.0
+                } else {
+                    times.iter().sum::<f64>() / times.len() as f64
+                }
+            })
+            .unwrap_or(0.0);
+
         MetricsSnapshot {
             tokens_total: tokens,
             requests_total: requests,
@@ -117,6 +218,12 @@ impl MetricsCollector {
             p99_latency_ms: p99,
             avg_batch_size: avg_batch,
             current_batch_size: current_batch,
+            requests_in_flight,
+            kv_cache_usage_percent,
+            prefix_cache_hit_rate,
+            prefill_throughput,
+            decode_throughput,
+            avg_scheduler_wait_time_ms: avg_wait,
         }
     }
 }
