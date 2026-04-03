@@ -2,7 +2,7 @@
 //!
 //! Provides ModelConfig struct that works across different model architectures.
 
-use super::Architecture;
+use super::architecture::{Architecture, LayerType, RoPEConfig};
 use crate::loader::detect_architecture;
 
 pub struct ModelConfig {
@@ -19,6 +19,9 @@ pub struct ModelConfig {
     pub sliding_window: Option<usize>,
     pub tie_word_embeddings: bool,
     pub max_position_embeddings: usize,
+    pub layer_types: Vec<LayerType>,
+    pub rope_configs: Vec<RoPEConfig>,
+    pub use_double_wide_mlp: bool,
 }
 
 impl ModelConfig {
@@ -37,6 +40,9 @@ impl ModelConfig {
             sliding_window: None,
             tie_word_embeddings: false,
             max_position_embeddings: 2048,
+            layer_types: vec![],
+            rope_configs: vec![],
+            use_double_wide_mlp: false,
         }
     }
 
@@ -55,6 +61,9 @@ impl ModelConfig {
             sliding_window: Some(4096),
             tie_word_embeddings: false,
             max_position_embeddings: 32768,
+            layer_types: vec![],
+            rope_configs: vec![],
+            use_double_wide_mlp: false,
         }
     }
 
@@ -124,6 +133,9 @@ impl ModelConfig {
             sliding_window,
             tie_word_embeddings,
             max_position_embeddings,
+            layer_types: vec![],
+            rope_configs: vec![],
+            use_double_wide_mlp: false,
         })
     }
 }
