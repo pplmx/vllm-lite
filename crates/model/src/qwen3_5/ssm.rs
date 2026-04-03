@@ -134,7 +134,7 @@ impl MambaBlock {
         let (delta, b, c, x_conv) = self.ssm.forward(x_inner)?;
 
         let batch = x.dims()[0];
-        let seq_len = x.dims()[1];
+        let seq_len = x_conv.dims()[1];
 
         let a_log = self.ssm.a_log().forward(&x_conv)?.reshape((
             batch,
@@ -159,10 +159,20 @@ impl MambaBlock {
 
             let a_t = a_t.exp()?;
 
-            let h_new = b_t.broadcast_mul(&x_t)?;
-            let h_new = a_t.broadcast_mul(&h_new)?;
-            let h_new = (&h_new + &h)?;
+            let b_t = b_t
+                .unsqueeze(1)?
+                .expand((batch, self.ssm.d_state(), self.ssm.d_inner()))?;
+            let x_t = x_t
+                .unsqueeze(1)?
+                .expand((batch, self.ssm.d_state(), self.ssm.d_inner()))?;
 
+            let bx = b_t.broadcast_mul(&x_t)?;
+            let h_new = a_t.broadcast_mul(&h)?;
+            let h_new = (&h_new + bx)?;
+
+            let c_t = c_t
+                .unsqueeze(1)?
+                .expand((batch, self.ssm.d_state(), self.ssm.d_inner()))?;
             let y_t = c_t.broadcast_mul(&h_new)?;
 
             outputs.push(y_t.unsqueeze(1)?);
@@ -182,5 +192,21 @@ impl MambaBlock {
         let output = self.norm.forward(&output)?;
 
         Ok(output)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use candle_core::Device;
+
+    #[test]
+    fn test_ssm_layer_creates_parameters() {
+        let config = SSMConfig::new(128);
+        let vb = VarBuilder::zeros(DType::F32, &Device::Cpu);
+        let ssm = SSMLayer::new(&config, vb).unwrap();
+
+        assert_eq!(ssm.d_inner(), 256);
+        assert_eq!(ssm.d_state(), 16);
     }
 }
