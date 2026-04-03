@@ -1,49 +1,47 @@
 #![allow(dead_code)]
 
-use crate::components::AttentionConfig;
+use crate::config::ModelConfig;
+use crate::qwen3::attention::GqaAttention;
+use crate::qwen3::mlp::SwiGLU;
 use candle_core::{Module, Result, Tensor};
-use candle_nn::LayerNorm;
+use candle_nn::{LayerNorm, VarBuilder};
 
 pub struct LlamaBlock {
     input_layernorm: LayerNorm,
     post_attention_layernorm: LayerNorm,
-    attention: crate::qwen3::attention::GqaAttention,
-    mlp: crate::qwen3::mlp::SwiGLU,
+    attention: GqaAttention,
+    mlp: SwiGLU,
 }
 
 impl LlamaBlock {
-    pub fn new(
-        hidden_size: usize,
-        num_heads: usize,
-        num_kv_heads: usize,
-        head_dim: usize,
-        intermediate_size: usize,
-        theta: f32,
-        rms_norm_eps: f64,
-    ) -> Result<Self> {
-        let input_layernorm = candle_nn::layer_norm(
-            hidden_size,
-            rms_norm_eps,
-            candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu),
-        )?;
-        let post_attention_layernorm = candle_nn::layer_norm(
-            hidden_size,
-            rms_norm_eps,
-            candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu),
-        )?;
+    pub fn new(config: &ModelConfig, _layer_idx: usize) -> Result<Self> {
+        let hidden_size = config.hidden_size;
+        let num_heads = config.num_heads;
+        let num_kv_heads = config.num_kv_heads;
+        let head_dim = config.head_dim;
+        let intermediate_size = config.intermediate_size;
+        let theta = config.rope_theta;
+        let rms_norm_eps = config.rms_norm_eps;
 
-        let attention = crate::qwen3::attention::GqaAttention::new(
+        let vb = VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu);
+
+        let input_layernorm =
+            candle_nn::layer_norm(hidden_size, rms_norm_eps, vb.pp("input_layernorm"))?;
+        let post_attention_layernorm =
+            candle_nn::layer_norm(hidden_size, rms_norm_eps, vb.pp("post_attention_layernorm"))?;
+
+        let attention = GqaAttention::new(
             hidden_size,
             num_heads,
             num_kv_heads,
             head_dim,
             theta,
             None,
-            AttentionConfig::default(),
+            crate::components::AttentionConfig::default(),
             false,
         )?;
 
-        let mlp = crate::qwen3::mlp::SwiGLU::new(hidden_size, intermediate_size, None)?;
+        let mlp = SwiGLU::new(hidden_size, intermediate_size, None)?;
 
         Ok(Self {
             input_layernorm,
