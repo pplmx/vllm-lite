@@ -47,13 +47,7 @@ impl SwiGLU {
     }
 
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        let gate = self.gate_proj.forward(x)?;
-        let up = self.up_proj.forward(x)?;
-
-        let silu = gate.silu()?;
-        let activated = silu.broadcast_mul(&up)?;
-
-        self.down_proj.forward(&activated)
+        crate::components::swiglu_forward(x, &self.gate_proj, &self.up_proj, &self.down_proj)
     }
 }
 
