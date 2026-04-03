@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
-use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 pub fn init_logging(log_dir: Option<PathBuf>, log_level: &str) {
     let env_filter =
@@ -30,33 +30,4 @@ pub fn init_logging(log_dir: Option<PathBuf>, log_level: &str) {
             .with(fmt::layer().with_target(true).with_thread_ids(false).json())
             .init();
     }
-}
-
-#[allow(dead_code)]
-pub fn log_request(request_id: &str, prompt: &str, params: &str) {
-    tracing::info!(
-        request_id = %request_id,
-        prompt_len = prompt.len(),
-        params = %params,
-        "Request started"
-    );
-}
-
-#[allow(dead_code)]
-pub fn log_response(request_id: &str, tokens: usize, latency_ms: f64) {
-    tracing::info!(
-        request_id = %request_id,
-        output_tokens = tokens,
-        latency_ms = latency_ms,
-        "Request completed"
-    );
-}
-
-#[allow(dead_code)]
-pub fn log_error(request_id: &str, error: &str) {
-    tracing::error!(
-        request_id = %request_id,
-        error = %error,
-        "Request failed"
-    );
 }

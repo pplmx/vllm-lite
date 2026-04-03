@@ -13,7 +13,6 @@ pub type EngineError = vllm_traits::ModelError;
 
 use super::block::TransformerBlock;
 
-#[allow(dead_code)]
 pub struct Qwen3Model {
     config: Qwen3Config,
     embed_tokens: Embedding,
@@ -22,6 +21,7 @@ pub struct Qwen3Model {
     lm_head: Linear,
     kv_cache: PagedKvCache,
     device: Device,
+    #[allow(dead_code)]
     tp_config: Option<TensorParallelConfig>,
 }
 

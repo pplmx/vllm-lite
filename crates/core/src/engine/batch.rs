@@ -52,14 +52,4 @@ impl<M: ModelBackend> super::Engine<M> {
 
         Ok(results)
     }
-
-    #[allow(dead_code)]
-    pub fn greedy_sample(logits: &[f32]) -> TokenId {
-        logits
-            .iter()
-            .enumerate()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-            .map(|(i, _)| i as TokenId)
-            .unwrap_or(0)
-    }
 }

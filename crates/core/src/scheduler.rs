@@ -129,17 +129,6 @@ impl Scheduler {
         id
     }
 
-    #[allow(dead_code)]
-    fn pending_tokens(seq: &Sequence) -> usize {
-        if seq.status == Status::Prefilling {
-            seq.tokens.len() - seq.num_computed_tokens
-        } else if seq.status == Status::Decoding {
-            1
-        } else {
-            0
-        }
-    }
-
     fn process_finished_sequences(&mut self) {
         let mut newly_finished = Vec::with_capacity(self.running.len());
 
