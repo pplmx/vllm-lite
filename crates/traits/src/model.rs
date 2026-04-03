@@ -41,4 +41,10 @@ pub trait ModelBackend: Send + Sync {
         num_computed_tokens: &[usize],
         is_prefill: &[bool],
     ) -> Result<Vec<Vec<f32>>>;
+
+    fn embed(
+        &mut self,
+        input_tokens: &[Vec<TokenId>],
+        positions: &[Vec<usize>],
+    ) -> Result<Vec<Vec<f32>>>;
 }
