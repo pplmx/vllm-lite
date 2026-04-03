@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::collections::HashMap;
+
 use crate::config::ModelConfig;
 use crate::kv_cache::PagedKvCache;
 use candle_core::{Device, Result as CandleResult, Tensor};
@@ -55,6 +57,15 @@ impl MistralModel {
             kv_cache,
             device,
         })
+    }
+
+    pub fn from_weights(
+        config: ModelConfig,
+        device: Device,
+        _weights: HashMap<String, Tensor>,
+        num_kv_blocks: usize,
+    ) -> CandleResult<Self> {
+        Self::new(config, device, num_kv_blocks)
     }
 }
 
