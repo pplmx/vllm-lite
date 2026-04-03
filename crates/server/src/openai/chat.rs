@@ -184,7 +184,8 @@ pub async fn chat_completions(
                                 finish_reason: None,
                             },
                         );
-                        let data = serde_json::to_string(&chunk).unwrap();
+                        let data = serde_json::to_string(&chunk)
+                            .expect("Failed to serialize chat chunk - internal error");
                         Some((Ok(Event::default().data(data)), rx))
                     }
                     None => {
@@ -201,7 +202,8 @@ pub async fn chat_completions(
                                 finish_reason: Some("stop".to_string()),
                             },
                         );
-                        let data = serde_json::to_string(&chunk).unwrap();
+                        let data = serde_json::to_string(&chunk)
+                            .expect("Failed to serialize chat chunk - internal error");
                         Some((Ok(Event::default().data(format!("{data}\n\n[DONE]"))), rx))
                     }
                 }
