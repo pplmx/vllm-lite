@@ -40,16 +40,15 @@ pub async fn embeddings(
         response_tx,
     });
 
-    let embeddings = rx.recv().await
-        .ok_or_else(|| {
-            (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse::new(
-                    "Failed to get embeddings from engine",
-                    "internal_error"
-                ))
-            )
-        })?;
+    let embeddings = rx.recv().await.ok_or_else(|| {
+        (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse::new(
+                "Failed to get embeddings from engine",
+                "internal_error",
+            )),
+        )
+    })?;
 
     Ok(Json(EmbeddingsResponse::new(embeddings, req.model)).into_response())
 }
