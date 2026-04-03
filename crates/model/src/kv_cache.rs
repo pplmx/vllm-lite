@@ -1,23 +1,6 @@
 use candle_core::{DType, Device, Result, Tensor};
 pub use vllm_traits::BLOCK_SIZE;
 
-#[allow(dead_code)]
-fn quantize_block(data: &[f32]) -> (Vec<i8>, f32) {
-    let max_abs = data.iter().map(|v| v.abs()).fold(0.0f32, f32::max);
-    if max_abs == 0.0 {
-        return (vec![0; data.len()], 1.0);
-    }
-    let scale = max_abs / 127.0;
-    let quantized: Vec<i8> = data.iter().map(|v| (v / scale).round() as i8).collect();
-    (quantized, scale)
-}
-
-#[allow(dead_code)]
-fn dequantize_block(data: &[i8], scale: f32) -> Vec<f32> {
-    data.iter().map(|&v| v as f32 * scale).collect()
-}
-
-#[allow(dead_code)]
 pub struct PagedKvCache {
     key_cache: Vec<Tensor>,
     value_cache: Vec<Tensor>,
