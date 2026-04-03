@@ -13,7 +13,7 @@ pub struct HealthResponse {
     pub status: String,
 }
 
-pub async fn health() -> Json<HealthResponse> {
+pub(crate) async fn health() -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok".to_string(),
     })
@@ -76,4 +76,59 @@ pub async fn get_prometheus(State(state): State<ApiState>) -> String {
         m.decode_throughput,
         m.avg_scheduler_wait_time_ms
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::to_bytes;
+    use axum::{
+        Router,
+        body::Body,
+        http::{Request, StatusCode},
+        response::Response,
+        routing::get,
+    };
+    use tower::ServiceExt;
+
+    async fn send_request(app: Router, request: Request<Body>) -> Response {
+        app.oneshot(request).await.expect("Failed to send request")
+    }
+
+    #[tokio::test]
+    async fn test_health_ok() {
+        let app = Router::new().route("/health", get(health));
+
+        let response = send_request(
+            app,
+            Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_health_json_response() {
+        let app = Router::new().route("/health", get(health));
+
+        let response = send_request(
+            app,
+            Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+        let body_str = String::from_utf8_lossy(&body);
+        assert!(body_str.contains("\"status\""));
+        assert!(body_str.contains("ok"));
+    }
 }
