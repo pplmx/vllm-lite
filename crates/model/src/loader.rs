@@ -3,8 +3,8 @@ use safetensors::SafeTensors;
 use std::collections::HashMap;
 use std::path::Path;
 
-use crate::config::Qwen3Config;
 use crate::qwen3::model::Qwen3Model;
+use crate::qwen3_config::Qwen3Config;
 
 fn find_safetensors_files(model_dir: &Path) -> Result<Vec<std::path::PathBuf>> {
     let single = model_dir.join("model.safetensors");
