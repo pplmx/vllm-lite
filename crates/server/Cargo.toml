@@ -8,9 +8,6 @@ rust-version.workspace = true
 name = "vllm-server"
 path = "src/main.rs"
 
-[lib]
-path = "src/main.rs"
-
 [dependencies]
 vllm-core = { path = "../core" }
 vllm-traits = { path = "../traits" }
