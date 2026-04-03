@@ -1,334 +1,133 @@
 # vLLM-lite Development Guide
 
-This guide helps AI agents and developers work effectively with the vLLM-lite codebase.
+This guide helps AI agents work effectively with the vLLM-lite codebase.
 
-## Quick Reference
-
-| Task                      | Skill                         | Command                                 |
-| ------------------------- | ----------------------------- | --------------------------------------- |
-| Design new feature        | `brainstorming`               | Load skill → discuss → get approval     |
-| Write implementation plan | `writing-plans`               | Load skill → spec approved → write plan |
-| Execute implementation    | `subagent-driven-development` | Load skill → task list → execute tasks  |
-| Debug issues              | `systematic-debugging`        | Load skill → reproduce → diagnose → fix |
-
-## Project Structure
-
-```text
-vllm-lite/
-├── Cargo.toml              # Workspace root
-├── justfile                # Build automation
-├── ROADMAP.md              # Development roadmap
-├── CHANGELOG.md            # Version history
-├── AGENTS.md               # This guide
-├── crates/
-│   ├── traits/             # Interface definitions (NEW)
-│   │   └── src/
-│   │       ├── model.rs    # ModelBackend trait
-│   │       └── types.rs    # Shared types (SeqId, TokenId, Batch)
-│   ├── core/               # Core engine
-│   │   └── src/
-│   │       ├── engine/     # Engine submodules
-│   │       │   ├── engine.rs   # Main Engine struct
-│   │       │   ├── batch.rs    # Batch processing
-│   │       │   └── speculative.rs # Speculative decoding
-│   │       ├── scheduler.rs # Batch scheduling
-│   │       ├── kv_cache.rs # BlockAllocator, PrefixCache
-│   │       ├── metrics.rs  # MetricsCollector
-│   │       └── types.rs    # Core types
-│   ├── model/              # ML models
-│   │   └── src/
-│   │       ├── qwen3/      # Qwen3 implementation
-│   │       │   ├── attention.rs # GqaAttention, tiled attention
-│   │       │   ├── block.rs    # TransformerBlock
-│   │       │   └── model.rs    # Qwen3Model
-│   │       ├── kv_cache.rs # PagedKvCache (GPU)
-│   │       ├── quantize.rs # INT8 quantization
-│   │       ├── loader.rs   # SafeTensors loading
-│   │       └── fake.rs     # FakeModel for testing
-│   └── server/             # HTTP server
-│       ├── src/main.rs     # Entry point
-│       └── src/api.rs      # HTTP handlers
-├── docs/
-│   ├── README.md           # Documentation index
-│   └── superpowers/
-│       ├── specs/          # Design specs (YYYY-MM-DD-*.md)
-│       └── plans/          # Implementation plans (YYYY-MM-DD-*.md)
-└── tests/                  # Integration tests
-```
-
-## Key Commands
+## Quick Commands
 
 ```bash
 # Build
 cargo build --workspace
 
-# Test
+# Run all tests
 cargo test --workspace
 
-# Clippy (required before commit)
+# Run single test (by name)
+cargo test -p vllm-core test_engine_streaming
+cargo test -p vllm-model -- attention
+
+# Run clippy (required before commit)
 cargo clippy --workspace -- -D warnings
 
-# Specific crate
-cargo test -p vllm-core
-cargo test -p vllm-model  
-cargo test -p vllm-server
+# Format check
+cargo fmt --all --check
 
-# Run server
-cargo run -p vllm-server
-
-# Check only (faster than build)
-cargo check -p vllm-model
+# Full CI check
+just ci
 ```
 
-## Development Workflow
+## Project Structure
 
-### 1. New Feature
-
-```text
-1. Load brainstorming skill
-2. Explore project context (files, docs, recent commits)
-3. Ask clarifying questions (one at a time)
-4. Propose approaches with trade-offs
-5. Get user approval on design
-6. Write spec to docs/superpowers/specs/YYYY-MM-DD-feature-name.md
-7. Commit with: git commit -m "docs(spec): add <feature> design"
-8. Load writing-plans skill
-9. Write plan to docs/superpowers/plans/YYYY-MM-DD-feature-name.md
-10. Commit with: git commit -m "docs(plan): add <feature> implementation plan"
-11. Load subagent-driven-development skill
-12. Execute tasks one by one with reviews
+```
+vllm-lite/
+├── Cargo.toml              # Workspace root (4 crates: traits, core, model, server)
+├── justfile                # Build automation
+├── crates/
+│   ├── traits/             # Interface definitions (ModelBackend trait)
+│   ├── core/               # Engine, Scheduler, KV cache, Metrics
+│   ├── model/              # Qwen3, PagedKV, Quantization
+│   └── server/             # HTTP API
+└── tests/                  # Integration tests
 ```
 
-### 2. Bug Fix
+## Code Style Guidelines
 
-```text
-1. Load systematic-debugging skill
-2. Reproduce the issue
-3. Identify root cause
-4. Fix and test
-5. Commit with: git commit -m "fix(<scope>): <description>"
+### Imports
+- Use absolute imports: `use crate::types::Request;`
+- External crates: `use vllm_traits::{ModelBackend, SeqId};`
+- Group std, external, then crate imports
+- Use `super` for sibling module access
+
+### Formatting
+- Run `cargo fmt` before committing
+- 4-space indentation (Rust standard)
+- Max line length: 100 characters (soft limit)
+- Use `#![allow(clippy::too_many_arguments)]` when needed
+
+### Naming Conventions
+- **Types**: `PascalCase` (structs, enums, traits)
+- **Functions/Variables**: `snake_case`
+- **Constants**: `SCREAMING_SNAKE_CASE`
+- **Modules**: `snake_case`
+- **Crate names**: `kebab-case` (e.g., `vllm-core`)
+
+### Types
+- Use `usize` for sizes/lengths, `u64` for IDs (`SeqId`, `TokenId`)
+- Prefer explicit type annotations in function signatures
+- Use `&T` for read-only, `&mut T` for mutable references
+- Use `Option<T>` for nullable values, not `null`
+
+### Error Handling
+- Use `thiserror` for error enums with `#[derive(Debug, thiserror::Error)]`
+- Always implement `Display` and use `#[error(...)]` macro
+- Return `Result<T>` from fallible functions
+- Use `?` operator for error propagation
+- Example (`crates/core/src/error.rs`):
+```rust
+#[derive(Debug, thiserror::Error)]
+pub enum EngineError {
+    #[error("sequence {id} not found")]
+    SeqNotFound { id: u64 },
+    #[error("model forward failed: {0}")]
+    ModelError(String),
+}
+pub type Result<T> = std::result::Result<T, EngineError>;
 ```
+
+### Tests
+- Add to `#[cfg(test)]` module in the same file
+- Use `FakeModel` or `StubModel` for mocking
+- Name: `test_<function>_<expected_behavior>`
+- Run: `cargo test -p vllm-core -- test_name`
+
+### Documentation
+- Document public APIs with `///` doc comments
+- Add examples for complex functions
+- Use `//` for implementation comments, avoid `/**`
 
 ## Commit Message Format
 
 ```text
 <type>(<scope>): <subject>
-
-<body>
 ```
 
-**Types:** `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
+**Types**: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 
-**Examples:**
-
+**Examples**:
 ```bash
 git commit -m "feat(model): add forward_prefill to GqaAttention"
 git commit -m "fix(core): resolve prefix cache eviction bug"
-git commit -m "docs(spec): add Phase 2 prefix hit design"
-git commit -m "docs(plan): add paged attention implementation plan"
-git commit -m "chore: update dependencies"
 git commit -m "test(core): add prefix cache hit test"
 ```
 
-## Crate API Reference
-
-### core/engine.rs
-
-```rust
-pub struct Engine<M: ModelBackend> {
-    pub scheduler: Scheduler,
-    pub target_model: M,
-    pub draft_model: M,
-    pub max_draft_tokens: usize,
-    pub metrics: MetricsCollector,
-}
-
-// Methods
-impl<M: ModelBackend> Engine<M> {
-    pub fn new(model: M, draft_model: M) -> Self
-    pub fn with_config(model: M, draft_model: M, config: SchedulerConfig, max_draft_tokens: usize, num_kv_blocks: usize) -> Self
-    pub fn add_request(&mut self, request: Request, response_tx: mpsc::UnboundedSender<TokenId>) -> SeqId
-    pub fn step(&mut self) -> Result<BatchOutput>
-    pub fn has_pending(&self) -> bool
-}
-```
-
-### core/scheduler.rs
-
-```rust
-pub struct Scheduler {
-    pub config: SchedulerConfig,
-    pub waiting: VecDeque<Sequence>,
-    pub running: VecDeque<Sequence>,
-    pub finished: VecDeque<Sequence>,
-    pub prefix_cache: PrefixCache,
-    pub kv_allocator: BlockAllocator,
-}
-
-impl Scheduler {
-    pub fn add_request(&mut self, request: Request) -> SeqId
-    pub fn build_batch(&mut self) -> Option<Batch>
-    pub fn get_sequence(&self, id: SeqId) -> Option<&Sequence>
-}
-```
-
-### model/kv_cache.rs (PagedKvCache)
-
-```rust
-impl PagedKvCache {
-    pub fn new(num_layers: usize, num_kv_heads: usize, head_dim: usize, num_blocks: usize, device: Device) -> Result<Self>
-    pub fn write_kv(&mut self, layer_idx: usize, block_id: usize, token_offset: usize, k: &Tensor, v: &Tensor) -> Result<()>
-    pub fn read_kv(&self, layer_idx: usize, block_ids: &[usize], seq_len: usize) -> Result<(Tensor, Tensor)>
-}
-```
-
-### model/qwen3/attention.rs
-
-```rust
-pub struct GqaAttention {
-    q_proj: Linear,
-    k_proj: Linear,
-    v_proj: Linear,
-    o_proj: Linear,
-    num_heads: usize,
-    num_kv_heads: usize,
-    head_dim: usize,
-    config: AttentionConfig,
-}
-
-impl GqaAttention {
-    pub fn new(hidden_size: usize, num_heads: usize, num_kv_heads: usize, head_dim: usize, vb: Option<VarBuilder>, config: AttentionConfig) -> Result<Self>
-    pub fn forward_prefill(&self, x: &Tensor, kv_cache: &mut PagedKvCache, layer_idx: usize, block_ids: &[usize]) -> Result<Tensor>
-    pub fn forward_decode(&self, x: &Tensor, kv_cache: &PagedKvCache, layer_idx: usize, block_ids: &[usize], num_computed_tokens: usize) -> Result<Tensor>
-}
-```
-
-## Testing Guidelines
-
-### Unit Tests
-
-- Add to `#[cfg(test)]` module in the same file
-- Use `FakeModel` or create minimal test fixtures
-- Name: `test_<function>_<expected_behavior>`
-
-### Integration Tests
-
-- Add to `crates/*/tests/*.rs`
-- Use `Engine::with_config()` with `StubModel` or `FakeModel`
-- Test full workflows (add_request → step → verify)
-
-### Running Tests
+## Verification (Required Before Commit)
 
 ```bash
-# All tests
-cargo test --workspace
-
-# With output
-cargo test --workspace -- --nocapture
-
-# Specific
-cargo test -p vllm-core -- prefix_cache
-cargo test -p vllm-model -- attention
+just fmt-check    # Format validation
+just clippy       # Code quality
+just test         # Run tests
+just ci           # Full CI (fmt-check → clippy → doc-check → test)
 ```
 
-## Common Patterns
+## Key Design Patterns
 
-### Adding a new type
+- **ModelBackend trait**: Abstracts ML model implementations
+- **Paged KV Cache**: Block-based KV memory management
+- **Prefix Caching**: Reuse KV for repeated prompts
+- **Speculative Decoding**: Draft-then-verify token generation
 
-1. Add to `crates/core/src/types.rs`
-2. Export in `crates/core/src/lib.rs`
+## Crate Dependencies
 
-### Adding a new model
-
-1. Create directory `crates/model/src/<model_name>/`
-2. Implement `ModelBackend` trait
-3. Add to model `lib.rs`
-
-### Adding API endpoint
-
-1. Add handler to `crates/server/src/api.rs`
-2. Register route in `crates/server/src/main.rs`
-
-## Key Design Decisions
-
-- Single GPU worker thread (avoid GPU contention)
-- 4 crates: traits (interfaces), core (engine), model (ML), server (HTTP)
-- Block size: 16 tokens per KV block
-- Max batched tokens: 4096 default
-- Max concurrent sequences: 256 default
-- Use `ModelBackend` trait for model abstraction
-- `vllm-traits` defines interfaces, `vllm-core` implements engine, `vllm-model` implements models
-
-## Documentation Standards
-
-| Document     | Location                  | When to Update              |
-| ------------ | ------------------------- | --------------------------- |
-| Spec         | `docs/superpowers/specs/` | Before implementation       |
-| Plan         | `docs/superpowers/plans/` | After spec approved         |
-| CHANGELOG.md | Root                      | For any user-facing changes |
-| README.md    | Root                      | For major features          |
-
-## Verification Guide (Required Before Commit)
-
-Always verify code changes before committing. Use `just` commands from project root:
-
-### Quick Verify (Recommended)
-
-```bash
-# Format check
-just fmt-check
-
-# Run clippy (code quality)
-just clippy
-
-# Run tests
-just test
-
-# Check documentation
-just doc-check
-```
-
-### Full CI Check
-
-```bash
-# Run all CI checks locally
-just ci
-```
-
-This runs: `fmt-check` → `clippy` → `doc-check` → `msrv-check` → `test`
-
-### Individual Commands
-
-```bash
-# Format code (auto-fix)
-just fmt
-
-# Fix clippy issues automatically
-just fix
-
-# Run tests with nextest (faster)
-just nextest
-
-# Generate documentation
-just doc
-
-# Clean build
-just clean
-```
-
-### Note on `--all-features`
-
-Some commands use `--all-features` which enables the `real_weights` feature:
-- `just clippy`
-- `just test`
-- `just doc-check`
-
-This may show different warnings than without the flag due to optional dependencies.
-
-## Notes
-
-- Uses Rust edition 2021
-- CUDA support via Candle
-- Follow TDD pattern where possible
-- **Always run verification before commit**
-- Use `cargo check` for fast validation
+- `vllm-traits` → (no deps)
+- `vllm-core` → `vllm-traits`
+- `vllm-model` → `vllm-traits`, candle
+- `vllm-server` → `vllm-core`, `vllm-model`, tokio

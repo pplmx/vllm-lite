@@ -68,7 +68,7 @@ Response {
 
 #### 2.3.3 配置
 
-- 添加 `embedding_dim` 配置项 (从 model config 推断)
+- 添加 `embedding_dim` 配置项 (从 model config 的 `hidden_size` 推断)
 - 支持 mean pooling 和 [CLS] pooling 策略
 
 ### 2.4 风险与缓解
@@ -156,7 +156,7 @@ groups:
 #### 4.2.1 Tile 化策略
 
 将 Q/K/V 矩阵分块处理:
-- tile_size = 16 或 32 (可配置)
+- tile_size = 16 或 32 (运行时配置，通过 ModelConfig)
 - 计算时只加载 tile 到 SRAM
 - 减少 HBM 访问次数
 
@@ -201,9 +201,9 @@ groups:
 
 #### 5.2.2 KV Cache 量化
 
-- 存储时转换为 INT8
+- 存储时转换为 INT8 (使用 per-tensor scale)
 - 计算时反量化回 FP16/FP32
-- 引入量化误差补偿
+- 保持 scale 在 block header 中
 
 ```rust
 struct QuantizedKVCache {
@@ -272,7 +272,7 @@ pub trait ModelRegistry {
 
 | 模型 | 优先级 | 难度 |
 |------|--------|------|
-| Llama 3 | P0 | 中 |
+| Llama 3 8B | P0 | 中 |
 | Mistral | P1 | 中 |
 | Phi-3 | P2 | 低 |
 | Gemma | P2 | 中 |
