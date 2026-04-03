@@ -4,6 +4,9 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::config::Architecture;
+use crate::config::ModelConfig;
+use crate::llama::LlamaModel;
+use crate::mistral::MistralModel;
 use crate::qwen3::model::Qwen3Model;
 use crate::qwen3_config::Qwen3Config;
 
@@ -142,10 +145,48 @@ impl ModelLoader {
         Ok(weights)
     }
 
-    pub fn load(&self, model_dir: &str) -> Result<(Qwen3Config, HashMap<String, Tensor>)> {
-        let config = self.load_config(model_dir)?;
+    pub fn load(
+        &self,
+        model_dir: &str,
+        num_kv_blocks: usize,
+    ) -> Result<Box<dyn vllm_traits::ModelBackend>> {
+        let config_path = Path::new(model_dir).join("config.json");
+        let content = std::fs::read_to_string(config_path)
+            .map_err(|e| candle_core::Error::msg(format!("Failed to read config: {}", e)))?;
+        let value: serde_json::Value = serde_json::from_str(&content)
+            .map_err(|e| candle_core::Error::msg(format!("Failed to parse config: {}", e)))?;
+
+        let config = ModelConfig::from_config_json(&value)
+            .map_err(|e| candle_core::Error::msg(format!("Failed to parse model config: {}", e)))?;
         let weights = self.load_weights(model_dir)?;
-        Ok((config, weights))
+
+        match config.architecture {
+            Architecture::Llama => {
+                let model =
+                    LlamaModel::from_weights(config, self.device.clone(), weights, num_kv_blocks)?;
+                Ok(Box::new(model))
+            }
+            Architecture::Mistral => {
+                let model = MistralModel::from_weights(
+                    config,
+                    self.device.clone(),
+                    weights,
+                    num_kv_blocks,
+                )?;
+                Ok(Box::new(model))
+            }
+            Architecture::Qwen3 => {
+                let config = self.load_config(model_dir)?;
+                let model = Qwen3Model::from_weights(
+                    config,
+                    self.device.clone(),
+                    weights,
+                    num_kv_blocks,
+                    false,
+                )?;
+                Ok(Box::new(model))
+            }
+        }
     }
 
     pub fn load_model(
