@@ -1,4 +1,5 @@
 use super::Architecture;
+use crate::loader::detect_architecture;
 
 pub struct ModelConfig {
     pub architecture: Architecture,
@@ -51,5 +52,74 @@ impl ModelConfig {
             tie_word_embeddings: false,
             max_position_embeddings: 32768,
         }
+    }
+
+    pub fn from_config_json(value: &serde_json::Value) -> Result<Self, Box<dyn std::error::Error>> {
+        let architecture = detect_architecture(value);
+
+        let hidden_size = value
+            .get("hidden_size")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(4096) as usize;
+        let num_layers = value
+            .get("num_hidden_layers")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(32) as usize;
+        let num_heads = value
+            .get("num_attention_heads")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(32) as usize;
+        let num_kv_heads = value
+            .get("num_key_value_heads")
+            .or_else(|| value.get("num_local_heads"))
+            .and_then(|v| v.as_u64())
+            .unwrap_or(num_heads as u64) as usize;
+        let head_dim = hidden_size / num_heads;
+        let vocab_size = value
+            .get("vocab_size")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(32000) as usize;
+        let intermediate_size = value
+            .get("intermediate_size")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(11008) as usize;
+        let rope_theta = value
+            .get("rope_theta")
+            .or_else(|| value.get("rotary_base"))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(10000.0) as f32;
+        let rms_norm_eps = value
+            .get("rms_norm_eps")
+            .or_else(|| value.get("layer_norm_eps"))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1e-5) as f64;
+        let sliding_window = value
+            .get("sliding_window")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize);
+        let tie_word_embeddings = value
+            .get("tie_word_embeddings")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let max_position_embeddings = value
+            .get("max_position_embeddings")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(2048) as usize;
+
+        Ok(Self {
+            architecture,
+            hidden_size,
+            num_layers,
+            num_heads,
+            num_kv_heads,
+            head_dim,
+            vocab_size,
+            intermediate_size,
+            rope_theta,
+            rms_norm_eps,
+            sliding_window,
+            tie_word_embeddings,
+            max_position_embeddings,
+        })
     }
 }
