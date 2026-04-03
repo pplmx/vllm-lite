@@ -7,7 +7,7 @@ use crate::gemma4::rope::Gemma4RoPE;
 /// Gemma4 transformer block with hybrid attention and GeGLU MLP.
 pub struct Gemma4Block {
     _attention: Gemma4Attention,
-    _mlp: GeGLU,
+    _mlp: Option<GeGLU>,
     _rope: Gemma4RoPE,
 }
 
@@ -16,7 +16,7 @@ impl Gemma4Block {
     pub fn new() -> Self {
         Self {
             _attention: Gemma4Attention,
-            _mlp: GeGLU,
+            _mlp: None,
             _rope: Gemma4RoPE,
         }
     }
