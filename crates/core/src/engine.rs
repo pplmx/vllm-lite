@@ -177,7 +177,7 @@ impl<M: ModelBackend> Engine<M> {
                     continue;
                 }
 
-                let logits = self.target_model.borrow().forward_logits(
+                let logits = self.target_model.borrow_mut().forward_logits(
                     &[0],
                     &[vec![beam.tokens.last().copied().unwrap_or(0)]],
                     &[vec![beam.tokens.len()]],
@@ -264,7 +264,7 @@ mod tests {
         }
 
         fn forward_logits(
-            &self,
+            &mut self,
             _seq_ids: &[SeqId],
             input_tokens: &[Vec<TokenId>],
             _positions: &[Vec<usize>],
