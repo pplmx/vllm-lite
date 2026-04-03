@@ -1,12 +1,9 @@
 #[cfg(feature = "tokenizers")]
-use std::sync::Arc;
-
-#[cfg(feature = "tokenizers")]
 use tokenizers::Tokenizer as HFTokenizer;
 
 pub struct Tokenizer {
     #[cfg(feature = "tokenizers")]
-    inner: Option<Arc<HFTokenizer>>,
+    inner: Option<Box<HFTokenizer>>,
     #[cfg(not(feature = "tokenizers"))]
     _placeholder: (),
     vocab_size: usize,
@@ -23,34 +20,32 @@ impl Tokenizer {
         }
     }
 
+    #[cfg(feature = "tokenizers")]
     pub fn from_file(path: &str) -> std::result::Result<Self, String> {
-        #[cfg(feature = "tokenizers")]
-        {
-            let tokenizer = HFTokenizer::from_file(path)
-                .map_err(|e| format!("Failed to load tokenizer: {}", e))?;
-            let vocab_size = tokenizer.get_vocab_size(true);
-            Ok(Self {
-                inner: Some(Arc::new(tokenizer)),
-                vocab_size,
-            })
-        }
-        #[cfg(not(feature = "tokenizers"))]
-        {
-            let _ = path;
-            Ok(Self {
-                _placeholder: (),
-                vocab_size: 151936,
-            })
-        }
+        let tokenizer =
+            HFTokenizer::from_file(path).map_err(|e| format!("Failed to load tokenizer: {}", e))?;
+        let vocab_size = tokenizer.get_vocab_size(true);
+        Ok(Self {
+            inner: Some(Box::new(tokenizer)),
+            vocab_size,
+        })
+    }
+
+    #[cfg(not(feature = "tokenizers"))]
+    pub fn from_file(path: &str) -> std::result::Result<Self, String> {
+        let _ = path;
+        Ok(Self {
+            _placeholder: (),
+            vocab_size: 151936,
+        })
     }
 
     pub fn encode(&self, text: &str) -> Vec<u32> {
         #[cfg(feature = "tokenizers")]
         if let Some(ref tokenizer) = self.inner {
-            let encoding = tokenizer
-                .encode(text, false)
-                .expect("Failed to encode text");
-            return encoding.get_ids().iter().map(|&id| id as u32).collect();
+            if let Ok(encoding) = tokenizer.encode(text, false) {
+                return encoding.get_ids().to_vec();
+            }
         }
 
         text.split_whitespace()
@@ -62,10 +57,8 @@ impl Tokenizer {
     pub fn decode(&self, tokens: &[u32]) -> String {
         #[cfg(feature = "tokenizers")]
         if let Some(ref tokenizer) = self.inner {
-            let token_ids: Vec<u32> = tokens.to_vec();
-            match tokenizer.decode(&token_ids, false) {
-                Ok(text) => return text,
-                Err(_) => {}
+            if let Ok(text) = tokenizer.decode(tokens, false) {
+                return text;
             }
         }
 
