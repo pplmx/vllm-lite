@@ -556,12 +556,12 @@ mod tests {
         let v = Tensor::from_slice(&v_data, (1, 2, 4), &device)?;
 
         cache_no_quant.write_kv(0, 0, 0, &k, &v)?;
-        let (k_no_q, v_no_q) = cache_no_quant.read_kv(0, &[0], 1)?;
+        let (k_no_q, _v_no_q) = cache_no_quant.read_kv(0, &[0], 1)?;
 
         // Quantized
         let mut cache_quant = PagedKvCache::new(1, 2, 4, 4, device.clone(), true)?;
         cache_quant.write_kv(0, 0, 0, &k, &v)?;
-        let (k_q, v_q) = cache_quant.read_kv(0, &[0], 1)?;
+        let (k_q, _v_q) = cache_quant.read_kv(0, &[0], 1)?;
 
         // Both should produce similar results (within quantization error)
         let k_no_q_data: Vec<f32> = k_no_q.flatten_all()?.to_vec1()?;
@@ -583,13 +583,13 @@ mod tests {
         let mut cache = PagedKvCache::new(2, 2, 4, 4, device.clone(), true)?;
 
         // Write to layer 0
-        let k0 = Tensor::from_slice(&vec![100.0f32; 8], (1, 2, 4), &device)?;
-        let v0 = Tensor::from_slice(&vec![100.0f32; 8], (1, 2, 4), &device)?;
+        let k0 = Tensor::from_slice(&[100.0f32; 8], (1, 2, 4), &device)?;
+        let v0 = Tensor::from_slice(&[100.0f32; 8], (1, 2, 4), &device)?;
         cache.write_kv(0, 0, 0, &k0, &v0)?;
 
         // Write to layer 1
-        let k1 = Tensor::from_slice(&vec![50.0f32; 8], (1, 2, 4), &device)?;
-        let v1 = Tensor::from_slice(&vec![50.0f32; 8], (1, 2, 4), &device)?;
+        let k1 = Tensor::from_slice(&[50.0f32; 8], (1, 2, 4), &device)?;
+        let v1 = Tensor::from_slice(&[50.0f32; 8], (1, 2, 4), &device)?;
         cache.write_kv(1, 0, 0, &k1, &v1)?;
 
         // Check scales are different

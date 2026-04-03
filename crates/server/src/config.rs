@@ -292,7 +292,7 @@ mod tests {
     #[test]
     fn test_kv_quantization_default() {
         let config = AppConfig::default();
-        assert_eq!(config.engine.kv_quantization, false);
+        assert!(!config.engine.kv_quantization);
     }
 
     #[test]
