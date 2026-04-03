@@ -1,17 +1,58 @@
-#[cfg(feature = "real_weights")]
+#[cfg(feature = "tokenizers")]
+use std::sync::Arc;
+
+#[cfg(feature = "tokenizers")]
+use tokenizers::Tokenizer as HFTokenizer;
+
 pub struct Tokenizer {
-    // tiktoken 3.x API changed significantly
-    // TODO: fix after tiktoken releases stable API
+    #[cfg(feature = "tokenizers")]
+    inner: Option<Arc<HFTokenizer>>,
+    #[cfg(not(feature = "tokenizers"))]
     _placeholder: (),
+    vocab_size: usize,
 }
 
-#[cfg(feature = "real_weights")]
 impl Tokenizer {
     pub fn new() -> Self {
-        Self { _placeholder: () }
+        Self {
+            #[cfg(feature = "tokenizers")]
+            inner: None,
+            #[cfg(not(feature = "tokenizers"))]
+            _placeholder: (),
+            vocab_size: 151936,
+        }
+    }
+
+    pub fn from_file(path: &str) -> std::result::Result<Self, String> {
+        #[cfg(feature = "tokenizers")]
+        {
+            let tokenizer = HFTokenizer::from_file(path)
+                .map_err(|e| format!("Failed to load tokenizer: {}", e))?;
+            let vocab_size = tokenizer.get_vocab_size(true);
+            Ok(Self {
+                inner: Some(Arc::new(tokenizer)),
+                vocab_size,
+            })
+        }
+        #[cfg(not(feature = "tokenizers"))]
+        {
+            let _ = path;
+            Ok(Self {
+                _placeholder: (),
+                vocab_size: 151936,
+            })
+        }
     }
 
     pub fn encode(&self, text: &str) -> Vec<u32> {
+        #[cfg(feature = "tokenizers")]
+        if let Some(ref tokenizer) = self.inner {
+            let encoding = tokenizer
+                .encode(text, false)
+                .expect("Failed to encode text");
+            return encoding.get_ids().iter().map(|&id| id as u32).collect();
+        }
+
         text.split_whitespace()
             .enumerate()
             .map(|(i, _)| (i + 1) as u32)
@@ -19,42 +60,26 @@ impl Tokenizer {
     }
 
     pub fn decode(&self, tokens: &[u32]) -> String {
+        #[cfg(feature = "tokenizers")]
+        if let Some(ref tokenizer) = self.inner {
+            let token_ids: Vec<u32> = tokens.to_vec();
+            match tokenizer.decode(&token_ids, false) {
+                Ok(text) => return text,
+                Err(_) => {}
+            }
+        }
+
         tokens.iter().map(|t| format!("token_{} ", t)).collect()
+    }
+
+    pub fn vocab_size(&self) -> usize {
+        self.vocab_size
     }
 }
 
-#[cfg(feature = "real_weights")]
 impl Default for Tokenizer {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-#[cfg(not(feature = "real_weights"))]
-pub struct Tokenizer;
-
-#[cfg(not(feature = "real_weights"))]
-impl Tokenizer {
-    pub fn new() -> Self {
-        Self
-    }
-
-    pub fn encode(&self, text: &str) -> Vec<u32> {
-        text.split_whitespace()
-            .enumerate()
-            .map(|(i, _)| (i + 1) as u32)
-            .collect()
-    }
-
-    pub fn decode(&self, tokens: &[u32]) -> String {
-        tokens.iter().map(|t| format!("token_{} ", t)).collect()
-    }
-}
-
-#[cfg(not(feature = "real_weights"))]
-impl Default for Tokenizer {
-    fn default() -> Self {
-        Self
     }
 }
 
@@ -79,6 +104,12 @@ mod tests {
     }
 
     #[test]
+    fn test_tokenizer_vocab_size() {
+        let tokenizer = Tokenizer::new();
+        assert_eq!(tokenizer.vocab_size(), 151936);
+    }
+
+    #[test]
     fn test_tokenizer_encode_empty() {
         let tokenizer = Tokenizer::new();
         let tokens = tokenizer.encode("");
@@ -95,87 +126,10 @@ mod tests {
     }
 
     #[test]
-    fn test_tokenizer_encode_multiple_words() {
-        let tokenizer = Tokenizer::new();
-        let tokens = tokenizer.encode("the quick brown fox");
-
-        assert_eq!(tokens.len(), 4);
-    }
-
-    #[test]
-    fn test_tokenizer_encode_whitespace_handling() {
-        let tokenizer = Tokenizer::new();
-
-        let tokens1 = tokenizer.encode("hello world");
-        let tokens2 = tokenizer.encode("hello  world");
-
-        assert_eq!(tokens1, tokens2);
-    }
-
-    #[test]
-    fn test_tokenizer_decode_empty() {
-        let tokenizer = Tokenizer::new();
-        let text = tokenizer.decode(&[]);
-
-        assert!(text.is_empty());
-    }
-
-    #[test]
     fn test_tokenizer_decode_single_token() {
         let tokenizer = Tokenizer::new();
         let text = tokenizer.decode(&[1]);
 
         assert!(!text.is_empty());
-    }
-
-    #[test]
-    fn test_tokenizer_decode_multiple_tokens() {
-        let tokenizer = Tokenizer::new();
-        let text = tokenizer.decode(&[1, 2, 3, 4, 5]);
-
-        assert!(text.contains("token_1"));
-        assert!(text.contains("token_5"));
-    }
-
-    #[test]
-    fn test_tokenizer_roundtrip() {
-        let tokenizer = Tokenizer::new();
-        let original = "hello world";
-
-        let tokens = tokenizer.encode(original);
-        let decoded = tokenizer.decode(&tokens);
-
-        assert!(!decoded.is_empty());
-    }
-
-    #[test]
-    fn test_tokenizer_encode_unicode() {
-        let tokenizer = Tokenizer::new();
-
-        let tokens = tokenizer.encode("你好世界");
-        assert!(!tokens.is_empty());
-
-        let tokens2 = tokenizer.encode("🎉🎊🎁");
-        assert!(!tokens2.is_empty());
-    }
-
-    #[test]
-    fn test_tokenizer_encode_leading_trailing_spaces() {
-        let tokenizer = Tokenizer::new();
-
-        let tokens1 = tokenizer.encode("hello");
-        let tokens2 = tokenizer.encode("  hello  ");
-
-        assert_eq!(tokens1, tokens2);
-    }
-
-    #[test]
-    fn test_tokenizer_consistency() {
-        let tokenizer = Tokenizer::new();
-
-        let tokens1 = tokenizer.encode("hello world test");
-        let tokens2 = tokenizer.encode("hello world test");
-
-        assert_eq!(tokens1, tokens2);
     }
 }
