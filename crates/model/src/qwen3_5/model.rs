@@ -162,7 +162,7 @@ impl ModelBackend for Qwen35Model {
     }
 
     fn forward_logits(
-        &self,
+        &mut self,
         _seq_ids: &[SeqId],
         input_tokens: &[Vec<TokenId>],
         _positions: &[Vec<usize>],

@@ -20,7 +20,7 @@ impl ModelBackend for IncrementModel {
     }
 
     fn forward_logits(
-        &self,
+        &mut self,
         _seq_ids: &[SeqId],
         input_tokens: &[Vec<TokenId>],
         _positions: &[Vec<usize>],
@@ -74,7 +74,7 @@ impl ModelBackend for ConstModel {
     }
 
     fn forward_logits(
-        &self,
+        &mut self,
         _seq_ids: &[SeqId],
         input_tokens: &[Vec<TokenId>],
         _positions: &[Vec<usize>],

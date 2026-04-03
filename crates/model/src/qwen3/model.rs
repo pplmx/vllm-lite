@@ -485,19 +485,39 @@ impl ModelBackend for Qwen3Model {
     }
 
     fn forward_logits(
-        &self,
-        _seq_ids: &[SeqId],
+        &mut self,
+        seq_ids: &[SeqId],
         input_tokens: &[Vec<TokenId>],
-        _positions: &[Vec<usize>],
-        _kv_block_ids: &[Vec<usize>],
-        _num_computed_tokens: &[usize],
-        _is_prefill: &[bool],
+        positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
     ) -> EngineResult<Vec<Vec<f32>>> {
-        // Note: forward_logits takes &self but forward_with_cache needs &mut self.
-        // Return zeros for now - a proper implementation would require
-        // either changing the trait or using interior mutability.
-        let vocab_size = self.config.vocab_size();
-        Ok(input_tokens.iter().map(|_| vec![0.0; vocab_size]).collect())
+        if seq_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let mut results = Vec::with_capacity(seq_ids.len());
+
+        for i in 0..seq_ids.len() {
+            let tokens = &input_tokens[i];
+            let pos = &positions[i];
+            let blocks = &kv_block_ids[i];
+            let computed = num_computed_tokens[i];
+            let pf = is_prefill[i];
+
+            let (logits, _) = self.forward_with_cache(tokens, computed, blocks, pos, pf)?;
+
+            let logits_vec = logits
+                .squeeze(0)
+                .map_err(|e| EngineError::new(e.to_string()))?
+                .to_vec1::<f32>()
+                .map_err(|e| EngineError::new(e.to_string()))?;
+
+            results.push(logits_vec);
+        }
+
+        Ok(results)
     }
 
     fn embed(

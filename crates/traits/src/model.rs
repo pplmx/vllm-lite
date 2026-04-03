@@ -33,7 +33,7 @@ pub trait ModelBackend: Send + Sync {
     ) -> Result<BatchOutput>;
 
     fn forward_logits(
-        &self,
+        &mut self,
         seq_ids: &[SeqId],
         input_tokens: &[Vec<TokenId>],
         positions: &[Vec<usize>],
