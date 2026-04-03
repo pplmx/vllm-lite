@@ -2,6 +2,9 @@
 default:
     @just --list
 
+init:
+    prek install --hook-type commit-msg --hook-type pre-push
+
 # Build release binary
 build:
     cargo build --release
