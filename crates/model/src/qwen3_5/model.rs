@@ -1,6 +1,7 @@
 #![allow(clippy::all, unused)]
 use crate::config::Qwen3Config;
 use crate::kv_cache::PagedKvCache;
+use crate::qwen3_5::ssm::{MambaBlock, SSMConfig};
 use candle_core::{Device, Module, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, LayerNorm, Linear, VarBuilder};
 use std::collections::HashMap;
@@ -19,17 +20,6 @@ pub struct Qwen35Model {
     device: Device,
 }
 
-pub struct MambaBlock {
-    linear: Linear,
-}
-
-impl MambaBlock {
-    pub fn new(hidden_size: usize, vb: VarBuilder) -> CandleResult<Self> {
-        let linear = candle_nn::linear(hidden_size, hidden_size, vb)?;
-        Ok(Self { linear })
-    }
-}
-
 impl Qwen35Model {
     pub fn new(config: Qwen3Config, device: Device) -> CandleResult<Self> {
         let vocab_size = config.vocab_size();
@@ -41,9 +31,14 @@ impl Qwen35Model {
 
         let num_layers = config.num_hidden_layers();
         let vb = VarBuilder::zeros(candle_core::DType::F32, &device);
+        let ssm_config = SSMConfig::new(hidden_size);
         let mut layers = Vec::new();
         for _ in 0..num_layers {
-            layers.push(MambaBlock::new(hidden_size, vb.clone())?);
+            layers.push(MambaBlock::new(
+                hidden_size,
+                ssm_config.d_state,
+                vb.clone(),
+            )?);
         }
 
         let norm = candle_nn::layer_norm(hidden_size, config.rms_norm_eps(), vb.clone())?;
@@ -82,7 +77,6 @@ impl Qwen35Model {
             println!("Loaded embed_tokens from {}", embed_key);
         }
 
-        eprintln!("Warning: Qwen3.5 Mamba implementation is simplified (placeholder)");
         Ok(model)
     }
 }
@@ -124,9 +118,8 @@ impl ModelBackend for Qwen35Model {
                 .map_err(|e| EngineError::new(e.to_string()))?;
 
             let mut hidden = hidden;
-            for layer in &self.layers {
+            for layer in &mut self.layers {
                 hidden = layer
-                    .linear
                     .forward(&hidden)
                     .map_err(|e| EngineError::new(e.to_string()))?;
             }
@@ -199,9 +192,8 @@ impl ModelBackend for Qwen35Model {
                 .forward(&token_tensor)
                 .map_err(|e| EngineError::new(e.to_string()))?;
 
-            for layer in &self.layers {
+            for layer in &mut self.layers {
                 hidden = layer
-                    .linear
                     .forward(&hidden)
                     .map_err(|e| EngineError::new(e.to_string()))?;
             }
