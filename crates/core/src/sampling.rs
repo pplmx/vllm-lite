@@ -4,12 +4,7 @@
 use crate::types::TokenId;
 
 fn random_f32() -> f32 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .subsec_nanos();
-    (nanos as f32) / (u32::MAX as f32)
+    rand::random::<f32>()
 }
 
 pub fn greedy_sample(logits: &[f32]) -> TokenId {
