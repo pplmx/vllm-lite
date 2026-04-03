@@ -1,6 +1,7 @@
 use crate::config::Qwen3Config;
 use candle_core::{Result, Tensor};
 
+#[allow(dead_code)]
 pub struct RoPE {
     pub(crate) theta: f32,
     pub(crate) head_dim: usize,
