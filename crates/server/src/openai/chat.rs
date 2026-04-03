@@ -125,7 +125,7 @@ async fn handle_chat(
     ))
 }
 
-pub async fn chat_completions(
+pub(crate) async fn chat_completions(
     State(state): State<ApiState>,
     Json(req): Json<ChatRequest>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
@@ -218,4 +218,117 @@ pub async fn chat_completions(
     // 非流式 - 返回普通 JSON
     let response = handle_chat(&state, req).await?;
     Ok(Json(response).into_response())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::StatusCode;
+
+    fn create_test_request(model: &str, messages: Vec<ChatMessage>) -> ChatRequest {
+        ChatRequest {
+            model: model.to_string(),
+            messages,
+            temperature: None,
+            top_p: None,
+            max_tokens: Some(100),
+            stream: None,
+            n: None,
+            stop: None,
+        }
+    }
+
+    #[test]
+    fn test_validate_chat_request_valid() {
+        let req = create_test_request(
+            "test-model",
+            vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Hello".to_string(),
+                name: None,
+            }],
+        );
+        assert!(validate_chat_request(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_chat_request_empty_model() {
+        let req = create_test_request(
+            "",
+            vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Hello".to_string(),
+                name: None,
+            }],
+        );
+        let result = validate_chat_request(&req);
+        assert!(result.is_err());
+        let (status, _) = result.unwrap_err();
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_validate_chat_request_empty_messages() {
+        let req = create_test_request("test-model", vec![]);
+        let result = validate_chat_request(&req);
+        assert!(result.is_err());
+        let (status, _) = result.unwrap_err();
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_build_prompt_from_messages_user_only() {
+        let messages = vec![ChatMessage {
+            role: "user".to_string(),
+            content: "Hello".to_string(),
+            name: None,
+        }];
+        let prompt = build_prompt_from_messages(&messages);
+        assert_eq!(prompt, "User: Hello\n\nAssistant: ");
+    }
+
+    #[test]
+    fn test_build_prompt_from_messages_system_and_user() {
+        let messages = vec![
+            ChatMessage {
+                role: "system".to_string(),
+                content: "You are helpful".to_string(),
+                name: None,
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: "Hi".to_string(),
+                name: None,
+            },
+        ];
+        let prompt = build_prompt_from_messages(&messages);
+        assert_eq!(prompt, "System: You are helpful\n\nUser: Hi\n\nAssistant: ");
+    }
+
+    #[test]
+    fn test_build_prompt_from_messages_with_assistant() {
+        let messages = vec![
+            ChatMessage {
+                role: "user".to_string(),
+                content: "Hi".to_string(),
+                name: None,
+            },
+            ChatMessage {
+                role: "assistant".to_string(),
+                content: "Hello!".to_string(),
+                name: None,
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: "How are you?".to_string(),
+                name: None,
+            },
+        ];
+        let prompt = build_prompt_from_messages(&messages);
+        assert_eq!(
+            prompt,
+            "User: Hi\n\nAssistant: Hello!\n\nUser: How are you?\n\nAssistant: "
+        );
+    }
+
 }
