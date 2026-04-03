@@ -1,5 +1,5 @@
-use crate::kv_cache::{BlockAllocator, PrefixCache, hash_tokens};
-use crate::types::{BLOCK_SIZE, Batch, Request, SchedulerConfig, SeqId, Sequence, Status, TokenId};
+use crate::kv_cache::{hash_tokens, BlockAllocator, PrefixCache};
+use crate::types::{Batch, Request, SchedulerConfig, SeqId, Sequence, Status, TokenId, BLOCK_SIZE};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
@@ -279,6 +279,38 @@ impl Scheduler {
         (seq_ids, input_tokens, positions, remaining_budget)
     }
 
+    fn finalize_batch(
+        seq_ids: Vec<SeqId>,
+        input_tokens: Vec<Vec<TokenId>>,
+        positions: Vec<Vec<usize>>,
+        running: &[Sequence],
+    ) -> Batch {
+        let batch_len = seq_ids.len();
+        let seq_id_to_idx: HashMap<SeqId, usize> =
+            seq_ids.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+
+        let mut kv_block_ids: Vec<Vec<usize>> = vec![vec![]; batch_len];
+        let mut num_computed_tokens: Vec<usize> = vec![0; batch_len];
+        let mut is_prefill: Vec<bool> = vec![false; batch_len];
+
+        for seq in running {
+            if let Some(&idx) = seq_id_to_idx.get(&seq.id) {
+                kv_block_ids[idx] = seq.kv_blocks.as_ref().clone();
+                num_computed_tokens[idx] = seq.num_computed_tokens;
+                is_prefill[idx] = seq.status == Status::Prefilling;
+            }
+        }
+
+        Batch {
+            seq_ids,
+            input_tokens,
+            positions,
+            kv_block_ids,
+            num_computed_tokens,
+            is_prefill,
+        }
+    }
+
     fn build_batch_with_pd_separation(&mut self) -> Batch {
         let budget = self.config.max_num_batched_tokens;
         let decode_preference = self.config.decode_preference_ratio;
@@ -299,33 +331,7 @@ impl Scheduler {
         let mut positions = decode_pos;
         positions.extend(prefill_pos);
 
-        // Build index mapping to maintain order
-        let batch_len = seq_ids.len();
-        let seq_id_to_idx: HashMap<SeqId, usize> =
-            seq_ids.iter().enumerate().map(|(i, &id)| (id, i)).collect();
-
-        // Pre-allocate vectors
-        let mut kv_block_ids: Vec<Vec<usize>> = vec![vec![]; batch_len];
-        let mut num_computed_tokens: Vec<usize> = vec![0; batch_len];
-        let mut is_prefill: Vec<bool> = vec![false; batch_len];
-
-        // Populate using index mapping
-        for seq in &self.running {
-            if let Some(&idx) = seq_id_to_idx.get(&seq.id) {
-                kv_block_ids[idx] = seq.kv_blocks.as_ref().clone();
-                num_computed_tokens[idx] = seq.num_computed_tokens;
-                is_prefill[idx] = seq.status == Status::Prefilling;
-            }
-        }
-
-        Batch {
-            seq_ids,
-            input_tokens,
-            positions,
-            kv_block_ids,
-            num_computed_tokens,
-            is_prefill,
-        }
+        Self::finalize_batch(seq_ids, input_tokens, positions, &self.running)
     }
 
     fn build_batch_mixed(&mut self) -> Batch {
@@ -343,33 +349,7 @@ impl Scheduler {
         let mut positions = decode_pos;
         positions.extend(prefill_pos);
 
-        // Build index mapping to maintain order
-        let batch_len = seq_ids.len();
-        let seq_id_to_idx: HashMap<SeqId, usize> =
-            seq_ids.iter().enumerate().map(|(i, &id)| (id, i)).collect();
-
-        // Pre-allocate vectors
-        let mut kv_block_ids: Vec<Vec<usize>> = vec![vec![]; batch_len];
-        let mut num_computed_tokens: Vec<usize> = vec![0; batch_len];
-        let mut is_prefill: Vec<bool> = vec![false; batch_len];
-
-        // Populate using index mapping
-        for seq in &self.running {
-            if let Some(&idx) = seq_id_to_idx.get(&seq.id) {
-                kv_block_ids[idx] = seq.kv_blocks.as_ref().clone();
-                num_computed_tokens[idx] = seq.num_computed_tokens;
-                is_prefill[idx] = seq.status == Status::Prefilling;
-            }
-        }
-
-        Batch {
-            seq_ids,
-            input_tokens,
-            positions,
-            kv_block_ids,
-            num_computed_tokens,
-            is_prefill,
-        }
+        Self::finalize_batch(seq_ids, input_tokens, positions, &self.running)
     }
 
     pub fn build_batch(&mut self) -> Batch {
