@@ -233,3 +233,45 @@ impl Default for MetricsCollector {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_metrics_snapshot_new_fields() {
+        let collector = MetricsCollector::new();
+
+        collector.record_request_start();
+        collector.record_kv_cache_usage(50, 100);
+        collector.record_prefix_cache_hit();
+        collector.record_prefix_cache_request();
+        collector.record_prefill_tokens(100);
+        collector.record_decode_tokens(50);
+        collector.record_scheduler_wait_time(10.0);
+        collector.record_request_end();
+
+        let snapshot = collector.snapshot();
+
+        assert_eq!(snapshot.requests_in_flight, 0);
+        assert!((snapshot.kv_cache_usage_percent - 50.0).abs() < 0.01);
+        assert!((snapshot.prefix_cache_hit_rate - 100.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_metrics_kv_cache_zero_total() {
+        let collector = MetricsCollector::new();
+        collector.record_kv_cache_usage(10, 0);
+
+        let snapshot = collector.snapshot();
+        assert_eq!(snapshot.kv_cache_usage_percent, 0.0);
+    }
+
+    #[test]
+    fn test_metrics_prefix_cache_no_requests() {
+        let collector = MetricsCollector::new();
+
+        let snapshot = collector.snapshot();
+        assert_eq!(snapshot.prefix_cache_hit_rate, 0.0);
+    }
+}
