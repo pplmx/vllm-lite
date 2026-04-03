@@ -88,6 +88,8 @@ impl<M: ModelBackend> Engine<M> {
                         self.add_request(request, response_tx);
                     }
                     EngineMessage::GetMetrics { response_tx } => {
+                        let (used, total) = self.scheduler.get_kv_cache_usage();
+                        self.metrics.record_kv_cache_usage(used, total);
                         let snapshot = self.metrics.snapshot();
                         let _ = response_tx.send(snapshot);
                     }

@@ -1,5 +1,5 @@
-use crate::kv_cache::{BlockAllocator, PrefixCache, hash_tokens};
-use crate::types::{BLOCK_SIZE, Batch, Request, SchedulerConfig, SeqId, Sequence, Status, TokenId};
+use crate::kv_cache::{hash_tokens, BlockAllocator, PrefixCache};
+use crate::types::{Batch, Request, SchedulerConfig, SeqId, Sequence, Status, TokenId, BLOCK_SIZE};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
@@ -492,6 +492,17 @@ impl Scheduler {
 
     pub fn prefix_cache(&self) -> &PrefixCache {
         &self.prefix_cache
+    }
+
+    pub fn get_kv_cache_usage(&self) -> (u64, u64) {
+        let total = self.kv_allocator.total() as u64;
+        let available = self.kv_allocator.available() as u64;
+        let used = total.saturating_sub(available);
+        (used, total)
+    }
+
+    pub fn get_prefix_cache_stats(&self) -> (u64, u64) {
+        (0, 0)
     }
 }
 
