@@ -1,3 +1,7 @@
+//! Unified model configuration.
+//!
+//! Provides ModelConfig struct that works across different model architectures.
+
 use super::Architecture;
 use crate::loader::detect_architecture;
 
