@@ -15,5 +15,5 @@
 pub mod architecture;
 pub mod model_config;
 
-pub use architecture::{Architecture, AttentionType, MlpType, NormType};
+pub use architecture::{Architecture, AttentionType, LayerType, MlpType, NormType, RoPEConfig};
 pub use model_config::ModelConfig;

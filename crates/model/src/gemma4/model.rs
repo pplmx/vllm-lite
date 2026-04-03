@@ -1,22 +1,35 @@
 //! Gemma4 Model implementation.
 
+#![allow(dead_code)]
+
+use crate::config::ModelConfig;
 use crate::gemma4::block::Gemma4Block;
+use candle_core::{Device, Result as CandleResult};
+use candle_nn::VarBuilder;
 use vllm_traits::{BatchOutput, ModelBackend, Result as EngineResult, SeqId, TokenId};
 
-/// Gemma4 model with transformer blocks.
 pub struct Gemma4Model {
-    _num_layers: usize,
+    config: ModelConfig,
     _layers: Vec<Gemma4Block>,
+    device: Device,
 }
 
 impl Gemma4Model {
-    /// Create a new Gemma4Model.
-    pub fn new(num_layers: usize) -> Self {
-        let _layers = (0..num_layers).map(|_| Gemma4Block::new()).collect();
-        Self {
-            _num_layers: num_layers,
-            _layers,
+    pub fn new(config: ModelConfig, device: Device, _num_kv_blocks: usize) -> CandleResult<Self> {
+        let num_layers = config.num_layers;
+        let vb = VarBuilder::zeros(candle_core::DType::F32, &device);
+
+        let mut layers = Vec::new();
+        for i in 0..num_layers {
+            let layer = Gemma4Block::new(&config, i, vb.pp(format!("layers.{}", i)))?;
+            layers.push(layer);
         }
+
+        Ok(Self {
+            config,
+            _layers: layers,
+            device,
+        })
     }
 }
 
