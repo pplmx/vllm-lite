@@ -8,6 +8,9 @@ rust-version.workspace = true
 name = "vllm-server"
 path = "src/main.rs"
 
+[lib]
+path = "src/main.rs"
+
 [dependencies]
 vllm-core = { path = "../core" }
 vllm-traits = { path = "../traits" }
@@ -23,3 +26,9 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 tracing-appender = "0.2"
 uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+axum = { version = "0.8", features = ["tokio", "macros"] }
+tower = { version = "0.4", features = ["util"] }
+http-body-util = "0.1"
+hyper = "1"
