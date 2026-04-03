@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use axum::{
     Json,
     extract::State,
@@ -41,6 +43,7 @@ fn build_prompt_from_messages(messages: &[ChatMessage]) -> String {
     prompt
 }
 
+#[allow(dead_code)]
 fn validate_chat_request(
     req: &ChatRequest,
 ) -> Result<(), (axum::http::StatusCode, Json<ErrorResponse>)> {
@@ -65,6 +68,7 @@ fn validate_chat_request(
     Ok(())
 }
 
+#[allow(dead_code)]
 async fn handle_chat(
     state: &ApiState,
     req: ChatRequest,
@@ -125,6 +129,7 @@ async fn handle_chat(
     ))
 }
 
+#[allow(dead_code)]
 pub(crate) async fn chat_completions(
     State(state): State<ApiState>,
     Json(req): Json<ChatRequest>,
@@ -330,5 +335,4 @@ mod tests {
             "User: Hi\n\nAssistant: Hello!\n\nUser: How are you?\n\nAssistant: "
         );
     }
-
 }
