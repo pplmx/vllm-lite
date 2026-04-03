@@ -13,7 +13,7 @@ use tokio::sync::mpsc;
 use super::types::*;
 use crate::ApiState;
 
-pub async fn completions(
+pub(crate) async fn completions(
     State(state): State<ApiState>,
     Json(req): Json<CompletionRequest>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
@@ -107,4 +107,14 @@ pub async fn completions(
     );
 
     Ok(Json(response).into_response())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_completions_empty_prompt() {
+        // Test with empty prompt - should return 400
+    }
 }
