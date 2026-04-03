@@ -4,10 +4,23 @@
 //! multiple model architectures.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayerType {
+    SlidingAttention,
+    FullAttention,
+}
+
+#[derive(Debug, Clone)]
+pub struct RoPEConfig {
+    pub rope_theta: f32,
+    pub partial_rotary_factor: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Architecture {
     Qwen3,
     Llama,
     Mistral,
+    Gemma4,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

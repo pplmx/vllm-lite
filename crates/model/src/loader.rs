@@ -186,6 +186,7 @@ impl ModelLoader {
                 )?;
                 Ok(Box::new(model))
             }
+            Architecture::Gemma4 => todo!("Gemma4 model loading not yet implemented"),
         }
     }
 
