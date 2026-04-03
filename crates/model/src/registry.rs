@@ -1,3 +1,6 @@
+use crate::config::ModelConfig as LlamaMistralConfig;
+use crate::llama::LlamaModel;
+use crate::mistral::MistralModel;
 use crate::qwen3_config::Qwen3Config;
 use candle_core::{Device, Result};
 use std::path::Path;
@@ -79,6 +82,22 @@ impl ModelFactory {
             }
         }
         None
+    }
+
+    pub fn create_llama(
+        config: LlamaMistralConfig,
+        device: Device,
+        num_kv_blocks: usize,
+    ) -> Result<LlamaModel> {
+        LlamaModel::new(config, device, num_kv_blocks)
+    }
+
+    pub fn create_mistral(
+        config: LlamaMistralConfig,
+        device: Device,
+        num_kv_blocks: usize,
+    ) -> Result<MistralModel> {
+        MistralModel::new(config, device, num_kv_blocks)
     }
 }
 
