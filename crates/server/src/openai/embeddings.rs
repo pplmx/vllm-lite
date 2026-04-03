@@ -40,13 +40,16 @@ pub async fn embeddings(
         response_tx,
     });
 
-    let embeddings = match rx.recv().await {
-        Some(emb) => emb,
-        None => {
-            let embedding_dim = 1024;
-            req.input.iter().map(|_| vec![0.0; embedding_dim]).collect()
-        }
-    };
+    let embeddings = rx.recv().await
+        .ok_or_else(|| {
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse::new(
+                    "Failed to get embeddings from engine",
+                    "internal_error"
+                ))
+            )
+        })?;
 
     Ok(Json(EmbeddingsResponse::new(embeddings, req.model)).into_response())
 }
