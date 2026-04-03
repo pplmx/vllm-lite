@@ -3,8 +3,24 @@ use safetensors::SafeTensors;
 use std::collections::HashMap;
 use std::path::Path;
 
+use crate::config::Architecture;
 use crate::qwen3::model::Qwen3Model;
 use crate::qwen3_config::Qwen3Config;
+
+pub fn detect_architecture(config: &serde_json::Value) -> Architecture {
+    let model_type = config
+        .get("model_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    match model_type.as_str() {
+        "llama" | "llama2" | "llama3" => Architecture::Llama,
+        "mistral" | "mixtral" => Architecture::Mistral,
+        "qwen2" | "qwen2.5" => Architecture::Qwen3,
+        _ => Architecture::Llama,
+    }
+}
 
 fn find_safetensors_files(model_dir: &Path) -> Result<Vec<std::path::PathBuf>> {
     let single = model_dir.join("model.safetensors");
