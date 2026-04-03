@@ -21,11 +21,11 @@ impl Gemma4RoPE {
     }
 
     /// Apply p-RoPE to query and key tensors
-    pub fn apply(&self, q: &Tensor, k: &Tensor, positions: &[i64]) -> Result<(Tensor, Tensor)> {
-        let rot_dim = (self.head_dim as f32 * self.partial_rotary_factor) as usize;
+    pub fn apply(&self, q: &Tensor, k: &Tensor, _positions: &[i64]) -> Result<(Tensor, Tensor)> {
+        let _rot_dim = (self.head_dim as f32 * self.partial_rotary_factor) as usize;
 
         // Get the dimensions
-        let (batch, num_heads, seq_len, _) = q.dims4()?;
+        let (_batch, _num_heads, _seq_len, _) = q.dims4()?;
 
         // For now, implement a placeholder that just returns q, k unchanged
         // Real implementation would apply rotary embeddings to first rot_dim dimensions
