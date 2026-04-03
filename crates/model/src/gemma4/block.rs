@@ -17,7 +17,7 @@ impl Gemma4Block {
         Self {
             _attention: Gemma4Attention,
             _mlp: None,
-            _rope: Gemma4RoPE,
+            _rope: Gemma4RoPE::default(),
         }
     }
 }
