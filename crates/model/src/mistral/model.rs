@@ -62,10 +62,61 @@ impl MistralModel {
     pub fn from_weights(
         config: ModelConfig,
         device: Device,
-        _weights: HashMap<String, Tensor>,
+        weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
     ) -> CandleResult<Self> {
-        Self::new(config, device, num_kv_blocks)
+        let hidden_size = config.hidden_size;
+        let num_layers = config.num_layers;
+
+        let embed_key = "model.embed_tokens.weight";
+        let embed_weight = weights
+            .get(embed_key)
+            .cloned()
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", embed_key)))?;
+        let embed_tokens = Embedding::new(embed_weight.clone(), hidden_size);
+
+        let mut layers = Vec::new();
+        for i in 0..num_layers {
+            layers.push(MistralBlock::from_weights(&config, i, &weights)?);
+        }
+
+        let norm_key = "model.norm.weight";
+        let norm_weight = weights
+            .get(norm_key)
+            .cloned()
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", norm_key)))?;
+        let norm = Linear::new(norm_weight, None);
+
+        let lm_head = if config.tie_word_embeddings {
+            Linear::new(embed_weight, None)
+        } else {
+            let lm_key = "lm_head.weight";
+            let lm_weight = weights
+                .get(lm_key)
+                .cloned()
+                .or_else(|| weights.get("model.embed_tokens.weight").cloned())
+                .ok_or_else(|| candle_core::Error::msg("Missing lm_head.weight"))?;
+            Linear::new(lm_weight, None)
+        };
+
+        let kv_cache = PagedKvCache::new(
+            num_layers,
+            config.num_kv_heads,
+            config.head_dim,
+            num_kv_blocks,
+            device.clone(),
+            false,
+        )?;
+
+        Ok(Self {
+            config,
+            embed_tokens,
+            layers,
+            norm,
+            lm_head,
+            kv_cache,
+            device,
+        })
     }
 }
 
