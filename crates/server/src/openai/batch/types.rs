@@ -76,7 +76,7 @@ impl BatchJob {
     ) -> Self {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("Failed to get system time")
             .as_secs() as i64;
         Self {
             id,
@@ -106,7 +106,7 @@ mod tests {
             max_tokens: Some(100),
             temperature: Some(0.7),
         };
-        let json = serde_json::to_string(&req).unwrap();
+        let json = serde_json::to_string(&req).expect("Failed to serialize batch request");
         assert!(json.contains("\"prompts\""));
         assert!(json.contains("\"endpoint\":\"chat\""));
     }
@@ -114,7 +114,8 @@ mod tests {
     #[test]
     fn test_simple_batch_request_deserialization() {
         let json = r#"{"prompts":["test"],"endpoint":"completions"}"#;
-        let req: SimpleBatchRequest = serde_json::from_str(json).unwrap();
+        let req: SimpleBatchRequest =
+            serde_json::from_str(json).expect("Failed to deserialize batch request");
         assert_eq!(req.prompts.len(), 1);
         assert_eq!(req.endpoint, "completions");
     }
@@ -135,7 +136,7 @@ mod tests {
                 failed: 1,
             }),
         };
-        let json = serde_json::to_string(&resp).unwrap();
+        let json = serde_json::to_string(&resp).expect("Failed to serialize batch response");
         assert!(json.contains("\"id\":\"batch_123\""));
         assert!(json.contains("\"status\":\"pending\""));
     }
