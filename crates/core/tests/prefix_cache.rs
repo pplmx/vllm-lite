@@ -66,8 +66,8 @@ fn test_prefix_cache_hit() {
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
-    let (tx1, _rx1) = mpsc::unbounded_channel();
-    let (tx2, _rx2) = mpsc::unbounded_channel();
+    let (tx1, _rx1) = mpsc::channel(64);
+    let (tx2, _rx2) = mpsc::channel(64);
 
     // First request: cache miss - wait for completion to populate cache
     engine.add_request(Request::new(1, vec![10, 20], 3), tx1);
@@ -100,7 +100,7 @@ fn test_cache_after_completion() {
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
-    let (tx, _rx) = mpsc::unbounded_channel();
+    let (tx, _rx) = mpsc::channel(64);
 
     // Add request and complete it
     engine.add_request(Request::new(1, vec![10, 20], 3), tx);
@@ -128,8 +128,8 @@ fn test_prefix_cache_partial_hit() {
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
-    let (tx1, _rx1) = mpsc::unbounded_channel();
-    let (tx2, _rx2) = mpsc::unbounded_channel();
+    let (tx1, _rx1) = mpsc::channel(64);
+    let (tx2, _rx2) = mpsc::channel(64);
 
     // First request: [10, 20, 30]
     engine.add_request(Request::new(1, vec![10, 20, 30], 3), tx1);
@@ -163,8 +163,8 @@ fn test_prefix_cache_no_hit_different_prefix() {
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
-    let (tx1, _rx1) = mpsc::unbounded_channel();
-    let (tx2, _rx2) = mpsc::unbounded_channel();
+    let (tx1, _rx1) = mpsc::channel(64);
+    let (tx2, _rx2) = mpsc::channel(64);
 
     // First request: [10, 20]
     engine.add_request(Request::new(1, vec![10, 20], 3), tx1);
@@ -199,25 +199,19 @@ fn test_prefix_cache_multiple_shared() {
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
     // First: [1, 2, 3]
-    engine.add_request(
-        Request::new(1, vec![1, 2, 3], 3),
-        mpsc::unbounded_channel().0,
-    );
+    engine.add_request(Request::new(1, vec![1, 2, 3], 3), mpsc::channel(64).0);
     while engine.has_pending() {
         engine.step().unwrap();
     }
 
     // Second: [1, 2] (prefix)
-    engine.add_request(Request::new(2, vec![1, 2], 3), mpsc::unbounded_channel().0);
+    engine.add_request(Request::new(2, vec![1, 2], 3), mpsc::channel(64).0);
     while engine.has_pending() {
         engine.step().unwrap();
     }
 
     // Third: [1, 2, 3, 4] (longer)
-    engine.add_request(
-        Request::new(3, vec![1, 2, 3, 4], 3),
-        mpsc::unbounded_channel().0,
-    );
+    engine.add_request(Request::new(3, vec![1, 2, 3, 4], 3), mpsc::channel(64).0);
 
     // Should all share the common prefix [1, 2]
     let cache = engine.scheduler.prefix_cache();
@@ -240,7 +234,7 @@ fn test_prefix_hit_partial_prefill() {
     };
     let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
 
-    let (tx1, _rx1) = mpsc::unbounded_channel();
+    let (tx1, _rx1) = mpsc::channel(64);
 
     // First request: complete it to populate cache
     engine.add_request(Request::new(1, vec![10, 20], 3), tx1);
@@ -256,7 +250,7 @@ fn test_prefix_hit_partial_prefill() {
 
     // Second request: longer prompt starting with same tokens
     // Use max_tokens=10 (> prompt_len=5) to avoid immediate finish
-    let (tx2, _rx2) = mpsc::unbounded_channel();
+    let (tx2, _rx2) = mpsc::channel(64);
     engine.add_request(Request::new(2, vec![10, 20, 30, 40, 50], 10), tx2);
 
     // Should have pending work (sequence in waiting)
@@ -327,10 +321,7 @@ fn test_prefix_cache_high_volume() {
     // Add 50 different requests with different tokens
     for i in 0..50 {
         let tokens: Vec<TokenId> = (0..10).map(|j| (i * 100 + j) as TokenId).collect();
-        engine.add_request(
-            Request::new(i as SeqId, tokens, 3),
-            mpsc::unbounded_channel().0,
-        );
+        engine.add_request(Request::new(i as SeqId, tokens, 3), mpsc::channel(64).0);
     }
 
     // Process all to completion
@@ -372,7 +363,7 @@ fn test_prefix_cache_many_sequences_same_prefix() {
     // First request: populate cache with common prefix
     engine.add_request(
         Request::new(0, common_prefix.clone(), 3),
-        mpsc::unbounded_channel().0,
+        mpsc::channel(64).0,
     );
     while engine.has_pending() {
         engine.step().unwrap();
@@ -383,10 +374,7 @@ fn test_prefix_cache_many_sequences_same_prefix() {
         let mut tokens = common_prefix.clone();
         tokens.push(i as TokenId);
         tokens.push((i + 100) as TokenId);
-        engine.add_request(
-            Request::new(i as SeqId, tokens, 3),
-            mpsc::unbounded_channel().0,
-        );
+        engine.add_request(Request::new(i as SeqId, tokens, 3), mpsc::channel(64).0);
     }
 
     // Process all to completion

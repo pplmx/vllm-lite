@@ -117,7 +117,7 @@ use crate::metrics::MetricsSnapshot;
 pub enum EngineMessage {
     AddRequest {
         request: Request,
-        response_tx: mpsc::UnboundedSender<TokenId>,
+        response_tx: mpsc::Sender<TokenId>,
     },
     GetMetrics {
         response_tx: mpsc::UnboundedSender<MetricsSnapshot>,

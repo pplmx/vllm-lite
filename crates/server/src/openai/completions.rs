@@ -40,7 +40,7 @@ pub async fn completions(
         request.sampling_params.temperature = temp;
     }
 
-    let (response_tx, mut response_rx) = mpsc::unbounded_channel();
+    let (response_tx, mut response_rx) = mpsc::channel(64);
 
     state
         .engine_tx

@@ -84,7 +84,7 @@ async fn handle_chat(
         request.sampling_params.temperature = temp;
     }
 
-    let (response_tx, mut response_rx) = mpsc::unbounded_channel();
+    let (response_tx, mut response_rx) = mpsc::channel(64);
 
     state
         .engine_tx
@@ -145,7 +145,7 @@ pub async fn chat_completions(
             request.sampling_params.temperature = temp;
         }
 
-        let (response_tx, response_rx) = mpsc::unbounded_channel();
+        let (response_tx, response_rx) = mpsc::channel(64);
 
         state
             .engine_tx
@@ -184,11 +184,13 @@ pub async fn chat_completions(
                                 finish_reason: None,
                             },
                         );
-                        let data = serde_json::to_string(&chunk)
-                            .expect("Failed to serialize chat chunk - internal error");
+                        let data =
+                            serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
                         Some((Ok(Event::default().data(data)), rx))
                     }
                     None => {
+                        // Channel closed - could be normal completion or client disconnect
+                        // With bounded channel, if send fails due to backpressure, we log it
                         let chunk = ChatChunk::new(
                             "chatcmpl-stream".to_string(),
                             model.clone(),
@@ -202,8 +204,8 @@ pub async fn chat_completions(
                                 finish_reason: Some("stop".to_string()),
                             },
                         );
-                        let data = serde_json::to_string(&chunk)
-                            .expect("Failed to serialize chat chunk - internal error");
+                        let data =
+                            serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
                         Some((Ok(Event::default().data(format!("{data}\n\n[DONE]"))), rx))
                     }
                 }

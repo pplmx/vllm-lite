@@ -16,7 +16,7 @@ impl<M: ModelBackend> super::Engine<M> {
         let mut results = Vec::new();
         for (seq_id, token) in verified_outputs {
             if let Some(tx) = self.response_txs.get(&seq_id) {
-                let _ = tx.send(token);
+                let _ = tx.try_send(token); // Use try_send to avoid blocking
             }
             results.push((seq_id, token));
         }

@@ -21,8 +21,8 @@ fn test_continuous_batching_with_streaming() {
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
-    let (tx1, mut rx1) = mpsc::unbounded_channel();
-    let (tx2, mut rx2) = mpsc::unbounded_channel();
+    let (tx1, mut rx1) = mpsc::channel(64);
+    let (tx2, mut rx2) = mpsc::channel(64);
 
     // req1: prompt=2, max_tokens=4 -> total 4 tokens, finishes in step 3
     // req2: prompt=3, max_tokens=5 -> total 5 tokens, finishes in step 4
@@ -71,7 +71,7 @@ fn test_chunked_prefill_integration() {
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
-    let (tx, mut rx) = mpsc::unbounded_channel();
+    let (tx, mut rx) = mpsc::channel(64);
     // 4 prompt + 10 max_tokens = 14 total tokens (need 10 decode steps)
     // Note: max_tokens must be > prompt.len() to avoid finishing in prefill
     engine.add_request(Request::new(1, vec![10, 20, 30, 40], 10), tx);
@@ -108,7 +108,7 @@ fn test_max_tokens_includes_prompt() {
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
-    let (tx, _rx) = mpsc::unbounded_channel();
+    let (tx, _rx) = mpsc::channel(64);
 
     // Prompt: 3 tokens, max_new_tokens: 2
     // Total should be: 3 + 2 = 5 tokens before finishing
@@ -154,7 +154,7 @@ fn test_single_token_prefill_then_decode() {
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
-    let (tx, mut rx) = mpsc::unbounded_channel();
+    let (tx, mut rx) = mpsc::channel(64);
 
     // Single token prompt
     let prompt = vec![100];
@@ -195,8 +195,8 @@ fn test_concurrent_requests_finish_together() {
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
-    let (tx1, _rx1) = mpsc::unbounded_channel();
-    let (tx2, _rx2) = mpsc::unbounded_channel();
+    let (tx1, _rx1) = mpsc::channel(64);
+    let (tx2, _rx2) = mpsc::channel(64);
 
     engine.add_request(Request::new(1, vec![10], 2), tx1);
     engine.add_request(Request::new(2, vec![20], 2), tx2);
@@ -223,8 +223,8 @@ fn test_batch_full_new_request_waits() {
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
-    let (tx1, _rx1) = mpsc::unbounded_channel();
-    let (tx2, _rx2) = mpsc::unbounded_channel();
+    let (tx1, _rx1) = mpsc::channel(64);
+    let (tx2, _rx2) = mpsc::channel(64);
 
     engine.add_request(Request::new(1, vec![10], 5), tx1);
     let batch1 = engine.scheduler.build_batch();
@@ -255,8 +255,8 @@ fn test_prefix_cache_hit_directly_decoding() {
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
-    let (tx1, _rx1) = mpsc::unbounded_channel();
-    let (tx2, _rx2) = mpsc::unbounded_channel();
+    let (tx1, _rx1) = mpsc::channel(64);
+    let (tx2, _rx2) = mpsc::channel(64);
 
     engine.add_request(Request::new(1, vec![10, 20], 3), tx1);
     while engine.has_pending() {
@@ -286,9 +286,9 @@ fn test_different_prompt_lengths_batching() {
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
-    let (tx1, _rx1) = mpsc::unbounded_channel();
-    let (tx2, _rx2) = mpsc::unbounded_channel();
-    let (tx3, _rx3) = mpsc::unbounded_channel();
+    let (tx1, _rx1) = mpsc::channel(64);
+    let (tx2, _rx2) = mpsc::channel(64);
+    let (tx3, _rx3) = mpsc::channel(64);
 
     engine.add_request(Request::new(1, vec![1], 3), tx1);
     engine.add_request(Request::new(2, vec![1, 2], 3), tx2);
@@ -314,9 +314,9 @@ fn test_prefill_priority_under_decode_limit() {
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
-    let (tx1, _rx1) = mpsc::unbounded_channel();
-    let (tx2, _rx2) = mpsc::unbounded_channel();
-    let (tx3, _rx3) = mpsc::unbounded_channel();
+    let (tx1, _rx1) = mpsc::channel(64);
+    let (tx2, _rx2) = mpsc::channel(64);
+    let (tx3, _rx3) = mpsc::channel(64);
 
     engine.add_request(Request::new(1, vec![10], 5), tx1);
     let batch1 = engine.scheduler.build_batch();
@@ -350,7 +350,7 @@ fn test_many_sequences_stress() {
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
     for i in 1..=20 {
-        let (tx, _rx) = mpsc::unbounded_channel();
+        let (tx, _rx) = mpsc::channel(64);
         engine.add_request(Request::new(i, vec![i as TokenId], 3), tx);
     }
 
@@ -381,7 +381,7 @@ fn test_sequence_state_transitions() {
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
-    let (tx, _rx) = mpsc::unbounded_channel();
+    let (tx, _rx) = mpsc::channel(64);
     engine.add_request(Request::new(1, vec![10, 20, 30], 5), tx);
 
     let batch1 = engine.scheduler.build_batch();
@@ -424,7 +424,7 @@ fn test_immediate_finish_after_prompt() {
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
-    let (tx, _rx) = mpsc::unbounded_channel();
+    let (tx, _rx) = mpsc::channel(64);
     engine.add_request(Request::new(1, vec![1, 2, 3], 3), tx);
 
     engine.step().unwrap();
@@ -441,7 +441,7 @@ fn test_speculative_decoding_verification() {
     let mut engine = Engine::new(model.clone(), model);
     engine.enable_speculative();
 
-    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, _rx) = tokio::sync::mpsc::channel(64);
     engine.add_request(Request::new(1, vec![1, 2, 3], 10), tx);
 
     // Run speculative step
@@ -467,9 +467,9 @@ fn test_concurrent_requests_different_prompts() {
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
-    let (tx1, _rx1) = mpsc::unbounded_channel();
-    let (tx2, _rx2) = mpsc::unbounded_channel();
-    let (tx3, _rx3) = mpsc::unbounded_channel();
+    let (tx1, _rx1) = mpsc::channel(64);
+    let (tx2, _rx2) = mpsc::channel(64);
+    let (tx3, _rx3) = mpsc::channel(64);
 
     engine.add_request(Request::new(1, vec![10, 20], 5), tx1);
     engine.add_request(Request::new(2, vec![30, 40, 50, 60], 6), tx2);
@@ -507,7 +507,7 @@ fn test_rapid_request_addition() {
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
     for i in 1..=10 {
-        let (tx, _rx) = mpsc::unbounded_channel();
+        let (tx, _rx) = mpsc::channel(64);
         engine.add_request(Request::new(i, vec![i as TokenId], 4), tx);
     }
 
@@ -542,8 +542,8 @@ fn test_request_cancellation() {
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
-    let (tx1, _rx1) = mpsc::unbounded_channel();
-    let (tx2, rx2) = mpsc::unbounded_channel();
+    let (tx1, _rx1) = mpsc::channel(64);
+    let (tx2, rx2) = mpsc::channel(64);
 
     engine.add_request(Request::new(1, vec![10, 20], 5), tx1);
     engine.add_request(Request::new(2, vec![30, 40], 5), tx2);
