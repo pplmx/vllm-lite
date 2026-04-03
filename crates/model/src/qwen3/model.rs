@@ -1,6 +1,6 @@
 #![allow(dead_code)]
-use crate::config::Qwen3Config;
 use crate::kv_cache::PagedKvCache;
+use crate::qwen3_config::Qwen3Config;
 use candle_core::{Device, Module, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, LayerNorm, Linear};
 use std::collections::HashMap;
@@ -585,7 +585,7 @@ impl ModelBackend for Qwen3Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Qwen3Config;
+    use crate::qwen3_config::Qwen3Config;
     use vllm_traits::ModelBackend;
 
     #[test]

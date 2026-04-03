@@ -1,4 +1,4 @@
-use crate::config::Qwen3Config;
+use crate::qwen3_config::Qwen3Config;
 use candle_core::{Device, Result};
 use std::path::Path;
 use vllm_traits::ModelBackend;

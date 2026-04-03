@@ -1,7 +1,7 @@
 #![allow(clippy::all, unused)]
-use crate::config::Qwen3Config;
 use crate::kv_cache::PagedKvCache;
 use crate::qwen3_5::ssm::{MambaBlock, SSMConfig};
+use crate::qwen3_config::Qwen3Config;
 use candle_core::{Device, Module, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, LayerNorm, Linear, VarBuilder};
 use std::collections::HashMap;
