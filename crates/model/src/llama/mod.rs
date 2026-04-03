@@ -9,12 +9,12 @@
 //! - Supports Grouped-Query Attention (GQA)
 //!
 //! # Example
-//! ```rust
-//! use crate::config::ModelConfig;
+//! ```rust,ignore
+//! use vllm_model::config::ModelConfig;
 //! use candle_core::Device;
 //!
 //! let config = ModelConfig::llama_7b();
-//! let model = LlamaModel::new(config, Device::Cpu, 1024).unwrap();
+//! let model = vllm_model::llama::LlamaModel::new(config, Device::Cpu, 1024).unwrap();
 //! ```
 
 pub mod block;

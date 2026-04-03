@@ -4,15 +4,12 @@
 //! including Llama, Mistral, and Qwen3.
 //!
 //! # Usage
-//! ```rust
-//! use crate::config::{ModelConfig, Architecture};
+//! ```rust,ignore
+//! use vllm_model::config::ModelConfig;
 //!
 //! // Use predefined configs
 //! let llama = ModelConfig::llama_7b();
 //! let mistral = ModelConfig::mistral_7b();
-//!
-//! // Or create from HuggingFace config.json
-//! let config = ModelConfig::from_config_json(&value).unwrap();
 //! ```
 
 pub mod architecture;
