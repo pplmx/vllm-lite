@@ -54,7 +54,7 @@ pub trait FlashAttention: Send + Sync {
         mask: &Tensor,
     ) -> Result<Tensor>;
     fn forward_tiled(&self, q: &Tensor, k: &Tensor, v: &Tensor, tile_size: usize)
-    -> Result<Tensor>;
+        -> Result<Tensor>;
 }
 
 pub struct ScaledDotProductAttention {
