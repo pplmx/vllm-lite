@@ -17,7 +17,7 @@ Integrate existing Tensor Parallel implementation with Qwen3Model to enable mult
 
 ### Current Architecture
 
-```
+```text
 vllm-core (crates/core)
 ├── engine.rs
 ├── scheduler.rs
@@ -36,6 +36,7 @@ vllm-model (crates/model)
 ### Problem
 
 If model uses `core::TensorParallelManager`, dependency direction violates clean architecture:
+
 - `core` should not depend on `model`
 - `model` should not depend on `core`
 
@@ -43,7 +44,7 @@ If model uses `core::TensorParallelManager`, dependency direction violates clean
 
 Move tensor parallel to independent crate (`vllm-dist`), which will also contain DP, PP, CP, EP in future:
 
-```
+```text
 vllm-dist (NEW)
 ├── Cargo.toml
 └── src/
@@ -79,14 +80,15 @@ path = "../traits"
 
 **Goal**: Verify integration logic without real multi-GPU
 
-| Aspect | Implementation |
-|--------|----------------|
-| AllReduce | Simulated (fake sum/avg/max) |
-| Device | Single process, same CUDA device |
-| Testing | Unit tests + single-process validation |
-| Limitation | Cannot truly utilize multiple GPUs |
+| Aspect     | Implementation                         |
+| ---------- | -------------------------------------- |
+| AllReduce  | Simulated (fake sum/avg/max)           |
+| Device     | Single process, same CUDA device       |
+| Testing    | Unit tests + single-process validation |
+| Limitation | Cannot truly utilize multiple GPUs     |
 
 **Simulated AllReduce**:
+
 ```rust
 impl AllReduce for NcclAllReduce {
     fn all_reduce_inplace(&self, input: &mut [f32], op: ReduceOp) -> Result<()> {
@@ -102,14 +104,15 @@ impl AllReduce for NcclAllReduce {
 
 **Goal**: Real multi-GPU acceleration
 
-| Aspect | Implementation |
-|--------|----------------|
-| AllReduce | Real NCCL via rust-cuda/nccl-rs |
-| Device | Each process on different GPU |
-| Testing | torchrun/mpirun with 2+ GPUs |
-| Launcher | `--tensor-parallel-size` + env vars |
+| Aspect    | Implementation                      |
+| --------- | ----------------------------------- |
+| AllReduce | Real NCCL via rust-cuda/nccl-rs     |
+| Device    | Each process on different GPU       |
+| Testing   | torchrun/mpirun with 2+ GPUs        |
+| Launcher  | `--tensor-parallel-size` + env vars |
 
 **Future AllReduce**:
+
 ```rust
 impl AllReduce for NcclAllReduce {
     fn all_reduce_inplace(&self, input: &mut [f32], op: ReduceOp) -> Result<()> {
@@ -135,7 +138,7 @@ impl AllReduce for NcclAllReduce {
 
 ### CLI Argument
 
-```
+```text
 --tensor-parallel-size <usize>  # Number of GPUs for tensor parallelism
 ```
 
@@ -160,7 +163,7 @@ impl TensorParallelConfig {
 
 ### Device Assignment
 
-```
+```text
 DeviceMesh(world_size=4, rank=2, device_ids=[0,1,2,3])
          │
          ▼
@@ -185,18 +188,18 @@ DeviceMesh(world_size=4, rank=2, device_ids=[0,1,2,3])
 
 ### Strategy by Layer Type
 
-| Layer Type | Sharding Strategy | AllReduce |
-|------------|-------------------|-----------|
-| q_proj, k_proj, v_proj | Column: output_dim / world_size | Sum after |
-| o_proj | Row: input_dim / world_size | Sum after |
-| gate_proj, up_proj | Column: output_dim / world_size | Sum after |
-| down_proj | Row: input_dim / world_size | Sum after |
-| embed_tokens | Shard: vocab_size / world_size | None |
-| lm_head | Shard vocab_size / world_size | Gather after |
+| Layer Type             | Sharding Strategy               | AllReduce    |
+| ---------------------- | ------------------------------- | ------------ |
+| q_proj, k_proj, v_proj | Column: output_dim / world_size | Sum after    |
+| o_proj                 | Row: input_dim / world_size     | Sum after    |
+| gate_proj, up_proj     | Column: output_dim / world_size | Sum after    |
+| down_proj              | Row: input_dim / world_size     | Sum after    |
+| embed_tokens           | Shard: vocab_size / world_size  | None         |
+| lm_head                | Shard vocab_size / world_size   | Gather after |
 
 ### Weight Sharding Example
 
-```
+```text
 Original weight: [1024, 4096]
 World size: 4
 
@@ -259,7 +262,7 @@ impl TransformerBlock {
                 tp.rank,
                 tp.device_ids.clone(),
             ).unwrap();
-            
+
             Self {
                 q_proj: tp_manager.create_column_parallel(hidden_size, q_out),
                 // ...
@@ -302,7 +305,7 @@ impl Qwen3Model {
             .as_ref()
             .map(|tp| tp.local_device())
             .unwrap_or(Device::Cpu);
-        
+
         // ... rest of initialization
     }
 }
@@ -316,7 +319,7 @@ impl Qwen3Model {
 
 When vocab_size is not divisible by world_size:
 
-```
+```text
 vocab_size = 100, world_size = 3
 
 Ideal: 100 / 3 = 33.33
@@ -333,26 +336,26 @@ Actual allocation:
 fn compute_vocab_shard(vocab_size: usize, world_size: usize, rank: usize) -> (usize, usize) {
     let vocab_per_rank = vocab_size / world_size;
     let remainder = vocab_size % world_size;
-    
+
     let my_vocab_size = if rank < remainder {
         vocab_per_rank + 1
     } else {
         vocab_per_rank
     };
-    
+
     let offset = if rank < remainder {
         rank * (vocab_per_rank + 1)
     } else {
         remainder * (vocab_per_rank + 1) + (rank - remainder) * vocab_per_rank
     };
-    
+
     (my_vocab_size, offset)
 }
 ```
 
 ### Logits Gather Process
 
-```
+```text
 Forward:
 ┌──────────────────────────────────────────────────────────────┐
 │  input_ids: [batch, seq_len]                                 │
@@ -426,6 +429,7 @@ mpirun -n 4 vllm-server --model qwen3-0.6b --tensor-parallel-size 4
 ```
 
 Each process:
+
 1. Parse same CLI args
 2. Get rank from env (`LOCAL_RANK`, `RANK`)
 3. Load sharded weights
@@ -437,22 +441,22 @@ Each process:
 
 ### Unit Tests
 
-| Test | GPU Required | Real Weights | Multi-Process |
-|------|--------------|--------------|---------------|
-| Weight sharding | No | No | No |
-| Vocab remainder | No | No | No |
-| Device assignment | No | No | No |
-| ColumnParallel | No | No | No |
-| RowParallel | No | No | No |
+| Test              | GPU Required | Real Weights | Multi-Process |
+| ----------------- | ------------ | ------------ | ------------- |
+| Weight sharding   | No           | No           | No            |
+| Vocab remainder   | No           | No           | No            |
+| Device assignment | No           | No           | No            |
+| ColumnParallel    | No           | No           | No            |
+| RowParallel       | No           | No           | No            |
 
 ### Integration Tests
 
-| Test | GPU Required | Real Weights | Multi-Process |
-|------|--------------|--------------|---------------|
-| TP=1 baseline | No | Optional | No |
-| TP=2 simulation | No | No | No |
-| TP=2 real | Yes | Yes | No (simulated) |
-| TP=N real | Yes | Yes | Yes (torchrun) |
+| Test            | GPU Required | Real Weights | Multi-Process  |
+| --------------- | ------------ | ------------ | -------------- |
+| TP=1 baseline   | No           | Optional     | No             |
+| TP=2 simulation | No           | No           | No             |
+| TP=2 real       | Yes          | Yes          | No (simulated) |
+| TP=N real       | Yes          | Yes          | Yes (torchrun) |
 
 ---
 

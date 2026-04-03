@@ -27,7 +27,7 @@ just ci
 
 ## Project Structure
 
-```
+```text
 vllm-lite/
 ├── Cargo.toml              # Workspace root (4 crates: traits, core, model, server)
 ├── justfile                # Build automation
@@ -42,18 +42,21 @@ vllm-lite/
 ## Code Style Guidelines
 
 ### Imports
+
 - Use absolute imports: `use crate::types::Request;`
 - External crates: `use vllm_traits::{ModelBackend, SeqId};`
 - Group std, external, then crate imports
 - Use `super` for sibling module access
 
 ### Formatting
+
 - Run `cargo fmt` before committing
 - 4-space indentation (Rust standard)
 - Max line length: 100 characters (soft limit)
 - Use `#![allow(clippy::too_many_arguments)]` when needed
 
 ### Naming Conventions
+
 - **Types**: `PascalCase` (structs, enums, traits)
 - **Functions/Variables**: `snake_case`
 - **Constants**: `SCREAMING_SNAKE_CASE`
@@ -61,17 +64,20 @@ vllm-lite/
 - **Crate names**: `kebab-case` (e.g., `vllm-core`)
 
 ### Types
+
 - Use `usize` for sizes/lengths, `u64` for IDs (`SeqId`, `TokenId`)
 - Prefer explicit type annotations in function signatures
 - Use `&T` for read-only, `&mut T` for mutable references
 - Use `Option<T>` for nullable values, not `null`
 
 ### Error Handling
+
 - Use `thiserror` for error enums with `#[derive(Debug, thiserror::Error)]`
 - Always implement `Display` and use `#[error(...)]` macro
 - Return `Result<T>` from fallible functions
 - Use `?` operator for error propagation
 - Example (`crates/core/src/error.rs`):
+
 ```rust
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {
@@ -84,12 +90,14 @@ pub type Result<T> = std::result::Result<T, EngineError>;
 ```
 
 ### Tests
+
 - Add to `#[cfg(test)]` module in the same file
 - Use `FakeModel` or `StubModel` for mocking
 - Name: `test_<function>_<expected_behavior>`
 - Run: `cargo test -p vllm-core -- test_name`
 
 ### Documentation
+
 - Document public APIs with `///` doc comments
 - Add examples for complex functions
 - Use `//` for implementation comments, avoid `/**`
@@ -103,6 +111,7 @@ pub type Result<T> = std::result::Result<T, EngineError>;
 **Types**: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 
 **Examples**:
+
 ```bash
 git commit -m "feat(model): add forward_prefill to GqaAttention"
 git commit -m "fix(core): resolve prefix cache eviction bug"

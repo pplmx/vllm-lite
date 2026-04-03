@@ -10,9 +10,10 @@
 
 ---
 
-### Task 1: Implement apply_rope function
+## Task 1: Implement apply_rope function
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/rope.rs:26-34`
 
 - [ ] **Step 1: Write the failing test**
@@ -23,23 +24,23 @@ Add test that verifies different positions produce different outputs:
 #[test]
 fn test_apply_rope_different_positions() -> Result<()> {
     use candle_core::{DType, Device, Tensor};
-    
+
     let device = Device::Cpu;
     // batch=1, seq=2, heads=2, head_dim=4
     let query = Tensor::ones((1, 2, 2, 4), DType::F32, &device)?;
-    
+
     // Position 0
     let pos0 = Tensor::new(&[0i64], &device)?;
     let out0 = apply_rope(&query, &pos0, 10000.0)?;
-    
+
     // Position 1
     let pos1 = Tensor::new(&[1i64], &device)?;
     let out1 = apply_rope(&query, &pos1, 10000.0)?;
-    
+
     // Outputs should be different
     let diff = (&out0 - &out1)?.abs_sum()?;
     assert!(diff.to_scalar::<f32>()? > 1e-5, "RoPE should produce different outputs for different positions");
-    
+
     Ok(())
 }
 ```
@@ -55,23 +56,23 @@ Actually, current impl returns `query.clone()` - same for all positions. Need di
 #[test]
 fn test_apply_rope_uses_position() -> Result<()> {
     use candle_core::{DType, Device, Tensor};
-    
+
     let device = Device::Cpu;
     // batch=1, seq=1, heads=1, head_dim=2 (simpler)
     let query = Tensor::new(&[[[[1.0, 2.0]]]], &device)?;
-    
+
     // Position 0
     let pos0 = Tensor::new(&[0i64], &device)?;
     let out0 = apply_rope(&query, &pos0, 10000.0)?;
-    
+
     // Position 1  
     let pos1 = Tensor::new(&[1i64], &device)?;
     let out1 = apply_rope(&query, &pos1, 10000.0)?;
-    
+
     // Verify outputs differ
     let diff = (&out0 - &out1)?.abs_sum()?;
     assert!(diff.to_scalar::<f32>()? > 1e-4);
-    
+
     Ok(())
 }
 ```
@@ -84,43 +85,43 @@ Replace the placeholder in `apply_rope`:
 pub fn apply_rope(query: &Tensor, position_ids: &Tensor, theta: f32) -> Result<Tensor> {
     // query shape: [batch, seq_len, num_heads, head_dim]
     // position_ids shape: [seq_len]
-    
+
     let (batch, seq_len, num_heads, head_dim) = query.dims4()?;
-    
+
     // Reshape to [batch, num_heads, seq_len, head_dim] for easier processing
     let query = query.transpose(1, 2)?;
-    
+
     // Get position as i64
     let pos = position_ids.to_vec1::<i64>()?[0] as f32;
-    
+
     // For each head dimension pair (i, i+head_dim/2), apply rotation
     // Rotated = x * cos(θ) + rotate(x) * sin(θ)
     // where rotate(x) = [-x[..., i+head_dim/2], x[..., i]]
-    
+
     let half_dim = head_dim / 2;
     let freq = (pos + 1.0).powf(-2.0 * (0..half_dim) as f32 / head_dim as f32) * theta;
-    
+
     let cos_vals: Vec<f32> = freq.iter().map(|f| f.cos()).collect();
     let sin_vals: Vec<f32> = freq.iter().map(|f| f.sin()).collect();
-    
+
     let cos = Tensor::new(cos_vals.as_slice(), query.device())?
         .reshape((1, num_heads, 1, half_dim))?
         .broadcast_add(&[batch, num_heads, seq_len, half_dim])?;
     let sin = Tensor::new(sin_vals.as_slice(), query.device())?
         .reshape((1, num_heads, 1, half_dim))?
         .broadcast_add(&[batch, num_heads, seq_len, half_dim])?;
-    
+
     // Split head_dim into first_half and second_half
     let first_half = query.narrow(3, 0, half_dim)?;
     let second_half = query.narrow(3, half_dim, half_dim)?;
-    
+
     // first_half * cos + second_half * sin
     let rotated_first = (first_half * &cos + second_half * &sin)?;
     // second_half * cos - first_half * sin  
     let rotated_second = (second_half * &cos - first_half * &sin)?;
-    
+
     let result = Tensor::cat(&[&rotated_first, &rotated_second], 3)?;
-    
+
     // Back to [batch, seq_len, num_heads, head_dim]
     result.transpose(1, 2)
 }
@@ -143,6 +144,7 @@ git commit -m "feat(model): implement apply_rope with actual rotation computatio
 ### Task 2: Add RoPE theta to GqaAttention
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/attention.rs:22-33`
 - Modify: `crates/model/src/qwen3/attention.rs:36-77`
 
@@ -182,7 +184,7 @@ pub fn new(
     theta: f32,  // ADD THIS
 ) -> Result<Self> {
     // ... existing code ...
-    
+
     Ok(Self {
         q_proj,
         k_proj,
@@ -226,20 +228,20 @@ Modify `forward`, `forward_prefill`, `forward_decode` to accept positions:
 ```rust
 pub fn forward(&self, x: &Tensor, positions: &[usize]) -> Result<Tensor> {
     // ... existing code up to q/k projection ...
-    
+
     let q = self.q_proj.forward(x)?;
     let k = self.k_proj.forward(x)?;
     let v = self.v_proj.forward(x)?;
-    
+
     let q = q.reshape((batch_size, seq_len, self.num_heads, self.head_dim))?;
     let k = k.reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?;
     let v = v.reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?;
-    
+
     // Apply RoPE here
     let position_tensor = Tensor::new(positions, x.device())?;
     let q = apply_rope(&q, &position_tensor, self.theta)?;
     let k = apply_rope(&k, &position_tensor, self.theta)?;
-    
+
     // ... rest of forward ...
 }
 ```
@@ -261,6 +263,7 @@ git commit -m "feat(model): add theta to GqaAttention and apply RoPE in forward"
 ### Task 3: Update TransformerBlock to pass positions
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/block.rs:11-16`
 - Modify: `crates/model/src/qwen3/block.rs:18-59`
 - Modify: `crates/model/src/qwen3/block.rs:139-149`
@@ -301,6 +304,7 @@ git commit -m "feat(model): pass positions through TransformerBlock"
 ### Task 4: Update Qwen3Model to use positions
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/model.rs:13-21`
 - Modify: `crates/model/src/qwen3/model.rs:295-363`
 
@@ -368,6 +372,7 @@ git commit -m "feat(model): wire positions through Qwen3Model to transformer lay
 ### Task 5: Update Qwen5Model
 
 **Files:**
+
 - Modify: `crates/model/src/qwen5/model.rs`
 
 - [ ] **Step 1: Update similar to Qwen3Model**
@@ -390,6 +395,7 @@ git commit -m "feat(model): add RoPE support to Qwen5Model"
 ### Task 6: Update FakeModel
 
 **Files:**
+
 - Modify: `crates/model/src/fake.rs`
 
 - [ ] **Step 1: Update to use positions parameter**
@@ -412,6 +418,7 @@ git commit -m "feat(model): update FakeModel to use positions parameter"
 ### Task 7: Fix test warnings and add position test
 
 **Files:**
+
 - Modify: `crates/core/tests/integration.rs:464-509`
 
 - [ ] **Step 1: Update MockModel in test to actually use positions**
@@ -461,7 +468,7 @@ impl ModelBackend for MockModel {
 #[test]
 fn test_model_position_awareness() {
     struct PositionAwareModel;
-    
+
     impl ModelBackend for PositionAwareModel {
         fn forward(&self, seq_ids: &[SeqId], input_tokens: &[Vec<TokenId>], positions: &[Vec<usize>]) -> Result<BatchOutput> {
             let next_tokens: Vec<TokenId> = input_tokens
@@ -478,18 +485,18 @@ fn test_model_position_awareness() {
                 .collect();
             Ok(BatchOutput { seq_ids: seq_ids.to_vec(), next_tokens })
         }
-        
+
         fn forward_logits(&self, _seq_ids: &[SeqId], input_tokens: &[Vec<TokenId>], _positions: &[Vec<usize>]) -> Result<Vec<Vec<f32>>> {
             Ok(input_tokens.iter().map(|t| vec![0.0; t.len()]).collect())
         }
     }
-    
+
     let model = PositionAwareModel;
-    
+
     // Same input tokens at different positions should produce different outputs
     let output1 = model.forward(&[1], &[vec![42]], &[vec![0]]).unwrap();
     let output2 = model.forward(&[1], &[vec![42]], &[vec![1]]).unwrap();
-    
+
     assert_ne!(output1.next_tokens[0], output2.next_tokens[0], 
         "Different positions should produce different outputs");
 }
@@ -511,6 +518,7 @@ git commit -m "test(core): add position-aware test and fix MockModel"
 ### Task 8: Final verification
 
 **Files:**
+
 - All modified files
 
 - [ ] **Step 1: Run full test suite**

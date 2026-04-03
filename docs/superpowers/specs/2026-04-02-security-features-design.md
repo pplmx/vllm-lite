@@ -11,6 +11,7 @@
 支持两种方式配置 API Keys：
 
 1. **配置文件** (`config.yaml`):
+
    ```yaml
    auth:
      api_keys:
@@ -19,6 +20,7 @@
    ```
 
 2. **环境变量** (逗号分隔):
+
    ```bash
    export VLLM_API_KEYS="key1,key2,key3"
    ```
@@ -47,9 +49,9 @@ auth:
 - 全局统一限制（所有 API Key 共享配额）
 - 超出限制返回 HTTP 429
 - 响应头添加：
-  - `X-RateLimit-Limit`: 允许的请求数
-  - `X-RateLimit-Remaining`: 剩余请求数
-  - `X-RateLimit-Reset`: 窗口重置时间戳
+    - `X-RateLimit-Limit`: 允许的请求数
+    - `X-RateLimit-Remaining`: 剩余请求数
+    - `X-RateLimit-Reset`: 窗口重置时间戳
 
 ### 优化
 
@@ -69,6 +71,7 @@ auth:
 ### 记录内容
 
 每个请求记录：
+
 ```json
 {
   "timestamp": "2026-04-02T10:30:00.123Z",
@@ -107,8 +110,8 @@ server:
 - 使用 `rustls` crate（纯 Rust，无需 OpenSSL）
 - 新增 `enable_tls()` 方法
 - 同时支持 HTTP 和 HTTPS：
-  - HTTP: `http://host:port`
-  - HTTPS: `https://host:port`（当配置了证书时自动启用）
+    - HTTP: `http://host:port`
+    - HTTPS: `https://host:port`（当配置了证书时自动启用）
 
 ### 证书格式
 
@@ -117,12 +120,12 @@ server:
 
 ## 文件变更
 
-| 文件 | 变更 |
-|------|------|
-| `crates/server/src/config.rs` | 添加 TLS 和审计日志配置 |
-| `crates/server/src/auth.rs` | 改进 Rate Limiter，添加审计日志 |
-| `crates/server/src/main.rs` | TLS 初始化 |
-| `crates/server/src/audit.rs` | 新建审计日志模块 |
+| 文件                          | 变更                            |
+| ----------------------------- | ------------------------------- |
+| `crates/server/src/config.rs` | 添加 TLS 和审计日志配置         |
+| `crates/server/src/auth.rs`   | 改进 Rate Limiter，添加审计日志 |
+| `crates/server/src/main.rs`   | TLS 初始化                      |
+| `crates/server/src/audit.rs`  | 新建审计日志模块                |
 
 ## 验证
 

@@ -52,15 +52,15 @@ auth:
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `VLLM_HOST` | Server host | `0.0.0.0` |
-| `VLLM_PORT` | Server port | `8000` |
-| `VLLM_LOG_LEVEL` | Log level | `info` |
-| `VLLM_MAX_DRAFT_TOKENS` | Max speculative tokens | `8` |
-| `VLLM_KV_BLOCKS` | Number of KV blocks | `1024` |
-| `VLLM_TENSOR_PARALLEL_SIZE` | Tensor parallel size | `1` |
-| `VLLM_KV_QUANTIZATION` | Enable INT8 KV cache quantization | `false` |
+| Variable                    | Description                       | Default   |
+| --------------------------- | --------------------------------- | --------- |
+| `VLLM_HOST`                 | Server host                       | `0.0.0.0` |
+| `VLLM_PORT`                 | Server port                       | `8000`    |
+| `VLLM_LOG_LEVEL`            | Log level                         | `info`    |
+| `VLLM_MAX_DRAFT_TOKENS`     | Max speculative tokens            | `8`       |
+| `VLLM_KV_BLOCKS`            | Number of KV blocks               | `1024`    |
+| `VLLM_TENSOR_PARALLEL_SIZE` | Tensor parallel size              | `1`       |
+| `VLLM_KV_QUANTIZATION`      | Enable INT8 KV cache quantization | `false`   |
 
 ### CLI Options
 
@@ -70,15 +70,15 @@ cargo run -p vllm-server -- --help
 
 ## API Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/v1/chat/completions` | POST | Chat completion |
-| `/v1/completions` | POST | Text completion |
-| `/v1/embeddings` | POST | Get embeddings |
-| `/v1/batches` | POST/GET | Batch requests |
-| `/metrics` | GET | Prometheus metrics |
-| `/health` | GET | Health check |
-| `/shutdown` | GET | Shutdown server |
+| Endpoint               | Method   | Description        |
+| ---------------------- | -------- | ------------------ |
+| `/v1/chat/completions` | POST     | Chat completion    |
+| `/v1/completions`      | POST     | Text completion    |
+| `/v1/embeddings`       | POST     | Get embeddings     |
+| `/v1/batches`          | POST/GET | Batch requests     |
+| `/metrics`             | GET      | Prometheus metrics |
+| `/health`              | GET      | Health check       |
+| `/shutdown`            | GET      | Shutdown server    |
 
 ## Examples
 

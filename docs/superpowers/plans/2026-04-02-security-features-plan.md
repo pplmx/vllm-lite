@@ -10,9 +10,10 @@
 
 ---
 
-### Task 1: 添加 TLS 和审计日志配置
+## Task 1: 添加 TLS 和审计日志配置
 
 **Files:**
+
 - Modify: `crates/server/src/config.rs:40-66`
 - Modify: `crates/server/src/config.rs:122-142`
 
@@ -143,6 +144,7 @@ git commit -m "feat(config): add TLS and audit log configuration"
 ### Task 2: 创建审计日志模块
 
 **Files:**
+
 - Create: `crates/server/src/audit.rs`
 - Modify: `crates/server/src/main.rs:4`
 
@@ -240,6 +242,7 @@ git commit -m "feat(audit): add audit logging module"
 ### Task 3: 改进 Rate Limiter（添加响应头和优化）
 
 **Files:**
+
 - Modify: `crates/server/src/auth.rs:1-85`
 
 - [ ] **Step 1: 修改 RateLimiter 结构体添加锁定**
@@ -290,7 +293,7 @@ impl AuthMiddleware {
 
         let mut limiter = self.rate_limiter.write().await;
         let info = limiter.check_rate_limit_with_info(api_key).await;
-        
+
         if !info.allowed {
             return Err((StatusCode::TOO_MANY_REQUESTS, info));
         }
@@ -375,6 +378,7 @@ git commit -m "feat(auth): improve rate limiter with response headers"
 ### Task 4: 支持 TLS (Rustls)
 
 **Files:**
+
 - Modify: `crates/server/src/main.rs:150-170`
 - Create: `crates/server/src/tls.rs` (可选)
 
@@ -397,7 +401,7 @@ use axum_server::tls_rustls::RustlsConfig;
 
 async fn run_server(app: Router, addr: String, tls_config: Option<TlsConfig>) {
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-    
+
     if let Some(tls) = tls_config {
         if tls.tls_cert.is_some() && tls.tls_key.is_some() {
             let config = RustlsConfig::from_pem_file(
@@ -406,7 +410,7 @@ async fn run_server(app: Router, addr: String, tls_config: Option<TlsConfig>) {
             )
             .await
             .expect("Failed to load TLS config");
-            
+
             tracing::info!(address = %addr, "Server listening (HTTPS)");
             axum_server::tls_rustls::TcpSocket::new()
                 .bind(addr)
@@ -417,7 +421,7 @@ async fn run_server(app: Router, addr: String, tls_config: Option<TlsConfig>) {
             return;
         }
     }
-    
+
     tracing::info!(address = %addr, "Server listening (HTTP)");
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
@@ -461,6 +465,7 @@ git commit -m "feat(server): add TLS support with rustls"
 ### Task 5: 集成审计日志到 API
 
 **Files:**
+
 - Modify: `crates/server/src/openai/chat.rs`
 - Modify: `crates/server/src/openai/completions.rs`
 
@@ -540,6 +545,7 @@ git commit -m "feat(audit): integrate audit logging into API endpoints"
 ### Task 6: 最终验证
 
 **Files:**
+
 - None (verification only)
 
 - [ ] **Step 1: 运行完整测试**

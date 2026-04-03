@@ -12,7 +12,7 @@
 
 ## File Structure
 
-```
+```text
 crates/traits/src/
 ├── types.rs          # MODIFY: Add Batch fields (kv_block_ids, num_computed_tokens, is_prefill)
 ├── model.rs          # MODIFY: Extend ModelBackend trait with new parameters
@@ -36,6 +36,7 @@ tests/
 ## Task 1: Extend Batch Structure in traits
 
 **Files:**
+
 - Modify: `crates/traits/src/types.rs`
 - Test: Run existing tests to verify no breakage
 
@@ -99,6 +100,7 @@ git commit -m "feat(traits): add kv_block_ids, num_computed_tokens, is_prefill t
 ## Task 2: Extend ModelBackend Trait
 
 **Files:**
+
 - Modify: `crates/traits/src/model.rs`
 
 - [ ] **Step 1: Read current model.rs**
@@ -150,6 +152,7 @@ git commit -m "feat(traits): extend ModelBackend with KV cache parameters"
 ## Task 3: Update Qwen3Model to Implement New Trait
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/model.rs` (lines 316-389)
 - Test: Run model tests
 
@@ -316,6 +319,7 @@ git commit -m "feat(model): implement KV cache usage in Qwen3Model::forward"
 ## Task 4: Update FakeModel
 
 **Files:**
+
 - Modify: `crates/model/src/fake.rs`
 - Test: Run tests
 
@@ -387,6 +391,7 @@ git commit -m "feat(model): update FakeModel to match new ModelBackend trait"
 ## Task 5: Update Scheduler to Populate Batch Fields
 
 **Files:**
+
 - Modify: `crates/core/src/scheduler.rs` (specifically build_batch method ~line 331)
 - Test: Run scheduler tests
 
@@ -459,6 +464,7 @@ git commit -m "feat(core): populate KV cache fields in Scheduler::build_batch"
 ## Task 6: Update Engine to Use RefCell<Box<M>>
 
 **Files:**
+
 - Modify: `crates/core/src/engine.rs`
 - Test: Run engine tests
 
@@ -491,6 +497,7 @@ pub struct Engine<M: ModelBackend> {
 - [ ] **Step 4: Update with_config to use Box::new**
 
 Find and update:
+
 ```rust
 Self {
     scheduler: Scheduler::with_config(config, num_kv_blocks),
@@ -521,6 +528,7 @@ git commit -m "refactor(core): change Engine to use RefCell<Box<M>> for interior
 ## Task 7: Update Engine Batch Step to Pass New Parameters
 
 **Files:**
+
 - Modify: `crates/core/src/engine/batch.rs`
 - Test: Run engine tests
 
@@ -575,6 +583,7 @@ git commit -m "feat(core): pass KV cache parameters in Engine::step"
 ## Task 8: Run Full Integration Test
 
 **Files:**
+
 - Test: Run full workspace tests
 
 - [ ] **Step 1: Run full test suite**
@@ -604,16 +613,16 @@ git commit -m "feat: integrate KV cache into Model::forward for PagedAttention"
 After completing all tasks, verify:
 
 1. **KV Cache Integration Works**:
-   - PagedAttention reads/writes blocks correctly
-   - Prefix cache hits work
+    - PagedAttention reads/writes blocks correctly
+    - Prefix cache hits work
 
 2. **Tests Pass**:
-   - `cargo test --workspace` passes
-   - `cargo clippy --workspace -- -D warnings` passes
+    - `cargo test --workspace` passes
+    - `cargo clippy --workspace -- -D warnings` passes
 
 3. **No Regression**:
-   - Existing functionality still works
-   - OpenAI API endpoints work correctly
+    - Existing functionality still works
+    - OpenAI API endpoints work correctly
 
 ---
 

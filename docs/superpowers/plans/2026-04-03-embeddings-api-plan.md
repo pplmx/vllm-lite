@@ -10,9 +10,10 @@
 
 ---
 
-### Task 1: 扩展 ModelBackend trait
+## Task 1: 扩展 ModelBackend trait
 
 **Files:**
+
 - Modify: `crates/traits/src/model.rs:24-44`
 - Test: `crates/model/tests/model.rs` (add embed test)
 
@@ -45,6 +46,7 @@ git commit -m "feat(traits): add embed method to ModelBackend trait"
 ### Task 2: 实现 Embedding 生成
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/model.rs`
 - Test: `crates/model/tests/embeddings.rs` (create)
 
@@ -68,12 +70,12 @@ fn test_qwen3_embedding_output_shape() {
         intermediate_size: Some(2816),
         ..Default::default()
     };
-    
+
     // 初始化模型 (使用 fake weights)
     let device = candle_core::Device::Cpu;
     let vb = VarBuilder::zeros(candle_core::DType::F32, &device);
     let model = Qwen3Model::new(config, vb).unwrap();
-    
+
     // Test: embedding output shape should match hidden_size
     // This will fail - method not implemented
 }
@@ -97,7 +99,7 @@ impl ModelBackend for Qwen3Model {
     ) -> Result<Vec<Vec<f32>>> {
         let batch_size = input_tokens.len();
         let mut embeddings = Vec::with_capacity(batch_size);
-        
+
         for (tokens, _positions) in input_tokens.iter().zip(positions.iter()) {
             // 1. Token embedding lookup
             let input_ids = candle_core::Tensor::from_slice(
@@ -105,19 +107,19 @@ impl ModelBackend for Qwen3Model {
                 tokens.len(),
                 &self.device,
             )?.unsqueeze(0)?;
-            
+
             // 2. Forward through embedding layer only
             let hidden_states = self.embed_tokens.forward(&input_ids)?;
-            
+
             // 3. Mean pooling over sequence length
             let hidden = hidden_states.squeeze(0)?;  // [seq_len, hidden_size]
             let seq_len = hidden.dim(0)? as f32;
             let pooled: Vec<f32> = hidden.mean(0)?
                 .to_vec::<f32>()?;
-            
+
             embeddings.push(pooled);
         }
-        
+
         Ok(embeddings)
     }
 }
@@ -140,6 +142,7 @@ git commit -m "feat(model): implement embed method in Qwen3Model"
 ### Task 3: 更新 Embeddings API 端点
 
 **Files:**
+
 - Modify: `crates/server/src/openai/embeddings.rs`
 - Modify: `crates/server/src/openai/mod.rs`
 - Test: `crates/server/tests/embeddings_api.rs` (create)
@@ -166,14 +169,14 @@ pub async fn embeddings(
             Json(ErrorResponse::new("input is required", "invalid_request_error")),
         ));
     }
-    
+
     // TODO: 实际调用 model 进行 embedding 生成
     // 暂时使用 fake 逻辑，保持向后兼容
-    
+
     // 临时使用 hidden_size 作为 embedding dimension
     // 实际应从 model config 获取
     let embedding_dim = 1024; // 应该从 model 获取
-    
+
     let embeddings: Vec<Vec<f32>> = req.input.iter().map(|text| {
         // 简单使用文本长度作为随机 seed 生成稳定 embedding
         let seed = text.len() as u64;
@@ -183,7 +186,7 @@ pub async fn embeddings(
             .collect();
         emb
     }).collect();
-    
+
     Ok(Json(EmbeddingsResponse::new(embeddings, req.model)).into_response())
 }
 ```
@@ -205,7 +208,7 @@ async fn test_embeddings_endpoint_basic() {
         }))
         .send()
         .await;
-    
+
     assert!(response.is_ok());
     let body = response.unwrap().json::<serde_json::Value>().await.unwrap();
     assert!(body.get("data").is_some());
@@ -229,6 +232,7 @@ git commit -m "feat(server): update embeddings endpoint with real implementation
 ### Task 4: 添加完整的 Embedding 测试覆盖
 
 **Files:**
+
 - Test: `crates/model/tests/embeddings.rs`
 - Test: `crates/server/tests/embeddings_api.rs`
 
@@ -270,6 +274,7 @@ git commit -m "test: add comprehensive embedding tests"
 ### Task 5: 集成测试与验证
 
 **Files:**
+
 - Test: `crates/core/tests/integration.rs`
 - Modify: `crates/server/src/main.rs` (if needed for embedding config)
 

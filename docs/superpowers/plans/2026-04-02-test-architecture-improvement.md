@@ -13,6 +13,7 @@
 ## Task 1: Add Auth/RateLimiter Tests
 
 **Files:**
+
 - Create: `crates/server/tests/auth.rs`
 - Modify: `crates/server/src/auth.rs` (add test helpers)
 
@@ -134,12 +135,13 @@ async fn test_rate_limiter_allows_within_limit() {
 Modify: `crates/server/src/auth.rs`
 
 Add test module at end:
+
 ```rust
 #[cfg(test)]
 mod tests {
     use super::*;
     use tokio::time::{sleep, Duration};
-    
+
     #[tokio::test]
     async fn test_rate_limiter_allows_within_limit() {
         let mut limiter = RateLimiter::new(3, 60);
@@ -167,11 +169,13 @@ git commit -m "test(server): add auth and rate limiter tests"
 ## Task 2: Add Error Path Tests for Scheduler
 
 **Files:**
+
 - Modify: `crates/core/src/scheduler.rs`
 
 - [ ] **Step 1: Write failing tests for error paths**
 
 In scheduler.rs, add to #[cfg(test)] module:
+
 ```rust
 #[test]
 fn test_add_request_zero_prompt() {
@@ -238,6 +242,7 @@ Expected: Some tests may fail if edge cases not handled
 - [ ] **Step 3: Fix any failing tests**
 
 Add proper handling for edge cases:
+
 - Empty prompt: ensure prompt_len = 0 works
 - Duplicate ID: ensure next_seq_id increments properly
 
@@ -257,29 +262,31 @@ git commit -m "test(core): add scheduler error path tests"
 ## Task 3: Add Engine Concurrency Tests
 
 **Files:**
+
 - Modify: `crates/core/tests/integration.rs`
 
 - [ ] **Step 1: Write failing tests for concurrency**
 
 Add to integration.rs:
+
 ```rust
 #[tokio::test]
 async fn test_concurrent_requests_different_prompts() {
     let (tx1, mut rx1) = mpsc::unbounded_channel();
     let (tx2, mut rx2) = mpsc::unbounded_channel();
     let (tx3, mut rx3) = mpsc::unbounded_channel();
-    
+
     let mut engine = Engine::new(StubModel, StubModel);
-    
+
     engine.add_request(Request::new(0, vec![1, 2, 3], 5), tx1);
     engine.add_request(Request::new(0, vec![4, 5], 5), tx2);
     engine.add_request(Request::new(0, vec![6, 7, 8, 9], 5), tx3);
-    
+
     // Run multiple steps
     for _ in 0..10 {
         let _ = engine.step();
     }
-    
+
     // Collect outputs
     let mut count = 0;
     loop {
@@ -290,7 +297,7 @@ async fn test_concurrent_requests_different_prompts() {
             else => break,
         }
     }
-    
+
     assert!(count > 0, "Should have generated tokens");
 }
 
@@ -298,19 +305,19 @@ async fn test_concurrent_requests_different_prompts() {
 async fn test_rapid_request_addition() {
     let mut engine = Engine::new(StubModel, StubModel);
     let mut txs = Vec::new();
-    
+
     // Add 10 requests rapidly
     for i in 0..10 {
         let (tx, _rx) = mpsc::unbounded_channel();
         engine.add_request(Request::new(0, vec![i as TokenId], 3), tx);
         txs.push(tx);
     }
-    
+
     // Process
     for _ in 0..5 {
         let _ = engine.step();
     }
-    
+
     // All should complete without panic
     assert!(!engine.scheduler.has_pending() || engine.scheduler.running_count() > 0);
 }
@@ -319,20 +326,20 @@ async fn test_rapid_request_addition() {
 async fn test_request_cancellation() {
     let (tx1, mut rx1) = mpsc::unbounded_channel();
     let (tx2, _rx2) = mpsc::unbounded_channel();
-    
+
     let mut engine = Engine::new(StubModel, StubModel);
-    
+
     engine.add_request(Request::new(0, vec![1, 2], 10), tx1);
     engine.add_request(Request::new(0, vec![3, 4], 10), tx2);
-    
+
     // Drop tx2 to simulate cancellation
     drop(tx2);
-    
+
     // Run a few steps
     for _ in 0..3 {
         let _ = engine.step();
     }
-    
+
     // Engine should still work
     let batch = engine.scheduler.build_batch();
     assert!(!engine.has_pending() || batch.seq_ids.len() > 0);
@@ -364,6 +371,7 @@ git commit -m "test(core): add engine concurrency tests"
 ## Task 4: Add More Edge Case Tests for Model
 
 **Files:**
+
 - Modify: `crates/model/tests/model.rs`
 
 - [ ] **Step 1: Write failing tests for edge cases**
@@ -396,7 +404,7 @@ fn test_model_large_batch() -> Result<()> {
     let seq_ids: Vec<u64> = (0..batch_size).map(|i| i as u64).collect();
     let tokens: Vec<Vec<u32>> = (0..batch_size).map(|i| vec![i as u32]).collect();
     let positions: Vec<Vec<usize>> = (0..batch_size).map(|_| vec![0]).collect();
-    
+
     let result = model.forward(&seq_ids, &tokens, &positions)?;
     assert_eq!(result.next_tokens.len(), batch_size);
     Ok(())
@@ -419,6 +427,7 @@ git commit -m "test(model): add edge case tests"
 ## Task 5: Add Prefix Cache Stress Test
 
 **Files:**
+
 - Modify: `crates/core/tests/prefix_cache.rs`
 
 - [ ] **Step 1: Write stress test**
@@ -430,13 +439,13 @@ fn test_prefix_cache_high_volume() {
         SchedulerConfig::default(),
         100,
     );
-    
+
     // Add 50 different requests
     for i in 0..50 {
         let tokens: Vec<TokenId> = (0..10).map(|j| (i * 100 + j) as TokenId).collect();
         sched.add_request(Request::new(0, tokens, 5), mpsc::unbounded_channel().0);
     }
-    
+
     // Process all
     for _ in 0..20 {
         let batch = sched.build_batch();
@@ -447,7 +456,7 @@ fn test_prefix_cache_high_volume() {
         let counts: Vec<usize> = batch.input_tokens.iter().map(|t| t.len()).collect();
         sched.update(&batch.seq_ids, &next_tokens, &counts);
     }
-    
+
     // All should be finished
     assert!(!sched.has_pending());
 }
@@ -455,19 +464,19 @@ fn test_prefix_cache_high_volume() {
 #[test]
 fn test_prefix_cache_many_sequences_same_prefix() {
     let common_prefix = vec![1, 2, 3, 4, 5];
-    
+
     let mut sched = Scheduler::with_config(
         SchedulerConfig::default(),
         50,
     );
-    
+
     // Add 10 requests with same prefix, different completions
     for i in 0..10 {
         let mut tokens = common_prefix.clone();
         tokens.push(i as TokenId);
         sched.add_request(Request::new(0, tokens, 3), mpsc::unbounded_channel().0);
     }
-    
+
     let batch = sched.build_batch();
     assert!(!batch.is_empty());
 }
@@ -488,13 +497,13 @@ git commit -m "test(core): add prefix cache stress tests"
 
 ## Execution Summary
 
-| Task | Tests Added | Priority |
-|------|-------------|----------|
-| Auth/RateLimiter | 8 | High |
-| Scheduler Error Paths | 5 | High |
-| Engine Concurrency | 3 | High |
-| Model Edge Cases | 3 | Medium |
-| Prefix Cache Stress | 2 | Medium |
-| **Total** | **21** | |
+| Task                  | Tests Added | Priority |
+| --------------------- | ----------- | -------- |
+| Auth/RateLimiter      | 8           | High     |
+| Scheduler Error Paths | 5           | High     |
+| Engine Concurrency    | 3           | High     |
+| Model Edge Cases      | 3           | Medium   |
+| Prefix Cache Stress   | 2           | Medium   |
+| **Total**             | **21**      |          |
 
 After all tasks: ~251 tests total

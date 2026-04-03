@@ -24,17 +24,17 @@ The server config already has `engine.num_kv_blocks` but it's not passed to the 
 
 Pass `num_kv_blocks` through the constructor chain:
 
-```
+```text
 server config → ModelLoader → Qwen3Model
 ```
 
 ### Files to Modify
 
-| File | Change |
-|------|--------|
+| File                       | Change                                                    |
+| -------------------------- | --------------------------------------------------------- |
 | `model/src/qwen3/model.rs` | Add `num_kv_blocks` param to `new()` and `from_weights()` |
-| `model/src/loader.rs` | Add `num_kv_blocks` param to `load_model()` |
-| `server/src/main.rs` | Pass config value to loader |
+| `model/src/loader.rs`      | Add `num_kv_blocks` param to `load_model()`               |
+| `server/src/main.rs`       | Pass config value to loader                               |
 
 ### API Changes
 
