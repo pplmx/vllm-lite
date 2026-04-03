@@ -243,7 +243,6 @@ impl GqaAttention {
         let k = self.apply_k_norm(k, batch_size, seq_len)?;
 
         let position_ids: Vec<i64> = positions.iter().map(|&p| p as i64).collect();
-        let position_ids = Tensor::new(position_ids.as_slice(), q.device())?;
         let q = apply_rope(&q, &position_ids, self.theta)?;
         let k = apply_rope(&k, &position_ids, self.theta)?;
 
@@ -305,7 +304,6 @@ impl GqaAttention {
         let q = q.transpose(1, 2)?;
 
         let position_ids: Vec<i64> = positions.iter().map(|&p| p as i64).collect();
-        let position_ids = Tensor::new(position_ids.as_slice(), q.device())?;
         let q = apply_rope(&q, &position_ids, self.theta)?;
 
         let (k, v) = kv_cache.read_kv(layer_idx, block_ids, num_computed_tokens)?;
