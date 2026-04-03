@@ -708,4 +708,78 @@ mod tests {
         assert_eq!(output.seq_ids.len(), 3);
         assert_eq!(output.next_tokens.len(), 3);
     }
+
+    #[test]
+    fn test_embed_single_text() {
+        let config = Qwen3Config {
+            vocab_size: Some(1000),
+            hidden_size: Some(128),
+            num_hidden_layers: Some(1),
+            num_attention_heads: Some(4),
+            num_key_value_heads: Some(2),
+            intermediate_size: Some(256),
+            ..Default::default()
+        };
+
+        let device = Device::Cpu;
+        let mut model = Qwen3Model::new(config, device, 1024).unwrap();
+
+        let input_tokens = vec![vec![1u32, 2, 3, 4, 5]];
+        let positions = vec![vec![0, 1, 2, 3, 4]];
+
+        let embeddings = model.embed(&input_tokens, &positions).unwrap();
+
+        assert_eq!(embeddings.len(), 1);
+        assert_eq!(embeddings[0].len(), 128);
+    }
+
+    #[test]
+    fn test_embed_batch() {
+        let config = Qwen3Config {
+            vocab_size: Some(1000),
+            hidden_size: Some(128),
+            num_hidden_layers: Some(1),
+            num_attention_heads: Some(4),
+            num_key_value_heads: Some(2),
+            intermediate_size: Some(256),
+            ..Default::default()
+        };
+
+        let device = Device::Cpu;
+        let mut model = Qwen3Model::new(config, device, 1024).unwrap();
+
+        let input_tokens = vec![vec![1u32, 2, 3], vec![4u32, 5, 6, 7, 8], vec![9u32, 10]];
+        let positions = vec![vec![0, 1, 2], vec![0, 1, 2, 3, 4], vec![0, 1]];
+
+        let embeddings = model.embed(&input_tokens, &positions).unwrap();
+
+        assert_eq!(embeddings.len(), 3);
+        for emb in &embeddings {
+            assert_eq!(emb.len(), 128);
+        }
+    }
+
+    #[test]
+    fn test_embed_empty_tokens() {
+        let config = Qwen3Config {
+            vocab_size: Some(1000),
+            hidden_size: Some(128),
+            num_hidden_layers: Some(1),
+            num_attention_heads: Some(4),
+            num_key_value_heads: Some(2),
+            intermediate_size: Some(256),
+            ..Default::default()
+        };
+
+        let device = Device::Cpu;
+        let mut model = Qwen3Model::new(config, device, 1024).unwrap();
+
+        let input_tokens = vec![vec![]];
+        let positions = vec![vec![]];
+
+        let embeddings = model.embed(&input_tokens, &positions).unwrap();
+
+        assert_eq!(embeddings.len(), 1);
+        assert_eq!(embeddings[0].len(), 128);
+    }
 }

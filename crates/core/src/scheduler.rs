@@ -1,5 +1,5 @@
-use crate::kv_cache::{hash_tokens, BlockAllocator, PrefixCache};
-use crate::types::{Batch, Request, SchedulerConfig, SeqId, Sequence, Status, TokenId, BLOCK_SIZE};
+use crate::kv_cache::{BlockAllocator, PrefixCache, hash_tokens};
+use crate::types::{BLOCK_SIZE, Batch, Request, SchedulerConfig, SeqId, Sequence, Status, TokenId};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 

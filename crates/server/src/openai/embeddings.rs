@@ -44,10 +44,7 @@ pub async fn embeddings(
         Some(emb) => emb,
         None => {
             let embedding_dim = 1024;
-            req.input
-                .iter()
-                .map(|_| vec![0.0; embedding_dim])
-                .collect()
+            req.input.iter().map(|_| vec![0.0; embedding_dim]).collect()
         }
     };
 
