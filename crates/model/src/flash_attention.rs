@@ -31,6 +31,12 @@ impl FlashAttentionConfig {
         self
     }
 
+    pub fn with_tiled(mut self, tile_size: usize) -> Self {
+        self.variant = AttentionVariant::Tiled;
+        self.flash_block_size = tile_size;
+        self
+    }
+
     pub fn with_sliding_window(mut self, size: usize) -> Self {
         self.use_sliding_window = true;
         self.sliding_window_size = size;
@@ -47,16 +53,83 @@ pub trait FlashAttention: Send + Sync {
         v: &Tensor,
         mask: &Tensor,
     ) -> Result<Tensor>;
+    fn forward_tiled(&self, q: &Tensor, k: &Tensor, v: &Tensor, tile_size: usize)
+        -> Result<Tensor>;
 }
 
 pub struct ScaledDotProductAttention {
     scale: f32,
+    tile_size: usize,
 }
 
 impl ScaledDotProductAttention {
     pub fn new(head_dim: usize) -> Self {
         let scale = 1.0 / (head_dim as f32).sqrt();
-        Self { scale }
+        Self {
+            scale,
+            tile_size: 16,
+        }
+    }
+
+    pub fn with_tile_size(mut self, tile_size: usize) -> Self {
+        self.tile_size = tile_size;
+        self
+    }
+
+    pub fn compute_tiled(
+        &self,
+        q: &Tensor,
+        k: &Tensor,
+        v: &Tensor,
+        tile_size: usize,
+    ) -> Result<Tensor> {
+        let q_shape = q.dims();
+        let batch_size = q_shape[0];
+        let num_heads = q_shape[1];
+        let seq_len = q_shape[2];
+        let _head_dim = q_shape[3];
+
+        let scale_tensor = Tensor::new(self.scale, q.device())?;
+        let mut all_outputs: Vec<Tensor> = Vec::with_capacity(batch_size);
+
+        for _b in 0..batch_size {
+            let mut head_outputs: Vec<Tensor> = Vec::with_capacity(num_heads);
+
+            for h in 0..num_heads {
+                let q_bh = q.narrow(1, h, 1)?.squeeze(1)?;
+                let k_bh = k.narrow(1, h, 1)?.squeeze(1)?;
+                let v_bh = v.narrow(1, h, 1)?.squeeze(1)?;
+
+                let mut tile_outputs: Vec<Tensor> = Vec::new();
+
+                for start in (0..seq_len).step_by(tile_size) {
+                    let end = (start + tile_size).min(seq_len);
+                    let actual_tile_size = end - start;
+                    let q_tile = q_bh.narrow(1, start, actual_tile_size)?;
+
+                    let k_start = 0;
+                    let k_len = end.min(seq_len);
+                    let k_tile = k_bh.narrow(1, k_start, k_len)?;
+                    let v_tile = v_bh.narrow(1, k_start, k_len)?;
+
+                    let qk = q_tile.matmul(&k_tile.t()?)?;
+                    let qk_scaled = qk.broadcast_mul(&scale_tensor)?;
+                    let attn = softmax_last_dim(&qk_scaled)?;
+                    let out_tile = attn.matmul(&v_tile)?;
+
+                    tile_outputs.push(out_tile);
+                }
+
+                let head_output = Tensor::cat(&tile_outputs, 0)?;
+                head_outputs.push(head_output);
+            }
+
+            let batch_output = Tensor::stack(&head_outputs, 0)?;
+            all_outputs.push(batch_output);
+        }
+
+        let result = Tensor::stack(&all_outputs, 0)?;
+        Ok(result)
     }
 
     pub fn compute_sliding_window(
@@ -104,6 +177,16 @@ impl FlashAttention for ScaledDotProductAttention {
     ) -> Result<Tensor> {
         self.forward(q, k, v)
     }
+
+    fn forward_tiled(
+        &self,
+        q: &Tensor,
+        k: &Tensor,
+        v: &Tensor,
+        tile_size: usize,
+    ) -> Result<Tensor> {
+        self.compute_tiled(q, k, v, tile_size)
+    }
 }
 
 pub struct FlashAttentionKernel {
@@ -114,21 +197,31 @@ pub struct FlashAttentionKernel {
 impl FlashAttentionKernel {
     pub fn new(head_dim: usize, config: FlashAttentionConfig) -> Self {
         let attention: Box<dyn FlashAttention> = match config.variant {
-            AttentionVariant::Flash | AttentionVariant::Tiled => {
+            AttentionVariant::Tiled => Box::new(
+                ScaledDotProductAttention::new(head_dim).with_tile_size(config.flash_block_size),
+            ),
+            AttentionVariant::Flash | AttentionVariant::Standard => {
                 Box::new(ScaledDotProductAttention::new(head_dim))
             }
-            AttentionVariant::Standard => Box::new(ScaledDotProductAttention::new(head_dim)),
         };
 
         Self { attention, config }
     }
 
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
+        if self.config.variant == AttentionVariant::Tiled {
+            return self.forward_tiled(q, k, v);
+        }
         if self.config.use_sliding_window && self.config.sliding_window_size > 0 {
             self.forward_sliding_window(q, k, v)
         } else {
             self.attention.forward(q, k, v)
         }
+    }
+
+    fn forward_tiled(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
+        self.attention
+            .forward_tiled(q, k, v, self.config.flash_block_size)
     }
 
     fn forward_sliding_window(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
