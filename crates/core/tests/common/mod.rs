@@ -33,6 +33,17 @@ impl ModelBackend for IncrementModel {
             .map(|tokens| tokens.iter().map(|_| 0.0).collect())
             .collect())
     }
+
+    fn embed(
+        &mut self,
+        input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+    ) -> Result<Vec<Vec<f32>>> {
+        Ok(input_tokens
+            .iter()
+            .map(|tokens| tokens.iter().map(|_| 0.0).collect())
+            .collect())
+    }
 }
 
 #[derive(Clone)]
@@ -70,6 +81,17 @@ impl ModelBackend for ConstModel {
         _kv_block_ids: &[Vec<usize>],
         _num_computed_tokens: &[usize],
         _is_prefill: &[bool],
+    ) -> Result<Vec<Vec<f32>>> {
+        Ok(input_tokens
+            .iter()
+            .map(|t| t.iter().map(|_| 0.0).collect())
+            .collect())
+    }
+
+    fn embed(
+        &mut self,
+        input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
     ) -> Result<Vec<Vec<f32>>> {
         Ok(input_tokens
             .iter()

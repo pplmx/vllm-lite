@@ -122,5 +122,9 @@ pub enum EngineMessage {
     GetMetrics {
         response_tx: mpsc::UnboundedSender<MetricsSnapshot>,
     },
+    GetEmbeddings {
+        input_tokens: Vec<Vec<TokenId>>,
+        response_tx: mpsc::UnboundedSender<Vec<Vec<f32>>>,
+    },
     Shutdown,
 }

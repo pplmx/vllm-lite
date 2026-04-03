@@ -91,6 +91,27 @@ impl<M: ModelBackend> Engine<M> {
                         let snapshot = self.metrics.snapshot();
                         let _ = response_tx.send(snapshot);
                     }
+                    EngineMessage::GetEmbeddings {
+                        input_tokens,
+                        response_tx,
+                    } => {
+                        let positions: Vec<Vec<usize>> = input_tokens
+                            .iter()
+                            .map(|tokens| (0..tokens.len()).collect())
+                            .collect();
+                        match self
+                            .target_model
+                            .borrow_mut()
+                            .embed(&input_tokens, &positions)
+                        {
+                            Ok(embeddings) => {
+                                let _ = response_tx.send(embeddings);
+                            }
+                            Err(e) => {
+                                eprintln!("Embeddings error: {}", e);
+                            }
+                        }
+                    }
                     EngineMessage::Shutdown => return,
                 }
             }
@@ -248,6 +269,17 @@ mod tests {
             _kv_block_ids: &[Vec<usize>],
             _num_computed_tokens: &[usize],
             _is_prefill: &[bool],
+        ) -> Result<Vec<Vec<f32>>> {
+            Ok(input_tokens
+                .iter()
+                .map(|tokens| tokens.iter().map(|_| 0.0).collect())
+                .collect())
+        }
+
+        fn embed(
+            &mut self,
+            input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
         ) -> Result<Vec<Vec<f32>>> {
             Ok(input_tokens
                 .iter()

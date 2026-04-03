@@ -1,9 +1,11 @@
 use super::types::*;
 use crate::ApiState;
 use axum::{Json, extract::State, response::IntoResponse};
+use tokio::sync::mpsc;
+use vllm_core::types::EngineMessage;
 
 pub async fn embeddings(
-    State(_state): State<ApiState>,
+    State(state): State<ApiState>,
     Json(req): Json<EmbeddingsRequest>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
     if req.model.is_empty() {
@@ -25,11 +27,29 @@ pub async fn embeddings(
         ));
     }
 
-    // TODO: 实现真正的 embedding 生成
-    // 暂时返回占位数据
+    let input_tokens: Vec<Vec<u32>> = req
+        .input
+        .iter()
+        .map(|text| state.tokenizer.encode(text))
+        .collect();
 
-    let embedding_dim = 512; // 需要从 model 获取
-    let embeddings: Vec<Vec<f32>> = req.input.iter().map(|_| vec![0.0; embedding_dim]).collect();
+    let (response_tx, mut rx) = mpsc::unbounded_channel::<Vec<Vec<f32>>>();
+
+    let _ = state.engine_tx.send(EngineMessage::GetEmbeddings {
+        input_tokens,
+        response_tx,
+    });
+
+    let embeddings = match rx.recv().await {
+        Some(emb) => emb,
+        None => {
+            let embedding_dim = 1024;
+            req.input
+                .iter()
+                .map(|_| vec![0.0; embedding_dim])
+                .collect()
+        }
+    };
 
     Ok(Json(EmbeddingsResponse::new(embeddings, req.model)).into_response())
 }
