@@ -1,5 +1,5 @@
-use vllm_model::config::Qwen3Config;
 use vllm_model::fake::FakeModel;
+use vllm_model::qwen3_config::Qwen3Config;
 use vllm_traits::ModelBackend;
 
 #[test]
@@ -229,7 +229,7 @@ fn test_qwen3_config_builder() {
 
 #[test]
 fn test_qwen3_config_text_config_fallback() {
-    let text_config = vllm_model::config::TextConfig {
+    let text_config = vllm_model::qwen3_config::TextConfig {
         vocab_size: Some(5000),
         hidden_size: Some(256),
         num_hidden_layers: Some(4),

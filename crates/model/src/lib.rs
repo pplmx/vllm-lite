@@ -16,5 +16,5 @@ pub mod tokenizer;
 pub use flash_attention::{
     AttentionVariant, FlashAttention, FlashAttentionConfig, FlashAttentionKernel,
 };
-pub use quantize::{dequantize, quantize, QuantizedTensor};
+pub use quantize::{QuantizedTensor, dequantize, quantize};
 pub use registry::{ModelFactory, ModelInfo, ModelRegistry};

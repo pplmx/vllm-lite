@@ -1,7 +1,7 @@
 #![allow(clippy::all, non_snake_case, dead_code)]
 
 use candle_core::{DType, Module, Result as CandleResult, Tensor};
-use candle_nn::{conv1d, Conv1d, LayerNorm, Linear, VarBuilder};
+use candle_nn::{Conv1d, LayerNorm, Linear, VarBuilder, conv1d};
 
 #[derive(Clone, Debug)]
 pub struct SSMConfig {
