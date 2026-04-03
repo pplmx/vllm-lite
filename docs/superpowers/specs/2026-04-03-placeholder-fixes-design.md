@@ -9,6 +9,7 @@
 ## 1. Executive Summary
 
 This document outlines fixes for two placeholder/fake implementations identified during code review:
+
 1. Embeddings endpoint returning zero vectors on failure
 2. Qwen3.5 Mamba model marked as simplified placeholder
 
@@ -31,6 +32,7 @@ let embeddings = match rx.recv().await {
 ```
 
 **Issue**: When engine message fails, returns zero vectors instead of propagating error. This causes:
+
 - Silent failures that are hard to debug
 - Clients receive invalid data without knowing
 - Wrong embeddings affect downstream tasks
@@ -69,12 +71,14 @@ The Qwen3.5 Mamba model is not fully implemented - only a placeholder exists.
 **Recommendation**: Complete Mamba implementation
 
 **Scope**:
+
 1. Implement Mamba state space model architecture
 2. Add proper SSM (State Space Model) layer support
 3. Integrate with existing KV cache system
 4. Remove placeholder warning
 
 **Architecture**:
+
 - Mamba uses selective state space models (SSM)
 - Different from transformer attention mechanism
 - Requires specialized forward pass

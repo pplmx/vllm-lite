@@ -48,6 +48,7 @@ The project is organized as a Rust workspace with 4 crates:
 ### Key Components
 
 **Engine** (`crates/core/src/engine.rs`): Main orchestrator managing scheduler, target/draft models, and metrics
+
 ```rust
 pub struct Engine<M: ModelBackend> {
     pub scheduler: Scheduler,

@@ -12,32 +12,36 @@
 
 ## 项目概览
 
-| # | 子项目 | 优先级 | 主要文件 |
-|---|--------|--------|----------|
-| 1 | KV Cache 批量写入优化 | P0 | `crates/model/src/kv_cache.rs`, `crates/model/src/qwen3/attention.rs` |
-| 2 | Scheduler 重构 | P0 | `crates/core/src/scheduler.rs` |
-| 3 | Prefix Cache 优化 | P1 | `crates/core/src/kv_cache.rs` |
-| 4 | Speculative Decoding 修复 | P1 | `crates/core/src/engine.rs` |
-| 5 | 企业特性 (API Key + Rate Limiting) | P2 | `crates/server/src/`, `crates/server/src/config.rs` |
-| 6 | 代码清理 | P2 | 整合重复代码 |
+| #   | 子项目                             | 优先级 | 主要文件                                                              |
+| --- | ---------------------------------- | ------ | --------------------------------------------------------------------- |
+| 1   | KV Cache 批量写入优化              | P0     | `crates/model/src/kv_cache.rs`, `crates/model/src/qwen3/attention.rs` |
+| 2   | Scheduler 重构                     | P0     | `crates/core/src/scheduler.rs`                                        |
+| 3   | Prefix Cache 优化                  | P1     | `crates/core/src/kv_cache.rs`                                         |
+| 4   | Speculative Decoding 修复          | P1     | `crates/core/src/engine.rs`                                           |
+| 5   | 企业特性 (API Key + Rate Limiting) | P2     | `crates/server/src/`, `crates/server/src/config.rs`                   |
+| 6   | 代码清理                           | P2     | 整合重复代码                                                          |
 
 ---
 
 ## 子项目 1: KV Cache 批量写入优化
 
 ### 目标
+
 优化 `PagedKvCache::write_kv` 性能，消除每 token 一次的 GPU-CPU 数据搬运
 
 ### 当前问题
+
 - `write_kv` 每写入一个 token 就要从 GPU 读取整个 block 到 CPU，修改后再重建
 - `forward_prefill` 逐个 token 调用 `kv_cache.write_kv`
 
 ### 架构设计
+
 1. 新增 `write_kv_batch` 方法支持批量写入
 2. 在 `GqaAttention::forward_prefill` 中批量调用
 3. 优化 tensor 操作避免 CPU-GPU 拷贝
 
 ### Files
+
 - Modify: `crates/model/src/kv_cache.rs:90-228`
 - Modify: `crates/model/src/qwen3/attention.rs:214-278`
 - Test: `crates/model/tests/kv_cache.rs` (create)
@@ -58,18 +62,18 @@ use candle_core::{DType, Device, Tensor, Result};
 fn test_write_kv_batch_basic() -> Result<()> {
     let device = Device::Cpu;
     let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone(), false)?;
-    
+
     // Create batch of 4 tokens
     let k_batch = Tensor::ones((1, 4, 2, 4), DType::F32, &device)?;
     let v_batch = Tensor::ones((1, 4, 2, 4), DType::F32, &device)?;
-    
+
     // Write batch at once
     cache.write_kv_batch(0, 0, 0, &k_batch, &v_batch)?;
-    
+
     // Read back and verify
     let (k_out, v_out) = cache.read_kv(0, &[0], 4)?;
     assert_eq!(k_out.dims(), &[4, 2, 4]);
-    
+
     Ok(())
 }
 
@@ -77,16 +81,16 @@ fn test_write_kv_batch_basic() -> Result<()> {
 fn test_write_kv_batch_multiple_blocks() -> Result<()> {
     let device = Device::Cpu;
     let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone(), false)?;
-    
+
     // Write 32 tokens across 2 blocks
     let k_batch = Tensor::ones((1, 32, 2, 4), DType::F32, &device)?;
     let v_batch = Tensor::ones((1, 32, 2, 4), DType::F32, &device)?;
-    
+
     cache.write_kv_batch(0, 0, 0, &k_batch, &v_batch)?;
-    
+
     let (k_out, v_out) = cache.read_kv(0, &[0, 1], 32)?;
     assert_eq!(k_out.dims(), &[32, 2, 4]);
-    
+
     Ok(())
 }
 ```
@@ -118,18 +122,18 @@ pub fn write_kv_batch(
 
     let k_dims = k_batch.dims();
     let v_dims = v_batch.dims();
-    
+
     if k_dims.len() != 4 || v_dims.len() != 4 {
         return Err(candle_core::Error::msg("Expected 4D tensors for batch"));
     }
-    
+
     let batch_size = k_dims[0];
     let num_tokens = k_dims[1];
-    
+
     if batch_size != 1 {
         return Err(candle_core::Error::msg("Batch size must be 1 for now"));
     }
-    
+
     if token_offset + num_tokens > self.block_size {
         return Err(candle_core::Error::msg("Token offset + num_tokens exceeds block size"));
     }
@@ -186,7 +190,7 @@ use candle_core::{DType, Device, Tensor, Result};
 #[test]
 fn test_forward_prefill_batch_performance() -> Result<()> {
     let device = Device::Cpu;
-    
+
     // Create attention layer
     let config = vllm_model::qwen3::attention::AttentionConfig::default();
     let attn = GqaAttention::new(
@@ -198,23 +202,23 @@ fn test_forward_prefill_batch_performance() -> Result<()> {
         config.clone(),
         false,
     )?;
-    
+
     // Create KV cache
     let mut kv_cache = PagedKvCache::new(28, 2, 112, 1024, device.clone(), false)?;
-    
+
     // Test input: 512 tokens
     let x = Tensor::ones((1, 512, 896), DType::F32, &device)?;
     let block_ids: Vec<usize> = (0..32).collect();
-    
+
     let start = std::time::Instant::now();
     let _output = attn.forward_prefill(&x, &mut kv_cache, 0, &block_ids)?;
     let elapsed = start.elapsed();
-    
+
     println!("forward_prefill for 512 tokens took: {:?}", elapsed);
-    
+
     // Should complete in reasonable time (< 5 seconds on CPU)
     assert!(elapsed.as_secs() < 5);
-    
+
     Ok(())
 }
 ```
@@ -266,19 +270,19 @@ pub fn forward_prefill(
     // Write KV cache in batch per block
     let k_t = k.transpose(1, 2)?;
     let v_t = v.transpose(1, 2)?;
-    
+
     for (block_id, token_indices) in &block_groups {
         if token_indices.is_empty() {
             continue;
         }
-        
+
         // Extract tokens for this block
         let indices: Vec<u32> = token_indices.iter().map(|&i| i as u32).collect();
         let indices_tensor = Tensor::new(indices.as_slice(), k.device())?;
-        
+
         let k_block = k_t.index_select(&indices_tensor, 2)?;
         let v_block = v_t.index_select(&indices_tensor, 2)?;
-        
+
         // Write entire block at once
         kv_cache.write_kv_batch(layer_idx, *block_id, 0, &k_block, &v_block)?;
     }
@@ -325,18 +329,22 @@ Task 1.2 complete"
 ## 子项目 2: Scheduler 重构
 
 ### 目标
+
 简化 `build_batch` 函数，消除重复逻辑，提升可维护性
 
 ### 当前问题
+
 - `build_batch` 300+ 行，包含大量重复代码（PD 分离 vs 非 PD 分离）
 - 难以测试和维护
 
 ### 架构设计
+
 1. 提取 `BatchBuilder` 辅助结构
 2. 将 PD 分离逻辑提取为独立函数
 3. 添加更细粒度的测试
 
 ### Files
+
 - Modify: `crates/core/src/scheduler.rs:142-316`
 - Test: `crates/core/tests/scheduler_refactored.rs` (create)
 
@@ -356,12 +364,12 @@ use vllm_core::types::{Request, SchedulerConfig};
 fn test_scheduler_batch_builder_extract() {
     let config = SchedulerConfig::default();
     let mut sched = Scheduler::with_config(config, 1024);
-    
+
     // Add multiple requests
     for i in 1..=5 {
         sched.add_request(Request::new(i, vec![i as u32], 3));
     }
-    
+
     let batch = sched.build_batch();
     assert!(batch.seq_ids.len() > 0);
 }
@@ -380,15 +388,15 @@ fn test_pd_separation_refactored() {
         min_batch_size: 1,
         max_batch_size: 256,
     };
-    
+
     let mut sched = Scheduler::with_config(config, 1024);
     sched.add_request(Request::new(1, vec![1, 2, 3], 5));
     let batch1 = sched.build_batch();
     sched.update(&batch1.seq_ids, &[99], &[batch1.input_tokens[0].len()]);
-    
+
     sched.add_request(Request::new(2, vec![4, 5], 3));
     let batch2 = sched.build_batch();
-    
+
     // Should process both decode and prefill
     assert!(batch2.seq_ids.len() >= 1);
 }
@@ -466,19 +474,19 @@ fn build_batch_with_pd_separation(&mut self) -> Batch {
     let budget = self.config.max_num_batched_tokens;
     let decode_budget = (budget as f32 * self.config.decode_preference_ratio) as usize;
     let prefill_budget = budget.saturating_sub(decode_budget);
-    
+
     let decode_batch = self.build_decode_batch(decode_budget);
     let prefill_batch = self.build_prefill_batch(prefill_budget, decode_batch.seq_ids.len());
-    
+
     // Combine decode first, then prefill
     let mut seq_ids = decode_batch.seq_ids;
     let mut input_tokens = decode_batch.input_tokens;
     let mut positions = decode_batch.positions;
-    
+
     seq_ids.extend(prefill_batch.seq_ids);
     input_tokens.extend(prefill_batch.input_tokens);
     positions.extend(prefill_batch.positions);
-    
+
     Batch { seq_ids, input_tokens, positions }
 }
 
@@ -503,13 +511,13 @@ fn build_batch_mixed(&mut self) -> Batch {
         if budget_remaining == 0 {
             break;
         }
-        
+
         if seq.status == Status::Decoding 
             && seq.consecutive_decode_rounds < self.config.max_consecutive_decode 
         {
             let last = *seq.tokens.last().unwrap();
             let pos = seq.tokens.len() - 1;
-            
+
             seq_ids.push(seq.id);
             input_tokens.push(vec![last]);
             positions.push(vec![pos]);
@@ -558,13 +566,13 @@ fn build_decode_batch(&mut self, budget: usize) -> Batch {
         if count >= budget {
             break;
         }
-        
+
         if seq.status == Status::Decoding 
             && seq.consecutive_decode_rounds < self.config.max_consecutive_decode 
         {
             let last = *seq.tokens.last().unwrap();
             let pos = seq.tokens.len() - 1;
-            
+
             seq_ids.push(seq.id);
             input_tokens.push(vec![last]);
             positions.push(vec![pos]);
@@ -643,17 +651,21 @@ Task 2.1 complete"
 ## 子项目 3: Prefix Cache 优化
 
 ### 目标
+
 优化 `find_prefix_match` 性能，从 O(n) 优化到 O(log n)
 
 ### 当前问题
+
 - 线性扫描所有可能的 prefix lengths
 - 未利用缓存数据的有序性
 
 ### 架构设计
+
 1. 使用 Trie 树或排序 + 二分查找
 2. 保持 LRU 缓存功能
 
 ### Files
+
 - Modify: `crates/core/src/kv_cache.rs:104-117`
 
 ---
@@ -669,20 +681,20 @@ Modify `crates/core/tests/prefix_cache.rs` (or create if not exists):
 fn test_prefix_match_with_many_entries() {
     let mut cache = PrefixCache::new();
     let mut alloc = BlockAllocator::new(1000);
-    
+
     // Insert 100 different prefixes
     for i in 0..100 {
         let tokens: Vec<TokenId> = (0..i+1).collect();
         let key = hash_tokens(&tokens);
         cache.insert(key, vec![i], i + 1);
     }
-    
+
     // Find prefix match - should be fast even with many entries
     let search_tokens: Vec<TokenId> = (0..50).collect();
     let start = std::time::Instant::now();
     let result = cache.find_prefix_match(&search_tokens);
     let elapsed = start.elapsed();
-    
+
     assert!(result.is_some());
     assert!(elapsed.as_millis() < 10, "find_prefix_match too slow: {:?}", elapsed);
 }
@@ -725,16 +737,16 @@ impl PrefixCache {
             sorted_prefixes: Vec::new(),
         }
     }
-    
+
     // ... existing methods ...
 
     pub fn insert(&mut self, key: CacheKey, blocks: Vec<BlockId>, token_count: usize) {
         // ... existing insert logic ...
-        
+
         // Rebuild sorted prefixes for efficient lookup
         self.rebuild_sorted_prefixes();
     }
-    
+
     fn rebuild_sorted_prefixes(&mut self) {
         self.sorted_prefixes.clear();
         for (key, entry) in &self.entries {
@@ -744,12 +756,12 @@ impl PrefixCache {
         // Sort by token count descending (longer matches first)
         self.sorted_prefixes.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
     }
-    
+
     pub fn find_prefix_match(&self, tokens: &[TokenId]) -> Option<&CachedEntry> {
         if tokens.is_empty() {
             return None;
         }
-        
+
         // Binary search for longest matching prefix
         // sorted_prefixes is sorted by length descending
         for (prefix_tokens, key) in &self.sorted_prefixes {
@@ -795,21 +807,21 @@ impl PrefixCache {
     pub fn insert(&mut self, key: CacheKey, blocks: Vec<BlockId>, token_count: usize) {
         // Decode tokens from key (or pass them in)
         // For now, we'll update find_prefix_match to work with the hash
-        
+
         // ... existing logic ...
     }
-    
+
     pub fn find_prefix_match(&self, tokens: &[TokenId]) -> Option<&CachedEntry> {
         if tokens.is_empty() {
             return None;
         }
-        
+
         // Try exact match first
         let key = hash_tokens(tokens);
         if let Some(entry) = self.entries.get(&key) {
             return Some(entry);
         }
-        
+
         // Try progressively shorter prefixes
         // This is O(n) but n is typically small (< 1000)
         // For production, consider a Trie if needed
@@ -843,7 +855,7 @@ impl PrefixCache {
         if tokens.is_empty() {
             return None;
         }
-        
+
         // Check cache first
         let query_key = hash_tokens(tokens);
         if let Some(&matched_key) = self.prefix_match_cache.get(&query_key) {
@@ -854,7 +866,7 @@ impl PrefixCache {
                 return Some(entry);
             }
         }
-        
+
         // Find match
         for prefix_len in (1..=tokens.len()).rev() {
             let prefix = &tokens[..prefix_len];
@@ -867,7 +879,7 @@ impl PrefixCache {
         }
         None
     }
-    
+
     pub fn invalidate_prefix_cache(&mut self) {
         self.prefix_match_cache.clear();
     }
@@ -903,18 +915,22 @@ Task 3.1 complete"
 ## 子项目 4: Speculative Decoding 修复
 
 ### 目标
+
 完善 `step_speculative` 实现，实现正确的 draft verification
 
 ### 当前问题
+
 - draft model 逐个 token 调用，效率低
 - 没有验证 draft tokens 的逻辑
 
 ### 架构设计
+
 1. 批量生成 draft tokens
 2. Target model 验证 draft tokens
 3. 接受正确的 tokens
 
 ### Files
+
 - Modify: `crates/core/src/engine.rs:150-196`
 
 ---
@@ -932,7 +948,7 @@ fn test_speculative_decoding_basic() {
     struct MockModel {
         return_token: TokenId,
     }
-    
+
     impl ModelBackend for MockModel {
         fn forward(&self, seq_ids: &[SeqId], input_tokens: &[Vec<TokenId>], positions: &[Vec<usize>]) -> Result<BatchOutput> {
             Ok(BatchOutput {
@@ -940,22 +956,22 @@ fn test_speculative_decoding_basic() {
                 next_tokens: seq_ids.iter().map(|_| self.return_token).collect(),
             })
         }
-        
+
         fn forward_logits(&self, seq_ids: &[SeqId], input_tokens: &[Vec<TokenId>], positions: &[Vec<usize>]) -> Result<Vec<Vec<f32>>> {
             Ok(input_tokens.iter().map(|t| t.iter().map(|_| 0.0).collect()).collect())
         }
     }
-    
+
     let model = MockModel { return_token: 42 };
     let mut engine = Engine::new(model.clone(), model);
     engine.enable_speculative();
-    
+
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     engine.add_request(Request::new(1, vec![1, 2, 3], 10), tx);
-    
+
     // Run speculative step
     let results = engine.step_speculative().unwrap();
-    
+
     // Should return draft tokens + target token
     assert!(results.len() >= 2);
 }
@@ -980,10 +996,10 @@ pub fn step_speculative(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
 
     // Step 1: Generate draft tokens from draft model (batch)
     let draft_outputs = self.generate_draft_tokens(&batch)?;
-    
+
     // Step 2: Verify draft tokens with target model
     let verified_outputs = self.verify_draft_tokens(&batch, &draft_outputs)?;
-    
+
     // Step 3: Send tokens to response channels
     let mut results = Vec::new();
     for (seq_id, token) in verified_outputs {
@@ -992,13 +1008,13 @@ pub fn step_speculative(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
         }
         results.push((seq_id, token));
     }
-    
+
     // Update scheduler with verified tokens
     let seq_ids: Vec<SeqId> = results.iter().map(|(id, _)| *id).collect();
     let tokens: Vec<TokenId> = results.iter().map(|(_, t)| *t).collect();
     let input_counts: Vec<usize> = vec![1; tokens.len()];
     self.scheduler.update(&seq_ids, &tokens, &input_counts);
-    
+
     // Clean up channels for finished sequences
     for seq in self.scheduler.finished_sequences() {
         self.response_txs.remove(&seq.id);
@@ -1015,7 +1031,7 @@ pub fn step_speculative(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
 
 fn generate_draft_tokens(&mut self, batch: &Batch) -> Result<Vec<Vec<TokenId>>> {
     let mut draft_outputs = Vec::new();
-    
+
     for ((seq_id, tokens), positions) in batch
         .seq_ids
         .iter()
@@ -1039,7 +1055,7 @@ fn generate_draft_tokens(&mut self, batch: &Batch) -> Result<Vec<Vec<TokenId>>> 
         }
         draft_outputs.push(draft);
     }
-    
+
     Ok(draft_outputs)
 }
 
@@ -1049,10 +1065,10 @@ fn verify_draft_tokens(
     draft_outputs: &[Vec<TokenId>],
 ) -> Result<Vec<(SeqId, TokenId)>> {
     let mut results = Vec::new();
-    
+
     for (i, seq_id) in batch.seq_ids.iter().enumerate() {
         let drafts = &draft_outputs[i];
-        
+
         if drafts.is_empty() {
             // No draft tokens, get target token
             let target_output = self.target_model.forward(
@@ -1065,24 +1081,24 @@ fn verify_draft_tokens(
             }
             continue;
         }
-        
+
         // Build input for verification: prompt + draft tokens
         let mut verify_tokens = batch.input_tokens[i].clone();
         verify_tokens.extend(drafts.iter().cloned());
-        
+
         let verify_positions: Vec<usize> = (0..verify_tokens.len()).collect();
-        
+
         // Run target model on combined sequence
         let target_output = self.target_model.forward(
             &[*seq_id],
             &[verify_tokens.clone()],
             &[verify_positions],
         )?;
-        
+
         // Compare draft tokens with target predictions
         // Accept draft tokens that match, otherwise accept target token
         let target_tokens = &target_output.next_tokens;
-        
+
         let mut accepted_count = 0;
         for (j, &draft_token) in drafts.iter().enumerate() {
             if j < target_tokens.len() && target_tokens[j] == draft_token {
@@ -1092,7 +1108,7 @@ fn verify_draft_tokens(
                 break;
             }
         }
-        
+
         // Always include at least one target token
         let target_idx = drafts.len();
         if target_idx < target_tokens.len() {
@@ -1101,7 +1117,7 @@ fn verify_draft_tokens(
             results.push((*seq_id, first));
         }
     }
-    
+
     Ok(results)
 }
 ```
@@ -1136,14 +1152,17 @@ Task 4.1 complete"
 ## 子项目 5: 企业特性 (API Key + Rate Limiting)
 
 ### 目标
+
 添加 Phase 8 规划的 API Key 认证和 Rate Limiting
 
 ### 架构设计
+
 1. 配置文件中添加 API Keys 列表
 2. 中间件验证请求
 3. Rate Limiter 基于 token bucket 算法
 
 ### Files
+
 - Modify: `crates/server/src/config.rs`
 - Create: `crates/server/src/auth.rs`
 - Modify: `crates/server/src/main.rs`
@@ -1238,21 +1257,21 @@ impl RateLimiter {
             window_secs,
         }
     }
-    
+
     async fn check_rate_limit(&mut self, key: &str) -> bool {
         let now = Instant::now();
         let window = Duration::from_secs(self.window_secs);
-        
+
         let times = self.requests.entry(key.to_string()).or_default();
-        
+
         // Remove old entries
         times.retain(|t| now.duration_since(*t) < window);
-        
+
         // Check limit
         if times.len() >= self.max_requests {
             return false;
         }
-        
+
         times.push(now);
         true
     }
@@ -1265,28 +1284,28 @@ impl AuthMiddleware {
             rate_limiter: Arc::new(RwLock::new(RateLimiter::new(max_requests, window_secs))),
         }
     }
-    
+
     pub async fn verify(&self, request: Request) -> Result<String, StatusCode> {
         // Check API key
         let auth_header = request
             .headers()
             .get(AUTHORIZATION)
             .and_then(|v| v.to_str().ok());
-        
+
         let api_key = auth_header
             .and_then(|h| h.strip_prefix("Bearer "))
             .ok_or(StatusCode::UNAUTHORIZED)?;
-        
+
         if !self.api_keys.is_empty() && !self.api_keys.contains(&api_key.to_string()) {
             return Err(StatusCode::UNAUTHORIZED);
         }
-        
+
         // Check rate limit
         let mut limiter = self.rate_limiter.write().await;
         if !limiter.check_rate_limit(api_key).await {
             return Err(StatusCode::TOO_MANY_REQUESTS);
         }
-        
+
         Ok(api_key.to_string())
     }
 }
@@ -1316,7 +1335,7 @@ pub async fn get_prometheus(
 ) -> Result<String, (StatusCode, String)> {
     let (tx, rx) = tokio::sync::oneshot::channel();
     let _ = state.engine_tx.send(EngineMessage::GetMetrics { response_tx: tx });
-    
+
     let snapshot = rx.await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(snapshot.to_prometheus())
 }
@@ -1331,7 +1350,7 @@ use crate::auth::AuthMiddleware;
 
 fn main() {
     // ... existing code ...
-    
+
     let auth_middleware = if !app_config.auth.api_keys.is_empty() {
         Some(Arc::new(AuthMiddleware::new(
             app_config.auth.api_keys.clone(),
@@ -1341,7 +1360,7 @@ fn main() {
     } else {
         None
     };
-    
+
     // Add to state
     let state = ApiState {
         engine_tx: msg_tx.clone(),
@@ -1370,7 +1389,7 @@ fn test_auth_config_default() {
 fn test_auth_config_with_keys() {
     let mut config = AppConfig::default();
     config.auth.api_keys = vec!["key1".to_string(), "key2".to_string()];
-    
+
     assert_eq!(config.auth.api_keys.len(), 2);
 }
 ```
@@ -1406,17 +1425,21 @@ Task 5.1 complete"
 ## 子项目 6: 代码清理
 
 ### 目标
+
 整合 `model/kv_cache.rs` 和 `core/kv_cache.rs` 中的重复代码
 
 ### 当前问题
+
 - 两处都有 BLOCK_SIZE 常量
 - BlockAllocator 和 PrefixCache 功能有重叠
 
 ### 架构设计
+
 1. 统一 kv_cache 模块到 core crate
 2. model crate 依赖 core 的 kv cache
 
 ### Files
+
 - Modify: `crates/model/src/kv_cache.rs`
 - Modify: `crates/model/src/lib.rs`
 
@@ -1502,6 +1525,7 @@ Task 6.1 complete"
 所有 6 个子项目分解完成。共 **11 个主要 Task**。
 
 **Subproject Summary:**
+
 - Task 1.1: KV Cache batch write method + tests
 - Task 1.2: Optimize forward_prefill with batch writes  
 - Task 2.1: Extract BatchBuilder in Scheduler

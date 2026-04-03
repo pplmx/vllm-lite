@@ -18,7 +18,7 @@ This document outlines the correct implementation of Mamba S6 (Selective State S
 
 ### Core Components
 
-```
+```text
 Input x [batch, seq, d_model]
     │
     ▼
@@ -71,23 +71,23 @@ Input x [batch, seq, d_model]
 
 ### Learnable Parameters
 
-| Parameter | Shape | Description |
-|-----------|-------|-------------|
-| A | [d_state, d_model] | State matrix (typically initialized to -1) |
-| x_proj | [d_inner, d_inner * 3] | Projects to delta, B, C |
-| conv | [d_inner, d_inner, d_conv] | 1D convolution |
-| input_proj | [d_model, d_inner * 2] | Gated projection |
-| output_proj | [d_inner, d_model] | Output projection |
-| D | [d_inner] | Skip connection (learnable) |
+| Parameter   | Shape                      | Description                                |
+| ----------- | -------------------------- | ------------------------------------------ |
+| A           | [d_state, d_model]         | State matrix (typically initialized to -1) |
+| x_proj      | [d_inner, d_inner * 3]     | Projects to delta, B, C                    |
+| conv        | [d_inner, d_inner, d_conv] | 1D convolution                             |
+| input_proj  | [d_model, d_inner * 2]     | Gated projection                           |
+| output_proj | [d_inner, d_model]         | Output projection                          |
+| D           | [d_inner]                  | Skip connection (learnable)                |
 
 ### Key Hyperparameters
 
-| Parameter | Typical Value | Description |
-|-----------|---------------|-------------|
-| d_model | 2048-4096 | Model hidden dimension |
-| d_state | 16-64 | SSM state expansion |
-| d_conv | 4 | Convolution width |
-| expand | 2 | Inner dimension expansion |
+| Parameter | Typical Value | Description               |
+| --------- | ------------- | ------------------------- |
+| d_model   | 2048-4096     | Model hidden dimension    |
+| d_state   | 16-64         | SSM state expansion       |
+| d_conv    | 4             | Convolution width         |
+| expand    | 2             | Inner dimension expansion |
 
 ---
 
@@ -97,7 +97,7 @@ Input x [batch, seq, d_model]
 
 The SSM operates in continuous time, discretized using bilinear transform:
 
-```
+```text
 A_bar = exp(delta * A)
 B_bar = delta * B
 ```
@@ -114,7 +114,7 @@ for t in 0..seq_len:
     delta = softplus(delta_proj[x_t])
     A_bar = exp(delta * A)  // [d_state, d_state]
     B_bar = delta * B[t]    // [d_state]
-    
+
     h = A_bar * h + B_bar * x_t  // State update
     y_t = C * h                  // Output
 ```
@@ -123,7 +123,7 @@ for t in 0..seq_len:
 
 For efficiency, use parallel scan algorithm (associative scan) instead of sequential loop:
 
-```
+```text
 y = C @ scan(A_bar, B_bar ⊙ x)
 ```
 
@@ -133,11 +133,11 @@ y = C @ scan(A_bar, B_bar ⊙ x)
 
 ### 4.1 New/Modified Files
 
-| File | Action | Description |
-|------|--------|-------------|
-| `crates/model/src/qwen3_5/ssm.rs` | Modify | Replace with correct S6 implementation |
-| `crates/model/src/qwen3_5/model.rs` | Modify | Update to work with new SSM |
-| `crates/model/src/qwen3_5/mod.rs` | No change | Already exports ssm |
+| File                                | Action    | Description                            |
+| ----------------------------------- | --------- | -------------------------------------- |
+| `crates/model/src/qwen3_5/ssm.rs`   | Modify    | Replace with correct S6 implementation |
+| `crates/model/src/qwen3_5/model.rs` | Modify    | Update to work with new SSM            |
+| `crates/model/src/qwen3_5/mod.rs`   | No change | Already exports ssm                    |
 
 ### 4.2 Key Changes to ssm.rs
 
@@ -151,7 +151,7 @@ y = C @ scan(A_bar, B_bar ⊙ x)
 ## 5. Success Criteria
 
 - [ ] S6 layer has learnable A, B, C, D parameters
-- [ ] Discretization uses exp(delta * A) + delta * B
+- [ ] Discretization uses exp(delta *A) + delta* B
 - [ ] Gating uses z * silu(ssm_out) (not just silu)
 - [ ] Parallel scan for efficiency
 - [ ] All existing tests pass

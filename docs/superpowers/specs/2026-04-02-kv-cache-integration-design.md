@@ -6,7 +6,7 @@ The current `ModelBackend::forward()` implementation doesn't receive KV cache bl
 
 ## Current Architecture
 
-```
+```text
 Scheduler.build_batch() → Batch { seq_ids, input_tokens, positions }
                                     ↓
 Model.forward(seq_ids, input_tokens, positions)
@@ -195,6 +195,7 @@ impl ModelBackend for Qwen3Model {
 ```
 
 **Key Implementation Details:**
+
 - Group by prefill/decode status first (different processing paths)
 - Use `forward_with_cache()` which already has proper block read/write logic
 - `forward_with_cache` writes KV during prefill, reads during decode
@@ -205,6 +206,7 @@ impl ModelBackend for Qwen3Model {
 **Ultimate Goal**: Support CPU, single GPU, and distributed GPU parallelism (TP/PP/DP/EP)
 
 **Challenge**: We need interior mutability to support both:
+
 - Single GPU: `&mut self` works with `Box<M>`
 - Multi-GPU (TP/PP): Need to coordinate across multiple model shards
 
@@ -262,6 +264,7 @@ struct DistributedEngine {
 **Current Implementation Decision**: Use Option A (`RefCell<Box<M>>`) for simplicity. Future distributed support can be added with a separate abstraction layer.
 
 **Rationale**:
+
 - Engine runs in a dedicated std::thread (see server/main.rs)
 - Model is only accessed from that single engine thread
 - `RefCell<Box<M>>` provides interior mutability while allowing future migration to distributed
@@ -286,6 +289,7 @@ Since this is an internal trait (not exposed as public API), we can make breakin
 3. **No default implementations needed**: This is an internal trait with controlled implementors
 
 **Implementations that need update:**
+
 - `crates/model/src/qwen3/model.rs` - Qwen3Model
 - `crates/model/src/fake.rs` - FakeModel
 - `crates/core/src/engine.rs` - StubModel (test)
@@ -301,16 +305,16 @@ Since this is an internal trait (not exposed as public API), we can make breakin
 
 ### 6.1 Parallelism Types
 
-| Parallelism | Description | Use Case |
-|-------------|-------------|----------|
-| **TP (Tensor Parallelism)** | Model layers split across GPUs (column/row parallel Linear) | Large models that don't fit in single GPU |
-| **PP (Pipeline Parallelism)** | Layers split into stages across GPUs | Very deep models |
-| **DP (Data Parallelism)** | Same model on multiple GPUs, different batches | Throughput optimization |
-| **EP (Expert Parallelism)** | MoE experts distributed across GPUs | Mixtral-style MoE models |
+| Parallelism                   | Description                                                 | Use Case                                  |
+| ----------------------------- | ----------------------------------------------------------- | ----------------------------------------- |
+| **TP (Tensor Parallelism)**   | Model layers split across GPUs (column/row parallel Linear) | Large models that don't fit in single GPU |
+| **PP (Pipeline Parallelism)** | Layers split into stages across GPUs                        | Very deep models                          |
+| **DP (Data Parallelism)**     | Same model on multiple GPUs, different batches              | Throughput optimization                   |
+| **EP (Expert Parallelism)**   | MoE experts distributed across GPUs                         | Mixtral-style MoE models                  |
 
 ### 6.2 Target Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                      Scheduler Layer                        │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
@@ -343,6 +347,7 @@ Since this is an internal trait (not exposed as public API), we can make breakin
 ### 6.3 Required Abstractions
 
 #### Device Abstraction
+
 ```rust
 pub trait Device: Send + Sync {
     fn device_type(&self) -> DeviceType;
@@ -359,6 +364,7 @@ pub enum DeviceType {
 ```
 
 #### Communicator (NCCL wrapper)
+
 ```rust
 pub trait Communicator: Send + Sync {
     fn all_reduce(&self, tensor: &mut Tensor, op: ReduceOp) -> Result<()>;
@@ -380,6 +386,7 @@ pub enum ReduceOp {
 ```
 
 #### Parallel Linear Layers (for TP)
+
 ```rust
 pub enum Linear {
     Normal(candle_nn::Linear),
@@ -424,6 +431,7 @@ impl Linear {
 ```
 
 #### Distributed KV Cache
+
 ```rust
 // KV Cache split across TP ranks
 pub struct DistributedKvCache {
@@ -455,6 +463,7 @@ impl DistributedKvCache {
 ```
 
 #### Device Mesh & Planning
+
 ```rust
 pub struct DeviceMesh {
     pub tp_size: usize,
@@ -532,7 +541,7 @@ fn is_tp_sensitive(name: &str) -> bool {
 
 ### 6.5 Implementation Roadmap
 
-```
+```text
 Phase 1: KV Cache Integration (Current)
     └── Make basic inference work with PagedAttention
 

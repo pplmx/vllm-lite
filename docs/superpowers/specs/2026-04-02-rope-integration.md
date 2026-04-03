@@ -18,6 +18,7 @@ fn forward(
 ```
 
 This causes:
+
 - Warnings in tests about unused variables
 - Incomplete model implementation (position information lost)
 - Inability to test position-dependent behavior
@@ -26,7 +27,7 @@ This causes:
 
 ### Data Flow
 
-```
+```text
 Engine::forward() 
   → ModelBackend::forward(seq_ids, input_tokens, positions)
       → Qwen3Model::forward(positions)
@@ -53,6 +54,7 @@ Engine::forward()
 Standard RoPE applies rotary transformation to query and key vectors:
 
 For each position `m` and dimension `i`:
+
 - Angle = m * θ_i where θ_i = base^(-2i/d)
 - Rotate by angle using complex number representation
 
@@ -61,6 +63,7 @@ pub fn apply_rope(query: &Tensor, position_ids: &Tensor, theta: f32) -> Result<T
 ```
 
 Input shapes:
+
 - query: [batch, seq_len, num_heads, head_dim]
 - position_ids: [seq_len]
 
@@ -121,15 +124,15 @@ impl ModelBackend for Qwen3Model {
 ## Testing Strategy
 
 1. **Unit tests for apply_rope**:
-   - Verify output shape matches input
-   - Verify different positions produce different outputs
-   - Verify same position produces same output (deterministic)
+    - Verify output shape matches input
+    - Verify different positions produce different outputs
+    - Verify same position produces same output (deterministic)
 
 2. **Integration test**:
-   - Same input tokens at different positions should produce different next tokens
+    - Same input tokens at different positions should produce different next tokens
 
 3. **Mock model update**:
-   - Make MockModel actually use positions parameter
+    - Make MockModel actually use positions parameter
 
 ## Scope
 
@@ -139,11 +142,11 @@ impl ModelBackend for Qwen3Model {
 
 ## Trade-offs
 
-| Aspect | Decision | Rationale |
-|--------|----------|-----------|
-| RoPE variant | Standard | Simpler to implement, works with current attention |
-| Where to apply | After Q/K projection | Standard practice, matches HuggingFace |
-| Positions format | Simple indices | Easy to generate, sufficient for testing |
+| Aspect           | Decision             | Rationale                                          |
+| ---------------- | -------------------- | -------------------------------------------------- |
+| RoPE variant     | Standard             | Simpler to implement, works with current attention |
+| Where to apply   | After Q/K projection | Standard practice, matches HuggingFace             |
+| Positions format | Simple indices       | Easy to generate, sufficient for testing           |
 
 ## Risks
 

@@ -5,6 +5,7 @@ repos:
     hooks:
       - id: end-of-file-fixer
       - id: trailing-whitespace
+        exclude: \.md$
       - id: check-toml
       - id: check-yaml
       - id: check-merge-conflict
@@ -17,3 +18,13 @@ repos:
       - id: commitizen
       - id: commitizen-branch
         stages: [pre-push]
+
+  - repo: local
+    hooks:
+      - id: rumdl
+        name: rumdl fmt & check
+        language: system
+        entry: rumdl fmt && rumdl check
+        files: \.md$
+        pass_filenames: true
+        require_serial: true

@@ -10,9 +10,10 @@
 
 ---
 
-### Task 1: Add Helper Function for Token Stacking
+## Task 1: Add Helper Function for Token Stacking
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/model.rs:310-320`
 
 - [ ] **Step 1: Add stack_tokens helper method**
@@ -26,7 +27,7 @@ fn stack_tokens(&self, tokens: &[Vec<TokenId>]) -> EngineResult<Tensor> {
         .iter()
         .map(|t| t.last().copied().unwrap_or(0))
         .collect();
-    
+
     Tensor::from_slice(&token_ids, [batch_size], &self.device)
         .map_err(|e| EngineError::new(e.to_string()))
 }
@@ -49,6 +50,7 @@ git commit -m "feat(model): add stack_tokens helper for batching"
 ### Task 2: Rewrite forward Method for Batch Processing
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/model.rs:304-372`
 
 - [ ] **Step 1: Replace the forward implementation**
@@ -75,11 +77,11 @@ fn forward(
         .iter()
         .map(|t| t.last().copied().unwrap_or(0))
         .collect();
-    
+
     // [batch_size, 1]
     let token_tensor = Tensor::from_slice(&token_ids, [batch_size], &self.device)
         .map_err(|e| EngineError::new(e.to_string()))?;
-    
+
     // Embedding: [batch_size, 1] -> [batch_size, 1, hidden_size]
     let mut hidden_states = self.embed_tokens
         .forward(&token_tensor)
@@ -125,6 +127,7 @@ Expected: Any error messages (to fix in next step)
 - [ ] **Step 3: Fix compilation errors**
 
 If there are errors, fix them. Common issues:
+
 - Import `DType` for `candle_core::D::Minus1`
 - Ensure tensor shapes are correct
 
@@ -145,6 +148,7 @@ git commit -m "feat(model): implement real batching in forward method"
 ### Task 3: Test Batch Processing
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/model.rs` (add tests in existing test module)
 
 - [ ] **Step 1: Run existing tests**
@@ -161,18 +165,18 @@ Add this test to the existing `#[cfg(test)]` module:
 fn test_qwen3_model_batch_forward() {
     use candle_core::Device;
     use crate::config::Qwen3Config;
-    
+
     let config = Qwen3Config::qwen3_0_6b();
     let device = Device::Cpu;
     let model = Qwen3Model::new(config, device).unwrap();
-    
+
     // Test with batch size 3
     let seq_ids = vec![1u64, 2, 3];
     let input_tokens = vec![vec![1], vec![2], vec![3]];
     let positions = vec![vec![0], vec![0], vec![0]];
-    
+
     let output = model.forward(&seq_ids, &input_tokens, &positions).unwrap();
-    
+
     assert_eq!(output.seq_ids.len(), 3);
     assert_eq!(output.next_tokens.len(), 3);
 }
@@ -207,12 +211,12 @@ If there are issues, fix and commit.
 
 ## Summary
 
-| Task | Description | Status |
-|------|-------------|--------|
-| Task 1 | Add stack_tokens helper | ⏳ |
-| Task 2 | Rewrite forward for batching | ⏳ |
-| Task 3 | Test batch processing | ⏳ |
-| Task 4 | Verify CI | ⏳ |
+| Task   | Description                  | Status |
+| ------ | ---------------------------- | ------ |
+| Task 1 | Add stack_tokens helper      | ⏳     |
+| Task 2 | Rewrite forward for batching | ⏳     |
+| Task 3 | Test batch processing        | ⏳     |
+| Task 4 | Verify CI                    | ⏳     |
 
 **Plan complete and saved to `docs/superpowers/plans/2026-04-02-fix-fake-batching-plan.md`. Two execution options:**
 

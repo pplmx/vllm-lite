@@ -7,15 +7,15 @@
 ## Current Problems
 
 1. **Circular dependency risk**: `model` crate depends on `core` crate (ModelBackend trait defined in core)
-2. **KV cache duplication**: 
-   - `core/src/kv_cache.rs`: BlockAllocator + PrefixCache (CPU-side block management)
-   - `model/src/kv_cache.rs`: PagedKvCache (GPU tensor storage)
+2. **KV cache duplication**:
+    - `core/src/kv_cache.rs`: BlockAllocator + PrefixCache (CPU-side block management)
+    - `model/src/kv_cache.rs`: PagedKvCache (GPU tensor storage)
 3. **ModelBackend in wrong place**: Trait defined in core, but actual implementations are in model
 4. **Engine too large**: 600+ lines in single file with mixed concerns
 
 ## Target Architecture
 
-```
+```text
 server/
 ├── src/
 │   ├── main.rs              # Entry point
@@ -70,6 +70,7 @@ core/
 ### 1. Move ModelBackend to server/interfaces
 
 Current (in `core/src/engine.rs`):
+
 ```rust
 pub trait ModelBackend: Send + Sync {
     fn forward(&self, seq_ids: &[SeqId], input_tokens: &[Vec<TokenId>], ...) -> Result<BatchOutput>;
@@ -78,6 +79,7 @@ pub trait ModelBackend: Send + Sync {
 ```
 
 After (in `server/interfaces/model.rs`):
+
 ```rust
 use crate::interfaces::types::{BatchOutput, SeqId, TokenId};
 
@@ -90,6 +92,7 @@ pub trait ModelBackend: Send + Sync {
 ### 2. Remove model → core dependency
 
 In `model/Cargo.toml`:
+
 ```toml
 [dependencies]
 # REMOVE: vllm-core = { path = "../core" }
@@ -99,6 +102,7 @@ candle-nn = "0.10.1"
 ```
 
 In `model/src/qwen3/model.rs`, `model/src/fake.rs`, etc.:
+
 - Remove `use vllm_core::engine::ModelBackend`
 - Implement `server::interfaces::model::ModelBackend` instead
 
@@ -107,6 +111,7 @@ In `model/src/qwen3/model.rs`, `model/src/fake.rs`, etc.:
 Split `core/src/engine.rs` (506 lines) into:
 
 **engine.rs** (main struct + run loop, ~150 lines):
+
 ```rust
 pub struct Engine<M: ModelBackend> {
     pub scheduler: Scheduler,
@@ -126,6 +131,7 @@ impl<M: ModelBackend> Engine<M> {
 ```
 
 **batch.rs** (batch building, ~200 lines):
+
 ```rust
 pub struct BatchBuilder;
 impl BatchBuilder {
@@ -135,6 +141,7 @@ impl BatchBuilder {
 ```
 
 **speculative.rs** (speculative decoding, ~150 lines):
+
 ```rust
 impl<M: ModelBackend> Engine<M> {
     pub fn step_speculative(...) -> Result<Vec<(SeqId, TokenId)>>
@@ -146,6 +153,7 @@ impl<M: ModelBackend> Engine<M> {
 ### 4. Define shared types in server/interfaces
 
 Create `server/interfaces/types.rs`:
+
 ```rust
 pub type TokenId = u32;
 pub type SeqId = u64;

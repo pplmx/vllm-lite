@@ -12,7 +12,7 @@
 
 ## File Structure
 
-```
+```text
 crates/
 ├── dist/                          # NEW: vllm-dist crate
 │   ├── Cargo.toml
@@ -47,6 +47,7 @@ Cargo.toml (workspace)             # Add dist crate
 ### Task 1: Create vllm-dist Crate
 
 **Files:**
+
 - Create: `crates/dist/Cargo.toml`
 - Create: `crates/dist/src/lib.rs`
 - Create: `crates/dist/src/tensor_parallel/mod.rs`
@@ -103,6 +104,7 @@ pub use device_mesh::TensorParallelError;
 - [ ] **Step 4: Copy tensor_parallel content from crates/core/src/tensor_parallel.rs to new files**
 
 Move the following to new locations:
+
 - `DeviceMesh` struct → `device_mesh.rs`
 - `AllReduce` trait, `NcclAllReduce`, `ReduceOp` → `all_reduce.rs`
 - `ColumnParallelLinear`, `RowParallelLinear`, `TensorParallelManager` → `parallel_linear.rs`
@@ -175,16 +177,20 @@ git commit -m "feat(dist): create vllm-dist crate for distributed compute"
 ### Task 2: Update Workspace and Core Crate
 
 **Files:**
+
 - Modify: `Cargo.toml` (workspace)
 - Modify: `crates/core/src/lib.rs`
 
 - [ ] **Step 1: Add dist to workspace members in Cargo.toml**
 
 In `[workspace]`, change:
+
 ```toml
 members = ["crates/core", "crates/model", "crates/server", "crates/traits"]
 ```
+
 To:
+
 ```toml
 members = ["crates/core", "crates/model", "crates/server", "crates/traits", "crates/dist"]
 ```
@@ -192,6 +198,7 @@ members = ["crates/core", "crates/model", "crates/server", "crates/traits", "cra
 - [ ] **Step 2: Remove tensor_parallel from core crate**
 
 In `crates/core/src/lib.rs`, remove:
+
 ```rust
 pub mod tensor_parallel;
 ```
@@ -201,6 +208,7 @@ And remove `crates/core/src/tensor_parallel.rs` file.
 - [ ] **Step 3: Add vllm-dist dependency to model crate**
 
 In `crates/model/Cargo.toml`, add:
+
 ```toml
 [dependencies.vllm-dist]
 path = "../dist"
@@ -223,6 +231,7 @@ git commit -m "refactor: move tensor_parallel to vllm-dist crate"
 ### Task 3: Add TensorParallelConfig to Server Config
 
 **Files:**
+
 - Modify: `crates/server/src/config.rs`
 
 - [ ] **Step 1: Add tensor_parallel_size to EngineConfig**
@@ -241,6 +250,7 @@ pub struct EngineConfig {
 ```
 
 Add function:
+
 ```rust
 fn default_tensor_parallel_size() -> usize {
     1
@@ -252,6 +262,7 @@ Update `Default` impl and `validate()` method.
 - [ ] **Step 2: Add environment variable support**
 
 In `AppConfig::load()`, add after other env vars:
+
 ```rust
 if let Ok(tp_size) = std::env::var("VLLM_TENSOR_PARALLEL_SIZE") {
     if let Ok(v) = tp_size.parse() {
@@ -277,11 +288,13 @@ git commit -m "feat(config): add tensor_parallel_size to EngineConfig"
 ### Task 4: Add CLI Argument for --tensor-parallel-size
 
 **Files:**
+
 - Modify: `crates/server/src/main.rs`
 
 - [ ] **Step 1: Parse --tensor-parallel-size CLI arg**
 
 Add function in `main.rs`:
+
 ```rust
 fn get_tensor_parallel_size() -> usize {
     let args: Vec<String> = std::env::args().collect();
@@ -296,6 +309,7 @@ fn get_tensor_parallel_size() -> usize {
 - [ ] **Step 2: Pass to model loader (will be used in Task 6)**
 
 After loading config:
+
 ```rust
 let tensor_parallel_size = get_tensor_parallel_size();
 tracing::info!(tensor_parallel_size = tensor_parallel_size, "Tensor parallel size");
@@ -313,6 +327,7 @@ git commit -m "feat(cli): add --tensor-parallel-size argument"
 ### Task 5: Integrate Tensor Parallel with TransformerBlock
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/block.rs`
 
 - [ ] **Step 1: Read current TransformerBlock implementation**
@@ -333,6 +348,7 @@ pub struct TransformerBlock {
 - [ ] **Step 3: Add new constructor with TP support**
 
 Add new method:
+
 ```rust
 impl TransformerBlock {
     pub fn new_with_tp(
@@ -374,12 +390,14 @@ git commit -m "feat(model): add tensor parallel support to TransformerBlock"
 ### Task 6: Integrate Tensor Parallel with Qwen3Model
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/model.rs`
 - Modify: `crates/model/src/loader.rs`
 
 - [ ] **Step 1: Add tp_config field to Qwen3Model**
 
 In `qwen3/model.rs`, add to struct:
+
 ```rust
 use vllm_dist::TensorParallelConfig;
 
@@ -402,7 +420,7 @@ impl Qwen3Model {
             .as_ref()
             .map(|tp| tp.local_device())
             .unwrap_or(Device::Cpu);
-        
+
         // Initialize with tp_config
         // Use TransformerBlock::new_with_tp() instead of new()
         // ...
@@ -413,6 +431,7 @@ impl Qwen3Model {
 - [ ] **Step 3: Handle lm_head with vocab remainder**
 
 In `from_weights()`:
+
 ```rust
 fn compute_vocab_shard(vocab_size: usize, world_size: usize, rank: usize) -> (usize, usize) {
     // Use vllm_dist::compute_vocab_shard
@@ -424,6 +443,7 @@ Handle the case where lm_head weight is sharded.
 - [ ] **Step 4: Add TP config to ModelLoader**
 
 In `crates/model/src/loader.rs`, add:
+
 ```rust
 pub fn load_model_with_tp(
     &self,
@@ -473,12 +493,14 @@ git commit -m "feat(model): integrate tensor parallel with Qwen3Model"
 ### Task 7: Add Unit Tests for Tensor Parallel
 
 **Files:**
+
 - Modify: `crates/dist/src/tensor_parallel/*.rs`
 - Modify: `crates/model/src/qwen3/block.rs`
 
 - [ ] **Step 1: Test TensorParallelConfig**
 
 In `crates/dist/src/types.rs`, add tests:
+
 ```rust
 #[cfg(test)]
 mod tests {
@@ -510,6 +532,7 @@ mod tests {
 - [ ] **Step 2: Test TransformerBlock with TP**
 
 In `crates/model/src/qwen3/block.rs`, add test in `#[cfg(test)]`:
+
 ```rust
 #[test]
 fn test_transformer_block_with_tp_config() {
@@ -540,6 +563,7 @@ git commit -m "test: add unit tests for tensor parallel integration"
 ### Task 8: Integration Test with TP=2 Simulation
 
 **Files:**
+
 - Create: `crates/model/tests/tensor_parallel.rs`
 
 - [ ] **Step 1: Create integration test file**
@@ -554,9 +578,9 @@ use candle_core::Device;
 fn test_qwen3_with_tensor_parallel_size_1() {
     let config = Qwen3Config::default();
     let tp_config = None;  // No TP
-    
+
     let model = Qwen3Model::new_with_tp(config, tp_config, 1024).unwrap();
-    
+
     // Verify single GPU behavior
     let output = model.forward(...);
     assert!(output.next_tokens.len() > 0);
@@ -566,9 +590,9 @@ fn test_qwen3_with_tensor_parallel_size_1() {
 fn test_qwen3_with_tensor_parallel_size_2() {
     let config = Qwen3Config::default();
     let tp_config = TensorParallelConfig::new(2, 0, vec![0, 1]);
-    
+
     let model = Qwen3Model::new_with_tp(config, tp_config, 1024).unwrap();
-    
+
     // Verify TP=2 initialization
     let output = model.forward(...);
     assert!(output.next_tokens.len() > 0);
@@ -578,6 +602,7 @@ fn test_qwen3_with_tensor_parallel_size_2() {
 - [ ] **Step 2: Add test to Cargo.toml**
 
 In `crates/model/Cargo.toml`, add:
+
 ```toml
 [[test]]
 name = "tensor_parallel"
@@ -600,16 +625,16 @@ git commit -m "test: add integration tests for tensor parallel"
 
 ## Summary
 
-| Task | Description | Files Changed |
-|------|-------------|---------------|
-| 1 | Create vllm-dist crate | 7 new files |
-| 2 | Update workspace | 3 files |
-| 3 | Server config | 1 file |
-| 4 | CLI argument | 1 file |
-| 5 | TransformerBlock | 1 file |
-| 6 | Qwen3Model + loader | 3 files |
-| 7 | Unit tests | 2 files |
-| 8 | Integration tests | 2 files |
+| Task | Description            | Files Changed |
+| ---- | ---------------------- | ------------- |
+| 1    | Create vllm-dist crate | 7 new files   |
+| 2    | Update workspace       | 3 files       |
+| 3    | Server config          | 1 file        |
+| 4    | CLI argument           | 1 file        |
+| 5    | TransformerBlock       | 1 file        |
+| 6    | Qwen3Model + loader    | 3 files       |
+| 7    | Unit tests             | 2 files       |
+| 8    | Integration tests      | 2 files       |
 
 ---
 

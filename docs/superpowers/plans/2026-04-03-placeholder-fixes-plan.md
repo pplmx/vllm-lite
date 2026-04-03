@@ -13,6 +13,7 @@
 ## Task 1: Fix Embeddings Error Handling (Simple)
 
 **Files:**
+
 - Modify: `crates/server/src/openai/embeddings.rs`
 
 - [ ] **Step 1: Review current implementation**
@@ -22,6 +23,7 @@ Read `crates/server/src/openai/embeddings.rs` lines 43-49 to see the fallback co
 - [ ] **Step 2: Replace fallback with error return**
 
 Replace:
+
 ```rust
 let embeddings = match rx.recv().await {
     Some(emb) => emb,
@@ -33,6 +35,7 @@ let embeddings = match rx.recv().await {
 ```
 
 With:
+
 ```rust
 let embeddings = rx.recv().await
     .map_err(|_| {
@@ -64,6 +67,7 @@ git commit -m "fix(server): return error instead of zero vectors on embeddings f
 ## Task 2: Complete Mamba Implementation (Complex)
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3_5/model.rs`
 - Create: `crates/model/src/qwen3_5/ssm.rs` (new file for SSM layer)
 - Test: Add tests for Mamba model
@@ -72,6 +76,7 @@ git commit -m "fix(server): return error instead of zero vectors on embeddings f
 Mamba is a State Space Model (SSM) architecture, different from transformer attention. The current implementation is just a simple linear layer stack (placeholder).
 
 **Mamba Architecture Requirements:**
+
 1. **SSM Core**: Selective State Space Model (S6) with hidden state
 2. **Gated MLP**: SiLU gating mechanism
 3. **Conv1D**: For handling sequential data
@@ -80,12 +85,13 @@ Mamba is a State Space Model (SSM) architecture, different from transformer atte
 - [ ] **Step 1: Research Mamba architecture**
 
 Review the current `MambaBlock` implementation in `crates/model/src/qwen3_5/model.rs`:
+
 - Current: Simple linear layer
 - Needed: Full SSM block with:
-  - Input projection
-  - Conv1D for local context
-  - SSM (state space model) core
-  - Gated MLP output
+    - Input projection
+    - Conv1D for local context
+    - SSM (state space model) core
+    - Gated MLP output
 
 - [ ] **Step 2: Create SSM layer module**
 
@@ -113,7 +119,7 @@ impl SSMLayer {
     pub fn new(dim: usize, state_dim: usize, vb: VarBuilder) -> Result<Self> {
         // Implementation of SSM layer
     }
-    
+
     pub fn forward(&self, x: &Tensor, state: &mut SSMState) -> Result<Tensor> {
         // Selective scan implementation
     }
@@ -135,7 +141,7 @@ impl MambaBlock {
     pub fn new(hidden_size: usize, ssm_state_size: usize, vb: VarBuilder) -> CandleResult<Self> {
         // Initialize SSM layer, gating, and normalization
     }
-    
+
     pub fn forward(&mut self, x: &Tensor, state: &mut SSMState) -> CandleResult<Tensor> {
         // 1. Conv1D for local context
         // 2. SSM forward pass
@@ -159,6 +165,7 @@ pub struct Qwen35Model {
 - [ ] **Step 5: Remove placeholder warning**
 
 Remove line 85:
+
 ```rust
 eprintln!("Warning: Qwen3.5 Mamba implementation is simplified (placeholder)");
 ```

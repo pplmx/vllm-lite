@@ -13,6 +13,7 @@
 ## 当前状态
 
 已有基础实现:
+
 - `/metrics` 端点已存在
 - 基础指标: tokens_total, requests_total, latency (avg/p50/p90/p99), batch_size
 
@@ -23,6 +24,7 @@
 ### Task 1: 扩展 MetricsCollector
 
 **Files:**
+
 - Modify: `crates/core/src/metrics.rs`
 
 - [ ] **Step 1: 添加新指标字段**
@@ -44,6 +46,7 @@
 ### Task 2: 更新 Engine 集成
 
 **Files:**
+
 - Modify: `crates/core/src/engine.rs`
 - Modify: `crates/core/src/scheduler.rs`
 
@@ -58,6 +61,7 @@
 ### Task 3: 更新 Prometheus 端点
 
 **Files:**
+
 - Modify: `crates/server/src/api.rs`
 
 - [ ] **Step 1: 更新 get_prometheus 函数**

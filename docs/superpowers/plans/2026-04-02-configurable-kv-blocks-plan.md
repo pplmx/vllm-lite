@@ -10,18 +10,22 @@
 
 ---
 
-### Task 1: Modify Qwen3Model::new() to accept num_kv_blocks
+## Task 1: Modify Qwen3Model::new() to accept num_kv_blocks
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/model.rs:25-80`
 
 - [ ] **Step 1: Update method signature**
 
 Change:
+
 ```rust
 pub fn new(config: Qwen3Config, device: Device) -> CandleResult<Self>
 ```
+
 To:
+
 ```rust
 pub fn new(config: Qwen3Config, device: Device, num_kv_blocks: usize) -> CandleResult<Self>
 ```
@@ -29,6 +33,7 @@ pub fn new(config: Qwen3Config, device: Device, num_kv_blocks: usize) -> CandleR
 - [ ] **Step 2: Use num_kv_blocks in PagedKvCache::new()**
 
 Change:
+
 ```rust
 let kv_cache = PagedKvCache::new(
     config.num_hidden_layers(),
@@ -38,7 +43,9 @@ let kv_cache = PagedKvCache::new(
     device.clone(),
 )?;
 ```
+
 To:
+
 ```rust
 let kv_cache = PagedKvCache::new(
     config.num_hidden_layers(),
@@ -59,15 +66,19 @@ Commit: `feat(model): add num_kv_blocks param to Qwen3Model::new()`
 ### Task 2: Modify Qwen3Model::from_weights() to accept num_kv_blocks
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/model.rs:91-230`
 
 - [ ] **Step 1: Update method signature**
 
 Change:
+
 ```rust
 pub fn from_weights(config: Qwen3Config, device: Device, weights: HashMap<String, Tensor>) -> CandleResult<Self>
 ```
+
 To:
+
 ```rust
 pub fn from_weights(config: Qwen3Config, device: Device, weights: HashMap<String, Tensor>, num_kv_blocks: usize) -> CandleResult<Self>
 ```
@@ -84,15 +95,19 @@ Commit: `feat(model): add num_kv_blocks param to Qwen3Model::from_weights()`
 ### Task 3: Modify ModelLoader::load_model() to accept num_kv_blocks
 
 **Files:**
+
 - Modify: `crates/model/src/loader.rs:135-141`
 
 - [ ] **Step 1: Update method signature**
 
 Change:
+
 ```rust
 pub fn load_model(&self, model_dir: &str) -> Result<Qwen3Model>
 ```
+
 To:
+
 ```rust
 pub fn load_model(&self, model_dir: &str, num_kv_blocks: usize) -> Result<Qwen3Model>
 ```
@@ -109,16 +124,20 @@ Commit: `feat(model): add num_kv_blocks param to ModelLoader::load_model()`
 ### Task 4: Update server to pass num_kv_blocks
 
 **Files:**
+
 - Modify: `crates/server/src/main.rs:70-83`
 
 - [ ] **Step 1: Pass config.engine.num_kv_blocks to load_model()**
 
 Change:
+
 ```rust
 let model = loader.load_model(&model_path).expect("Failed to load model");
 let draft_model = loader.load_model(&model_path).expect("Failed to load draft model");
 ```
+
 To:
+
 ```rust
 let model = loader.load_model(&model_path, app_config.engine.num_kv_blocks)
     .expect("Failed to load model");
@@ -136,11 +155,13 @@ Commit: `feat(server): pass num_kv_blocks from config to model loader`
 ### Task 5: Update tests
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/model.rs` (test calls)
 
 - [ ] **Step 1: Update test calls to pass num_kv_blocks**
 
 Update these locations (around lines 409, 432, 454, 473):
+
 ```rust
 Qwen3Model::new(config, device, 1024)
 Qwen3Model::from_weights(config, device, weights, 1024)

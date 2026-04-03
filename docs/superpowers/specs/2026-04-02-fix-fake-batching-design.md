@@ -33,11 +33,13 @@ let next_tokens = argmax(logits);                   // [batch]
 ## Scope
 
 ### Phase 1: Decode Batching (This Spec)
+
 - Batch size: configurable (default 32)
 - Sequence length: 1 (decode mode)
 - Attention: 处理单 token 的 batch attention
 
 ### Phase 2: Prefill Batching (Future)
+
 - Variable length sequences
 - Padding strategy
 - Attention mask
@@ -79,11 +81,11 @@ let next_tokens = logits.squeeze(1)?.argmax()?;  // [batch]
 
 ## Changes Required
 
-| File | Change |
-|------|--------|
-| `model/src/qwen3/model.rs` | Rewrite `forward` to use batch operations |
-| `model/src/qwen3/attention.rs` | Ensure attention supports batched input |
-| `model/src/qwen3/block.rs` | Ensure transformer block supports batching |
+| File                           | Change                                     |
+| ------------------------------ | ------------------------------------------ |
+| `model/src/qwen3/model.rs`     | Rewrite `forward` to use batch operations  |
+| `model/src/qwen3/attention.rs` | Ensure attention supports batched input    |
+| `model/src/qwen3/block.rs`     | Ensure transformer block supports batching |
 
 ## Testing
 

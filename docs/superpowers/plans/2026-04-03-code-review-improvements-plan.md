@@ -15,12 +15,14 @@
 ### Task 1: Fix Random Number Generation in sampling.rs
 
 **Files:**
+
 - Modify: `crates/core/src/sampling.rs:1-15`
 - Test: Run existing sampling tests
 
 - [ ] **Step 1: Add rand dependency if not present**
 
 Check `crates/core/Cargo.toml` for `rand` crate. If not present, add:
+
 ```toml
 rand = "0.8"
 ```
@@ -57,11 +59,13 @@ git commit -m "fix(core): use secure random number generation"
 ### Task 2: Remove Dead Code in server/src/api.rs
 
 **Files:**
+
 - Modify: `crates/server/src/api.rs:19-77` and other dead code locations
 
 - [ ] **Step 1: Identify removable dead code**
 
 Run clippy to find unused code:
+
 ```bash
 cargo clippy --workspace -- -D warnings 2>&1 | grep -i "dead_code"
 ```
@@ -69,6 +73,7 @@ cargo clippy --workspace -- -D warnings 2>&1 | grep -i "dead_code"
 - [ ] **Step 2: Remove dead code in api.rs**
 
 Review each `#[allow(dead_code)]` function:
+
 - `parse_prompt_template` (line 19)
 - `validate_max_tokens` (line 33)
 - `calculate_stop_conditions` (line 38)
@@ -96,12 +101,14 @@ git commit -m "refactor(server): remove unused dead_code in api.rs"
 ### Task 3: Deduplicate Scheduler Batch Building
 
 **Files:**
+
 - Modify: `crates/core/src/scheduler.rs:280-373`
 - Test: `crates/core/tests/scheduler_refactored.rs`
 
 - [ ] **Step 1: Review duplicated code**
 
 Both `build_batch_with_pd_separation` and `build_batch_mixed` contain:
+
 ```rust
 // Lines 302-319 (identical in both methods)
 let batch_len = seq_ids.len();
@@ -162,6 +169,7 @@ fn finalize_batch(
 - [ ] **Step 3: Refactor both methods to use helper**
 
 Replace duplicated code with:
+
 ```rust
 let batch = Self::finalize_batch(seq_ids, input_tokens, positions, &self.running);
 return batch;
@@ -189,12 +197,14 @@ git commit -m "refactor(core): deduplicate batch building in scheduler"
 ### Task 4: Implement forward_logits Properly
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/model.rs:487-501`
 - Test: Existing model tests + add new test for beam search
 
 - [ ] **Step 1: Add cache field to Qwen3Model**
 
 In `crates/model/src/qwen3/model.rs`, add to struct:
+
 ```rust
 use std::collections::HashMap;
 
@@ -207,6 +217,7 @@ pub struct Qwen3Model {
 - [ ] **Step 2: Initialize cache in constructors**
 
 In `new`, `new_with_tp`, and `from_weights` methods, add:
+
 ```rust
 logits_cache: HashMap::new(),
 ```
@@ -214,6 +225,7 @@ logits_cache: HashMap::new(),
 - [ ] **Step 3: Implement forward_logits properly**
 
 Replace placeholder with:
+
 ```rust
 fn forward_logits(
     &mut self,
@@ -230,7 +242,7 @@ fn forward_logits(
 
     // Call forward to get logits, store in cache
     let mut results = Vec::with_capacity(seq_ids.len());
-    
+
     for (i, seq_id) in seq_ids.iter().enumerate() {
         let tokens = &input_tokens[i];
         let pos = &positions[i];
@@ -261,6 +273,7 @@ fn forward_logits(
 - [ ] **Step 4: Add test for forward_logits**
 
 In test module:
+
 ```rust
 #[test]
 fn test_forward_logits_returns_actual_logits() {
@@ -313,11 +326,13 @@ git commit -m "feat(model): implement forward_logits with cache"
 ### Task 5: Remove Remaining Dead Code
 
 **Files:**
+
 - Modify: Multiple files across crates
 
 - [ ] **Step 1: Address remaining dead code**
 
 For each remaining location:
+
 - `model/src/kv_cache.rs` - 3 instances
 - `core/src/scheduler.rs` - 1 instance (`pending_tokens`)
 - `model/src/qwen3/block.rs` - 1 instance
@@ -325,6 +340,7 @@ For each remaining location:
 - `server/src/logging.rs` - 3 instances
 
 For each:
+
 1. Check if actually unused
 2. If truly unused, remove
 3. If still needed but warned, add proper doc comments
@@ -359,6 +375,7 @@ just ci
 ```
 
 Expected output:
+
 - ✅ Format check passes
 - ✅ Clippy passes with no warnings
 - ✅ Documentation builds
@@ -368,13 +385,13 @@ Expected output:
 
 ## Summary
 
-| Task | Description | Risk |
-|------|-------------|------|
-| 1 | Fix random number generation | Low |
-| 2 | Remove dead code in api.rs | Low |
-| 3 | Deduplicate scheduler code | Low |
-| 4 | Implement forward_logits | Medium |
-| 5 | Remove remaining dead code | Low |
+| Task | Description                  | Risk   |
+| ---- | ---------------------------- | ------ |
+| 1    | Fix random number generation | Low    |
+| 2    | Remove dead code in api.rs   | Low    |
+| 3    | Deduplicate scheduler code   | Low    |
+| 4    | Implement forward_logits     | Medium |
+| 5    | Remove remaining dead code   | Low    |
 
 **Plan complete and saved to `docs/superpowers/plans/2026-04-03-code-review-improvements-plan.md`. Two execution options:**
 
