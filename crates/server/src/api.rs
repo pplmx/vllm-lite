@@ -225,6 +225,12 @@ pub async fn get_stats(State(state): State<ApiState>) -> Json<MetricsSnapshot> {
         p99_latency_ms: 0.0,
         avg_batch_size: 0.0,
         current_batch_size: 0,
+        requests_in_flight: 0,
+        kv_cache_usage_percent: 0.0,
+        prefix_cache_hit_rate: 0.0,
+        prefill_throughput: 0.0,
+        decode_throughput: 0.0,
+        avg_scheduler_wait_time_ms: 0.0,
     });
     Json(snapshot)
 }
@@ -244,9 +250,28 @@ pub async fn get_prometheus(State(state): State<ApiState>) -> String {
         p99_latency_ms: 0.0,
         avg_batch_size: 0.0,
         current_batch_size: 0,
+        requests_in_flight: 0,
+        kv_cache_usage_percent: 0.0,
+        prefix_cache_hit_rate: 0.0,
+        prefill_throughput: 0.0,
+        decode_throughput: 0.0,
+        avg_scheduler_wait_time_ms: 0.0,
     });
     format!(
-        "vllm_tokens_total {}\nvllm_requests_total {}\nvllm_avg_latency_ms {:.2}\nvllm_p50_latency_ms {:.2}\nvllm_p90_latency_ms {:.2}\nvllm_p99_latency_ms {:.2}\nvllm_avg_batch_size {:.2}\nvllm_current_batch_size {}\n",
+        "vllm_tokens_total {}\n\
+         vllm_requests_total {}\n\
+         vllm_avg_latency_ms {:.2}\n\
+         vllm_p50_latency_ms {:.2}\n\
+         vllm_p90_latency_ms {:.2}\n\
+         vllm_p99_latency_ms {:.2}\n\
+         vllm_avg_batch_size {:.2}\n\
+         vllm_current_batch_size {}\n\
+         vllm_requests_in_flight {}\n\
+         vllm_kv_cache_usage_percent {:.2}\n\
+         vllm_prefix_cache_hit_rate {:.2}\n\
+         vllm_prefill_throughput {:.2}\n\
+         vllm_decode_throughput {:.2}\n\
+         vllm_avg_scheduler_wait_time_ms {:.2}\n",
         m.tokens_total,
         m.requests_total,
         m.avg_latency_ms,
@@ -254,7 +279,13 @@ pub async fn get_prometheus(State(state): State<ApiState>) -> String {
         m.p90_latency_ms,
         m.p99_latency_ms,
         m.avg_batch_size,
-        m.current_batch_size
+        m.current_batch_size,
+        m.requests_in_flight,
+        m.kv_cache_usage_percent,
+        m.prefix_cache_hit_rate,
+        m.prefill_throughput,
+        m.decode_throughput,
+        m.avg_scheduler_wait_time_ms
     )
 }
 
