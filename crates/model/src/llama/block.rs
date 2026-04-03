@@ -149,7 +149,7 @@ impl LlamaBlock {
             None => {
                 return Err(candle_core::Error::msg(
                     "Missing post_attention_layernorm weight",
-                ))
+                ));
             }
         };
 
