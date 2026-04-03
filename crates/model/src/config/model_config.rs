@@ -96,7 +96,7 @@ impl ModelConfig {
             .get("rms_norm_eps")
             .or_else(|| value.get("layer_norm_eps"))
             .and_then(|v| v.as_f64())
-            .unwrap_or(1e-5) as f64;
+            .unwrap_or(1e-5);
         let sliding_window = value
             .get("sliding_window")
             .and_then(|v| v.as_u64())
