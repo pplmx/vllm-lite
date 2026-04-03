@@ -3,6 +3,7 @@ pub mod config;
 pub mod fake;
 pub mod flash_attention;
 pub mod kv_cache;
+pub mod llama;
 pub mod loader;
 pub mod quantize;
 pub mod qwen3;
