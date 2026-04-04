@@ -1,10 +1,10 @@
 use serde::Serialize;
 use std::sync::{
-    Arc, Mutex,
     atomic::{AtomicU64, Ordering},
+    Arc, Mutex,
 };
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Default)]
 pub struct MetricsSnapshot {
     pub tokens_total: u64,
     pub requests_total: u64,

@@ -43,16 +43,55 @@ fn default_log_level() -> String {
 pub struct AuthConfig {
     #[serde(default)]
     pub api_keys: Vec<String>,
+    #[serde(default)]
+    pub api_keys_env: Option<String>, // Read from env var (comma-separated)
+    #[serde(default)]
+    pub api_keys_file: Option<String>, // Read from file (one per line)
     #[serde(default = "default_rate_limit_requests")]
     pub rate_limit_requests: usize,
     #[serde(default = "default_rate_limit_window")]
     pub rate_limit_window_secs: u64,
 }
 
+impl AuthConfig {
+    /// Get all API keys from config + env + file
+    pub fn resolve_api_keys(&self) -> Vec<String> {
+        let mut keys = self.api_keys.clone();
+
+        // From env var (VLLM_API_KEYS=key1,key2)
+        if let Some(ref env_var) = self.api_keys_env {
+            if let Ok(env_keys) = std::env::var(env_var) {
+                for key in env_keys.split(',') {
+                    let key = key.trim().to_string();
+                    if !key.is_empty() {
+                        keys.push(key);
+                    }
+                }
+            }
+        }
+
+        // From file (one key per line)
+        if let Some(ref file_path) = self.api_keys_file {
+            if let Ok(content) = std::fs::read_to_string(file_path) {
+                for line in content.lines() {
+                    let key = line.trim().to_string();
+                    if !key.is_empty() && !key.starts_with('#') {
+                        keys.push(key);
+                    }
+                }
+            }
+        }
+
+        keys
+    }
+}
+
 impl Default for AuthConfig {
     fn default() -> Self {
         Self {
             api_keys: vec![],
+            api_keys_env: None,
+            api_keys_file: None,
             rate_limit_requests: 100,
             rate_limit_window_secs: 60,
         }
