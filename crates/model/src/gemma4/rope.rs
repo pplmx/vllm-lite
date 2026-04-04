@@ -43,3 +43,60 @@ impl Default for Gemma4RoPE {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use candle_core::DType;
+
+    #[test]
+    fn test_rope_config_creation() {
+        let config = RoPEConfig {
+            rope_theta: 10000.0,
+            partial_rotary_factor: 1.0,
+        };
+        let rope = Gemma4RoPE::new(&config, 256);
+
+        assert_eq!(rope.rope_theta, 10000.0);
+        assert_eq!(rope.partial_rotary_factor, 1.0);
+        assert_eq!(rope.head_dim, 256);
+    }
+
+    #[test]
+    fn test_rope_config_full_attention() {
+        let config = RoPEConfig {
+            rope_theta: 1000000.0,
+            partial_rotary_factor: 0.25,
+        };
+        let rope = Gemma4RoPE::new(&config, 256);
+
+        assert_eq!(rope.rope_theta, 1000000.0);
+        assert_eq!(rope.partial_rotary_factor, 0.25);
+    }
+
+    #[test]
+    fn test_rope_apply_returns_same_shape() -> Result<()> {
+        let device = candle_core::Device::Cpu;
+        let config = RoPEConfig {
+            rope_theta: 10000.0,
+            partial_rotary_factor: 1.0,
+        };
+        let rope = Gemma4RoPE::new(&config, 256);
+
+        let q = Tensor::ones((1, 8, 10, 256), DType::F32, &device)?;
+        let k = Tensor::ones((1, 8, 10, 256), DType::F32, &device)?;
+
+        let (q_out, k_out) = rope.apply(&q, &k, &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9])?;
+
+        assert_eq!(q_out.dims(), q.dims());
+        assert_eq!(k_out.dims(), k.dims());
+        Ok(())
+    }
+
+    #[test]
+    fn test_rope_default() {
+        let rope = Gemma4RoPE::default();
+        assert_eq!(rope.rope_theta, 10000.0);
+        assert_eq!(rope.partial_rotary_factor, 0.5);
+    }
+}
