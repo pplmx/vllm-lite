@@ -15,9 +15,31 @@ pub struct HealthResponse {
     pub status: String,
 }
 
+#[derive(Serialize)]
+pub struct HealthDetailResponse {
+    pub status: String,
+    pub gpu_available: bool,
+    pub gpu_utilization: Option<f32>,
+    pub kv_cache_usage_percent: Option<f32>,
+}
+
 pub(crate) async fn health() -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok".to_string(),
+    })
+}
+
+pub(crate) async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailResponse> {
+    let (response_tx, mut response_rx) = mpsc::unbounded_channel();
+    let _ = state.engine_tx.send(EngineMessage::GetMetrics { response_tx });
+
+    let metrics = response_rx.recv().await.unwrap_or_default();
+
+    Json(HealthDetailResponse {
+        status: "ok".to_string(),
+        gpu_available: true,
+        gpu_utilization: Some(metrics.prefill_throughput as f32),
+        kv_cache_usage_percent: Some(metrics.kv_cache_usage_percent as f32),
     })
 }
 

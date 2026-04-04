@@ -155,6 +155,7 @@ async fn main() {
         // 运维 (保留 api.rs)
         .route("/metrics", get(api::get_prometheus))
         .route("/health", get(api::health))
+        .route("/health/details", get(api::health_details))
         .with_state(state);
 
     if let Some(auth) = auth_middleware {
