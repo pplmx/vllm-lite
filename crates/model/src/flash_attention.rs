@@ -14,6 +14,8 @@ pub struct FlashAttentionConfig {
     pub flash_block_size: usize,
     pub use_sliding_window: bool,
     pub sliding_window_size: usize,
+    pub tile_sizes: Vec<usize>,
+    pub use_fused: bool,
 }
 
 impl FlashAttentionConfig {
@@ -23,6 +25,8 @@ impl FlashAttentionConfig {
             flash_block_size: 128,
             use_sliding_window: false,
             sliding_window_size: 512,
+            tile_sizes: vec![64, 128, 256],
+            use_fused: true,
         }
     }
 
@@ -44,6 +48,18 @@ impl FlashAttentionConfig {
     }
 }
 
+pub fn select_tile_size(seq_len: usize, _config: &FlashAttentionConfig) -> usize {
+    if seq_len <= 64 {
+        64
+    } else if seq_len <= 512 {
+        128
+    } else if seq_len <= 2048 {
+        256
+    } else {
+        256
+    }
+}
+
 pub trait FlashAttention: Send + Sync {
     fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor>;
     fn forward_with_mask(
@@ -54,7 +70,7 @@ pub trait FlashAttention: Send + Sync {
         mask: &Tensor,
     ) -> Result<Tensor>;
     fn forward_tiled(&self, q: &Tensor, k: &Tensor, v: &Tensor, tile_size: usize)
-    -> Result<Tensor>;
+        -> Result<Tensor>;
 }
 
 pub struct ScaledDotProductAttention {
@@ -220,8 +236,9 @@ impl FlashAttentionKernel {
     }
 
     fn forward_tiled(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
-        self.attention
-            .forward_tiled(q, k, v, self.config.flash_block_size)
+        let seq_len = q.dims()[2];
+        let tile_size = select_tile_size(seq_len, &self.config);
+        self.attention.forward_tiled(q, k, v, tile_size)
     }
 
     fn forward_sliding_window(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
