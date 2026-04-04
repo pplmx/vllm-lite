@@ -19,11 +19,16 @@ use vllm_core::types::EngineMessage;
 use vllm_model::loader::ModelLoader;
 use vllm_model::tokenizer::Tokenizer;
 
+/// Shared state for all API handlers
 #[derive(Clone)]
 pub struct ApiState {
+    /// Channel to send messages to the inference engine
     pub engine_tx: api::EngineHandle,
+    /// Tokenizer for encoding/decoding text
     pub tokenizer: Arc<Tokenizer>,
+    /// Batch manager for handling batch API requests
     pub batch_manager: Arc<BatchManager>,
+    /// Authentication middleware (None if disabled)
     pub auth: Option<Arc<AuthMiddleware>>,
 }
 

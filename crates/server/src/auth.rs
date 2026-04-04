@@ -158,4 +158,24 @@ mod tests {
         let result = auth.verify(&headers).await;
         assert!(result.is_ok());
     }
+
+    #[tokio::test]
+    async fn test_auth_middleware_rate_limit_exceeded() {
+        let auth = AuthMiddleware::new(vec!["test_key".to_string()], 2, 60);
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer test_key".parse().unwrap());
+
+        assert!(auth.verify(&headers).await.is_ok());
+        assert!(auth.verify(&headers).await.is_ok());
+        assert_eq!(auth.verify(&headers).await.unwrap_err(), StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[tokio::test]
+    async fn test_auth_middleware_missing_bearer_prefix() {
+        let auth = AuthMiddleware::new(vec!["test_key".to_string()], 10, 60);
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "test_key".parse().unwrap());
+        let result = auth.verify(&headers).await;
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
 }
