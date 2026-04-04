@@ -163,3 +163,88 @@ pub async fn list_batches(State(state): State<ApiState>) -> Json<Vec<BatchRespon
 
     Json(responses)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::EngineConfig;
+    use crate::openai::batch::manager::BatchManager;
+    use vllm_model::tokenizer::Tokenizer;
+    use std::sync::Arc;
+
+    fn create_test_state() -> ApiState {
+        let tokenizer = Tokenizer::new();
+        let (engine_tx, _engine_rx) = tokio::sync::mpsc::unbounded_channel();
+        ApiState {
+            engine_tx,
+            tokenizer: Arc::new(tokenizer),
+            batch_manager: Arc::new(BatchManager::new()),
+            auth: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_batch_empty_prompts() {
+        let state = create_test_state();
+        let req = SimpleBatchRequest {
+            prompts: vec![],
+            endpoint: "chat".to_string(),
+            model: Some("test-model".to_string()),
+            max_tokens: Some(100),
+            temperature: Some(0.7),
+        };
+
+        let result = create_batch(State(state), Json(req)).await;
+        assert!(result.is_err());
+        let (status, _) = result.unwrap_err();
+        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_create_batch_invalid_endpoint() {
+        let state = create_test_state();
+        let req = SimpleBatchRequest {
+            prompts: vec!["Hello".to_string()],
+            endpoint: "invalid".to_string(),
+            model: Some("test-model".to_string()),
+            max_tokens: Some(100),
+            temperature: Some(0.7),
+        };
+
+        let result = create_batch(State(state), Json(req)).await;
+        assert!(result.is_err());
+        let (status, _) = result.unwrap_err();
+        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_create_batch_valid_request() {
+        let state = create_test_state();
+        let req = SimpleBatchRequest {
+            prompts: vec!["Hello".to_string(), "World".to_string()],
+            endpoint: "completions".to_string(),
+            model: Some("test-model".to_string()),
+            max_tokens: Some(50),
+            temperature: Some(0.5),
+        };
+
+        let result = create_batch(State(state), Json(req)).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_get_batch_not_found() {
+        let state = create_test_state();
+        let result = get_batch(State(state), axum::extract::Path("nonexistent".to_string())).await;
+        assert!(result.is_err());
+        let (status, _) = result.unwrap_err();
+        assert_eq!(status, axum::http::StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_list_batches_empty() {
+        let state = create_test_state();
+        let result = list_batches(State(state)).await;
+        assert!(result.0.is_empty());
+    }
+}
