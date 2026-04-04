@@ -21,6 +21,7 @@ pub enum Architecture {
     Llama,
     Mistral,
     Gemma4,
+    Mixtral,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
