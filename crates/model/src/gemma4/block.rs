@@ -7,7 +7,7 @@ use crate::config::{LayerType, ModelConfig, RoPEConfig};
 use crate::gemma4::attention::Gemma4Attention;
 use crate::gemma4::mlp::GeGLU;
 use candle_core::{Result, Tensor};
-use candle_nn::{linear, Linear};
+use candle_nn::{Linear, linear};
 
 pub struct Gemma4Block {
     attention: Gemma4Attention,

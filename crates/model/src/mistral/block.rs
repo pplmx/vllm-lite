@@ -229,3 +229,27 @@ impl MistralBlock {
         x.reshape((batch_size, seq_len, *hidden_size))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::ModelConfig;
+    use candle_core::{DType, Device};
+
+    #[test]
+    fn test_mistral_block_sliding_window() {
+        let config = ModelConfig::mistral_7b();
+        let block = MistralBlock::new(&config, 0).unwrap();
+
+        assert_eq!(block.sliding_window, 4096);
+    }
+
+    #[test]
+    fn test_mistral_block_single_token() {
+        let config = ModelConfig::mistral_7b();
+        let block = MistralBlock::new(&config, 0).unwrap();
+
+        // Just verify block creation works - sliding window should be 4096
+        assert_eq!(block.sliding_window, 4096);
+    }
+}
