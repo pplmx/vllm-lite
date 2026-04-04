@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use candle_core::{DType, Device, Result, Tensor};
 pub use vllm_traits::BLOCK_SIZE;
 
@@ -11,6 +13,7 @@ pub struct PagedKvCache {
     device: Device,
     pub quantized: bool,
     pub scales: Vec<f32>,
+    pub block_hashes: Vec<HashMap<u64, usize>>,
 }
 
 impl PagedKvCache {
@@ -34,6 +37,7 @@ impl PagedKvCache {
         }
 
         let scales = vec![1.0f32; num_layers];
+        let block_hashes = vec![HashMap::new(); num_layers];
 
         Ok(Self {
             key_cache,
@@ -45,6 +49,7 @@ impl PagedKvCache {
             device,
             quantized,
             scales,
+            block_hashes,
         })
     }
 
@@ -67,6 +72,30 @@ impl PagedKvCache {
         if layer_idx < self.scales.len() {
             self.scales[layer_idx] = new_scale;
         }
+    }
+
+    pub fn compute_block_hash(block: &Tensor) -> u64 {
+        if let Ok(data) = block.to_vec1::<f32>() {
+            let hash: u64 = data
+                .iter()
+                .map(|&x| (x.abs() * 1000.0) as u64)
+                .fold(0u64, |acc, x| acc.wrapping_mul(31).wrapping_add(x));
+            hash
+        } else {
+            0
+        }
+    }
+
+    pub fn find_matching_blocks(&self, prompt_hash: u64, layer_idx: usize) -> Vec<usize> {
+        let mut matches = Vec::new();
+        if let Some(hash_map) = self.block_hashes.get(layer_idx) {
+            for (&hash, &block_id) in hash_map.iter() {
+                if prompt_hash == hash {
+                    matches.push(block_id);
+                }
+            }
+        }
+        matches
     }
 
     pub fn write_kv_batch(
@@ -279,6 +308,12 @@ impl PagedKvCache {
 
         self.key_cache[layer_idx] = Tensor::cat(&key_parts, 0)?;
         self.value_cache[layer_idx] = Tensor::cat(&value_parts, 0)?;
+
+        let key_block = self.key_cache[layer_idx]
+            .narrow(0, block_id, 1)?
+            .squeeze(0)?;
+        let hash = Self::compute_block_hash(&key_block);
+        self.block_hashes[layer_idx].insert(hash, block_id);
 
         Ok(())
     }
