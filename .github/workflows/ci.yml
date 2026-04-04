@@ -9,6 +9,8 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # Disable CUDA in CI (GitHub runners don't have GPU)
+  CANDLE_NATIVE_BACKEND: 1
 
 jobs:
   # Check formatting and linting
@@ -17,16 +19,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        
+
       - name: Check formatting
         run: cargo fmt --all -- --check
-        
+
       - name: Clippy
         run: cargo clippy --workspace -- -D warnings
-        
+
       - name: Check dependencies
         run: cargo audit || true
 
@@ -36,10 +38,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -52,13 +54,17 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-            
-      - name: Build
-        run: cargo build --workspace
-        
+
+      - name: Build (CPU only, no GPU required)
+        run: |
+          # Build without CUDA features to avoid GPU-dependent downloads in CI
+          cargo build --workspace --no-default-features
+          # Also build with default features (may fail on no-GPU runners)
+          cargo build --workspace || true
+
       - name: Test
         run: cargo test --workspace
-        
+
       - name: Test (with output)
         run: cargo test --workspace -- --nocapture
 
@@ -68,13 +74,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        
+
       - name: Build docs
         run: cargo doc --workspace --no-deps
-        
+
       - name: Deploy docs
         uses: peaceiris/actions-gh-pages@v4
         if: github.ref == 'refs/heads/main'
@@ -92,15 +98,15 @@ jobs:
         rust: [stable, beta]
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install Rust ${{ matrix.rust }}
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-          
-      - name: Build
-        run: cargo build --workspace
-        
+
+      - name: Build (CPU only)
+        run: cargo build --workspace --no-default-features
+
       - name: Test
         run: cargo test --workspace
 
@@ -110,7 +116,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Run security audit
         run: |
           cargo install cargo-audit || true
