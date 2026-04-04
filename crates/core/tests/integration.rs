@@ -594,7 +594,7 @@ fn test_single_token_prompt() {
 
 #[test]
 fn test_engine_health_tracking() {
-    let mut engine = Engine::new(IncrementModel, IncrementModel);
+    let engine = Engine::new(IncrementModel, IncrementModel);
 
     assert!(engine.is_healthy(), "new engine should be healthy");
     assert!(
