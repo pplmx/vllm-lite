@@ -167,7 +167,6 @@ pub async fn list_batches(State(state): State<ApiState>) -> Json<Vec<BatchRespon
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::EngineConfig;
     use crate::openai::batch::manager::BatchManager;
     use std::sync::Arc;
     use vllm_model::tokenizer::Tokenizer;
