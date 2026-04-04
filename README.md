@@ -1,12 +1,28 @@
 # vLLM-lite
 
-A lightweight LLM inference engine written in Rust, implementing key vLLM innovations:
+A lightweight LLM inference engine written in Rust, implementing key vLLM innovations.
+
+## Supported Models
+
+| Model | Architecture | Status |
+|-------|--------------|--------|
+| Qwen3 | GQA + RoPE | ✅ |
+| Llama | GQA + RMSNorm | ✅ |
+| Mistral | Sliding Window + GQA | ✅ |
+| Gemma4 | Hybrid Attention + GeGLU | ✅ |
+| Mixtral | Sparse MoE (8 experts) | ✅ |
+
+## Features
 
 - **Continuous Batching** - Dynamic batch scheduling with fairness
-- **Paged KV Cache** - Memory-efficient cache management  
-- **Prefix Caching** - Cache repeated prompts
+- **Paged KV Cache** - Memory-efficient cache management with pool
+- **Prefix Caching** - Block hash-based cache reuse
 - **Speculative Decoding** - Accelerated token generation
 - **OpenAI-compatible API** - `/v1/completions`, `/v1/chat/completions`
+- **Flash Attention** - Dynamic tile size selection (64/128/256)
+- **Fused Kernels** - Optimized attention + MLP layers
+- **Authentication** - API key support
+- **Rate Limiting** - Request rate control
 
 ## Quick Start
 
@@ -124,11 +140,16 @@ curl -X POST http://localhost:8000/v1/completions \
 
 - 🚀 Fast Rust implementation
 - 🎯 Continuous batching with decode-priority scheduling
-- 💾 Paged KV cache with LRU eviction
+- 💾 Paged KV cache with LRU eviction + memory pool
+- 🔍 Block hash-based prefix caching
+- ⚡ Flash Attention with dynamic tile selection
+- 🔗 Fused attention and MLP kernels
 - 🔄 Streaming token generation (SSE)
 - 📡 OpenAI-compatible HTTP API
 - 🖥️ CUDA GPU support (via Candle)
 - 📊 Real-time metrics collection
+- 🔐 API key authentication
+- ⏱️ Rate limiting
 
 ## Documentation
 
@@ -138,6 +159,18 @@ curl -X POST http://localhost:8000/v1/completions \
 | [CHANGELOG.md](./CHANGELOG.md) | Version history and changes           |
 | [AGENTS.md](./AGENTS.md)       | Developer guide and conventions       |
 | [docs/](./docs/)               | Design specs and implementation plans |
+
+## Architecture
+
+```
+vllm-lite/
+├── crates/
+│   ├── traits/      # Interface definitions (ModelBackend trait)
+│   ├── core/        # Engine, Scheduler, KV Cache, Metrics
+│   ├── model/       # Qwen3, Llama, Mistral, Gemma4, Mixtral
+│   ├── dist/        # Tensor Parallel support
+│   └── server/      # HTTP API (OpenAI compatible)
+```
 
 ## Tech Stack
 
