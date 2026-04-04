@@ -167,7 +167,10 @@ mod tests {
 
         assert!(auth.verify(&headers).await.is_ok());
         assert!(auth.verify(&headers).await.is_ok());
-        assert_eq!(auth.verify(&headers).await.unwrap_err(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(
+            auth.verify(&headers).await.unwrap_err(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
     }
 
     #[tokio::test]

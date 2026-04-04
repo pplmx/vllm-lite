@@ -169,8 +169,8 @@ mod tests {
     use super::*;
     use crate::config::EngineConfig;
     use crate::openai::batch::manager::BatchManager;
-    use vllm_model::tokenizer::Tokenizer;
     use std::sync::Arc;
+    use vllm_model::tokenizer::Tokenizer;
 
     fn create_test_state() -> ApiState {
         let tokenizer = Tokenizer::new();
