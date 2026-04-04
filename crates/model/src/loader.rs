@@ -20,7 +20,8 @@ pub fn detect_architecture(config: &serde_json::Value) -> Architecture {
 
     match model_type.as_str() {
         "llama" | "llama2" | "llama3" => Architecture::Llama,
-        "mistral" | "mixtral" => Architecture::Mistral,
+        "mistral" => Architecture::Mistral,
+        "mixtral" => Architecture::Mixtral,
         "qwen2" | "qwen2.5" => Architecture::Qwen3,
         "gemma2" | "gemma3" | "gemma4" => Architecture::Gemma4,
         _ => Architecture::Llama,
@@ -177,6 +178,9 @@ impl ModelLoader {
                 )?;
                 Ok(Box::new(model))
             }
+            Architecture::Mixtral => Err(candle_core::Error::msg(
+                "Mixtral model loading not yet implemented",
+            )),
             Architecture::Qwen3 => {
                 let config = self.load_config(model_dir)?;
                 let model = Qwen3Model::from_weights(
@@ -328,12 +332,19 @@ mod tests {
 
     #[test]
     fn test_detect_architecture_mistral() {
-        for model_type in ["mistral", "mixtral"] {
-            let config_json = serde_json::json!({
-                "model_type": model_type
-            });
-            let arch = detect_architecture(&config_json);
-            assert_eq!(arch, Architecture::Mistral, "Failed for {}", model_type);
-        }
+        let config_json = serde_json::json!({
+            "model_type": "mistral"
+        });
+        let arch = detect_architecture(&config_json);
+        assert_eq!(arch, Architecture::Mistral);
+    }
+
+    #[test]
+    fn test_detect_architecture_mixtral() {
+        let config_json = serde_json::json!({
+            "model_type": "mixtral"
+        });
+        let arch = detect_architecture(&config_json);
+        assert_eq!(arch, Architecture::Mixtral);
     }
 }

@@ -22,6 +22,9 @@ pub struct ModelConfig {
     pub layer_types: Vec<LayerType>,
     pub rope_configs: Vec<RoPEConfig>,
     pub use_double_wide_mlp: bool,
+    pub num_experts: Option<usize>,
+    pub top_k_experts: Option<usize>,
+    pub expert_intermediate_size: Option<usize>,
 }
 
 impl ModelConfig {
@@ -43,6 +46,9 @@ impl ModelConfig {
             layer_types: vec![],
             rope_configs: vec![],
             use_double_wide_mlp: false,
+            num_experts: None,
+            top_k_experts: None,
+            expert_intermediate_size: None,
         }
     }
 
@@ -64,6 +70,9 @@ impl ModelConfig {
             layer_types: vec![],
             rope_configs: vec![],
             use_double_wide_mlp: false,
+            num_experts: None,
+            top_k_experts: None,
+            expert_intermediate_size: None,
         }
     }
 
@@ -118,6 +127,19 @@ impl ModelConfig {
             .get("max_position_embeddings")
             .and_then(|v| v.as_u64())
             .unwrap_or(2048) as usize;
+        let num_experts = value
+            .get("num_local_experts")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize);
+        let top_k_experts = value
+            .get("num_experts_per_tok")
+            .or_else(|| value.get("top_k_experts"))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize);
+        let expert_intermediate_size = value
+            .get("expert_intermediate_size")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize);
 
         Ok(Self {
             architecture,
@@ -136,6 +158,9 @@ impl ModelConfig {
             layer_types: vec![],
             rope_configs: vec![],
             use_double_wide_mlp: false,
+            num_experts,
+            top_k_experts,
+            expert_intermediate_size,
         })
     }
 }

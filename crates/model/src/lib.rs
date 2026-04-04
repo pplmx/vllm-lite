@@ -7,6 +7,7 @@ pub mod kv_cache;
 pub mod llama;
 pub mod loader;
 pub mod mistral;
+pub mod mixtral;
 pub mod quantize;
 pub mod qwen3;
 pub mod qwen3_5;
