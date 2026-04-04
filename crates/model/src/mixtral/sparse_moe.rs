@@ -56,6 +56,44 @@ impl MixtralSparseMoe {
         })
     }
 
+    pub fn new_with_weights(
+        _hidden_size: usize,
+        num_experts: usize,
+        _expert_intermediate_size: usize,
+        top_k: usize,
+        gate_weight: Tensor,
+        expert_weights: Vec<(Tensor, Tensor, Tensor)>,
+    ) -> Result<Self> {
+        if expert_weights.len() != num_experts {
+            return Err(candle_core::Error::msg(format!(
+                "Expected {} expert weights, got {}",
+                num_experts,
+                expert_weights.len()
+            )));
+        }
+
+        let mut experts = Vec::new();
+        for (gate_w, up_w, down_w) in expert_weights {
+            let gate_proj = Linear::new(gate_w, None);
+            let up_proj = Linear::new(up_w, None);
+            let down_proj = Linear::new(down_w, None);
+            experts.push(Expert {
+                gate_proj,
+                up_proj,
+                down_proj,
+            });
+        }
+
+        let gate = Linear::new(gate_weight, None);
+
+        Ok(Self {
+            experts,
+            gate,
+            num_experts,
+            top_k,
+        })
+    }
+
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let (batch, seq, hidden) = x.dims3()?;
 
