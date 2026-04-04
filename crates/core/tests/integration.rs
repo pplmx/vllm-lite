@@ -557,3 +557,48 @@ fn test_request_cancellation() {
 
     assert!(!engine.has_pending(), "remaining request should finish");
 }
+
+#[test]
+#[ignore = "empty prompt handling needs validation at API layer"]
+fn test_empty_prompt_handling() {
+    let config = SchedulerConfig::default();
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    let (tx, _rx) = mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![], 5), tx);
+
+    engine.step().unwrap();
+
+    assert!(
+        !engine.has_pending(),
+        "empty prompt should be rejected at API layer"
+    );
+}
+
+#[test]
+fn test_single_token_prompt() {
+    let config = SchedulerConfig::default();
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    let (tx, _rx) = mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![42], 3), tx);
+
+    let mut steps = 0;
+    while engine.has_pending() && steps < 10 {
+        engine.step().unwrap();
+        steps += 1;
+    }
+
+    assert!(steps <= 3, "should complete in ~2-3 steps");
+}
+
+#[test]
+fn test_engine_health_tracking() {
+    let mut engine = Engine::new(IncrementModel, IncrementModel);
+
+    assert!(engine.is_healthy(), "new engine should be healthy");
+    assert!(
+        engine.get_last_error().is_none(),
+        "new engine should have no errors"
+    );
+}

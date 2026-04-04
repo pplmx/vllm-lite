@@ -18,11 +18,7 @@ impl<M: ModelBackend> super::Engine<M> {
             &batch.is_prefill,
         )?;
 
-        let input_counts: Vec<usize> = batch
-            .input_tokens
-            .iter()
-            .map(|v| v.len())
-            .collect::<Vec<_>>();
+        let input_counts: Vec<usize> = batch.input_tokens.iter().map(|v| v.len()).collect();
 
         self.scheduler
             .update(&batch.seq_ids, &output.next_tokens, &input_counts);
