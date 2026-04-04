@@ -31,7 +31,9 @@ pub(crate) async fn health() -> Json<HealthResponse> {
 
 pub(crate) async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailResponse> {
     let (response_tx, mut response_rx) = mpsc::unbounded_channel();
-    let _ = state.engine_tx.send(EngineMessage::GetMetrics { response_tx });
+    let _ = state
+        .engine_tx
+        .send(EngineMessage::GetMetrics { response_tx });
 
     let metrics = response_rx.recv().await.unwrap_or_default();
 
