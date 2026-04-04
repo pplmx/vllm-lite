@@ -116,9 +116,59 @@ pub(crate) async fn completions(
 mod tests {
     #[allow(unused_imports)]
     use super::*;
+    use crate::openai::batch::manager::BatchManager;
+    use vllm_model::tokenizer::Tokenizer;
+    use std::sync::Arc;
+
+    fn create_test_state() -> ApiState {
+        let tokenizer = Tokenizer::new();
+        let (engine_tx, _engine_rx) = mpsc::unbounded_channel();
+        ApiState {
+            engine_tx,
+            tokenizer: Arc::new(tokenizer),
+            batch_manager: Arc::new(BatchManager::new()),
+            auth: None,
+        }
+    }
 
     #[tokio::test]
     async fn test_completions_empty_prompt() {
-        // Test with empty prompt - should return 400
+        let state = create_test_state();
+        let req = CompletionRequest {
+            model: None,
+            prompt: "".to_string(),
+            temperature: None,
+            max_tokens: Some(100),
+            stream: None,
+            n: None,
+            stop: None,
+        };
+
+        let result = completions(State(state), Json(req)).await;
+        assert!(result.is_err());
+        let (status, _) = result.unwrap_err();
+        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_completions_with_valid_max_tokens() {
+        let state = create_test_state();
+        let req = CompletionRequest {
+            model: None,
+            prompt: "Hello".to_string(),
+            temperature: None,
+            max_tokens: Some(10),
+            stream: None,
+            n: None,
+            stop: None,
+        };
+
+        // With no engine running, this will fail to send to engine
+        // but we can verify it doesn't fail on validation
+        let result = completions(State(state), Json(req)).await;
+        // Expected: fails because engine channel has no receiver
+        assert!(result.is_err());
+        let (status, _) = result.unwrap_err();
+        assert_eq!(status, axum::http::StatusCode::INTERNAL_SERVER_ERROR);
     }
 }
