@@ -234,7 +234,6 @@ impl MistralBlock {
 mod tests {
     use super::*;
     use crate::config::ModelConfig;
-    use candle_core::{DType, Device};
 
     #[test]
     fn test_mistral_block_sliding_window() {
