@@ -84,16 +84,15 @@ pub fn fused_mlp_layer(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candle_core::DType;
 
     #[test]
     fn test_fused_attention_output_shape() -> Result<()> {
-        let device = candle_core::Device::Cpu;
-        let batch = 2;
-        let seq = 8;
-        let hidden = 256;
-        let num_heads = 4;
-        let head_dim = 64;
+        let _device = candle_core::Device::Cpu;
+        let _batch = 2;
+        let _seq = 8;
+        let _hidden = 256;
+        let _num_heads = 4;
+        let _head_dim = 64;
 
         // Skip actual computation - just verify function exists
         Ok(())

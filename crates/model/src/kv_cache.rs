@@ -387,7 +387,7 @@ pub struct KvCachePool {
 
 impl KvCachePool {
     pub fn new(
-        num_layers: usize,
+        _num_layers: usize,
         num_heads: usize,
         head_dim: usize,
         block_size: usize,

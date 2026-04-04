@@ -53,8 +53,6 @@ pub fn select_tile_size(seq_len: usize, _config: &FlashAttentionConfig) -> usize
         64
     } else if seq_len <= 512 {
         128
-    } else if seq_len <= 2048 {
-        256
     } else {
         256
     }
@@ -70,7 +68,7 @@ pub trait FlashAttention: Send + Sync {
         mask: &Tensor,
     ) -> Result<Tensor>;
     fn forward_tiled(&self, q: &Tensor, k: &Tensor, v: &Tensor, tile_size: usize)
-        -> Result<Tensor>;
+    -> Result<Tensor>;
 }
 
 pub struct ScaledDotProductAttention {
