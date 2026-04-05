@@ -602,3 +602,90 @@ fn test_engine_health_tracking() {
         "new engine should have no errors"
     );
 }
+
+#[test]
+fn test_engine_with_const_model() {
+    let config = SchedulerConfig::default();
+    let const_model = ConstModel::new(42);
+    let mut engine = Engine::with_config(const_model.clone(), const_model, config, 4, 1024);
+
+    let (tx, _rx) = mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![1, 2, 3], 5), tx);
+
+    let mut steps = 0;
+    while engine.has_pending() && steps < 10 {
+        engine.step().unwrap();
+        steps += 1;
+    }
+
+    assert!(steps > 0, "should have processed some steps");
+}
+
+#[test]
+fn test_engine_large_batch_handling() {
+    let config = SchedulerConfig {
+        max_num_seqs: 32,
+        max_num_batched_tokens: 512,
+        max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
+        enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
+    };
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    for i in 0..10 {
+        let (tx, _rx) = mpsc::channel(64);
+        engine.add_request(Request::new(i as u64, vec![i; 3], 5), tx);
+    }
+
+    let steps = 5;
+    for _ in 0..steps {
+        if !engine.has_pending() {
+            break;
+        }
+        engine.step().unwrap();
+    }
+}
+
+#[test]
+fn test_engine_sequential_requests() {
+    let config = SchedulerConfig::default();
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    let (tx1, _rx1) = mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![10], 3), tx1);
+
+    while engine.has_pending() {
+        engine.step().unwrap();
+    }
+
+    let (tx2, _rx2) = mpsc::channel(64);
+    engine.add_request(Request::new(2, vec![20], 3), tx2);
+
+    while engine.has_pending() {
+        engine.step().unwrap();
+    }
+
+    assert!(!engine.has_pending(), "all requests should be done");
+}
+
+#[test]
+fn test_request_with_max_tokens_equals_prompt() {
+    let config = SchedulerConfig::default();
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    let (tx, _rx) = mpsc::channel(64);
+    let prompt = vec![1, 2, 3];
+    engine.add_request(Request::new(1, prompt.clone(), prompt.len()), tx);
+
+    engine.step().unwrap();
+
+    assert!(
+        !engine.has_pending(),
+        "request should complete immediately when max_tokens == prompt_len"
+    );
+}

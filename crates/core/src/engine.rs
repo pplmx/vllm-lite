@@ -11,6 +11,19 @@ use std::collections::HashMap;
 use tokio::sync::mpsc;
 use vllm_traits::{ModelBackend, SeqId, TokenId};
 
+/// Core inference engine managing requests, scheduling, and model execution.
+///
+/// The Engine orchestrates the entire inference pipeline:
+/// - Receives requests via `add_request`
+/// - Schedules batches via the Scheduler
+/// - Executes model forward passes
+/// - Streams generated tokens back to clients
+///
+/// # Thread Safety
+///
+/// The Engine runs on its own dedicated thread (via `run`), using `RefCell`
+/// for interior mutability of model references. All external communication
+/// happens through mpsc channels (actor pattern).
 pub struct Engine<M: ModelBackend> {
     pub scheduler: Scheduler,
     pub target_model: RefCell<Box<M>>,
@@ -24,6 +37,16 @@ pub struct Engine<M: ModelBackend> {
 }
 
 impl<M: ModelBackend> Engine<M> {
+    /// Creates a new Engine with default configuration.
+    ///
+    /// # Arguments
+    /// * `target_model` - The primary model for inference
+    /// * `draft_model` - The draft model for speculative decoding
+    ///
+    /// # Example
+    /// ```ignore
+    /// let engine = Engine::new(my_model, draft_model);
+    /// ```
     pub fn new(target_model: M, draft_model: M) -> Self {
         Self::with_config(
             target_model,
