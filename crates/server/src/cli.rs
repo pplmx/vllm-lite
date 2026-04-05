@@ -1,3 +1,4 @@
+use crate::config::AppConfig;
 use clap::Parser;
 use std::path::PathBuf;
 
@@ -18,7 +19,12 @@ pub struct CliArgs {
     pub model: PathBuf,
 
     // Engine
-    #[arg(long, default_value = "1", env = "VLLM_TENSOR_PARALLEL_SIZE", short = 'tp')]
+    #[arg(
+        long,
+        default_value = "1",
+        env = "VLLM_TENSOR_PARALLEL_SIZE",
+        short = 't'
+    )]
     pub tensor_parallel_size: usize,
 
     #[arg(long, default_value = "1024", env = "VLLM_KV_BLOCKS")]
@@ -35,9 +41,6 @@ pub struct CliArgs {
 
     #[arg(long, default_value = "8", env = "VLLM_MAX_DRAFT_TOKENS")]
     pub max_draft_tokens: usize,
-
-    #[arg(long, default_value = "false", env = "VLLM_ENFORCE_EAGER")]
-    pub enforce_eager: bool,
 
     // Auth
     #[arg(long, env = "VLLM_API_KEY")]
@@ -56,4 +59,40 @@ pub struct CliArgs {
     // Config file
     #[arg(long, short = 'c')]
     pub config: Option<PathBuf>,
+}
+
+impl CliArgs {
+    /// Convert CLI args to AppConfig, loading from config file first
+    pub fn to_app_config(&self) -> AppConfig {
+        // 1. Load from config file if specified
+        let mut config = AppConfig::load(self.config.clone());
+
+        // 2. CLI overrides config
+        config.server.host = self.host.clone();
+        config.server.port = self.port;
+
+        config.engine.tensor_parallel_size = self.tensor_parallel_size;
+        config.engine.num_kv_blocks = self.kv_blocks;
+        config.engine.kv_quantization = self.kv_quantization;
+        config.engine.max_batch_size = self.max_batch_size;
+        config.engine.max_waiting_batches = self.max_waiting_batches;
+        config.engine.max_draft_tokens = self.max_draft_tokens;
+
+        // Auth - merge API keys
+        if !self.api_key.is_empty() {
+            config.auth.api_keys = self.api_key.clone();
+        }
+        if let Some(ref path) = self.api_key_file {
+            config.auth.api_keys_file = Some(path.to_string_lossy().to_string());
+        }
+
+        // Logging
+        config.server.log_level = self.log_level.clone();
+        config.server.log_dir = self
+            .log_dir
+            .as_ref()
+            .map(|p| p.to_string_lossy().to_string());
+
+        config
+    }
 }
