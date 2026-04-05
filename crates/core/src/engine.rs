@@ -1,4 +1,3 @@
-mod batch;
 mod speculative;
 
 use crate::beam::BeamSequence;
@@ -33,7 +32,7 @@ pub struct Engine<M: ModelBackend> {
     pub error_count: usize,
     pub last_error: Option<String>,
     pub metrics: MetricsCollector,
-    response_txs: HashMap<SeqId, mpsc::Sender<TokenId>>,
+    pub(crate) response_txs: HashMap<SeqId, mpsc::Sender<TokenId>>,
 }
 
 impl<M: ModelBackend> Engine<M> {

@@ -1,7 +1,7 @@
 use crate::error::Result;
 use vllm_traits::{ModelBackend, SeqId, TokenId};
 
-impl<M: ModelBackend> super::Engine<M> {
+impl<M: ModelBackend> crate::engine::Engine<M> {
     pub fn step(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
         let start = std::time::Instant::now();
         let batch = self.scheduler.build_batch();

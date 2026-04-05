@@ -181,9 +181,7 @@ mod tests {
             }
 
             let mut result = vec![0.0f32; t1.shape().iter().product()];
-            for i in 0..result.len() {
-                result[i] = 1.0 + 2.0;
-            }
+            result.fill(1.0 + 2.0);
 
             Ok(vec![Box::new(MockTensor::new(result, t1.shape().to_vec()))])
         }

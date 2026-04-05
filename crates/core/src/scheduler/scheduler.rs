@@ -1,4 +1,5 @@
 use crate::kv_cache::{BlockAllocator, PrefixCache, hash_tokens};
+use crate::scheduler::eviction::EvictionPolicy;
 use crate::types::{BLOCK_SIZE, Batch, Request, SchedulerConfig, SeqId, Sequence, Status, TokenId};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -11,6 +12,7 @@ pub struct Scheduler {
     config: SchedulerConfig,
     kv_allocator: BlockAllocator,
     prefix_cache: PrefixCache,
+    eviction_policy: EvictionPolicy,
 }
 
 impl Default for Scheduler {
@@ -33,6 +35,7 @@ impl Scheduler {
             config,
             kv_allocator: BlockAllocator::new(num_kv_blocks),
             prefix_cache: PrefixCache::new(),
+            eviction_policy: EvictionPolicy::new(),
         }
     }
 
@@ -81,6 +84,8 @@ impl Scheduler {
                 .allocate(num_blocks_needed)
                 .unwrap_or_default();
 
+            self.eviction_policy.record_blocks(&blocks);
+
             let mut all_blocks = cached_blocks;
             all_blocks.extend(blocks);
 
@@ -112,6 +117,8 @@ impl Scheduler {
             .kv_allocator
             .allocate(num_blocks_needed)
             .unwrap_or_default();
+
+        self.eviction_policy.record_blocks(&blocks);
 
         let seq = Sequence {
             id,
@@ -382,6 +389,7 @@ impl Scheduler {
                 let blocks_needed = new_total.div_ceil(BLOCK_SIZE);
                 while seq.kv_blocks.len() < blocks_needed {
                     if let Some(new_block) = self.kv_allocator.allocate(1) {
+                        self.eviction_policy.record_blocks(&new_block);
                         Arc::make_mut(&mut seq.kv_blocks).extend(new_block);
                     } else {
                         break;
@@ -461,6 +469,10 @@ impl Scheduler {
 
     pub fn prefix_cache(&self) -> &PrefixCache {
         &self.prefix_cache
+    }
+
+    pub fn eviction_policy(&self) -> &EvictionPolicy {
+        &self.eviction_policy
     }
 
     pub fn get_kv_cache_usage(&self) -> (u64, u64) {
