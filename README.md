@@ -167,7 +167,14 @@ vllm-lite/
 ├── crates/
 │   ├── traits/      # Interface definitions (ModelBackend trait)
 │   ├── core/        # Engine, Scheduler, KV Cache, Metrics
-│   ├── model/       # Qwen3, Llama, Mistral, Gemma4, Mixtral
+│   │   └── src/
+│   │       ├── scheduler/  # Scheduler modules (queue, preemption, eviction, batch)
+│   │       └── kv_cache/   # Logical KV cache (block_allocator, prefix_cache)
+│   ├── model/       # Model implementations
+│   │   └── src/
+│   │       ├── kernels/    # GPU kernels (flash_attention, fused_mlp, cuda_graph)
+│   │       ├── paged_tensor/ # Physical KV cache (tensor_store, quantization)
+│   │       └── components/ # Model components (attention, mlp, norm, positional)
 │   ├── dist/        # Tensor Parallel support
 │   └── server/      # HTTP API (OpenAI compatible)
 ```
