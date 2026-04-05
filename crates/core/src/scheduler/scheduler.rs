@@ -11,7 +11,6 @@ pub struct Scheduler {
     config: SchedulerConfig,
     kv_allocator: BlockAllocator,
     prefix_cache: PrefixCache,
-    #[allow(dead_code)]
     preemption: PreemptionManager,
     eviction: EvictionPolicy,
 }
@@ -372,6 +371,9 @@ impl Scheduler {
         next_tokens: &[TokenId],
         input_token_counts: &[usize],
     ) {
+        let mut preemption_needed = false;
+        let mut blocks_needed_for_preempt = 0usize;
+
         for ((seq_id, token), &input_count) in
             seq_ids.iter().zip(next_tokens).zip(input_token_counts)
         {
@@ -392,12 +394,37 @@ impl Scheduler {
                         self.eviction.record_blocks(&new_block);
                         Arc::make_mut(&mut seq.kv_blocks).extend(new_block);
                     } else {
+                        blocks_needed_for_preempt = blocks_needed - seq.kv_blocks.len();
+                        preemption_needed = true;
                         break;
                     }
                 }
 
                 if seq.tokens.len() >= seq.max_tokens {
                     seq.status = Status::Finished;
+                }
+            }
+        }
+
+        if preemption_needed {
+            let running_len = self.queue.running_len();
+            let waiting_len = self.queue.waiting_len();
+            let blocks_available = self.kv_allocator.available();
+
+            if self.preemption.should_preempt(
+                running_len,
+                waiting_len,
+                blocks_needed_for_preempt,
+                blocks_available,
+            ) {
+                if let Some((_, mut victim)) =
+                    self.preemption.select_victim(self.queue.get_running())
+                {
+                    self.queue.running_retain(|s| s.id != victim.id);
+                    victim.status = Status::Waiting;
+                    victim.num_computed_tokens = 0;
+                    self.queue.waiting_push_back(victim);
+                    self.preemption.record_preemption();
                 }
             }
         }
