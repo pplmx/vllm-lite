@@ -8,7 +8,7 @@ use std::path::PathBuf;
 #[command(about = "High-performance LLM inference server")]
 pub struct CliArgs {
     // Server
-    #[arg(long, default_value = "0.0.0.0", env = "VLLM_HOST", short = 'h')]
+    #[arg(long, default_value = "0.0.0.0", env = "VLLM_HOST")]
     pub host: String,
 
     #[arg(long, default_value = "8000", env = "VLLM_PORT", short = 'p')]
@@ -94,5 +94,67 @@ impl CliArgs {
             .map(|p| p.to_string_lossy().to_string());
 
         config
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cli_defaults() {
+        let cli = CliArgs::parse_from(["vllm-server", "-m", "/test/model"]);
+
+        assert_eq!(cli.host, "0.0.0.0");
+        assert_eq!(cli.port, 8000);
+        assert_eq!(cli.tensor_parallel_size, 1);
+        assert_eq!(cli.kv_blocks, 1024);
+        assert_eq!(cli.max_batch_size, 256);
+    }
+
+    #[test]
+    fn test_cli_with_args() {
+        let cli = CliArgs::parse_from([
+            "vllm-server",
+            "-m",
+            "/test/model",
+            "-p",
+            "9000",
+            "--host",
+            "127.0.0.1",
+            "--tensor-parallel-size",
+            "4",
+            "--kv-blocks",
+            "2048",
+        ]);
+
+        assert_eq!(cli.host, "127.0.0.1");
+        assert_eq!(cli.port, 9000);
+        assert_eq!(cli.tensor_parallel_size, 4);
+        assert_eq!(cli.kv_blocks, 2048);
+    }
+
+    #[test]
+    fn test_cli_short_args() {
+        let cli =
+            CliArgs::parse_from(["vllm-server", "-m", "/test/model", "-p", "8080", "-t", "2"]);
+
+        assert_eq!(cli.port, 8080);
+        assert_eq!(cli.tensor_parallel_size, 2);
+    }
+
+    #[test]
+    fn test_cli_required_model() {
+        let result = CliArgs::try_parse_from(["vllm-server"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_to_app_config() {
+        let cli = CliArgs::parse_from(["vllm-server", "-m", "/test/model", "-p", "9000"]);
+
+        let config = cli.to_app_config();
+
+        assert_eq!(config.server.port, 9000);
     }
 }
