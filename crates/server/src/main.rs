@@ -11,6 +11,7 @@ use crate::auth::AuthMiddleware;
 use crate::openai::batch::manager::BatchManager;
 use axum::{Router, routing::get, routing::post};
 use candle_core::Device;
+use clap::Parser;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::signal;
@@ -33,15 +34,12 @@ pub struct ApiState {
     pub auth: Option<Arc<AuthMiddleware>>,
 }
 
-fn load_config() -> config::AppConfig {
-    let config_path = std::env::args()
-        .skip(1)
-        .find(|arg| arg.starts_with("--config="))
-        .map(|arg| PathBuf::from(arg.trim_start_matches("--config=")));
+#[tokio::main]
+async fn main() {
+    let cli = cli::CliArgs::parse();
+    let app_config = cli.to_app_config();
 
-    let config = config::AppConfig::load(config_path);
-
-    if let Err(errors) = config.validate() {
+    if let Err(errors) = app_config.validate() {
         for err in &errors {
             tracing::error!(error = %err, "Config validation failed");
         }
@@ -52,30 +50,6 @@ fn load_config() -> config::AppConfig {
         std::process::exit(1);
     }
 
-    config
-}
-
-fn get_model_path() -> String {
-    let args: Vec<String> = std::env::args().collect();
-    args.iter()
-        .position(|a| a == "--model")
-        .and_then(|i| args.get(i + 1).cloned())
-        .unwrap_or_else(|| "/models/Qwen2.5-0.5B-Instruct".to_string())
-}
-
-fn get_tensor_parallel_size() -> usize {
-    let args: Vec<String> = std::env::args().collect();
-    args.iter()
-        .position(|a| a == "--tensor-parallel-size")
-        .and_then(|i| args.get(i + 1))
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(1)
-}
-
-#[tokio::main]
-async fn main() {
-    let app_config = load_config();
-
     let log_dir = app_config.server.log_dir.as_ref().map(PathBuf::from);
     logging::init_logging(log_dir, &app_config.server.log_level);
 
@@ -84,10 +58,10 @@ async fn main() {
     let device = Device::cuda_if_available(0).unwrap_or_else(|_| Device::Cpu);
     tracing::info!(device = ?device, "Using device");
 
-    let model_path = get_model_path();
+    let model_path = cli.model.display().to_string();
     tracing::info!(model_path = %model_path, "Loading model from");
 
-    let tensor_parallel_size = get_tensor_parallel_size();
+    let tensor_parallel_size = app_config.engine.tensor_parallel_size;
     tracing::info!(
         tensor_parallel_size = tensor_parallel_size,
         "Tensor parallel size"
