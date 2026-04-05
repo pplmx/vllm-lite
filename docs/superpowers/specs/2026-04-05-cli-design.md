@@ -1,7 +1,7 @@
 # CLI Design Specification
 
 **Date**: 2026-04-05
-**Goal:** Comprehensive command-line interface using clap with full feature parity
+**Goal:** Comprehensive CLI using clap, aligned with vLLM upstream
 
 ---
 
@@ -9,11 +9,11 @@
 
 ### 1.1 Design Philosophy
 
-- Follow vLLM upstream CLI patterns
-- Support config file + CLI args + env vars (config wins)
+- Follow vLLM upstream CLI patterns (https://docs.vllm.ai/en/latest/cli/serve/)
+- Support config file + CLI args + env vars (CLI wins)
 - Provide sensible defaults
 - Add `--help` with comprehensive usage info
-- Use subcommands for grouping related options
+- Add short aliases for common options
 
 ### 1.2 CLI vs Config vs Env Priority
 
@@ -23,7 +23,7 @@ CLI args > Env vars > Config file > Defaults
 
 ---
 
-## 2. CLI Structure
+## 2. CLI Structure (vLLM-style)
 
 ### 2.1 Main Command
 
@@ -31,47 +31,61 @@ CLI args > Env vars > Config file > Defaults
 vllm-server [OPTIONS]
 ```
 
-### 2.2 Option Groups
+### 2.2 Option Groups (Following vLLM Pattern)
 
 ```
-Server Options:
-  --host <IP>                 Bind address (default: 0.0.0.0)
-  --port <PORT>               Bind port (default: 8000)
-  --timeout <SECS>            Request timeout (default: 300)
+Server (Frontend):
+  --host <IP>                 Bind address [default: 0.0.0.0] [-h]
+  --port <PORT>               Bind port [default: 8000] [-p]
+  --timeout <SECS>            Request timeout [default: 300]
+  --uvicorn-log-level <LEVEL> uvicorn log level [default: info]
+  --disable-access-log        Disable request access log
 
-Model Options:
-  --model <PATH>              Model path (required)
-  --tokenizer <PATH>          Tokenizer path (default: <model>/tokenizer.json)
+Model:
+  --model <PATH>              Model path or HF model name [required] [-m]
+  --tokenizer <PATH>          Tokenizer path [default: <model>/tokenizer.json]
+  --tokenizer-mode <MODE>     Tokenizer mode: auto, hf, slow [default: auto]
   --trust-remote-code         Trust remote code in tokenizer
+  --dtype <DTYPE>             Data type: auto, float16, bfloat16, float32 [default: auto]
+  --max-model-len <N>         Max model sequence length (auto-detect if not set)
+  --served-model-name <NAME>  Model name in API responses
 
-Engine Options:
-  --tensor-parallel-size <N>  GPU count for TP (default: 1)
-  --kv-blocks <N>             KV cache blocks (default: 1024)
-  --kv-quantization           Enable KV cache INT8 quantization
-  --max-batch-size <N>        Max batch size (default: 256)
-  --max-waiting-batches <N>   Max waiting batches (default: 10)
-  --max-model-len <N>         Max model sequence length
-  --max-draft-tokens <N>      Max speculative draft tokens (default: 8)
-  --enforce-eager             Disable CUDA graph (debug)
+Parallel:
+  --tensor-parallel-size <N>  Tensor parallel size [default: 1] [-tp]
+  --pipeline-parallel-size <N> Pipeline parallel size [default: 1] [-pp]
 
-Authentication Options:
+Cache:
+  --gpu-memory-utilization <FLOAT>  GPU memory for KV cache [default: 0.9]
+  --block-size <N>            KV cache block size [default: 16]
+  --kv-cache-dtype <DTYPE>    KV cache dtype: auto, fp8, fp8_e4m3, int8 [default: auto]
+  --max-num-seqs <N>          Max concurrent sequences [default: 256]
+
+Scheduler:
+  --max-batch-size <N>        Max batch size [default: 256]
+  --max-waiting-batches <N>   Max waiting batches [default: 10]
+  --enforce-eager             Disable CUDA graph
+  --disable-sliding-window    Disable sliding window
+
+Speculative Decoding:
+  --max-draft-tokens <N>      Max speculative draft tokens [default: 8]
+
+Auth:
   --api-key <KEY>             API key (can be repeated)
   --api-key-file <PATH>       File with API keys (one per line)
-  --api-keys-env <VAR>        Env var containing comma-separated keys
 
-Rate Limiting Options:
-  --rate-limit <N>            Max requests per window (default: 100)
-  --rate-limit-window <SECS>  Rate limit window (default: 60)
+Rate Limiting:
+  --limit-requests-per-minute <N>  Requests per minute [default: 100]
+  --limit-tokens-per-minute <N>    Tokens per minute
 
-Logging Options:
-  --log-level <LEVEL>         Log level: trace,debug,info,warn,error (default: info)
+Logging:
+  --log-level <LEVEL>         Log level: trace,debug,info,warn,error [default: info]
   --log-dir <PATH>            Log directory
   --disable-log-stdout        Disable stdout logging
 
-Config Options:
+Config:
   --config <PATH>             Config file (YAML)
 
-Utility Options:
+Utility:
   --version                   Show version
   --help                      Show help
 ```
@@ -88,7 +102,7 @@ Utility Options:
 clap = { version = "4", features = ["derive", "env"] }
 ```
 
-### 3.2 CLI Args Struct
+### 3.2 CLI Args Struct (vLLM-aligned)
 
 ```rust
 use clap::{Parser, Args};
@@ -107,19 +121,31 @@ pub struct CliArgs {
     #[command(flatten)]
     pub model: ModelArgs,
 
-    /// Engine configuration
+    /// Parallel configuration
     #[command(flatten)]
-    pub engine: EngineArgs,
+    pub parallel: ParallelArgs,
 
-    /// Authentication configuration
+    /// Cache configuration
+    #[command(flatten)]
+    pub cache: CacheArgs,
+
+    /// Scheduler configuration
+    #[command(flatten)]
+    pub scheduler: SchedulerArgs,
+
+    /// Speculative decoding
+    #[command(flatten)]
+    pub speculative: SpeculativeArgs,
+
+    /// Authentication
     #[command(flatten)]
     pub auth: AuthArgs,
 
-    /// Rate limiting configuration
+    /// Rate limiting
     #[command(flatten)]
     pub rate_limit: RateLimitArgs,
 
-    /// Logging configuration
+    /// Logging
     #[command(flatten)]
     pub logging: LoggingArgs,
 
@@ -132,48 +158,90 @@ pub struct CliArgs {
 #[group(required = false)]
 pub struct ServerArgs {
     /// Server host
-    #[clap(long, default_value = "0.0.0.0", env = "VLLM_HOST")]
+    #[clap(long, default_value = "0.0.0.0", env = "VLLM_HOST", short = 'h')]
     pub host: String,
 
     /// Server port
-    #[clap(long, default_value_t = 8000, env = "VLLM_PORT")]
+    #[clap(long, default_value_t = 8000, env = "VLLM_PORT", short = 'p')]
     pub port: u16,
 
     /// Request timeout in seconds
     #[clap(long, default_value_t = 300, env = "VLLM_TIMEOUT")]
     pub timeout: u64,
+
+    /// uvicorn log level
+    #[clap(long, default_value = "info", env = "VLLM_UVICORN_LOG_LEVEL")]
+    pub uvicorn_log_level: String,
+
+    /// Disable access log
+    #[clap(long, default_value = "false", env = "VLLM_DISABLE_ACCESS_LOG")]
+    pub disable_access_log: bool,
 }
 
 #[derive(Args, Debug, Clone)]
 #[group(required = true)]
 pub struct ModelArgs {
     /// Model path (directory or HF hub ID)
-    #[clap(long)]
+    #[clap(long, env = "VLLM_MODEL", short = 'm')]
     pub model: PathBuf,
 
-    /// Tokenizer path (default: <model>/tokenizer.json)
-    #[clap(long)]
+    /// Tokenizer path
+    #[clap(long, env = "VLLM_TOKENIZER")]
     pub tokenizer: Option<PathBuf>,
 
+    /// Tokenizer mode
+    #[clap(long, default_value = "auto", env = "VLLM_TOKENIZER_MODE")]
+    pub tokenizer_mode: String,
+
     /// Trust remote code in tokenizer
-    #[clap(long, default_value = "false")]
+    #[clap(long, default_value = "false", env = "VLLM_TRUST_REMOTE_CODE")]
     pub trust_remote_code: bool,
+
+    /// Data type
+    #[clap(long, default_value = "auto", env = "VLLM_DTYPE")]
+    pub dtype: String,
+
+    /// Max model sequence length
+    #[clap(long, env = "VLLM_MAX_MODEL_LEN")]
+    pub max_model_len: Option<usize>,
+
+    /// Served model name
+    #[clap(long, env = "VLLM_SERVED_MODEL_NAME")]
+    pub served_model_name: Option<String>,
 }
 
 #[derive(Args, Debug, Clone)]
-pub struct EngineArgs {
+pub struct ParallelArgs {
     /// Tensor parallel size
-    #[clap(long, default_value_t = 1, env = "VLLM_TENSOR_PARALLEL_SIZE")]
+    #[clap(long, default_value_t = 1, env = "VLLM_TENSOR_PARALLEL_SIZE", short = 'tp')]
     pub tensor_parallel_size: usize,
 
-    /// KV cache blocks
-    #[clap(long, default_value_t = 1024, env = "VLLM_KV_BLOCKS")]
-    pub kv_blocks: usize,
+    /// Pipeline parallel size
+    #[clap(long, default_value_t = 1, env = "VLLM_PIPELINE_PARALLEL_SIZE", short = 'pp')]
+    pub pipeline_parallel_size: usize,
+}
 
-    /// Enable KV cache quantization
-    #[clap(long, default_value = "false", env = "VLLM_KV_QUANTIZATION")]
-    pub kv_quantization: bool,
+#[derive(Args, Debug, Clone)]
+pub struct CacheArgs {
+    /// GPU memory utilization for KV cache
+    #[clap(long, default_value_t = 0.9, env = "VLLM_GPU_MEMORY_UTILIZATION")]
+    pub gpu_memory_utilization: f64,
 
+    /// KV cache block size
+    #[clap(long, default_value_t = 16, env = "VLLM_BLOCK_SIZE")]
+    pub block_size: usize,
+
+    /// KV cache dtype
+    #[clap(long, default_value = "auto", env = "VLLM_KV_CACHE_DTYPE")]
+    pub kv_cache_dtype: String,
+
+    /// Max concurrent sequences
+    #[clap(long, default_value_t = 256, env = "VLLM_MAX_NUM_SEQS")]
+    pub max_num_seqs: usize,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct SchedulerArgs {
     /// Max batch size
     #[clap(long, default_value_t = 256, env = "VLLM_MAX_BATCH_SIZE")]
     pub max_batch_size: usize,
@@ -182,17 +250,20 @@ pub struct EngineArgs {
     #[clap(long, default_value_t = 10, env = "VLLM_MAX_WAITING_BATCHES")]
     pub max_waiting_batches: usize,
 
-    /// Max model sequence length
-    #[clap(long, env = "VLLM_MAX_MODEL_LEN")]
-    pub max_model_len: Option<usize>,
+    /// Disable CUDA graph
+    #[clap(long, default_value = "false", env = "VLLM_ENFORCE_EAGER")]
+    pub enforce_eager: bool,
 
+    /// Disable sliding window
+    #[clap(long, default_value = "false", env = "VLLM_DISABLE_SLIDING_WINDOW")]
+    pub disable_sliding_window: bool,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct SpeculativeArgs {
     /// Max speculative draft tokens
     #[clap(long, default_value_t = 8, env = "VLLM_MAX_DRAFT_TOKENS")]
     pub max_draft_tokens: usize,
-
-    /// Disable CUDA graph (for debugging)
-    #[clap(long, default_value = "false")]
-    pub enforce_eager: bool,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -204,27 +275,23 @@ pub struct AuthArgs {
     /// File containing API keys (one per line)
     #[clap(long, env = "VLLM_API_KEYS_FILE")]
     pub api_key_file: Option<PathBuf>,
-
-    /// Environment variable with comma-separated API keys
-    #[clap(long, env = "VLLM_API_KEYS_ENV")]
-    pub api_keys_env: Option<String>,
 }
 
 #[derive(Args, Debug, Clone)]
 pub struct RateLimitArgs {
-    /// Max requests per window
-    #[clap(long, default_value_t = 100, env = "VLLM_RATE_LIMIT")]
-    pub rate_limit: usize,
+    /// Max requests per minute
+    #[clap(long, default_value_t = 100, env = "VLLM_LIMIT_REQUESTS_PER_MINUTE")]
+    pub limit_requests_per_minute: usize,
 
-    /// Rate limit window in seconds
-    #[clap(long, default_value_t = 60, env = "VLLM_RATE_LIMIT_WINDOW")]
-    pub rate_limit_window: u64,
+    /// Max tokens per minute
+    #[clap(long, env = "VLLM_LIMIT_TOKENS_PER_MINUTE")]
+    pub limit_tokens_per_minute: Option<usize>,
 }
 
 #[derive(Args, Debug, Clone)]
 pub struct LoggingArgs {
     /// Log level
-    #[clap(long, default_value = "info", env = "VLLM_LOG_LEVEL", 
+    #[clap(long, default_value = "info", env = "VLLM_LOG_LEVEL",
            value_parser = clap::builder::PossibleValuesParser::new(["trace", "debug", "info", "warn", "error"]))]
     pub log_level: String,
 
@@ -253,17 +320,30 @@ impl CliArgs {
         // 2. Override with CLI args
         config.server.host = self.server.host.clone();
         config.server.port = self.server.port;
-        
-        config.engine.tensor_parallel_size = self.engine.tensor_parallel_size;
-        config.engine.num_kv_blocks = self.engine.kv_blocks;
-        config.engine.kv_quantization = self.engine.kv_quantization;
-        config.engine.max_batch_size = self.engine.max_batch_size;
-        config.engine.max_waiting_batches = self.engine.max_waiting_batches;
-        config.engine.max_draft_tokens = self.engine.max_draft_tokens;
-        
-        config.server.log_level = self.logging.log_level.clone();
-        config.server.log_dir = self.logging.log_dir.clone();
-        
+        config.server.timeout = self.server.timeout;
+        config.server.uvicorn_log_level = self.server.uvicorn_log_level.clone();
+
+        config.model.model = self.model.model.clone();
+        config.model.tokenizer = self.model.tokenizer.clone();
+        config.model.trust_remote_code = self.model.trust_remote_code;
+        config.model.dtype = self.model.dtype.clone();
+        config.model.max_model_len = self.model.max_model_len;
+        config.model.served_model_name = self.model.served_model_name.clone();
+
+        config.parallel.tensor_parallel_size = self.parallel.tensor_parallel_size;
+        config.parallel.pipeline_parallel_size = self.parallel.pipeline_parallel_size;
+
+        config.cache.gpu_memory_utilization = self.cache.gpu_memory_utilization;
+        config.cache.block_size = self.cache.block_size;
+        config.cache.kv_cache_dtype = self.cache.kv_cache_dtype.clone();
+        config.cache.max_num_seqs = self.cache.max_num_seqs;
+
+        config.scheduler.max_batch_size = self.scheduler.max_batch_size;
+        config.scheduler.max_waiting_batches = self.scheduler.max_waiting_batches;
+        config.scheduler.enforce_eager = self.scheduler.enforce_eager;
+
+        config.speculative.max_draft_tokens = self.speculative.max_draft_tokens;
+
         // Auth: merge API keys
         if !self.auth.api_key.is_empty() {
             config.auth.api_keys = self.auth.api_key.clone();
@@ -271,12 +351,13 @@ impl CliArgs {
         if self.auth.api_key_file.is_some() {
             config.auth.api_keys_file = self.auth.api_key_file.clone();
         }
-        if self.auth.api_keys_env.is_some() {
-            config.auth.api_keys_env = self.auth.api_keys_env.clone();
-        }
-        
-        config.auth.rate_limit_requests = self.rate_limit.rate_limit;
-        config.auth.rate_limit_window_secs = self.rate_limit.rate_limit_window;
+
+        config.rate_limit.requests_per_minute = self.rate_limit.limit_requests_per_minute;
+        config.rate_limit.tokens_per_minute = self.rate_limit.limit_tokens_per_minute;
+
+        config.logging.log_level = self.logging.log_level.clone();
+        config.logging.log_dir = self.logging.log_dir.clone();
+        config.logging.disable_log_stdout = self.logging.disable_log_stdout;
 
         config
     }
@@ -296,139 +377,144 @@ High-performance LLM inference server
 Usage: vllm-server [OPTIONS]
 
 Server Options:
-  --host <IP>                 Bind address [default: 0.0.0.0] [env: VLLM_HOST]
-  --port <PORT>               Bind port [default: 8000] [env: VLLM_PORT]
+  --host <IP>                 Bind address [default: 0.0.0.0] [-h] [env: VLLM_HOST]
+  --port <PORT>               Bind port [default: 8000] [-p] [env: VLLM_PORT]
   --timeout <SECS>            Request timeout [default: 300] [env: VLLM_TIMEOUT]
+  --uvicorn-log-level <LEVEL> uvicorn log level [default: info]
 
 Model Options:
-  --model <PATH>              Model path (directory or HF hub ID) [required]
+  --model <PATH>              Model path [required] [-m] [env: VLLM_MODEL]
   --tokenizer <PATH>          Tokenizer path [env: VLLM_TOKENIZER]
-  --trust-remote-code         Trust remote code in tokenizer [default: false]
+  --dtype <DTYPE>             Data type [default: auto] [env: VLLM_DTYPE]
+  --max-model-len <N>         Max model length [env: VLLM_MAX_MODEL_LEN]
+  --trust-remote-code         Trust remote code [env: VLLM_TRUST_REMOTE_CODE]
 
-Engine Options:
-  --tensor-parallel-size <N>  GPU count for tensor parallelism [default: 1] [env: VLLM_TENSOR_PARALLEL_SIZE]
-  --kv-blocks <N>             KV cache block count [default: 1024] [env: VLLM_KV_BLOCKS]
-  --kv-quantization           Enable KV cache INT8 quantization [env: VLLM_KV_QUANTIZATION]
-  --max-batch-size <N>        Max batch size [default: 256] [env: VLLM_MAX_BATCH_SIZE]
-  --max-waiting-batches <N>   Max waiting batches [default: 10] [env: VLLM_MAX_WAITING_BATCHES]
-  --max-model-len <N>         Max model sequence length [env: VLLM_MAX_MODEL_LEN]
-  --max-draft-tokens <N>      Max speculative draft tokens [default: 8] [env: VLLM_MAX_DRAFT_TOKENS]
-  --enforce-eager             Disable CUDA graph (for debugging)
+Parallel Options:
+  --tensor-parallel-size <N>  Tensor parallel size [default: 1] [-tp]
+  --pipeline-parallel-size <N> Pipeline parallel size [default: 1] [-pp]
 
-Authentication Options:
-  --api-key <KEY>             API key (can be repeated) [env: VLLM_API_KEY]
-  --api-key-file <PATH>       File with API keys [env: VLLM_API_KEYS_FILE]
-  --api-keys-env <VAR>        Env var with comma-separated keys [env: VLLM_API_KEYS_ENV]
+Cache Options:
+  --gpu-memory-utilization <F> GPU memory utilization [default: 0.9]
+  --block-size <N>            KV cache block size [default: 16]
+  --kv-cache-dtype <DTYPE>    KV cache dtype [default: auto]
 
-Rate Limiting Options:
-  --rate-limit <N>            Max requests per window [default: 100] [env: VLLM_RATE_LIMIT]
-  --rate-limit-window <SECS>  Window duration [default: 60] [env: VLLM_RATE_LIMIT_WINDOW]
+Scheduler Options:
+  --max-batch-size <N>        Max batch size [default: 256]
+  --max-waiting-batches <N>   Max waiting batches [default: 10]
+  --enforce-eager             Disable CUDA graph
+
+Speculative Options:
+  --max-draft-tokens <N>      Max draft tokens [default: 8]
+
+Auth Options:
+  --api-key <KEY>             API key [env: VLLM_API_KEY]
+  --api-key-file <PATH>       API keys file [env: VLLM_API_KEYS_FILE]
+
+Rate Limit Options:
+  --limit-requests-per-minute <N>  Requests/min [default: 100]
 
 Logging Options:
-  --log-level <LEVEL>         Log level: trace,debug,info,warn,error [default: info] [env: VLLM_LOG_LEVEL]
-  --log-dir <PATH>            Log directory [env: VLLM_LOG_DIR]
-  --disable-log-stdout        Disable stdout logging
+  --log-level <LEVEL>         Log level [default: info]
+  --log-dir <PATH>            Log directory
+  --disable-log-stdout        Disable stdout
 
 Config Options:
   --config <PATH>             Config file (YAML)
 
 Examples:
   # Basic usage
-  vllm-server --model /models/llama-7b
+  vllm-server -m /models/llama-7b
 
   # With custom port
-  vllm-server --model /models/llama-7b --port 8080
+  vllm-server -m /models/llama-7b -p 8080
+
+  # Multi-GPU
+  vllm-server -m /models/llama-7b --tp 4
 
   # With API key
-  vllm-server --model /models/llama-7b --api-key sk-12345
+  vllm-server -m /models/llama-7b --api-key sk-12345
 
-  # From config file
-  vllm-server --config config.yaml
-
-  # With environment variables
-  VLLM_PORT=8080 VLLM_API_KEY=sk-123 vllm-server --model /models/llama-7b
-
-  # Multi-GPU tensor parallel
-  vllm-server --model /models/llama-7b --tensor-parallel-size 4
-
-  # Production with rate limiting
-  vllm-server --model /models/llama-7b \
+  # Production
+  vllm-server -m /models/llama-7b \
     --api-key-file /etc/vllm/keys.txt \
-    --rate-limit 1000 \
-    --rate-limit-window 60 \
+    --gpu-memory-utilization 0.95 \
     --log-level warn
 
-See also:
-  Config file format: https://github.com/vllm-lite/vllm-lite
-  Environment variables: All options can be set via VLLM_<UPPER_CASE> env vars
+  # From config
+  vllm-server --config config.yaml
+
+  # Environment variables
+  VLLM_PORT=8080 VLLM_API_KEY=sk-123 vllm-server -m /models/llama-7b
 ```
 
 ---
 
 ## 6. Environment Variables
 
-| CLI Option | Env Variable | Type | Default |
-|------------|--------------|------|---------|
-| `--host` | `VLLM_HOST` | string | "0.0.0.0" |
-| `--port` | `VLLM_PORT` | u16 | 8000 |
-| `--timeout` | `VLLM_TIMEOUT` | u64 | 300 |
-| `--model` | `VLLM_MODEL` | path | (required) |
-| `--tokenizer` | `VLLM_TOKENIZER` | path | auto |
-| `--trust-remote-code` | `VLLM_TRUST_REMOTE_CODE` | bool | false |
-| `--tensor-parallel-size` | `VLLM_TENSOR_PARALLEL_SIZE` | usize | 1 |
-| `--kv-blocks` | `VLLM_KV_BLOCKS` | usize | 1024 |
-| `--kv-quantization` | `VLLM_KV_QUANTIZATION` | bool | false |
-| `--max-batch-size` | `VLLM_MAX_BATCH_SIZE` | usize | 256 |
-| `--max-waiting-batches` | `VLLM_MAX_WAITING_BATCHES` | usize | 10 |
-| `--max-model-len` | `VLLM_MAX_MODEL_LEN` | usize | auto |
-| `--max-draft-tokens` | `VLLM_MAX_DRAFT_TOKENS` | usize | 8 |
-| `--enforce-eager` | `VLLM_ENFORCE_EAGER` | bool | false |
-| `--api-key` | `VLLM_API_KEY` | string | none |
-| `--api-key-file` | `VLLM_API_KEYS_FILE` | path | none |
-| `--api-keys-env` | `VLLM_API_KEYS_ENV` | string | none |
-| `--rate-limit` | `VLLM_RATE_LIMIT` | usize | 100 |
-| `--rate-limit-window` | `VLLM_RATE_LIMIT_WINDOW` | u64 | 60 |
-| `--log-level` | `VLLM_LOG_LEVEL` | string | "info" |
-| `--log-dir` | `VLLM_LOG_DIR` | path | none |
-| `--config` | `VLLM_CONFIG` | path | none |
+| CLI Option | Short | Env Variable | Type | Default |
+|------------|-------|--------------|------|---------|
+| `--host` | `-h` | `VLLM_HOST` | string | "0.0.0.0" |
+| `--port` | `-p` | `VLLM_PORT` | u16 | 8000 |
+| `--model` | `-m` | `VLLM_MODEL` | path | required |
+| `--tensor-parallel-size` | `-tp` | `VLLM_TENSOR_PARALLEL_SIZE` | usize | 1 |
+| `--pipeline-parallel-size` | `-pp` | `VLLM_PIPELINE_PARALLEL_SIZE` | usize | 1 |
+| `--gpu-memory-utilization` | | `VLLM_GPU_MEMORY_UTILIZATION` | f64 | 0.9 |
+| `--block-size` | | `VLLM_BLOCK_SIZE` | usize | 16 |
+| `--max-batch-size` | | `VLLM_MAX_BATCH_SIZE` | usize | 256 |
+| `--max-waiting-batches` | | `VLLM_MAX_WAITING_BATCHES` | usize | 10 |
+| `--max-model-len` | | `VLLM_MAX_MODEL_LEN` | usize | auto |
+| `--max-draft-tokens` | | `VLLM_MAX_DRAFT_TOKENS` | usize | 8 |
+| `--enforce-eager` | | `VLLM_ENFORCE_EAGER` | bool | false |
+| `--api-key` | | `VLLM_API_KEY` | string | none |
+| `--api-key-file` | | `VLLM_API_KEYS_FILE` | path | none |
+| `--limit-requests-per-minute` | | `VLLM_LIMIT_REQUESTS_PER_MINUTE` | usize | 100 |
+| `--log-level` | | `VLLM_LOG_LEVEL` | string | "info" |
+| `--log-dir` | | `VLLM_LOG_DIR` | path | none |
+| `--config` | | `VLLM_CONFIG` | path | none |
 
 ---
 
 ## 7. Config File Format
 
 ```yaml
-# config.yaml
-server:
-  host: 0.0.0.0
-  port: 8000
-  timeout: 300
+# config.yaml (vLLM-style)
+host: 0.0.0.0
+port: 8000
+timeout: 300
 
 model:
-  # model path
   model: /models/Qwen2.5-0.5B-Instruct
-  # tokenizer path (optional)
   tokenizer: null
-  # trust remote code
+  tokenizer_mode: auto
   trust_remote_code: false
+  dtype: auto
+  max_model_len: null
 
-engine:
+parallel:
   tensor_parallel_size: 1
-  kv_blocks: 1024
-  kv_quantization: false
+  pipeline_parallel_size: 1
+
+cache:
+  gpu_memory_utilization: 0.9
+  block_size: 16
+  kv_cache_dtype: auto
+  max_num_seqs: 256
+
+scheduler:
   max_batch_size: 256
   max_waiting_batches: 10
-  max_model_len: null
-  max_draft_tokens: 8
   enforce_eager: false
+
+speculative:
+  max_draft_tokens: 8
 
 auth:
   api_keys: []
-  api_keys_env: null
   api_keys_file: null
 
 rate_limit:
-  requests: 100
-  window_secs: 60
+  requests_per_minute: 100
+  tokens_per_minute: null
 
 logging:
   log_level: info
@@ -448,65 +534,28 @@ vllm-server --model /path/to/model --tensor-parallel-size 2
 vllm-server --config=config.yaml
 ```
 
-### 8.2 Config File Loading
-
-- `--config` argument loads YAML config
-- Config values are overridden by CLI args and env vars
-
 ---
 
-## 9. Error Handling
-
-### 9.1 Missing Required Args
-
-```bash
-$ vllm-server
-error: the following required argument was not provided:
-  --model <PATH>
-
-Usage: vllm-server [OPTIONS]
-```
-
-### 9.2 Invalid Values
-
-```bash
-$ vllm-server --model /path --port 0
-error: invalid value '0' for '--port <PORT>': number must be >= 1
-
-$ vllm-server --model /path --log-level invalid
-error: invalid value 'invalid' for '--log-level <LEVEL>': 
-  possible values: trace, debug, info, warn, error
-```
-
-### 9.3 Config File Errors
-
-```bash
-$ vllm-server --config /nonexistent/config.yaml
-warning: config file not found: /nonexistent/config.yaml
-```
-
----
-
-## 10. Files to Modify
+## 9. Files to Modify
 
 | File | Changes |
 |------|---------|
 | `crates/server/Cargo.toml` | Add `clap` dependency |
 | `crates/server/src/main.rs` | Use clap for CLI parsing |
 | `crates/server/src/cli.rs` | New: CLI args definitions |
-| `crates/server/src/config.rs` | Merge CLI into config |
+| `crates/server/src/config.rs` | Merge CLI into config, add new fields |
 
 ---
 
-## 11. Acceptance Criteria
+## 10. Acceptance Criteria
 
 - [ ] `--help` shows all options with descriptions
 - [ ] `--version` shows version
-- [ ] All config options available as CLI args
+- [ ] Short aliases work (-m, -p, -tp, -pp)
 - [ ] All CLI args available as env vars
 - [ ] Config file can be specified with `--config`
 - [ ] CLI args override config file values
-- [ ] Env vars override config file values
 - [ ] Invalid values show helpful errors
 - [ ] Required args (`--model`) enforced
 - [ ] Backward compatible with existing usage
+- [ ] gpu-memory-utilization works (vLLM style)
