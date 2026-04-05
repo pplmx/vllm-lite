@@ -2,6 +2,7 @@
 
 mod api;
 mod auth;
+mod cli;
 mod config;
 mod logging;
 pub mod openai;
