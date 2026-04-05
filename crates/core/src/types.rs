@@ -81,17 +81,30 @@ pub enum Status {
     Finished,
 }
 
+/// Configuration for the request scheduler.
+///
+/// Controls batching behavior, prefill/decode separation, and priority handling.
 #[derive(Clone, Debug)]
 pub struct SchedulerConfig {
+    /// Maximum number of sequences that can be scheduled in a single batch.
     pub max_num_seqs: usize,
+    /// Maximum number of tokens (including prompt and generated) in a batch.
     pub max_num_batched_tokens: usize,
+    /// Maximum consecutive decode iterations before forcing a prefill.
     pub max_consecutive_decode: u32,
+    /// Enable separation of prefill and decode phases into different batches.
     pub enable_pd_separation: bool,
+    /// Maximum number of prompt tokens to process in a single prefill chunk.
     pub prefill_chunk_size: usize,
+    /// Ratio of decode-to-prefill tokens when batching mixed phases (0.0-1.0).
     pub decode_preference_ratio: f32,
+    /// Enable priority-based scheduling (higher priority requests first).
     pub enable_priority_scheduling: bool,
+    /// Enable dynamic batching (grouping similar requests automatically).
     pub enable_dynamic_batching: bool,
+    /// Minimum batch size for dynamic batching.
     pub min_batch_size: usize,
+    /// Maximum batch size for dynamic batching.
     pub max_batch_size: usize,
 }
 

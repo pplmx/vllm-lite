@@ -15,7 +15,7 @@ use tokio::sync::mpsc;
 use super::types::*;
 use crate::ApiState;
 
-fn build_prompt_from_messages(messages: &[ChatMessage]) -> String {
+pub fn build_prompt_from_messages(messages: &[ChatMessage]) -> String {
     let mut prompt = String::new();
 
     for msg in messages {
@@ -44,7 +44,7 @@ fn build_prompt_from_messages(messages: &[ChatMessage]) -> String {
 }
 
 #[allow(dead_code)]
-fn validate_chat_request(
+pub fn validate_chat_request(
     req: &ChatRequest,
 ) -> Result<(), (axum::http::StatusCode, Json<ErrorResponse>)> {
     if req.model.is_empty() {
