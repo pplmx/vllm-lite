@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Refactored
+
+#### Architecture Refactoring
+
+- **Scheduler Module Split**
+    - Split monolithic `scheduler.rs` into focused submodules
+    - Created `scheduler/queue.rs` with `RequestQueue` for queue management
+    - Created `scheduler/preemption.rs` with `PreemptionManager` for preemption decisions
+    - Created `scheduler/eviction.rs` with `EvictionPolicy` for block eviction
+    - Fully integrated all modules into `Scheduler` struct
+
+- **KV Cache Layer Separation**
+    - Split `core/kv_cache.rs` into `kv_cache/block_allocator.rs` and `kv_cache/prefix_cache.rs`
+    - Created `model/paged_tensor/` module (separating logical and physical KV cache)
+    - `tensor_store.rs` for GPU KV tensor management
+    - `quantization.rs` for INT8/FP8 quantization
+    - Added deprecated alias in `kv_cache.rs` for backward compatibility
+
+- **Kernel Layer Extraction**
+    - Created `model/kernels/` directory for GPU kernels
+    - Moved `flash_attention.rs` → `kernels/flash_attention.rs`
+    - Moved `fused_kernel.rs` → `kernels/fused_mlp.rs`
+    - Moved `cuda_graph.rs` from core to `model/kernels/cuda_graph.rs`
+    - Updated `components/` to use kernels module
+
 ### Added
 
 #### Phase 4: Performance Optimization
