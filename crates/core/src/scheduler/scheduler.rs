@@ -1,14 +1,12 @@
-use crate::kv_cache::{BlockAllocator, PrefixCache, hash_tokens};
+use crate::kv_cache::{hash_tokens, BlockAllocator, PrefixCache};
 use crate::scheduler::eviction::EvictionPolicy;
-use crate::types::{BLOCK_SIZE, Batch, Request, SchedulerConfig, SeqId, Sequence, Status, TokenId};
-use std::collections::{HashMap, VecDeque};
+use crate::scheduler::queue::RequestQueue;
+use crate::types::{Batch, Request, SchedulerConfig, SeqId, Sequence, Status, TokenId, BLOCK_SIZE};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 pub struct Scheduler {
-    waiting: VecDeque<Sequence>,
-    running: Vec<Sequence>,
-    finished: Vec<Sequence>,
-    next_seq_id: SeqId,
+    queue: RequestQueue,
     config: SchedulerConfig,
     kv_allocator: BlockAllocator,
     prefix_cache: PrefixCache,
@@ -28,10 +26,7 @@ impl Scheduler {
 
     pub fn with_config(config: SchedulerConfig, num_kv_blocks: usize) -> Self {
         Self {
-            waiting: VecDeque::new(),
-            running: Vec::new(),
-            finished: Vec::new(),
-            next_seq_id: 1,
+            queue: RequestQueue::new(),
             config,
             kv_allocator: BlockAllocator::new(num_kv_blocks),
             prefix_cache: PrefixCache::new(),
@@ -41,14 +36,11 @@ impl Scheduler {
 
     pub fn add_request(&mut self, req: Request) -> SeqId {
         let id = if req.id == 0 {
-            let id = self.next_seq_id;
-            self.next_seq_id += 1;
-            id
+            self.queue.next_seq_id()
         } else {
             req.id
         };
 
-        // Check prefix cache
         let prompt_len = req.prompt.len();
         let key = hash_tokens(&req.prompt);
         if let Some(entry) = self.prefix_cache.get(key) {
@@ -64,11 +56,10 @@ impl Scheduler {
                 consecutive_decode_rounds: 0,
                 priority: req.priority,
             };
-            self.running.push(seq);
+            self.queue.running_push(seq);
             return id;
         }
 
-        // Check for prefix match
         if let Some(entry) = self.prefix_cache.find_prefix_match(&req.prompt) {
             let cached_len = entry.token_count;
             let cached_blocks = entry.blocks.as_ref().clone();
@@ -101,14 +92,12 @@ impl Scheduler {
                 consecutive_decode_rounds: 0,
                 priority: req.priority,
             };
-            self.waiting.push_back(seq);
+            self.queue.waiting_push_back(seq);
             return id;
         }
 
-        // Cache miss - allocate new blocks
         let num_blocks_needed = req.prompt.len().div_ceil(BLOCK_SIZE);
 
-        // Evict if needed before allocation
         if self.kv_allocator.available() < num_blocks_needed {
             self.prefix_cache.evict(&mut self.kv_allocator);
         }
@@ -132,14 +121,15 @@ impl Scheduler {
             consecutive_decode_rounds: 0,
             priority: req.priority,
         };
-        self.waiting.push_back(seq);
+        self.queue.waiting_push_back(seq);
         id
     }
 
     fn process_finished_sequences(&mut self) {
-        let mut newly_finished = Vec::with_capacity(self.running.len());
+        let running = self.queue.get_running_mut();
+        let mut newly_finished = Vec::with_capacity(running.len());
 
-        self.running.retain(|seq| {
+        running.retain(|seq| {
             if seq.status == Status::Finished {
                 newly_finished.push(seq.clone());
                 false
@@ -156,21 +146,19 @@ impl Scheduler {
                     .insert_arc(key, seq.kv_blocks.clone(), seq.prompt_len);
             }
         }
-        self.finished.extend(newly_finished);
+        self.queue.finished_extend(newly_finished);
     }
 
     fn promote_waiting_to_running(&mut self) {
         if self.config.enable_priority_scheduling {
-            let mut waiting_vec: Vec<_> = self.waiting.drain(..).collect();
-            waiting_vec.sort_by(|a, b| a.priority.cmp(&b.priority));
-            self.waiting = waiting_vec.into();
+            self.queue.waiting_sort_by_priority();
         }
 
-        while self.running.len() < self.config.max_num_seqs {
-            match self.waiting.pop_front() {
+        while self.queue.running_len() < self.config.max_num_seqs {
+            match self.queue.waiting_pop_front() {
                 Some(mut seq) => {
                     seq.status = Status::Prefilling;
-                    self.running.push(seq);
+                    self.queue.running_push(seq);
                 }
                 None => break,
             }
@@ -195,7 +183,7 @@ impl Scheduler {
 
         let mut remaining_budget = budget;
 
-        for seq in &self.running {
+        for seq in self.queue.get_running() {
             if seq_ids.len() >= effective_max_seqs {
                 break;
             }
@@ -243,7 +231,7 @@ impl Scheduler {
 
         let mut remaining_budget = budget;
 
-        for seq in &self.running {
+        for seq in self.queue.get_running() {
             if seq_ids.len() >= max_seqs {
                 break;
             }
@@ -327,7 +315,7 @@ impl Scheduler {
         let mut positions = decode_pos;
         positions.extend(prefill_pos);
 
-        Self::finalize_batch(seq_ids, input_tokens, positions, &self.running)
+        Self::finalize_batch(seq_ids, input_tokens, positions, self.queue.get_running())
     }
 
     fn build_batch_mixed(&mut self) -> Batch {
@@ -345,7 +333,7 @@ impl Scheduler {
         let mut positions = decode_pos;
         positions.extend(prefill_pos);
 
-        Self::finalize_batch(seq_ids, input_tokens, positions, &self.running)
+        Self::finalize_batch(seq_ids, input_tokens, positions, self.queue.get_running())
     }
 
     pub fn build_batch(&mut self) -> Batch {
@@ -353,8 +341,16 @@ impl Scheduler {
         self.promote_waiting_to_running();
 
         if self.config.enable_pd_separation {
-            let has_decode = self.running.iter().any(|s| s.status == Status::Decoding);
-            let has_prefill = self.running.iter().any(|s| s.status == Status::Prefilling);
+            let has_decode = self
+                .queue
+                .get_running()
+                .iter()
+                .any(|s| s.status == Status::Decoding);
+            let has_prefill = self
+                .queue
+                .get_running()
+                .iter()
+                .any(|s| s.status == Status::Prefilling);
 
             if has_decode && has_prefill {
                 self.build_batch_with_pd_separation()
@@ -375,7 +371,7 @@ impl Scheduler {
         for ((seq_id, token), &input_count) in
             seq_ids.iter().zip(next_tokens).zip(input_token_counts)
         {
-            if let Some(seq) = self.running.iter_mut().find(|s| s.id == *seq_id) {
+            if let Some(seq) = self.queue.running_find_mut(*seq_id) {
                 if seq.status == Status::Prefilling {
                     seq.num_computed_tokens += input_count;
                     if seq.num_computed_tokens >= seq.tokens.len() {
@@ -402,11 +398,12 @@ impl Scheduler {
             }
         }
 
-        let mut newly_finished = Vec::with_capacity(self.running.len());
+        let running = self.queue.get_running_mut();
+        let mut newly_finished = Vec::with_capacity(running.len());
         let mut i = 0;
-        while i < self.running.len() {
-            if self.running[i].status == Status::Finished {
-                let seq = self.running.remove(i);
+        while i < running.len() {
+            if running[i].status == Status::Finished {
+                let seq = running.remove(i);
                 newly_finished.push(seq);
             } else {
                 i += 1;
@@ -422,18 +419,17 @@ impl Scheduler {
             }
         }
 
-        // Move to finished list
-        self.finished.extend(newly_finished);
+        self.queue.finished_extend(newly_finished);
     }
 
     pub fn has_pending(&self) -> bool {
-        !self.waiting.is_empty() || !self.running.is_empty()
+        !self.queue.waiting_is_empty() || self.queue.running_len() > 0
     }
 
     fn adjust_batch_size(&self) -> usize {
         let available_blocks = self.kv_allocator.available();
-        let waiting_count = self.waiting.len();
-        let running_count = self.running.len();
+        let waiting_count = self.queue.waiting_len();
+        let running_count = self.queue.running_len();
 
         let base_batch = self.config.max_num_seqs;
 
@@ -452,19 +448,19 @@ impl Scheduler {
     }
 
     pub fn running_count(&self) -> usize {
-        self.running.len()
+        self.queue.running_len()
     }
 
     pub fn waiting_count(&self) -> usize {
-        self.waiting.len()
+        self.queue.waiting_len()
     }
 
     pub fn finished_sequences(&self) -> &[Sequence] {
-        &self.finished
+        self.queue.finished()
     }
 
     pub fn running(&self) -> &[Sequence] {
-        &self.running
+        self.queue.get_running()
     }
 
     pub fn prefix_cache(&self) -> &PrefixCache {
