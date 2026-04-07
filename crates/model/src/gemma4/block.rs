@@ -80,9 +80,12 @@ impl Gemma4Block {
     }
 
     fn rms_norm(&self, x: &Tensor, weight: &Linear) -> Result<Tensor> {
-        let hidden_size = x.dims().last().unwrap();
-        let x_flat = x.reshape(((), *hidden_size))?;
-        let weight = weight.weight().reshape((*hidden_size,))?;
+        let hidden_size = *x
+            .dims()
+            .last()
+            .ok_or_else(|| candle_core::Error::msg("Tensor has no dimensions"))?;
+        let x_flat = x.reshape(((), hidden_size))?;
+        let weight = weight.weight().reshape((hidden_size,))?;
         let variance = x_flat.sqr()?.mean(1)?;
         let x = x_flat.broadcast_div(&(variance + 1e-6)?.sqrt()?)?;
         let x = x.broadcast_mul(&weight)?;

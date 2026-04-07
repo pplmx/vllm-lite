@@ -224,7 +224,8 @@ impl<M: ModelBackend> Engine<M> {
             all_candidates.sort_by(|a, b| {
                 let sa = a.score / (a.tokens.len() as f32).powf(length_penalty);
                 let sb = b.score / (b.tokens.len() as f32).powf(length_penalty);
-                sb.partial_cmp(&sa).unwrap()
+                sb.partial_cmp(&sa)
+                    .unwrap_or_else(|| sa.is_nan().cmp(&sb.is_nan()))
             });
 
             beams = all_candidates.into_iter().take(beam_width).collect();
@@ -235,7 +236,8 @@ impl<M: ModelBackend> Engine<M> {
             .max_by(|a, b| {
                 let sa = a.score / (a.tokens.len() as f32).powf(length_penalty);
                 let sb = b.score / (b.tokens.len() as f32).powf(length_penalty);
-                sa.partial_cmp(&sb).unwrap()
+                sa.partial_cmp(&sb)
+                    .unwrap_or_else(|| sa.is_nan().cmp(&sb.is_nan()))
             })
             .unwrap())
     }
@@ -244,7 +246,10 @@ impl<M: ModelBackend> Engine<M> {
         let k = k.min(logits.len());
         let mut indexed: Vec<(usize, f32)> =
             logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
-        indexed.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        indexed.sort_by(|a, b| {
+            b.1.partial_cmp(&a.1)
+                .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
+        });
         indexed
             .into_iter()
             .take(k)

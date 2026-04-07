@@ -212,21 +212,24 @@ impl MistralBlock {
     }
 
     fn rms_norm(&self, x: &Tensor, layernorm: &LayerNorm) -> Result<Tensor> {
-        let hidden_size = x.dims().last().unwrap();
+        let hidden_size = *x
+            .dims()
+            .last()
+            .ok_or_else(|| candle_core::Error::msg("Tensor has no dimensions"))?;
         let dims = x.dims();
         let batch_size = dims[0];
         let seq_len = dims[1];
 
         let total_len = batch_size * seq_len;
-        let x_flat = x.reshape((total_len, *hidden_size))?;
+        let x_flat = x.reshape((total_len, hidden_size))?;
         let weight = layernorm.weight().clone();
-        let weight = weight.reshape((1, *hidden_size))?;
+        let weight = weight.reshape((1, hidden_size))?;
 
         let variance = x_flat.sqr()?.mean(1)?;
         let x_normed = x_flat.broadcast_div(&(variance + 1e-6)?.sqrt()?)?;
         let x = x_normed.broadcast_mul(&weight)?;
 
-        x.reshape((batch_size, seq_len, *hidden_size))
+        x.reshape((batch_size, seq_len, hidden_size))
     }
 }
 
