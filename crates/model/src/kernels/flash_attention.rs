@@ -48,14 +48,24 @@ impl FlashAttentionConfig {
     }
 }
 
-pub fn select_tile_size(seq_len: usize, _config: &FlashAttentionConfig) -> usize {
-    if seq_len <= 64 {
+pub fn select_tile_size(seq_len: usize, config: &FlashAttentionConfig) -> usize {
+    if seq_len <= 32 {
+        32
+    } else if seq_len <= 128 {
         64
     } else if seq_len <= 512 {
         128
-    } else {
+    } else if seq_len <= 2048 {
         256
+    } else {
+        config.tile_sizes.last().copied().unwrap_or(256)
     }
+}
+
+pub fn should_use_tiled(seq_len: usize, head_dim: usize) -> bool {
+    let memory_standard = seq_len * seq_len * head_dim;
+    let memory_tiled = seq_len * 128 * head_dim * 2;
+    memory_standard > memory_tiled * 2
 }
 
 pub trait FlashAttention: Send + Sync {
@@ -71,6 +81,25 @@ pub trait FlashAttention: Send + Sync {
     -> Result<Tensor>;
 }
 
+#[derive(Clone, Default)]
+pub struct AttentionStats {
+    pub forward_count: u64,
+    pub tiled_forward_count: u64,
+    pub total_tokens: u64,
+}
+
+impl AttentionStats {
+    pub fn record_forward(&mut self, num_tokens: usize) {
+        self.forward_count += 1;
+        self.total_tokens += num_tokens as u64;
+    }
+
+    pub fn record_tiled(&mut self, num_tokens: usize) {
+        self.tiled_forward_count += 1;
+        self.total_tokens += num_tokens as u64;
+    }
+}
+
 pub struct ScaledDotProductAttention {
     scale: f32,
     tile_size: usize,
@@ -79,9 +108,10 @@ pub struct ScaledDotProductAttention {
 impl ScaledDotProductAttention {
     pub fn new(head_dim: usize) -> Self {
         let scale = 1.0 / (head_dim as f32).sqrt();
+        let optimal_tile = if head_dim <= 64 { 32 } else { 64 };
         Self {
             scale,
-            tile_size: 16,
+            tile_size: optimal_tile,
         }
     }
 
@@ -102,6 +132,10 @@ impl ScaledDotProductAttention {
         let num_heads = q_shape[1];
         let seq_len = q_shape[2];
         let _head_dim = q_shape[3];
+
+        if seq_len <= 32 {
+            return self.forward(q, k, v);
+        }
 
         let scale_tensor = Tensor::new(self.scale, q.device())?;
         let mut all_outputs: Vec<Tensor> = Vec::with_capacity(batch_size);
@@ -168,7 +202,9 @@ impl ScaledDotProductAttention {
 
 fn softmax_last_dim(t: &Tensor) -> Result<Tensor> {
     let shape = t.dims();
-    let exp = t.exp()?;
+    let max_vals = t.max_keepdim(shape.len() - 1)?;
+    let t_shifted = t.broadcast_sub(&max_vals)?;
+    let exp = t_shifted.exp()?;
     let sum = exp.sum_keepdim(shape.len() - 1)?;
     exp.broadcast_div(&sum)
 }
