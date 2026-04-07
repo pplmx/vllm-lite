@@ -13,13 +13,13 @@ init:
 build:
     cargo build --release
 
-# Run all tests
+# Run all tests (without CUDA features for compatibility)
 test:
-    cargo test --all-features --workspace
+    cargo test --workspace
 
 # Run tests by cargo-nextest (a much more modern test runner)
 nextest:
-    cargo nextest run --all-features --workspace
+    cargo nextest run --workspace
 
 # Format code
 fmt:
@@ -31,19 +31,19 @@ fmt-check:
 
 # Run clippy (CI style)
 clippy:
-    cargo clippy --all-targets --all-features --workspace -- -D warnings
+    cargo clippy --all-targets --workspace -- -D warnings
 
 # Check documentation (CI style)
 doc-check:
-    RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --all-features --workspace
+    RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --workspace
 
 # Run all CI checks locally (excluding msrv-check - requires special workspace setup)
 ci: fmt-check clippy doc-check nextest
 
 # Auto-fix clippy warnings and format
 fix:
-    cargo fix --allow-dirty --allow-staged --all-targets --all-features --workspace
-    cargo clippy --fix --allow-dirty --allow-staged --all-targets --all-features --workspace -- -D warnings
+    cargo fix --allow-dirty --allow-staged --all-targets --workspace
+    cargo clippy --fix --allow-dirty --allow-staged --all-targets --workspace -- -D warnings
     cargo fmt --all
 
 # Generate documentation
