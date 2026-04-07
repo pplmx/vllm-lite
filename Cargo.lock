@@ -3223,6 +3223,7 @@ version = "0.1.0"
 dependencies = [
  "candle-core 0.10.2",
  "candle-nn",
+ "criterion",
  "half",
  "rand 0.10.0",
  "safetensors 0.7.0",
