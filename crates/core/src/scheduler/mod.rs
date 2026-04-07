@@ -14,5 +14,6 @@ mod scheduler;
 pub use scheduler::{Scheduler, SchedulerStats};
 
 pub mod batch;
+pub mod batch_planner;
 pub mod event_handler;
 pub mod queue_manager;
