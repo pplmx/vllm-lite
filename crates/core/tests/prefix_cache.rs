@@ -1,54 +1,8 @@
 use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
 use vllm_core::kv_cache::{BlockAllocator, PrefixCache, hash_tokens};
-use vllm_core::types::{Request, SchedulerConfig};
-use vllm_traits::{BatchOutput, SeqId, TokenId};
-use vllm_traits::{ModelBackend, Result};
-
-struct StubModel;
-
-impl ModelBackend for StubModel {
-    fn forward(
-        &mut self,
-        seq_ids: &[SeqId],
-        _input_tokens: &[Vec<TokenId>],
-        _positions: &[Vec<usize>],
-        _kv_block_ids: &[Vec<usize>],
-        _num_computed_tokens: &[usize],
-        _is_prefill: &[bool],
-    ) -> Result<BatchOutput> {
-        Ok(BatchOutput {
-            seq_ids: seq_ids.to_vec(),
-            next_tokens: seq_ids.iter().map(|_| 1 as TokenId).collect(),
-        })
-    }
-
-    fn forward_logits(
-        &mut self,
-        _seq_ids: &[SeqId],
-        input_tokens: &[Vec<TokenId>],
-        _positions: &[Vec<usize>],
-        _kv_block_ids: &[Vec<usize>],
-        _num_computed_tokens: &[usize],
-        _is_prefill: &[bool],
-    ) -> Result<Vec<Vec<f32>>> {
-        Ok(input_tokens
-            .iter()
-            .map(|tokens| tokens.iter().map(|_| 0.0).collect())
-            .collect())
-    }
-
-    fn embed(
-        &mut self,
-        input_tokens: &[Vec<TokenId>],
-        _positions: &[Vec<usize>],
-    ) -> Result<Vec<Vec<f32>>> {
-        Ok(input_tokens
-            .iter()
-            .map(|tokens| tokens.iter().map(|_| 0.0).collect())
-            .collect())
-    }
-}
+use vllm_core::types::{Request, SchedulerConfig, SeqId, TokenId};
+use vllm_testing::StubModel;
 
 #[test]
 fn test_prefix_cache_hit() {

@@ -20,6 +20,7 @@ tokenizers = { version = "0.22", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
+vllm-testing = { path = "../testing" }
 
 [features]
 default = []
