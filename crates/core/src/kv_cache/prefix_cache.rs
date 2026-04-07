@@ -161,23 +161,27 @@ impl PrefixCache {
         }
     }
 
-    /// Find if any cached entry is a prefix of the given tokens
-    /// Returns the cached entry if found, along with how many tokens are cached
-    pub fn find_cached_prefix(&self, tokens: &[TokenId]) -> Option<(&CachedEntry, usize)> {
-        if tokens.is_empty() {
+    /// Reverse prefix lookup: find if any cached entry is a prefix of the given tokens
+    /// Note: This is expensive as we need to check all entries
+    /// Note: This is expensive as we need to check all entries
+    pub fn find_reverse_prefix_match(
+        &self,
+        tokens: &[TokenId],
+    ) -> Option<(Arc<Vec<BlockId>>, usize)> {
+        if tokens.is_empty() || self.entries.is_empty() {
             return None;
         }
 
-        // Check all entries - if an entry's token_count is <= tokens.len()
-        // and the tokens match, it's a cached prefix
-        for (key, entry) in &self.entries {
-            if entry.token_count <= tokens.len() {
-                // Need to verify the tokens match
-                // Since we only store the key (hash), we'd need to compare hashes
-                // For now, check if token_count matches and assume hash matched
-                return Some((entry, entry.token_count));
+        // Try shorter lengths first (more likely to be cached)
+        for prefix_len in 1..=tokens.len().saturating_sub(1) {
+            let prefix = &tokens[..prefix_len];
+            let prefix_key = hash_tokens(prefix);
+
+            if let Some(entry) = self.entries.get(&prefix_key) {
+                return Some((entry.blocks.clone(), entry.token_count));
             }
         }
+
         None
     }
 }
