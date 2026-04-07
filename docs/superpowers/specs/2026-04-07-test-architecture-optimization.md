@@ -163,11 +163,11 @@ pub fn generate_random_tokens(len: usize) -> Vec<TokenId>;
 
 ## 验收标准
 
-- [ ] 消除所有重复的 Mock 模型实现
-- [ ] 测试文件命名统一 (`*_test.rs` 或 `*_integration.rs`)
-- [ ] Benchmark 可通过 `cargo bench` 运行
-- [ ] 新测试使用 `vllm-testing` crate
-- [ ] CI 流程不变
+- [x] 消除所有重复的 Mock 模型实现
+- [x] 测试文件命名统一 (`*_test.rs` 或 `*_integration.rs`)
+- [x] Benchmark 可通过 `cargo bench` 运行
+- [x] 新测试使用 `vllm-testing` crate
+- [x] CI 流程不变
 
 ## 风险与回滚
 
