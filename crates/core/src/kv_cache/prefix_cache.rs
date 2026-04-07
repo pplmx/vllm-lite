@@ -1,5 +1,5 @@
 use crate::types::{BlockId, TokenId};
-use std::collections::{HashMap, VecDeque, hash_map::DefaultHasher};
+use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::Instant;
@@ -9,7 +9,7 @@ use super::BlockAllocator;
 pub type CacheKey = u64;
 
 pub fn hash_tokens(tokens: &[TokenId]) -> CacheKey {
-    let mut hasher = DefaultHasher::new();
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
     tokens.hash(&mut hasher);
     hasher.finish()
 }

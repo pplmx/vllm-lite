@@ -53,17 +53,19 @@ impl BlockAllocator {
             return None;
         }
 
+        debug_assert!(self.first_free != NULL_BLOCK || self.stats.available_blocks == 0);
+
         let mut blocks = Vec::with_capacity(num_blocks);
         for _ in 0..num_blocks {
-            if self.first_free != NULL_BLOCK && self.is_free[self.first_free] {
-                let block = self.first_free;
-                blocks.push(block);
-                self.remove_from_free_list(block);
-                self.is_free[block] = false;
-                self.stats.available_blocks -= 1;
-            } else {
+            let block = self.first_free;
+            if block == NULL_BLOCK {
                 return None;
             }
+            debug_assert!(self.is_free[block]);
+            blocks.push(block);
+            self.remove_from_free_list(block);
+            self.is_free[block] = false;
+            self.stats.available_blocks -= 1;
         }
         self.stats.allocation_count += 1;
         Some(blocks)
