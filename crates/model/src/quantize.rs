@@ -296,6 +296,10 @@ fn float_to_fp8(value: f32, format: FP8Format) -> u8 {
     let bias = max_exp / 2;
 
     let log2 = abs_value.log2();
+    if log2.is_nan() || log2.is_infinite() || log2 < -(bias as f32) - 1.0 {
+        return 0;
+    }
+
     let mut exp = log2.floor() as i32 + bias;
     let mantissa = abs_value * 2.0f32.powf(log2.fract() - mantissa_bits as f32);
 
@@ -324,6 +328,9 @@ fn fp8_to_float(byte: u8, format: FP8Format) -> f32 {
     let mantissa = byte & ((1 << mantissa_bits) - 1);
 
     if exp == max_exp {
+        if mantissa != 0 {
+            return f32::NAN;
+        }
         return f32::INFINITY;
     }
 

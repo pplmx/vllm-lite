@@ -41,8 +41,11 @@ impl PreemptionManager {
             return false;
         }
 
-        let memory_shortage_ratio =
-            blocks_needed as f32 / blocks_available.saturating_sub(1) as f32;
+        if blocks_available <= 1 {
+            return false;
+        }
+
+        let memory_shortage_ratio = blocks_needed as f32 / (blocks_available - 1) as f32;
         if memory_shortage_ratio < 1.2 {
             return false;
         }
@@ -144,7 +147,7 @@ mod tests {
     #[test]
     fn test_should_preempt_all_conditions_met() {
         let manager = PreemptionManager::new(SchedulerConfig::default());
-        assert!(manager.should_preempt(3, 5, 10, 1));
+        assert!(manager.should_preempt(3, 5, 10, 5));
     }
 
     #[test]
