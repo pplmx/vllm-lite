@@ -406,12 +406,34 @@ impl SchedulerEngine {
         let mut is_prefill = Vec::new();
 
         let batch_size = plan.target_batch_size.min(self.queue_manager.len());
+        let max_tokens = self.config.max_num_batched_tokens;
 
         // Get sequences from queue for batch (peek, don't remove)
-        let batch_seqs: Vec<_> = {
+        let all_seqs: Vec<_> = {
             let all = self.queue_manager.all_waiting();
             all.into_iter().take(batch_size).cloned().collect()
         };
+
+        // Apply token budget: collect sequences until we hit max_tokens limit
+        let mut current_tokens = 0;
+        let mut batch_seqs = Vec::new();
+
+        for seq in all_seqs {
+            let is_prefilling = seq.status == Status::Waiting;
+            let seq_tokens = if is_prefilling {
+                seq.tokens.len().saturating_sub(seq.num_computed_tokens)
+            } else {
+                1 // decode is 1 token
+            };
+
+            // Check if adding this sequence would exceed token budget
+            if current_tokens + seq_tokens > max_tokens {
+                break;
+            }
+
+            current_tokens += seq_tokens;
+            batch_seqs.push(seq);
+        }
 
         for seq in batch_seqs {
             let is_prefilling = seq.status == Status::Waiting;
