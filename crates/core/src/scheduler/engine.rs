@@ -1,10 +1,69 @@
 use crate::kv_cache::BlockAllocator;
-use crate::scheduler::SchedulerStats;
 use crate::scheduler::action_executor::ActionExecutor;
 use crate::scheduler::batch_planner::{BatchPlanner, SchedulerStateView};
 use crate::scheduler::event_handler::EventHandler;
 use crate::scheduler::queue_manager::QueueManager;
 use crate::types::{BLOCK_SIZE, Batch, Request, SchedulerConfig, SeqId, Sequence, Status};
+use std::time::Instant;
+
+#[derive(Clone)]
+pub struct SchedulerStats {
+    pub total_batches: usize,
+    pub total_prefill_requests: usize,
+    pub total_decode_requests: usize,
+    pub total_preemptions: usize,
+    pub total_evictions: usize,
+    pub avg_batch_size: f64,
+    pub last_batch_size: usize,
+    pub batch_size_sum: u64,
+    pub last_update: Instant,
+}
+
+impl Default for SchedulerStats {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SchedulerStats {
+    pub fn new() -> Self {
+        Self {
+            total_batches: 0,
+            total_prefill_requests: 0,
+            total_decode_requests: 0,
+            total_preemptions: 0,
+            total_evictions: 0,
+            avg_batch_size: 0.0,
+            last_batch_size: 0,
+            batch_size_sum: 0,
+            last_update: Instant::now(),
+        }
+    }
+
+    pub fn record_batch(&mut self, batch_size: usize) {
+        self.total_batches += 1;
+        self.last_batch_size = batch_size;
+        self.batch_size_sum += batch_size as u64;
+        self.avg_batch_size = self.batch_size_sum as f64 / self.total_batches as f64;
+        self.last_update = Instant::now();
+    }
+
+    pub fn record_prefill(&mut self) {
+        self.total_prefill_requests += 1;
+    }
+
+    pub fn record_decode(&mut self) {
+        self.total_decode_requests += 1;
+    }
+
+    pub fn record_preemption(&mut self) {
+        self.total_preemptions += 1;
+    }
+
+    pub fn record_eviction(&mut self) {
+        self.total_evictions += 1;
+    }
+}
 
 #[allow(dead_code)]
 pub struct SchedulerEngine {
@@ -16,6 +75,7 @@ pub struct SchedulerEngine {
     config: SchedulerConfig,
     stats: SchedulerStats,
     next_seq_id: SeqId,
+    running: Vec<Sequence>,
 }
 
 impl SchedulerEngine {
@@ -27,8 +87,9 @@ impl SchedulerEngine {
             batch_planner: BatchPlanner::new(config.clone()),
             kv_allocator: BlockAllocator::new(num_kv_blocks),
             config,
-            stats: SchedulerStats::default(),
+            stats: SchedulerStats::new(),
             next_seq_id: 1,
+            running: Vec::new(),
         }
     }
 
@@ -95,32 +156,39 @@ impl SchedulerEngine {
 
         let batch_size = plan.target_batch_size.min(self.queue_manager.len());
 
-        for _ in 0..batch_size {
-            if let Some(seq) = self.queue_manager.dequeue() {
-                let is_prefilling = seq.status == Status::Waiting;
+        // Get sequences from queue for batch (peek, don't remove)
+        let batch_seqs: Vec<_> = {
+            let all = self.queue_manager.all_waiting();
+            all.into_iter().take(batch_size).cloned().collect()
+        };
 
-                let start = seq.num_computed_tokens;
-                let tokens: Vec<_> = if is_prefilling {
-                    seq.tokens[start..].to_vec()
-                } else {
-                    seq.tokens.last().map(|t| vec![*t]).unwrap_or_default()
-                };
+        for seq in batch_seqs {
+            let is_prefilling = seq.status == Status::Waiting;
 
-                let pos: Vec<usize> = (start..start + tokens.len()).collect();
+            // Track running sequence
+            self.running.push(seq.clone());
 
-                seq_ids.push(seq.id);
-                input_tokens.push(tokens);
-                positions.push(pos);
-                kv_block_ids.push(seq.kv_blocks.as_ref().clone());
-                num_computed.push(seq.num_computed_tokens);
-                is_prefill.push(is_prefilling);
+            let start = seq.num_computed_tokens;
+            let tokens: Vec<_> = if is_prefilling {
+                seq.tokens[start..].to_vec()
+            } else {
+                seq.tokens.last().map(|t| vec![*t]).unwrap_or_default()
+            };
 
-                self.stats.record_batch(1);
-                if is_prefilling {
-                    self.stats.record_prefill();
-                } else {
-                    self.stats.record_decode();
-                }
+            let pos: Vec<usize> = (start..start + tokens.len()).collect();
+
+            seq_ids.push(seq.id);
+            input_tokens.push(tokens);
+            positions.push(pos);
+            kv_block_ids.push(seq.kv_blocks.as_ref().clone());
+            num_computed.push(seq.num_computed_tokens);
+            is_prefill.push(is_prefilling);
+
+            self.stats.record_batch(1);
+            if is_prefilling {
+                self.stats.record_prefill();
+            } else {
+                self.stats.record_decode();
             }
         }
 
@@ -179,6 +247,7 @@ impl SchedulerEngine {
 
         for seq_id in finished {
             self.queue_manager.remove(seq_id);
+            self.running.retain(|s| s.id != seq_id);
         }
     }
 
@@ -186,8 +255,28 @@ impl SchedulerEngine {
         !self.queue_manager.is_empty()
     }
 
+    pub fn running(&self) -> Vec<Sequence> {
+        self.running.clone()
+    }
+
+    pub fn finished_sequences(&self) -> Vec<Sequence> {
+        vec![]
+    }
+
     pub fn waiting_count(&self) -> usize {
         self.queue_manager.len()
+    }
+
+    pub fn running_count(&self) -> usize {
+        0
+    }
+
+    pub fn prefix_cache(&self) -> crate::kv_cache::PrefixCache {
+        crate::kv_cache::PrefixCache::new()
+    }
+
+    pub fn eviction(&self) -> crate::scheduler::eviction::EvictionPolicy {
+        crate::scheduler::eviction::EvictionPolicy::new()
     }
 
     pub fn get_stats(&self) -> SchedulerStats {

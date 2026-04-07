@@ -3,7 +3,7 @@ mod speculative;
 use crate::beam::BeamSequence;
 use crate::error::Result;
 use crate::metrics::MetricsCollector;
-use crate::scheduler::Scheduler;
+use crate::scheduler::engine::SchedulerEngine;
 use crate::types::{EngineMessage, Request, SchedulerConfig};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -24,7 +24,7 @@ use vllm_traits::{ModelBackend, SeqId, TokenId};
 /// for interior mutability of model references. All external communication
 /// happens through mpsc channels (actor pattern).
 pub struct Engine<M: ModelBackend> {
-    pub scheduler: Scheduler,
+    pub scheduler: SchedulerEngine,
     pub target_model: RefCell<Box<M>>,
     pub draft_model: RefCell<Box<M>>,
     pub max_draft_tokens: usize,
@@ -65,7 +65,7 @@ impl<M: ModelBackend> Engine<M> {
     ) -> Self {
         let max_seqs = config.max_num_seqs;
         Self {
-            scheduler: Scheduler::with_config(config, num_kv_blocks),
+            scheduler: SchedulerEngine::new(config, num_kv_blocks),
             target_model: RefCell::new(Box::new(target_model)),
             draft_model: RefCell::new(Box::new(draft_model)),
             max_draft_tokens,
@@ -167,7 +167,7 @@ impl<M: ModelBackend> Engine<M> {
 
         let mut results = Vec::new();
         for seq in self.scheduler.running() {
-            let beam = self.beam_search(seq, beam_width, length_penalty, max_tokens)?;
+            let beam = self.beam_search(&seq, beam_width, length_penalty, max_tokens)?;
             results.push(beam);
         }
 
