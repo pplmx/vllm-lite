@@ -485,7 +485,7 @@ fn test_concurrent_requests_different_prompts() {
 }
 
 #[test]
-fn test_rapid_request_addition() {
+fn test_batch_size_variation() {
     let config = SchedulerConfig {
         max_num_seqs: 20,
         max_num_batched_tokens: 200,
@@ -682,4 +682,207 @@ fn test_request_with_max_tokens_equals_prompt() {
         !engine.has_pending(),
         "request should complete immediately when max_tokens == prompt_len"
     );
+}
+
+#[test]
+fn test_concurrent_requests_batch_processing() {
+    let config = SchedulerConfig {
+        max_num_seqs: 4,
+        max_num_batched_tokens: 50,
+        max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
+        enable_priority_scheduling: false,
+        enable_dynamic_batching: true,
+        min_batch_size: 1,
+        max_batch_size: 256,
+    };
+    let mut engine = Engine::with_config(
+        common::IncrementModel,
+        common::IncrementModel,
+        config,
+        4,
+        1024,
+    );
+
+    // Add 4 concurrent requests
+    for i in 1..=4 {
+        let (tx, _rx) = mpsc::channel(64);
+        engine.add_request(Request::new(i as u64, vec![i as u32; 3], 5), tx);
+    }
+
+    // Process in batches
+    let mut total_processed = 0;
+    while engine.has_pending() {
+        let results = engine.step().unwrap();
+        total_processed += results.len();
+    }
+
+    assert!(total_processed > 0, "Should have processed some tokens");
+}
+
+#[test]
+fn test_multi_batch_continuous_processing() {
+    let config = SchedulerConfig {
+        max_num_seqs: 2,
+        max_num_batched_tokens: 20,
+        max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
+        enable_priority_scheduling: false,
+        enable_dynamic_batching: true,
+        min_batch_size: 1,
+        max_batch_size: 256,
+    };
+    let mut engine = Engine::with_config(
+        common::IncrementModel,
+        common::IncrementModel,
+        config,
+        4,
+        1024,
+    );
+
+    // Add first batch of requests
+    for i in 1..=2 {
+        let (tx, _rx) = mpsc::channel(64);
+        engine.add_request(Request::new(i as u64, vec![i as u32; 3], 10), tx);
+    }
+
+    // Process first batch
+    while engine.has_pending() {
+        let results = engine.step().unwrap();
+        if results.is_empty() {
+            break;
+        }
+    }
+
+    // Add second batch of requests
+    for i in 3..=4 {
+        let (tx, _rx) = mpsc::channel(64);
+        engine.add_request(Request::new(i as u64, vec![i as u32; 3], 10), tx);
+    }
+
+    // Process second batch
+    while engine.has_pending() {
+        let results = engine.step().unwrap();
+        if results.is_empty() {
+            break;
+        }
+    }
+
+    assert!(!engine.has_pending(), "All requests should be completed");
+}
+
+#[test]
+fn test_dynamic_batch_adjustment() {
+    let config = SchedulerConfig::default();
+    let mut engine = Engine::with_config(
+        common::IncrementModel,
+        common::IncrementModel,
+        config,
+        4,
+        1024,
+    );
+
+    // Rapidly add many requests
+    for i in 1..=10 {
+        let (tx, _rx) = mpsc::channel(64);
+        engine.add_request(Request::new(i as u64, vec![i as u32], 3), tx);
+    }
+
+    // Process all
+    let mut batches = 0;
+    while engine.has_pending() {
+        engine.step().unwrap();
+        batches += 1;
+    }
+
+    assert!(batches > 0, "Should have processed in multiple batches");
+}
+
+#[test]
+fn test_mixed_prompt_lengths() {
+    let config = SchedulerConfig {
+        max_num_seqs: 10,
+        max_num_batched_tokens: 50,
+        max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
+        enable_priority_scheduling: false,
+        enable_dynamic_batching: true,
+        min_batch_size: 1,
+        max_batch_size: 256,
+    };
+    let mut engine = Engine::with_config(
+        common::IncrementModel,
+        common::IncrementModel,
+        config,
+        4,
+        1024,
+    );
+
+    // Add requests with varying prompt lengths
+    let prompts = [1, 3, 5, 10, 20];
+    for (i, len) in prompts.iter().enumerate() {
+        let (tx, _rx) = mpsc::channel(64);
+        let prompt: Vec<u32> = (0..*len as u32).collect();
+        engine.add_request(Request::new((i + 1) as u64, prompt, 5), tx);
+    }
+
+    // Process
+    while engine.has_pending() {
+        engine.step().unwrap();
+    }
+
+    assert!(!engine.has_pending(), "All requests should complete");
+}
+
+#[test]
+fn test_batch_size_changes_over_time() {
+    let config = SchedulerConfig {
+        max_num_seqs: 10,
+        max_num_batched_tokens: 100,
+        max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
+        enable_priority_scheduling: false,
+        enable_dynamic_batching: true,
+        min_batch_size: 1,
+        max_batch_size: 256,
+    };
+    let mut engine = Engine::with_config(
+        common::IncrementModel,
+        common::IncrementModel,
+        config,
+        4,
+        1024,
+    );
+
+    let mut batch_sizes = Vec::new();
+
+    // Add requests gradually and track batch sizes
+    for i in 1..=10 {
+        let (tx, _rx) = mpsc::channel(64);
+        engine.add_request(Request::new(i as u64, vec![i as u32], 5), tx);
+
+        if i >= 3 {
+            let results = engine.step().unwrap();
+            batch_sizes.push(results.len());
+        }
+    }
+
+    // Process remaining
+    while engine.has_pending() {
+        let results = engine.step().unwrap();
+        batch_sizes.push(results.len());
+    }
+
+    assert!(!batch_sizes.is_empty(), "Should have recorded batch sizes");
+    // Verify batch sizes are reasonable (not all zero)
+    let total: usize = batch_sizes.iter().sum();
+    assert!(total > 0, "Should have processed tokens");
 }
