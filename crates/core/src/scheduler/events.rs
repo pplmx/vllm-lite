@@ -47,12 +47,44 @@ pub enum SchedulerEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::Request;
 
     #[test]
-    fn test_event_cloning() {
-        let event = SchedulerEvent::RequestArrived(Request::new(1, vec![1, 2, 3], 5));
-        let cloned = event.clone();
-        assert!(matches!(cloned, SchedulerEvent::RequestArrived(_)));
+    fn test_all_event_variants() {
+        // Request lifecycle events
+        let _ = SchedulerEvent::RequestArrived(Request::new(1, vec![1], 5));
+        let _ = SchedulerEvent::RequestCancelled(1);
+        let _ = SchedulerEvent::RequestTimeout(1);
+
+        // Sequence state transitions
+        let _ = SchedulerEvent::PrefillChunkComplete {
+            seq_id: 1,
+            tokens_computed: 5,
+            total_prompt: 10,
+        };
+        let _ = SchedulerEvent::PrefillComplete { seq_id: 1 };
+        let _ = SchedulerEvent::DecodeComplete {
+            seq_id: 1,
+            new_token: 42,
+        };
+        let _ = SchedulerEvent::SequenceFinished { seq_id: 1 };
+
+        // Resource events
+        let _ = SchedulerEvent::MemoryPressure {
+            available_blocks: 10,
+        };
+        let _ = SchedulerEvent::GPUIdle;
+
+        // Scheduled events
+        let _ = SchedulerEvent::Tick;
+
+        // State machine events
+        let _ = SchedulerEvent::Scheduled;
+        let _ = SchedulerEvent::Preempt {
+            seq_id: 1,
+            reason: "test".to_string(),
+        };
+        let _ = SchedulerEvent::Resumed { seq_id: 1 };
     }
 
     #[test]
@@ -71,5 +103,46 @@ mod tests {
             reason: "memory pressure".to_string(),
         };
         assert!(matches!(event, SchedulerEvent::Preempt { .. }));
+    }
+
+    #[test]
+    fn test_resumed_event_with_seq_id() {
+        let event = SchedulerEvent::Resumed { seq_id: 42 };
+        assert!(matches!(event, SchedulerEvent::Resumed { seq_id: 42 }));
+    }
+
+    #[test]
+    fn test_prefill_chunk_complete() {
+        let event = SchedulerEvent::PrefillChunkComplete {
+            seq_id: 1,
+            tokens_computed: 5,
+            total_prompt: 10,
+        };
+        if let SchedulerEvent::PrefillChunkComplete {
+            seq_id,
+            tokens_computed,
+            total_prompt,
+        } = event
+        {
+            assert_eq!(seq_id, 1);
+            assert_eq!(tokens_computed, 5);
+            assert_eq!(total_prompt, 10);
+        } else {
+            panic!("Expected PrefillChunkComplete");
+        }
+    }
+
+    #[test]
+    fn test_decode_complete() {
+        let event = SchedulerEvent::DecodeComplete {
+            seq_id: 1,
+            new_token: 100,
+        };
+        if let SchedulerEvent::DecodeComplete { seq_id, new_token } = event {
+            assert_eq!(seq_id, 1);
+            assert_eq!(new_token, 100);
+        } else {
+            panic!("Expected DecodeComplete");
+        }
     }
 }

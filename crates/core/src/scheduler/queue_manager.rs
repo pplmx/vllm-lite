@@ -197,4 +197,78 @@ mod tests {
         assert_eq!(b, 0);
         assert_eq!(p, 1);
     }
+
+    #[test]
+    fn test_is_empty() {
+        let mut qm = QueueManager::new();
+        assert!(qm.is_empty());
+
+        qm.enqueue(make_seq(1, 30), Priority(30));
+        assert!(!qm.is_empty());
+    }
+
+    #[test]
+    fn test_len() {
+        let mut qm = QueueManager::new();
+        assert_eq!(qm.len(), 0);
+
+        qm.enqueue(make_seq(1, 30), Priority(30));
+        qm.enqueue(make_seq(2, 30), Priority(30));
+        assert_eq!(qm.len(), 2);
+    }
+
+    #[test]
+    fn test_get_sequence() {
+        let mut qm = QueueManager::new();
+        qm.enqueue(make_seq(1, 30), Priority(30));
+        qm.enqueue(make_seq(2, 30), Priority(30));
+
+        let seq = qm.get(1);
+        assert!(seq.is_some());
+        assert_eq!(seq.unwrap().id, 1);
+
+        let seq = qm.get(999);
+        assert!(seq.is_none());
+    }
+
+    #[test]
+    fn test_remove_sequence() {
+        let mut qm = QueueManager::new();
+        qm.enqueue(make_seq(1, 30), Priority(30));
+        qm.enqueue(make_seq(2, 30), Priority(30));
+
+        let removed = qm.remove(1);
+        assert!(removed.is_some());
+        assert_eq!(removed.unwrap().id, 1);
+
+        assert_eq!(qm.len(), 1);
+    }
+
+    #[test]
+    fn test_filter_by_status() {
+        let mut qm = QueueManager::new();
+        let mut s1 = make_seq(1, 30);
+        s1.status = Status::Waiting;
+        let mut s2 = make_seq(2, 30);
+        s2.status = Status::Prefilling;
+
+        qm.enqueue(s1, Priority(30));
+        qm.enqueue(s2, Priority(30));
+
+        let waiting = qm.filter_by_status(Status::Waiting);
+        assert_eq!(waiting.len(), 1);
+
+        let prefill = qm.filter_by_status(Status::Prefilling);
+        assert_eq!(prefill.len(), 1);
+    }
+
+    #[test]
+    fn test_all_waiting() {
+        let mut qm = QueueManager::new();
+        qm.enqueue(make_seq(1, 30), Priority(30));
+        qm.enqueue(make_seq(2, 30), Priority(30));
+
+        let all = qm.all_waiting();
+        assert_eq!(all.len(), 2);
+    }
 }

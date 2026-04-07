@@ -276,4 +276,144 @@ mod tests {
             .can_be_preempted()
         );
     }
+
+    #[test]
+    fn test_preemption_from_decoding() {
+        let state = SeqState::Decoding {
+            decode_count: 5,
+            started_at: Instant::now(),
+        };
+        let event = SchedulerEvent::Preempt {
+            seq_id: 1,
+            reason: "memory pressure".to_string(),
+        };
+        let next = state.transition(&event);
+        assert!(matches!(next, Some(SeqState::Preempted { .. })));
+    }
+
+    #[test]
+    fn test_preemption_from_prefilling() {
+        let state = SeqState::Prefilling {
+            chunk_idx: 0,
+            total_chunks: 1,
+            started_at: Instant::now(),
+        };
+        let event = SchedulerEvent::Preempt {
+            seq_id: 1,
+            reason: "priority".to_string(),
+        };
+        let next = state.transition(&event);
+        assert!(matches!(next, Some(SeqState::Preempted { .. })));
+    }
+
+    #[test]
+    fn test_no_preemption_from_queued() {
+        let state = SeqState::Queued {
+            priority: Priority(10),
+            queued_at: Instant::now(),
+            prompt_length: 3,
+        };
+        let event = SchedulerEvent::Preempt {
+            seq_id: 1,
+            reason: "memory pressure".to_string(),
+        };
+        let next = state.transition(&event);
+        assert!(next.is_none());
+    }
+
+    #[test]
+    fn test_resumed_transition() {
+        let state = SeqState::Preempted {
+            resume_at: 0,
+            preempted_at: Instant::now(),
+            preemption_count: 2,
+        };
+        let event = SchedulerEvent::Resumed { seq_id: 1 };
+        let next = state.transition(&event);
+        assert!(matches!(next, Some(SeqState::Queued { .. })));
+    }
+
+    #[test]
+    fn test_decode_to_finished() {
+        let state = SeqState::Decoding {
+            decode_count: 10,
+            started_at: Instant::now(),
+        };
+        let event = SchedulerEvent::SequenceFinished { seq_id: 1 };
+        let next = state.transition(&event);
+        assert!(matches!(next, Some(SeqState::Finished)));
+    }
+
+    #[test]
+    fn test_prefill_complete_to_decode() {
+        let state = SeqState::Prefilling {
+            chunk_idx: 0,
+            total_chunks: 1,
+            started_at: Instant::now(),
+        };
+        let event = SchedulerEvent::PrefillChunkComplete {
+            seq_id: 1,
+            tokens_computed: 10,
+            total_prompt: 10,
+        };
+        let next = state.transition(&event);
+        assert!(matches!(next, Some(SeqState::Decoding { .. })));
+    }
+
+    #[test]
+    fn test_prefill_incomplete_stays_prefilling() {
+        let state = SeqState::Prefilling {
+            chunk_idx: 0,
+            total_chunks: 2,
+            started_at: Instant::now(),
+        };
+        let event = SchedulerEvent::PrefillChunkComplete {
+            seq_id: 1,
+            tokens_computed: 5,
+            total_prompt: 10,
+        };
+        let next = state.transition(&event);
+        assert!(matches!(next, Some(SeqState::Prefilling { .. })));
+    }
+
+    #[test]
+    fn test_decode_continue() {
+        let state = SeqState::Decoding {
+            decode_count: 5,
+            started_at: Instant::now(),
+        };
+        let event = SchedulerEvent::DecodeComplete {
+            seq_id: 1,
+            new_token: 42,
+        };
+        let next = state.transition(&event);
+        assert!(matches!(
+            next,
+            Some(SeqState::Decoding {
+                decode_count: 6,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn test_is_waiting() {
+        assert!(
+            SeqState::Queued {
+                priority: Priority(10),
+                queued_at: Instant::now(),
+                prompt_length: 3,
+            }
+            .is_waiting()
+        );
+
+        assert!(!SeqState::Pending.is_waiting());
+        assert!(
+            !SeqState::Decoding {
+                decode_count: 1,
+                started_at: Instant::now()
+            }
+            .is_waiting()
+        );
+    }
 }
