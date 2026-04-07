@@ -18,4 +18,5 @@ pub mod batch;
 pub mod batch_planner;
 pub mod engine;
 pub mod event_handler;
+pub mod legacy_adapter;
 pub mod queue_manager;
