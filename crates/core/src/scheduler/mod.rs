@@ -15,3 +15,4 @@ pub use scheduler::{Scheduler, SchedulerStats};
 
 pub mod batch;
 pub mod event_handler;
+pub mod queue_manager;
