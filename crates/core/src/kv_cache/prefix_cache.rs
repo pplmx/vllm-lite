@@ -1,5 +1,6 @@
 use crate::types::{BlockId, TokenId};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, VecDeque, hash_map::DefaultHasher};
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -8,9 +9,9 @@ use super::BlockAllocator;
 pub type CacheKey = u64;
 
 pub fn hash_tokens(tokens: &[TokenId]) -> CacheKey {
-    tokens
-        .iter()
-        .fold(0u64, |acc, &t| acc.wrapping_mul(31).wrapping_add(t as u64))
+    let mut hasher = DefaultHasher::new();
+    tokens.hash(&mut hasher);
+    hasher.finish()
 }
 
 #[derive(Clone)]
@@ -21,11 +22,20 @@ pub struct CachedEntry {
     pub last_access: Instant,
 }
 
+#[derive(Clone, Default)]
+pub struct PrefixCacheStats {
+    pub entries: usize,
+    pub hits: usize,
+    pub misses: usize,
+    pub evictions: usize,
+}
+
 pub struct PrefixCache {
     entries: HashMap<CacheKey, CachedEntry>,
     lru_order: VecDeque<CacheKey>,
     block_refs: HashMap<BlockId, usize>,
     prefix_match_cache: HashMap<CacheKey, CacheKey>,
+    stats: PrefixCacheStats,
 }
 
 impl PrefixCache {
@@ -35,6 +45,7 @@ impl PrefixCache {
             lru_order: VecDeque::new(),
             block_refs: HashMap::new(),
             prefix_match_cache: HashMap::new(),
+            stats: PrefixCacheStats::default(),
         }
     }
 
@@ -42,8 +53,10 @@ impl PrefixCache {
         if let Some(entry) = self.entries.get(&key) {
             self.lru_order.retain(|k| *k != key);
             self.lru_order.push_front(key);
+            self.stats.hits += 1;
             Some(entry)
         } else {
+            self.stats.misses += 1;
             None
         }
     }
@@ -78,6 +91,7 @@ impl PrefixCache {
         self.lru_order.retain(|k| *k != key);
         self.lru_order.push_front(key);
         self.prefix_match_cache.clear();
+        self.stats.entries = self.entries.len();
     }
 
     pub fn evict(&mut self, allocator: &mut BlockAllocator) {
@@ -92,6 +106,8 @@ impl PrefixCache {
                         }
                     }
                 }
+                self.stats.evictions += 1;
+                self.stats.entries = self.entries.len();
                 break;
             }
         }
@@ -130,6 +146,19 @@ impl PrefixCache {
             }
         }
         None
+    }
+
+    pub fn stats(&self) -> PrefixCacheStats {
+        self.stats.clone()
+    }
+
+    pub fn hit_rate(&self) -> f64 {
+        let total = self.stats.hits + self.stats.misses;
+        if total == 0 {
+            0.0
+        } else {
+            self.stats.hits as f64 / total as f64
+        }
     }
 }
 
@@ -247,5 +276,20 @@ mod tests {
 
         let result = cache.find_prefix_match(&[3, 4]);
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_stats() {
+        let mut cache = PrefixCache::new();
+
+        cache.insert(1, vec![1], 1);
+        assert_eq!(cache.stats().entries, 1);
+
+        cache.get(1);
+        cache.get(2);
+
+        assert_eq!(cache.stats().hits, 1);
+        assert_eq!(cache.stats().misses, 1);
+        assert!((cache.hit_rate() - 0.5).abs() < 0.01);
     }
 }

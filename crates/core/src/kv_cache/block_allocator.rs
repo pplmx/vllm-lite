@@ -1,43 +1,122 @@
 use crate::types::BlockId;
 
+const NULL_BLOCK: BlockId = BlockId::MAX;
+
+#[derive(Clone, Default)]
+pub struct BlockAllocatorStats {
+    pub total_blocks: usize,
+    pub available_blocks: usize,
+    pub allocation_count: usize,
+    pub free_count: usize,
+}
+
 pub struct BlockAllocator {
     num_blocks: usize,
-    free_list: Vec<BlockId>,
+    next_free: Vec<BlockId>,
+    prev_free: Vec<BlockId>,
+    first_free: BlockId,
+    is_free: Vec<bool>,
+    stats: BlockAllocatorStats,
 }
 
 impl BlockAllocator {
     pub fn new(num_blocks: usize) -> Self {
-        let free_list: Vec<BlockId> = (0..num_blocks).collect();
+        let mut next_free = vec![0; num_blocks];
+        let mut prev_free = vec![0; num_blocks];
+
+        for i in 0..num_blocks {
+            next_free[i] = if i + 1 < num_blocks {
+                i + 1
+            } else {
+                NULL_BLOCK
+            };
+            prev_free[i] = if i > 0 { i - 1 } else { NULL_BLOCK };
+        }
+
         Self {
             num_blocks,
-            free_list,
+            next_free,
+            prev_free,
+            first_free: 0,
+            is_free: vec![true; num_blocks],
+            stats: BlockAllocatorStats {
+                total_blocks: num_blocks,
+                available_blocks: num_blocks,
+                allocation_count: 0,
+                free_count: 0,
+            },
         }
     }
 
     pub fn allocate(&mut self, num_blocks: usize) -> Option<Vec<BlockId>> {
-        if self.free_list.len() >= num_blocks {
-            let mut blocks = Vec::with_capacity(num_blocks);
-            for _ in 0..num_blocks {
-                blocks.push(self.free_list.pop()?);
+        if self.stats.available_blocks < num_blocks {
+            return None;
+        }
+
+        let mut blocks = Vec::with_capacity(num_blocks);
+        for _ in 0..num_blocks {
+            if self.first_free != NULL_BLOCK && self.is_free[self.first_free] {
+                let block = self.first_free;
+                blocks.push(block);
+                self.remove_from_free_list(block);
+                self.is_free[block] = false;
+                self.stats.available_blocks -= 1;
+            } else {
+                return None;
             }
-            Some(blocks)
+        }
+        self.stats.allocation_count += 1;
+        Some(blocks)
+    }
+
+    fn remove_from_free_list(&mut self, block: BlockId) {
+        let next = self.next_free[block];
+        let prev = self.prev_free[block];
+
+        if prev != NULL_BLOCK {
+            self.next_free[prev] = next;
         } else {
-            None
+            self.first_free = next;
+        }
+
+        if next != NULL_BLOCK {
+            self.prev_free[next] = prev;
         }
     }
 
     pub fn free(&mut self, blocks: &[BlockId]) {
         for &block in blocks {
-            self.free_list.push(block);
+            if block < self.num_blocks as BlockId {
+                self.add_to_free_list(block);
+                self.is_free[block] = true;
+                self.stats.available_blocks += 1;
+            }
         }
+        self.stats.free_count += 1;
+    }
+
+    fn add_to_free_list(&mut self, block: BlockId) {
+        let first = self.first_free;
+
+        if first != NULL_BLOCK {
+            self.prev_free[first] = block;
+        }
+
+        self.next_free[block] = first;
+        self.prev_free[block] = NULL_BLOCK;
+        self.first_free = block;
     }
 
     pub fn available(&self) -> usize {
-        self.free_list.len()
+        self.stats.available_blocks
     }
 
     pub fn total(&self) -> usize {
         self.num_blocks
+    }
+
+    pub fn stats(&self) -> BlockAllocatorStats {
+        self.stats.clone()
     }
 }
 
@@ -83,5 +162,18 @@ mod tests {
         let blocks = alloc.allocate(3).unwrap();
         assert_eq!(blocks.len(), 3);
         assert_eq!(alloc.available(), 0);
+    }
+
+    #[test]
+    fn test_stats() {
+        let mut alloc = BlockAllocator::new(10);
+
+        assert_eq!(alloc.stats().allocation_count, 0);
+
+        let blocks = alloc.allocate(3).unwrap();
+        assert_eq!(alloc.stats().allocation_count, 1);
+
+        alloc.free(&blocks);
+        assert_eq!(alloc.stats().free_count, 1);
     }
 }
