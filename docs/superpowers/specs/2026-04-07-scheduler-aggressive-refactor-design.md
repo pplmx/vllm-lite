@@ -200,11 +200,11 @@ impl ActionExecutor {
 
 ```rust
 pub struct QueueManager {
-    // Separate queues for different priority levels
-    critical: PriorityQueue,   // Interactive, low latency
-    normal: PriorityQueue,     // Standard requests  
-    background: PriorityQueue, // Batch, prefetch
-    preempted: PriorityQueue,  // Waiting to resume
+    // Separate queues for different priority levels (VecDeque for FIFO)
+    critical: VecDeque<Sequence>,   // Interactive, low latency (priority 0-10)
+    normal: VecDeque<Sequence>,     // Standard requests (priority 11-50)
+    background: VecDeque<Sequence>, // Batch, prefetch (priority 51+)
+    preempted: VecDeque<Sequence>,  // Waiting to resume
     
     // Metrics
     queue_wait_times: Histogram,
