@@ -39,7 +39,9 @@ pub enum SchedulerEvent {
         seq_id: SeqId,
         reason: String,
     }, // Trigger preemption
-    Resumed,   // Preempted -> Queued (resume)
+    Resumed {
+        seq_id: SeqId,
+    }, // Preempted -> Queued (resume)
 }
 
 #[cfg(test)]

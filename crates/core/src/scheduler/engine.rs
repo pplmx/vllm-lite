@@ -186,6 +186,10 @@ impl SchedulerEngine {
         !self.queue_manager.is_empty()
     }
 
+    pub fn waiting_count(&self) -> usize {
+        self.queue_manager.len()
+    }
+
     pub fn get_stats(&self) -> SchedulerStats {
         self.stats.clone()
     }

@@ -26,7 +26,7 @@ impl ActionExecutor {
                     reason: format!("{:?}", reason),
                 }]
             }
-            Action::Resume { .. } => vec![SchedulerEvent::Resumed],
+            Action::Resume { seq_id } => vec![SchedulerEvent::Resumed { seq_id }],
             Action::Finish { seq_id } => vec![SchedulerEvent::SequenceFinished { seq_id }],
             Action::AllocateBlocks { count, .. } => {
                 if self.kv_allocator.allocate(count).is_some() {
