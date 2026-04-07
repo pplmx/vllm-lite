@@ -1,3 +1,6 @@
+pub mod events;
+pub use events::SchedulerEvent;
+
 #[allow(clippy::module_inception)]
 pub mod eviction;
 pub mod preemption;
