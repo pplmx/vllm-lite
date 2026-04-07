@@ -166,14 +166,35 @@ impl SeqState {
                     prompt_length: req.prompt.len(),
                 })
             }
-            (SeqState::Queued(_), SchedulerEvent::PrefillChunkComplete { seq_id, tokens_computed }) => {
+            // Queued + Scheduled = Prefilling (NOT PrefillChunkComplete!)
+            (SeqState::Queued(_), SchedulerEvent::Scheduled) => {
                 Some(SeqState::Prefilling {
                     chunk_idx: 0,
                     total_chunks: 1,
                     started_at: Instant::now(),
                 })
             }
-            // ... complete implementation for all valid transitions
+            // Prefilling + all chunks complete = Decoding
+            (SeqState::Prefilling { .. }, SchedulerEvent::PrefillChunkComplete { tokens_computed, total_prompt }) => {
+                if tokens_computed >= total_prompt {
+                    Some(SeqState::Decoding { decode_count: 0, started_at: Instant::now() })
+                } else {
+                    Some(SeqState::Prefilling { chunk_idx: 0, total_chunks: 1, started_at: Instant::now() })
+                }
+            }
+            // Decoding + DecodeComplete = Decoding (more) or Finished
+            (SeqState::Decoding { decode_count, .. }, SchedulerEvent::DecodeComplete { .. }) => {
+                Some(SeqState::Decoding { decode_count: decode_count + 1, started_at: Instant::now() })
+            }
+            (SeqState::Decoding { .. }, SchedulerEvent::SequenceFinished { .. }) => {
+                Some(SeqState::Finished)
+            }
+            // Any state -> Cancelled
+            (_, SchedulerEvent::RequestCancelled(_)) => Some(SeqState::Cancelled),
+            // Any state -> Preempted
+            (_, SchedulerEvent::Preempt { .. }) => {
+                Some(SeqState::Preempted { resume_at: 0, preempted_at: Instant::now(), preemption_count: 1 })
+            }
             _ => None,
         }
     }
@@ -956,6 +977,59 @@ git commit -m "feat(scheduler): complete event-driven scheduler implementation"
 
 ---
 
+## Task 11: Cleanup Old Scheduler (Optional - Per Spec Phase 7)
+
+**Files:**
+- Modify: `crates/core/src/scheduler/mod.rs`
+- Delete: `crates/core/src/scheduler/scheduler.rs` (old implementation)
+- Modify: Engine integration points
+
+- [ ] **Step 1: Verify all functionality via adapter**
+
+Run: `cargo test -p vllm-core -- scheduler --nocapture 2>&1 | tail -30`
+Expected: All tests pass through adapter
+
+- [ ] **Step 2: Update Engine to use new SchedulerEngine**
+
+In `crates/core/src/engine.rs`, replace:
+```rust
+use crate::scheduler::Scheduler;
+```
+With:
+```rust
+use crate::scheduler::engine::SchedulerEngine;
+```
+
+- [ ] **Step 3: Run tests with direct engine**
+
+Run: `cargo test -p vllm-core`
+Expected: All pass
+
+- [ ] **Step 4: Remove LegacyAdapter (optional)**
+
+If all works, delete `legacy_adapter.rs` and clean up mod.rs exports
+
+- [ ] **Step 5: Remove old scheduler.rs**
+
+Delete the old polling-based scheduler:
+```bash
+rm crates/core/src/scheduler/scheduler.rs
+```
+
+- [ ] **Step 6: Final integration test**
+
+Run: `cargo test -p vllm-core && cargo test -p vllm-server`
+Expected: All pass
+
+- [ ] **Step 7: Commit cleanup**
+
+```bash
+git add -A
+git commit -m "refactor(scheduler): remove legacy polling scheduler"
+```
+
+---
+
 ## Implementation Summary
 
 | Task | Component | Files | Tests |
@@ -970,5 +1044,6 @@ git commit -m "feat(scheduler): complete event-driven scheduler implementation"
 | 8 | Engine | engine.rs | 3 |
 | 9 | Legacy Adapter | legacy_adapter.rs | 2 |
 | 10 | Integration | Various | 5+ |
+| 11 | Cleanup (optional) | mod.rs, scheduler.rs | - |
 
-**Total: ~25 steps, ~20 tests**
+**Total: ~30 steps, ~25 tests**
