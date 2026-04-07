@@ -16,5 +16,6 @@ pub use scheduler::{Scheduler, SchedulerStats};
 pub mod action_executor;
 pub mod batch;
 pub mod batch_planner;
+pub mod engine;
 pub mod event_handler;
 pub mod queue_manager;
