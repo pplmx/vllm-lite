@@ -256,4 +256,104 @@ mod tests {
         let plan = planner.plan(&state);
         assert!(plan.decode_budget > plan.prefill_budget);
     }
+
+    #[test]
+    fn test_plan_with_zero_waiting() {
+        let config = SchedulerConfig::default();
+        let mut planner = BatchPlanner::new(config);
+
+        let state = MockState {
+            waiting: 0,
+            running: 0,
+            prefill: 0,
+            decode: 0,
+            memory: 100,
+        };
+
+        let plan = planner.plan(&state);
+        assert!(plan.target_batch_size > 0);
+    }
+
+    #[test]
+    fn test_plan_with_low_memory() {
+        let config = SchedulerConfig::default();
+        let mut planner = BatchPlanner::new(config);
+
+        let state = MockState {
+            waiting: 50,
+            running: 10,
+            prefill: 5,
+            decode: 5,
+            memory: 5, // Very low memory
+        };
+
+        let plan = planner.plan(&state);
+        // Should reduce batch size when memory is low (compare to default)
+        let normal_state = MockState {
+            waiting: 50,
+            running: 10,
+            prefill: 5,
+            decode: 5,
+            memory: 100,
+        };
+        let normal_plan = planner.plan(&normal_state);
+        assert!(plan.target_batch_size <= normal_plan.target_batch_size);
+    }
+
+    #[test]
+    fn test_plan_with_high_memory() {
+        let config = SchedulerConfig::default();
+        let mut planner = BatchPlanner::new(config);
+
+        let state = MockState {
+            waiting: 10,
+            running: 5,
+            prefill: 2,
+            decode: 3,
+            memory: 500, // High memory
+        };
+
+        let plan = planner.plan(&state);
+        // Can use larger batch with high memory
+        assert!(plan.target_batch_size > 5);
+    }
+
+    #[test]
+    fn test_record_and_stats() {
+        let config = SchedulerConfig::default();
+        let mut planner = BatchPlanner::new(config);
+
+        // Record some snapshots
+        planner.record(BatchSnapshot {
+            timestamp: std::time::Instant::now(),
+            batch_size: 10,
+            prefill_count: 5,
+            decode_count: 5,
+            total_tokens: 50,
+            latency_ms: 100.0,
+        });
+
+        planner.record(BatchSnapshot {
+            timestamp: std::time::Instant::now(),
+            batch_size: 8,
+            prefill_count: 3,
+            decode_count: 5,
+            total_tokens: 40,
+            latency_ms: 80.0,
+        });
+
+        let (avg_batch, avg_latency, throughput) = planner.get_stats();
+        assert!(avg_batch > 0.0);
+        assert!(avg_latency > 0.0);
+        assert!(throughput > 0.0);
+    }
+
+    #[test]
+    fn test_throughput_with_empty_history() {
+        let config = SchedulerConfig::default();
+        let planner = BatchPlanner::new(config);
+
+        let throughput = planner.estimate_throughput();
+        assert_eq!(throughput, 1000.0); // Default value
+    }
 }
