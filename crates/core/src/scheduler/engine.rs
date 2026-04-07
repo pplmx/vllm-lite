@@ -123,6 +123,7 @@ impl SchedulerEngine {
                 consecutive_decode_rounds: 0,
                 priority: priority.clone(),
             };
+            // Add to running directly (skip queue for cache hit)
             self.running.push(seq);
             return seq_id;
         }
@@ -137,6 +138,163 @@ impl SchedulerEngine {
                 tokens: req.prompt.clone(),
                 kv_blocks: entry.blocks.clone(),
                 num_computed_tokens: tokens_to_skip,
+                prompt_len,
+                status: Status::Prefilling, // Need to prefill remaining
+                max_tokens: req.max_tokens,
+                sampling_params: req.sampling_params,
+                consecutive_decode_rounds: 0,
+                priority: priority.clone(),
+            };
+            // Add to running directly (skip queue for cache hit)
+            self.running.push(seq);
+            return seq_id;
+        }
+
+        // Check for reverse prefix match (cached shorter prefix of longer prompt)
+        // E.g., cache has [10, 20], query is [10, 20, 30, 40, 50]
+        if let Some((blocks, cached_tokens)) =
+            self.prefix_cache.find_reverse_prefix_match(&req.prompt)
+        {
+            let seq = Sequence {
+                id: seq_id,
+                tokens: req.prompt.clone(),
+                kv_blocks: blocks,
+                num_computed_tokens: cached_tokens,
+                prompt_len,
+                status: Status::Prefilling, // Need to prefill remaining
+                max_tokens: req.max_tokens,
+                sampling_params: req.sampling_params,
+                consecutive_decode_rounds: 0,
+                priority: priority.clone(),
+            };
+            // Add to running directly (skip queue for cache hit)
+            self.running.push(seq);
+            return seq_id;
+        }
+
+        // Check for prefix match (shorter prompt matches cached longer one)
+        if let Some(entry) = self.prefix_cache.find_prefix_match(&req.prompt) {
+            // Partial cache hit - can skip part of prefill
+            let tokens_to_skip = entry.token_count;
+
+            let seq = Sequence {
+                id: seq_id,
+                tokens: req.prompt.clone(),
+                kv_blocks: entry.blocks.clone(),
+                num_computed_tokens: tokens_to_skip,
+                prompt_len,
+                status: Status::Prefilling, // Need to prefill remaining
+                max_tokens: req.max_tokens,
+                sampling_params: req.sampling_params,
+                consecutive_decode_rounds: 0,
+                priority: priority.clone(),
+            };
+            // Add to queue for tracking
+            self.queue_manager.enqueue(seq.clone(), priority.clone());
+            // Also add to running for immediate access
+            self.running.push(seq);
+            return seq_id;
+        }
+
+        // Check for reverse prefix match (cached shorter prefix of longer prompt)
+        // E.g., cache has [10, 20], query is [10, 20, 30, 40, 50]
+        if let Some((blocks, cached_tokens)) =
+            self.prefix_cache.find_reverse_prefix_match(&req.prompt)
+        {
+            let seq = Sequence {
+                id: seq_id,
+                tokens: req.prompt.clone(),
+                kv_blocks: blocks,
+                num_computed_tokens: cached_tokens,
+                prompt_len,
+                status: Status::Prefilling, // Need to prefill remaining
+                max_tokens: req.max_tokens,
+                sampling_params: req.sampling_params,
+                consecutive_decode_rounds: 0,
+                priority: priority.clone(),
+            };
+            // Add to queue for tracking
+            self.queue_manager.enqueue(seq.clone(), priority.clone());
+            // Also add to running for immediate access
+            self.running.push(seq);
+            return seq_id;
+        }
+
+        // Check for prefix match (shorter prompt matches cached longer one)
+        if let Some(entry) = self.prefix_cache.find_prefix_match(&req.prompt) {
+            // Partial cache hit - can skip part of prefill
+            let tokens_to_skip = entry.token_count;
+
+            let seq = Sequence {
+                id: seq_id,
+                tokens: req.prompt.clone(),
+                kv_blocks: entry.blocks.clone(),
+                num_computed_tokens: tokens_to_skip,
+                prompt_len,
+                status: Status::Prefilling, // Need to prefill remaining
+                max_tokens: req.max_tokens,
+                sampling_params: req.sampling_params,
+                consecutive_decode_rounds: 0,
+                priority: priority.clone(),
+            };
+            // Add to queue so build_batch can find it
+            self.queue_manager.enqueue(seq, priority);
+            return seq_id;
+        }
+
+        // Check for reverse prefix match (cached shorter prefix of longer prompt)
+        // E.g., cache has [10, 20], query is [10, 20, 30, 40, 50]
+        if let Some((blocks, cached_tokens)) =
+            self.prefix_cache.find_reverse_prefix_match(&req.prompt)
+        {
+            let seq = Sequence {
+                id: seq_id,
+                tokens: req.prompt.clone(),
+                kv_blocks: blocks,
+                num_computed_tokens: cached_tokens,
+                prompt_len,
+                status: Status::Prefilling, // Need to prefill remaining
+                max_tokens: req.max_tokens,
+                sampling_params: req.sampling_params,
+                consecutive_decode_rounds: 0,
+                priority: priority.clone(),
+            };
+            // Add to queue so build_batch can find it
+            self.queue_manager.enqueue(seq, priority);
+            return seq_id;
+        }
+
+        // Check for prefix match (shorter prompt matches cached longer one)
+        if let Some(entry) = self.prefix_cache.find_prefix_match(&req.prompt) {
+            // Partial cache hit - can skip part of prefill
+            let tokens_to_skip = entry.token_count;
+
+            let seq = Sequence {
+                id: seq_id,
+                tokens: req.prompt.clone(),
+                kv_blocks: entry.blocks.clone(),
+                num_computed_tokens: tokens_to_skip,
+                prompt_len,
+                status: Status::Prefilling, // Need to prefill remaining
+                max_tokens: req.max_tokens,
+                sampling_params: req.sampling_params,
+                consecutive_decode_rounds: 0,
+                priority: priority.clone(),
+            };
+            self.running.push(seq);
+            return seq_id;
+        }
+
+        // Check for reverse prefix match (cached shorter prefix of longer prompt)
+        // E.g., cache has [10,20], query is [10,20,30,40,50]
+        if let Some((blocks, cached_tokens)) =
+            self.prefix_cache.find_reverse_prefix_match(&req.prompt)
+        {
+            let seq = Sequence {
+                id: seq_id,
+                tokens: req.prompt.clone(),
+                kv_blocks: blocks,
+                num_computed_tokens: cached_tokens,
                 prompt_len,
                 status: Status::Prefilling, // Need to prefill remaining
                 max_tokens: req.max_tokens,
@@ -355,7 +513,7 @@ impl SchedulerEngine {
     }
 
     pub fn has_pending(&self) -> bool {
-        !self.queue_manager.is_empty()
+        !self.queue_manager.is_empty() || !self.running.is_empty()
     }
 
     pub fn running(&self) -> Vec<Sequence> {
