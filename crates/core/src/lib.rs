@@ -25,5 +25,5 @@ pub mod types;
 pub use beam::BeamSequence;
 pub use engine::Engine;
 pub use metrics::{MetricsCollector, MetricsSnapshot};
-pub use scheduler::Scheduler;
+pub use scheduler::SchedulerEngine;
 pub use types::Priority;
