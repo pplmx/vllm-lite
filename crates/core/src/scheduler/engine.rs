@@ -1,4 +1,4 @@
-use crate::kv_cache::BlockAllocator;
+use crate::kv_cache::{BlockAllocator, PrefixCache, hash_tokens};
 use crate::scheduler::action_executor::ActionExecutor;
 use crate::scheduler::batch_planner::{BatchPlanner, SchedulerStateView};
 use crate::scheduler::event_handler::EventHandler;
@@ -72,10 +72,12 @@ pub struct SchedulerEngine {
     queue_manager: QueueManager,
     batch_planner: BatchPlanner,
     kv_allocator: BlockAllocator,
+    prefix_cache: PrefixCache,
     config: SchedulerConfig,
     stats: SchedulerStats,
     next_seq_id: SeqId,
     running: Vec<Sequence>,
+    finished: Vec<Sequence>,
 }
 
 impl SchedulerEngine {
@@ -86,10 +88,12 @@ impl SchedulerEngine {
             queue_manager: QueueManager::new(),
             batch_planner: BatchPlanner::new(config.clone()),
             kv_allocator: BlockAllocator::new(num_kv_blocks),
+            prefix_cache: PrefixCache::new(),
             config,
             stats: SchedulerStats::new(),
             next_seq_id: 1,
             running: Vec::new(),
+            finished: Vec::new(),
         }
     }
 
@@ -101,8 +105,28 @@ impl SchedulerEngine {
 
         let seq_id = req.id;
         let priority = req.priority.clone();
-
         let prompt_len = req.prompt.len();
+
+        // Check prefix cache first
+        let key = hash_tokens(&req.prompt);
+        if let Some(entry) = self.prefix_cache.get(key) {
+            // Cache hit - use cached KV blocks, skip prefill
+            let seq = Sequence {
+                id: seq_id,
+                tokens: req.prompt,
+                kv_blocks: entry.blocks.clone(),
+                num_computed_tokens: entry.token_count,
+                prompt_len,
+                status: Status::Decoding, // Skip to decoding
+                max_tokens: req.max_tokens,
+                sampling_params: req.sampling_params,
+                consecutive_decode_rounds: 0,
+                priority: priority.clone(),
+            };
+            self.running.push(seq);
+            return seq_id;
+        }
+
         let blocks_needed = prompt_len.div_ceil(BLOCK_SIZE);
 
         let blocks = self
@@ -237,7 +261,7 @@ impl SchedulerEngine {
             }
         }
 
-        let finished: Vec<_> = self
+        let finished_ids: Vec<_> = self
             .queue_manager
             .all_waiting()
             .into_iter()
@@ -245,8 +269,17 @@ impl SchedulerEngine {
             .map(|s| s.id)
             .collect();
 
-        for seq_id in finished {
-            self.queue_manager.remove(seq_id);
+        for seq_id in finished_ids {
+            if let Some(seq) = self.queue_manager.remove(seq_id) {
+                // Insert into prefix cache
+                let prompt_tokens = &seq.tokens[..seq.prompt_len];
+                let key = hash_tokens(prompt_tokens);
+                if !self.prefix_cache.contains_key(&key) {
+                    self.prefix_cache
+                        .insert(key, seq.kv_blocks.to_vec(), seq.prompt_len);
+                }
+                self.finished.push(seq);
+            }
             self.running.retain(|s| s.id != seq_id);
         }
     }
@@ -260,7 +293,7 @@ impl SchedulerEngine {
     }
 
     pub fn finished_sequences(&self) -> Vec<Sequence> {
-        vec![]
+        self.finished.clone()
     }
 
     pub fn waiting_count(&self) -> usize {
@@ -271,8 +304,8 @@ impl SchedulerEngine {
         0
     }
 
-    pub fn prefix_cache(&self) -> crate::kv_cache::PrefixCache {
-        crate::kv_cache::PrefixCache::new()
+    pub fn prefix_cache(&self) -> &PrefixCache {
+        &self.prefix_cache
     }
 
     pub fn eviction(&self) -> crate::scheduler::eviction::EvictionPolicy {
