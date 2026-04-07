@@ -1,6 +1,5 @@
 pub mod components;
 pub mod config;
-pub mod fake;
 pub mod gemma4;
 pub mod kernels;
 pub mod kv_cache;

@@ -1,5 +1,5 @@
-use vllm_model::fake::FakeModel;
 use vllm_model::qwen3_config::Qwen3Config;
+use vllm_testing::FakeModel;
 use vllm_traits::ModelBackend;
 
 #[test]

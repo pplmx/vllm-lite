@@ -1,9 +1,7 @@
-mod common;
-
-use common::{ConstModel, IncrementModel};
 use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
 use vllm_core::types::{Request, SchedulerConfig, TokenId};
+use vllm_testing::{ConstModel, IncrementModel};
 
 #[test]
 fn test_continuous_batching_with_streaming() {
@@ -699,8 +697,8 @@ fn test_concurrent_requests_batch_processing() {
         max_batch_size: 256,
     };
     let mut engine = Engine::with_config(
-        common::IncrementModel,
-        common::IncrementModel,
+        vllm_testing::IncrementModel,
+        vllm_testing::IncrementModel,
         config,
         4,
         1024,
@@ -737,8 +735,8 @@ fn test_multi_batch_continuous_processing() {
         max_batch_size: 256,
     };
     let mut engine = Engine::with_config(
-        common::IncrementModel,
-        common::IncrementModel,
+        vllm_testing::IncrementModel,
+        vllm_testing::IncrementModel,
         config,
         4,
         1024,
@@ -779,8 +777,8 @@ fn test_multi_batch_continuous_processing() {
 fn test_dynamic_batch_adjustment() {
     let config = SchedulerConfig::default();
     let mut engine = Engine::with_config(
-        common::IncrementModel,
-        common::IncrementModel,
+        vllm_testing::IncrementModel,
+        vllm_testing::IncrementModel,
         config,
         4,
         1024,
@@ -817,8 +815,8 @@ fn test_mixed_prompt_lengths() {
         max_batch_size: 256,
     };
     let mut engine = Engine::with_config(
-        common::IncrementModel,
-        common::IncrementModel,
+        vllm_testing::IncrementModel,
+        vllm_testing::IncrementModel,
         config,
         4,
         1024,
@@ -855,8 +853,8 @@ fn test_batch_size_changes_over_time() {
         max_batch_size: 256,
     };
     let mut engine = Engine::with_config(
-        common::IncrementModel,
-        common::IncrementModel,
+        vllm_testing::IncrementModel,
+        vllm_testing::IncrementModel,
         config,
         4,
         1024,
