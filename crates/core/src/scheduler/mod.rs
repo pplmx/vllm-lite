@@ -1,4 +1,5 @@
 pub mod events;
+pub mod state;
 pub use events::SchedulerEvent;
 
 #[allow(clippy::module_inception)]

@@ -11,6 +11,7 @@ pub enum SchedulerEvent {
     PrefillChunkComplete {
         seq_id: SeqId,
         tokens_computed: usize,
+        total_prompt: usize,
     },
     PrefillComplete {
         seq_id: SeqId,
