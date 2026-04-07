@@ -385,12 +385,8 @@ fn test_sequence_state_transitions() {
     engine.add_request(Request::new(1, vec![10, 20, 30], 5), tx);
 
     let batch1 = engine.scheduler.build_batch();
-    let seq = engine
-        .scheduler
-        .running()
-        .iter()
-        .find(|s| s.id == 1)
-        .unwrap();
+    let running = engine.scheduler.running();
+    let seq = running.iter().find(|s| s.id == 1).unwrap();
     assert_eq!(seq.status, vllm_core::types::Status::Prefilling);
 
     engine.scheduler.update(
@@ -399,12 +395,8 @@ fn test_sequence_state_transitions() {
         &[batch1.input_tokens.iter().map(|v| v.len()).sum()],
     );
 
-    let seq = engine
-        .scheduler
-        .running()
-        .iter()
-        .find(|s| s.id == 1)
-        .unwrap();
+    let running = engine.scheduler.running();
+    let seq = running.iter().find(|s| s.id == 1).unwrap();
     assert_eq!(seq.status, vllm_core::types::Status::Decoding);
 }
 

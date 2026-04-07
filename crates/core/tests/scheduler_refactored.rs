@@ -1,10 +1,10 @@
-use vllm_core::scheduler::Scheduler;
+use vllm_core::scheduler::SchedulerEngine;
 use vllm_core::types::{Request, SchedulerConfig, Status};
 
 #[test]
 fn test_scheduler_batch_builder_extract() {
     let config = SchedulerConfig::default();
-    let mut sched = Scheduler::with_config(config, 1024);
+    let mut sched = SchedulerEngine::new(config, 1024);
 
     // Add 5 requests
     for i in 1..=5 {
@@ -47,7 +47,7 @@ fn test_pd_separation_refactored() {
         max_batch_size: 256,
     };
 
-    let mut sched = Scheduler::with_config(config, 1024);
+    let mut sched = SchedulerEngine::new(config, 1024);
 
     // Add request 1: prefill then decode
     sched.add_request(Request::new(1, vec![1, 2, 3], 5));
@@ -87,7 +87,7 @@ fn test_pd_separation_refactored() {
 #[test]
 fn test_process_finished_sequences() {
     let config = SchedulerConfig::default();
-    let mut sched = Scheduler::with_config(config, 1024);
+    let mut sched = SchedulerEngine::new(config, 1024);
 
     // Add request with max_tokens = prompt_len (should finish after prefill)
     sched.add_request(Request::new(1, vec![1, 2], 2)); // prompt_len=2, max_tokens=2
@@ -120,7 +120,7 @@ fn test_build_decode_batch_budget() {
         max_batch_size: 256,
     };
 
-    let mut sched = Scheduler::with_config(config, 1024);
+    let mut sched = SchedulerEngine::new(config, 1024);
     sched.add_request(Request::new(1, vec![1], 5));
     let batch1 = sched.build_batch();
     sched.update(&batch1.seq_ids, &[10], &[1]);

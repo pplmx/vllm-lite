@@ -9,7 +9,7 @@
 //! # Core Components
 //!
 //! - [`Engine`] - Main inference engine
-//! - [`Scheduler`] - Request scheduling and batch building
+//! - [`SchedulerEngine`] - Request scheduling and batch building
 //! - [`MetricsCollector`] - Performance metrics
 //! - [`kv_cache`] - Block allocation and prefix cache
 

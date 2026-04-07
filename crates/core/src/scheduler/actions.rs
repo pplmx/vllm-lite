@@ -64,7 +64,7 @@ mod tests {
 
     #[test]
     fn test_preempt_reason_variants() {
-        let reasons = vec![
+        let reasons = [
             PreemptReason::MemoryPressure,
             PreemptReason::PriorityPreemption,
             PreemptReason::Timeout,
