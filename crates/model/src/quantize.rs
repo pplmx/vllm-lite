@@ -242,3 +242,173 @@ mod tests {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FP8Format {
+    E4M3,
+    E5M2,
+}
+
+impl FP8Format {
+    pub fn max_value(&self) -> f32 {
+        match self {
+            FP8Format::E4M3 => 240.0,
+            FP8Format::E5M2 => 57344.0,
+        }
+    }
+
+    pub fn exponent_bits(&self) -> u32 {
+        match self {
+            FP8Format::E4M3 => 4,
+            FP8Format::E5M2 => 5,
+        }
+    }
+
+    pub fn mantissa_bits(&self) -> u32 {
+        match self {
+            FP8Format::E4M3 => 3,
+            FP8Format::E5M2 => 2,
+        }
+    }
+}
+
+pub struct FP8Tensor {
+    pub data: Vec<u8>,
+    pub scale: f32,
+    pub format: FP8Format,
+    pub shape: Vec<usize>,
+}
+
+fn float_to_fp8(value: f32, format: FP8Format) -> u8 {
+    if value == 0.0 {
+        return 0;
+    }
+
+    let sign = if value < 0.0 { 1u8 } else { 0u8 };
+    let abs_value = value.abs();
+
+    let (exp_bits, mantissa_bits) = match format {
+        FP8Format::E4M3 => (4i32, 3i32),
+        FP8Format::E5M2 => (5i32, 2i32),
+    };
+
+    let max_exp = (1 << exp_bits) - 1;
+    let bias = max_exp / 2;
+
+    let log2 = abs_value.log2();
+    let mut exp = log2.floor() as i32 + bias;
+    let mantissa = abs_value * 2.0f32.powf(log2.fract() - mantissa_bits as f32);
+
+    if exp <= 0 {
+        exp = 0;
+    } else if exp >= max_exp {
+        exp = max_exp;
+    }
+
+    let mantissa_int = ((mantissa - 1.0) * (1i32 << mantissa_bits) as f32).round() as u8;
+
+    (sign << (exp_bits + mantissa_bits)) | ((exp as u8) << mantissa_bits) | mantissa_int
+}
+
+fn fp8_to_float(byte: u8, format: FP8Format) -> f32 {
+    let (exp_bits, mantissa_bits) = match format {
+        FP8Format::E4M3 => (4i32, 3i32),
+        FP8Format::E5M2 => (5i32, 2i32),
+    };
+
+    let max_exp = (1 << exp_bits) - 1;
+    let bias = max_exp / 2;
+
+    let sign = (byte >> (exp_bits + mantissa_bits)) & 1;
+    let exp = ((byte >> mantissa_bits) & ((1 << exp_bits) - 1)) as i32;
+    let mantissa = byte & ((1 << mantissa_bits) - 1);
+
+    if exp == max_exp {
+        return f32::INFINITY;
+    }
+
+    let significand = 1.0 + (mantissa as f32) / (1i32 << mantissa_bits) as f32;
+    let value = significand * 2.0f32.powi(exp - bias);
+
+    if sign == 1 { -value } else { value }
+}
+
+pub fn quantize_fp8(tensor: &Tensor, format: FP8Format) -> Result<FP8Tensor> {
+    let shape = tensor.dims().to_vec();
+    let flat = tensor.flatten_all()?;
+    let data_fp32: Vec<f32> = flat.to_vec1()?;
+
+    let max_abs = data_fp32.iter().map(|v| v.abs()).fold(0.0f32, f32::max);
+
+    if max_abs == 0.0 {
+        return Ok(FP8Tensor {
+            data: vec![],
+            scale: 1.0,
+            format,
+            shape,
+        });
+    }
+
+    let scale = max_abs / format.max_value();
+    let data_fp8: Vec<u8> = data_fp32
+        .iter()
+        .map(|v| float_to_fp8(v / scale, format))
+        .collect();
+
+    Ok(FP8Tensor {
+        data: data_fp8,
+        scale,
+        format,
+        shape,
+    })
+}
+
+pub fn dequantize_fp8(quant: &FP8Tensor) -> Result<Tensor> {
+    if quant.data.is_empty() {
+        return Tensor::zeros(&quant.shape[..], candle_core::DType::F32, &Device::Cpu);
+    }
+
+    let data_fp32: Vec<f32> = quant
+        .data
+        .iter()
+        .map(|&v| fp8_to_float(v, quant.format) * quant.scale)
+        .collect();
+
+    Tensor::from_slice(&data_fp32, &quant.shape[..], &Device::Cpu)
+}
+
+pub struct FP8Calibrator {
+    max_values: HashMap<String, f32>,
+}
+
+impl FP8Calibrator {
+    pub fn new() -> Self {
+        Self {
+            max_values: HashMap::new(),
+        }
+    }
+
+    pub fn observe(&mut self, name: &str, tensor: &Tensor) -> Result<()> {
+        let data: Vec<f32> = tensor.flatten_all()?.to_vec1()?;
+        let max_abs = data.iter().map(|v| v.abs()).fold(0.0f32, f32::max);
+
+        let current_max = self.max_values.get(name).copied().unwrap_or(0.0);
+        if max_abs > current_max {
+            self.max_values.insert(name.to_string(), max_abs);
+        }
+        Ok(())
+    }
+
+    pub fn compute_scales(&self, format: FP8Format) -> HashMap<String, f32> {
+        self.max_values
+            .iter()
+            .map(|(k, v)| (k.clone(), v / format.max_value()))
+            .collect()
+    }
+}
+
+impl Default for FP8Calibrator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
