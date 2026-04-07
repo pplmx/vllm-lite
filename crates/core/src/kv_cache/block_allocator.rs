@@ -16,11 +16,11 @@ impl BlockAllocator {
 
     pub fn allocate(&mut self, num_blocks: usize) -> Option<Vec<BlockId>> {
         if self.free_list.len() >= num_blocks {
-            Some(
-                (0..num_blocks)
-                    .map(|_| self.free_list.pop().unwrap())
-                    .collect(),
-            )
+            let mut blocks = Vec::with_capacity(num_blocks);
+            for _ in 0..num_blocks {
+                blocks.push(self.free_list.pop()?);
+            }
+            Some(blocks)
         } else {
             None
         }

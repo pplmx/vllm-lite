@@ -49,7 +49,10 @@ pub fn top_p_sample(logits: &[f32], top_p: f32) -> TokenId {
     }
 
     let mut indexed: Vec<(usize, f32)> = logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
-    indexed.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    indexed.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
+    });
 
     let max_val = indexed[0].1;
     let exp: Vec<f32> = indexed.iter().map(|(_, v)| (v - max_val).exp()).collect();
@@ -90,7 +93,10 @@ pub fn top_k_sample(logits: &[f32], k: usize) -> TokenId {
 
     let mut indexed: Vec<(usize, f32)> = logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
 
-    indexed.select_nth_unstable_by(k - 1, |a, b| b.1.partial_cmp(&a.1).unwrap());
+    indexed.select_nth_unstable_by(k - 1, |a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
+    });
     let threshold = indexed[k - 1].1;
 
     let masked: Vec<f32> = logits
@@ -129,7 +135,10 @@ pub fn sample_batch(
                 let k = top_k.min(logits.len());
                 let mut indexed: Vec<(usize, f32)> =
                     logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
-                indexed.select_nth_unstable_by(k - 1, |a, b| b.1.partial_cmp(&a.1).unwrap());
+                indexed.select_nth_unstable_by(k - 1, |a, b| {
+                    b.1.partial_cmp(&a.1)
+                        .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
+                });
                 let threshold = indexed[k - 1].1;
                 for l in logits.iter_mut() {
                     if *l < threshold {
