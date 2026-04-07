@@ -5,6 +5,62 @@ use crate::scheduler::queue::RequestQueue;
 use crate::types::{BLOCK_SIZE, Batch, Request, SchedulerConfig, SeqId, Sequence, Status, TokenId};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
+
+#[derive(Clone)]
+pub struct SchedulerStats {
+    pub total_batches: usize,
+    pub total_prefill_requests: usize,
+    pub total_decode_requests: usize,
+    pub total_preemptions: usize,
+    pub total_evictions: usize,
+    pub avg_batch_size: f64,
+    pub last_batch_size: usize,
+    pub batch_size_sum: u64,
+    pub last_update: Instant,
+}
+
+impl Default for SchedulerStats {
+    fn default() -> Self {
+        Self {
+            total_batches: 0,
+            total_prefill_requests: 0,
+            total_decode_requests: 0,
+            total_preemptions: 0,
+            total_evictions: 0,
+            avg_batch_size: 0.0,
+            last_batch_size: 0,
+            batch_size_sum: 0,
+            last_update: Instant::now(),
+        }
+    }
+}
+
+impl SchedulerStats {
+    pub fn record_batch(&mut self, batch_size: usize) {
+        self.total_batches += 1;
+        self.last_batch_size = batch_size;
+        self.batch_size_sum += batch_size as u64;
+        self.avg_batch_size = self.batch_size_sum as f64 / self.total_batches as f64;
+        self.last_update = Instant::now();
+    }
+
+    pub fn record_prefill(&mut self) {
+        self.total_prefill_requests += 1;
+    }
+
+    pub fn record_decode(&mut self) {
+        self.total_decode_requests += 1;
+    }
+
+    pub fn record_preemption(&mut self) {
+        self.total_preemptions += 1;
+    }
+
+    pub fn record_eviction(&mut self) {
+        self.total_evictions += 1;
+    }
+}
 
 pub struct Scheduler {
     queue: RequestQueue,
@@ -13,6 +69,7 @@ pub struct Scheduler {
     prefix_cache: PrefixCache,
     preemption: PreemptionManager,
     eviction: EvictionPolicy,
+    stats: SchedulerStats,
 }
 
 impl Default for Scheduler {
@@ -34,6 +91,7 @@ impl Scheduler {
             prefix_cache: PrefixCache::new(),
             preemption: PreemptionManager::new(config),
             eviction: EvictionPolicy::new(),
+            stats: SchedulerStats::default(),
         }
     }
 
@@ -343,7 +401,7 @@ impl Scheduler {
         self.process_finished_sequences();
         self.promote_waiting_to_running();
 
-        if self.config.enable_pd_separation {
+        let batch = if self.config.enable_pd_separation {
             let has_decode = self
                 .queue
                 .get_running()
@@ -362,7 +420,19 @@ impl Scheduler {
             }
         } else {
             self.build_batch_mixed()
+        };
+
+        self.stats.record_batch(batch.seq_ids.len());
+
+        for seq in self.queue.get_running() {
+            match seq.status {
+                Status::Prefilling => self.stats.record_prefill(),
+                Status::Decoding => self.stats.record_decode(),
+                _ => {}
+            }
         }
+
+        batch
     }
 
     pub fn update(
@@ -469,7 +539,30 @@ impl Scheduler {
         }
 
         let memory_factor = (available_blocks as f32 / 1024.0).min(1.0);
-        let target_batch = (self.config.max_batch_size as f32 * memory_factor) as usize;
+
+        let queue_pressure = if waiting_count > 0 {
+            let pressure = (waiting_count as f32 / 100.0).min(1.0);
+            1.0 + pressure * 0.5
+        } else {
+            1.0
+        };
+
+        let throughput_factor = if running_count > 0 {
+            let avg_batch = self.stats.avg_batch_size;
+            if avg_batch > 0.0 && avg_batch < self.config.max_num_seqs as f64 * 0.3 {
+                0.8
+            } else if avg_batch > self.config.max_num_seqs as f64 * 0.8 {
+                1.2
+            } else {
+                1.0
+            }
+        } else {
+            1.0
+        };
+
+        let target_batch = ((self.config.max_batch_size as f32 * memory_factor)
+            * queue_pressure
+            * throughput_factor) as usize;
 
         let max_possible = waiting_count + running_count;
         target_batch
@@ -511,6 +604,10 @@ impl Scheduler {
 
     pub fn get_prefix_cache_stats(&self) -> (u64, u64) {
         (0, 0)
+    }
+
+    pub fn get_scheduler_stats(&self) -> SchedulerStats {
+        self.stats.clone()
     }
 }
 

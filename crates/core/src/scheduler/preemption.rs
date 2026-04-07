@@ -1,4 +1,4 @@
-use crate::types::{SchedulerConfig, Sequence};
+use crate::types::{SchedulerConfig, Sequence, Status};
 
 #[allow(dead_code)]
 pub struct PreemptionManager {
@@ -41,6 +41,12 @@ impl PreemptionManager {
             return false;
         }
 
+        let memory_shortage_ratio =
+            blocks_needed as f32 / blocks_available.saturating_sub(1) as f32;
+        if memory_shortage_ratio < 1.2 {
+            return false;
+        }
+
         true
     }
 
@@ -49,11 +55,24 @@ impl PreemptionManager {
             return None;
         }
 
-        running
+        let decode_sequences: Vec<_> = running
             .iter()
             .enumerate()
-            .min_by_key(|(_, seq)| seq.consecutive_decode_rounds)
-            .map(|(idx, seq)| (idx, seq.clone()))
+            .filter(|(_, s)| s.status == Status::Decoding)
+            .collect();
+
+        if decode_sequences.is_empty() {
+            running
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, seq)| seq.consecutive_decode_rounds)
+                .map(|(idx, seq)| (idx, seq.clone()))
+        } else {
+            decode_sequences
+                .into_iter()
+                .min_by_key(|(_, seq)| seq.consecutive_decode_rounds)
+                .map(|(idx, seq)| (idx, seq.clone()))
+        }
     }
 
     pub fn preempted_count(&self) -> u64 {

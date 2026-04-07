@@ -5,6 +5,6 @@ pub mod queue;
 
 #[allow(clippy::module_inception)]
 mod scheduler;
-pub use scheduler::Scheduler;
+pub use scheduler::{Scheduler, SchedulerStats};
 
 pub mod batch;
