@@ -40,8 +40,7 @@ impl LegacySchedulerAdapter {
     }
 
     pub fn waiting_count(&self) -> usize {
-        let (used, _) = self.engine.get_kv_cache_usage();
-        if used > 0 { 1 } else { 0 }
+        self.engine.waiting_count()
     }
 
     pub fn finished_sequences(&self) -> &[Sequence] {

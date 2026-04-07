@@ -88,8 +88,8 @@ impl EventHandler {
                 }]
             }
 
-            SchedulerEvent::Resumed => {
-                vec![Action::Resume { seq_id: 0 }]
+            SchedulerEvent::Resumed { seq_id } => {
+                vec![Action::Resume { seq_id }]
             }
         }
     }

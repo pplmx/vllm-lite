@@ -109,11 +109,13 @@ impl SeqState {
             }
 
             // Preempted -> Queued (resume)
-            (SeqState::Preempted { .. }, SchedulerEvent::Resumed) => Some(SeqState::Queued {
-                priority: Priority(10),
-                queued_at: Instant::now(),
-                prompt_length: 0,
-            }),
+            (SeqState::Preempted { .. }, SchedulerEvent::Resumed { .. }) => {
+                Some(SeqState::Queued {
+                    priority: Priority(10),
+                    queued_at: Instant::now(),
+                    prompt_length: 0,
+                })
+            }
 
             _ => None,
         }
