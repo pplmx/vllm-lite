@@ -107,7 +107,7 @@ impl SchedulerEngine {
         let priority = req.priority.clone();
         let prompt_len = req.prompt.len();
 
-        // Check prefix cache first
+        // Check prefix cache first - exact match
         let key = hash_tokens(&req.prompt);
         if let Some(entry) = self.prefix_cache.get(key) {
             // Cache hit - use cached KV blocks, skip prefill
@@ -118,6 +118,27 @@ impl SchedulerEngine {
                 num_computed_tokens: entry.token_count,
                 prompt_len,
                 status: Status::Decoding, // Skip to decoding
+                max_tokens: req.max_tokens,
+                sampling_params: req.sampling_params,
+                consecutive_decode_rounds: 0,
+                priority: priority.clone(),
+            };
+            self.running.push(seq);
+            return seq_id;
+        }
+
+        // Check for prefix match (shorter prompt matches cached longer one)
+        if let Some(entry) = self.prefix_cache.find_prefix_match(&req.prompt) {
+            // Partial cache hit - can skip part of prefill
+            let tokens_to_skip = entry.token_count;
+
+            let seq = Sequence {
+                id: seq_id,
+                tokens: req.prompt.clone(),
+                kv_blocks: entry.blocks.clone(),
+                num_computed_tokens: tokens_to_skip,
+                prompt_len,
+                status: Status::Prefilling, // Need to prefill remaining
                 max_tokens: req.max_tokens,
                 sampling_params: req.sampling_params,
                 consecutive_decode_rounds: 0,
@@ -189,8 +210,12 @@ impl SchedulerEngine {
         for seq in batch_seqs {
             let is_prefilling = seq.status == Status::Waiting;
 
-            // Track running sequence
-            self.running.push(seq.clone());
+            // Update status and track running sequence
+            let mut running_seq = seq.clone();
+            if is_prefilling {
+                running_seq.status = Status::Prefilling;
+            }
+            self.running.push(running_seq);
 
             let start = seq.num_computed_tokens;
             let tokens: Vec<_> = if is_prefilling {
@@ -230,8 +255,11 @@ impl SchedulerEngine {
         for ((seq_id, &token), &input_count) in
             seq_ids.iter().zip(next_tokens).zip(input_token_counts)
         {
-            if let Some(seq) = self.queue_manager.get_mut(*seq_id) {
-                if seq.status == Status::Waiting {
+            // Update in running list
+            let mut updated_seq: Option<Sequence> = None;
+
+            if let Some(seq) = self.running.iter_mut().find(|s| s.id == *seq_id) {
+                if seq.status == Status::Waiting || seq.status == Status::Prefilling {
                     seq.num_computed_tokens += input_count;
                     if seq.num_computed_tokens >= seq.prompt_len {
                         seq.status = Status::Decoding;
@@ -257,6 +285,48 @@ impl SchedulerEngine {
                         self.stats.record_preemption();
                         break;
                     }
+                }
+
+                if seq.status == Status::Finished {
+                    updated_seq = Some(seq.clone());
+                }
+            }
+
+            // Also check queue_manager for any sequences that didn't go through running
+            if let Some(seq) = self.queue_manager.get_mut(*seq_id) {
+                if seq.status == Status::Waiting {
+                    seq.num_computed_tokens += input_count;
+                    if seq.num_computed_tokens >= seq.prompt_len {
+                        seq.status = Status::Decoding;
+                    } else {
+                        seq.status = Status::Prefilling;
+                    }
+                }
+
+                seq.tokens.push(token);
+                seq.consecutive_decode_rounds += 1;
+
+                if seq.tokens.len() >= seq.max_tokens {
+                    seq.status = Status::Finished;
+                }
+
+                if seq.status == Status::Finished {
+                    updated_seq = Some(seq.clone());
+                }
+            }
+
+            // Handle finished sequence
+            if let Some(finished_seq) = updated_seq {
+                self.running.retain(|s| s.id != finished_seq.id);
+                if let Some(seq) = self.queue_manager.remove(finished_seq.id) {
+                    // Insert into prefix cache
+                    let prompt_tokens = &seq.tokens[..seq.prompt_len];
+                    let key = hash_tokens(prompt_tokens);
+                    if !self.prefix_cache.contains_key(&key) {
+                        self.prefix_cache
+                            .insert(key, seq.kv_blocks.to_vec(), seq.prompt_len);
+                    }
+                    self.finished.push(seq);
                 }
             }
         }
