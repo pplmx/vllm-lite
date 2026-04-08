@@ -31,9 +31,11 @@ impl<M: ModelBackend> crate::engine::Engine<M> {
             results.push((*seq_id, *token));
         }
 
-        for seq in self.scheduler.finished_sequences() {
+        let finished = self.scheduler.finished_sequences();
+        for seq in &finished {
             self.response_txs.remove(&seq.id);
         }
+        self.scheduler.clear_finished();
 
         if !batch.seq_ids.is_empty() {
             let total_tokens: usize = batch.input_tokens.iter().map(|t| t.len()).sum();
