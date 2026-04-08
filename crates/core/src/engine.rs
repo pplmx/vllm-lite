@@ -155,7 +155,12 @@ impl<M: ModelBackend> Engine<M> {
                 }
             }
 
-            std::thread::sleep(std::time::Duration::from_millis(1));
+            static SLEEP_POLICY: std::sync::LazyLock<std::sync::Mutex<SleepPolicy>> =
+                std::sync::LazyLock::new(|| std::sync::Mutex::new(SleepPolicy::default()));
+
+            let has_pending = self.scheduler.has_pending();
+            let interval = SLEEP_POLICY.lock().unwrap().next_interval(has_pending);
+            std::thread::sleep(std::time::Duration::from_millis(interval));
         }
     }
 
@@ -261,6 +266,45 @@ impl<M: ModelBackend> Engine<M> {
             .take(k)
             .map(|(i, v)| (i as TokenId, v))
             .collect()
+    }
+}
+
+pub struct SleepPolicy {
+    pub base_interval: u64,
+    pub max_interval: u64,
+    pub backoff_factor: f64,
+    pub consecutive_idle: u32,
+}
+
+impl Default for SleepPolicy {
+    fn default() -> Self {
+        Self {
+            base_interval: 1,
+            max_interval: 50,
+            backoff_factor: 1.5,
+            consecutive_idle: 0,
+        }
+    }
+}
+
+impl SleepPolicy {
+    pub fn next_interval(&mut self, has_work: bool) -> u64 {
+        if has_work {
+            self.consecutive_idle = 0;
+            return self.base_interval;
+        }
+
+        self.consecutive_idle += 1;
+
+        if self.consecutive_idle == 1 {
+            return self.base_interval;
+        }
+
+        let interval = ((self.base_interval as f64)
+            * self.backoff_factor.powi(self.consecutive_idle as i32 - 1))
+        .min(self.max_interval as f64) as u64;
+
+        interval
     }
 }
 
@@ -429,5 +473,42 @@ mod tests {
         }
 
         assert!(!engine.has_pending());
+    }
+
+    #[test]
+    fn test_sleep_policy_immediate_work() {
+        let mut policy = SleepPolicy::default();
+        let interval = policy.next_interval(true);
+        assert_eq!(interval, 1);
+        assert_eq!(policy.consecutive_idle, 0);
+    }
+
+    #[test]
+    fn test_sleep_policy_exponential_backoff() {
+        let mut policy = SleepPolicy::default();
+
+        let _ = policy.next_interval(false);
+        assert_eq!(policy.consecutive_idle, 1);
+
+        let interval2 = policy.next_interval(false);
+        assert_eq!(policy.consecutive_idle, 2);
+
+        let interval3 = policy.next_interval(false);
+        assert!(interval3 >= interval2);
+
+        let interval4 = policy.next_interval(true);
+        assert_eq!(interval4, 1);
+    }
+
+    #[test]
+    fn test_sleep_policy_max_interval() {
+        let mut policy = SleepPolicy::default();
+
+        for _ in 0..100 {
+            policy.next_interval(false);
+        }
+
+        let interval = policy.next_interval(false);
+        assert!(interval <= policy.max_interval);
     }
 }
