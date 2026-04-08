@@ -1,5 +1,6 @@
-use super::device_mesh::{DeviceMesh, TensorParallelError};
+use super::device_mesh::DeviceMesh;
 use std::sync::Arc;
+use vllm_traits::TensorParallelError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReduceOp {

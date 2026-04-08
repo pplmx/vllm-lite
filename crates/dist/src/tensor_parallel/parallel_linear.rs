@@ -1,6 +1,7 @@
 use super::all_reduce::{AllReduce, NcclAllReduce, ReduceOp};
-use super::device_mesh::{DeviceMesh, TensorParallelError};
+use super::device_mesh::DeviceMesh;
 use std::sync::Arc;
+use vllm_traits::TensorParallelError;
 
 pub struct ColumnParallelLinear {
     input_size: usize,
