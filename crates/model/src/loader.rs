@@ -13,6 +13,7 @@ pub fn load_file(path: &Path) -> Result<Vec<u8>> {
     let metadata = std::fs::metadata(path)?;
     let file_size = metadata.len();
 
+    #[allow(clippy::manual_range_contains)]
     if file_size >= MMAP_THRESHOLD_BYTES && file_size <= MAX_MMAP_SIZE {
         match load_mmap(path) {
             Ok(mmap) => {
@@ -110,91 +111,110 @@ impl ModelLoader {
     }
 
     pub fn load_weights(&self, model_dir: &str) -> Result<HashMap<String, Tensor>> {
+        use rayon::prelude::*;
+
         let model_path = Path::new(model_dir);
         let files = find_safetensors_files(model_path)?;
 
-        // First pass: count total tensors
-        let mut total_tensors = 0;
-        for file_path in &files {
-            let data = std::fs::read(file_path).map_err(|e| {
-                candle_core::Error::msg(format!("Failed to read {}: {}", file_path.display(), e))
-            })?;
-            let file = SafeTensors::deserialize(&data).map_err(|e| {
-                candle_core::Error::msg(format!("Failed to load {}: {}", file_path.display(), e))
-            })?;
-            total_tensors += file.tensors().len();
-        }
+        let mmap_results: Vec<Result<(std::path::PathBuf, Vec<u8>)>> = files
+            .par_iter()
+            .map(|path| {
+                let data = load_file(path)?;
+                Ok((path.clone(), data))
+            })
+            .collect();
 
-        eprintln!("Loading {} total tensors...", total_tensors);
+        let tensor_vec: Vec<Result<Vec<(String, Tensor)>>> = mmap_results
+            .into_par_iter()
+            .map(|result| {
+                let (_path, data) = result?;
+                let file = SafeTensors::deserialize(&data)
+                    .map_err(|e| candle_core::Error::msg(format!("deserialize failed: {}", e)))?;
+                file.tensors()
+                    .into_iter()
+                    .filter(|(name, _)| {
+                        !name.contains("visual.")
+                            && !name.contains("vision_")
+                            && !name.contains("img_")
+                    })
+                    .map(|(name, view)| {
+                        let tensor = convert_tensor(&view, &self.device)?;
+                        Ok((name, tensor))
+                    })
+                    .collect::<Result<Vec<_>>>()
+            })
+            .collect();
 
-        let mut weights: HashMap<String, Tensor> = HashMap::new();
+        let mut weights = HashMap::new();
         let mut loaded = 0;
+        let total = tensor_vec.len();
 
-        for file_path in files {
-            let data = std::fs::read(&file_path).map_err(|e| {
-                candle_core::Error::msg(format!("Failed to read {}: {}", file_path.display(), e))
-            })?;
-            let file = SafeTensors::deserialize(&data).map_err(|e| {
-                candle_core::Error::msg(format!("Failed to load {}: {}", file_path.display(), e))
-            })?;
-
-            for (name, view) in file.tensors() {
-                if name.contains("visual.") || name.contains("vision_") || name.contains("img_") {
-                    continue;
-                }
-                loaded += 1;
-
-                if loaded % 20 == 0 || loaded == total_tensors {
-                    let pct = (loaded as f64 / total_tensors as f64 * 100.0) as u32;
-                    eprintln!("Loading: {}/{} ({}%)", loaded, total_tensors, pct);
-                }
-
-                let tensor_data: &[u8] = view.data();
-                let shape = view.shape().to_vec();
-                let dtype = view.dtype();
-
-                let tensor = match dtype {
-                    safetensors::Dtype::BF16 | safetensors::Dtype::F16 => {
-                        let n = tensor_data.len() / 2;
-                        let data_u16: &[u16] = unsafe {
-                            std::slice::from_raw_parts(tensor_data.as_ptr() as *const u16, n)
-                        };
-                        let mut data_f32_vec = Vec::with_capacity(n);
-                        for &bits in data_u16 {
-                            let f32_val = half::f16::from_bits(bits).to_f32();
-                            data_f32_vec.push(f32_val);
-                        }
-                        candle_core::Tensor::from_slice(&data_f32_vec, shape, &self.device)
-                    }
-                    safetensors::Dtype::F32 => {
-                        let n = tensor_data.len() / 4;
-                        let data_f32: &[f32] = unsafe {
-                            std::slice::from_raw_parts(tensor_data.as_ptr() as *const f32, n)
-                        };
-                        candle_core::Tensor::from_slice(data_f32, shape, &self.device)
-                    }
-                    _ => {
-                        return Err(candle_core::Error::msg(format!(
-                            "Unsupported dtype {:?} for weight {}",
-                            dtype, name
-                        )));
-                    }
-                }
-                .map_err(|e| {
-                    candle_core::Error::msg(format!("Failed to create tensor for {}: {}", name, e))
-                })?;
+        for result in tensor_vec {
+            let tensors = result?;
+            for (name, tensor) in tensors {
                 if weights.insert(name.clone(), tensor).is_some() {
                     return Err(candle_core::Error::msg(format!(
-                        "Duplicate weight '{}' found in sharded files",
+                        "Duplicate weight '{}'",
                         name
                     )));
+                }
+                loaded += 1;
+                if loaded % 20 == 0 {
+                    eprintln!("Loading: {}/{}", loaded, total);
                 }
             }
         }
 
+        eprintln!("Loaded {} tensors total", loaded);
         Ok(weights)
     }
+}
 
+use half::{bf16, f16};
+
+fn convert_tensor(view: &safetensors::tensor::TensorView, device: &Device) -> Result<Tensor> {
+    use safetensors::Dtype;
+
+    let tensor_data: &[u8] = view.data();
+    let shape = view.shape().to_vec();
+    let dtype = view.dtype();
+
+    match dtype {
+        Dtype::BF16 => {
+            let n = tensor_data.len() / 2;
+            let data_bf16: &[u16] =
+                unsafe { std::slice::from_raw_parts(tensor_data.as_ptr() as *const u16, n) };
+            let data_f32: Vec<f32> = data_bf16
+                .iter()
+                .map(|&bits| bf16::from_bits(bits).to_f32())
+                .collect();
+            candle_core::Tensor::from_slice(&data_f32, shape, device)
+        }
+        Dtype::F16 => {
+            let n = tensor_data.len() / 2;
+            let data_f16: &[u16] =
+                unsafe { std::slice::from_raw_parts(tensor_data.as_ptr() as *const u16, n) };
+            let data_f32: Vec<f32> = data_f16
+                .iter()
+                .map(|&bits| f16::from_bits(bits).to_f32())
+                .collect();
+            candle_core::Tensor::from_slice(&data_f32, shape, device)
+        }
+        Dtype::F32 => {
+            let n = tensor_data.len() / 4;
+            let data_f32: &[f32] =
+                unsafe { std::slice::from_raw_parts(tensor_data.as_ptr() as *const f32, n) };
+            candle_core::Tensor::from_slice(data_f32, shape, device)
+        }
+        _ => Err(candle_core::Error::msg(format!(
+            "Unsupported dtype {:?} for weight",
+            dtype
+        ))),
+    }
+    .map_err(|e| candle_core::Error::msg(format!("Failed to create tensor: {}", e)))
+}
+
+impl ModelLoader {
     pub fn load(
         &self,
         model_dir: &str,
