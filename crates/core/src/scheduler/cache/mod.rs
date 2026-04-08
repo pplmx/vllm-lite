@@ -1,6 +1,8 @@
 pub mod prefix_cache;
 
-pub use prefix_cache::{CacheKey, CachedEntry, PrefixCache, PrefixCacheStats, hash_tokens};
+pub use prefix_cache::{
+    hash_tokens, CacheKey, CachedEntry, PrefixCache, PrefixCacheConfig, PrefixCacheStats,
+};
 
 /// Cache manager for prefix caching of KV blocks.
 pub struct CacheManager {
@@ -8,10 +10,15 @@ pub struct CacheManager {
 }
 
 impl CacheManager {
-    /// Creates a new empty cache manager.
+    /// Creates a new empty cache manager with default config.
     pub fn new() -> Self {
+        Self::with_config(PrefixCacheConfig::default())
+    }
+
+    /// Creates a new cache manager with custom config.
+    pub fn with_config(config: PrefixCacheConfig) -> Self {
         Self {
-            prefix_cache: PrefixCache::new(),
+            prefix_cache: PrefixCache::new(config),
         }
     }
 
