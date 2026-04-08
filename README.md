@@ -2,6 +2,8 @@
 
 A lightweight LLM inference engine written in Rust, implementing key vLLM innovations.
 
+---
+
 ## Supported Models
 
 | Model   | Architecture             | Status |
@@ -12,17 +14,24 @@ A lightweight LLM inference engine written in Rust, implementing key vLLM innova
 | Gemma4  | Hybrid Attention + GeGLU | ✅     |
 | Mixtral | Sparse MoE (8 experts)   | ✅     |
 
+---
+
 ## Features
 
-- **Continuous Batching** - Dynamic batch scheduling with fairness
-- **Paged KV Cache** - Memory-efficient cache management with pool
-- **Prefix Caching** - Block hash-based cache reuse
-- **Speculative Decoding** - Accelerated token generation
-- **OpenAI-compatible API** - `/v1/completions`, `/v1/chat/completions`
-- **Flash Attention** - Dynamic tile size selection (64/128/256)
-- **Fused Kernels** - Optimized attention + MLP layers
-- **Authentication** - API key support
-- **Rate Limiting** - Request rate control
+- 🚀 Fast Rust implementation
+- 🎯 Continuous batching with decode-priority scheduling
+- 💾 Paged KV cache with LRU eviction + memory pool
+- 🔍 Block hash-based prefix caching
+- ⚡ Flash Attention with dynamic tile selection (64/128/256)
+- 🔗 Fused attention and MLP kernels
+- 🔄 Streaming token generation (SSE)
+- 📡 OpenAI-compatible HTTP API
+- 🖥️ CUDA GPU support (via Candle)
+- 📊 Real-time metrics collection
+- 🔐 API key authentication
+- ⏱️ Rate limiting
+
+---
 
 ## Quick Start
 
@@ -42,9 +51,24 @@ curl -X POST http://localhost:8000/v1/completions \
   -d '{"prompt": "Hello, how are you?", "max_tokens": 50, "stream": true}'
 ```
 
+---
+
 ## Configuration
 
-Configuration can be provided via YAML file or environment variables:
+### Environment Variables
+
+| Variable                    | Description                       | Default   |
+| --------------------------- | --------------------------------- | --------- |
+| `VLLM_HOST`                 | Server host                       | `0.0.0.0` |
+| `VLLM_PORT`                 | Server port                       | `8000`    |
+| `VLLM_LOG_LEVEL`            | Log level                         | `info`    |
+| `VLLM_MAX_DRAFT_TOKENS`     | Max speculative tokens            | `8`       |
+| `VLLM_KV_BLOCKS`            | Number of KV blocks               | `1024`    |
+| `VLLM_TENSOR_PARALLEL_SIZE` | Tensor parallel size              | `1`       |
+| `VLLM_KV_QUANTIZATION`      | Enable INT8 KV cache quantization | `false`   |
+| `VLLM_API_KEY`              | API key for authentication        | -         |
+
+### YAML Config File
 
 ```yaml
 # config.yaml
@@ -58,7 +82,7 @@ engine:
   num_kv_blocks: 1024
   max_batch_size: 256
   tensor_parallel_size: 1
-  kv_quantization: false  # Enable INT8 KV cache quantization
+  kv_quantization: false
 
 auth:
   api_keys: []
@@ -66,23 +90,13 @@ auth:
   rate_limit_window_secs: 60
 ```
 
-### Environment Variables
-
-| Variable                    | Description                       | Default   |
-| --------------------------- | --------------------------------- | --------- |
-| `VLLM_HOST`                 | Server host                       | `0.0.0.0` |
-| `VLLM_PORT`                 | Server port                       | `8000`    |
-| `VLLM_LOG_LEVEL`            | Log level                         | `info`    |
-| `VLLM_MAX_DRAFT_TOKENS`     | Max speculative tokens            | `8`       |
-| `VLLM_KV_BLOCKS`            | Number of KV blocks               | `1024`    |
-| `VLLM_TENSOR_PARALLEL_SIZE` | Tensor parallel size              | `1`       |
-| `VLLM_KV_QUANTIZATION`      | Enable INT8 KV cache quantization | `false`   |
-
 ### CLI Options
 
 ```bash
 cargo run -p vllm-server -- --help
 ```
+
+---
 
 ## API Endpoints
 
@@ -95,6 +109,8 @@ cargo run -p vllm-server -- --help
 | `/metrics`             | GET      | Prometheus metrics |
 | `/health`              | GET      | Health check       |
 | `/shutdown`            | GET      | Shutdown server    |
+
+---
 
 ## Examples
 
@@ -126,30 +142,50 @@ curl -X POST http://localhost:8000/v1/completions \
 ### With Authentication
 
 ```bash
-# Set API key
 export VLLM_API_KEY=your-secret-key
 
-# Use with requests
 curl -X POST http://localhost:8000/v1/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-secret-key" \
   -d '{"prompt": "Hello", "max_tokens": 10}'
 ```
 
-## Features
+---
 
-- 🚀 Fast Rust implementation
-- 🎯 Continuous batching with decode-priority scheduling
-- 💾 Paged KV cache with LRU eviction + memory pool
-- 🔍 Block hash-based prefix caching
-- ⚡ Flash Attention with dynamic tile selection
-- 🔗 Fused attention and MLP kernels
-- 🔄 Streaming token generation (SSE)
-- 📡 OpenAI-compatible HTTP API
-- 🖥️ CUDA GPU support (via Candle)
-- 📊 Real-time metrics collection
-- 🔐 API key authentication
-- ⏱️ Rate limiting
+## Architecture
+
+```
+vllm-lite/
+├── Cargo.toml              # Workspace root (5 crates)
+├── justfile                # Build automation
+├── crates/
+│   ├── traits/             # Interface definitions (ModelBackend trait)
+│   ├── core/               # Engine, Scheduler, KV Cache, Metrics
+│   │   └── src/
+│   │       ├── scheduler/  # Queue, preemption, eviction, batch
+│   │       └── kv_cache/   # Block allocator, prefix cache
+│   ├── model/              # Model implementations
+│   │   └── src/
+│   │       ├── kernels/    # Flash attention, fused MLP, CUDA graph
+│   │       ├── paged_tensor/ # Tensor store, quantization
+│   │       └── components/ # Attention, MLP, norm, positional
+│   ├── dist/               # Tensor Parallel support
+│   └── server/             # HTTP API (OpenAI compatible)
+└── tests/                  # Integration tests
+```
+
+---
+
+## Tech Stack
+
+| Component   | Technology |
+| ----------- | ---------- |
+| Runtime     | tokio      |
+| ML Backend  | Candle     |
+| HTTP        | axum       |
+| Weights     | SafeTensors|
+
+---
 
 ## Documentation
 
@@ -158,37 +194,16 @@ curl -X POST http://localhost:8000/v1/completions \
 | [ROADMAP.md](./ROADMAP.md)     | Development roadmap and milestones    |
 | [CHANGELOG.md](./CHANGELOG.md) | Version history and changes           |
 | [AGENTS.md](./AGENTS.md)       | Developer guide and conventions       |
-| [docs/](./docs/)               | Design specs and implementation plans |
+| [docs/superpowers/specs/](docs/superpowers/specs/) | Design specs |
+| [docs/superpowers/plans/](docs/superpowers/plans/) | Implementation plans |
 
-## Architecture
-
-```text
-vllm-lite/
-├── crates/
-│   ├── traits/      # Interface definitions (ModelBackend trait)
-│   ├── core/        # Engine, Scheduler, KV Cache, Metrics
-│   │   └── src/
-│   │       ├── scheduler/  # Scheduler modules (queue, preemption, eviction, batch)
-│   │       └── kv_cache/   # Logical KV cache (block_allocator, prefix_cache)
-│   ├── model/       # Model implementations
-│   │   └── src/
-│   │       ├── kernels/    # GPU kernels (flash_attention, fused_mlp, cuda_graph)
-│   │       ├── paged_tensor/ # Physical KV cache (tensor_store, quantization)
-│   │       └── components/ # Model components (attention, mlp, norm, positional)
-│   ├── dist/        # Tensor Parallel support
-│   └── server/      # HTTP API (OpenAI compatible)
-```
-
-## Tech Stack
-
-- **Runtime**: tokio
-- **ML Backend**: Candle
-- **HTTP**: axum
-- **Weights**: SafeTensors
+---
 
 ## License
 
 MIT
+
+---
 
 ## Links
 
