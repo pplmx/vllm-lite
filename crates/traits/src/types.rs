@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub const BLOCK_SIZE: usize = 16;
-
+pub type BlockId = usize;
 pub type TokenId = u32;
 pub type SeqId = u64;
 
