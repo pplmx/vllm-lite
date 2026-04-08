@@ -214,13 +214,13 @@ mod tests {
     #[test]
     fn test_lru_order() {
         let mut cache = PrefixCache::new();
+        let mut alloc = BlockAllocator::new(10);
         cache.insert(1, vec![1], 1);
         cache.insert(2, vec![2], 1);
         cache.insert(3, vec![3], 1);
 
         cache.get(1);
 
-        let mut alloc = BlockAllocator::new(10);
         cache.evict(&mut alloc);
 
         assert!(cache.get(1).is_some());
@@ -244,21 +244,23 @@ mod tests {
     #[test]
     fn test_multiple_evictions_release_all_blocks() {
         let mut cache = PrefixCache::new();
+        let mut alloc = BlockAllocator::new(10);
 
         cache.insert(1, vec![1, 2], 2);
         cache.insert(2, vec![3, 4], 2);
         assert_eq!(cache.len(), 2);
 
-        cache.evict(&mut BlockAllocator::new(10));
+        cache.evict(&mut alloc);
         assert_eq!(cache.len(), 1);
 
-        cache.evict(&mut BlockAllocator::new(10));
+        cache.evict(&mut alloc);
         assert_eq!(cache.len(), 0);
     }
 
     #[test]
     fn test_cache_get_updates_lru() {
         let mut cache = PrefixCache::new();
+        let mut alloc = BlockAllocator::new(10);
         cache.insert(1, vec![1], 1);
         cache.insert(2, vec![2], 1);
 
@@ -266,7 +268,6 @@ mod tests {
         cache.get(2);
         cache.get(1);
 
-        let mut alloc = BlockAllocator::new(10);
         cache.evict(&mut alloc);
 
         assert!(cache.get(2).is_none());

@@ -154,10 +154,6 @@ impl EvictionPolicy {
         *self.block_ref_count.get(&block).unwrap_or(&0)
     }
 
-    pub fn available_blocks(&self) -> usize {
-        self.block_ref_count.values().filter(|&&c| c == 0).count()
-    }
-
     pub fn stats(&self) -> EvictionPolicyStats {
         self.stats.clone()
     }

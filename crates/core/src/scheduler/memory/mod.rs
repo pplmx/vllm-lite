@@ -20,6 +20,7 @@ impl Default for MemoryManager {
 }
 
 impl MemoryManager {
+    /// Creates a new MemoryManager with the given scheduler configuration and number of blocks.
     pub fn new(config: SchedulerConfig, num_blocks: usize) -> Self {
         Self {
             allocator: BlockAllocator::new(num_blocks),
@@ -28,19 +29,25 @@ impl MemoryManager {
         }
     }
 
+    /// Allocates the specified number of blocks.
+    /// Returns None if not enough blocks are available.
     pub fn allocate(&mut self, num_blocks: usize) -> Option<Vec<BlockId>> {
         self.allocator.allocate(num_blocks)
     }
 
+    /// Frees the given blocks without updating eviction policy.
+    /// Use release_blocks if you want to also update reference counts.
     pub fn free(&mut self, blocks: &[BlockId]) {
         self.allocator.free(blocks);
     }
 
+    /// Releases blocks, updating eviction policy reference counts and freeing the blocks.
     pub fn release_blocks(&mut self, blocks: &[BlockId]) {
         self.eviction_policy.release_blocks(blocks);
         self.allocator.free(blocks);
     }
 
+    /// Selects victim blocks from running sequences to free up the requested number of blocks.
     pub fn select_victims(
         &self,
         running_sequences: &[Sequence],
@@ -61,26 +68,32 @@ impl MemoryManager {
         result
     }
 
+    /// Records blocks for eviction policy tracking.
     pub fn record_blocks(&mut self, blocks: &[BlockId]) {
         self.eviction_policy.record_blocks(blocks);
     }
 
+    /// Updates the access time for blocks in the eviction policy.
     pub fn touch_blocks(&mut self, blocks: &[BlockId]) {
         self.eviction_policy.touch_blocks(blocks);
     }
 
+    /// Returns the number of currently available (free) blocks.
     pub fn available_blocks(&self) -> usize {
         self.allocator.available()
     }
 
+    /// Returns the total number of blocks managed by this MemoryManager.
     pub fn total_blocks(&self) -> usize {
         self.allocator.total()
     }
 
+    /// Returns statistics about the block allocator.
     pub fn allocator_stats(&self) -> BlockAllocatorStats {
         self.allocator.stats()
     }
 
+    /// Determines whether preemption should be triggered based on current system state.
     pub fn should_preempt(
         &self,
         running_len: usize,
@@ -96,43 +109,52 @@ impl MemoryManager {
         )
     }
 
+    /// Executes preemption by selecting sequences to evict and freeing their blocks.
+    /// Returns the list of preempted sequences.
     pub fn execute_preemption(
         &mut self,
         running: &mut Vec<Sequence>,
         blocks_needed: usize,
     ) -> Vec<Sequence> {
-        let mut preemptable: Vec<_> = running
+        let mut preemptable_indices: Vec<usize> = running
             .iter()
-            .filter(|s| s.status == Status::Decoding)
-            .cloned()
+            .enumerate()
+            .filter(|(_, s)| s.status == Status::Decoding)
+            .map(|(i, _)| i)
             .collect();
 
-        preemptable.sort_by(|a, b| {
-            b.consecutive_decode_rounds
-                .cmp(&a.consecutive_decode_rounds)
+        preemptable_indices.sort_by(|&a, &b| {
+            running[b]
+                .consecutive_decode_rounds
+                .cmp(&running[a].consecutive_decode_rounds)
         });
 
         let mut blocks_freed = 0;
         let mut preempted = Vec::new();
+        let mut preempted_indices: Vec<usize> = Vec::new();
 
-        for seq in preemptable.iter() {
+        for &idx in preemptable_indices.iter() {
             if blocks_freed >= blocks_needed {
                 break;
             }
 
+            let seq = &running[idx];
             let block_count = seq.kv_blocks.len();
             self.free(seq.kv_blocks.as_ref());
-            preempted.push(seq.clone());
+            preempted_indices.push(idx);
             blocks_freed += block_count;
         }
 
-        for seq in &preempted {
-            running.retain(|s| s.id != seq.id);
+        preempted_indices.sort_by(|a, b| b.cmp(a));
+        for idx in preempted_indices {
+            let seq = running.remove(idx);
+            preempted.push(seq);
         }
 
         preempted
     }
 
+    /// Returns preemption statistics: (preempted_count, rejected_count).
     pub fn preemption_stats(&self) -> (u64, u64) {
         (
             self.preemption_manager.preempted_count(),

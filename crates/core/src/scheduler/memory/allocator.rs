@@ -89,9 +89,13 @@ impl BlockAllocator {
     pub fn free(&mut self, blocks: &[BlockId]) {
         for &block in blocks {
             if block < self.num_blocks as BlockId {
-                self.add_to_free_list(block);
-                self.is_free[block] = true;
-                self.stats.available_blocks += 1;
+                if self.is_free[block] {
+                    eprintln!("warning: freeing already-freed block: {}", block);
+                } else {
+                    self.add_to_free_list(block);
+                    self.is_free[block] = true;
+                    self.stats.available_blocks += 1;
+                }
             }
         }
         self.stats.free_count += 1;
