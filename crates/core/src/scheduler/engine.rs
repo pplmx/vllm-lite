@@ -5,6 +5,7 @@ use crate::scheduler::batch_planner::{BatchPlanner, SchedulerStateView};
 use crate::scheduler::event_handler::EventHandler;
 use crate::scheduler::events::SchedulerEvent;
 use crate::scheduler::eviction::EvictionPolicy;
+use crate::scheduler::observer::{ObserverEvent, SchedulerObservers};
 use crate::scheduler::preemption::PreemptionManager;
 use crate::scheduler::queue_manager::QueueManager;
 use crate::types::{BLOCK_SIZE, Batch, Request, SchedulerConfig, SeqId, Sequence, Status};
@@ -86,6 +87,7 @@ pub struct SchedulerEngine {
     next_seq_id: SeqId,
     running: Vec<Sequence>,
     finished: Vec<Sequence>,
+    observers: SchedulerObservers,
 }
 
 impl SchedulerEngine {
@@ -104,6 +106,7 @@ impl SchedulerEngine {
             next_seq_id: 1,
             running: Vec::new(),
             finished: Vec::new(),
+            observers: SchedulerObservers::new(),
         }
     }
 
@@ -169,6 +172,17 @@ impl SchedulerEngine {
             events.extend(result);
         }
         events
+    }
+
+    pub fn register_observer(
+        &self,
+        observer: Box<dyn crate::scheduler::observer::SchedulerObserver>,
+    ) -> Result<(), String> {
+        self.observers.register(observer)
+    }
+
+    fn dispatch_observer_event(&self, event: ObserverEvent) {
+        self.observers.dispatch(&event);
     }
 
     fn process_event_loop(&mut self, initial_event: SchedulerEvent) {
@@ -270,6 +284,9 @@ impl SchedulerEngine {
 
         self.queue_manager.enqueue(seq, priority);
 
+        // Dispatch observer event
+        self.dispatch_observer_event(ObserverEvent::RequestArrived { seq_id, prompt_len });
+
         // Dispatch event for tracking/metrics
         self.process_event_loop(SchedulerEvent::RequestArrived(req));
 
@@ -313,6 +330,12 @@ impl SchedulerEngine {
 
             // Dispatch preemption event
             self.process_event_loop(SchedulerEvent::Preempt {
+                seq_id,
+                reason: "MemoryPressure".to_string(),
+            });
+
+            // Dispatch observer preemption event
+            self.dispatch_observer_event(ObserverEvent::Preemption {
                 seq_id,
                 reason: "MemoryPressure".to_string(),
             });
@@ -415,6 +438,13 @@ impl SchedulerEngine {
             }
         }
 
+        // Dispatch observer event
+        let batch_size = seq_ids.len();
+        self.dispatch_observer_event(ObserverEvent::BatchScheduled {
+            seq_ids: seq_ids.clone(),
+            batch_size,
+        });
+
         Batch {
             seq_ids,
             input_tokens,
@@ -427,6 +457,7 @@ impl SchedulerEngine {
 
     pub fn update(&mut self, seq_ids: &[SeqId], next_tokens: &[u32], input_token_counts: &[usize]) {
         let mut events_to_dispatch: Vec<SchedulerEvent> = Vec::new();
+        let mut observer_events: Vec<ObserverEvent> = Vec::new();
 
         for ((seq_id, &token), &input_count) in
             seq_ids.iter().zip(next_tokens).zip(input_token_counts)
@@ -453,6 +484,12 @@ impl SchedulerEngine {
                 seq.tokens.push(token);
                 seq.consecutive_decode_rounds += 1;
 
+                // Collect observer event for decoding
+                observer_events.push(ObserverEvent::Decoding {
+                    seq_id: *seq_id,
+                    token,
+                });
+
                 if seq.tokens.len() >= seq.max_tokens {
                     seq.status = Status::Finished;
                 }
@@ -471,6 +508,10 @@ impl SchedulerEngine {
                             events_to_dispatch.push(SchedulerEvent::MemoryPressure {
                                 available_blocks: self.kv_allocator.available(),
                             });
+                            // Collect observer memory pressure event
+                            observer_events.push(ObserverEvent::MemoryPressure {
+                                available_blocks: self.kv_allocator.available(),
+                            });
                             break;
                         }
 
@@ -487,6 +528,10 @@ impl SchedulerEngine {
                             events_to_dispatch.push(SchedulerEvent::MemoryPressure {
                                 available_blocks: self.kv_allocator.available(),
                             });
+                            // Collect observer memory pressure event
+                            observer_events.push(ObserverEvent::MemoryPressure {
+                                available_blocks: self.kv_allocator.available(),
+                            });
                             break;
                         }
                     }
@@ -495,6 +540,12 @@ impl SchedulerEngine {
                 if seq.status == Status::Finished {
                     updated_seq = Some(seq.clone());
                     events_to_dispatch.push(SchedulerEvent::SequenceFinished { seq_id: *seq_id });
+                    // Collect observer event for sequence finished
+                    let total_tokens = seq.tokens.len();
+                    observer_events.push(ObserverEvent::SequenceFinished {
+                        seq_id: *seq_id,
+                        total_tokens,
+                    });
                 } else {
                     events_to_dispatch.push(SchedulerEvent::DecodeComplete {
                         seq_id: *seq_id,
@@ -553,6 +604,11 @@ impl SchedulerEngine {
         // Dispatch collected events after all mutable borrows are done
         for event in events_to_dispatch {
             self.dispatch_event(event);
+        }
+
+        // Dispatch collected observer events
+        for event in observer_events {
+            self.dispatch_observer_event(event);
         }
     }
 
