@@ -1,8 +1,7 @@
-use crate::kv_cache::{BlockAllocator, PrefixCache, hash_tokens};
 use crate::scheduler::batch_planner::{BatchPlanner, SchedulerStateView};
-use crate::scheduler::eviction::EvictionPolicy;
+use crate::scheduler::cache::{CacheManager, hash_tokens};
+use crate::scheduler::memory::MemoryManager;
 use crate::scheduler::observer::{ObserverEvent, SchedulerObservers};
-use crate::scheduler::preemption::PreemptionManager;
 use crate::scheduler::queue_manager::QueueManager;
 use crate::types::{BLOCK_SIZE, Batch, Request, SchedulerConfig, SeqId, Sequence, Status};
 use std::sync::Arc;
@@ -70,10 +69,8 @@ impl SchedulerStats {
 pub struct SchedulerEngine {
     queue_manager: QueueManager,
     batch_planner: BatchPlanner,
-    kv_allocator: BlockAllocator,
-    prefix_cache: PrefixCache,
-    eviction_policy: EvictionPolicy,
-    preemption_manager: PreemptionManager,
+    memory: MemoryManager,
+    cache: CacheManager,
     config: SchedulerConfig,
     stats: SchedulerStats,
     next_seq_id: SeqId,
@@ -87,10 +84,8 @@ impl SchedulerEngine {
         Self {
             queue_manager: QueueManager::new(),
             batch_planner: BatchPlanner::new(config.clone()),
-            kv_allocator: BlockAllocator::new(num_kv_blocks),
-            prefix_cache: PrefixCache::new(),
-            eviction_policy: EvictionPolicy::new(),
-            preemption_manager: PreemptionManager::new(config.clone()),
+            memory: MemoryManager::new(config.clone(), num_kv_blocks),
+            cache: CacheManager::new(),
             config,
             stats: SchedulerStats::new(),
             next_seq_id: 1,
@@ -128,13 +123,13 @@ impl SchedulerEngine {
 
     fn check_prefix_cache(&mut self, prompt: &[u32]) -> Option<(Arc<Vec<usize>>, usize)> {
         let key = hash_tokens(prompt);
-        if let Some(entry) = self.prefix_cache.get(key) {
+        if let Some(entry) = self.cache.get(key) {
             return Some((entry.blocks.clone(), entry.token_count));
         }
-        if let Some(entry) = self.prefix_cache.find_prefix_match(prompt) {
+        if let Some(entry) = self.cache.find_prefix_match(prompt) {
             return Some((entry.blocks.clone(), entry.token_count));
         }
-        if let Some((blocks, cached_tokens)) = self.prefix_cache.find_reverse_prefix_match(prompt) {
+        if let Some((blocks, cached_tokens)) = self.cache.find_reverse_prefix_match(prompt) {
             return Some((blocks, cached_tokens));
         }
         None
@@ -143,8 +138,8 @@ impl SchedulerEngine {
     fn insert_into_prefix_cache(&mut self, seq: Sequence) {
         let prompt_tokens = &seq.tokens[..seq.prompt_len];
         let key = hash_tokens(prompt_tokens);
-        if !self.prefix_cache.contains_key(&key) {
-            self.prefix_cache
+        if !self.cache.contains_key(&key) {
+            self.cache
                 .insert(key, seq.kv_blocks.to_vec(), seq.prompt_len);
         }
         self.finished.push(seq);
@@ -216,12 +211,12 @@ impl SchedulerEngine {
 
         let blocks_needed = prompt_len.div_ceil(BLOCK_SIZE);
 
-        if blocks_needed > self.kv_allocator.available() {
-            let should_preempt = self.preemption_manager.should_preempt(
+        if blocks_needed > self.memory.available_blocks() {
+            let should_preempt = self.memory.should_preempt(
                 self.running.len(),
                 self.queue_manager.len(),
                 blocks_needed,
-                self.kv_allocator.available(),
+                self.memory.available_blocks(),
             );
 
             if should_preempt {
@@ -229,10 +224,7 @@ impl SchedulerEngine {
             }
         }
 
-        let blocks = self
-            .kv_allocator
-            .allocate(blocks_needed)
-            .unwrap_or_default();
+        let blocks = self.memory.allocate(blocks_needed).unwrap_or_default();
 
         let seq = Self::create_sequence(
             seq_id,
@@ -276,8 +268,7 @@ impl SchedulerEngine {
             let block_count = seq.kv_blocks.len();
             let seq_id = seq.id;
 
-            self.eviction_policy.release_blocks(seq.kv_blocks.as_ref());
-            self.kv_allocator.free(seq.kv_blocks.as_ref());
+            self.memory.release_blocks(seq.kv_blocks.as_ref());
 
             if let Some(running_seq) = self.running.iter_mut().find(|s| s.id == seq.id) {
                 running_seq.status = Status::Waiting;
@@ -315,7 +306,7 @@ impl SchedulerEngine {
 
         let state_view = SchedulerStateViewImpl {
             queue_manager: &self.queue_manager,
-            kv_allocator: &self.kv_allocator,
+            memory: &self.memory,
             running: &self.running,
         };
 
@@ -393,7 +384,7 @@ impl SchedulerEngine {
 
             self.running.push(running_seq);
 
-            self.eviction_policy.record_blocks(&kv_blocks);
+            self.memory.record_blocks(&kv_blocks);
 
             let start = num_computed_tokens_val;
             let tokens: Vec<_> = if is_prefilling {
@@ -482,27 +473,26 @@ impl SchedulerEngine {
 
                 let blocks_needed = seq.tokens.len().div_ceil(BLOCK_SIZE);
                 while seq.kv_blocks.len() < blocks_needed {
-                    if let Some(new_blocks) = self.kv_allocator.allocate(1) {
+                    if let Some(new_blocks) = self.memory.allocate(1) {
                         let mut blocks = (*seq.kv_blocks).clone();
                         blocks.extend(new_blocks);
                         seq.kv_blocks = Arc::new(blocks);
                     } else {
-                        let victims = self.eviction_policy.select_victims(&running_seqs, 1);
+                        let victims = self.memory.select_victims(&running_seqs, 1);
 
                         if victims.is_empty() {
                             self.stats.record_preemption();
                             // Collect observer memory pressure event
                             observer_events.push(ObserverEvent::MemoryPressure {
-                                available_blocks: self.kv_allocator.available(),
+                                available_blocks: self.memory.available_blocks(),
                             });
                             break;
                         }
 
-                        self.eviction_policy.release_blocks(&victims);
-                        self.kv_allocator.free(&victims);
+                        self.memory.release_blocks(&victims);
                         self.stats.record_eviction();
 
-                        if let Some(new_blocks) = self.kv_allocator.allocate(1) {
+                        if let Some(new_blocks) = self.memory.allocate(1) {
                             let mut blocks = (*seq.kv_blocks).clone();
                             blocks.extend(new_blocks);
                             seq.kv_blocks = Arc::new(blocks);
@@ -510,7 +500,7 @@ impl SchedulerEngine {
                             self.stats.record_preemption();
                             // Collect observer memory pressure event
                             observer_events.push(ObserverEvent::MemoryPressure {
-                                available_blocks: self.kv_allocator.available(),
+                                available_blocks: self.memory.available_blocks(),
                             });
                             break;
                         }
@@ -580,12 +570,16 @@ impl SchedulerEngine {
         self.running.len()
     }
 
-    pub fn prefix_cache(&self) -> &PrefixCache {
-        &self.prefix_cache
+    pub fn cache(&self) -> &CacheManager {
+        &self.cache
     }
 
-    pub fn eviction(&self) -> crate::scheduler::eviction::EvictionPolicy {
-        crate::scheduler::eviction::EvictionPolicy::new()
+    pub fn memory(&self) -> &MemoryManager {
+        &self.memory
+    }
+
+    pub fn prefix_cache(&self) -> &CacheManager {
+        &self.cache
     }
 
     pub fn get_stats(&self) -> SchedulerStats {
@@ -593,8 +587,8 @@ impl SchedulerEngine {
     }
 
     pub fn get_kv_cache_usage(&self) -> (u64, u64) {
-        let total = self.kv_allocator.total() as u64;
-        let available = self.kv_allocator.available() as u64;
+        let total = self.memory.total_blocks() as u64;
+        let available = self.memory.available_blocks() as u64;
         let used = total.saturating_sub(available);
         (used, total)
     }
@@ -602,7 +596,7 @@ impl SchedulerEngine {
 
 struct SchedulerStateViewImpl<'a> {
     queue_manager: &'a QueueManager,
-    kv_allocator: &'a BlockAllocator,
+    memory: &'a MemoryManager,
     running: &'a Vec<Sequence>,
 }
 
@@ -626,7 +620,7 @@ impl<'a> SchedulerStateView for SchedulerStateViewImpl<'a> {
     }
 
     fn available_memory(&self) -> usize {
-        self.kv_allocator.available()
+        self.memory.available_blocks()
     }
 }
 
