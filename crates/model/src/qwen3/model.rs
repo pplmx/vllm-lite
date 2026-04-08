@@ -5,10 +5,9 @@ use candle_core::{Device, Module, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, LayerNorm, Linear};
 use std::collections::HashMap;
 use vllm_dist::TensorParallelConfig;
-use vllm_traits::{BatchOutput, SeqId, TokenId};
+use vllm_traits::{BatchOutput, BlockId, SeqId, TokenId};
 use vllm_traits::{ModelBackend, Result as EngineResult};
 
-pub type BlockId = usize;
 pub type EngineError = vllm_traits::ModelError;
 
 use super::block::TransformerBlock;
