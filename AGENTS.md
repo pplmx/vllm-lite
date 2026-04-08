@@ -1,6 +1,12 @@
 # vLLM-lite Development Guide
 
-This guide helps AI agents work effectively with the vLLM-lite codebase.
+This guide helps AI agents work effectively with the vllm-lite codebase.
+
+## ⚠️ IMPORTANT: No Worktrees
+
+**DO NOT use git worktrees for local development.** 
+
+Single-developer local worktrees cause unnecessary merge conflicts and add complexity without benefit. Just work directly on the current branch.
 
 ## Quick Commands
 
