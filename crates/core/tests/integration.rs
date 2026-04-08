@@ -551,6 +551,67 @@ fn test_request_cancellation() {
 }
 
 #[test]
+fn test_finished_sequences_cleared() {
+    let config = SchedulerConfig {
+        max_num_seqs: 10,
+        max_num_batched_tokens: 100,
+        max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
+        enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
+    };
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    let (tx, _rx) = mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![10, 20], 2), tx);
+
+    for _ in 0..3 {
+        engine.step().unwrap();
+    }
+
+    assert!(!engine.has_pending());
+    assert!(engine.scheduler.finished_sequences().is_empty());
+}
+
+#[test]
+fn test_cancel_request_cleans_response_txs() {
+    let config = SchedulerConfig {
+        max_num_seqs: 10,
+        max_num_batched_tokens: 100,
+        max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
+        enable_priority_scheduling: false,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
+    };
+    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+
+    let (tx1, _rx1) = mpsc::channel(64);
+    let (tx2, _rx2) = mpsc::channel(64);
+
+    let id1 = engine.add_request(Request::new(1, vec![10, 20], 5), tx1);
+    let _id2 = engine.add_request(Request::new(2, vec![30, 40], 5), tx2);
+
+    assert_eq!(engine.response_txs.len(), 2);
+
+    let canceled = engine.cancel_request(id1);
+    assert!(canceled);
+
+    assert_eq!(engine.response_txs.len(), 1);
+    assert!(!engine.response_txs.contains_key(&id1));
+
+    engine.step().unwrap();
+    assert!(engine.has_pending());
+}
+
+#[test]
 #[ignore = "empty prompt handling needs validation at API layer"]
 fn test_empty_prompt_handling() {
     let config = SchedulerConfig::default();

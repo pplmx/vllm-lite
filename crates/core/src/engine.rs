@@ -32,7 +32,7 @@ pub struct Engine<M: ModelBackend> {
     pub error_count: usize,
     pub last_error: Option<String>,
     pub metrics: MetricsCollector,
-    pub(crate) response_txs: HashMap<SeqId, mpsc::Sender<TokenId>>,
+    pub response_txs: HashMap<SeqId, mpsc::Sender<TokenId>>,
     sleep_policy: SleepPolicy,
 }
 
