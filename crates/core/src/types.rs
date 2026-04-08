@@ -107,6 +107,54 @@ pub struct SchedulerConfig {
     pub max_batch_size: usize,
 }
 
+impl SchedulerConfig {
+    pub fn new(
+        max_num_seqs: usize,
+        max_num_batched_tokens: usize,
+        max_consecutive_decode: u32,
+        enable_pd_separation: bool,
+        prefill_chunk_size: usize,
+        decode_preference_ratio: f32,
+        enable_priority_scheduling: bool,
+        enable_dynamic_batching: bool,
+        min_batch_size: usize,
+        max_batch_size: usize,
+    ) -> Self {
+        assert!(max_num_seqs > 0, "max_num_seqs must be > 0");
+        assert!(
+            max_num_batched_tokens > 0,
+            "max_num_batched_tokens must be > 0"
+        );
+        assert!(prefill_chunk_size > 0, "prefill_chunk_size must be > 0");
+        assert!(
+            (0.0..=1.0).contains(&decode_preference_ratio),
+            "decode_preference_ratio must be between 0.0 and 1.0"
+        );
+        assert!(min_batch_size > 0, "min_batch_size must be > 0");
+        assert!(
+            max_batch_size >= min_batch_size,
+            "max_batch_size must be >= min_batch_size"
+        );
+        assert!(
+            max_num_batched_tokens >= max_batch_size,
+            "max_num_batched_tokens must be >= max_batch_size"
+        );
+
+        Self {
+            max_num_seqs,
+            max_num_batched_tokens,
+            max_consecutive_decode,
+            enable_pd_separation,
+            prefill_chunk_size,
+            decode_preference_ratio,
+            enable_priority_scheduling,
+            enable_dynamic_batching,
+            min_batch_size,
+            max_batch_size,
+        }
+    }
+}
+
 impl Default for SchedulerConfig {
     fn default() -> Self {
         Self {
