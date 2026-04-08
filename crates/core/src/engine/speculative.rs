@@ -61,7 +61,7 @@ impl<M: ModelBackend> super::Engine<M> {
             let mut current_positions = positions.clone();
 
             for _ in 0..self.max_draft_tokens {
-                let output = self.draft_model.borrow_mut().forward(
+                let output = self.draft_model.lock().unwrap().forward(
                     &[*seq_id],
                     std::slice::from_ref(&current_tokens),
                     std::slice::from_ref(&current_positions),
@@ -91,7 +91,7 @@ impl<M: ModelBackend> super::Engine<M> {
             let drafts = &draft_outputs[i];
 
             if drafts.is_empty() {
-                let target_output = self.target_model.borrow_mut().forward(
+                let target_output = self.target_model.lock().unwrap().forward(
                     &[*seq_id],
                     std::slice::from_ref(&batch.input_tokens[i]),
                     std::slice::from_ref(&batch.positions[i]),
@@ -115,7 +115,7 @@ impl<M: ModelBackend> super::Engine<M> {
                 vec![batch.num_computed_tokens[i] + drafts.len(); verify_tokens.len()];
             let verify_is_prefill: Vec<bool> = vec![false; verify_tokens.len()];
 
-            let target_output = self.target_model.borrow_mut().forward(
+            let target_output = self.target_model.lock().unwrap().forward(
                 &[*seq_id],
                 std::slice::from_ref(&verify_tokens),
                 std::slice::from_ref(&verify_positions),
