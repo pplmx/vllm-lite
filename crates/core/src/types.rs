@@ -108,6 +108,7 @@ pub struct SchedulerConfig {
 }
 
 impl SchedulerConfig {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         max_num_seqs: usize,
         max_num_batched_tokens: usize,

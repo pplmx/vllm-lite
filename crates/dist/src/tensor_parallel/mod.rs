@@ -4,5 +4,5 @@ pub mod parallel_linear;
 
 pub use all_reduce::{AllReduce, NcclAllReduce, ReduceOp};
 pub use device_mesh::DeviceMesh;
-pub use device_mesh::TensorParallelError;
 pub use parallel_linear::{ColumnParallelLinear, RowParallelLinear};
+pub use vllm_traits::TensorParallelError;
