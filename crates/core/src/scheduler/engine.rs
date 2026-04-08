@@ -626,6 +626,13 @@ impl Default for SchedulerEngine {
 }
 
 #[cfg(test)]
+impl SchedulerEngine {
+    pub fn with_config_and_blocks(config: SchedulerConfig, num_kv_blocks: usize) -> Self {
+        Self::new(config, num_kv_blocks)
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

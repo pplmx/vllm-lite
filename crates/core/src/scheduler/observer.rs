@@ -10,6 +10,7 @@ pub trait SchedulerObserver: Send + Sync {
     fn on_memory_pressure(&self, available_blocks: usize);
 }
 
+#[derive(Clone, Debug)]
 pub enum ObserverEvent {
     RequestArrived {
         seq_id: SeqId,
