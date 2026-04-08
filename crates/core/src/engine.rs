@@ -140,7 +140,8 @@ impl<M: ModelBackend + 'static> Engine<M> {
                             .collect();
                         match self
                             .target_model
-                            .borrow_mut()
+                            .lock()
+                            .unwrap()
                             .embed(&input_tokens, &positions)
                         {
                             Ok(embeddings) => {
@@ -216,7 +217,7 @@ impl<M: ModelBackend + 'static> Engine<M> {
                     continue;
                 }
 
-                let logits = self.target_model.borrow_mut().forward_logits(
+                let logits = self.target_model.lock().unwrap().forward_logits(
                     &[0],
                     &[vec![beam.tokens.last().copied().unwrap_or(0)]],
                     &[vec![beam.tokens.len()]],
