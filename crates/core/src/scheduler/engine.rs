@@ -507,25 +507,23 @@ impl SchedulerEngine {
             // Handle finished sequence
             if let Some(finished_seq) = updated_seq {
                 self.running.retain(|s| s.id != finished_seq.id);
-                if let Some(seq) = self.queue_manager.remove(finished_seq.id) {
-                    self.insert_into_prefix_cache(seq);
-                }
+                self.insert_into_prefix_cache(finished_seq);
             }
         }
 
+        // Check running for finished sequences (may have been missed)
         let finished_ids: Vec<_> = self
-            .queue_manager
-            .all_waiting()
-            .into_iter()
+            .running
+            .iter()
             .filter(|s| s.status == Status::Finished)
             .map(|s| s.id)
             .collect();
 
         for seq_id in finished_ids {
-            if let Some(seq) = self.queue_manager.remove(seq_id) {
+            if let Some(idx) = self.running.iter().position(|s| s.id == seq_id) {
+                let seq = self.running.remove(idx);
                 self.insert_into_prefix_cache(seq);
             }
-            self.running.retain(|s| s.id != seq_id);
         }
 
         // Dispatch collected observer events
