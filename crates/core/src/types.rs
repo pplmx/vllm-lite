@@ -1,8 +1,7 @@
 use std::sync::Arc;
 use tokio::sync::mpsc;
-pub use vllm_traits::{Batch, BatchOutput, SeqId, TokenId};
+pub use vllm_traits::{Batch, BatchOutput, BlockId, SeqId, TokenId};
 
-pub type BlockId = usize;
 pub use crate::kv_cache::BLOCK_SIZE;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
