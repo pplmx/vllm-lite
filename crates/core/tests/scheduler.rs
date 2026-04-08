@@ -427,7 +427,7 @@ fn test_memory_manager_select_victims() {
     let memory = MemoryManager::new(config, 100);
 
     // Create sequences with different decode rounds
-    let mut seq1 = Sequence {
+    let seq1 = Sequence {
         id: 1,
         tokens: vec![1, 2, 3],
         kv_blocks: Arc::new(vec![]),
