@@ -8,6 +8,21 @@ use super::super::memory::BlockAllocator;
 
 pub type CacheKey = u64;
 
+#[derive(Clone, Debug)]
+pub struct PrefixCacheConfig {
+    pub max_entries: Option<usize>,
+    pub max_blocks: Option<usize>,
+}
+
+impl Default for PrefixCacheConfig {
+    fn default() -> Self {
+        Self {
+            max_entries: Some(1000), // More permissive default
+            max_blocks: Some(10000), // More permissive default
+        }
+    }
+}
+
 pub fn hash_tokens(tokens: &[TokenId]) -> CacheKey {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     tokens.hash(&mut hasher);
@@ -36,16 +51,20 @@ pub struct PrefixCache {
     block_refs: HashMap<BlockId, usize>,
     prefix_match_cache: HashMap<CacheKey, CacheKey>,
     stats: PrefixCacheStats,
+    config: PrefixCacheConfig,
+    total_blocks: usize,
 }
 
 impl PrefixCache {
-    pub fn new() -> Self {
+    pub fn new(config: PrefixCacheConfig) -> Self {
         Self {
             entries: HashMap::new(),
             lru_order: VecDeque::new(),
             block_refs: HashMap::new(),
             prefix_match_cache: HashMap::new(),
             stats: PrefixCacheStats::default(),
+            config,
+            total_blocks: 0,
         }
     }
 
@@ -75,6 +94,7 @@ impl PrefixCache {
                     }
                 }
             }
+            self.total_blocks = self.total_blocks.saturating_sub(old_entry.blocks.len());
         }
 
         for &block in blocks.as_ref() {
@@ -92,11 +112,53 @@ impl PrefixCache {
         self.lru_order.push_front(key);
         self.prefix_match_cache.clear();
         self.stats.entries = self.entries.len();
+
+        self.total_blocks = self.total_blocks.saturating_add(token_count);
+
+        // Note: Auto-eviction during insert is optional - for now, rely on explicit evict() calls
+        // To enable auto-eviction, uncomment the line below:
+        // self.maybe_evict(None);
     }
 
-    pub fn evict(&mut self, allocator: &mut BlockAllocator) {
-        while let Some(oldest_key) = self.lru_order.pop_back() {
+    fn maybe_evict(&mut self, mut allocator: Option<&mut BlockAllocator>) {
+        loop {
+            let entries_over = self
+                .config
+                .max_entries
+                .map(|max| self.entries.len() > max)
+                .unwrap_or(false);
+            let blocks_over = self
+                .config
+                .max_blocks
+                .map(|max| self.total_blocks > max)
+                .unwrap_or(false);
+
+            if !entries_over && !blocks_over {
+                break;
+            }
+
+            if let Some(ref mut alloc) = allocator {
+                self.evict_single(alloc);
+            } else {
+                self.evict_single_internal();
+            }
+        }
+    }
+
+    fn evict_single_internal(&mut self) {
+        if let Some(oldest_key) = self.lru_order.pop_back() {
             if let Some(entry) = self.entries.remove(&oldest_key) {
+                self.total_blocks = self.total_blocks.saturating_sub(entry.blocks.len());
+                self.stats.evictions += 1;
+                self.stats.entries = self.entries.len();
+            }
+        }
+    }
+
+    fn evict_single(&mut self, allocator: &mut BlockAllocator) {
+        if let Some(oldest_key) = self.lru_order.pop_back() {
+            if let Some(entry) = self.entries.remove(&oldest_key) {
+                self.total_blocks = self.total_blocks.saturating_sub(entry.blocks.len());
                 for &block in entry.blocks.as_ref() {
                     if let Some(count) = self.block_refs.get_mut(&block) {
                         *count -= 1;
@@ -108,9 +170,17 @@ impl PrefixCache {
                 }
                 self.stats.evictions += 1;
                 self.stats.entries = self.entries.len();
-                break;
             }
         }
+    }
+
+    /// Evicts the least recently used entry (unconditionally).
+    pub fn evict(&mut self, allocator: &mut BlockAllocator) {
+        // First try to evict one entry unconditionally (for backward compatibility)
+        self.evict_single(allocator);
+
+        // Then check if we're still over limits and evict more if needed
+        self.maybe_evict(Some(allocator));
     }
 
     pub fn len(&self) -> usize {
@@ -187,7 +257,7 @@ impl PrefixCache {
 
 impl Default for PrefixCache {
     fn default() -> Self {
-        Self::new()
+        Self::new(PrefixCacheConfig::default())
     }
 }
 
@@ -203,7 +273,7 @@ mod tests {
 
     #[test]
     fn test_cache_insert_and_get() {
-        let mut cache = PrefixCache::new();
+        let mut cache = PrefixCache::new(PrefixCacheConfig::default());
         cache.insert(123, vec![1, 2], 2);
 
         assert!(cache.get(123).is_some());
@@ -212,7 +282,7 @@ mod tests {
 
     #[test]
     fn test_lru_order() {
-        let mut cache = PrefixCache::new();
+        let mut cache = PrefixCache::new(PrefixCacheConfig::default());
         let mut alloc = BlockAllocator::new(10);
         cache.insert(1, vec![1], 1);
         cache.insert(2, vec![2], 1);
@@ -229,7 +299,7 @@ mod tests {
 
     #[test]
     fn test_shared_block_reference_count() {
-        let mut cache = PrefixCache::new();
+        let mut cache = PrefixCache::new(PrefixCacheConfig::default());
 
         cache.insert(1, vec![1, 2, 3], 3);
         cache.insert(2, vec![1, 2, 3], 3);
@@ -242,7 +312,7 @@ mod tests {
 
     #[test]
     fn test_multiple_evictions_release_all_blocks() {
-        let mut cache = PrefixCache::new();
+        let mut cache = PrefixCache::new(PrefixCacheConfig::default());
         let mut alloc = BlockAllocator::new(10);
 
         cache.insert(1, vec![1, 2], 2);
@@ -258,7 +328,7 @@ mod tests {
 
     #[test]
     fn test_cache_get_updates_lru() {
-        let mut cache = PrefixCache::new();
+        let mut cache = PrefixCache::new(PrefixCacheConfig::default());
         let mut alloc = BlockAllocator::new(10);
         cache.insert(1, vec![1], 1);
         cache.insert(2, vec![2], 1);
@@ -275,7 +345,7 @@ mod tests {
 
     #[test]
     fn test_cache_contains_key() {
-        let mut cache = PrefixCache::new();
+        let mut cache = PrefixCache::new(PrefixCacheConfig::default());
         cache.insert(100, vec![1], 1);
 
         assert!(cache.contains_key(&100));
@@ -284,13 +354,13 @@ mod tests {
 
     #[test]
     fn test_cache_is_empty() {
-        let cache = PrefixCache::new();
+        let cache = PrefixCache::new(PrefixCacheConfig::default());
         assert!(cache.is_empty());
     }
 
     #[test]
     fn test_prefix_match() {
-        let mut cache = PrefixCache::new();
+        let mut cache = PrefixCache::new(PrefixCacheConfig::default());
 
         cache.insert(hash_tokens(&[1, 2]), vec![1], 2);
 
@@ -304,7 +374,7 @@ mod tests {
 
     #[test]
     fn test_stats() {
-        let mut cache = PrefixCache::new();
+        let mut cache = PrefixCache::new(PrefixCacheConfig::default());
 
         cache.insert(1, vec![1], 1);
         assert_eq!(cache.stats().entries, 1);
