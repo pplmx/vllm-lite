@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 use vllm_core::scheduler::{ObserverEvent, SchedulerEngine, SchedulerObserver, SchedulerObservers};
-use vllm_core::types::{Request, SchedulerConfig};
+use vllm_core::types::Request;
 
 #[derive(Clone)]
 struct TrackingObserver {
