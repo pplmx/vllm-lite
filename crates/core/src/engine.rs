@@ -300,11 +300,8 @@ impl SleepPolicy {
             return self.base_interval;
         }
 
-        let interval = ((self.base_interval as f64)
-            * self.backoff_factor.powi(self.consecutive_idle as i32 - 1))
-        .min(self.max_interval as f64) as u64;
-
-        interval
+        ((self.base_interval as f64) * self.backoff_factor.powi(self.consecutive_idle as i32 - 1))
+            .min(self.max_interval as f64) as u64
     }
 }
 
