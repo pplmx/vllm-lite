@@ -82,7 +82,22 @@ impl ModelLoader {
         let model_path = Path::new(model_dir);
         let files = find_safetensors_files(model_path)?;
 
+        // First pass: count total tensors
+        let mut total_tensors = 0;
+        for file_path in &files {
+            let data = std::fs::read(file_path).map_err(|e| {
+                candle_core::Error::msg(format!("Failed to read {}: {}", file_path.display(), e))
+            })?;
+            let file = SafeTensors::deserialize(&data).map_err(|e| {
+                candle_core::Error::msg(format!("Failed to load {}: {}", file_path.display(), e))
+            })?;
+            total_tensors += file.tensors().len();
+        }
+
+        eprintln!("Loading {} total tensors...", total_tensors);
+
         let mut weights: HashMap<String, Tensor> = HashMap::new();
+        let mut loaded = 0;
 
         for file_path in files {
             let data = std::fs::read(&file_path).map_err(|e| {
@@ -92,14 +107,15 @@ impl ModelLoader {
                 candle_core::Error::msg(format!("Failed to load {}: {}", file_path.display(), e))
             })?;
 
-            let mut loaded = 0;
             for (name, view) in file.tensors() {
                 if name.contains("visual.") || name.contains("vision_") || name.contains("img_") {
                     continue;
                 }
                 loaded += 1;
-                if loaded % 20 == 0 {
-                    eprintln!("Loaded {}/? weights...", loaded);
+
+                if loaded % 20 == 0 || loaded == total_tensors {
+                    let pct = (loaded as f64 / total_tensors as f64 * 100.0) as u32;
+                    eprintln!("Loading: {}/{} ({}%)", loaded, total_tensors, pct);
                 }
 
                 let tensor_data: &[u8] = view.data();
@@ -289,7 +305,7 @@ mod tests {
             .load_config(model_path)
             .expect("Failed to load config");
         eprintln!(
-            "Loaded Qwen3 config: hidden_size={}, num_layers={}, num_heads={}",
+            "Loaded config: hidden_size={}, num_layers={}, num_heads={}",
             config.hidden_size(),
             config.num_hidden_layers(),
             config.num_attention_heads()
@@ -308,7 +324,7 @@ mod tests {
         let _model = loader
             .load_model(model_path, 128, false)
             .expect("Failed to create model");
-        eprintln!("Model created successfully!");
+        eprintln!("Model loaded successfully");
     }
 
     #[test]
