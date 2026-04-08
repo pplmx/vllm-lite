@@ -13,13 +13,17 @@ init:
 build:
     cargo build --release
 
-# Run all tests (without CUDA features for compatibility)
+# Run all tests (skips #[ignore] tests by default)
 test:
     cargo test --workspace
 
-# Run tests by cargo-nextest (a much more modern test runner)
+# Run tests with nextest (skips #[ignore] tests by default)
 nextest:
     cargo nextest run --workspace
+
+# Run nextest including all tests (with #[ignore])
+nextest-all:
+    cargo nextest run --workspace --all-features
 
 # Format code
 fmt:
@@ -38,7 +42,11 @@ doc-check:
     RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --workspace
 
 # Run all CI checks locally (excluding msrv-check - requires special workspace setup)
-ci: fmt-check clippy doc-check nextest
+# Uses nextest which skips #[ignore] tests by default
+ci: fmt-check clippy doc-check test
+
+# Run all CI checks including slow/ignored tests
+ci-all: fmt-check clippy doc-check nextest
 
 # Auto-fix clippy warnings and format
 fix:
