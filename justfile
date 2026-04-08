@@ -13,17 +13,13 @@ init:
 build:
     cargo build --release
 
-# Run all tests (skips #[ignore] tests by default)
-test:
-    cargo test --workspace
-
 # Run tests with nextest (skips #[ignore] tests by default)
 nextest:
-    cargo nextest run --workspace
+    cargo nextest run --workspace --all-features --no-fail-fast
 
 # Run nextest including all tests (with #[ignore])
 nextest-all:
-    cargo nextest run --workspace --all-features
+    cargo nextest run --release --workspace --all-features --run-ignored all --no-fail-fast
 
 # Format code
 fmt:
@@ -35,23 +31,22 @@ fmt-check:
 
 # Run clippy (CI style)
 clippy:
-    cargo clippy --all-targets --workspace -- -D warnings
+    cargo clippy --all-targets --workspace --all-features -- -D warnings
 
 # Check documentation (CI style)
 doc-check:
-    RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --workspace
+    RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --workspace --all-features
 
-# Run all CI checks locally (excluding msrv-check - requires special workspace setup)
-# Uses nextest which skips #[ignore] tests by default
-ci: fmt-check clippy doc-check test
+# Run quick: fix/fmt/clippy will be fixed
+quick: fix doc-check nextest
 
 # Run all CI checks including slow/ignored tests
-ci-all: fmt-check clippy doc-check nextest
+ci: fmt-check clippy doc-check nextest-all
 
 # Auto-fix clippy warnings and format
 fix:
-    cargo fix --allow-dirty --allow-staged --all-targets --workspace
-    cargo clippy --fix --allow-dirty --allow-staged --all-targets --workspace -- -D warnings
+    cargo fix --allow-dirty --allow-staged --all-targets --workspace --all-features
+    cargo clippy --fix --allow-dirty --allow-staged --all-targets --workspace --all-features -- -D warnings
     cargo fmt --all
 
 # Generate documentation

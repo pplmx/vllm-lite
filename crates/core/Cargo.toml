@@ -12,5 +12,5 @@ rand = { version = "0.10", features = ["std"] }
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "0.8"
 vllm-testing = { path = "../testing" }

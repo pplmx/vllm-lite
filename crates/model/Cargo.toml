@@ -8,8 +8,8 @@ rust-version.workspace = true
 vllm-traits = { path = "../traits" }
 vllm-dist = { path = "../dist" }
 rand = "0.10"
-candle-core = { version = "0.10.1", features = ["cuda"] }
-candle-nn = { version = "0.10.1", features = ["cuda"] }
+candle-core = { version = "0.10.2", features = ["cuda"] }
+candle-nn = { version = "0.10.2", features = ["cuda"] }
 thiserror = "2"
 safetensors = "0.7.0"
 serde = { version = "1", features = ["derive"] }
@@ -21,7 +21,7 @@ tokenizers = { version = "0.22", optional = true }
 [dev-dependencies]
 tempfile = "3"
 vllm-testing = { path = "../testing" }
-criterion = "0.5"
+criterion = "0.8"
 
 [features]
 default = []

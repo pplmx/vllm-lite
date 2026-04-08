@@ -6,12 +6,12 @@ edition.workspace = true
 [dependencies]
 vllm-traits = { path = "../traits" }
 vllm-core = { path = "../core" }
-candle-core = "0.8"
+candle-core = "0.10.2"
 tokio = { version = "1", features = ["sync"] }
 rand = "0.10"
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "0.8"
 proptest = "1.5"
 
 [features]
