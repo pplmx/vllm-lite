@@ -11,6 +11,7 @@ tokio = { version = "1", features = ["sync"] }
 rand = { version = "0.10", features = ["std"] }
 serde = { version = "1", features = ["derive"] }
 crossbeam = "0.8"
+tracing = "0.1"
 
 [dev-dependencies]
 criterion = "0.8"
