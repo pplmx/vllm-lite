@@ -3,6 +3,9 @@ pub enum EngineError {
     #[error("sequence {id} not found")]
     SeqNotFound { id: u64 },
 
+    #[error("invalid request: {0}")]
+    InvalidRequest(String),
+
     #[error("model forward failed: {0}")]
     ModelError(String),
 
