@@ -16,8 +16,11 @@ Single-developer local worktrees cause unnecessary merge conflicts and add compl
 # Build
 cargo build --workspace
 
-# Run all tests
-cargo test --workspace
+# Run all tests (skips #[ignore] slow tests)
+just nextest
+
+# Run all tests including slow/ignored ones
+just nextest-all
 
 # Run single test (by name)
 cargo test -p vllm-core test_engine_streaming
@@ -25,13 +28,25 @@ cargo test -p vllm-model -- attention
 
 # Run clippy (required before commit)
 cargo clippy --workspace -- -D warnings
+cargo clippy --all-targets --workspace --all-features -- -D warnings
 
 # Format check
 cargo fmt --all --check
 
 # Full CI check
 just ci
+
+# Quick: auto-fix + doc check + test
+just quick
+
+# Clean build
+just clean
 ```
+
+### Test Notes
+
+- Slow tests are marked with `#[ignore]` and skipped by default
+- Use `just nextest-all` or `cargo test -- --ignored` to run them
 
 ---
 

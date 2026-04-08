@@ -39,6 +39,12 @@ A lightweight LLM inference engine written in Rust, implementing key vLLM innova
 # Build
 cargo build --workspace
 
+# Run tests (fast, skips slow tests)
+just nextest
+
+# Run all tests including slow ones
+just nextest-all
+
 # Run server (default: /models/Qwen2.5-0.5B-Instruct)
 cargo run -p vllm-server
 
