@@ -1,9 +1,40 @@
 use candle_core::{Device, Result, Tensor};
+use memmap2::Mmap;
 use safetensors::SafeTensors;
 use std::collections::HashMap;
 use std::path::Path;
 
 use crate::config::Architecture;
+
+const MMAP_THRESHOLD_BYTES: u64 = 100 * 1024 * 1024;
+const MAX_MMAP_SIZE: u64 = 10 * 1024 * 1024 * 1024;
+
+pub fn load_file(path: &Path) -> Result<Vec<u8>> {
+    let metadata = std::fs::metadata(path)?;
+    let file_size = metadata.len();
+
+    if file_size >= MMAP_THRESHOLD_BYTES && file_size <= MAX_MMAP_SIZE {
+        match load_mmap(path) {
+            Ok(mmap) => {
+                return Ok(mmap.to_vec());
+            }
+            Err(e) => {
+                eprintln!(
+                    "mmap failed for {}, falling back to read(): {}",
+                    path.display(),
+                    e
+                );
+            }
+        }
+    }
+
+    std::fs::read(path).map_err(|e| candle_core::Error::msg(format!("read failed: {}", e)))
+}
+
+fn load_mmap(path: &Path) -> Result<Mmap> {
+    let file = std::fs::File::open(path)?;
+    unsafe { Mmap::map(&file) }.map_err(|e| candle_core::Error::msg(format!("mmap failed: {}", e)))
+}
 use crate::config::ModelConfig;
 use crate::gemma4::Gemma4Model;
 use crate::llama::LlamaModel;
@@ -363,5 +394,44 @@ mod tests {
         });
         let arch = detect_architecture(&config_json);
         assert_eq!(arch, Architecture::Mixtral);
+    }
+
+    #[test]
+    fn test_load_file_uses_mmap_for_large() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let large_file = temp_dir.path().join("large.bin");
+        fs::write(&large_file, vec![0u8; 150 * 1024 * 1024]).unwrap();
+
+        let data = load_file(&large_file).unwrap();
+        assert_eq!(data.len(), 150 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_load_file_uses_read_for_small() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let small_file = temp_dir.path().join("small.bin");
+        fs::write(&small_file, b"hello world").unwrap();
+
+        let data = load_file(&small_file).unwrap();
+        assert_eq!(data, b"hello world");
+    }
+
+    #[test]
+    fn test_load_file_fallback_on_error() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let file = temp_dir.path().join("test.bin");
+        fs::write(&file, b"test").unwrap();
+
+        let data = load_file(&file).unwrap();
+        assert_eq!(data, b"test");
     }
 }
