@@ -14,11 +14,26 @@ pub struct PrefixCacheConfig {
     pub max_blocks: Option<usize>,
 }
 
+impl PrefixCacheConfig {
+    pub fn new(max_entries: Option<usize>, max_blocks: Option<usize>) -> Self {
+        if let Some(entries) = max_entries {
+            assert!(entries > 0, "max_entries must be > 0");
+        }
+        if let Some(blocks) = max_blocks {
+            assert!(blocks > 0, "max_blocks must be > 0");
+        }
+        Self {
+            max_entries,
+            max_blocks,
+        }
+    }
+}
+
 impl Default for PrefixCacheConfig {
     fn default() -> Self {
         Self {
-            max_entries: Some(1000), // More permissive default
-            max_blocks: Some(10000), // More permissive default
+            max_entries: Some(1000),
+            max_blocks: Some(10000),
         }
     }
 }
