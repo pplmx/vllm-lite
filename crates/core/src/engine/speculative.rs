@@ -26,9 +26,11 @@ impl<M: ModelBackend> super::Engine<M> {
         let input_counts: Vec<usize> = vec![1; tokens.len()];
         self.scheduler.update(&seq_ids, &tokens, &input_counts);
 
-        for seq in self.scheduler.finished_sequences() {
+        let finished = self.scheduler.finished_sequences();
+        for seq in &finished {
             self.response_txs.remove(&seq.id);
         }
+        self.scheduler.clear_finished();
 
         if !batch.seq_ids.is_empty() {
             let total_tokens: usize = batch.input_tokens.iter().map(|t| t.len()).sum();
