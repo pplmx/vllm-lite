@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
+use tracing::error;
 use vllm_traits::{ModelBackend, SeqId, TokenId};
 
 /// Core inference engine managing requests, scheduling, and model execution.
@@ -148,7 +149,7 @@ impl<M: ModelBackend + 'static> Engine<M> {
                                 let _ = response_tx.send(embeddings);
                             }
                             Err(e) => {
-                                eprintln!("Embeddings error: {}", e);
+                                error!(error = %e, "Embeddings error");
                             }
                         }
                     }
@@ -165,7 +166,7 @@ impl<M: ModelBackend + 'static> Engine<M> {
                 if let Err(e) = result {
                     self.error_count += 1;
                     self.last_error = Some(e.to_string());
-                    eprintln!("Engine step error: {}", e);
+                    error!(error = %e, "Engine step error");
                 }
             }
 

@@ -1,4 +1,5 @@
 use crate::types::BlockId;
+use tracing::warn;
 
 const NULL_BLOCK: BlockId = BlockId::MAX;
 
@@ -90,7 +91,7 @@ impl BlockAllocator {
         for &block in blocks {
             if block < self.num_blocks as BlockId {
                 if self.is_free[block] {
-                    eprintln!("warning: freeing already-freed block: {}", block);
+                    warn!(block = block, "freeing already-freed block");
                 } else {
                     self.add_to_free_list(block);
                     self.is_free[block] = true;
