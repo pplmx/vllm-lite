@@ -1,10 +1,10 @@
-use crate::kv_cache::{BlockAllocator, PrefixCache, hash_tokens};
+use crate::kv_cache::{hash_tokens, BlockAllocator, PrefixCache};
 use crate::scheduler::batch_planner::{BatchPlanner, SchedulerStateView};
 use crate::scheduler::eviction::EvictionPolicy;
 use crate::scheduler::observer::{ObserverEvent, SchedulerObservers};
 use crate::scheduler::preemption::PreemptionManager;
 use crate::scheduler::queue_manager::QueueManager;
-use crate::types::{BLOCK_SIZE, Batch, Request, SchedulerConfig, SeqId, Sequence, Status};
+use crate::types::{Batch, Request, SchedulerConfig, SeqId, Sequence, Status, BLOCK_SIZE};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -559,6 +559,10 @@ impl SchedulerEngine {
 
     pub fn finished_sequences(&self) -> Vec<Sequence> {
         self.finished.clone()
+    }
+
+    pub fn clear_finished(&mut self) {
+        self.finished.clear();
     }
 
     pub fn waiting_count(&self) -> usize {
