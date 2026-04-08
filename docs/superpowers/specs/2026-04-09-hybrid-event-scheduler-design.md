@@ -138,6 +138,43 @@ pub enum ObserverEvent {
 
 **Rationale**: One-way notification, no response expected.
 
+### 4.1 Observer Trait (Matches Events)
+
+```rust
+pub trait SchedulerObserver: Send + Sync {
+    fn on_request_arrived(&self, seq_id: SeqId, prompt_len: usize);
+    fn on_batch_scheduled(&self, seq_ids: &[SeqId], batch_size: usize);
+    fn on_decoding(&self, seq_id: SeqId, token: TokenId);
+    fn on_sequence_finished(&self, seq_id: SeqId, total_tokens: usize);
+    fn on_preemption(&self, seq_id: SeqId, reason: &str);
+    fn on_memory_pressure(&self, available_blocks: usize);
+}
+```
+
+### 4.2 Thread Safety
+
+Observers are called synchronously from the scheduler's thread (single-threaded execution model). Each observer is `Send + Sync` for future thread-pool execution if needed.
+
+```rust
+pub struct SchedulerObservers {
+    observers: RwLock<Vec<Box<dyn SchedulerObserver>>>,
+}
+
+impl SchedulerObservers {
+    pub fn dispatch(&self, event: &ObserverEvent) {
+        let observers = self.observers.read().unwrap();
+        for observer in observers.iter() {
+            match event {
+                ObserverEvent::RequestArrived { seq_id, prompt_len } => {
+                    observer.on_request_arrived(*seq_id, *prompt_len);
+                }
+                // ... other events
+            }
+        }
+    }
+}
+```
+
 ### 5. Remove ActionExecutor's Independent Allocator
 
 Current `ActionExecutor` has its own `BlockAllocator` that duplicates `SchedulerEngine`'s. This causes state inconsistency.
@@ -158,17 +195,66 @@ pub struct ActionExecutor {
 ```rust
 // crates/core/src/scheduler/observer.rs
 
+use crate::types::{SeqId, TokenId};
+use crate::scheduler::Batch;
+
 pub trait SchedulerObserver: Send + Sync {
-    fn on_request_arrived(&self, req: &Request, seq_id: SeqId);
-    fn on_batch_scheduled(&self, batch: &Batch);
+    fn on_request_arrived(&self, seq_id: SeqId, prompt_len: usize);
+    fn on_batch_scheduled(&self, seq_ids: &[SeqId], batch_size: usize);
     fn on_decoding(&self, seq_id: SeqId, token: TokenId);
-    fn on_sequence_finished(&self, seq: &Sequence);
+    fn on_sequence_finished(&self, seq_id: SeqId, total_tokens: usize);
     fn on_preemption(&self, seq_id: SeqId, reason: &str);
-    fn on_memory_pressure(&self, available: usize);
+    fn on_memory_pressure(&self, available_blocks: usize);
 }
 
-pub struct SchedulerObservers { ... }
-pub enum ObserverEvent { ... }
+pub enum ObserverEvent {
+    RequestArrived { seq_id: SeqId, prompt_len: usize },
+    BatchScheduled { seq_ids: Vec<SeqId>, batch_size: usize },
+    Decoding { seq_id: SeqId, token: TokenId },
+    SequenceFinished { seq_id: SeqId, total_tokens: usize },
+    Preemption { seq_id: SeqId, reason: String },
+    MemoryPressure { available_blocks: usize },
+}
+
+pub struct SchedulerObservers {
+    observers: RwLock<Vec<Box<dyn SchedulerObserver>>>,
+}
+
+impl SchedulerObservers {
+    pub fn new() -> Self {
+        Self { observers: RwLock::new(Vec::new()) }
+    }
+    
+    pub fn register(&self, observer: Box<dyn SchedulerObserver>) {
+        self.observers.write().unwrap().push(observer);
+    }
+    
+    pub fn dispatch(&self, event: &ObserverEvent) {
+        let observers = self.observers.read().unwrap();
+        for observer in observers.iter() {
+            match event {
+                ObserverEvent::RequestArrived { seq_id, prompt_len } => {
+                    observer.on_request_arrived(*seq_id, *prompt_len);
+                }
+                ObserverEvent::BatchScheduled { seq_ids, batch_size } => {
+                    observer.on_batch_scheduled(seq_ids, *batch_size);
+                }
+                ObserverEvent::Decoding { seq_id, token } => {
+                    observer.on_decoding(*seq_id, *token);
+                }
+                ObserverEvent::SequenceFinished { seq_id, total_tokens } => {
+                    observer.on_sequence_finished(*seq_id, *total_tokens);
+                }
+                ObserverEvent::Preemption { seq_id, reason } => {
+                    observer.on_preemption(*seq_id, reason);
+                }
+                ObserverEvent::MemoryPressure { available_blocks } => {
+                    observer.on_memory_pressure(*available_blocks);
+                }
+            }
+        }
+    }
+}
 ```
 
 ### 2. Modified: engine.rs
@@ -252,11 +338,40 @@ fn test_observer_receives_events() {
 }
 ```
 
-## Open Questions
+## Open Questions (with Recommendations)
 
-1. Should we keep the old `SchedulerEvent`/`Action` system for backwards compatibility?
-2. Maximum number of observers to prevent abuse?
-3. Should observer errors be propagated or silently ignored?
+| Question | Recommendation |
+|----------|----------------|
+| Keep old `SchedulerEvent`/`Action` for backwards compatibility? | **No** - Mark as deprecated, remove in next major version |
+| Maximum number of observers? | **Yes** - Limit to 16 to prevent abuse |
+| Observer errors: propagate or silently ignore? | **Log and continue** - Don't let one observer crash others |
+
+### Implementation Notes for Open Questions
+
+```rust
+impl SchedulerObservers {
+    const MAX_OBSERVERS: usize = 16;
+    
+    pub fn register(&self, observer: Box<dyn SchedulerObserver>) -> Result<(), Error> {
+        let mut guards = self.observers.write().unwrap();
+        if guards.len() >= Self::MAX_OBSERVERS {
+            return Err(Error::MaxObserversReached);
+        }
+        guards.push(observer);
+        Ok(())
+    }
+    
+    pub fn dispatch(&self, event: &ObserverEvent) {
+        let observers = self.observers.read().unwrap();
+        for observer in observers.iter() {
+            if let Err(e) = std::panic::catch_unwind(|| self.notify_one(observer, event)) {
+                // Log error and continue
+                log::warn!("Observer panicked: {:?}", e);
+            }
+        }
+    }
+}
+```
 
 ## Related Files
 
