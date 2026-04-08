@@ -5,8 +5,9 @@ use crate::error::Result;
 use crate::metrics::MetricsCollector;
 use crate::scheduler::engine::SchedulerEngine;
 use crate::types::{EngineMessage, Request, SchedulerConfig};
-use std::cell::RefCell;
 use std::collections::HashMap;
+use std::marker::PhantomData;
+use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use vllm_traits::{ModelBackend, SeqId, TokenId};
 
@@ -23,10 +24,10 @@ use vllm_traits::{ModelBackend, SeqId, TokenId};
 /// The Engine runs on its own dedicated thread (via `run`), using `RefCell`
 /// for interior mutability of model references. All external communication
 /// happens through mpsc channels (actor pattern).
-pub struct Engine<M: ModelBackend> {
+pub struct Engine<M: ModelBackend + 'static> {
     pub scheduler: SchedulerEngine,
-    pub target_model: RefCell<Box<M>>,
-    pub draft_model: RefCell<Box<M>>,
+    pub target_model: Arc<Mutex<dyn ModelBackend>>,
+    pub draft_model: Arc<Mutex<dyn ModelBackend>>,
     pub max_draft_tokens: usize,
     pub speculative_mode: bool,
     pub error_count: usize,
@@ -34,9 +35,10 @@ pub struct Engine<M: ModelBackend> {
     pub metrics: MetricsCollector,
     pub response_txs: HashMap<SeqId, mpsc::Sender<TokenId>>,
     sleep_policy: SleepPolicy,
+    _phantom: PhantomData<M>,
 }
 
-impl<M: ModelBackend> Engine<M> {
+impl<M: ModelBackend + 'static> Engine<M> {
     /// Creates a new Engine with default configuration.
     ///
     /// # Arguments
@@ -67,8 +69,8 @@ impl<M: ModelBackend> Engine<M> {
         let max_seqs = config.max_num_seqs;
         Self {
             scheduler: SchedulerEngine::new(config, num_kv_blocks),
-            target_model: RefCell::new(Box::new(target_model)),
-            draft_model: RefCell::new(Box::new(draft_model)),
+            target_model: Arc::new(Mutex::new(target_model)),
+            draft_model: Arc::new(Mutex::new(draft_model)),
             max_draft_tokens,
             speculative_mode: false,
             error_count: 0,
@@ -76,6 +78,7 @@ impl<M: ModelBackend> Engine<M> {
             metrics: MetricsCollector::new(),
             response_txs: HashMap::with_capacity(max_seqs),
             sleep_policy: SleepPolicy::default(),
+            _phantom: PhantomData,
         }
     }
 
