@@ -346,7 +346,7 @@ impl SchedulerEngine {
         let mut batch_seqs = Vec::new();
         let mut current_tokens = 0;
 
-        // First, add decoding sequences from running
+        // First, add decoding sequences from running (each decode is 1 token)
         for seq in self
             .running
             .iter()
@@ -354,6 +354,7 @@ impl SchedulerEngine {
             .filter(|s| s.status == Status::Decoding)
         {
             batch_seqs.push(seq);
+            current_tokens += 1; // decode is always 1 token
         }
 
         // Then, add waiting sequences from queue
