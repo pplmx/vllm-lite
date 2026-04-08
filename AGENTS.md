@@ -8,6 +8,8 @@ This guide helps AI agents work effectively with the vllm-lite codebase.
 
 Single-developer local worktrees cause unnecessary merge conflicts and add complexity without benefit. Just work directly on the current branch.
 
+---
+
 ## Quick Commands
 
 ```bash
@@ -31,9 +33,11 @@ cargo fmt --all --check
 just ci
 ```
 
+---
+
 ## Project Structure
 
-```text
+```
 vllm-lite/
 ├── Cargo.toml              # Workspace root (5 crates: traits, core, model, server, dist)
 ├── justfile                # Build automation
@@ -53,13 +57,15 @@ vllm-lite/
 └── tests/                  # Integration tests
 ```
 
+---
+
 ## Code Style Guidelines
 
 ### Imports
 
 - Use absolute imports: `use crate::types::Request;`
 - External crates: `use vllm_traits::{ModelBackend, SeqId};`
-- Group std, external, then crate imports
+- Group in order: std → external → crate
 - Use `super` for sibling module access
 
 ### Formatting
@@ -71,26 +77,24 @@ vllm-lite/
 
 ### Naming Conventions
 
-- **Types**: `PascalCase` (structs, enums, traits)
-- **Functions/Variables**: `snake_case`
-- **Constants**: `SCREAMING_SNAKE_CASE`
-- **Modules**: `snake_case`
-- **Crate names**: `kebab-case` (e.g., `vllm-core`)
+| Type | Convention | Example |
+|------|------------|---------|
+| Types | PascalCase | `SchedulerEngine`, `Status` |
+| Functions/Variables | snake_case | `add_request`, `running_count` |
+| Constants | SCREAMING_SNAKE_CASE | `BLOCK_SIZE`, `MAX_BATCH_SIZE` |
+| Modules | snake_case | `queue_manager`, `eviction` |
+| Crate names | kebab-case | `vllm-core` |
 
 ### Types
 
 - Use `usize` for sizes/lengths, `u64` for IDs (`SeqId`, `TokenId`)
 - Prefer explicit type annotations in function signatures
 - Use `&T` for read-only, `&mut T` for mutable references
-- Use `Option<T>` for nullable values, not `null`
+- Use `Option<T>` for nullable values, never `null`
 
 ### Error Handling
 
-- Use `thiserror` for error enums with `#[derive(Debug, thiserror::Error)]`
-- Always implement `Display` and use `#[error(...)]` macro
-- Return `Result<T>` from fallible functions
-- Use `?` operator for error propagation
-- Example (`crates/core/src/error.rs`):
+Use `thiserror` for error enums:
 
 ```rust
 #[derive(Debug, thiserror::Error)]
@@ -103,11 +107,14 @@ pub enum EngineError {
 pub type Result<T> = std::result::Result<T, EngineError>;
 ```
 
+- Return `Result<T>` from fallible functions
+- Use `?` operator for error propagation
+
 ### Tests
 
 - Add to `#[cfg(test)]` module in the same file
 - Use `FakeModel` or `StubModel` for mocking
-- Name: `test_<function>_<expected_behavior>`
+- Naming: `test_<function>_<expected_behavior>`
 - Run: `cargo test -p vllm-core -- test_name`
 
 ### Documentation
@@ -116,13 +123,22 @@ pub type Result<T> = std::result::Result<T, EngineError>;
 - Add examples for complex functions
 - Use `//` for implementation comments, avoid `/**`
 
+---
+
 ## Commit Message Format
 
-```text
+```
 <type>(<scope>): <subject>
 ```
 
-**Types**: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
+| Type | Description |
+|------|-------------|
+| `feat` | New feature |
+| `fix` | Bug fix |
+| `refactor` | Code restructuring |
+| `test` | Adding/updating tests |
+| `docs` | Documentation |
+| `chore` | Maintenance |
 
 **Examples**:
 
@@ -132,25 +148,106 @@ git commit -m "fix(core): resolve prefix cache eviction bug"
 git commit -m "test(core): add prefix cache hit test"
 ```
 
+---
+
 ## Verification (Required Before Commit)
 
 ```bash
 just fmt-check    # Format validation
 just clippy       # Code quality
 just test         # Run tests
-just ci           # Full CI (fmt-check → clippy → doc-check → test)
+just ci           # Full CI
 ```
+
+---
 
 ## Key Design Patterns
 
-- **ModelBackend trait**: Abstracts ML model implementations
-- **Paged KV Cache**: Block-based KV memory management
-- **Prefix Caching**: Reuse KV for repeated prompts
-- **Speculative Decoding**: Draft-then-verify token generation
+| Pattern | Description |
+|---------|-------------|
+| **ModelBackend trait** | Abstracts ML model implementations |
+| **Paged KV Cache** | Block-based KV memory management |
+| **Prefix Caching** | Reuse KV for repeated prompts |
+| **Speculative Decoding** | Draft-then-verify token generation |
+| **Continuous Batching** | Dynamic batch scheduling with fairness |
+
+---
 
 ## Crate Dependencies
 
-- `vllm-traits` → (no deps)
-- `vllm-core` → `vllm-traits`
-- `vllm-model` → `vllm-traits`, candle
-- `vllm-server` → `vllm-core`, `vllm-model`, tokio
+```
+vllm-traits   → (no deps)
+vllm-core     → vllm-traits
+vllm-model    → vllm-traits, candle
+vllm-server   → vllm-core, vllm-model, tokio
+vllm-dist     → vllm-traits
+```
+
+---
+
+## Async Patterns
+
+### Engine Initialization
+
+```rust
+// Async engine setup
+let engine = Engine::new(config).await?;
+```
+
+### Request Processing
+
+```rust
+// Add request, returns SeqId
+let seq_id = engine.add_request(request);
+
+// Build batch
+let batch = engine.build_batch();
+
+// Process batch
+let output = model.forward(&batch).await?;
+
+// Update engine state
+engine.update(&batch.seq_ids, &output.tokens, &input_counts);
+```
+
+---
+
+## Testing Guidelines
+
+### Unit Tests
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scheduler_add_request() {
+        let mut engine = SchedulerEngine::default();
+        let id = engine.add_request(Request::new(0, vec![1, 2, 3], 10));
+        assert!(id > 0);
+    }
+}
+```
+
+### Integration Tests
+
+- Test end-to-end request flow
+- Use realistic model configurations
+- Verify metrics collection
+- Test error handling paths
+
+---
+
+## Debugging
+
+```bash
+# Run with verbose logging
+RUST_LOG=debug cargo run -p vllm-server
+
+# Run specific test with output
+cargo test -p vllm-core test_name -- --nocapture
+
+# Check memory usage
+cargo build --release && valgrind ./target/release/vllm-server
+```
