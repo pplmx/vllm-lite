@@ -90,6 +90,12 @@ impl<M: ModelBackend> Engine<M> {
     }
 
     pub fn add_request(&mut self, req: Request, response_tx: mpsc::Sender<TokenId>) -> SeqId {
+        // Validate prompt is not empty
+        if req.prompt.is_empty() {
+            self.last_error = Some("prompt cannot be empty".to_string());
+            return 0;
+        }
+
         let seq_id = self.scheduler.add_request(req);
         self.response_txs.insert(seq_id, response_tx);
         seq_id
