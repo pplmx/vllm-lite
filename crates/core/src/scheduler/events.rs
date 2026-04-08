@@ -1,3 +1,5 @@
+#![deprecated(since = "0.2.0", note = "Use ObserverEvent instead")]
+
 use crate::types::{Request, SeqId, TokenId};
 
 #[derive(Debug, Clone)]

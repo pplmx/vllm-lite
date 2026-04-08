@@ -1,3 +1,5 @@
+#![deprecated(since = "0.2.0", note = "Use SchedulerObserver instead")]
+
 use super::actions::{Action, PreemptReason};
 use super::events::SchedulerEvent;
 use crate::types::BLOCK_SIZE;

@@ -1,3 +1,5 @@
+#![deprecated(since = "0.2.0", note = "Use SchedulerObserver instead")]
+
 use crate::types::{SeqId, TokenId};
 
 #[derive(Debug, Clone, PartialEq)]
