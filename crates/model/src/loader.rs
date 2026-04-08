@@ -4,7 +4,15 @@ use safetensors::SafeTensors;
 use std::collections::HashMap;
 use std::path::Path;
 
+use half::{bf16, f16};
+
 use crate::config::Architecture;
+use crate::config::ModelConfig;
+use crate::gemma4::Gemma4Model;
+use crate::llama::LlamaModel;
+use crate::mistral::MistralModel;
+use crate::qwen3::model::Qwen3Model;
+use crate::qwen3_config::Qwen3Config;
 
 const MMAP_THRESHOLD_BYTES: u64 = 100 * 1024 * 1024;
 const MAX_MMAP_SIZE: u64 = 10 * 1024 * 1024 * 1024;
@@ -13,8 +21,7 @@ pub fn load_file(path: &Path) -> Result<Vec<u8>> {
     let metadata = std::fs::metadata(path)?;
     let file_size = metadata.len();
 
-    #[allow(clippy::manual_range_contains)]
-    if file_size >= MMAP_THRESHOLD_BYTES && file_size <= MAX_MMAP_SIZE {
+    if (MMAP_THRESHOLD_BYTES..=MAX_MMAP_SIZE).contains(&file_size) {
         match load_mmap(path) {
             Ok(mmap) => {
                 return Ok(mmap.to_vec());
@@ -36,12 +43,6 @@ fn load_mmap(path: &Path) -> Result<Mmap> {
     let file = std::fs::File::open(path)?;
     unsafe { Mmap::map(&file) }.map_err(|e| candle_core::Error::msg(format!("mmap failed: {}", e)))
 }
-use crate::config::ModelConfig;
-use crate::gemma4::Gemma4Model;
-use crate::llama::LlamaModel;
-use crate::mistral::MistralModel;
-use crate::qwen3::model::Qwen3Model;
-use crate::qwen3_config::Qwen3Config;
 
 pub fn detect_architecture(config: &serde_json::Value) -> Architecture {
     let model_type = config
@@ -145,9 +146,15 @@ impl ModelLoader {
             })
             .collect();
 
+        // Count total tensors for progress tracking
+        let total: usize = tensor_vec
+            .iter()
+            .filter_map(|r| r.as_ref().ok())
+            .map(|tensors| tensors.len())
+            .sum();
+
         let mut weights = HashMap::new();
         let mut loaded = 0;
-        let total = tensor_vec.len();
 
         for result in tensor_vec {
             let tensors = result?;
@@ -170,8 +177,6 @@ impl ModelLoader {
     }
 }
 
-use half::{bf16, f16};
-
 fn convert_tensor(view: &safetensors::tensor::TensorView, device: &Device) -> Result<Tensor> {
     use safetensors::Dtype;
 
@@ -182,6 +187,8 @@ fn convert_tensor(view: &safetensors::tensor::TensorView, device: &Device) -> Re
     match dtype {
         Dtype::BF16 => {
             let n = tensor_data.len() / 2;
+            // SAFETY: safetensors guarantees the data size matches the declared dtype.
+            // We trust the dtype from the file metadata and calculate length accordingly.
             let data_bf16: &[u16] =
                 unsafe { std::slice::from_raw_parts(tensor_data.as_ptr() as *const u16, n) };
             let data_f32: Vec<f32> = data_bf16
@@ -192,6 +199,7 @@ fn convert_tensor(view: &safetensors::tensor::TensorView, device: &Device) -> Re
         }
         Dtype::F16 => {
             let n = tensor_data.len() / 2;
+            // SAFETY: safetensors guarantees the data size matches the declared dtype.
             let data_f16: &[u16] =
                 unsafe { std::slice::from_raw_parts(tensor_data.as_ptr() as *const u16, n) };
             let data_f32: Vec<f32> = data_f16

@@ -33,6 +33,7 @@ pub struct Engine<M: ModelBackend> {
     pub last_error: Option<String>,
     pub metrics: MetricsCollector,
     pub(crate) response_txs: HashMap<SeqId, mpsc::Sender<TokenId>>,
+    sleep_policy: SleepPolicy,
 }
 
 impl<M: ModelBackend> Engine<M> {
@@ -74,6 +75,7 @@ impl<M: ModelBackend> Engine<M> {
             last_error: None,
             metrics: MetricsCollector::new(),
             response_txs: HashMap::with_capacity(max_seqs),
+            sleep_policy: SleepPolicy::default(),
         }
     }
 
@@ -155,11 +157,8 @@ impl<M: ModelBackend> Engine<M> {
                 }
             }
 
-            static SLEEP_POLICY: std::sync::LazyLock<std::sync::Mutex<SleepPolicy>> =
-                std::sync::LazyLock::new(|| std::sync::Mutex::new(SleepPolicy::default()));
-
             let has_pending = self.scheduler.has_pending();
-            let interval = SLEEP_POLICY.lock().unwrap().next_interval(has_pending);
+            let interval = self.sleep_policy.next_interval(has_pending);
             std::thread::sleep(std::time::Duration::from_millis(interval));
         }
     }
