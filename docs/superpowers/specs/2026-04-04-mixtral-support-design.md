@@ -7,22 +7,24 @@
 ## Overview
 
 Mixtral is a Sparse Mixture of Experts (SMoE) model from Mistral AI. Key features:
+
 - 8 experts per layer, top-2 routing
 - 4096 sliding window attention
 - Similar to Mistral but with MoE
 
 ## Architecture Comparison
 
-| Feature | Mistral | Mixtral |
-|---------|----------|---------|
-| Norm | RMSNorm | RMSNorm |
-| Attention | Sliding | Sliding |
-| MLP | SwiGLU | **MoE (8 experts)** |
-| Experts | 1 | 8 (top-2) |
+| Feature   | Mistral | Mixtral             |
+| --------- | ------- | ------------------- |
+| Norm      | RMSNorm | RMSNorm             |
+| Attention | Sliding | Sliding             |
+| MLP       | SwiGLU  | **MoE (8 experts)** |
+| Experts   | 1       | 8 (top-2)           |
 
 ## Implementation
 
 ### 1. MixtralConfig
+
 ```rust
 pub struct MixtralConfig {
     // Standard fields
@@ -31,7 +33,7 @@ pub struct MixtralConfig {
     pub num_heads: usize,         // 32
     pub num_kv_heads: usize,     // 8
     pub vocab_size: usize,        // 32000
-    
+
     // MoE specific
     pub num_experts: usize,      // 8
     pub top_k_experts: usize,     // 2
@@ -41,6 +43,7 @@ pub struct MixtralConfig {
 ```
 
 ### 2. MixtralSparseMoe
+
 ```rust
 pub struct MixtralSparseMoe {
     experts: Vec<SwiGLU>,  // 8 experts
@@ -52,10 +55,10 @@ impl MixtralSparseMoe {
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         // 1. Compute gate scores
         let gate_logits = self.gate.forward(x)?;
-        
+
         // 2. Get top-k experts
         let (top_indices, top_weights) = gate_logits.topk(self.top_k, 1)?;
-        
+
         // 3. Forward through selected experts
         // 4. Weighted sum of expert outputs
     }
@@ -63,11 +66,12 @@ impl MixtralSparseMoe {
 ```
 
 ### 3. MixtralBlock
+
 - Similar to MistralBlock but uses MixtralSparseMoe instead of SwiGLU
 
 ## Files to Create/Modify
 
-```
+```text
 crates/model/src/
 ├── mistral/
 │   ├── mod.rs

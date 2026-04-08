@@ -15,7 +15,8 @@
 ### Weight Key Patterns
 
 **Llama / Mistral:**
-```
+
+```text
 model.embed_tokens.weight
 model.layers.{i}.self_attn.q_proj.weight
 model.layers.{i}.self_attn.k_proj.weight
@@ -33,6 +34,7 @@ lm_head.weight (or tie with embed_tokens)
 ### Implementation Approach
 
 Follow Qwen3's pattern:
+
 1. Look up weights by key pattern (with fallback keys)
 2. Extract weights for each layer
 3. Pass weights to model/block constructors
@@ -53,10 +55,10 @@ impl LlamaBlock {
         let k_key = format!("model.layers.{}.self_attn.k_proj.weight", layer_idx);
         let v_key = format!("model.layers.{}.self_attn.v_proj.weight", layer_idx);
         let o_key = format!("model.layers.{}.self_attn.o_proj.weight", layer_idx);
-        
+
         // Create attention with weights
         let attention = GqaAttention::new_with_weights(...)?;
-        
+
         // Similar for MLP and norms
     }
 }
@@ -115,7 +117,7 @@ Mistral uses the same weight key patterns as Llama, so the implementation will b
 
 1. Update `LlamaBlock::new_with_weights()`
 2. Update `LlamaModel::from_weights()` to actually load weights
-3. Update `MistralBlock::new_with_weights()` 
+3. Update `MistralBlock::new_with_weights()`
 4. Update `MistralModel::from_weights()` to actually load weights
 5. Test with real Llama/Mistral model weights
 

@@ -7,6 +7,7 @@
 ## Problem Statement
 
 Current architecture:
+
 - Each model (Qwen3, Qwen3.5-Mamba) has its own monolithic implementation
 - Hard to add new architectures (Llama, Mistral)
 - Configuration and weight loading not unified
@@ -109,6 +110,7 @@ impl ModelRegistry {
 ## Model Implementations
 
 ### LlamaModel
+
 ```rust
 pub struct LlamaModel {
     config: ModelConfig,
@@ -128,6 +130,7 @@ impl LlamaModel {
 ```
 
 ### MistralModel
+
 ```rust
 pub struct MistralModel {
     config: ModelConfig,
@@ -156,7 +159,7 @@ impl ModelLoader {
     pub fn load_llama(path: &str, device: &Device) -> Result<LlamaModel>;
     pub fn load_mistral(path: &str, device: &Device) -> Result<MistralModel>;
     pub fn load_qwen3(path: &str, device: &Device) -> Result<Qwen3Model>;
-    
+
     // Generic loader
     pub fn load(path: &str, device: &Device) -> Result<Box<dyn ModelTrait>>;
 }
@@ -164,7 +167,7 @@ impl ModelLoader {
 
 ## Module Structure
 
-```
+```text
 model/src/
 ├── config/
 │   ├── mod.rs
@@ -188,34 +191,34 @@ model/src/
 
 ## Differences Between Models
 
-| Feature | Llama | Mistral | Qwen3 |
-|---------|-------|---------|-------|
-| Norm | RMSNorm | RMSNorm | LayerNorm |
-| Attention | GQA | Sliding + GQA | GQA + q/k norm |
-| Position | RoPE | RoPE | RoPE |
-| MLP | SwiGLU | SwiGLU | SwiGLU |
-| Sliding Window | None | 4096 | None |
+| Feature        | Llama   | Mistral       | Qwen3          |
+| -------------- | ------- | ------------- | -------------- |
+| Norm           | RMSNorm | RMSNorm       | LayerNorm      |
+| Attention      | GQA     | Sliding + GQA | GQA + q/k norm |
+| Position       | RoPE    | RoPE          | RoPE           |
+| MLP            | SwiGLU  | SwiGLU        | SwiGLU         |
+| Sliding Window | None    | 4096          | None           |
 
 ## Implementation Order
 
 1. **Phase 1: Infrastructure**
-   - Create `config/model_config.rs`
-   - Create `config/architecture.rs`
-   - Update `loader.rs` for unified loading
+    - Create `config/model_config.rs`
+    - Create `config/architecture.rs`
+    - Update `loader.rs` for unified loading
 
 2. **Phase 2: Llama**
-   - Create `llama/block.rs`
-   - Create `llama/model.rs`
-   - Implement ModelBackend
+    - Create `llama/block.rs`
+    - Create `llama/model.rs`
+    - Implement ModelBackend
 
 3. **Phase 3: Mistral**
-   - Create `mistral/block.rs` (with sliding window)
-   - Create `mistral/model.rs`
-   - Implement ModelBackend
+    - Create `mistral/block.rs` (with sliding window)
+    - Create `mistral/model.rs`
+    - Implement ModelBackend
 
 4. **Phase 4: Integration**
-   - Update registry
-   - Add to server model loading
+    - Update registry
+    - Add to server model loading
 
 ## Acceptance Criteria
 

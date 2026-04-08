@@ -9,6 +9,7 @@
 ## Task 1: Add doc comments to modules
 
 **Files:**
+
 - Modify: `crates/model/src/llama/mod.rs`
 - Modify: `crates/model/src/mistral/mod.rs`
 - Modify: `crates/model/src/config/mod.rs`
@@ -80,6 +81,7 @@
 ## Task 2: Add LlamaBlock unit tests
 
 **Files:**
+
 - Modify: `crates/model/src/llama/block.rs`
 
 - [ ] **Step 1: Add tests module**
@@ -95,10 +97,10 @@ mod tests {
     fn test_llama_block_forward_shape() {
         let config = ModelConfig::llama_7b();
         let block = LlamaBlock::new(&config, 0).unwrap();
-        
+
         let input = Tensor::ones((2, 10, 4096), DType::F32, &Device::Cpu).unwrap();
         let output = block.forward(&input).unwrap();
-        
+
         assert_eq!(output.dims(), &[2, 10, 4096]);
     }
 
@@ -106,17 +108,17 @@ mod tests {
     fn test_llama_block_single_token() {
         let config = ModelConfig::llama_7b();
         let block = LlamaBlock::new(&config, 0).unwrap();
-        
+
         let input = Tensor::ones((1, 1, 4096), DType::F32, &Device::Cpu).unwrap();
         let output = block.forward(&input).unwrap();
-        
+
         assert_eq!(output.dims(), &[1, 1, 4096]);
     }
 
     #[test]
     fn test_llama_block_different_batch_sizes() {
         let config = ModelConfig::llama_7b();
-        
+
         for batch_size in [1, 2, 4] {
             let block = LlamaBlock::new(&config, 0).unwrap();
             let input = Tensor::ones((batch_size, 5, 4096), DType::F32, &Device::Cpu).unwrap();
@@ -134,6 +136,7 @@ mod tests {
 ## Task 3: Add MistralBlock unit tests
 
 **Files:**
+
 - Modify: `crates/model/src/mistral/block.rs`
 
 - [ ] **Step 1: Add tests module**
@@ -149,10 +152,10 @@ mod tests {
     fn test_mistral_block_forward_shape() {
         let config = ModelConfig::mistral_7b();
         let block = MistralBlock::new(&config, 0).unwrap();
-        
+
         let input = Tensor::ones((2, 10, 4096), DType::F32, &Device::Cpu).unwrap();
         let output = block.forward(&input).unwrap();
-        
+
         assert_eq!(output.dims(), &[2, 10, 4096]);
     }
 
@@ -160,7 +163,7 @@ mod tests {
     fn test_mistral_block_sliding_window_config() {
         let config = ModelConfig::mistral_7b();
         let block = MistralBlock::new(&config, 0).unwrap();
-        
+
         // Verify sliding window is set
         assert_eq!(block.sliding_window, 4096);
     }

@@ -18,7 +18,7 @@
 
 ## 2. CLI Options (Implemented Features Only)
 
-```
+```text
 Server:
   --host <IP>                 Bind address [default: 0.0.0.0] [-h]
   --port <PORT>               Bind port [default: 8000] [-p]
@@ -207,23 +207,23 @@ Examples:
 
 ## 6. Environment Variables
 
-| Option | Short | Env | Default |
-|--------|-------|-----|---------|
-| `--host` | `-h` | `VLLM_HOST` | "0.0.0.0" |
-| `--port` | `-p` | `VLLM_PORT` | 8000 |
-| `--model` | `-m` | `VLLM_MODEL` | required |
-| `--tensor-parallel-size` | `-tp` | `VLLM_TENSOR_PARALLEL_SIZE` | 1 |
-| `--kv-blocks` | | `VLLM_KV_BLOCKS` | 1024 |
-| `--kv-quantization` | | `VLLM_KV_QUANTIZATION` | false |
-| `--max-batch-size` | | `VLLM_MAX_BATCH_SIZE` | 256 |
-| `--max-waiting-batches` | | `VLLM_MAX_WAITING_BATCHES` | 10 |
-| `--max-draft-tokens` | | `VLLM_MAX_DRAFT_TOKENS` | 8 |
-| `--enforce-eager` | | `VLLM_ENFORCE_EAGER` | false |
-| `--api-key` | | `VLLM_API_KEY` | - |
-| `--api-key-file` | | `VLLM_API_KEYS_FILE` | - |
-| `--log-level` | | `VLLM_LOG_LEVEL` | "info" |
-| `--log-dir` | | `VLLM_LOG_DIR` | - |
-| `--config` | `-c` | `VLLM_CONFIG` | - |
+| Option                   | Short | Env                         | Default   |
+| ------------------------ | ----- | --------------------------- | --------- |
+| `--host`                 | `-h`  | `VLLM_HOST`                 | "0.0.0.0" |
+| `--port`                 | `-p`  | `VLLM_PORT`                 | 8000      |
+| `--model`                | `-m`  | `VLLM_MODEL`                | required  |
+| `--tensor-parallel-size` | `-tp` | `VLLM_TENSOR_PARALLEL_SIZE` | 1         |
+| `--kv-blocks`            |       | `VLLM_KV_BLOCKS`            | 1024      |
+| `--kv-quantization`      |       | `VLLM_KV_QUANTIZATION`      | false     |
+| `--max-batch-size`       |       | `VLLM_MAX_BATCH_SIZE`       | 256       |
+| `--max-waiting-batches`  |       | `VLLM_MAX_WAITING_BATCHES`  | 10        |
+| `--max-draft-tokens`     |       | `VLLM_MAX_DRAFT_TOKENS`     | 8         |
+| `--enforce-eager`        |       | `VLLM_ENFORCE_EAGER`        | false     |
+| `--api-key`              |       | `VLLM_API_KEY`              | -         |
+| `--api-key-file`         |       | `VLLM_API_KEYS_FILE`        | -         |
+| `--log-level`            |       | `VLLM_LOG_LEVEL`            | "info"    |
+| `--log-dir`              |       | `VLLM_LOG_DIR`              | -         |
+| `--config`               | `-c`  | `VLLM_CONFIG`               | -         |
 
 ---
 
@@ -258,11 +258,11 @@ logging:
 
 ## 8. Files to Modify
 
-| File | Changes |
-|------|---------|
-| `crates/server/Cargo.toml` | Add clap |
-| `crates/server/src/cli.rs` | New file |
-| `crates/server/src/main.rs` | Use clap |
+| File                          | Changes   |
+| ----------------------------- | --------- |
+| `crates/server/Cargo.toml`    | Add clap  |
+| `crates/server/src/cli.rs`    | New file  |
+| `crates/server/src/main.rs`   | Use clap  |
 | `crates/server/src/config.rs` | Merge CLI |
 
 ---

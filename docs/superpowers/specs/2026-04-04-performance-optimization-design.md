@@ -23,7 +23,7 @@ impl PagedKvCache {
     pub fn compute_block_hash(&self, block: &Tensor) -> u64 {
         // Compute hash of block content for prefix matching
     }
-    
+
     pub fn find_matching_blocks(&self, prompt_hash: u64) -> Vec<usize> {
         // Find cached blocks matching the prompt
     }
@@ -48,7 +48,7 @@ impl KvCachePool {
     pub fn allocate(&mut self) -> Option<usize> {
         self.free_list.pop()
     }
-    
+
     pub fn deallocate(&mut self, block_id: usize) {
         self.free_list.push(block_id);
     }
@@ -61,7 +61,8 @@ impl KvCachePool {
 
 **Current:** Basic Flash Attention implementation exists.
 
-**Improvement:** 
+**Improvement:**
+
 - Add more tile sizes for different seq lengths
 - Optimize memory access patterns
 - Add sliding window support in Flash Attention

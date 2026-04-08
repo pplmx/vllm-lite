@@ -4,13 +4,13 @@ A lightweight LLM inference engine written in Rust, implementing key vLLM innova
 
 ## Supported Models
 
-| Model | Architecture | Status |
-|-------|--------------|--------|
-| Qwen3 | GQA + RoPE | ✅ |
-| Llama | GQA + RMSNorm | ✅ |
-| Mistral | Sliding Window + GQA | ✅ |
-| Gemma4 | Hybrid Attention + GeGLU | ✅ |
-| Mixtral | Sparse MoE (8 experts) | ✅ |
+| Model   | Architecture             | Status |
+| ------- | ------------------------ | ------ |
+| Qwen3   | GQA + RoPE               | ✅     |
+| Llama   | GQA + RMSNorm            | ✅     |
+| Mistral | Sliding Window + GQA     | ✅     |
+| Gemma4  | Hybrid Attention + GeGLU | ✅     |
+| Mixtral | Sparse MoE (8 experts)   | ✅     |
 
 ## Features
 
@@ -162,7 +162,7 @@ curl -X POST http://localhost:8000/v1/completions \
 
 ## Architecture
 
-```
+```text
 vllm-lite/
 ├── crates/
 │   ├── traits/      # Interface definitions (ModelBackend trait)

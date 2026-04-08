@@ -11,6 +11,7 @@
 - Format: ✅ Clean
 
 **Missing:**
+
 - Doc comments for new modules (llama, mistral, config)
 - Unit tests for LlamaBlock and MistralBlock
 
@@ -73,10 +74,10 @@ mod tests {
     fn test_llama_block_forward_shape() {
         let config = ModelConfig::llama_7b();
         let block = LlamaBlock::new(&config, 0).unwrap();
-        
+
         let input = Tensor::ones((2, 10, 4096), DType::F32, &Device::Cpu).unwrap();
         let output = block.forward(&input).unwrap();
-        
+
         assert_eq!(output.dims(), &[2, 10, 4096]);
     }
 
@@ -103,10 +104,10 @@ mod tests {
     fn test_mistral_block_forward_shape() {
         let config = ModelConfig::mistral_7b();
         let block = MistralBlock::new(&config, 0).unwrap();
-        
+
         let input = Tensor::ones((2, 10, 4096), DType::F32, &Device::Cpu).unwrap();
         let output = block.forward(&input).unwrap();
-        
+
         assert_eq!(output.dims(), &[2, 10, 4096]);
     }
 }

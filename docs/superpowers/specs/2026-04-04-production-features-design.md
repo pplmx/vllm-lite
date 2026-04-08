@@ -46,20 +46,20 @@ pub struct AuthMiddleware {
 
 按照 vLLM 上游做法，以下特性由外部组件处理：
 
-| 特性 | 原因 |
-|------|------|
-| TLS/HTTPS | 由 nginx/负载均衡处理 |
-| 多租户 | 如需要可使用 API Key 区分 |
-| 审计日志 | 外部日志系统收集 |
-| JWT 认证 | API Key 已足够 |
-| 告警 | 监控系统处理 |
-| Quota 管理 | 外部计费系统处理 |
+| 特性       | 原因                      |
+| ---------- | ------------------------- |
+| TLS/HTTPS  | 由 nginx/负载均衡处理     |
+| 多租户     | 如需要可使用 API Key 区分 |
+| 审计日志   | 外部日志系统收集          |
+| JWT 认证   | API Key 已足够            |
+| 告警       | 监控系统处理              |
+| Quota 管理 | 外部计费系统处理          |
 
 ---
 
 ## 3. 架构
 
-```
+```text
 server/
 ├── auth.rs          # ✅ 已有: API Key 认证 + Rate Limiting
 ├── config.rs        # ✅ 已有: 认证配置

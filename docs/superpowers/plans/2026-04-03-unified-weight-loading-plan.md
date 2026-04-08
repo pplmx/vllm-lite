@@ -9,6 +9,7 @@
 ## Task 1: Add architecture detection
 
 **Files:**
+
 - Modify: `crates/model/src/loader.rs`
 
 - [ ] **Step 1: Add detect_architecture function**
@@ -39,6 +40,7 @@ pub fn detect_architecture(config: &serde_json::Value) -> Architecture {
 ## Task 2: Add ModelConfig from JSON
 
 **Files:**
+
 - Modify: `crates/model/src/config/model_config.rs`
 
 - [ ] **Step 1: Add from_config_json method**
@@ -47,7 +49,7 @@ pub fn detect_architecture(config: &serde_json::Value) -> Architecture {
 impl ModelConfig {
     pub fn from_config_json(value: &serde_json::Value) -> Result<Self> {
         let architecture = detect_architecture(value);
-        
+
         let hidden_size = value.get("hidden_size")
             .and_then(|v| v.as_u64())
             .unwrap_or(4096) as usize;
@@ -112,6 +114,7 @@ impl ModelConfig {
 ## Task 3: Add LlamaModel::from_weights
 
 **Files:**
+
 - Modify: `crates/model/src/llama/model.rs`
 
 - [ ] **Step 1: Add from_weights method to LlamaModel**
@@ -166,10 +169,10 @@ impl LlamaBlock {
         weights: &HashMap<String, Tensor>,
     ) -> Result<Self> {
         let prefix = format!("model.layers.{}", layer_idx);
-        
+
         // Extract weights for this layer
         // ... (similar to Qwen3 implementation)
-        
+
         // For now, create with random weights
         Self::new(config, layer_idx)
     }
@@ -183,6 +186,7 @@ impl LlamaBlock {
 ## Task 4: Add MistralModel::from_weights
 
 **Files:**
+
 - Modify: `crates/model/src/mistral/model.rs`
 
 - [ ] **Step 1: Similar to Task 3 for Mistral**
@@ -194,6 +198,7 @@ impl LlamaBlock {
 ## Task 5: Update ModelLoader::load
 
 **Files:**
+
 - Modify: `crates/model/src/loader.rs`
 
 - [ ] **Step 1: Update load method to auto-detect**
@@ -207,10 +212,10 @@ pub fn load(
     let config_path = Path::new(model_dir).join("config.json");
     let content = std::fs::read_to_string(config_path)?;
     let value: serde_json::Value = serde_json::from_str(&content)?;
-    
+
     let config = ModelConfig::from_config_json(&value)?;
     let weights = self.load_weights(model_dir)?;
-    
+
     match config.architecture {
         Architecture::Llama => {
             let model = LlamaModel::from_weights(config, self.device.clone(), weights, num_kv_blocks)?;

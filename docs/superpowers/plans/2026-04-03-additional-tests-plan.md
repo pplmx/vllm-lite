@@ -13,6 +13,7 @@
 ## Task 1: vllm-traits Interface Tests
 
 **Files:**
+
 - Create: `crates/traits/tests/model_backend.rs`
 
 **Why**: No tests validate the core trait interfaces that all model implementations depend on
@@ -69,6 +70,7 @@ git commit -m "test(traits): add trait interface tests"
 ## Task 2: Error Handling Tests
 
 **Files:**
+
 - Create: `crates/core/tests/error_handling.rs`
 
 **Why**: No tests for error propagation from engine to API
@@ -119,6 +121,7 @@ git commit -m "test(core): add error handling tests"
 ## Task 3: Resource Limit Tests
 
 **Files:**
+
 - Create: `crates/core/tests/resource_limits.rs`
 
 **Why**: Critical for production stability - memory pressure, OOM handling
@@ -176,6 +179,7 @@ git commit -m "test(core): add resource limit tests"
 ## Task 4: Model Loader Tests
 
 **Files:**
+
 - Create: `crates/model/tests/loader.rs`
 
 **Why**: No tests for loading weights from disk

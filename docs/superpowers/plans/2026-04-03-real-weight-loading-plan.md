@@ -9,6 +9,7 @@
 ## Task 1: Update LlamaBlock to support weights
 
 **Files:**
+
 - Modify: `crates/model/src/llama/block.rs`
 
 - [ ] **Step 1: Add new_with_weights method to LlamaBlock**
@@ -114,6 +115,7 @@ impl LlamaBlock {
 ## Task 2: Update LlamaModel::from_weights
 
 **Files:**
+
 - Modify: `crates/model/src/llama/model.rs`
 
 - [ ] **Step 1: Update from_weights to actually load weights**
@@ -188,6 +190,7 @@ impl LlamaModel {
 ## Task 3: Update MistralBlock
 
 **Files:**
+
 - Modify: `crates/model/src/mistral/block.rs`
 
 - [ ] **Step 1: Add new_with_weights method (similar to LlamaBlock)**
@@ -199,6 +202,7 @@ impl LlamaModel {
 ## Task 4: Update MistralModel::from_weights
 
 **Files:**
+
 - Modify: `crates/model/src/mistral/model.rs`
 
 - [ ] **Step 1: Update from_weights (similar to LlamaModel)**

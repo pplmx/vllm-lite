@@ -4,7 +4,8 @@
 
 **Goal:** 修复 SchedulerEngine 中的 5 个架构问题：running_count 返回 0、add_request 重复代码、双重状态存储、EvictionPolicy 未集成、PreemptionManager 未集成
 
-**Architecture:** 
+**Architecture:**
+
 - Task 1-2: 修复简单问题（running_count、状态分离）
 - Task 3: 重构 add_request 消除重复代码
 - Task 4-5: 集成 EvictionPolicy 和 PreemptionManager
@@ -18,13 +19,13 @@
 
 ### 问题清单
 
-| # | 问题 | 文件 | 难度 |
-|---|------|------|------|
-| 1 | `running_count()` 永远返回 0 | engine.rs:601-603 | 简单 |
-| 2 | `running` 和 `queue_manager` 双重存储 | engine.rs | 中等 |
-| 3 | `add_request` 重复代码 (~250行) | engine.rs:100-356 | 中等 |
-| 4 | EvictionPolicy 未集成 | engine.rs:507-516 | 复杂 |
-| 5 | PreemptionManager 未使用 | engine.rs | 复杂 |
+| #   | 问题                                  | 文件              | 难度 |
+| --- | ------------------------------------- | ----------------- | ---- |
+| 1   | `running_count()` 永远返回 0          | engine.rs:601-603 | 简单 |
+| 2   | `running` 和 `queue_manager` 双重存储 | engine.rs         | 中等 |
+| 3   | `add_request` 重复代码 (~250行)       | engine.rs:100-356 | 中等 |
+| 4   | EvictionPolicy 未集成                 | engine.rs:507-516 | 复杂 |
+| 5   | PreemptionManager 未使用              | engine.rs         | 复杂 |
 
 ### 关键文件
 
@@ -40,6 +41,7 @@
 ## 任务 1: 修复 running_count() 返回 0
 
 **Files:**
+
 - Modify: `crates/core/src/scheduler/engine.rs:601-603`
 - Test: `crates/core/src/scheduler/engine.rs` (现有测试)
 
@@ -103,12 +105,14 @@ Expected: 现有测试通过
 ## 任务 2: 分析并优化双重状态存储
 
 **Files:**
+
 - Modify: `crates/core/src/scheduler/engine.rs`
 - Test: `crates/core/tests/integration.rs`
 
 - [ ] **Step 1: 分析 running 和 queue_manager 的使用差异**
 
 运行命令查看使用位置:
+
 ```bash
 cd /home/mystvio/repos/vllm-lite
 grep -n "self.running" crates/core/src/scheduler/engine.rs
@@ -116,6 +120,7 @@ grep -n "queue_manager" crates/core/src/scheduler/engine.rs
 ```
 
 分析结果:
+
 - `running`: 在 `build_batch` 中添加当前批次请求，在 `update` 中更新状态
 - `queue_manager`: 持久化等待队列，按优先级管理
 
@@ -132,10 +137,12 @@ grep -n "queue_manager" crates/core/src/scheduler/engine.rs
 - [ ] **Step 3: 统一更新逻辑**
 
 对于已完成的序列:
+
 - 从 `running` 中移除
 - 从 `queue_manager` 中移除并加入 prefix_cache
 
 对于正在运行的序列:
+
 - 只在 `running` 中更新（因为已不在 queue 中）
 
 - [ ] **Step 4: 运行测试**
@@ -148,6 +155,7 @@ Expected: 所有测试通过
 ## 任务 3: 重构 add_request 消除重复代码
 
 **Files:**
+
 - Modify: `crates/core/src/scheduler/engine.rs:100-380`
 - Test: `crates/core/src/scheduler/engine.rs` (添加测试)
 
@@ -206,17 +214,17 @@ fn check_prefix_cache(&mut self, prompt: &[TokenId]) -> CacheHit {
     if let Some(entry) = self.prefix_cache.get(key) {
         return CacheHit::Exact(entry.blocks.clone(), entry.token_count);
     }
-    
+
     // 2. 前缀匹配
     if let Some(entry) = self.prefix_cache.find_prefix_match(prompt) {
         return CacheHit::Prefix(entry.blocks.clone(), entry.token_count);
     }
-    
+
     // 3. 反向前缀匹配
     if let Some((blocks, cached_tokens)) = self.prefix_cache.find_reverse_prefix_match(prompt) {
         return CacheHit::ReversePrefix(blocks, cached_tokens);
     }
-    
+
     CacheHit::None
 }
 ```
@@ -291,11 +299,11 @@ pub fn add_request(&mut self, mut req: Request) -> SeqId {
 #[test]
 fn test_add_request_cache_exact_hit() {
     let mut engine = SchedulerEngine::default();
-    
+
     // First request - cache miss
     engine.add_request(Request::new(0, vec![1, 2, 3], 10));
     // ... process and finish to populate cache ...
-    
+
     // Second request with same prompt - should hit cache
     let id = engine.add_request(Request::new(0, vec![1, 2, 3], 10));
     assert!(id > 0);
@@ -312,6 +320,7 @@ Expected: 所有测试通过
 ## 任务 4: 集成 EvictionPolicy
 
 **Files:**
+
 - Modify: `crates/core/src/scheduler/engine.rs:500-520`
 - Modify: `crates/core/src/scheduler/engine.rs:69-81` (添加字段)
 - Test: `crates/core/src/scheduler/eviction.rs` (现有测试)
@@ -341,6 +350,7 @@ pub fn new(config: SchedulerConfig, num_kv_blocks: usize) -> Self {
 - [ ] **Step 3: 修改 update 中的块分配逻辑**
 
 当前代码 (engine.rs:507-516):
+
 ```rust
 while seq.kv_blocks.len() < blocks_needed {
     if let Some(new_blocks) = self.kv_allocator.allocate(1) {
@@ -353,6 +363,7 @@ while seq.kv_blocks.len() < blocks_needed {
 ```
 
 修改为:
+
 ```rust
 while seq.kv_blocks.len() < blocks_needed {
     if let Some(new_blocks) = self.kv_allocator.allocate(1) {
@@ -365,22 +376,22 @@ while seq.kv_blocks.len() < blocks_needed {
             .filter(|s| s.id != seq_id && s.status != Status::Finished)
             .cloned()
             .collect();
-        
+
         let victims = self.eviction_policy.select_victims(
             &running_seqs,
             1,  // 需要 1 个块
         );
-        
+
         if victims.is_empty() {
             self.stats.record_preemption();
             break;
         }
-        
+
         // 释放被淘汰的块
         self.eviction_policy.release_blocks(&victims);
         self.kv_allocator.free(&victims);
         self.stats.record_eviction();
-        
+
         // 重试分配
         if let Some(new_blocks) = self.kv_allocator.allocate(1) {
             let mut blocks = (*seq.kv_blocks).clone();
@@ -397,6 +408,7 @@ while seq.kv_blocks.len() < blocks_needed {
 - [ ] **Step 4: 在 build_batch 中记录块引用**
 
 在将序列加入 running 时:
+
 ```rust
 // engine.rs:446 后添加
 self.eviction_policy.record_blocks(&seq.kv_blocks);
@@ -412,6 +424,7 @@ Expected: 所有测试通过
 ## 任务 5: 集成 PreemptionManager
 
 **Files:**
+
 - Modify: `crates/core/src/scheduler/engine.rs`
 - Modify: `crates/core/src/scheduler/preemption.rs` (如需要)
 - Test: `crates/core/src/scheduler/preemption.rs`
@@ -441,6 +454,7 @@ pub fn new(config: SchedulerConfig, num_kv_blocks: usize) -> Self {
 - [ ] **Step 3: 在 add_request 中检查是否需要抢占**
 
 在分配块之前添加:
+
 ```rust
 // 检查是否需要抢占
 if blocks_needed > self.kv_allocator.available() {
@@ -450,7 +464,7 @@ if blocks_needed > self.kv_allocator.available() {
         blocks_needed,
         self.kv_allocator.available(),
     );
-    
+
     if should_preempt {
         // 执行抢占
         self.execute_preemption(blocks_needed);
@@ -461,15 +475,16 @@ if blocks_needed > self.kv_allocator.available() {
 - [ ] **Step 4: 实现 execute_preemption 方法**
 
 在 SchedulerEngine impl 中添加:
+
 ```rust
 fn execute_preemption(&mut self, blocks_needed: usize) {
     let running_seqs: Vec<_> = self.running.iter()
         .filter(|s| s.status == Status::Decoding)
         .cloned()
         .collect();
-    
+
     let victims = self.eviction_policy.select_victims(&running_seqs, blocks_needed);
-    
+
     for victim in victims {
         // 找到对应的序列
         if let Some(seq) = self.running.iter_mut().find(|s| s.kv_blocks.contains(&victim)) {
@@ -497,6 +512,7 @@ Expected: 所有测试通过
 ## 任务 6: 全面测试和验证
 
 **Files:**
+
 - Test: `crates/core/tests/integration.rs`
 - Test: `crates/core/src/scheduler/`
 

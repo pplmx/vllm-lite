@@ -17,6 +17,7 @@ Add HTTP-level integration tests for the server API endpoints. Currently there a
 ### Dependencies Needed
 
 Add to `crates/server/Cargo.toml`:
+
 ```toml
 [dev-dependencies]
 axum = { version = "0.8", features = ["tokio", "macros"] }
@@ -52,45 +53,45 @@ async fn send_request(app: &Router, request: Request<Body>) -> Response<Body> {
 
 ### 3.1 GET /health
 
-| Test | Description |
-|------|-------------|
-| `test_health_ok` | Returns 200 OK |
+| Test                        | Description        |
+| --------------------------- | ------------------ |
+| `test_health_ok`            | Returns 200 OK     |
 | `test_health_json_response` | Returns valid JSON |
 
 ### 3.2 POST /v1/chat/completions
 
-| Test | Description |
-|------|-------------|
-| `test_chat_basic` | Basic chat request |
+| Test                         | Description                |
+| ---------------------------- | -------------------------- |
+| `test_chat_basic`            | Basic chat request         |
 | `test_chat_with_temperature` | With temperature parameter |
-| `test_chat_streaming` | Streaming response |
-| `test_chat_empty_prompt` | Error: empty prompt |
-| `test_chat_missing_model` | Error: missing model |
-| `test_chat_max_tokens` | With max_tokens parameter |
+| `test_chat_streaming`        | Streaming response         |
+| `test_chat_empty_prompt`     | Error: empty prompt        |
+| `test_chat_missing_model`    | Error: missing model       |
+| `test_chat_max_tokens`       | With max_tokens parameter  |
 
 ### 3.3 POST /v1/completions
 
-| Test | Description |
-|------|-------------|
-| `test_completions_basic` | Basic completion |
-| `test_completions_streaming` | Streaming |
+| Test                            | Description         |
+| ------------------------------- | ------------------- |
+| `test_completions_basic`        | Basic completion    |
+| `test_completions_streaming`    | Streaming           |
 | `test_completions_empty_prompt` | Error: empty prompt |
 
 ### 3.4 POST /v1/embeddings
 
-| Test | Description |
-|------|-------------|
-| `test_embeddings_basic` | Basic embedding request |
-| `test_embeddings_empty_input` | Error: empty input |
-| `test_embeddings_single_string` | Single string input |
-| `test_embeddings_batch` | Batch input |
+| Test                            | Description             |
+| ------------------------------- | ----------------------- |
+| `test_embeddings_basic`         | Basic embedding request |
+| `test_embeddings_empty_input`   | Error: empty input      |
+| `test_embeddings_single_string` | Single string input     |
+| `test_embeddings_batch`         | Batch input             |
 
 ### 3.5 Auth Tests (existing +扩展)
 
-| Test | Description |
-|------|-------------|
-| `test_no_auth` | Without API key - should fail |
-| `test_with_auth` | With valid API key - should pass |
+| Test                | Description                        |
+| ------------------- | ---------------------------------- |
+| `test_no_auth`      | Without API key - should fail      |
+| `test_with_auth`    | With valid API key - should pass   |
 | `test_invalid_auth` | With invalid API key - should fail |
 
 ---

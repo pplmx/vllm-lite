@@ -13,6 +13,7 @@
 ## Task 1: Replace unwrap() with expect() in chat.rs
 
 **Files:**
+
 - Modify: `crates/server/src/openai/chat.rs:187`
 - Modify: `crates/server/src/openai/chat.rs:204`
 
@@ -23,6 +24,7 @@ Find lines 187 and 204 in `crates/server/src/openai/chat.rs`.
 - [ ] **Step 2: Replace unwrap with expect**
 
 At line 187:
+
 ```rust
 // Before:
 let data = serde_json::to_string(&chunk).unwrap();
@@ -33,6 +35,7 @@ let data = serde_json::to_string(&chunk)
 ```
 
 At line 204:
+
 ```rust
 // Before:
 let data = serde_json::to_string(&chunk).unwrap();
@@ -60,6 +63,7 @@ git commit -m "refactor(server): replace unwrap with expect in chat serializatio
 ## Task 2: Replace unwrap() with expect() in batch/types.rs
 
 **Files:**
+
 - Modify: `crates/server/src/openai/batch/types.rs:109`
 - Modify: `crates/server/src/openai/batch/types.rs:138`
 
@@ -89,9 +93,11 @@ git commit -m "refactor(server): replace unwrap with expect in batch serializati
 ## Task 3: Add Streaming Error Handling
 
 **Files:**
+
 - Modify: `crates/server/src/openai/chat.rs`
 
 **Context:** Currently the streaming response channel only returns `Option<TokenId>`. We need to distinguish between:
+
 1. `Some(token)` - normal token
 2. `None` - stream ended normally
 3. Channel error - engine failed
@@ -101,6 +107,7 @@ git commit -m "refactor(server): replace unwrap with expect in batch serializati
 Read lines 163-211 in chat.rs to understand the current stream implementation.
 
 The current code:
+
 ```rust
 let stream = stream::unfold(response_rx, move |mut rx| {
     async move {
@@ -113,6 +120,7 @@ let stream = stream::unfold(response_rx, move |mut rx| {
 ```
 
 **Problem**: `mpsc::UnboundedReceiver::recv()` returns:
+
 - `Ok(Some(token))` - received token
 - `Ok(None)` - channel closed (normal end)
 - `Err(...)` - channel error (engine failure)
@@ -122,6 +130,7 @@ Currently we only match `Some` and `None`, ignoring errors!
 - [ ] **Step 2: Update the match to handle errors**
 
 Replace the stream handler:
+
 ```rust
 match rx.recv().await {
     Ok(Some(token)) => {
