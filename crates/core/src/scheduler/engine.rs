@@ -301,7 +301,8 @@ impl SchedulerEngine {
     }
 
     pub fn build_batch(&mut self) -> Batch {
-        if self.queue_manager.is_empty() {
+        // Check if there's work to do in either queue or running
+        if self.queue_manager.is_empty() && self.running.is_empty() {
             return Batch {
                 seq_ids: Vec::new(),
                 input_tokens: Vec::new(),
@@ -327,14 +328,36 @@ impl SchedulerEngine {
         let mut num_computed = Vec::new();
         let mut is_prefill = Vec::new();
 
-        let batch_size = plan.target_batch_size.min(self.queue_manager.len());
+        // Get waiting sequences from queue
+        let waiting_count = self.queue_manager.len();
+        let running_decode_count = self
+            .running
+            .iter()
+            .filter(|s| s.status == Status::Decoding)
+            .count();
+        let batch_size = plan
+            .target_batch_size
+            .saturating_sub(running_decode_count)
+            .max(0)
+            .min(waiting_count);
         let max_tokens = self.config.max_num_batched_tokens;
 
         // Use dequeue to remove sequences from queue instead of cloning
         let mut batch_seqs = Vec::new();
         let mut current_tokens = 0;
 
-        while batch_seqs.len() < batch_size {
+        // First, add decoding sequences from running
+        for seq in self
+            .running
+            .iter()
+            .cloned()
+            .filter(|s| s.status == Status::Decoding)
+        {
+            batch_seqs.push(seq);
+        }
+
+        // Then, add waiting sequences from queue
+        while batch_seqs.len() < batch_size + running_decode_count {
             if let Some(seq) = self.queue_manager.dequeue() {
                 let is_prefilling = seq.status == Status::Waiting;
                 let seq_tokens = if is_prefilling {
