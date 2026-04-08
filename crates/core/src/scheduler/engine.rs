@@ -1,10 +1,10 @@
-use crate::kv_cache::{BlockAllocator, PrefixCache, hash_tokens};
+use crate::kv_cache::{hash_tokens, BlockAllocator, PrefixCache};
 use crate::scheduler::batch_planner::{BatchPlanner, SchedulerStateView};
 use crate::scheduler::eviction::EvictionPolicy;
 use crate::scheduler::observer::{ObserverEvent, SchedulerObservers};
 use crate::scheduler::preemption::PreemptionManager;
 use crate::scheduler::queue_manager::QueueManager;
-use crate::types::{BLOCK_SIZE, Batch, Request, SchedulerConfig, SeqId, Sequence, Status};
+use crate::types::{Batch, Request, SchedulerConfig, SeqId, Sequence, Status, BLOCK_SIZE};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -330,59 +330,67 @@ impl SchedulerEngine {
         let batch_size = plan.target_batch_size.min(self.queue_manager.len());
         let max_tokens = self.config.max_num_batched_tokens;
 
-        // Get sequences from queue for batch (peek, don't remove)
-        let all_seqs: Vec<_> = {
-            let all = self.queue_manager.all_waiting();
-            all.into_iter().take(batch_size).cloned().collect()
-        };
-
-        // Apply token budget: collect sequences until we hit max_tokens limit
-        let mut current_tokens = 0;
+        // Use dequeue to remove sequences from queue instead of cloning
         let mut batch_seqs = Vec::new();
+        let mut current_tokens = 0;
 
-        for seq in all_seqs {
-            let is_prefilling = seq.status == Status::Waiting;
-            let seq_tokens = if is_prefilling {
-                seq.tokens.len().saturating_sub(seq.num_computed_tokens)
+        while batch_seqs.len() < batch_size {
+            if let Some(seq) = self.queue_manager.dequeue() {
+                let is_prefilling = seq.status == Status::Waiting;
+                let seq_tokens = if is_prefilling {
+                    seq.tokens.len().saturating_sub(seq.num_computed_tokens)
+                } else {
+                    1
+                };
+
+                if current_tokens + seq_tokens > max_tokens {
+                    self.queue_manager
+                        .enqueue(seq.clone(), seq.priority.clone());
+                    break;
+                }
+
+                current_tokens += seq_tokens;
+                batch_seqs.push(seq);
             } else {
-                1 // decode is 1 token
-            };
-
-            // Check if adding this sequence would exceed token budget
-            if current_tokens + seq_tokens > max_tokens {
                 break;
             }
-
-            current_tokens += seq_tokens;
-            batch_seqs.push(seq);
         }
 
         for seq in batch_seqs {
             let is_prefilling = seq.status == Status::Waiting;
 
-            // Update status and track running sequence
-            let mut running_seq = seq.clone();
+            let mut running_seq = seq;
             if is_prefilling {
                 running_seq.status = Status::Prefilling;
             }
+            let kv_blocks = running_seq.kv_blocks.clone();
+            let num_computed_tokens_val = running_seq.num_computed_tokens;
+            let seq_id = running_seq.id;
+
             self.running.push(running_seq);
 
-            self.eviction_policy.record_blocks(&seq.kv_blocks);
+            self.eviction_policy.record_blocks(&kv_blocks);
 
-            let start = seq.num_computed_tokens;
+            let start = num_computed_tokens_val;
             let tokens: Vec<_> = if is_prefilling {
-                seq.tokens[start..].to_vec()
+                self.running.last().unwrap().tokens[start..].to_vec()
             } else {
-                seq.tokens.last().map(|t| vec![*t]).unwrap_or_default()
+                self.running
+                    .last()
+                    .unwrap()
+                    .tokens
+                    .last()
+                    .map(|t| vec![*t])
+                    .unwrap_or_default()
             };
 
             let pos: Vec<usize> = (start..start + tokens.len()).collect();
 
-            seq_ids.push(seq.id);
+            seq_ids.push(seq_id);
             input_tokens.push(tokens);
             positions.push(pos);
-            kv_block_ids.push(seq.kv_blocks.as_ref().clone());
-            num_computed.push(seq.num_computed_tokens);
+            kv_block_ids.push(kv_blocks.as_ref().clone());
+            num_computed.push(num_computed_tokens_val);
             is_prefill.push(is_prefilling);
 
             self.stats.record_batch(1);
