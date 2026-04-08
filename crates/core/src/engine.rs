@@ -91,6 +91,14 @@ impl<M: ModelBackend> Engine<M> {
         self.last_error.as_deref()
     }
 
+    pub fn cancel_request(&mut self, seq_id: SeqId) -> bool {
+        let canceled = self.scheduler.cancel_request(seq_id);
+        if canceled {
+            self.response_txs.remove(&seq_id);
+        }
+        canceled
+    }
+
     pub fn add_request(&mut self, req: Request, response_tx: mpsc::Sender<TokenId>) -> SeqId {
         // Validate prompt is not empty
         if req.prompt.is_empty() {
