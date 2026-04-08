@@ -1,7 +1,7 @@
 use crate::error::Result;
 use vllm_traits::{ModelBackend, SeqId, TokenId};
 
-impl<M: ModelBackend> crate::engine::Engine<M> {
+impl<M: ModelBackend + 'static> crate::engine::Engine<M> {
     pub fn step(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
         let start = std::time::Instant::now();
         let batch = self.scheduler.build_batch();
@@ -9,7 +9,7 @@ impl<M: ModelBackend> crate::engine::Engine<M> {
             return Ok(vec![]);
         }
 
-        let output = self.target_model.borrow_mut().forward(
+        let output = self.target_model.lock().unwrap().forward(
             &batch.seq_ids,
             &batch.input_tokens,
             &batch.positions,
