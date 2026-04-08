@@ -1,5 +1,5 @@
 use crate::scheduler::batch_planner::{BatchPlanner, SchedulerStateView};
-use crate::scheduler::cache::{hash_tokens, CacheManager};
+use crate::scheduler::cache::{hash_tokens, CacheManager, PrefixCacheConfig};
 use crate::scheduler::memory::MemoryManager;
 use crate::scheduler::observer::{ObserverEvent, SchedulerObservers};
 use crate::scheduler::queue_manager::QueueManager;
@@ -81,11 +81,15 @@ pub struct SchedulerEngine {
 
 impl SchedulerEngine {
     pub fn new(config: SchedulerConfig, num_kv_blocks: usize) -> Self {
+        let cache_config = PrefixCacheConfig {
+            max_entries: Some(config.max_num_seqs * 10),
+            max_blocks: Some(num_kv_blocks / 2),
+        };
         Self {
             queue_manager: QueueManager::new(),
             batch_planner: BatchPlanner::new(config.clone()),
             memory: MemoryManager::new(config.clone(), num_kv_blocks),
-            cache: CacheManager::new(),
+            cache: CacheManager::with_config(cache_config),
             config,
             stats: SchedulerStats::new(),
             next_seq_id: 1,
