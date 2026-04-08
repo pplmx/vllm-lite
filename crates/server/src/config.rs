@@ -44,9 +44,9 @@ pub struct AuthConfig {
     #[serde(default)]
     pub api_keys: Vec<String>,
     #[serde(default)]
-    pub api_keys_env: Option<String>, // Read from env var (comma-separated)
+    pub api_keys_env: Option<String>,
     #[serde(default)]
-    pub api_keys_file: Option<String>, // Read from file (one per line)
+    pub api_keys_file: Option<String>,
     #[serde(default = "default_rate_limit_requests")]
     pub rate_limit_requests: usize,
     #[serde(default = "default_rate_limit_window")]
@@ -54,11 +54,9 @@ pub struct AuthConfig {
 }
 
 impl AuthConfig {
-    /// Get all API keys from config + env + file
     pub fn resolve_api_keys(&self) -> Vec<String> {
         let mut keys = self.api_keys.clone();
 
-        // From env var (VLLM_API_KEYS=key1,key2)
         if let Some(ref env_var) = self.api_keys_env {
             if let Ok(env_keys) = std::env::var(env_var) {
                 for key in env_keys.split(',') {
@@ -70,7 +68,6 @@ impl AuthConfig {
             }
         }
 
-        // From file (one key per line)
         if let Some(ref file_path) = self.api_keys_file {
             if let Ok(content) = std::fs::read_to_string(file_path) {
                 for line in content.lines() {
@@ -196,41 +193,6 @@ impl AppConfig {
             }
         }
 
-        if let Ok(host) = std::env::var("VLLM_HOST") {
-            config.server.host = host;
-        }
-        if let Ok(port) = std::env::var("VLLM_PORT") {
-            if let Ok(port) = port.parse() {
-                config.server.port = port;
-            }
-        }
-        if let Ok(level) = std::env::var("VLLM_LOG_LEVEL") {
-            config.server.log_level = level;
-        }
-        if let Ok(log_dir) = std::env::var("VLLM_LOG_DIR") {
-            config.server.log_dir = Some(log_dir);
-        }
-        if let Ok(max_draft) = std::env::var("VLLM_MAX_DRAFT_TOKENS") {
-            if let Ok(v) = max_draft.parse() {
-                config.engine.max_draft_tokens = v;
-            }
-        }
-        if let Ok(blocks) = std::env::var("VLLM_KV_BLOCKS") {
-            if let Ok(v) = blocks.parse() {
-                config.engine.num_kv_blocks = v;
-            }
-        }
-        if let Ok(tp_size) = std::env::var("VLLM_TENSOR_PARALLEL_SIZE") {
-            if let Ok(v) = tp_size.parse() {
-                config.engine.tensor_parallel_size = v;
-            }
-        }
-        if let Ok(quant) = std::env::var("VLLM_KV_QUANTIZATION") {
-            if let Ok(v) = quant.parse() {
-                config.engine.kv_quantization = v;
-            }
-        }
-
         config
     }
 
@@ -342,12 +304,5 @@ mod tests {
         config.engine.kv_quantization = true;
         assert!(config.validate().is_ok());
         assert!(config.engine.kv_quantization);
-    }
-
-    #[test]
-    fn test_kv_quantization_from_env() {
-        // Test that kv_quantization defaults to false
-        let config = AppConfig::default();
-        assert!(!config.engine.kv_quantization);
     }
 }

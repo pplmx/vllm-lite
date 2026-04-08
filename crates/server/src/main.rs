@@ -58,7 +58,7 @@ async fn main() {
     let device = Device::cuda_if_available(0).unwrap_or_else(|_| Device::Cpu);
     tracing::info!(device = ?device, "Using device");
 
-    let model_path = cli.model.display().to_string();
+    let model_path = cli.model_path().display().to_string();
     tracing::info!(model_path = %model_path, "Loading model from");
 
     let tensor_parallel_size = app_config.engine.tensor_parallel_size;
