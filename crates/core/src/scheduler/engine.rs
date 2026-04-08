@@ -1,9 +1,9 @@
 use crate::scheduler::batch_planner::{BatchPlanner, SchedulerStateView};
-use crate::scheduler::cache::{CacheManager, hash_tokens};
+use crate::scheduler::cache::{hash_tokens, CacheManager};
 use crate::scheduler::memory::MemoryManager;
 use crate::scheduler::observer::{ObserverEvent, SchedulerObservers};
 use crate::scheduler::queue_manager::QueueManager;
-use crate::types::{BLOCK_SIZE, Batch, Request, SchedulerConfig, SeqId, Sequence, Status};
+use crate::types::{Batch, Request, SchedulerConfig, SeqId, Sequence, Status, BLOCK_SIZE};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -270,15 +270,12 @@ impl SchedulerEngine {
 
             self.memory.release_blocks(seq.kv_blocks.as_ref());
 
-            if let Some(running_seq) = self.running.iter_mut().find(|s| s.id == seq.id) {
-                running_seq.status = Status::Waiting;
-                running_seq.kv_blocks = Arc::new(vec![]);
-            }
+            let mut preempted_seq = seq.clone();
+            preempted_seq.status = Status::Waiting;
+            preempted_seq.kv_blocks = Arc::new(vec![]);
 
-            if let Some(running_seq) = self.running.iter().find(|s| s.id == seq.id) {
-                self.queue_manager.enqueue_preempted(running_seq.clone());
-                self.running.retain(|s| s.id != seq.id);
-            }
+            self.queue_manager.enqueue_preempted(preempted_seq);
+            self.running.retain(|s| s.id != seq_id);
 
             // Dispatch observer preemption event
             self.dispatch_observer_event(ObserverEvent::Preemption {
