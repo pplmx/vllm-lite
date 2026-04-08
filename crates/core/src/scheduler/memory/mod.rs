@@ -4,24 +4,27 @@ pub mod eviction;
 pub use allocator::{BlockAllocator, BlockAllocatorStats};
 pub use eviction::{EvictionPolicy, EvictionPolicyStats};
 
-use crate::types::{BlockId, Sequence};
+use crate::scheduler::preemption::PreemptionManager;
+use crate::types::{BlockId, SchedulerConfig, Sequence, Status};
 
 pub struct MemoryManager {
     allocator: BlockAllocator,
     eviction_policy: EvictionPolicy,
+    preemption_manager: PreemptionManager,
 }
 
 impl Default for MemoryManager {
     fn default() -> Self {
-        Self::new(1000)
+        Self::new(SchedulerConfig::default(), 1000)
     }
 }
 
 impl MemoryManager {
-    pub fn new(num_blocks: usize) -> Self {
+    pub fn new(config: SchedulerConfig, num_blocks: usize) -> Self {
         Self {
             allocator: BlockAllocator::new(num_blocks),
             eviction_policy: EvictionPolicy::new(),
+            preemption_manager: PreemptionManager::new(config),
         }
     }
 
@@ -31,16 +34,31 @@ impl MemoryManager {
 
     pub fn free(&mut self, blocks: &[BlockId]) {
         self.allocator.free(blocks);
+    }
+
+    pub fn release_blocks(&mut self, blocks: &[BlockId]) {
         self.eviction_policy.release_blocks(blocks);
+        self.allocator.free(blocks);
     }
 
     pub fn select_victims(
-        &mut self,
+        &self,
         running_sequences: &[Sequence],
         num_blocks: usize,
     ) -> Vec<BlockId> {
-        self.eviction_policy
-            .select_victims(running_sequences, num_blocks)
+        let mut result = Vec::new();
+        for seq in running_sequences
+            .iter()
+            .filter(|s| s.status == Status::Decoding)
+        {
+            for &block in seq.kv_blocks.iter() {
+                if result.len() >= num_blocks {
+                    return result;
+                }
+                result.push(block);
+            }
+        }
+        result
     }
 
     pub fn record_blocks(&mut self, blocks: &[BlockId]) {
@@ -63,16 +81,63 @@ impl MemoryManager {
         self.allocator.stats()
     }
 
-    pub fn eviction_stats(&self) -> EvictionPolicyStats {
-        self.eviction_policy.stats()
+    pub fn should_preempt(
+        &self,
+        running_len: usize,
+        waiting_len: usize,
+        blocks_needed: usize,
+        blocks_available: usize,
+    ) -> bool {
+        self.preemption_manager.should_preempt(
+            running_len,
+            waiting_len,
+            blocks_needed,
+            blocks_available,
+        )
     }
 
-    pub fn get_block_ref_count(&self, block: BlockId) -> usize {
-        self.eviction_policy.get_block_ref_count(block)
+    pub fn execute_preemption(
+        &mut self,
+        running: &mut Vec<Sequence>,
+        blocks_needed: usize,
+    ) -> Vec<Sequence> {
+        let mut preemptable: Vec<_> = running
+            .iter()
+            .filter(|s| s.status == Status::Decoding)
+            .cloned()
+            .collect();
+
+        preemptable.sort_by(|a, b| {
+            b.consecutive_decode_rounds
+                .cmp(&a.consecutive_decode_rounds)
+        });
+
+        let mut blocks_freed = 0;
+        let mut preempted = Vec::new();
+
+        for seq in preemptable.iter() {
+            if blocks_freed >= blocks_needed {
+                break;
+            }
+
+            let block_count = seq.kv_blocks.len();
+            self.free(seq.kv_blocks.as_ref());
+            preempted.push(seq.clone());
+            blocks_freed += block_count;
+        }
+
+        for seq in &preempted {
+            running.retain(|s| s.id != seq.id);
+        }
+
+        preempted
     }
 
-    pub fn invalidate_eviction_cache(&mut self) {
-        self.eviction_policy.invalidate_cache();
+    pub fn preemption_stats(&self) -> (u64, u64) {
+        (
+            self.preemption_manager.preempted_count(),
+            self.preemption_manager.rejected_count(),
+        )
     }
 }
 
@@ -99,7 +164,7 @@ mod tests {
 
     #[test]
     fn test_memory_manager_allocate_free() {
-        let mut manager = MemoryManager::new(10);
+        let mut manager = MemoryManager::new(SchedulerConfig::default(), 10);
 
         let blocks = manager.allocate(3).unwrap();
         assert_eq!(blocks.len(), 3);
@@ -111,7 +176,7 @@ mod tests {
 
     #[test]
     fn test_memory_manager_select_victims() {
-        let mut manager = MemoryManager::new(10);
+        let manager = MemoryManager::new(SchedulerConfig::default(), 10);
 
         let seq = make_sequence(1, vec![1, 2], Status::Decoding);
         let victims = manager.select_victims(&[seq], 1);
@@ -120,7 +185,7 @@ mod tests {
 
     #[test]
     fn test_memory_manager_oom() {
-        let mut manager = MemoryManager::new(2);
+        let mut manager = MemoryManager::new(SchedulerConfig::default(), 2);
         manager.allocate(2).unwrap();
         assert!(manager.allocate(1).is_none());
     }
