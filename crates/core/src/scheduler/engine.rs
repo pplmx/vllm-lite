@@ -68,9 +68,10 @@ impl SchedulerStats {
     }
 }
 
-#[allow(dead_code)]
 pub struct SchedulerEngine {
+    #[allow(dead_code)]
     event_handler: EventHandler,
+    #[allow(dead_code)]
     action_executor: ActionExecutor,
     queue_manager: QueueManager,
     batch_planner: BatchPlanner,
@@ -142,6 +143,16 @@ impl SchedulerEngine {
             return Some((blocks, cached_tokens));
         }
         None
+    }
+
+    fn insert_into_prefix_cache(&mut self, seq: Sequence) {
+        let prompt_tokens = &seq.tokens[..seq.prompt_len];
+        let key = hash_tokens(prompt_tokens);
+        if !self.prefix_cache.contains_key(&key) {
+            self.prefix_cache
+                .insert(key, seq.kv_blocks.to_vec(), seq.prompt_len);
+        }
+        self.finished.push(seq);
     }
 
     pub fn add_request(&mut self, mut req: Request) -> SeqId {
@@ -448,14 +459,7 @@ impl SchedulerEngine {
             if let Some(finished_seq) = updated_seq {
                 self.running.retain(|s| s.id != finished_seq.id);
                 if let Some(seq) = self.queue_manager.remove(finished_seq.id) {
-                    // Insert into prefix cache
-                    let prompt_tokens = &seq.tokens[..seq.prompt_len];
-                    let key = hash_tokens(prompt_tokens);
-                    if !self.prefix_cache.contains_key(&key) {
-                        self.prefix_cache
-                            .insert(key, seq.kv_blocks.to_vec(), seq.prompt_len);
-                    }
-                    self.finished.push(seq);
+                    self.insert_into_prefix_cache(seq);
                 }
             }
         }
@@ -470,14 +474,7 @@ impl SchedulerEngine {
 
         for seq_id in finished_ids {
             if let Some(seq) = self.queue_manager.remove(seq_id) {
-                // Insert into prefix cache
-                let prompt_tokens = &seq.tokens[..seq.prompt_len];
-                let key = hash_tokens(prompt_tokens);
-                if !self.prefix_cache.contains_key(&key) {
-                    self.prefix_cache
-                        .insert(key, seq.kv_blocks.to_vec(), seq.prompt_len);
-                }
-                self.finished.push(seq);
+                self.insert_into_prefix_cache(seq);
             }
             self.running.retain(|s| s.id != seq_id);
         }
