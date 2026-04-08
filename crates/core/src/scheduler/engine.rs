@@ -1,7 +1,9 @@
 use crate::kv_cache::{BlockAllocator, PrefixCache, hash_tokens};
 use crate::scheduler::action_executor::ActionExecutor;
+use crate::scheduler::actions::Action;
 use crate::scheduler::batch_planner::{BatchPlanner, SchedulerStateView};
 use crate::scheduler::event_handler::EventHandler;
+use crate::scheduler::events::SchedulerEvent;
 use crate::scheduler::eviction::EvictionPolicy;
 use crate::scheduler::preemption::PreemptionManager;
 use crate::scheduler::queue_manager::QueueManager;
@@ -155,6 +157,51 @@ impl SchedulerEngine {
         self.finished.push(seq);
     }
 
+    fn dispatch_event(&mut self, event: SchedulerEvent) -> Vec<SchedulerEvent> {
+        let actions = self.event_handler.dispatch(event);
+        self.execute_actions(actions)
+    }
+
+    fn execute_actions(&mut self, actions: Vec<Action>) -> Vec<SchedulerEvent> {
+        let mut events = Vec::new();
+        for action in actions {
+            let result = self.action_executor.execute(action);
+            events.extend(result);
+        }
+        events
+    }
+
+    fn process_event_loop(&mut self, initial_event: SchedulerEvent) {
+        let mut events = vec![initial_event];
+        while let Some(event) = events.pop() {
+            let new_events = self.dispatch_event(event);
+            events.extend(new_events);
+        }
+    }
+
+    pub fn cancel_request(&mut self, seq_id: SeqId) -> bool {
+        if let Some(seq) = self.running.iter().find(|s| s.id == seq_id).cloned() {
+            self.running.retain(|s| s.id != seq_id);
+            self.queue_manager.enqueue_preempted(seq);
+            self.process_event_loop(SchedulerEvent::RequestCancelled(seq_id));
+            return true;
+        }
+        if let Some(_seq) = self.queue_manager.remove(seq_id) {
+            // seq removed from queue, event dispatched below
+            self.process_event_loop(SchedulerEvent::RequestCancelled(seq_id));
+            return true;
+        }
+        false
+    }
+
+    pub fn handle_timeout(&mut self, seq_id: SeqId) -> bool {
+        if self.running.iter().any(|s| s.id == seq_id) || self.queue_manager.get(seq_id).is_some() {
+            self.process_event_loop(SchedulerEvent::RequestTimeout(seq_id));
+            return true;
+        }
+        false
+    }
+
     pub fn add_request(&mut self, mut req: Request) -> SeqId {
         if req.id == 0 {
             req.id = self.next_seq_id;
@@ -211,17 +258,20 @@ impl SchedulerEngine {
 
         let seq = Self::create_sequence(
             seq_id,
-            req.prompt,
+            req.prompt.clone(),
             Arc::new(blocks),
             0,
             prompt_len,
             req.max_tokens,
-            req.sampling_params,
+            req.sampling_params.clone(),
             priority.clone(),
             Status::Waiting,
         );
 
         self.queue_manager.enqueue(seq, priority);
+
+        // Dispatch event for tracking/metrics
+        self.process_event_loop(SchedulerEvent::RequestArrived(req));
 
         seq_id
     }
@@ -246,6 +296,7 @@ impl SchedulerEngine {
             }
 
             let block_count = seq.kv_blocks.len();
+            let seq_id = seq.id;
 
             self.eviction_policy.release_blocks(seq.kv_blocks.as_ref());
             self.kv_allocator.free(seq.kv_blocks.as_ref());
@@ -259,6 +310,12 @@ impl SchedulerEngine {
                 self.queue_manager.enqueue_preempted(running_seq.clone());
                 self.running.retain(|s| s.id != seq.id);
             }
+
+            // Dispatch preemption event
+            self.process_event_loop(SchedulerEvent::Preempt {
+                seq_id,
+                reason: "MemoryPressure".to_string(),
+            });
 
             blocks_freed += block_count;
             self.stats.record_preemption();
@@ -369,6 +426,8 @@ impl SchedulerEngine {
     }
 
     pub fn update(&mut self, seq_ids: &[SeqId], next_tokens: &[u32], input_token_counts: &[usize]) {
+        let mut events_to_dispatch: Vec<SchedulerEvent> = Vec::new();
+
         for ((seq_id, &token), &input_count) in
             seq_ids.iter().zip(next_tokens).zip(input_token_counts)
         {
@@ -409,6 +468,9 @@ impl SchedulerEngine {
 
                         if victims.is_empty() {
                             self.stats.record_preemption();
+                            events_to_dispatch.push(SchedulerEvent::MemoryPressure {
+                                available_blocks: self.kv_allocator.available(),
+                            });
                             break;
                         }
 
@@ -422,6 +484,9 @@ impl SchedulerEngine {
                             seq.kv_blocks = Arc::new(blocks);
                         } else {
                             self.stats.record_preemption();
+                            events_to_dispatch.push(SchedulerEvent::MemoryPressure {
+                                available_blocks: self.kv_allocator.available(),
+                            });
                             break;
                         }
                     }
@@ -429,6 +494,12 @@ impl SchedulerEngine {
 
                 if seq.status == Status::Finished {
                     updated_seq = Some(seq.clone());
+                    events_to_dispatch.push(SchedulerEvent::SequenceFinished { seq_id: *seq_id });
+                } else {
+                    events_to_dispatch.push(SchedulerEvent::DecodeComplete {
+                        seq_id: *seq_id,
+                        new_token: token,
+                    });
                 }
             }
 
@@ -477,6 +548,11 @@ impl SchedulerEngine {
                 self.insert_into_prefix_cache(seq);
             }
             self.running.retain(|s| s.id != seq_id);
+        }
+
+        // Dispatch collected events after all mutable borrows are done
+        for event in events_to_dispatch {
+            self.dispatch_event(event);
         }
     }
 
