@@ -504,29 +504,6 @@ impl SchedulerEngine {
                 }
             }
 
-            // Also check queue_manager for any sequences that didn't go through running
-            if let Some(seq) = self.queue_manager.get_mut(*seq_id) {
-                if seq.status == Status::Waiting {
-                    seq.num_computed_tokens += input_count;
-                    if seq.num_computed_tokens >= seq.prompt_len {
-                        seq.status = Status::Decoding;
-                    } else {
-                        seq.status = Status::Prefilling;
-                    }
-                }
-
-                seq.tokens.push(token);
-                seq.consecutive_decode_rounds += 1;
-
-                if seq.tokens.len() >= seq.max_tokens {
-                    seq.status = Status::Finished;
-                }
-
-                if seq.status == Status::Finished {
-                    updated_seq = Some(seq.clone());
-                }
-            }
-
             // Handle finished sequence
             if let Some(finished_seq) = updated_seq {
                 self.running.retain(|s| s.id != finished_seq.id);
