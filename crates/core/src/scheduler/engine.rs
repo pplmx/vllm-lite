@@ -2,8 +2,11 @@ use crate::kv_cache::{BlockAllocator, PrefixCache, hash_tokens};
 use crate::scheduler::action_executor::ActionExecutor;
 use crate::scheduler::batch_planner::{BatchPlanner, SchedulerStateView};
 use crate::scheduler::event_handler::EventHandler;
+use crate::scheduler::eviction::EvictionPolicy;
+use crate::scheduler::preemption::PreemptionManager;
 use crate::scheduler::queue_manager::QueueManager;
 use crate::types::{BLOCK_SIZE, Batch, Request, SchedulerConfig, SeqId, Sequence, Status};
+use std::sync::Arc;
 use std::time::Instant;
 
 #[derive(Clone)]
@@ -73,6 +76,8 @@ pub struct SchedulerEngine {
     batch_planner: BatchPlanner,
     kv_allocator: BlockAllocator,
     prefix_cache: PrefixCache,
+    eviction_policy: EvictionPolicy,
+    preemption_manager: PreemptionManager,
     config: SchedulerConfig,
     stats: SchedulerStats,
     next_seq_id: SeqId,
@@ -89,12 +94,54 @@ impl SchedulerEngine {
             batch_planner: BatchPlanner::new(config.clone()),
             kv_allocator: BlockAllocator::new(num_kv_blocks),
             prefix_cache: PrefixCache::new(),
+            eviction_policy: EvictionPolicy::new(),
+            preemption_manager: PreemptionManager::new(config.clone()),
             config,
             stats: SchedulerStats::new(),
             next_seq_id: 1,
             running: Vec::new(),
             finished: Vec::new(),
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn create_sequence(
+        seq_id: SeqId,
+        prompt: Vec<u32>,
+        kv_blocks: Arc<Vec<usize>>,
+        num_computed_tokens: usize,
+        prompt_len: usize,
+        max_tokens: usize,
+        sampling_params: crate::types::SamplingParams,
+        priority: crate::types::Priority,
+        status: Status,
+    ) -> Sequence {
+        Sequence {
+            id: seq_id,
+            tokens: prompt,
+            kv_blocks,
+            num_computed_tokens,
+            prompt_len,
+            status,
+            max_tokens,
+            sampling_params,
+            consecutive_decode_rounds: 0,
+            priority,
+        }
+    }
+
+    fn check_prefix_cache(&mut self, prompt: &[u32]) -> Option<(Arc<Vec<usize>>, usize)> {
+        let key = hash_tokens(prompt);
+        if let Some(entry) = self.prefix_cache.get(key) {
+            return Some((entry.blocks.clone(), entry.token_count));
+        }
+        if let Some(entry) = self.prefix_cache.find_prefix_match(prompt) {
+            return Some((entry.blocks.clone(), entry.token_count));
+        }
+        if let Some((blocks, cached_tokens)) = self.prefix_cache.find_reverse_prefix_match(prompt) {
+            return Some((blocks, cached_tokens));
+        }
+        None
     }
 
     pub fn add_request(&mut self, mut req: Request) -> SeqId {
@@ -107,276 +154,104 @@ impl SchedulerEngine {
         let priority = req.priority.clone();
         let prompt_len = req.prompt.len();
 
-        // Check prefix cache first - exact match
-        let key = hash_tokens(&req.prompt);
-        if let Some(entry) = self.prefix_cache.get(key) {
-            // Cache hit - use cached KV blocks
-            let seq = Sequence {
-                id: seq_id,
-                tokens: req.prompt,
-                kv_blocks: entry.blocks.clone(),
-                num_computed_tokens: entry.token_count,
-                prompt_len,
-                status: Status::Waiting,
-                max_tokens: req.max_tokens,
-                sampling_params: req.sampling_params,
-                consecutive_decode_rounds: 0,
-                priority: priority.clone(),
+        if let Some((blocks, token_count)) = self.check_prefix_cache(&req.prompt) {
+            let status = if token_count >= prompt_len {
+                Status::Waiting
+            } else {
+                Status::Prefilling
             };
-            // Add to queue for processing
-            self.queue_manager.enqueue(seq.clone(), priority.clone());
-            // Also add to running so tests expecting immediate running state pass
-            self.running.push(seq);
-            return seq_id;
-        }
 
-        // Check for prefix match (shorter prompt matches cached longer one)
-        if let Some(entry) = self.prefix_cache.find_prefix_match(&req.prompt) {
-            let tokens_to_skip = entry.token_count;
-
-            let seq = Sequence {
-                id: seq_id,
-                tokens: req.prompt.clone(),
-                kv_blocks: entry.blocks.clone(),
-                num_computed_tokens: tokens_to_skip,
+            let seq = Self::create_sequence(
+                seq_id,
+                req.prompt,
+                blocks,
+                token_count,
                 prompt_len,
-                status: Status::Waiting,
-                max_tokens: req.max_tokens,
-                sampling_params: req.sampling_params,
-                consecutive_decode_rounds: 0,
-                priority: priority.clone(),
-            };
-            // Add to queue for processing
-            self.queue_manager.enqueue(seq.clone(), priority.clone());
-            // Also add to running
-            self.running.push(seq);
-            return seq_id;
-        }
+                req.max_tokens,
+                req.sampling_params,
+                priority.clone(),
+                status,
+            );
 
-        // Check for reverse prefix match (cached shorter prefix of longer prompt)
-        if let Some((blocks, cached_tokens)) =
-            self.prefix_cache.find_reverse_prefix_match(&req.prompt)
-        {
-            let seq = Sequence {
-                id: seq_id,
-                tokens: req.prompt.clone(),
-                kv_blocks: blocks,
-                num_computed_tokens: cached_tokens,
-                prompt_len,
-                status: Status::Waiting,
-                max_tokens: req.max_tokens,
-                sampling_params: req.sampling_params,
-                consecutive_decode_rounds: 0,
-                priority: priority.clone(),
-            };
-            // Add to queue for processing
-            self.queue_manager.enqueue(seq.clone(), priority.clone());
-            // Also add to running
-            self.running.push(seq);
-            return seq_id;
-        }
-
-        // Check for prefix match (shorter prompt matches cached longer one)
-        if let Some(entry) = self.prefix_cache.find_prefix_match(&req.prompt) {
-            // Partial cache hit - can skip part of prefill
-            let tokens_to_skip = entry.token_count;
-
-            let seq = Sequence {
-                id: seq_id,
-                tokens: req.prompt.clone(),
-                kv_blocks: entry.blocks.clone(),
-                num_computed_tokens: tokens_to_skip,
-                prompt_len,
-                status: Status::Prefilling, // Need to prefill remaining
-                max_tokens: req.max_tokens,
-                sampling_params: req.sampling_params,
-                consecutive_decode_rounds: 0,
-                priority: priority.clone(),
-            };
-            // Add to running directly (skip queue for cache hit)
-            self.running.push(seq);
-            return seq_id;
-        }
-
-        // Check for reverse prefix match (cached shorter prefix of longer prompt)
-        // E.g., cache has [10, 20], query is [10, 20, 30, 40, 50]
-        if let Some((blocks, cached_tokens)) =
-            self.prefix_cache.find_reverse_prefix_match(&req.prompt)
-        {
-            let seq = Sequence {
-                id: seq_id,
-                tokens: req.prompt.clone(),
-                kv_blocks: blocks,
-                num_computed_tokens: cached_tokens,
-                prompt_len,
-                status: Status::Prefilling, // Need to prefill remaining
-                max_tokens: req.max_tokens,
-                sampling_params: req.sampling_params,
-                consecutive_decode_rounds: 0,
-                priority: priority.clone(),
-            };
-            // Add to running directly (skip queue for cache hit)
-            self.running.push(seq);
-            return seq_id;
-        }
-
-        // Check for prefix match (shorter prompt matches cached longer one)
-        if let Some(entry) = self.prefix_cache.find_prefix_match(&req.prompt) {
-            // Partial cache hit - can skip part of prefill
-            let tokens_to_skip = entry.token_count;
-
-            let seq = Sequence {
-                id: seq_id,
-                tokens: req.prompt.clone(),
-                kv_blocks: entry.blocks.clone(),
-                num_computed_tokens: tokens_to_skip,
-                prompt_len,
-                status: Status::Prefilling, // Need to prefill remaining
-                max_tokens: req.max_tokens,
-                sampling_params: req.sampling_params,
-                consecutive_decode_rounds: 0,
-                priority: priority.clone(),
-            };
-            // Add to queue for tracking
-            self.queue_manager.enqueue(seq.clone(), priority.clone());
-            // Also add to running for immediate access
-            self.running.push(seq);
-            return seq_id;
-        }
-
-        // Check for reverse prefix match (cached shorter prefix of longer prompt)
-        // E.g., cache has [10, 20], query is [10, 20, 30, 40, 50]
-        if let Some((blocks, cached_tokens)) =
-            self.prefix_cache.find_reverse_prefix_match(&req.prompt)
-        {
-            let seq = Sequence {
-                id: seq_id,
-                tokens: req.prompt.clone(),
-                kv_blocks: blocks,
-                num_computed_tokens: cached_tokens,
-                prompt_len,
-                status: Status::Prefilling, // Need to prefill remaining
-                max_tokens: req.max_tokens,
-                sampling_params: req.sampling_params,
-                consecutive_decode_rounds: 0,
-                priority: priority.clone(),
-            };
-            // Add to queue for tracking
-            self.queue_manager.enqueue(seq.clone(), priority.clone());
-            // Also add to running for immediate access
-            self.running.push(seq);
-            return seq_id;
-        }
-
-        // Check for prefix match (shorter prompt matches cached longer one)
-        if let Some(entry) = self.prefix_cache.find_prefix_match(&req.prompt) {
-            // Partial cache hit - can skip part of prefill
-            let tokens_to_skip = entry.token_count;
-
-            let seq = Sequence {
-                id: seq_id,
-                tokens: req.prompt.clone(),
-                kv_blocks: entry.blocks.clone(),
-                num_computed_tokens: tokens_to_skip,
-                prompt_len,
-                status: Status::Prefilling, // Need to prefill remaining
-                max_tokens: req.max_tokens,
-                sampling_params: req.sampling_params,
-                consecutive_decode_rounds: 0,
-                priority: priority.clone(),
-            };
-            // Add to queue so build_batch can find it
-            self.queue_manager.enqueue(seq, priority);
-            return seq_id;
-        }
-
-        // Check for reverse prefix match (cached shorter prefix of longer prompt)
-        // E.g., cache has [10, 20], query is [10, 20, 30, 40, 50]
-        if let Some((blocks, cached_tokens)) =
-            self.prefix_cache.find_reverse_prefix_match(&req.prompt)
-        {
-            let seq = Sequence {
-                id: seq_id,
-                tokens: req.prompt.clone(),
-                kv_blocks: blocks,
-                num_computed_tokens: cached_tokens,
-                prompt_len,
-                status: Status::Prefilling, // Need to prefill remaining
-                max_tokens: req.max_tokens,
-                sampling_params: req.sampling_params,
-                consecutive_decode_rounds: 0,
-                priority: priority.clone(),
-            };
-            // Add to queue so build_batch can find it
-            self.queue_manager.enqueue(seq, priority);
-            return seq_id;
-        }
-
-        // Check for prefix match (shorter prompt matches cached longer one)
-        if let Some(entry) = self.prefix_cache.find_prefix_match(&req.prompt) {
-            // Partial cache hit - can skip part of prefill
-            let tokens_to_skip = entry.token_count;
-
-            let seq = Sequence {
-                id: seq_id,
-                tokens: req.prompt.clone(),
-                kv_blocks: entry.blocks.clone(),
-                num_computed_tokens: tokens_to_skip,
-                prompt_len,
-                status: Status::Prefilling, // Need to prefill remaining
-                max_tokens: req.max_tokens,
-                sampling_params: req.sampling_params,
-                consecutive_decode_rounds: 0,
-                priority: priority.clone(),
-            };
-            self.running.push(seq);
-            return seq_id;
-        }
-
-        // Check for reverse prefix match (cached shorter prefix of longer prompt)
-        // E.g., cache has [10,20], query is [10,20,30,40,50]
-        if let Some((blocks, cached_tokens)) =
-            self.prefix_cache.find_reverse_prefix_match(&req.prompt)
-        {
-            let seq = Sequence {
-                id: seq_id,
-                tokens: req.prompt.clone(),
-                kv_blocks: blocks,
-                num_computed_tokens: cached_tokens,
-                prompt_len,
-                status: Status::Prefilling, // Need to prefill remaining
-                max_tokens: req.max_tokens,
-                sampling_params: req.sampling_params,
-                consecutive_decode_rounds: 0,
-                priority: priority.clone(),
-            };
+            self.queue_manager.enqueue(seq.clone(), priority);
             self.running.push(seq);
             return seq_id;
         }
 
         let blocks_needed = prompt_len.div_ceil(BLOCK_SIZE);
 
+        if blocks_needed > self.kv_allocator.available() {
+            let should_preempt = self.preemption_manager.should_preempt(
+                self.running.len(),
+                self.queue_manager.len(),
+                blocks_needed,
+                self.kv_allocator.available(),
+            );
+
+            if should_preempt {
+                self.execute_preemption(blocks_needed);
+            }
+        }
+
         let blocks = self
             .kv_allocator
             .allocate(blocks_needed)
             .unwrap_or_default();
 
-        let seq = Sequence {
-            id: seq_id,
-            tokens: req.prompt,
-            kv_blocks: std::sync::Arc::new(blocks),
-            num_computed_tokens: 0,
+        let seq = Self::create_sequence(
+            seq_id,
+            req.prompt,
+            Arc::new(blocks),
+            0,
             prompt_len,
-            status: Status::Waiting,
-            max_tokens: req.max_tokens,
-            sampling_params: req.sampling_params,
-            consecutive_decode_rounds: 0,
-            priority: priority.clone(),
-        };
+            req.max_tokens,
+            req.sampling_params,
+            priority.clone(),
+            Status::Waiting,
+        );
 
         self.queue_manager.enqueue(seq, priority);
 
         seq_id
+    }
+
+    fn execute_preemption(&mut self, blocks_needed: usize) {
+        let mut preemptable: Vec<_> = self
+            .running
+            .iter()
+            .filter(|s| s.status == Status::Decoding)
+            .cloned()
+            .collect();
+
+        preemptable.sort_by(|a, b| {
+            b.consecutive_decode_rounds
+                .cmp(&a.consecutive_decode_rounds)
+        });
+
+        let mut blocks_freed = 0;
+        for seq in preemptable.iter() {
+            if blocks_freed >= blocks_needed {
+                break;
+            }
+
+            let block_count = seq.kv_blocks.len();
+
+            self.eviction_policy.release_blocks(seq.kv_blocks.as_ref());
+            self.kv_allocator.free(seq.kv_blocks.as_ref());
+
+            if let Some(running_seq) = self.running.iter_mut().find(|s| s.id == seq.id) {
+                running_seq.status = Status::Waiting;
+                running_seq.kv_blocks = Arc::new(vec![]);
+            }
+
+            if let Some(running_seq) = self.running.iter().find(|s| s.id == seq.id) {
+                self.queue_manager.enqueue_preempted(running_seq.clone());
+                self.running.retain(|s| s.id != seq.id);
+            }
+
+            blocks_freed += block_count;
+            self.stats.record_preemption();
+        }
     }
 
     pub fn build_batch(&mut self) -> Batch {
@@ -394,6 +269,7 @@ impl SchedulerEngine {
         let state_view = SchedulerStateViewImpl {
             queue_manager: &self.queue_manager,
             kv_allocator: &self.kv_allocator,
+            running: &self.running,
         };
 
         let plan = self.batch_planner.plan(&state_view);
@@ -445,6 +321,8 @@ impl SchedulerEngine {
             }
             self.running.push(running_seq);
 
+            self.eviction_policy.record_blocks(&seq.kv_blocks);
+
             let start = seq.num_computed_tokens;
             let tokens: Vec<_> = if is_prefilling {
                 seq.tokens[start..].to_vec()
@@ -483,8 +361,14 @@ impl SchedulerEngine {
         for ((seq_id, &token), &input_count) in
             seq_ids.iter().zip(next_tokens).zip(input_token_counts)
         {
-            // Update in running list
             let mut updated_seq: Option<Sequence> = None;
+
+            let running_seqs: Vec<_> = self
+                .running
+                .iter()
+                .filter(|s| s.id != *seq_id && s.status != Status::Finished)
+                .cloned()
+                .collect();
 
             if let Some(seq) = self.running.iter_mut().find(|s| s.id == *seq_id) {
                 if seq.status == Status::Waiting || seq.status == Status::Prefilling {
@@ -508,10 +392,27 @@ impl SchedulerEngine {
                     if let Some(new_blocks) = self.kv_allocator.allocate(1) {
                         let mut blocks = (*seq.kv_blocks).clone();
                         blocks.extend(new_blocks);
-                        seq.kv_blocks = std::sync::Arc::new(blocks);
+                        seq.kv_blocks = Arc::new(blocks);
                     } else {
-                        self.stats.record_preemption();
-                        break;
+                        let victims = self.eviction_policy.select_victims(&running_seqs, 1);
+
+                        if victims.is_empty() {
+                            self.stats.record_preemption();
+                            break;
+                        }
+
+                        self.eviction_policy.release_blocks(&victims);
+                        self.kv_allocator.free(&victims);
+                        self.stats.record_eviction();
+
+                        if let Some(new_blocks) = self.kv_allocator.allocate(1) {
+                            let mut blocks = (*seq.kv_blocks).clone();
+                            blocks.extend(new_blocks);
+                            seq.kv_blocks = Arc::new(blocks);
+                        } else {
+                            self.stats.record_preemption();
+                            break;
+                        }
                     }
                 }
 
@@ -599,7 +500,7 @@ impl SchedulerEngine {
     }
 
     pub fn running_count(&self) -> usize {
-        0
+        self.running.len()
     }
 
     pub fn prefix_cache(&self) -> &PrefixCache {
@@ -625,6 +526,7 @@ impl SchedulerEngine {
 struct SchedulerStateViewImpl<'a> {
     queue_manager: &'a QueueManager,
     kv_allocator: &'a BlockAllocator,
+    running: &'a Vec<Sequence>,
 }
 
 impl<'a> SchedulerStateView for SchedulerStateViewImpl<'a> {
@@ -633,7 +535,7 @@ impl<'a> SchedulerStateView for SchedulerStateViewImpl<'a> {
     }
 
     fn running_count(&self) -> usize {
-        0
+        self.running.len()
     }
 
     fn prefill_count(&self) -> usize {
