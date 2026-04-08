@@ -13,6 +13,7 @@
 ### Task 1: Add Gemma4 to Architecture enum
 
 **Files:**
+
 - Modify: `crates/model/src/config/architecture.rs`
 - Modify: `crates/model/src/config/model_config.rs`
 
@@ -62,6 +63,7 @@ pub struct ModelConfig {
 ### Task 2: Update ModelConfig parsing for Gemma4
 
 **Files:**
+
 - Modify: `crates/model/src/config/model_config.rs`
 - Modify: `crates/model/src/loader.rs`
 
@@ -95,6 +97,7 @@ pub fn detect_architecture(config: &serde_json::Value) -> Architecture {
 ### Task 3: Create gemma4 module structure
 
 **Files:**
+
 - Create: `crates/model/src/gemma4/mod.rs`
 - Create: `crates/model/src/gemma4/block.rs`
 - Create: `crates/model/src/gemma4/attention.rs`
@@ -129,6 +132,7 @@ pub mod gemma4;
 ### Task 4: Implement GeGLU MLP
 
 **Files:**
+
 - Modify: `crates/model/src/gemma4/mlp.rs`
 
 - [ ] **Step 1: Implement GeGLU**
@@ -148,14 +152,14 @@ impl GeGLU {
         let gate_proj = Linear::new(hidden_size, intermediate_size, false, vb)?;
         let up_proj = Linear::new(hidden_size, intermediate_size, false, vb)?;
         let down_proj = Linear::new(intermediate_size, hidden_size, false, vb)?;
-        
+
         Ok(Self { gate_proj, up_proj, down_proj })
     }
-    
+
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let gate = self.gate_proj.forward(x)?;
         let up = self.up_proj.forward(x)?;
-        
+
         // GeGLU: x * gelu(gate)
         let activated = gate.gelu(&up)?;  // Different from SwiGLU's silu
         self.down_proj.forward(&activated)
@@ -170,6 +174,7 @@ impl GeGLU {
 ### Task 5: Implement p-RoPE
 
 **Files:**
+
 - Modify: `crates/model/src/gemma4/rope.rs`
 
 - [ ] **Step 1: Implement Gemma4RoPE**
@@ -191,7 +196,7 @@ impl Gemma4RoPE {
             head_dim,
         }
     }
-    
+
     pub fn apply(&self, q: &Tensor, k: &Tensor, positions: &[i64]) -> Result<(Tensor, Tensor)> {
         // Apply RoPE only to first partial_rotary_factor dimensions
         let rot_dim = (self.head_dim as f32 * self.partial_rotary_factor) as usize;
@@ -207,6 +212,7 @@ impl Gemma4RoPE {
 ### Task 6: Implement Hybrid Attention
 
 **Files:**
+
 - Modify: `crates/model/src/gemma4/attention.rs`
 
 - [ ] **Step 1: Implement Gemma4Attention**
@@ -230,7 +236,7 @@ impl Gemma4Attention {
     pub fn forward(&self, x: &Tensor, positions: &[usize]) -> Result<Tensor> {
         // Standard GQA forward with RoPE
     }
-    
+
     pub fn forward_sliding(&self, x: &Tensor, positions: &[usize]) -> Result<Tensor> {
         // Apply sliding window mask
         // Only attend to tokens within sliding_window
@@ -245,6 +251,7 @@ impl Gemma4Attention {
 ### Task 7: Implement Gemma4Block
 
 **Files:**
+
 - Modify: `crates/model/src/gemma4/block.rs`
 
 - [ ] **Step 1: Implement Gemma4Block**
@@ -265,27 +272,27 @@ impl Gemma4Block {
         let layer_type = config.layer_types.get(layer_idx)
             .copied()
             .unwrap_or(LayerType::SlidingAttention);
-        
+
         // Create attention and MLP
         // ...
     }
-    
+
     pub fn forward(&self, x: &Tensor, positions: &[usize]) -> Result<Tensor> {
         let residual = x.clone();
         let x = self.rms_norm(x, &self.input_layernorm)?;
-        
+
         // Attention based on layer type
         x = self.attention.forward(x, positions)?;
-        
+
         x = (x + residual)?;
-        
+
         // MLP
         let residual = x.clone();
         let x = self.rms_norm(&x, &self.post_attention_layernorm)?;
         x = self.mlp.forward(&x)?;
         x.add(&residual)
     }
-    
+
     fn rms_norm(&self, x: &Tensor, weight: &Linear) -> Result<Tensor> {
         // Standard RMS norm
     }
@@ -301,6 +308,7 @@ impl Gemma4Block {
 ### Task 8: Implement Gemma4Model
 
 **Files:**
+
 - Modify: `crates/model/src/gemma4/model.rs`
 
 - [ ] **Step 1: Implement Gemma4Model**
@@ -320,7 +328,7 @@ impl Gemma4Model {
     pub fn new(config: ModelConfig, device: Device, num_kv_blocks: usize) -> Result<Self> {
         // Similar to LlamaModel
     }
-    
+
     pub fn from_weights(...) -> Result<Self> {
         // Load weights
     }
@@ -342,6 +350,7 @@ impl ModelBackend for Gemma4Model {
 ### Task 9: Update registry and loader
 
 **Files:**
+
 - Modify: `crates/model/src/registry.rs`
 - Modify: `crates/model/src/loader.rs`
 
@@ -378,10 +387,12 @@ match config.architecture {
 ## Summary
 
 ### Phase 1: Infrastructure (2 tasks)
+
 - Task 1: Add Gemma4 to Architecture enum
 - Task 2: Update ModelConfig parsing
 
 ### Phase 2: Core Components (4 tasks)
+
 - Task 3: Create gemma4 module
 - Task 4: Implement GeGLU
 - Task 5: Implement p-RoPE
@@ -389,8 +400,10 @@ match config.architecture {
 - Task 7: Implement Gemma4Block
 
 ### Phase 3: Model Integration (1 task)
+
 - Task 8: Implement Gemma4Model
 
 ### Phase 4: Integration (2 tasks)
+
 - Task 9: Update registry/loader
 - Task 10: Final verification

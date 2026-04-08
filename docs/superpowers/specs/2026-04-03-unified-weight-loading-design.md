@@ -73,9 +73,9 @@ impl ModelLoader {
         let config_path = Path::new(model_dir).join("config.json");
         let content = std::fs::read_to_string(config_path)?;
         let value: serde_json::Value = serde_json::from_str(&content)?;
-        
+
         let architecture = detect_architecture(&value);
-        
+
         // Parse config based on architecture
         match architecture {
             Architecture::Llama => self.parse_llama_config(&value),
@@ -93,7 +93,7 @@ impl ModelLoader {
     ) -> Result<Box<dyn ModelBackend>> {
         let config = self.load_config(model_dir)?;
         let weights = self.load_weights(model_dir)?;
-        
+
         match config.architecture {
             Architecture::Llama => {
                 let model = LlamaModel::from_weights(config, self.device.clone(), weights, num_kv_blocks)?;
@@ -123,6 +123,7 @@ impl ModelLoader {
 ## Weight Key Patterns
 
 **Llama:**
+
 - `model.embed_tokens.weight`
 - `model.layers.{i}.self_attn.q_proj.weight`
 - `model.layers.{i}.self_attn.k_proj.weight`
@@ -137,9 +138,11 @@ impl ModelLoader {
 - `lm_head.weight`
 
 **Mistral:**
+
 - Same as Llama
 
 **Qwen3:**
+
 - `model.embed_tokens.weight`
 - `model.layers.{i}.self_attn.q_proj.weight`
 - etc.

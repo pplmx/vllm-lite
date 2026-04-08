@@ -9,6 +9,7 @@
 ## 1. Executive Summary
 
 This document outlines fixes for error handling issues found during code review:
+
 1. Replace unwrap() with proper error handling in chat.rs
 2. Add error events to SSE streaming to distinguish normal completion from errors
 
@@ -53,6 +54,7 @@ match rx.recv().await {
 ```
 
 When the stream ends, client cannot distinguish between:
+
 1. Normal completion (all tokens generated)
 2. Engine error (something went wrong)
 3. Client disconnect
@@ -62,6 +64,7 @@ When the stream ends, client cannot distinguish between:
 Add an error event type to the SSE stream:
 
 1. **Modify the stream handling**:
+
 ```rust
 match rx.recv().await {
     Ok(Some(token)) => { /* process token */ }

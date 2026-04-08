@@ -4,7 +4,8 @@
 
 **Goal:** Implement unified architecture supporting Llama and Mistral with easy extensibility
 
-**Architecture:** 
+**Architecture:**
+
 - Unified ModelConfig + Architecture enum
 - ArchitectureSpec trait defining behavior differences
 - Reuse existing components (attention, mlp, rope, norm)
@@ -16,7 +17,7 @@
 
 ## File Structure
 
-```
+```text
 crates/model/src/
 ├── config/
 │   ├── mod.rs
@@ -41,6 +42,7 @@ crates/model/src/
 ## Task 1: Create config module infrastructure
 
 **Files:**
+
 - Create: `crates/model/src/config/mod.rs`
 - Create: `crates/model/src/config/architecture.rs`
 - Create: `crates/model/src/config/model_config.rs`
@@ -202,6 +204,7 @@ git commit -m "feat(model): add unified config infrastructure"
 ## Task 2: Implement Llama Model
 
 **Files:**
+
 - Modify: `crates/model/src/llama/block.rs`
 - Modify: `crates/model/src/llama/model.rs`
 
@@ -401,6 +404,7 @@ git commit -m "feat(model): implement LlamaModel with unified config"
 ## Task 3: Implement Mistral Model
 
 **Files:**
+
 - Create: `crates/model/src/mistral/mod.rs`
 - Create: `crates/model/src/mistral/block.rs`
 - Create: `crates/model/src/mistral/model.rs`
@@ -612,12 +616,14 @@ git commit -m "feat(model): implement MistralModel with sliding window"
 ## Task 4: Update registry and loader
 
 **Files:**
+
 - Modify: `crates/model/src/registry.rs`
 - Modify: `crates/model/src/loader.rs`
 
 - [ ] **Step 1: Update registry.rs to support Llama/Mistral**
 
 Add creation functions:
+
 ```rust
 impl ModelRegistry {
     pub fn create_llama(config: &ModelConfig, device: Device, num_kv_blocks: usize) -> Result<LlamaModel> {
@@ -646,6 +652,7 @@ git commit -m "feat(model): update registry for Llama/Mistral support"
 ## Task 5: Final verification
 
 **Files:**
+
 - All modified files
 
 - [ ] **Step 1: Run full test suite**

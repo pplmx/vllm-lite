@@ -19,6 +19,7 @@ This plan executes three-phase architecture refactoring:
 3. **Phase 3**: Extract kernel layer from model components
 
 **Files to modify:**
+
 - `crates/core/src/scheduler.rs` - split into directory
 - `crates/core/src/engine/batch.rs` - move to scheduler
 - `crates/core/src/kv_cache.rs` - split into directory
@@ -34,6 +35,7 @@ This plan executes three-phase architecture refactoring:
 ## Task 1: Create scheduler directory structure
 
 **Files:**
+
 - Create: `crates/core/src/scheduler/mod.rs`
 - Create: `crates/core/src/scheduler/queue.rs`
 - Create: `crates/core/src/scheduler/preemption.rs`
@@ -59,6 +61,7 @@ pub use scheduler::Scheduler;
 - [ ] **Step 2: Create scheduler/queue.rs**
 
 Run: Extract queue management from scheduler.rs
+
 - Move waiting/running/finished VecDeque/Vec to new struct
 - Keep Sequence management logic
 - About 150 lines
@@ -83,6 +86,7 @@ impl SequenceQueue {
 - [ ] **Step 3: Create scheduler/preemption.rs**
 
 Run: Extract preemption logic from scheduler.rs
+
 - Move preemption decision logic
 - About 150 lines
 
@@ -99,6 +103,7 @@ impl PreemptionManager {
 - [ ] **Step 4: Create scheduler/eviction.rs**
 
 Run: Extract eviction logic from scheduler.rs
+
 - Move block eviction policy logic
 - About 100 lines
 
@@ -113,7 +118,8 @@ impl EvictionPolicy {
 
 - [ ] **Step 5: Move engine/batch.rs to scheduler/batch.rs**
 
-Run: 
+Run:
+
 ```bash
 mv crates/core/src/engine/batch.rs crates/core/src/scheduler/batch.rs
 ```
@@ -123,6 +129,7 @@ Update imports in batch.rs (likely needs `super` instead of `crate::`)
 - [ ] **Step 6: Rewrite scheduler/mod.rs with new structure**
 
 Run: Replace monolithic scheduler.rs with modular version
+
 - Use queue, preemption, eviction modules
 - Keep public API identical
 - Reduce to ~250 lines
@@ -185,6 +192,7 @@ Expected: < 300 lines
 ## Task 3: Split core/kv_cache.rs
 
 **Files:**
+
 - Create: `crates/core/src/kv_cache/block_allocator.rs`
 - Create: `crates/core/src/kv_cache/prefix_cache.rs`
 - Modify: `crates/core/src/kv_cache.rs` (becomes mod.rs)
@@ -195,6 +203,7 @@ Expected: < 300 lines
 - [ ] **Step 1: Create kv_cache directory**
 
 Run: Create directory structure:
+
 ```bash
 mkdir -p crates/core/src/kv_cache
 ```
@@ -202,12 +211,14 @@ mkdir -p crates/core/src/kv_cache
 - [ ] **Step 2: Create kv_cache/block_allocator.rs**
 
 Run: Move BlockAllocator from core/kv_cache.rs
+
 - About 150 lines
 - Keep all allocation logic
 
 - [ ] **Step 3: Create kv_cache/prefix_cache.rs**
 
 Run: Move PrefixCache from core/kv_cache.rs
+
 - About 200 lines
 - Keep hash → block mapping
 
@@ -226,6 +237,7 @@ pub use prefix_cache::{PrefixCache, CachedEntry, hash_tokens};
 - [ ] **Step 5: Create paged_tensor directory**
 
 Run:
+
 ```bash
 mkdir -p crates/model/src/paged_tensor
 mv crates/model/src/kv_cache.rs crates/model/src/paged_tensor/tensor_store.rs
@@ -238,6 +250,7 @@ Run: Move quantization struct/functions from tensor_store.rs to paged_tensor/qua
 - [ ] **Step 7: Create paged_tensor/mod.rs**
 
 Run:
+
 ```rust
 pub mod tensor_store;
 pub mod quantization;
@@ -292,6 +305,7 @@ Expected: No import errors
 ## Task 5: Create model/kernels directory
 
 **Files:**
+
 - Create: `crates/model/src/kernels/mod.rs`
 - Create: `crates/model/src/kernels/flash_attention.rs`
 - Create: `crates/model/src/kernels/fused_mlp.rs`
@@ -302,6 +316,7 @@ Expected: No import errors
 - [ ] **Step 1: Create kernels directory**
 
 Run:
+
 ```bash
 mkdir -p crates/model/src/kernels
 ```
@@ -323,6 +338,7 @@ pub use cuda_graph::CudaGraph;
 - [ ] **Step 3: Move flash_attention.rs to kernels**
 
 Run:
+
 ```bash
 mv crates/model/src/flash_attention.rs crates/model/src/kernels/flash_attention.rs
 ```
@@ -332,6 +348,7 @@ Update internal imports (relative paths)
 - [ ] **Step 4: Move fused_kernel.rs to kernels**
 
 Run:
+
 ```bash
 mv crates/model/src/components/fused_kernel.rs crates/model/src/kernels/fused_mlp.rs
 ```
@@ -341,6 +358,7 @@ Rename module and update internal imports
 - [ ] **Step 5: Move cuda_graph.rs from core to model/kernels**
 
 Run:
+
 ```bash
 mv crates/core/src/cuda_graph.rs crates/model/src/kernels/cuda_graph.rs
 ```
@@ -418,12 +436,12 @@ Run: Create commit with all refactoring
 
 ## Summary
 
-| Phase | Tasks | Files Changed | Lines Restructured |
-|-------|-------|---------------|-------------------|
-| 1 | 2 | 8 | ~1000 |
-| 2 | 4 | 6 | ~500 |
-| 3 | 6 | 10 | ~800 |
-| **Total** | **12** | **~24** | **~2300** |
+| Phase     | Tasks  | Files Changed | Lines Restructured |
+| --------- | ------ | ------------- | ------------------ |
+| 1         | 2      | 8             | ~1000              |
+| 2         | 4      | 6             | ~500               |
+| 3         | 6      | 10            | ~800               |
+| **Total** | **12** | **~24**       | **~2300**          |
 
 **Risk Level**: Medium - all changes are refactoring, no functional changes
 **Estimated Time**: 3-5 sessions

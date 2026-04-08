@@ -13,6 +13,7 @@
 ## Problem Analysis
 
 Current state:
+
 ```toml
 [[bin]]
 path = "src/main.rs"
@@ -30,11 +31,13 @@ Root cause: We added `[lib]` to test internal `pub(crate)` functions.
 ## Solution: Two Approaches
 
 ### Approach A: Remove [lib], Keep Inline Tests (Simple)
+
 - Remove [lib] from Cargo.toml
 - Keep inline `#[cfg(test)]` modules (they use `super::` which still works)
 - Accept that integration tests in `tests/` can't access internal functions
 
 ### Approach B: Use pub(super) + pub(crate) Strategy (Complete)
+
 - Make internal handlers `pub` but document as internal
 - Use `pub(super)` for test-only access paths
 - Completely standard structure
@@ -46,11 +49,13 @@ Root cause: We added `[lib]` to test internal `pub(crate)` functions.
 ## Task 1: Remove [lib] from Cargo.toml
 
 **Files:**
+
 - Modify: `crates/server/Cargo.toml`
 
 - [ ] **Step 1: Edit Cargo.toml**
 
 Remove the [lib] section:
+
 ```toml
 # Before:
 [[bin]]

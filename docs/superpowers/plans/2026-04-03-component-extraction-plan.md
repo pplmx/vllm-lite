@@ -12,7 +12,7 @@
 
 ## File Structure
 
-```
+```text
 crates/model/src/
 ├── components/
 │   ├── mod.rs          # NEW: Module entry
@@ -38,6 +38,7 @@ crates/model/src/
 ## Task 1: Create components module structure
 
 **Files:**
+
 - Create: `crates/model/src/components/mod.rs`
 
 - [ ] **Step 1: Create components/mod.rs**
@@ -71,6 +72,7 @@ git commit -m "feat(model): create components module structure"
 ## Task 2: Extract positional.rs (RoPE)
 
 **Files:**
+
 - Create: `crates/model/src/components/positional.rs`
 - Modify: `crates/model/src/qwen3/rope.rs`
 - Modify: `crates/model/src/qwen3/attention.rs:1-10` (remove import)
@@ -187,6 +189,7 @@ git commit -m "feat(model): extract RoPE to components/positional.rs"
 ## Task 3: Extract mlp.rs (SwiGLU)
 
 **Files:**
+
 - Create: `crates/model/src/components/mlp.rs`
 - Modify: `crates/model/src/qwen3/mlp.rs`
 
@@ -251,6 +254,7 @@ git commit -m "feat(model): extract SwiGLU to components/mlp.rs"
 ## Task 4: Extract norm.rs
 
 **Files:**
+
 - Create: `crates/model/src/components/norm.rs`
 
 - [ ] **Step 1: Create components/norm.rs**
@@ -298,6 +302,7 @@ git commit -m "feat(model): add components/norm.rs"
 ## Task 5: Extract attention.rs
 
 **Files:**
+
 - Create: `crates/model/src/components/attention.rs`
 - Modify: `crates/model/src/qwen3/attention.rs`
 
@@ -448,7 +453,7 @@ impl GqaAttention {
             &self.config,
         )
     }
-    
+
     // Keep prefill/decode methods as they handle KV cache
 }
 ```
@@ -470,6 +475,7 @@ git commit -m "feat(model): extract attention to components/attention.rs"
 ## Task 6: Update qwen3/block.rs to use components
 
 **Files:**
+
 - Modify: `crates/model/src/qwen3/block.rs`
 
 - [ ] **Step 1: Update TransformerBlock to use components**
@@ -509,6 +515,7 @@ git commit -m "refactor(model): update qwen3/block.rs to use components"
 ## Task 7: Create Llama skeleton
 
 **Files:**
+
 - Create: `crates/model/src/llama/mod.rs`
 - Create: `crates/model/src/llama/block.rs`
 - Create: `crates/model/src/llama/model.rs`
@@ -605,6 +612,7 @@ git commit -m "feat(model): add llama module skeleton"
 ## Task 8: Final verification
 
 **Files:**
+
 - All modified files
 
 - [ ] **Step 1: Run full test suite**

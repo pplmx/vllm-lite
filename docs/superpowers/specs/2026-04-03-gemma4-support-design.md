@@ -11,6 +11,7 @@
 Gemma 4 is a family of multimodal models from Google DeepMind. This spec covers text-only inference support for dense models (E2B, E4B). Full multimodal support (vision, audio) is out of scope for now.
 
 ### Scope
+
 - ✅ Text-only inference
 - ✅ Gemma 4 E2B (2.3B effective)
 - ✅ Gemma 4 E4B (4.5B effective)
@@ -22,15 +23,15 @@ Gemma 4 is a family of multimodal models from Google DeepMind. This spec covers 
 
 ## 2. Architecture Comparison
 
-| Feature | Llama | Mistral | Gemma 4 |
-|---------|--------|----------|-----------|
-| Norm | RMSNorm | RMSNorm | RMSNorm |
-| Position | RoPE | RoPE | p-RoPE |
-| Attention | GQA | Sliding + GQA | Hybrid Sliding + MQA |
-| MLP | SwiGLU | SwiGLU | GeGLU |
-| Sliding Window | None | 4096 | 512 |
-| Global Layers | All | All | Every ~5th layer |
-| KV Heads | num_kv_heads | num_kv_heads | 1 (MQA) |
+| Feature        | Llama        | Mistral       | Gemma 4              |
+| -------------- | ------------ | ------------- | -------------------- |
+| Norm           | RMSNorm      | RMSNorm       | RMSNorm              |
+| Position       | RoPE         | RoPE          | p-RoPE               |
+| Attention      | GQA          | Sliding + GQA | Hybrid Sliding + MQA |
+| MLP            | SwiGLU       | SwiGLU        | GeGLU                |
+| Sliding Window | None         | 4096          | 512                  |
+| Global Layers  | All          | All           | Every ~5th layer     |
+| KV Heads       | num_kv_heads | num_kv_heads  | 1 (MQA)              |
 
 ---
 
@@ -99,7 +100,7 @@ impl ArchitectureSpec for Gemma4Spec {
 
 ## 4. Module Structure
 
-```
+```text
 crates/model/src/
 ├── config/
 │   ├── model_config.rs    # Add Gemma4 fields
@@ -144,15 +145,15 @@ impl Gemma4Block {
     pub fn forward(&self, x: &Tensor, positions: &[usize]) -> Result<Tensor> {
         let residual = x.clone();
         let x = self.rms_norm(x, &self.input_layernorm)?;
-        
+
         // Attention based on layer type
         x = match self.layer_type {
             LayerType::FullAttention => self.attention.forward(x)?,
             LayerType::SlidingAttention => self.attention.forward_sliding(x, positions)?,
         };
-        
+
         x = (x + residual)?;
-        
+
         // MLP (GeGLU)
         let residual = x.clone();
         let x = self.rms_norm(&x, &self.post_attention_layernorm)?;
@@ -179,7 +180,7 @@ impl GeGLU {
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let gate = self.gate_proj.forward(x)?;
         let up = self.up_proj.forward(x)?;
-        
+
         // GeGLU activation: x * gelu(gate)
         let activated = gate.gelu(&up)?;  // Different from SwiGLU's silu
         self.down_proj.forward(&activated)
@@ -210,7 +211,7 @@ impl Gemma4RoPE {
             head_dim,
         }
     }
-    
+
     pub fn apply(&self, q: &Tensor, k: &Tensor, positions: &[i64]) -> Result<(Tensor, Tensor)> {
         // Only apply to first partial_rotary_factor of head_dim
         // For full attention layers: partial_rotary_factor = 0.25
@@ -224,7 +225,8 @@ impl Gemma4RoPE {
 ### 5.4 Weight Loading
 
 Weight key patterns for Gemma 4:
-```
+
+```text
 model.embed_tokens.weight
 model.layers.{i}.self_attn.q_proj.weight
 model.layers.{i}.self_attn.k_proj.weight  
@@ -265,7 +267,7 @@ impl ModelConfig {
         // Parse RoPE configs
         let rope_params = text_config.get("rope_parameters")
             .and_then(|v| v.as_object());
-        
+
         let full_rope = rope_params.and_then(|r| r.get("full_attention"));
         let sliding_rope = rope_params.and_then(|r| r.get("sliding_attention"));
 
@@ -353,25 +355,25 @@ impl ModelConfig {
 ## 8. Implementation Order
 
 1. **Phase 1: Infrastructure**
-   - Add Architecture::Gemma4 to enum
-   - Add LayerType, RoPEConfig types
-   - Update ModelConfig parsing
+    - Add Architecture::Gemma4 to enum
+    - Add LayerType, RoPEConfig types
+    - Update ModelConfig parsing
 
 2. **Phase 2: Core Components**
-   - Create gemma4/ module structure
-   - Implement GeGLU MLP
-   - Implement p-RoPE
-   - Implement hybrid attention
+    - Create gemma4/ module structure
+    - Implement GeGLU MLP
+    - Implement p-RoPE
+    - Implement hybrid attention
 
 3. **Phase 3: Model Integration**
-   - Implement Gemma4Block
-   - Implement Gemma4Model
-   - Add weight loading
+    - Implement Gemma4Block
+    - Implement Gemma4Model
+    - Add weight loading
 
 4. **Phase 4: Integration**
-   - Update ModelLoader
-   - Update registry
-   - Add tests
+    - Update ModelLoader
+    - Update registry
+    - Add tests
 
 ---
 

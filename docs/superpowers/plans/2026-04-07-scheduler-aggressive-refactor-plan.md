@@ -12,7 +12,7 @@
 
 ## File Structure
 
-```
+```text
 crates/core/src/scheduler/
 ├── mod.rs              # Update exports
 ├── engine.rs           # Replace main Scheduler logic
@@ -32,6 +32,7 @@ crates/core/src/scheduler/
 ## Task 1: Core Types and Events
 
 **Files:**
+
 - Create: `crates/core/src/scheduler/events.rs`
 - Modify: `crates/core/src/scheduler/mod.rs`
 
@@ -60,7 +61,7 @@ pub enum SchedulerEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_event_cloning() {
         let event = SchedulerEvent::RequestArrived(Request::new(1, vec![1,2,3], 5));
@@ -78,6 +79,7 @@ Expected: FAIL - file not found
 - [ ] **Step 3: Create the events.rs file**
 
 Write the full `events.rs` with:
+
 - `SchedulerEvent` enum with all variants
 - `Event` trait for extensibility
 - Basic tests
@@ -90,6 +92,7 @@ Expected: PASS
 - [ ] **Step 5: Update mod.rs exports**
 
 In `crates/core/src/scheduler/mod.rs`, add:
+
 ```rust
 pub mod events;
 pub use events::SchedulerEvent;
@@ -107,6 +110,7 @@ git commit -m "feat(scheduler): add event types for event-driven design"
 ## Task 2: State Machine
 
 **Files:**
+
 - Create: `crates/core/src/scheduler/state.rs`
 - Test: `crates/core/src/scheduler/state.rs` (same file)
 
@@ -134,7 +138,7 @@ pub enum SeqState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_pending_to_queued_transition() {
         let state = SeqState::Pending;
@@ -155,6 +159,7 @@ Expected: FAIL - method not implemented
 - [ ] **Step 3: Write the state machine implementation**
 
 Add to `state.rs`:
+
 ```rust
 impl SeqState {
     pub fn transition(&self, event: &SchedulerEvent) -> Option<SeqState> {
@@ -198,7 +203,7 @@ impl SeqState {
             _ => None,
         }
     }
-    
+
     pub fn is_active(&self) -> bool {
         matches!(self, SeqState::Prefilling { .. } | SeqState::Decoding { .. })
     }
@@ -226,6 +231,7 @@ git commit -m "feat(scheduler): add state machine for sequence lifecycle"
 ## Task 3: Actions System
 
 **Files:**
+
 - Create: `crates/core/src/scheduler/actions.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -254,7 +260,7 @@ pub enum Action {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_action_debug() {
         let action = Action::Preempt { 
@@ -275,6 +281,7 @@ Expected: FAIL - file not found
 - [ ] **Step 3: Write the actions implementation**
 
 Complete `actions.rs` with:
+
 - All action variants
 - ActionDisplay trait for logging
 - Basic tests
@@ -296,6 +303,7 @@ git commit -m "feat(scheduler): add action definitions"
 ## Task 4: Event Handler
 
 **Files:**
+
 - Create: `crates/core/src/scheduler/event_handler.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -314,7 +322,7 @@ impl EventHandler {
     pub fn new() -> Self {
         Self { }
     }
-    
+
     pub fn dispatch(&mut self, event: SchedulerEvent) -> Vec<Action> {
         todo!("Implement event dispatching")
     }
@@ -323,7 +331,7 @@ impl EventHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_request_arrived_generates_actions() {
         let mut handler = EventHandler::new();
@@ -386,6 +394,7 @@ git commit -m "feat(scheduler): add event handler for dispatching actions"
 ## Task 5: Queue Manager (Multi-Level Priority)
 
 **Files:**
+
 - Create: `crates/core/src/scheduler/queue_manager.rs`
 - Modify: `crates/core/src/scheduler/mod.rs`
 
@@ -408,11 +417,11 @@ impl QueueManager {
     pub fn new() -> Self {
         todo!("Implement constructor")
     }
-    
+
     pub fn enqueue(&mut self, seq: Sequence, priority: Priority) {
         todo!("Implement enqueue with priority")
     }
-    
+
     pub fn dequeue(&mut self) -> Option<Sequence> {
         todo!("Implement dequeue (FIFO within priority)")
     }
@@ -422,7 +431,7 @@ impl QueueManager {
 mod tests {
     use super::*;
     use crate::types::Status;
-    
+
     fn make_seq(id: u64, priority: u8) -> Sequence {
         Sequence {
             id,
@@ -437,14 +446,14 @@ mod tests {
             priority: Priority(priority),
         }
     }
-    
+
     #[test]
     fn test_priority_ordering() {
         let mut qm = QueueManager::new();
         qm.enqueue(make_seq(1, 50), Priority(50));  // normal
         qm.enqueue(make_seq(2, 10), Priority(10));  // critical
         qm.enqueue(make_seq(3, 100), Priority(100)); // background
-        
+
         // Critical should come first
         assert_eq!(qm.dequeue().map(|s| s.id), Some(2));
         assert_eq!(qm.dequeue().map(|s| s.id), Some(1));
@@ -470,12 +479,12 @@ impl QueueManager {
             preempted: VecDeque::new(),
         }
     }
-    
+
     pub fn enqueue(&mut self, seq: Sequence, priority: Priority) {
         let queue = self.queue_for_priority(priority);
         queue.push_back(seq);
     }
-    
+
     fn queue_for_priority(&mut self, priority: Priority) -> &mut VecDeque<Sequence> {
         if priority.0 <= 10 {
             &mut self.critical
@@ -485,17 +494,17 @@ impl QueueManager {
             &mut self.background
         }
     }
-    
+
     pub fn dequeue(&mut self) -> Option<Sequence> {
         self.critical.pop_front()
             .or_else(|| self.normal.pop_front())
             .or_else(|| self.background.pop_front())
     }
-    
+
     pub fn is_empty(&self) -> bool {
         self.critical.is_empty() && self.normal.is_empty() && self.background.is_empty()
     }
-    
+
     pub fn len(&self) -> usize {
         self.critical.len() + self.normal.len() + self.background.len()
     }
@@ -523,6 +532,7 @@ git commit -m "feat(scheduler): add multi-level priority queue manager"
 ## Task 6: Batch Planner (Predictive)
 
 **Files:**
+
 - Create: `crates/core/src/scheduler/batch_planner.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -559,7 +569,7 @@ impl BatchPlanner {
     pub fn new(config: SchedulerConfig) -> Self {
         todo!("Implement constructor")
     }
-    
+
     pub fn plan(&mut self, state: &impl SchedulerStateView) -> BatchPlan {
         todo!("Implement planning")
     }
@@ -576,7 +586,7 @@ pub trait SchedulerStateView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_batch_plan_creation() {
         let config = SchedulerConfig::default();
@@ -601,11 +611,11 @@ impl BatchPlanner {
             config,
         }
     }
-    
+
     pub fn plan(&mut self, state: &impl SchedulerStateView) -> BatchPlan {
         let adaptive_ratio = self.compute_adaptive_ratio(state);
         let budget = self.config.max_num_batched_tokens;
-        
+
         BatchPlan {
             target_batch_size: self.predict_optimal_size(state),
             prefill_budget: (budget as f32 * (1.0 - adaptive_ratio)) as usize,
@@ -614,17 +624,17 @@ impl BatchPlanner {
             decode_throughput_hint: self.estimate_throughput(),
         }
     }
-    
+
     fn compute_adaptive_ratio(&self, state: &impl SchedulerStateView) -> f32 {
         // If lots of waiting prefills, favor prefill
         // If mostly decoding, favor decode
         0.7 // default
     }
-    
+
     fn predict_optimal_size(&self, state: &impl SchedulerStateView) -> usize {
         self.config.max_num_seqs
     }
-    
+
     fn estimate_throughput(&self) -> f64 {
         // Simple moving average from history
         1000.0 // tokens/sec placeholder
@@ -653,6 +663,7 @@ git commit -m "feat(scheduler): add predictive batch planner"
 ## Task 7: Action Executor
 
 **Files:**
+
 - Create: `crates/core/src/scheduler/action_executor.rs`
 
 - [ ] **Step 1: Write the failing test**
@@ -675,7 +686,7 @@ impl ActionExecutor {
             kv_allocator: BlockAllocator::new(num_blocks),
         }
     }
-    
+
     pub fn execute(&mut self, action: Action) -> Vec<SchedulerEvent> {
         todo!("Implement action execution")
     }
@@ -684,7 +695,7 @@ impl ActionExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_allocate_action() {
         let mut executor = ActionExecutor::new(100);
@@ -742,6 +753,7 @@ git commit -m "feat(scheduler): add action executor"
 ## Task 8: Scheduler Engine (Integration)
 
 **Files:**
+
 - Create: `crates/core/src/scheduler/engine.rs`
 - Modify: `crates/core/src/scheduler/mod.rs`
 
@@ -775,11 +787,11 @@ impl SchedulerEngine {
             config,
         }
     }
-    
+
     pub fn add_request(&mut self, req: Request) -> SeqId {
         todo!("Implement request handling")
     }
-    
+
     pub fn build_batch(&mut self) -> Batch {
         todo!("Implement batch building")
     }
@@ -788,7 +800,7 @@ impl SchedulerEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_engine_basic() {
         let mut engine = SchedulerEngine::new(SchedulerConfig::default(), 1024);
@@ -811,14 +823,14 @@ impl SchedulerEngine {
         let seq_id = req.id;
         let event = SchedulerEvent::RequestArrived(req);
         let actions = self.event_handler.dispatch(event);
-        
+
         for action in actions {
             self.action_executor.execute(action);
         }
-        
+
         seq_id
     }
-    
+
     pub fn build_batch(&mut self) -> Batch {
         // Use batch planner to determine optimal batch
         // Dequeue from queue manager
@@ -849,6 +861,7 @@ git commit -m "feat(scheduler): add scheduler engine as central coordinator"
 ## Task 9: Legacy Adapter (Backward Compatibility)
 
 **Files:**
+
 - Create: `crates/core/src/scheduler/legacy_adapter.rs`
 - Modify: `crates/core/src/scheduler/mod.rs`
 
@@ -870,15 +883,15 @@ impl LegacySchedulerAdapter {
             engine: SchedulerEngine::new(config, num_kv_blocks),
         }
     }
-    
+
     pub fn add_request(&mut self, req: Request) -> SeqId {
         self.engine.add_request(req)
     }
-    
+
     pub fn build_batch(&mut self) -> Batch {
         self.engine.build_batch()
     }
-    
+
     // Implement all Scheduler methods for compatibility
 }
 
@@ -891,7 +904,7 @@ impl Default for LegacySchedulerAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_adapter_add_request() {
         let mut adapter = LegacySchedulerAdapter::default();
@@ -927,6 +940,7 @@ git commit -m "feat(scheduler): add legacy adapter for backward compatibility"
 ## Task 10: Integration Tests and Migration
 
 **Files:**
+
 - Modify: Various test files
 
 - [ ] **Step 1: Run existing scheduler tests**
@@ -946,15 +960,15 @@ Create integration test that exercises full pipeline:
 #[test]
 fn test_full_pipeline() {
     let mut adapter = LegacySchedulerAdapter::default();
-    
+
     // Add requests
     adapter.add_request(Request::new(1, vec![1,2,3], 5));
     adapter.add_request(Request::new(2, vec![4,5,6], 5));
-    
+
     // Build batch
     let batch = adapter.build_batch();
     assert!(!batch.is_empty());
-    
+
     // This tests the full flow
 }
 ```
@@ -980,6 +994,7 @@ git commit -m "feat(scheduler): complete event-driven scheduler implementation"
 ## Task 11: Cleanup Old Scheduler (Optional - Per Spec Phase 7)
 
 **Files:**
+
 - Modify: `crates/core/src/scheduler/mod.rs`
 - Delete: `crates/core/src/scheduler/scheduler.rs` (old implementation)
 - Modify: Engine integration points
@@ -992,10 +1007,13 @@ Expected: All tests pass through adapter
 - [ ] **Step 2: Update Engine to use new SchedulerEngine**
 
 In `crates/core/src/engine.rs`, replace:
+
 ```rust
 use crate::scheduler::Scheduler;
 ```
+
 With:
+
 ```rust
 use crate::scheduler::engine::SchedulerEngine;
 ```
@@ -1012,6 +1030,7 @@ If all works, delete `legacy_adapter.rs` and clean up mod.rs exports
 - [ ] **Step 5: Remove old scheduler.rs**
 
 Delete the old polling-based scheduler:
+
 ```bash
 rm crates/core/src/scheduler/scheduler.rs
 ```
@@ -1032,18 +1051,18 @@ git commit -m "refactor(scheduler): remove legacy polling scheduler"
 
 ## Implementation Summary
 
-| Task | Component | Files | Tests |
-|------|-----------|-------|-------|
-| 1 | Events | events.rs | 1 |
-| 2 | State Machine | state.rs | 5 |
-| 3 | Actions | actions.rs | 1 |
-| 4 | Event Handler | event_handler.rs | 3 |
-| 5 | Queue Manager | queue_manager.rs | 3 |
-| 6 | Batch Planner | batch_planner.rs | 2 |
-| 7 | Action Executor | action_executor.rs | 2 |
-| 8 | Engine | engine.rs | 3 |
-| 9 | Legacy Adapter | legacy_adapter.rs | 2 |
-| 10 | Integration | Various | 5+ |
-| 11 | Cleanup (optional) | mod.rs, scheduler.rs | - |
+| Task | Component          | Files                | Tests |
+| ---- | ------------------ | -------------------- | ----- |
+| 1    | Events             | events.rs            | 1     |
+| 2    | State Machine      | state.rs             | 5     |
+| 3    | Actions            | actions.rs           | 1     |
+| 4    | Event Handler      | event_handler.rs     | 3     |
+| 5    | Queue Manager      | queue_manager.rs     | 3     |
+| 6    | Batch Planner      | batch_planner.rs     | 2     |
+| 7    | Action Executor    | action_executor.rs   | 2     |
+| 8    | Engine             | engine.rs            | 3     |
+| 9    | Legacy Adapter     | legacy_adapter.rs    | 2     |
+| 10   | Integration        | Various              | 5+    |
+| 11   | Cleanup (optional) | mod.rs, scheduler.rs | -     |
 
 **Total: ~30 steps, ~25 tests**

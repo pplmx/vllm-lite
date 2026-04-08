@@ -7,6 +7,7 @@ Completely redesign the scheduler from a polling-based approach to an event-driv
 ## Motivation
 
 Current scheduler issues (cannot be fixed incrementally):
+
 1. **Polling overhead**: Every step iterates all sequences even when nothing changed
 2. **Flat queue**: No differentiation between urgent and background work
 3. **Coupled concerns**: Batch building mixed with preemption, eviction, stats
@@ -16,7 +17,7 @@ Current scheduler issues (cannot be fixed incrementally):
 
 ### High-Level Design
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                         SchedulerCore                           │
 ├─────────────────────────────────────────────────────────────────┤
@@ -47,17 +48,17 @@ pub enum SchedulerEvent {
     RequestArrived(Request),
     RequestCancelled(SeqId),
     RequestTimeout(SeqId),
-    
+
     // Sequence state transitions
     PrefillChunkComplete { seq_id: SeqId, tokens_computed: usize },
     PrefillComplete { seq_id: SeqId },
     DecodeComplete { seq_id: SeqId, new_token: TokenId },
     SequenceFinished { seq_id: SeqId },
-    
+
     // Resource events
     MemoryPressure { available_blocks: usize },
     GPUIdle,
-    
+
     // Scheduled events
     Tick,
 }
@@ -74,7 +75,7 @@ pub struct EventHandler {
 impl EventHandler {
     pub fn dispatch(&mut self, event: SchedulerEvent) -> Vec<Action> {
         let mut actions = Vec::new();
-        
+
         match event {
             SchedulerEvent::RequestArrived(req) => {
                 actions.extend(self.handle_request_arrived(req));
@@ -84,7 +85,7 @@ impl EventHandler {
             }
             // ...
         }
-        
+
         actions
     }
 }
@@ -97,40 +98,40 @@ impl EventHandler {
 pub enum SeqState {
     /// Newly created, not yet scheduled
     Pending,
-    
+
     /// In waiting queue, awaiting scheduling
     Queued { 
         priority: Priority,
         queued_at: Instant,
         prompt_length: usize,
     },
-    
+
     /// Actively being processed (prefill in progress)
     Prefilling {
         chunk_idx: usize,
         total_chunks: usize,
         started_at: Instant,
     },
-    
+
     /// Waiting for decode slot
     DecodeWaiting,
-    
+
     /// Actively decoding
     Decoding {
         decode_count: u32,
         started_at: Instant,
     },
-    
+
     /// Temporarily paused for resources
     Preempted {
         resume_at: usize,
         preempted_at: Instant,
         preemption_count: u32,
     },
-    
+
     /// Completed successfully
     Finished,
-    
+
     /// Cancelled or failed
     Cancelled,
 }
@@ -160,18 +161,18 @@ pub enum Action {
     ScheduleBatch(BatchPlan),
     ReserveDecodeSlots(Vec<SeqId>),
     ReleaseDecodeSlots(Vec<SeqId>),
-    
+
     // Sequence actions
     StartPrefill { seq_id: SeqId, chunk: TokenChunk },
     StartDecode { seq_id: SeqId, token: TokenId },
     Preempt { seq_id: SeqId, reason: PreemptReason },
     Resume { seq_id: SeqId },
     Finish { seq_id: SeqId },
-    
+
     // Resource actions
     AllocateBlocks { seq_id: SeqId, count: usize },
     EvictCache { target_size: usize },
-    
+
     // Response actions
     SendToken { seq_id: SeqId, token: TokenId },
     SendFinish { seq_id: SeqId },
@@ -205,7 +206,7 @@ pub struct QueueManager {
     normal: VecDeque<Sequence>,     // Standard requests (priority 11-50)
     background: VecDeque<Sequence>, // Batch, prefetch (priority 51+)
     preempted: VecDeque<Sequence>,  // Waiting to resume
-    
+
     // Metrics
     queue_wait_times: Histogram,
 }
@@ -217,11 +218,11 @@ impl QueueManager {
             p if p <= Priority(50) => &mut self.normal,
             _ => &mut self.background,
         };
-        
+
         queue.push(seq);
         self.notify_changed();
     }
-    
+
     pub fn select_for_scheduling(&mut self, slots: usize, budget: usize) -> Vec<Sequence> {
         // First fill from critical
         // Then normal
@@ -251,7 +252,7 @@ pub struct BatchSnapshot {
 impl BatchPlanner {
     pub fn plan(&mut self, state: &SchedulerState) -> BatchPlan {
         let adaptive_policy = self.compute_adaptive_policy(state);
-        
+
         BatchPlan {
             target_batch_size: self.predict_optimal_size(state),
             prefill_budget: adaptive_policy.prefill_ratio * state.token_budget,
@@ -260,7 +261,7 @@ impl BatchPlanner {
             decode_throughput_hint: self.estimate_decode_throughput(),
         }
     }
-    
+
     fn compute_adaptive_policy(&self, state: &SchedulerState) -> AdaptivePolicy {
         // Analyze current state and historical patterns
         // Return optimal ratios and limits
@@ -288,16 +289,16 @@ impl PreemptionManager {
     pub fn should_preempt(&self, state: &SchedulerState, seq: &Sequence) -> PreemptionDecision {
         let cost = self.cost_model.estimate_cost(seq);
         let benefit = self.estimate_benefit(seq);
-        
+
         let score = benefit / (cost + self.config.epsilon);
-        
+
         if score > self.config.threshold {
             PreemptionDecision::Preempt { score, cost, benefit }
         } else {
             PreemptionDecision::Wait
         }
     }
-    
+
     pub fn select_victims(&self, running: &[Sequence], blocks_needed: usize) -> Vec<Sequence> {
         // Score all candidates
         // Select best combination to meet block requirement
@@ -323,12 +324,12 @@ impl SegmentedBlockAllocator {
         // First try exact size match
         // Then try larger block + split
         // Finally fallback to first-fit
-        
+
         if self.fragmentation_score > 0.3 {
             self.defragment();
         }
     }
-    
+
     pub fn defragment(&mut self) {
         // Copy blocks to compact memory
         // Update all allocation pointers
@@ -338,7 +339,7 @@ impl SegmentedBlockAllocator {
 
 ## Data Flow
 
-```
+```text
                     ┌─────────────────┐
                     │   Incoming      │
                     │   Request       │
@@ -401,16 +402,16 @@ impl SchedulerEngine {
             let actions = self.event_handler.dispatch(event);
             self.execute_actions(actions);
         }
-        
+
         // 2. Check if we should schedule new work
         if self.should_schedule() {
             self.schedule_next_batch()?;
         }
-        
+
         // 3. Process completed work
         self.process_completions()
     }
-    
+
     fn should_schedule(&self) -> bool {
         !self.queue_manager.is_empty() 
             && self.state.running.len() < self.config.max_concurrent
@@ -428,22 +429,22 @@ pub struct SchedulerConfig {
     pub max_queue_size: usize,
     pub queue_timeout_ms: u64,
     pub priority_levels: usize,
-    
+
     // Batch settings
     pub max_batch_size: usize,
     pub max_token_budget: usize,
     pub prefill_chunk_size: usize,
-    
+
     // Preemption settings
     pub enable_preemption: bool,
     pub preemption_threshold: f32,
     pub max_preemption_chain: usize,
-    
+
     // Memory settings
     pub max_kv_blocks: usize,
     pub eviction_threshold: f32,
     pub enable_defragmentation: bool,
-    
+
     // Adaptive settings
     pub enable_adaptive_batching: bool,
     pub enable_predictive_scheduling: bool,
@@ -466,7 +467,7 @@ impl LegacySchedulerAdapter {
         let event = SchedulerEvent::RequestArrived(req);
         self.engine.dispatch(event)
     }
-    
+
     pub fn build_batch(&mut self) -> Batch {
         // Delegate to engine
         self.engine.build_batch()
@@ -477,18 +478,21 @@ impl LegacySchedulerAdapter {
 ## Testing Strategy
 
 ### Unit Tests
+
 1. State machine transitions (all valid paths)
 2. Event dispatching (all event types)
 3. Action execution (side effects)
 4. Queue ordering (priority behavior)
 
 ### Integration Tests
+
 1. Full request lifecycle (arrive → queue → schedule → complete)
 2. Preemption under pressure
 3. Queue priority ordering
 4. Memory eviction integration
 
 ### Chaos Tests
+
 1. Rapid request arrival
 2. Cancellation during execution
 3. Memory pressure scenarios
@@ -514,9 +518,9 @@ impl LegacySchedulerAdapter {
 
 ## Risks and Mitigations
 
-| Risk | Mitigation |
-|------|------------|
-| Complex state machine bugs | Extensive property-based testing |
-| Event loop performance | Profile early, optimize hot paths |
-| Backward compatibility | Keep adapter until validated |
-| Preemption regression | A/B test against production |
+| Risk                       | Mitigation                        |
+| -------------------------- | --------------------------------- |
+| Complex state machine bugs | Extensive property-based testing  |
+| Event loop performance     | Profile early, optimize hot paths |
+| Backward compatibility     | Keep adapter until validated      |
+| Preemption regression      | A/B test against production       |

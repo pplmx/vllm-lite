@@ -8,20 +8,20 @@
 
 ### 1. Mock 模型重复定义 (4处)
 
-| 位置 | 名称 | 用途 |
-|------|------|------|
-| `crates/core/tests/common/mod.rs` | `IncrementModel`, `ConstModel` | 核心调度器测试 |
-| `crates/core/tests/prefix_cache.rs` | `StubModel` | 前缀缓存测试 |
-| `crates/core/src/engine.rs:273` | `StubModel` | 引擎测试 |
-| `crates/model/src/fake.rs` | `FakeModel` | 模型测试 |
+| 位置                                | 名称                           | 用途           |
+| ----------------------------------- | ------------------------------ | -------------- |
+| `crates/core/tests/common/mod.rs`   | `IncrementModel`, `ConstModel` | 核心调度器测试 |
+| `crates/core/tests/prefix_cache.rs` | `StubModel`                    | 前缀缓存测试   |
+| `crates/core/src/engine.rs:273`     | `StubModel`                    | 引擎测试       |
+| `crates/model/src/fake.rs`          | `FakeModel`                    | 模型测试       |
 
 ### 2. 测试文件命名不一致
 
-| 当前名称 | 问题 |
-|----------|------|
-| `scheduler_functional.rs` | 应为 `scheduler_integration.rs` |
-| `tiled_attention.rs` | 需明确是测试还是功能 |
-| `attention_batch_benchmark.rs` | 需移至标准 bench 目录 |
+| 当前名称                       | 问题                            |
+| ------------------------------ | ------------------------------- |
+| `scheduler_functional.rs`      | 应为 `scheduler_integration.rs` |
+| `tiled_attention.rs`           | 需明确是测试还是功能            |
+| `attention_batch_benchmark.rs` | 需移至标准 bench 目录           |
 
 ### 3. 缺少共享测试基础设施
 
@@ -87,15 +87,15 @@ pub struct NeverProgressModel;  // 用于超时测试
 
 #### 2.1 重命名文件
 
-| 原名称 | 新名称 |
-|--------|--------|
-| `crates/core/tests/scheduler_functional.rs` | `scheduler_integration.rs` |
-| `crates/model/tests/tiled_attention.rs` | `tiled_attention_test.rs` |
-| `crates/model/tests/attention_batch_benchmark.rs` | 移动到 `benches/` |
+| 原名称                                            | 新名称                     |
+| ------------------------------------------------- | -------------------------- |
+| `crates/core/tests/scheduler_functional.rs`       | `scheduler_integration.rs` |
+| `crates/model/tests/tiled_attention.rs`           | `tiled_attention_test.rs`  |
+| `crates/model/tests/attention_batch_benchmark.rs` | 移动到 `benches/`          |
 
 #### 2.2 创建标准 benchmark 目录
 
-```
+```text
 crates/
   core/
     benches/

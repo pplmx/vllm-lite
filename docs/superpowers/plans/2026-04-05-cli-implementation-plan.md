@@ -13,6 +13,7 @@
 ## Overview
 
 This plan adds clap-based CLI to replace the current manual argument parsing in main.rs. The implementation:
+
 1. Adds clap dependency to Cargo.toml
 2. Creates cli.rs with CliArgs struct
 3. Updates main.rs to use clap
@@ -20,6 +21,7 @@ This plan adds clap-based CLI to replace the current manual argument parsing in 
 5. Adds comprehensive tests
 
 **Files to modify:**
+
 - `crates/server/Cargo.toml` - add clap
 - `crates/server/src/cli.rs` - new file
 - `crates/server/src/main.rs` - use clap
@@ -30,6 +32,7 @@ This plan adds clap-based CLI to replace the current manual argument parsing in 
 ## Task 1: Add clap dependency
 
 **Files:**
+
 - Modify: `crates/server/Cargo.toml`
 
 - [ ] **Step 1: Add clap dependency**
@@ -60,6 +63,7 @@ git commit -m "feat(server): add clap dependency for CLI"
 ## Task 2: Create CLI module
 
 **Files:**
+
 - Create: `crates/server/src/cli.rs`
 
 - [ ] **Step 1: Create cli.rs with CliArgs**
@@ -143,6 +147,7 @@ git commit -m "feat(server): add CLI module with clap"
 ## Task 3: Add to_app_config method
 
 **Files:**
+
 - Modify: `crates/server/src/cli.rs`
 
 - [ ] **Step 1: Add to_app_config implementation**
@@ -213,6 +218,7 @@ git commit -m "feat(server): add to_app_config method"
 ## Task 4: Update main.rs to use clap
 
 **Files:**
+
 - Modify: `crates/server/src/main.rs`
 
 - [ ] **Step 1: Replace manual arg parsing with clap**
@@ -261,6 +267,7 @@ fn main() {
 - [ ] **Step 2: Remove old get_model_path and get_tensor_parallel_size functions**
 
 Delete these functions that are no longer needed:
+
 - get_model_path()
 - get_tensor_parallel_size()
 
@@ -287,6 +294,7 @@ git commit -m "refactor(server): use clap for CLI parsing"
 ## Task 5: Add CLI tests
 
 **Files:**
+
 - Create: `crates/server/src/cli.rs` (add tests module)
 
 - [ ] **Step 1: Add test module to cli.rs**
@@ -302,7 +310,7 @@ mod tests {
     fn test_cli_defaults() {
         // Parse with required args
         let cli = CliArgs::parse_from(["vllm-server", "-m", "/test/model"]);
-        
+
         assert_eq!(cli.host, "0.0.0.0");
         assert_eq!(cli.port, 8000);
         assert_eq!(cli.tensor_parallel_size, 1);
@@ -320,7 +328,7 @@ mod tests {
             "--tensor-parallel-size", "4",
             "--kv-blocks", "2048",
         ]);
-        
+
         assert_eq!(cli.host, "127.0.0.1");
         assert_eq!(cli.port, 9000);
         assert_eq!(cli.tensor_parallel_size, 4);
@@ -336,7 +344,7 @@ mod tests {
             "-h", "0.0.0.0",
             "-tp", "2",
         ]);
-        
+
         assert_eq!(cli.port, 8080);
         assert_eq!(cli.host, "0.0.0.0");
         assert_eq!(cli.tensor_parallel_size, 2);
@@ -356,9 +364,9 @@ mod tests {
             "-p", "9000",
             "--log-level", "debug",
         ]);
-        
+
         let config = cli.to_app_config();
-        
+
         assert_eq!(config.server.port, 9000);
         assert_eq!(config.server.log_level, "debug");
     }
@@ -382,6 +390,7 @@ git commit -m "test(server): add CLI tests"
 ## Task 6: Integration test
 
 **Files:**
+
 - Test: Full CLI workflow
 
 - [ ] **Step 1: Test --help**
@@ -397,6 +406,7 @@ Expected: Shows "vllm-server 0.1.0"
 - [ ] **Step 3: Test with config file**
 
 Create test config:
+
 ```yaml
 # /tmp/test-config.yaml
 host: 127.0.0.1
@@ -427,6 +437,7 @@ git commit -m "test(server): CLI integration tests"
 ## Task 7: Final verification
 
 **Files:**
+
 - Verify: Full workspace
 
 - [ ] **Step 1: Run clippy**
