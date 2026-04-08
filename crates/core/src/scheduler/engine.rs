@@ -1,10 +1,10 @@
-use crate::kv_cache::{hash_tokens, BlockAllocator, PrefixCache};
+use crate::kv_cache::{BlockAllocator, PrefixCache, hash_tokens};
 use crate::scheduler::batch_planner::{BatchPlanner, SchedulerStateView};
 use crate::scheduler::eviction::EvictionPolicy;
 use crate::scheduler::observer::{ObserverEvent, SchedulerObservers};
 use crate::scheduler::preemption::PreemptionManager;
 use crate::scheduler::queue_manager::QueueManager;
-use crate::types::{Batch, Request, SchedulerConfig, SeqId, Sequence, Status, BLOCK_SIZE};
+use crate::types::{BLOCK_SIZE, Batch, Request, SchedulerConfig, SeqId, Sequence, Status};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -350,8 +350,8 @@ impl SchedulerEngine {
         for seq in self
             .running
             .iter()
-            .cloned()
             .filter(|s| s.status == Status::Decoding)
+            .cloned()
         {
             batch_seqs.push(seq);
             current_tokens += 1; // decode is always 1 token
