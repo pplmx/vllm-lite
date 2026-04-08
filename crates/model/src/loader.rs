@@ -272,6 +272,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "Requires model files at /models/Qwen2.5-0.5B-Instruct, ~60s runtime"]
     fn test_load_qwen2_model_integration() {
         // This test requires the model to exist at /models/Qwen2.5-0.5B-Instruct
         // Skip if model doesn't exist
