@@ -191,6 +191,16 @@ impl ModelLoader {
                 )?;
                 Ok(Box::new(model))
             }
+            Architecture::Qwen35 => {
+                let config = self.load_config()?;
+                let model = crate::qwen3_5::model::Qwen35Model::from_weights(
+                    config,
+                    self.inner.device.clone(),
+                    weights,
+                    num_kv_blocks,
+                )?;
+                Ok(Box::new(model))
+            }
             Architecture::Gemma4 => {
                 let model = crate::gemma4::Gemma4Model::from_weights(
                     config,

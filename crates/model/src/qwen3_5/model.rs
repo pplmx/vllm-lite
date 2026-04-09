@@ -21,7 +21,7 @@ pub struct Qwen35Model {
 }
 
 impl Qwen35Model {
-    pub fn new(config: Qwen3Config, device: Device) -> CandleResult<Self> {
+    pub fn new(config: Qwen3Config, device: Device, num_kv_blocks: usize) -> CandleResult<Self> {
         let vocab_size = config.vocab_size();
         let hidden_size = config.hidden_size();
 
@@ -48,7 +48,7 @@ impl Qwen35Model {
             config.num_hidden_layers(),
             config.num_key_value_heads(),
             hidden_size / config.num_attention_heads(),
-            1024,
+            num_kv_blocks,
             device.clone(),
             false,
         )?;
@@ -68,14 +68,17 @@ impl Qwen35Model {
         config: Qwen3Config,
         device: Device,
         weights: HashMap<String, Tensor>,
+        num_kv_blocks: usize,
     ) -> CandleResult<Self> {
-        let mut model = Self::new(config.clone(), device.clone())?;
+        let mut model = Self::new(config.clone(), device.clone(), num_kv_blocks)?;
 
-        let embed_key = "model.language_model.embed_tokens.weight";
-        if let Some(w) = weights.get(embed_key) {
+        // Load embed_tokens
+        if let Some(w) = weights.get("model.language_model.embed_tokens.weight") {
             model.embed_tokens = Embedding::new(w.clone(), w.dims()[1]);
-            println!("Loaded embed_tokens from {}", embed_key);
+            println!("Loaded embed_tokens");
         }
+
+        // TODO: Load layer weights when from_weights is implemented for MambaBlock
 
         Ok(model)
     }
