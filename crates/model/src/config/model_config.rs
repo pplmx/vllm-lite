@@ -76,6 +76,30 @@ impl ModelConfig {
         }
     }
 
+    pub fn mixtral_8x7b() -> Self {
+        Self {
+            architecture: Architecture::Mixtral,
+            hidden_size: 4096,
+            num_layers: 32,
+            num_heads: 32,
+            num_kv_heads: 8,
+            head_dim: 128,
+            vocab_size: 32000,
+            intermediate_size: 14336,
+            rope_theta: 10000.0,
+            rms_norm_eps: 1e-5,
+            sliding_window: Some(4096),
+            tie_word_embeddings: false,
+            max_position_embeddings: 32768,
+            layer_types: vec![],
+            rope_configs: vec![],
+            use_double_wide_mlp: false,
+            num_experts: Some(8),
+            top_k_experts: Some(2),
+            expert_intermediate_size: Some(14336),
+        }
+    }
+
     pub fn from_config_json(value: &serde_json::Value) -> Result<Self, Box<dyn std::error::Error>> {
         let architecture = detect_architecture(value);
 

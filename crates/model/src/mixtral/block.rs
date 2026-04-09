@@ -7,15 +7,15 @@ use std::collections::HashMap;
 use crate::config::ModelConfig;
 use crate::mixtral::sparse_moe::MixtralSparseMoe;
 use crate::qwen3::attention::GqaAttention;
-use candle_core::Result;
 use candle_core::Tensor;
-use candle_nn::{Linear, VarBuilder};
+use candle_core::{Module, Result};
+use candle_nn::{LayerNorm, VarBuilder};
 
 pub struct MixtralBlock {
     attention: GqaAttention,
     mlp: MixtralSparseMoe,
-    input_layernorm: Linear,
-    post_attention_layernorm: Linear,
+    input_layernorm: LayerNorm,
+    post_attention_layernorm: LayerNorm,
     sliding_window: usize,
 }
 
@@ -26,7 +26,7 @@ impl MixtralBlock {
         let num_kv_heads = config.num_kv_heads;
         let head_dim = config.head_dim;
         let rope_theta = config.rope_theta;
-        let _rms_norm_eps = config.rms_norm_eps;
+        let rms_norm_eps = config.rms_norm_eps;
         let sliding_window = config.sliding_window.unwrap_or(4096);
 
         let num_experts = config.num_experts.unwrap_or(8);
@@ -38,9 +38,9 @@ impl MixtralBlock {
         let vb = VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu);
 
         let input_layernorm =
-            candle_nn::linear(hidden_size, hidden_size, vb.pp("input_layernorm"))?;
+            candle_nn::layer_norm(hidden_size, rms_norm_eps, vb.pp("input_layernorm"))?;
         let post_attention_layernorm =
-            candle_nn::linear(hidden_size, hidden_size, vb.pp("post_attention_layernorm"))?;
+            candle_nn::layer_norm(hidden_size, rms_norm_eps, vb.pp("post_attention_layernorm"))?;
 
         let attention = GqaAttention::new(
             hidden_size,
@@ -80,7 +80,7 @@ impl MixtralBlock {
         let num_kv_heads = config.num_kv_heads;
         let head_dim = config.head_dim;
         let rope_theta = config.rope_theta;
-        let _rms_norm_eps = config.rms_norm_eps;
+        let rms_norm_eps = config.rms_norm_eps;
         let sliding_window = config.sliding_window.unwrap_or(4096);
 
         let num_experts = config.num_experts.unwrap_or(8);
@@ -155,8 +155,17 @@ impl MixtralBlock {
             }
         };
 
-        let input_layernorm = Linear::new(input_ln_w, None);
-        let post_attention_layernorm = Linear::new(post_attn_ln_w, None);
+        let input_ln_dim = input_ln_w.dim(0).unwrap_or(hidden_size);
+        let input_ln_bias = Tensor::zeros(input_ln_dim, input_ln_w.dtype(), input_ln_w.device())?;
+        let input_layernorm = LayerNorm::new(input_ln_w, input_ln_bias, rms_norm_eps);
+
+        let post_attn_dim = post_attn_ln_w.dim(0).unwrap_or(hidden_size);
+        let post_attn_bias = Tensor::zeros(
+            post_attn_dim,
+            post_attn_ln_w.dtype(),
+            post_attn_ln_w.device(),
+        )?;
+        let post_attention_layernorm = LayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
 
         let attention = GqaAttention::new_with_weights(
             hidden_size,
@@ -256,34 +265,13 @@ impl MixtralBlock {
 
     pub fn forward(&self, x: &Tensor, _positions: &[usize]) -> Result<Tensor> {
         let residual = x.clone();
-        let x = self.rms_norm(x, &self.input_layernorm)?;
+        let x = self.input_layernorm.forward(x)?;
         let x = self.attention.forward(&x)?;
         let x = (x + residual)?;
 
         let residual = x.clone();
-        let x = self.rms_norm(&x, &self.post_attention_layernorm)?;
+        let x = self.post_attention_layernorm.forward(&x)?;
         let x = self.mlp.forward(&x)?;
         x.add(&residual)
-    }
-
-    fn rms_norm(&self, x: &Tensor, weight: &Linear) -> Result<Tensor> {
-        let hidden_size = *x
-            .dims()
-            .last()
-            .ok_or_else(|| candle_core::Error::msg("Tensor has no dimensions"))?;
-        let dims = x.dims();
-        let batch_size = dims[0];
-        let seq_len = dims[1];
-
-        let total_len = batch_size * seq_len;
-        let x_flat = x.reshape((total_len, hidden_size))?;
-        let weight = weight.weight().clone();
-        let weight = weight.reshape((1, hidden_size))?;
-
-        let variance = x_flat.sqr()?.mean(1)?;
-        let x_normed = x_flat.broadcast_div(&(variance + 1e-6)?.sqrt()?)?;
-        let x = x_normed.broadcast_mul(&weight)?;
-
-        x.reshape((batch_size, seq_len, hidden_size))
     }
 }
