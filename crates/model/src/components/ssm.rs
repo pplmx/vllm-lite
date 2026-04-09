@@ -261,13 +261,25 @@ pub trait SSMModel: Module {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candle_core::Device;
+    use candle_core::{DType, Device};
 
     #[test]
     fn test_ssm_config() {
         let config = SSMConfig::new(128);
         assert_eq!(config.d_inner(), 256);
         assert_eq!(config.d_state(), 16);
+    }
+
+    #[test]
+    fn test_ssm_config_builder() {
+        let config = SSMConfig::new(64)
+            .with_d_state(32)
+            .with_d_conv(3)
+            .with_expand(3);
+
+        assert_eq!(config.d_inner(), 192); // 64 * 3
+        assert_eq!(config.d_state(), 32);
+        assert_eq!(config.d_conv(), 3);
     }
 
     #[test]
@@ -280,8 +292,43 @@ mod tests {
     }
 
     #[test]
+    fn test_ssm_layer_accessors() {
+        let config = SSMConfig::new(128);
+        let vb = VarBuilder::zeros(DType::F32, &Device::Cpu);
+        let ssm = SSMLayer::new(&config, vb).unwrap();
+
+        // Test accessors
+        assert_eq!(ssm.d_inner(), 256);
+        assert_eq!(ssm.d_state(), 16);
+        assert!(ssm.a_log().weight().dims()[0] > 0);
+        assert!(ssm.d_linear().weight().dims()[0] > 0);
+    }
+
+    #[test]
     fn test_mamba_block_creates() {
         let vb = VarBuilder::zeros(DType::F32, &Device::Cpu);
         MambaBlock::new(128, 16, vb).unwrap();
+    }
+
+    #[test]
+    fn test_mamba_block_different_configurations() {
+        let vb = VarBuilder::zeros(DType::F32, &Device::Cpu);
+
+        // Test different d_model and d_state
+        for (d_model, d_state) in [(64, 8), (128, 16), (256, 32)] {
+            MambaBlock::new(d_model, d_state, vb.clone()).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_ssm_config_different_models() {
+        // Test configs for different model sizes
+        let small = SSMConfig::new(64);
+        let medium = SSMConfig::new(128);
+        let large = SSMConfig::new(256);
+
+        assert_eq!(small.d_inner(), 128); // 64 * 2
+        assert_eq!(medium.d_inner(), 256); // 128 * 2
+        assert_eq!(large.d_inner(), 512); // 256 * 2
     }
 }

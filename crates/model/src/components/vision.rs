@@ -65,7 +65,7 @@ impl VisionEncoder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candle_core::Device;
+    use candle_core::{DType, Device};
 
     #[test]
     fn test_vision_config() {
@@ -74,9 +74,44 @@ mod tests {
     }
 
     #[test]
-    fn test_patch_embed() {
+    fn test_vision_config_different_sizes() {
+        // Test different image sizes
+        assert_eq!(VisionConfig::new(512, 16).num_patches(), 1024); // (512/16)^2
+        assert_eq!(VisionConfig::new(768, 16).num_patches(), 2304); // (768/16)^2
+        assert_eq!(VisionConfig::new(1024, 16).num_patches(), 4096); // (1024/16)^2
+    }
+
+    #[test]
+    fn test_vision_config_different_patch_sizes() {
+        // Test different patch sizes
+        assert_eq!(VisionConfig::new(224, 16).num_patches(), 196); // (224/16)^2 = 14^2
+        assert_eq!(VisionConfig::new(224, 14).num_patches(), 256); // (224/14)^2 = 16^2
+        assert_eq!(VisionConfig::new(224, 7).num_patches(), 1024); // (224/7)^2 = 32^2
+    }
+
+    #[test]
+    fn test_patch_embed_creates() {
         let config = VisionConfig::new(1024, 16);
-        let vb = VarBuilder::zeros(candle_core::DType::F32, &Device::Cpu);
-        let _embed = PatchEmbed::new(&config, vb).unwrap();
+        let vb = VarBuilder::zeros(DType::F32, &Device::Cpu);
+        PatchEmbed::new(&config, vb).unwrap();
+    }
+
+    #[test]
+    fn test_vision_encoder_creates() {
+        let config = VisionConfig::new(224, 16);
+        let vb = VarBuilder::zeros(DType::F32, &Device::Cpu);
+        VisionEncoder::new(&config, vb).unwrap();
+    }
+
+    #[test]
+    fn test_vision_encoder_empty_forward() {
+        let config = VisionConfig::new(224, 16);
+        let vb = VarBuilder::zeros(DType::F32, &Device::Cpu);
+        let encoder = VisionEncoder::new(&config, vb).unwrap();
+
+        // Currently forward just returns input (placeholder)
+        let input = Tensor::zeros((1, 10, 768), DType::F32, &Device::Cpu).unwrap();
+        let output = encoder.forward(&input).unwrap();
+        assert_eq!(output.dims(), input.dims());
     }
 }
