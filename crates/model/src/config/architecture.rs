@@ -18,6 +18,7 @@ pub struct RoPEConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Architecture {
     Qwen3,
+    Qwen35,
     Llama,
     Mistral,
     Gemma4,

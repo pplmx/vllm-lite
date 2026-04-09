@@ -58,7 +58,9 @@ pub fn detect_architecture(config: &serde_json::Value) -> Architecture {
         "llama" | "llama2" | "llama3" => Architecture::Llama,
         "mistral" => Architecture::Mistral,
         "mixtral" => Architecture::Mixtral,
-        "qwen2" | "qwen2.5" => Architecture::Qwen3,
+        "qwen2" => Architecture::Qwen3,
+        "qwen2.5" | "qwen3" => Architecture::Qwen35,
+        "mamba" => Architecture::Qwen35,
         "gemma2" | "gemma3" | "gemma4" => Architecture::Gemma4,
         _ => Architecture::Llama,
     }
