@@ -67,23 +67,19 @@ async fn main() {
         "Tensor parallel size"
     );
 
-    let loader = ModelLoader::new(device.clone());
+    let loader = ModelLoader::builder(device.clone())
+        .with_model_dir(model_path.clone())
+        .with_kv_blocks(app_config.engine.num_kv_blocks)
+        .with_kv_quantization(app_config.engine.kv_quantization)
+        .build()
+        .unwrap_or_else(|e| panic!("Failed to create loader: {}", e));
+
     let model = loader
-        .load_model(
-            &model_path,
-            app_config.engine.num_kv_blocks,
-            app_config.engine.kv_quantization,
-        )
+        .load_model()
         .unwrap_or_else(|e| panic!("Failed to load model: {}", e));
 
-    // For speculative decoding, we need a proper draft model
-    // Note: Loading twice doubles memory - consider optimizing for production
     let draft_model = loader
-        .load_model(
-            &model_path,
-            app_config.engine.num_kv_blocks,
-            app_config.engine.kv_quantization,
-        )
+        .load_model()
         .unwrap_or_else(|e| panic!("Failed to load draft model: {}", e));
 
     let mut engine = Engine::new(model, draft_model);
