@@ -12,7 +12,6 @@ pub mod quantize;
 pub mod qwen3;
 pub mod qwen3_5;
 pub mod qwen3_config;
-pub mod registry;
 pub mod tokenizer;
 
 pub use kernels::{
@@ -21,4 +20,3 @@ pub use kernels::{
 };
 pub use loader::{ModelLoader, ModelLoaderBuilder};
 pub use quantize::{QuantizedTensor, dequantize, quantize};
-pub use registry::{ModelFactory, ModelInfo, ModelRegistry};
