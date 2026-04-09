@@ -171,9 +171,15 @@ impl ModelLoader {
                 )?;
                 Ok(Box::new(model))
             }
-            Architecture::Mixtral => Err(candle_core::Error::msg(
-                "Mixtral model loading not yet implemented",
-            )),
+            Architecture::Mixtral => {
+                let model = crate::mixtral::MixtralModel::from_weights(
+                    config,
+                    self.inner.device.clone(),
+                    weights,
+                    num_kv_blocks,
+                )?;
+                Ok(Box::new(model))
+            }
             Architecture::Qwen3 => {
                 let config = self.load_config()?;
                 let model = crate::qwen3::model::Qwen3Model::from_weights(
