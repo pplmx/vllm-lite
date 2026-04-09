@@ -29,8 +29,21 @@ pub fn rms_norm(x: &Tensor, weight: &Tensor, eps: f64) -> Result<Tensor> {
         let x = x_normed.broadcast_mul(&weight_2d)?;
 
         x.reshape((batch, seq, hidden))
+    } else if dims.len() == 2 {
+        // 2D tensor: [batch, hidden] - compute RMS across hidden dimension
+        let hidden = dims[1];
+
+        // Compute RMS: sqrt(mean(x^2)) for each row, then normalize
+        let x_sq = x.sqr()?;
+        let mean_sq = x_sq.mean_keepdim(1)?; // [batch, 1]
+        let rms = (mean_sq + eps)?.sqrt()?; // [batch, 1]
+
+        // Normalize: x / rms * weight
+        let normalized = x.broadcast_div(&rms)?; // [batch, hidden]
+        let weight_broadcast = weight.reshape((1, hidden))?;
+        normalized.broadcast_mul(&weight_broadcast)
     } else {
-        // 2D tensor: [batch, hidden]
+        // Fallback: use standard approach
         let hidden = *dims
             .last()
             .ok_or_else(|| candle_core::Error::msg("Empty tensor"))?;
