@@ -1,4 +1,3 @@
-use crate::scheduler::packing::{PackedBatch, SequencePacker};
 use crate::types::{Phase, Sequence, SequencePackingConfig};
 use vllm_traits::{Batch, BatchPhase, TokenId};
 
@@ -60,29 +59,10 @@ impl BatchComposer {
     }
 
     fn compose_prefill_with_packing(&self, sequences: Vec<Sequence>) -> Batch {
-        let packer = SequencePacker::new(self.packing_config.clone());
-        let packed_batches = packer.pack_sequences(sequences);
-
-        if packed_batches.is_empty() {
-            return Batch::empty();
-        }
-
-        // Select batch with best packing (lowest waste per sequence)
-        let best_batch = packed_batches
-            .into_iter()
-            .min_by(|a, b| {
-                let waste_per_seq_a = a.padding_waste as f32 / a.batch_size.max(1) as f32;
-                let waste_per_seq_b = b.padding_waste as f32 / b.batch_size.max(1) as f32;
-                waste_per_seq_a.partial_cmp(&waste_per_seq_b).unwrap()
-            })
-            .unwrap_or_else(|| PackedBatch {
-                sequences: vec![],
-                batch_size: 0,
-                max_seq_len: 0,
-                padding_waste: 0,
-            });
-
-        self.build_batch_from_sequences(best_batch.sequences, Phase::Prefill)
+        // For now, just use standard composition
+        // Full packing optimization would reorder sequences to minimize padding
+        // but still include all sequences in the batch
+        self.build_batch_from_sequences(sequences, Phase::Prefill)
     }
 
     fn compose_standard(&self, sequences: Vec<Sequence>, phase: Phase) -> Batch {
