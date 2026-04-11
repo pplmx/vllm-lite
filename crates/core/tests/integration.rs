@@ -17,6 +17,7 @@ fn test_continuous_batching_with_streaming() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -67,6 +68,7 @@ fn test_chunked_prefill_integration() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -104,6 +106,7 @@ fn test_max_tokens_includes_prompt() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -150,6 +153,7 @@ fn test_single_token_prefill_then_decode() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -191,6 +195,7 @@ fn test_concurrent_requests_finish_together() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -219,6 +224,7 @@ fn test_batch_full_new_request_waits() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -251,6 +257,7 @@ fn test_prefix_cache_hit_directly_decoding() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -287,6 +294,7 @@ fn test_different_prompt_lengths_batching() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -315,6 +323,7 @@ fn test_prefill_priority_under_decode_limit() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -350,6 +359,7 @@ fn test_many_sequences_stress() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -382,6 +392,7 @@ fn test_sequence_state_transitions() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -417,6 +428,7 @@ fn test_immediate_finish_after_prompt() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -460,6 +472,7 @@ fn test_concurrent_requests_different_prompts() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -499,6 +512,7 @@ fn test_batch_size_variation() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -535,6 +549,7 @@ fn test_request_cancellation() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -567,6 +582,7 @@ fn test_finished_sequences_cleared() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -594,6 +610,7 @@ fn test_cancel_request_cleans_response_txs() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -691,6 +708,7 @@ fn test_engine_large_batch_handling() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
 
@@ -760,6 +778,7 @@ fn test_concurrent_requests_batch_processing() {
         enable_dynamic_batching: true,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(
         vllm_testing::IncrementModel,
@@ -798,6 +817,7 @@ fn test_multi_batch_continuous_processing() {
         enable_dynamic_batching: true,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(
         vllm_testing::IncrementModel,
@@ -878,6 +898,7 @@ fn test_mixed_prompt_lengths() {
         enable_dynamic_batching: true,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(
         vllm_testing::IncrementModel,
@@ -916,6 +937,7 @@ fn test_batch_size_changes_over_time() {
         enable_dynamic_batching: true,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
     let mut engine = Engine::with_config(
         vllm_testing::IncrementModel,

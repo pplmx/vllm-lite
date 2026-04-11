@@ -446,6 +446,7 @@ mod tests {
             enable_dynamic_batching: false,
             min_batch_size: 1,
             max_batch_size: 256,
+            ..Default::default()
         };
         let engine = Engine::with_config(stub.clone(), stub, config, 8, 1024);
         assert_eq!(engine.max_draft_tokens, 8);

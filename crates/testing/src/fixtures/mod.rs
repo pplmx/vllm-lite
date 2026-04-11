@@ -1,5 +1,6 @@
 //! Test fixtures for common scenarios.
 
+use vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig;
 use vllm_core::types::SchedulerConfig;
 
 pub struct TestFixtures;
@@ -21,6 +22,7 @@ impl TestFixtures {
             enable_dynamic_batching: false,
             min_batch_size: 1,
             max_batch_size: 256,
+            cuda_graph: SchedulerCudaGraphConfig::default(),
         }
     }
 
@@ -36,6 +38,7 @@ impl TestFixtures {
             enable_dynamic_batching: false,
             min_batch_size: 1,
             max_batch_size: 256,
+            cuda_graph: SchedulerCudaGraphConfig::default(),
         }
     }
 
@@ -51,12 +54,14 @@ impl TestFixtures {
             enable_dynamic_batching: false,
             min_batch_size: 1,
             max_batch_size: 256,
+            cuda_graph: SchedulerCudaGraphConfig::default(),
         }
     }
 
     pub fn priority_config() -> SchedulerConfig {
         SchedulerConfig {
             enable_priority_scheduling: true,
+            cuda_graph: SchedulerCudaGraphConfig::default(),
             ..SchedulerConfig::default()
         }
     }
@@ -73,6 +78,7 @@ impl TestFixtures {
             enable_dynamic_batching: false,
             min_batch_size: 1,
             max_batch_size: 2,
+            cuda_graph: SchedulerCudaGraphConfig::default(),
         }
     }
 }
