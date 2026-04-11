@@ -8,7 +8,6 @@ pub mod loader;
 pub mod mistral;
 pub mod mixtral;
 pub mod paged_tensor;
-mod quantize_old;
 pub mod quantize;
 pub mod qwen3;
 pub mod qwen3_5;
@@ -16,8 +15,8 @@ pub mod qwen3_config;
 pub mod tokenizer;
 
 pub use kernels::{
-    AttentionVariant, CudaGraph, FlashAttention, FlashAttentionConfig, FlashAttentionKernel,
-    fused_attention_layer, fused_mlp_layer,
+    fused_attention_layer, fused_mlp_layer, AttentionVariant, CudaGraph, FlashAttention,
+    FlashAttentionConfig, FlashAttentionKernel,
 };
 pub use loader::{ModelLoader, ModelLoaderBuilder};
-pub use quantize::{QuantizedTensor, dequantize, quantize, StorageTensor, QuantizationFormat, QuantizationConfig};
+pub use quantize::{QuantizationConfig, QuantizationFormat, QuantizedTensor, StorageTensor};

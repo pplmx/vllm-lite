@@ -1,6 +1,6 @@
 #![allow(clippy::all, unused)]
 
-pub use crate::components::{RoPE, apply_rope};
+pub use crate::components::{apply_rope, RoPE};
 
 pub fn precompute_rope_cache(seq_len: usize, head_dim: usize, theta: f32) -> Vec<(f32, f32)> {
     let mut cache = Vec::with_capacity(seq_len * head_dim / 2);
