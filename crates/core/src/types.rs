@@ -87,6 +87,58 @@ pub enum Phase {
     Decode,
 }
 
+/// Configuration for sequence packing optimization
+#[derive(Clone, Debug)]
+pub struct SequencePackingConfig {
+    /// Enable sequence packing optimization
+    pub enabled: bool,
+    /// Target batch size for packing
+    pub target_batch_size: usize,
+    /// Maximum batch size (hard limit)
+    pub max_batch_size: usize,
+    /// Length similarity threshold (0.0-1.0)
+    pub similarity_threshold: f32,
+}
+
+impl Default for SequencePackingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            target_batch_size: 32,
+            max_batch_size: 256,
+            similarity_threshold: 0.2,
+        }
+    }
+}
+
+impl SequencePackingConfig {
+    /// Create config from environment variables
+    pub fn from_env() -> Self {
+        let enabled = std::env::var("VLLM_SEQ_PACKING_ENABLED")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(true);
+        let target_batch_size = std::env::var("VLLM_SEQ_PACKING_TARGET_BATCH")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(32);
+        let max_batch_size = std::env::var("VLLM_SEQ_PACKING_MAX_BATCH")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(256);
+        let similarity_threshold = std::env::var("VLLM_SEQ_PACKING_THRESHOLD")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0.2);
+        Self {
+            enabled,
+            target_batch_size,
+            max_batch_size,
+            similarity_threshold,
+        }
+    }
+}
+
 /// Configuration for the request scheduler.
 ///
 /// Controls batching behavior, prefill/decode separation, and priority handling.
@@ -114,6 +166,8 @@ pub struct SchedulerConfig {
     pub max_batch_size: usize,
     /// CUDA Graph configuration
     pub cuda_graph: SchedulerCudaGraphConfig,
+    /// Sequence packing configuration
+    pub packing: SequencePackingConfig,
 }
 
 impl SchedulerConfig {
@@ -129,6 +183,7 @@ impl SchedulerConfig {
         enable_dynamic_batching: bool,
         min_batch_size: usize,
         max_batch_size: usize,
+        packing: SequencePackingConfig,
     ) -> Self {
         assert!(max_num_seqs > 0, "max_num_seqs must be > 0");
         assert!(
@@ -162,6 +217,7 @@ impl SchedulerConfig {
             min_batch_size,
             max_batch_size,
             cuda_graph: SchedulerCudaGraphConfig::default(),
+            packing,
         }
     }
 }
@@ -180,6 +236,7 @@ impl Default for SchedulerConfig {
             min_batch_size: 1,
             max_batch_size: 256,
             cuda_graph: SchedulerCudaGraphConfig::default(),
+            packing: SequencePackingConfig::default(),
         }
     }
 }

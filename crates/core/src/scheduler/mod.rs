@@ -18,10 +18,10 @@ pub mod stats;
 
 pub use batch_composer::{BatchComposer, BatchCompositionConfig};
 pub use cuda_graph::{GraphBatch, GraphPreparedBatch, SchedulerCudaGraphConfig};
-pub use packing::{PackedBatch, SequencePacker};
 pub use engine::SchedulerEngine;
 pub use memory::MemoryManager;
 pub use observer::{ObserverEvent, SchedulerObserver, SchedulerObservers};
+pub use packing::{PackedBatch, SequencePacker};
 pub use phase_scheduler::{PhaseScheduler, PhaseSwitchPolicy, SchedulerState};
 pub use radix_cache::{PrefixMatchResult, RadixNode, RadixTree};
 pub use request_queue::RequestQueue;
