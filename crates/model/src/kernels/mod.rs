@@ -2,7 +2,10 @@ pub mod cuda_graph;
 pub mod flash_attention;
 pub mod fused_mlp;
 
-pub use cuda_graph::CudaGraph;
+pub use cuda_graph::{
+    BatchCudaGraphExecutor, CudaGraph, CudaGraphConfig, CudaGraphError, CudaGraphExecutor,
+    GraphExecutionError, ModelGraphConfig,
+};
 pub use flash_attention::{
     AttentionVariant, FlashAttention, FlashAttentionConfig, FlashAttentionKernel,
 };
