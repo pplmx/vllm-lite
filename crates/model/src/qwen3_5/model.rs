@@ -72,13 +72,48 @@ impl Qwen35Model {
     ) -> CandleResult<Self> {
         let mut model = Self::new(config.clone(), device.clone(), num_kv_blocks)?;
 
-        // Load embed_tokens
         if let Some(w) = weights.get("model.language_model.embed_tokens.weight") {
             model.embed_tokens = Embedding::new(w.clone(), w.dims()[1]);
             println!("Loaded embed_tokens");
+        } else if let Some(w) = weights.get("model.embed_tokens.weight") {
+            model.embed_tokens = Embedding::new(w.clone(), w.dims()[1]);
+            println!("Loaded embed_tokens (fallback)");
         }
 
-        // TODO: Load layer weights when from_weights is implemented for MambaBlock
+        let num_layers = config.num_hidden_layers();
+        let hidden_size = config.hidden_size();
+        let d_state = 16;
+
+        for i in 0..num_layers {
+            let layer =
+                MambaBlock::from_weights(hidden_size, d_state, i, &weights).map_err(|e| {
+                    candle_core::Error::msg(format!("Failed to load layer {}: {}", i, e))
+                })?;
+            model.layers[i] = layer;
+            println!("Loaded MambaBlock layer {}", i);
+        }
+
+        if let Some(w) = weights.get("model.norm.weight") {
+            let bias = Tensor::zeros(w.dim(0).unwrap_or(hidden_size), w.dtype(), w.device())?;
+            model.norm = candle_nn::LayerNorm::new(w.clone(), bias, config.rms_norm_eps() as f64);
+            println!("Loaded final norm");
+        } else {
+            return Err(candle_core::Error::msg("Missing model.norm.weight"));
+        }
+
+        let lm_head_w = weights
+            .get("lm_head.weight")
+            .or_else(|| weights.get("output.weight"))
+            .cloned();
+
+        if let Some(w) = lm_head_w {
+            model.lm_head = candle_nn::Linear::new(w, None);
+            println!("Loaded lm_head");
+        } else if config.tie_word_embeddings() {
+            println!("Using tied embeddings for lm_head");
+        } else {
+            return Err(candle_core::Error::msg("Missing lm_head.weight"));
+        }
 
         Ok(model)
     }
