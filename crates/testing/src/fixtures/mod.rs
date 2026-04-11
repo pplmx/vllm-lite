@@ -1,7 +1,7 @@
 //! Test fixtures for common scenarios.
 
 use vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig;
-use vllm_core::types::SchedulerConfig;
+use vllm_core::types::{SchedulerConfig, SequencePackingConfig};
 
 pub struct TestFixtures;
 
@@ -23,6 +23,7 @@ impl TestFixtures {
             min_batch_size: 1,
             max_batch_size: 256,
             cuda_graph: SchedulerCudaGraphConfig::default(),
+            packing: SequencePackingConfig::default(),
         }
     }
 
@@ -39,6 +40,7 @@ impl TestFixtures {
             min_batch_size: 1,
             max_batch_size: 256,
             cuda_graph: SchedulerCudaGraphConfig::default(),
+            packing: SequencePackingConfig::default(),
         }
     }
 
@@ -55,6 +57,7 @@ impl TestFixtures {
             min_batch_size: 1,
             max_batch_size: 256,
             cuda_graph: SchedulerCudaGraphConfig::default(),
+            packing: SequencePackingConfig::default(),
         }
     }
 
@@ -79,6 +82,7 @@ impl TestFixtures {
             min_batch_size: 1,
             max_batch_size: 2,
             cuda_graph: SchedulerCudaGraphConfig::default(),
+            packing: SequencePackingConfig::default(),
         }
     }
 }

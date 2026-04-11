@@ -65,7 +65,7 @@ impl SchedulerEngine {
         Self {
             request_queue: RequestQueue::new(),
             phase_scheduler: PhaseScheduler::new(phase_switch_policy),
-            batch_composer: BatchComposer::new(batch_config),
+            batch_composer: BatchComposer::with_packing(batch_config, config.packing.clone()),
             memory: MemoryManager::new(config.clone(), num_kv_blocks),
             prefix_cache: RadixTree::new(),
             policy: Box::new(FcfsPolicy::new()),

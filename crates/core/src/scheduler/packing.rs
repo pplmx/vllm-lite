@@ -30,12 +30,14 @@ impl PackedBatch {
 
     fn recalculate_stats(&mut self) {
         self.batch_size = self.sequences.len();
-        self.max_seq_len = self.sequences
+        self.max_seq_len = self
+            .sequences
             .iter()
             .map(|s| s.tokens.len())
             .max()
             .unwrap_or(0);
-        self.padding_waste = self.sequences
+        self.padding_waste = self
+            .sequences
             .iter()
             .map(|s| self.max_seq_len - s.tokens.len())
             .sum();
@@ -93,7 +95,8 @@ impl SequencePacker {
             .filter(|(_, b)| b.batch_size < self.config.max_batch_size)
             .filter(|(_, b)| {
                 // Check length similarity
-                let batch_min_len = b.sequences
+                let batch_min_len = b
+                    .sequences
                     .iter()
                     .map(|s| s.tokens.len())
                     .min()

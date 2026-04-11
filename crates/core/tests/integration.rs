@@ -1,7 +1,7 @@
 use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
 use vllm_core::scheduler::cache::PrefixCacheConfig;
-use vllm_core::types::{Request, SchedulerConfig, TokenId};
+use vllm_core::types::{Request, SchedulerConfig, SequencePackingConfig, TokenId};
 use vllm_testing::{ConstModel, IncrementModel};
 
 #[test]
@@ -977,7 +977,16 @@ fn test_batch_size_changes_over_time() {
 fn test_scheduler_config_rejects_zero_max_seqs() {
     let _ = SchedulerConfig::new(
         0, // max_num_seqs = 0 - should panic
-        100, 10, false, 512, 0.7, false, false, 1, 10,
+        100,
+        10,
+        false,
+        512,
+        0.7,
+        false,
+        false,
+        1,
+        10,
+        SequencePackingConfig::default(),
     );
 }
 
@@ -985,8 +994,17 @@ fn test_scheduler_config_rejects_zero_max_seqs() {
 #[should_panic(expected = "max_batch_size must be >= min_batch_size")]
 fn test_scheduler_config_rejects_invalid_batch_range() {
     let _ = SchedulerConfig::new(
-        10, 100, 10, false, 512, 0.7, false, false, 10, // min_batch_size = 10
+        10,
+        100,
+        10,
+        false,
+        512,
+        0.7,
+        false,
+        false,
+        10, // min_batch_size = 10
         5,  // max_batch_size = 5 - should panic (less than min)
+        SequencePackingConfig::default(),
     );
 }
 
@@ -994,8 +1012,17 @@ fn test_scheduler_config_rejects_invalid_batch_range() {
 #[should_panic(expected = "decode_preference_ratio must be between 0.0 and 1.0")]
 fn test_scheduler_config_rejects_invalid_ratio() {
     let _ = SchedulerConfig::new(
-        10, 100, 10, false, 512, 1.5, // invalid ratio > 1.0 - should panic
-        false, false, 1, 10,
+        10,
+        100,
+        10,
+        false,
+        512,
+        1.5, // invalid ratio > 1.0 - should panic
+        false,
+        false,
+        1,
+        10,
+        SequencePackingConfig::default(),
     );
 }
 
