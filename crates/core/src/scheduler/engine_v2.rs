@@ -342,7 +342,7 @@ mod tests {
         let config = SchedulerConfig::default();
         let mut engine = SchedulerEngineV2::new(config, 1024);
         let id = engine.add_request(Request::new(0, vec![1, 2, 3], 5));
-        let batch = engine.build_batch();
+        let _batch = engine.build_batch();
 
         // Simulate model output: one token generated
         engine.update(&[id], &[100], &[3]); // 3 input tokens processed
@@ -384,7 +384,7 @@ mod tests {
 
         // Pressure should be between 0 and 1
         let pressure = engine.get_memory_pressure();
-        assert!(pressure >= 0.0 && pressure <= 1.0);
+        assert!((0.0..=1.0).contains(&pressure));
     }
 
     #[test]
@@ -397,7 +397,7 @@ mod tests {
         let id1 = engine.add_request(Request::new(0, prompt.clone(), 5));
 
         // Build batch and process
-        let batch = engine.build_batch();
+        let _batch = engine.build_batch();
         engine.update(&[id1], &[100], &[5]);
 
         // Complete the sequence to add to cache
@@ -407,7 +407,7 @@ mod tests {
         }
 
         // Add second request with same prefix
-        let id2 = engine.add_request(Request::new(0, vec![1, 2, 3, 6, 7], 5));
+        let _id2 = engine.add_request(Request::new(0, vec![1, 2, 3, 6, 7], 5));
 
         // Second request should be enqueued
         assert!(engine.waiting_count() > 0 || engine.running_count() > 0);
