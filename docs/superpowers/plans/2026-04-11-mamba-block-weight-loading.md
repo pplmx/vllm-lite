@@ -14,180 +14,121 @@
 
 ```
 crates/model/src/qwen3_5/
-├── ssm.rs          # 添加 MambaBlock::from_weights
+├── ssm.rs          # 添加 MambaBlock::from_weights (已完成)
 └── model.rs        # 更新 Qwen35Model::from_weights
 ```
 
 ---
 
-### Task 1: 为 MambaBlock 添加 from_weights 方法
+### Task 1: 为 MambaBlock 添加 from_weights 方法 ✅ 已完成
+
+- [x] 添加 from_weights 方法到 MambaBlock
+- [x] 添加 HashMap import
+- [x] 运行 clippy
+- [x] 提交
+
+---
+
+### Task 2: 检查并添加必要的 imports
 
 **Files:**
-- Modify: `crates/model/src/qwen3_5/ssm.rs:103-196`
+- Modify: `crates/model/src/qwen3_5/model.rs:1-10`
 
-- [ ] **Step 1: 在 MambaBlock impl 末尾添加 from_weights 方法**
+- [ ] **Step 1: 检查当前 imports**
 
-在 `impl MambaBlock {` 块中添加：
-
+查看当前文件头部，确认是否有：
 ```rust
-pub fn from_weights(
-    d_model: usize,
-    d_state: usize,
-    layer_idx: usize,
-    weights: &HashMap<String, Tensor>,
-) -> Result<Self> {
-    let config = SSMConfig {
-        d_model,
-        d_state,
-        d_conv: 4,
-        expand: 2,
-    };
-    let d_inner = config.d_inner();
-
-    let in_proj_w = weights
-        .get(&format!("model.layers.{}.mamba.in_proj.weight", layer_idx))
-        .cloned()
-        .ok_or_else(|| Error::msg(format!("Missing in_proj weight for layer {}", layer_idx)))?;
-    let in_proj = candle_nn::Linear::new(in_proj_w, None);
-
-    let x_proj_w = weights
-        .get(&format!("model.layers.{}.mamba.x_proj.weight", layer_idx))
-        .cloned()
-        .ok_or_else(|| Error::msg(format!("Missing x_proj weight for layer {}", layer_idx)))?;
-    let x_proj = candle_nn::Linear::new(x_proj_w, None);
-
-    let a_log_w = weights
-        .get(&format!("model.layers.{}.mamba.A_log.weight", layer_idx))
-        .cloned()
-        .ok_or_else(|| Error::msg(format!("Missing A_log weight for layer {}", layer_idx)))?;
-    let a_log = candle_nn::Linear::new(a_log_w, None);
-
-    let d_w = weights
-        .get(&format!("model.layers.{}.mamba.D.weight", layer_idx))
-        .cloned()
-        .ok_or_else(|| Error::msg(format!("Missing D weight for layer {}", layer_idx)))?;
-    let d = candle_nn::Linear::new(d_w, None);
-
-    let conv_w = weights
-        .get(&format!("model.layers.{}.mamba.conv1d.weight", layer_idx))
-        .cloned()
-        .ok_or_else(|| Error::msg(format!("Missing conv1d weight for layer {}", layer_idx)))?;
-    let conv_cfg = candle_nn::Conv1dConfig {
-        padding: config.d_conv - 1,
-        ..Default::default()
-    };
-    let conv = candle_nn::conv1d(d_inner, d_inner, config.d_conv, conv_cfg, conv_w)?;
-
-    let out_proj_w = weights
-        .get(&format!("model.layers.{}.mamba.out_proj.weight", layer_idx))
-        .cloned()
-        .ok_or_else(|| Error::msg(format!("Missing out_proj weight for layer {}", layer_idx)))?;
-    let out_proj = candle_nn::Linear::new(out_proj_w, None);
-
-    let norm_w = weights
-        .get(&format!("model.layers.{}.mamba.norm.weight", layer_idx))
-        .cloned()
-        .ok_or_else(|| Error::msg(format!("Missing norm weight for layer {}", layer_idx)))?;
-    let norm = candle_nn::LayerNorm::new(norm_w, 1e-5);
-
-    let ssm = SSMLayer {
-        x_proj,
-        a_log,
-        d,
-        conv,
-        d_inner,
-        d_state,
-    };
-
-    Ok(Self {
-        input_proj: in_proj,
-        ssm,
-        output_proj: out_proj,
-        norm,
-    })
-}
+use crate::qwen3_5::ssm::{MambaBlock, SSMConfig};
 ```
 
-- [ ] **Step 2: 添加 HashMap import**
+如果没有则添加。
 
-在文件顶部添加：
-```rust
-use std::collections::HashMap;
-```
-
-- [ ] **Step 3: 运行 clippy 检查**
+- [ ] **Step 2: 运行 clippy 确认无新增警告**
 
 Run: `cargo clippy -p vllm-model -- -D warnings`
 
-- [ ] **Step 4: 提交**
+- [ ] **Step 3: 提交**
 
 ```bash
-git add crates/model/src/qwen3_5/ssm.rs
-git commit -m "feat(qwen3_5): add MambaBlock::from_weights method"
+git add crates/model/src/qwen3_5/model.rs
+git commit -m "chore(qwen3_5): ensure MambaBlock imports"
 ```
 
 ---
 
-### Task 2: 更新 Qwen35Model::from_weights 加载所有层
+### Task 3: 更新 embed_tokens 加载（支持 fallback）
 
 **Files:**
-- Modify: `crates/model/src/qwen3_5/model.rs:67-84`
+- Modify: `crates/model/src/qwen3_5/model.rs:75-79`
 
-- [ ] **Step 1: 更新 from_weights 方法**
+- [ ] **Step 1: 修改 embed_tokens 加载逻辑**
 
-替换现有的 `from_weights` 方法体：
-
+当前代码：
 ```rust
-pub fn from_weights(
-    config: Qwen3Config,
-    device: Device,
-    weights: HashMap<String, Tensor>,
-    num_kv_blocks: usize,
-) -> CandleResult<Self> {
-    let mut model = Self::new(config.clone(), device.clone(), num_kv_blocks)?;
-
-    // Load embed_tokens
-    if let Some(w) = weights.get("model.language_model.embed_tokens.weight") {
-        model.embed_tokens = Embedding::new(w.clone(), w.dims()[1]);
-        println!("Loaded embed_tokens");
-    } else if let Some(w) = weights.get("model.embed_tokens.weight") {
-        model.embed_tokens = Embedding::new(w.clone(), w.dims()[1]);
-        println!("Loaded embed_tokens");
-    }
-
-    // Load MambaBlock layers
-    let num_layers = config.num_hidden_layers();
-    let hidden_size = config.hidden_size();
-    let d_state = 16; // Default from SSMConfig
-    
-    for i in 0..num_layers {
-        let layer = MambaBlock::from_weights(hidden_size, d_state, i, &weights)?;
-        model.layers[i] = layer;
-        println!("Loaded MambaBlock layer {}", i);
-    }
-
-    // Load final norm
-    if let Some(w) = weights.get("model.norm.weight") {
-        model.norm = candle_nn::LayerNorm::new(w.clone(), config.rms_norm_eps())?;
-        println!("Loaded final norm");
-    }
-
-    // Load lm_head (try multiple names)
-    let lm_head_w = weights
-        .get("lm_head.weight")
-        .or_else(|| weights.get("output.weight"))
-        .cloned();
-    
-    if let Some(w) = lm_head_w {
-        model.lm_head = candle_nn::Linear::new(w, None)?;
-        println!("Loaded lm_head");
-    }
-
-    Ok(model)
+// Load embed_tokens
+if let Some(w) = weights.get("model.language_model.embed_tokens.weight") {
+    model.embed_tokens = Embedding::new(w.clone(), w.dims()[1]);
+    println!("Loaded embed_tokens");
 }
 ```
 
-- [ ] **Step 2: 运行 clippy 检查**
+修改为：
+```rust
+// Load embed_tokens (try multiple names)
+if let Some(w) = weights.get("model.language_model.embed_tokens.weight") {
+    model.embed_tokens = Embedding::new(w.clone(), w.dims()[1]);
+    println!("Loaded embed_tokens");
+} else if let Some(w) = weights.get("model.embed_tokens.weight") {
+    model.embed_tokens = Embedding::new(w.clone(), w.dims()[1]);
+    println!("Loaded embed_tokens (fallback)");
+}
+```
+
+- [ ] **Step 2: 运行 clippy**
+
+Run: `cargo clippy -p vllm-model -- -D warnings`
+
+- [ ] **Step 3: 提交**
+
+```bash
+git add crates/model/src/qwen3_5/model.rs
+git commit -m "feat(qwen3_5): improve embed_tokens loading with fallback"
+```
+
+---
+
+### Task 4: 添加 MambaBlock 层加载循环
+
+**Files:**
+- Modify: `crates/model/src/qwen3_5/model.rs:81` (替换 TODO)
+
+- [ ] **Step 1: 添加 MambaBlock 层加载代码**
+
+在 `// TODO: Load layer weights...` 位置添加：
+
+```rust
+// Load MambaBlock layers
+let num_layers = config.num_hidden_layers();
+let hidden_size = config.hidden_size();
+let d_state = 16; // Default from SSMConfig
+
+for i in 0..num_layers {
+    match MambaBlock::from_weights(hidden_size, d_state, i, &weights) {
+        Ok(layer) => {
+            model.layers[i] = layer;
+            println!("Loaded MambaBlock layer {}", i);
+        }
+        Err(e) => {
+            return Err(candle_core::Error::msg(format!(
+                "Failed to load MambaBlock layer {}: {}",
+                i, e
+            )));
+        }
+    }
+}
+```
+
+- [ ] **Step 2: 运行 clippy**
 
 Run: `cargo clippy -p vllm-model -- -D warnings`
 
@@ -199,26 +140,193 @@ Run: `cargo test -p vllm-model -- qwen3_5`
 
 ```bash
 git add crates/model/src/qwen3_5/model.rs
-git commit -m "feat(qwen3_5): load all MambaBlock weights in from_weights"
+git commit -m "feat(qwen3_5): load MambaBlock layers in from_weights"
 ```
 
 ---
 
-### Task 3: 测试验证（可选，需要真实权重）
+### Task 5: 添加 final norm 权重加载
+
+**Files:**
+- Modify: `crates/model/src/qwen3_5/model.rs`
+
+- [ ] **Step 1: 在层加载循环后添加 final norm 加载**
+
+在 `model.layers[i] = layer;` 之后添加：
+
+```rust
+// Load final norm
+if let Some(w) = weights.get("model.norm.weight") {
+    model.norm = candle_nn::LayerNorm::new(w.clone(), config.rms_norm_eps())?;
+    println!("Loaded final norm");
+} else {
+    return Err(candle_core::Error::msg("Missing model.norm.weight"));
+}
+```
+
+- [ ] **Step 2: 运行 clippy**
+
+Run: `cargo clippy -p vllm-model -- -D warnings`
+
+- [ ] **Step 3: 提交**
+
+```bash
+git add crates/model/src/qwen3_5/model.rs
+git commit -m "feat(qwen3_5): load final norm weight"
+```
+
+---
+
+### Task 6: 添加 lm_head 权重加载（支持 fallback 和 tie_word_embeddings）
+
+**Files:**
+- Modify: `crates/model/src/qwen3_5/model.rs`
+
+- [ ] **Step 1: 在 final norm 加载后添加 lm_head 加载**
+
+```rust
+// Load lm_head (try multiple names)
+let lm_head_w = weights
+    .get("lm_head.weight")
+    .or_else(|| weights.get("output.weight"))
+    .cloned();
+
+if let Some(w) = lm_head_w {
+    model.lm_head = candle_nn::Linear::new(w, None)?;
+    println!("Loaded lm_head");
+} else if config.tie_word_embeddings() {
+    // If tied, use embed_tokens weights
+    println!("Using tied embeddings for lm_head");
+} else {
+    return Err(candle_core::Error::msg("Missing lm_head.weight or output.weight"));
+}
+```
+
+- [ ] **Step 2: 运行 clippy**
+
+Run: `cargo clippy -p vllm-model -- -D warnings`
+
+- [ ] **Step 3: 运行测试**
+
+Run: `cargo test -p vllm-model -- qwen3_5`
+
+- [ ] **Step 4: 提交**
+
+```bash
+git add crates/model/src/qwen3_5/model.rs
+git commit -m "feat(qwen3_5): load lm_head weight with fallback"
+```
+
+---
+
+### Task 7: 移除 TODO 注释
+
+**Files:**
+- Modify: `crates/model/src/qwen3_5/model.rs`
+
+- [ ] **Step 1: 删除 TODO 注释**
+
+删除 `// TODO: Load layer weights when from_weights is implemented for MambaBlock`
+
+- [ ] **Step 2: 运行 clippy**
+
+Run: `cargo clippy -p vllm-model -- -D warnings`
+
+- [ ] **Step 3: 提交**
+
+```bash
+git add crates/model/src/qwen3_5/model.rs
+git commit -m "chore(qwen3_5): remove TODO after weight loading complete"
+```
+
+---
+
+### Task 8: 验证编译
+
+**Files:**
+- Build: `crates/model/`
+
+- [ ] **Step 1: 运行完整编译**
+
+Run: `cargo build -p vllm-model`
+
+- [ ] **Step 2: 运行 clippy**
+
+Run: `cargo clippy -p vllm-model -- -D warnings`
+
+- [ ] **Step 3: 提交**
+
+```bash
+git add -A && git commit -m "build: verify MambaBlock weight loading compiles"
+```
+
+---
+
+### Task 9: 运行单元测试
 
 **Files:**
 - Test: `crates/model/src/qwen3_5/`
 
-- [ ] **Step 1: 验证编译**
+- [ ] **Step 1: 运行 qwen3_5 相关测试**
 
-Run: `cargo build -p vllm-model`
+Run: `cargo test -p vllm-model -- qwen3_5`
 
-- [ ] **Step 2: 运行现有测试**
+- [ ] **Step 2: 运行所有 model 测试**
 
 Run: `cargo test -p vllm-model`
 
 - [ ] **Step 3: 提交**
 
 ```bash
-git add -A && git commit -m "test(qwen3_5): verify MambaBlock weight loading"
+git add -A && git commit -m "test(qwen3_5): run tests for weight loading"
+```
+
+---
+
+### Task 10: 最终验证
+
+**Files:**
+- Full: `crates/model/`, `crates/core/`, `crates/server/`
+
+- [ ] **Step 1: 运行 workspace 编译**
+
+Run: `cargo build --workspace`
+
+- [ ] **Step 2: 运行 workspace clippy**
+
+Run: `cargo clippy --workspace -- -D warnings`
+
+- [ ] **Step 3: 运行全部测试**
+
+Run: `just test`
+
+- [ ] **Step 4: 提交**
+
+```bash
+git add -A && git commit -m "chore: final verification for MambaBlock weight loading"
+```
+
+---
+
+### Task 11: 更新 CHANGELOG
+
+**Files:**
+- Modify: `CHANGELOG.md`
+
+- [ ] **Step 1: 添加 changelog 条目**
+
+```markdown
+## [Unreleased]
+
+### Added
+- MambaBlock weight loading for Qwen3.5 Mamba models
+- Support for loading all Mamba layer weights (in_proj, x_proj, A_log, D, conv1d, out_proj, norm)
+- Fallback support for embed_tokens and lm_head weights
+```
+
+- [ ] **Step 2: 提交**
+
+```bash
+git add CHANGELOG.md
+git commit -m "chore: update changelog for MambaBlock weight loading"
 ```
