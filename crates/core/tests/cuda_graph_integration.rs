@@ -17,10 +17,11 @@ fn test_cuda_graph_disabled_by_default() {
 /// Test that decode batches can use CUDA Graph when enabled
 #[test]
 fn test_decode_batch_can_use_graph() {
-    let mut config = SchedulerConfig::default();
-    config.cuda_graph = SchedulerCudaGraphConfig {
-        enabled: true,
-        batch_sizes: vec![1, 2, 4],
+    let config = SchedulerConfig {
+        cuda_graph: SchedulerCudaGraphConfig {
+            enabled: true,
+            batch_sizes: vec![1, 2, 4],
+        },
         ..Default::default()
     };
     let mut engine = SchedulerEngine::new(config, 1024);
@@ -115,10 +116,11 @@ fn test_end_to_end_engine_with_cuda_graph_config() {
         }
     }
 
-    let mut config = SchedulerConfig::default();
-    config.cuda_graph = SchedulerCudaGraphConfig {
-        enabled: true,
-        batch_sizes: vec![1, 4],
+    let config = SchedulerConfig {
+        cuda_graph: SchedulerCudaGraphConfig {
+            enabled: true,
+            batch_sizes: vec![1, 4],
+        },
         ..Default::default()
     };
     let target_model = MockModel;

@@ -44,7 +44,7 @@ fn test_end_to_end_packing_reduces_waste() {
     let batch = engine.build_batch();
 
     // Verify batch is valid
-    assert!(batch.seq_ids.len() > 0);
+    assert!(!batch.seq_ids.is_empty());
 }
 
 #[test]
