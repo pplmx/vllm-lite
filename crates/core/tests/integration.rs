@@ -265,7 +265,7 @@ fn test_prefix_cache_hit_directly_decoding() {
     engine.add_request(Request::new(2, vec![10, 20], 5), tx2);
 
     // Cache hit - sequence should be waiting with cached num_computed_tokens
-    // In V2, sequences are added to request_queue, not directly to running
+    // New architecture: sequences are added to request_queue, not directly to running
     // Build batch to move sequence to running
     let _batch = engine.scheduler.build_batch();
     assert_eq!(engine.scheduler.running().len(), 1);

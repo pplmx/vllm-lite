@@ -1,6 +1,6 @@
 use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
-use vllm_core::kv_cache::{BlockAllocator, PrefixCache, hash_tokens};
+use vllm_core::kv_cache::{hash_tokens, BlockAllocator, PrefixCache};
 use vllm_core::types::{Request, SchedulerConfig, SeqId, TokenId};
 use vllm_testing::StubModel;
 
@@ -32,7 +32,7 @@ fn test_prefix_cache_hit() {
     // Second request with same prompt: cache hit
     engine.add_request(Request::new(2, vec![10, 20], 5), tx2);
 
-    // In V2, sequences start in request_queue, not directly in running
+    // New architecture: sequences start in request_queue, not directly in running
     // Build batch to move to running
     let _batch = engine.scheduler.build_batch();
 
