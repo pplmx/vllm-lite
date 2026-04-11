@@ -8,6 +8,7 @@ pub mod loader;
 pub mod mistral;
 pub mod mixtral;
 pub mod paged_tensor;
+mod quantize_old;
 pub mod quantize;
 pub mod qwen3;
 pub mod qwen3_5;
@@ -19,4 +20,4 @@ pub use kernels::{
     fused_attention_layer, fused_mlp_layer,
 };
 pub use loader::{ModelLoader, ModelLoaderBuilder};
-pub use quantize::{QuantizedTensor, dequantize, quantize};
+pub use quantize::{QuantizedTensor, dequantize, quantize, StorageTensor, QuantizationFormat, QuantizationConfig};
