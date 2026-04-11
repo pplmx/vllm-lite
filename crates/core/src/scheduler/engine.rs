@@ -1,11 +1,12 @@
 use crate::scheduler::batch_planner::{BatchPlanner, SchedulerStateView};
-use crate::scheduler::cache::{CacheManager, PrefixCacheConfig, hash_tokens};
+use crate::scheduler::cache::{hash_tokens, CacheManager, PrefixCacheConfig};
 use crate::scheduler::memory::MemoryManager;
 use crate::scheduler::observer::{ObserverEvent, SchedulerObservers};
 use crate::scheduler::queue_manager::QueueManager;
 use crate::scheduler::stats::SchedulerStats;
-use crate::types::{BLOCK_SIZE, Batch, Request, SchedulerConfig, SeqId, Sequence, Status};
+use crate::types::{Batch, Request, SchedulerConfig, SeqId, Sequence, Status, BLOCK_SIZE};
 use std::sync::Arc;
+use vllm_traits::BatchPhase;
 
 pub struct SchedulerEngine {
     queue_manager: QueueManager,
@@ -243,6 +244,9 @@ impl SchedulerEngine {
                 kv_block_ids: Vec::new(),
                 num_computed_tokens: Vec::new(),
                 is_prefill: Vec::new(),
+                phase: vllm_traits::BatchPhase::Mixed,
+                total_tokens: 0,
+                max_seq_len: 0,
             };
         }
 
@@ -365,6 +369,19 @@ impl SchedulerEngine {
             batch_size,
         });
 
+        // Calculate phase based on is_prefill
+        let phase = if is_prefill.iter().all(|&p| p) {
+            BatchPhase::Prefill
+        } else if is_prefill.iter().all(|&p| !p) {
+            BatchPhase::Decode
+        } else {
+            BatchPhase::Mixed
+        };
+
+        // Calculate total tokens and max seq len
+        let total_tokens: usize = input_tokens.iter().map(|t| t.len()).sum();
+        let max_seq_len = input_tokens.iter().map(|t| t.len()).max().unwrap_or(0);
+
         Batch {
             seq_ids,
             input_tokens,
@@ -372,6 +389,9 @@ impl SchedulerEngine {
             kv_block_ids,
             num_computed_tokens: num_computed,
             is_prefill,
+            phase,
+            total_tokens,
+            max_seq_len,
         }
     }
 

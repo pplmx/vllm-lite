@@ -80,6 +80,12 @@ pub enum Status {
     Finished,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Phase {
+    Prefill,
+    Decode,
+}
+
 /// Configuration for the request scheduler.
 ///
 /// Controls batching behavior, prefill/decode separation, and priority handling.
