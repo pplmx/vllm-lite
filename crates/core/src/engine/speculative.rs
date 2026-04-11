@@ -47,6 +47,14 @@ impl<M: ModelBackend> super::Engine<M> {
     }
 
     fn generate_draft_tokens(&mut self, batch: &Batch) -> Result<Vec<Vec<TokenId>>> {
+        self.generate_draft_tokens_with_limit(batch, self.max_draft_tokens)
+    }
+
+    fn generate_draft_tokens_with_limit(
+        &mut self,
+        batch: &Batch,
+        max_draft: usize,
+    ) -> Result<Vec<Vec<TokenId>>> {
         let mut draft_outputs = Vec::new();
 
         for (i, ((seq_id, tokens), positions)) in batch
@@ -60,7 +68,7 @@ impl<M: ModelBackend> super::Engine<M> {
             let mut current_tokens = tokens.clone();
             let mut current_positions = positions.clone();
 
-            for _ in 0..self.max_draft_tokens {
+            for _ in 0..max_draft {
                 let output = self.draft_model.lock().unwrap().forward(
                     &[*seq_id],
                     std::slice::from_ref(&current_tokens),
@@ -140,6 +148,143 @@ impl<M: ModelBackend> super::Engine<M> {
             } else if let Some(&first) = target_tokens.first() {
                 results.push((*seq_id, first));
             }
+        }
+
+        Ok(results)
+    }
+
+    /// Step with adaptive speculative decoding
+    pub fn step_adaptive_speculative(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
+        let start = std::time::Instant::now();
+        let batch = self.scheduler.build_batch();
+        if batch.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Determine max draft tokens from adaptive decoder or use default
+        let max_draft = self
+            .adaptive_decoder
+            .as_ref()
+            .map(|d| d.current_max_draft_tokens())
+            .unwrap_or(self.max_draft_tokens);
+
+        // Generate draft tokens with the adaptive limit
+        let draft_outputs = self.generate_draft_tokens_with_limit(&batch, max_draft)?;
+
+        // Verify drafts and track accuracy
+        let verified = self.verify_and_track(&batch, &draft_outputs)?;
+
+        // Process results
+        let mut results = Vec::new();
+        for (seq_id, token) in &verified {
+            if let Some(tx) = self.response_txs.get(seq_id) {
+                let _ = tx.try_send(*token);
+            }
+            results.push((*seq_id, *token));
+        }
+
+        // Update scheduler
+        let seq_ids: Vec<_> = results.iter().map(|(id, _)| *id).collect();
+        let tokens: Vec<_> = results.iter().map(|(_, t)| *t).collect();
+        let input_counts = vec![1; tokens.len()];
+        self.scheduler.update(&seq_ids, &tokens, &input_counts);
+
+        // Clean up finished sequences
+        let finished = self.scheduler.finished_sequences();
+        for seq in &finished {
+            self.response_txs.remove(&seq.id);
+        }
+        self.scheduler.clear_finished();
+
+        // Record metrics
+        if !batch.seq_ids.is_empty() {
+            self.metrics.record_tokens(results.len() as u64);
+            self.metrics.record_batch_size(batch.seq_ids.len());
+        }
+        let elapsed = start.elapsed().as_millis() as f64;
+        if elapsed > 0.0 {
+            self.metrics.record_latency(elapsed);
+        }
+
+        Ok(results)
+    }
+
+    /// Verify draft tokens and track acceptance for adaptive adjustment
+    fn verify_and_track(
+        &mut self,
+        batch: &Batch,
+        draft_outputs: &[Vec<TokenId>],
+    ) -> Result<Vec<(SeqId, TokenId)>> {
+        let mut results = Vec::new();
+        let mut total_draft = 0usize;
+        let mut total_accepted = 0usize;
+
+        for (i, seq_id) in batch.seq_ids.iter().enumerate() {
+            let drafts = &draft_outputs[i];
+            total_draft += drafts.len();
+
+            // Verify drafts
+            let mut accepted_count = 0usize;
+
+            if drafts.is_empty() {
+                // No drafts, just run target model
+                let target_output = self.target_model.lock().unwrap().forward(
+                    &[*seq_id],
+                    std::slice::from_ref(&batch.input_tokens[i]),
+                    std::slice::from_ref(&batch.positions[i]),
+                    std::slice::from_ref(&batch.kv_block_ids[i]),
+                    std::slice::from_ref(&batch.num_computed_tokens[i]),
+                    std::slice::from_ref(&batch.is_prefill[i]),
+                )?;
+                if let Some(&token) = target_output.next_tokens.first() {
+                    results.push((*seq_id, token));
+                    accepted_count = 1;
+                }
+            } else {
+                // Verify drafts
+                let mut verify_tokens = batch.input_tokens[i].clone();
+                verify_tokens.extend(drafts.iter().cloned());
+
+                let verify_positions: Vec<usize> = (0..verify_tokens.len()).collect();
+                let verify_kv_block_ids = vec![batch.kv_block_ids[i].clone(); verify_tokens.len()];
+                let verify_num_computed =
+                    vec![batch.num_computed_tokens[i] + drafts.len(); verify_tokens.len()];
+                let verify_is_prefill = vec![false; verify_tokens.len()];
+
+                let target_output = self.target_model.lock().unwrap().forward(
+                    &[*seq_id],
+                    std::slice::from_ref(&verify_tokens),
+                    std::slice::from_ref(&verify_positions),
+                    &verify_kv_block_ids,
+                    &verify_num_computed,
+                    &verify_is_prefill,
+                )?;
+
+                let target_tokens = &target_output.next_tokens;
+
+                // Count consecutive accepted drafts
+                for (j, &draft_token) in drafts.iter().enumerate() {
+                    if j < target_tokens.len() && target_tokens[j] == draft_token {
+                        results.push((*seq_id, draft_token));
+                        accepted_count += 1;
+                    } else {
+                        break;
+                    }
+                }
+
+                // Add first target token
+                let target_idx = accepted_count;
+                if target_idx < target_tokens.len() {
+                    results.push((*seq_id, target_tokens[target_idx]));
+                }
+            }
+
+            total_accepted += accepted_count;
+        }
+
+        // Track accuracy in adaptive decoder
+        if let Some(ref mut decoder) = self.adaptive_decoder {
+            decoder.record_verification(total_draft, total_accepted);
         }
 
         Ok(results)

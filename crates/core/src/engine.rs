@@ -4,6 +4,8 @@ use crate::beam::BeamSequence;
 use crate::error::Result;
 use crate::metrics::MetricsCollector;
 use crate::scheduler::engine::SchedulerEngine;
+use crate::speculative::AdaptiveSpeculativeDecoder;
+use crate::types::AdaptiveDraftConfig;
 use crate::types::{EngineMessage, Request, SchedulerConfig};
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -40,6 +42,8 @@ pub struct Engine<M: ModelBackend + 'static> {
     _phantom: PhantomData<M>,
     /// CUDA Graph executor for decode optimization
     cuda_graph: Option<BatchCudaGraphExecutor>,
+    /// Adaptive speculative decoder
+    pub adaptive_decoder: Option<AdaptiveSpeculativeDecoder>,
 }
 
 impl<M: ModelBackend + 'static> Engine<M> {
@@ -101,6 +105,7 @@ impl<M: ModelBackend + 'static> Engine<M> {
             sleep_policy: SleepPolicy::default(),
             _phantom: PhantomData,
             cuda_graph,
+            adaptive_decoder: None,
         }
     }
 
@@ -122,6 +127,23 @@ impl<M: ModelBackend + 'static> Engine<M> {
 
     pub fn enable_speculative(&mut self) {
         self.speculative_mode = true;
+    }
+
+    /// Enable adaptive speculative decoding
+    pub fn enable_adaptive_speculative(&mut self, config: AdaptiveDraftConfig) {
+        self.adaptive_decoder = Some(AdaptiveSpeculativeDecoder::new(config));
+        self.speculative_mode = true;
+    }
+
+    /// Disable adaptive speculative decoding
+    pub fn disable_adaptive_speculative(&mut self) {
+        self.adaptive_decoder = None;
+        self.speculative_mode = false;
+    }
+
+    /// Check if adaptive speculative is enabled
+    pub fn is_adaptive_speculative_enabled(&self) -> bool {
+        self.adaptive_decoder.is_some()
     }
 
     pub fn is_healthy(&self) -> bool {

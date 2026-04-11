@@ -20,6 +20,7 @@ pub mod kv_cache;
 pub mod metrics;
 pub mod sampling;
 pub mod scheduler;
+pub mod speculative;
 pub mod types;
 
 pub use beam::BeamSequence;

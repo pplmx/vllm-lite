@@ -5,6 +5,36 @@ pub use vllm_traits::{Batch, BatchOutput, BlockId, SeqId, TokenId};
 pub use crate::kv_cache::BLOCK_SIZE;
 use crate::scheduler::cuda_graph::SchedulerCudaGraphConfig;
 
+/// Configuration for adaptive speculative decoding
+#[derive(Clone, Debug)]
+pub struct AdaptiveDraftConfig {
+    /// Minimum number of draft tokens
+    pub min_draft_tokens: usize,
+    /// Maximum number of draft tokens
+    pub max_draft_tokens: usize,
+    /// Target acceptance rate (0.0-1.0)
+    pub target_acceptance_rate: f32,
+    /// Window size for accuracy tracking
+    pub accuracy_window_size: usize,
+    /// Adjustment step size
+    pub adjustment_step: usize,
+    /// Cooldown steps between adjustments
+    pub cooldown_steps: usize,
+}
+
+impl Default for AdaptiveDraftConfig {
+    fn default() -> Self {
+        Self {
+            min_draft_tokens: 2,
+            max_draft_tokens: 8,
+            target_acceptance_rate: 0.7,
+            accuracy_window_size: 20,
+            adjustment_step: 1,
+            cooldown_steps: 5,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Priority(pub u8);
 
