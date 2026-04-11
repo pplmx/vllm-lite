@@ -311,3 +311,6 @@ mod tests {
         assert!(result.is_err());
     }
 }
+
+pub mod config;
+pub use config::{CudaGraphConfig, ModelGraphConfig};
