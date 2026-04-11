@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **MambaBlock Weight Loading**
+    - Added `MambaBlock::from_weights` method to load SSM layer weights
+    - Implemented full weight loading for Qwen3.5 Mamba models
+    - Supports fallback for embed_tokens and lm_head weight names
+    - Supports tied embeddings (tie_word_embeddings)
+
 ### Refactored
 
 #### Architecture Refactoring
