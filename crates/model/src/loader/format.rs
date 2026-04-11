@@ -248,6 +248,36 @@ impl FormatLoader for SafetensorsLoader {
     }
 }
 
+/// Loader for GGUF format files.
+pub struct GgufLoader;
+
+impl FormatLoader for GgufLoader {
+    fn can_load(path: &Path) -> bool
+    where
+        Self: Sized,
+    {
+        path.extension().map(|ext| ext == "gguf").unwrap_or(false)
+    }
+
+    fn load(path: &Path, device: &Device) -> Result<HashMap<String, Tensor>>
+    where
+        Self: Sized,
+    {
+        use crate::quantize::gguf::load_gguf_tensors;
+        let storage_tensors = load_gguf_tensors(path, device)?;
+        let mut tensors = HashMap::new();
+        for (name, storage) in storage_tensors {
+            let tensor = match storage {
+                crate::quantize::StorageTensor::Quantized(q) => q.dequantize_to_f32()?,
+                crate::quantize::StorageTensor::Fp16(t) => t.to_dtype(candle_core::DType::F32)?,
+                crate::quantize::StorageTensor::Fp32(t) => t,
+            };
+            tensors.insert(name, tensor);
+        }
+        Ok(tensors)
+    }
+}
+
 /// Load a checkpoint from the given path using the appropriate loader.
 ///
 /// # Arguments
@@ -263,6 +293,9 @@ pub fn load_checkpoint(path: &Path, device: &Device) -> Result<HashMap<String, T
     // Try SafetensorsLoader first
     if SafetensorsLoader::can_load(path) {
         return SafetensorsLoader::load(path, device);
+    }
+    if GgufLoader::can_load(path) {
+        return GgufLoader::load(path, device);
     }
 
     Err(candle_core::Error::msg(format!(
