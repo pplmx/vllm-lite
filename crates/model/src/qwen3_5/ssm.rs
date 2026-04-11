@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use candle_core::{DType, Module, Result as CandleResult, Tensor};
-use candle_nn::{Conv1d, LayerNorm, Linear, VarBuilder, conv1d};
+use candle_nn::{conv1d, Conv1d, LayerNorm, Linear, VarBuilder};
 use thiserror::Error;
 
 #[derive(Clone, Debug)]
@@ -138,45 +138,33 @@ impl MambaBlock {
 
         let batch = x.dims()[0];
         let seq_len = x_conv.dims()[1];
+        let d_inner = self.ssm.d_inner();
+        let d_state = self.ssm.d_state();
 
-        let a_log = self.ssm.a_log().forward(&x_conv)?.reshape((
-            batch,
-            seq_len,
-            self.ssm.d_state(),
-            self.ssm.d_inner(),
-        ))?;
+        // Pre-compute A_log
+        let a_log = self
+            .ssm
+            .a_log()
+            .forward(&x_conv)?
+            .reshape((batch, seq_len, d_state, d_inner))?;
 
-        let mut outputs = Vec::with_capacity(seq_len);
-        let mut h = Tensor::zeros(
-            (batch, self.ssm.d_state(), self.ssm.d_inner()),
-            DType::F32,
-            x.device(),
-        )?;
+        // Pre-allocate hidden state
+        let mut h = Tensor::zeros((batch, d_state, d_inner), DType::F32, x.device())?;
 
+        // Pre-allocate outputs
+        let mut outputs: Vec<Tensor> = Vec::with_capacity(seq_len);
+
+        // Sequential processing (required for hidden state)
         for t in 0..seq_len {
             let _delta_t = delta.narrow(1, t, 1)?.squeeze(1)?;
             let x_t = x_conv.narrow(1, t, 1)?.squeeze(1)?;
             let b_t = b.narrow(1, t, 1)?.squeeze(1)?;
             let c_t = c.narrow(1, t, 1)?.squeeze(1)?;
-            let a_t = a_log.narrow(1, t, 1)?.squeeze(1)?;
+            let a_t = a_log.narrow(1, t, 1)?.squeeze(1)?.exp()?;
 
-            let a_t = a_t.exp()?;
-
-            let b_t = b_t
-                .unsqueeze(1)?
-                .expand((batch, self.ssm.d_state(), self.ssm.d_inner()))?;
-            let x_t = x_t
-                .unsqueeze(1)?
-                .expand((batch, self.ssm.d_state(), self.ssm.d_inner()))?;
-
-            let bx = b_t.broadcast_mul(&x_t)?;
-            let h_new = a_t.broadcast_mul(&h)?;
-            let h_new = (&h_new + bx)?;
-
-            let c_t = c_t
-                .unsqueeze(1)?
-                .expand((batch, self.ssm.d_state(), self.ssm.d_inner()))?;
-            let y_t = c_t.broadcast_mul(&h_new)?;
+            let bx = b_t.unsqueeze(1)?.broadcast_mul(&x_t.unsqueeze(1)?)?;
+            let h_new = a_t.broadcast_mul(&h)?.broadcast_add(&bx)?;
+            let y_t = c_t.unsqueeze(1)?.broadcast_mul(&h_new)?;
 
             outputs.push(y_t.unsqueeze(1)?);
             h = h_new;
