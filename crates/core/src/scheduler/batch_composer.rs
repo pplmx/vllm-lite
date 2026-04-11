@@ -1,0 +1,231 @@
+use crate::types::{Phase, Sequence};
+use vllm_traits::{Batch, BatchPhase, TokenId};
+
+/// Batch composition configuration
+#[derive(Clone, Debug)]
+pub struct BatchCompositionConfig {
+    /// Maximum batch size
+    pub max_batch_size: usize,
+    /// Maximum token budget
+    pub max_token_budget: usize,
+    /// Enable similarity grouping
+    pub enable_similarity_grouping: bool,
+}
+
+impl Default for BatchCompositionConfig {
+    fn default() -> Self {
+        Self {
+            max_batch_size: 256,
+            max_token_budget: 4096,
+            enable_similarity_grouping: false,
+        }
+    }
+}
+
+/// Batch composer for building phase-specific batches
+pub struct BatchComposer {
+    config: BatchCompositionConfig,
+}
+
+impl BatchComposer {
+    /// Create a new batch composer with the given configuration
+    pub fn new(config: BatchCompositionConfig) -> Self {
+        Self { config }
+    }
+
+    /// Compose a batch from sequences for the given phase
+    pub fn compose(&self, sequences: Vec<Sequence>, phase: Phase) -> Batch {
+        match phase {
+            Phase::Prefill => self.compose_prefill_batch(sequences),
+            Phase::Decode => self.compose_decode_batch(sequences),
+        }
+    }
+
+    /// Compose a prefill batch
+    fn compose_prefill_batch(&self, mut sequences: Vec<Sequence>) -> Batch {
+        // Sort by remaining token count (shorter first for better packing)
+        sequences.sort_by_key(|s| s.tokens.len().saturating_sub(s.num_computed_tokens));
+
+        let mut seq_ids = Vec::new();
+        let mut input_tokens = Vec::new();
+        let mut positions = Vec::new();
+        let mut kv_block_ids = Vec::new();
+        let mut num_computed_tokens = Vec::new();
+        let mut is_prefill = Vec::new();
+        let mut total_tokens = 0usize;
+        let mut max_seq_len = 0usize;
+
+        for seq in sequences.into_iter().take(self.config.max_batch_size) {
+            let start = seq.num_computed_tokens;
+            let seq_len = seq.tokens.len();
+            let tokens_to_process = seq_len.saturating_sub(start);
+
+            if total_tokens + tokens_to_process > self.config.max_token_budget {
+                break;
+            }
+
+            seq_ids.push(seq.id);
+
+            // Prefill: return all remaining tokens
+            let tokens: Vec<TokenId> = seq.tokens[start..].to_vec();
+            positions.push((start..seq_len).collect());
+            total_tokens += tokens.len();
+            max_seq_len = max_seq_len.max(tokens.len());
+            input_tokens.push(tokens);
+
+            kv_block_ids.push(seq.kv_blocks.as_ref().clone());
+            num_computed_tokens.push(start);
+            is_prefill.push(true);
+        }
+
+        let total = total_tokens;
+        let max_len = max_seq_len;
+
+        Batch {
+            seq_ids,
+            input_tokens,
+            positions,
+            kv_block_ids,
+            num_computed_tokens,
+            is_prefill,
+            phase: BatchPhase::Prefill,
+            total_tokens: total,
+            max_seq_len: max_len,
+        }
+    }
+
+    /// Compose a decode batch
+    fn compose_decode_batch(&self, sequences: Vec<Sequence>) -> Batch {
+        let batch_size = sequences.len().min(self.config.max_batch_size);
+
+        let mut seq_ids = Vec::with_capacity(batch_size);
+        let mut input_tokens = Vec::with_capacity(batch_size);
+        let mut positions = Vec::with_capacity(batch_size);
+        let mut kv_block_ids = Vec::with_capacity(batch_size);
+        let mut num_computed_tokens = Vec::with_capacity(batch_size);
+        let mut is_prefill = Vec::with_capacity(batch_size);
+        let mut total_tokens = 0;
+        let mut max_seq_len = 0;
+
+        for seq in sequences.into_iter().take(batch_size) {
+            seq_ids.push(seq.id);
+
+            // Decode: only last token
+            let last_token = seq.tokens.last().copied().unwrap_or(0);
+            let position = seq.tokens.len().saturating_sub(1);
+
+            input_tokens.push(vec![last_token]);
+            positions.push(vec![position]);
+            total_tokens += 1;
+            max_seq_len = max_seq_len.max(1);
+
+            kv_block_ids.push(seq.kv_blocks.as_ref().clone());
+            num_computed_tokens.push(seq.num_computed_tokens);
+            is_prefill.push(false);
+        }
+
+        let total = total_tokens;
+        let max_len = max_seq_len;
+
+        Batch {
+            seq_ids,
+            input_tokens,
+            positions,
+            kv_block_ids,
+            num_computed_tokens,
+            is_prefill,
+            phase: BatchPhase::Decode,
+            total_tokens: total,
+            max_seq_len: max_len,
+        }
+    }
+}
+
+impl Default for BatchComposer {
+    fn default() -> Self {
+        Self::new(BatchCompositionConfig::default())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{Priority, SamplingParams, Status};
+    use std::sync::Arc;
+
+    fn make_sequence(id: u64, tokens: Vec<u32>, status: Status) -> Sequence {
+        Sequence {
+            id,
+            tokens,
+            kv_blocks: Arc::new(vec![id as usize]),
+            num_computed_tokens: 0,
+            prompt_len: 3,
+            status,
+            max_tokens: 10,
+            sampling_params: SamplingParams::default(),
+            consecutive_decode_rounds: 0,
+            priority: Priority::default(),
+        }
+    }
+
+    #[test]
+    fn test_prefill_batch_includes_all_prompt_tokens() {
+        let composer = BatchComposer::default();
+        let seq = make_sequence(1, vec![1, 2, 3, 4, 5], Status::Waiting);
+
+        let batch = composer.compose(vec![seq], Phase::Prefill);
+
+        assert_eq!(batch.seq_ids.len(), 1);
+        assert_eq!(batch.input_tokens[0], vec![1, 2, 3, 4, 5]);
+        assert!(batch.is_prefill[0]);
+    }
+
+    #[test]
+    fn test_decode_batch_includes_only_last_token() {
+        let composer = BatchComposer::default();
+        let seq = make_sequence(1, vec![1, 2, 3, 4, 5], Status::Decoding);
+
+        let batch = composer.compose(vec![seq], Phase::Decode);
+
+        assert_eq!(batch.seq_ids.len(), 1);
+        assert_eq!(batch.input_tokens[0], vec![5]);
+        assert!(!batch.is_prefill[0]);
+    }
+
+    #[test]
+    fn test_batch_respects_max_size() {
+        let config = BatchCompositionConfig {
+            max_batch_size: 2,
+            max_token_budget: 1000,
+            enable_similarity_grouping: false,
+        };
+        let composer = BatchComposer::new(config);
+
+        let seqs: Vec<_> = (1..=5)
+            .map(|i| make_sequence(i, vec![i as u32], Status::Decoding))
+            .collect();
+
+        let batch = composer.compose(seqs, Phase::Decode);
+
+        assert_eq!(batch.seq_ids.len(), 2);
+    }
+
+    #[test]
+    fn test_prefill_respects_token_budget() {
+        let config = BatchCompositionConfig {
+            max_batch_size: 100,
+            max_token_budget: 5,
+            enable_similarity_grouping: false,
+        };
+        let composer = BatchComposer::new(config);
+
+        let seqs: Vec<_> = (1..=10)
+            .map(|i| make_sequence(i, vec![i as u32; 10], Status::Waiting))
+            .collect();
+
+        let batch = composer.compose(seqs, Phase::Prefill);
+
+        let total_tokens: usize = batch.input_tokens.iter().map(|t| t.len()).sum();
+        assert!(total_tokens <= 5, "Should respect token budget");
+    }
+}

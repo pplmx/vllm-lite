@@ -9,7 +9,7 @@ pub struct SchedulingContext {
     pub memory_pressure: f32,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PriorityScore(pub u64);
 
 pub trait SchedulingPolicy: Send + Sync {

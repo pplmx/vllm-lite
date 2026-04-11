@@ -1,6 +1,6 @@
 //! Test builders for common structures.
 
-use vllm_traits::{Batch, SeqId, TokenId};
+use vllm_traits::{Batch, BatchPhase, SeqId, TokenId};
 
 pub struct RequestBuilder {
     seq_id: SeqId,
@@ -65,6 +65,18 @@ impl BatchBuilder {
     }
 
     pub fn build(self) -> Batch {
+        let total_tokens: usize = self.input_tokens.iter().map(|t| t.len()).sum();
+        let max_seq_len = self.input_tokens.iter().map(|t| t.len()).max().unwrap_or(0);
+
+        // Determine phase based on is_prefill
+        let phase = if self.is_prefill.iter().all(|&p| p) {
+            BatchPhase::Prefill
+        } else if self.is_prefill.iter().all(|&p| !p) {
+            BatchPhase::Decode
+        } else {
+            BatchPhase::Mixed
+        };
+
         Batch {
             seq_ids: self.seq_ids,
             input_tokens: self.input_tokens,
@@ -72,6 +84,9 @@ impl BatchBuilder {
             kv_block_ids: self.kv_block_ids,
             num_computed_tokens: self.num_computed_tokens,
             is_prefill: self.is_prefill,
+            phase,
+            total_tokens,
+            max_seq_len,
         }
     }
 }

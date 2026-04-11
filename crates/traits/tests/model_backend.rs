@@ -1,4 +1,4 @@
-use vllm_traits::{BLOCK_SIZE, Batch, BatchOutput, ModelError, SeqId, TokenId};
+use vllm_traits::{Batch, BatchOutput, BatchPhase, ModelError, SeqId, TokenId, BLOCK_SIZE};
 
 #[test]
 fn test_batch_output_creation() {
@@ -48,6 +48,9 @@ fn test_batch_creation() {
         kv_block_ids: vec![vec![0], vec![1]],
         num_computed_tokens: vec![0, 0],
         is_prefill: vec![true, false],
+        phase: BatchPhase::Mixed,
+        total_tokens: 4,
+        max_seq_len: 2,
     };
     assert_eq!(batch.seq_ids.len(), 2);
     assert_eq!(batch.input_tokens.len(), 2);
@@ -62,6 +65,9 @@ fn test_batch_is_empty() {
         kv_block_ids: vec![],
         num_computed_tokens: vec![],
         is_prefill: vec![],
+        phase: BatchPhase::Mixed,
+        total_tokens: 0,
+        max_seq_len: 0,
     };
     assert!(empty_batch.is_empty());
 
@@ -72,6 +78,9 @@ fn test_batch_is_empty() {
         kv_block_ids: vec![vec![0]],
         num_computed_tokens: vec![0],
         is_prefill: vec![true],
+        phase: BatchPhase::Prefill,
+        total_tokens: 1,
+        max_seq_len: 1,
     };
     assert!(!non_empty_batch.is_empty());
 }
@@ -85,6 +94,9 @@ fn test_batch_has_prefill() {
         kv_block_ids: vec![vec![0], vec![0]],
         num_computed_tokens: vec![0, 0],
         is_prefill: vec![true, false],
+        phase: BatchPhase::Mixed,
+        total_tokens: 2,
+        max_seq_len: 1,
     };
     assert!(prefill_batch.has_prefill());
 
@@ -95,6 +107,9 @@ fn test_batch_has_prefill() {
         kv_block_ids: vec![vec![0]],
         num_computed_tokens: vec![5],
         is_prefill: vec![false],
+        phase: BatchPhase::Decode,
+        total_tokens: 1,
+        max_seq_len: 1,
     };
     assert!(!decode_only_batch.has_prefill());
 }
@@ -108,6 +123,9 @@ fn test_batch_has_decode() {
         kv_block_ids: vec![vec![0], vec![0]],
         num_computed_tokens: vec![0, 5],
         is_prefill: vec![true, false],
+        phase: BatchPhase::Mixed,
+        total_tokens: 2,
+        max_seq_len: 1,
     };
     assert!(decode_batch.has_decode());
 
@@ -118,6 +136,9 @@ fn test_batch_has_decode() {
         kv_block_ids: vec![vec![0]],
         num_computed_tokens: vec![0],
         is_prefill: vec![true],
+        phase: BatchPhase::Prefill,
+        total_tokens: 3,
+        max_seq_len: 3,
     };
     assert!(!prefill_only_batch.has_decode());
 }
