@@ -1,4 +1,5 @@
 pub mod cache;
+pub mod cuda_graph;
 pub mod phase_scheduler;
 pub mod policy;
 pub mod preemption;
@@ -15,6 +16,7 @@ pub mod observer;
 pub mod stats;
 
 pub use batch_composer::{BatchComposer, BatchCompositionConfig};
+pub use cuda_graph::{GraphBatch, GraphPreparedBatch, SchedulerCudaGraphConfig};
 pub use engine::SchedulerEngine;
 pub use memory::MemoryManager;
 pub use observer::{ObserverEvent, SchedulerObserver, SchedulerObservers};
