@@ -22,6 +22,19 @@ pub enum CudaGraphError {
     Unsupported(String),
 }
 
+impl std::fmt::Display for CudaGraphError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CudaGraphError::CaptureFailed(msg) => write!(f, "capture failed: {}", msg),
+            CudaGraphError::LaunchFailed(msg) => write!(f, "launch failed: {}", msg),
+            CudaGraphError::InvalidNode(msg) => write!(f, "invalid node: {}", msg),
+            CudaGraphError::Unsupported(msg) => write!(f, "unsupported: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for CudaGraphError {}
+
 pub struct CudaGraph {
     nodes: Vec<Arc<dyn CudaGraphNode>>,
     node_inputs: Vec<Vec<usize>>,
