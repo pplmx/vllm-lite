@@ -1,7 +1,7 @@
 pub mod prefix_cache;
 
 pub use prefix_cache::{
-    CacheKey, CachedEntry, PrefixCache, PrefixCacheConfig, PrefixCacheStats, hash_tokens,
+    hash_tokens, CacheKey, CachedEntry, PrefixCache, PrefixCacheConfig, PrefixCacheStats,
 };
 
 /// Cache manager for prefix caching of KV blocks.

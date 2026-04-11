@@ -12,7 +12,6 @@ pub mod batch_composer;
 pub mod batch_planner;
 pub mod engine;
 pub mod observer;
-pub mod queue_manager;
 pub mod stats;
 
 pub use batch_composer::{BatchComposer, BatchCompositionConfig};
