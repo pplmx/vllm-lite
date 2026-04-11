@@ -32,6 +32,10 @@ fn test_prefix_cache_hit() {
     // Second request with same prompt: cache hit
     engine.add_request(Request::new(2, vec![10, 20], 5), tx2);
 
+    // In V2, sequences start in request_queue, not directly in running
+    // Build batch to move to running
+    let _batch = engine.scheduler.build_batch();
+
     // Verify second request is in running with cache hit info
     assert_eq!(engine.scheduler.running().len(), 1);
     let seq = &engine.scheduler.running()[0];
