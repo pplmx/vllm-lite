@@ -16,3 +16,11 @@ tracing = "0.1"
 [dev-dependencies]
 criterion = "0.8"
 vllm-testing = { path = "../testing" }
+
+[[bench]]
+name = "scheduler_benchmarks"
+harness = false
+
+[[bench]]
+name = "prefix_cache_benchmarks"
+harness = false
