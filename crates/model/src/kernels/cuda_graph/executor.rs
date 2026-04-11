@@ -1,5 +1,5 @@
-use super::config::CudaGraphConfig;
 use super::CudaGraph;
+use super::config::CudaGraphConfig;
 use std::collections::HashMap;
 use vllm_traits::{Batch, BatchOutput};
 
@@ -128,7 +128,7 @@ impl BatchCudaGraphExecutor {
         let graph = self
             .graphs
             .get(&batch_size)
-            .ok_or_else(|| GraphExecutionError::GraphNotFound(batch_size))?;
+            .ok_or(GraphExecutionError::GraphNotFound(batch_size))?;
         // For now, return mock output (actual execution in future phase)
         let mut tensors: Vec<Box<dyn crate::kernels::cuda_graph::CudaGraphTensor>> = vec![];
         graph
