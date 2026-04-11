@@ -74,6 +74,71 @@ vllm-lite/
 
 ---
 
+## Checkpoint Loading
+
+The `ModelLoader` supports multiple checkpoint formats with automatic format detection:
+
+- **Safetensors** (`.safetensors`, sharded: `model-00001-of-00002.safetensors`)
+- **GGUF** (`.gguf`) - with Q4_K_M quantization support (dequantizes to FP16)
+
+### Usage
+
+```rust
+use vllm_model::loader::ModelLoader;
+use candle_core::Device;
+
+let device = Device::Cpu;
+let loader = ModelLoader::builder(device)
+    .with_model_dir("path/to/model".to_string())
+    .with_kv_blocks(1024)
+    .build()?;
+
+let model = loader.load()?;
+```
+
+### Format Detection
+
+The `FormatLoader` trait provides automatic format detection:
+
+```rust
+use vllm_model::loader::format::load_checkpoint;
+use std::path::Path;
+
+let weights = load_checkpoint(Path::new("model.gguf"), &device)?;
+```
+
+---
+
+## Quantization
+
+Supported quantization formats:
+- GGUF Q4_K_M (loads and dequantizes to FP16)
+
+The `StorageTensor` abstraction supports multiple storage strategies:
+- `Quantized(QuantizedTensor)` - Keep in quantized form (memory efficient)
+- `Fp16(Tensor)` - Dequantize to FP16 (balanced)
+- `Fp32(Tensor)` - Dequantize to FP32 (highest precision)
+
+### Future Support
+
+The `QuantizationFormat` enum is designed for future support of:
+- GPTQ
+- AWQ
+- Custom quantization schemes
+
+---
+
+## SSM Performance
+
+The `MambaBlock` uses optimized sequential processing with pre-allocated buffers for improved performance on medium to long sequences.
+
+Key optimizations:
+- Pre-allocated output buffers
+- Minimized tensor allocations in the forward loop
+- Local variable caching for frequently accessed dimensions
+
+---
+
 ## Code Style Guidelines
 
 ### Imports
