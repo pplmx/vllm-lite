@@ -47,7 +47,7 @@ fn test_adaptive_speculative_basic() {
     // Run a few steps
     for _ in 0..5 {
         let results = engine.step_adaptive_speculative().unwrap();
-        for (_, token) in results {
+        for (_, _token) in results {
             let _ = rx.try_recv();
         }
     }
@@ -71,7 +71,7 @@ fn test_adaptive_speculative_adjusts_draft_count() {
         cooldown_steps: 2,
     });
 
-    let initial_max = engine
+    let _initial_max = engine
         .adaptive_decoder
         .as_ref()
         .unwrap()
@@ -92,5 +92,5 @@ fn test_adaptive_speculative_adjusts_draft_count() {
         .as_ref()
         .unwrap()
         .current_max_draft_tokens();
-    assert!(final_max >= 2 && final_max <= 6);
+    assert!((2..=6).contains(&final_max));
 }
