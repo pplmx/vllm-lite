@@ -128,7 +128,7 @@ fn test_batch_scheduled_event() {
     engine.add_request(Request::new(0, vec![4, 5, 6], 10));
     engine.add_request(Request::new(0, vec![7, 8, 9], 10));
 
-    engine.build_batch();
+    let _ = engine.build_batch();
 
     let events = observer.get_events();
     let found = events.iter().any(|e| {
@@ -179,7 +179,7 @@ fn test_sequence_finished_event() {
         .unwrap();
 
     let seq_id = engine.add_request(Request::new(0, vec![1, 2], 2));
-    engine.build_batch();
+    let _ = engine.build_batch();
 
     engine.update(&[seq_id], &[10], &[1]);
     engine.update(&[seq_id], &[11], &[1]);
