@@ -7,13 +7,6 @@ pub use types::{QuantizationConfig, QuantizationFormat, QuantizedTensor, Storage
 use candle_core::{Result, Tensor};
 use std::collections::HashMap;
 
-// Re-export from the quantize module for backward compatibility
-// Note: QuantizedTensor from quantize_old is NOT re-exported to avoid conflicts
-pub use crate::quantize_old::{
-    dequantize, dequantize_fp8, quantize, quantize_2d, quantize_fp8, FP8Calibrator, FP8Format,
-    FP8Tensor, QuantizationCalibrator, QuantizedLinear,
-};
-
 #[derive(Debug)]
 pub struct Checkpoint {
     pub tensors: HashMap<String, StorageTensor>,

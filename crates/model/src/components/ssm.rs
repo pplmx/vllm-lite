@@ -4,7 +4,7 @@
 //! It can be extended to support different SSM variants.
 
 use candle_core::{DType, Module, Result as CandleResult, Tensor};
-use candle_nn::{Conv1d, LayerNorm, Linear, VarBuilder, conv1d};
+use candle_nn::{conv1d, Conv1d, LayerNorm, Linear, VarBuilder};
 
 /// SSM Configuration
 #[derive(Clone, Debug)]
