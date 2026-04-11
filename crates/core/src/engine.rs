@@ -10,7 +10,8 @@ use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tracing::error;
-use vllm_traits::{ModelBackend, SeqId, TokenId};
+use vllm_model::kernels::{BatchCudaGraphExecutor, CudaGraphConfig};
+use vllm_traits::{BatchOutput, ModelBackend, SeqId, TokenId};
 
 /// Core inference engine managing requests, scheduling, and model execution.
 ///
@@ -37,6 +38,8 @@ pub struct Engine<M: ModelBackend + 'static> {
     pub response_txs: HashMap<SeqId, mpsc::Sender<TokenId>>,
     sleep_policy: SleepPolicy,
     _phantom: PhantomData<M>,
+    /// CUDA Graph executor for decode optimization
+    cuda_graph: Option<BatchCudaGraphExecutor>,
 }
 
 impl<M: ModelBackend + 'static> Engine<M> {
@@ -68,6 +71,23 @@ impl<M: ModelBackend + 'static> Engine<M> {
         num_kv_blocks: usize,
     ) -> Self {
         let max_seqs = config.max_num_seqs;
+        // Initialize CUDA Graph if enabled
+        let cuda_graph = if config.cuda_graph.enabled {
+            let graph_config = CudaGraphConfig {
+                enabled: true,
+                batch_sizes: config.cuda_graph.batch_sizes.clone(),
+                ..Default::default()
+            };
+            match BatchCudaGraphExecutor::new(graph_config) {
+                Ok(executor) => Some(executor),
+                Err(e) => {
+                    tracing::warn!("Failed to initialize CUDA Graph: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
         Self {
             scheduler: SchedulerEngine::new(config, num_kv_blocks),
             target_model: Arc::new(Mutex::new(target_model)),
@@ -80,7 +100,24 @@ impl<M: ModelBackend + 'static> Engine<M> {
             response_txs: HashMap::with_capacity(max_seqs),
             sleep_policy: SleepPolicy::default(),
             _phantom: PhantomData,
+            cuda_graph,
         }
+    }
+
+    /// Capture CUDA Graphs for all configured batch sizes
+    pub fn capture_cuda_graphs(&mut self) -> crate::error::Result<()> {
+        if let Some(ref mut executor) = self.cuda_graph {
+            executor
+                .capture_all_graphs()
+                .map_err(|e| crate::error::EngineError::ModelError(e.to_string()))?;
+            tracing::info!("CUDA Graphs captured successfully");
+        }
+        Ok(())
+    }
+
+    /// Check if CUDA Graph is enabled and has graphs
+    pub fn cuda_graph_enabled(&self) -> bool {
+        self.cuda_graph.as_ref().map_or(false, |e| e.is_enabled())
     }
 
     pub fn enable_speculative(&mut self) {
@@ -160,6 +197,8 @@ impl<M: ModelBackend + 'static> Engine<M> {
             if self.scheduler.has_pending() {
                 let result = if self.speculative_mode {
                     self.step_speculative()
+                } else if self.cuda_graph_enabled() {
+                    self.step_with_graph()
                 } else {
                     self.step()
                 };
@@ -278,6 +317,90 @@ impl<M: ModelBackend + 'static> Engine<M> {
             .take(k)
             .map(|(i, v)| (i as TokenId, v))
             .collect()
+    }
+
+    /// Step with CUDA Graph support for decode
+    pub fn step_with_graph(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
+        let start = std::time::Instant::now();
+        let graph_batch = self.scheduler.build_batch_with_graph();
+        if graph_batch.batch_size() == 0 {
+            return Ok(vec![]);
+        }
+
+        let output = match graph_batch {
+            crate::scheduler::GraphBatch::Graph(prepared) => {
+                // Try CUDA Graph execution
+                if let Some(ref executor) = self.cuda_graph {
+                    match executor.execute(&prepared.batch) {
+                        Ok(output) => output,
+                        Err(e) => {
+                            tracing::warn!("CUDA Graph execution failed: {}, falling back", e);
+                            // Fallback to regular execution
+                            self.execute_regular(&prepared.batch)?
+                        }
+                    }
+                } else {
+                    self.execute_regular(&prepared.batch)?
+                }
+            }
+            crate::scheduler::GraphBatch::Regular(batch) => self.execute_regular(&batch)?,
+        };
+
+        // Process output and update
+        self.process_output(output, start)
+    }
+
+    /// Execute regular forward pass (existing logic)
+    fn execute_regular(&mut self, batch: &vllm_traits::Batch) -> Result<BatchOutput> {
+        let mut model = self.target_model.lock().unwrap();
+        model
+            .forward(
+                &batch.seq_ids,
+                &batch.input_tokens,
+                &batch.positions,
+                &batch.kv_block_ids,
+                &batch.num_computed_tokens,
+                &batch.is_prefill,
+            )
+            .map_err(|e| crate::error::EngineError::ModelError(e.to_string()))
+    }
+
+    /// Process model output and update state
+    fn process_output(
+        &mut self,
+        output: BatchOutput,
+        start: std::time::Instant,
+    ) -> Result<Vec<(SeqId, TokenId)>> {
+        let mut results = Vec::new();
+        for (seq_id, token) in output.seq_ids.iter().zip(&output.next_tokens) {
+            if let Some(tx) = self.response_txs.get(seq_id) {
+                let _ = tx.try_send(*token);
+            }
+            results.push((*seq_id, *token));
+        }
+
+        let seq_ids: Vec<_> = results.iter().map(|(id, _)| *id).collect();
+        let tokens: Vec<_> = results.iter().map(|(_, t)| *t).collect();
+        let input_counts = vec![1; tokens.len()];
+        self.scheduler.update(&seq_ids, &tokens, &input_counts);
+
+        let finished = self.scheduler.finished_sequences();
+        for seq in &finished {
+            self.response_txs.remove(&seq.id);
+        }
+        self.scheduler.clear_finished();
+
+        // Record metrics
+        if !results.is_empty() {
+            self.metrics.record_tokens(results.len() as u64);
+            self.metrics.record_batch_size(results.len());
+            let elapsed = start.elapsed().as_millis() as f64;
+            if elapsed > 0.0 {
+                self.metrics.record_latency(elapsed);
+            }
+        }
+
+        Ok(results)
     }
 }
 

@@ -1,7 +1,7 @@
 use super::config::CudaGraphConfig;
 use super::CudaGraph;
 use std::collections::HashMap;
-use vllm_traits::{Batch, BatchOutput, ModelBackend};
+use vllm_traits::{Batch, BatchOutput};
 
 /// Executor for managing CUDA Graph capture and execution
 ///
@@ -87,16 +87,13 @@ impl BatchCudaGraphExecutor {
     }
 
     /// Capture graphs for all configured batch sizes
-    pub fn capture_all_graphs<M: ModelBackend>(
-        &mut self,
-        model: &mut M,
-    ) -> Result<(), GraphExecutionError> {
+    pub fn capture_all_graphs(&mut self) -> Result<(), GraphExecutionError> {
         if !self.enabled {
             return Ok(());
         }
         let batch_sizes: Vec<usize> = self.config.batch_sizes.clone();
         for &batch_size in &batch_sizes {
-            self.capture_graph_for_batch_size(batch_size, model)?;
+            self.capture_graph_for_batch_size(batch_size)?;
         }
         tracing::info!(
             "CUDA Graphs captured for batch sizes: {:?}",
@@ -106,10 +103,9 @@ impl BatchCudaGraphExecutor {
     }
 
     /// Capture graph for specific batch size
-    fn capture_graph_for_batch_size<M: ModelBackend>(
+    fn capture_graph_for_batch_size(
         &mut self,
         batch_size: usize,
-        _model: &mut M,
     ) -> Result<(), GraphExecutionError> {
         // For now, create mock graph (actual CUDA integration in future phase)
         let mut graph = CudaGraph::new();
@@ -195,55 +191,10 @@ mod tests {
 
     #[test]
     fn test_capture_graph_increases_graph_count() {
-        use vllm_traits::{BatchOutput, ModelBackend, ModelError};
-
         let mut executor = BatchCudaGraphExecutor::new(CudaGraphConfig::default()).unwrap();
         assert_eq!(executor.graph_count(), 0);
 
-        // Create mock model
-        struct MockModel;
-
-        impl ModelBackend for MockModel {
-            fn forward(
-                &mut self,
-                _seq_ids: &[u64],
-                _input_tokens: &[Vec<u32>],
-                _positions: &[Vec<usize>],
-                _kv_block_ids: &[Vec<usize>],
-                _num_computed_tokens: &[usize],
-                _is_prefill: &[bool],
-            ) -> Result<BatchOutput, ModelError> {
-                Ok(BatchOutput {
-                    seq_ids: vec![],
-                    next_tokens: vec![],
-                })
-            }
-
-            fn forward_logits(
-                &mut self,
-                _seq_ids: &[u64],
-                _input_tokens: &[Vec<u32>],
-                _positions: &[Vec<usize>],
-                _kv_block_ids: &[Vec<usize>],
-                _num_computed_tokens: &[usize],
-                _is_prefill: &[bool],
-            ) -> Result<Vec<Vec<f32>>, ModelError> {
-                Ok(vec![])
-            }
-
-            fn embed(
-                &mut self,
-                _input_tokens: &[Vec<u32>],
-                _positions: &[Vec<usize>],
-            ) -> Result<Vec<Vec<f32>>, ModelError> {
-                Ok(vec![])
-            }
-        }
-
-        let mut model = MockModel;
-        executor
-            .capture_graph_for_batch_size(1, &mut model)
-            .unwrap();
+        executor.capture_graph_for_batch_size(1).unwrap();
         assert_eq!(executor.graph_count(), 1);
         assert!(executor.has_graph(1));
     }
