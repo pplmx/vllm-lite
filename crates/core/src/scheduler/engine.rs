@@ -3,6 +3,7 @@ use std::time::Instant;
 
 use vllm_traits::{Batch, BlockId, SeqId, TokenId};
 
+use crate::scheduler::cuda_graph::{GraphBatch, GraphPreparedBatch, SchedulerCudaGraphConfig};
 use crate::scheduler::observer::{ObserverEvent, SchedulerObservers};
 use crate::scheduler::policy::{FcfsPolicy, SchedulingContext, SchedulingPolicy};
 use crate::scheduler::{
@@ -32,6 +33,8 @@ pub struct SchedulerEngine {
     finished: Vec<Sequence>,
     next_seq_id: SeqId,
     observers: SchedulerObservers,
+    /// CUDA Graph configuration for decode optimization
+    cuda_graph: SchedulerCudaGraphConfig,
 }
 
 impl SchedulerEngine {
@@ -53,6 +56,12 @@ impl SchedulerEngine {
             enable_similarity_grouping: false,
         };
 
+        // Initialize CUDA Graph config from scheduler config
+        let cuda_graph = SchedulerCudaGraphConfig {
+            enabled: config.cuda_graph.enabled,
+            batch_sizes: config.cuda_graph.batch_sizes.clone(),
+        };
+
         Self {
             request_queue: RequestQueue::new(),
             phase_scheduler: PhaseScheduler::new(phase_switch_policy),
@@ -65,6 +74,7 @@ impl SchedulerEngine {
             finished: Vec::new(),
             next_seq_id: 1,
             observers: SchedulerObservers::new(),
+            cuda_graph,
         }
     }
 
@@ -206,6 +216,61 @@ impl SchedulerEngine {
         }
 
         batch
+    }
+
+    /// Build batch with potential CUDA Graph routing
+    pub fn build_batch_with_graph(&mut self) -> GraphBatch {
+        let phase = self
+            .phase_scheduler
+            .select_phase(&self.get_scheduler_state());
+        let sequences = self.select_sequences_for_phase(phase);
+
+        if sequences.is_empty() {
+            return GraphBatch::Regular(Batch::empty());
+        }
+
+        let batch = self.batch_composer.compose(sequences, phase);
+
+        // Only use CUDA Graph for decode phase
+        match phase {
+            Phase::Prefill => GraphBatch::Regular(batch),
+            Phase::Decode => {
+                let batch_size = batch.seq_ids.len();
+                if self.cuda_graph.enabled && self.cuda_graph.supports_batch_size(batch_size) {
+                    GraphBatch::Graph(GraphPreparedBatch::new(batch))
+                } else {
+                    GraphBatch::Regular(batch)
+                }
+            }
+        }
+    }
+
+    /// Get current scheduler state for phase selection
+    fn get_scheduler_state(&self) -> crate::scheduler::SchedulerState {
+        crate::scheduler::SchedulerState {
+            waiting_count: self.request_queue.len(),
+            running_count: self.running.len(),
+            prefill_queue_len: self.request_queue.phase_len(Phase::Prefill),
+            decode_queue_len: self.request_queue.phase_len(Phase::Decode),
+            available_memory: self.memory.available_blocks(),
+            consecutive_decode_rounds: 0,
+        }
+    }
+
+    /// Select sequences for the given phase
+    fn select_sequences_for_phase(&mut self, phase: Phase) -> Vec<Sequence> {
+        let mut sequences: Vec<Sequence> = self
+            .running
+            .iter()
+            .filter(|s| s.status == Status::Decoding)
+            .cloned()
+            .collect();
+
+        let new_sequences = self.request_queue.drain_by_phase(phase);
+        sequences.extend(new_sequences.iter().cloned());
+        self.running.extend(new_sequences);
+
+        sequences
     }
 
     /// Update the scheduler after model forward pass

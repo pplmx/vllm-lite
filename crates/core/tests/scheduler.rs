@@ -45,6 +45,7 @@ fn test_pd_separation_refactored() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
 
     let mut sched = SchedulerEngine::new(config, 1024);
@@ -118,6 +119,7 @@ fn test_build_decode_batch_budget() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
 
     let mut sched = SchedulerEngine::new(config, 1024);
@@ -150,6 +152,7 @@ fn test_token_budget_boundary_zero() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
 
     let mut sched = SchedulerEngine::new(config, 1024);
@@ -178,6 +181,7 @@ fn test_token_budget_boundary_one() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
 
     let mut sched = SchedulerEngine::new(config, 1024);
@@ -208,6 +212,7 @@ fn test_prefill_and_decode_separation() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
 
     let mut sched = SchedulerEngine::new(config, 1024);
@@ -247,6 +252,7 @@ fn test_priority_scheduling() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
 
     let mut sched = SchedulerEngine::new(config, 1024);
@@ -279,6 +285,7 @@ fn test_consecutive_decode_limit() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
 
     let mut sched = SchedulerEngine::new(config, 1024);
@@ -321,6 +328,7 @@ fn test_min_batch_size() {
         enable_dynamic_batching: false,
         min_batch_size: 3, // Require at least 3
         max_batch_size: 256,
+        ..Default::default()
     };
 
     let mut sched = SchedulerEngine::new(config, 1024);
@@ -349,6 +357,7 @@ fn test_max_batch_size() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
 
     let mut sched = SchedulerEngine::new(config, 1024);
@@ -525,6 +534,7 @@ fn test_preemption_execution() {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
 
     let mut sched = SchedulerEngine::new(config, 100);

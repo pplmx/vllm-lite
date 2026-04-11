@@ -3,6 +3,7 @@ use tokio::sync::mpsc;
 pub use vllm_traits::{Batch, BatchOutput, BlockId, SeqId, TokenId};
 
 pub use crate::kv_cache::BLOCK_SIZE;
+use crate::scheduler::cuda_graph::SchedulerCudaGraphConfig;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Priority(pub u8);
@@ -111,6 +112,8 @@ pub struct SchedulerConfig {
     pub min_batch_size: usize,
     /// Maximum batch size for dynamic batching.
     pub max_batch_size: usize,
+    /// CUDA Graph configuration
+    pub cuda_graph: SchedulerCudaGraphConfig,
 }
 
 impl SchedulerConfig {
@@ -158,6 +161,7 @@ impl SchedulerConfig {
             enable_dynamic_batching,
             min_batch_size,
             max_batch_size,
+            cuda_graph: SchedulerCudaGraphConfig::default(),
         }
     }
 }
@@ -175,6 +179,7 @@ impl Default for SchedulerConfig {
             enable_dynamic_batching: true,
             min_batch_size: 1,
             max_batch_size: 256,
+            cuda_graph: SchedulerCudaGraphConfig::default(),
         }
     }
 }

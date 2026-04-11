@@ -1,4 +1,4 @@
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::hint::black_box;
 use vllm_core::scheduler::SchedulerEngine;
 use vllm_core::types::{Request, SchedulerConfig};
@@ -15,6 +15,7 @@ fn scheduler_add_request(c: &mut Criterion) {
         enable_dynamic_batching: false,
         min_batch_size: 1,
         max_batch_size: 256,
+        ..Default::default()
     };
 
     c.bench_function("scheduler_new", |b| {
