@@ -7,7 +7,7 @@ pub mod builder;
 pub mod format;
 
 pub use builder::{ModelLoader, ModelLoaderBuilder};
-pub use format::{load_checkpoint, FormatLoader};
+pub use format::{FormatLoader, load_checkpoint};
 
 use candle_core::{Device, Result, Tensor};
 use memmap2::Mmap;
