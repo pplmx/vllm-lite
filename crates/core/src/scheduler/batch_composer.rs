@@ -33,7 +33,8 @@ impl BatchComposer {
         Self { config }
     }
 
-    /// Compose a batch from sequences for the given phase
+    /// Compose a batch from sequences for the given phase.
+    #[must_use]
     pub fn compose(&self, sequences: Vec<Sequence>, phase: Phase) -> Batch {
         match phase {
             Phase::Prefill => self.compose_prefill_batch(sequences),

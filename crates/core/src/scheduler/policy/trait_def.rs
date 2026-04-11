@@ -10,6 +10,7 @@ pub struct SchedulingContext {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[must_use]
 pub struct PriorityScore(pub u64);
 
 pub trait SchedulingPolicy: Send + Sync {
