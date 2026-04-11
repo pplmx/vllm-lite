@@ -1572,15 +1572,15 @@ git commit -m "feat(traits): add BatchPhase enum and enhance Batch struct"
 ### Task 5.1: 创建新的 SchedulerEngine 使用新组件
 
 **Files:**
-- Create: `crates/core/src/scheduler/engine_v2.rs`
+- Create: `crates/core/src/scheduler/engine.rs`
 - Modify: `crates/core/src/scheduler/mod.rs`
 - Test: 集成测试
 
 **设计文档参考:** Section 2.1 (总体架构)
 
-- [ ] **Step 1: 创建新的 SchedulerEngineV2**
+- [ ] **Step 1: 创建新的 SchedulerEngine**
 ```rust
-// crates/core/src/scheduler/engine_v2.rs
+// crates/core/src/scheduler/engine.rs
 use vllm_traits::Batch;
 use crate::scheduler::{
     BatchComposer, BatchCompositionConfig,
@@ -1593,7 +1593,7 @@ use crate::types::{Phase, Request, SchedulerConfig, SeqId, Sequence, Status};
 use std::sync::Arc;
 
 /// 新的调度器引擎
-pub struct SchedulerEngineV2 {
+pub struct SchedulerEngine {
     /// 请求队列
     request_queue: RequestQueue,
     /// 阶段调度器
@@ -1612,7 +1612,7 @@ pub struct SchedulerEngineV2 {
     next_seq_id: SeqId,
 }
 
-impl SchedulerEngineV2 {
+impl SchedulerEngine {
     pub fn new(config: SchedulerConfig, num_kv_blocks: usize) -> Self {
         let phase_switch_policy = PhaseSwitchPolicy {
             max_consecutive_decode: config.max_consecutive_decode,
@@ -1822,19 +1822,19 @@ mod tests {
     use crate::types::Request;
 
     #[test]
-    fn test_engine_v2_add_request() {
+fn test_engine_add_request() {
         let config = SchedulerConfig::default();
-        let mut engine = SchedulerEngineV2::new(config, 1024);
-        
+        let mut engine = SchedulerEngine::new(config, 1024);
+
         let id = engine.add_request(Request::new(0, vec![1, 2, 3], 5));
         assert!(id > 0);
         assert!(engine.has_pending());
     }
 
     #[test]
-    fn test_engine_v2_build_batch() {
+    fn test_engine_build_batch() {
         let config = SchedulerConfig::default();
-        let mut engine = SchedulerEngineV2::new(config, 1024);
+        let mut engine = SchedulerEngine::new(config, 1024);
         
         engine.add_request(Request::new(0, vec![1, 2, 3], 5));
         let batch = engine.build_batch();
@@ -1846,21 +1846,21 @@ mod tests {
 
 - [ ] **Step 2: 更新 scheduler/mod.rs 导出**
 ```rust
-pub mod engine_v2;
-pub use engine_v2::SchedulerEngineV2;
+pub mod engine;
+pub use engine::SchedulerEngine;
 ```
 
 - [ ] **Step 3: 运行测试**
 ```bash
-cargo test -p vllm-core engine_v2 -- --nocapture
+cargo test -p vllm-core engine -- --nocapture
 ```
 Expected: PASS - 2 tests passed
 
 - [ ] **Step 4: 提交**
 ```bash
-git add crates/core/src/scheduler/engine_v2.rs
-git add crates/core/src/scheduler/mod.rs
-git commit -m "feat(scheduler): add new SchedulerEngineV2 with componentized architecture"
+git add crates/core/src/scheduler/engine.rs
+    git add crates/core/src/scheduler/mod.rs
+    git commit -m "feat(scheduler): add new SchedulerEngine with componentized architecture"
 ```
 
 ---
@@ -1870,19 +1870,19 @@ git commit -m "feat(scheduler): add new SchedulerEngineV2 with componentized arc
 ### Task 6.1: 添加集成测试
 
 **Files:**
-- Create: `crates/core/tests/scheduler_v2_integration.rs`
+- Create: `crates/core/tests/scheduler_integration.rs`
 
 - [ ] **Step 1: 创建集成测试**
 ```rust
-// crates/core/tests/scheduler_v2_integration.rs
-use vllm_core::scheduler::{SchedulerEngineV2, FcfsPolicy, SjfPolicy};
+// crates/core/tests/scheduler_integration.rs
+use vllm_core::scheduler::{SchedulerEngine, FcfsPolicy, SjfPolicy};
 use vllm_core::types::{Request, SchedulerConfig, Status, Phase};
 use vllm_traits::BatchPhase;
 
 #[test]
 fn test_strict_pd_separation() {
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngineV2::new(config, 1024);
+    let mut engine = SchedulerEngine::new(config, 1024);
     
     // 添加 prefill 请求
     engine.add_request(Request::new(0, vec![1, 2, 3], 5));
@@ -1897,7 +1897,7 @@ fn test_strict_pd_separation() {
 #[test]
 fn test_policy_switching() {
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngineV2::new(config, 1024);
+    let mut engine = SchedulerEngine::new(config, 1024);
     
     // 初始使用 FCFS
     assert_eq!(engine.policy.name(), "FCFS");
@@ -1911,7 +1911,7 @@ fn test_policy_switching() {
 fn test_memory_preemption() {
     // 创建小内存引擎
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngineV2::new(config, 10); // 只有 10 blocks
+    let mut engine = SchedulerEngine::new(config, 10); // 只有 10 blocks
     
     // 添加多个大请求
     for i in 1..=5 {
@@ -1927,13 +1927,13 @@ fn test_memory_preemption() {
 
 - [ ] **Step 2: 运行集成测试**
 ```bash
-cargo test -p vllm-core --test scheduler_v2_integration -- --nocapture
+cargo test -p vllm-core --test scheduler_integration -- --nocapture
 ```
 
 - [ ] **Step 3: 提交**
 ```bash
-git add crates/core/tests/scheduler_v2_integration.rs
-git commit -m "test(scheduler): add integration tests for SchedulerEngineV2"
+git add crates/core/tests/scheduler_integration.rs
+    git commit -m "test(scheduler): add integration tests for SchedulerEngine"
 ```
 
 ---
@@ -1962,7 +1962,7 @@ git commit -m "refactor(scheduler): complete architecture refactoring with compo
 - Add BatchComposer for phase-specific batch construction
 - Add Radix Tree prefix cache
 - Enhance Batch struct with BatchPhase
-- Create new SchedulerEngineV2 using all new components
+- Create new SchedulerEngine using all new components
 
 Breaking Changes:
 - Batch struct now includes phase, total_tokens, max_seq_len fields
@@ -1980,7 +1980,7 @@ Breaking Changes:
 - [x] BatchComposer (阶段特定批次) - Task 2.2
 - [x] Radix Tree PrefixCache - Task 3.1
 - [x] Batch 结构增强 - Task 4.1
-- [x] SchedulerEngineV2 组装 - Task 5.1
+- [x] SchedulerEngine 组装 - Task 5.1
 
 **无占位符检查:**
 - [x] 所有代码步骤包含完整实现
