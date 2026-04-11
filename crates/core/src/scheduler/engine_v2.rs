@@ -3,6 +3,7 @@ use std::time::Instant;
 
 use vllm_traits::{Batch, BlockId, SeqId, TokenId};
 
+use crate::scheduler::observer::{ObserverEvent, SchedulerObservers};
 use crate::scheduler::policy::{FcfsPolicy, SchedulingContext, SchedulingPolicy};
 use crate::scheduler::{
     BatchComposer, BatchCompositionConfig, MemoryManager, PhaseScheduler, PhaseSwitchPolicy,
@@ -28,7 +29,9 @@ pub struct SchedulerEngineV2 {
     #[allow(dead_code)]
     config: SchedulerConfig,
     running: Vec<Sequence>,
+    finished: Vec<Sequence>,
     next_seq_id: SeqId,
+    observers: SchedulerObservers,
 }
 
 impl SchedulerEngineV2 {
@@ -59,7 +62,9 @@ impl SchedulerEngineV2 {
             policy: Box::new(FcfsPolicy::new()),
             config,
             running: Vec::new(),
+            finished: Vec::new(),
             next_seq_id: 1,
+            observers: SchedulerObservers::new(),
         }
     }
 
@@ -81,9 +86,9 @@ impl SchedulerEngineV2 {
         // Check prefix cache for prompt reuse
         let (tokens, kv_blocks, num_computed) =
             if let Some(result) = self.prefix_cache.longest_prefix_match(&req.prompt) {
-                let remaining_tokens = req.prompt[result.matched_tokens..].to_vec();
+                // Keep full tokens, use num_computed_tokens to track progress
                 (
-                    remaining_tokens,
+                    req.prompt.clone(),
                     result.blocks.clone(),
                     result.matched_tokens,
                 )
@@ -115,7 +120,15 @@ impl SchedulerEngineV2 {
             memory_pressure: self.get_memory_pressure(),
         };
 
-        self.request_queue.enqueue(seq, self.policy.as_ref(), &ctx);
+        self.request_queue
+            .enqueue(seq.clone(), self.policy.as_ref(), &ctx);
+
+        // Dispatch observer event
+        self.observers.dispatch(&ObserverEvent::RequestArrived {
+            seq_id: req.id,
+            prompt_len: req.prompt.len(),
+        });
+
         req.id
     }
 
@@ -124,6 +137,14 @@ impl SchedulerEngineV2 {
     /// Uses the phase scheduler to determine whether to build a prefill or decode batch,
     /// then composes the batch according to memory constraints.
     pub fn build_batch(&mut self) -> Batch {
+        // First, include running decode sequences (they need to continue processing)
+        let mut sequences: Vec<Sequence> = self
+            .running
+            .iter()
+            .filter(|s| s.status == Status::Decoding)
+            .cloned()
+            .collect();
+
         // Get current scheduler state
         let state = crate::scheduler::SchedulerState {
             waiting_count: self.request_queue.len(),
@@ -136,11 +157,16 @@ impl SchedulerEngineV2 {
 
         let phase = self.phase_scheduler.select_phase(&state);
 
-        // Get sequences for this phase
-        let mut sequences = self.request_queue.drain_by_phase(phase);
-        if sequences.is_empty() {
+        // Get sequences for this phase from the queue
+        let new_sequences = self.request_queue.drain_by_phase(phase);
+
+        // If no running decode sequences and no new sequences, return empty
+        if sequences.is_empty() && new_sequences.is_empty() {
             return Batch::empty();
         }
+
+        // Add new sequences to the batch
+        sequences.extend(new_sequences.iter().cloned());
 
         // Sort by policy priority
         let ctx = SchedulingContext {
@@ -164,12 +190,21 @@ impl SchedulerEngineV2 {
             }
         }
 
-        // Build batch - sequences are already removed from queue by drain_by_phase
-        // Move sequences to running (they were already removed from queue)
-        self.running.extend(sequences.iter().cloned());
+        // Move new sequences to running
+        self.running.extend(new_sequences);
 
-        // Build and return the batch
-        self.batch_composer.compose(sequences, phase)
+        // Build the batch
+        let batch = self.batch_composer.compose(sequences.clone(), phase);
+
+        // Dispatch observer event
+        if !batch.seq_ids.is_empty() {
+            self.observers.dispatch(&ObserverEvent::BatchScheduled {
+                seq_ids: batch.seq_ids.clone(),
+                batch_size: batch.seq_ids.len(),
+            });
+        }
+
+        batch
     }
 
     /// Update the scheduler after model forward pass
@@ -199,6 +234,10 @@ impl SchedulerEngineV2 {
                 seq.tokens.push(token);
                 seq.consecutive_decode_rounds += 1;
 
+                // Dispatch observer event for token generation
+                self.observers
+                    .dispatch(&ObserverEvent::Decoding { seq_id, token });
+
                 // Allocate more blocks if needed
                 let blocks_needed = seq.tokens.len().div_ceil(vllm_traits::BLOCK_SIZE);
                 while seq.kv_blocks.len() < blocks_needed {
@@ -222,7 +261,25 @@ impl SchedulerEngineV2 {
             }
         }
 
-        // Remove finished sequences
+        // Collect finished sequences and dispatch observer events
+        let finished_seqs: Vec<_> = self
+            .running
+            .iter()
+            .filter(|s| s.status == Status::Finished)
+            .cloned()
+            .collect();
+
+        for seq in &finished_seqs {
+            self.observers.dispatch(&ObserverEvent::SequenceFinished {
+                seq_id: seq.id,
+                total_tokens: seq.tokens.len(),
+            });
+        }
+
+        for seq in finished_seqs {
+            self.finished.push(seq);
+        }
+
         self.running.retain(|s| s.status != Status::Finished);
     }
 
@@ -293,6 +350,62 @@ impl SchedulerEngineV2 {
     pub fn prefix_cache_hit_rate(&self) -> f64 {
         // Placeholder - would need stats tracking
         0.0
+    }
+
+    /// Cancel a request by sequence ID
+    pub fn cancel_request(&mut self, seq_id: SeqId) -> bool {
+        if let Some(seq) = self.request_queue.remove(seq_id) {
+            // Release blocks if allocated
+            if !seq.kv_blocks.is_empty() {
+                self.memory.release_blocks(seq.kv_blocks.as_ref());
+            }
+            return true;
+        }
+        // Check if it's running
+        if let Some(pos) = self.running.iter().position(|s| s.id == seq_id) {
+            let seq = self.running.remove(pos);
+            if !seq.kv_blocks.is_empty() {
+                self.memory.release_blocks(seq.kv_blocks.as_ref());
+            }
+            return true;
+        }
+        false
+    }
+
+    /// Get KV cache usage statistics
+    pub fn get_kv_cache_usage(&self) -> (u64, u64) {
+        let total = self.memory.total_blocks() as u64;
+        let available = self.memory.available_blocks() as u64;
+        let used = total.saturating_sub(available);
+        (used, total)
+    }
+
+    /// Get running sequences
+    pub fn running(&self) -> Vec<Sequence> {
+        self.running.clone()
+    }
+
+    /// Get finished sequences
+    pub fn finished_sequences(&self) -> Vec<Sequence> {
+        self.finished.clone()
+    }
+
+    /// Clear finished sequences
+    pub fn clear_finished(&mut self) {
+        self.finished.clear();
+    }
+
+    /// Get access to the prefix cache (RadixTree)
+    pub fn prefix_cache(&self) -> &RadixTree {
+        &self.prefix_cache
+    }
+
+    /// Register an observer
+    pub fn register_observer(
+        &mut self,
+        observer: Box<dyn crate::scheduler::observer::SchedulerObserver>,
+    ) -> Result<(), String> {
+        self.observers.register(observer)
     }
 }
 

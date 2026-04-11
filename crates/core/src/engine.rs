@@ -3,7 +3,7 @@ mod speculative;
 use crate::beam::BeamSequence;
 use crate::error::Result;
 use crate::metrics::MetricsCollector;
-use crate::scheduler::engine::SchedulerEngine;
+use crate::scheduler::engine_v2::SchedulerEngineV2 as SchedulerEngine;
 use crate::types::{EngineMessage, Request, SchedulerConfig};
 use std::collections::HashMap;
 use std::marker::PhantomData;
