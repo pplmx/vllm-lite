@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod tests {
+mod policy_tests {
     use super::super::*;
     use crate::types::{Priority, SamplingParams, Sequence, Status};
     use std::sync::Arc;
