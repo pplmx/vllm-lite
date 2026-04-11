@@ -1,0 +1,101 @@
+version: "3.8"
+
+services:
+  vllm-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: vllm-lite:latest
+    container_name: vllm-lite-server
+    ports:
+      - "8000:8000"
+    environment:
+      - RUST_LOG=info
+      - RUST_BACKTRACE=1
+      # Performance optimizations
+      - VLLM_CUDA_GRAPH_ENABLED=true
+      - VLLM_SEQ_PACKING_ENABLED=true
+      - VLLM_ADAPTIVE_MIN_DRAFT=2
+      - VLLM_ADAPTIVE_MAX_DRAFT=8
+      # Resource limits
+      - VLLM_MAX_NUM_SEQS=256
+      - VLLM_MAX_BATCHED_TOKENS=4096
+    volumes:
+      - ./models:/app/models:ro
+      - vllm-cache:/app/.cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '8'
+          memory: 16G
+        reservations:
+          cpus: '4'
+          memory: 8G
+    restart: unless-stopped
+    networks:
+      - vllm-network
+
+  # Optional: Prometheus monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: vllm-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - vllm-network
+    profiles:
+      - monitoring
+
+  # Optional: Grafana dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: vllm-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./monitoring/grafana:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=vllm-admin
+    networks:
+      - vllm-network
+    profiles:
+      - monitoring
+
+  # Load testing service
+  k6:
+    image: grafana/k6:latest
+    container_name: vllm-k6
+    volumes:
+      - ./tests/load:/tests:ro
+    command: run /tests/load_test.js
+    networks:
+      - vllm-network
+    profiles:
+      - loadtest
+
+volumes:
+  vllm-cache:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  vllm-network:
+    driver: bridge
