@@ -92,6 +92,8 @@ impl RequestQueue {
         None
     }
 
+    /// O(1) lookup by sequence ID.
+    #[must_use]
     pub fn get(&self, seq_id: SeqId) -> Option<&Sequence> {
         self.sequences.get(&seq_id)
     }
@@ -100,6 +102,8 @@ impl RequestQueue {
         self.sequences.get_mut(&seq_id)
     }
 
+    /// O(1) removal by sequence ID.
+    #[must_use]
     pub fn remove(&mut self, seq_id: SeqId) -> Option<Sequence> {
         if let Some(seq) = self.sequences.remove(&seq_id) {
             let phase = self.determine_phase(&seq);
@@ -133,10 +137,14 @@ impl RequestQueue {
         result
     }
 
+    /// Get the number of sequences in the queue.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.sequences.len()
     }
 
+    /// Check if the queue is empty.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.sequences.is_empty()
     }

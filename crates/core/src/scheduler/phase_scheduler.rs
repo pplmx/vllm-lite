@@ -42,6 +42,8 @@ impl PhaseScheduler {
         }
     }
 
+    /// Select the current phase based on scheduler state.
+    #[must_use]
     pub fn select_phase(&mut self, state: &SchedulerState) -> Phase {
         let phase = match self.current_phase {
             Phase::Decode => {
@@ -70,6 +72,8 @@ impl PhaseScheduler {
         phase
     }
 
+    /// Get the current phase.
+    #[must_use]
     pub fn current_phase(&self) -> Phase {
         self.current_phase
     }

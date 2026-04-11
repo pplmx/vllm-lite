@@ -23,7 +23,8 @@ impl RadixTree {
         }
     }
 
-    /// Find longest prefix match - O(k) complexity
+    /// Find longest prefix match - O(k) complexity.
+    #[must_use]
     pub fn longest_prefix_match(&self, tokens: &[TokenId]) -> Option<PrefixMatchResult> {
         let mut node = &self.root;
         let mut matched_len = 0;
@@ -66,12 +67,14 @@ impl RadixTree {
         self.entry_count += 1;
     }
 
-    /// Get entry count
+    /// Get entry count.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.entry_count
     }
 
-    /// Is empty
+    /// Check if tree is empty.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entry_count == 0
     }

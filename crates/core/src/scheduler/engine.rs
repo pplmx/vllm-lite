@@ -136,6 +136,7 @@ impl SchedulerEngine {
     ///
     /// Uses the phase scheduler to determine whether to build a prefill or decode batch,
     /// then composes the batch according to memory constraints.
+    #[must_use]
     pub fn build_batch(&mut self) -> Batch {
         // First, include running decode sequences (they need to continue processing)
         let mut sequences: Vec<Sequence> = self
@@ -332,16 +333,19 @@ impl SchedulerEngine {
     }
 
     /// Check if there are pending requests or running sequences
+    #[must_use]
     pub fn has_pending(&self) -> bool {
         !self.request_queue.is_empty() || !self.running.is_empty()
     }
 
     /// Get the number of running sequences
+    #[must_use]
     pub fn running_count(&self) -> usize {
         self.running.len()
     }
 
     /// Get the number of waiting sequences
+    #[must_use]
     pub fn waiting_count(&self) -> usize {
         self.request_queue.len()
     }
