@@ -1,12 +1,12 @@
-use vllm_core::scheduler::SchedulerEngineV2;
 use vllm_core::scheduler::policy::SjfPolicy;
+use vllm_core::scheduler::SchedulerEngine;
 use vllm_core::types::{Request, SchedulerConfig};
 use vllm_traits::BatchPhase;
 
 #[test]
-fn test_scheduler_v2_basic_flow() {
+fn test_scheduler_basic_flow() {
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngineV2::new(config, 1024);
+    let mut engine = SchedulerEngine::new(config, 1024);
 
     // Add a request
     let id = engine.add_request(Request::new(0, vec![1, 2, 3], 5));
@@ -26,9 +26,9 @@ fn test_scheduler_v2_basic_flow() {
 }
 
 #[test]
-fn test_scheduler_v2_multiple_requests() {
+fn test_scheduler_multiple_requests() {
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngineV2::new(config, 1024);
+    let mut engine = SchedulerEngine::new(config, 1024);
 
     // Add multiple requests
     for i in 1..=5 {
@@ -42,9 +42,9 @@ fn test_scheduler_v2_multiple_requests() {
 }
 
 #[test]
-fn test_scheduler_v2_prefill_decode_separation() {
+fn test_scheduler_prefill_decode_separation() {
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngineV2::new(config, 1024);
+    let mut engine = SchedulerEngine::new(config, 1024);
 
     // Add a request
     engine.add_request(Request::new(0, vec![1, 2, 3], 5));
@@ -68,9 +68,9 @@ fn test_scheduler_v2_prefill_decode_separation() {
 }
 
 #[test]
-fn test_scheduler_v2_policy_switching() {
+fn test_scheduler_policy_switching() {
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngineV2::new(config, 1024);
+    let mut engine = SchedulerEngine::new(config, 1024);
 
     // Default policy is FCFS
     // Add requests with different priorities
@@ -94,12 +94,12 @@ fn test_scheduler_v2_policy_switching() {
 }
 
 #[test]
-fn test_scheduler_v2_prefix_cache() {
+fn test_scheduler_prefix_cache() {
     // Note: This test verifies that prefix cache operations don't panic
     // There's a known bug in batch_composer.rs when num_computed_tokens > tokens.len()
     // after prefix cache hit - we work around it by not triggering that path
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngineV2::new(config, 1024);
+    let mut engine = SchedulerEngine::new(config, 1024);
 
     // Add first request - complete it to add to prefix cache
     let id1 = engine.add_request(Request::new(0, vec![1, 2, 3], 10));
@@ -125,10 +125,10 @@ fn test_scheduler_v2_prefix_cache() {
 }
 
 #[test]
-fn test_scheduler_v2_memory_preemption() {
+fn test_scheduler_memory_preemption() {
     // Create engine with limited memory
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngineV2::new(config, 20); // Only 20 blocks
+    let mut engine = SchedulerEngine::new(config, 20); // Only 20 blocks
 
     // Add multiple large requests
     for i in 1..=5 {
@@ -142,9 +142,9 @@ fn test_scheduler_v2_memory_preemption() {
 }
 
 #[test]
-fn test_scheduler_v2_concurrent_requests() {
+fn test_scheduler_concurrent_requests() {
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngineV2::new(config, 1024);
+    let mut engine = SchedulerEngine::new(config, 1024);
 
     // Add concurrent requests
     for i in 1..=10 {
