@@ -1,7 +1,10 @@
 #![allow(clippy::all, non_snake_case, dead_code)]
 
+use std::collections::HashMap;
+
 use candle_core::{DType, Module, Result as CandleResult, Tensor};
-use candle_nn::{Conv1d, LayerNorm, Linear, VarBuilder, conv1d};
+use candle_nn::{conv1d, Conv1d, LayerNorm, Linear, VarBuilder};
+use thiserror::Error;
 
 #[derive(Clone, Debug)]
 pub struct SSMConfig {
@@ -192,6 +195,126 @@ impl MambaBlock {
         let output = self.norm.forward(&output)?;
 
         Ok(output)
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum SSMError {
+    #[error("{0}")]
+    Msg(String),
+}
+
+impl From<std::convert::Infallible> for SSMError {
+    fn from(_: std::convert::Infallible) -> Self {
+        SSMError::Msg("Infallible error".to_string())
+    }
+}
+
+impl SSMLayer {
+    pub fn from_weights(
+        d_inner: usize,
+        d_state: usize,
+        layer_idx: usize,
+        weights: &HashMap<String, Tensor>,
+    ) -> Result<Self, SSMError> {
+        let x_proj_w = weights
+            .get(&format!("model.layers.{}.mamba.x_proj.weight", layer_idx))
+            .cloned()
+            .ok_or_else(|| {
+                SSMError::Msg(format!("Missing x_proj weight for layer {}", layer_idx))
+            })?;
+        let x_proj = candle_nn::Linear::new(x_proj_w, None);
+
+        let a_log_w = weights
+            .get(&format!("model.layers.{}.mamba.A_log.weight", layer_idx))
+            .cloned()
+            .ok_or_else(|| {
+                SSMError::Msg(format!("Missing A_log weight for layer {}", layer_idx))
+            })?;
+        let a_log = candle_nn::Linear::new(a_log_w, None);
+
+        let d_w = weights
+            .get(&format!("model.layers.{}.mamba.D.weight", layer_idx))
+            .cloned()
+            .ok_or_else(|| SSMError::Msg(format!("Missing D weight for layer {}", layer_idx)))?;
+        let d = candle_nn::Linear::new(d_w, None);
+
+        let conv_w = weights
+            .get(&format!("model.layers.{}.mamba.conv1d.weight", layer_idx))
+            .cloned()
+            .ok_or_else(|| {
+                SSMError::Msg(format!("Missing conv1d weight for layer {}", layer_idx))
+            })?;
+        let d_conv = 4;
+        let conv_cfg = candle_nn::Conv1dConfig {
+            padding: d_conv - 1,
+            ..Default::default()
+        };
+        let conv = Conv1d::new(conv_w, None, conv_cfg);
+
+        Ok(Self {
+            x_proj,
+            a_log,
+            d,
+            conv,
+            d_inner,
+            d_state,
+        })
+    }
+}
+
+impl MambaBlock {
+    pub fn from_weights(
+        d_model: usize,
+        d_state: usize,
+        layer_idx: usize,
+        weights: &HashMap<String, Tensor>,
+    ) -> Result<Self, SSMError> {
+        let config = SSMConfig {
+            d_model,
+            d_state,
+            d_conv: 4,
+            expand: 2,
+        };
+        let d_inner = config.d_inner();
+
+        let in_proj_w = weights
+            .get(&format!("model.layers.{}.mamba.in_proj.weight", layer_idx))
+            .cloned()
+            .ok_or_else(|| {
+                SSMError::Msg(format!("Missing in_proj weight for layer {}", layer_idx))
+            })?;
+        let input_proj = candle_nn::Linear::new(in_proj_w, None);
+
+        let ssm = SSMLayer::from_weights(d_inner, d_state, layer_idx, weights)?;
+
+        let out_proj_w = weights
+            .get(&format!("model.layers.{}.mamba.out_proj.weight", layer_idx))
+            .cloned()
+            .ok_or_else(|| {
+                SSMError::Msg(format!("Missing out_proj weight for layer {}", layer_idx))
+            })?;
+        let output_proj = candle_nn::Linear::new(out_proj_w, None);
+
+        let norm_w = weights
+            .get(&format!("model.layers.{}.mamba.norm.weight", layer_idx))
+            .cloned()
+            .ok_or_else(|| SSMError::Msg(format!("Missing norm weight for layer {}", layer_idx)))?;
+        let norm_b = weights
+            .get(&format!("model.layers.{}.mamba.norm.bias", layer_idx))
+            .cloned()
+            .unwrap_or_else(|| {
+                Tensor::zeros(norm_w.shape().dims()[0], DType::F32, norm_w.device())
+                    .expect("Failed to create zero bias")
+            });
+        let norm = candle_nn::LayerNorm::new(norm_w, norm_b, 1e-5);
+
+        Ok(Self {
+            input_proj,
+            ssm,
+            output_proj,
+            norm,
+        })
     }
 }
 
