@@ -28,6 +28,83 @@ pub struct ModelConfig {
 }
 
 impl ModelConfig {
+    /// Tiny configuration for fast unit tests
+    /// Hidden size: 128, Heads: 4, Head dim: 32
+    pub fn test_tiny() -> Self {
+        Self {
+            architecture: Architecture::Llama,
+            hidden_size: 128,
+            num_layers: 2,
+            num_heads: 4,
+            num_kv_heads: 4,
+            head_dim: 32,
+            vocab_size: 1000,
+            intermediate_size: 256,
+            rope_theta: 10000.0,
+            rms_norm_eps: 1e-5,
+            sliding_window: None,
+            tie_word_embeddings: false,
+            max_position_embeddings: 512,
+            layer_types: vec![],
+            rope_configs: vec![],
+            use_double_wide_mlp: false,
+            num_experts: None,
+            top_k_experts: None,
+            expert_intermediate_size: None,
+        }
+    }
+
+    /// Small configuration for faster integration tests
+    /// Hidden size: 256, Heads: 4, Head dim: 64
+    pub fn test_small() -> Self {
+        Self {
+            architecture: Architecture::Llama,
+            hidden_size: 256,
+            num_layers: 4,
+            num_heads: 4,
+            num_kv_heads: 4,
+            head_dim: 64,
+            vocab_size: 1000,
+            intermediate_size: 512,
+            rope_theta: 10000.0,
+            rms_norm_eps: 1e-5,
+            sliding_window: None,
+            tie_word_embeddings: false,
+            max_position_embeddings: 512,
+            layer_types: vec![],
+            rope_configs: vec![],
+            use_double_wide_mlp: false,
+            num_experts: None,
+            top_k_experts: None,
+            expert_intermediate_size: None,
+        }
+    }
+
+    /// Medium configuration for more realistic tests
+    pub fn test_medium() -> Self {
+        Self {
+            architecture: Architecture::Llama,
+            hidden_size: 512,
+            num_layers: 8,
+            num_heads: 8,
+            num_kv_heads: 8,
+            head_dim: 64,
+            vocab_size: 5000,
+            intermediate_size: 1024,
+            rope_theta: 10000.0,
+            rms_norm_eps: 1e-5,
+            sliding_window: None,
+            tie_word_embeddings: false,
+            max_position_embeddings: 2048,
+            layer_types: vec![],
+            rope_configs: vec![],
+            use_double_wide_mlp: false,
+            num_experts: None,
+            top_k_experts: None,
+            expert_intermediate_size: None,
+        }
+    }
+
     pub fn llama_7b() -> Self {
         Self {
             architecture: Architecture::Llama,

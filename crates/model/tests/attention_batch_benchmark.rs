@@ -5,6 +5,7 @@ use vllm_model::qwen3::attention::GqaAttention;
 const THETA: f32 = 10000.0;
 
 #[test]
+#[ignore = "slow benchmark test - run with --ignored for performance testing"]
 fn test_forward_prefill_batch_performance() -> Result<()> {
     let device = Device::Cpu;
 
