@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-pub trait CudaGraphNode: Send {
+pub trait CudaGraphNode: Send + Sync {
     fn execute(
         &self,
         inputs: &[&dyn CudaGraphTensor],
@@ -41,6 +41,10 @@ pub struct CudaGraph {
     node_outputs: Vec<Vec<usize>>,
     cached: bool,
 }
+
+// SAFETY: CudaGraph can be Send because it only contains thread-safe types
+// The Arc<dyn CudaGraphNode> requires CudaGraphNode to be Send + Sync
+unsafe impl Send for CudaGraph {}
 
 impl CudaGraph {
     pub fn new() -> Self {

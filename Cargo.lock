@@ -2860,6 +2860,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "vllm-model",
  "vllm-testing",
  "vllm-traits",
 ]
@@ -2892,6 +2893,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tiktoken",
  "tokenizers",
+ "tracing",
  "vllm-dist",
  "vllm-testing",
  "vllm-traits",
