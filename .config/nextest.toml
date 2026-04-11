@@ -1,0 +1,62 @@
+# Nextest configuration for vllm-lite
+# https://nexte.st/book/configuration.html
+
+[profile.default]
+# Fail fast on first failure
+fail-fast = false
+
+# Number of retries for flaky tests
+retries = { backoff = "exponential", count = 2, delay = "1s", jitter = true }
+
+# Slow test threshold
+slow-timeout = { period = "30s", terminate-after = 2, grace-period = "10s" }
+
+# Display settings
+status-level = "slow"
+final-status-level = "slow"
+
+[profile.ci]
+# CI profile - more verbose output
+fail-fast = false
+status-level = "all"
+final-status-level = "all"
+retries = { backoff = "exponential", count = 3, delay = "2s" }
+slow-timeout = { period = "60s", terminate-after = 3, grace-period = "15s" }
+
+[profile.optimized]
+# Optimized profile for local development - faster feedback
+fail-fast = true
+status-level = "skip"
+final-status-level = "slow"
+retries = { backoff = "fixed", count = 1, delay = "500ms" }
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+# Override for specific slow tests
+[[profile.default.overrides]]
+filter = 'test(~test_llama_block)'
+threads-required = 1
+slow-timeout = { period = "10s", terminate-after = 2 }
+
+[[profile.default.overrides]]
+filter = 'test(~test_qwen3_model)'
+threads-required = 1
+slow-timeout = { period = "5s", terminate-after = 2 }
+
+[[profile.default.overrides]]
+filter = 'test(~test_transformer_block)'
+threads-required = 1
+slow-timeout = { period = "5s", terminate-after = 2 }
+
+[[profile.default.overrides]]
+filter = 'test(~test_forward_prefill_batch_performance)'
+threads-required = 2
+slow-timeout = { period = "15s", terminate-after = 2 }
+
+[[profile.ci.overrides]]
+filter = 'test(~test_llama_block)'
+retries = { backoff = "exponential", count = 2, delay = "2s" }
+
+[test-groups]
+# Group heavy tests to limit concurrency
+heavy-model-tests = { max-threads = 2 }
+kernel-tests = { max-threads = 4 }
