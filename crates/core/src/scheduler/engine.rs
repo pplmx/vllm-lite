@@ -11,7 +11,7 @@ use crate::scheduler::{
 };
 use crate::types::{Phase, Request, SchedulerConfig, Sequence, Status};
 
-/// SchedulerEngineV2 - Componentized scheduler architecture
+/// SchedulerEngine - Componentized scheduler architecture
 ///
 /// This engine combines multiple specialized components:
 /// - RequestQueue: O(1) lookup and removal with phase-aware indexing
@@ -19,7 +19,7 @@ use crate::types::{Phase, Request, SchedulerConfig, Sequence, Status};
 /// - BatchComposer: Phase-specific batch construction
 /// - MemoryManager: Block allocation and eviction
 /// - RadixTree: Prefix caching for prompt reuse
-pub struct SchedulerEngineV2 {
+pub struct SchedulerEngine {
     request_queue: RequestQueue,
     phase_scheduler: PhaseScheduler,
     batch_composer: BatchComposer,
@@ -34,8 +34,8 @@ pub struct SchedulerEngineV2 {
     observers: SchedulerObservers,
 }
 
-impl SchedulerEngineV2 {
-    /// Create a new SchedulerEngineV2 with the given configuration
+impl SchedulerEngine {
+    /// Create a new SchedulerEngine with the given configuration
     ///
     /// # Arguments
     /// * `config` - Scheduler configuration
@@ -409,7 +409,7 @@ impl SchedulerEngineV2 {
     }
 }
 
-impl Default for SchedulerEngineV2 {
+impl Default for SchedulerEngine {
     fn default() -> Self {
         Self::new(SchedulerConfig::default(), 1024)
     }
@@ -422,9 +422,9 @@ mod tests {
     use vllm_traits::BatchPhase;
 
     #[test]
-    fn test_engine_v2_add_request() {
+    fn test_engine_add_request() {
         let config = SchedulerConfig::default();
-        let mut engine = SchedulerEngineV2::new(config, 1024);
+        let mut engine = SchedulerEngine::new(config, 1024);
         let id = engine.add_request(Request::new(0, vec![1, 2, 3], 5));
         assert!(id > 0);
         assert!(engine.has_pending());
@@ -432,9 +432,9 @@ mod tests {
     }
 
     #[test]
-    fn test_engine_v2_build_batch() {
+    fn test_engine_build_batch() {
         let config = SchedulerConfig::default();
-        let mut engine = SchedulerEngineV2::new(config, 1024);
+        let mut engine = SchedulerEngine::new(config, 1024);
         engine.add_request(Request::new(0, vec![1, 2, 3], 5));
         let batch = engine.build_batch();
         assert!(!batch.is_empty());
@@ -442,18 +442,18 @@ mod tests {
     }
 
     #[test]
-    fn test_engine_v2_batch_phase_is_prefill() {
+    fn test_engine_batch_phase_is_prefill() {
         let config = SchedulerConfig::default();
-        let mut engine = SchedulerEngineV2::new(config, 1024);
+        let mut engine = SchedulerEngine::new(config, 1024);
         engine.add_request(Request::new(0, vec![1, 2, 3], 5));
         let batch = engine.build_batch();
         assert_eq!(batch.phase, BatchPhase::Prefill);
     }
 
     #[test]
-    fn test_engine_v2_update_sequence() {
+    fn test_engine_update_sequence() {
         let config = SchedulerConfig::default();
-        let mut engine = SchedulerEngineV2::new(config, 1024);
+        let mut engine = SchedulerEngine::new(config, 1024);
         let id = engine.add_request(Request::new(0, vec![1, 2, 3], 5));
         let _batch = engine.build_batch();
 
@@ -465,9 +465,9 @@ mod tests {
     }
 
     #[test]
-    fn test_engine_v2_multiple_requests() {
+    fn test_engine_multiple_requests() {
         let config = SchedulerConfig::default();
-        let mut engine = SchedulerEngineV2::new(config, 1024);
+        let mut engine = SchedulerEngine::new(config, 1024);
 
         // Add multiple requests
         let id1 = engine.add_request(Request::new(0, vec![1, 2], 5));
@@ -482,9 +482,9 @@ mod tests {
     }
 
     #[test]
-    fn test_engine_v2_memory_pressure() {
+    fn test_engine_memory_pressure() {
         let config = SchedulerConfig::default();
-        let mut engine = SchedulerEngineV2::new(config, 10); // Small memory
+        let mut engine = SchedulerEngine::new(config, 10); // Small memory
 
         // Memory pressure should be 0.0 with all blocks free
         assert_eq!(engine.get_memory_pressure(), 0.0);
@@ -501,9 +501,9 @@ mod tests {
     }
 
     #[test]
-    fn test_engine_v2_prefix_cache_hit() {
+    fn test_engine_prefix_cache_hit() {
         let config = SchedulerConfig::default();
-        let mut engine = SchedulerEngineV2::new(config, 1024);
+        let mut engine = SchedulerEngine::new(config, 1024);
 
         // Add first request
         let prompt = vec![1, 2, 3, 4, 5];

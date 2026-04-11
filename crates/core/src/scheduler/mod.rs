@@ -10,14 +10,13 @@ pub mod memory;
 pub mod batch;
 pub mod batch_composer;
 pub mod batch_planner;
-pub mod engine_v2;
+pub mod engine;
 pub mod observer;
 pub mod queue_manager;
 pub mod stats;
 
 pub use batch_composer::{BatchComposer, BatchCompositionConfig};
-pub use engine_v2::SchedulerEngineV2;
-pub use engine_v2::SchedulerEngineV2 as SchedulerEngine; // Re-export as SchedulerEngine for compatibility
+pub use engine::SchedulerEngine;
 pub use memory::MemoryManager;
 pub use observer::{ObserverEvent, SchedulerObserver, SchedulerObservers};
 pub use phase_scheduler::{PhaseScheduler, PhaseSwitchPolicy, SchedulerState};
