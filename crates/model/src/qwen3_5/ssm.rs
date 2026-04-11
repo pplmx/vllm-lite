@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use candle_core::{DType, Module, Result as CandleResult, Tensor};
-use candle_nn::{conv1d, Conv1d, LayerNorm, Linear, VarBuilder};
+use candle_nn::{Conv1d, LayerNorm, Linear, VarBuilder, conv1d};
 use thiserror::Error;
 
 #[derive(Clone, Debug)]
