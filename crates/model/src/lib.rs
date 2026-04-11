@@ -15,8 +15,8 @@ pub mod qwen3_config;
 pub mod tokenizer;
 
 pub use kernels::{
-    fused_attention_layer, fused_mlp_layer, AttentionVariant, CudaGraph, FlashAttention,
-    FlashAttentionConfig, FlashAttentionKernel,
+    AttentionVariant, CudaGraph, FlashAttention, FlashAttentionConfig, FlashAttentionKernel,
+    fused_attention_layer, fused_mlp_layer,
 };
 pub use loader::{ModelLoader, ModelLoaderBuilder};
 pub use quantize::{QuantizationConfig, QuantizationFormat, QuantizedTensor, StorageTensor};
