@@ -1,6 +1,6 @@
 use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
-use vllm_core::kv_cache::{hash_tokens, BlockAllocator, PrefixCache};
+use vllm_core::kv_cache::{BlockAllocator, PrefixCache, hash_tokens};
 use vllm_core::types::{Request, SchedulerConfig, SeqId, TokenId};
 use vllm_testing::StubModel;
 
