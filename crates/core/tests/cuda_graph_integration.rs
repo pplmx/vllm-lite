@@ -1,14 +1,21 @@
 // crates/core/tests/cuda_graph_integration.rs
+use std::sync::Arc;
 use vllm_core::engine::Engine;
+use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_core::scheduler::{GraphBatch, SchedulerCudaGraphConfig, SchedulerEngine};
 use vllm_core::types::{Request, SchedulerConfig};
 use vllm_traits::{BatchOutput, ModelBackend, ModelError};
+
+fn create_test_engine(config: SchedulerConfig, num_kv_blocks: usize) -> SchedulerEngine {
+    let metrics = Arc::new(EnhancedMetricsCollector::new());
+    SchedulerEngine::new(config, num_kv_blocks, metrics)
+}
 
 /// Test that CUDA Graph is disabled by default
 #[test]
 fn test_cuda_graph_disabled_by_default() {
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngine::new(config, 1024);
+    let mut engine = create_test_engine(config, 1024);
     // Build batch should return regular batch
     let batch = engine.build_batch_with_graph();
     assert!(!batch.is_graph());
@@ -24,13 +31,13 @@ fn test_decode_batch_can_use_graph() {
         },
         ..Default::default()
     };
-    let mut engine = SchedulerEngine::new(config, 1024);
+    let mut engine = create_test_engine(config, 1024);
     // Add a request
     engine.add_request(Request::new(0, vec![1, 2, 3], 5));
     // Build batch (first will be prefill)
     let batch1 = engine.build_batch_with_graph();
     assert!(!batch1.is_graph()); // First is prefill
-    // Update to move to decode
+                                 // Update to move to decode
     let seq_id = batch1.into_regular().seq_ids[0];
     engine.update(&[seq_id], &[10], &[3]);
     // Second batch should be decode and could use graph

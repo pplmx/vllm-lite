@@ -1,10 +1,17 @@
+use std::sync::Arc;
+use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_core::scheduler::SchedulerEngine;
 use vllm_core::types::{Priority, Request, SchedulerConfig, Status};
+
+fn create_test_engine(config: SchedulerConfig, num_kv_blocks: usize) -> SchedulerEngine {
+    let metrics = Arc::new(EnhancedMetricsCollector::new());
+    SchedulerEngine::new(config, num_kv_blocks, metrics)
+}
 
 #[test]
 fn test_scheduler_batch_builder_extract() {
     let config = SchedulerConfig::default();
-    let mut sched = SchedulerEngine::new(config, 1024);
+    let mut sched = create_test_engine(config, 1024);
 
     // Add 5 requests
     for i in 1..=5 {
@@ -48,7 +55,7 @@ fn test_pd_separation_refactored() {
         ..Default::default()
     };
 
-    let mut sched = SchedulerEngine::new(config, 1024);
+    let mut sched = create_test_engine(config, 1024);
 
     // Add request 1: prefill then decode
     sched.add_request(Request::new(1, vec![1, 2, 3], 5));
@@ -88,7 +95,7 @@ fn test_pd_separation_refactored() {
 #[test]
 fn test_process_finished_sequences() {
     let config = SchedulerConfig::default();
-    let mut sched = SchedulerEngine::new(config, 1024);
+    let mut sched = create_test_engine(config, 1024);
 
     // Add request with max_tokens = prompt_len (should finish after prefill)
     sched.add_request(Request::new(1, vec![1, 2], 2)); // prompt_len=2, max_tokens=2
@@ -122,7 +129,7 @@ fn test_build_decode_batch_budget() {
         ..Default::default()
     };
 
-    let mut sched = SchedulerEngine::new(config, 1024);
+    let mut sched = create_test_engine(config, 1024);
     sched.add_request(Request::new(1, vec![1], 5));
     let batch1 = sched.build_batch();
     sched.update(&batch1.seq_ids, &[10], &[1]);
@@ -155,7 +162,7 @@ fn test_token_budget_boundary_zero() {
         ..Default::default()
     };
 
-    let mut sched = SchedulerEngine::new(config, 1024);
+    let mut sched = create_test_engine(config, 1024);
 
     // Add some requests
     for i in 1..=5 {
@@ -184,7 +191,7 @@ fn test_token_budget_boundary_one() {
         ..Default::default()
     };
 
-    let mut sched = SchedulerEngine::new(config, 1024);
+    let mut sched = create_test_engine(config, 1024);
 
     // Add decode requests (1 token each)
     for i in 1..=3 {
@@ -215,7 +222,7 @@ fn test_prefill_and_decode_separation() {
         ..Default::default()
     };
 
-    let mut sched = SchedulerEngine::new(config, 1024);
+    let mut sched = create_test_engine(config, 1024);
 
     // Add prefill requests
     for i in 1..=3 {
@@ -255,7 +262,7 @@ fn test_priority_scheduling() {
         ..Default::default()
     };
 
-    let mut sched = SchedulerEngine::new(config, 1024);
+    let mut sched = create_test_engine(config, 1024);
 
     // Add requests with different priorities (lower = higher priority)
     sched.add_request(Request::new(1, vec![1], 5)); // default priority 0
@@ -288,7 +295,7 @@ fn test_consecutive_decode_limit() {
         ..Default::default()
     };
 
-    let mut sched = SchedulerEngine::new(config, 1024);
+    let mut sched = create_test_engine(config, 1024);
 
     // Add requests and simulate multiple decode rounds
     for i in 1..=3 {
@@ -331,7 +338,7 @@ fn test_min_batch_size() {
         ..Default::default()
     };
 
-    let mut sched = SchedulerEngine::new(config, 1024);
+    let mut sched = create_test_engine(config, 1024);
 
     // Add fewer than min_batch_size requests
     sched.add_request(Request::new(1, vec![1], 5));
@@ -360,7 +367,7 @@ fn test_max_batch_size() {
         ..Default::default()
     };
 
-    let mut sched = SchedulerEngine::new(config, 1024);
+    let mut sched = create_test_engine(config, 1024);
 
     // Add many requests
     for i in 1..=20 {
@@ -472,7 +479,7 @@ fn test_memory_manager_select_victims() {
 
 #[test]
 fn test_cache_manager_prefix_match() {
-    use vllm_core::scheduler::cache::{CacheManager, hash_tokens};
+    use vllm_core::scheduler::cache::{hash_tokens, CacheManager};
 
     let mut cache = CacheManager::new();
 
@@ -537,7 +544,7 @@ fn test_preemption_execution() {
         ..Default::default()
     };
 
-    let mut sched = SchedulerEngine::new(config, 100);
+    let mut sched = create_test_engine(config, 100);
 
     // Add multiple requests
     for i in 1..=5 {

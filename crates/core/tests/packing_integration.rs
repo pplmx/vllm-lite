@@ -1,5 +1,12 @@
+use std::sync::Arc;
+use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_core::scheduler::{SchedulerEngine, SequencePacker};
 use vllm_core::types::{Request, SchedulerConfig, SequencePackingConfig};
+
+fn create_test_engine(config: SchedulerConfig, num_kv_blocks: usize) -> SchedulerEngine {
+    let metrics = Arc::new(EnhancedMetricsCollector::new());
+    SchedulerEngine::new(config, num_kv_blocks, metrics)
+}
 
 #[test]
 fn test_packing_disabled_by_default() {
@@ -17,7 +24,7 @@ fn test_packing_disabled_returns_single_batch() {
         ..Default::default()
     };
 
-    let mut engine = SchedulerEngine::new(config, 1024);
+    let mut engine = create_test_engine(config, 1024);
 
     // Add requests
     engine.add_request(Request::new(0, vec![1; 100], 10));
@@ -32,7 +39,7 @@ fn test_packing_disabled_returns_single_batch() {
 #[test]
 fn test_end_to_end_packing_reduces_waste() {
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngine::new(config, 1024);
+    let mut engine = create_test_engine(config, 1024);
 
     // Add requests with varying lengths
     engine.add_request(Request::new(0, vec![1; 1000], 10));
