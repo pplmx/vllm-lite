@@ -52,7 +52,9 @@ impl PrometheusExporter {
             self.collector.get_counter("packing_sequences_total")
         ));
 
-        output.push_str("# HELP speculative_adjustments_total Number of speculative draft adjustments\n");
+        output.push_str(
+            "# HELP speculative_adjustments_total Number of speculative draft adjustments\n",
+        );
         output.push_str("# TYPE speculative_adjustments_total counter\n");
         output.push_str(&format!(
             "speculative_adjustments_total {}\n",

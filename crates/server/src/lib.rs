@@ -6,6 +6,7 @@ use std::sync::Arc;
 use crate::api::EngineHandle;
 use crate::auth::AuthMiddleware;
 use crate::openai::batch::manager::BatchManager;
+use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_model::tokenizer::Tokenizer;
 
 pub mod api;
@@ -29,4 +30,8 @@ pub struct ApiState {
     pub batch_manager: Arc<BatchManager>,
     /// Authentication middleware (None if disabled)
     pub auth: Option<Arc<AuthMiddleware>>,
+    /// Health checker for liveness/readiness probes
+    pub health: Arc<std::sync::RwLock<HealthChecker>>,
+    /// Enhanced metrics collector
+    pub metrics: Arc<EnhancedMetricsCollector>,
 }

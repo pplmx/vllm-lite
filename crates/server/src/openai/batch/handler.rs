@@ -171,14 +171,19 @@ mod tests {
     use std::sync::Arc;
     use vllm_model::tokenizer::Tokenizer;
 
-    fn create_test_state() -> ApiState {
+    fn create_test_state() -> crate::ApiState {
+        use vllm_core::metrics::EnhancedMetricsCollector;
         let tokenizer = Tokenizer::new();
         let (engine_tx, _engine_rx) = tokio::sync::mpsc::unbounded_channel();
-        ApiState {
+        crate::ApiState {
             engine_tx,
             tokenizer: Arc::new(tokenizer),
             batch_manager: Arc::new(BatchManager::new()),
             auth: None,
+            health: Arc::new(std::sync::RwLock::new(crate::HealthChecker::new(
+                true, true,
+            ))),
+            metrics: Arc::new(EnhancedMetricsCollector::new()),
         }
     }
 
