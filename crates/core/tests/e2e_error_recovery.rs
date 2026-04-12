@@ -51,8 +51,9 @@ impl ModelBackend for FaultInjectedModel {
         num_computed_tokens: &[usize],
         is_prefill: &[bool],
     ) -> vllm_traits::Result<BatchOutput> {
-        // Only fail occasionally
-        if self.should_fail() && rand::random::<f32>() < 0.1 {
+        // Deterministic failure: fail every 10th call to ensure reproducible tests
+        let count = self.failure_count.load(Ordering::Relaxed);
+        if self.should_fail() && count % 10 == 0 {
             return Err(ModelError::new("Simulated failure"));
         }
         self.inner.forward(
