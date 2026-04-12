@@ -1,11 +1,23 @@
-# Changelog
+# 📋 Changelog
 
-All notable changes to vLLM-lite will be documented in this file.
+<p align="center">
+  <img src="https://img.shields.io/badge/Keep%20a%20Changelog-1.0.0-blue.svg?style=flat-square" alt="Keep a Changelog">
+  <img src="https://img.shields.io/badge/Semantic%20Versioning-2.0.0-green.svg?style=flat-square" alt="Semantic Versioning">
+</p>
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+> All notable changes to **vLLM-lite** will be documented in this file.
 
-## [Unreleased]
+---
+
+## 📊 Release Statistics
+
+| 版本 | 日期 | 测试 | 覆盖率 |
+|:----:|:----:|:----:|:------:|
+| [Unreleased] | - | 654+ | 90%+ |
+
+---
+
+## 🚀 [Unreleased]
 
 ### Added
 
@@ -64,29 +76,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Phase 5: Production Readiness (2025-04-12)
 
 **Observability & Metrics**
+
 - Prometheus-compatible metrics export (`/metrics` endpoint)
 - Enhanced metrics collection (CUDA Graph, Sequence Packing, Adaptive Speculative)
 - Health check endpoints (`/health`, `/ready`)
 - Real-time metrics with `EnhancedMetricsCollector`
 
 **Fault Tolerance**
+
 - Circuit breaker pattern for automatic failure recovery
 - Retry strategy with exponential backoff
 - Degrade strategy for graceful degradation
 - Recovery manager with error severity classification
 
 **Testing**
+
 - 26 E2E integration tests (lifecycle, concurrent, error recovery, graceful shutdown)
 - Deterministic mock models for reproducible tests
 - Performance regression testing in CI
 
 **Deployment**
+
 - Multi-stage Docker build (`Dockerfile`)
 - Docker Compose with Prometheus (`docker-compose.yml`)
 - Kubernetes manifests (namespace, deployment, service, HPA)
 - CI performance regression workflow (`.github/workflows/benchmark.yml`)
 
 **Core Features**
+
 - Request timeout support (`timeout` parameter)
 - Graceful shutdown (SIGINT/SIGTERM handling)
 - YAML configuration file support
