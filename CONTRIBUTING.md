@@ -36,10 +36,11 @@ cargo run -p vllm-server
 ## Development Workflow
 
 1. **Fork & Clone**
-   - Fork the repository on GitHub
-   - Clone your fork: `git clone https://github.com/YOUR_USERNAME/vllm-lite.git`
+    - Fork the repository on GitHub
+    - Clone your fork: `git clone https://github.com/YOUR_USERNAME/vllm-lite.git`
 
 2. **Create a Branch**
+
    ```bash
    git checkout -b feature/your-feature-name
    # or
@@ -47,26 +48,27 @@ cargo run -p vllm-server
    ```
 
 3. **Make Changes**
-   - Follow the coding standards below
-   - Add tests for new features
-   - Keep commits atomic and focused
+    - Follow the coding standards below
+    - Add tests for new features
+    - Keep commits atomic and focused
 
 4. **Test Your Changes**
+
    ```bash
    # Format check
    cargo fmt --all --check
-   
+
    # Lint
    cargo clippy --workspace -- -D warnings
-   
+
    # Run tests
    cargo test --workspace
    ```
 
 5. **Submit a Pull Request**
-   - Push to your fork
-   - Open a PR against `main`
-   - Fill out the PR template
+    - Push to your fork
+    - Open a PR against `main`
+    - Fill out the PR template
 
 ## Coding Standards
 
@@ -77,22 +79,22 @@ cargo run -p vllm-server
 
 ## Commit Message Format
 
-```
+```text
 <type>(<scope>): <subject>
 ```
 
-| Type | Description |
-|------|-------------|
-| feat | New feature |
-| fix | Bug fix |
-| refactor | Code restructuring |
-| test | Adding/updating tests |
-| docs | Documentation |
-| chore | Maintenance |
+| Type     | Description           |
+| -------- | --------------------- |
+| feat     | New feature           |
+| fix      | Bug fix               |
+| refactor | Code restructuring    |
+| test     | Adding/updating tests |
+| docs     | Documentation         |
+| chore    | Maintenance           |
 
 **Example**:
 
-```
+```text
 feat(scheduler): add decode-priority batching
 
 - Prioritize decode sequences over prefill
@@ -102,7 +104,7 @@ feat(scheduler): add decode-priority batching
 
 ## Project Structure
 
-```
+```text
 vllm-lite/
 ├── crates/
 │   ├── traits/      # Interface definitions

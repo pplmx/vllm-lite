@@ -4,7 +4,7 @@ This guide helps AI agents work effectively with the vllm-lite codebase.
 
 ## ⚠️ IMPORTANT: No Worktrees
 
-**DO NOT use git worktrees for local development.** 
+**DO NOT use git worktrees for local development.**
 
 Single-developer local worktrees cause unnecessary merge conflicts and add complexity without benefit. Just work directly on the current branch.
 
@@ -52,7 +52,7 @@ just clean
 
 ## Project Structure
 
-```
+```text
 vllm-lite/
 ├── Cargo.toml              # Workspace root (5 crates: traits, core, model, server, dist)
 ├── justfile                # Build automation
@@ -112,9 +112,11 @@ let weights = load_checkpoint(Path::new("model.gguf"), &device)?;
 ## Quantization
 
 Supported quantization formats:
+
 - GGUF Q4_K_M (loads and dequantizes to FP16)
 
 The `StorageTensor` abstraction supports multiple storage strategies:
+
 - `Quantized(QuantizedTensor)` - Keep in quantized form (memory efficient)
 - `Fp16(Tensor)` - Dequantize to FP16 (balanced)
 - `Fp32(Tensor)` - Dequantize to FP32 (highest precision)
@@ -122,6 +124,7 @@ The `StorageTensor` abstraction supports multiple storage strategies:
 ### Future Support
 
 The `QuantizationFormat` enum is designed for future support of:
+
 - GPTQ
 - AWQ
 - Custom quantization schemes
@@ -133,6 +136,7 @@ The `QuantizationFormat` enum is designed for future support of:
 The `MambaBlock` uses optimized sequential processing with pre-allocated buffers for improved performance on medium to long sequences.
 
 Key optimizations:
+
 - Pre-allocated output buffers
 - Minimized tensor allocations in the forward loop
 - Local variable caching for frequently accessed dimensions
@@ -157,13 +161,13 @@ Key optimizations:
 
 ### Naming Conventions
 
-| Type | Convention | Example |
-|------|------------|---------|
-| Types | PascalCase | `SchedulerEngine`, `Status` |
-| Functions/Variables | snake_case | `add_request`, `running_count` |
-| Constants | SCREAMING_SNAKE_CASE | `BLOCK_SIZE`, `MAX_BATCH_SIZE` |
-| Modules | snake_case | `queue_manager`, `eviction` |
-| Crate names | kebab-case | `vllm-core` |
+| Type                | Convention           | Example                        |
+| ------------------- | -------------------- | ------------------------------ |
+| Types               | PascalCase           | `SchedulerEngine`, `Status`    |
+| Functions/Variables | snake_case           | `add_request`, `running_count` |
+| Constants           | SCREAMING_SNAKE_CASE | `BLOCK_SIZE`, `MAX_BATCH_SIZE` |
+| Modules             | snake_case           | `queue_manager`, `eviction`    |
+| Crate names         | kebab-case           | `vllm-core`                    |
 
 ### Types
 
@@ -207,18 +211,18 @@ pub type Result<T> = std::result::Result<T, EngineError>;
 
 ## Commit Message Format
 
-```
+```text
 <type>(<scope>): <subject>
 ```
 
-| Type | Description |
-|------|-------------|
-| `feat` | New feature |
-| `fix` | Bug fix |
-| `refactor` | Code restructuring |
-| `test` | Adding/updating tests |
-| `docs` | Documentation |
-| `chore` | Maintenance |
+| Type       | Description           |
+| ---------- | --------------------- |
+| `feat`     | New feature           |
+| `fix`      | Bug fix               |
+| `refactor` | Code restructuring    |
+| `test`     | Adding/updating tests |
+| `docs`     | Documentation         |
+| `chore`    | Maintenance           |
 
 **Examples**:
 
@@ -243,19 +247,19 @@ just ci           # Full CI
 
 ## Key Design Patterns
 
-| Pattern | Description |
-|---------|-------------|
-| **ModelBackend trait** | Abstracts ML model implementations |
-| **Paged KV Cache** | Block-based KV memory management |
-| **Prefix Caching** | Reuse KV for repeated prompts |
-| **Speculative Decoding** | Draft-then-verify token generation |
-| **Continuous Batching** | Dynamic batch scheduling with fairness |
+| Pattern                  | Description                            |
+| ------------------------ | -------------------------------------- |
+| **ModelBackend trait**   | Abstracts ML model implementations     |
+| **Paged KV Cache**       | Block-based KV memory management       |
+| **Prefix Caching**       | Reuse KV for repeated prompts          |
+| **Speculative Decoding** | Draft-then-verify token generation     |
+| **Continuous Batching**  | Dynamic batch scheduling with fairness |
 
 ---
 
 ## Crate Dependencies
 
-```
+```text
 vllm-traits   → (no deps)
 vllm-core     → vllm-traits
 vllm-model    → vllm-traits, candle

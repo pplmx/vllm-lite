@@ -1,7 +1,7 @@
 [global]
-disable = ["MD029", "MD034", "MD036", "MD059", "MD033", "MD025"]
+disable = ["MD029", "MD034", "MD036", "MD041", "MD059", "MD033", "MD025"]
 respect_gitignore = true
-exclude = ["themes"]
+exclude = ["docs/superpowers"]
 
 [MD004]
 style = "dash"

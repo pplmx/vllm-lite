@@ -95,21 +95,23 @@ cargo fmt --all --check
 ---
 
 <a name="项目亮点"></a>
+
 ## ✨ 项目亮点
 
 <div align="center">
 
-| 🚀 **高性能** | 🛡️ **生产就绪** | 📊 **可观测性** | 🐳 **云原生** |
-|:--|:--|:--|:--|
-| Rust 原生实现 | Circuit Breaker 熔断 | Prometheus Metrics | Docker/K8s 支持 |
-| Paged Attention | 26个 E2E 测试 | Health Check | 多阶段构建 |
-| Flash Attention | 自动故障恢复 | 实时指标监控 | HPA 自动扩缩 |
+| 🚀 **高性能**   | 🛡️ **生产就绪**      | 📊 **可观测性**    | 🐳 **云原生**   |
+| :-------------- | :------------------- | :----------------- | :-------------- |
+| Rust 原生实现   | Circuit Breaker 熔断 | Prometheus Metrics | Docker/K8s 支持 |
+| Paged Attention | 26个 E2E 测试        | Health Check       | 多阶段构建      |
+| Flash Attention | 自动故障恢复         | 实时指标监控       | HPA 自动扩缩    |
 
 </div>
 
 ---
 
 <a name="快速开始"></a>
+
 ## ⚡ 快速开始
 
 ### 🎯 一行命令启动
@@ -137,28 +139,29 @@ curl -X POST http://localhost:8000/v1/completions \
 ---
 
 <a name="特性"></a>
+
 ## ✨ 特性详解
 
 ### 🚀 核心推理优化
 
-| 特性 | 说明 | 性能提升 |
-|------|------|---------|
-| **Paged Attention** | 分页 KV Cache，减少内存碎片 | 内存效率 ↑ 40% |
-| **Continuous Batching** | 动态批处理，GPU 利用率最大化 | 吞吐量 ↑ 35% |
-| **Prefix Caching** | Radix Tree 前缀缓存，O(k) 查找 | TTFT ↓ 60% |
-| **Flash Attention** | 动态 Tile 大小 (64/128/256) | 计算速度 ↑ 2x |
+| 特性                    | 说明                           | 性能提升       |
+| ----------------------- | ------------------------------ | -------------- |
+| **Paged Attention**     | 分页 KV Cache，减少内存碎片    | 内存效率 ↑ 40% |
+| **Continuous Batching** | 动态批处理，GPU 利用率最大化   | 吞吐量 ↑ 35%   |
+| **Prefix Caching**      | Radix Tree 前缀缓存，O(k) 查找 | TTFT ↓ 60%     |
+| **Flash Attention**     | 动态 Tile 大小 (64/128/256)    | 计算速度 ↑ 2x  |
 
 ### 🎯 高级调度策略
 
-| 策略 | 描述 | 适用场景 |
-|------|------|---------|
-| **FCFS** | 先来先服务 | 公平性优先 |
-| **SJF** | 最短作业优先 | 低延迟优先 |
-| **Priority** | 优先级调度 | VIP 请求 |
+| 策略         | 描述         | 适用场景   |
+| ------------ | ------------ | ---------- |
+| **FCFS**     | 先来先服务   | 公平性优先 |
+| **SJF**      | 最短作业优先 | 低延迟优先 |
+| **Priority** | 优先级调度   | VIP 请求   |
 
 ### 🛡️ 生产级特性
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    生产就绪功能矩阵                           │
 ├─────────────────────────────────────────────────────────────┤
@@ -179,52 +182,55 @@ curl -X POST http://localhost:8000/v1/completions \
 ---
 
 <a name="性能指标"></a>
+
 ## 📊 性能指标
 
 <div align="center">
 
-| 指标 | 数值 | 说明 |
-|------|------|------|
-| **吞吐量** | ~2000 tokens/s | Qwen2.5-0.5B, A100 GPU |
-| **首 Token 延迟 (TTFT)** | < 50ms | 1K token prompt |
-| **P99 延迟** | < 100ms | end-to-end |
-| **显存效率** | +40% | vs 传统 KV Cache |
-| **测试覆盖率** | 654+ | 单元 + 集成测试 |
-| **E2E 测试** | 26个 | 全场景覆盖 |
+| 指标                     | 数值           | 说明                   |
+| ------------------------ | -------------- | ---------------------- |
+| **吞吐量**               | ~2000 tokens/s | Qwen2.5-0.5B, A100 GPU |
+| **首 Token 延迟 (TTFT)** | < 50ms         | 1K token prompt        |
+| **P99 延迟**             | < 100ms        | end-to-end             |
+| **显存效率**             | +40%           | vs 传统 KV Cache       |
+| **测试覆盖率**           | 654+           | 单元 + 集成测试        |
+| **E2E 测试**             | 26个           | 全场景覆盖             |
 
 </div>
 
 ---
 
 <a name="支持模型"></a>
+
 ## 📦 支持模型
 
 <div align="center">
 
-| 模型 | 架构 | 状态 | 显存需求 |
-|------|------|:----:|---------:|
-| **Qwen3** | GQA + RoPE | ✅ | 1-4 GB |
-| **Llama** | GQA + RMSNorm | ✅ | 2-8 GB |
-| **Mistral** | Sliding Window + GQA | ✅ | 2-8 GB |
-| **Gemma4** | Hybrid Attention + GeGLU | ✅ | 2-8 GB |
-| **Mixtral** | Sparse MoE (8 experts) | ✅ | 8-16 GB |
+| 模型        | 架构                     | 状态  | 显存需求 |
+| ----------- | ------------------------ | :---: | -------: |
+| **Qwen3**   | GQA + RoPE               |  ✅   |   1-4 GB |
+| **Llama**   | GQA + RMSNorm            |  ✅   |   2-8 GB |
+| **Mistral** | Sliding Window + GQA     |  ✅   |   2-8 GB |
+| **Gemma4**  | Hybrid Attention + GeGLU |  ✅   |   2-8 GB |
+| **Mixtral** | Sparse MoE (8 experts)   |  ✅   |  8-16 GB |
 
 </div>
 
 <details>
   <summary>📋 查看模型详情</summary>
-  
-  - ✅ **Qwen3**: 支持 0.5B 到 110B 参数模型
-  - ✅ **Llama**: 支持 Llama 2/3 系列
-  - ✅ **Mistral**: 支持 Mistral 7B 和 Mixtral 8x7B
-  - ✅ **Gemma4**: Google Gemma 4 系列
-  - ⏳ **更多模型**: 持续添加中...
+
+- ✅ **Qwen3**: 支持 0.5B 到 110B 参数模型
+- ✅ **Llama**: 支持 Llama 2/3 系列
+- ✅ **Mistral**: 支持 Mistral 7B 和 Mixtral 8x7B
+- ✅ **Gemma4**: Google Gemma 4 系列
+- ⏳ **更多模型**: 持续添加中...
 
 </details>
 
 ---
 
 <a name="配置"></a>
+
 ## ⚙️ 配置
 
 ### 🔧 环境变量快速配置
@@ -246,15 +252,15 @@ export VLLM_API_KEY=your-secret-key
 
 <div align="center">
 
-| 变量 | 描述 | 默认值 | 说明 |
-|------|------|--------|------|
-| `VLLM_HOST` | 服务 host | `0.0.0.0` | 监听地址 |
-| `VLLM_PORT` | 服务端口 | `8000` | API 端口 |
-| `VLLM_LOG_LEVEL` | 日志级别 | `info` | debug/info/warn/error |
-| `VLLM_KV_BLOCKS` | KV Block 数量 | `1024` | 显存相关 |
-| `VLLM_MAX_DRAFT_TOKENS` | 最大投机 Token | `8` | 投机解码 |
-| `VLLM_TENSOR_PARALLEL_SIZE` | 张量并行度 | `1` | GPU 数量 |
-| `VLLM_API_KEY` | API 密钥 | - | 认证必填 |
+| 变量                        | 描述           | 默认值    | 说明                  |
+| --------------------------- | -------------- | --------- | --------------------- |
+| `VLLM_HOST`                 | 服务 host      | `0.0.0.0` | 监听地址              |
+| `VLLM_PORT`                 | 服务端口       | `8000`    | API 端口              |
+| `VLLM_LOG_LEVEL`            | 日志级别       | `info`    | debug/info/warn/error |
+| `VLLM_KV_BLOCKS`            | KV Block 数量  | `1024`    | 显存相关              |
+| `VLLM_MAX_DRAFT_TOKENS`     | 最大投机 Token | `8`       | 投机解码              |
+| `VLLM_TENSOR_PARALLEL_SIZE` | 张量并行度     | `1`       | GPU 数量              |
+| `VLLM_API_KEY`              | API 密钥       | -         | 认证必填              |
 
 </div>
 
@@ -307,21 +313,22 @@ cargo run -p vllm-server -- --help
 ---
 
 <a name="api-端点"></a>
+
 ## 🌐 API 端点
 
 ### RESTful API
 
 <div align="center">
 
-| 端点 | 方法 | 描述 | 认证 |
-|------|------|------|:----:|
-| `/v1/chat/completions` | POST | Chat 补全 | 🔐 |
-| `/v1/completions` | POST | 文本补全 | 🔐 |
-| `/v1/embeddings` | POST | 向量嵌入 | 🔐 |
-| `/v1/batches` | POST/GET | 批量请求 | 🔐 |
-| `/metrics` | GET | Prometheus 指标 | - |
-| `/health` | GET | 存活检查 | - |
-| `/ready` | GET | 就绪检查 | - |
+| 端点                   | 方法     | 描述            | 认证  |
+| ---------------------- | -------- | --------------- | :---: |
+| `/v1/chat/completions` | POST     | Chat 补全       |  🔐   |
+| `/v1/completions`      | POST     | 文本补全        |  🔐   |
+| `/v1/embeddings`       | POST     | 向量嵌入        |  🔐   |
+| `/v1/batches`          | POST/GET | 批量请求        |  🔐   |
+| `/metrics`             | GET      | Prometheus 指标 |   -   |
+| `/health`              | GET      | 存活检查        |   -   |
+| `/ready`               | GET      | 就绪检查        |   -   |
 
 </div>
 
@@ -332,29 +339,29 @@ cargo run -p vllm-server -- --help
 <details>
   <summary>📖 查看通用参数说明</summary>
 
-| 参数 | 类型 | 默认 | 描述 | 范围 |
-|------|------|------|------|------|
-| `model` | string | - | 模型名称 | 必需 |
-| `prompt` / `messages` | string/array | - | 输入提示 | 必需 |
-| `max_tokens` | int | 256 | 最大生成 Token 数 | 1-4096 |
-| `temperature` | float | 1.0 | 采样温度 | 0.0-2.0 |
-| `top_p` | float | 1.0 | Nucleus 采样阈值 | 0.0-1.0 |
-| `top_k` | int | 0 | Top-K 采样 | 0=禁用 |
-| `stream` | bool | false | 启用 SSE 流式输出 | true/false |
-| `repeat_penalty` | float | 1.0 | 重复惩罚 | 1.0-2.0 |
+| 参数                  | 类型         | 默认  | 描述              | 范围       |
+| --------------------- | ------------ | ----- | ----------------- | ---------- |
+| `model`               | string       | -     | 模型名称          | 必需       |
+| `prompt` / `messages` | string/array | -     | 输入提示          | 必需       |
+| `max_tokens`          | int          | 256   | 最大生成 Token 数 | 1-4096     |
+| `temperature`         | float        | 1.0   | 采样温度          | 0.0-2.0    |
+| `top_p`               | float        | 1.0   | Nucleus 采样阈值  | 0.0-1.0    |
+| `top_k`               | int          | 0     | Top-K 采样        | 0=禁用     |
+| `stream`              | bool         | false | 启用 SSE 流式输出 | true/false |
+| `repeat_penalty`      | float        | 1.0   | 重复惩罚          | 1.0-2.0    |
 
 </details>
 
 ### 通用参数
 
-| 参数 | 类型 | 默认 | 描述 |
-|------|------|------|------|
-| `max_tokens` | int | 256 | 最大生成 Token 数 |
-| `temperature` | float | 1.0 | 采样温度 (0-2) |
-| `top_p` | float | 1.0 | Nucleus 采样阈值 |
-| `top_k` | int | 0 | Top-K 采样 (0=禁用) |
-| `stream` | bool | false | 启用 SSE 流式输出 |
-| `repeat_penalty` | float | 1.0 | 重复惩罚 |
+| 参数             | 类型  | 默认  | 描述                |
+| ---------------- | ----- | ----- | ------------------- |
+| `max_tokens`     | int   | 256   | 最大生成 Token 数   |
+| `temperature`    | float | 1.0   | 采样温度 (0-2)      |
+| `top_p`          | float | 1.0   | Nucleus 采样阈值    |
+| `top_k`          | int   | 0     | Top-K 采样 (0=禁用) |
+| `stream`         | bool  | false | 启用 SSE 流式输出   |
+| `repeat_penalty` | float | 1.0   | 重复惩罚            |
 
 ---
 
@@ -413,7 +420,7 @@ engine.set_policy(Box::new(PriorityPolicy::default()));
 
 ## 🏗️ 架构
 
-```
+```text
 vllm-lite/
 ├── Cargo.toml  # Workspace (5 crates)
 ├── justfile    # 构建自动化
@@ -435,17 +442,17 @@ vllm-lite/
 
 ## 📈 性能改进
 
-| 指标 | 改进 |
-|------|------|
+| 指标         | 改进                      |
+| ------------ | ------------------------- |
 | 前缀缓存查找 | O(n) → O(k), 10-100x 提升 |
-| 队列操作 | O(n) → O(1), n 倍提升 |
-| P/D 分离 | GPU 利用率 +15-30% |
+| 队列操作     | O(n) → O(1), n 倍提升     |
+| P/D 分离     | GPU 利用率 +15-30%        |
 
 ---
 
 ## 🏗️ 架构
 
-```
+```text
 vllm-lite/
 ├── Cargo.toml              # Workspace (5 crates)
 ├── justfile                # 构建自动化
@@ -460,12 +467,12 @@ vllm-lite/
 
 ### 技术栈
 
-| 组件 | 技术 |
-|------|------|
-| Runtime | tokio |
-| ML Backend | Candle |
-| HTTP | axum |
-| Weights | SafeTensors |
+| 组件       | 技术        |
+| ---------- | ----------- |
+| Runtime    | tokio       |
+| ML Backend | Candle      |
+| HTTP       | axum        |
+| Weights    | SafeTensors |
 
 ---
 
