@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use vllm_core::metrics::EnhancedMetricsCollector;
-use vllm_core::scheduler::policy::SjfPolicy;
 use vllm_core::scheduler::SchedulerEngine;
+use vllm_core::scheduler::policy::SjfPolicy;
 use vllm_core::types::{Request, SchedulerConfig};
 use vllm_traits::BatchPhase;
 

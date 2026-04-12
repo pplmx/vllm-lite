@@ -479,7 +479,7 @@ fn test_memory_manager_select_victims() {
 
 #[test]
 fn test_cache_manager_prefix_match() {
-    use vllm_core::scheduler::cache::{hash_tokens, CacheManager};
+    use vllm_core::scheduler::cache::{CacheManager, hash_tokens};
 
     let mut cache = CacheManager::new();
 

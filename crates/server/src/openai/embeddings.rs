@@ -65,13 +65,18 @@ mod tests {
     use tokio::sync::mpsc;
     use vllm_model::tokenizer::Tokenizer;
 
-    fn create_test_state() -> ApiState {
+    fn create_test_state() -> crate::ApiState {
+        use vllm_core::metrics::EnhancedMetricsCollector;
         let (engine_tx, _rx) = mpsc::unbounded_channel();
-        ApiState {
+        crate::ApiState {
             engine_tx,
             tokenizer: Arc::new(Tokenizer::new()),
             batch_manager: Arc::new(crate::openai::batch::manager::BatchManager::new()),
             auth: None,
+            health: Arc::new(std::sync::RwLock::new(crate::HealthChecker::new(
+                true, true,
+            ))),
+            metrics: Arc::new(EnhancedMetricsCollector::new()),
         }
     }
 

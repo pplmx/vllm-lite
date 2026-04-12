@@ -4,12 +4,15 @@ mod api;
 mod auth;
 mod cli;
 mod config;
+mod health;
 mod logging;
 pub mod openai;
 
 use crate::auth::AuthMiddleware;
 use crate::openai::batch::manager::BatchManager;
-use axum::{Router, routing::get, routing::post, http::StatusCode, response::Response, extract::State};
+use axum::{
+    Router, extract::State, http::StatusCode, response::Response, routing::get, routing::post,
+};
 use candle_core::Device;
 use clap::Parser;
 use serde_json::json;
@@ -59,7 +62,8 @@ async fn health_handler(State(state): State<ApiState>) -> Response {
 async fn ready_handler(State(state): State<ApiState>) -> Response {
     let health = state.health.read().unwrap();
     let status = health.check_readiness();
-    let http_status = StatusCode::from_u16(status.http_status()).unwrap_or(StatusCode::SERVICE_UNAVAILABLE);
+    let http_status =
+        StatusCode::from_u16(status.http_status()).unwrap_or(StatusCode::SERVICE_UNAVAILABLE);
 
     let body = json!({ "status": status.as_str() });
     Response::builder()
