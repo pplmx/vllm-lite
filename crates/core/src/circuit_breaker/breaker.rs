@@ -1,14 +1,14 @@
 // crates/core/src/circuit_breaker/breaker.rs
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
 /// Circuit breaker state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CircuitState {
-    Closed, // Normal operation
-    Open,   // Failing, reject calls
+    Closed,   // Normal operation
+    Open,     // Failing, reject calls
     HalfOpen, // Testing recovery
 }
 
@@ -161,7 +161,9 @@ mod tests {
         };
         let breaker = CircuitBreaker::new(config);
         for _ in 0..3 {
-            let _ = breaker.call(|| async { Err::<i32, TestError>(TestError("fail")) }).await;
+            let _ = breaker
+                .call(|| async { Err::<i32, TestError>(TestError("fail")) })
+                .await;
         }
         let result = breaker.call(|| async { Ok::<_, TestError>(42) }).await;
         assert!(matches!(result, Err(CircuitBreakerError::Open)));
@@ -176,7 +178,9 @@ mod tests {
         };
         let breaker = CircuitBreaker::new(config);
         // First failure opens the circuit
-        let _ = breaker.call(|| async { Err::<i32, TestError>(TestError("fail")) }).await;
+        let _ = breaker
+            .call(|| async { Err::<i32, TestError>(TestError("fail")) })
+            .await;
         // Wait for recovery timeout
         tokio::time::sleep(Duration::from_millis(100)).await;
         // The next call will transition to HalfOpen
@@ -198,8 +202,12 @@ mod tests {
         };
         let breaker = CircuitBreaker::new(config);
         // Two failures open the circuit
-        let _ = breaker.call(|| async { Err::<i32, TestError>(TestError("fail")) }).await;
-        let _ = breaker.call(|| async { Err::<i32, TestError>(TestError("fail")) }).await;
+        let _ = breaker
+            .call(|| async { Err::<i32, TestError>(TestError("fail")) })
+            .await;
+        let _ = breaker
+            .call(|| async { Err::<i32, TestError>(TestError("fail")) })
+            .await;
         // Wait for recovery
         tokio::time::sleep(Duration::from_millis(100)).await;
         // Check that we're in HalfOpen by making a call that succeeds

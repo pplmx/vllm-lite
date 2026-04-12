@@ -119,8 +119,7 @@ mod tests {
         let attempts = std::sync::atomic::AtomicUsize::new(0);
         let result = strategy
             .execute(|| async {
-                let count =
-                    attempts.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let count = attempts.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 if count < 2 {
                     Err::<i32, ()>(())
                 } else {

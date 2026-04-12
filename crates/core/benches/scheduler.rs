@@ -1,5 +1,7 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
+use std::sync::Arc;
+use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_core::scheduler::SchedulerEngine;
 use vllm_core::types::{Request, SchedulerConfig};
 
@@ -17,10 +19,11 @@ fn scheduler_add_request(c: &mut Criterion) {
         max_batch_size: 256,
         ..Default::default()
     };
+    let metrics = Arc::new(EnhancedMetricsCollector::new());
 
     c.bench_function("scheduler_new", |b| {
         b.iter(|| {
-            let scheduler = SchedulerEngine::new(config.clone(), 1024);
+            let scheduler = SchedulerEngine::new(config.clone(), 1024, metrics.clone());
             black_box(scheduler)
         });
     });
@@ -28,7 +31,8 @@ fn scheduler_add_request(c: &mut Criterion) {
 
 fn scheduler_build_batch(c: &mut Criterion) {
     let config = SchedulerConfig::default();
-    let mut scheduler = SchedulerEngine::new(config, 1024);
+    let metrics = Arc::new(EnhancedMetricsCollector::new());
+    let mut scheduler = SchedulerEngine::new(config, 1024, metrics);
 
     for i in 0..100 {
         let tokens: Vec<u32> = (0..128).map(|j| (i * 100 + j) as u32).collect();
