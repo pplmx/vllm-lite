@@ -40,12 +40,13 @@ pub enum CircuitBreakerError {
 }
 
 /// Circuit breaker implementation
+#[derive(Clone)]
 pub struct CircuitBreaker {
     config: CircuitBreakerConfig,
     state: Arc<RwLock<CircuitState>>,
-    failure_count: AtomicU64,
+    failure_count: Arc<AtomicU64>,
     last_failure_time: Arc<RwLock<Option<Instant>>>,
-    half_open_calls: AtomicU64,
+    half_open_calls: Arc<AtomicU64>,
 }
 
 impl CircuitBreaker {
@@ -53,9 +54,9 @@ impl CircuitBreaker {
         Self {
             config,
             state: Arc::new(RwLock::new(CircuitState::Closed)),
-            failure_count: AtomicU64::new(0),
+            failure_count: Arc::new(AtomicU64::new(0)),
             last_failure_time: Arc::new(RwLock::new(None)),
-            half_open_calls: AtomicU64::new(0),
+            half_open_calls: Arc::new(AtomicU64::new(0)),
         }
     }
 
