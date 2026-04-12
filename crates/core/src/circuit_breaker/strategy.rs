@@ -1,103 +1,147 @@
 // crates/core/src/circuit_breaker/strategy.rs
-use std::fmt;
 use std::time::Duration;
 
-/// Trait for fallback strategies when circuit breaker is open
-pub trait FallbackStrategy: Send + Sync {
-    type Output;
-    fn fallback(&self) -> Self::Output;
+/// Trait for fallback strategies
+#[async_trait::async_trait]
+pub trait FallbackStrategy {
+    async fn execute<F, Fut, T, E>(&self, operation: F) -> Result<T, E>
+    where
+        F: Fn() -> Fut + Send,
+        Fut: std::future::Future<Output = Result<T, E>> + Send,
+        T: Send,
+        E: Send;
 }
 
-/// Retry strategy configuration
-#[derive(Debug, Clone)]
+/// Retry strategy with exponential backoff
 pub struct RetryStrategy {
-    pub max_retries: usize,
-    pub initial_delay: Duration,
-    pub max_delay: Duration,
-    pub backoff_multiplier: f64,
-}
-
-impl Default for RetryStrategy {
-    fn default() -> Self {
-        Self {
-            max_retries: 3,
-            initial_delay: Duration::from_millis(100),
-            max_delay: Duration::from_secs(10),
-            backoff_multiplier: 2.0,
-        }
-    }
+    max_attempts: usize,
+    base_delay: Duration,
 }
 
 impl RetryStrategy {
-    /// Calculate delay for a specific retry attempt
-    pub fn delay_for(&self, attempt: usize) -> Duration {
-        if attempt == 0 {
-            Duration::ZERO
-        } else {
-            let delay = self.initial_delay.as_millis() as f64
-                * self.backoff_multiplier.powi(attempt as i32 - 1);
-            let delay = delay.min(self.max_delay.as_millis() as f64) as u64;
-            Duration::from_millis(delay)
-        }
-    }
-
-    /// Check if we should retry
-    pub fn should_retry(&self, attempt: usize, _error: &dyn fmt::Display) -> bool {
-        attempt < self.max_retries
-    }
-}
-
-/// Degrade strategy for graceful degradation
-#[derive(Debug, Clone)]
-pub struct DegradeStrategy {
-    pub enable_degraded_mode: bool,
-    pub degraded_capacity: usize, // percentage 0-100
-    pub response_timeout: Duration,
-}
-
-impl Default for DegradeStrategy {
-    fn default() -> Self {
+    pub fn new(max_attempts: usize, base_delay: Duration) -> Self {
         Self {
-            enable_degraded_mode: true,
-            degraded_capacity: 50,
-            response_timeout: Duration::from_secs(5),
+            max_attempts,
+            base_delay,
+        }
+    }
+
+    fn calculate_delay(&self, attempt: usize) -> Duration {
+        let multiplier = 2_u32.pow(attempt as u32);
+        self.base_delay * multiplier
+    }
+}
+
+#[async_trait::async_trait]
+impl FallbackStrategy for RetryStrategy {
+    async fn execute<F, Fut, T, E>(&self, operation: F) -> Result<T, E>
+    where
+        F: Fn() -> Fut + Send,
+        Fut: std::future::Future<Output = Result<T, E>> + Send,
+        T: Send,
+        E: Send,
+    {
+        let mut last_error = None;
+        for attempt in 0..self.max_attempts {
+            match operation().await {
+                Ok(result) => return Ok(result),
+                Err(e) => {
+                    last_error = Some(e);
+                    if attempt < self.max_attempts - 1 {
+                        tokio::time::sleep(self.calculate_delay(attempt)).await;
+                    }
+                }
+            }
+        }
+        Err(last_error.unwrap())
+    }
+}
+
+/// Fail-fast strategy - no fallback, propagate immediately
+pub struct FailFastStrategy;
+
+#[async_trait::async_trait]
+impl FallbackStrategy for FailFastStrategy {
+    async fn execute<F, Fut, T, E>(&self, operation: F) -> Result<T, E>
+    where
+        F: Fn() -> Fut + Send,
+        Fut: std::future::Future<Output = Result<T, E>> + Send,
+        T: Send,
+        E: Send,
+    {
+        operation().await
+    }
+}
+
+/// Degrade strategy - fallback to simpler implementation
+/// This is not a FallbackStrategy impl because it changes the output type
+pub struct DegradeStrategy<F> {
+    fallback: F,
+}
+
+impl<F> DegradeStrategy<F> {
+    pub fn new<T>(fallback: F) -> Self
+    where
+        F: Fn() -> T,
+    {
+        Self { fallback }
+    }
+
+    pub async fn execute<Op, Fut, T, E>(&self, operation: Op) -> Result<T, E>
+    where
+        Op: Fn() -> Fut + Send,
+        Fut: std::future::Future<Output = Result<T, E>> + Send,
+        F: Fn() -> T,
+        T: Send,
+        E: Send,
+    {
+        match operation().await {
+            Ok(result) => Ok(result),
+            Err(_) => Ok((self.fallback)()),
         }
     }
 }
 
-impl DegradeStrategy {
-    /// Check if degraded mode should be used
-    pub fn should_degrade(&self, error_rate: f64) -> bool {
-        self.enable_degraded_mode && error_rate > 0.3
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_retry_strategy_success() {
+        let strategy = RetryStrategy::new(3, Duration::from_millis(10));
+        let result = strategy.execute(|| async { Ok::<_, ()>(42) }).await;
+        assert_eq!(result, Ok(42));
     }
 
-    /// Get the degraded capacity as a fraction
-    pub fn capacity_fraction(&self) -> f64 {
-        (self.degraded_capacity as f64) / 100.0
+    #[tokio::test]
+    async fn test_retry_strategy_eventually_succeeds() {
+        let strategy = RetryStrategy::new(3, Duration::from_millis(1));
+        let attempts = std::sync::atomic::AtomicUsize::new(0);
+        let result = strategy
+            .execute(|| async {
+                let count =
+                    attempts.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if count < 2 {
+                    Err::<i32, ()>(())
+                } else {
+                    Ok(42)
+                }
+            })
+            .await;
+        assert_eq!(result, Ok(42));
     }
-}
 
-/// Fail-fast strategy for immediate rejection
-#[derive(Debug, Clone)]
-pub struct FailFastStrategy {
-    pub enable_fail_fast: bool,
-    pub max_concurrent: usize,
-    pub queue_size: usize,
-}
-
-impl Default for FailFastStrategy {
-    fn default() -> Self {
-        Self {
-            enable_fail_fast: true,
-            max_concurrent: 100,
-            queue_size: 1000,
-        }
+    #[tokio::test]
+    async fn test_degrade_strategy_fallback() {
+        let strategy = DegradeStrategy::new(|| 42);
+        let result = strategy.execute(|| async { Err::<i32, ()>(()) }).await;
+        assert_eq!(result, Ok(42));
     }
-}
 
-impl FailFastStrategy {
-    /// Check if request should be rejected immediately
-    pub fn should_fail_fast(&self, current_load: usize) -> bool {
-        self.enable_fail_fast && current_load >= self.max_concurrent + self.queue_size
+    #[tokio::test]
+    async fn test_degrade_strategy_uses_original_on_success() {
+        let strategy = DegradeStrategy::new(|| 42);
+        let result = strategy.execute(|| async { Ok::<_, ()>(100) }).await;
+        assert_eq!(result, Ok(100));
     }
 }

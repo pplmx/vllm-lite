@@ -2,5 +2,7 @@
 //! Circuit breaker pattern for fault tolerance
 pub mod breaker;
 pub mod strategy;
-pub use breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitState, CircuitBreakerError};
-pub use strategy::{FallbackStrategy, RetryStrategy, DegradeStrategy, FailFastStrategy};
+pub use breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError, CircuitState};
+pub use strategy::{
+    DegradeStrategy, FailFastStrategy, FallbackStrategy, RetryStrategy,
+};
