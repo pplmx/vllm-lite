@@ -4,11 +4,11 @@
 
 ### 测试性能提升
 
-| 指标 | 优化前 | 优化后 | 提升 |
-|------|--------|--------|------|
-| **总测试数** | 470 | 469 | - |
-| **执行时间** | ~5.0s | ~1.3s | **74% ↓** |
-| **慢测试数** | 5+ | 3 (被忽略) | - |
+| 指标                 | 优化前     | 优化后     | 提升      |
+| -------------------- | ---------- | ---------- | --------- |
+| **总测试数**         | 470        | 469        | -         |
+| **执行时间**         | ~5.0s      | ~1.3s      | **74% ↓** |
+| **慢测试数**         | 5+         | 3 (被忽略) | -         |
 | **llama_block 测试** | ~4.7s each | ~0.6s each | **87% ↓** |
 
 ### 关键优化措施
@@ -33,10 +33,12 @@ ModelConfig::test_medium()
 #### 2. 重构慢测试
 
 **crates/model/src/llama/block.rs**:
+
 - 将测试从 `ModelConfig::llama_7b()` 改为 `ModelConfig::test_tiny()`
 - 添加 `#[ignore]` 标记的完整模型测试，用于 CI/CD 全量验证
 
 **crates/model/tests/attention_batch_benchmark.rs**:
+
 - 添加 `#[ignore = "slow benchmark test"]` 标记
 - 需要显式运行: `cargo test -- --ignored`
 
@@ -62,12 +64,14 @@ slow-timeout = { period = "10s", terminate-after = 2 }
 ```
 
 **Profile 对比**:
+
 - `cargo nextest run --profile default`: 完整测试 (~4-5s)
 - `cargo nextest run --profile optimized`: 快速反馈 (~1-2s)
 
 #### 4. 测试并行化
 
 通过 nextest 自动并行执行测试：
+
 - 默认使用所有可用 CPU 核心
 - 重模型测试限制为 2 线程
 - 内核测试限制为 4 线程
@@ -76,7 +80,7 @@ slow-timeout = { period = "10s", terminate-after = 2 }
 
 ### 测试组织
 
-```
+```text
 crates/
 ├── core/
 │   ├── src/                    # 单元测试 (87 tests)
@@ -113,6 +117,7 @@ crates/
 ### 测试覆盖率分析
 
 **已覆盖**:
+
 - ✅ 调度器核心逻辑 (100%)
 - ✅ KV Cache 管理 (100%)
 - ✅ 内存分配与驱逐 (100%)
@@ -123,12 +128,14 @@ crates/
 - ✅ OpenAI API 端点 (100%)
 
 **建议补充**:
+
 - ⚠️ tensor_parallel - 部分依赖 GPU
 - ⚠️ dist crate - 分布式测试
 
 ## 运行测试
 
 ### 快速开发测试
+
 ```bash
 # 使用优化 profile (最快)
 cargo nextest run --profile optimized
@@ -138,6 +145,7 @@ just quick
 ```
 
 ### 完整测试
+
 ```bash
 # 所有测试 (包括被忽略的)
 cargo nextest run --workspace --profile ci
@@ -147,6 +155,7 @@ cargo test --workspace -- --ignored
 ```
 
 ### 特定测试
+
 ```bash
 # 单个 crate
 cargo test -p vllm-core
@@ -171,6 +180,7 @@ cargo test -p vllm-core -- --nocapture
 ## 总结
 
 通过模型配置优化、nextest 配置和测试重构，实现：
+
 - **74% 测试时间减少** (5.0s → 1.3s)
 - **20x 单测试加速** (llama_block 4.7s → 0.2s)
 - **更好的并行化支持**

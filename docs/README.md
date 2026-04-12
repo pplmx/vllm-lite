@@ -6,7 +6,7 @@ This directory contains design documents and implementation plans for vLLM-lite.
 
 ## Directory Structure
 
-```
+```text
 vllm-lite/
 ├── crates/
 │   ├── traits/      # Interface definitions (ModelBackend trait)
@@ -25,13 +25,13 @@ vllm-lite/
 
 The project follows a clean separation of concerns:
 
-| Crate | Responsibility |
-|-------|----------------|
-| `traits` | Interface definitions |
-| `core` | Scheduling, memory management, engine |
-| `model` | ML implementations, kernels |
-| `dist` | Tensor parallelism |
-| `server` | HTTP API layer |
+| Crate    | Responsibility                        |
+| -------- | ------------------------------------- |
+| `traits` | Interface definitions                 |
+| `core`   | Scheduling, memory management, engine |
+| `model`  | ML implementations, kernels           |
+| `dist`   | Tensor parallelism                    |
+| `server` | HTTP API layer                        |
 
 See [superpowers/specs/2026-03-29-vllm-lite-design.md](./superpowers/specs/2026-03-29-vllm-lite-design.md) for detailed architecture.
 
