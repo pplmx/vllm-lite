@@ -20,18 +20,18 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Run Benchmarks (PR)
-        run: cargo bench -- --save-baseline pr
+        run: cargo bench --workspace -- --save-baseline pr
       - name: Checkout Main
         run: |
           git fetch origin main
           git checkout origin/main
       - name: Run Benchmarks (Main)
-        run: cargo bench -- --save-baseline main
+        run: cargo bench --workspace -- --save-baseline main
       - name: Compare Results
-        run: cargo bench -- --baseline main --threshold 10
+        run: cargo bench --workspace -- --baseline main --threshold 10
       - name: Upload Results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
           path: target/criterion/
