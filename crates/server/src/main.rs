@@ -9,17 +9,20 @@ pub mod openai;
 
 use crate::auth::AuthMiddleware;
 use crate::openai::batch::manager::BatchManager;
-use axum::{Router, routing::get, routing::post};
+use axum::{Router, routing::get, routing::post, http::StatusCode, response::Response, extract::State};
 use candle_core::Device;
 use clap::Parser;
+use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::signal;
 use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
+use vllm_core::metrics::{EnhancedMetricsCollector, PrometheusExporter};
 use vllm_core::types::EngineMessage;
 use vllm_model::loader::ModelLoader;
 use vllm_model::tokenizer::Tokenizer;
+use vllm_server::health::HealthChecker;
 
 /// Shared state for all API handlers
 #[derive(Clone)]
@@ -32,6 +35,50 @@ pub struct ApiState {
     pub batch_manager: Arc<BatchManager>,
     /// Authentication middleware (None if disabled)
     pub auth: Option<Arc<AuthMiddleware>>,
+    /// Health checker for liveness/readiness probes
+    pub health: Arc<std::sync::RwLock<HealthChecker>>,
+    /// Enhanced metrics collector
+    pub metrics: Arc<EnhancedMetricsCollector>,
+}
+
+/// Health check endpoint - liveness probe
+async fn health_handler(State(state): State<ApiState>) -> Response {
+    let health = state.health.read().unwrap();
+    let status = health.check_liveness();
+    let http_status = StatusCode::from_u16(status.http_status()).unwrap_or(StatusCode::OK);
+
+    let body = json!({ "status": status.as_str() });
+    Response::builder()
+        .status(http_status)
+        .header("content-type", "application/json")
+        .body(serde_json::to_string(&body).unwrap_or_default().into())
+        .unwrap_or_else(|_| Response::new(axum::body::Body::empty()))
+}
+
+/// Readiness check endpoint
+async fn ready_handler(State(state): State<ApiState>) -> Response {
+    let health = state.health.read().unwrap();
+    let status = health.check_readiness();
+    let http_status = StatusCode::from_u16(status.http_status()).unwrap_or(StatusCode::SERVICE_UNAVAILABLE);
+
+    let body = json!({ "status": status.as_str() });
+    Response::builder()
+        .status(http_status)
+        .header("content-type", "application/json")
+        .body(serde_json::to_string(&body).unwrap_or_default().into())
+        .unwrap_or_else(|_| Response::new(axum::body::Body::empty()))
+}
+
+/// Prometheus metrics endpoint
+async fn metrics_handler(State(state): State<ApiState>) -> Response {
+    let exporter = PrometheusExporter::new(state.metrics.clone(), 9090);
+    let output = exporter.export_to_string().await;
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("content-type", "text/plain; charset=utf-8")
+        .body(output.into())
+        .unwrap_or_else(|_| Response::new(axum::body::Body::empty()))
 }
 
 #[tokio::main]
@@ -106,11 +153,17 @@ async fn main() {
         None
     };
 
+    // Initialize health checker and metrics collector
+    let health_checker = Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true)));
+    let metrics_collector = Arc::new(EnhancedMetricsCollector::new());
+
     let state = ApiState {
         engine_tx: msg_tx.clone(),
         tokenizer,
         batch_manager,
         auth: auth_middleware.clone(),
+        health: health_checker,
+        metrics: metrics_collector,
     };
 
     use openai::batch::handler::{create_batch, get_batch, get_batch_results, list_batches};
@@ -128,9 +181,10 @@ async fn main() {
         .route("/v1/batches", get(list_batches))
         .route("/v1/batches/:id", get(get_batch))
         .route("/v1/batches/:id/results", get(get_batch_results))
-        // 运维 (保留 api.rs)
-        .route("/metrics", get(api::get_prometheus))
-        .route("/health", get(api::health))
+        // Health, readiness, and metrics endpoints
+        .route("/health", get(health_handler))
+        .route("/ready", get(ready_handler))
+        .route("/metrics", get(metrics_handler))
         .route("/health/details", get(api::health_details))
         .with_state(state);
 
