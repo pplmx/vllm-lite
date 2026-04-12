@@ -2,7 +2,7 @@ mod speculative;
 
 use crate::beam::BeamSequence;
 use crate::error::Result;
-use crate::metrics::MetricsCollector;
+use crate::metrics::{EnhancedMetricsCollector, MetricsCollector};
 use crate::scheduler::engine::SchedulerEngine;
 use crate::speculative::AdaptiveSpeculativeDecoder;
 use crate::types::AdaptiveDraftConfig;
@@ -92,8 +92,10 @@ impl<M: ModelBackend + 'static> Engine<M> {
         } else {
             None
         };
+        // Create shared metrics collector for scheduler
+        let enhanced_metrics = Arc::new(EnhancedMetricsCollector::new());
         Self {
-            scheduler: SchedulerEngine::new(config, num_kv_blocks),
+            scheduler: SchedulerEngine::new(config, num_kv_blocks, enhanced_metrics),
             target_model: Arc::new(Mutex::new(target_model)),
             draft_model: Arc::new(Mutex::new(draft_model)),
             max_draft_tokens,

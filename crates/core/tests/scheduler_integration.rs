@@ -1,12 +1,19 @@
-use vllm_core::scheduler::SchedulerEngine;
+use std::sync::Arc;
+use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_core::scheduler::policy::SjfPolicy;
+use vllm_core::scheduler::SchedulerEngine;
 use vllm_core::types::{Request, SchedulerConfig};
 use vllm_traits::BatchPhase;
+
+fn create_test_engine(config: SchedulerConfig, num_kv_blocks: usize) -> SchedulerEngine {
+    let metrics = Arc::new(EnhancedMetricsCollector::new());
+    SchedulerEngine::new(config, num_kv_blocks, metrics)
+}
 
 #[test]
 fn test_scheduler_basic_flow() {
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngine::new(config, 1024);
+    let mut engine = create_test_engine(config, 1024);
 
     // Add a request
     let id = engine.add_request(Request::new(0, vec![1, 2, 3], 5));
@@ -28,7 +35,7 @@ fn test_scheduler_basic_flow() {
 #[test]
 fn test_scheduler_multiple_requests() {
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngine::new(config, 1024);
+    let mut engine = create_test_engine(config, 1024);
 
     // Add multiple requests
     for i in 1..=5 {
@@ -44,7 +51,7 @@ fn test_scheduler_multiple_requests() {
 #[test]
 fn test_scheduler_prefill_decode_separation() {
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngine::new(config, 1024);
+    let mut engine = create_test_engine(config, 1024);
 
     // Add a request
     engine.add_request(Request::new(0, vec![1, 2, 3], 5));
@@ -70,7 +77,7 @@ fn test_scheduler_prefill_decode_separation() {
 #[test]
 fn test_scheduler_policy_switching() {
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngine::new(config, 1024);
+    let mut engine = create_test_engine(config, 1024);
 
     // Default policy is FCFS
     // Add requests with different priorities
@@ -99,7 +106,7 @@ fn test_scheduler_prefix_cache() {
     // There's a known bug in batch_composer.rs when num_computed_tokens > tokens.len()
     // after prefix cache hit - we work around it by not triggering that path
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngine::new(config, 1024);
+    let mut engine = create_test_engine(config, 1024);
 
     // Add first request - complete it to add to prefix cache
     let id1 = engine.add_request(Request::new(0, vec![1, 2, 3], 10));
@@ -128,7 +135,7 @@ fn test_scheduler_prefix_cache() {
 fn test_scheduler_memory_preemption() {
     // Create engine with limited memory
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngine::new(config, 20); // Only 20 blocks
+    let mut engine = create_test_engine(config, 20); // Only 20 blocks
 
     // Add multiple large requests
     for i in 1..=5 {
@@ -144,7 +151,7 @@ fn test_scheduler_memory_preemption() {
 #[test]
 fn test_scheduler_concurrent_requests() {
     let config = SchedulerConfig::default();
-    let mut engine = SchedulerEngine::new(config, 1024);
+    let mut engine = create_test_engine(config, 1024);
 
     // Add concurrent requests
     for i in 1..=10 {

@@ -3,6 +3,7 @@ use std::time::Instant;
 
 use vllm_traits::{Batch, BlockId, SeqId, TokenId};
 
+use crate::metrics::EnhancedMetricsCollector;
 use crate::scheduler::cuda_graph::{GraphBatch, GraphPreparedBatch, SchedulerCudaGraphConfig};
 use crate::scheduler::observer::{ObserverEvent, SchedulerObservers};
 use crate::scheduler::policy::{FcfsPolicy, SchedulingContext, SchedulingPolicy};
@@ -35,6 +36,8 @@ pub struct SchedulerEngine {
     observers: SchedulerObservers,
     /// CUDA Graph configuration for decode optimization
     cuda_graph: SchedulerCudaGraphConfig,
+    /// Metrics collector for tracking engine performance
+    metrics: Arc<EnhancedMetricsCollector>,
 }
 
 impl SchedulerEngine {
@@ -43,7 +46,12 @@ impl SchedulerEngine {
     /// # Arguments
     /// * `config` - Scheduler configuration
     /// * `num_kv_blocks` - Number of KV cache blocks available
-    pub fn new(config: SchedulerConfig, num_kv_blocks: usize) -> Self {
+    /// * `metrics` - Metrics collector for tracking performance
+    pub fn new(
+        config: SchedulerConfig,
+        num_kv_blocks: usize,
+        metrics: Arc<EnhancedMetricsCollector>,
+    ) -> Self {
         let phase_switch_policy = PhaseSwitchPolicy {
             max_consecutive_decode: config.max_consecutive_decode,
             prefill_priority_threshold: 5,
@@ -62,6 +70,10 @@ impl SchedulerEngine {
             batch_sizes: config.cuda_graph.batch_sizes.clone(),
         };
 
+        // Initialize metrics with current state
+        metrics.set_active_sequences(0);
+        metrics.set_queue_depth(0);
+
         Self {
             request_queue: RequestQueue::new(),
             phase_scheduler: PhaseScheduler::new(phase_switch_policy),
@@ -75,6 +87,7 @@ impl SchedulerEngine {
             next_seq_id: 1,
             observers: SchedulerObservers::new(),
             cuda_graph,
+            metrics,
         }
     }
 
@@ -88,6 +101,9 @@ impl SchedulerEngine {
     /// Checks the prefix cache for matching prompts and creates a sequence.
     /// Returns the assigned sequence ID.
     pub fn add_request(&mut self, mut req: Request) -> SeqId {
+        // Record metrics: request received
+        self.metrics.record_request();
+
         if req.id == 0 {
             req.id = self.next_seq_id;
             self.next_seq_id += 1;
@@ -133,6 +149,10 @@ impl SchedulerEngine {
         self.request_queue
             .enqueue(seq.clone(), self.policy.as_ref(), &ctx);
 
+        // Update metrics: queue depth
+        self.metrics
+            .set_queue_depth(self.request_queue.len() as u64);
+
         // Dispatch observer event
         self.observers.dispatch(&ObserverEvent::RequestArrived {
             seq_id: req.id,
@@ -148,6 +168,8 @@ impl SchedulerEngine {
     /// then composes the batch according to memory constraints.
     #[must_use]
     pub fn build_batch(&mut self) -> Batch {
+        let start_time = Instant::now();
+
         // First, include running decode sequences (they need to continue processing)
         let mut sequences: Vec<Sequence> = self
             .running
@@ -170,6 +192,10 @@ impl SchedulerEngine {
 
         // Get sequences for this phase from the queue
         let new_sequences = self.request_queue.drain_by_phase(phase);
+
+        // Update metrics: queue depth after draining
+        self.metrics
+            .set_queue_depth(self.request_queue.len() as u64);
 
         // If no running decode sequences and no new sequences, return empty
         if sequences.is_empty() && new_sequences.is_empty() {
@@ -204,8 +230,21 @@ impl SchedulerEngine {
         // Move new sequences to running
         self.running.extend(new_sequences);
 
+        // Update metrics: active sequences
+        self.metrics.set_active_sequences(self.running.len() as u64);
+
         // Build the batch
         let batch = self.batch_composer.compose(sequences.clone(), phase);
+
+        // Record CUDA Graph metrics if applicable
+        if phase == Phase::Decode && self.cuda_graph.enabled {
+            let batch_size = batch.seq_ids.len();
+            if self.cuda_graph.supports_batch_size(batch_size) {
+                self.metrics.record_cuda_graph_hit();
+            } else {
+                self.metrics.record_cuda_graph_miss();
+            }
+        }
 
         // Dispatch observer event
         if !batch.seq_ids.is_empty() {
@@ -214,6 +253,11 @@ impl SchedulerEngine {
                 batch_size: batch.seq_ids.len(),
             });
         }
+
+        // Record batch scheduling latency
+        let duration = start_time.elapsed();
+        self.metrics
+            .record_inference_latency(duration.as_nanos() as u64);
 
         batch
     }
@@ -237,8 +281,10 @@ impl SchedulerEngine {
             Phase::Decode => {
                 let batch_size = batch.seq_ids.len();
                 if self.cuda_graph.enabled && self.cuda_graph.supports_batch_size(batch_size) {
+                    self.metrics.record_cuda_graph_hit();
                     GraphBatch::Graph(GraphPreparedBatch::new(batch))
                 } else {
+                    self.metrics.record_cuda_graph_miss();
                     GraphBatch::Regular(batch)
                 }
             }
@@ -480,7 +526,11 @@ impl SchedulerEngine {
 
 impl Default for SchedulerEngine {
     fn default() -> Self {
-        Self::new(SchedulerConfig::default(), 1024)
+        Self::new(
+            SchedulerConfig::default(),
+            1024,
+            Arc::new(EnhancedMetricsCollector::new()),
+        )
     }
 }
 
@@ -490,10 +540,15 @@ mod tests {
     use crate::types::Request;
     use vllm_traits::BatchPhase;
 
+    fn create_test_engine(config: SchedulerConfig, num_kv_blocks: usize) -> SchedulerEngine {
+        let metrics = Arc::new(EnhancedMetricsCollector::new());
+        SchedulerEngine::new(config, num_kv_blocks, metrics)
+    }
+
     #[test]
     fn test_engine_add_request() {
         let config = SchedulerConfig::default();
-        let mut engine = SchedulerEngine::new(config, 1024);
+        let mut engine = create_test_engine(config, 1024);
         let id = engine.add_request(Request::new(0, vec![1, 2, 3], 5));
         assert!(id > 0);
         assert!(engine.has_pending());
@@ -503,7 +558,7 @@ mod tests {
     #[test]
     fn test_engine_build_batch() {
         let config = SchedulerConfig::default();
-        let mut engine = SchedulerEngine::new(config, 1024);
+        let mut engine = create_test_engine(config, 1024);
         engine.add_request(Request::new(0, vec![1, 2, 3], 5));
         let batch = engine.build_batch();
         assert!(!batch.is_empty());
@@ -513,7 +568,7 @@ mod tests {
     #[test]
     fn test_engine_batch_phase_is_prefill() {
         let config = SchedulerConfig::default();
-        let mut engine = SchedulerEngine::new(config, 1024);
+        let mut engine = create_test_engine(config, 1024);
         engine.add_request(Request::new(0, vec![1, 2, 3], 5));
         let batch = engine.build_batch();
         assert_eq!(batch.phase, BatchPhase::Prefill);
@@ -522,7 +577,7 @@ mod tests {
     #[test]
     fn test_engine_update_sequence() {
         let config = SchedulerConfig::default();
-        let mut engine = SchedulerEngine::new(config, 1024);
+        let mut engine = create_test_engine(config, 1024);
         let id = engine.add_request(Request::new(0, vec![1, 2, 3], 5));
         let _batch = engine.build_batch();
 
@@ -536,7 +591,7 @@ mod tests {
     #[test]
     fn test_engine_multiple_requests() {
         let config = SchedulerConfig::default();
-        let mut engine = SchedulerEngine::new(config, 1024);
+        let mut engine = create_test_engine(config, 1024);
 
         // Add multiple requests
         let id1 = engine.add_request(Request::new(0, vec![1, 2], 5));
@@ -553,7 +608,7 @@ mod tests {
     #[test]
     fn test_engine_memory_pressure() {
         let config = SchedulerConfig::default();
-        let mut engine = SchedulerEngine::new(config, 10); // Small memory
+        let mut engine = create_test_engine(config, 10); // Small memory
 
         // Memory pressure should be 0.0 with all blocks free
         assert_eq!(engine.get_memory_pressure(), 0.0);
@@ -572,7 +627,7 @@ mod tests {
     #[test]
     fn test_engine_prefix_cache_hit() {
         let config = SchedulerConfig::default();
-        let mut engine = SchedulerEngine::new(config, 1024);
+        let mut engine = create_test_engine(config, 1024);
 
         // Add first request
         let prompt = vec![1, 2, 3, 4, 5];
@@ -593,5 +648,27 @@ mod tests {
 
         // Second request should be enqueued
         assert!(engine.waiting_count() > 0 || engine.running_count() > 0);
+    }
+
+    #[test]
+    fn test_engine_metrics_tracking() {
+        let config = SchedulerConfig::default();
+        let metrics = Arc::new(EnhancedMetricsCollector::new());
+        let mut engine = SchedulerEngine::new(config, 1024, metrics.clone());
+
+        // Initially metrics should be zero
+        assert_eq!(metrics.get_counter("requests_total"), 0);
+
+        // Add a request
+        let _id = engine.add_request(Request::new(0, vec![1, 2, 3], 5));
+
+        // Check metrics were updated
+        assert_eq!(metrics.get_counter("requests_total"), 1);
+
+        // Build batch to trigger latency recording
+        let _batch = engine.build_batch();
+
+        // Metrics should still track request count
+        assert_eq!(metrics.get_counter("requests_total"), 1);
     }
 }
