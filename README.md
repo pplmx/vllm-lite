@@ -67,6 +67,12 @@ cargo fmt --all --check
 | 📊 | 实时 Metrics 收集 |
 | 🔐 | API Key 认证 |
 | ⏱️ | 请求限流 |
+| 📈 | Prometheus Metrics 导出 (`/metrics`) |
+| 🏥 | Health Check 端点 (`/health`, `/ready`) |
+| 🛡️ | Circuit Breaker 熔断与自动恢复 |
+| 🐳 | Docker & Kubernetes 部署支持 |
+| 📋 | 26个 E2E 集成测试 |
+| 🔧 | CI 性能回归测试 |
 
 ---
 
