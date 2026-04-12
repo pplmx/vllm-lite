@@ -59,7 +59,7 @@ pub(crate) async fn embeddings(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ApiState;
+
     use axum::http::StatusCode;
     use std::sync::Arc;
     use tokio::sync::mpsc;

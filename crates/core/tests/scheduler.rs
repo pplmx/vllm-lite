@@ -528,8 +528,6 @@ fn test_cache_manager_eviction() {
 
 #[test]
 fn test_preemption_execution() {
-    use vllm_core::scheduler::SchedulerEngine;
-
     let config = SchedulerConfig {
         max_num_seqs: 10,
         max_num_batched_tokens: 100,
