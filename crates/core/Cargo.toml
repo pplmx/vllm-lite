@@ -13,6 +13,15 @@ rand = { version = "0.10", features = ["std"] }
 serde = { version = "1", features = ["derive"] }
 crossbeam = "0.8"
 tracing = "0.1"
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true, optional = true }
+opentelemetry = { workspace = true, optional = true }
+dashmap = { workspace = true }
+
+[features]
+default = ["prometheus"]
+prometheus = ["metrics-exporter-prometheus"]
+opentelemetry = ["dep:opentelemetry"]
 
 [dev-dependencies]
 criterion = "0.8"
