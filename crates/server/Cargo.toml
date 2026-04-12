@@ -4,6 +4,10 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 
+[lib]
+name = "vllm_server"
+path = "src/lib.rs"
+
 [[bin]]
 name = "vllm-server"
 path = "src/main.rs"
