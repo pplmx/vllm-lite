@@ -14,6 +14,7 @@
 //! - [`kv_cache`] - Block allocation and prefix cache
 
 pub mod beam;
+pub mod circuit_breaker;
 pub mod engine;
 pub mod error;
 pub mod kv_cache;

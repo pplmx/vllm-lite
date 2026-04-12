@@ -1,3 +1,5 @@
+pub mod recovery;
+
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {
     #[error("sequence {id} not found")]
