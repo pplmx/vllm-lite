@@ -2,6 +2,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 use std::sync::Arc;
 use std::time::Instant;
+use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_core::scheduler::policy::{FcfsPolicy, SchedulingContext, SchedulingPolicy, SjfPolicy};
 use vllm_core::scheduler::{
     PhaseScheduler, PhaseSwitchPolicy, RequestQueue, SchedulerEngine, SchedulerState,
@@ -106,11 +107,12 @@ fn bench_scheduling_policies(c: &mut Criterion) {
 fn bench_batch_building(c: &mut Criterion) {
     let mut group = c.benchmark_group("batch_building");
     let config = SchedulerConfig::default();
+    let metrics = Arc::new(EnhancedMetricsCollector::new());
 
     group.bench_function("build_batch_10", |b| {
         b.iter_with_setup(
             || {
-                let mut engine = SchedulerEngine::new(config.clone(), 1024);
+                let mut engine = SchedulerEngine::new(config.clone(), 1024, metrics.clone());
                 for i in 0..10 {
                     engine.add_request(Request::new(i, vec![i as u32; 50], 100));
                 }
@@ -123,7 +125,7 @@ fn bench_batch_building(c: &mut Criterion) {
     group.bench_function("build_batch_100", |b| {
         b.iter_with_setup(
             || {
-                let mut engine = SchedulerEngine::new(config.clone(), 1024);
+                let mut engine = SchedulerEngine::new(config.clone(), 1024, metrics.clone());
                 for i in 0..100 {
                     engine.add_request(Request::new(i, vec![i as u32; 50], 100));
                 }

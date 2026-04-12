@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 use vllm_core::engine::Engine;
 use vllm_core::types::{EngineMessage, Request, SchedulerConfig};
 use vllm_testing::IncrementModel;

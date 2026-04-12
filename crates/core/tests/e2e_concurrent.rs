@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 use vllm_core::engine::Engine;
 use vllm_core::types::{Request, SchedulerConfig};
 use vllm_testing::IncrementModel;
@@ -165,10 +165,7 @@ async fn test_staggered_requests() {
         }
     }
 
-    assert_eq!(
-        success_count, 5,
-        "All staggered requests should complete"
-    );
+    assert_eq!(success_count, 5, "All staggered requests should complete");
 }
 
 #[test]

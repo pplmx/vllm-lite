@@ -1,9 +1,9 @@
 // tests/e2e_error_recovery.rs
 //! Error recovery E2E tests
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
+use tokio::sync::{Mutex, mpsc};
 use vllm_core::engine::Engine;
 use vllm_core::types::{Request, SchedulerConfig};
 use vllm_testing::IncrementModel;
@@ -55,8 +55,14 @@ impl ModelBackend for FaultInjectedModel {
         if self.should_fail() && rand::random::<f32>() < 0.1 {
             return Err(ModelError::new("Simulated failure"));
         }
-        self.inner
-            .forward(seq_ids, input_tokens, positions, kv_block_ids, num_computed_tokens, is_prefill)
+        self.inner.forward(
+            seq_ids,
+            input_tokens,
+            positions,
+            kv_block_ids,
+            num_computed_tokens,
+            is_prefill,
+        )
     }
 
     fn forward_logits(
@@ -68,8 +74,14 @@ impl ModelBackend for FaultInjectedModel {
         num_computed_tokens: &[usize],
         is_prefill: &[bool],
     ) -> vllm_traits::Result<Vec<Vec<f32>>> {
-        self.inner
-            .forward_logits(seq_ids, input_tokens, positions, kv_block_ids, num_computed_tokens, is_prefill)
+        self.inner.forward_logits(
+            seq_ids,
+            input_tokens,
+            positions,
+            kv_block_ids,
+            num_computed_tokens,
+            is_prefill,
+        )
     }
 
     fn embed(
@@ -331,11 +343,7 @@ fn test_multiple_cancellations() {
     // Verify canceled requests are not running
     for seq_id in &seq_ids {
         let still_running = engine.scheduler.running().iter().any(|s| s.id == *seq_id);
-        assert!(
-            !still_running,
-            "Request {} should not be running",
-            seq_id
-        );
+        assert!(!still_running, "Request {} should not be running", seq_id);
     }
 }
 

@@ -1,19 +1,17 @@
 // crates/core/src/error/recovery.rs
 //! Error recovery management
 
-use crate::circuit_breaker::{
-    CircuitBreaker, CircuitBreakerConfig,
-};
+use crate::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
 use std::time::Duration;
 
 /// Severity level for errors
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorSeverity {
-    Warning,       // Log and continue
-    Retryable,     // Attempt retry with backoff
-    Degradable,    // Switch to fallback mode
+    Warning,        // Log and continue
+    Retryable,      // Attempt retry with backoff
+    Degradable,     // Switch to fallback mode
     CircuitBreaker, // Trip circuit breaker
-    Fatal,         // Log and terminate
+    Fatal,          // Log and terminate
 }
 
 impl ErrorSeverity {
@@ -76,9 +74,7 @@ impl RecoveryManager {
     pub fn get_or_create_circuit_breaker(&self, name: &str) -> CircuitBreaker {
         self.circuit_breakers
             .entry(name.to_string())
-            .or_insert_with(|| {
-                CircuitBreaker::new(self.config.default_circuit_breaker.clone())
-            })
+            .or_insert_with(|| CircuitBreaker::new(self.config.default_circuit_breaker.clone()))
             .clone()
     }
 
@@ -128,9 +124,18 @@ mod tests {
 
     #[test]
     fn test_error_severity_from_error() {
-        assert_eq!(ErrorSeverity::from_error("timeout"), ErrorSeverity::Retryable);
-        assert_eq!(ErrorSeverity::from_error("graph failure"), ErrorSeverity::Degradable);
-        assert_eq!(ErrorSeverity::from_error("crash"), ErrorSeverity::CircuitBreaker);
+        assert_eq!(
+            ErrorSeverity::from_error("timeout"),
+            ErrorSeverity::Retryable
+        );
+        assert_eq!(
+            ErrorSeverity::from_error("graph failure"),
+            ErrorSeverity::Degradable
+        );
+        assert_eq!(
+            ErrorSeverity::from_error("crash"),
+            ErrorSeverity::CircuitBreaker
+        );
         assert_eq!(ErrorSeverity::from_error("oom"), ErrorSeverity::Fatal);
     }
 }
