@@ -144,7 +144,19 @@ async fn main() {
         engine.run(msg_rx);
     });
 
-    let tokenizer = Arc::new(Tokenizer::new());
+    let tokenizer_path = PathBuf::from(&model_path).join("tokenizer.json");
+    let tokenizer = if tokenizer_path.exists() {
+        Arc::new(
+            Tokenizer::from_file(tokenizer_path.to_str().unwrap())
+                .unwrap_or_else(|e| {
+                    tracing::warn!(error = %e, "Failed to load tokenizer from file, using default");
+                    Tokenizer::new()
+                })
+        )
+    } else {
+        tracing::warn!("No tokenizer.json found in model directory, using default tokenizer");
+        Arc::new(Tokenizer::new())
+    };
     let batch_manager = Arc::new(BatchManager::new());
 
     let auth_middleware = if !app_config.auth.api_keys.is_empty() {
@@ -183,8 +195,8 @@ async fn main() {
         // Batch API
         .route("/v1/batches", post(create_batch))
         .route("/v1/batches", get(list_batches))
-        .route("/v1/batches/:id", get(get_batch))
-        .route("/v1/batches/:id/results", get(get_batch_results))
+        .route("/v1/batches/{id}", get(get_batch))
+        .route("/v1/batches/{id}/results", get(get_batch_results))
         // Health, readiness, and metrics endpoints
         .route("/health", get(health_handler))
         .route("/ready", get(ready_handler))
