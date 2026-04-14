@@ -245,10 +245,15 @@ impl GqaAttention {
             kv_cache.write_kv_batch(layer_idx, *block_id, 0, &k_block, &v_block)?;
         }
 
-        let k_expanded = self.expand_kv(&k.transpose(1, 2)?, self.num_heads, self.num_kv_heads)?;
-        let v_expanded = self.expand_kv(&v.transpose(1, 2)?, self.num_heads, self.num_kv_heads)?;
-        let k_expanded = k_expanded.transpose(1, 2)?;
-        let v_expanded = v_expanded.transpose(1, 2)?;
+        // expand_kv expects [batch, seq, heads, dim]
+        // k_t and v_t are already in correct shape from lines 231-232
+        let k_expanded = self.expand_kv(&k_t, self.num_heads, self.num_kv_heads)?;
+        let v_expanded = self.expand_kv(&v_t, self.num_heads, self.num_kv_heads)?;
+
+        // paged_attention expects [batch, heads, seq, dim]
+        // expand_kv outputs [batch, seq, heads, dim], so transpose
+        let k_expanded = k_expanded.transpose(1, 2)?.contiguous()?;
+        let v_expanded = v_expanded.transpose(1, 2)?.contiguous()?;
 
         if seq_len > tile_size {
             self.tiled_attention(&q, &k_expanded, &v_expanded, seq_len)
@@ -286,10 +291,16 @@ impl GqaAttention {
 
         let k = apply_rope(&k, &position_ids, self.theta)?;
 
+        // k/v from read_kv after transposes: [head_dim, num_kv_heads, seq]
+        // Need to reshape to [batch=1, seq, num_kv_heads, head_dim] for expand_kv
+        let k = k.transpose(0, 2)?; // [head_dim, num_kv_heads, seq] -> [seq, num_kv_heads, head_dim]
+        let v = v.transpose(0, 2)?;
+        let k = k.unsqueeze(0)?; // Add batch dimension: [1, seq, num_kv_heads, head_dim]
+        let v = v.unsqueeze(0)?;
         let k_expanded = self.expand_kv(&k, self.num_heads, self.num_kv_heads)?;
         let v_expanded = self.expand_kv(&v, self.num_heads, self.num_kv_heads)?;
-        let k_expanded = k_expanded.transpose(1, 2)?;
-        let v_expanded = v_expanded.transpose(1, 2)?;
+        let k_expanded = k_expanded.squeeze(0)?; // Remove batch dimension for attention
+        let v_expanded = v_expanded.squeeze(0)?;
 
         if seq_len > tile_size {
             self.tiled_attention(&q, &k_expanded, &v_expanded, seq_len)
