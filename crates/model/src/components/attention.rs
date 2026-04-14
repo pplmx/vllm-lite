@@ -17,16 +17,47 @@ impl AttentionConfig {
     }
 }
 
+/// Expand KV heads to match Q heads count for GQA
+///
+/// For GQA, we repeat KV heads to match the number of Q heads.
+/// Example: num_q_heads=14, num_kv_heads=2 => repeat_factor=7
 pub fn expand_kv(kv: &Tensor, num_q_heads: usize, num_kv_heads: usize) -> Result<Tensor> {
     if num_q_heads == num_kv_heads {
+        // Standard MHA - no expansion needed
         return Ok(kv.clone());
     }
+
+    let dims = kv.dims();
+    if dims.len() != 4 {
+        return Err(candle_core::Error::msg(format!(
+            "KV tensor must have exactly 4 dimensions [batch, seq, heads, dim], got {:?}",
+            dims
+        )));
+    }
+
+    let _batch = dims[0];
+    let _seq = dims[1];
+    let heads = dims[2];
+    let _dim = dims[3];
+
+    if heads != num_kv_heads {
+        return Err(candle_core::Error::msg(format!(
+            "KV tensor has {} heads but expected {}",
+            heads, num_kv_heads
+        )));
+    }
+
+    // Check if num_q_heads is divisible by num_kv_heads
+    if num_q_heads % num_kv_heads != 0 {
+        // Edge case: use ceil division and slice
+        let repeat_factor = (num_q_heads + num_kv_heads - 1) / num_kv_heads;
+        let kv_repeated = kv.repeat(&[1, 1, repeat_factor, 1])?;
+        // Slice to exact num_q_heads
+        return kv_repeated.narrow(2, 0, num_q_heads);
+    }
+
     let repeat_factor = num_q_heads / num_kv_heads;
-    let (batch, seq, heads, dim) = kv.dims4()?;
-    let kv = kv.reshape((batch, seq, heads, 1, dim))?;
-    let expanded = kv.broadcast_as((batch, seq, heads, repeat_factor, dim))?;
-    let expanded = expanded.reshape((batch, seq, heads * repeat_factor, dim))?;
-    Ok(expanded)
+    kv.repeat(&[1, 1, repeat_factor, 1])
 }
 
 pub fn causal_mask(seq_len: usize, device: &candle_core::Device) -> Result<Tensor> {
