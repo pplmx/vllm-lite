@@ -83,10 +83,7 @@ pub fn paged_attention(
     let batch_size = q.dims()[0];
     let seq_len = q.dims()[2];
 
-    eprintln!("DEBUG components::paged_attention: q dims={:?}, k dims={:?}, v dims={:?}, batch_size={}, seq_len={}, num_heads={}, head_dim={}", q.dims(), k.dims(), v.dims(), batch_size, seq_len, num_heads, head_dim);
-
     let qk = Tensor::matmul(q, &k.transpose(2, 3)?)?;
-    eprintln!("DEBUG qk dims={:?}", qk.dims());
     let mask = causal_mask(seq_len, q.device())?;
     let mask = mask.broadcast_as(qk.dims())?;
     let qk = (&qk + &mask)?;
@@ -98,21 +95,7 @@ pub fn paged_attention(
 
     let attn_output = Tensor::matmul(&attn_weights, v)?;
     let attn_output = attn_output.transpose(1, 2)?;
-    // attn_output now [batch, seq, heads, dim]
-    eprintln!(
-        "DEBUG attn_output before reshape: dims={:?}, batch_size={}, num_heads={}, head_dim={}",
-        attn_output.dims(),
-        batch_size,
-        num_heads,
-        head_dim
-    );
     let actual_seq_len = attn_output.dims()[1];
-    eprintln!(
-        "DEBUG reshape target: ({}, {}, {})",
-        batch_size,
-        actual_seq_len,
-        num_heads * head_dim
-    );
     let attn_output = attn_output.reshape((batch_size, actual_seq_len, num_heads * head_dim))?;
     Ok(attn_output)
 }
