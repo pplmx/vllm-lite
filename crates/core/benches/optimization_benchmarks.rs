@@ -71,7 +71,7 @@ fn bench_adaptive_speculative(c: &mut Criterion) {
     // Fixed draft tokens
     group.bench_function("fixed_draft", |b| {
         let config = SchedulerConfig::default();
-        let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+        let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
         let (tx, _rx) = mpsc::channel(64);
         engine.add_request(Request::new(1, vec![10, 20], 50), tx);
@@ -84,7 +84,7 @@ fn bench_adaptive_speculative(c: &mut Criterion) {
     // Adaptive draft tokens
     group.bench_function("adaptive_draft", |b| {
         let config = SchedulerConfig::default();
-        let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+        let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
         engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
 
         let (tx, _rx) = mpsc::channel(64);
@@ -116,8 +116,7 @@ fn bench_throughput(c: &mut Criterion) {
                     },
                     ..Default::default()
                 };
-                let mut engine =
-                    Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+                let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
                 for i in 0..num_requests {
                     let (tx, _rx) = mpsc::channel(64);
