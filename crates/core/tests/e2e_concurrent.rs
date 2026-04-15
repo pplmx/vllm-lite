@@ -11,7 +11,6 @@ use vllm_testing::IncrementModel;
 /// Thread-safe engine wrapper with background stepper
 struct ConcurrentEngine {
     inner: Arc<Mutex<Engine<IncrementModel>>>,
-    stop_flag: Arc<Mutex<bool>>,
 }
 
 impl ConcurrentEngine {
@@ -20,23 +19,14 @@ impl ConcurrentEngine {
         let engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
         Self {
             inner: Arc::new(Mutex::new(engine)),
-            stop_flag: Arc::new(Mutex::new(false)),
         }
     }
 
     async fn start_background_stepper(&self) {
         let inner = self.inner.clone();
-        let stop = self.stop_flag.clone();
 
         tokio::spawn(async move {
             loop {
-                {
-                    let should_stop = *stop.lock().await;
-                    if should_stop {
-                        break;
-                    }
-                }
-
                 let mut engine = inner.lock().await;
                 if !engine.has_pending() {
                     drop(engine);
@@ -63,14 +53,13 @@ impl ConcurrentEngine {
         }
     }
 
-    async fn wait_for_completion(&self, seq_id: u64, max_tokens: usize) -> Result<(), String> {
+    async fn wait_for_completion(&self, seq_id: u64, _max_tokens: usize) -> Result<(), String> {
         let timeout = Duration::from_secs(30);
         let start = std::time::Instant::now();
 
         while start.elapsed() < timeout {
             let engine = self.inner.lock().await;
 
-            // Check if sequence is finished (not in running)
             let still_running = engine.scheduler.running().iter().any(|s| s.id == seq_id);
 
             if !still_running {
@@ -83,19 +72,12 @@ impl ConcurrentEngine {
 
         Err("Timeout waiting for completion".to_string())
     }
-
-    fn stop(&self) {
-        let stop = self.stop_flag.clone();
-        // We can't easily stop the background task without more infrastructure
-        // For now, let it continue running
-    }
 }
 
 impl Clone for ConcurrentEngine {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
-            stop_flag: Arc::clone(&self.stop_flag),
         }
     }
 }
