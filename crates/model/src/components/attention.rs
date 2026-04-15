@@ -95,8 +95,9 @@ pub fn paged_attention(
 
     let attn_output = Tensor::matmul(&attn_weights, v)?;
     let attn_output = attn_output.transpose(1, 2)?;
-    let seq_len = attn_output.dims()[1];
-    let attn_output = attn_output.reshape((batch_size, seq_len, num_heads * head_dim))?;
+    // attn_output now [batch, seq, heads, dim]
+    let actual_seq_len = attn_output.dims()[1];
+    let attn_output = attn_output.reshape((batch_size, actual_seq_len, num_heads * head_dim))?;
     Ok(attn_output)
 }
 
