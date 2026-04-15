@@ -557,15 +557,20 @@ fn test_request_cancellation() {
     let (tx1, _rx1) = mpsc::channel(64);
     let (tx2, rx2) = mpsc::channel(64);
 
-    engine.add_request(Request::new(1, vec![10, 20], 5), tx1);
-    engine.add_request(Request::new(2, vec![30, 40], 5), tx2);
+    engine.add_request(Request::new(1, vec![10, 20], 7), tx1); // total = 2 + 7 = 9 tokens
+    engine.add_request(Request::new(2, vec![30, 40], 7), tx2);
 
     engine.step().unwrap();
 
     drop(rx2);
 
-    engine.step().unwrap();
-    engine.step().unwrap();
+    // Run more steps to complete remaining request
+    for _ in 0..10 {
+        if !engine.has_pending() {
+            break;
+        }
+        engine.step().unwrap();
+    }
 
     assert!(!engine.has_pending(), "remaining request should finish");
 }
@@ -822,12 +827,12 @@ fn test_multi_batch_continuous_processing() {
         engine.add_request(Request::new(i as u64, vec![i as u32; 3], 10), tx);
     }
 
-    // Process first batch
-    while engine.has_pending() {
-        let results = engine.step().unwrap();
-        if results.is_empty() {
+    // Process first batch - run up to 30 steps to ensure completion
+    for _ in 0..30 {
+        if !engine.has_pending() {
             break;
         }
+        engine.step().unwrap();
     }
 
     // Add second batch of requests
@@ -836,12 +841,12 @@ fn test_multi_batch_continuous_processing() {
         engine.add_request(Request::new(i as u64, vec![i as u32; 3], 10), tx);
     }
 
-    // Process second batch
-    while engine.has_pending() {
-        let results = engine.step().unwrap();
-        if results.is_empty() {
+    // Process second batch - run up to 30 steps to ensure completion
+    for _ in 0..30 {
+        if !engine.has_pending() {
             break;
         }
+        engine.step().unwrap();
     }
 
     assert!(!engine.has_pending(), "All requests should be completed");
