@@ -692,7 +692,7 @@ mod tests {
 
         cache.write_kv_batch(0, 0, 0, &k, &v)?;
 
-        let (k_out, v_out) = cache.read_kv(0, &[0], 1)?;
+        let (k_out, _v_out) = cache.read_kv(0, &[0], 1)?;
         assert_eq!(k_out.dims(), &[1, 4, 16]);
 
         Ok(())
