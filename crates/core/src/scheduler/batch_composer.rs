@@ -96,6 +96,10 @@ impl BatchComposer {
             let seq_len = seq.tokens.len();
             let tokens_to_process = seq_len.saturating_sub(start);
 
+            if tokens_to_process == 0 {
+                continue;
+            }
+
             if total_tokens + tokens_to_process > self.config.max_token_budget {
                 break;
             }
@@ -156,7 +160,10 @@ impl BatchComposer {
             max_seq_len = max_seq_len.max(1);
 
             kv_block_ids.push(seq.kv_blocks.as_ref().clone());
-            num_computed_tokens.push(seq.num_computed_tokens);
+            // num_computed_tokens is used to determine what to read from KV cache
+            // For decode, this should be the number of tokens already in KV cache
+            // which is seq.tokens.len() - 1 (before processing this decode step)
+            num_computed_tokens.push(seq.tokens.len() - 1);
             is_prefill.push(false);
         }
 
