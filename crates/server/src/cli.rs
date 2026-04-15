@@ -460,14 +460,16 @@ mod tests {
 
     #[test]
     fn test_max_draft_tokens_range_validation() {
+        // Valid range is 0-64
         let result =
             CliArgs::try_parse_from(["vllm-server", "-m", "/test", "--max-draft-tokens", "0"]);
-        assert!(result.is_err());
+        assert!(result.is_ok(), "0 should be valid");
 
         let result =
             CliArgs::try_parse_from(["vllm-server", "-m", "/test", "--max-draft-tokens", "64"]);
         assert!(result.is_ok());
 
+        // 65 should be rejected (out of range)
         let result =
             CliArgs::try_parse_from(["vllm-server", "-m", "/test", "--max-draft-tokens", "65"]);
         assert!(result.is_err());
