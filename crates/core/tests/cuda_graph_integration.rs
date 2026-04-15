@@ -37,7 +37,7 @@ fn test_decode_batch_can_use_graph() {
     // Build batch (first will be prefill)
     let batch1 = engine.build_batch_with_graph();
     assert!(!batch1.is_graph()); // First is prefill
-    // Update to move to decode
+                                 // Update to move to decode
     let seq_id = batch1.into_regular().seq_ids[0];
     engine.update(&[seq_id], &[10], &[3]);
     // Second batch should be decode and could use graph
@@ -131,7 +131,6 @@ fn test_end_to_end_engine_with_cuda_graph_config() {
         ..Default::default()
     };
     let target_model = MockModel;
-    let draft_model = MockModel;
     let engine = Engine::with_config(target_model, None, config, 4, 1024);
     // Verify CUDA Graph is configured
     assert!(engine.cuda_graph_enabled());
