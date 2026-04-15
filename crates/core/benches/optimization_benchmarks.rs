@@ -1,4 +1,4 @@
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::hint::black_box;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -141,7 +141,7 @@ fn bench_throughput(c: &mut Criterion) {
             |b, &num_requests| {
                 let config = SchedulerConfig::default();
                 let mut engine =
-                    Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+                    Engine::with_config(IncrementModel, Some(IncrementModel), config, 4, 1024);
                 engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
 
                 for i in 0..num_requests {
