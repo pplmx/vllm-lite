@@ -708,7 +708,7 @@ mod tests {
 
         cache.write_kv_batch(0, 0, 0, &k, &v)?;
 
-        let (k_out, v_out) = cache.read_kv(0, &[0], 4)?;
+        let (k_out, _v_out) = cache.read_kv(0, &[0], 4)?;
         assert_eq!(k_out.dims(), &[4, 4, 16]);
 
         Ok(())
@@ -724,7 +724,7 @@ mod tests {
 
         cache.write_kv_batch(0, 0, 0, &k, &v)?;
 
-        let (k_out, v_out) = cache.read_kv(0, &[0, 1], 20)?;
+        let (k_out, _v_out) = cache.read_kv(0, &[0, 1], 20)?;
         assert_eq!(k_out.dims(), &[20, 2, 8]);
 
         Ok(())
@@ -776,7 +776,7 @@ mod tests {
     fn test_gqa_expanded_heads_cache() -> Result<()> {
         let device = Device::Cpu;
         let num_heads = 14;
-        let num_kv_heads = 2;
+        let _num_kv_heads = 2;
         let head_dim = 64;
 
         let mut cache = PagedKvCache::new(1, num_heads, head_dim, 4, device.clone(), false)?;
@@ -786,7 +786,7 @@ mod tests {
 
         cache.write_kv_batch(0, 0, 0, &k, &v)?;
 
-        let (k_out, v_out) = cache.read_kv(0, &[0], 1)?;
+        let (k_out, _v_out) = cache.read_kv(0, &[0], 1)?;
         assert_eq!(k_out.dims(), &[1, num_heads, head_dim]);
 
         Ok(())
