@@ -126,7 +126,8 @@ impl<M: ModelBackend + 'static> Engine<M> {
 
     /// Check if CUDA Graph is enabled and has graphs
     pub fn cuda_graph_enabled(&self) -> bool {
-        self.cuda_graph.as_ref().is_some_and(|e| e.is_enabled())
+        false // TODO: disabled for debugging
+              // self.cuda_graph.as_ref().is_some_and(|e| e.is_enabled())
     }
 
     pub fn enable_speculative(&mut self) {
@@ -179,6 +180,7 @@ impl<M: ModelBackend + 'static> Engine<M> {
     }
 
     pub fn run(&mut self, mut msg_rx: mpsc::UnboundedReceiver<EngineMessage>) {
+        let mut step_count = 0u64;
         loop {
             while let Ok(msg) = msg_rx.try_recv() {
                 match msg {
@@ -186,7 +188,12 @@ impl<M: ModelBackend + 'static> Engine<M> {
                         request,
                         response_tx,
                     } => {
-                        self.add_request(request, response_tx);
+                        let seq_id = self.add_request(request, response_tx);
+                        eprintln!(
+                            "DEBUG: Added request seq_id={}, pending={}",
+                            seq_id,
+                            self.scheduler.has_pending()
+                        );
                     }
                     EngineMessage::GetMetrics { response_tx } => {
                         let (used, total) = self.scheduler.get_kv_cache_usage();
@@ -221,16 +228,28 @@ impl<M: ModelBackend + 'static> Engine<M> {
             }
 
             if self.scheduler.has_pending() {
+                step_count += 1;
+                if step_count <= 5 || step_count % 100 == 0 {
+                    eprintln!(
+                        "DEBUG: Running step {}, queue={}, running={}",
+                        step_count,
+                        self.scheduler.waiting_count(),
+                        self.scheduler.running_count()
+                    );
+                }
                 let result = if self.speculative_mode {
                     self.step_speculative()
                 } else if self.cuda_graph_enabled() {
+                    eprintln!("DEBUG: Calling step_with_graph");
                     self.step_with_graph()
                 } else {
+                    eprintln!("DEBUG: Calling step");
                     self.step()
                 };
                 if let Err(e) = result {
                     self.error_count += 1;
                     self.last_error = Some(e.to_string());
+                    eprintln!("ERROR in step {}: {}", step_count, e);
                     error!(error = %e, "Engine step error");
                 }
             }
@@ -350,30 +369,36 @@ impl<M: ModelBackend + 'static> Engine<M> {
         let start = std::time::Instant::now();
         let graph_batch = self.scheduler.build_batch_with_graph();
         if graph_batch.batch_size() == 0 {
+            eprintln!("DEBUG step_with_graph: batch_size=0, skipping");
             return Ok(vec![]);
         }
 
-        let output = match graph_batch {
+        let (output, batch) = match graph_batch {
             crate::scheduler::GraphBatch::Graph(prepared) => {
-                // Try CUDA Graph execution
-                if let Some(ref executor) = self.cuda_graph {
-                    match executor.execute(&prepared.batch) {
+                let batch = prepared.batch;
+                let input_counts: Vec<usize> = batch.input_tokens.iter().map(|v| v.len()).collect();
+                let output = if let Some(ref executor) = self.cuda_graph {
+                    match executor.execute(&batch) {
                         Ok(output) => output,
                         Err(e) => {
                             tracing::warn!("CUDA Graph execution failed: {}, falling back", e);
-                            // Fallback to regular execution
-                            self.execute_regular(&prepared.batch)?
+                            self.execute_regular(&batch)?
                         }
                     }
                 } else {
-                    self.execute_regular(&prepared.batch)?
-                }
+                    self.execute_regular(&batch)?
+                };
+                (output, input_counts)
             }
-            crate::scheduler::GraphBatch::Regular(batch) => self.execute_regular(&batch)?,
+            crate::scheduler::GraphBatch::Regular(batch) => {
+                let input_counts: Vec<usize> = batch.input_tokens.iter().map(|v| v.len()).collect();
+                let output = self.execute_regular(&batch)?;
+                (output, input_counts)
+            }
         };
 
         // Process output and update
-        self.process_output(output, start)
+        self.process_output(output, batch, start)
     }
 
     /// Execute regular forward pass (existing logic)
@@ -395,6 +420,7 @@ impl<M: ModelBackend + 'static> Engine<M> {
     fn process_output(
         &mut self,
         output: BatchOutput,
+        input_counts: Vec<usize>,
         start: std::time::Instant,
     ) -> Result<Vec<(SeqId, TokenId)>> {
         let mut results = Vec::new();
@@ -407,7 +433,6 @@ impl<M: ModelBackend + 'static> Engine<M> {
 
         let seq_ids: Vec<_> = results.iter().map(|(id, _)| *id).collect();
         let tokens: Vec<_> = results.iter().map(|(_, t)| *t).collect();
-        let input_counts = vec![1; tokens.len()];
         self.scheduler.update(&seq_ids, &tokens, &input_counts);
 
         let finished = self.scheduler.finished_sequences();

@@ -288,11 +288,11 @@ impl Qwen3Model {
 
         let kv_cache = PagedKvCache::new(
             config.num_hidden_layers(),
-            config.num_key_value_heads(),
-            hidden_size / config.num_attention_heads(),
+            config.num_attention_heads(), // Use expanded num_heads for GQA
+            config.head_dim(),
             num_kv_blocks,
             device.clone(),
-            kv_quantization,
+            false,
         )?;
 
         Ok(Self {
@@ -354,7 +354,7 @@ impl Qwen3Model {
                 hidden = layer
                     .forward_decode(
                         &hidden,
-                        &self.kv_cache,
+                        &mut self.kv_cache,
                         layer_idx,
                         block_ids,
                         num_computed_tokens,

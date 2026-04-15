@@ -147,7 +147,7 @@ impl GqaAttention {
 
         // Now q, k, v are [batch, heads, seq, dim]
         // For q @ k^T, need k as [batch, heads, dim, seq]
-        let k_t = k.transpose(2, 3)?;
+        let k_t = k.transpose(2, 3)?.contiguous()?;
         let qk = Tensor::matmul(&q, &k_t)?;
 
         let scale = 1.0 / (self.head_dim as f32).sqrt();
@@ -157,7 +157,7 @@ impl GqaAttention {
         // attn_weights: [batch, heads, seq_q, seq_kv]
         // v: [batch, heads, seq_kv, dim]
         // attn_output: [batch, heads, seq_q, dim]
-        let attn_output = Tensor::matmul(&attn_weights, &v)?;
+        let attn_output = Tensor::matmul(&attn_weights, &v.contiguous()?)?;
 
         // attn_output: [batch, heads, seq_q, dim]
         // Transpose to [batch, seq_q, heads, dim]
@@ -224,9 +224,7 @@ impl GqaAttention {
 
         let q = q.reshape((batch_size, seq_len, self.num_heads, self.head_dim))?;
         let k = k.reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?;
-        let v = v
-            .reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?
-            .transpose(1, 2)?;
+        let v = v.reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?;
 
         let q = self.apply_q_norm(q, batch_size, seq_len)?;
         let k = self.apply_k_norm(k, batch_size, seq_len)?;
@@ -235,17 +233,20 @@ impl GqaAttention {
         let q = apply_rope(&q, &position_ids, self.theta)?;
         let k = apply_rope(&k, &position_ids, self.theta)?;
 
-        let q = q.transpose(1, 2)?;
-        let k = k.transpose(1, 2)?;
+        // Expand k/v from num_kv_heads to num_heads for storage and attention
+        let k_expanded = self.expand_kv(&k, self.num_heads, self.num_kv_heads)?;
+        let v_expanded = self.expand_kv(&v, self.num_heads, self.num_kv_heads)?;
 
+        let q = q.transpose(1, 2)?.contiguous()?;
+        let k_expanded = k_expanded.transpose(1, 2)?.contiguous()?;
+        let v_expanded = v_expanded.transpose(1, 2)?.contiguous()?;
+
+        // Write expanded k/v to cache
         let mut block_groups: std::collections::BTreeMap<usize, Vec<usize>> =
             std::collections::BTreeMap::new();
         for (token_idx, &block_id) in block_ids.iter().take(seq_len).enumerate() {
             block_groups.entry(block_id).or_default().push(token_idx);
         }
-
-        let k_t = k.transpose(1, 2)?.contiguous()?;
-        let v_t = v.transpose(1, 2)?.contiguous()?;
 
         for (block_id, token_indices) in &block_groups {
             if token_indices.is_empty() {
@@ -255,21 +256,20 @@ impl GqaAttention {
             let indices: Vec<u32> = token_indices.iter().map(|&i| i as u32).collect();
             let indices_tensor = Tensor::new(indices.as_slice(), k.device())?;
 
-            let k_block = k_t.index_select(&indices_tensor, 1)?;
-            let v_block = v_t.index_select(&indices_tensor, 1)?;
+            // After transpose, k_expanded is [batch, num_heads, seq, head_dim]
+            // Select tokens from dim 2 (sequence dimension)
+            // Result: [batch, num_heads, selected_seq, head_dim]
+            let k_block = k_expanded.index_select(&indices_tensor, 2)?.contiguous()?;
+            let v_block = v_expanded.index_select(&indices_tensor, 2)?.contiguous()?;
+
+            // Transpose to [batch, seq, num_heads, head_dim] for write_kv_batch
+            let k_block = k_block.transpose(1, 2)?.contiguous()?;
+            let v_block = v_block.transpose(1, 2)?.contiguous()?;
 
             kv_cache.write_kv_batch(layer_idx, *block_id, 0, &k_block, &v_block)?;
         }
 
-        // expand_kv expects [batch, seq, heads, dim]
-        // k_t and v_t are already in correct shape from lines 231-232
-        let k_expanded = self.expand_kv(&k_t, self.num_heads, self.num_kv_heads)?;
-        let v_expanded = self.expand_kv(&v_t, self.num_heads, self.num_kv_heads)?;
-
-        // paged_attention expects [batch, heads, seq, dim]
-        // expand_kv outputs [batch, seq, heads, dim], so transpose
-        let k_expanded = k_expanded.transpose(1, 2)?.contiguous()?;
-        let v_expanded = v_expanded.transpose(1, 2)?.contiguous()?;
+        // k_expanded and v_expanded are already [batch, num_heads, seq, head_dim] from transpose above
 
         if seq_len > tile_size {
             self.tiled_attention(&q, &k_expanded, &v_expanded, seq_len)
@@ -281,7 +281,7 @@ impl GqaAttention {
     pub fn forward_decode(
         &self,
         x: &Tensor,
-        kv_cache: &PagedKvCache,
+        kv_cache: &mut PagedKvCache,
         layer_idx: usize,
         block_ids: &[usize],
         num_computed_tokens: usize,
@@ -292,35 +292,80 @@ impl GqaAttention {
         let tile_size = self.config.tile_size.unwrap_or(16);
 
         let q = self.q_proj.forward(x)?;
+        let k = self.k_proj.forward(x)?;
+        let v = self.v_proj.forward(x)?;
+
         let q = q.reshape((batch_size, 1, self.num_heads, self.head_dim))?;
+        let k = k.reshape((batch_size, 1, self.num_kv_heads, self.head_dim))?;
+        let v = v.reshape((batch_size, 1, self.num_kv_heads, self.head_dim))?;
 
         let q = self.apply_q_norm(q, batch_size, 1)?;
-        // q is [batch, seq=1, num_heads, head_dim]
-        // apply_rope expects [batch, seq, num_heads, head_dim], so don't transpose
+        let k = self.apply_k_norm(k, batch_size, 1)?;
 
         let position_ids: Vec<i64> = positions.iter().map(|&p| p as i64).collect();
         let q = apply_rope(&q, &position_ids, self.theta)?;
+        let k = apply_rope(&k, &position_ids, self.theta)?;
 
-        // After apply_rope, transpose to [batch, num_heads, seq, head_dim] for attention
         let q = q.transpose(1, 2)?;
 
-        let (k, v) = kv_cache.read_kv(layer_idx, block_ids, num_computed_tokens)?;
-
-        // read_kv returns [seq, num_kv_heads, head_dim]
-        // Reshape to [batch=1, seq, num_kv_heads, head_dim] for expand_kv and RoPE
-        let k = k.unsqueeze(0)?; // [1, seq, num_kv_heads, head_dim]
-        let v = v.unsqueeze(0)?;
-
-        let k = apply_rope(&k, &position_ids, self.theta)?;
+        // For GQA: expand k/v from num_kv_heads to num_heads before writing to cache
         let k_expanded = self.expand_kv(&k, self.num_heads, self.num_kv_heads)?;
         let v_expanded = self.expand_kv(&v, self.num_heads, self.num_kv_heads)?;
-        let k_expanded = k_expanded.transpose(1, 2)?; // [1, N, 14, 64] -> [1, 14, N, 64]
-        let v_expanded = v_expanded.transpose(1, 2)?;
+
+        // k_expanded/v_expanded is [batch=1, seq=1, num_heads, head_dim]
+        // After transpose: [batch=1, num_heads, seq=1, head_dim] -> squeeze batch: [num_heads, 1, head_dim]
+        let k_for_cache = k_expanded.transpose(1, 2)?.squeeze(0)?.contiguous()?; // [num_heads, 1, head_dim]
+        let v_for_cache = v_expanded.transpose(1, 2)?.squeeze(0)?.contiguous()?;
+
+        // Read cached k/v (which is stored with num_heads for the expanded version)
+        let (cached_k, cached_v) = kv_cache.read_kv(layer_idx, block_ids, num_computed_tokens)?;
+
+        eprintln!(
+            "DEBUG decode: cached_k dims={:?}, k_for_cache dims={:?}",
+            cached_k.dims(),
+            k_for_cache.dims()
+        );
+
+        // read_kv returns [seq_len, num_heads, head_dim], need [num_heads, seq_len, head_dim]
+        let cached_k = cached_k.transpose(0, 1)?.contiguous()?;
+        let cached_v = cached_v.transpose(0, 1)?.contiguous()?;
+
+        // Concatenate cached and new k/v along seq dimension
+        // cached_k/v is [num_heads, seq, head_dim]
+        // k_for_cache/v_for_cache is [num_heads, 1, head_dim]
+        let full_k = Tensor::cat(&[&cached_k, &k_for_cache], 1)?.contiguous()?; // [num_heads, seq+1, head_dim]
+        let full_v = Tensor::cat(&[&cached_v, &v_for_cache], 1)?.contiguous()?;
+
+        // Write new k/v to cache (with expanded num_heads)
+        // k_for_cache/v_for_cache is [num_heads, 1, head_dim]
+        // write_kv expects [1, num_heads, head_dim]
+        // token_offset should be within current block, not absolute position
+        if !block_ids.is_empty() {
+            let block_size = kv_cache.block_size();
+            let token_offset = num_computed_tokens % block_size;
+            let block_id = num_computed_tokens / block_size;
+
+            // k_for_cache: [num_heads, 1, head_dim] -> [1, num_heads, head_dim]
+            let k_for_write = k_for_cache.permute((1, 0, 2))?.contiguous()?; // [1, num_heads, head_dim]
+            let v_for_write = v_for_cache.permute((1, 0, 2))?.contiguous()?;
+            kv_cache.write_kv(
+                layer_idx,
+                block_id,
+                token_offset,
+                &k_for_write,
+                &v_for_write,
+            )?;
+        }
+
+        // Expand cached k/v for attention (they should already be expanded from storage)
+        // full_k/v already has num_heads, just need to unsqueeze and transpose
+        let full_k_unsqueezed = full_k.unsqueeze(0)?.contiguous()?; // [1, num_heads, seq+1, head_dim]
+        let full_v_unsqueezed = full_v.unsqueeze(0)?.contiguous()?;
 
         if seq_len > tile_size {
-            self.tiled_attention(&q, &k_expanded, &v_expanded, seq_len)
+            self.tiled_attention(&q, &full_k_unsqueezed, &full_v_unsqueezed, seq_len)
         } else {
-            self.paged_attention(&q, &k_expanded, &v_expanded, seq_len)
+            self.paged_attention(&q, &full_k_unsqueezed, &full_v_unsqueezed, seq_len)
         }
     }
 

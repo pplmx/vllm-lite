@@ -83,7 +83,7 @@ pub fn paged_attention(
     let batch_size = q.dims()[0];
     let seq_len = q.dims()[2];
 
-    let qk = Tensor::matmul(q, &k.transpose(2, 3)?)?;
+    let qk = Tensor::matmul(q, &k.transpose(2, 3)?.contiguous()?)?;
     let mask = causal_mask(seq_len, q.device())?;
     let mask = mask.broadcast_as(qk.dims())?;
     let qk = (&qk + &mask)?;
@@ -121,7 +121,7 @@ pub fn tiled_attention(
         let k_tile = k.narrow(2, 0, end)?;
         let v_tile = v.narrow(2, 0, end)?;
 
-        let qk = Tensor::matmul(&q_tile, &k_tile.transpose(2, 3)?)?;
+        let qk = Tensor::matmul(&q_tile, &k_tile.transpose(2, 3)?.contiguous()?)?;
 
         let mask = causal_mask_tile(q.dims()[0], start, tile_len, end, q.device())?;
         let mask = mask.broadcast_as(qk.dims())?;
