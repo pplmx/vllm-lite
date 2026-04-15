@@ -197,7 +197,9 @@ impl<M: ModelBackend> super::Engine<M> {
         // Clean up finished sequences
         let finished = self.scheduler.finished_sequences();
         for seq in &finished {
-            self.response_txs.remove(&seq.id);
+            if let Some(tx) = self.response_txs.remove(&seq.id) {
+                drop(tx);
+            }
         }
         self.scheduler.clear_finished();
 

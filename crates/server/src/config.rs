@@ -211,9 +211,6 @@ impl AppConfig {
             ));
         }
 
-        if self.engine.max_draft_tokens == 0 {
-            errors.push("engine.max_draft_tokens must be > 0".to_string());
-        }
         if self.engine.max_draft_tokens > 64 {
             errors.push("engine.max_draft_tokens must be <= 64".to_string());
         }

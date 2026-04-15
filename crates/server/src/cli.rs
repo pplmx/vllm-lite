@@ -69,7 +69,7 @@ fn validate_max_waiting_batches(s: &str) -> Result<usize, String> {
 }
 
 fn validate_max_draft_tokens(s: &str) -> Result<usize, String> {
-    parse_usize_in_range(s, 1, 64)
+    parse_usize_in_range(s, 0, 64)
 }
 
 #[derive(Parser, Debug)]
