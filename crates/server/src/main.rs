@@ -129,9 +129,18 @@ async fn main() {
         .load_model()
         .unwrap_or_else(|e| panic!("Failed to load model: {}", e));
 
-    let draft_model = loader
-        .load_model()
-        .unwrap_or_else(|e| panic!("Failed to load draft model: {}", e));
+    // Only load draft model if speculative decoding is enabled
+    let draft_model = if app_config.engine.max_draft_tokens > 0 {
+        tracing::info!("Loading draft model (speculative decoding enabled)");
+        Some(
+            loader
+                .load_model()
+                .unwrap_or_else(|e| panic!("Failed to load draft model: {}", e)),
+        )
+    } else {
+        tracing::info!("Skipping draft model (speculative decoding disabled)");
+        None
+    };
 
     let mut engine = Engine::new(model, draft_model);
     // Don't enable speculative mode - it causes hangs with mismatched draft model

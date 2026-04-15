@@ -68,8 +68,13 @@ impl<M: ModelBackend> super::Engine<M> {
             let mut current_tokens = tokens.clone();
             let mut current_positions = positions.clone();
 
+            let draft_model = match &self.draft_model {
+                Some(dm) => dm,
+                None => continue,
+            };
+
             for _ in 0..max_draft {
-                let output = self.draft_model.lock().unwrap().forward(
+                let output = draft_model.lock().unwrap().forward(
                     &[*seq_id],
                     std::slice::from_ref(&current_tokens),
                     std::slice::from_ref(&current_positions),
