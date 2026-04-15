@@ -139,15 +139,31 @@ impl GqaAttention {
         let k = self.expand_kv(&k, self.num_heads, self.num_kv_heads)?;
         let v = self.expand_kv(&v, self.num_heads, self.num_kv_heads)?;
 
-        let k = k.transpose(2, 3)?;
-        let qk = Tensor::matmul(&q, &k)?;
+        // q, k, v are [batch, seq, heads, dim]
+        // For matmul, need [batch, heads, seq, dim]
+        let q = q.transpose(1, 2)?;
+        let k = k.transpose(1, 2)?;
+        let v = v.transpose(1, 2)?;
+
+        // Now q, k, v are [batch, heads, seq, dim]
+        // For q @ k^T, need k as [batch, heads, dim, seq]
+        let k_t = k.transpose(2, 3)?;
+        let qk = Tensor::matmul(&q, &k_t)?;
 
         let scale = 1.0 / (self.head_dim as f32).sqrt();
         let qk = qk.mul(&Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?)?;
         let attn_weights = candle_nn::ops::softmax(&qk, 3)?;
 
+        // attn_weights: [batch, heads, seq_q, seq_kv]
+        // v: [batch, heads, seq_kv, dim]
+        // attn_output: [batch, heads, seq_q, dim]
         let attn_output = Tensor::matmul(&attn_weights, &v)?;
 
+        // attn_output: [batch, heads, seq_q, dim]
+        // Transpose to [batch, seq_q, heads, dim]
+        let attn_output = attn_output.transpose(1, 2)?;
+
+        // Reshape to [batch, seq_q, num_heads * head_dim]
         let attn_output =
             attn_output.reshape((batch_size, seq_len, self.num_heads * self.head_dim))?;
 
