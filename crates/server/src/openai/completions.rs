@@ -94,6 +94,7 @@ pub(crate) async fn completions(
         tokens.push(token);
     }
 
+    eprintln!("DEBUG: Generated tokens: {:?}", tokens);
     let text = state.tokenizer.decode(&tokens);
     let choice = CompletionChoice {
         text,
