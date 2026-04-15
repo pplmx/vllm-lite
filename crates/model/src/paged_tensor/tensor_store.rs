@@ -681,4 +681,124 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_write_kv_batch_single_token() -> Result<()> {
+        let device = Device::Cpu;
+        let mut cache = PagedKvCache::new(1, 4, 16, 4, device.clone(), false)?;
+
+        let k = Tensor::randn(0.0f32, 1.0, (1, 1, 4, 16), &device)?;
+        let v = Tensor::randn(0.0f32, 1.0, (1, 1, 4, 16), &device)?;
+
+        cache.write_kv_batch(0, 0, 0, &k, &v)?;
+
+        let (k_out, v_out) = cache.read_kv(0, &[0], 1)?;
+        assert_eq!(k_out.dims(), &[1, 4, 16]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_kv_batch_multi_token() -> Result<()> {
+        let device = Device::Cpu;
+        let mut cache = PagedKvCache::new(1, 4, 16, 4, device.clone(), false)?;
+
+        let k = Tensor::randn(0.0f32, 1.0, (1, 4, 4, 16), &device)?;
+        let v = Tensor::randn(0.0f32, 1.0, (1, 4, 4, 16), &device)?;
+
+        cache.write_kv_batch(0, 0, 0, &k, &v)?;
+
+        let (k_out, v_out) = cache.read_kv(0, &[0], 4)?;
+        assert_eq!(k_out.dims(), &[4, 4, 16]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_kv_batch_crosses_block_boundary() -> Result<()> {
+        let device = Device::Cpu;
+        let mut cache = PagedKvCache::new(1, 2, 8, 4, device.clone(), false)?;
+
+        let k = Tensor::randn(0.0f32, 1.0, (1, 20, 2, 8), &device)?;
+        let v = Tensor::randn(0.0f32, 1.0, (1, 20, 2, 8), &device)?;
+
+        cache.write_kv_batch(0, 0, 0, &k, &v)?;
+
+        let (k_out, v_out) = cache.read_kv(0, &[0, 1], 20)?;
+        assert_eq!(k_out.dims(), &[20, 2, 8]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_kv_batch_invalid_layer_idx() -> Result<()> {
+        let device = Device::Cpu;
+        let mut cache = PagedKvCache::new(2, 2, 8, 4, device.clone(), false)?;
+
+        let k = Tensor::ones((1, 4, 2, 8), DType::F32, &device)?;
+        let v = Tensor::ones((1, 4, 2, 8), DType::F32, &device)?;
+
+        let result = cache.write_kv_batch(2, 0, 0, &k, &v);
+        assert!(result.is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_kv_batch_invalid_kv_dims() -> Result<()> {
+        let device = Device::Cpu;
+        let mut cache = PagedKvCache::new(1, 2, 8, 4, device.clone(), false)?;
+
+        let k = Tensor::ones((1, 4, 2, 8), DType::F32, &device)?;
+        let v = Tensor::ones((1, 4, 3, 8), DType::F32, &device)?;
+
+        let result = cache.write_kv_batch(0, 0, 0, &k, &v);
+        assert!(result.is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_kv_batch_wrong_num_heads() -> Result<()> {
+        let device = Device::Cpu;
+        let mut cache = PagedKvCache::new(1, 4, 8, 4, device.clone(), false)?;
+
+        let k = Tensor::ones((1, 4, 2, 8), DType::F32, &device)?;
+        let v = Tensor::ones((1, 4, 2, 8), DType::F32, &device)?;
+
+        let result = cache.write_kv_batch(0, 0, 0, &k, &v);
+        assert!(result.is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_gqa_expanded_heads_cache() -> Result<()> {
+        let device = Device::Cpu;
+        let num_heads = 14;
+        let num_kv_heads = 2;
+        let head_dim = 64;
+
+        let mut cache = PagedKvCache::new(1, num_heads, head_dim, 4, device.clone(), false)?;
+
+        let k = Tensor::randn(0.0f32, 1.0, (1, 1, num_heads, head_dim), &device)?;
+        let v = Tensor::randn(0.0f32, 1.0, (1, 1, num_heads, head_dim), &device)?;
+
+        cache.write_kv_batch(0, 0, 0, &k, &v)?;
+
+        let (k_out, v_out) = cache.read_kv(0, &[0], 1)?;
+        assert_eq!(k_out.dims(), &[1, num_heads, head_dim]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_block_size_getter() -> Result<()> {
+        let device = Device::Cpu;
+        let cache = PagedKvCache::new(1, 4, 16, 10, device.clone(), false)?;
+
+        assert_eq!(cache.block_size(), 16);
+
+        Ok(())
+    }
 }
