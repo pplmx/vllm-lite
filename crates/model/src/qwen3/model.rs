@@ -364,23 +364,14 @@ impl Qwen3Model {
             }
         }
 
-        eprintln!(
-            "DEBUG forward_with_cache: before norm hidden dims={:?}",
-            hidden.dims()
-        );
         hidden = self
             .norm
             .forward(&hidden)
             .map_err(|e| EngineError::new(e.to_string()))?;
-        eprintln!(
-            "DEBUG forward_with_cache: after norm hidden dims={:?}",
-            hidden.dims()
-        );
         let logits = self
             .lm_head
             .forward(&hidden)
             .map_err(|e| EngineError::new(e.to_string()))?;
-        eprintln!("DEBUG forward_with_cache: logits dims={:?}", logits.dims());
 
         Ok((logits, hidden))
     }
@@ -567,8 +558,6 @@ impl ModelBackend for Qwen3Model {
                         max_idx
                     }
                 });
-                eprintln!("DEBUG logits stats: max={:.2}, min={:.2}, sum={:.2}, argmax_idx={}, is_prefill={}",
-                         max_val, min_val, sum_val, argmax_idx, pf);
             }
 
             results.push(logits_vec);

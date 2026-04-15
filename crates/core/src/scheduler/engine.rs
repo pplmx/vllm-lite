@@ -389,6 +389,7 @@ impl SchedulerEngine {
         }
 
         for seq in finished_seqs {
+            self.memory.release_blocks(seq.kv_blocks.as_ref());
             self.finished.push(seq);
         }
 

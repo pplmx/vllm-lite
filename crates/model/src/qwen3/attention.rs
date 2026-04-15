@@ -266,22 +266,10 @@ impl GqaAttention {
         let k_expanded = self.expand_kv(&k_t, self.num_heads, self.num_kv_heads)?;
         let v_expanded = self.expand_kv(&v_t, self.num_heads, self.num_kv_heads)?;
 
-        eprintln!(
-            "DEBUG forward_prefill: k_expanded dims={:?}, v_expanded dims={:?}",
-            k_expanded.dims(),
-            v_expanded.dims()
-        );
-
         // paged_attention expects [batch, heads, seq, dim]
         // expand_kv outputs [batch, seq, heads, dim], so transpose
         let k_expanded = k_expanded.transpose(1, 2)?.contiguous()?;
         let v_expanded = v_expanded.transpose(1, 2)?.contiguous()?;
-
-        eprintln!(
-            "DEBUG forward_prefill after transpose: k_expanded dims={:?}, v_expanded dims={:?}",
-            k_expanded.dims(),
-            v_expanded.dims()
-        );
 
         if seq_len > tile_size {
             self.tiled_attention(&q, &k_expanded, &v_expanded, seq_len)
@@ -343,14 +331,8 @@ impl GqaAttention {
         v: &Tensor,
         _seq_len: usize,
     ) -> Result<Tensor> {
-        eprintln!("DEBUG paged_attention: q dims={:?}, k dims={:?}, v dims={:?}, num_heads={}, head_dim={}", q.dims(), k.dims(), v.dims(), self.num_heads, self.head_dim);
         let attn_output = paged_attention(q, k, v, self.num_heads, self.head_dim)?;
-        eprintln!(
-            "DEBUG paged_attention output: attn_output dims={:?}",
-            attn_output.dims()
-        );
         let o = self.o_proj.forward(&attn_output)?;
-        eprintln!("DEBUG paged_attention after o_proj: o dims={:?}", o.dims());
         Ok(o)
     }
 
