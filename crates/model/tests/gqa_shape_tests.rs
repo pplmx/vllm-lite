@@ -2,7 +2,7 @@
 //!
 //! These tests verify that expand_kv correctly handles GQA head count mismatches.
 
-use candle_core::{Device, Shape, Tensor};
+use candle_core::{Device, Tensor};
 
 /// Helper function to test expand_kv
 fn test_expand_kv(
@@ -22,7 +22,7 @@ fn test_expand_kv(
     // Check if num_q_heads is divisible by num_kv_heads
     if num_q_heads % num_kv_heads != 0 {
         // Handle edge case: repeat KV heads to match Q heads
-        let repeat_factor = (num_q_heads + num_kv_heads - 1) / num_kv_heads;
+        let repeat_factor = num_q_heads.div_ceil(num_kv_heads);
         let kv_repeated = kv.repeat(&[1, 1, repeat_factor, 1])?;
         // Slice to exact num_q_heads
         return kv_repeated.narrow(2, 0, num_q_heads);
