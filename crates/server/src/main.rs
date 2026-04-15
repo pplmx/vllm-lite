@@ -145,14 +145,21 @@ async fn main() {
     });
 
     let tokenizer_path = PathBuf::from(&model_path).join("tokenizer.json");
-    let tokenizer = if tokenizer_path.exists() {
-        Arc::new(
-            Tokenizer::from_file(tokenizer_path.to_str().unwrap())
-                .unwrap_or_else(|e| {
-                    tracing::warn!(error = %e, "Failed to load tokenizer from file, using default");
-                    Tokenizer::new()
-                })
-        )
+    let tokenizer: Arc<Tokenizer> = if tokenizer_path.exists() {
+        match Tokenizer::from_file(tokenizer_path.to_str().unwrap()) {
+            Ok(t) => {
+                tracing::info!("Loaded tokenizer from {:?}", tokenizer_path);
+                // Test encoding
+                let test_tokens = t.encode("hi");
+                let test_decode = t.decode(&test_tokens);
+                tracing::info!("Tokenizer test: 'hi' -> {:?}, decode -> '{}'", test_tokens, test_decode);
+                Arc::new(t)
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to load tokenizer from file, using default");
+                Arc::new(Tokenizer::new())
+            }
+        }
     } else {
         tracing::warn!("No tokenizer.json found in model directory, using default tokenizer");
         Arc::new(Tokenizer::new())

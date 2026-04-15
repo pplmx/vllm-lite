@@ -316,7 +316,20 @@ impl Qwen3Model {
         is_prefill: bool,
     ) -> EngineResult<(Tensor, Tensor)> {
         if tokens.is_empty() {
-            return Err(EngineError::new("Empty tokens"));
+            eprintln!(
+                "WARN: Empty tokens received, num_computed={}, positions={:?}, is_prefill={}",
+                num_computed_tokens, positions, is_prefill
+            );
+            let hidden_size = self.config.hidden_size();
+            let dummy = Tensor::zeros((1, 1, hidden_size), candle_core::DType::F32, &self.device)
+                .map_err(|e| EngineError::new(e.to_string()))?;
+            let logits = Tensor::zeros(
+                (1, 1, self.config.vocab_size()),
+                candle_core::DType::F32,
+                &self.device,
+            )
+            .map_err(|e| EngineError::new(e.to_string()))?;
+            return Ok((logits, dummy));
         }
 
         let token_tensor =
@@ -442,6 +455,34 @@ impl ModelBackend for Qwen3Model {
                 // logits shape: [batch=1, seq_len, vocab_size]
                 // argmax on last dim gives [batch=1, seq_len]
                 // We need to squeeze both dims to get scalar
+
+                // Debug: check first token logits
+                if tokens.len() > 0 {
+                    // logits: [1, seq_len, vocab] -> narrow last -> [1, 1, vocab]
+                    let last_logit = logits
+                        .narrow(1, logits.dims()[1] - 1, 1)
+                        .map_err(|e| EngineError::new(e.to_string()))?;
+                    // squeeze batch and seq_len -> [vocab]
+                    let flat = last_logit
+                        .squeeze(0)
+                        .map_err(|e| EngineError::new(e.to_string()))?
+                        .squeeze(0)
+                        .map_err(|e| EngineError::new(e.to_string()))?;
+                    let vec = flat
+                        .to_vec1::<f32>()
+                        .map_err(|e| EngineError::new(e.to_string()))?;
+                    let max_idx = vec
+                        .iter()
+                        .enumerate()
+                        .fold(0, |m, (i, &v)| if v > vec[m] { i } else { m });
+                    eprintln!(
+                        "DEBUG PREFILL logits[last]: max_idx={}, max_val={:.4}, seq_len={}",
+                        max_idx,
+                        vec[max_idx],
+                        logits.dims()[1]
+                    );
+                }
+
                 let next = logits
                     .argmax(D::Minus1)
                     .map_err(|e| EngineError::new(e.to_string()))?
@@ -473,6 +514,23 @@ impl ModelBackend for Qwen3Model {
                 // logits shape: [batch=1, seq_len, vocab_size]
                 // argmax on last dim gives [batch=1, seq_len]
                 // We need to squeeze both dims to get scalar
+
+                // Debug: check decode logits
+                let flat = logits
+                    .squeeze(0)
+                    .map_err(|e| EngineError::new(e.to_string()))?;
+                let vec = flat
+                    .to_vec1::<f32>()
+                    .map_err(|e| EngineError::new(e.to_string()))?;
+                let max_idx = vec
+                    .iter()
+                    .enumerate()
+                    .fold(0, |m, (i, &v)| if v > vec[m] { i } else { m });
+                eprintln!(
+                    "DEBUG DECODE logits: max_idx={}, max_val={:.4}, pos={:?}",
+                    max_idx, vec[max_idx], pos
+                );
+
                 let next = logits
                     .argmax(D::Minus1)
                     .map_err(|e| EngineError::new(e.to_string()))?
@@ -516,11 +574,42 @@ impl ModelBackend for Qwen3Model {
 
             let (logits, _) = self.forward_with_cache(tokens, computed, blocks, pos, pf)?;
 
-            let logits_vec = logits
-                .squeeze(0)
-                .map_err(|e| EngineError::new(e.to_string()))?
-                .to_vec1::<f32>()
-                .map_err(|e| EngineError::new(e.to_string()))?;
+            // logits shape: [batch, seq_len, vocab_size]
+            // Take last token's logits for sampling
+            let logits_vec = if pf {
+                // Prefill: take last position
+                let seq_len = logits.dims()[1];
+                logits
+                    .narrow(1, seq_len - 1, 1)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .squeeze(1)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .to_vec1::<f32>()
+                    .map_err(|e| EngineError::new(e.to_string()))?
+            } else {
+                // Decode: squeeze batch dimension
+                logits
+                    .squeeze(0)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .to_vec1::<f32>()
+                    .map_err(|e| EngineError::new(e.to_string()))?
+            };
+
+            // Debug: check logits stats
+            if logits_vec.len() > 100 {
+                let max_val = logits_vec.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+                let min_val = logits_vec.iter().cloned().fold(f32::INFINITY, f32::min);
+                let sum_val: f32 = logits_vec.iter().sum();
+                let argmax_idx = logits_vec.iter().enumerate().fold(0, |max_idx, (i, &v)| {
+                    if v > logits_vec[max_idx] {
+                        i
+                    } else {
+                        max_idx
+                    }
+                });
+                eprintln!("DEBUG logits stats: max={:.2}, min={:.2}, sum={:.2}, argmax_idx={}, is_prefill={}",
+                         max_val, min_val, sum_val, argmax_idx, pf);
+            }
 
             results.push(logits_vec);
         }
