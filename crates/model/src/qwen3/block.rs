@@ -206,17 +206,24 @@ impl TransformerBlock {
         block_ids: &[usize],
         positions: &[usize],
     ) -> Result<Tensor> {
+        eprintln!("DEBUG block forward_prefill input x dims={:?}", x.dims());
         let residual = x.clone();
         let x = self.input_layernorm.forward(x)?;
+        eprintln!("DEBUG block after input_layernorm dims={:?}", x.dims());
         let x = self
             .attention
             .forward_prefill(&x, kv_cache, layer_idx, block_ids, positions)?;
+        eprintln!("DEBUG block after attention dims={:?}", x.dims());
         let x = (&x + &residual)?;
+        eprintln!("DEBUG block after residual add dims={:?}", x.dims());
 
         let residual = x.clone();
         let x = self.post_attention_layernorm.forward(&x)?;
+        eprintln!("DEBUG block after post_attn_layernorm dims={:?}", x.dims());
         let x = self.mlp.forward(&x)?;
+        eprintln!("DEBUG block after mlp dims={:?}", x.dims());
         let x = (&x + &residual)?;
+        eprintln!("DEBUG block final output dims={:?}", x.dims());
 
         Ok(x)
     }

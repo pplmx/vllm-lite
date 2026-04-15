@@ -351,14 +351,23 @@ impl Qwen3Model {
             }
         }
 
+        eprintln!(
+            "DEBUG forward_with_cache: before norm hidden dims={:?}",
+            hidden.dims()
+        );
         hidden = self
             .norm
             .forward(&hidden)
             .map_err(|e| EngineError::new(e.to_string()))?;
+        eprintln!(
+            "DEBUG forward_with_cache: after norm hidden dims={:?}",
+            hidden.dims()
+        );
         let logits = self
             .lm_head
             .forward(&hidden)
             .map_err(|e| EngineError::new(e.to_string()))?;
+        eprintln!("DEBUG forward_with_cache: logits dims={:?}", logits.dims());
 
         Ok((logits, hidden))
     }

@@ -266,10 +266,22 @@ impl GqaAttention {
         let k_expanded = self.expand_kv(&k_t, self.num_heads, self.num_kv_heads)?;
         let v_expanded = self.expand_kv(&v_t, self.num_heads, self.num_kv_heads)?;
 
+        eprintln!(
+            "DEBUG forward_prefill: k_expanded dims={:?}, v_expanded dims={:?}",
+            k_expanded.dims(),
+            v_expanded.dims()
+        );
+
         // paged_attention expects [batch, heads, seq, dim]
         // expand_kv outputs [batch, seq, heads, dim], so transpose
         let k_expanded = k_expanded.transpose(1, 2)?.contiguous()?;
         let v_expanded = v_expanded.transpose(1, 2)?.contiguous()?;
+
+        eprintln!(
+            "DEBUG forward_prefill after transpose: k_expanded dims={:?}, v_expanded dims={:?}",
+            k_expanded.dims(),
+            v_expanded.dims()
+        );
 
         if seq_len > tile_size {
             self.tiled_attention(&q, &k_expanded, &v_expanded, seq_len)
@@ -295,24 +307,23 @@ impl GqaAttention {
         let q = q.reshape((batch_size, 1, self.num_heads, self.head_dim))?;
 
         let q = self.apply_q_norm(q, batch_size, 1)?;
-        let q = q.transpose(1, 2)?;
+        // q is [batch, seq=1, num_heads, head_dim]
+        // apply_rope expects [batch, seq, num_heads, head_dim], so don't transpose
 
         let position_ids: Vec<i64> = positions.iter().map(|&p| p as i64).collect();
         let q = apply_rope(&q, &position_ids, self.theta)?;
 
+        // After apply_rope, transpose to [batch, num_heads, seq, head_dim] for attention
+        let q = q.transpose(1, 2)?;
+
         let (k, v) = kv_cache.read_kv(layer_idx, block_ids, num_computed_tokens)?;
 
-        let k = k.transpose(0, 1)?.transpose(1, 2)?;
-        let v = v.transpose(0, 1)?.transpose(1, 2)?;
+        // read_kv returns [seq, num_kv_heads, head_dim]
+        // Reshape to [batch=1, seq, num_kv_heads, head_dim] for expand_kv and RoPE
+        let k = k.unsqueeze(0)?; // [1, seq, num_kv_heads, head_dim]
+        let v = v.unsqueeze(0)?;
 
         let k = apply_rope(&k, &position_ids, self.theta)?;
-
-        // k/v from read_kv after transposes: [head_dim, num_kv_heads, seq]
-        // Need to reshape to [batch=1, seq, num_kv_heads, head_dim] for expand_kv
-        let k = k.transpose(0, 2)?; // [head_dim, num_kv_heads, seq] -> [seq, num_kv_heads, head_dim]
-        let v = v.transpose(0, 2)?;
-        let k = k.unsqueeze(0)?; // Add batch dimension: [1, seq, num_kv_heads, head_dim]
-        let v = v.unsqueeze(0)?;
         let k_expanded = self.expand_kv(&k, self.num_heads, self.num_kv_heads)?;
         let v_expanded = self.expand_kv(&v, self.num_heads, self.num_kv_heads)?;
         let k_expanded = k_expanded.transpose(1, 2)?; // [1, N, 14, 64] -> [1, 14, N, 64]
@@ -332,8 +343,14 @@ impl GqaAttention {
         v: &Tensor,
         _seq_len: usize,
     ) -> Result<Tensor> {
+        eprintln!("DEBUG paged_attention: q dims={:?}, k dims={:?}, v dims={:?}, num_heads={}, head_dim={}", q.dims(), k.dims(), v.dims(), self.num_heads, self.head_dim);
         let attn_output = paged_attention(q, k, v, self.num_heads, self.head_dim)?;
+        eprintln!(
+            "DEBUG paged_attention output: attn_output dims={:?}",
+            attn_output.dims()
+        );
         let o = self.o_proj.forward(&attn_output)?;
+        eprintln!("DEBUG paged_attention after o_proj: o dims={:?}", o.dims());
         Ok(o)
     }
 
