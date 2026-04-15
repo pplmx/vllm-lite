@@ -126,8 +126,7 @@ impl<M: ModelBackend + 'static> Engine<M> {
 
     /// Check if CUDA Graph is enabled and has graphs
     pub fn cuda_graph_enabled(&self) -> bool {
-        false // TODO: disabled for debugging
-        // self.cuda_graph.as_ref().is_some_and(|e| e.is_enabled())
+        self.cuda_graph.as_ref().is_some_and(|e| e.is_enabled())
     }
 
     pub fn enable_speculative(&mut self) {

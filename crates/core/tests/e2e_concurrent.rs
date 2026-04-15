@@ -26,7 +26,8 @@ impl ConcurrentEngine {
         let prompt: Vec<u32> = (1..=10).collect();
         let (tx, _rx) = mpsc::channel(64);
         let mut engine = self.inner.lock().await;
-        let seq_id = engine.add_request(Request::new(1, prompt, max_tokens), tx);
+        // Use id=0 to let scheduler assign unique ID
+        let seq_id = engine.add_request(Request::new(0, prompt, max_tokens), tx);
         if seq_id > 0 {
             Ok(seq_id)
         } else {
