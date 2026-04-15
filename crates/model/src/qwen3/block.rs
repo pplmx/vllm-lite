@@ -224,7 +224,7 @@ impl TransformerBlock {
     pub fn forward_decode(
         &self,
         x: &Tensor,
-        kv_cache: &PagedKvCache,
+        kv_cache: &mut PagedKvCache,
         layer_idx: usize,
         block_ids: &[usize],
         num_computed_tokens: usize,

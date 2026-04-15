@@ -76,6 +76,10 @@ impl PagedKvCache {
         }
     }
 
+    pub fn block_size(&self) -> usize {
+        self.block_size
+    }
+
     pub fn compute_block_hash(block: &Tensor) -> u64 {
         if let Ok(data) = block.to_vec1::<f32>() {
             let hash: u64 = data

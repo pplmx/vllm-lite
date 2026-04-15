@@ -329,6 +329,7 @@ impl SchedulerEngine {
         next_tokens: &[TokenId],
         input_token_counts: &[usize],
     ) {
+        eprintln!("DEBUG update: {} sequences", seq_ids.len());
         for ((&seq_id, &token), &input_count) in
             seq_ids.iter().zip(next_tokens).zip(input_token_counts)
         {
@@ -344,6 +345,13 @@ impl SchedulerEngine {
                 }
 
                 seq.tokens.push(token);
+                eprintln!(
+                    "DEBUG update seq={}: tokens.len()={}, max_tokens={}, status={:?}",
+                    seq_id,
+                    seq.tokens.len(),
+                    seq.max_tokens,
+                    seq.status
+                );
                 seq.consecutive_decode_rounds += 1;
 
                 // Dispatch observer event for token generation
@@ -446,8 +454,17 @@ impl SchedulerEngine {
 
     /// Check if there are pending requests or running sequences
     #[must_use]
+    #[must_use]
     pub fn has_pending(&self) -> bool {
-        !self.request_queue.is_empty() || !self.running.is_empty()
+        let pending = !self.request_queue.is_empty() || !self.running.is_empty();
+        if !pending {
+            eprintln!(
+                "DEBUG has_pending: queue={}, running={}",
+                self.request_queue.len(),
+                self.running.len()
+            );
+        }
+        pending
     }
 
     /// Get the number of running sequences

@@ -6,8 +6,16 @@ impl<M: ModelBackend + 'static> crate::engine::Engine<M> {
         let start = std::time::Instant::now();
         let batch = self.scheduler.build_batch();
         if batch.is_empty() {
+            eprintln!("DEBUG step: batch is empty, skipping");
             return Ok(vec![]);
         }
+
+        eprintln!("DEBUG step: batch seq_ids={:?}, input_tokens_count={}, positions_len={}, num_computed={:?}",
+            batch.seq_ids,
+            batch.input_tokens.len(),
+            batch.positions.len(),
+            batch.num_computed_tokens
+        );
 
         let output = self.target_model.lock().unwrap().forward(
             &batch.seq_ids,

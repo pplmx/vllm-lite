@@ -41,7 +41,7 @@ impl LlamaModel {
 
         let kv_cache = PagedKvCache::new(
             num_layers,
-            config.num_kv_heads,
+            config.num_heads, // Use expanded num_heads for GQA
             config.head_dim,
             num_kv_blocks,
             device.clone(),
@@ -101,7 +101,7 @@ impl LlamaModel {
 
         let kv_cache = PagedKvCache::new(
             num_layers,
-            config.num_kv_heads,
+            config.num_heads, // Use expanded num_heads for GQA
             config.head_dim,
             num_kv_blocks,
             device.clone(),
