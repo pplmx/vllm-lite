@@ -8,7 +8,7 @@
   <a href="https://github.com/pplmx/vllm-lite/releases">
     <img src="https://img.shields.io/github/v/release/pplmx/vllm-lite?style=flat-square&color=brightgreen" alt="Release">
   </a>
-  <img src="https://img.shields.io/badge/Tests-654%20passing-success?style=flat-square" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-683%20passing-success?style=flat-square" alt="Tests">
 </p>
 
 <!-- PROJECT LOGO -->
@@ -103,7 +103,7 @@ cargo fmt --all --check
 | 🚀 **高性能**   | 🛡️ **生产就绪**      | 📊 **可观测性**    | 🐳 **云原生**   |
 | :-------------- | :------------------- | :----------------- | :-------------- |
 | Rust 原生实现   | Circuit Breaker 熔断 | Prometheus Metrics | Docker/K8s 支持 |
-| Paged Attention | 26个 E2E 测试        | Health Check       | 多阶段构建      |
+| Paged Attention | 30+ E2E 测试        | Health Check       | 多阶段构建      |
 | Flash Attention | 自动故障恢复         | 实时指标监控       | HPA 自动扩缩    |
 
 </div>
@@ -172,8 +172,8 @@ curl -X POST http://localhost:8000/v1/completions \
 │  └── Prometheus      │  └── Recovery Manager                  │
 ├─────────────────────────────────────────────────────────────┤
 │  🐳 Deployment         │  ✅ Testing                            │
-│  ├── Dockerfile        │  ├── 26 E2E Tests                      │
-│  ├── docker-compose    │  ├── Unit Tests (654+)               │
+│  ├── Dockerfile        │  ├── 30+ E2E Tests                     │
+│  ├── docker-compose    │  ├── Unit Tests (683+)                │
 │  ├── K8s Manifests     │  └── Benchmarks                        │
 │  └── HPA               │                                        │
 └─────────────────────────────────────────────────────────────┘
@@ -193,8 +193,8 @@ curl -X POST http://localhost:8000/v1/completions \
 | **首 Token 延迟 (TTFT)** | < 50ms         | 1K token prompt        |
 | **P99 延迟**             | < 100ms        | end-to-end             |
 | **显存效率**             | +40%           | vs 传统 KV Cache       |
-| **测试覆盖率**           | 654+           | 单元 + 集成测试        |
-| **E2E 测试**             | 26个           | 全场景覆盖             |
+| **测试覆盖率**           | 683+           | 单元 + 集成测试        |
+| **E2E 测试**             | 30+            | 全场景覆盖             |
 
 </div>
 
