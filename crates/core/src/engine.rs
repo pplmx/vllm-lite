@@ -31,7 +31,7 @@ use vllm_traits::{BatchOutput, ModelBackend, SeqId, TokenId};
 pub struct Engine<M: ModelBackend + 'static> {
     pub scheduler: SchedulerEngine,
     pub target_model: Arc<Mutex<dyn ModelBackend>>,
-    pub draft_model: Arc<Mutex<dyn ModelBackend>>,
+    pub draft_model: Option<Arc<Mutex<dyn ModelBackend>>>,
     pub max_draft_tokens: usize,
     pub speculative_mode: bool,
     pub error_count: usize,
@@ -55,9 +55,9 @@ impl<M: ModelBackend + 'static> Engine<M> {
     ///
     /// # Example
     /// ```ignore
-    /// let engine = Engine::new(my_model, draft_model);
+    /// let engine = Engine::new(my_model, Some(draft_model));
     /// ```
-    pub fn new(target_model: M, draft_model: M) -> Self {
+    pub fn new(target_model: M, draft_model: Option<M>) -> Self {
         Self::with_config(
             target_model,
             draft_model,
@@ -69,7 +69,7 @@ impl<M: ModelBackend + 'static> Engine<M> {
 
     pub fn with_config(
         target_model: M,
-        draft_model: M,
+        draft_model: Option<M>,
         config: SchedulerConfig,
         max_draft_tokens: usize,
         num_kv_blocks: usize,
@@ -94,10 +94,12 @@ impl<M: ModelBackend + 'static> Engine<M> {
         };
         // Create shared metrics collector for scheduler
         let enhanced_metrics = Arc::new(EnhancedMetricsCollector::new());
+        let draft_model =
+            draft_model.map(|m| Arc::new(Mutex::new(m)) as Arc<Mutex<dyn ModelBackend>>);
         Self {
             scheduler: SchedulerEngine::new(config, num_kv_blocks, enhanced_metrics),
             target_model: Arc::new(Mutex::new(target_model)),
-            draft_model: Arc::new(Mutex::new(draft_model)),
+            draft_model,
             max_draft_tokens,
             speculative_mode: false,
             error_count: 0,

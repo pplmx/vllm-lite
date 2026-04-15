@@ -453,42 +453,19 @@ impl ModelBackend for Qwen3Model {
 
                 use candle_core::D;
                 // logits shape: [batch=1, seq_len, vocab_size]
-                // argmax on last dim gives [batch=1, seq_len]
-                // We need to squeeze both dims to get scalar
+                // For prefill, take the last token's logits: narrow -> squeeze -> argmax
+                let seq_len = logits.dims()[1];
+                let last_logits = logits
+                    .narrow(1, seq_len - 1, 1)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .squeeze(1)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .squeeze(0)
+                    .map_err(|e| EngineError::new(e.to_string()))?;
 
-                // Debug: check first token logits
-                if tokens.len() > 0 {
-                    // logits: [1, seq_len, vocab] -> narrow last -> [1, 1, vocab]
-                    let last_logit = logits
-                        .narrow(1, logits.dims()[1] - 1, 1)
-                        .map_err(|e| EngineError::new(e.to_string()))?;
-                    // squeeze batch and seq_len -> [vocab]
-                    let flat = last_logit
-                        .squeeze(0)
-                        .map_err(|e| EngineError::new(e.to_string()))?
-                        .squeeze(0)
-                        .map_err(|e| EngineError::new(e.to_string()))?;
-                    let vec = flat
-                        .to_vec1::<f32>()
-                        .map_err(|e| EngineError::new(e.to_string()))?;
-                    let max_idx = vec
-                        .iter()
-                        .enumerate()
-                        .fold(0, |m, (i, &v)| if v > vec[m] { i } else { m });
-                    eprintln!(
-                        "DEBUG PREFILL logits[last]: max_idx={}, max_val={:.4}, seq_len={}",
-                        max_idx,
-                        vec[max_idx],
-                        logits.dims()[1]
-                    );
-                }
-
-                let next = logits
+                // argmax on last dim gives scalar
+                let next = last_logits
                     .argmax(D::Minus1)
-                    .map_err(|e| EngineError::new(e.to_string()))?
-                    .squeeze(1) // Remove seq_len dim
-                    .map_err(|e| EngineError::new(e.to_string()))?
-                    .squeeze(0) // Remove batch dim
                     .map_err(|e| EngineError::new(e.to_string()))?
                     .to_vec0::<u32>()
                     .map_err(|e| EngineError::new(e.to_string()))?;
@@ -511,26 +488,9 @@ impl ModelBackend for Qwen3Model {
                     .map_err(|e| EngineError::new(e.to_string()))?;
 
                 use candle_core::D;
-                // logits shape: [batch=1, seq_len, vocab_size]
-                // argmax on last dim gives [batch=1, seq_len]
-                // We need to squeeze both dims to get scalar
-
-                // Debug: check decode logits
-                let flat = logits
-                    .squeeze(0)
-                    .map_err(|e| EngineError::new(e.to_string()))?;
-                let vec = flat
-                    .to_vec1::<f32>()
-                    .map_err(|e| EngineError::new(e.to_string()))?;
-                let max_idx = vec
-                    .iter()
-                    .enumerate()
-                    .fold(0, |m, (i, &v)| if v > vec[m] { i } else { m });
-                eprintln!(
-                    "DEBUG DECODE logits: max_idx={}, max_val={:.4}, pos={:?}",
-                    max_idx, vec[max_idx], pos
-                );
-
+                // logits shape: [batch=1, seq_len=1, vocab_size]
+                // argmax on last dim gives [batch=1, seq_len=1]
+                // squeeze to scalar
                 let next = logits
                     .argmax(D::Minus1)
                     .map_err(|e| EngineError::new(e.to_string()))?
