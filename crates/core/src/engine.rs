@@ -188,12 +188,7 @@ impl<M: ModelBackend + 'static> Engine<M> {
                         request,
                         response_tx,
                     } => {
-                        let seq_id = self.add_request(request, response_tx);
-                        eprintln!(
-                            "DEBUG: Added request seq_id={}, pending={}",
-                            seq_id,
-                            self.scheduler.has_pending()
-                        );
+                        self.add_request(request, response_tx);
                     }
                     EngineMessage::GetMetrics { response_tx } => {
                         let (used, total) = self.scheduler.get_kv_cache_usage();
@@ -229,14 +224,6 @@ impl<M: ModelBackend + 'static> Engine<M> {
 
             if self.scheduler.has_pending() {
                 step_count += 1;
-                if step_count <= 5 || step_count % 100 == 0 {
-                    eprintln!(
-                        "DEBUG: Running step {}, queue={}, running={}",
-                        step_count,
-                        self.scheduler.waiting_count(),
-                        self.scheduler.running_count()
-                    );
-                }
                 let result = if self.speculative_mode {
                     self.step_speculative()
                 } else if self.cuda_graph_enabled() {
