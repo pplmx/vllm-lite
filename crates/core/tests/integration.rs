@@ -489,7 +489,8 @@ fn test_concurrent_requests_different_prompts() {
         "all 3 requests should be pending"
     );
 
-    for _ in 0..5 {
+    // Run steps until all complete (max 20 steps to cover prompt + max_tokens for each)
+    for _ in 0..20 {
         if !engine.has_pending() {
             break;
         }
