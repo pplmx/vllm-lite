@@ -351,13 +351,7 @@ fn test_multiple_cancellations() {
 #[test]
 fn test_error_recovery_with_faulty_model() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(
-        FaultInjectedModel::new(100),
-        None,
-        config,
-        4,
-        1024,
-    );
+    let mut engine = Engine::with_config(FaultInjectedModel::new(100), None, config, 4, 1024);
 
     // Add requests
     let (tx, _rx) = mpsc::channel(64);

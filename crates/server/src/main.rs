@@ -161,7 +161,11 @@ async fn main() {
                 // Test encoding
                 let test_tokens = t.encode("hi");
                 let test_decode = t.decode(&test_tokens);
-                tracing::info!("Tokenizer test: 'hi' -> {:?}, decode -> '{}'", test_tokens, test_decode);
+                tracing::info!(
+                    "Tokenizer test: 'hi' -> {:?}, decode -> '{}'",
+                    test_tokens,
+                    test_decode
+                );
                 Arc::new(t)
             }
             Err(e) => {

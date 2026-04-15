@@ -115,7 +115,12 @@ fn test_expand_kv_no_expansion_needed() {
 fn test_expand_kv_non_divisible() {
     // Edge case: num_heads=10, num_kv_heads=3 (10 % 3 != 0)
     let device = Device::Cpu;
-    let kv = Tensor::zeros((1usize, 5usize, 3usize, 64usize), candle_core::DType::F32, &device).unwrap();
+    let kv = Tensor::zeros(
+        (1usize, 5usize, 3usize, 64usize),
+        candle_core::DType::F32,
+        &device,
+    )
+    .unwrap();
 
     let result = test_expand_kv(&kv, 10, 3);
     // Should handle gracefully
