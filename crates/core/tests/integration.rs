@@ -19,7 +19,7 @@ fn test_continuous_batching_with_streaming() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx1, mut rx1) = mpsc::channel(64);
     let (tx2, mut rx2) = mpsc::channel(64);
@@ -70,7 +70,7 @@ fn test_chunked_prefill_integration() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx, mut rx) = mpsc::channel(64);
     // 4 prompt + 10 max_tokens = 14 total tokens (need 10 decode steps)
@@ -108,7 +108,7 @@ fn test_max_tokens_includes_prompt() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx, _rx) = mpsc::channel(64);
 
@@ -155,7 +155,7 @@ fn test_single_token_prefill_then_decode() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx, mut rx) = mpsc::channel(64);
 
@@ -197,7 +197,7 @@ fn test_concurrent_requests_finish_together() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx1, _rx1) = mpsc::channel(64);
     let (tx2, _rx2) = mpsc::channel(64);
@@ -226,7 +226,7 @@ fn test_batch_full_new_request_waits() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx1, _rx1) = mpsc::channel(64);
     let (tx2, _rx2) = mpsc::channel(64);
@@ -259,7 +259,7 @@ fn test_prefix_cache_hit_directly_decoding() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx1, _rx1) = mpsc::channel(64);
     let (tx2, _rx2) = mpsc::channel(64);
@@ -296,7 +296,7 @@ fn test_different_prompt_lengths_batching() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx1, _rx1) = mpsc::channel(64);
     let (tx2, _rx2) = mpsc::channel(64);
@@ -325,7 +325,7 @@ fn test_prefill_priority_under_decode_limit() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx1, _rx1) = mpsc::channel(64);
     let (tx2, _rx2) = mpsc::channel(64);
@@ -361,7 +361,7 @@ fn test_many_sequences_stress() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     for i in 1..=20 {
         let (tx, _rx) = mpsc::channel(64);
@@ -394,7 +394,7 @@ fn test_sequence_state_transitions() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx, _rx) = mpsc::channel(64);
     engine.add_request(Request::new(1, vec![10, 20, 30], 5), tx);
@@ -430,7 +430,7 @@ fn test_immediate_finish_after_prompt() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx, _rx) = mpsc::channel(64);
     engine.add_request(Request::new(1, vec![1, 2, 3], 3), tx);
@@ -446,7 +446,7 @@ fn test_immediate_finish_after_prompt() {
 #[test]
 fn test_speculative_decoding_verification() {
     let model = ConstModel::new(42);
-    let mut engine = Engine::new(model.clone(), model);
+    let mut engine = Engine::new(model.clone(), Some(model));
     engine.enable_speculative();
 
     let (tx, _rx) = tokio::sync::mpsc::channel(64);
@@ -474,7 +474,7 @@ fn test_concurrent_requests_different_prompts() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx1, _rx1) = mpsc::channel(64);
     let (tx2, _rx2) = mpsc::channel(64);
@@ -514,7 +514,7 @@ fn test_batch_size_variation() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     for i in 1..=10 {
         let (tx, _rx) = mpsc::channel(64);
@@ -551,7 +551,7 @@ fn test_request_cancellation() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx1, _rx1) = mpsc::channel(64);
     let (tx2, rx2) = mpsc::channel(64);
@@ -584,7 +584,7 @@ fn test_finished_sequences_cleared() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx, _rx) = mpsc::channel(64);
     engine.add_request(Request::new(1, vec![10, 20], 2), tx);
@@ -612,7 +612,7 @@ fn test_cancel_request_cleans_response_txs() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx1, _rx1) = mpsc::channel(64);
     let (tx2, _rx2) = mpsc::channel(64);
@@ -636,7 +636,7 @@ fn test_cancel_request_cleans_response_txs() {
 #[ignore = "empty prompt handling needs validation at API layer"]
 fn test_empty_prompt_handling() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx, _rx) = mpsc::channel(64);
     engine.add_request(Request::new(1, vec![], 5), tx);
@@ -652,7 +652,7 @@ fn test_empty_prompt_handling() {
 #[test]
 fn test_single_token_prompt() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx, _rx) = mpsc::channel(64);
     engine.add_request(Request::new(1, vec![42], 3), tx);
@@ -668,7 +668,7 @@ fn test_single_token_prompt() {
 
 #[test]
 fn test_engine_health_tracking() {
-    let engine = Engine::new(IncrementModel, IncrementModel);
+    let engine = Engine::new(IncrementModel, None);
 
     assert!(engine.is_healthy(), "new engine should be healthy");
     assert!(
@@ -681,7 +681,7 @@ fn test_engine_health_tracking() {
 fn test_engine_with_const_model() {
     let config = SchedulerConfig::default();
     let const_model = ConstModel::new(42);
-    let mut engine = Engine::with_config(const_model.clone(), const_model, config, 4, 1024);
+    let mut engine = Engine::with_config(const_model.clone(), None, config, 4, 1024);
 
     let (tx, _rx) = mpsc::channel(64);
     engine.add_request(Request::new(1, vec![1, 2, 3], 5), tx);
@@ -710,7 +710,7 @@ fn test_engine_large_batch_handling() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     for i in 0..10 {
         let (tx, _rx) = mpsc::channel(64);
@@ -729,7 +729,7 @@ fn test_engine_large_batch_handling() {
 #[test]
 fn test_engine_sequential_requests() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx1, _rx1) = mpsc::channel(64);
     engine.add_request(Request::new(1, vec![10], 3), tx1);
@@ -751,7 +751,7 @@ fn test_engine_sequential_requests() {
 #[test]
 fn test_request_with_max_tokens_equals_prompt() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     let (tx, _rx) = mpsc::channel(64);
     let prompt = vec![1, 2, 3];
@@ -780,13 +780,7 @@ fn test_concurrent_requests_batch_processing() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(
-        vllm_testing::IncrementModel,
-        vllm_testing::IncrementModel,
-        config,
-        4,
-        1024,
-    );
+    let mut engine = Engine::with_config(vllm_testing::IncrementModel, None, config, 4, 1024);
 
     // Add 4 concurrent requests
     for i in 1..=4 {
@@ -819,13 +813,7 @@ fn test_multi_batch_continuous_processing() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(
-        vllm_testing::IncrementModel,
-        vllm_testing::IncrementModel,
-        config,
-        4,
-        1024,
-    );
+    let mut engine = Engine::with_config(vllm_testing::IncrementModel, None, config, 4, 1024);
 
     // Add first batch of requests
     for i in 1..=2 {
@@ -861,13 +849,7 @@ fn test_multi_batch_continuous_processing() {
 #[test]
 fn test_dynamic_batch_adjustment() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(
-        vllm_testing::IncrementModel,
-        vllm_testing::IncrementModel,
-        config,
-        4,
-        1024,
-    );
+    let mut engine = Engine::with_config(vllm_testing::IncrementModel, None, config, 4, 1024);
 
     // Rapidly add many requests
     for i in 1..=10 {
@@ -900,13 +882,7 @@ fn test_mixed_prompt_lengths() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(
-        vllm_testing::IncrementModel,
-        vllm_testing::IncrementModel,
-        config,
-        4,
-        1024,
-    );
+    let mut engine = Engine::with_config(vllm_testing::IncrementModel, None, config, 4, 1024);
 
     // Add requests with varying prompt lengths
     let prompts = [1, 3, 5, 10, 20];
@@ -939,13 +915,7 @@ fn test_batch_size_changes_over_time() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(
-        vllm_testing::IncrementModel,
-        vllm_testing::IncrementModel,
-        config,
-        4,
-        1024,
-    );
+    let mut engine = Engine::with_config(vllm_testing::IncrementModel, None, config, 4, 1024);
 
     let mut batch_sizes = Vec::new();
 

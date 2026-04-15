@@ -50,7 +50,7 @@ pub fn expand_kv(kv: &Tensor, num_q_heads: usize, num_kv_heads: usize) -> Result
     // Check if num_q_heads is divisible by num_kv_heads
     if num_q_heads % num_kv_heads != 0 {
         // Edge case: use ceil division and slice
-        let repeat_factor = (num_q_heads + num_kv_heads - 1) / num_kv_heads;
+        let repeat_factor = num_q_heads.div_ceil(num_kv_heads);
         let kv_repeated = kv.repeat(&[1, 1, repeat_factor, 1])?;
         // Slice to exact num_q_heads
         return kv_repeated.narrow(2, 0, num_q_heads);

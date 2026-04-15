@@ -170,14 +170,6 @@ impl SchedulerEngine {
     pub fn build_batch(&mut self) -> Batch {
         let start_time = Instant::now();
 
-        // First, include running decode sequences (they need to continue processing)
-        let mut sequences: Vec<Sequence> = self
-            .running
-            .iter()
-            .filter(|s| s.status == Status::Decoding)
-            .cloned()
-            .collect();
-
         // Get current scheduler state
         let state = crate::scheduler::SchedulerState {
             waiting_count: self.request_queue.len(),
@@ -189,6 +181,17 @@ impl SchedulerEngine {
         };
 
         let phase = self.phase_scheduler.select_phase(&state);
+
+        // Only include running decode sequences when in Decode phase
+        let mut sequences: Vec<Sequence> = if phase == Phase::Decode {
+            self.running
+                .iter()
+                .filter(|s| s.status == Status::Decoding)
+                .cloned()
+                .collect()
+        } else {
+            Vec::new()
+        };
 
         // Get sequences for this phase from the queue
         let new_sequences = self.request_queue.drain_by_phase(phase);
@@ -329,7 +332,6 @@ impl SchedulerEngine {
         next_tokens: &[TokenId],
         input_token_counts: &[usize],
     ) {
-        eprintln!("DEBUG update: {} sequences", seq_ids.len());
         for ((&seq_id, &token), &input_count) in
             seq_ids.iter().zip(next_tokens).zip(input_token_counts)
         {
@@ -345,13 +347,6 @@ impl SchedulerEngine {
                 }
 
                 seq.tokens.push(token);
-                eprintln!(
-                    "DEBUG update seq={}: tokens.len()={}, max_tokens={}, status={:?}",
-                    seq_id,
-                    seq.tokens.len(),
-                    seq.max_tokens,
-                    seq.status
-                );
                 seq.consecutive_decode_rounds += 1;
 
                 // Dispatch observer event for token generation
@@ -454,17 +449,8 @@ impl SchedulerEngine {
 
     /// Check if there are pending requests or running sequences
     #[must_use]
-    #[must_use]
     pub fn has_pending(&self) -> bool {
-        let pending = !self.request_queue.is_empty() || !self.running.is_empty();
-        if !pending {
-            eprintln!(
-                "DEBUG has_pending: queue={}, running={}",
-                self.request_queue.len(),
-                self.running.len()
-            );
-        }
-        pending
+        !self.request_queue.is_empty() || !self.running.is_empty()
     }
 
     /// Get the number of running sequences

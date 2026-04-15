@@ -17,7 +17,7 @@ struct ShutdownEngine {
 impl ShutdownEngine {
     fn new() -> Self {
         let config = SchedulerConfig::default();
-        let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+        let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
         let (msg_tx, msg_rx) = mpsc::unbounded_channel::<EngineMessage>();
         let shutdown_complete = Arc::new(Mutex::new(false));
@@ -236,7 +236,7 @@ async fn test_shutdown_no_pending_requests() {
 #[test]
 fn test_engine_shutdown_synchronously() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     // Add some requests
     let (tx, _rx) = mpsc::channel(64);
@@ -266,7 +266,7 @@ fn test_engine_shutdown_synchronously() {
 #[test]
 fn test_drain_in_flight_requests() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     // Add requests
     let (tx, _rx) = mpsc::channel(64);

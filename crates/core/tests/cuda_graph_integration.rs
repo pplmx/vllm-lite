@@ -132,7 +132,7 @@ fn test_end_to_end_engine_with_cuda_graph_config() {
     };
     let target_model = MockModel;
     let draft_model = MockModel;
-    let engine = Engine::with_config(target_model, draft_model, config, 4, 1024);
+    let engine = Engine::with_config(target_model, None, config, 4, 1024);
     // Verify CUDA Graph is configured
     assert!(engine.cuda_graph_enabled());
 }

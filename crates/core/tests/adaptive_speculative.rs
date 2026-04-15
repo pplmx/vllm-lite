@@ -6,7 +6,7 @@ use vllm_testing::IncrementModel;
 #[test]
 fn test_adaptive_speculative_disabled_by_default() {
     let config = SchedulerConfig::default();
-    let engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     assert!(!engine.is_adaptive_speculative_enabled());
 }
@@ -14,7 +14,7 @@ fn test_adaptive_speculative_disabled_by_default() {
 #[test]
 fn test_enable_adaptive_speculative() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
     assert!(engine.is_adaptive_speculative_enabled());
@@ -24,7 +24,7 @@ fn test_enable_adaptive_speculative() {
 #[test]
 fn test_disable_adaptive_speculative() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
     assert!(engine.is_adaptive_speculative_enabled());
@@ -37,7 +37,7 @@ fn test_disable_adaptive_speculative() {
 #[test]
 fn test_adaptive_speculative_basic() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
 
@@ -59,7 +59,7 @@ fn test_adaptive_speculative_basic() {
 #[test]
 fn test_adaptive_speculative_adjusts_draft_count() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     // Use low cooldown to trigger adjustment quickly
     engine.enable_adaptive_speculative(AdaptiveDraftConfig {

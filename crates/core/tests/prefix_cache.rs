@@ -19,7 +19,7 @@ fn test_prefix_cache_hit() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
+    let mut engine = Engine::with_config(StubModel, None, config, 4, 100);
 
     let (tx1, _rx1) = mpsc::channel(64);
     let (tx2, _rx2) = mpsc::channel(64);
@@ -59,7 +59,7 @@ fn test_cache_after_completion() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
+    let mut engine = Engine::with_config(StubModel, None, config, 4, 100);
 
     let (tx, _rx) = mpsc::channel(64);
 
@@ -88,7 +88,7 @@ fn test_prefix_cache_partial_hit() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
+    let mut engine = Engine::with_config(StubModel, None, config, 4, 100);
 
     let (tx1, _rx1) = mpsc::channel(64);
     let (tx2, _rx2) = mpsc::channel(64);
@@ -124,7 +124,7 @@ fn test_prefix_cache_no_hit_different_prefix() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
+    let mut engine = Engine::with_config(StubModel, None, config, 4, 100);
 
     let (tx1, _rx1) = mpsc::channel(64);
     let (tx2, _rx2) = mpsc::channel(64);
@@ -160,7 +160,7 @@ fn test_prefix_cache_multiple_shared() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
+    let mut engine = Engine::with_config(StubModel, None, config, 4, 100);
 
     // First: [1, 2, 3]
     engine.add_request(Request::new(1, vec![1, 2, 3], 3), mpsc::channel(64).0);
@@ -197,7 +197,7 @@ fn test_prefix_hit_partial_prefill() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 100);
+    let mut engine = Engine::with_config(StubModel, None, config, 4, 100);
 
     let (tx1, _rx1) = mpsc::channel(64);
 
@@ -287,7 +287,7 @@ fn test_prefix_cache_high_volume() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 200);
+    let mut engine = Engine::with_config(StubModel, None, config, 4, 200);
 
     // Add 50 different requests with different tokens
     for i in 0..50 {
@@ -328,7 +328,7 @@ fn test_prefix_cache_many_sequences_same_prefix() {
         max_batch_size: 256,
         ..Default::default()
     };
-    let mut engine = Engine::with_config(StubModel, StubModel, config, 4, 200);
+    let mut engine = Engine::with_config(StubModel, None, config, 4, 200);
 
     let common_prefix = vec![100, 200, 300];
 

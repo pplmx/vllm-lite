@@ -115,7 +115,9 @@ impl BatchComposer {
 
             kv_block_ids.push(seq.kv_blocks.as_ref().clone());
             num_computed_tokens.push(start);
-            is_prefill.push(true);
+            // Only treat as prefill if this is the first chunk of the sequence
+            // If start > 0, this is a resume from partial prefill, use decode mode
+            is_prefill.push(start == 0);
         }
 
         let total = total_tokens;
