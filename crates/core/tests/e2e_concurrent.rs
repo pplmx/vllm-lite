@@ -16,7 +16,7 @@ struct ConcurrentEngine {
 impl ConcurrentEngine {
     fn new() -> Self {
         let config = SchedulerConfig::default();
-        let engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+        let engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
         Self {
             inner: Arc::new(Mutex::new(engine)),
         }
@@ -171,7 +171,7 @@ async fn test_staggered_requests() {
 #[test]
 fn test_batch_processing() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, IncrementModel, config, 4, 1024);
+    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
     // Add multiple requests
     let num_requests = 10;

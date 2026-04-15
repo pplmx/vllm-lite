@@ -147,12 +147,13 @@ impl GqaAttention {
 
         // Now q, k, v are [batch, heads, seq, dim]
         // For q @ k^T, need k as [batch, heads, dim, seq]
+        let q = q.contiguous()?;
         let k_t = k.transpose(2, 3)?.contiguous()?;
         let qk = Tensor::matmul(&q, &k_t)?;
 
         let scale = 1.0 / (self.head_dim as f32).sqrt();
         let qk = qk.mul(&Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?)?;
-        let attn_weights = candle_nn::ops::softmax(&qk, 3)?;
+        let attn_weights = candle_nn::ops::softmax(&qk, 3)?.contiguous()?;
 
         // attn_weights: [batch, heads, seq_q, seq_kv]
         // v: [batch, heads, seq_kv, dim]
@@ -319,12 +320,6 @@ impl GqaAttention {
 
         // Read cached k/v (which is stored with num_heads for the expanded version)
         let (cached_k, cached_v) = kv_cache.read_kv(layer_idx, block_ids, num_computed_tokens)?;
-
-        eprintln!(
-            "DEBUG decode: cached_k dims={:?}, k_for_cache dims={:?}",
-            cached_k.dims(),
-            k_for_cache.dims()
-        );
 
         // read_kv returns [seq_len, num_heads, head_dim], need [num_heads, seq_len, head_dim]
         let cached_k = cached_k.transpose(0, 1)?.contiguous()?;

@@ -39,7 +39,7 @@ impl Qwen3Model {
             let layer = TransformerBlock::new(
                 hidden_size,
                 config.num_attention_heads(),
-                config.num_key_value_heads(),
+                config.num_attention_heads(), // Use expanded num_heads for GQA
                 config.head_dim(),
                 config.intermediate_size(),
                 theta,
@@ -63,7 +63,7 @@ impl Qwen3Model {
 
         let kv_cache = PagedKvCache::new(
             config.num_hidden_layers(),
-            config.num_key_value_heads(),
+            config.num_attention_heads(), // Use expanded num_heads for GQA
             config.head_dim(),
             num_kv_blocks,
             device.clone(),
@@ -105,7 +105,7 @@ impl Qwen3Model {
             let layer = TransformerBlock::new_with_tp(
                 hidden_size,
                 config.num_attention_heads(),
-                config.num_key_value_heads(),
+                config.num_attention_heads(), // Use expanded num_heads for GQA
                 config.head_dim(),
                 config.intermediate_size(),
                 theta,
@@ -129,7 +129,7 @@ impl Qwen3Model {
 
         let kv_cache = PagedKvCache::new(
             config.num_hidden_layers(),
-            config.num_key_value_heads(),
+            config.num_attention_heads(), // Use expanded num_heads for GQA
             config.head_dim(),
             num_kv_blocks,
             device.clone(),
@@ -162,7 +162,7 @@ impl Qwen3Model {
         device: Device,
         weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
-        kv_quantization: bool,
+        _kv_quantization: bool,
     ) -> CandleResult<Self> {
         let _vocab_size = config.vocab_size();
         let hidden_size = config.hidden_size();
@@ -244,8 +244,8 @@ impl Qwen3Model {
             let theta = config.rope_theta();
             let layer = TransformerBlock::new_with_weights(
                 hidden_size,
-                config.num_attention_heads(),
-                config.num_key_value_heads(),
+                config.num_attention_heads(), // num_heads
+                config.num_key_value_heads(), // num_kv_heads for GQA
                 config.head_dim(),
                 config.intermediate_size(),
                 theta,
@@ -545,20 +545,6 @@ impl ModelBackend for Qwen3Model {
                     .to_vec1::<f32>()
                     .map_err(|e| EngineError::new(e.to_string()))?
             };
-
-            // Debug: check logits stats
-            if logits_vec.len() > 100 {
-                let max_val = logits_vec.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-                let min_val = logits_vec.iter().cloned().fold(f32::INFINITY, f32::min);
-                let sum_val: f32 = logits_vec.iter().sum();
-                let argmax_idx = logits_vec.iter().enumerate().fold(0, |max_idx, (i, &v)| {
-                    if v > logits_vec[max_idx] {
-                        i
-                    } else {
-                        max_idx
-                    }
-                });
-            }
 
             results.push(logits_vec);
         }

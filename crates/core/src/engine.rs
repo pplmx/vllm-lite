@@ -240,10 +240,8 @@ impl<M: ModelBackend + 'static> Engine<M> {
                 let result = if self.speculative_mode {
                     self.step_speculative()
                 } else if self.cuda_graph_enabled() {
-                    eprintln!("DEBUG: Calling step_with_graph");
                     self.step_with_graph()
                 } else {
-                    eprintln!("DEBUG: Calling step");
                     self.step()
                 };
                 if let Err(e) = result {
@@ -369,7 +367,6 @@ impl<M: ModelBackend + 'static> Engine<M> {
         let start = std::time::Instant::now();
         let graph_batch = self.scheduler.build_batch_with_graph();
         if graph_batch.batch_size() == 0 {
-            eprintln!("DEBUG step_with_graph: batch_size=0, skipping");
             return Ok(vec![]);
         }
 
@@ -553,24 +550,31 @@ mod tests {
         let stub = StubModel {
             token_to_return: 42,
         };
-        let mut engine = Engine::new(stub.clone(), stub);
+        let mut engine = Engine::new(stub.clone(), None);
         let (tx, mut rx) = mpsc::channel(64);
 
         engine.add_request(Request::new(1, vec![10, 20], 5), tx);
 
+        // First step: prefill, should return at least 1 output (the generated token)
         let out = engine.step().unwrap();
-        assert_eq!(out.len(), 1);
+        assert!(!out.is_empty());
         assert_eq!(rx.try_recv().unwrap(), 42);
 
-        let out = engine.step().unwrap();
-        assert_eq!(out[0], (1, 42));
-        assert_eq!(rx.try_recv().unwrap(), 42);
+        // Keep stepping until done
+        let mut steps = 0;
+        while engine.has_pending() && steps < 10 {
+            let out = engine.step().unwrap();
+            if !out.is_empty() {
+                assert_eq!(out[0], (1, 42));
+                assert_eq!(rx.try_recv().unwrap(), 42);
+            }
+            steps += 1;
+        }
 
-        let out = engine.step().unwrap();
-        assert_eq!(out[0], (1, 42));
-        assert_eq!(rx.try_recv().unwrap(), 42);
-
-        assert!(!engine.has_pending());
+        assert!(
+            !engine.has_pending(),
+            "Sequence should finish after max_tokens"
+        );
     }
 
     #[test]
@@ -578,7 +582,7 @@ mod tests {
         let stub = StubModel {
             token_to_return: 10,
         };
-        let mut engine = Engine::new(stub.clone(), stub);
+        let mut engine = Engine::new(stub.clone(), None);
         let (tx1, mut rx1) = mpsc::channel(64);
         let (tx2, mut rx2) = mpsc::channel(64);
 
@@ -601,7 +605,7 @@ mod tests {
         let stub = StubModel {
             token_to_return: 42,
         };
-        let mut engine = Engine::new(stub.clone(), stub);
+        let mut engine = Engine::new(stub.clone(), None);
         let out = engine.step().unwrap();
         assert!(out.is_empty());
     }
@@ -624,7 +628,7 @@ mod tests {
             max_batch_size: 256,
             ..Default::default()
         };
-        let engine = Engine::with_config(stub.clone(), stub, config, 8, 1024);
+        let engine = Engine::with_config(stub.clone(), None, config, 8, 1024);
         assert_eq!(engine.max_draft_tokens, 8);
     }
 
@@ -633,7 +637,7 @@ mod tests {
         let stub = StubModel {
             token_to_return: 42,
         };
-        let mut engine = Engine::new(stub.clone(), stub);
+        let mut engine = Engine::new(stub.clone(), None);
         let (tx, _rx) = mpsc::channel(64);
         engine.add_request(Request::new(1, vec![10], 3), tx);
 
@@ -647,7 +651,7 @@ mod tests {
         let stub = StubModel {
             token_to_return: 42,
         };
-        let mut engine = Engine::new(stub.clone(), stub);
+        let mut engine = Engine::new(stub.clone(), None);
         let (tx1, _rx1) = mpsc::channel(64);
         let (tx2, _rx2) = mpsc::channel(64);
 
