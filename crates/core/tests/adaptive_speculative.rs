@@ -1,6 +1,6 @@
 use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
-use vllm_core::types::{AdaptiveDraftConfig, Request, SchedulerConfig};
+use vllm_core::types::{AdaptiveDraftConfig, SchedulerConfig};
 use vllm_testing::IncrementModel;
 
 #[test]
