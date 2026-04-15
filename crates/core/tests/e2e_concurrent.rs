@@ -8,9 +8,10 @@ use vllm_core::engine::Engine;
 use vllm_core::types::{Request, SchedulerConfig};
 use vllm_testing::IncrementModel;
 
-/// Thread-safe engine wrapper for concurrent tests
+/// Thread-safe engine wrapper with background stepper
 struct ConcurrentEngine {
     inner: Arc<Mutex<Engine<IncrementModel>>>,
+    stop_flag: Arc<Mutex<bool>>,
 }
 
 impl ConcurrentEngine {
@@ -19,14 +20,41 @@ impl ConcurrentEngine {
         let engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
         Self {
             inner: Arc::new(Mutex::new(engine)),
+            stop_flag: Arc::new(Mutex::new(false)),
         }
+    }
+
+    async fn start_background_stepper(&self) {
+        let inner = self.inner.clone();
+        let stop = self.stop_flag.clone();
+
+        tokio::spawn(async move {
+            loop {
+                {
+                    let should_stop = *stop.lock().await;
+                    if should_stop {
+                        break;
+                    }
+                }
+
+                let mut engine = inner.lock().await;
+                if !engine.has_pending() {
+                    drop(engine);
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                    continue;
+                }
+
+                let _ = engine.step();
+                drop(engine);
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+        });
     }
 
     async fn add_request(&self, max_tokens: usize) -> Result<u64, String> {
         let prompt: Vec<u32> = (1..=10).collect();
         let (tx, _rx) = mpsc::channel(64);
         let mut engine = self.inner.lock().await;
-        // Use id=0 to let scheduler assign unique ID
         let seq_id = engine.add_request(Request::new(0, prompt, max_tokens), tx);
         if seq_id > 0 {
             Ok(seq_id)
@@ -35,32 +63,31 @@ impl ConcurrentEngine {
         }
     }
 
-    async fn process_single(&self, seq_id: u64, max_tokens: usize) -> Result<(), String> {
+    async fn wait_for_completion(&self, seq_id: u64, max_tokens: usize) -> Result<(), String> {
         let timeout = Duration::from_secs(30);
         let start = std::time::Instant::now();
-        let mut iterations = 0;
-        let max_iterations = max_tokens * 10; // Generous limit
 
-        while start.elapsed() < timeout && iterations < max_iterations {
-            let mut engine = self.inner.lock().await;
+        while start.elapsed() < timeout {
+            let engine = self.inner.lock().await;
 
-            if let Ok(_results) = engine.step() {
-                // Check if our sequence is finished (not in running)
-                let still_running = engine.scheduler.running().iter().any(|s| s.id == seq_id);
-                if !still_running {
-                    return Ok(());
-                }
+            // Check if sequence is finished (not in running)
+            let still_running = engine.scheduler.running().iter().any(|s| s.id == seq_id);
+
+            if !still_running {
+                return Ok(());
             }
 
-            iterations += 1;
             drop(engine);
-            tokio::time::sleep(Duration::from_millis(1)).await;
+            tokio::time::sleep(Duration::from_millis(10)).await;
         }
 
-        Err(format!(
-            "Timeout waiting for completion after {} iterations",
-            iterations
-        ))
+        Err("Timeout waiting for completion".to_string())
+    }
+
+    fn stop(&self) {
+        let stop = self.stop_flag.clone();
+        // We can't easily stop the background task without more infrastructure
+        // For now, let it continue running
     }
 }
 
@@ -68,21 +95,26 @@ impl Clone for ConcurrentEngine {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
+            stop_flag: Arc::clone(&self.stop_flag),
         }
     }
 }
 
 #[tokio::test]
 async fn test_concurrent_requests() {
-    let concurrency = 10;
     let engine = ConcurrentEngine::new();
+    engine.start_background_stepper().await;
 
+    // Small delay to let stepper start
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    let concurrency = 10;
     let handles: Vec<_> = (0..concurrency)
         .map(|_| {
             let eng = engine.clone();
             tokio::spawn(async move {
-                let id = eng.add_request(5).await?;
-                eng.process_single(id, 5).await
+                let id = eng.add_request(15).await?; // total tokens = 10 + 5
+                eng.wait_for_completion(id, 15).await
             })
         })
         .collect();
@@ -108,15 +140,19 @@ async fn test_concurrent_requests() {
 #[tokio::test]
 async fn test_mixed_workload() {
     let engine = ConcurrentEngine::new();
+    engine.start_background_stepper().await;
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
     let count = 20;
 
     let handles: Vec<_> = (0..count)
         .map(|i| {
             let eng = engine.clone();
-            let max_tokens = if i % 2 == 0 { 3 } else { 8 };
+            let max_tokens = if i % 2 == 0 { 13 } else { 18 }; // total tokens
             tokio::spawn(async move {
                 let id = eng.add_request(max_tokens).await?;
-                eng.process_single(id, max_tokens).await
+                eng.wait_for_completion(id, max_tokens).await
             })
         })
         .collect();
@@ -146,15 +182,19 @@ async fn test_mixed_workload() {
 #[tokio::test]
 async fn test_staggered_requests() {
     let engine = ConcurrentEngine::new();
+    engine.start_background_stepper().await;
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
     let mut handles = Vec::new();
 
     // Add requests staggered over time
     for i in 0..5 {
         let eng = engine.clone();
         let handle = tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(i * 10)).await;
-            let id = eng.add_request(3).await?;
-            eng.process_single(id, 3).await
+            tokio::time::sleep(Duration::from_millis(i * 20)).await;
+            let id = eng.add_request(13).await?; // total tokens = 10 + 3
+            eng.wait_for_completion(id, 13).await
         });
         handles.push(handle);
     }
@@ -174,20 +214,20 @@ fn test_batch_processing() {
     let config = SchedulerConfig::default();
     let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
 
-    // Add multiple requests
+    // Add multiple requests with total tokens = prompt + max_tokens
     let num_requests = 10;
     let mut receivers = Vec::new();
 
     for i in 0..num_requests {
         let (tx, rx) = mpsc::channel(64);
-        let seq_id = engine.add_request(Request::new(i, vec![10, 20], 5), tx);
+        let seq_id = engine.add_request(Request::new(i, vec![10, 20], 15), tx); // total = 2 + 15 = 17
         assert!(seq_id > 0);
         receivers.push(rx);
     }
 
     // Process all in batch
     let mut total_tokens = 0;
-    let max_iterations = 50;
+    let max_iterations = 100;
 
     for _ in 0..max_iterations {
         if let Ok(results) = engine.step() {
@@ -201,7 +241,7 @@ fn test_batch_processing() {
     }
 
     assert!(
-        total_tokens >= num_requests as usize,
+        total_tokens >= num_requests as usize * 5, // 5 tokens each
         "Should process tokens for all {} requests, got {}",
         num_requests,
         total_tokens
