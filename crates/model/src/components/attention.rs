@@ -105,10 +105,12 @@ pub fn tiled_attention(
     q: &Tensor,
     k: &Tensor,
     v: &Tensor,
-    _num_heads: usize,
+    num_heads: usize,
     tile_size: usize,
 ) -> Result<Tensor> {
+    let batch_size = q.dims()[0];
     let seq_len = q.dims()[2];
+    let head_dim = q.dims()[3];
     let num_tiles = seq_len.div_ceil(tile_size);
     let mut output_parts = Vec::new();
 
@@ -136,7 +138,10 @@ pub fn tiled_attention(
         output_parts.push(out);
     }
 
-    Tensor::cat(&output_parts, 2)
+    let attn_output = Tensor::cat(&output_parts, 2)?;
+    let attn_output = attn_output.transpose(1, 2)?.contiguous()?;
+    let attn_output = attn_output.reshape((batch_size, seq_len, num_heads * head_dim))?;
+    Ok(attn_output)
 }
 
 pub fn causal_mask_tile(
