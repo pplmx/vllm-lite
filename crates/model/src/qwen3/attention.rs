@@ -315,8 +315,8 @@ impl GqaAttention {
         let v = v.unsqueeze(0)?;
         let k_expanded = self.expand_kv(&k, self.num_heads, self.num_kv_heads)?;
         let v_expanded = self.expand_kv(&v, self.num_heads, self.num_kv_heads)?;
-        let k_expanded = k_expanded.squeeze(0)?; // Remove batch dimension for attention
-        let v_expanded = v_expanded.squeeze(0)?;
+        let k_expanded = k_expanded.transpose(1, 2)?; // [1, N, 14, 64] -> [1, 14, N, 64]
+        let v_expanded = v_expanded.transpose(1, 2)?;
 
         if seq_len > tile_size {
             self.tiled_attention(&q, &k_expanded, &v_expanded, seq_len)
