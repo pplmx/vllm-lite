@@ -30,3 +30,4 @@ benches/
 .worktrees/
 .worktrees/
 .claude/
+core.*
