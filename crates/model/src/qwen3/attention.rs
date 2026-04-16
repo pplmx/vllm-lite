@@ -387,13 +387,9 @@ impl GqaAttention {
         let q_for_attn = &q;
 
         if seq_len > tile_size {
-            eprintln!(
-                "DEBUG forward_decode L{}: using tiled_attention, seq_len={}, tile_size={}",
-                layer_idx, seq_len, tile_size
-            );
-            self.tiled_attention(&q_for_attn, &full_k_unsqueezed, &full_v_unsqueezed, seq_len)
+            self.tiled_attention(q_for_attn, &full_k_unsqueezed, &full_v_unsqueezed, seq_len)
         } else {
-            self.paged_attention(&q_for_attn, &full_k_unsqueezed, &full_v_unsqueezed, seq_len)
+            self.paged_attention(q_for_attn, &full_k_unsqueezed, &full_v_unsqueezed, seq_len)
         }
     }
 
@@ -405,13 +401,7 @@ impl GqaAttention {
         seq_len: usize,
     ) -> Result<Tensor> {
         let attn_output = paged_attention(q, k, v, self.num_heads, self.head_dim)?;
-        eprintln!(
-            "DEBUG paged_attention result: attn_output.dims={:?}, o_proj weight dims={:?}",
-            attn_output.dims(),
-            self.o_proj.weight().dims()
-        );
         let o = self.o_proj.forward(&attn_output)?;
-        eprintln!("DEBUG after o_proj: o.dims={:?}", o.dims());
         Ok(o)
     }
 
