@@ -231,8 +231,8 @@ impl TransformerBlock {
         positions: &[usize],
     ) -> Result<Tensor> {
         let residual = x.clone();
-        let x = self.input_layernorm.forward(x)?;
-        let x = self.attention.forward_decode(
+        let mut x = self.input_layernorm.forward(x)?;
+        x = self.attention.forward_decode(
             &x,
             kv_cache,
             layer_idx,
@@ -240,12 +240,18 @@ impl TransformerBlock {
             num_computed_tokens,
             positions,
         )?;
-        let x = (&x + &residual)?;
+        if x.dims().len() == 3 && x.dims()[1] == 1 && residual.dims().len() == 2 {
+            let dims = x.dims();
+            let batch_size = dims[0];
+            let hidden_size: usize = dims[2];
+            x = x.reshape((batch_size, hidden_size))?;
+        }
+        x = (&x + &residual)?;
 
         let residual = x.clone();
-        let x = self.post_attention_layernorm.forward(&x)?;
-        let x = self.mlp.forward(&x)?;
-        let x = (&x + &residual)?;
+        x = self.post_attention_layernorm.forward(&x)?;
+        x = self.mlp.forward(&x)?;
+        x = (&x + &residual)?;
 
         Ok(x)
     }

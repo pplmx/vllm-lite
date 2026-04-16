@@ -39,7 +39,7 @@ impl Qwen3Model {
             let layer = TransformerBlock::new(
                 hidden_size,
                 config.num_attention_heads(),
-                config.num_attention_heads(), // Use expanded num_heads for GQA
+                config.num_key_value_heads(),
                 config.head_dim(),
                 config.intermediate_size(),
                 theta,
@@ -63,7 +63,7 @@ impl Qwen3Model {
 
         let kv_cache = PagedKvCache::new(
             config.num_hidden_layers(),
-            config.num_attention_heads(), // Use expanded num_heads for GQA
+            config.num_attention_heads(), // Use num_heads for expanded KV cache
             config.head_dim(),
             num_kv_blocks,
             device.clone(),
@@ -105,7 +105,7 @@ impl Qwen3Model {
             let layer = TransformerBlock::new_with_tp(
                 hidden_size,
                 config.num_attention_heads(),
-                config.num_attention_heads(), // Use expanded num_heads for GQA
+                config.num_key_value_heads(), // Use num_kv_heads for KV cache and GQA
                 config.head_dim(),
                 config.intermediate_size(),
                 theta,
@@ -129,7 +129,7 @@ impl Qwen3Model {
 
         let kv_cache = PagedKvCache::new(
             config.num_hidden_layers(),
-            config.num_attention_heads(), // Use expanded num_heads for GQA
+            config.num_attention_heads(), // Use num_heads for expanded KV cache
             config.head_dim(),
             num_kv_blocks,
             device.clone(),
@@ -288,7 +288,7 @@ impl Qwen3Model {
 
         let kv_cache = PagedKvCache::new(
             config.num_hidden_layers(),
-            config.num_attention_heads(), // Use expanded num_heads for GQA
+            config.num_attention_heads(), // Use num_heads for expanded KV cache
             config.head_dim(),
             num_kv_blocks,
             device.clone(),
@@ -332,15 +332,22 @@ impl Qwen3Model {
             return Ok((logits, dummy));
         }
 
-        let token_tensor =
-            Tensor::new(tokens, &self.device).map_err(|e| EngineError::new(e.to_string()))?;
-        let hidden = self
-            .embed_tokens
-            .forward(&token_tensor)
-            .map_err(|e| EngineError::new(e.to_string()))?
-            .unsqueeze(0)
-            .map_err(|e| EngineError::new(e.to_string()))?;
-
+        let hidden = if is_prefill {
+            let t =
+                Tensor::new(tokens, &self.device).map_err(|e| EngineError::new(e.to_string()))?;
+            self.embed_tokens
+                .forward(&t)
+                .map_err(|e| EngineError::new(e.to_string()))?
+                .unsqueeze(0)
+                .map_err(|e| EngineError::new(e.to_string()))?
+        } else {
+            let last_token = tokens.last().copied().unwrap_or(0);
+            let t = Tensor::new(&[last_token], &self.device)
+                .map_err(|e| EngineError::new(e.to_string()))?;
+            self.embed_tokens
+                .forward(&t)
+                .map_err(|e| EngineError::new(e.to_string()))?
+        };
         let mut hidden = hidden;
 
         if is_prefill {
@@ -479,13 +486,11 @@ impl ModelBackend for Qwen3Model {
                     .map_err(|e| EngineError::new(e.to_string()))?;
 
                 use candle_core::D;
-                // logits shape: [batch=1, seq_len=1, vocab_size]
-                // argmax on last dim gives [batch=1, seq_len=1]
+                // logits shape: [batch=1, vocab_size] for decode
+                // argmax on last dim gives [batch=1]
                 // squeeze to scalar
                 let next = logits
                     .argmax(D::Minus1)
-                    .map_err(|e| EngineError::new(e.to_string()))?
-                    .squeeze(1) // Remove seq_len dim
                     .map_err(|e| EngineError::new(e.to_string()))?
                     .squeeze(0) // Remove batch dim
                     .map_err(|e| EngineError::new(e.to_string()))?
