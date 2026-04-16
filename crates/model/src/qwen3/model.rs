@@ -839,4 +839,114 @@ mod tests {
         assert_eq!(embeddings.len(), 1);
         assert_eq!(embeddings[0].len(), 128);
     }
+
+    #[test]
+    fn test_qwen3_decode_mode_with_gqa() {
+        let config = Qwen3Config {
+            vocab_size: Some(1000),
+            hidden_size: Some(1024),
+            num_hidden_layers: Some(2),
+            num_attention_heads: Some(16),
+            num_key_value_heads: Some(8),
+            intermediate_size: Some(3072),
+            head_dim: Some(128),
+            ..Default::default()
+        };
+
+        let device = Device::Cpu;
+        let mut model = Qwen3Model::new(config, device, 1024).unwrap();
+
+        let seq_ids = vec![1u64];
+        let input_tokens = vec![vec![42]];
+        let positions = vec![vec![7]];
+        let kv_block_ids = vec![vec![0usize]];
+        let num_computed_tokens = vec![7usize];
+        let is_prefill = vec![false];
+
+        let output = model
+            .forward(
+                &seq_ids,
+                &input_tokens,
+                &positions,
+                &kv_block_ids,
+                &num_computed_tokens,
+                &is_prefill,
+            )
+            .unwrap();
+        assert_eq!(output.next_tokens.len(), 1);
+    }
+
+    #[test]
+    fn test_qwen3_decode_then_continue() {
+        let config = Qwen3Config {
+            vocab_size: Some(1000),
+            hidden_size: Some(256),
+            num_hidden_layers: Some(2),
+            num_attention_heads: Some(4),
+            num_key_value_heads: Some(2),
+            intermediate_size: Some(512),
+            head_dim: Some(64),
+            ..Default::default()
+        };
+
+        let device = Device::Cpu;
+        let mut model = Qwen3Model::new(config, device, 1024).unwrap();
+
+        let block_ids = vec![vec![0usize]];
+        let num_computed = vec![0usize];
+        let is_prefill = vec![false];
+        let positions = vec![vec![0]];
+        let tokens = vec![vec![42u32]];
+
+        let output = model
+            .forward(
+                &[1],
+                &tokens,
+                &positions,
+                &block_ids,
+                &num_computed,
+                &is_prefill,
+            )
+            .unwrap();
+
+        assert_eq!(output.next_tokens.len(), 1);
+    }
+
+    #[test]
+    fn test_qwen3_kv_cache_gqa_dimensions() {
+        let config = Qwen3Config {
+            vocab_size: Some(1000),
+            hidden_size: Some(512),
+            num_hidden_layers: Some(1),
+            num_attention_heads: Some(8),
+            num_key_value_heads: Some(2),
+            intermediate_size: Some(1024),
+            head_dim: Some(64),
+            ..Default::default()
+        };
+
+        let device = Device::Cpu;
+        let mut model = Qwen3Model::new(config, device, 8).unwrap();
+
+        let seq_ids = vec![1u64, 2u64];
+        let input_tokens = vec![vec![1u32, 2, 3], vec![4u32, 5]];
+        let positions = vec![vec![0, 1, 2], vec![0, 1]];
+        let kv_block_ids = vec![vec![0, 1], vec![2, 3]];
+        let num_computed_tokens = vec![0usize, 0];
+        let is_prefill = vec![true, true];
+
+        let output = model
+            .forward(
+                &seq_ids,
+                &input_tokens,
+                &positions,
+                &kv_block_ids,
+                &num_computed_tokens,
+                &is_prefill,
+            )
+            .unwrap();
+
+        assert_eq!(output.seq_ids.len(), 2);
+        assert_eq!(output.next_tokens.len(), 2);
+    }
 }
