@@ -9,9 +9,9 @@ init:
     uv tool install rust-just
     prek install --hook-type commit-msg --hook-type pre-push
 
-# Build release binary
+# Build release binary (with tokenizer support)
 build:
-    cargo build --release
+    cargo build --release --features vllm-model/real_weights
 
 # Run tests with nextest (skips #[ignore] tests by default)
 nextest:
@@ -22,16 +22,12 @@ nextest-all:
     cargo nextest run --release --workspace --all-features --run-ignored all --no-fail-fast
 
 # Format code
-fmt:
-    cargo fmt --all
-
-# Check formatting (CI style)
 fmt-check:
     cargo fmt --all --check
 
 # Run clippy (CI style)
 clippy:
-    cargo clippy --all-targets --workspace --all-features -- -D warnings
+    cargo clippy --all-targets --workspace --features vllm-model/real_weights -- -D warnings
 
 # Check documentation (CI style)
 doc-check:
