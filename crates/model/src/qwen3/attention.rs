@@ -196,8 +196,17 @@ impl GqaAttention {
 
     fn apply_k_norm(&self, k: Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
         if let Some(ref k_norm) = self.k_norm {
+            eprintln!("DEBUG apply_k_norm: k.dims={:?}, batch_size={}, num_kv_heads={}, seq_len={}, head_dim={}",
+                     k.dims(), batch_size, self.num_kv_heads, seq_len, self.head_dim);
             let k = k.transpose(1, 2)?; // [batch, num_kv_heads, seq, head_dim]
-            let k = k.reshape((batch_size * self.num_kv_heads * seq_len, self.head_dim))?;
+            eprintln!("DEBUG apply_k_norm: after transpose k.dims={:?}", k.dims());
+            let reshape_size = batch_size * self.num_kv_heads * seq_len;
+            eprintln!(
+                "DEBUG apply_k_norm: reshaping to ({}, {})",
+                reshape_size, self.head_dim
+            );
+            let k = k.reshape((reshape_size, self.head_dim))?;
+            eprintln!("DEBUG apply_k_norm: after reshape k.dims={:?}", k.dims());
             let k = k_norm.forward(&k)?;
             let k = k.reshape((batch_size, self.num_kv_heads, seq_len, self.head_dim))?;
             let k = k.transpose(1, 2)?; // [batch, seq, num_kv_heads, head_dim]
@@ -222,6 +231,11 @@ impl GqaAttention {
         let q = self.q_proj.forward(x)?;
         let k = self.k_proj.forward(x)?;
         let v = self.v_proj.forward(x)?;
+
+        eprintln!("DEBUG prefill L{}: q dims={:?} (expect {}), k dims={:?} (expect {}), num_heads={}, head_dim={}",
+                 layer_idx, q.dims(), batch_size * seq_len * self.num_heads * self.head_dim,
+                 k.dims(), batch_size * seq_len * self.num_kv_heads * self.head_dim,
+                 self.num_heads, self.head_dim);
 
         let q = q.reshape((batch_size, seq_len, self.num_heads, self.head_dim))?;
         let k = k.reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?;
@@ -296,6 +310,9 @@ impl GqaAttention {
         let k = self.k_proj.forward(x)?;
         let v = self.v_proj.forward(x)?;
 
+        eprintln!("DEBUG decode: q_proj output dims={:?}, k_proj dims={:?}, x dims={:?}, num_heads={}, num_kv_heads={}, head_dim={}",
+                 q.dims(), k.dims(), x.dims(), self.num_heads, self.num_kv_heads, self.head_dim);
+
         let q = q.reshape((batch_size, 1, self.num_heads, self.head_dim))?;
         let k = k.reshape((batch_size, 1, self.num_kv_heads, self.head_dim))?;
         let v = v.reshape((batch_size, 1, self.num_kv_heads, self.head_dim))?;
@@ -341,7 +358,16 @@ impl GqaAttention {
             let block_id = num_computed_tokens / block_size;
 
             // k_for_cache: [num_heads, 1, head_dim] -> [1, num_heads, head_dim]
+            eprintln!("DEBUG write L{}: k_for_cache dims={:?}, self.num_heads={}, self.head_dim={}, num_computed={}",
+                     layer_idx, k_for_cache.dims(), self.num_heads, self.head_dim, num_computed_tokens);
             let k_for_write = k_for_cache.permute((1, 0, 2))?.contiguous()?; // [1, num_heads, head_dim]
+            eprintln!(
+                "DEBUG write L{}: k_for_write dims={:?} (expect [1, {}, {}])",
+                layer_idx,
+                k_for_write.dims(),
+                self.num_heads,
+                self.head_dim
+            );
             let v_for_write = v_for_cache.permute((1, 0, 2))?.contiguous()?;
             kv_cache.write_kv(
                 layer_idx,
@@ -357,10 +383,17 @@ impl GqaAttention {
         let full_k_unsqueezed = full_k.unsqueeze(0)?.contiguous()?; // [1, num_heads, seq+1, head_dim]
         let full_v_unsqueezed = full_v.unsqueeze(0)?.contiguous()?;
 
+        // q is already [batch, num_heads, seq_q, head_dim] after transpose at line 327
+        let q_for_attn = &q;
+
         if seq_len > tile_size {
-            self.tiled_attention(&q, &full_k_unsqueezed, &full_v_unsqueezed, seq_len)
+            eprintln!(
+                "DEBUG forward_decode L{}: using tiled_attention, seq_len={}, tile_size={}",
+                layer_idx, seq_len, tile_size
+            );
+            self.tiled_attention(&q_for_attn, &full_k_unsqueezed, &full_v_unsqueezed, seq_len)
         } else {
-            self.paged_attention(&q, &full_k_unsqueezed, &full_v_unsqueezed, seq_len)
+            self.paged_attention(&q_for_attn, &full_k_unsqueezed, &full_v_unsqueezed, seq_len)
         }
     }
 
@@ -369,10 +402,16 @@ impl GqaAttention {
         q: &Tensor,
         k: &Tensor,
         v: &Tensor,
-        _seq_len: usize,
+        seq_len: usize,
     ) -> Result<Tensor> {
         let attn_output = paged_attention(q, k, v, self.num_heads, self.head_dim)?;
+        eprintln!(
+            "DEBUG paged_attention result: attn_output.dims={:?}, o_proj weight dims={:?}",
+            attn_output.dims(),
+            self.o_proj.weight().dims()
+        );
         let o = self.o_proj.forward(&attn_output)?;
+        eprintln!("DEBUG after o_proj: o.dims={:?}", o.dims());
         Ok(o)
     }
 
