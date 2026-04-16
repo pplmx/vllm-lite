@@ -60,3 +60,11 @@ cov:
 # Clean build artifacts
 clean:
     cargo clean
+
+# Run benchmarks
+bench:
+    cargo bench --workspace --all-features --no-fail-fast
+
+# Run quick benchmarks (scheduler and core only)
+bench-quick:
+    cargo bench -p vllm-core -p vllm-lite-benchmarks -- --test-threads=1
