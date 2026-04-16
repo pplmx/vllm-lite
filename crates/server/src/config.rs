@@ -118,6 +118,8 @@ pub struct EngineConfig {
     pub tensor_parallel_size: usize,
     #[serde(default = "default_kv_quantization")]
     pub kv_quantization: bool,
+    #[serde(default = "default_enable_adaptive_speculative")]
+    pub enable_adaptive_speculative: bool,
 }
 
 impl Default for EngineConfig {
@@ -129,6 +131,7 @@ impl Default for EngineConfig {
             max_waiting_batches: default_max_waiting_batches(),
             tensor_parallel_size: default_tensor_parallel_size(),
             kv_quantization: default_kv_quantization(),
+            enable_adaptive_speculative: default_enable_adaptive_speculative(),
         }
     }
 }
@@ -155,6 +158,10 @@ fn default_tensor_parallel_size() -> usize {
 
 fn default_kv_quantization() -> bool {
     false
+}
+
+fn default_enable_adaptive_speculative() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
