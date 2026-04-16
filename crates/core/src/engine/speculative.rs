@@ -57,6 +57,12 @@ impl<M: ModelBackend> super::Engine<M> {
     ) -> Result<Vec<Vec<TokenId>>> {
         let mut draft_outputs = Vec::new();
 
+        if self.draft_model.is_none() {
+            tracing::warn!(
+                "Speculative decoding enabled but no draft model set, using target model"
+            );
+        }
+
         for (i, ((seq_id, tokens), positions)) in batch
             .seq_ids
             .iter()
@@ -69,8 +75,11 @@ impl<M: ModelBackend> super::Engine<M> {
             let mut current_positions = positions.clone();
 
             let draft_model = match &self.draft_model {
-                Some(dm) => dm,
-                None => continue,
+                Some(dm) => dm.clone(),
+                None => {
+                    draft_outputs.push(Vec::new());
+                    continue;
+                }
             };
 
             for _ in 0..max_draft {

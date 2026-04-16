@@ -133,6 +133,9 @@ struct EngineArgs {
 
     #[arg(long, default_value = "8", env = "VLLM_MAX_DRAFT_TOKENS", value_parser = validate_max_draft_tokens)]
     pub max_draft_tokens: usize,
+
+    #[arg(long, default_value = "false", env = "VLLM_ADAPTIVE_SPECULATIVE")]
+    pub enable_adaptive_speculative: bool,
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -175,6 +178,7 @@ impl CliArgs {
         config.engine.max_batch_size = self.engine.max_batch_size;
         config.engine.max_waiting_batches = self.engine.max_waiting_batches;
         config.engine.max_draft_tokens = self.engine.max_draft_tokens;
+        config.engine.enable_adaptive_speculative = self.engine.enable_adaptive_speculative;
 
         if !self.auth.api_key.is_empty() {
             config.auth.api_keys = self.auth.api_key.clone();

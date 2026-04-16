@@ -22,6 +22,7 @@ use tokio::signal;
 use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
 use vllm_core::metrics::{EnhancedMetricsCollector, PrometheusExporter};
+use vllm_core::types::AdaptiveDraftConfig;
 use vllm_core::types::EngineMessage;
 use vllm_model::loader::ModelLoader;
 use vllm_model::tokenizer::Tokenizer;
@@ -143,8 +144,29 @@ async fn main() {
     };
 
     let mut engine = Engine::new(model, draft_model);
-    // Don't enable speculative mode - it causes hangs with mismatched draft model
-    // engine.enable_speculative();
+
+    if app_config.engine.max_draft_tokens > 0 {
+        if app_config.engine.enable_adaptive_speculative {
+            tracing::info!(
+                "Enabling adaptive speculative decoding (max_draft_tokens={})",
+                app_config.engine.max_draft_tokens
+            );
+            engine.enable_adaptive_speculative(AdaptiveDraftConfig {
+                min_draft_tokens: 1,
+                max_draft_tokens: app_config.engine.max_draft_tokens,
+                target_acceptance_rate: 0.5,
+                accuracy_window_size: 10,
+                adjustment_step: 1,
+                cooldown_steps: 5,
+            });
+        } else {
+            tracing::info!(
+                "Enabling speculative decoding (max_draft_tokens={})",
+                app_config.engine.max_draft_tokens
+            );
+            engine.enable_speculative();
+        }
+    }
 
     let (msg_tx, msg_rx) = mpsc::unbounded_channel::<EngineMessage>();
     let engine_shutdown_tx = msg_tx.clone();

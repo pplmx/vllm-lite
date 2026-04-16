@@ -223,7 +223,9 @@ impl<M: ModelBackend + 'static> Engine<M> {
 
             if self.scheduler.has_pending() {
                 step_count += 1;
-                let result = if self.speculative_mode {
+                let result = if self.adaptive_decoder.is_some() {
+                    self.step_adaptive_speculative()
+                } else if self.speculative_mode {
                     self.step_speculative()
                 } else if self.cuda_graph_enabled() {
                     self.step_with_graph()
