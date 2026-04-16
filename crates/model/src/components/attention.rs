@@ -82,6 +82,12 @@ pub fn paged_attention(
 ) -> Result<Tensor> {
     let batch_size = q.dims()[0];
     let seq_len = q.dims()[2];
+    let q_dims = q.dims();
+    let k_dims = k.dims();
+    eprintln!(
+        "DEBUG paged_attention: q.dims={:?}, k.dims={:?}, num_heads={}, head_dim={}",
+        q_dims, k_dims, num_heads, head_dim
+    );
 
     let qk = Tensor::matmul(q, &k.transpose(2, 3)?.contiguous()?)?;
     let mask = causal_mask(seq_len, q.device())?;

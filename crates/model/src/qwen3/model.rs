@@ -242,6 +242,13 @@ impl Qwen3Model {
             ));
 
             let theta = config.rope_theta();
+            eprintln!(
+                "DEBUG from_weights: hidden={}, num_heads={}, num_kv_heads={}, head_dim={}",
+                hidden_size,
+                config.num_attention_heads(),
+                config.num_key_value_heads(),
+                config.head_dim()
+            );
             let layer = TransformerBlock::new_with_weights(
                 hidden_size,
                 config.num_attention_heads(), // num_heads

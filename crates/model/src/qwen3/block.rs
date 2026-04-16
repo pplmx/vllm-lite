@@ -147,6 +147,10 @@ impl TransformerBlock {
         };
 
         let input_ln_dim = input_ln_w.dim(0).unwrap_or(hidden_size);
+        eprintln!(
+            "DEBUG TransformerBlock: input_ln_w.dim(0)={}, hidden_size={}",
+            input_ln_dim, hidden_size
+        );
         let input_ln_bias = Tensor::zeros(input_ln_dim, input_ln_w.dtype(), input_ln_w.device())?;
         let input_layernorm = LayerNorm::new(input_ln_w.clone(), input_ln_bias, rms_norm_eps);
 
@@ -211,11 +215,27 @@ impl TransformerBlock {
         let x = self
             .attention
             .forward_prefill(&x, kv_cache, layer_idx, block_ids, positions)?;
+        eprintln!(
+            "DEBUG block prefill L{}: after attn x.dims={:?}, residual.dims={:?}",
+            layer_idx,
+            x.dims(),
+            residual.dims()
+        );
         let x = (&x + &residual)?;
 
         let residual = x.clone();
         let x = self.post_attention_layernorm.forward(&x)?;
+        eprintln!(
+            "DEBUG block prefill L{}: after post_ln x.dims={:?}",
+            layer_idx,
+            x.dims()
+        );
         let x = self.mlp.forward(&x)?;
+        eprintln!(
+            "DEBUG block prefill L{}: after mlp x.dims={:?}",
+            layer_idx,
+            x.dims()
+        );
         let x = (&x + &residual)?;
 
         Ok(x)
@@ -232,6 +252,12 @@ impl TransformerBlock {
     ) -> Result<Tensor> {
         let residual = x.clone();
         let mut x = self.input_layernorm.forward(x)?;
+        eprintln!(
+            "DEBUG block decode L{}: after ln x.dims={:?}, residual.dims={:?}",
+            layer_idx,
+            x.dims(),
+            residual.dims()
+        );
         x = self.attention.forward_decode(
             &x,
             kv_cache,
@@ -240,6 +266,11 @@ impl TransformerBlock {
             num_computed_tokens,
             positions,
         )?;
+        eprintln!(
+            "DEBUG block decode L{}: after attn x.dims={:?}",
+            layer_idx,
+            x.dims()
+        );
         if x.dims().len() == 3 && x.dims()[1] == 1 && residual.dims().len() == 2 {
             let dims = x.dims();
             let batch_size = dims[0];
