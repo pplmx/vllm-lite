@@ -956,4 +956,244 @@ mod tests {
         assert_eq!(output.seq_ids.len(), 2);
         assert_eq!(output.next_tokens.len(), 2);
     }
+
+    #[test]
+    fn test_qwen3_decode_logits_2d_shape() {
+        let config = Qwen3Config {
+            vocab_size: Some(1000),
+            hidden_size: Some(256),
+            num_hidden_layers: Some(2),
+            num_attention_heads: Some(4),
+            num_key_value_heads: Some(2),
+            intermediate_size: Some(512),
+            head_dim: Some(64),
+            ..Default::default()
+        };
+
+        let device = Device::Cpu;
+        let mut model = Qwen3Model::new(config, device, 1024).unwrap();
+
+        let _seq_ids = vec![1u64];
+        let _input_tokens = vec![vec![42u32]];
+        let _positions = vec![vec![7]];
+        let _kv_block_ids = vec![vec![0usize]];
+        let _num_computed_tokens = vec![7usize];
+        let _is_prefill = vec![false];
+
+        let (logits, hidden) = model
+            .forward_with_cache(&[42], 7, &[0], &[7], false)
+            .unwrap();
+
+        assert_eq!(
+            logits.dims(),
+            &[1, 1000],
+            "Decode logits should be [1, vocab_size]"
+        );
+        assert_eq!(
+            hidden.dims(),
+            &[1, 256],
+            "Decode hidden should be [1, hidden_size]"
+        );
+    }
+
+    #[test]
+    fn test_qwen3_prefill_logits_3d_shape() {
+        let config = Qwen3Config {
+            vocab_size: Some(1000),
+            hidden_size: Some(256),
+            num_hidden_layers: Some(2),
+            num_attention_heads: Some(4),
+            num_key_value_heads: Some(2),
+            intermediate_size: Some(512),
+            head_dim: Some(64),
+            ..Default::default()
+        };
+
+        let device = Device::Cpu;
+        let mut model = Qwen3Model::new(config, device, 1024).unwrap();
+
+        let (logits, hidden) = model
+            .forward_with_cache(
+                &[1, 2, 3, 4, 5],
+                0,
+                &[0, 1, 2, 3, 4],
+                &[0, 1, 2, 3, 4],
+                true,
+            )
+            .unwrap();
+
+        assert_eq!(
+            logits.dims(),
+            &[1, 5, 1000],
+            "Prefill logits should be [1, seq_len, vocab_size]"
+        );
+        assert_eq!(
+            hidden.dims(),
+            &[1, 5, 256],
+            "Prefill hidden should be [1, seq_len, hidden_size]"
+        );
+    }
+
+    #[test]
+    fn test_qwen3_decode_sequential_generation() {
+        let config = Qwen3Config {
+            vocab_size: Some(500),
+            hidden_size: Some(256),
+            num_hidden_layers: Some(2),
+            num_attention_heads: Some(4),
+            num_key_value_heads: Some(2),
+            intermediate_size: Some(512),
+            head_dim: Some(64),
+            ..Default::default()
+        };
+
+        let device = Device::Cpu;
+        let mut model = Qwen3Model::new(config, device, 32).unwrap();
+
+        let block_size = 8;
+
+        for step in 0..20 {
+            let block_id = step / block_size;
+            let num_computed = step;
+            let position = step;
+
+            let (logits, hidden) = model
+                .forward_with_cache(&[42], num_computed, &[block_id], &[position], false)
+                .unwrap();
+
+            assert_eq!(
+                logits.dims(),
+                &[1, 500],
+                "Step {}: logits shape mismatch",
+                step
+            );
+            assert_eq!(
+                hidden.dims(),
+                &[1, 256],
+                "Step {}: hidden shape mismatch",
+                step
+            );
+
+            let next_token: u32 = logits
+                .argmax(candle_core::D::Minus1)
+                .unwrap()
+                .squeeze(0)
+                .unwrap()
+                .to_vec0()
+                .unwrap();
+            assert!(
+                next_token < 500,
+                "Step {}: next token {} out of range",
+                step,
+                next_token
+            );
+        }
+    }
+
+    #[test]
+    fn test_qwen3_decode_with_gqa_expanded_kv_cache() {
+        let config = Qwen3Config {
+            vocab_size: Some(1000),
+            hidden_size: Some(1024),
+            num_hidden_layers: Some(3),
+            num_attention_heads: Some(16),
+            num_key_value_heads: Some(8),
+            intermediate_size: Some(3072),
+            head_dim: Some(128),
+            ..Default::default()
+        };
+
+        let device = Device::Cpu;
+        let mut model = Qwen3Model::new(config, device, 16).unwrap();
+
+        let output = model
+            .forward(
+                &[1],
+                &[vec![42u32]],
+                &[vec![5]],
+                &[vec![0usize]],
+                &[5],
+                &[false],
+            )
+            .unwrap();
+
+        assert_eq!(output.next_tokens.len(), 1);
+        assert!(output.next_tokens[0] < 1000);
+    }
+
+    #[test]
+    fn test_qwen3_mixed_prefill_and_decode() {
+        let config = Qwen3Config {
+            vocab_size: Some(500),
+            hidden_size: Some(128),
+            num_hidden_layers: Some(2),
+            num_attention_heads: Some(4),
+            num_key_value_heads: Some(2),
+            intermediate_size: Some(256),
+            head_dim: Some(32),
+            ..Default::default()
+        };
+
+        let device = Device::Cpu;
+        let mut model = Qwen3Model::new(config, device, 16).unwrap();
+
+        let _ = model
+            .forward(
+                &[1],
+                &[vec![1u32, 2, 3, 4, 5]],
+                &[vec![0, 1, 2, 3, 4]],
+                &[vec![0, 1, 2, 3, 4]],
+                &[0, 1, 2, 3, 4],
+                &[true],
+            )
+            .unwrap();
+
+        for step in 5..10 {
+            let block_id = step / 8;
+            let output = model
+                .forward(
+                    &[1],
+                    &[vec![42u32]],
+                    &[vec![step]],
+                    &[vec![block_id]],
+                    &[step],
+                    &[false],
+                )
+                .unwrap();
+
+            assert_eq!(output.next_tokens.len(), 1);
+            assert!(output.next_tokens[0] < 500);
+        }
+    }
+
+    #[test]
+    fn test_forward_logits_decode_mode() {
+        let config = Qwen3Config {
+            vocab_size: Some(300),
+            hidden_size: Some(128),
+            num_hidden_layers: Some(1),
+            num_attention_heads: Some(4),
+            num_key_value_heads: Some(2),
+            intermediate_size: Some(256),
+            head_dim: Some(32),
+            ..Default::default()
+        };
+
+        let device = Device::Cpu;
+        let mut model = Qwen3Model::new(config, device, 8).unwrap();
+
+        let result = model
+            .forward_logits(
+                &[1],
+                &[vec![42u32]],
+                &[vec![5]],
+                &[vec![0usize]],
+                &[5],
+                &[false],
+            )
+            .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].len(), 300);
+    }
 }

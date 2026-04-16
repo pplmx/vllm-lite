@@ -550,4 +550,230 @@ mod tests {
 
         assert!(diff < 0.1, "Outputs differ too much: avg diff = {}", diff);
     }
+
+    #[test]
+    fn test_paged_attention_single_token_decode() {
+        let batch_size = 1;
+        let seq_q = 1;
+        let seq_kv = 8;
+        let num_heads = 16;
+        let head_dim = 128;
+
+        let q = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_q, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+        let k = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_kv, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+        let v = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_kv, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+
+        let output = paged_attention(&q, &k, &v, num_heads, head_dim).unwrap();
+
+        assert_eq!(output.dims(), &[batch_size, seq_q, num_heads * head_dim]);
+    }
+
+    #[test]
+    fn test_paged_attention_decode_with_longer_kv() {
+        let batch_size = 1;
+        let num_heads = 8;
+        let head_dim = 64;
+
+        for kv_len in [1, 8, 16, 32, 64] {
+            let q =
+                Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, 1, head_dim), DEVICE).unwrap();
+            let k = Tensor::randn(
+                0.0f32,
+                1.0,
+                (batch_size, num_heads, kv_len, head_dim),
+                DEVICE,
+            )
+            .unwrap();
+            let v = Tensor::randn(
+                0.0f32,
+                1.0,
+                (batch_size, num_heads, kv_len, head_dim),
+                DEVICE,
+            )
+            .unwrap();
+
+            let output = paged_attention(&q, &k, &v, num_heads, head_dim).unwrap();
+
+            assert_eq!(
+                output.dims(),
+                &[1, 1, num_heads * head_dim],
+                "kv_len={}",
+                kv_len
+            );
+        }
+    }
+
+    #[test]
+    fn test_tiled_attention_decode_single_token() {
+        let batch_size = 1;
+        let seq_q = 1;
+        let seq_kv = 32;
+        let num_heads = 8;
+        let head_dim = 64;
+        let tile_size = 16;
+
+        let q = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_q, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+        let k = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_kv, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+        let v = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_kv, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+
+        let output = tiled_attention(&q, &k, &v, num_heads, tile_size).unwrap();
+
+        assert_eq!(output.dims(), &[batch_size, seq_q, num_heads * head_dim]);
+    }
+
+    #[test]
+    fn test_expand_kv_exact_division() {
+        let batch_size = 2;
+        let seq_len = 4;
+        let num_kv_heads = 2;
+        let num_q_heads = 16;
+        let head_dim = 64;
+
+        let kv = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, seq_len, num_kv_heads, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+
+        let expanded = expand_kv(&kv, num_q_heads, num_kv_heads).unwrap();
+
+        assert_eq!(
+            expanded.dims(),
+            &[batch_size, seq_len, num_q_heads, head_dim]
+        );
+    }
+
+    #[test]
+    fn test_expand_kv_non_exact_division() {
+        let batch_size = 1;
+        let seq_len = 2;
+        let num_kv_heads = 3;
+        let num_q_heads = 10;
+        let head_dim = 32;
+
+        let kv = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, seq_len, num_kv_heads, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+
+        let expanded = expand_kv(&kv, num_q_heads, num_kv_heads).unwrap();
+
+        assert_eq!(
+            expanded.dims(),
+            &[batch_size, seq_len, num_q_heads, head_dim]
+        );
+    }
+
+    #[test]
+    fn test_expand_kv_kv_equals_q() {
+        let batch_size = 1;
+        let seq_len = 4;
+        let num_heads = 8;
+        let head_dim = 64;
+
+        let kv = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, seq_len, num_heads, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+
+        let expanded = expand_kv(&kv, num_heads, num_heads).unwrap();
+
+        assert_eq!(expanded.dims(), kv.dims());
+    }
+
+    #[test]
+    fn test_expand_kv_large_ratio() {
+        let batch_size = 1;
+        let seq_len = 1;
+        let num_kv_heads = 1;
+        let num_q_heads = 32;
+        let head_dim = 128;
+
+        let kv = Tensor::ones(
+            (batch_size, seq_len, num_kv_heads, head_dim),
+            candle_core::DType::F32,
+            DEVICE,
+        )
+        .unwrap();
+
+        let expanded = expand_kv(&kv, num_q_heads, num_kv_heads).unwrap();
+
+        assert_eq!(
+            expanded.dims(),
+            &[batch_size, seq_len, num_q_heads, head_dim]
+        );
+    }
+
+    #[test]
+    fn test_paged_attention_and_tiled_attention_single_token() {
+        let batch_size = 1;
+        let num_heads = 8;
+        let head_dim = 64;
+        let tile_size = 16;
+
+        let q = Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, 1, head_dim), DEVICE).unwrap();
+        let k = Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, 16, head_dim), DEVICE).unwrap();
+        let v = Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, 16, head_dim), DEVICE).unwrap();
+
+        let paged_output = paged_attention(&q, &k, &v, num_heads, head_dim).unwrap();
+        let tiled_output = tiled_attention(&q, &k, &v, num_heads, tile_size).unwrap();
+
+        assert_eq!(paged_output.dims(), tiled_output.dims());
+        assert_eq!(paged_output.dims(), &[1, 1, num_heads * head_dim]);
+    }
+
+    #[test]
+    fn test_causal_mask_decode_mode() {
+        let seq_len = 1;
+        let mask = causal_mask(seq_len, DEVICE).unwrap();
+
+        assert_eq!(mask.dims(), &[1, 1, seq_len, seq_len]);
+        let mask_data: Vec<f32> = mask.flatten_all().unwrap().to_vec1().unwrap();
+        assert_eq!(mask_data.len(), 1);
+        assert_eq!(mask_data[0], 0.0);
+    }
 }
