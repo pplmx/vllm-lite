@@ -1089,3 +1089,162 @@ fn test_qwen3_full_pipeline_prefill_decode() {
         "Model should generate diverse tokens, not repeat the same one"
     );
 }
+
+#[test]
+#[cfg(feature = "real_weights")]
+fn test_qwen3_layer0_intermediate_outputs() {
+    use candle_core::Device;
+    use vllm_model::loader::ModelLoader;
+
+    let device = Device::Cpu;
+    let loader = ModelLoader::builder(device)
+        .with_model_dir("/models/Qwen3-0.6B".to_string())
+        .with_kv_blocks(1024)
+        .build()
+        .expect("Failed to build loader");
+
+    let mut model = loader.load_model().expect("Failed to load model");
+
+    let tokens = vec![6023u32];
+    let positions: Vec<usize> = vec![0];
+
+    let (logits, hidden) = model
+        .forward_with_cache(&tokens, 0, &[0], &positions, true)
+        .expect("Forward failed");
+
+    println!("Hidden dims: {:?}", hidden.dims());
+    println!("Logits dims: {:?}", logits.dims());
+
+    // For prefill, hidden is [batch, seq_len, hidden_size]
+    // logits is [batch, seq_len, vocab_size]
+    assert_eq!(hidden.dims().len(), 3, "Prefill hidden should be 3D");
+    assert_eq!(logits.dims().len(), 3, "Prefill logits should be 3D");
+
+    let hidden_data = hidden.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+
+    let mean: f32 = hidden_data.iter().sum::<f32>() / hidden_data.len() as f32;
+    let variance: f32 =
+        hidden_data.iter().map(|&x| (x - mean).powi(2)).sum::<f32>() / hidden_data.len() as f32;
+    let std_dev = variance.sqrt();
+
+    println!("Hidden - mean: {:.6}, std: {:.6}", mean, std_dev);
+    println!(
+        "Hidden min: {:.4}, max: {:.4}",
+        hidden_data.iter().cloned().fold(f32::INFINITY, f32::min),
+        hidden_data
+            .iter()
+            .cloned()
+            .fold(f32::NEG_INFINITY, f32::max)
+    );
+
+    assert!(std_dev > 0.001, "Hidden std_dev too small: {}", std_dev);
+    assert!(std_dev < 100.0, "Hidden std_dev too large: {}", std_dev);
+
+    let logits_data = logits.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+    let logits_std = logits_data.iter().map(|&x| x * x).sum::<f32>() / logits_data.len() as f32;
+
+    println!("Logits std: {:.6}", logits_std.sqrt());
+    assert!(
+        logits_std.sqrt() > 0.1,
+        "Logits std too small: {}",
+        logits_std.sqrt()
+    );
+}
+
+#[test]
+#[cfg(feature = "real_weights")]
+fn test_qwen3_deterministic_same_input() {
+    use candle_core::Device;
+    use vllm_model::loader::ModelLoader;
+
+    let device = Device::Cpu;
+    let loader = ModelLoader::builder(device)
+        .with_model_dir("/models/Qwen3-0.6B".to_string())
+        .with_kv_blocks(1024)
+        .build()
+        .expect("Failed to build loader");
+
+    let mut model = loader.load_model().expect("Failed to load model");
+
+    let tokens = vec![6023u32];
+    let positions: Vec<usize> = vec![0];
+
+    // Run same input multiple times
+    let mut top_tokens = Vec::new();
+    let mut first_logits: Option<Vec<f32>> = None;
+
+    for i in 0..3 {
+        let (logits, _) = model
+            .forward_with_cache(&tokens, 0, &[0], &positions, true)
+            .unwrap();
+
+        let top_token: u32 = logits
+            .squeeze(0)
+            .unwrap()
+            .squeeze(0)
+            .unwrap()
+            .argmax(candle_core::D::Minus1)
+            .unwrap()
+            .to_vec0()
+            .unwrap();
+
+        top_tokens.push(top_token);
+
+        if i == 0 {
+            first_logits = Some(logits.flatten_all().unwrap().to_vec1::<f32>().unwrap());
+        }
+    }
+
+    println!("Top tokens from 3 runs: {:?}", top_tokens);
+    let all_same = top_tokens.windows(2).all(|w| w[0] == w[1]);
+    assert!(
+        all_same,
+        "Same input should produce same output: {:?}",
+        top_tokens
+    );
+}
+
+#[test]
+#[cfg(feature = "real_weights")]
+fn test_qwen3_different_prompts_different_outputs() {
+    use candle_core::Device;
+    use vllm_model::loader::ModelLoader;
+
+    let device = Device::Cpu;
+    let loader = ModelLoader::builder(device)
+        .with_model_dir("/models/Qwen3-0.6B".to_string())
+        .with_kv_blocks(1024)
+        .build()
+        .expect("Failed to build loader");
+
+    let mut model = loader.load_model().expect("Failed to load model");
+
+    // Test with two different prompts
+    let tokens1 = vec![6023u32]; // "hi"
+    let tokens2 = vec![14947u32]; // different word
+
+    let (logits1, _) = model
+        .forward_with_cache(&tokens1, 0, &[0], &[0], true)
+        .unwrap();
+    let (logits2, _) = model
+        .forward_with_cache(&tokens2, 0, &[0], &[0], true)
+        .unwrap();
+
+    let l1 = logits1.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+    let l2 = logits2.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+
+    // Compute cosine similarity
+    let dot: f32 = l1.iter().zip(l2.iter()).map(|(a, b)| a * b).sum::<f32>();
+    let norm1 = l1.iter().map(|&x| x * x).sum::<f32>().sqrt();
+    let norm2 = l2.iter().map(|&x| x * x).sum::<f32>().sqrt();
+    let cosine = dot / (norm1 * norm2);
+
+    println!("Cosine similarity between different prompts: {:.6}", cosine);
+
+    // Different prompts should produce different outputs (cosine should not be ~1)
+    assert!(
+        cosine < 0.99,
+        "Different prompts should produce different outputs, cosine: {}",
+        cosine
+    );
+}
