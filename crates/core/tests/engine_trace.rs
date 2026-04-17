@@ -40,7 +40,7 @@ impl ModelBackend for TracingModel {
         );
 
         let mut next_tokens = Vec::new();
-        for i in 0.._seq_ids.len() {
+        for seq_id in _seq_ids.iter() {
             let token = if self.current_idx < self.sequence_to_return.len() {
                 let t = self.sequence_to_return[self.current_idx];
                 self.current_idx += 1;
@@ -49,7 +49,7 @@ impl ModelBackend for TracingModel {
                 151643 // EOS
             };
             next_tokens.push(token);
-            eprintln!("  seq {} -> token {}", _seq_ids[i], token);
+            eprintln!("  seq {} -> token {}", seq_id, token);
         }
 
         Ok(BatchOutput {
@@ -75,7 +75,7 @@ impl ModelBackend for TracingModel {
         input_tokens: &[Vec<TokenId>],
         _positions: &[Vec<usize>],
     ) -> vllm_traits::Result<Vec<Vec<f32>>> {
-        Ok(input_tokens.iter().map(|t| vec![0.0; 128]).collect())
+        Ok(input_tokens.iter().map(|_t| vec![0.0; 128]).collect())
     }
 }
 
