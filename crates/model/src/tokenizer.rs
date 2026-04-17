@@ -125,4 +125,60 @@ mod tests {
 
         assert!(!text.is_empty());
     }
+
+    #[cfg(feature = "tokenizers")]
+    #[test]
+    fn test_tokenizer_qwen3_hi_token() {
+        use std::path::PathBuf;
+
+        let model_path = PathBuf::from("/models/Qwen3-0.6B");
+        let tokenizer_path = model_path.join("tokenizer.json");
+
+        if tokenizer_path.exists() {
+            let tokenizer = Tokenizer::from_file(tokenizer_path.to_str().unwrap())
+                .expect("Failed to load tokenizer");
+
+            // Verify "hi" produces token 6023 (as per server logs)
+            let tokens = tokenizer.encode("hi");
+            assert_eq!(tokens.len(), 1, "hi should be a single token");
+            assert_eq!(tokens[0], 6023, "hi should be token 6023");
+
+            // Verify round-trip
+            let decoded = tokenizer.decode(&tokens);
+            assert!(decoded.contains("hi"), "Decoded text should contain 'hi'");
+        }
+    }
+
+    #[cfg(feature = "tokenizers")]
+    #[test]
+    fn test_tokenizer_qwen3_chat_prompt() {
+        use std::path::PathBuf;
+
+        let model_path = PathBuf::from("/models/Qwen3-0.6B");
+        let tokenizer_path = model_path.join("tokenizer.json");
+
+        if tokenizer_path.exists() {
+            let tokenizer = Tokenizer::from_file(tokenizer_path.to_str().unwrap())
+                .expect("Failed to load tokenizer");
+
+            // Build chat prompt exactly as server does
+            let im_start = "<|im_start|>";
+            let im_end = "<|im_end|>";
+            let prompt = format!(
+                "{}user\nhi{}{}\n{}assistant\n",
+                im_start, im_end, "\n", im_start
+            );
+
+            let tokens = tokenizer.encode(&prompt);
+            assert!(!tokens.is_empty(), "Chat prompt should produce tokens");
+            assert!(
+                tokens.len() < 100,
+                "Chat prompt should be reasonable length"
+            );
+
+            // Verify we can decode back
+            let decoded = tokenizer.decode(&tokens);
+            assert!(!decoded.is_empty(), "Should be able to decode tokens");
+        }
+    }
 }
