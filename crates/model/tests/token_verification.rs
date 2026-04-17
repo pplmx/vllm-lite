@@ -50,4 +50,54 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+    fn test_tokenizer_decode_top_k_tokens() {
+        let tokenizer = setup_tokenizer();
+
+        let sample_ranges = vec![(0, 1000), (10000, 11000), (150000, 151000)];
+
+        let mut all_samples = Vec::new();
+        for (start, end) in sample_ranges {
+            for token in start..end {
+                all_samples.push(token as u32);
+            }
+        }
+
+        let mut fail_count = 0;
+        let mut fail_tokens = Vec::new();
+
+        for token in &all_samples {
+            let decoded = tokenizer.decode(&[*token]);
+            if decoded.contains('\u{FFFD}') || decoded.trim().is_empty() {
+                fail_count += 1;
+                fail_tokens.push(*token);
+            }
+        }
+
+        let fail_rate = fail_count as f32 / all_samples.len() as f32;
+        println!(
+            "Token decode fail rate: {:.1}% ({}/{})",
+            fail_rate * 100.0,
+            fail_count,
+            all_samples.len()
+        );
+
+        if !fail_tokens.is_empty() {
+            println!(
+                "Failed tokens (first 10): {:?}",
+                &fail_tokens[..fail_tokens.len().min(10)]
+            );
+        }
+
+        assert!(
+            fail_rate < 0.1,
+            "{}/{} tokens ({:.1}%) failed to decode: {:?}",
+            fail_count,
+            all_samples.len(),
+            fail_rate * 100.0,
+            &fail_tokens[..fail_tokens.len().min(10)]
+        );
+    }
 }
