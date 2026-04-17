@@ -429,9 +429,9 @@ fn test_qwen3_generated_tokens_decodable() {
 #[cfg(feature = "real_weights")]
 fn test_qwen3_verify_model_weights() {
     use candle_core::Device;
-    use std::collections::HashMap;
+
     use std::path::Path;
-    use vllm_model::loader::format::{SafetensorsLoader, load_checkpoint};
+    use vllm_model::loader::format::load_checkpoint;
 
     let device = Device::Cpu;
     let weights = load_checkpoint(Path::new("/models/Qwen3-0.6B"), &device).unwrap();
@@ -1171,7 +1171,7 @@ fn test_qwen3_deterministic_same_input() {
 
     // Run same input multiple times
     let mut top_tokens = Vec::new();
-    let mut first_logits: Option<Vec<f32>> = None;
+    let mut _first_logits: Option<Vec<f32>> = None;
 
     for i in 0..3 {
         let (logits, _) = model
@@ -1191,7 +1191,7 @@ fn test_qwen3_deterministic_same_input() {
         top_tokens.push(top_token);
 
         if i == 0 {
-            first_logits = Some(logits.flatten_all().unwrap().to_vec1::<f32>().unwrap());
+            _first_logits = Some(logits.flatten_all().unwrap().to_vec1::<f32>().unwrap());
         }
     }
 

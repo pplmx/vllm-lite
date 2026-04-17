@@ -24,7 +24,7 @@ mod tests {
         let model_output_tokens = vec![13539u32, 47421u32, 60290u32];
 
         for token in &model_output_tokens {
-            let decoded = tokenizer.decode(&[*token as u32]);
+            let decoded = tokenizer.decode(&[(*token)]);
 
             println!("Token {} decodes to: {:?}", token, decoded);
 
@@ -43,7 +43,7 @@ mod tests {
             );
 
             assert!(
-                decoded.trim().len() >= 1,
+                !decoded.trim().is_empty(),
                 "Token {} decoded to empty/whitespace: {:?}",
                 token,
                 decoded
@@ -124,7 +124,7 @@ mod tests {
             let decoded = tokenizer.decode(&tokens);
 
             if !decoded.trim().to_lowercase().contains(&text.to_lowercase()) {
-                failed.push((text.clone(), tokens, decoded.clone()));
+                failed.push((text.to_string(), tokens, decoded.clone()));
             }
         }
 
