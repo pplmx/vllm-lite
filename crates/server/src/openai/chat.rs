@@ -34,7 +34,7 @@ pub fn build_prompt_from_messages(messages: &[ChatMessage]) -> String {
 
     let im_start = "<|im_start|>";
     let im_end = "<|im_end|>";
-    let bos_token = "<|endoftext|>";  // Qwen3 uses this as BOS
+    let bos_token = "<|endoftext|>"; // Qwen3 uses this as BOS
 
     // Add BOS token at the beginning
     prompt.push_str(bos_token);
@@ -378,7 +378,7 @@ mod tests {
         let prompt = build_prompt_from_messages(&messages);
         assert_eq!(
             prompt,
-            "<|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\n"
+            "<|endoftext|><|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\n"
         );
     }
 
@@ -399,7 +399,7 @@ mod tests {
         let prompt = build_prompt_from_messages(&messages);
         assert_eq!(
             prompt,
-            "<|im_start|>system\nYou are helpful<|im_end|>\n<|im_start|>user\nHi<|im_end|>\n<|im_start|>assistant\n"
+            "<|endoftext|><|im_start|>system\nYou are helpful<|im_end|>\n<|im_start|>user\nHi<|im_end|>\n<|im_start|>assistant\n"
         );
     }
 
@@ -425,7 +425,7 @@ mod tests {
         let prompt = build_prompt_from_messages(&messages);
         assert_eq!(
             prompt,
-            "<|im_start|>user\nHi<|im_end|>\n<|im_start|>assistant\nHello!<|im_end|>\n<|im_start|>user\nHow are you?<|im_end|>\n<|im_start|>assistant\n"
+            "<|endoftext|><|im_start|>user\nHi<|im_end|>\n<|im_start|>assistant\nHello!<|im_end|>\n<|im_start|>user\nHow are you?<|im_end|>\n<|im_start|>assistant\n"
         );
     }
 }

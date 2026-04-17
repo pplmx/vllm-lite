@@ -91,16 +91,39 @@ impl BatchComposer {
         let mut total_tokens = 0usize;
         let mut max_seq_len = 0usize;
 
+        tracing::debug!(
+            sequences_count = sequences.len(),
+            max_batch_size = self.config.max_batch_size,
+            max_token_budget = self.config.max_token_budget,
+            "compose_prefill: starting"
+        );
+
         for seq in sequences.into_iter().take(self.config.max_batch_size) {
             let start = seq.num_computed_tokens;
             let seq_len = seq.tokens.len();
             let tokens_to_process = seq_len.saturating_sub(start);
 
+            tracing::debug!(
+                seq_id = seq.id,
+                start = start,
+                seq_len = seq_len,
+                tokens_to_process = tokens_to_process,
+                total_tokens = total_tokens,
+                "compose_prefill: processing sequence"
+            );
+
             if tokens_to_process == 0 {
+                tracing::debug!("Skipping: tokens_to_process == 0");
                 continue;
             }
 
             if total_tokens + tokens_to_process > self.config.max_token_budget {
+                tracing::debug!(
+                    "Breaking: total_tokens {} + tokens_to_process {} > max_token_budget {}",
+                    total_tokens,
+                    tokens_to_process,
+                    self.config.max_token_budget
+                );
                 break;
             }
 

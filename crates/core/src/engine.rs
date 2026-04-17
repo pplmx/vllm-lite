@@ -388,6 +388,16 @@ impl<M: ModelBackend + 'static> Engine<M> {
 
     /// Execute regular forward pass (existing logic)
     fn execute_regular(&mut self, batch: &vllm_traits::Batch) -> Result<BatchOutput> {
+        let first_input_len = batch.input_tokens.first().map(|t| t.len()).unwrap_or(0);
+        tracing::debug!(
+            batch_seq_ids = ?batch.seq_ids,
+            batch_input_tokens_count = batch.input_tokens.len(),
+            batch_first_sequence_len = first_input_len,
+            batch_total_tokens = batch.input_tokens.iter().map(|t| t.len()).sum::<usize>(),
+            batch_is_prefill = ?batch.is_prefill,
+            "execute_regular: calling model.forward()"
+        );
+
         let mut model = self.target_model.lock().unwrap();
         model
             .forward(
@@ -408,8 +418,15 @@ impl<M: ModelBackend + 'static> Engine<M> {
         input_counts: Vec<usize>,
         start: std::time::Instant,
     ) -> Result<Vec<(SeqId, TokenId)>> {
+        tracing::debug!(
+            output_seq_ids = ?output.seq_ids,
+            output_tokens = ?output.next_tokens,
+            "process_output: received model output"
+        );
+
         let mut results = Vec::new();
         for (seq_id, token) in output.seq_ids.iter().zip(&output.next_tokens) {
+            tracing::debug!(seq_id = %seq_id, token = %token, "Sending token via channel");
             if let Some(tx) = self.response_txs.get(seq_id) {
                 let _ = tx.try_send(*token);
             }
