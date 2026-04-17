@@ -388,6 +388,113 @@ mod tests {
 
     #[test]
     #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+    fn test_qwen3_with_special_tokens() {
+        use candle_core::Device;
+        use vllm_model::loader::ModelLoader;
+
+        let device = Device::Cpu;
+        let loader = ModelLoader::builder(device)
+            .with_model_dir("/models/Qwen3-0.6B".to_string())
+            .with_kv_blocks(1024)
+            .build()
+            .expect("Failed to build loader");
+
+        let mut model = loader.load_model().expect("Failed to load model");
+        let tokenizer = setup_tokenizer();
+
+        // Server prompt tokens: [151643, 151644, 872, 198, 6023, 151645, 198, 151644, 77091, 198]
+        let server_tokens = vec![
+            151643u32, 151644, 872, 198, 6023, 151645, 198, 151644, 77091, 198,
+        ];
+        let positions: Vec<usize> = (0..server_tokens.len()).collect();
+
+        println!("Prompt: {:?}", tokenizer.decode(&server_tokens));
+
+        let (logits, _) = model
+            .forward_with_cache(&server_tokens, 0, &[0], &positions, true)
+            .expect("Forward failed");
+
+        // Get top token
+        use candle_core::D;
+        let seq_len = logits.dims()[1];
+        let next_token: u32 = logits
+            .narrow(1, seq_len - 1, 1)
+            .unwrap()
+            .squeeze(1)
+            .unwrap()
+            .squeeze(0)
+            .unwrap()
+            .argmax(D::Minus1)
+            .unwrap()
+            .to_vec0()
+            .unwrap();
+
+        let decoded = tokenizer.decode(&[next_token]);
+        println!("First generated token: {} -> '{}'", next_token, decoded);
+
+        assert!(next_token < 151936, "Token should be in vocab range");
+    }
+
+    #[test]
+    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+    fn test_server_token_stream_decode() {
+        let tokenizer = setup_tokenizer();
+
+        // Exact tokens from server output
+        let server_tokens = vec![
+            95060u32, 47625u32, 79128u32, 11433u32, 121471u32, 78348u32, 11234u32, 19906u32,
+            4342u32, 83454u32,
+        ];
+
+        println!("=== Decoding server token stream ===");
+        for token in &server_tokens {
+            let decoded = tokenizer.decode(&[*token]);
+            println!("Token {} -> '{}'", token, decoded);
+        }
+
+        // Batch decode
+        let batch = tokenizer.decode(&server_tokens);
+        println!("\nBatch decode: '{}'", batch);
+    }
+
+    #[test]
+    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+    fn test_server_problematic_tokens() {
+        let tokenizer = setup_tokenizer();
+
+        // Tokens that caused garbage in server output
+        let server_problematic = vec![121471u32, 78348u32, 11234u32];
+
+        println!("=== Testing server problematic tokens ===");
+        for &token in &server_problematic {
+            let decoded = tokenizer.decode(&[token]);
+            println!("Token {} -> '{}'", token, decoded);
+
+            // Check if it contains replacement char
+            if decoded.contains('\u{FFFD}') {
+                println!("  WARNING: Contains replacement character!");
+            }
+
+            // Check if it's printable
+            let is_printable = decoded
+                .chars()
+                .all(|c| c.is_alphanumeric() || c.is_whitespace() || c.is_ascii_punctuation());
+            if !is_printable {
+                println!("  Contains non-printable characters");
+            }
+        }
+
+        // Check batch decode
+        let batch = tokenizer.decode(&server_problematic);
+        println!("\nBatch decode: '{}'", batch);
+
+        if batch.contains('\u{FFFD}') {
+            println!("WARNING: Batch contains replacement character!");
+        }
+    }
+
+    #[test]
+    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
     fn test_special_token_filtering() {
         let tokenizer = setup_tokenizer();
 

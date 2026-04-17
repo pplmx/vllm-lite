@@ -34,6 +34,10 @@ pub fn build_prompt_from_messages(messages: &[ChatMessage]) -> String {
 
     let im_start = "<|im_start|>";
     let im_end = "<|im_end|>";
+    let bos_token = "<|endoftext|>";  // Qwen3 uses this as BOS
+
+    // Add BOS token at the beginning
+    prompt.push_str(bos_token);
 
     for msg in messages {
         match msg.role.as_str() {
@@ -100,8 +104,10 @@ async fn handle_chat(
     validate_chat_request(&req)?;
 
     let prompt = build_prompt_from_messages(&req.messages);
+    tracing::info!(prompt = %prompt, "Built prompt");
 
     let prompt_tokens = state.tokenizer.encode(&prompt);
+    tracing::info!(prompt_tokens_len = prompt_tokens.len(), first_tokens = ?&prompt_tokens[..prompt_tokens.len().min(20)], "Prompt tokens");
     let prompt_tokens_len = prompt_tokens.len();
     let max_tokens = req.max_tokens.unwrap_or(100) as usize;
     let total_max = prompt_tokens_len + max_tokens;
@@ -132,7 +138,13 @@ async fn handle_chat(
         tokens.push(token);
     }
 
-    let completion_text = clean_completion_text(&state.tokenizer.decode(&tokens));
+    tracing::info!(token_count = tokens.len(), first_tokens = ?&tokens[..tokens.len().min(10)], "Received tokens from engine");
+
+    let raw_decode = state.tokenizer.decode(&tokens);
+    tracing::info!(raw_decode_len = raw_decode.len(), "Raw decode length");
+
+    let completion_text = clean_completion_text(&raw_decode);
+    tracing::info!(completion_text = %completion_text, "Final completion text");
     let choice = ChatChoice {
         index: 0,
         message: ChatMessage {
