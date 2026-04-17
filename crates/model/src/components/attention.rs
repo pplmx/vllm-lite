@@ -122,6 +122,9 @@ pub fn tiled_attention(
 
     for tile_idx in 0..num_tiles {
         let start = tile_idx * tile_size;
+        if start >= seq_len {
+            break;
+        }
         let end = (start + tile_size).min(seq_len);
         let tile_len = end - start;
 

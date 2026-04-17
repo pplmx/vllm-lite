@@ -364,6 +364,7 @@ impl Qwen3Model {
                     .map_err(|e| EngineError::new(e.to_string()))?;
             }
         } else {
+            let decode_position = [num_computed_tokens];
             for (layer_idx, layer) in self.layers.iter_mut().enumerate() {
                 hidden = layer
                     .forward_decode(
@@ -372,7 +373,7 @@ impl Qwen3Model {
                         layer_idx,
                         block_ids,
                         num_computed_tokens,
-                        positions,
+                        &decode_position,
                     )
                     .map_err(|e| EngineError::new(e.to_string()))?;
             }
@@ -493,7 +494,7 @@ impl ModelBackend for Qwen3Model {
                     .map_err(|e| EngineError::new(e.to_string()))?;
 
                 use candle_core::D;
-                // logits shape: [batch=1, vocab_size] for decode
+                // logits shape: [batch=1, vocab_size] for decode (2D)
                 // argmax on last dim gives [batch=1]
                 // squeeze to scalar
                 let next = logits
@@ -973,12 +974,12 @@ mod tests {
         let device = Device::Cpu;
         let mut model = Qwen3Model::new(config, device, 1024).unwrap();
 
-        let _seq_ids = vec![1u64];
-        let _input_tokens = vec![vec![42u32]];
-        let _positions = vec![vec![7]];
-        let _kv_block_ids = vec![vec![0usize]];
-        let _num_computed_tokens = vec![7usize];
-        let _is_prefill = vec![false];
+        let _seq_ids = [1u64];
+        let _input_tokens = [vec![42u32]];
+        let _positions = [vec![7]];
+        let _kv_block_ids = [vec![0usize]];
+        let _num_computed_tokens = [7usize];
+        let _is_prefill = [false];
 
         let (logits, hidden) = model
             .forward_with_cache(&[42], 7, &[0], &[7], false)
