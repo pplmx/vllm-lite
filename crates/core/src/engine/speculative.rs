@@ -130,12 +130,14 @@ impl<M: ModelBackend> super::Engine<M> {
             let mut verify_tokens = batch.input_tokens[i].clone();
             verify_tokens.extend(drafts.iter().cloned());
 
+            // All batch-level arrays should have length 1 (one sequence per batch entry)
+            // Token-level info is encoded in the single Vec
             let verify_positions: Vec<usize> = (0..verify_tokens.len()).collect();
-            let verify_kv_block_ids: Vec<Vec<usize>> =
-                vec![batch.kv_block_ids[i].clone(); verify_tokens.len()];
-            let verify_num_computed: Vec<usize> =
-                vec![batch.num_computed_tokens[i] + drafts.len(); verify_tokens.len()];
-            let verify_is_prefill: Vec<bool> = vec![false; verify_tokens.len()];
+            let verify_kv_block_ids: Vec<Vec<usize>> = vec![batch.kv_block_ids[i].clone()];
+            let verify_num_computed: Vec<usize> = vec![batch.num_computed_tokens[i] + drafts.len()];
+            // For verification with multiple tokens, treat as prefill to get all logits
+            // then extract the specific tokens for comparison
+            let verify_is_prefill: Vec<bool> = vec![true];
 
             let target_output = self.target_model.lock().unwrap().forward(
                 &[*seq_id],
