@@ -242,3 +242,188 @@ fn test_speculative_verify_batch_dimensions_consistency() {
         "is_prefill should have 1 entry for single sequence batch"
     );
 }
+
+#[test]
+fn test_prefill_batch_single_sequence() {
+    use std::sync::Arc;
+    use vllm_core::scheduler::BatchComposer;
+    use vllm_core::types::{Priority, SamplingParams, Sequence, Status};
+
+    fn make_seq(id: u64, tokens: Vec<u32>, status: Status) -> Sequence {
+        Sequence {
+            id,
+            tokens,
+            kv_blocks: Arc::new(vec![id as usize]),
+            num_computed_tokens: 0,
+            prompt_len: 5,
+            status,
+            max_tokens: 10,
+            sampling_params: SamplingParams::default(),
+            consecutive_decode_rounds: 0,
+            priority: Priority::default(),
+        }
+    }
+
+    let composer = BatchComposer::default();
+
+    // Test prefill with single sequence
+    let seq1 = make_seq(1, vec![1, 2, 3, 4, 5], Status::Waiting);
+    let batch = composer.compose(vec![seq1], vllm_core::types::Phase::Prefill);
+
+    assert_eq!(batch.seq_ids.len(), 1, "Batch should have 1 sequence");
+    assert_eq!(
+        batch.input_tokens[0],
+        vec![1, 2, 3, 4, 5],
+        "All tokens should be in prefill batch"
+    );
+    assert!(
+        batch.is_prefill[0],
+        "is_prefill should be true for first prefill"
+    );
+}
+
+#[test]
+fn test_prefill_batch_with_partial_computed() {
+    use std::sync::Arc;
+    use vllm_core::scheduler::BatchComposer;
+    use vllm_core::types::{Priority, SamplingParams, Sequence, Status};
+
+    fn make_seq(id: u64, tokens: Vec<u32>, status: Status, num_computed: usize) -> Sequence {
+        Sequence {
+            id,
+            tokens,
+            kv_blocks: Arc::new(vec![id as usize]),
+            num_computed_tokens: num_computed,
+            prompt_len: 10,
+            status,
+            max_tokens: 20,
+            sampling_params: SamplingParams::default(),
+            consecutive_decode_rounds: 0,
+            priority: Priority::default(),
+        }
+    }
+
+    let composer = BatchComposer::default();
+
+    // Test prefill with partial computed tokens (simulating chunked prefill)
+    let seq1 = make_seq(
+        1,
+        vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        Status::Prefilling,
+        5,
+    );
+    let batch = composer.compose(vec![seq1], vllm_core::types::Phase::Prefill);
+
+    assert_eq!(batch.seq_ids.len(), 1, "Batch should have 1 sequence");
+    assert_eq!(
+        batch.input_tokens[0],
+        vec![6, 7, 8, 9, 10],
+        "Only remaining tokens should be in batch"
+    );
+    assert_eq!(
+        batch.positions[0],
+        vec![5, 6, 7, 8, 9],
+        "Positions should start from num_computed"
+    );
+    assert!(
+        !batch.is_prefill[0],
+        "is_prefill should be false for partial prefill"
+    );
+}
+
+#[test]
+fn test_decode_batch_contains_only_last_token() {
+    use std::sync::Arc;
+    use vllm_core::scheduler::BatchComposer;
+    use vllm_core::types::{Priority, SamplingParams, Sequence, Status};
+
+    fn make_seq(id: u64, tokens: Vec<u32>, status: Status, prompt_len: usize) -> Sequence {
+        Sequence {
+            id,
+            tokens,
+            kv_blocks: Arc::new(vec![id as usize]),
+            num_computed_tokens: 0,
+            prompt_len,
+            status,
+            max_tokens: 15,
+            sampling_params: SamplingParams::default(),
+            consecutive_decode_rounds: 0,
+            priority: Priority::default(),
+        }
+    }
+
+    let composer = BatchComposer::default();
+
+    // After prefill (prompt_len=5) and 2 decode steps, tokens=[1,2,3,4,5,6,7]
+    let seq1 = make_seq(1, vec![1, 2, 3, 4, 5, 6, 7], Status::Decoding, 5);
+    let batch = composer.compose(vec![seq1], vllm_core::types::Phase::Decode);
+
+    assert_eq!(batch.seq_ids.len(), 1);
+    // Should only contain the last token
+    assert_eq!(
+        batch.input_tokens[0],
+        vec![7],
+        "Decode should only have last token"
+    );
+    // Position should be tokens_len - 1 = 6 (0-indexed)
+    assert_eq!(
+        batch.positions[0],
+        vec![6],
+        "Position should be last token index"
+    );
+    // num_computed should be tokens_len - 1 = 6 (tokens already in cache)
+    assert_eq!(
+        batch.num_computed_tokens[0], 6,
+        "num_computed should be all but last token"
+    );
+    assert!(
+        !batch.is_prefill[0],
+        "is_prefill should be false for decode"
+    );
+}
+
+#[test]
+fn test_decode_batch_position_is_tokens_len_minus_one() {
+    use std::sync::Arc;
+    use vllm_core::scheduler::BatchComposer;
+    use vllm_core::types::{Priority, SamplingParams, Sequence, Status};
+
+    fn make_seq(id: u64, tokens: Vec<u32>) -> Sequence {
+        let prompt_len = tokens.len();
+        Sequence {
+            id,
+            tokens,
+            kv_blocks: Arc::new(vec![id as usize]),
+            num_computed_tokens: 0,
+            prompt_len,
+            status: Status::Decoding,
+            max_tokens: 20,
+            sampling_params: SamplingParams::default(),
+            consecutive_decode_rounds: 0,
+            priority: Priority::default(),
+        }
+    }
+
+    let composer = BatchComposer::default();
+
+    // Test various token lengths
+    let test_cases = vec![
+        (1, vec![1], 0),         // 1 token -> position 0
+        (2, vec![1, 2], 1),      // 2 tokens -> position 1
+        (3, vec![1, 2, 3], 2),   // 3 tokens -> position 2
+        (10, vec![0u32; 10], 9), // 10 tokens -> position 9
+    ];
+
+    for (id, tokens, expected_pos) in test_cases {
+        let seq = make_seq(id, tokens.clone());
+        let batch = composer.compose(vec![seq], vllm_core::types::Phase::Decode);
+        assert_eq!(
+            batch.positions[0][0],
+            expected_pos,
+            "For {} tokens, position should be {}, got {}",
+            tokens.len(),
+            expected_pos,
+            batch.positions[0][0]
+        );
+    }
+}
