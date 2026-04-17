@@ -143,4 +143,61 @@ mod tests {
             test_strings.len()
         );
     }
+
+    #[test]
+    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+    fn test_model_token_to_text_pipeline() {
+        use candle_core::Device;
+        use vllm_model::loader::ModelLoader;
+
+        let device = Device::Cpu;
+        let loader = ModelLoader::builder(device)
+            .with_model_dir("/models/Qwen3-0.6B".to_string())
+            .with_kv_blocks(1024)
+            .build()
+            .expect("Failed to build loader");
+
+        let mut model = loader.load_model().expect("Failed to load model");
+        let tokenizer = setup_tokenizer();
+
+        let tokens = vec![6023u32]; // "hi"
+        let positions: Vec<usize> = vec![0];
+
+        let (logits, _) = model
+            .forward_with_cache(&tokens, 0, &[0], &positions, true)
+            .expect("Forward failed");
+
+        let top_token: u32 = logits
+            .squeeze(0)
+            .unwrap()
+            .squeeze(0)
+            .unwrap()
+            .argmax(candle_core::D::Minus1)
+            .unwrap()
+            .to_vec0()
+            .unwrap();
+
+        println!("Top token: {}", top_token);
+
+        let text = tokenizer.decode(&[top_token]);
+        println!("Decoded text: {:?}", text);
+
+        assert!(!text.is_empty(), "Decoded text should not be empty");
+
+        assert!(
+            !text.contains('\u{FFFD}'),
+            "Decoded text contains replacement char: {:?}",
+            text
+        );
+
+        let meaningful_chars: usize = text.chars().filter(|c| c.is_alphabetic()).count();
+
+        assert!(
+            meaningful_chars > 0,
+            "Decoded text should contain some letters, got: {:?}",
+            text
+        );
+
+        println!("Model output '{}' decodes to '{}'", top_token, text);
+    }
 }
