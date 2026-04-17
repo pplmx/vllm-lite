@@ -103,16 +103,6 @@ impl BatchComposer {
             let seq_len = seq.tokens.len();
             let tokens_to_process = seq_len.saturating_sub(start);
 
-            eprintln!(
-                "compose_prefill: seq_id={}, start={}, seq_len={}, tokens_to_process={}, total_tokens={}, max_token_budget={}",
-                seq.id,
-                start,
-                seq_len,
-                tokens_to_process,
-                total_tokens,
-                self.config.max_token_budget
-            );
-
             tracing::debug!(
                 seq_id = seq.id,
                 start = start,
@@ -128,10 +118,6 @@ impl BatchComposer {
             }
 
             if total_tokens + tokens_to_process > self.config.max_token_budget {
-                eprintln!(
-                    "compose_prefill: BREAKING due to token budget. total={} + to_process={} > budget={}",
-                    total_tokens, tokens_to_process, self.config.max_token_budget
-                );
                 tracing::debug!(
                     "Breaking: total_tokens {} + tokens_to_process {} > max_token_budget {}",
                     total_tokens,
@@ -160,15 +146,10 @@ impl BatchComposer {
         let total = total_tokens;
         let max_len = max_seq_len;
 
-        eprintln!(
-            "compose_prefill: built batch with {} seqs, total_tokens={}, input_tokens[0].len()={}, positions[0].len()={}",
-            seq_ids.len(),
-            total,
-            input_tokens
-                .first()
-                .map(|t: &Vec<TokenId>| t.len())
-                .unwrap_or(0),
-            positions.first().map(|p: &Vec<usize>| p.len()).unwrap_or(0)
+        tracing::debug!(
+            batch_seq_count = seq_ids.len(),
+            total_tokens = total,
+            "compose_prefill: batch built"
         );
 
         Batch {
@@ -210,9 +191,11 @@ impl BatchComposer {
             // If tokens_len=1, position=0 (first token at index 0)
             // If tokens_len=10, position=9 (10th token at index 9)
             let position = tokens_len - 1;
-            eprintln!(
-                "DEBUG compose_decode: seq_id={}, tokens_len={}, position={}",
-                seq.id, tokens_len, position
+            tracing::debug!(
+                seq_id = seq.id,
+                tokens_len = tokens_len,
+                position = position,
+                "compose_decode: processing sequence"
             );
 
             input_tokens.push(vec![last_token]);

@@ -7,6 +7,7 @@ pub struct Tokenizer {
     #[cfg(not(feature = "tokenizers"))]
     _placeholder: (),
     vocab_size: usize,
+    special_tokens: Vec<String>,
 }
 
 impl Tokenizer {
@@ -17,6 +18,11 @@ impl Tokenizer {
             #[cfg(not(feature = "tokenizers"))]
             _placeholder: (),
             vocab_size: 151936,
+            special_tokens: vec![
+                "<|endoftext|>".to_string(),
+                "<|im_end|>".to_string(),
+                "<|im_start|>".to_string(),
+            ],
         }
     }
 
@@ -25,9 +31,28 @@ impl Tokenizer {
         let tokenizer =
             HFTokenizer::from_file(path).map_err(|e| format!("Failed to load tokenizer: {}", e))?;
         let vocab_size = tokenizer.get_vocab_size(true);
+
+        let mut special_tokens = Vec::new();
+        for id in tokenizer.get_added_tokens_decoder().keys() {
+            if let Some(token) = tokenizer.id_to_token(*id) {
+                if !token.starts_with('▁') && token.len() > 1 && token.starts_with('<') {
+                    special_tokens.push(token);
+                }
+            }
+        }
+
+        if special_tokens.is_empty() {
+            special_tokens = vec![
+                "<|endoftext|>".to_string(),
+                "<|im_end|>".to_string(),
+                "<|im_start|>".to_string(),
+            ];
+        }
+
         Ok(Self {
             inner: Some(Box::new(tokenizer)),
             vocab_size,
+            special_tokens,
         })
     }
 
@@ -37,6 +62,11 @@ impl Tokenizer {
         Ok(Self {
             _placeholder: (),
             vocab_size: 151936,
+            special_tokens: vec![
+                "<|endoftext|>".to_string(),
+                "<|im_end|>".to_string(),
+                "<|im_start|>".to_string(),
+            ],
         })
     }
 
@@ -67,6 +97,22 @@ impl Tokenizer {
 
     pub fn vocab_size(&self) -> usize {
         self.vocab_size
+    }
+
+    pub fn special_tokens(&self) -> &[String] {
+        &self.special_tokens
+    }
+
+    pub fn is_special_token(&self, text: &str) -> bool {
+        self.special_tokens.iter().any(|t| t.as_str() == text)
+    }
+
+    pub fn clean_special_tokens(&self, text: &str) -> String {
+        let mut result = text.to_string();
+        for token in &self.special_tokens {
+            result = result.replace(token.as_str(), "");
+        }
+        result.trim().to_string()
     }
 }
 

@@ -235,8 +235,7 @@ impl<M: ModelBackend + 'static> Engine<M> {
                 if let Err(e) = result {
                     self.error_count += 1;
                     self.last_error = Some(e.to_string());
-                    eprintln!("ERROR in step {}: {}", step_count, e);
-                    error!(error = %e, "Engine step error");
+                    error!(step = step_count, error = %e, "Engine step error");
                 }
             }
 

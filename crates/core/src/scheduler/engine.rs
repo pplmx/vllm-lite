@@ -341,22 +341,22 @@ impl SchedulerEngine {
         next_tokens: &[TokenId],
         input_token_counts: &[usize],
     ) {
-        eprintln!(
-            "DEBUG update: seq_ids.len()={}, next_tokens.len()={}, input_counts.len()={}",
-            seq_ids.len(),
-            next_tokens.len(),
-            input_token_counts.len()
+        tracing::debug!(
+            seq_ids_len = seq_ids.len(),
+            next_tokens_len = next_tokens.len(),
+            input_counts_len = input_token_counts.len(),
+            "Scheduler update"
         );
         for ((&seq_id, &token), &input_count) in
             seq_ids.iter().zip(next_tokens).zip(input_token_counts)
         {
             if let Some(seq) = self.running.iter_mut().find(|s| s.id == seq_id) {
-                eprintln!(
-                    "DEBUG update: seq_id={}, tokens.len()={}, status={:?}, max_tokens={}",
-                    seq_id,
-                    seq.tokens.len(),
-                    seq.status,
-                    seq.max_tokens
+                tracing::debug!(
+                    seq_id = seq_id,
+                    tokens_len = seq.tokens.len(),
+                    status = ?seq.status,
+                    max_tokens = seq.max_tokens,
+                    "Scheduler update: processing sequence"
                 );
                 // Update status based on progress
                 if seq.status == Status::Waiting || seq.status == Status::Prefilling {
@@ -369,7 +369,6 @@ impl SchedulerEngine {
                 }
 
                 seq.tokens.push(token);
-                eprintln!("DEBUG update: after push tokens.len()={}", seq.tokens.len());
                 seq.consecutive_decode_rounds += 1;
 
                 // Dispatch observer event for token generation

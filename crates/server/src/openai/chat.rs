@@ -15,18 +15,12 @@ use tokio::sync::mpsc;
 use super::types::*;
 use crate::ApiState;
 
-const SPECIAL_TOKENS_TO_SKIP: &[&str] = &["<|endoftext|>", "<|im_end|>", "<|im_start|>"];
-
-fn should_skip_token_text(text: &str) -> bool {
-    text.is_empty() || SPECIAL_TOKENS_TO_SKIP.contains(&text)
+fn should_skip_token_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &str) -> bool {
+    text.is_empty() || tokenizer.is_special_token(text)
 }
 
-fn clean_completion_text(text: &str) -> String {
-    let mut result = text.to_string();
-    for token in SPECIAL_TOKENS_TO_SKIP {
-        result = result.replace(*token, "");
-    }
-    result.trim().to_string()
+fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &str) -> String {
+    tokenizer.clean_special_tokens(text)
 }
 
 pub fn build_prompt_from_messages(messages: &[ChatMessage]) -> String {
@@ -143,7 +137,7 @@ async fn handle_chat(
     let raw_decode = state.tokenizer.decode(&tokens);
     tracing::info!(raw_decode_len = raw_decode.len(), "Raw decode length");
 
-    let completion_text = clean_completion_text(&raw_decode);
+    let completion_text = clean_completion_text(&state.tokenizer, &raw_decode);
     tracing::info!(completion_text = %completion_text, "Final completion text");
     let choice = ChatChoice {
         index: 0,
@@ -209,7 +203,7 @@ pub(crate) async fn chat_completions(
                 match rx.recv().await {
                     Some(token) => {
                         let text = tokenizer.decode(&[token]);
-                        if should_skip_token_text(&text) {
+                        if should_skip_token_text(&tokenizer, &text) {
                             return Some((Ok::<Event, Infallible>(Event::default().data("")), rx));
                         }
                         let chunk = ChatChunk::new(
@@ -265,55 +259,70 @@ pub(crate) async fn chat_completions(
 mod tests {
     use super::*;
     use axum::http::StatusCode;
+    use vllm_model::tokenizer::Tokenizer;
+
+    fn test_tokenizer() -> Tokenizer {
+        Tokenizer::new()
+    }
 
     #[test]
     fn test_should_skip_token_text_empty() {
-        assert!(should_skip_token_text(""));
+        let tokenizer = test_tokenizer();
+        assert!(should_skip_token_text(&tokenizer, ""));
     }
 
     #[test]
     fn test_should_skip_token_text_eos() {
-        assert!(should_skip_token_text("<|endoftext|>"));
+        let tokenizer = test_tokenizer();
+        assert!(should_skip_token_text(&tokenizer, "<|endoftext|>"));
     }
 
     #[test]
     fn test_should_skip_token_text_im_end() {
-        assert!(should_skip_token_text("<|im_end|>"));
+        let tokenizer = test_tokenizer();
+        assert!(should_skip_token_text(&tokenizer, "<|im_end|>"));
     }
 
     #[test]
     fn test_should_skip_token_text_im_start() {
-        assert!(should_skip_token_text("<|im_start|>"));
+        let tokenizer = test_tokenizer();
+        assert!(should_skip_token_text(&tokenizer, "<|im_start|>"));
     }
 
     #[test]
     fn test_should_skip_token_text_normal() {
-        assert!(!should_skip_token_text("hello"));
-        assert!(!should_skip_token_text("gypt"));
-        assert!(!should_skip_token_text(" world"));
+        let tokenizer = test_tokenizer();
+        assert!(!should_skip_token_text(&tokenizer, "hello"));
+        assert!(!should_skip_token_text(&tokenizer, "gypt"));
+        assert!(!should_skip_token_text(&tokenizer, " world"));
     }
 
     #[test]
     fn test_clean_completion_text_removes_eos() {
-        let result = clean_completion_text("gyptabo<|endoftext|>");
+        let tokenizer = test_tokenizer();
+        let result = clean_completion_text(&tokenizer, "gyptabo<|endoftext|>");
         assert_eq!(result, "gyptabo");
     }
 
     #[test]
     fn test_clean_completion_text_removes_im_end() {
-        let result = clean_completion_text("hi<|im_end|>world");
+        let tokenizer = test_tokenizer();
+        let result = clean_completion_text(&tokenizer, "hi<|im_end|>world");
         assert_eq!(result, "hiworld");
     }
 
     #[test]
     fn test_clean_completion_text_removes_all_special() {
-        let result = clean_completion_text("hello<|endoftext|><|im_end|><|im_start|>world");
+        let tokenizer = test_tokenizer();
+        let result =
+            clean_completion_text(&tokenizer, "hello<|endoftext|><|im_end|><|im_start|>world");
         assert_eq!(result, "helloworld");
     }
 
     #[test]
     fn test_clean_completion_text_trims_whitespace() {
-        let result = clean_completion_text("  hello  ");
+        let tokenizer = test_tokenizer();
+        let result = clean_completion_text(&tokenizer, "  hello  ");
         assert_eq!(result, "hello");
     }
 
