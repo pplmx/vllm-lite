@@ -212,7 +212,7 @@ mod tests {
 
         let eos_token = 151643u32;
 
-        let test_sequences = vec![
+        let test_sequences = [
             vec![13539u32, 47421u32, eos_token],
             vec![6023u32, eos_token],
             vec![6023u32, 6024u32, 6025u32, eos_token],
@@ -231,7 +231,7 @@ mod tests {
     #[test]
     #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
     fn test_qwen3_multi_step_generation() {
-        use candle_core::{Device, Tensor};
+        use candle_core::Device;
         use vllm_model::loader::ModelLoader;
 
         let device = Device::Cpu;
