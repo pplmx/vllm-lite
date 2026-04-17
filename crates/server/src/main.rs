@@ -168,6 +168,57 @@ async fn main() {
         }
     }
 
+    fn download_tokenizer_from_hf(model_path: &str, repo: Option<&str>) -> Result<(), String> {
+        let repo_name = repo.unwrap_or("Qwen/Qwen3-0.6B");
+        let tokenizer_url = format!(
+            "https://huggingface.co/{}/resolve/main/tokenizer.json",
+            repo_name
+        );
+
+        let dest_path = PathBuf::from(model_path).join("tokenizer.json");
+        let backup_path = dest_path.with_extension("json.bak");
+
+        tracing::info!("Downloading tokenizer from {}", tokenizer_url);
+
+        let client = reqwest::blocking::Client::new();
+        let response = client
+            .get(&tokenizer_url)
+            .send()
+            .map_err(|e| format!("Failed to download tokenizer: {}", e))?;
+
+        let bytes = response
+            .bytes()
+            .map_err(|e| format!("Failed to read response: {}", e))?;
+
+        std::fs::copy(&dest_path, &backup_path)
+            .map_err(|e| format!("Failed to backup old tokenizer: {}", e))?;
+
+        std::fs::write(&dest_path, &bytes)
+            .map_err(|e| format!("Failed to write tokenizer: {}", e))?;
+
+        tracing::info!(
+            "Tokenizer updated successfully (backup at {:?})",
+            backup_path
+        );
+
+        serde_json::from_slice::<serde_json::Value>(&bytes)
+            .map_err(|e| format!("Invalid tokenizer JSON: {}", e))?;
+
+        Ok(())
+    }
+
+    if cli.model.download_tokenizer {
+        match download_tokenizer_from_hf(&model_path, cli.model.tokenizer_repo.as_deref()) {
+            Ok(()) => {
+                tracing::info!("Tokenizer download complete");
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "Failed to download tokenizer");
+                eprintln!("Error: {}", e);
+            }
+        }
+    }
+
     let (msg_tx, msg_rx) = mpsc::unbounded_channel::<EngineMessage>();
     let engine_shutdown_tx = msg_tx.clone();
 
