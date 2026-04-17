@@ -30,9 +30,37 @@
 let token = 13539u32;  // 模型当前输出的 token
 let decoded = tokenizer.decode(&[token]);
 
-// 验证
-assert!(decoded.is_valid_text(), "Token {} should decode to valid text, got: {:?}", token, decoded);
-assert!(!decoded.contains("�"), "Token {} should not produce replacement char", token);
+println!("Token {} decodes to: {:?}", token, decoded);
+
+// 验证 1: 不应该是乱码字符
+assert!(
+    !decoded.contains('\u{FFFD}'),
+    "Token {} should not decode to replacement char, got: {:?}",
+    token, decoded
+);
+
+// 验证 2: 应该是可打印的英文文本
+assert!(
+    is_printable_text(&decoded),
+    "Token {} should decode to printable text, got: {:?}",
+    token, decoded
+);
+
+// 验证 3: 不应该过短（单个字节的特殊字符）
+assert!(
+    decoded.trim().len() >= 1,
+    "Token {} decoded to empty/whitespace: {:?}",
+    token, decoded
+);
+```
+
+**辅助函数定义**：
+```rust
+fn is_printable_text(s: &str) -> bool {
+    !s.is_empty()
+        && !s.chars().any(|c| c == '\u{FFFD}')  // no replacement char
+        && s.chars().any(|c| c.is_alphabetic())  // has some letters
+}
 ```
 
 #### Test 1.2: `test_tokenizer_decode_top_k_tokens`
@@ -40,17 +68,28 @@ assert!(!decoded.contains("�"), "Token {} should not produce replacement char"
 
 ```rust
 // 测试 vocab 范围 [0, 1000], [10000, 20000], [150000-1]
-// 随机采样 100 个 token，验证解码成功率
+// 采样测试，验证解码成功率
 
 let mut fail_count = 0;
+let mut fail_tokens = Vec::new();
+
 for token in sample_tokens {
     let decoded = tokenizer.decode(&[token]);
-    if !is_valid_text(&decoded) {
-        fail_count++;
+    if decoded.contains('\u{FFFD}') || decoded.trim().is_empty() {
+        fail_count += 1;
+        fail_tokens.push(token);
     }
 }
 
-assert!(fail_count == 0, "{}/{} tokens failed to decode", fail_count, total);
+// 允许少量失败（特殊 token），但不应该太多
+let fail_rate = fail_count as f32 / sample_tokens.len() as f32;
+println!("Token decode fail rate: {:.1}% ({}/{})", fail_rate * 100.0, fail_count, sample_tokens.len());
+
+assert!(
+    fail_rate < 0.1,  // 允许 <10% 失败率（特殊 token）
+    "{}/{} tokens failed to decode: {:?}",
+    fail_count, sample_tokens.len(), fail_tokens
+);
 ```
 
 #### Test 1.3: `test_tokenizer_roundtrip_vocab`
@@ -98,10 +137,24 @@ struct TokenTrace {
 let model_output = vec![13539u32, 47421u32, 60290u32];
 let text = tokenizer.decode(&model_output);
 
+println!("Decoded text: {:?}", text);
+
 // 验证
-assert!(text.len() > 0);
-assert!(!text.contains("�"), "Decoded text contains replacement char");
-assert!(is_printable_ascii(&text) || is_valid_utf8(&text));
+assert!(!text.is_empty(), "Decoded text should not be empty");
+assert!(
+    !text.contains('\u{FFFD}'),
+    "Decoded text contains replacement char"
+);
+
+// 验证文本有内容（不是只有空格/标点）
+let meaningful_chars: usize = text.chars()
+    .filter(|c| c.is_alphabetic())
+    .count();
+assert!(
+    meaningful_chars > 0,
+    "Decoded text should contain some letters, got: {:?}",
+    text
+);
 ```
 
 ---
@@ -138,29 +191,26 @@ crates/server/tests/
 
 ## 4. 预期结果与判定
 
+### 术语说明
+- **当前状态**：测试运行时的实际结果（可能是 PASS 或 FAIL）
+- **修复后期望**：问题修复后测试应该的状态（应该是 PASS）
+
 ### 测试结果矩阵
 
-| 测试 | 预期结果 | 失败含义 |
-|------|----------|----------|
-| Test 1.1 | ✓ PASS | tokenizer 无法解码模型输出的 token |
-| Test 1.2 | ✓ PASS | tokenizer vocab 不完整 |
-| Test 1.3 | ✓ PASS | tokenizer roundtrip 失败 |
-| Test 2.1 | ✓ PASS | 某个 step 开始产生无效 token |
-| Test 2.2 | ✓ PASS | 多 token 拼接产生乱码 |
+| 测试 | 当前状态期望 | 修复后期望 | 失败含义 |
+|------|--------------|------------|----------|
+| Test 1.1 | **FAIL** | PASS | tokenizer 无法正确解码 token 13539 |
+| Test 1.2 | FAIL 或 PASS | PASS | tokenizer vocab 不完整 |
+| Test 1.3 | FAIL 或 PASS | PASS | tokenizer roundtrip 失败 |
+| Test 2.1 | FAIL | PASS | 某个 step 开始产生无效 token |
+| Test 2.2 | FAIL | PASS | 多 token 拼接产生乱码 |
+
+**核心假设**：Test 1.1 在当前状态下应该 FAIL，因为问题是 token 13539 无法被正确解码。
 
 ### 成功标准
-- 所有测试 PASS
-- 端到端输出可读的英文文本（不需要完美，但要有意义）
-
-### 失败根因定位
-
-| 失败测试 | 最可能根因 | 修复方向 |
-|----------|------------|----------|
-| Test 1.1 | Token 13539 是特殊/unknown token | 检查 vocab 映射 |
-| Test 1.2 | 大量 token 解码失败 | tokenizer 配置错误 |
-| Test 1.3 | Roundtrip 失败 | tokenizer 实现问题 |
-| Test 2.1 | Step N 开始出问题 | 定位到具体 layer |
-| Test 2.2 | 多 token 拼接失败 | 特殊 token 处理问题 |
+- Test 1.1 **在当前状态 FAIL**（定位到根因）
+- 修复后所有测试 PASS
+- 端到端输出可读的英文文本
 
 ---
 
@@ -204,20 +254,55 @@ crates/server/tests/
 
 ---
 
-## 8. 相关文件
+## 8. 测试 Setup
 
-需要修改/创建的测试文件：
-- `crates/model/tests/token_verification.rs` (新建)
-- `crates/model/tests/integration_trace.rs` (新建)
+### Tokenizer 初始化
 
-依赖：
-- tokenizer 加载逻辑
-- ModelLoader
-- 测试 fixture 或真实权重
+```rust
+#[cfg(feature = "tokenizers")]
+fn setup_tokenizer() -> Tokenizer {
+    let path = PathBuf::from("/models/Qwen3-0.6B/tokenizer.json");
+    if !path.exists() {
+        panic!("Tokenizer not found at {:?}", path);
+    }
+    Tokenizer::from_file(path.to_str().unwrap())
+        .expect("Failed to load tokenizer")
+}
+
+#[cfg(not(feature = "tokenizers"))]
+fn setup_tokenizer() -> Tokenizer {
+    Tokenizer::new()  // fallback, 但可能无法正确解码
+}
+```
+
+### Feature Gate
+
+所有 token 验证测试需要 `real_weights` feature（访问真实 tokenizer）和 `tokenizers` feature（使用 HuggingFace tokenizer）。
+
+```rust
+#[test]
+#[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+fn test_tokenizer_decode_model_output() {
+    let tokenizer = setup_tokenizer();
+    // ...
+}
+```
 
 ---
 
-## 9. 时间估算
+## 9. 相关文件与依赖
+
+需要创建/修改的测试文件：
+- `crates/model/tests/token_verification.rs` (新建)
+
+依赖：
+- tokenizer 实现: `crates/model/src/tokenizer.rs`
+- Tokenizer 类型: `vllm_model::tokenizer::Tokenizer`
+- 测试 feature: `real_weights`, `tokenizers`
+
+---
+
+## 10. 时间估算
 
 | 任务 | 估计时间 |
 |------|----------|
