@@ -364,7 +364,8 @@ impl Qwen3Model {
                     .map_err(|e| EngineError::new(e.to_string()))?;
             }
         } else {
-            let decode_position = [num_computed_tokens];
+            let position = positions[0]; // positions contains the current decode position
+            let decode_position = [position];
             for (layer_idx, layer) in self.layers.iter_mut().enumerate() {
                 hidden = layer
                     .forward_decode(

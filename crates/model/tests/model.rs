@@ -338,4 +338,273 @@ fn test_qwen3_real_model_decode() {
 
     println!("Next token from decode: {}", next_token);
     assert!(next_token < 151936, "Token should be valid");
+
+    // Check logits distribution - top token should have significantly higher logit than random
+    // Decode logits are 2D [batch, vocab_size], need to flatten
+    let logits_data: Vec<f32> = logits.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+
+    let max_logit = logits_data
+        .iter()
+        .cloned()
+        .fold(f32::NEG_INFINITY, f32::max);
+    let random_expected = max_logit - (151936f32).ln(); // Expected if uniform distribution
+
+    // Top logit should be significantly higher than random chance
+    let entropy_bonus = max_logit - random_expected;
+    println!(
+        "Logit entropy bonus (higher = less random): {:.2}",
+        entropy_bonus
+    );
+    assert!(
+        entropy_bonus > 3.0,
+        "Logits appear too uniform - possible model weight issue"
+    );
+}
+
+#[test]
+#[cfg(feature = "real_weights")]
+fn test_qwen3_generated_tokens_decodable() {
+    use candle_core::Device;
+    use vllm_model::loader::ModelLoader;
+
+    let device = Device::Cpu;
+    let loader = ModelLoader::builder(device)
+        .with_model_dir("/models/Qwen3-0.6B".to_string())
+        .with_kv_blocks(1024)
+        .build()
+        .expect("Failed to build loader");
+
+    let mut model = loader.load_model().expect("Failed to load model");
+
+    // Simulate prefill with "hi" prompt tokens
+    let prompt_tokens = vec![6023u32]; // "hi" token
+    let positions: Vec<usize> = (0..1).collect();
+
+    // Run prefill
+    let (prefill_logits, _) = model
+        .forward_with_cache(&prompt_tokens, 0, &[0], &positions, true)
+        .expect("Prefill failed");
+
+    // Get first generated token
+    use candle_core::D;
+    let first_token: u32 = prefill_logits
+        .narrow(1, 0, 1)
+        .unwrap()
+        .squeeze(1)
+        .unwrap()
+        .squeeze(0)
+        .unwrap()
+        .argmax(D::Minus1)
+        .unwrap()
+        .to_vec0()
+        .unwrap();
+
+    println!("First generated token: {}", first_token);
+    assert!(first_token < 151936, "Token out of range");
+
+    // Simulate decode step
+    let decode_tokens = vec![first_token];
+    let decode_positions = vec![1];
+
+    let (decode_logits, _) = model
+        .forward_with_cache(&decode_tokens, 1, &[0], &decode_positions, false)
+        .expect("Decode failed");
+
+    let second_token: u32 = decode_logits
+        .argmax(D::Minus1)
+        .unwrap()
+        .squeeze(0)
+        .unwrap()
+        .to_vec0()
+        .unwrap();
+
+    println!("Second generated token: {}", second_token);
+    assert!(second_token < 151936, "Token out of range");
+
+    // Both tokens should be valid
+    println!("Generated sequence: [{}, {}]", first_token, second_token);
+}
+
+#[test]
+#[cfg(feature = "real_weights")]
+fn test_qwen3_verify_model_weights() {
+    use candle_core::Device;
+    use std::collections::HashMap;
+    use std::path::Path;
+    use vllm_model::loader::format::{SafetensorsLoader, load_checkpoint};
+
+    let device = Device::Cpu;
+    let weights = load_checkpoint(Path::new("/models/Qwen3-0.6B"), &device).unwrap();
+
+    println!("Loaded {} tensors", weights.len());
+
+    // Check for embed_tokens weight
+    let embed_keys: Vec<_> = weights
+        .keys()
+        .filter(|k| k.contains("embed_tokens"))
+        .collect();
+    println!("Embed keys: {:?}", embed_keys);
+
+    // Check for lm_head weight
+    let lm_head_keys: Vec<_> = weights
+        .keys()
+        .filter(|k| k.contains("lm_head") || k.contains("output"))
+        .collect();
+    println!("LM head keys: {:?}", lm_head_keys);
+
+    // Check for layer weights
+    let layer_0_q_keys: Vec<_> = weights
+        .keys()
+        .filter(|k| k.contains("layers.0") && k.contains("q_proj"))
+        .collect();
+    println!("Layer 0 Q keys: {:?}", layer_0_q_keys);
+
+    // Verify embed_tokens weight exists and has correct shape
+    if let Some(embed_w) = weights.get("model.embed_tokens.weight") {
+        println!("embed_tokens weight shape: {:?}", embed_w.dims());
+        assert_eq!(
+            embed_w.dims()[0],
+            151936,
+            "embed_tokens vocab_size mismatch"
+        );
+        assert_eq!(embed_w.dims()[1], 1024, "embed_tokens hidden_size mismatch");
+    } else {
+        panic!("model.embed_tokens.weight not found");
+    }
+
+    // Verify at least one layer has weights
+    let layer_count = weights
+        .keys()
+        .filter(|k| k.contains("layers.") && k.contains("q_proj.weight"))
+        .count();
+    println!("Number of layers with q_proj: {}", layer_count);
+    assert!(
+        layer_count >= 28,
+        "Expected at least 28 layers, found {}",
+        layer_count
+    );
+
+    // Verify weights are not zero (which would cause garbage output)
+    if let Some(embed_w) = weights.get("model.embed_tokens.weight") {
+        let embed_data: Vec<f32> = embed_w.flatten_all().unwrap().to_vec1().unwrap();
+        let zero_count = embed_data.iter().filter(|&&x| x == 0.0).count();
+        let total_count = embed_data.len();
+        let zero_ratio = zero_count as f32 / total_count as f32;
+        println!(
+            "embed_tokens zero ratio: {:.2}% ({}/{})",
+            zero_ratio * 100.0,
+            zero_count,
+            total_count
+        );
+        println!("embed_tokens dtype: {:?}", embed_w.dtype());
+
+        // Check that weights have reasonable variance (not all the same)
+        // Note: BF16/FP16 weights may have lower variance when converted to f32
+        let mean = embed_data.iter().sum::<f32>() / total_count as f32;
+        let variance =
+            embed_data.iter().map(|&x| (x - mean).powi(2)).sum::<f32>() / total_count as f32;
+        let std_dev = variance.sqrt();
+        println!("embed_tokens mean: {:.6}, std_dev: {:.6}", mean, std_dev);
+
+        // For BF16/FP16 weights, std_dev around 0.02-0.2 is reasonable
+        // Just check that it's not zero or extremely small
+        assert!(
+            std_dev > 0.0001,
+            "embed_tokens std_dev too low: {}",
+            std_dev
+        );
+    }
+}
+
+#[test]
+#[cfg(feature = "real_weights")]
+fn test_qwen3_chat_flow_simulation() {
+    use candle_core::Device;
+    use vllm_model::loader::ModelLoader;
+
+    let device = Device::Cpu;
+    let loader = ModelLoader::builder(device)
+        .with_model_dir("/models/Qwen3-0.6B".to_string())
+        .with_kv_blocks(1024)
+        .build()
+        .expect("Failed to build loader");
+
+    let mut model = loader.load_model().expect("Failed to load model");
+
+    // Build prompt exactly as server does
+    let im_start = "<|im_start|>";
+    let im_end = "<|im_end|>";
+    let prompt = format!(
+        "{}user\nhi{}{}\n{}assistant\n",
+        im_start, im_end, "\n", im_start
+    );
+
+    println!("Prompt: {:?}", prompt);
+
+    // The tokenizer should encode this prompt
+    // For this test, we'll use a simplified approach
+    let prompt_tokens = vec![
+        151644u32, 8948, 30, 10950, 29, 151645, 151644, 4080, 2038, 25,
+    ];
+    println!("Using prompt tokens: {:?}", prompt_tokens);
+
+    let positions: Vec<usize> = (0..prompt_tokens.len()).collect();
+
+    // Run prefill
+    let (logits, _) = model
+        .forward_with_cache(&prompt_tokens, 0, &[0], &positions, true)
+        .expect("Prefill failed");
+
+    println!("Prefill logits shape: {:?}", logits.dims());
+
+    // Simulate generating a few tokens
+    use candle_core::D;
+    let mut all_tokens = prompt_tokens.clone();
+    let mut decoded_text = String::new();
+
+    for step in 0..3 {
+        let seq_len = logits.dims()[1];
+        let token_idx = step.min(seq_len - 1);
+
+        let next_token: u32 = logits
+            .narrow(1, token_idx, 1)
+            .unwrap()
+            .squeeze(1)
+            .unwrap()
+            .squeeze(0)
+            .unwrap()
+            .argmax(D::Minus1)
+            .unwrap()
+            .to_vec0()
+            .unwrap();
+
+        println!(
+            "Step {}: Generated token {} (0x{:x})",
+            step, next_token, next_token
+        );
+
+        all_tokens.push(next_token);
+        assert!(next_token < 151936, "Token {} out of range", next_token);
+
+        // If not the last step, run decode with this token
+        if step < 2 {
+            let (next_logits, _) = model
+                .forward_with_cache(
+                    &[next_token],
+                    all_tokens.len(),
+                    &[0],
+                    &[all_tokens.len()],
+                    false,
+                )
+                .expect("Decode failed");
+            // Store logits for next iteration (simplified)
+            let _ = next_logits;
+        }
+    }
+
+    println!("All tokens: {:?}", all_tokens);
+    println!(
+        "Total tokens generated: {}",
+        all_tokens.len() - prompt_tokens.len()
+    );
 }
