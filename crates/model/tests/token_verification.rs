@@ -100,4 +100,47 @@ mod tests {
             &fail_tokens[..fail_tokens.len().min(10)]
         );
     }
+
+    #[test]
+    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+    fn test_tokenizer_roundtrip_vocab() {
+        let tokenizer = setup_tokenizer();
+
+        let test_strings = vec![
+            "hi",
+            "hello",
+            "world",
+            "The",
+            "a",
+            "Hello, world!",
+            "123",
+            "token",
+        ];
+
+        let mut failed = Vec::new();
+
+        for text in &test_strings {
+            let tokens = tokenizer.encode(text);
+            let decoded = tokenizer.decode(&tokens);
+
+            if !decoded.trim().to_lowercase().contains(&text.to_lowercase()) {
+                failed.push((text.clone(), tokens, decoded.clone()));
+            }
+        }
+
+        if !failed.is_empty() {
+            println!("Roundtrip failures:");
+            for (orig, tokens, decoded) in &failed {
+                println!("  '{}' -> {:?} -> '{}'", orig, tokens, decoded);
+            }
+        }
+
+        let fail_rate = failed.len() as f32 / test_strings.len() as f32;
+        assert!(
+            fail_rate < 0.3,
+            "{}/{} roundtrip failed",
+            failed.len(),
+            test_strings.len()
+        );
+    }
 }
