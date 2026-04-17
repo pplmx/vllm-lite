@@ -146,6 +146,195 @@ mod tests {
 
     #[test]
     #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+    fn test_qwen3_special_tokens() {
+        let tokenizer = setup_tokenizer();
+
+        let eos_token = 151643u32;
+        let bos_token = 151645u32;
+
+        let eos_decoded = tokenizer.decode(&[eos_token]);
+        println!("EOS token {} decodes to: {:?}", eos_token, eos_decoded);
+
+        let bos_decoded = tokenizer.decode(&[bos_token]);
+        println!("BOS token {} decodes to: {:?}", bos_token, bos_decoded);
+
+        assert!(
+            !eos_decoded.is_empty(),
+            "EOS token should decode to something"
+        );
+        assert!(
+            !bos_decoded.is_empty(),
+            "BOS token should decode to something"
+        );
+
+        if eos_decoded.contains('\u{FFFD}') {
+            println!("WARNING: EOS token produces replacement character!");
+        }
+        if bos_decoded.contains('\u{FFFD}') {
+            println!("WARNING: BOS token produces replacement character!");
+        }
+    }
+
+    #[test]
+    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+    fn test_tokenizer_decode_out_of_range_tokens() {
+        let tokenizer = setup_tokenizer();
+
+        let vocab_size = 151936;
+        let out_of_range_tokens = vec![
+            vocab_size,       // 151936 - exactly at vocab size
+            vocab_size + 1,   // 151937
+            vocab_size + 100, // 152036
+            200000,           // Way out of range
+            1000000,          // Very far out of range
+        ];
+
+        let mut replacement_char_count = 0;
+        for token in &out_of_range_tokens {
+            let decoded = tokenizer.decode(&[*token]);
+            println!("Out-of-range token {} decodes to: {:?}", token, decoded);
+            if decoded.contains('\u{FFFD}') {
+                replacement_char_count += 1;
+            }
+        }
+
+        println!(
+            "Tokens with replacement char: {}/{}",
+            replacement_char_count,
+            out_of_range_tokens.len()
+        );
+    }
+
+    #[test]
+    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+    fn test_qwen3_eos_handling_in_decode() {
+        let tokenizer = setup_tokenizer();
+
+        let eos_token = 151643u32;
+
+        let test_sequences = vec![
+            vec![13539u32, 47421u32, eos_token],
+            vec![6023u32, eos_token],
+            vec![6023u32, 6024u32, 6025u32, eos_token],
+        ];
+
+        for (i, tokens) in test_sequences.iter().enumerate() {
+            let decoded = tokenizer.decode(tokens);
+            println!("Sequence {}: {:?} -> {:?}", i + 1, tokens, decoded);
+
+            if decoded.contains('\u{FFFD}') {
+                println!("  WARNING: Contains replacement char!");
+            }
+        }
+    }
+
+    #[test]
+    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+    fn test_qwen3_multi_step_generation() {
+        use candle_core::{Device, Tensor};
+        use vllm_model::loader::ModelLoader;
+
+        let device = Device::Cpu;
+        let loader = ModelLoader::builder(device)
+            .with_model_dir("/models/Qwen3-0.6B".to_string())
+            .with_kv_blocks(1024)
+            .build()
+            .expect("Failed to build loader");
+
+        let mut model = loader.load_model().expect("Failed to load model");
+        let tokenizer = setup_tokenizer();
+
+        let prompt = "hi";
+        let prompt_tokens: Vec<u32> = tokenizer.encode(prompt);
+        println!("Prompt '{}' tokens: {:?}", prompt, prompt_tokens);
+
+        let mut all_tokens = prompt_tokens.clone();
+        let mut generated_tokens = Vec::new();
+
+        for step in 0..3 {
+            let seq_len = all_tokens.len();
+            let positions: Vec<usize> = (0..seq_len).collect();
+            let is_decode = step > 0;
+
+            println!(
+                "Step {}: running forward with {} tokens, is_decode={}",
+                step + 1,
+                seq_len,
+                is_decode
+            );
+
+            let (logits, _) = model
+                .forward_with_cache(&all_tokens, 0, &[0], &positions, is_decode)
+                .expect("Forward failed");
+
+            println!("  logits dims: {:?}", logits.dims());
+
+            let logits_vec: Vec<f32> = {
+                let dims = logits.dims();
+                if dims.len() == 3 {
+                    // [batch, seq, vocab] - take last token
+                    let seq_len = dims[1];
+                    logits
+                        .narrow(1, seq_len - 1, 1)
+                        .unwrap()
+                        .squeeze(1)
+                        .unwrap()
+                        .squeeze(0)
+                        .unwrap()
+                        .to_vec1()
+                        .unwrap()
+                } else if dims.len() == 2 {
+                    // [batch, vocab] or [seq, vocab]
+                    if dims[0] == 1 {
+                        logits.squeeze(0).unwrap().to_vec1().unwrap()
+                    } else {
+                        logits.to_vec1().unwrap()
+                    }
+                } else {
+                    logits.to_vec1().unwrap()
+                }
+            };
+
+            let vocab_size = tokenizer.vocab_size();
+            let top_idx = logits_vec
+                .iter()
+                .enumerate()
+                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
+                .map(|(i, _)| i)
+                .unwrap_or(0);
+
+            let top_token = top_idx as u32;
+
+            if top_token >= vocab_size as u32 {
+                println!(
+                    "  WARNING: top_token {} >= vocab_size {}",
+                    top_token, vocab_size
+                );
+            } else {
+                let decoded = tokenizer.decode(&[top_token]);
+                println!("  top_token {} -> {:?}", top_token, decoded);
+                generated_tokens.push((top_token, decoded.clone()));
+
+                if decoded.contains('\u{FFFD}') {
+                    println!("  WARNING: Got replacement character!");
+                }
+
+                all_tokens.push(top_token);
+            }
+        }
+
+        let final_decode =
+            tokenizer.decode(&generated_tokens.iter().map(|(t, _)| *t).collect::<Vec<_>>());
+        println!("Full generated text: {:?}", final_decode);
+
+        assert!(
+            !final_decode.contains('\u{FFFD}'),
+            "Final decode should not contain replacement char"
+        );
+    }
+
+    #[test]
+    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
     fn test_model_token_to_text_pipeline() {
         use candle_core::Device;
         use vllm_model::loader::ModelLoader;
