@@ -81,7 +81,7 @@ pub struct CliArgs {
     server: ServerArgs,
 
     #[command(flatten)]
-    model: ModelArgs,
+    pub model: ModelArgs,
 
     #[command(flatten)]
     engine: EngineArgs,
@@ -108,9 +108,15 @@ struct ServerArgs {
 
 #[derive(clap::Args, Debug, Clone)]
 #[group(id = "model_args", required = true)]
-struct ModelArgs {
+pub struct ModelArgs {
     #[arg(long, required = true, env = "VLLM_MODEL", short = 'm')]
     pub model: PathBuf,
+
+    #[arg(long, env = "VLLM_DOWNLOAD_TOKENIZER")]
+    pub download_tokenizer: bool,
+
+    #[arg(long, env = "VLLM_TOKENIZER_REPO")]
+    pub tokenizer_repo: Option<String>,
 }
 
 #[derive(clap::Args, Debug, Clone)]
