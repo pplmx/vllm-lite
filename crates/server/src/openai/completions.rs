@@ -15,6 +15,20 @@ use tokio::sync::mpsc;
 use super::types::*;
 use crate::ApiState;
 
+const SPECIAL_TOKENS_TO_SKIP: &[&str] = &["<|endoftext|>", "<|im_end|>", "<|im_start|>"];
+
+fn should_skip_token_text(text: &str) -> bool {
+    text.is_empty() || SPECIAL_TOKENS_TO_SKIP.contains(&text)
+}
+
+fn clean_completion_text(text: &str) -> String {
+    let mut result = text.to_string();
+    for token in SPECIAL_TOKENS_TO_SKIP {
+        result = result.replace(*token, "");
+    }
+    result.trim().to_string()
+}
+
 #[allow(dead_code)]
 pub(crate) async fn completions(
     State(state): State<ApiState>,
@@ -66,7 +80,7 @@ pub(crate) async fn completions(
                 match rx.recv().await {
                     Some(token) => {
                         let text = tokenizer.decode(&[token]);
-                        if text.is_empty() {
+                        if should_skip_token_text(&text) {
                             return Some((Ok::<Event, Infallible>(Event::default().data("")), rx));
                         }
                         let chunk = serde_json::json!({
@@ -94,7 +108,7 @@ pub(crate) async fn completions(
         tokens.push(token);
     }
 
-    let text = state.tokenizer.decode(&tokens);
+    let text = clean_completion_text(&state.tokenizer.decode(&tokens));
     let choice = CompletionChoice {
         text,
         index: 0,

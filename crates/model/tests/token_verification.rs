@@ -335,6 +335,103 @@ mod tests {
 
     #[test]
     #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+    fn test_server_streaming_token_handling() {
+        let tokenizer = setup_tokenizer();
+
+        let eos_token = 151643u32;
+        let im_end_token = 151645u32;
+
+        let server_output_tokens = vec![13539u32, 47421u32, 60290u32, eos_token];
+
+        println!("=== Simulating server streaming behavior ===");
+
+        let mut streamed_chunks = Vec::new();
+        for token in &server_output_tokens {
+            let text = tokenizer.decode(&[*token]);
+            println!("Token {} -> {:?}", token, text);
+
+            if text.is_empty() {
+                println!("  -> Skipped (empty)");
+                continue;
+            }
+
+            streamed_chunks.push(text.clone());
+            println!("  -> Streamed: '{}'", text);
+        }
+
+        let combined: String = streamed_chunks.iter().map(|s| s.as_str()).collect();
+        println!("\nCombined streaming output: {:?}", combined);
+
+        let batch_decode = tokenizer.decode(&server_output_tokens);
+        println!("Batch decode: {:?}", batch_decode);
+
+        println!("\n=== Testing with <|im_end|> in output ===");
+        let tokens_with_im_end = vec![6023u32, 6024u32, im_end_token, 6025u32, 6026u32];
+        let decoded_with_im_end = tokenizer.decode(&tokens_with_im_end);
+        println!(
+            "Tokens {:?} -> {:?}",
+            tokens_with_im_end, decoded_with_im_end
+        );
+
+        if decoded_with_im_end.contains("<|im_end|>") {
+            println!("WARNING: <|im_end|> appears in decoded output!");
+            println!("This could cause visible乱码 in streaming responses");
+        }
+
+        println!("\n=== Testing first token patterns ===");
+        let first_token_tests = [vec![6023u32], vec![13539u32], vec![60290u32]];
+        for (i, tokens) in first_token_tests.iter().enumerate() {
+            let text = tokenizer.decode(tokens);
+            println!("First token pattern {}: {} -> '{}'", i + 1, tokens[0], text);
+        }
+    }
+
+    #[test]
+    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+    fn test_special_token_filtering() {
+        let tokenizer = setup_tokenizer();
+
+        let eos_token = 151643u32;
+        let im_end_token = 151645u32;
+        let im_start_token = 151644u32;
+
+        let special_tokens = vec![
+            ("EOS", eos_token),
+            ("IM_END", im_end_token),
+            ("IM_START", im_start_token),
+        ];
+
+        println!("=== Special token values ===");
+        for (name, token) in &special_tokens {
+            let decoded = tokenizer.decode(&[*token]);
+            println!("{} ({}): {:?}", name, token, decoded);
+        }
+
+        println!("\n=== Filter test ===");
+        let tokens_with_special = vec![6023u32, eos_token, 6024u32, 6025u32, im_end_token, 6026u32];
+
+        let filtered: Vec<u32> = tokens_with_special
+            .iter()
+            .filter(|&&t| t != eos_token && t != im_end_token && t != im_start_token)
+            .copied()
+            .collect();
+
+        let unfiltered_decoded = tokenizer.decode(&tokens_with_special);
+        let filtered_decoded = tokenizer.decode(&filtered);
+
+        println!(
+            "Unfiltered: {:?} -> {:?}",
+            tokens_with_special, unfiltered_decoded
+        );
+        println!("Filtered: {:?} -> {:?}", filtered, filtered_decoded);
+
+        if unfiltered_decoded.contains("<|") {
+            println!("\nWARNING: Special tokens in output will be visible to users!");
+        }
+    }
+
+    #[test]
+    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
     fn test_model_token_to_text_pipeline() {
         use candle_core::Device;
         use vllm_model::loader::ModelLoader;
