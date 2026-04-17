@@ -18,28 +18,38 @@ use crate::ApiState;
 pub fn build_prompt_from_messages(messages: &[ChatMessage]) -> String {
     let mut prompt = String::new();
 
+    let im_start = "<|im_start|>";
+    let im_end = "<|im_end|>";
+
     for msg in messages {
         match msg.role.as_str() {
             "system" => {
-                prompt.push_str("System: ");
+                prompt.push_str(im_start);
+                prompt.push_str("system\n");
                 prompt.push_str(&msg.content);
-                prompt.push_str("\n\n");
+                prompt.push_str(im_end);
+                prompt.push('\n');
             }
             "user" => {
-                prompt.push_str("User: ");
+                prompt.push_str(im_start);
+                prompt.push_str("user\n");
                 prompt.push_str(&msg.content);
-                prompt.push_str("\n\n");
+                prompt.push_str(im_end);
+                prompt.push('\n');
             }
             "assistant" => {
-                prompt.push_str("Assistant: ");
+                prompt.push_str(im_start);
+                prompt.push_str("assistant\n");
                 prompt.push_str(&msg.content);
-                prompt.push_str("\n\n");
+                prompt.push_str(im_end);
+                prompt.push('\n');
             }
             _ => {}
         }
     }
 
-    prompt.push_str("Assistant: ");
+    prompt.push_str(im_start);
+    prompt.push_str("assistant\n");
     prompt
 }
 
@@ -289,7 +299,10 @@ mod tests {
             name: None,
         }];
         let prompt = build_prompt_from_messages(&messages);
-        assert_eq!(prompt, "User: Hello\n\nAssistant: ");
+        assert_eq!(
+            prompt,
+            "<|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\n"
+        );
     }
 
     #[test]
@@ -307,7 +320,10 @@ mod tests {
             },
         ];
         let prompt = build_prompt_from_messages(&messages);
-        assert_eq!(prompt, "System: You are helpful\n\nUser: Hi\n\nAssistant: ");
+        assert_eq!(
+            prompt,
+            "<|im_start|>system\nYou are helpful<|im_end|>\n<|im_start|>user\nHi<|im_end|>\n<|im_start|>assistant\n"
+        );
     }
 
     #[test]
@@ -332,7 +348,7 @@ mod tests {
         let prompt = build_prompt_from_messages(&messages);
         assert_eq!(
             prompt,
-            "User: Hi\n\nAssistant: Hello!\n\nUser: How are you?\n\nAssistant: "
+            "<|im_start|>user\nHi<|im_end|>\n<|im_start|>assistant\nHello!<|im_end|>\n<|im_start|>user\nHow are you?<|im_end|>\n<|im_start|>assistant\n"
         );
     }
 }

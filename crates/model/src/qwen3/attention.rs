@@ -184,7 +184,14 @@ impl GqaAttention {
     fn apply_q_norm(&self, q: Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
         if let Some(ref q_norm) = self.q_norm {
             let q = q.transpose(1, 2)?; // [batch, num_heads, seq, head_dim]
-            let q = q.reshape((batch_size * self.num_heads * seq_len, self.head_dim))?;
+            eprintln!("DEBUG apply_q_norm: after transpose q.dims={:?}", q.dims());
+            let reshape_size = batch_size * self.num_heads * seq_len;
+            eprintln!(
+                "DEBUG apply_q_norm: reshape to [{}, {}]",
+                reshape_size, self.head_dim
+            );
+            let q = q.reshape((reshape_size, self.head_dim))?;
+            eprintln!("DEBUG apply_q_norm: q.dims after reshape={:?}", q.dims());
             let q = q_norm.forward(&q)?;
             let q = q.reshape((batch_size, self.num_heads, seq_len, self.head_dim))?;
             let q = q.transpose(1, 2)?; // [batch, seq, num_heads, head_dim]
@@ -197,8 +204,14 @@ impl GqaAttention {
     fn apply_k_norm(&self, k: Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
         if let Some(ref k_norm) = self.k_norm {
             let k = k.transpose(1, 2)?; // [batch, num_kv_heads, seq, head_dim]
+            eprintln!("DEBUG apply_k_norm: after transpose k.dims={:?}", k.dims());
             let reshape_size = batch_size * self.num_kv_heads * seq_len;
+            eprintln!(
+                "DEBUG apply_k_norm: reshape to [{}, {}]",
+                reshape_size, self.head_dim
+            );
             let k = k.reshape((reshape_size, self.head_dim))?;
+            eprintln!("DEBUG apply_k_norm: k.dims after reshape={:?}", k.dims());
             let k = k_norm.forward(&k)?;
             let k = k.reshape((batch_size, self.num_kv_heads, seq_len, self.head_dim))?;
             let k = k.transpose(1, 2)?; // [batch, seq, num_kv_heads, head_dim]
@@ -293,20 +306,65 @@ impl GqaAttention {
         let seq_len = num_computed_tokens + 1;
         let tile_size = self.config.tile_size.unwrap_or(16);
 
+        eprintln!(
+            "DEBUG decode L{}: x.dims={:?}, num_heads={}, num_kv_heads={}, head_dim={}",
+            layer_idx,
+            x.dims(),
+            self.num_heads,
+            self.num_kv_heads,
+            self.head_dim
+        );
+
         let q = self.q_proj.forward(x)?;
         let k = self.k_proj.forward(x)?;
         let v = self.v_proj.forward(x)?;
+
+        eprintln!(
+            "DEBUG decode L{}: after proj q={:?}, k={:?}, v={:?}",
+            layer_idx,
+            q.dims(),
+            k.dims(),
+            v.dims()
+        );
 
         let q = q.reshape((batch_size, 1, self.num_heads, self.head_dim))?;
         let k = k.reshape((batch_size, 1, self.num_kv_heads, self.head_dim))?;
         let v = v.reshape((batch_size, 1, self.num_kv_heads, self.head_dim))?;
 
+        eprintln!(
+            "DEBUG decode L{}: after reshape q={:?}, k={:?}, v={:?}",
+            layer_idx,
+            q.dims(),
+            k.dims(),
+            v.dims()
+        );
+
         let q = self.apply_q_norm(q, batch_size, 1)?;
         let k = self.apply_k_norm(k, batch_size, 1)?;
 
+        eprintln!(
+            "DEBUG decode L{}: after norm q={:?}, k={:?}",
+            layer_idx,
+            q.dims(),
+            k.dims()
+        );
+
         let position_ids: Vec<i64> = positions.iter().map(|&p| p as i64).collect();
+        eprintln!(
+            "DEBUG decode L{}: calling apply_rope with q.dims={:?}, positions={:?}, theta={}",
+            layer_idx,
+            q.dims(),
+            position_ids,
+            self.theta
+        );
         let q = apply_rope(&q, &position_ids, self.theta)?;
         let k = apply_rope(&k, &position_ids, self.theta)?;
+        eprintln!(
+            "DEBUG decode L{}: after rope q={:?}, k={:?}",
+            layer_idx,
+            q.dims(),
+            k.dims()
+        );
 
         let q = q.transpose(1, 2)?;
 
@@ -314,10 +372,26 @@ impl GqaAttention {
         let k_expanded = self.expand_kv(&k, self.num_heads, self.num_kv_heads)?;
         let v_expanded = self.expand_kv(&v, self.num_heads, self.num_kv_heads)?;
 
+        eprintln!(
+            "DEBUG decode L{}: after expand k_expanded={:?}, v_expanded={:?}",
+            layer_idx,
+            k_expanded.dims(),
+            v_expanded.dims()
+        );
+
         // k_expanded/v_expanded is [batch=1, seq=1, num_heads, head_dim]
         // After transpose: [batch=1, num_heads, seq=1, head_dim] -> squeeze batch: [num_heads, 1, head_dim]
-        let k_for_cache = k_expanded.transpose(1, 2)?.squeeze(0)?.contiguous()?; // [num_heads, 1, head_dim]
-        let v_for_cache = v_expanded.transpose(1, 2)?.squeeze(0)?.contiguous()?;
+        let k_transposed = k_expanded.transpose(1, 2)?;
+        let k_for_cache = k_transposed.squeeze(0)?.contiguous()?; // [num_heads, 1, head_dim]
+        let v_transposed = v_expanded.transpose(1, 2)?;
+        let v_for_cache = v_transposed.squeeze(0)?.contiguous()?;
+
+        eprintln!(
+            "DEBUG decode L{}: k_for_cache={:?}, v_for_cache={:?}",
+            layer_idx,
+            k_for_cache.dims(),
+            v_for_cache.dims()
+        );
 
         // Read cached k/v (which is stored with num_heads for the expanded version)
         let (cached_k, cached_v) = kv_cache.read_kv(layer_idx, block_ids, num_computed_tokens)?;

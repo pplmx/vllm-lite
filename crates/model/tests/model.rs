@@ -250,3 +250,92 @@ fn test_qwen3_config_text_config_fallback() {
     assert_eq!(config.hidden_size(), 256);
     assert_eq!(config.num_hidden_layers(), 4);
 }
+
+#[test]
+#[cfg(feature = "real_weights")]
+fn test_qwen3_real_model_prefill() {
+    use candle_core::Device;
+    use vllm_model::loader::ModelLoader;
+
+    let device = Device::Cpu;
+    let loader = ModelLoader::builder(device)
+        .with_model_dir("/models/Qwen3-0.6B".to_string())
+        .with_kv_blocks(1024)
+        .build()
+        .expect("Failed to build loader");
+
+    let mut model = loader.load_model().expect("Failed to load model");
+
+    // Test prefill with simple tokens
+    let tokens = vec![1u32, 2, 3, 4, 5];
+    let positions: Vec<usize> = (0..tokens.len()).collect();
+
+    let (logits, _) = model
+        .forward_with_cache(&tokens, 0, &[0], &positions, true)
+        .expect("Prefill failed");
+
+    // Check logits shape
+    assert_eq!(logits.dims().len(), 3, "logits should be 3D");
+    assert_eq!(logits.dims()[0], 1, "batch size should be 1");
+    assert_eq!(logits.dims()[1], 5, "seq_len should be 5");
+    assert_eq!(logits.dims()[2], 151936, "vocab_size should be 151936");
+
+    // Get next token from last position
+    use candle_core::D;
+    let next_token: u32 = logits
+        .narrow(1, 4, 1)
+        .unwrap()
+        .squeeze(1)
+        .unwrap()
+        .squeeze(0)
+        .unwrap()
+        .argmax(D::Minus1)
+        .unwrap()
+        .to_vec0()
+        .unwrap();
+
+    println!("Next token from prefill: {}", next_token);
+    assert!(next_token < 151936, "Token should be valid");
+}
+
+#[test]
+#[cfg(feature = "real_weights")]
+fn test_qwen3_real_model_decode() {
+    use candle_core::Device;
+    use vllm_model::loader::ModelLoader;
+
+    let device = Device::Cpu;
+    let loader = ModelLoader::builder(device)
+        .with_model_dir("/models/Qwen3-0.6B".to_string())
+        .with_kv_blocks(1024)
+        .build()
+        .expect("Failed to build loader");
+
+    let mut model = loader.load_model().expect("Failed to load model");
+
+    // Test decode
+    let tokens = vec![42u32];
+    let position = vec![5];
+
+    let (logits, _) = model
+        .forward_with_cache(&tokens, 5, &[0], &position, false)
+        .expect("Decode failed");
+
+    // Check logits shape - decode returns 2D [batch, vocab_size]
+    assert_eq!(logits.dims().len(), 2, "decode logits should be 2D");
+    assert_eq!(logits.dims()[0], 1, "batch size should be 1");
+    assert_eq!(logits.dims()[1], 151936, "vocab_size should be 151936");
+
+    // Get next token
+    use candle_core::D;
+    let next_token: u32 = logits
+        .argmax(D::Minus1)
+        .unwrap()
+        .squeeze(0)
+        .unwrap()
+        .to_vec0()
+        .unwrap();
+
+    println!("Next token from decode: {}", next_token);
+    assert!(next_token < 151936, "Token should be valid");
+}

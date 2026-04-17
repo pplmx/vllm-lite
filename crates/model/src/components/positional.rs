@@ -21,7 +21,7 @@ impl RoPE {
         let rope_scaling = config.rope_scaling();
         Self {
             theta: config.rope_theta(),
-            head_dim: config.hidden_size() / config.num_attention_heads(),
+            head_dim: config.head_dim(),
             scaling_factor: rope_scaling.and_then(|r| r.factor).unwrap_or(1.0),
         }
     }
