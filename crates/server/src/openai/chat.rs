@@ -254,6 +254,57 @@ mod tests {
     use super::*;
     use axum::http::StatusCode;
 
+    #[test]
+    fn test_should_skip_token_text_empty() {
+        assert!(should_skip_token_text(""));
+    }
+
+    #[test]
+    fn test_should_skip_token_text_eos() {
+        assert!(should_skip_token_text("<|endoftext|>"));
+    }
+
+    #[test]
+    fn test_should_skip_token_text_im_end() {
+        assert!(should_skip_token_text("<|im_end|>"));
+    }
+
+    #[test]
+    fn test_should_skip_token_text_im_start() {
+        assert!(should_skip_token_text("<|im_start|>"));
+    }
+
+    #[test]
+    fn test_should_skip_token_text_normal() {
+        assert!(!should_skip_token_text("hello"));
+        assert!(!should_skip_token_text("gypt"));
+        assert!(!should_skip_token_text(" world"));
+    }
+
+    #[test]
+    fn test_clean_completion_text_removes_eos() {
+        let result = clean_completion_text("gyptabo<|endoftext|>");
+        assert_eq!(result, "gyptabo");
+    }
+
+    #[test]
+    fn test_clean_completion_text_removes_im_end() {
+        let result = clean_completion_text("hi<|im_end|>world");
+        assert_eq!(result, "hiworld");
+    }
+
+    #[test]
+    fn test_clean_completion_text_removes_all_special() {
+        let result = clean_completion_text("hello<|endoftext|><|im_end|><|im_start|>world");
+        assert_eq!(result, "helloworld");
+    }
+
+    #[test]
+    fn test_clean_completion_text_trims_whitespace() {
+        let result = clean_completion_text("  hello  ");
+        assert_eq!(result, "hello");
+    }
+
     fn create_test_request(model: &str, messages: Vec<ChatMessage>) -> ChatRequest {
         ChatRequest {
             model: model.to_string(),
