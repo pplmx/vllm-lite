@@ -154,7 +154,18 @@ impl BatchComposer {
 
             // Decode: only last token
             let last_token = seq.tokens.last().copied().unwrap_or(0);
-            let position = seq.tokens.len().saturating_sub(1);
+            // position is the index of the current token (0-indexed)
+            // After prefill, seq.tokens has prompt_len tokens, so position = prompt_len (the new token's index)
+            // After N decode steps, seq.tokens has prompt_len + N tokens, so position = prompt_len + N - 1
+            let tokens_len = seq.tokens.len();
+            // tokens_len is the count, position should be the index (0-indexed)
+            // If tokens_len=1, position=0 (first token at index 0)
+            // If tokens_len=10, position=9 (10th token at index 9)
+            let position = tokens_len - 1;
+            eprintln!(
+                "DEBUG compose_decode: seq_id={}, tokens_len={}, position={}",
+                seq.id, tokens_len, position
+            );
 
             input_tokens.push(vec![last_token]);
             positions.push(vec![position]);
@@ -235,6 +246,38 @@ mod tests {
         assert_eq!(batch.seq_ids.len(), 1);
         assert_eq!(batch.input_tokens[0], vec![5]);
         assert!(!batch.is_prefill[0]);
+    }
+
+    #[test]
+    fn test_decode_batch_position_is_zero_indexed() {
+        let composer = BatchComposer::default();
+
+        // Test case 1: Single token (after prefill)
+        let seq1 = make_sequence(1, vec![42], Status::Decoding);
+        let batch1 = composer.compose(vec![seq1], Phase::Decode);
+        assert_eq!(
+            batch1.positions[0],
+            vec![0],
+            "Position for 1 token should be 0"
+        );
+
+        // Test case 2: 5 tokens (3 prompt + 2 generated)
+        let seq2 = make_sequence(2, vec![1, 2, 3, 4, 5], Status::Decoding);
+        let batch2 = composer.compose(vec![seq2], Phase::Decode);
+        assert_eq!(
+            batch2.positions[0],
+            vec![4],
+            "Position for 5 tokens should be 4 (0-indexed)"
+        );
+
+        // Test case 3: 10 tokens
+        let seq3 = make_sequence(3, vec![0u32; 10], Status::Decoding);
+        let batch3 = composer.compose(vec![seq3], Phase::Decode);
+        assert_eq!(
+            batch3.positions[0],
+            vec![9],
+            "Position for 10 tokens should be 9 (0-indexed)"
+        );
     }
 
     #[test]
