@@ -190,6 +190,94 @@ impl TransformerBlock {
         })
     }
 
+    pub fn from_weights(
+        config: &crate::config::ModelConfig,
+        layer_idx: usize,
+        weights: &std::collections::HashMap<String, Tensor>,
+    ) -> Result<Self> {
+        let hidden_size = config.hidden_size;
+        let num_heads = config.num_heads;
+        let num_kv_heads = config.num_kv_heads;
+        let head_dim = config.head_dim;
+        let intermediate_size = config.intermediate_size;
+        let theta = config.rope_theta;
+        let rms_norm_eps = config.rms_norm_eps;
+        let has_qk_norm = false;
+
+        let get_weight = |keys: &[&str]| -> Option<&Tensor> {
+            for key in keys {
+                if let Some(w) = weights.get(*key) {
+                    return Some(w);
+                }
+            }
+            None
+        };
+
+        let q_key = get_weight(&[
+            &format!("model.layers.{}.self_attn.q_proj.weight", layer_idx),
+            &format!("model.layers.{}.attn.q_proj.weight", layer_idx),
+        ]);
+        let k_key = get_weight(&[
+            &format!("model.layers.{}.self_attn.k_proj.weight", layer_idx),
+            &format!("model.layers.{}.attn.k_proj.weight", layer_idx),
+        ]);
+        let v_key = get_weight(&[
+            &format!("model.layers.{}.self_attn.v_proj.weight", layer_idx),
+            &format!("model.layers.{}.attn.v_proj.weight", layer_idx),
+        ]);
+        let o_key = get_weight(&[
+            &format!("model.layers.{}.self_attn.o_proj.weight", layer_idx),
+            &format!("model.layers.{}.attn.o_proj.weight", layer_idx),
+        ]);
+
+        let q_norm_key = format!("model.layers.{}.self_attn.q_norm.weight", layer_idx);
+        let k_norm_key = format!("model.layers.{}.self_attn.k_norm.weight", layer_idx);
+        let q_norm_weight = weights.get(&q_norm_key).cloned();
+        let k_norm_weight = weights.get(&k_norm_key).cloned();
+
+        let layer_weights = Some((
+            q_key.cloned(),
+            k_key.cloned(),
+            v_key.cloned(),
+            o_key.cloned(),
+            weights
+                .get(&format!("model.layers.{}.mlp.gate_proj.weight", layer_idx))
+                .cloned(),
+            weights
+                .get(&format!("model.layers.{}.mlp.up_proj.weight", layer_idx))
+                .cloned(),
+            weights
+                .get(&format!("model.layers.{}.mlp.down_proj.weight", layer_idx))
+                .cloned(),
+            weights
+                .get(&format!(
+                    "model.layers.{}.input_layernorm.weight",
+                    layer_idx
+                ))
+                .cloned(),
+            weights
+                .get(&format!(
+                    "model.layers.{}.post_attention_layernorm.weight",
+                    layer_idx
+                ))
+                .cloned(),
+            q_norm_weight,
+            k_norm_weight,
+        ));
+
+        Self::new_with_weights(
+            hidden_size,
+            num_heads,
+            num_kv_heads,
+            head_dim,
+            intermediate_size,
+            theta,
+            rms_norm_eps,
+            has_qk_norm,
+            layer_weights,
+        )
+    }
+
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let residual = x.clone();
         let x = self.input_layernorm.forward(x)?;
