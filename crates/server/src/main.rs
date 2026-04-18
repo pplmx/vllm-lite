@@ -107,7 +107,7 @@ async fn main() {
 
     tracing::info!(config = ?app_config, "Starting vllm-lite");
 
-    let device = Device::cuda_if_available(0).unwrap_or_else(|_| Device::Cpu);
+    let device = Device::cuda_if_available(0).unwrap_or(Device::Cpu);
     tracing::info!(device = ?device, "Using device");
 
     let model_path = cli.model_path().display().to_string();

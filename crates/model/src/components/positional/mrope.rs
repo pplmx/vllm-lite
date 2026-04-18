@@ -236,7 +236,7 @@ mod tests {
     #[test]
     fn test_mrope_section_validation() {
         let head_dim = 12;
-        let sections = vec![4, 4, 4];
+        let sections = [4, 4, 4];
         let total: usize = sections.iter().sum();
 
         assert_eq!(total, head_dim, "Sections should sum to head_dim");
