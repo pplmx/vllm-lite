@@ -221,7 +221,7 @@ impl SSMLayer35 {
         d_conv: usize,
         vb: VarBuilder,
     ) -> CandleResult<Self> {
-        let x_proj = candle_nn::linear(d_inner, d_inner * 3, vb.pp("x_proj"))?;
+        let x_proj = candle_nn::linear(d_inner * 3, d_inner * 3, vb.pp("x_proj"))?;
         let in_proj_a = candle_nn::linear(d_inner, d_state, vb.pp("in_proj_a"))?;
         let a_log = Tensor::zeros(d_state, DType::F32, vb.device())?;
         let dt_bias = Tensor::zeros(d_state, DType::F32, vb.device())?;
@@ -229,7 +229,7 @@ impl SSMLayer35 {
             padding: d_conv - 1,
             ..Default::default()
         };
-        let conv = conv1d(d_inner, d_inner, d_conv, conv_cfg, vb.pp("conv"))?;
+        let conv = conv1d(d_inner * 3, d_inner * 3, d_conv, conv_cfg, vb.pp("conv"))?;
 
         Ok(Self {
             x_proj,
@@ -270,6 +270,21 @@ impl SSMLayer35 {
         let x_conv = x_conv.transpose(1, 2)?;
         let x_conv = candle_nn::ops::silu(&x_conv)?;
 
+        let x_conv_len = x_conv.dims()[1];
+        let x_len = x.dims()[1];
+        let x_conv = if x_conv_len > x_len {
+            x_conv.narrow(1, x_conv_len - x_len, x_len)?
+        } else if x_conv_len < x_len {
+            let pad = Tensor::zeros(
+                (x_conv.dims()[0], x_len - x_conv_len, x_conv.dims()[2]),
+                x_conv.dtype(),
+                x.device(),
+            )?;
+            Tensor::cat(&[&x_conv, &pad], 1)?
+        } else {
+            x_conv
+        };
+
         let x_ssm = self.x_proj.forward(&x_conv)?;
 
         let parts = x_ssm.chunk(3, 2)?;
@@ -302,7 +317,7 @@ impl LinearAttentionBlock {
     ) -> CandleResult<Self> {
         let d_inner = expand * d_model;
 
-        let input_proj = candle_nn::linear(d_model, d_inner * 2, vb.pp("in_proj"))?;
+        let input_proj = candle_nn::linear(d_model, d_inner * 3, vb.pp("in_proj"))?;
         let ssm = SSMLayer35::new(d_inner, d_state, d_conv, vb.clone())?;
         let output_proj = candle_nn::linear(d_inner, d_model, vb.pp("out_proj"))?;
         let norm = candle_nn::layer_norm(d_model, 1e-5, vb.pp("norm"))?;
@@ -370,6 +385,12 @@ impl LinearAttentionBlock {
 
         let x_proj_out = self.input_proj.forward(x)?;
 
+        eprintln!(
+            "LinearAttentionBlock::forward - x.dims={:?}, x_proj_out.dims={:?}",
+            x.dims(),
+            x_proj_out.dims()
+        );
+
         let batch = x_proj_out.dims()[0];
         let seq_len = if x_proj_out.dims().len() == 3 {
             x_proj_out.dims()[1]
@@ -395,30 +416,43 @@ impl LinearAttentionBlock {
             return output.add(&residual);
         }
 
-        let (_delta, b, c, _x_conv) = self.ssm.forward(&x_proj_out)?;
+        let parts = x_proj_out.chunk(3, 2)?;
+        let z = &parts[0];
+
+        let (delta, b, c, _x_conv, a_proj_out) = self.ssm.forward_with_a(&x_proj_out, &residual)?;
 
         let d_inner = self.ssm.d_inner();
         let d_state = self.ssm.d_state();
 
         let a_log = &self.ssm.a_log;
-        let dt_bias = &self.ssm.dt_bias;
 
         let mut h = Tensor::zeros((batch, d_state, d_inner), DType::F32, x.device())?;
         let mut outputs: Vec<Tensor> = Vec::with_capacity(seq_len);
 
         for t in 0..seq_len {
-            let dt_t = _delta.narrow(1, t, 1)?.squeeze(1)?.broadcast_add(dt_bias)?;
-            let dt_t = candle_nn::ops::silu(&dt_t)?;
-            let a_t = (a_log.reshape((d_state, 1))? * Tensor::ones((), DType::F32, x.device())?)?
-                .exp()?;
+            let dt_t = delta.narrow(1, t, 1)?.squeeze(1)?;
+            let a_t = a_proj_out
+                .narrow(1, t, 1)?
+                .squeeze(1)?
+                .reshape((batch, d_state))?;
             let b_t = b.narrow(1, t, 1)?.squeeze(1)?.reshape((batch, d_state))?;
             let c_t = c.narrow(1, t, 1)?.squeeze(1)?.reshape((batch, d_state))?;
 
-            let dt_a = dt_t.reshape((1, d_state))?.broadcast_mul(&a_t)?;
-            let bx = b_t.broadcast_mul(&dt_t.reshape((1, d_state))?)?;
-            let h_new = dt_a.broadcast_mul(&h)?.broadcast_add(&bx)?;
-            let y_t = c_t.broadcast_mul(&h_new)?;
-            outputs.push(y_t.reshape((batch, 1, d_inner))?);
+            let a_combined = (a_log.reshape((1, d_state))? + a_t)?;
+            let a_decay = a_combined.exp()?;
+
+            let dt_act = candle_nn::ops::silu(&dt_t)?.reshape((batch, 1, d_inner))?;
+
+            let a_decay_3d = a_decay.reshape((batch, d_state, 1))?;
+            let h_new = a_decay_3d.broadcast_mul(&h)?;
+
+            let b_dt = b_t.reshape((batch, d_state, 1))?.broadcast_mul(&dt_act)?;
+            let h_new = h_new.broadcast_add(&b_dt)?;
+
+            let c_3d = c_t.reshape((batch, d_state, 1))?;
+            let y_t = c_3d.broadcast_mul(&h_new)?;
+
+            outputs.push(y_t);
             h = h_new;
         }
 
@@ -426,7 +460,6 @@ impl LinearAttentionBlock {
 
         let ssm_act = candle_nn::ops::silu(&ssm_out)?;
 
-        let z = x_proj_out.narrow(2, 0, d_inner)?;
         let gated = z.broadcast_mul(&ssm_act)?;
 
         let output = self.output_proj.forward(&gated)?;
@@ -805,7 +838,7 @@ impl LinearAttentionBlock {
         weights: &HashMap<String, Tensor>,
         d_model: usize,
         d_state: usize,
-        d_conv: usize,
+        _d_conv: usize,
         expand: usize,
     ) -> CandleResult<Self> {
         let d_inner = expand * d_model;
@@ -853,8 +886,11 @@ impl LinearAttentionBlock {
         let in_proj_a = Linear::new(in_proj_a_w, None);
 
         let conv_cfg = candle_nn::Conv1dConfig {
-            padding: d_conv - 1,
-            ..Default::default()
+            padding: 3,
+            stride: 1,
+            dilation: 1,
+            groups: 6144,
+            cudnn_fwd_algo: None,
         };
         let conv = Conv1d::new(conv_w, None, conv_cfg);
 
@@ -1056,10 +1092,21 @@ impl ModelBackend for Qwen35HybridModel {
             let token_tensor = Tensor::new(tokens.as_slice(), &self.device)
                 .map_err(|e| EngineError::new(e.to_string()))?;
 
-            let mut hidden = self
+            let hidden_2d = self
                 .embed_tokens
                 .forward(&token_tensor)
                 .map_err(|e| EngineError::new(e.to_string()))?;
+
+            eprintln!(
+                "DEBUG forward: tokens.len()={}, hidden_2d.dims={:?}",
+                tokens.len(),
+                hidden_2d.dims()
+            );
+            let mut hidden = hidden_2d.unsqueeze(0)?;
+            eprintln!(
+                "DEBUG forward: after unsqueeze hidden.dims={:?}",
+                hidden.dims()
+            );
 
             for layer in &mut self.layers {
                 hidden = layer
@@ -1137,10 +1184,12 @@ impl ModelBackend for Qwen35HybridModel {
             let token_tensor = Tensor::new(tokens.as_slice(), &self.device)
                 .map_err(|e| EngineError::new(e.to_string()))?;
 
-            let mut hidden = self
+            let hidden_2d = self
                 .embed_tokens
                 .forward(&token_tensor)
                 .map_err(|e| EngineError::new(e.to_string()))?;
+
+            let mut hidden = hidden_2d.unsqueeze(0)?;
 
             for layer in &mut self.layers {
                 hidden = layer
@@ -1472,34 +1521,45 @@ mod tests {
     #[test]
     fn test_ssm_layer_forward_output_shapes() {
         let device = Device::Cpu;
-        let ssm = SSMLayer35::new(128, 16, 4, VarBuilder::zeros(DType::F32, &device)).unwrap();
+        let d_inner = 128;
+        let ssm = SSMLayer35::new(d_inner, 16, 4, VarBuilder::zeros(DType::F32, &device)).unwrap();
 
-        let x = Tensor::ones((2, 5, 128), DType::F32, &device).unwrap();
+        let x = Tensor::ones((2, 5, d_inner * 3), DType::F32, &device).unwrap();
         let (delta, b, c, x_conv) = ssm.forward(&x).unwrap();
 
         assert_eq!(delta.dims()[0], 2);
+        assert_eq!(delta.dims()[2], d_inner);
         assert_eq!(b.dims()[0], 2);
+        assert_eq!(b.dims()[2], d_inner);
         assert_eq!(c.dims()[0], 2);
+        assert_eq!(c.dims()[2], d_inner);
         assert_eq!(x_conv.dims()[0], 2);
+        assert_eq!(x_conv.dims()[2], d_inner * 3);
         assert!(x_conv.dims()[1] >= 5);
     }
 
     #[test]
     fn test_linear_attention_block_ssm_output_shape() {
         let device = Device::Cpu;
-        let block =
-            LinearAttentionBlock::new(256, 16, 4, 2, VarBuilder::zeros(DType::F32, &device))
-                .unwrap();
+        let d_model = 256;
+        let expand = 2;
+        let d_inner = expand * d_model;
+        let block = LinearAttentionBlock::new(
+            d_model,
+            16,
+            4,
+            expand,
+            VarBuilder::zeros(DType::F32, &device),
+        )
+        .unwrap();
 
-        let x = Tensor::ones((1, 3, 256), DType::F32, &device).unwrap();
+        let x = Tensor::ones((1, 3, d_model), DType::F32, &device).unwrap();
         let x_proj = block.input_proj.forward(&x).unwrap();
 
-        let parts = x_proj.chunk(2, 2).unwrap();
-        let x_inner = &parts[1];
-
-        let (_delta, _b, _c, x_conv) = block.ssm.forward(x_inner).unwrap();
+        let (_delta, _b, _c, x_conv) = block.ssm.forward(&x_proj).unwrap();
 
         assert_eq!(x_conv.dims()[0], 1);
+        assert_eq!(x_conv.dims()[2], d_inner * 3);
         assert!(x_conv.dims()[1] >= 3);
     }
 

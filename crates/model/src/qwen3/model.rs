@@ -321,14 +321,14 @@ impl Qwen3Model {
         block_ids: &[BlockId],
         positions: &[usize],
         is_prefill: bool,
-    ) -> EngineResult<(Tensor, Tensor)> {
+    ) -> EngineResult<(Tensor, usize)> {
         if tokens.is_empty() {
             eprintln!(
                 "WARN: Empty tokens received, num_computed={}, positions={:?}, is_prefill={}",
                 num_computed_tokens, positions, is_prefill
             );
             let hidden_size = self.config.hidden_size();
-            let dummy = Tensor::zeros((1, 1, hidden_size), candle_core::DType::F32, &self.device)
+            let _dummy = Tensor::zeros((1, 1, hidden_size), candle_core::DType::F32, &self.device)
                 .map_err(|e| EngineError::new(e.to_string()))?;
             let logits = Tensor::zeros(
                 (1, 1, self.config.vocab_size()),
@@ -336,7 +336,7 @@ impl Qwen3Model {
                 &self.device,
             )
             .map_err(|e| EngineError::new(e.to_string()))?;
-            return Ok((logits, dummy));
+            return Ok((logits, 0));
         }
 
         let hidden = if is_prefill {
@@ -353,6 +353,8 @@ impl Qwen3Model {
                 .map_err(|e| EngineError::new(e.to_string()))?;
             self.embed_tokens
                 .forward(&t)
+                .map_err(|e| EngineError::new(e.to_string()))?
+                .unsqueeze(0)
                 .map_err(|e| EngineError::new(e.to_string()))?
         };
         let mut hidden = hidden;
@@ -389,13 +391,13 @@ impl Qwen3Model {
             .forward(&hidden)
             .map_err(|e| EngineError::new(e.to_string()))?;
 
-        Ok((logits, hidden))
+        Ok((logits, 0))
     }
 
     pub fn forward_quantized_demo(
         &mut self,
         input_tokens: &[TokenId],
-    ) -> EngineResult<(Tensor, Tensor)> {
+    ) -> EngineResult<(Tensor, usize)> {
         let positions: Vec<usize> = (0..input_tokens.len()).collect();
         self.forward_with_cache(input_tokens, 0, &[0], &positions, true)
             .map_err(|e| EngineError::new(e.to_string()))
@@ -414,6 +416,24 @@ impl Qwen3Model {
 }
 
 impl ModelBackend for Qwen3Model {
+    fn forward_with_cache(
+        &mut self,
+        input_tokens: &[TokenId],
+        num_computed: usize,
+        kv_block_ids: &[usize],
+        positions: &[usize],
+        is_prefill: bool,
+    ) -> EngineResult<(Tensor, usize)> {
+        Qwen3Model::forward_with_cache(
+            self,
+            input_tokens,
+            num_computed,
+            kv_block_ids,
+            positions,
+            is_prefill,
+        )
+    }
+
     fn forward(
         &mut self,
         seq_ids: &[SeqId],
@@ -495,13 +515,14 @@ impl ModelBackend for Qwen3Model {
                     .map_err(|e| EngineError::new(e.to_string()))?;
 
                 use candle_core::D;
-                // logits shape: [batch=1, vocab_size] for decode (2D)
-                // argmax on last dim gives [batch=1]
-                // squeeze to scalar
+                // logits shape: [batch=1, seq=1, vocab_size] for decode (3D)
+                // squeeze batch and seq, then argmax
                 let next = logits
-                    .argmax(D::Minus1)
+                    .squeeze(0)
                     .map_err(|e| EngineError::new(e.to_string()))?
-                    .squeeze(0) // Remove batch dim
+                    .squeeze(0)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .argmax(D::Minus1)
                     .map_err(|e| EngineError::new(e.to_string()))?
                     .to_vec0::<u32>()
                     .map_err(|e| EngineError::new(e.to_string()))?;
@@ -552,8 +573,10 @@ impl ModelBackend for Qwen3Model {
                     .to_vec1::<f32>()
                     .map_err(|e| EngineError::new(e.to_string()))?
             } else {
-                // Decode: squeeze batch dimension
+                // Decode: squeeze batch and seq dimensions
                 logits
+                    .squeeze(0)
+                    .map_err(|e| EngineError::new(e.to_string()))?
                     .squeeze(0)
                     .map_err(|e| EngineError::new(e.to_string()))?
                     .to_vec1::<f32>()
@@ -986,19 +1009,14 @@ mod tests {
         let _num_computed_tokens = [7usize];
         let _is_prefill = [false];
 
-        let (logits, hidden) = model
+        let (logits, _hidden_token) = model
             .forward_with_cache(&[42], 7, &[0], &[7], false)
             .unwrap();
 
         assert_eq!(
             logits.dims(),
-            &[1, 1000],
-            "Decode logits should be [1, vocab_size]"
-        );
-        assert_eq!(
-            hidden.dims(),
-            &[1, 256],
-            "Decode hidden should be [1, hidden_size]"
+            &[1, 1, 1000],
+            "Decode logits should be [1, 1, vocab_size]"
         );
     }
 
@@ -1018,7 +1036,7 @@ mod tests {
         let device = Device::Cpu;
         let mut model = Qwen3Model::new(config, device, 1024).unwrap();
 
-        let (logits, hidden) = model
+        let (logits, _hidden_token) = model
             .forward_with_cache(
                 &[1, 2, 3, 4, 5],
                 0,
@@ -1032,11 +1050,6 @@ mod tests {
             logits.dims(),
             &[1, 5, 1000],
             "Prefill logits should be [1, seq_len, vocab_size]"
-        );
-        assert_eq!(
-            hidden.dims(),
-            &[1, 5, 256],
-            "Prefill hidden should be [1, seq_len, hidden_size]"
         );
     }
 
@@ -1063,29 +1076,25 @@ mod tests {
             let num_computed = step;
             let position = step;
 
-            let (logits, hidden) = model
+            let (logits, _hidden_token) = model
                 .forward_with_cache(&[42], num_computed, &[block_id], &[position], false)
                 .unwrap();
 
             assert_eq!(
                 logits.dims(),
-                &[1, 500],
+                &[1, 1, 500],
                 "Step {}: logits shape mismatch",
-                step
-            );
-            assert_eq!(
-                hidden.dims(),
-                &[1, 256],
-                "Step {}: hidden shape mismatch",
                 step
             );
 
             let next_token: u32 = logits
-                .argmax(candle_core::D::Minus1)
+                .squeeze(0)
                 .unwrap()
                 .squeeze(0)
                 .unwrap()
-                .to_vec0()
+                .argmax(candle_core::D::Minus1)
+                .unwrap()
+                .to_vec0::<u32>()
                 .unwrap();
             assert!(
                 next_token < 500,
