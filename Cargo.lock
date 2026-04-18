@@ -3728,6 +3728,7 @@ dependencies = [
  "gguf",
  "half",
  "memmap2",
+ "once_cell",
  "rand 0.10.0",
  "rayon",
  "safetensors 0.7.0",

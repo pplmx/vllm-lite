@@ -76,7 +76,8 @@ impl Architecture for Qwen35Architecture {
             ..Default::default()
         };
 
-        let model = Qwen35HybridModel::from_weights(qwen_config, device, remapped_weights, num_kv_blocks)?;
+        let model =
+            Qwen35HybridModel::from_weights(qwen_config, device, remapped_weights, num_kv_blocks)?;
         Ok(Box::new(model))
     }
 
