@@ -330,9 +330,10 @@ mod tests {
 }
 
 pub mod config;
-pub use config::{CudaGraphConfig, ModelGraphConfig};
-
 pub mod executor;
-pub use executor::{BatchCudaGraphExecutor, GraphExecutionError};
+
+pub use config::{CudaGraphConfig, ModelGraphConfig};
+pub use executor::BatchCudaGraphExecutor;
+pub use vllm_traits::kernels::GraphExecutionError;
 // Note: BatchCudaGraphExecutor is a different type from CudaGraphExecutor above (lines 91-134)
 // BatchCudaGraphExecutor uses batch_size (usize) keys and is specialized for scheduler integration

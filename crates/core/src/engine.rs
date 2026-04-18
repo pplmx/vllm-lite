@@ -12,8 +12,13 @@ use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tracing::error;
-use vllm_model::kernels::{BatchCudaGraphExecutor, CudaGraphConfig};
 use vllm_traits::{BatchOutput, ModelBackend, Result as ModelResult, SeqId, TokenId};
+
+#[cfg(feature = "cuda-graph")]
+use vllm_model::kernels::BatchCudaGraphExecutor;
+
+#[cfg(feature = "cuda-graph")]
+use vllm_traits::kernels::CudaGraphConfig;
 
 pub struct BoxedModelBackend(Box<dyn ModelBackend>);
 
@@ -113,9 +118,8 @@ pub struct Engine<M: ModelBackend + 'static> {
     pub response_txs: HashMap<SeqId, mpsc::Sender<TokenId>>,
     sleep_policy: SleepPolicy,
     _phantom: PhantomData<M>,
-    /// CUDA Graph executor for decode optimization
+    #[cfg(feature = "cuda-graph")]
     cuda_graph: Option<BatchCudaGraphExecutor>,
-    /// Adaptive speculative decoder
     pub adaptive_decoder: Option<AdaptiveSpeculativeDecoder>,
 }
 
@@ -141,6 +145,7 @@ impl Engine<BoxedModelBackend> {
         num_kv_blocks: usize,
     ) -> Self {
         let max_seqs = config.max_num_seqs;
+        #[cfg(feature = "cuda-graph")]
         let cuda_graph = if config.cuda_graph.enabled {
             let graph_config = CudaGraphConfig {
                 enabled: true,
@@ -174,6 +179,7 @@ impl Engine<BoxedModelBackend> {
             response_txs: HashMap::with_capacity(max_seqs),
             sleep_policy: SleepPolicy::default(),
             _phantom: PhantomData,
+            #[cfg(feature = "cuda-graph")]
             cuda_graph,
             adaptive_decoder: None,
         }
@@ -209,7 +215,7 @@ impl<M: ModelBackend + 'static> Engine<M> {
         num_kv_blocks: usize,
     ) -> Self {
         let max_seqs = config.max_num_seqs;
-        // Initialize CUDA Graph if enabled
+        #[cfg(feature = "cuda-graph")]
         let cuda_graph = if config.cuda_graph.enabled {
             let graph_config = CudaGraphConfig {
                 enabled: true,
@@ -226,7 +232,6 @@ impl<M: ModelBackend + 'static> Engine<M> {
         } else {
             None
         };
-        // Create shared metrics collector for scheduler
         let enhanced_metrics = Arc::new(EnhancedMetricsCollector::new());
         let draft_model =
             draft_model.map(|m| Arc::new(Mutex::new(m)) as Arc<Mutex<dyn ModelBackend>>);
@@ -242,12 +247,13 @@ impl<M: ModelBackend + 'static> Engine<M> {
             response_txs: HashMap::with_capacity(max_seqs),
             sleep_policy: SleepPolicy::default(),
             _phantom: PhantomData,
+            #[cfg(feature = "cuda-graph")]
             cuda_graph,
             adaptive_decoder: None,
         }
     }
 
-    /// Capture CUDA Graphs for all configured batch sizes
+    #[cfg(feature = "cuda-graph")]
     pub fn capture_cuda_graphs(&mut self) -> crate::error::Result<()> {
         if let Some(ref mut executor) = self.cuda_graph {
             executor
@@ -258,9 +264,20 @@ impl<M: ModelBackend + 'static> Engine<M> {
         Ok(())
     }
 
-    /// Check if CUDA Graph is enabled and has graphs
+    #[cfg(not(feature = "cuda-graph"))]
+    pub fn capture_cuda_graphs(&mut self) -> crate::error::Result<()> {
+        tracing::warn!("CUDA Graph support not enabled");
+        Ok(())
+    }
+
+    #[cfg(feature = "cuda-graph")]
     pub fn cuda_graph_enabled(&self) -> bool {
         self.cuda_graph.as_ref().is_some_and(|e| e.is_enabled())
+    }
+
+    #[cfg(not(feature = "cuda-graph"))]
+    pub fn cuda_graph_enabled(&self) -> bool {
+        false
     }
 
     pub fn enable_speculative(&mut self) {
@@ -483,7 +500,7 @@ impl<M: ModelBackend + 'static> Engine<M> {
             .collect()
     }
 
-    /// Step with CUDA Graph support for decode
+    #[cfg(feature = "cuda-graph")]
     pub fn step_with_graph(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
         let start = std::time::Instant::now();
         let graph_batch = self.scheduler.build_batch_with_graph();
@@ -515,8 +532,13 @@ impl<M: ModelBackend + 'static> Engine<M> {
             }
         };
 
-        // Process output and update
         self.process_output(output, batch, start)
+    }
+
+    #[cfg(not(feature = "cuda-graph"))]
+    pub fn step_with_graph(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
+        tracing::warn!("CUDA Graph support not enabled, using regular step");
+        self.step()
     }
 
     /// Execute regular forward pass (existing logic)
