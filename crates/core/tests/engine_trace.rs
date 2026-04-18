@@ -77,6 +77,10 @@ impl ModelBackend for TracingModel {
     ) -> vllm_traits::Result<Vec<Vec<f32>>> {
         Ok(input_tokens.iter().map(|_t| vec![0.0; 128]).collect())
     }
+
+    fn vocab_size(&self) -> usize {
+        151936
+    }
 }
 
 #[test]

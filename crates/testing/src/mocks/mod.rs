@@ -50,6 +50,10 @@ impl ModelBackend for StubModel {
             .map(|tokens| tokens.iter().map(|_| 0.0).collect())
             .collect())
     }
+
+    fn vocab_size(&self) -> usize {
+        151936
+    }
 }
 
 /// Model that returns seq_id + 1 as next token.
@@ -96,6 +100,10 @@ impl ModelBackend for IncrementModel {
             .iter()
             .map(|tokens| tokens.iter().map(|_| 0.0).collect())
             .collect())
+    }
+
+    fn vocab_size(&self) -> usize {
+        151936
     }
 }
 
@@ -152,6 +160,10 @@ impl ModelBackend for ConstModel {
             .iter()
             .map(|t| t.iter().map(|_| 0.0).collect())
             .collect())
+    }
+
+    fn vocab_size(&self) -> usize {
+        151936
     }
 }
 
@@ -219,6 +231,10 @@ impl ModelBackend for FakeModel {
             .map(|tokens| tokens.iter().map(|_| 0.0).collect())
             .collect())
     }
+
+    fn vocab_size(&self) -> usize {
+        self.vocab_size
+    }
 }
 
 /// Model that never progresses (always returns same token).
@@ -273,6 +289,10 @@ impl ModelBackend for NeverProgressModel {
             .iter()
             .map(|t| t.iter().map(|_| 0.0).collect())
             .collect())
+    }
+
+    fn vocab_size(&self) -> usize {
+        151936
     }
 }
 

@@ -226,18 +226,8 @@ impl ModelLoader {
         }
     }
 
-    pub fn load_model(&self) -> Result<crate::qwen3::model::Qwen3Model> {
-        let config = self.load_config()?;
-        let weights = self.load_weights()?;
-
-        crate::qwen3::model::Qwen3Model::from_weights(
-            config,
-            self.inner.device.clone(),
-            weights,
-            self.inner.num_kv_blocks,
-            self.inner.kv_quantization,
-        )
-        .map_err(|e| candle_core::Error::msg(format!("Failed to create model: {}", e)))
+    pub fn load_model(&self) -> Result<Box<dyn vllm_traits::ModelBackend>> {
+        self.load()
     }
 
     pub fn print_weight_keys(weights: &std::collections::HashMap<String, Tensor>) {

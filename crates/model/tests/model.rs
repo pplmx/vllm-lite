@@ -1109,37 +1109,15 @@ fn test_qwen3_layer0_intermediate_outputs() {
     let tokens = vec![6023u32];
     let positions: Vec<usize> = vec![0];
 
-    let (logits, hidden) = model
+    let (logits, next_token) = model
         .forward_with_cache(&tokens, 0, &[0], &positions, true)
         .expect("Forward failed");
 
-    println!("Hidden dims: {:?}", hidden.dims());
+    println!("Next token: {}", next_token);
     println!("Logits dims: {:?}", logits.dims());
 
-    // For prefill, hidden is [batch, seq_len, hidden_size]
-    // logits is [batch, seq_len, vocab_size]
-    assert_eq!(hidden.dims().len(), 3, "Prefill hidden should be 3D");
+    // For prefill, logits is [batch, seq_len, vocab_size]
     assert_eq!(logits.dims().len(), 3, "Prefill logits should be 3D");
-
-    let hidden_data = hidden.flatten_all().unwrap().to_vec1::<f32>().unwrap();
-
-    let mean: f32 = hidden_data.iter().sum::<f32>() / hidden_data.len() as f32;
-    let variance: f32 =
-        hidden_data.iter().map(|&x| (x - mean).powi(2)).sum::<f32>() / hidden_data.len() as f32;
-    let std_dev = variance.sqrt();
-
-    println!("Hidden - mean: {:.6}, std: {:.6}", mean, std_dev);
-    println!(
-        "Hidden min: {:.4}, max: {:.4}",
-        hidden_data.iter().cloned().fold(f32::INFINITY, f32::min),
-        hidden_data
-            .iter()
-            .cloned()
-            .fold(f32::NEG_INFINITY, f32::max)
-    );
-
-    assert!(std_dev > 0.001, "Hidden std_dev too small: {}", std_dev);
-    assert!(std_dev < 100.0, "Hidden std_dev too large: {}", std_dev);
 
     let logits_data = logits.flatten_all().unwrap().to_vec1::<f32>().unwrap();
     let logits_std = logits_data.iter().map(|&x| x * x).sum::<f32>() / logits_data.len() as f32;

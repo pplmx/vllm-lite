@@ -78,7 +78,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_qwen35_full_weight_structure() {
         let model_path = "/models/Qwen3.5-0.8B";
         let device = Device::Cpu;
@@ -196,27 +195,11 @@ mod tests {
         println!("\n=== Testing Prefill ===");
         println!("Input tokens: {:?}", tokens);
 
-        let (logits, _) = model
-            .forward_with_cache(&tokens, 0, &block_ids, &positions, true)
+        let output = model
+            .forward(&[1], &[tokens], &[positions], &[block_ids], &[0], &[true])
             .expect("Prefill forward failed");
 
-        println!("Logits shape: {:?}", logits.dims());
-
-        let seq_len = logits.dims()[1];
-        let last_logits = logits.narrow(1, seq_len - 1, 1).expect("narrow failed");
-        let last_logits = last_logits.squeeze(1).expect("squeeze failed");
-        let last_logits = last_logits.squeeze(0).expect("squeeze failed");
-
-        let top_token = last_logits
-            .argmax(candle_core::D::Minus1)
-            .expect("argmax failed");
-        let top_token = top_token.to_vec0::<u32>().expect("to_vec0 failed");
-        println!("Top token: {}", top_token);
-
-        use vllm_model::tokenizer::Tokenizer;
-        let tokenizer = Tokenizer::from_file("/models/Qwen3-0.6B/tokenizer.json").unwrap();
-        let decoded = tokenizer.decode(&[top_token]);
-        println!("Decoded: '{}'", decoded);
+        println!("Output: {:?}", output);
     }
 
     #[test]

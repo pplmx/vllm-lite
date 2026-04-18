@@ -254,4 +254,8 @@ impl ModelBackend for Qwen35Model {
 
         Ok(embeddings)
     }
+
+    fn vocab_size(&self) -> usize {
+        self.config.vocab_size()
+    }
 }

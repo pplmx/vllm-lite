@@ -159,4 +159,8 @@ impl ModelBackend for LlamaModel {
             input_tokens.len()
         ])
     }
+
+    fn vocab_size(&self) -> usize {
+        self.config.vocab_size
+    }
 }

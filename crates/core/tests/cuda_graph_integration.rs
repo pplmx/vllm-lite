@@ -121,6 +121,10 @@ fn test_end_to_end_engine_with_cuda_graph_config() {
         ) -> Result<Vec<Vec<f32>>, ModelError> {
             Ok(vec![])
         }
+
+        fn vocab_size(&self) -> usize {
+            151936
+        }
     }
 
     let config = SchedulerConfig {

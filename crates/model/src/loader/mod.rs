@@ -56,13 +56,15 @@ pub fn detect_architecture(config: &serde_json::Value) -> Architecture {
         .unwrap_or("")
         .to_lowercase();
 
+    eprintln!("DEBUG: config.model_type = {:?}", model_type);
+
     match model_type.as_str() {
         "llama" | "llama2" | "llama3" => Architecture::Llama,
         "mistral" => Architecture::Mistral,
         "mixtral" => Architecture::Mixtral,
-        "qwen2" | "qwen2.5" => Architecture::Qwen3,
-        "qwen3" => Architecture::Qwen3,
-        "qwen3.5" => Architecture::Qwen35,
+        "qwen2" | "qwen2.5" | "qwen2_5" => Architecture::Qwen3,
+        "qwen3" | "qwen_3" => Architecture::Qwen3,
+        "qwen3.5" | "qwen3_5" => Architecture::Qwen35,
         "mamba" => Architecture::Qwen35,
         "gemma2" | "gemma3" | "gemma4" => Architecture::Gemma4,
         _ => Architecture::Llama,

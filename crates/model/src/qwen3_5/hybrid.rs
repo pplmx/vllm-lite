@@ -206,8 +206,9 @@ impl MRoPE {
 
 pub struct SSMLayer35 {
     x_proj: Linear,
-    a_log: Linear,
-    d: Linear,
+    in_proj_a: Linear,
+    a_log: Tensor,
+    dt_bias: Tensor,
     conv: Conv1d,
     d_inner: usize,
     d_state: usize,
@@ -221,8 +222,9 @@ impl SSMLayer35 {
         vb: VarBuilder,
     ) -> CandleResult<Self> {
         let x_proj = candle_nn::linear(d_inner, d_inner * 3, vb.pp("x_proj"))?;
-        let a_log = candle_nn::linear(d_inner, d_state * d_inner, vb.pp("A_log"))?;
-        let d = candle_nn::linear(d_inner, d_inner, vb.pp("D"))?;
+        let in_proj_a = candle_nn::linear(d_inner, d_state, vb.pp("in_proj_a"))?;
+        let a_log = Tensor::zeros(d_state, DType::F32, vb.device())?;
+        let dt_bias = Tensor::zeros(d_state, DType::F32, vb.device())?;
         let conv_cfg = candle_nn::Conv1dConfig {
             padding: d_conv - 1,
             ..Default::default()
@@ -231,8 +233,9 @@ impl SSMLayer35 {
 
         Ok(Self {
             x_proj,
+            in_proj_a,
             a_log,
-            d,
+            dt_bias,
             conv,
             d_inner,
             d_state,
@@ -255,6 +258,30 @@ impl SSMLayer35 {
         let delta = candle_nn::ops::silu(delta)?;
 
         Ok((delta, b.clone(), c.clone(), x_conv))
+    }
+
+    pub fn forward_with_a(
+        &self,
+        x: &Tensor,
+        a_input: &Tensor,
+    ) -> CandleResult<(Tensor, Tensor, Tensor, Tensor, Tensor)> {
+        let x_conv = x.transpose(1, 2)?;
+        let x_conv = self.conv.forward(&x_conv)?;
+        let x_conv = x_conv.transpose(1, 2)?;
+        let x_conv = candle_nn::ops::silu(&x_conv)?;
+
+        let x_ssm = self.x_proj.forward(&x_conv)?;
+
+        let parts = x_ssm.chunk(3, 2)?;
+        let delta = &parts[0];
+        let b = &parts[1];
+        let c = &parts[2];
+
+        let a_proj_out = self.in_proj_a.forward(a_input)?;
+
+        let delta = candle_nn::ops::silu(delta)?;
+
+        Ok((delta, b.clone(), c.clone(), x_conv, a_proj_out))
     }
 
     pub fn d_inner(&self) -> usize {
@@ -341,38 +368,55 @@ impl LinearAttentionBlock {
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
         let residual = x.clone();
 
-        let x_proj = self.input_proj.forward(x)?;
-        let parts = x_proj.chunk(2, 2)?;
-        let z = &parts[0];
-        let x_inner = &parts[1];
+        let x_proj_out = self.input_proj.forward(x)?;
 
-        let (_delta, b, c, x_conv) = self.ssm.forward(x_inner)?;
+        let batch = x_proj_out.dims()[0];
+        let seq_len = if x_proj_out.dims().len() == 3 {
+            x_proj_out.dims()[1]
+        } else {
+            1
+        };
 
-        let batch = x.dims()[0];
-        let seq_len = x_conv.dims()[1];
+        if x_proj_out.dims().len() == 2 {
+            let x_3d = x_proj_out.unsqueeze(1)?;
+            let output = self.output_proj.forward(&x_3d)?;
+            return output.squeeze(1)?.add(&residual);
+        }
+
+        if seq_len < 4 {
+            let gated = candle_nn::ops::silu(&x_proj_out)?;
+            let output = self.output_proj.forward(&gated)?;
+            let output = if output.dims().len() == 3 && output.dims()[1] == 1 {
+                output.squeeze(1)?
+            } else {
+                output
+            };
+
+            return output.add(&residual);
+        }
+
+        let (_delta, b, c, _x_conv) = self.ssm.forward(&x_proj_out)?;
+
         let d_inner = self.ssm.d_inner();
         let d_state = self.ssm.d_state();
 
-        let a_log = self
-            .ssm
-            .a_log
-            .forward(&x_conv)?
-            .reshape((batch, seq_len, d_state, d_inner))?;
+        let a_log = &self.ssm.a_log;
+        let dt_bias = &self.ssm.dt_bias;
 
         let mut h = Tensor::zeros((batch, d_state, d_inner), DType::F32, x.device())?;
         let mut outputs: Vec<Tensor> = Vec::with_capacity(seq_len);
 
         for t in 0..seq_len {
-            let a_t = a_log.narrow(1, t, 1)?.squeeze(1)?.exp()?;
+            let dt_t = _delta.narrow(1, t, 1)?.squeeze(1)?.broadcast_add(dt_bias)?;
+            let dt_t = candle_nn::ops::silu(&dt_t)?;
+            let a_t = (a_log.reshape((d_state, 1))? * Tensor::ones((), DType::F32, x.device())?)?
+                .exp()?;
             let b_t = b.narrow(1, t, 1)?.squeeze(1)?.reshape((batch, d_state))?;
             let c_t = c.narrow(1, t, 1)?.squeeze(1)?.reshape((batch, d_state))?;
-            let x_t = x_conv
-                .narrow(1, t, 1)?
-                .squeeze(1)?
-                .reshape((batch, d_inner))?;
 
-            let bx = b_t.broadcast_mul(&x_t)?;
-            let h_new = a_t.broadcast_mul(&h)?.broadcast_add(&bx)?;
+            let dt_a = dt_t.reshape((1, d_state))?.broadcast_mul(&a_t)?;
+            let bx = b_t.broadcast_mul(&dt_t.reshape((1, d_state))?)?;
+            let h_new = dt_a.broadcast_mul(&h)?.broadcast_add(&bx)?;
             let y_t = c_t.broadcast_mul(&h_new)?;
             outputs.push(y_t.reshape((batch, 1, d_inner))?);
             h = h_new;
@@ -380,26 +424,15 @@ impl LinearAttentionBlock {
 
         let ssm_out = Tensor::cat(&outputs, 1)?;
 
-        let d = self.ssm.d.forward(&x_conv)?;
-        let ssm_out = (&ssm_out + &d)?;
-
         let ssm_act = candle_nn::ops::silu(&ssm_out)?;
+
+        let z = x_proj_out.narrow(2, 0, d_inner)?;
         let gated = z.broadcast_mul(&ssm_act)?;
 
-        let mut output = self.output_proj.forward(&gated)?;
+        let output = self.output_proj.forward(&gated)?;
 
-        if let Some(ref attn) = self.linear_attn {
-            let attn_out = attn.forward(x)?;
-            output = output.broadcast_add(&attn_out)?;
-        }
-
-        if let Some(ref g) = self.gate {
-            let g_val = g.forward(x)?;
-            output = output.broadcast_mul(&g_val)?;
-        }
-
-        output = output.add(&residual)?;
-        output = self.norm.forward(&output)?;
+        let output = output.add(&residual)?;
+        let output = self.norm.forward(&output)?;
 
         Ok(output)
     }
@@ -695,7 +728,7 @@ impl Qwen35HybridModel {
         let rope = MRoPE::from_config(&config);
 
         for i in 0..num_layers {
-            let prefix = format!("model.language_model.layers.{}", i);
+            let prefix = format!("model.layers.{}", i);
             let layer_type = &model.layer_types[i];
 
             let layer = match layer_type {
@@ -730,11 +763,15 @@ impl Qwen35HybridModel {
             eprintln!("Loaded layer {}: {:?}", i, model.layer_types[i]);
         }
 
-        if let Some(w) = weights.get("model.language_model.norm.weight") {
+        if let Some(w) = weights.get("model.norm.weight") {
             let bias = Tensor::zeros(w.dim(0).unwrap_or(hidden_size), w.dtype(), w.device())?;
             model.norm = candle_nn::LayerNorm::new(w.clone(), bias, config.rms_norm_eps() as f64);
             eprintln!("Loaded final norm");
-        } else if let Some(w) = weights.get("model.norm.weight") {
+        } else if let Some(w) = weights.get("model.language_model.norm.weight") {
+            let bias = Tensor::zeros(w.dim(0).unwrap_or(hidden_size), w.dtype(), w.device())?;
+            model.norm = candle_nn::LayerNorm::new(w.clone(), bias, config.rms_norm_eps() as f64);
+            eprintln!("Loaded final norm (language_model fallback)");
+        } else if let Some(w) = weights.get("model.final_layernorm.weight") {
             let bias = Tensor::zeros(w.dim(0).unwrap_or(hidden_size), w.dtype(), w.device())?;
             model.norm = candle_nn::LayerNorm::new(w.clone(), bias, config.rms_norm_eps() as f64);
             eprintln!("Loaded final norm (fallback)");
@@ -773,38 +810,47 @@ impl LinearAttentionBlock {
     ) -> CandleResult<Self> {
         let d_inner = expand * d_model;
 
-        let in_proj_key = format!("{}.mamba.in_proj.weight", prefix);
-        let in_proj_w = weights
-            .get(&in_proj_key)
-            .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", in_proj_key)))?;
+        let in_proj_key = format!("{}.linear_attn.in_proj_qkv.weight", prefix);
+        let in_proj_w = match weights.get(&in_proj_key).cloned() {
+            Some(w) => w,
+            None => return Err(candle_core::Error::msg(format!("Missing {}", in_proj_key))),
+        };
         let input_proj = Linear::new(in_proj_w, None);
 
-        let x_proj_key = format!("{}.mamba.x_proj.weight", prefix);
-        let a_log_key = format!("{}.mamba.A_log.weight", prefix);
-        let d_key = format!("{}.mamba.D.weight", prefix);
-        let conv_key = format!("{}.mamba.conv1d.weight", prefix);
+        let x_proj_key = format!("{}.linear_attn.in_proj_qkv.weight", prefix);
+        let in_proj_a_key = format!("{}.linear_attn.in_proj_a.weight", prefix);
+        let a_log_key = format!("{}.linear_attn.A_log", prefix);
+        let dt_bias_key = format!("{}.linear_attn.dt_bias", prefix);
+        let conv_key = format!("{}.linear_attn.conv1d.weight", prefix);
 
-        let x_proj_w = weights
-            .get(&x_proj_key)
-            .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", x_proj_key)))?;
-        let a_log_w = weights
-            .get(&a_log_key)
-            .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", a_log_key)))?;
-        let d_w = weights
-            .get(&d_key)
-            .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", d_key)))?;
-        let conv_w = weights
-            .get(&conv_key)
-            .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", conv_key)))?;
+        let x_proj_w = match weights.get(&x_proj_key).cloned() {
+            Some(w) => w,
+            None => return Err(candle_core::Error::msg(format!("Missing {}", x_proj_key))),
+        };
+        let in_proj_a_w = match weights.get(&in_proj_a_key).cloned() {
+            Some(w) => w,
+            None => {
+                return Err(candle_core::Error::msg(format!(
+                    "Missing {}",
+                    in_proj_a_key
+                )));
+            }
+        };
+        let a_log_w = match weights.get(&a_log_key).cloned() {
+            Some(w) => w,
+            None => return Err(candle_core::Error::msg(format!("Missing {}", a_log_key))),
+        };
+        let dt_bias_w = match weights.get(&dt_bias_key).cloned() {
+            Some(w) => w,
+            None => return Err(candle_core::Error::msg(format!("Missing {}", dt_bias_key))),
+        };
+        let conv_w = match weights.get(&conv_key).cloned() {
+            Some(w) => w,
+            None => return Err(candle_core::Error::msg(format!("Missing {}", conv_key))),
+        };
 
         let x_proj = Linear::new(x_proj_w, None);
-        let a_log = Linear::new(a_log_w, None);
-        let d = Linear::new(d_w, None);
+        let in_proj_a = Linear::new(in_proj_a_w, None);
 
         let conv_cfg = candle_nn::Conv1dConfig {
             padding: d_conv - 1,
@@ -814,36 +860,37 @@ impl LinearAttentionBlock {
 
         let ssm = SSMLayer35 {
             x_proj,
-            a_log,
-            d,
+            in_proj_a,
+            a_log: a_log_w,
+            dt_bias: dt_bias_w,
             conv,
             d_inner,
             d_state,
         };
 
-        let out_proj_key = format!("{}.mamba.out_proj.weight", prefix);
-        let out_proj_w = weights
-            .get(&out_proj_key)
-            .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", out_proj_key)))?;
+        let out_proj_key = format!("{}.linear_attn.out_proj.weight", prefix);
+        let out_proj_w = match weights.get(&out_proj_key).cloned() {
+            Some(w) => w,
+            None => return Err(candle_core::Error::msg(format!("Missing {}", out_proj_key))),
+        };
         let output_proj = Linear::new(out_proj_w, None);
 
-        let norm_key = format!("{}.mamba.norm.weight", prefix);
-        let norm_w = weights
-            .get(&norm_key)
+        let norm_key = format!("{}.linear_attn.norm.weight", prefix);
+        let norm_w = match weights.get(&norm_key).cloned() {
+            Some(w) => w,
+            None => return Err(candle_core::Error::msg(format!("Missing {}", norm_key))),
+        };
+        let norm_b = match weights
+            .get(&format!("{}.linear_attn.norm.bias", prefix))
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", norm_key)))?;
-        let norm_b = weights
-            .get(&format!("{}.mamba.norm.bias", prefix))
-            .cloned()
-            .unwrap_or_else(|| {
-                Tensor::zeros(
-                    norm_w.dim(0).unwrap_or(d_model),
-                    DType::F32,
-                    norm_w.device(),
-                )
-                .unwrap()
-            });
+        {
+            Some(w) => w,
+            None => Tensor::zeros(
+                norm_w.dim(0).unwrap_or(d_model),
+                DType::F32,
+                norm_w.device(),
+            )?,
+        };
         let norm = LayerNorm::new(norm_w, norm_b, 1e-5);
 
         Ok(Self {
@@ -1118,6 +1165,10 @@ impl ModelBackend for Qwen35HybridModel {
         }
 
         Ok(embeddings)
+    }
+
+    fn vocab_size(&self) -> usize {
+        self.config.vocab_size()
     }
 }
 
