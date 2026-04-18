@@ -13,7 +13,7 @@ pub use attention::{
     AttentionConfig, GqaAttention, causal_mask, causal_mask_tile, expand_kv, paged_attention,
     tiled_attention,
 };
-pub use block::TransformerBlock;
+pub use block::{BlockConfig, StandardBlock, TransformerBlock};
 pub use mlp::*;
 pub use norm::{LnLayerNorm, RmsNorm, layer_norm, rms_norm};
 pub use positional::*;
