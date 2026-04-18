@@ -162,7 +162,10 @@ mod tests {
         let output = mlp.forward(&x)?;
 
         let data: Vec<f32> = output.flatten_all()?.to_vec1()?;
-        assert!(data.iter().all(|v| v.is_finite()), "SiLU output should be finite");
+        assert!(
+            data.iter().all(|v| v.is_finite()),
+            "SiLU output should be finite"
+        );
         Ok(())
     }
 
