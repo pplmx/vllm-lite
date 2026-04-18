@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn test_qwen35_architecture_default() {
-        let arch = Qwen35Architecture::default();
+        let arch = Qwen35Architecture;
         assert_eq!(arch.name(), "qwen3.5");
     }
 }

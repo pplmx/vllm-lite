@@ -108,6 +108,7 @@ impl Architecture for Qwen3Architecture {
             max_position_embeddings: Some(config.max_position_embeddings),
             rms_norm_eps: Some(config.rms_norm_eps as f32),
             tie_word_embeddings: Some(config.tie_word_embeddings),
+            head_dim: Some(config.head_dim),
             ..Default::default()
         };
         let model = Qwen3Model::from_weights(qwen_config, device, weights, num_kv_blocks, false)?;
