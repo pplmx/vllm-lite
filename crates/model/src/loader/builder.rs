@@ -90,6 +90,7 @@ impl ModelLoaderInner {
             .map_err(|e| candle_core::Error::msg(format!("Failed to parse config: {}", e)))?;
 
         let architecture = crate::loader::detect_architecture(&config_json);
+        eprintln!("Detected architecture: {:?}", architecture);
 
         Ok(Self {
             device,
@@ -152,7 +153,7 @@ impl ModelLoader {
 
         let config = ModelConfig::from_config_json(&self.inner.config_json)
             .map_err(|e| candle_core::Error::msg(format!("Failed to parse model config: {}", e)))?;
-        let weights = self.load_weights()?;
+        let mut weights = self.load_weights()?;
 
         match self.inner.architecture {
             Architecture::Llama => {
@@ -195,7 +196,17 @@ impl ModelLoader {
             }
             Architecture::Qwen35 => {
                 let config = self.load_config()?;
-                let model = crate::qwen3_5::model::Qwen35Model::from_weights(
+                eprintln!("Qwen35: architecture detected, loading hybrid model");
+                weights = crate::loader::remap_qwen35_weight_keys(weights);
+                eprintln!("Qwen35: after remap, checking for embed_tokens...");
+                if !weights.contains_key("model.embed_tokens.weight")
+                    && !weights.contains_key("model.language_model.embed_tokens.weight")
+                {
+                    let embed_keys: Vec<_> =
+                        weights.keys().filter(|k| k.contains("embed")).collect();
+                    eprintln!("Qwen35 embed keys available: {:?}", embed_keys);
+                }
+                let model = crate::qwen3_5::Qwen35HybridModel::from_weights(
                     config,
                     self.inner.device.clone(),
                     weights,

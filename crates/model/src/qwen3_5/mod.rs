@@ -1,4 +1,5 @@
+pub mod hybrid;
 pub mod model;
 pub mod ssm;
 
-pub use model::Qwen35Model;
+pub use hybrid::Qwen35HybridModel;

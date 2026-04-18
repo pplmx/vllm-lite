@@ -240,6 +240,7 @@ fn test_qwen3_config_text_config_fallback() {
         rope_theta: None,
         max_position_embeddings: None,
         rms_norm_eps: None,
+        layer_types: None,
     };
     let config = Qwen3Config {
         text_config: Some(text_config),

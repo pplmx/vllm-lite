@@ -60,12 +60,36 @@ pub fn detect_architecture(config: &serde_json::Value) -> Architecture {
         "llama" | "llama2" | "llama3" => Architecture::Llama,
         "mistral" => Architecture::Mistral,
         "mixtral" => Architecture::Mixtral,
-        "qwen2" => Architecture::Qwen3,
-        "qwen2.5" | "qwen3" => Architecture::Qwen35,
+        "qwen2" | "qwen2.5" => Architecture::Qwen3,
+        "qwen3" => Architecture::Qwen3,
+        "qwen3.5" => Architecture::Qwen35,
         "mamba" => Architecture::Qwen35,
         "gemma2" | "gemma3" | "gemma4" => Architecture::Gemma4,
         _ => Architecture::Llama,
     }
+}
+
+pub fn remap_qwen35_weight_keys(weights: HashMap<String, Tensor>) -> HashMap<String, Tensor> {
+    let mut remapped = HashMap::new();
+
+    for (key, value) in weights {
+        let new_key = if key.starts_with("model.language_model.") {
+            key.replace("model.language_model.", "model.")
+        } else if key.starts_with("lm_head.") || key.starts_with("model.lm_head.") {
+            if key.starts_with("lm_head.") {
+                key.replace("lm_head.", "model.lm_head.")
+            } else {
+                key
+            }
+        } else if key == "model.norm.weight" {
+            "model.final_layernorm.weight".to_string()
+        } else {
+            key
+        };
+        remapped.insert(new_key, value);
+    }
+
+    remapped
 }
 
 fn find_safetensors_files(model_dir: &Path) -> Result<Vec<std::path::PathBuf>> {
