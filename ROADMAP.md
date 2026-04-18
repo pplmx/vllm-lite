@@ -151,9 +151,9 @@
 | 模型                 | 架构                   | 状态 |
 | -------------------- | ---------------------- | ---- |
 | Qwen2.5-0.5B         | GQA + RoPE             | ✅   |
-| Qwen3-0.6B           | GQA + RoPE             | ✅   |
+| Qwen3-0.6B           | GQA + RoPE + QK-Norm   | ✅   |
 | DeepSeek-R1-8B       | GQA + MoE              | ✅   |
-| Qwen3.5-0.8B (Mamba) | Mamba SSM              | ✅   |
+| Qwen3.5-0.8B (Mamba) | Mamba SSM + Attention  | ✅   |
 | Llama                | GQA + RMSNorm          | ✅   |
 | Mistral              | Sliding Window + GQA   | ✅   |
 | Gemma4               | Hybrid Attention       | ✅   |
@@ -164,8 +164,16 @@
 - [x] `tie_word_embeddings` 支持
 - [x] `q_norm` / `k_norm` 支持
 - [x] RoPE YARN scaling
+- [x] 自定义 `head_dim` 支持
 
-### 6.3 模型管理
+### 6.3 架构注册系统
+
+- [x] `Architecture` trait 动态抽象
+- [x] `ArchitectureRegistry` 注册表
+- [x] 新架构 3 步添加流程
+- [x] 每个架构独立模块和测试
+
+### 6.4 模型管理
 
 - [x] `--model` CLI 参数
 - [x] 模型热插拔 (通过 CLI 参数)
@@ -222,12 +230,32 @@
 
 ## 🔮 长期愿景
 
-| 目标 | 描述                |
-| ---- | ------------------- |
-| 🚧   | 更多模型架构支持    |
-| 🚧   | 移动端/边缘部署优化 |
-| 🚧   | WebAssembly 支持    |
-| 🚧   | 在线微调接口        |
+| 目标 | 描述                | 状态 |
+| ---- | ------------------- | ---- |
+| 🚧   | 更多模型架构支持    | 新架构可快速添加 |
+| 🚧   | 移动端/边缘部署优化 | 依赖轻量级后端 |
+| 🚧   | WebAssembly 支持    | 依赖 WASM 编译目标 |
+| 🚧   | 在线微调接口        | 未来规划 |
+
+### 架构扩展性
+
+新的模型架构只需 3 步即可添加:
+
+```rust
+// 1. 创建 arch.rs
+pub struct NewModel;
+impl Architecture for NewModel { ... }
+
+// 2. 创建 register.rs
+pub fn register(registry: &ArchitectureRegistry) {
+    registry.register::<NewModel>();
+}
+
+// 3. 更新 register_all_archs()
+registry::register::<NewModel>(registry);
+```
+
+详细文档: [docs/superpowers/specs/2026-04-18-multi-model-architecture-design.md](docs/superpowers/specs/2026-04-18-multi-model-architecture-design.md)
 
 ---
 
