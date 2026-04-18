@@ -111,12 +111,6 @@ struct ServerArgs {
 pub struct ModelArgs {
     #[arg(long, required = true, env = "VLLM_MODEL", short = 'm')]
     pub model: PathBuf,
-
-    #[arg(long, env = "VLLM_DOWNLOAD_TOKENIZER")]
-    pub download_tokenizer: bool,
-
-    #[arg(long, env = "VLLM_TOKENIZER_REPO")]
-    pub tokenizer_repo: Option<String>,
 }
 
 #[derive(clap::Args, Debug, Clone)]
