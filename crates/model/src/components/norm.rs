@@ -3,23 +3,104 @@
 //! Provides unified RMSNorm and LayerNorm implementations.
 
 use candle_core::{DType, Device, Module, Result, Tensor};
-use candle_nn::{LayerNorm, Linear};
+use candle_nn::LayerNorm;
 
-/// RMSNorm configuration
+pub trait NormLayer: Send + Sync {
+    fn forward(&self, x: &Tensor) -> Result<Tensor>;
+    fn hidden_size(&self) -> usize;
+}
+
 #[derive(Clone, Debug)]
 pub struct RmsNormConfig {
     pub hidden_size: usize,
     pub eps: f64,
 }
 
-/// Unified RMSNorm function.
-///
-/// Handles both 2D [batch * seq, hidden] and 3D [batch, seq, hidden] tensors.
+pub struct RmsNorm {
+    weight: Tensor,
+    eps: f64,
+}
+
+impl RmsNorm {
+    pub fn new(weight: Tensor, eps: f64) -> Self {
+        Self { weight, eps }
+    }
+
+    pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
+        let dims = x.dims();
+
+        if dims.len() == 3 {
+            let (batch, seq, hidden) = x.dims3()?;
+            let x_flat = x.reshape((batch * seq, hidden))?;
+            let weight_2d = self.weight.reshape((1, hidden))?;
+
+            let variance = x_flat.sqr()?.mean_keepdim(1)?;
+            let x_normed = x_flat.broadcast_div(&(variance + self.eps)?.sqrt()?)?;
+            let x = x_normed.broadcast_mul(&weight_2d)?;
+
+            x.reshape((batch, seq, hidden))
+        } else {
+            let hidden = *dims.last().ok_or_else(|| candle_core::Error::msg("Empty tensor"))?;
+            let weight_2d = self.weight.reshape((1, hidden))?;
+
+            let variance = x.sqr()?.mean_keepdim(1)?;
+            let x_normed = x.broadcast_div(&(variance + self.eps)?.sqrt()?)?;
+            x_normed.broadcast_mul(&weight_2d)
+        }
+    }
+}
+
+impl NormLayer for RmsNorm {
+    fn forward(&self, x: &Tensor) -> Result<Tensor> {
+        self.forward(x)
+    }
+
+    fn hidden_size(&self) -> usize {
+        self.weight.dims().last().copied().unwrap_or(0)
+    }
+}
+
+pub struct LnLayerNorm {
+    weight: Tensor,
+    bias: Tensor,
+    eps: f64,
+}
+
+impl LnLayerNorm {
+    pub fn new(weight: Tensor, bias: Tensor, eps: f64) -> Self {
+        Self { weight, bias, eps }
+    }
+
+    pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
+        let dims = x.dims();
+
+        if dims.len() == 3 {
+            let (batch, seq, hidden) = x.dims3()?;
+            let x = x.reshape((batch * seq, hidden))?;
+            let norm = LayerNorm::new(self.weight.clone(), self.bias.clone(), self.eps);
+            let x = norm.forward(&x)?;
+            x.reshape((batch, seq, hidden))
+        } else {
+            let norm = LayerNorm::new(self.weight.clone(), self.bias.clone(), self.eps);
+            norm.forward(x)
+        }
+    }
+}
+
+impl NormLayer for LnLayerNorm {
+    fn forward(&self, x: &Tensor) -> Result<Tensor> {
+        self.forward(x)
+    }
+
+    fn hidden_size(&self) -> usize {
+        self.weight.dims().last().copied().unwrap_or(0)
+    }
+}
+
 pub fn rms_norm(x: &Tensor, weight: &Tensor, eps: f64) -> Result<Tensor> {
     let dims = x.dims();
 
     if dims.len() == 3 {
-        // 3D tensor: [batch, seq, hidden]
         let (batch, seq, hidden) = x.dims3()?;
         let x_flat = x.reshape((batch * seq, hidden))?;
         let weight_2d = weight.reshape((1, hidden))?;
@@ -30,23 +111,17 @@ pub fn rms_norm(x: &Tensor, weight: &Tensor, eps: f64) -> Result<Tensor> {
 
         x.reshape((batch, seq, hidden))
     } else if dims.len() == 2 {
-        // 2D tensor: [batch, hidden] - compute RMS across hidden dimension
         let hidden = dims[1];
 
-        // Compute RMS: sqrt(mean(x^2)) for each row, then normalize
         let x_sq = x.sqr()?;
-        let mean_sq = x_sq.mean_keepdim(1)?; // [batch, 1]
-        let rms = (mean_sq + eps)?.sqrt()?; // [batch, 1]
+        let mean_sq = x_sq.mean_keepdim(1)?;
+        let rms = (mean_sq + eps)?.sqrt()?;
 
-        // Normalize: x / rms * weight
-        let normalized = x.broadcast_div(&rms)?; // [batch, hidden]
+        let normalized = x.broadcast_div(&rms)?;
         let weight_broadcast = weight.reshape((1, hidden))?;
         normalized.broadcast_mul(&weight_broadcast)
     } else {
-        // Fallback: use standard approach
-        let hidden = *dims
-            .last()
-            .ok_or_else(|| candle_core::Error::msg("Empty tensor"))?;
+        let hidden = *dims.last().ok_or_else(|| candle_core::Error::msg("Empty tensor"))?;
         let weight_2d = weight.reshape((1, hidden))?;
 
         let variance = x.sqr()?.mean(1)?;
@@ -55,7 +130,6 @@ pub fn rms_norm(x: &Tensor, weight: &Tensor, eps: f64) -> Result<Tensor> {
     }
 }
 
-/// LayerNorm function (standard, not RMS)
 pub fn layer_norm(x: &Tensor, weight: &Tensor, bias: &Tensor, eps: f64) -> Result<Tensor> {
     let dims = x.dims();
 
@@ -71,27 +145,39 @@ pub fn layer_norm(x: &Tensor, weight: &Tensor, bias: &Tensor, eps: f64) -> Resul
     }
 }
 
-/// Create a new RMSNorm layer with proper initialization
-pub fn rms_norm_layer(hidden_size: usize, eps: f64, device: &Device) -> Result<LayerNorm> {
+pub fn rms_norm_layer(hidden_size: usize, eps: f64, device: &Device) -> Result<LnLayerNorm> {
     let weight = Tensor::ones(hidden_size, DType::F32, device)?;
     let bias = Tensor::zeros(hidden_size, DType::F32, device)?;
-    Ok(LayerNorm::new(weight, bias, eps))
-}
-
-/// Wrap a Linear layer as RMSNorm weight (for compatibility)
-pub fn linear_as_rms_norm(linear: &Linear, eps: f64) -> Result<LayerNorm> {
-    let weight = linear.weight().clone();
-    let hidden_size = weight
-        .dim(0)
-        .map_err(|e| candle_core::Error::msg(e.to_string()))?;
-    let bias = Tensor::zeros(hidden_size, weight.dtype(), weight.device())?;
-    Ok(LayerNorm::new(weight, bias, eps))
+    Ok(LnLayerNorm::new(weight, bias, eps))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candle_core::Device;
+    use candle_core::DType;
+
+    #[test]
+    fn test_rms_norm_shape_preserved() {
+        let weight = Tensor::ones((32,), DType::F32, &Device::Cpu).unwrap();
+        let rms = RmsNorm::new(weight, 1e-6);
+
+        let input = Tensor::ones((2, 10, 32), DType::F32, &Device::Cpu).unwrap();
+        let output = rms.forward(&input).unwrap();
+
+        assert_eq!(output.dims(), &[2, 10, 32]);
+    }
+
+    #[test]
+    fn test_layer_norm_shape_preserved() {
+        let weight = Tensor::ones((32,), DType::F32, &Device::Cpu).unwrap();
+        let bias = Tensor::zeros((32,), DType::F32, &Device::Cpu).unwrap();
+        let ln = LnLayerNorm::new(weight, bias, 1e-6);
+
+        let input = Tensor::ones((2, 10, 32), DType::F32, &Device::Cpu).unwrap();
+        let output = ln.forward(&input).unwrap();
+
+        assert_eq!(output.dims(), &[2, 10, 32]);
+    }
 
     #[test]
     fn test_rms_norm_2d() {
