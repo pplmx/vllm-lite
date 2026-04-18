@@ -3,17 +3,18 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
+use crate::components::RmsNorm;
 use crate::config::{LayerType, ModelConfig, RoPEConfig};
 use crate::gemma4::attention::Gemma4Attention;
 use crate::gemma4::mlp::GeGLU;
 use candle_core::{Result, Tensor};
-use candle_nn::{Linear, linear};
+use candle_nn::linear;
 
 pub struct Gemma4Block {
     attention: Gemma4Attention,
     mlp: GeGLU,
-    input_layernorm: Linear,
-    post_attention_layernorm: Linear,
+    input_layernorm: RmsNorm,
+    post_attention_layernorm: RmsNorm,
     _layer_type: LayerType,
 }
 
@@ -54,9 +55,11 @@ impl Gemma4Block {
 
         let mlp = GeGLU::new(hidden_size, intermediate_size, vb.clone())?;
 
-        let input_layernorm = linear(hidden_size, hidden_size, vb.pp("input_layernorm"))?;
-        let post_attention_layernorm =
-            linear(hidden_size, hidden_size, vb.pp("post_attention_layernorm"))?;
+        let input_ln_weight = linear(hidden_size, hidden_size, vb.pp("input_layernorm"))?;
+        let input_layernorm = RmsNorm::new(input_ln_weight.weight().clone(), config.rms_norm_eps);
+
+        let post_ln_weight = linear(hidden_size, hidden_size, vb.pp("post_attention_layernorm"))?;
+        let post_attention_layernorm = RmsNorm::new(post_ln_weight.weight().clone(), config.rms_norm_eps);
 
         Ok(Self {
             attention,
@@ -69,27 +72,14 @@ impl Gemma4Block {
 
     pub fn forward(&self, x: &Tensor, positions: &[usize]) -> Result<Tensor> {
         let residual = x.clone();
-        let x = self.rms_norm(x, &self.input_layernorm)?;
+        let x = self.input_layernorm.forward(x)?;
         let x = self.attention.forward(&x, positions)?;
         let x = x.add(&residual)?;
 
         let residual = x.clone();
-        let x = self.rms_norm(&x, &self.post_attention_layernorm)?;
+        let x = self.post_attention_layernorm.forward(&x)?;
         let x = self.mlp.forward(&x)?;
         x.add(&residual)
-    }
-
-    fn rms_norm(&self, x: &Tensor, weight: &Linear) -> Result<Tensor> {
-        let hidden_size = *x
-            .dims()
-            .last()
-            .ok_or_else(|| candle_core::Error::msg("Tensor has no dimensions"))?;
-        let x_flat = x.reshape(((), hidden_size))?;
-        let weight = weight.weight().reshape((hidden_size,))?;
-        let variance = x_flat.sqr()?.mean(1)?;
-        let x = x_flat.broadcast_div(&(variance + 1e-6)?.sqrt()?)?;
-        let x = x.broadcast_mul(&weight)?;
-        x.reshape(x.dims())
     }
 }
 

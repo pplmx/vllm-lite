@@ -13,7 +13,7 @@ pub use attention::{
 };
 pub use block::TransformerBlock;
 pub use mlp::*;
-pub use norm::{LnLayerNorm, NormLayer, RmsNorm, RmsNormConfig};
+pub use norm::{LnLayerNorm, RmsNorm, layer_norm, rms_norm};
 pub use positional::*;
 pub use ssm::*;
 pub use vision::*;
