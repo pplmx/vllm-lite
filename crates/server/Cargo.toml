@@ -17,7 +17,7 @@ vllm-core = { path = "../core" }
 vllm-traits = { path = "../traits" }
 vllm-model = { path = "../model", features = ["real_weights"] }
 candle-core = { version = "0.10.2", features = ["cuda"] }
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "time", "io-util", "fs", "net", "signal"] }
 axum = { version = "0.8", features = ["tokio"] }
 tower = { version = "0.5", features = ["util"] }
 futures = "0.3"
