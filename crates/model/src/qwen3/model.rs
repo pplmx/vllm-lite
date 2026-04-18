@@ -626,6 +626,10 @@ impl ModelBackend for Qwen3Model {
 
         Ok(embeddings)
     }
+
+    fn vocab_size(&self) -> usize {
+        self.config.vocab_size()
+    }
 }
 
 #[cfg(test)]

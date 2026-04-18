@@ -143,7 +143,7 @@ async fn main() {
         None
     };
 
-    let mut engine = Engine::new(model, draft_model);
+    let mut engine = Engine::new_boxed(model, draft_model);
 
     if app_config.engine.max_draft_tokens > 0 {
         if app_config.engine.enable_adaptive_speculative {

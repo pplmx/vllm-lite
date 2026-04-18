@@ -3785,6 +3785,7 @@ dependencies = [
 name = "vllm-traits"
 version = "0.1.0"
 dependencies = [
+ "candle-core",
  "serde",
  "serde_json",
 ]

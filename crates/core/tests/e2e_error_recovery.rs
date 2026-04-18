@@ -92,6 +92,10 @@ impl ModelBackend for FaultInjectedModel {
     ) -> vllm_traits::Result<Vec<Vec<f32>>> {
         self.inner.embed(input_tokens, positions)
     }
+
+    fn vocab_size(&self) -> usize {
+        self.inner.vocab_size()
+    }
 }
 
 /// Engine wrapper with error tracking

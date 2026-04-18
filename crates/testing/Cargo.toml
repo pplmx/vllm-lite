@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-vllm-traits = { path = "../traits" }
+vllm-traits = { path = "../traits", features = ["candle"] }
 vllm-core = { path = "../core" }
 candle-core = "0.10.2"
 tokio = { version = "1", features = ["sync"] }

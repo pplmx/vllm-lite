@@ -13,7 +13,80 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tracing::error;
 use vllm_model::kernels::{BatchCudaGraphExecutor, CudaGraphConfig};
-use vllm_traits::{BatchOutput, ModelBackend, SeqId, TokenId};
+use vllm_traits::{BatchOutput, ModelBackend, Result as ModelResult, SeqId, TokenId};
+
+pub struct BoxedModelBackend(Box<dyn ModelBackend>);
+
+impl BoxedModelBackend {
+    pub fn new(model: Box<dyn ModelBackend>) -> Self {
+        Self(model)
+    }
+}
+
+impl std::ops::Deref for BoxedModelBackend {
+    type Target = dyn ModelBackend;
+    fn deref(&self) -> &Self::Target {
+        &*self.0
+    }
+}
+
+impl std::ops::DerefMut for BoxedModelBackend {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut *self.0
+    }
+}
+
+impl ModelBackend for BoxedModelBackend {
+    fn forward(
+        &mut self,
+        seq_ids: &[SeqId],
+        input_tokens: &[Vec<TokenId>],
+        positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
+    ) -> ModelResult<BatchOutput> {
+        self.0.forward(
+            seq_ids,
+            input_tokens,
+            positions,
+            kv_block_ids,
+            num_computed_tokens,
+            is_prefill,
+        )
+    }
+
+    fn forward_logits(
+        &mut self,
+        seq_ids: &[SeqId],
+        input_tokens: &[Vec<TokenId>],
+        positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
+    ) -> ModelResult<Vec<Vec<f32>>> {
+        self.0.forward_logits(
+            seq_ids,
+            input_tokens,
+            positions,
+            kv_block_ids,
+            num_computed_tokens,
+            is_prefill,
+        )
+    }
+
+    fn embed(
+        &mut self,
+        input_tokens: &[Vec<TokenId>],
+        positions: &[Vec<usize>],
+    ) -> ModelResult<Vec<Vec<f32>>> {
+        self.0.embed(input_tokens, positions)
+    }
+
+    fn vocab_size(&self) -> usize {
+        self.0.vocab_size()
+    }
+}
 
 /// Core inference engine managing requests, scheduling, and model execution.
 ///
@@ -44,6 +117,67 @@ pub struct Engine<M: ModelBackend + 'static> {
     cuda_graph: Option<BatchCudaGraphExecutor>,
     /// Adaptive speculative decoder
     pub adaptive_decoder: Option<AdaptiveSpeculativeDecoder>,
+}
+
+impl Engine<BoxedModelBackend> {
+    pub fn new_boxed(
+        target_model: Box<dyn ModelBackend>,
+        draft_model: Option<Box<dyn ModelBackend>>,
+    ) -> Self {
+        Self::with_config_boxed(
+            target_model,
+            draft_model,
+            SchedulerConfig::default(),
+            4,
+            1024,
+        )
+    }
+
+    pub fn with_config_boxed(
+        target_model: Box<dyn ModelBackend>,
+        draft_model: Option<Box<dyn ModelBackend>>,
+        config: SchedulerConfig,
+        max_draft_tokens: usize,
+        num_kv_blocks: usize,
+    ) -> Self {
+        let max_seqs = config.max_num_seqs;
+        let cuda_graph = if config.cuda_graph.enabled {
+            let graph_config = CudaGraphConfig {
+                enabled: true,
+                batch_sizes: config.cuda_graph.batch_sizes.clone(),
+                ..Default::default()
+            };
+            match BatchCudaGraphExecutor::new(graph_config) {
+                Ok(executor) => Some(executor),
+                Err(e) => {
+                    tracing::warn!("Failed to initialize CUDA Graph: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        let enhanced_metrics = Arc::new(EnhancedMetricsCollector::new());
+        let draft = draft_model.map(|m| {
+            Arc::new(Mutex::new(BoxedModelBackend::new(m))) as Arc<Mutex<dyn ModelBackend>>
+        });
+        Self {
+            scheduler: SchedulerEngine::new(config, num_kv_blocks, enhanced_metrics),
+            target_model: Arc::new(Mutex::new(BoxedModelBackend::new(target_model)))
+                as Arc<Mutex<dyn ModelBackend>>,
+            draft_model: draft,
+            max_draft_tokens,
+            speculative_mode: false,
+            error_count: 0,
+            last_error: None,
+            metrics: MetricsCollector::new(),
+            response_txs: HashMap::with_capacity(max_seqs),
+            sleep_policy: SleepPolicy::default(),
+            _phantom: PhantomData,
+            cuda_graph,
+            adaptive_decoder: None,
+        }
+    }
 }
 
 impl<M: ModelBackend + 'static> Engine<M> {
@@ -546,6 +680,10 @@ mod tests {
                 .iter()
                 .map(|tokens| tokens.iter().map(|_| 0.0).collect())
                 .collect())
+        }
+
+        fn vocab_size(&self) -> usize {
+            151936
         }
     }
 
