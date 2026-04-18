@@ -228,6 +228,28 @@
 
 ---
 
+## ✅ Phase 9: 架构重构 (2026-04-19)
+
+| 功能 | 描述 | 状态 |
+| ---- | ---- | ---- |
+| Cargo.toml 优化 | tokio features 精确化, release profile 优化 | ✅ |
+| Feature Flags | cuda/gguf/real_weights 可选 | ✅ |
+| 共享组件层 | attention, mlp, norm, positional 子模块 | ✅ |
+| TransformerBlock | 基类设计, 支持组合模式 | ✅ |
+| core→model 解耦 | vllm-core 对 vllm-model 可选依赖 | ✅ |
+| 文档完善 | ADR, SPEC 更新 | ✅ |
+
+### 成果
+
+- **代码行数**: ~800+ 行重复代码移除
+- **组件目录**: 4 个新子模块 (attention, mlp, norm, positional)
+- **Feature Flags**: 4 个新可选特性
+- **测试数**: 849 tests pass
+
+详细设计: [docs/superpowers/specs/2026-04-19-architecture-refactor-design.md](docs/superpowers/specs/2026-04-19-architecture-refactor-design.md)
+
+---
+
 ## 🔮 长期愿景
 
 | 目标 | 描述                | 状态 |

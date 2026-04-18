@@ -326,11 +326,46 @@ pub fn register_all_archs(registry: &ArchitectureRegistry) {
 
 ```text
 vllm-traits   → (no deps)
-vllm-core     → vllm-traits
+vllm-core     → vllm-traits [(optional) vllm-model with cuda-graph feature]
 vllm-model    → vllm-traits, candle
 vllm-server   → vllm-core, vllm-model, tokio
 vllm-dist     → vllm-traits
 ```
+
+---
+
+## Shared Components Layer
+
+The project uses a shared components architecture to reduce code duplication:
+
+```
+crates/model/src/components/
+├── attention/
+│   ├── mod.rs         # GqaAttention, utility functions
+│   ├── gqa.rs         # Grouped-query attention implementation
+│   └── flash.rs       # Flash attention placeholder
+├── mlp/
+│   ├── mod.rs
+│   └── swiglu.rs      # SwiGLU feed-forward
+├── norm/
+│   ├── mod.rs
+│   ├── rms_norm.rs    # RMSNorm
+│   └── layer_norm.rs  # LayerNorm
+├── positional/
+│   ├── mod.rs
+│   ├── rope.rs        # Standard RoPE
+│   └── mrope.rs       # MRoPE (Qwen3.5)
+└── block.rs           # TransformerBlock base class
+```
+
+### Feature Flags
+
+| Feature      | Description                    |
+| ------------ | ------------------------------ |
+| `cuda`       | Candle CUDA support            |
+| `gguf`       | GGUF model loading             |
+| `real_weights` | Tokenizer support            |
+| `full`       | All features enabled           |
 
 ---
 

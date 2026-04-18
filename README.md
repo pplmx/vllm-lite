@@ -8,7 +8,7 @@
   <a href="https://github.com/pplmx/vllm-lite/releases">
     <img src="https://img.shields.io/github/v/release/pplmx/vllm-lite?style=flat-square&color=brightgreen" alt="Release">
   </a>
-  <img src="https://img.shields.io/badge/Tests-683%20passing-success?style=flat-square" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-849%20passing-success?style=flat-square" alt="Tests">
 </p>
 
 <!-- PROJECT LOGO -->
@@ -193,7 +193,7 @@ curl -X POST http://localhost:8000/v1/completions \
 | **首 Token 延迟 (TTFT)** | < 50ms         | 1K token prompt        |
 | **P99 延迟**             | < 100ms        | end-to-end             |
 | **显存效率**             | +40%           | vs 传统 KV Cache       |
-| **测试覆盖率**           | 683+           | 单元 + 集成测试        |
+| **测试覆盖率**           | 849+           | 单元 + 集成测试        |
 | **E2E 测试**             | 30+            | 全场景覆盖             |
 
 </div>
@@ -422,46 +422,24 @@ engine.set_policy(Box::new(PriorityPolicy::default()));
 
 ```text
 vllm-lite/
-├── Cargo.toml  # Workspace (5 crates)
-├── justfile    # 构建自动化
-├── crates/
-│   ├── traits/          # 接口定义 (Batch, ModelBackend)
-│   ├── core/            # Engine、组件化 Scheduler
-│   │   └── scheduler/
-│   │       ├── policy/          # 可插拔调度策略
-│   │       ├── request_queue.rs # O(1) 索引化队列
-│   │       ├── phase_scheduler.rs # P/D 分离调度器
-│   │       ├── batch_composer.rs  # 阶段特定 batch 构建
-│   │       ├── radix_cache/       # Radix Tree 前缀缓存
-│   │       └── engine.rs            # 标准调度引擎
-│   ├── model/           # 模型实现、Kernels
-│   ├── dist/            # 张量并行
-│   └── server/          # HTTP API
-└── tests/               # 集成测试
-```
-
-## 📈 性能改进
-
-| 指标         | 改进                      |
-| ------------ | ------------------------- |
-| 前缀缓存查找 | O(n) → O(k), 10-100x 提升 |
-| 队列操作     | O(n) → O(1), n 倍提升     |
-| P/D 分离     | GPU 利用率 +15-30%        |
-
----
-
-## 🏗️ 架构
-
-```text
-vllm-lite/
-├── Cargo.toml              # Workspace (5 crates)
+├── Cargo.toml              # Workspace (7 crates)
 ├── justfile                # 构建自动化
 ├── crates/
-│   ├── traits/             # 接口定义
+│   ├── traits/             # 接口定义 (ModelBackend, Batch, Kernel traits)
 │   ├── core/               # Engine、Scheduler、KV Cache
 │   ├── model/              # 模型实现、Kernels
+│   │   └── src/
+│   │       ├── components/ # 共享组件层 (attention, mlp, norm, positional)
+│   │       ├── llama/      # Llama 架构
+│   │       ├── mistral/    # Mistral 架构
+│   │       ├── qwen3/      # Qwen2/3 架构
+│   │       ├── qwen3_5/    # Qwen3.5 架构 (Mamba Hybrid)
+│   │       ├── gemma4/     # Gemma4 架构
+│   │       ├── mixtral/    # Mixtral 架构 (MoE)
+│   │       └── kernels/    # GPU Kernels
 │   ├── dist/               # 张量并行
-│   └── server/             # HTTP API
+│   ├── server/             # HTTP API (OpenAI 兼容)
+│   └── testing/            # 测试工具
 └── tests/                  # 集成测试
 ```
 
@@ -473,6 +451,37 @@ vllm-lite/
 | ML Backend | Candle      |
 | HTTP       | axum        |
 | Weights    | SafeTensors |
+
+### 共享组件层
+
+核心组件提取到 `components/` 子模块，实现代码复用：
+
+| 组件 | 文件 | 描述 |
+|------|------|------|
+| Attention | `components/attention/` | GqaAttention, paged/tiled attention |
+| MLP | `components/mlp/` | SwiGLU feed-forward |
+| Norm | `components/norm/` | RMSNorm, LayerNorm |
+| Positional | `components/positional/` | RoPE, MRoPE |
+
+### Feature Flags
+
+| Feature | 描述 |
+|---------|------|
+| `cuda` | Candle CUDA 支持 |
+| `gguf` | GGUF 模型加载 |
+| `real_weights` | Tokenizer 支持 |
+| `full` | 所有特性 |
+
+---
+
+## 📈 性能改进
+
+| 指标         | 改进                      |
+| ------------ | ------------------------- |
+| 前缀缓存查找 | O(n) → O(k), 10-100x 提升 |
+| 队列操作     | O(n) → O(1), n 倍提升     |
+| P/D 分离     | GPU 利用率 +15-30%        |
+| 编译优化     | fat LTO, panic=abort      |
 
 ---
 
