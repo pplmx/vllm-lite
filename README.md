@@ -469,8 +469,9 @@ vllm-lite/
 |---------|------|
 | `cuda` | Candle CUDA 支持 |
 | `gguf` | GGUF 模型加载 |
-| `real_weights` | Tokenizer 支持 |
-| `full` | 所有特性 |
+| `full` | cuda + gguf |
+
+Note: Tokenizer (tiktoken, tokenizers) is always enabled - required for model inference.
 
 ---
 
