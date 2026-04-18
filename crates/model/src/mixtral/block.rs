@@ -8,8 +8,8 @@ use crate::components::GqaAttention;
 use crate::components::LnLayerNorm;
 use crate::config::ModelConfig;
 use crate::mixtral::sparse_moe::MixtralSparseMoe;
-use candle_core::Tensor;
 use candle_core::Result;
+use candle_core::Tensor;
 use candle_nn::VarBuilder;
 
 pub struct MixtralBlock {
@@ -157,11 +157,20 @@ impl MixtralBlock {
             }
         };
 
-        let input_ln_bias = Tensor::zeros(input_ln_w.dim(0).unwrap_or(hidden_size), input_ln_w.dtype(), input_ln_w.device())?;
+        let input_ln_bias = Tensor::zeros(
+            input_ln_w.dim(0).unwrap_or(hidden_size),
+            input_ln_w.dtype(),
+            input_ln_w.device(),
+        )?;
         let input_layernorm = LnLayerNorm::new(input_ln_w, input_ln_bias, rms_norm_eps);
 
-        let post_attn_bias = Tensor::zeros(post_attn_ln_w.dim(0).unwrap_or(hidden_size), post_attn_ln_w.dtype(), post_attn_ln_w.device())?;
-        let post_attention_layernorm = LnLayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
+        let post_attn_bias = Tensor::zeros(
+            post_attn_ln_w.dim(0).unwrap_or(hidden_size),
+            post_attn_ln_w.dtype(),
+            post_attn_ln_w.device(),
+        )?;
+        let post_attention_layernorm =
+            LnLayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
 
         let attention = GqaAttention::new_with_weights(
             hidden_size,

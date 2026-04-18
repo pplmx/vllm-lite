@@ -18,7 +18,12 @@ struct Expert {
 
 impl Expert {
     fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        crate::components::mlp::swiglu::swiglu_forward(x, &self.gate_proj, &self.up_proj, &self.down_proj)
+        crate::components::mlp::swiglu::swiglu_forward(
+            x,
+            &self.gate_proj,
+            &self.up_proj,
+            &self.down_proj,
+        )
     }
 }
 

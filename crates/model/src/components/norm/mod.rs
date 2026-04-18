@@ -5,5 +5,5 @@
 pub mod layer_norm;
 pub mod rms_norm;
 
-pub use layer_norm::{layer_norm, LnLayerNorm};
-pub use rms_norm::{rms_norm, RmsNorm};
+pub use layer_norm::{LnLayerNorm, layer_norm};
+pub use rms_norm::{RmsNorm, rms_norm};

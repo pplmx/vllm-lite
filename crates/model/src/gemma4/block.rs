@@ -59,7 +59,8 @@ impl Gemma4Block {
         let input_layernorm = RmsNorm::new(input_ln_weight.weight().clone(), config.rms_norm_eps);
 
         let post_ln_weight = linear(hidden_size, hidden_size, vb.pp("post_attention_layernorm"))?;
-        let post_attention_layernorm = RmsNorm::new(post_ln_weight.weight().clone(), config.rms_norm_eps);
+        let post_attention_layernorm =
+            RmsNorm::new(post_ln_weight.weight().clone(), config.rms_norm_eps);
 
         Ok(Self {
             attention,
