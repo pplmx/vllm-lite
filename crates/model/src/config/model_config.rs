@@ -3,7 +3,7 @@
 //! Provides ModelConfig struct that works across different model architectures.
 
 use super::architecture::{Architecture, LayerType, RoPEConfig};
-use crate::loader::detect_architecture;
+use crate::arch::ARCHITECTURE_REGISTRY;
 
 pub struct ModelConfig {
     pub architecture: Architecture,
@@ -178,7 +178,10 @@ impl ModelConfig {
     }
 
     pub fn from_config_json(value: &serde_json::Value) -> Result<Self, Box<dyn std::error::Error>> {
-        let architecture = detect_architecture(value);
+        let architecture = ARCHITECTURE_REGISTRY
+            .detect(value)
+            .and_then(|name| Architecture::from_name(&name))
+            .unwrap_or(Architecture::Llama);
 
         let hidden_size = value
             .get("hidden_size")
