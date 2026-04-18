@@ -216,6 +216,79 @@ impl GqaAttention {
     pub fn head_dim(&self) -> usize {
         self.head_dim
     }
+
+    pub fn has_q_norm(&self) -> bool {
+        self.q_norm.is_some()
+    }
+
+    pub fn has_k_norm(&self) -> bool {
+        self.k_norm.is_some()
+    }
+
+    pub fn config(&self) -> &AttentionConfig {
+        &self.config
+    }
+
+    pub fn project_qkv(&self, x: &Tensor) -> Result<(Tensor, Tensor, Tensor)> {
+        let q = self.q_proj.forward(x)?;
+        let k = self.k_proj.forward(x)?;
+        let v = self.v_proj.forward(x)?;
+        Ok((q, k, v))
+    }
+
+    pub fn apply_q_norm_impl(
+        &self,
+        q: Tensor,
+        batch_size: usize,
+        num_heads: usize,
+        seq_len: usize,
+        head_dim: usize,
+    ) -> Result<Tensor> {
+        if let Some(ref q_norm) = self.q_norm {
+            let q = q.reshape((batch_size * num_heads * seq_len, head_dim))?;
+            let q = q_norm.forward(&q)?;
+            let q = q.reshape((batch_size, num_heads, seq_len, head_dim))?;
+            Ok(q)
+        } else {
+            Ok(q)
+        }
+    }
+
+    pub fn apply_k_norm_impl(
+        &self,
+        k: Tensor,
+        batch_size: usize,
+        num_kv_heads: usize,
+        seq_len: usize,
+        head_dim: usize,
+    ) -> Result<Tensor> {
+        if let Some(ref k_norm) = self.k_norm {
+            let k = k.reshape((batch_size * num_kv_heads * seq_len, head_dim))?;
+            let k = k_norm.forward(&k)?;
+            let k = k.reshape((batch_size, num_kv_heads, seq_len, head_dim))?;
+            Ok(k)
+        } else {
+            Ok(k)
+        }
+    }
+
+    pub fn apply_q_norm_impl_flattened(&self, q: Tensor) -> Result<Tensor> {
+        if let Some(ref q_norm) = self.q_norm {
+            let q = q_norm.forward(&q)?;
+            Ok(q)
+        } else {
+            Ok(q)
+        }
+    }
+
+    pub fn apply_k_norm_impl_flattened(&self, k: Tensor) -> Result<Tensor> {
+        if let Some(ref k_norm) = self.k_norm {
+            let k = k_norm.forward(&k)?;
+            Ok(k)
+        } else {
+            Ok(k)
+        }
+    }
 }
 
 #[cfg(test)]

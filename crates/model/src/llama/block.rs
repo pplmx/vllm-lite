@@ -2,9 +2,9 @@
 
 use std::collections::HashMap;
 
+use crate::components::GqaAttention;
 use crate::config::ModelConfig;
-use crate::qwen3::attention::GqaAttention;
-use crate::qwen3::mlp::SwiGLU;
+use crate::components::SwiGLU;
 use candle_core::{Module, Result, Tensor};
 use candle_nn::{LayerNorm, VarBuilder};
 
@@ -22,7 +22,6 @@ impl LlamaBlock {
         let num_kv_heads = config.num_kv_heads;
         let head_dim = config.head_dim;
         let intermediate_size = config.intermediate_size;
-        let theta = config.rope_theta;
         let rms_norm_eps = config.rms_norm_eps;
 
         let vb = VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu);
@@ -37,7 +36,6 @@ impl LlamaBlock {
             num_heads,
             num_kv_heads,
             head_dim,
-            theta,
             None,
             crate::components::AttentionConfig::default(),
             false,
@@ -63,7 +61,6 @@ impl LlamaBlock {
         let num_kv_heads = config.num_kv_heads;
         let head_dim = config.head_dim;
         let intermediate_size = config.intermediate_size;
-        let theta = config.rope_theta;
         let rms_norm_eps = config.rms_norm_eps;
 
         let q_w = weights
@@ -170,7 +167,6 @@ impl LlamaBlock {
             num_heads,
             num_kv_heads,
             head_dim,
-            theta,
             q_w,
             k_w,
             v_w,
