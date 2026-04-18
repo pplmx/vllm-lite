@@ -8,6 +8,7 @@ pub struct Tokenizer {
     _placeholder: (),
     vocab_size: usize,
     special_tokens: Vec<String>,
+    model_name: Option<String>,
 }
 
 impl Tokenizer {
@@ -23,6 +24,7 @@ impl Tokenizer {
                 "<|im_end|>".to_string(),
                 "<|im_start|>".to_string(),
             ],
+            model_name: None,
         }
     }
 
@@ -53,13 +55,16 @@ impl Tokenizer {
             inner: Some(Box::new(tokenizer)),
             vocab_size,
             special_tokens,
+            model_name: Some("Qwen3.5-0.8B".to_string()),
         })
     }
 
     #[cfg(not(feature = "tokenizers"))]
-    pub fn from_file(path: &str) -> std::result::Result<Self, String> {
-        let _ = path;
+    pub fn from_file(_path: &str) -> std::result::Result<Self, String> {
         Ok(Self {
+            #[cfg(feature = "tokenizers")]
+            inner: None,
+            #[cfg(not(feature = "tokenizers"))]
             _placeholder: (),
             vocab_size: 151936,
             special_tokens: vec![
@@ -67,6 +72,7 @@ impl Tokenizer {
                 "<|im_end|>".to_string(),
                 "<|im_start|>".to_string(),
             ],
+            model_name: Some("Qwen3.5-0.8B".to_string()),
         })
     }
 
@@ -113,6 +119,10 @@ impl Tokenizer {
             result = result.replace(token.as_str(), "");
         }
         result.trim().to_string()
+    }
+
+    pub fn model_name(&self) -> Option<String> {
+        self.model_name.clone()
     }
 }
 

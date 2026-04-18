@@ -279,9 +279,11 @@ async fn main() {
     use openai::chat::chat_completions;
     use openai::completions::completions as openai_completions;
     use openai::embeddings::embeddings;
+    use openai::models::models_handler;
 
     let mut app = Router::new()
         // OpenAI API
+        .route("/v1/models", get(models_handler))
         .route("/v1/chat/completions", post(chat_completions))
         .route("/v1/completions", post(openai_completions))
         .route("/v1/embeddings", post(embeddings))

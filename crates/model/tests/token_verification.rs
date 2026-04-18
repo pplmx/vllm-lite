@@ -599,9 +599,11 @@ mod tests {
             let next: u32 = decode_logits
                 .squeeze(0)
                 .unwrap()
+                .squeeze(0)
+                .unwrap()
                 .argmax(D::Minus1)
                 .unwrap()
-                .to_vec0()
+                .to_vec0::<u32>()
                 .unwrap();
 
             let decoded = tokenizer.decode(&[next]);
@@ -1071,13 +1073,16 @@ mod tests {
                     .to_vec0()
                     .unwrap()
             } else {
-                // For decode, logits are [batch, vocab]
+                // For decode, logits are [batch, seq, vocab] = [1, 1, vocab_size]
+                // squeeze twice -> [vocab_size], then argmax -> scalar u32, then to_vec0
                 logits
-                    .argmax(D::Minus1)
+                    .squeeze(0)
                     .unwrap()
                     .squeeze(0)
                     .unwrap()
-                    .to_vec0()
+                    .argmax(D::Minus1)
+                    .unwrap()
+                    .to_vec0::<u32>()
                     .unwrap()
             };
 
@@ -1236,11 +1241,13 @@ mod tests {
             .expect("Decode failed");
 
         let second_token: u32 = logits_2
-            .argmax(D::Minus1)
+            .squeeze(0)
             .unwrap()
             .squeeze(0)
             .unwrap()
-            .to_vec0()
+            .argmax(D::Minus1)
+            .unwrap()
+            .to_vec0::<u32>()
             .unwrap();
 
         let decoded_2 = tokenizer.decode(&[second_token]);
@@ -1479,12 +1486,15 @@ mod tests {
             )
             .expect("Decode with pos=1 failed");
 
+        // logits shape is [1, 1, vocab_size], squeeze both -> [vocab_size], argmax -> scalar
         let next_pos1: u32 = logits_pos1
-            .argmax(D::Minus1)
+            .squeeze(0)
             .unwrap()
             .squeeze(0)
             .unwrap()
-            .to_vec0()
+            .argmax(D::Minus1)
+            .unwrap()
+            .to_vec0::<u32>()
             .unwrap();
 
         println!(
@@ -1500,11 +1510,13 @@ mod tests {
             .expect("Decode with pos=0 failed");
 
         let next_pos0: u32 = logits_pos0
-            .argmax(D::Minus1)
+            .squeeze(0)
             .unwrap()
             .squeeze(0)
             .unwrap()
-            .to_vec0()
+            .argmax(D::Minus1)
+            .unwrap()
+            .to_vec0::<u32>()
             .unwrap();
 
         println!(

@@ -276,6 +276,7 @@ fn test_qwen3_real_model_prefill() {
         .expect("Prefill failed");
 
     // Check logits shape
+    println!("DEBUG: logits.dims() = {:?}", logits.dims());
     assert_eq!(logits.dims().len(), 3, "logits should be 3D");
     assert_eq!(logits.dims()[0], 1, "batch size should be 1");
     assert_eq!(logits.dims()[1], 5, "seq_len should be 5");
@@ -292,7 +293,7 @@ fn test_qwen3_real_model_prefill() {
         .unwrap()
         .argmax(D::Minus1)
         .unwrap()
-        .to_vec0()
+        .to_vec0::<u32>()
         .unwrap();
 
     println!("Next token from prefill: {}", next_token);
@@ -322,19 +323,24 @@ fn test_qwen3_real_model_decode() {
         .forward_with_cache(&tokens, 5, &[0], &position, false)
         .expect("Decode failed");
 
-    // Check logits shape - decode returns 2D [batch, vocab_size]
-    assert_eq!(logits.dims().len(), 2, "decode logits should be 2D");
+    // Check logits shape - decode returns 3D [batch, seq, vocab_size]
+    let dims = logits.dims();
+    println!("DEBUG decode logits.dims() = {:?}", dims);
+    assert_eq!(logits.dims().len(), 3, "logits should be 3D");
     assert_eq!(logits.dims()[0], 1, "batch size should be 1");
-    assert_eq!(logits.dims()[1], 151936, "vocab_size should be 151936");
+    assert_eq!(logits.dims()[1], 1, "seq_len should be 1 for decode");
+    assert_eq!(logits.dims()[2], 151936, "vocab_size should be 151936");
 
     // Get next token
     use candle_core::D;
     let next_token: u32 = logits
-        .argmax(D::Minus1)
+        .squeeze(0)
         .unwrap()
         .squeeze(0)
         .unwrap()
-        .to_vec0()
+        .argmax(D::Minus1)
+        .unwrap()
+        .to_vec0::<u32>()
         .unwrap();
 
     println!("Next token from decode: {}", next_token);
@@ -412,11 +418,13 @@ fn test_qwen3_generated_tokens_decodable() {
         .expect("Decode failed");
 
     let second_token: u32 = decode_logits
-        .argmax(D::Minus1)
+        .squeeze(0)
         .unwrap()
         .squeeze(0)
         .unwrap()
-        .to_vec0()
+        .argmax(D::Minus1)
+        .unwrap()
+        .to_vec0::<u32>()
         .unwrap();
 
     println!("Second generated token: {}", second_token);
@@ -891,7 +899,7 @@ fn test_qwen3_attention_layer_output() {
         .unwrap()
         .argmax(candle_core::D::Minus1)
         .unwrap()
-        .to_vec0()
+        .to_vec0::<u32>()
         .unwrap();
 
     println!("Top token: {}", top_token);
@@ -1044,9 +1052,11 @@ fn test_qwen3_full_pipeline_prefill_decode() {
     let next_token2: u32 = decode_logits1
         .squeeze(0)
         .unwrap()
+        .squeeze(0)
+        .unwrap()
         .argmax(candle_core::D::Minus1)
         .unwrap()
-        .to_vec0()
+        .to_vec0::<u32>()
         .unwrap();
 
     println!("Second generated token: {}", next_token2);
@@ -1066,9 +1076,11 @@ fn test_qwen3_full_pipeline_prefill_decode() {
     let next_token3: u32 = decode_logits2
         .squeeze(0)
         .unwrap()
+        .squeeze(0)
+        .unwrap()
         .argmax(candle_core::D::Minus1)
         .unwrap()
-        .to_vec0()
+        .to_vec0::<u32>()
         .unwrap();
 
     println!("Third generated token: {}", next_token3);
