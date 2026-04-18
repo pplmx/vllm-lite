@@ -247,13 +247,78 @@ just ci           # Full CI
 
 ## Key Design Patterns
 
-| Pattern                  | Description                            |
-| ------------------------ | -------------------------------------- |
-| **ModelBackend trait**   | Abstracts ML model implementations     |
-| **Paged KV Cache**       | Block-based KV memory management       |
-| **Prefix Caching**       | Reuse KV for repeated prompts          |
-| **Speculative Decoding** | Draft-then-verify token generation     |
-| **Continuous Batching**  | Dynamic batch scheduling with fairness |
+| Pattern                     | Description                            |
+| --------------------------- | -------------------------------------- |
+| **ModelBackend trait**      | Abstracts ML model implementations     |
+| **Paged KV Cache**          | Block-based KV memory management       |
+| **Prefix Caching**          | Reuse KV for repeated prompts          |
+| **Speculative Decoding**    | Draft-then-verify token generation     |
+| **Continuous Batching**     | Dynamic batch scheduling with fairness |
+| **Architecture Registry**   | Dynamic model architecture registration |
+
+---
+
+## Architecture Registry System
+
+The project uses a dynamic registration system for model architectures, replacing the previous enum + match pattern.
+
+### Core Components
+
+```rust
+// Architecture trait - implement for each model
+pub trait Architecture: Send + Sync + 'static {
+    fn name(&self) -> &'static str;
+    fn detect(&self, config_json: &serde_json::Value) -> bool;
+    fn create_model(...) -> Result<Box<dyn ModelBackend>>;
+}
+
+// Registry - manages architecture instances
+pub struct ArchitectureRegistry {
+    architectures: RwLock<HashMap<String, Box<dyn Architecture>>>,
+}
+```
+
+### Adding a New Architecture (3 steps)
+
+1. **Create `arch.rs`** in the model module:
+```rust
+pub struct NewModelArchitecture;
+impl Architecture for NewModelArchitecture { ... }
+```
+
+2. **Create `register.rs`** to register the architecture:
+```rust
+use crate::arch::{Architecture, ArchitectureRegistry};
+pub fn register(registry: &ArchitectureRegistry) {
+    registry.register::<NewModelArchitecture>();
+}
+```
+
+3. **Update `register_all_archs()`** in `arch/registry.rs`:
+```rust
+pub fn register_all_archs(registry: &ArchitectureRegistry) {
+    // ... existing registrations
+    crate::newmodel::register::register(registry);
+}
+```
+
+### Supported Architectures
+
+| Architecture | Directory | Features |
+| ------------ | --------- | -------- |
+| Llama | `model/src/llama/` | RMSNorm, RoPE, SwiGLU |
+| Mistral | `model/src/mistral/` | Sliding Window, GQA |
+| Qwen2/3 | `model/src/qwen3/` | GQA, RoPE, QK-Norm |
+| Qwen3.5 | `model/src/qwen3_5/` | Mamba SSM Hybrid |
+| Gemma4 | `model/src/gemma4/` | Hybrid Attention |
+| Mixtral | `model/src/mixtral/` | Sparse MoE |
+
+### Benefits
+
+- **Extensibility**: New architectures without modifying core code
+- **Separation**: Each architecture in its own module
+- **Testability**: Independent testing per architecture
+- **Type Safety**: Compile-time checks via trait bounds
 
 ---
 
