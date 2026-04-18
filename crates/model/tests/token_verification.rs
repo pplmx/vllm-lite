@@ -17,7 +17,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_tokenizer_decode_model_output() {
         let tokenizer = setup_tokenizer();
 
@@ -52,7 +52,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_tokenizer_decode_top_k_tokens() {
         let tokenizer = setup_tokenizer();
 
@@ -102,7 +102,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_tokenizer_roundtrip_vocab() {
         let tokenizer = setup_tokenizer();
 
@@ -145,7 +145,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_qwen3_special_tokens() {
         let tokenizer = setup_tokenizer();
 
@@ -176,7 +176,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_tokenizer_decode_out_of_range_tokens() {
         let tokenizer = setup_tokenizer();
 
@@ -206,7 +206,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_qwen3_eos_handling_in_decode() {
         let tokenizer = setup_tokenizer();
 
@@ -229,7 +229,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
     #[ignore = "Known issue: partial prefill produces different output than full prefill"]
     fn test_qwen3_partial_prefill_kv_cache_issue() {
         use candle_core::Device;
@@ -343,7 +342,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_qwen3_partial_prefill_simulation() {
         use candle_core::Device;
         use vllm_model::loader::ModelLoader;
@@ -449,7 +448,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_qwen3_forward_with_exact_server_params() {
         use candle_core::Device;
         use vllm_model::loader::ModelLoader;
@@ -527,7 +526,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_qwen3_simulate_server_engine_flow() {
         use candle_core::Device;
         use vllm_model::loader::ModelLoader;
@@ -623,7 +622,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_qwen3_multi_step_generation() {
         use candle_core::Device;
         use vllm_model::loader::ModelLoader;
@@ -728,7 +727,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_server_streaming_token_handling() {
         let tokenizer = setup_tokenizer();
 
@@ -781,7 +780,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_qwen3_with_special_tokens() {
         use candle_core::Device;
         use vllm_model::loader::ModelLoader;
@@ -830,7 +829,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_server_token_stream_decode() {
         let tokenizer = setup_tokenizer();
 
@@ -852,7 +851,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_server_problematic_tokens() {
         let tokenizer = setup_tokenizer();
 
@@ -888,7 +887,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_special_token_filtering() {
         let tokenizer = setup_tokenizer();
 
@@ -932,7 +931,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_model_token_to_text_pipeline() {
         use candle_core::Device;
         use vllm_model::loader::ModelLoader;
@@ -989,7 +988,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_server_engine_loop_simulation() {
         use candle_core::Device;
         use vllm_model::loader::ModelLoader;
@@ -1126,7 +1125,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_working_unit_test_vs_server_comparison() {
         // This test verifies that the working unit test and server loop produce same output
         use candle_core::Device;
@@ -1275,7 +1274,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_special_token_filtering_logic() {
         const SPECIAL_TOKENS_TO_SKIP: &[&str] = &["<|endoftext|>", "<|im_end|>", "<|im_start|>"];
 
@@ -1339,7 +1338,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_streaming_with_special_token_filtering() {
         const SPECIAL_TOKENS_TO_SKIP: &[&str] = &["<|endoftext|>", "<|im_end|>", "<|im_start|>"];
 
@@ -1400,7 +1399,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "real_weights", feature = "tokenizers"))]
+
     fn test_decode_position_calculation() {
         // This test verifies the decode position calculation matches server expectations
         use candle_core::Device;

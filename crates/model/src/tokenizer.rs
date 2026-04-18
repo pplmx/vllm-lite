@@ -1,11 +1,7 @@
-#[cfg(feature = "tokenizers")]
 use tokenizers::Tokenizer as HFTokenizer;
 
 pub struct Tokenizer {
-    #[cfg(feature = "tokenizers")]
     inner: Option<Box<HFTokenizer>>,
-    #[cfg(not(feature = "tokenizers"))]
-    _placeholder: (),
     vocab_size: usize,
     special_tokens: Vec<String>,
     model_name: Option<String>,
@@ -14,10 +10,7 @@ pub struct Tokenizer {
 impl Tokenizer {
     pub fn new() -> Self {
         Self {
-            #[cfg(feature = "tokenizers")]
             inner: None,
-            #[cfg(not(feature = "tokenizers"))]
-            _placeholder: (),
             vocab_size: 151936,
             special_tokens: vec![
                 "<|endoftext|>".to_string(),
@@ -28,7 +21,6 @@ impl Tokenizer {
         }
     }
 
-    #[cfg(feature = "tokenizers")]
     pub fn from_file(path: &str) -> std::result::Result<Self, String> {
         let tokenizer =
             HFTokenizer::from_file(path).map_err(|e| format!("Failed to load tokenizer: {}", e))?;
@@ -59,25 +51,7 @@ impl Tokenizer {
         })
     }
 
-    #[cfg(not(feature = "tokenizers"))]
-    pub fn from_file(_path: &str) -> std::result::Result<Self, String> {
-        Ok(Self {
-            #[cfg(feature = "tokenizers")]
-            inner: None,
-            #[cfg(not(feature = "tokenizers"))]
-            _placeholder: (),
-            vocab_size: 151936,
-            special_tokens: vec![
-                "<|endoftext|>".to_string(),
-                "<|im_end|>".to_string(),
-                "<|im_start|>".to_string(),
-            ],
-            model_name: Some("Qwen3.5-0.8B".to_string()),
-        })
-    }
-
     pub fn encode(&self, text: &str) -> Vec<u32> {
-        #[cfg(feature = "tokenizers")]
         if let Some(ref tokenizer) = self.inner {
             if let Ok(encoding) = tokenizer.encode(text, false) {
                 return encoding.get_ids().to_vec();
@@ -91,7 +65,6 @@ impl Tokenizer {
     }
 
     pub fn decode(&self, tokens: &[u32]) -> String {
-        #[cfg(feature = "tokenizers")]
         if let Some(ref tokenizer) = self.inner {
             if let Ok(text) = tokenizer.decode(tokens, false) {
                 return text;
@@ -182,7 +155,6 @@ mod tests {
         assert!(!text.is_empty());
     }
 
-    #[cfg(feature = "tokenizers")]
     #[test]
     fn test_tokenizer_qwen3_hi_token() {
         use std::path::PathBuf;
@@ -194,18 +166,15 @@ mod tests {
             let tokenizer = Tokenizer::from_file(tokenizer_path.to_str().unwrap())
                 .expect("Failed to load tokenizer");
 
-            // Verify "hi" produces token 6023 (as per server logs)
             let tokens = tokenizer.encode("hi");
             assert_eq!(tokens.len(), 1, "hi should be a single token");
             assert_eq!(tokens[0], 6023, "hi should be token 6023");
 
-            // Verify round-trip
             let decoded = tokenizer.decode(&tokens);
             assert!(decoded.contains("hi"), "Decoded text should contain 'hi'");
         }
     }
 
-    #[cfg(feature = "tokenizers")]
     #[test]
     fn test_tokenizer_qwen3_chat_prompt() {
         use std::path::PathBuf;
@@ -217,7 +186,6 @@ mod tests {
             let tokenizer = Tokenizer::from_file(tokenizer_path.to_str().unwrap())
                 .expect("Failed to load tokenizer");
 
-            // Build chat prompt exactly as server does
             let im_start = "<|im_start|>";
             let im_end = "<|im_end|>";
             let prompt = format!(
@@ -232,7 +200,6 @@ mod tests {
                 "Chat prompt should be reasonable length"
             );
 
-            // Verify we can decode back
             let decoded = tokenizer.decode(&tokens);
             assert!(!decoded.is_empty(), "Should be able to decode tokens");
         }
