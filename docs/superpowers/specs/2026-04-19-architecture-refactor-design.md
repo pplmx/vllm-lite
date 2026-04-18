@@ -2,7 +2,7 @@
 
 **日期**: 2026-04-19
 **状态**: 已批准
-**版本**: v2
+**版本**: v3 (8 Phases)
 
 ## 概述
 
@@ -40,11 +40,12 @@
 | core → model 依赖 | 存在 | 解耦 |
 | 依赖方向 | 单向有环风险 | 层级清晰 |
 
-## 分阶段实施计划
+## 分阶段实施计划 (8 Phases)
 
 ### Phase 1: Cargo.toml 基础优化
 
 **目标**: 最快见效，风险最低
+**复杂度**: 低 | **风险**: 极低
 
 #### 1.1 tokio features 精确化
 
@@ -52,14 +53,10 @@
 # 修改前
 tokio = { version = "1", features = ["full"] }
 
-# 修改后 (根据实际使用)
-tokio = { version = "1", features = ["sync", "rt", "macros"] }
-
-# server 使用更多特性
-[dependencies]
+# 修改后 (server)
 tokio = { version = "1", features = ["sync", "rt", "macros", "time", "io-util"] }
 
-# core 使用
+# 修改后 (core/testing)
 tokio = { version = "1", features = ["sync", "rt", "macros"] }
 ```
 
@@ -82,13 +79,14 @@ tokio = { version = "1", features = ["sync", "rt", "macros"] }
 ```
 
 **交付物**: PR #1
-**风险**: 极低
+**验证**: `cargo build --release` + 记录编译时间
 
 ---
 
-### Phase 2: Cargo Feature 重构
+### Phase 2: Cargo Feature 重构 (CUDA/GGUF 可选)
 
 **目标**: 可选依赖正确配置，支持轻量级构建
+**复杂度**: 低-中 | **风险**: 低
 
 #### 2.1 Candle CUDA 可选
 
@@ -115,87 +113,98 @@ gguf-support = ["dep:gguf"]
 ```
 
 **交付物**: PR #2
-**风险**: 低
+**验证**: 无 CUDA 环境下 `cargo build` 成功
 
 ---
 
-### Phase 3: 共享组件层重构
+### Phase 3: 共享组件层 - Attention 提取
 
-**目标**: 建立统一的组件抽象层
+**目标**: 建立统一的组件抽象层 - 从 Attention 开始
+**复杂度**: 高 | **风险**: 中
 
-#### 3.1 组件 trait 定义
-
-```rust
-// crates/model/src/components/traits.rs
-
-pub trait Attention: Send + Sync {
-    fn forward(
-        &self,
-        q: &Tensor,
-        k: &Tensor,
-        v: &Tensor,
-        cos: &Tensor,
-        sin: &Tensor,
-        block_tables: &[i32],
-        context_lens: &[usize],
-    ) -> Result<Tensor>;
-}
-
-pub trait FeedForward: Send + Sync {
-    fn forward(&self, x: &Tensor) -> Result<Tensor>;
-}
-
-pub trait Norm: Send + Sync {
-    fn forward(&self, x: &Tensor) -> Result<Tensor>;
-}
-
-pub trait PositionalEncoding: Send + Sync {
-    fn forward(&self, positions: &[i64], head_dim: usize) -> Result<(Tensor, Tensor)>;
-}
-```
-
-#### 3.2 组件实现目录
+#### 3.1 创建组件目录结构
 
 ```
 crates/model/src/components/
-├── traits.rs          # trait 定义
 ├── attention/
 │   ├── mod.rs
-│   ├── gqa.rs         # GQA 实现
-│   ├── mha.rs         # MHA 实现 (备用)
+│   ├── gqa.rs         # GqaAttention 实现
 │   └── flash.rs       # Flash Attention 封装
-├── mlp/
-│   ├── mod.rs
-│   ├── swiglu.rs      # SwiGLU 实现
-│   └── geglu.rs       # GeGLU 实现 (未来)
-├── norm/
-│   ├── mod.rs
-│   ├── rms_norm.rs    # RMSNorm
-│   └── layer_norm.rs  # LayerNorm (备用)
-├── positional/
-│   ├── mod.rs
-│   ├── rope.rs        # 标准 RoPE
-│   ├── yarn.rs        # YaRN 缩放
-│   └── mrope.rs       # MRoPE (Qwen3.5)
-└── mod.rs             # 统一导出
+└── mod.rs
 ```
 
-#### 3.3 迁移策略
+#### 3.2 迁移策略
 
 1. 将 `components/attention.rs` 中的 `GqaAttention` 移动到 `components/attention/gqa.rs`
-2. 将 `qwen3/attention.rs` 中的 `GqaAttention` 改为使用共享实现
-3. 对其他架构重复此过程
+2. 各架构 (`qwen3/`, `llama/`, `mistral/`, `mixtral/`) 改为使用共享实现
+3. 保持向后兼容，通过 re-export
 
 **交付物**: PR #3
-**风险**: 中 (需要确保向后兼容)
+**验证**: 所有架构测试通过
 
 ---
 
-### Phase 4: Block 重构
+### Phase 4: 共享组件层 - MLP/Norm 提取
 
-**目标**: 通过组合模式减少重复代码
+**目标**: 提取 SwiGLU 和 RMSNorm
+**复杂度**: 中 | **风险**: 低-中
 
-#### 4.1 基类设计
+#### 4.1 创建组件子模块
+
+```
+crates/model/src/components/
+├── mlp/
+│   ├── mod.rs
+│   └── swiglu.rs      # SwiGLU 实现
+└── norm/
+    ├── mod.rs
+    └── rms_norm.rs    # RMSNorm 实现
+```
+
+#### 4.2 迁移策略
+
+1. 从各架构提取 MLP 和 Norm 实现到共享层
+2. 使用 trait 提供统一接口
+3. 支持未来扩展 (GeGLU, LayerNorm 等)
+
+**交付物**: PR #4
+**验证**: 模型加载测试通过
+
+---
+
+### Phase 5: 共享组件层 - RoPE 提取
+
+**目标**: 提取各种 RoPE 变体
+**复杂度**: 中 | **风险**: 低
+
+#### 5.1 创建 Positional 子模块
+
+```
+crates/model/src/components/
+└── positional/
+    ├── mod.rs
+    ├── rope.rs        # 标准 RoPE
+    ├── yarn.rs        # YaRN 缩放
+    └── mrope.rs       # MRoPE (Qwen3.5)
+```
+
+#### 5.2 迁移策略
+
+1. 收集所有 RoPE 实现变体
+2. 识别公共模式，提取共享逻辑
+3. 保留架构特定配置参数
+
+**交付物**: PR #5
+**验证**: Qwen3.5 (MRoPE) 测试通过
+
+---
+
+### Phase 6: Block 基类设计
+
+**目标**: 定义通用的 TransformerBlock 基类
+**复杂度**: 高 | **风险**: 中
+
+#### 6.1 基类设计
 
 ```rust
 // crates/model/src/components/block.rs
@@ -209,7 +218,6 @@ pub struct TransformerBlockConfig {
     pub max_position_embeddings: usize,
     pub rope_theta: f64,
     pub rms_eps: f64,
-    pub sliding_window: Option<usize>,
 }
 
 pub struct TransformerBlock<Attn, FF, Norm> {
@@ -220,47 +228,47 @@ pub struct TransformerBlock<Attn, FF, Norm> {
 }
 ```
 
-#### 4.2 架构特定组合
+#### 6.2 架构组合类型
 
 ```rust
 // 架构使用示例
-pub type LlamaBlock = TransformerBlock<
-    GqaAttention,      // from components
-    SwiGLU,            // from components
-    RmsNorm,           // from components
->;
-
-pub type MistralBlock = TransformerBlock<
-    SlidingWindowGqaAttention,  // 扩展 attention
-    SwiGLU,
-    RmsNorm,
->;
+pub type LlamaBlock = TransformerBlock<GqaAttention, SwiGLU, RmsNorm>;
+pub type MistralBlock = TransformerBlock<SlidingWindowAttention, SwiGLU, RmsNorm>;
 ```
 
-#### 4.3 配置差异处理
-
-```rust
-// 对于 Mistral 的 sliding window，在配置中传入
-pub struct SlidingWindowConfig {
-    pub base: TransformerBlockConfig,
-    pub sliding_window: usize,
-}
-```
-
-**交付物**: PR #4
-**风险**: 中
+**交付物**: PR #6
+**验证**: 架构类型定义编译通过
 
 ---
 
-### Phase 5: core→model 解耦 + 文档
+### Phase 7: 架构迁移 - Llama → Mixtral
+
+**目标**: 逐步迁移各架构使用新 Block 系统
+**复杂度**: 高 | **风险**: 中
+
+#### 7.1 迁移顺序
+
+1. **Llama** - 最简单，作为模板
+2. **Mistral** - 添加 sliding window 支持
+3. **Qwen3** - 添加 QK-Norm 支持
+4. **Mixtral** - 添加 MoE 支持
+
+#### 7.2 每次迁移验证
+
+- 单元测试通过
+- 模型加载成功
+- 生成结果一致
+
+**交付物**: PR #7 (可能需要多个 commit)
+
+---
+
+### Phase 8: core→model 解耦 + 文档完善
 
 **目标**: 架构健康，文档完善
+**复杂度**: 中 | **风险**: 低
 
-#### 5.1 解耦策略
-
-**问题**: `vllm-core` 依赖 `vllm-model` 来使用 CUDA graph kernels
-
-**方案**: 将 kernel wrappers 移到 `vllm-traits`
+#### 8.1 解耦策略
 
 ```
 vllm-traits
@@ -274,33 +282,36 @@ vllm-core
 └── engine.rs         # 使用 kernels trait，不直接依赖 model
 
 vllm-model
-├── kernels/
-│   ├── cuda_graph.rs  # 实现 kernels 中的 trait
-│   └── flash_attention.rs
+├── kernels/          # 实现 kernels trait
 └── components/       # 使用 traits 定义接口
 ```
 
-#### 5.2 文档完善
+#### 8.2 文档完善
 
 - 架构决策记录 (ADR)
 - 模块级别文档
 - 示例和教程
 
-**交付物**: PR #5
-**风险**: 低
+**交付物**: PR #8
+**验证**: `cargo doc --document-private-items` 无警告
 
 ---
 
 ## 依赖关系
 
 ```
-Phase 1 ──┬──> Phase 2 ──> Phase 3 ──> Phase 4 ──> Phase 5
-          │         │          │          │
-          │         │          └──────────┘
-          │         │              │
-          └─────────┴──────────────┘
-              (可以并行尝试)
+Phase 1 ──> Phase 2 ──> Phase 3 ──> Phase 4 ──> Phase 5 ──> Phase 6 ──> Phase 7 ──> Phase 8
+             │                ↑                              ↑
+             │                │                              │
+             └────────────────┴──> 可以并行尝试 Phases 3,4,5 <─┘
 ```
+
+**说明**:
+- Phase 1, 2 必须按顺序
+- Phase 3, 4, 5 可以并行开发 (共享组件层内部)
+- Phase 6 依赖 Phase 3, 4, 5
+- Phase 7 依赖 Phase 6
+- Phase 8 可在任何时候执行
 
 ## 测试策略
 
@@ -315,9 +326,10 @@ Phase 1 ──┬──> Phase 2 ──> Phase 3 ──> Phase 4 ──> Phase 5
 |-------|----------|
 | Phase 1 | 直接 revert PR |
 | Phase 2 | Feature flag 禁用 |
-| Phase 3 | 保留旧实现作为 fallback |
-| Phase 4 | 架构类型 alias 回退 |
-| Phase 5 | 依赖关系逐步恢复 |
+| Phase 3-5 | 保留旧实现作为 fallback |
+| Phase 6 | 架构类型 alias 回退 |
+| Phase 7 | 逐架构回退 |
+| Phase 8 | 依赖关系逐步恢复 |
 
 ## 验收标准
 
