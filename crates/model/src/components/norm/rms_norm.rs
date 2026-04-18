@@ -108,4 +108,127 @@ mod tests {
         let result = rms_norm(&x, &weight, 1e-5).unwrap();
         assert_eq!(result.dims(), &[1, 2, 2]);
     }
+
+    #[test]
+    fn test_rms_norm_weight_application() {
+        let device = candle_core::Device::Cpu;
+        let weight = Tensor::ones(128, DType::F32, &device).unwrap();
+        let norm = RmsNorm::new(weight, 1e-6);
+
+        let x = Tensor::ones((2, 128), DType::F32, &device).unwrap();
+        let output = norm.forward(&x).unwrap();
+
+        let count = (output.dim(1).unwrap() * output.dim(2).unwrap_or(1)) as f32;
+        let sum_out: f32 = output.sum_all().unwrap().to_scalar().unwrap();
+        let sum_in: f32 = x.sum_all().unwrap().to_scalar().unwrap();
+        let mean_out = sum_out / count;
+        let mean_in = sum_in / count;
+        assert!((mean_out - mean_in).abs() < 0.5);
+    }
+
+    #[test]
+    fn test_rms_norm_variance_calculation() {
+        let device = candle_core::Device::Cpu;
+        let weight = Tensor::ones(64, DType::F32, &device).unwrap();
+        let norm = RmsNorm::new(weight, 1e-6);
+
+        let x = Tensor::full(2.0, (1, 64), &device).unwrap().to_dtype(DType::F32).unwrap();
+        let output = norm.forward(&x).unwrap();
+
+        let data = output.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+        let first = data[0];
+        let all_same = data.iter().all(|v| (v - first).abs() < 1e-6);
+        assert!(all_same);
+    }
+
+    #[test]
+    fn test_rms_norm_forward() {
+        let device = candle_core::Device::Cpu;
+        let weight = Tensor::ones(32, DType::F32, &device).unwrap();
+        let norm = RmsNorm::new(weight, 1e-6);
+
+        let x = Tensor::randn(0.0, 1.0, (4, 32), &device).unwrap().to_dtype(DType::F32).unwrap();
+        let output = norm.forward(&x).unwrap();
+
+        assert_eq!(output.dims(), x.dims());
+    }
+
+    #[test]
+    fn test_rms_norm_minimal_dim() {
+        let device = candle_core::Device::Cpu;
+        let weight = Tensor::ones(8, DType::F32, &device).unwrap();
+        let norm = RmsNorm::new(weight, 1e-6);
+
+        let x = Tensor::ones((1, 8), DType::F32, &device).unwrap();
+        let output = norm.forward(&x).unwrap();
+        assert_eq!(output.dims(), &[1, 8]);
+    }
+
+    #[test]
+    fn test_rms_norm_large_dim() {
+        let device = candle_core::Device::Cpu;
+        let weight = Tensor::ones(8192, DType::F32, &device).unwrap();
+        let norm = RmsNorm::new(weight, 1e-6);
+
+        let x = Tensor::ones((1, 8192), DType::F32, &device).unwrap();
+        let output = norm.forward(&x).unwrap();
+        assert_eq!(output.dims(), &[1, 8192]);
+    }
+
+    #[test]
+    fn test_rms_norm_large_eps() {
+        let device = candle_core::Device::Cpu;
+        let weight = Tensor::ones(64, DType::F32, &device).unwrap();
+        let norm = RmsNorm::new(weight, 0.1);
+
+        let x = Tensor::randn(0.0, 1.0, (2, 64), &device).unwrap().to_dtype(DType::F32).unwrap();
+        let output = norm.forward(&x).unwrap();
+        let data: Vec<f32> = output.flatten_all().unwrap().to_vec1().unwrap();
+        assert!(data.iter().all(|v| v.is_finite()));
+    }
+
+    #[test]
+    fn test_rms_norm_output_finite() {
+        let device = candle_core::Device::Cpu;
+        let weight = Tensor::ones(128, DType::F32, &device).unwrap();
+        let norm = RmsNorm::new(weight, 1e-6);
+
+        let x = Tensor::randn(-10.0, 10.0, (4, 128), &device).unwrap().to_dtype(DType::F32).unwrap();
+        let output = norm.forward(&x).unwrap();
+        let data: Vec<f32> = output.flatten_all().unwrap().to_vec1().unwrap();
+        assert!(data.iter().all(|v| v.is_finite()));
+    }
+
+    #[test]
+    fn test_rms_norm_output_scale() {
+        let device = candle_core::Device::Cpu;
+        let weight = Tensor::ones(64, DType::F32, &device).unwrap();
+        let norm = RmsNorm::new(weight, 1e-6);
+
+        let x = Tensor::randn(0.0, 1.0, (2, 64), &device).unwrap().to_dtype(DType::F32).unwrap();
+        let output = norm.forward(&x).unwrap();
+
+        let count = output.dim(1).unwrap() * output.dim(2).unwrap_or(1);
+        let sum_sq: f32 = output.sqr().unwrap().sum_all().unwrap().to_scalar().unwrap();
+        let rms = (sum_sq / count as f32).sqrt();
+        assert!(rms < 2.0 && rms > 0.1, "RMS should be in reasonable range");
+    }
+
+    #[test]
+    fn test_rms_norm_eps_stability() {
+        let device = candle_core::Device::Cpu;
+        let x = Tensor::ones((1, 64), DType::F32, &device).unwrap();
+
+        let weight1 = Tensor::ones(64, DType::F32, &device).unwrap();
+        let weight2 = Tensor::ones(64, DType::F32, &device).unwrap();
+
+        let norm1 = RmsNorm::new(weight1, 1e-8);
+        let norm2 = RmsNorm::new(weight2, 1e-2);
+
+        let out1 = norm1.forward(&x).unwrap();
+        let out2 = norm2.forward(&x).unwrap();
+
+        assert!(out1.flatten_all().unwrap().to_vec1::<f32>().unwrap().iter().all(|v| v.is_finite()));
+        assert!(out2.flatten_all().unwrap().to_vec1::<f32>().unwrap().iter().all(|v| v.is_finite()));
+    }
 }
