@@ -8,8 +8,10 @@
 //! - Uses Grouped-Query Attention with fewer KV heads
 //! - Supports MistralSparseMoe block in Mixtral
 
+pub mod arch;
 pub mod block;
 pub mod model;
+pub mod register;
 
 pub use block::MistralBlock;
 pub use model::MistralModel;
