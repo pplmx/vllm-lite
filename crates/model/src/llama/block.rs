@@ -3,14 +3,14 @@
 use std::collections::HashMap;
 
 use crate::components::GqaAttention;
+use crate::components::LnLayerNorm;
 use crate::config::ModelConfig;
 use crate::components::SwiGLU;
-use candle_core::{Module, Result, Tensor};
-use candle_nn::{LayerNorm, VarBuilder};
+use candle_core::{Result, Tensor};
 
 pub struct LlamaBlock {
-    input_layernorm: LayerNorm,
-    post_attention_layernorm: LayerNorm,
+    input_layernorm: LnLayerNorm,
+    post_attention_layernorm: LnLayerNorm,
     attention: GqaAttention,
     mlp: SwiGLU,
 }
@@ -24,12 +24,15 @@ impl LlamaBlock {
         let intermediate_size = config.intermediate_size;
         let rms_norm_eps = config.rms_norm_eps;
 
-        let vb = VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu);
+        let device = candle_core::Device::Cpu;
 
-        let input_layernorm =
-            candle_nn::layer_norm(hidden_size, rms_norm_eps, vb.pp("input_layernorm"))?;
-        let post_attention_layernorm =
-            candle_nn::layer_norm(hidden_size, rms_norm_eps, vb.pp("post_attention_layernorm"))?;
+        let input_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
+        let input_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
+        let input_layernorm = LnLayerNorm::new(input_ln_weight, input_ln_bias, rms_norm_eps);
+
+        let post_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
+        let post_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
+        let post_attention_layernorm = LnLayerNorm::new(post_ln_weight, post_ln_bias, rms_norm_eps);
 
         let attention = GqaAttention::new(
             hidden_size,
@@ -150,17 +153,11 @@ impl LlamaBlock {
             }
         };
 
-        let input_ln_dim = input_ln_w.dim(0).unwrap_or(hidden_size);
-        let input_ln_bias = Tensor::zeros(input_ln_dim, input_ln_w.dtype(), input_ln_w.device())?;
-        let input_layernorm = LayerNorm::new(input_ln_w, input_ln_bias, rms_norm_eps);
+        let input_ln_bias = Tensor::zeros(input_ln_w.dim(0).unwrap_or(hidden_size), input_ln_w.dtype(), input_ln_w.device())?;
+        let input_layernorm = LnLayerNorm::new(input_ln_w, input_ln_bias, rms_norm_eps);
 
-        let post_attn_dim = post_attn_ln_w.dim(0).unwrap_or(hidden_size);
-        let post_attn_bias = Tensor::zeros(
-            post_attn_dim,
-            post_attn_ln_w.dtype(),
-            post_attn_ln_w.device(),
-        )?;
-        let post_attention_layernorm = LayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
+        let post_attn_bias = Tensor::zeros(post_attn_ln_w.dim(0).unwrap_or(hidden_size), post_attn_ln_w.dtype(), post_attn_ln_w.device())?;
+        let post_attention_layernorm = LnLayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
 
         let attention = GqaAttention::new_with_weights(
             hidden_size,

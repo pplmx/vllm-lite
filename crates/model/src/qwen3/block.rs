@@ -2,14 +2,14 @@
 
 use super::{attention::Qwen3Attention, mlp::SwiGLU};
 use crate::components::AttentionConfig;
+use crate::components::LnLayerNorm;
 use crate::kv_cache::PagedKvCache;
-use candle_core::{Module, Result, Tensor};
-use candle_nn::LayerNorm;
+use candle_core::{Result, Tensor};
 use vllm_dist::TensorParallelConfig;
 
 pub struct TransformerBlock {
-    input_layernorm: LayerNorm,
-    post_attention_layernorm: LayerNorm,
+    input_layernorm: LnLayerNorm,
+    post_attention_layernorm: LnLayerNorm,
     attention: Qwen3Attention,
     mlp: SwiGLU,
     #[allow(dead_code)]
@@ -32,11 +32,15 @@ impl TransformerBlock {
         let vb = vb.unwrap_or_else(|| {
             candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu)
         });
+        let device = candle_core::Device::Cpu;
 
-        let input_layernorm =
-            candle_nn::layer_norm(hidden_size, rms_norm_eps, vb.pp("input_layernorm"))?;
-        let post_attention_layernorm =
-            candle_nn::layer_norm(hidden_size, rms_norm_eps, vb.pp("post_attention_layernorm"))?;
+        let input_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
+        let input_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
+        let input_layernorm = LnLayerNorm::new(input_ln_weight, input_ln_bias, rms_norm_eps);
+
+        let post_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
+        let post_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
+        let post_attention_layernorm = LnLayerNorm::new(post_ln_weight, post_ln_bias, rms_norm_eps);
 
         let vb_attn = vb.pp("attn");
         let attention = Qwen3Attention::new(
@@ -75,11 +79,15 @@ impl TransformerBlock {
         has_qk_norm: bool,
     ) -> Result<Self> {
         let vb = candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu);
+        let device = candle_core::Device::Cpu;
 
-        let input_layernorm =
-            candle_nn::layer_norm(hidden_size, rms_norm_eps, vb.pp("input_layernorm"))?;
-        let post_attention_layernorm =
-            candle_nn::layer_norm(hidden_size, rms_norm_eps, vb.pp("post_attention_layernorm"))?;
+        let input_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
+        let input_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
+        let input_layernorm = LnLayerNorm::new(input_ln_weight, input_ln_bias, rms_norm_eps);
+
+        let post_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
+        let post_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
+        let post_attention_layernorm = LnLayerNorm::new(post_ln_weight, post_ln_bias, rms_norm_eps);
 
         let vb_attn = vb.pp("attn");
         let attention = Qwen3Attention::new(
@@ -146,22 +154,11 @@ impl TransformerBlock {
             return Err(candle_core::Error::msg("Missing layer weights"));
         };
 
-        let input_ln_dim = input_ln_w.dim(0).unwrap_or(hidden_size);
-        eprintln!(
-            "DEBUG TransformerBlock: input_ln_w.dim(0)={}, hidden_size={}",
-            input_ln_dim, hidden_size
-        );
-        let input_ln_bias = Tensor::zeros(input_ln_dim, input_ln_w.dtype(), input_ln_w.device())?;
-        let input_layernorm = LayerNorm::new(input_ln_w.clone(), input_ln_bias, rms_norm_eps);
+        let input_ln_bias = Tensor::zeros(input_ln_w.dim(0).unwrap_or(hidden_size), input_ln_w.dtype(), input_ln_w.device())?;
+        let input_layernorm = LnLayerNorm::new(input_ln_w, input_ln_bias, rms_norm_eps);
 
-        let post_attn_dim = post_attn_ln_w.dim(0).unwrap_or(hidden_size);
-        let post_attn_bias = Tensor::zeros(
-            post_attn_dim,
-            post_attn_ln_w.dtype(),
-            post_attn_ln_w.device(),
-        )?;
-        let post_attention_layernorm =
-            LayerNorm::new(post_attn_ln_w.clone(), post_attn_bias, rms_norm_eps);
+        let post_attn_bias = Tensor::zeros(post_attn_ln_w.dim(0).unwrap_or(hidden_size), post_attn_ln_w.dtype(), post_attn_ln_w.device())?;
+        let post_attention_layernorm = LnLayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
 
         let attention = Qwen3Attention::new_with_weights(
             hidden_size,
