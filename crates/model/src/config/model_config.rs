@@ -200,7 +200,10 @@ impl ModelConfig {
             .or_else(|| value.get("num_local_heads"))
             .and_then(|v| v.as_u64())
             .unwrap_or(num_heads as u64) as usize;
-        let head_dim = hidden_size / num_heads;
+        let head_dim = value
+            .get("head_dim")
+            .and_then(|v| v.as_u64())
+            .unwrap_or((hidden_size / num_heads) as u64) as usize;
         let vocab_size = value
             .get("vocab_size")
             .and_then(|v| v.as_u64())
