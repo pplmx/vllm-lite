@@ -10,9 +10,27 @@ pub struct RopeScaling {
     pub original_max_position_embeddings: Option<usize>,
     #[serde(default)]
     pub attn_factor: Option<f32>,
+    #[serde(default)]
+    pub partial_rotary_factor: Option<f32>,
+    #[serde(default)]
+    pub mrope_section: Option<Vec<usize>>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct RopeParameters {
+    #[serde(default)]
+    pub rope_type: Option<String>,
+    #[serde(default)]
+    pub rope_theta: Option<f32>,
+    #[serde(default)]
+    pub partial_rotary_factor: Option<f32>,
+    #[serde(default)]
+    pub mrope_section: Option<Vec<usize>>,
+    #[serde(default)]
+    pub mrope_interleaved: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct TextConfig {
     #[serde(default)]
     pub vocab_size: Option<usize>,
@@ -34,6 +52,8 @@ pub struct TextConfig {
     pub max_position_embeddings: Option<usize>,
     #[serde(default)]
     pub rms_norm_eps: Option<f32>,
+    #[serde(default)]
+    pub layer_types: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -75,6 +95,8 @@ pub struct Qwen3Config {
     #[serde(default)]
     pub rope_scaling: Option<RopeScaling>,
     #[serde(default)]
+    pub rope_parameters: Option<RopeParameters>,
+    #[serde(default)]
     pub head_dim: Option<usize>,
 }
 
@@ -113,6 +135,10 @@ impl TextConfig {
 
     pub fn rms_norm_eps(&self) -> f32 {
         self.rms_norm_eps.unwrap_or(1e-6)
+    }
+
+    pub fn layer_types(&self) -> Option<&[String]> {
+        self.layer_types.as_deref()
     }
 }
 
@@ -192,9 +218,17 @@ impl Qwen3Config {
         self.rope_scaling.as_ref()
     }
 
+    pub fn rope_parameters(&self) -> Option<&RopeParameters> {
+        self.rope_parameters.as_ref()
+    }
+
     pub fn head_dim(&self) -> usize {
         self.head_dim
             .unwrap_or_else(|| self.hidden_size() / self.num_attention_heads())
+    }
+
+    pub fn layer_types(&self) -> Option<&[String]> {
+        self.text_config.as_ref().and_then(|c| c.layer_types())
     }
 
     pub fn attention_type(&self) -> AttentionType {
@@ -243,6 +277,7 @@ mod tests {
             tie_word_embeddings: None,
             has_qk_norm: None,
             rope_scaling: None,
+            rope_parameters: None,
             head_dim: None,
         };
 
@@ -275,6 +310,7 @@ mod tests {
             tie_word_embeddings: Some(true),
             has_qk_norm: Some(true),
             rope_scaling: None,
+            rope_parameters: None,
             head_dim: None,
         };
 
@@ -300,6 +336,7 @@ mod tests {
             rope_theta: None,
             max_position_embeddings: None,
             rms_norm_eps: None,
+            layer_types: None,
         };
 
         let config = Qwen3Config {
@@ -313,6 +350,7 @@ mod tests {
             rope_theta: None,
             max_position_embeddings: None,
             rms_norm_eps: None,
+            rope_parameters: None,
             text_config: Some(text_config),
             q_len: None,
             qk_nope_dim: None,
