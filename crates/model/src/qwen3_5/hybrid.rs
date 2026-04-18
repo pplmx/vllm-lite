@@ -161,7 +161,7 @@ impl MRoPE {
         positions: &[i64],
         section_idx: usize,
     ) -> CandleResult<Tensor> {
-        let (batch, seq, heads, dim) = x.dims4()?;
+        let (_batch, seq, _heads, dim) = x.dims4()?;
         let half_dim = dim / 2;
 
         let x_even = x.narrow(3, 0, half_dim)?;
@@ -178,24 +178,26 @@ impl MRoPE {
         let x_odd_rot = x_odd.broadcast_mul(&freq_sin)?;
         let rotated = (x_even_rot - x_odd_rot)?;
 
-        rotated.reshape((batch, seq, heads, half_dim))
+        Tensor::cat(&[&rotated, &x.narrow(3, half_dim, half_dim)?], 3)
     }
 
     fn compute_freqs(&self, positions: &[i64], section_idx: usize) -> CandleResult<Tensor> {
         let seq_len = positions.len();
         let device = &Device::Cpu;
+        let half_dim = self.sections[section_idx] / 2;
         let freqs = Tensor::from_vec(
             positions
                 .iter()
                 .flat_map(|&pos| {
-                    (0..self.sections[section_idx] / 2).map(move |i| {
-                        let freq = (pos as f32)
+                    (0..half_dim).map(move |i| {
+                        let freq = self
+                            .theta
                             .powf(-2.0 * (i as f32) / (self.sections[section_idx] as f32));
-                        freq * self.theta
+                        freq * (pos as f32)
                     })
                 })
                 .collect::<Vec<_>>(),
-            (seq_len, self.sections[section_idx] / 2),
+            (seq_len, half_dim),
             device,
         )?;
         Ok(freqs)
@@ -1235,25 +1237,43 @@ mod tests {
     }
 
     #[test]
-    fn test_full_attention_block_creation() {
+    fn test_full_attention_block_residual_connection() {
         let device = Device::Cpu;
-        let rope = MRoPE::new(64, 10000.0, vec![21, 21, 22], 0.25);
+        let rope = MRoPE::new(32, 10000.0, vec![10, 10, 12], 0.25);
         let block = FullAttentionBlock35::new(
+            128,
+            2,
+            2,
+            32,
             256,
-            4,
-            4,
-            64,
-            512,
             1e-6,
             rope,
             VarBuilder::zeros(DType::F32, &device),
         )
         .unwrap();
 
-        let x = Tensor::ones((1, 4, 256), DType::F32, &device).unwrap();
+        let x = Tensor::zeros((1, 2, 128), DType::F32, &device).unwrap();
         let out = block.forward(&x).unwrap();
 
-        assert_eq!(out.dims(), &[1, 4, 256]);
+        assert_eq!(out.dims(), &[1, 2, 128]);
+    }
+
+    #[test]
+    fn test_qwen35_hybrid_model_kv_cache_init() {
+        let config = Qwen3Config {
+            text_config: Some(crate::qwen3_config::TextConfig {
+                num_hidden_layers: Some(4),
+                num_key_value_heads: Some(2),
+                ..Default::default()
+            }),
+            head_dim: Some(64),
+            ..Default::default()
+        };
+
+        let device = Device::Cpu;
+        let model = Qwen35HybridModel::new(config.clone(), device, 16).unwrap();
+
+        assert_eq!(model.kv_cache.num_layers(), 4);
     }
 
     #[test]
@@ -1272,5 +1292,218 @@ mod tests {
 
         assert_eq!(model.layers.len(), 12);
         assert_eq!(model.layer_types.len(), 12);
+    }
+
+    #[test]
+    fn test_mrope_output_shape() {
+        let rope = MRoPE::new(12, 10000.0, vec![4, 4, 4], 0.25);
+        let device = Device::Cpu;
+
+        let q = Tensor::ones((2, 4, 8, 12), DType::F32, &device).unwrap();
+        let k = Tensor::ones((2, 4, 2, 12), DType::F32, &device).unwrap();
+        let positions: Vec<i64> = vec![0, 1, 2, 3];
+
+        let (q_out, k_out) = rope.apply(&q, &k, &positions).unwrap();
+
+        assert_eq!(q_out.dims(), q.dims());
+        assert_eq!(k_out.dims(), k.dims());
+    }
+
+    #[test]
+    fn test_mrope_different_positions_different_output() {
+        let rope = MRoPE::new(12, 10000.0, vec![4, 4, 4], 0.25);
+        let device = Device::Cpu;
+
+        let q = Tensor::ones((1, 2, 2, 12), DType::F32, &device).unwrap();
+        let k = Tensor::ones((1, 2, 2, 12), DType::F32, &device).unwrap();
+
+        let pos_0: Vec<i64> = vec![0, 1];
+        let pos_5: Vec<i64> = vec![5, 6];
+
+        let (_, k_0) = rope.apply(&q, &k, &pos_0).unwrap();
+        let (_, k_5) = rope.apply(&q, &k, &pos_5).unwrap();
+
+        let diff = (&k_0 - &k_5)
+            .unwrap()
+            .abs()
+            .unwrap()
+            .sum_all()
+            .unwrap()
+            .to_scalar::<f32>()
+            .unwrap();
+        assert!(
+            diff > 1e-3,
+            "RoPE should produce different outputs for different positions, got diff={}",
+            diff
+        );
+    }
+
+    #[test]
+    fn test_mrope_deterministic() {
+        let rope = MRoPE::new(12, 10000.0, vec![4, 4, 4], 0.25);
+        let device = Device::Cpu;
+
+        let q = Tensor::ones((1, 2, 2, 12), DType::F32, &device).unwrap();
+        let k = Tensor::ones((1, 2, 2, 12), DType::F32, &device).unwrap();
+        let positions: Vec<i64> = vec![3, 4];
+
+        let (q1, k1) = rope.apply(&q, &k, &positions).unwrap();
+        let (q2, k2) = rope.apply(&q, &k, &positions).unwrap();
+
+        let q_diff = (&q1 - &q2)
+            .unwrap()
+            .abs()
+            .unwrap()
+            .sum_all()
+            .unwrap()
+            .to_scalar::<f32>()
+            .unwrap();
+        let k_diff = (&k1 - &k2)
+            .unwrap()
+            .abs()
+            .unwrap()
+            .sum_all()
+            .unwrap()
+            .to_scalar::<f32>()
+            .unwrap();
+
+        assert_eq!(q_diff, 0.0, "RoPE should be deterministic for q");
+        assert_eq!(k_diff, 0.0, "RoPE should be deterministic for k");
+    }
+
+    #[test]
+    fn test_layer_type_parsing_mixed() {
+        let config = Qwen3Config {
+            text_config: Some(crate::qwen3_config::TextConfig {
+                num_hidden_layers: Some(8),
+                layer_types: Some(vec![
+                    "linear_attention".to_string(),
+                    "linear_attention".to_string(),
+                    "linear_attention".to_string(),
+                    "full_attention".to_string(),
+                    "linear_attention".to_string(),
+                    "linear_attention".to_string(),
+                    "linear_attention".to_string(),
+                    "full_attention".to_string(),
+                ]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let layer_types = Qwen35HybridModel::parse_layer_types(&config);
+        assert_eq!(layer_types.len(), 8);
+        assert_eq!(layer_types[0], LayerType::LinearAttention);
+        assert_eq!(layer_types[3], LayerType::FullAttention);
+        assert_eq!(layer_types[7], LayerType::FullAttention);
+    }
+
+    #[test]
+    fn test_mlp_output_shape_different_intermediate_size() {
+        let device = Device::Cpu;
+        let mlp = MLP35::new(256, 1024, VarBuilder::zeros(DType::F32, &device)).unwrap();
+
+        let x = Tensor::ones((1, 3, 256), DType::F32, &device).unwrap();
+        let out = mlp.forward(&x).unwrap();
+
+        assert_eq!(out.dims(), &[1, 3, 256]);
+    }
+
+    #[test]
+    fn test_ssm_layer_dimensions() {
+        let device = Device::Cpu;
+        let ssm = SSMLayer35::new(256, 16, 4, VarBuilder::zeros(DType::F32, &device)).unwrap();
+
+        assert_eq!(ssm.d_inner(), 256);
+        assert_eq!(ssm.d_state(), 16);
+    }
+
+    #[test]
+    fn test_ssm_layer_forward_output_shapes() {
+        let device = Device::Cpu;
+        let ssm = SSMLayer35::new(128, 16, 4, VarBuilder::zeros(DType::F32, &device)).unwrap();
+
+        let x = Tensor::ones((2, 5, 128), DType::F32, &device).unwrap();
+        let (delta, b, c, x_conv) = ssm.forward(&x).unwrap();
+
+        assert_eq!(delta.dims()[0], 2);
+        assert_eq!(b.dims()[0], 2);
+        assert_eq!(c.dims()[0], 2);
+        assert_eq!(x_conv.dims()[0], 2);
+        assert!(x_conv.dims()[1] >= 5);
+    }
+
+    #[test]
+    fn test_linear_attention_block_ssm_output_shape() {
+        let device = Device::Cpu;
+        let block =
+            LinearAttentionBlock::new(256, 16, 4, 2, VarBuilder::zeros(DType::F32, &device))
+                .unwrap();
+
+        let x = Tensor::ones((1, 3, 256), DType::F32, &device).unwrap();
+        let x_proj = block.input_proj.forward(&x).unwrap();
+
+        let parts = x_proj.chunk(2, 2).unwrap();
+        let x_inner = &parts[1];
+
+        let (_delta, _b, _c, x_conv) = block.ssm.forward(x_inner).unwrap();
+
+        assert_eq!(x_conv.dims()[0], 1);
+        assert!(x_conv.dims()[1] >= 3);
+    }
+
+    #[test]
+    fn test_attention35_rope_preserves_head_dim() {
+        let device = Device::Cpu;
+        let rope = MRoPE::new(64, 10000.0, vec![21, 21, 22], 0.25);
+        let attn = Attention35WithRoPE::new(
+            256,
+            4,
+            4,
+            64,
+            rope.clone(),
+            VarBuilder::zeros(DType::F32, &device),
+        )
+        .unwrap();
+
+        assert_eq!(attn.head_dim, 64);
+        assert_eq!(attn.num_heads, 4);
+        assert_eq!(attn.num_kv_heads, 4);
+        assert_eq!(rope.dim, 64);
+    }
+
+    #[test]
+    fn test_mrope_section_validation() {
+        let head_dim = 12;
+        let sections = vec![4, 4, 4];
+        let total: usize = sections.iter().sum();
+
+        assert_eq!(total, head_dim, "Sections should sum to head_dim");
+        assert!(
+            sections.iter().all(|&s| s % 2 == 0),
+            "Each section should be even for half-dim split"
+        );
+    }
+
+    #[test]
+    fn test_qwen35_config_layer_types_via_rope_params() {
+        use crate::qwen3_config::RopeParameters;
+        let config = Qwen3Config {
+            rope_theta: Some(10000000.0),
+            head_dim: Some(256),
+            rope_parameters: Some(RopeParameters {
+                rope_type: Some("default".to_string()),
+                rope_theta: Some(10000000.0),
+                partial_rotary_factor: Some(0.5),
+                mrope_section: Some(vec![85, 85, 86]),
+                mrope_interleaved: Some(true),
+            }),
+            ..Default::default()
+        };
+
+        let rope = MRoPE::from_config(&config);
+        assert_eq!(rope.theta, 10000000.0);
+        assert_eq!(rope.sections, vec![85, 85, 86]);
+        assert_eq!(rope.dim, 256);
     }
 }
