@@ -154,11 +154,20 @@ impl TransformerBlock {
             return Err(candle_core::Error::msg("Missing layer weights"));
         };
 
-        let input_ln_bias = Tensor::zeros(input_ln_w.dim(0).unwrap_or(hidden_size), input_ln_w.dtype(), input_ln_w.device())?;
+        let input_ln_bias = Tensor::zeros(
+            input_ln_w.dim(0).unwrap_or(hidden_size),
+            input_ln_w.dtype(),
+            input_ln_w.device(),
+        )?;
         let input_layernorm = LnLayerNorm::new(input_ln_w, input_ln_bias, rms_norm_eps);
 
-        let post_attn_bias = Tensor::zeros(post_attn_ln_w.dim(0).unwrap_or(hidden_size), post_attn_ln_w.dtype(), post_attn_ln_w.device())?;
-        let post_attention_layernorm = LnLayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
+        let post_attn_bias = Tensor::zeros(
+            post_attn_ln_w.dim(0).unwrap_or(hidden_size),
+            post_attn_ln_w.dtype(),
+            post_attn_ln_w.device(),
+        )?;
+        let post_attention_layernorm =
+            LnLayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
 
         let attention = Qwen3Attention::new_with_weights(
             hidden_size,

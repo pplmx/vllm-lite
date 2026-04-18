@@ -3,6 +3,8 @@ pub mod block;
 pub mod mlp;
 pub mod norm;
 pub mod positional;
+
+pub use positional::{MRoPE, RoPE, apply_rope, precompute_rope_cache};
 pub mod ssm;
 pub mod vision;
 
