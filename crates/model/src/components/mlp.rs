@@ -1,5 +1,11 @@
+//! MLP layer trait for component abstraction.
+
 use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;
+
+pub trait MlpLayer: Send + Sync {
+    fn forward(&self, x: &Tensor) -> Result<Tensor>;
+}
 
 pub fn swiglu_forward(
     x: &Tensor,
