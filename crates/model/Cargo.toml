@@ -8,8 +8,8 @@ rust-version.workspace = true
 vllm-traits = { path = "../traits", features = ["candle"] }
 vllm-dist = { path = "../dist" }
 rand = "0.10"
-candle-core = { version = "0.10.2", features = ["cuda"] }
-candle-nn = { version = "0.10.2", features = ["cuda"] }
+candle-core = "0.10.2"
+candle-nn = "0.10.2"
 thiserror = "2"
 safetensors = "0.7.0"
 serde = { version = "1", features = ["derive"] }
@@ -30,4 +30,6 @@ criterion = "0.8"
 
 [features]
 default = []
+cuda = ["candle-core/cuda", "candle-nn/cuda"]
 real_weights = ["tiktoken", "tokenizers"]
+full = ["cuda", "real_weights"]

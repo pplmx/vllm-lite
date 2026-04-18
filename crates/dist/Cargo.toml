@@ -9,7 +9,7 @@ homepage.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-candle-core = { version = "0.10.2", features = ["cuda"] }
+candle-core = "0.10.2"
 thiserror = "2"
 
 [dependencies.vllm-traits]
