@@ -12,7 +12,12 @@ pub struct RoPE {
 }
 
 impl RoPE {
-    pub fn new(head_dim: usize, max_position: usize, theta: f32, device: &candle_core::Device) -> Self {
+    pub fn new(
+        head_dim: usize,
+        max_position: usize,
+        theta: f32,
+        device: &candle_core::Device,
+    ) -> Self {
         Self {
             theta,
             head_dim,
@@ -269,7 +274,12 @@ mod tests {
         let flat = q_out.flatten_all()?;
         for i in 0..flat.elem_count() {
             let val: f32 = flat.get(i)?.to_scalar()?;
-            assert!(val.is_finite(), "Value at index {} is not finite: {}", i, val);
+            assert!(
+                val.is_finite(),
+                "Value at index {} is not finite: {}",
+                i,
+                val
+            );
         }
         Ok(())
     }

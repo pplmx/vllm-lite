@@ -490,7 +490,8 @@ mod tests {
     #[test]
     fn test_gqa_attention_num_heads_accessors() {
         let _device = candle_core::Device::Cpu;
-        let attn = GqaAttention::new(512, 16, 4, 32, None, AttentionConfig::default(), false).unwrap();
+        let attn =
+            GqaAttention::new(512, 16, 4, 32, None, AttentionConfig::default(), false).unwrap();
         assert_eq!(attn.num_heads(), 16);
         assert_eq!(attn.num_kv_heads(), 4);
     }
@@ -498,7 +499,8 @@ mod tests {
     #[test]
     fn test_gqa_attention_head_dim_accessors() {
         let _device = candle_core::Device::Cpu;
-        let attn = GqaAttention::new(256, 4, 2, 64, None, AttentionConfig::default(), false).unwrap();
+        let attn =
+            GqaAttention::new(256, 4, 2, 64, None, AttentionConfig::default(), false).unwrap();
         assert_eq!(attn.head_dim(), 64);
     }
 
@@ -518,13 +520,33 @@ mod tests {
         let o_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
 
         let attn = GqaAttention::new_with_weights(
-            hidden_size, num_heads, num_kv_heads, head_dim, q_w, k_w, v_w, o_w,
-            AttentionConfig::default(), false, None, None
+            hidden_size,
+            num_heads,
+            num_kv_heads,
+            head_dim,
+            q_w,
+            k_w,
+            v_w,
+            o_w,
+            AttentionConfig::default(),
+            false,
+            None,
+            None,
         )?;
 
         let q = Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, 1, head_dim), &device)?;
-        let k = Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, seq_len, head_dim), &device)?;
-        let v = Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, seq_len, head_dim), &device)?;
+        let k = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_len, head_dim),
+            &device,
+        )?;
+        let v = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_len, head_dim),
+            &device,
+        )?;
 
         let output = attn.paged_attention_fn(&q, &k, &v)?;
         assert_eq!(output.dims(), &[batch_size, 1, hidden_size]);
@@ -547,13 +569,38 @@ mod tests {
         let o_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
 
         let attn = GqaAttention::new_with_weights(
-            hidden_size, num_heads, num_kv_heads, head_dim, q_w, k_w, v_w, o_w,
-            AttentionConfig::default(), false, None, None
+            hidden_size,
+            num_heads,
+            num_kv_heads,
+            head_dim,
+            q_w,
+            k_w,
+            v_w,
+            o_w,
+            AttentionConfig::default(),
+            false,
+            None,
+            None,
         )?;
 
-        let q = Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, seq_len, head_dim), &device)?;
-        let k = Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, seq_len, head_dim), &device)?;
-        let v = Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, seq_len, head_dim), &device)?;
+        let q = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_len, head_dim),
+            &device,
+        )?;
+        let k = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_len, head_dim),
+            &device,
+        )?;
+        let v = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_len, head_dim),
+            &device,
+        )?;
 
         let output = attn.tiled_attention_fn(&q, &k, &v)?;
         assert_eq!(output.dims(), &[batch_size, seq_len, hidden_size]);
@@ -612,13 +659,23 @@ mod tests {
     fn test_gqa_attention_deterministic() -> Result<()> {
         let device = candle_core::Device::Cpu;
         let q_w = Tensor::randn(0.0f32, 1.0, (256, 256), &device)?;
-        let k_w = Tensor::randn(0.0f32,  1.0, (64, 256), &device)?;
+        let k_w = Tensor::randn(0.0f32, 1.0, (64, 256), &device)?;
         let v_w = Tensor::randn(0.0f32, 1.0, (64, 256), &device)?;
         let o_w = Tensor::randn(0.0f32, 1.0, (256, 256), &device)?;
 
         let attn = GqaAttention::new_with_weights(
-            256, 8, 2, 32, q_w, k_w, v_w, o_w,
-            AttentionConfig::default(), false, None, None
+            256,
+            8,
+            2,
+            32,
+            q_w,
+            k_w,
+            v_w,
+            o_w,
+            AttentionConfig::default(),
+            false,
+            None,
+            None,
         )?;
 
         let q = Tensor::randn(0.0f32, 1.0, (1, 8, 1, 32), &device)?;
@@ -629,7 +686,12 @@ mod tests {
         let out2 = attn.paged_attention_fn(&q, &k, &v)?;
 
         let diff = (&out1 - &out2)?.abs()?;
-        let max_diff: f32 = diff.flatten_all()?.to_vec1()?.iter().cloned().fold(0.0f32, |a, b| a.max(b));
+        let max_diff: f32 = diff
+            .flatten_all()?
+            .to_vec1()?
+            .iter()
+            .cloned()
+            .fold(0.0f32, |a, b| a.max(b));
         assert!(max_diff < 1e-5);
         Ok(())
     }

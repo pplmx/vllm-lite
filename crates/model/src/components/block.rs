@@ -284,7 +284,13 @@ mod tests {
         let output = block.forward(&x).unwrap();
         assert_eq!(output.dims(), x.dims());
 
-        let output_sum: f32 = output.abs().unwrap().sum_all().unwrap().to_scalar().unwrap();
+        let output_sum: f32 = output
+            .abs()
+            .unwrap()
+            .sum_all()
+            .unwrap()
+            .to_scalar()
+            .unwrap();
         let input_sum: f32 = x.abs().unwrap().sum_all().unwrap().to_scalar().unwrap();
         assert!(
             output_sum > input_sum * 0.1,
@@ -308,7 +314,13 @@ mod tests {
         let x = Tensor::ones((1, 1, 64), DType::F32, &Device::Cpu).unwrap();
         let output = block.forward(&x).unwrap();
 
-        let abs_max: f32 = output.abs().unwrap().max_all().unwrap().to_scalar().unwrap();
+        let abs_max: f32 = output
+            .abs()
+            .unwrap()
+            .max_all()
+            .unwrap()
+            .to_scalar()
+            .unwrap();
         assert!(abs_max.is_finite() && abs_max < 100.0);
     }
 
@@ -418,13 +430,15 @@ mod tests {
         let block = StandardBlock::new(&config, None).unwrap();
         let x = Tensor::ones((1, 1, 128), DType::F32, &Device::Cpu).unwrap();
         let output = block.forward(&x).unwrap();
-        assert!(output
-            .flatten_all()
-            .unwrap()
-            .to_vec1::<f32>()
-            .unwrap()
-            .iter()
-            .all(|v| v.is_finite()));
+        assert!(
+            output
+                .flatten_all()
+                .unwrap()
+                .to_vec1::<f32>()
+                .unwrap()
+                .iter()
+                .all(|v| v.is_finite())
+        );
     }
 
     #[test]
@@ -448,7 +462,13 @@ mod tests {
         let x = Tensor::randn(-1.0f32, 1.0, (1, 2, config.hidden_size), &Device::Cpu).unwrap();
         let output = block.forward(&x).unwrap();
 
-        let abs_max: f32 = output.abs().unwrap().max_all().unwrap().to_scalar().unwrap();
+        let abs_max: f32 = output
+            .abs()
+            .unwrap()
+            .max_all()
+            .unwrap()
+            .to_scalar()
+            .unwrap();
         assert!(
             abs_max < 100.0,
             "Output magnitude unreasonable: {}",
@@ -485,19 +505,21 @@ mod tests {
         let out1 = block1.forward(&x).unwrap();
         let out2 = block2.forward(&x).unwrap();
 
-        assert!(out1
-            .flatten_all()
-            .unwrap()
-            .to_vec1::<f32>()
-            .unwrap()
-            .iter()
-            .all(|v| v.is_finite()));
-        assert!(out2
-            .flatten_all()
-            .unwrap()
-            .to_vec1::<f32>()
-            .unwrap()
-            .iter()
-            .all(|v| v.is_finite()));
+        assert!(
+            out1.flatten_all()
+                .unwrap()
+                .to_vec1::<f32>()
+                .unwrap()
+                .iter()
+                .all(|v| v.is_finite())
+        );
+        assert!(
+            out2.flatten_all()
+                .unwrap()
+                .to_vec1::<f32>()
+                .unwrap()
+                .iter()
+                .all(|v| v.is_finite())
+        );
     }
 }

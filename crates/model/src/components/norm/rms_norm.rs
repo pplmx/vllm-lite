@@ -132,7 +132,10 @@ mod tests {
         let weight = Tensor::ones(64, DType::F32, &device).unwrap();
         let norm = RmsNorm::new(weight, 1e-6);
 
-        let x = Tensor::full(2.0, (1, 64), &device).unwrap().to_dtype(DType::F32).unwrap();
+        let x = Tensor::full(2.0, (1, 64), &device)
+            .unwrap()
+            .to_dtype(DType::F32)
+            .unwrap();
         let output = norm.forward(&x).unwrap();
 
         let data = output.flatten_all().unwrap().to_vec1::<f32>().unwrap();
@@ -147,7 +150,10 @@ mod tests {
         let weight = Tensor::ones(32, DType::F32, &device).unwrap();
         let norm = RmsNorm::new(weight, 1e-6);
 
-        let x = Tensor::randn(0.0, 1.0, (4, 32), &device).unwrap().to_dtype(DType::F32).unwrap();
+        let x = Tensor::randn(0.0, 1.0, (4, 32), &device)
+            .unwrap()
+            .to_dtype(DType::F32)
+            .unwrap();
         let output = norm.forward(&x).unwrap();
 
         assert_eq!(output.dims(), x.dims());
@@ -181,7 +187,10 @@ mod tests {
         let weight = Tensor::ones(64, DType::F32, &device).unwrap();
         let norm = RmsNorm::new(weight, 0.1);
 
-        let x = Tensor::randn(0.0, 1.0, (2, 64), &device).unwrap().to_dtype(DType::F32).unwrap();
+        let x = Tensor::randn(0.0, 1.0, (2, 64), &device)
+            .unwrap()
+            .to_dtype(DType::F32)
+            .unwrap();
         let output = norm.forward(&x).unwrap();
         let data: Vec<f32> = output.flatten_all().unwrap().to_vec1().unwrap();
         assert!(data.iter().all(|v| v.is_finite()));
@@ -193,7 +202,10 @@ mod tests {
         let weight = Tensor::ones(128, DType::F32, &device).unwrap();
         let norm = RmsNorm::new(weight, 1e-6);
 
-        let x = Tensor::randn(-10.0, 10.0, (4, 128), &device).unwrap().to_dtype(DType::F32).unwrap();
+        let x = Tensor::randn(-10.0, 10.0, (4, 128), &device)
+            .unwrap()
+            .to_dtype(DType::F32)
+            .unwrap();
         let output = norm.forward(&x).unwrap();
         let data: Vec<f32> = output.flatten_all().unwrap().to_vec1().unwrap();
         assert!(data.iter().all(|v| v.is_finite()));
@@ -205,11 +217,20 @@ mod tests {
         let weight = Tensor::ones(64, DType::F32, &device).unwrap();
         let norm = RmsNorm::new(weight, 1e-6);
 
-        let x = Tensor::randn(0.0, 1.0, (2, 64), &device).unwrap().to_dtype(DType::F32).unwrap();
+        let x = Tensor::randn(0.0, 1.0, (2, 64), &device)
+            .unwrap()
+            .to_dtype(DType::F32)
+            .unwrap();
         let output = norm.forward(&x).unwrap();
 
         let count = output.dim(1).unwrap() * output.dim(2).unwrap_or(1);
-        let sum_sq: f32 = output.sqr().unwrap().sum_all().unwrap().to_scalar().unwrap();
+        let sum_sq: f32 = output
+            .sqr()
+            .unwrap()
+            .sum_all()
+            .unwrap()
+            .to_scalar()
+            .unwrap();
         let rms = (sum_sq / count as f32).sqrt();
         assert!(rms < 2.0 && rms > 0.1, "RMS should be in reasonable range");
     }
@@ -228,7 +249,21 @@ mod tests {
         let out1 = norm1.forward(&x).unwrap();
         let out2 = norm2.forward(&x).unwrap();
 
-        assert!(out1.flatten_all().unwrap().to_vec1::<f32>().unwrap().iter().all(|v| v.is_finite()));
-        assert!(out2.flatten_all().unwrap().to_vec1::<f32>().unwrap().iter().all(|v| v.is_finite()));
+        assert!(
+            out1.flatten_all()
+                .unwrap()
+                .to_vec1::<f32>()
+                .unwrap()
+                .iter()
+                .all(|v| v.is_finite())
+        );
+        assert!(
+            out2.flatten_all()
+                .unwrap()
+                .to_vec1::<f32>()
+                .unwrap()
+                .iter()
+                .all(|v| v.is_finite())
+        );
     }
 }
