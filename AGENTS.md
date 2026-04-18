@@ -360,12 +360,13 @@ crates/model/src/components/
 
 ### Feature Flags
 
-| Feature      | Description                    |
-| ------------ | ------------------------------ |
-| `cuda`       | Candle CUDA support            |
-| `gguf`       | GGUF model loading             |
-| `real_weights` | Tokenizer support            |
-| `full`       | All features enabled           |
+| Feature | Description              |
+| ------- | ------------------------ |
+| `cuda`  | Candle CUDA support      |
+| `gguf`  | GGUF model loading       |
+| `full`  | All features (cuda+gguf) |
+
+Note: Tokenizer (tiktoken, tokenizers) is always enabled as it's required for model inference.
 
 ---
 

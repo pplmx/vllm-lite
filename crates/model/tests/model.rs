@@ -253,7 +253,7 @@ fn test_qwen3_config_text_config_fallback() {
 }
 
 #[test]
-#[cfg(feature = "real_weights")]
+
 fn test_qwen3_real_model_prefill() {
     use candle_core::Device;
     use vllm_model::loader::ModelLoader;
@@ -301,7 +301,7 @@ fn test_qwen3_real_model_prefill() {
 }
 
 #[test]
-#[cfg(feature = "real_weights")]
+
 fn test_qwen3_real_model_decode() {
     use candle_core::Device;
     use vllm_model::loader::ModelLoader;
@@ -369,7 +369,7 @@ fn test_qwen3_real_model_decode() {
 }
 
 #[test]
-#[cfg(feature = "real_weights")]
+
 fn test_qwen3_generated_tokens_decodable() {
     use candle_core::Device;
     use vllm_model::loader::ModelLoader;
@@ -435,7 +435,7 @@ fn test_qwen3_generated_tokens_decodable() {
 }
 
 #[test]
-#[cfg(feature = "real_weights")]
+
 fn test_qwen3_verify_model_weights() {
     use candle_core::Device;
 
@@ -526,7 +526,7 @@ fn test_qwen3_verify_model_weights() {
 }
 
 #[test]
-#[cfg(feature = "real_weights")]
+
 fn test_qwen3_chat_flow_simulation() {
     use candle_core::Device;
     use vllm_model::loader::ModelLoader;
@@ -618,7 +618,7 @@ fn test_qwen3_chat_flow_simulation() {
 }
 
 #[test]
-#[cfg(feature = "real_weights")]
+
 fn test_qwen3_embedding_layer() {
     use candle_core::Device;
     use vllm_model::loader::ModelLoader;
@@ -662,7 +662,7 @@ fn test_qwen3_embedding_layer() {
 }
 
 #[test]
-#[cfg(feature = "real_weights")]
+
 fn test_qwen3_embedding_different_tokens_different_embeddings() {
     use candle_core::Device;
     use vllm_model::loader::ModelLoader;
@@ -710,7 +710,7 @@ fn test_qwen3_embedding_different_tokens_different_embeddings() {
 }
 
 #[test]
-#[cfg(feature = "real_weights")]
+
 fn test_qwen3_rope_position_encoding() {
     use candle_core::{Device, Tensor};
     use vllm_model::components::positional::apply_rope;
@@ -781,7 +781,7 @@ fn test_qwen3_rope_position_encoding() {
 }
 
 #[test]
-#[cfg(feature = "real_weights")]
+
 fn test_qwen3_rope_consistency_and_norm() {
     use candle_core::{Device, Tensor};
     use vllm_model::components::positional::apply_rope;
@@ -847,7 +847,7 @@ fn test_qwen3_rope_consistency_and_norm() {
 }
 
 #[test]
-#[cfg(feature = "real_weights")]
+
 fn test_qwen3_attention_layer_output() {
     use candle_core::Device;
     use vllm_model::loader::ModelLoader;
@@ -907,7 +907,7 @@ fn test_qwen3_attention_layer_output() {
 }
 
 #[test]
-#[cfg(feature = "real_weights")]
+
 fn test_qwen3_attention_kv_cache_consistency() {
     use candle_core::Device;
     use vllm_model::loader::ModelLoader;
@@ -974,7 +974,7 @@ fn test_qwen3_attention_kv_cache_consistency() {
 }
 
 #[test]
-#[cfg(feature = "real_weights")]
+
 fn test_qwen3_full_pipeline_prefill_decode() {
     use candle_core::Device;
     use vllm_model::loader::ModelLoader;
@@ -1104,7 +1104,7 @@ fn test_qwen3_full_pipeline_prefill_decode() {
 }
 
 #[test]
-#[cfg(feature = "real_weights")]
+
 fn test_qwen3_layer0_intermediate_outputs() {
     use candle_core::Device;
     use vllm_model::loader::ModelLoader;
@@ -1143,7 +1143,7 @@ fn test_qwen3_layer0_intermediate_outputs() {
 }
 
 #[test]
-#[cfg(feature = "real_weights")]
+
 fn test_qwen3_deterministic_same_input() {
     use candle_core::Device;
     use vllm_model::loader::ModelLoader;
@@ -1196,7 +1196,7 @@ fn test_qwen3_deterministic_same_input() {
 }
 
 #[test]
-#[cfg(feature = "real_weights")]
+
 fn test_qwen3_different_prompts_different_outputs() {
     use candle_core::Device;
     use vllm_model::loader::ModelLoader;
