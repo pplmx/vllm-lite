@@ -1,5 +1,6 @@
 //! Quantization utilities for model weights.
 
+#[cfg(feature = "gguf")]
 pub mod gguf;
 pub mod types;
 pub use types::{QuantizationConfig, QuantizationFormat, QuantizedTensor, StorageTensor};

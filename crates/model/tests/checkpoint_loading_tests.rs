@@ -31,6 +31,7 @@ mod tests {
         let _ = std::any::type_name::<QuantizedTensor>();
     }
 
+    #[cfg(feature = "gguf")]
     #[test]
     fn test_quantization_format_enum() {
         use vllm_model::quantize::QuantizationFormat;
@@ -38,6 +39,7 @@ mod tests {
         assert_eq!(format, QuantizationFormat::GgufQ4_K_M);
     }
 
+    #[cfg(feature = "gguf")]
     #[test]
     fn test_gguf_loader_can_load() {
         use vllm_model::loader::format::{FormatLoader, GgufLoader};

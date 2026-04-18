@@ -19,7 +19,7 @@ rayon = "1.10"
 memmap2 = "0.9"
 tiktoken = { version = "3", optional = true }
 tokenizers = { version = "0.22", optional = true }
-gguf = "0.1"
+gguf = { version = "0.1", optional = true }
 tracing = "0.1"
 once_cell = "1"
 
@@ -31,5 +31,6 @@ criterion = "0.8"
 [features]
 default = []
 cuda = ["candle-core/cuda", "candle-nn/cuda"]
+gguf = ["dep:gguf"]
 real_weights = ["tiktoken", "tokenizers"]
-full = ["cuda", "real_weights"]
+full = ["cuda", "gguf", "real_weights"]
