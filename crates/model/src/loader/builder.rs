@@ -2,7 +2,8 @@ use candle_core::{Device, Result, Tensor};
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::config::Architecture;
+use crate::arch::{ARCHITECTURE_REGISTRY, register_all_archs};
+use crate::config::Architecture as ConfigArchitecture;
 use crate::config::ModelConfig;
 
 pub struct ModelLoaderBuilder {
@@ -71,9 +72,9 @@ struct ModelLoaderInner {
     device: Device,
     model_dir: String,
     num_kv_blocks: usize,
+    #[allow(dead_code)]
     kv_quantization: bool,
     config_json: serde_json::Value,
-    architecture: Architecture,
 }
 
 impl ModelLoaderInner {
@@ -89,16 +90,12 @@ impl ModelLoaderInner {
         let config_json: serde_json::Value = serde_json::from_str(&content)
             .map_err(|e| candle_core::Error::msg(format!("Failed to parse config: {}", e)))?;
 
-        let architecture = crate::loader::detect_architecture(&config_json);
-        eprintln!("Detected architecture: {:?}", architecture);
-
         Ok(Self {
             device,
             model_dir,
             num_kv_blocks,
             kv_quantization,
             config_json,
-            architecture,
         })
     }
 }
@@ -112,7 +109,6 @@ impl ModelLoader {
                 num_kv_blocks: 1024,
                 kv_quantization: false,
                 config_json: serde_json::Value::Null,
-                architecture: Architecture::Llama,
             }),
         }
     }
@@ -125,8 +121,8 @@ impl ModelLoader {
         &self.inner.device
     }
 
-    pub fn architecture(&self) -> Architecture {
-        self.inner.architecture
+    pub fn architecture(&self) -> ConfigArchitecture {
+        ConfigArchitecture::Llama
     }
 
     pub fn config_json(&self) -> &serde_json::Value {
@@ -149,81 +145,22 @@ impl ModelLoader {
     }
 
     pub fn load(&self) -> Result<Box<dyn vllm_traits::ModelBackend>> {
-        let num_kv_blocks = self.inner.num_kv_blocks;
+        register_all_archs(&ARCHITECTURE_REGISTRY);
+
+        let arch_name = ARCHITECTURE_REGISTRY
+            .detect(&self.inner.config_json)
+            .ok_or_else(|| candle_core::Error::msg("Unsupported architecture"))?;
+
+        let arch = ARCHITECTURE_REGISTRY
+            .get(&arch_name)
+            .ok_or_else(|| candle_core::Error::msg("Architecture not found"))?;
 
         let config = ModelConfig::from_config_json(&self.inner.config_json)
             .map_err(|e| candle_core::Error::msg(format!("Failed to parse model config: {}", e)))?;
-        let mut weights = self.load_weights()?;
+        let weights = self.load_weights()?;
+        let weights = arch.remap_weights(weights);
 
-        match self.inner.architecture {
-            Architecture::Llama => {
-                let model = crate::llama::LlamaModel::from_weights(
-                    config,
-                    self.inner.device.clone(),
-                    weights,
-                    num_kv_blocks,
-                )?;
-                Ok(Box::new(model))
-            }
-            Architecture::Mistral => {
-                let model = crate::mistral::MistralModel::from_weights(
-                    config,
-                    self.inner.device.clone(),
-                    weights,
-                    num_kv_blocks,
-                )?;
-                Ok(Box::new(model))
-            }
-            Architecture::Mixtral => {
-                let model = crate::mixtral::MixtralModel::from_weights(
-                    config,
-                    self.inner.device.clone(),
-                    weights,
-                    num_kv_blocks,
-                )?;
-                Ok(Box::new(model))
-            }
-            Architecture::Qwen3 => {
-                let config = self.load_config()?;
-                let model = crate::qwen3::model::Qwen3Model::from_weights(
-                    config,
-                    self.inner.device.clone(),
-                    weights,
-                    num_kv_blocks,
-                    self.inner.kv_quantization,
-                )?;
-                Ok(Box::new(model))
-            }
-            Architecture::Qwen35 => {
-                let config = self.load_config()?;
-                eprintln!("Qwen35: architecture detected, loading hybrid model");
-                weights = crate::loader::remap_qwen35_weight_keys(weights);
-                eprintln!("Qwen35: after remap, checking for embed_tokens...");
-                if !weights.contains_key("model.embed_tokens.weight")
-                    && !weights.contains_key("model.language_model.embed_tokens.weight")
-                {
-                    let embed_keys: Vec<_> =
-                        weights.keys().filter(|k| k.contains("embed")).collect();
-                    eprintln!("Qwen35 embed keys available: {:?}", embed_keys);
-                }
-                let model = crate::qwen3_5::Qwen35HybridModel::from_weights(
-                    config,
-                    self.inner.device.clone(),
-                    weights,
-                    num_kv_blocks,
-                )?;
-                Ok(Box::new(model))
-            }
-            Architecture::Gemma4 => {
-                let model = crate::gemma4::Gemma4Model::from_weights(
-                    config,
-                    self.inner.device.clone(),
-                    weights,
-                    num_kv_blocks,
-                )?;
-                Ok(Box::new(model))
-            }
-        }
+        arch.create_model(config, self.inner.device.clone(), weights, self.inner.num_kv_blocks)
     }
 
     pub fn load_model(&self) -> Result<Box<dyn vllm_traits::ModelBackend>> {

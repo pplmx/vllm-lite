@@ -55,7 +55,11 @@ impl ArchitectureRegistry {
 
 pub static ARCHITECTURE_REGISTRY: Lazy<ArchitectureRegistry> = Lazy::new(ArchitectureRegistry::new);
 
-pub fn register_all_archs(_registry: &ArchitectureRegistry) {
-    // Registration will be done by each architecture module
-    // This function is called during model loading to ensure registration
+pub fn register_all_archs(registry: &ArchitectureRegistry) {
+    crate::llama::register::register(registry);
+    crate::mistral::register::register(registry);
+    crate::qwen3::register::register(registry);
+    crate::qwen3_5::register::register(registry);
+    crate::gemma4::register::register(registry);
+    crate::mixtral::register::register(registry);
 }
