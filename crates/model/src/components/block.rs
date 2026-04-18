@@ -3,10 +3,10 @@
 use candle_core::{Result, Tensor};
 use candle_nn::VarBuilder;
 
+use super::AttentionConfig;
 use super::GqaAttention;
 use super::LnLayerNorm;
 use super::SwiGLU;
-use super::AttentionConfig;
 
 #[derive(Debug, Clone)]
 pub struct BlockConfig {
@@ -46,28 +46,15 @@ impl StandardBlock {
             candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu)
         });
 
-        let input_ln_weight = Tensor::ones(
-            config.hidden_size,
-            candle_core::DType::F32,
-            vb.device(),
-        )?;
-        let input_ln_bias = Tensor::zeros(
-            config.hidden_size,
-            candle_core::DType::F32,
-            vb.device(),
-        )?;
+        let input_ln_weight =
+            Tensor::ones(config.hidden_size, candle_core::DType::F32, vb.device())?;
+        let input_ln_bias =
+            Tensor::zeros(config.hidden_size, candle_core::DType::F32, vb.device())?;
         let input_layernorm = LnLayerNorm::new(input_ln_weight, input_ln_bias, config.eps);
 
-        let post_ln_weight = Tensor::ones(
-            config.hidden_size,
-            candle_core::DType::F32,
-            vb.device(),
-        )?;
-        let post_ln_bias = Tensor::zeros(
-            config.hidden_size,
-            candle_core::DType::F32,
-            vb.device(),
-        )?;
+        let post_ln_weight =
+            Tensor::ones(config.hidden_size, candle_core::DType::F32, vb.device())?;
+        let post_ln_bias = Tensor::zeros(config.hidden_size, candle_core::DType::F32, vb.device())?;
         let post_attention_layernorm = LnLayerNorm::new(post_ln_weight, post_ln_bias, config.eps);
 
         let attention = GqaAttention::new(
@@ -186,7 +173,12 @@ mod tests {
         };
 
         let block = StandardBlock::new(&config, None).unwrap();
-        let x = Tensor::ones((2, 10, 256), candle_core::DType::F32, &candle_core::Device::Cpu).unwrap();
+        let x = Tensor::ones(
+            (2, 10, 256),
+            candle_core::DType::F32,
+            &candle_core::Device::Cpu,
+        )
+        .unwrap();
         let output = block.forward(&x).unwrap();
 
         assert_eq!(output.dims(), &[2, 10, 256]);
@@ -197,7 +189,12 @@ mod tests {
         let config = BlockConfig::default();
         let block = StandardBlock::new(&config, None).unwrap();
 
-        let x = Tensor::ones((1, 1, config.hidden_size), candle_core::DType::F32, &candle_core::Device::Cpu).unwrap();
+        let x = Tensor::ones(
+            (1, 1, config.hidden_size),
+            candle_core::DType::F32,
+            &candle_core::Device::Cpu,
+        )
+        .unwrap();
         let output = block.forward(&x).unwrap();
 
         assert_eq!(output.dims(), &[1, 1, config.hidden_size]);
@@ -216,7 +213,12 @@ mod tests {
         };
 
         let block = StandardBlock::new(&config, None).unwrap();
-        let x = Tensor::ones((1, 5, 128), candle_core::DType::F32, &candle_core::Device::Cpu).unwrap();
+        let x = Tensor::ones(
+            (1, 5, 128),
+            candle_core::DType::F32,
+            &candle_core::Device::Cpu,
+        )
+        .unwrap();
         let output = block.forward(&x).unwrap();
 
         assert_eq!(output.dims(), &[1, 5, 128]);
@@ -239,7 +241,12 @@ mod tests {
         assert_eq!(block.inner_dim(), 256);
         assert_eq!(block.num_kv_heads(), 2);
 
-        let x = Tensor::ones((1, 1, 256), candle_core::DType::F32, &candle_core::Device::Cpu).unwrap();
+        let x = Tensor::ones(
+            (1, 1, 256),
+            candle_core::DType::F32,
+            &candle_core::Device::Cpu,
+        )
+        .unwrap();
         let output = StandardBlock::forward(&block, &x).unwrap();
 
         assert_eq!(output.dims(), &[1, 1, 256]);
