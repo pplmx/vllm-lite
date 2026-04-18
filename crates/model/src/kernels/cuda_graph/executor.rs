@@ -1,6 +1,7 @@
 use super::CudaGraph;
 use super::config::CudaGraphConfig;
 use std::collections::HashMap;
+use vllm_traits::kernels::GraphExecutionError;
 use vllm_traits::{Batch, BatchOutput};
 
 /// Executor for managing CUDA Graph capture and execution
@@ -16,36 +17,6 @@ pub struct BatchCudaGraphExecutor {
     /// Whether CUDA Graph is enabled
     enabled: bool,
 }
-
-/// Errors that can occur during graph operations
-#[derive(Debug, Clone)]
-pub enum GraphExecutionError {
-    GraphNotFound(usize),
-    GraphCaptureFailed(String),
-    GraphExecutionFailed(String),
-    CudaError(String),
-}
-
-impl std::fmt::Display for GraphExecutionError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            GraphExecutionError::GraphNotFound(batch_size) => {
-                write!(f, "graph not found for batch size {}", batch_size)
-            }
-            GraphExecutionError::GraphCaptureFailed(msg) => {
-                write!(f, "graph capture failed: {}", msg)
-            }
-            GraphExecutionError::GraphExecutionFailed(msg) => {
-                write!(f, "graph execution failed: {}", msg)
-            }
-            GraphExecutionError::CudaError(msg) => {
-                write!(f, "CUDA error: {}", msg)
-            }
-        }
-    }
-}
-
-impl std::error::Error for GraphExecutionError {}
 
 impl BatchCudaGraphExecutor {
     /// Create new executor (does not capture graphs yet)

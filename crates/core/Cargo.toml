@@ -5,8 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-vllm-traits = { path = "../traits", features = ["candle"] }
-vllm-model = { path = "../model" }
+vllm-traits = { path = "../traits", features = ["candle", "kernels"] }
 thiserror = "2"
 tokio = { version = "1", features = ["sync", "rt", "macros"] }
 async-trait = "0.1"
@@ -20,9 +19,14 @@ opentelemetry = { workspace = true, optional = true }
 dashmap = { workspace = true }
 
 [features]
-default = ["prometheus"]
+default = ["prometheus", "cuda-graph"]
 prometheus = ["metrics-exporter-prometheus"]
 opentelemetry = ["dep:opentelemetry"]
+cuda-graph = ["dep:vllm-model"]
+
+[dependencies.vllm-model]
+path = "../model"
+optional = true
 
 [dev-dependencies]
 criterion = "0.8"
