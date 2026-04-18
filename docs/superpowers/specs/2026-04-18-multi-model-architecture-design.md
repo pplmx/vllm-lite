@@ -50,7 +50,8 @@ pub trait Attention: Send + Sync {
         &self,
         x: &Tensor,
         positions: &[usize],
-        kv_cache: Option<(&Tensor, &Tensor)>,
+        kv_block_ids: Option<&[usize]>,
+        num_computed: usize,
         is_prefill: bool,
     ) -> Result<Tensor>;
 
@@ -149,7 +150,7 @@ pub struct GenericTransformerBlock {
     output_norm: Box<dyn NormLayer>,
     attention: Box<dyn Attention>,
     mlp: Box<dyn MlpLayer>,
-    kv_cache: Option<(Tensor, Tensor)>,
+    // 注意: kv_cache 由 Model 层管理，Block 不持有
 }
 
 #[cfg(feature = "candle")]
@@ -166,8 +167,8 @@ impl TransformerBlock for GenericTransformerBlock {
         let residual = hidden_states.clone();
         let x = self.input_norm.forward(hidden_states)?;
 
-        // Attention with KV cache
-        let x = self.attention.forward(&x, positions, self.kv_cache.as_ref(), is_prefill)?;
+        // Attention with KV cache - 使用 kv_block_ids
+        let x = self.attention.forward(&x, positions, Some(kv_block_ids), num_computed, is_prefill)?;
 
         // Residual connection
         let x = (x + residual)?;
