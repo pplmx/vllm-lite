@@ -17,8 +17,11 @@
 //! let model = vllm_model::llama::LlamaModel::new(config, Device::Cpu, 1024).unwrap();
 //! ```
 
+pub mod arch;
 pub mod block;
 pub mod model;
+pub mod register;
 
+pub use arch::LlamaArchitecture;
 pub use block::LlamaBlock;
 pub use model::LlamaModel;
