@@ -2,9 +2,9 @@
 
 use std::collections::HashMap;
 
+use crate::components::GqaAttention;
 use crate::config::ModelConfig;
-use crate::qwen3::attention::GqaAttention;
-use crate::qwen3::mlp::SwiGLU;
+use crate::components::SwiGLU;
 use candle_core::Result;
 use candle_core::Tensor;
 use candle_nn::{LayerNorm, VarBuilder};
@@ -24,7 +24,6 @@ impl MistralBlock {
         let num_kv_heads = config.num_kv_heads;
         let head_dim = config.head_dim;
         let intermediate_size = config.intermediate_size;
-        let theta = config.rope_theta;
         let sliding_window = config.sliding_window.unwrap_or(4096);
 
         let vb = VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu);
@@ -42,7 +41,6 @@ impl MistralBlock {
             num_heads,
             num_kv_heads,
             head_dim,
-            theta,
             None,
             crate::components::AttentionConfig::default(),
             false,
@@ -69,7 +67,6 @@ impl MistralBlock {
         let num_kv_heads = config.num_kv_heads;
         let head_dim = config.head_dim;
         let intermediate_size = config.intermediate_size;
-        let theta = config.rope_theta;
         let rms_norm_eps = config.rms_norm_eps;
         let sliding_window = config.sliding_window.unwrap_or(4096);
 
@@ -177,7 +174,6 @@ impl MistralBlock {
             num_heads,
             num_kv_heads,
             head_dim,
-            theta,
             q_w,
             k_w,
             v_w,

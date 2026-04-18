@@ -2,26 +2,16 @@
 
 use super::rope::apply_rope;
 pub use crate::components::AttentionConfig;
-use crate::components::{expand_kv, paged_attention, tiled_attention};
+use crate::components::attention::GqaAttention as SharedGqaAttention;
 use crate::kv_cache::PagedKvCache;
-use candle_core::{Module, Result, Tensor};
-use candle_nn::{LayerNorm, Linear};
+use candle_core::{Result, Tensor};
 
-pub struct GqaAttention {
-    q_proj: Linear,
-    k_proj: Linear,
-    v_proj: Linear,
-    o_proj: Linear,
-    num_heads: usize,
-    num_kv_heads: usize,
-    head_dim: usize,
+pub struct Qwen3Attention {
+    inner: SharedGqaAttention,
     theta: f32,
-    config: AttentionConfig,
-    q_norm: Option<LayerNorm>,
-    k_norm: Option<LayerNorm>,
 }
 
-impl GqaAttention {
+impl Qwen3Attention {
     pub fn new(
         hidden_size: usize,
         num_heads: usize,
@@ -32,43 +22,20 @@ impl GqaAttention {
         config: AttentionConfig,
         has_qk_norm: bool,
     ) -> Result<Self> {
-        let vb = vb.unwrap_or_else(|| {
-            candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu)
-        });
-
-        let q_proj = candle_nn::linear(hidden_size, num_heads * head_dim, vb.pp("q_proj"))?;
-        let k_proj = candle_nn::linear(hidden_size, num_kv_heads * head_dim, vb.pp("k_proj"))?;
-        let v_proj = candle_nn::linear(hidden_size, num_kv_heads * head_dim, vb.pp("v_proj"))?;
-        let o_proj = candle_nn::linear(num_heads * head_dim, hidden_size, vb.pp("o_proj"))?;
-
-        let q_norm = if has_qk_norm {
-            Some(candle_nn::layer_norm(head_dim, 1e-6, vb.pp("q_norm"))?)
-        } else {
-            None
-        };
-        let k_norm = if has_qk_norm {
-            Some(candle_nn::layer_norm(head_dim, 1e-6, vb.pp("k_norm"))?)
-        } else {
-            None
-        };
-
-        Ok(Self {
-            q_proj,
-            k_proj,
-            v_proj,
-            o_proj,
+        let inner = SharedGqaAttention::new(
+            hidden_size,
             num_heads,
             num_kv_heads,
             head_dim,
-            theta,
+            vb,
             config,
-            q_norm,
-            k_norm,
-        })
+            has_qk_norm,
+        )?;
+        Ok(Self { inner, theta })
     }
 
     pub fn new_with_weights(
-        _hidden_size: usize,
+        hidden_size: usize,
         num_heads: usize,
         num_kv_heads: usize,
         head_dim: usize,
@@ -82,143 +49,61 @@ impl GqaAttention {
         q_norm_weight: Option<Tensor>,
         k_norm_weight: Option<Tensor>,
     ) -> Result<Self> {
-        let q_proj = Linear::new(q_weight, None);
-        let k_proj = Linear::new(k_weight, None);
-        let v_proj = Linear::new(v_weight, None);
-        let o_proj = Linear::new(o_weight, None);
-
-        let q_norm = if has_qk_norm {
-            let q_norm_weight =
-                q_norm_weight.ok_or_else(|| candle_core::Error::msg("Missing q_norm weight"))?;
-            let q_norm_bias =
-                Tensor::zeros(head_dim, q_norm_weight.dtype(), q_norm_weight.device())?;
-            Some(LayerNorm::new(q_norm_weight, q_norm_bias, 1e-6))
-        } else {
-            None
-        };
-        let k_norm = if has_qk_norm {
-            let k_norm_weight =
-                k_norm_weight.ok_or_else(|| candle_core::Error::msg("Missing k_norm weight"))?;
-            let k_norm_bias =
-                Tensor::zeros(head_dim, k_norm_weight.dtype(), k_norm_weight.device())?;
-            Some(LayerNorm::new(k_norm_weight, k_norm_bias, 1e-6))
-        } else {
-            None
-        };
-
-        Ok(Self {
-            q_proj,
-            k_proj,
-            v_proj,
-            o_proj,
+        let inner = SharedGqaAttention::new_with_weights(
+            hidden_size,
             num_heads,
             num_kv_heads,
             head_dim,
-            theta,
+            q_weight,
+            k_weight,
+            v_weight,
+            o_weight,
             config,
-            q_norm,
-            k_norm,
-        })
+            has_qk_norm,
+            q_norm_weight,
+            k_norm_weight,
+        )?;
+        Ok(Self { inner, theta })
     }
 
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        let batch_size = x.dims()[0];
-        let seq_len = x.dims()[1];
-
-        let q = self.q_proj.forward(x)?;
-        let k = self.k_proj.forward(x)?;
-        let v = self.v_proj.forward(x)?;
-
-        let q = q.reshape((batch_size, seq_len, self.num_heads, self.head_dim))?;
-        let k = k.reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?;
-        let v = v.reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?;
-
-        let q = self.apply_q_norm(q, batch_size, seq_len)?;
-        let k = self.apply_k_norm(k, batch_size, seq_len)?;
-
-        let k = self.expand_kv(&k, self.num_heads, self.num_kv_heads)?;
-        let v = self.expand_kv(&v, self.num_heads, self.num_kv_heads)?;
-
-        // q, k, v are [batch, seq, heads, dim]
-        // For matmul, need [batch, heads, seq, dim]
-        let q = q.transpose(1, 2)?;
-        let k = k.transpose(1, 2)?;
-        let v = v.transpose(1, 2)?;
-
-        // Now q, k, v are [batch, heads, seq, dim]
-        // For q @ k^T, need k as [batch, heads, dim, seq]
-        let q = q.contiguous()?;
-        let k_t = k.transpose(2, 3)?.contiguous()?;
-        let qk = Tensor::matmul(&q, &k_t)?;
-
-        let scale = 1.0 / (self.head_dim as f32).sqrt();
-        let qk = qk.mul(&Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?)?;
-        let attn_weights = candle_nn::ops::softmax(&qk, 3)?.contiguous()?;
-
-        // attn_weights: [batch, heads, seq_q, seq_kv]
-        // v: [batch, heads, seq_kv, dim]
-        // attn_output: [batch, heads, seq_q, dim]
-        let attn_output = Tensor::matmul(&attn_weights, &v.contiguous()?)?;
-
-        // attn_output: [batch, heads, seq_q, dim]
-        // Transpose to [batch, seq_q, heads, dim]
-        let attn_output = attn_output.transpose(1, 2)?;
-
-        // Reshape to [batch, seq_q, num_heads * head_dim]
-        let attn_output =
-            attn_output.reshape((batch_size, seq_len, self.num_heads * self.head_dim))?;
-
-        let o = self.o_proj.forward(&attn_output)?;
-        Ok(o)
+        self.inner.forward(x)
     }
 
-    pub fn expand_kv(
+    fn apply_qk_norm(
         &self,
-        kv: &Tensor,
-        num_q_heads: usize,
-        num_kv_heads: usize,
-    ) -> Result<Tensor> {
-        expand_kv(kv, num_q_heads, num_kv_heads)
-    }
+        q: Tensor,
+        k: Tensor,
+        batch_size: usize,
+        seq_len: usize,
+    ) -> Result<(Tensor, Tensor)> {
+        let num_heads = self.inner.num_heads();
+        let num_kv_heads = self.inner.num_kv_heads();
+        let head_dim = self.inner.head_dim();
 
-    fn apply_q_norm(&self, q: Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
-        if let Some(ref q_norm) = self.q_norm {
-            let q = q.transpose(1, 2)?; // [batch, num_heads, seq, head_dim]
-            eprintln!("DEBUG apply_q_norm: after transpose q.dims={:?}", q.dims());
-            let reshape_size = batch_size * self.num_heads * seq_len;
-            eprintln!(
-                "DEBUG apply_q_norm: reshape to [{}, {}]",
-                reshape_size, self.head_dim
-            );
-            let q = q.reshape((reshape_size, self.head_dim))?;
-            eprintln!("DEBUG apply_q_norm: q.dims after reshape={:?}", q.dims());
-            let q = q_norm.forward(&q)?;
-            let q = q.reshape((batch_size, self.num_heads, seq_len, self.head_dim))?;
-            let q = q.transpose(1, 2)?; // [batch, seq, num_heads, head_dim]
-            Ok(q)
+        let q = if self.inner.has_q_norm() {
+            let q = q.transpose(1, 2)?;
+            let reshape_size = batch_size * num_heads * seq_len;
+            let q = q.reshape((reshape_size, head_dim))?;
+            let q = self.inner.apply_q_norm_impl_flattened(q)?;
+            let q = q.reshape((batch_size, num_heads, seq_len, head_dim))?;
+            q.transpose(1, 2)?
         } else {
-            Ok(q)
-        }
-    }
+            q
+        };
 
-    fn apply_k_norm(&self, k: Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
-        if let Some(ref k_norm) = self.k_norm {
-            let k = k.transpose(1, 2)?; // [batch, num_kv_heads, seq, head_dim]
-            eprintln!("DEBUG apply_k_norm: after transpose k.dims={:?}", k.dims());
-            let reshape_size = batch_size * self.num_kv_heads * seq_len;
-            eprintln!(
-                "DEBUG apply_k_norm: reshape to [{}, {}]",
-                reshape_size, self.head_dim
-            );
-            let k = k.reshape((reshape_size, self.head_dim))?;
-            eprintln!("DEBUG apply_k_norm: k.dims after reshape={:?}", k.dims());
-            let k = k_norm.forward(&k)?;
-            let k = k.reshape((batch_size, self.num_kv_heads, seq_len, self.head_dim))?;
-            let k = k.transpose(1, 2)?; // [batch, seq, num_kv_heads, head_dim]
-            Ok(k)
+        let k = if self.inner.has_k_norm() {
+            let k = k.transpose(1, 2)?;
+            let reshape_size = batch_size * num_kv_heads * seq_len;
+            let k = k.reshape((reshape_size, head_dim))?;
+            let k = self.inner.apply_k_norm_impl_flattened(k)?;
+            let k = k.reshape((batch_size, num_kv_heads, seq_len, head_dim))?;
+            k.transpose(1, 2)?
         } else {
-            Ok(k)
-        }
+            k
+        };
+
+        Ok((q, k))
     }
 
     pub fn forward_prefill(
@@ -231,32 +116,29 @@ impl GqaAttention {
     ) -> Result<Tensor> {
         let batch_size = x.dims()[0];
         let seq_len = x.dims()[1];
-        let tile_size = self.config.tile_size.unwrap_or(16);
+        let num_heads = self.inner.num_heads();
+        let num_kv_heads = self.inner.num_kv_heads();
+        let head_dim = self.inner.head_dim();
 
-        let q = self.q_proj.forward(x)?;
-        let k = self.k_proj.forward(x)?;
-        let v = self.v_proj.forward(x)?;
+        let (q, k, v) = self.inner.project_qkv(x)?;
 
-        let q = q.reshape((batch_size, seq_len, self.num_heads, self.head_dim))?;
-        let k = k.reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?;
-        let v = v.reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?;
+        let q = q.reshape((batch_size, seq_len, num_heads, head_dim))?;
+        let k = k.reshape((batch_size, seq_len, num_kv_heads, head_dim))?;
+        let v = v.reshape((batch_size, seq_len, num_kv_heads, head_dim))?;
 
-        let q = self.apply_q_norm(q, batch_size, seq_len)?;
-        let k = self.apply_k_norm(k, batch_size, seq_len)?;
+        let (q, k) = self.apply_qk_norm(q, k, batch_size, seq_len)?;
 
         let position_ids: Vec<i64> = positions.iter().map(|&p| p as i64).collect();
         let q = apply_rope(&q, &position_ids, self.theta)?;
         let k = apply_rope(&k, &position_ids, self.theta)?;
 
-        // Expand k/v from num_kv_heads to num_heads for storage and attention
-        let k_expanded = self.expand_kv(&k, self.num_heads, self.num_kv_heads)?;
-        let v_expanded = self.expand_kv(&v, self.num_heads, self.num_kv_heads)?;
+        let k_expanded = self.inner.expand_kv(&k, num_heads, num_kv_heads)?;
+        let v_expanded = self.inner.expand_kv(&v, num_heads, num_kv_heads)?;
 
         let q = q.transpose(1, 2)?.contiguous()?;
         let k_expanded = k_expanded.transpose(1, 2)?.contiguous()?;
         let v_expanded = v_expanded.transpose(1, 2)?.contiguous()?;
 
-        // Write expanded k/v to cache
         let mut block_groups: std::collections::BTreeMap<usize, Vec<usize>> =
             std::collections::BTreeMap::new();
         for (token_idx, &block_id) in block_ids.iter().take(seq_len).enumerate() {
@@ -271,25 +153,20 @@ impl GqaAttention {
             let indices: Vec<u32> = token_indices.iter().map(|&i| i as u32).collect();
             let indices_tensor = Tensor::new(indices.as_slice(), k.device())?;
 
-            // After transpose, k_expanded is [batch, num_heads, seq, head_dim]
-            // Select tokens from dim 2 (sequence dimension)
-            // Result: [batch, num_heads, selected_seq, head_dim]
             let k_block = k_expanded.index_select(&indices_tensor, 2)?.contiguous()?;
             let v_block = v_expanded.index_select(&indices_tensor, 2)?.contiguous()?;
 
-            // Transpose to [batch, seq, num_heads, head_dim] for write_kv_batch
             let k_block = k_block.transpose(1, 2)?.contiguous()?;
             let v_block = v_block.transpose(1, 2)?.contiguous()?;
 
             kv_cache.write_kv_batch(layer_idx, *block_id, 0, &k_block, &v_block)?;
         }
 
-        // k_expanded and v_expanded are already [batch, num_heads, seq, head_dim] from transpose above
-
+        let tile_size = self.inner.config().tile_size.unwrap_or(16);
         if seq_len > tile_size {
-            self.tiled_attention(&q, &k_expanded, &v_expanded, seq_len)
+            self.inner.tiled_attention_fn(&q, &k_expanded, &v_expanded)
         } else {
-            self.paged_attention(&q, &k_expanded, &v_expanded, seq_len)
+            self.inner.paged_attention_fn(&q, &k_expanded, &v_expanded)
         }
     }
 
@@ -304,118 +181,46 @@ impl GqaAttention {
     ) -> Result<Tensor> {
         let batch_size = x.dims()[0];
         let seq_len = num_computed_tokens + 1;
-        let tile_size = self.config.tile_size.unwrap_or(16);
+        let num_heads = self.inner.num_heads();
+        let num_kv_heads = self.inner.num_kv_heads();
+        let head_dim = self.inner.head_dim();
+        let tile_size = self.inner.config().tile_size.unwrap_or(16);
 
-        eprintln!(
-            "DEBUG decode L{}: x.dims={:?}, num_heads={}, num_kv_heads={}, head_dim={}",
-            layer_idx,
-            x.dims(),
-            self.num_heads,
-            self.num_kv_heads,
-            self.head_dim
-        );
+        let (q, k, v) = self.inner.project_qkv(x)?;
 
-        let q = self.q_proj.forward(x)?;
-        let k = self.k_proj.forward(x)?;
-        let v = self.v_proj.forward(x)?;
+        let q = q.reshape((batch_size, 1, num_heads, head_dim))?;
+        let k = k.reshape((batch_size, 1, num_kv_heads, head_dim))?;
+        let v = v.reshape((batch_size, 1, num_kv_heads, head_dim))?;
 
-        eprintln!(
-            "DEBUG decode L{}: after proj q={:?}, k={:?}, v={:?}",
-            layer_idx,
-            q.dims(),
-            k.dims(),
-            v.dims()
-        );
-
-        let q = q.reshape((batch_size, 1, self.num_heads, self.head_dim))?;
-        let k = k.reshape((batch_size, 1, self.num_kv_heads, self.head_dim))?;
-        let v = v.reshape((batch_size, 1, self.num_kv_heads, self.head_dim))?;
-
-        eprintln!(
-            "DEBUG decode L{}: after reshape q={:?}, k={:?}, v={:?}",
-            layer_idx,
-            q.dims(),
-            k.dims(),
-            v.dims()
-        );
-
-        let q = self.apply_q_norm(q, batch_size, 1)?;
-        let k = self.apply_k_norm(k, batch_size, 1)?;
-
-        eprintln!(
-            "DEBUG decode L{}: after norm q={:?}, k={:?}",
-            layer_idx,
-            q.dims(),
-            k.dims()
-        );
+        let (q, k) = self.apply_qk_norm(q, k, batch_size, 1)?;
 
         let position_ids: Vec<i64> = positions.iter().map(|&p| p as i64).collect();
-        eprintln!(
-            "DEBUG decode L{}: calling apply_rope with q.dims={:?}, positions={:?}, theta={}",
-            layer_idx,
-            q.dims(),
-            position_ids,
-            self.theta
-        );
         let q = apply_rope(&q, &position_ids, self.theta)?;
         let k = apply_rope(&k, &position_ids, self.theta)?;
-        eprintln!(
-            "DEBUG decode L{}: after rope q={:?}, k={:?}",
-            layer_idx,
-            q.dims(),
-            k.dims()
-        );
+
+        let k_expanded = self.inner.expand_kv(&k, num_heads, num_kv_heads)?;
+        let v_expanded = self.inner.expand_kv(&v, num_heads, num_kv_heads)?;
 
         let q = q.transpose(1, 2)?;
 
-        // For GQA: expand k/v from num_kv_heads to num_heads before writing to cache
-        let k_expanded = self.expand_kv(&k, self.num_heads, self.num_kv_heads)?;
-        let v_expanded = self.expand_kv(&v, self.num_heads, self.num_kv_heads)?;
-
-        eprintln!(
-            "DEBUG decode L{}: after expand k_expanded={:?}, v_expanded={:?}",
-            layer_idx,
-            k_expanded.dims(),
-            v_expanded.dims()
-        );
-
-        // k_expanded/v_expanded is [batch=1, seq=1, num_heads, head_dim]
-        // After transpose: [batch=1, num_heads, seq=1, head_dim] -> squeeze batch: [num_heads, 1, head_dim]
         let k_transposed = k_expanded.transpose(1, 2)?;
-        let k_for_cache = k_transposed.squeeze(0)?.contiguous()?; // [num_heads, 1, head_dim]
+        let k_for_cache = k_transposed.squeeze(0)?.contiguous()?;
         let v_transposed = v_expanded.transpose(1, 2)?;
         let v_for_cache = v_transposed.squeeze(0)?.contiguous()?;
 
-        eprintln!(
-            "DEBUG decode L{}: k_for_cache={:?}, v_for_cache={:?}",
-            layer_idx,
-            k_for_cache.dims(),
-            v_for_cache.dims()
-        );
-
-        // Read cached k/v (which is stored with num_heads for the expanded version)
         let (cached_k, cached_v) = kv_cache.read_kv(layer_idx, block_ids, num_computed_tokens)?;
 
-        // read_kv returns [seq_len, num_heads, head_dim], need [num_heads, seq_len, head_dim]
         let cached_k = cached_k.transpose(0, 1)?.contiguous()?;
         let cached_v = cached_v.transpose(0, 1)?.contiguous()?;
 
-        // Concatenate cached and new k/v along seq dimension
-        // cached_k/v is [num_heads, seq, head_dim]
-        // k_for_cache/v_for_cache is [num_heads, 1, head_dim]
-        let full_k = Tensor::cat(&[&cached_k, &k_for_cache], 1)?.contiguous()?; // [num_heads, seq+1, head_dim]
+        let full_k = Tensor::cat(&[&cached_k, &k_for_cache], 1)?.contiguous()?;
         let full_v = Tensor::cat(&[&cached_v, &v_for_cache], 1)?.contiguous()?;
 
-        // Write new k/v to cache (with expanded num_heads)
-        // k_for_cache/v_for_cache is [num_heads, 1, head_dim]
-        // write_kv expects [1, num_heads, head_dim]
-        // token_offset should be within current block, not absolute position
         if !block_ids.is_empty() {
             let block_size = kv_cache.block_size();
             let token_offset = num_computed_tokens % block_size;
             let block_id = num_computed_tokens / block_size;
 
-            // k_for_cache: [num_heads, 1, head_dim] -> [1, num_heads, head_dim]
             let k_for_write = k_for_cache.permute((1, 0, 2))?.contiguous()?;
             let v_for_write = v_for_cache.permute((1, 0, 2))?.contiguous()?;
             kv_cache.write_kv(
@@ -427,264 +232,100 @@ impl GqaAttention {
             )?;
         }
 
-        // Expand cached k/v for attention (they should already be expanded from storage)
-        // full_k/v already has num_heads, just need to unsqueeze and transpose
-        let full_k_unsqueezed = full_k.unsqueeze(0)?.contiguous()?; // [1, num_heads, seq+1, head_dim]
+        let full_k_unsqueezed = full_k.unsqueeze(0)?.contiguous()?;
         let full_v_unsqueezed = full_v.unsqueeze(0)?.contiguous()?;
 
-        // q is already [batch, num_heads, seq_q, head_dim] after transpose at line 327
-        let q_for_attn = &q;
-
         if seq_len > tile_size {
-            self.tiled_attention(q_for_attn, &full_k_unsqueezed, &full_v_unsqueezed, seq_len)
+            self.inner
+                .tiled_attention_fn(&q, &full_k_unsqueezed, &full_v_unsqueezed)
         } else {
-            self.paged_attention(q_for_attn, &full_k_unsqueezed, &full_v_unsqueezed, seq_len)
+            self.inner
+                .paged_attention_fn(&q, &full_k_unsqueezed, &full_v_unsqueezed)
         }
-    }
-
-    fn paged_attention(
-        &self,
-        q: &Tensor,
-        k: &Tensor,
-        v: &Tensor,
-        _seq_len: usize,
-    ) -> Result<Tensor> {
-        let attn_output = paged_attention(q, k, v, self.num_heads, self.head_dim)?;
-        let o = self.o_proj.forward(&attn_output)?;
-        Ok(o)
-    }
-
-    fn tiled_attention(
-        &self,
-        q: &Tensor,
-        k: &Tensor,
-        v: &Tensor,
-        _seq_len: usize,
-    ) -> Result<Tensor> {
-        let tile_size = self.config.tile_size.unwrap_or(16);
-        let attn_output = tiled_attention(q, k, v, self.num_heads, tile_size)?;
-        let o = self.o_proj.forward(&attn_output)?;
-        Ok(o)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candle_core::{DType, Device};
 
     #[test]
-    fn test_gqa_attention_decode_mode_output_shape() {
-        let device = Device::Cpu;
-        let num_heads = 16;
-        let num_kv_heads = 8;
-        let head_dim = 128;
-        let batch_size = 1;
-        let seq_len = 8;
-
-        let hidden_size = num_heads * head_dim;
-        let q_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device).unwrap();
-        let k_w = Tensor::randn(0.0f32, 1.0, (hidden_size / 2, hidden_size), &device).unwrap();
-        let v_w = Tensor::randn(0.0f32, 1.0, (hidden_size / 2, hidden_size), &device).unwrap();
-        let o_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device).unwrap();
-
-        let attention = GqaAttention::new_with_weights(
-            hidden_size,
-            num_heads,
-            num_kv_heads,
-            head_dim,
-            10000.0,
-            q_w,
-            k_w,
-            v_w,
-            o_w,
-            AttentionConfig::default(),
-            false,
-            None,
-            None,
-        )
-        .unwrap();
-
-        let q = Tensor::randn(
-            0.0f32,
-            1.0,
-            (batch_size, num_heads, seq_len, head_dim),
-            &device,
-        )
-        .unwrap();
-        let k = Tensor::randn(
-            0.0f32,
-            1.0,
-            (batch_size, num_heads, seq_len, head_dim),
-            &device,
-        )
-        .unwrap();
-        let v = Tensor::randn(
-            0.0f32,
-            1.0,
-            (batch_size, num_heads, seq_len, head_dim),
-            &device,
-        )
-        .unwrap();
-
-        let output = attention.tiled_attention(&q, &k, &v, seq_len).unwrap();
-
-        assert_eq!(output.dims(), &[batch_size, seq_len, hidden_size]);
-    }
-
-    #[test]
-    fn test_gqa_attention_decode_single_token_output_shape() {
-        let device = Device::Cpu;
-        let num_heads = 16;
-        let num_kv_heads = 8;
-        let head_dim = 128;
-
-        let hidden_size = num_heads * head_dim;
-        let q_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device).unwrap();
-        let k_w = Tensor::randn(0.0f32, 1.0, (hidden_size / 2, hidden_size), &device).unwrap();
-        let v_w = Tensor::randn(0.0f32, 1.0, (hidden_size / 2, hidden_size), &device).unwrap();
-        let o_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device).unwrap();
-
-        let attention = GqaAttention::new_with_weights(
-            hidden_size,
-            num_heads,
-            num_kv_heads,
-            head_dim,
-            10000.0,
-            q_w,
-            k_w,
-            v_w,
-            o_w,
-            AttentionConfig::default(),
-            false,
-            None,
-            None,
-        )
-        .unwrap();
-
-        let q = Tensor::randn(0.0f32, 1.0, (1, num_heads, 1, head_dim), &device).unwrap();
-        let k = Tensor::randn(0.0f32, 1.0, (1, num_heads, 8, head_dim), &device).unwrap();
-        let v = Tensor::randn(0.0f32, 1.0, (1, num_heads, 8, head_dim), &device).unwrap();
-
-        let output = attention.paged_attention(&q, &k, &v, 8).unwrap();
-
-        assert_eq!(output.dims(), &[1, 1, hidden_size]);
-    }
-
-    #[test]
-    fn test_gqa_attention_paged_single_token() {
-        let device = Device::Cpu;
-        let num_heads = 16;
-        let num_kv_heads = 8;
-        let head_dim = 128;
-
-        let hidden_size = num_heads * head_dim;
-        let q_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device).unwrap();
-        let k_w = Tensor::randn(0.0f32, 1.0, (hidden_size / 2, hidden_size), &device).unwrap();
-        let v_w = Tensor::randn(0.0f32, 1.0, (hidden_size / 2, hidden_size), &device).unwrap();
-        let o_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device).unwrap();
-
-        let attention = GqaAttention::new_with_weights(
-            hidden_size,
-            num_heads,
-            num_kv_heads,
-            head_dim,
-            10000.0,
-            q_w,
-            k_w,
-            v_w,
-            o_w,
-            AttentionConfig::default(),
-            false,
-            None,
-            None,
-        )
-        .unwrap();
-
-        let q = Tensor::ones((1, num_heads, 1, head_dim), DType::F32, &device).unwrap();
-        let k = Tensor::ones((1, num_heads, 1, head_dim), DType::F32, &device).unwrap();
-        let v = Tensor::ones((1, num_heads, 1, head_dim), DType::F32, &device).unwrap();
-
-        let result = attention.paged_attention(&q, &k, &v, 1).unwrap();
-
-        assert_eq!(result.dims(), &[1, 1, hidden_size]);
-    }
-
-    #[test]
-    fn test_gqa_attention_decode_with_longer_kv_cache() {
-        let device = Device::Cpu;
-        let num_heads = 16;
-        let num_kv_heads = 8;
-        let head_dim = 128;
-        let hidden_size = num_heads * head_dim;
-
-        let q_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device).unwrap();
-        let k_w = Tensor::randn(0.0f32, 1.0, (hidden_size / 2, hidden_size), &device).unwrap();
-        let v_w = Tensor::randn(0.0f32, 1.0, (hidden_size / 2, hidden_size), &device).unwrap();
-        let o_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device).unwrap();
-
-        let attention = GqaAttention::new_with_weights(
-            hidden_size,
-            num_heads,
-            num_kv_heads,
-            head_dim,
-            10000.0,
-            q_w,
-            k_w,
-            v_w,
-            o_w,
-            AttentionConfig::default(),
-            false,
-            None,
-            None,
-        )
-        .unwrap();
-
-        let q = Tensor::ones((1, num_heads, 1, head_dim), DType::F32, &device).unwrap();
-
-        for kv_len in [1, 8, 16, 32] {
-            let k = Tensor::ones((1, num_heads, kv_len, head_dim), DType::F32, &device).unwrap();
-            let v = Tensor::ones((1, num_heads, kv_len, head_dim), DType::F32, &device).unwrap();
-
-            let result = attention.paged_attention(&q, &k, &v, kv_len).unwrap();
-            assert_eq!(result.dims(), &[1, 1, hidden_size], "kv_len={}", kv_len);
-        }
-    }
-
-    #[test]
-    fn test_gqa_attention_forward_decode_single_token() {
-        let device = Device::Cpu;
+    fn test_qwen3_attention_forward_output_shape() {
+        let device = candle_core::Device::Cpu;
         let num_heads = 8;
         let num_kv_heads = 4;
         let head_dim = 64;
         let hidden_size = num_heads * head_dim;
         let batch_size = 1;
+        let seq_len = 4;
 
-        let q_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device).unwrap();
-        let k_w =
-            Tensor::randn(0.0f32, 1.0, (num_kv_heads * head_dim, hidden_size), &device).unwrap();
-        let v_w =
-            Tensor::randn(0.0f32, 1.0, (num_kv_heads * head_dim, hidden_size), &device).unwrap();
-        let o_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device).unwrap();
-
-        let attention = GqaAttention::new_with_weights(
+        let attention = Qwen3Attention::new(
             hidden_size,
             num_heads,
             num_kv_heads,
             head_dim,
             10000.0,
-            q_w,
-            k_w,
-            v_w,
-            o_w,
+            None,
             AttentionConfig::default(),
             false,
-            None,
-            None,
         )
         .unwrap();
 
-        let x = Tensor::ones((batch_size, hidden_size), DType::F32, &device).unwrap();
+        let x = Tensor::randn(0.0f32, 1.0, (batch_size, seq_len, hidden_size), &device).unwrap();
+        let output = attention.forward(&x).unwrap();
+
+        assert_eq!(output.dims(), &[batch_size, seq_len, hidden_size]);
+    }
+
+    #[test]
+    fn test_qwen3_attention_with_qk_norm() {
+        let device = candle_core::Device::Cpu;
+        let num_heads = 8;
+        let num_kv_heads = 4;
+        let head_dim = 64;
+        let hidden_size = num_heads * head_dim;
+        let batch_size = 1;
+        let seq_len = 4;
+
+        let attention = Qwen3Attention::new(
+            hidden_size,
+            num_heads,
+            num_kv_heads,
+            head_dim,
+            10000.0,
+            None,
+            AttentionConfig::default(),
+            true,
+        )
+        .unwrap();
+
+        let x = Tensor::randn(0.0f32, 1.0, (batch_size, seq_len, hidden_size), &device).unwrap();
+        let output = attention.forward(&x).unwrap();
+
+        assert_eq!(output.dims(), &[batch_size, seq_len, hidden_size]);
+    }
+
+    #[test]
+    fn test_qwen3_attention_decode_single_token() {
+        let device = candle_core::Device::Cpu;
+        let num_heads = 8;
+        let num_kv_heads = 4;
+        let head_dim = 64;
+        let hidden_size = num_heads * head_dim;
+
+        let attention = Qwen3Attention::new(
+            hidden_size,
+            num_heads,
+            num_kv_heads,
+            head_dim,
+            10000.0,
+            None,
+            AttentionConfig::default(),
+            false,
+        )
+        .unwrap();
+
+        let x = Tensor::ones((1, hidden_size), candle_core::DType::F32, &device).unwrap();
         let mut kv_cache =
             crate::kv_cache::PagedKvCache::new(1, num_heads, head_dim, 8, device.clone(), false)
                 .unwrap();
@@ -696,6 +337,44 @@ mod tests {
             .forward_decode(&x, &mut kv_cache, 0, &block_ids, 0, &positions)
             .unwrap();
 
-        assert_eq!(result.dims(), &[batch_size, 1, hidden_size]);
+        assert_eq!(result.dims(), &[1, 1, hidden_size]);
+    }
+
+    #[test]
+    fn test_qwen3_attention_decode_with_kv_cache() {
+        let device = candle_core::Device::Cpu;
+        let num_heads = 4;
+        let num_kv_heads = 2;
+        let head_dim = 64;
+        let hidden_size = num_heads * head_dim;
+
+        let attention = Qwen3Attention::new(
+            hidden_size,
+            num_heads,
+            num_kv_heads,
+            head_dim,
+            10000.0,
+            None,
+            AttentionConfig::default(),
+            false,
+        )
+        .unwrap();
+
+        let mut kv_cache =
+            crate::kv_cache::PagedKvCache::new(1, num_heads, head_dim, 16, device.clone(), false)
+                .unwrap();
+
+        for step in 0..8 {
+            let x = Tensor::ones((1, hidden_size), candle_core::DType::F32, &device).unwrap();
+            let block_id = step / 8;
+            let block_ids: Vec<usize> = vec![block_id];
+            let positions = vec![step];
+
+            let result = attention
+                .forward_decode(&x, &mut kv_cache, 0, &block_ids, step, &positions)
+                .unwrap();
+
+            assert_eq!(result.dims(), &[1, 1, hidden_size], "step={}", step);
+        }
     }
 }

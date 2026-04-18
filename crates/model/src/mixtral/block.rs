@@ -4,9 +4,9 @@
 
 use std::collections::HashMap;
 
+use crate::components::GqaAttention;
 use crate::config::ModelConfig;
 use crate::mixtral::sparse_moe::MixtralSparseMoe;
-use crate::qwen3::attention::GqaAttention;
 use candle_core::Tensor;
 use candle_core::{Module, Result};
 use candle_nn::{LayerNorm, VarBuilder};
@@ -25,7 +25,6 @@ impl MixtralBlock {
         let num_heads = config.num_heads;
         let num_kv_heads = config.num_kv_heads;
         let head_dim = config.head_dim;
-        let rope_theta = config.rope_theta;
         let rms_norm_eps = config.rms_norm_eps;
         let sliding_window = config.sliding_window.unwrap_or(4096);
 
@@ -47,7 +46,6 @@ impl MixtralBlock {
             num_heads,
             num_kv_heads,
             head_dim,
-            rope_theta,
             Some(vb.clone()),
             crate::components::AttentionConfig::default(),
             false,
@@ -79,7 +77,6 @@ impl MixtralBlock {
         let num_heads = config.num_heads;
         let num_kv_heads = config.num_kv_heads;
         let head_dim = config.head_dim;
-        let rope_theta = config.rope_theta;
         let rms_norm_eps = config.rms_norm_eps;
         let sliding_window = config.sliding_window.unwrap_or(4096);
 
@@ -172,7 +169,6 @@ impl MixtralBlock {
             num_heads,
             num_kv_heads,
             head_dim,
-            rope_theta,
             q_w,
             k_w,
             v_w,

@@ -1,6 +1,6 @@
 #![allow(clippy::type_complexity)]
 
-use super::{attention::GqaAttention, mlp::SwiGLU};
+use super::{attention::Qwen3Attention, mlp::SwiGLU};
 use crate::components::AttentionConfig;
 use crate::kv_cache::PagedKvCache;
 use candle_core::{Module, Result, Tensor};
@@ -10,7 +10,7 @@ use vllm_dist::TensorParallelConfig;
 pub struct TransformerBlock {
     input_layernorm: LayerNorm,
     post_attention_layernorm: LayerNorm,
-    attention: GqaAttention,
+    attention: Qwen3Attention,
     mlp: SwiGLU,
     #[allow(dead_code)]
     tp_config: Option<TensorParallelConfig>,
@@ -39,7 +39,7 @@ impl TransformerBlock {
             candle_nn::layer_norm(hidden_size, rms_norm_eps, vb.pp("post_attention_layernorm"))?;
 
         let vb_attn = vb.pp("attn");
-        let attention = GqaAttention::new(
+        let attention = Qwen3Attention::new(
             hidden_size,
             num_heads,
             num_kv_heads,
@@ -82,7 +82,7 @@ impl TransformerBlock {
             candle_nn::layer_norm(hidden_size, rms_norm_eps, vb.pp("post_attention_layernorm"))?;
 
         let vb_attn = vb.pp("attn");
-        let attention = GqaAttention::new(
+        let attention = Qwen3Attention::new(
             hidden_size,
             num_heads,
             num_kv_heads,
@@ -163,7 +163,7 @@ impl TransformerBlock {
         let post_attention_layernorm =
             LayerNorm::new(post_attn_ln_w.clone(), post_attn_bias, rms_norm_eps);
 
-        let attention = GqaAttention::new_with_weights(
+        let attention = Qwen3Attention::new_with_weights(
             hidden_size,
             num_heads,
             num_kv_heads,
