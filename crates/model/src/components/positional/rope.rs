@@ -6,24 +6,31 @@ use candle_core::{Result, Tensor};
 pub struct RoPE {
     pub(crate) theta: f32,
     pub(crate) head_dim: usize,
+    pub(crate) max_position: usize,
     pub(crate) scaling_factor: f32,
+    pub(crate) device: candle_core::Device,
 }
 
 impl RoPE {
-    pub fn new(theta: f32, head_dim: usize) -> Self {
+    pub fn new(head_dim: usize, max_position: usize, theta: f32, device: &candle_core::Device) -> Self {
         Self {
             theta,
             head_dim,
+            max_position,
             scaling_factor: 1.0,
+            device: device.clone(),
         }
     }
 
     pub fn new_with_config(config: &Qwen3Config) -> Self {
+        use candle_core::Device;
         let rope_scaling = config.rope_scaling();
         Self {
             theta: config.rope_theta(),
             head_dim: config.head_dim(),
+            max_position: config.max_position_embeddings(),
             scaling_factor: rope_scaling.and_then(|r| r.factor).unwrap_or(1.0),
+            device: Device::Cpu,
         }
     }
 
@@ -33,6 +40,13 @@ impl RoPE {
 
     pub fn apply(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
         apply_rope(x, positions, self.theta)
+    }
+
+    pub fn forward(&self, q: &Tensor, k: &Tensor, position: i64) -> Result<(Tensor, Tensor)> {
+        let positions: Vec<i64> = (0..q.dim(1)? as i64).map(|i| position + i).collect();
+        let q_out = apply_rope(q, &positions, self.theta)?;
+        let k_out = apply_rope(k, &positions, self.theta)?;
+        Ok((q_out, k_out))
     }
 }
 
@@ -168,7 +182,8 @@ mod tests {
 
     #[test]
     fn test_rope_creation() {
-        let rope = RoPE::new(10000.0, 128);
+        let device = Device::Cpu;
+        let rope = RoPE::new(128, 2048, 10000.0, &device);
         assert_eq!(rope.theta, 10000.0);
         assert_eq!(rope.head_dim, 128);
         assert_eq!(rope.scaling_factor, 1.0);
@@ -177,13 +192,85 @@ mod tests {
     #[test]
     fn test_rope_apply() -> Result<()> {
         let device = Device::Cpu;
-        let rope = RoPE::new(10000.0, 64);
+        let rope = RoPE::new(64, 1024, 10000.0, &device);
         let query = Tensor::ones((1, 4, 8, 64), DType::F32, &device)?;
         let positions: Vec<i64> = vec![0, 1, 2, 3];
 
         let result = rope.apply(&query, &positions)?;
         assert_eq!(result.dims(), query.dims());
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_rope_forward_q_shape_preserved() -> Result<()> {
+        let device = Device::Cpu;
+        let rope = RoPE::new(64, 1024, 10000.0, &device);
+
+        let q = Tensor::randn(0.0f32, 1.0, (2, 4, 8, 64), &device)?;
+        let k = Tensor::randn(0.0f32, 1.0, (2, 4, 8, 64), &device)?;
+
+        let (q_out, _) = rope.forward(&q, &k, 0)?;
+        assert_eq!(q_out.dims(), q.dims());
+        Ok(())
+    }
+
+    #[test]
+    fn test_rope_forward_k_shape_preserved() -> Result<()> {
+        let device = Device::Cpu;
+        let rope = RoPE::new(64, 1024, 10000.0, &device);
+
+        let q = Tensor::randn(0.0f32, 1.0, (2, 4, 8, 64), &device)?;
+        let k = Tensor::randn(0.0f32, 1.0, (2, 4, 8, 64), &device)?;
+
+        let (_, k_out) = rope.forward(&q, &k, 0)?;
+        assert_eq!(k_out.dims(), k.dims());
+        Ok(())
+    }
+
+    #[test]
+    fn test_rope_rotation_applied() -> Result<()> {
+        let device = Device::Cpu;
+        let rope = RoPE::new(64, 1024, 10000.0, &device);
+
+        let q = Tensor::ones((1, 2, 8, 64), DType::F32, &device)?;
+        let k = Tensor::ones((1, 2, 8, 64), DType::F32, &device)?;
+
+        let (q_out, _) = rope.forward(&q, &k, 0)?;
+
+        let diff = (&q_out - &q)?.abs()?;
+        let sum_diff = diff.sum_all()?.to_scalar::<f32>()?;
+        assert!(sum_diff > 1e-6, "RoPE should modify the tensor");
+        Ok(())
+    }
+
+    #[test]
+    fn test_rope_minimal_head_dim() -> Result<()> {
+        let device = Device::Cpu;
+        let rope = RoPE::new(64, 512, 10000.0, &device);
+
+        let q = Tensor::randn(0.0f32, 1.0, (1, 1, 1, 64), &device)?;
+        let k = Tensor::randn(0.0f32, 1.0, (1, 1, 1, 64), &device)?;
+
+        let (q_out, _) = rope.forward(&q, &k, 0)?;
+        assert_eq!(q_out.dims(), q.dims());
+        Ok(())
+    }
+
+    #[test]
+    fn test_rope_large_position() -> Result<()> {
+        let device = Device::Cpu;
+        let rope = RoPE::new(64, 1024, 10000.0, &device);
+
+        let q = Tensor::randn(0.0f32, 1.0, (1, 1, 1, 64), &device)?;
+        let k = Tensor::randn(0.0f32, 1.0, (1, 1, 1, 64), &device)?;
+
+        let (q_out, _) = rope.forward(&q, &k, 8192)?;
+        let flat = q_out.flatten_all()?;
+        for i in 0..flat.elem_count() {
+            let val: f32 = flat.get(i)?.to_scalar()?;
+            assert!(val.is_finite(), "Value at index {} is not finite: {}", i, val);
+        }
         Ok(())
     }
 }
