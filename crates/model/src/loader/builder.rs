@@ -160,7 +160,12 @@ impl ModelLoader {
         let weights = self.load_weights()?;
         let weights = arch.remap_weights(weights);
 
-        arch.create_model(config, self.inner.device.clone(), weights, self.inner.num_kv_blocks)
+        arch.create_model(
+            config,
+            self.inner.device.clone(),
+            weights,
+            self.inner.num_kv_blocks,
+        )
     }
 
     pub fn load_model(&self) -> Result<Box<dyn vllm_traits::ModelBackend>> {

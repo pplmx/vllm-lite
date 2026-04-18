@@ -40,7 +40,9 @@ impl RmsNorm {
 
             x.reshape((batch, seq, hidden))
         } else {
-            let hidden = *dims.last().ok_or_else(|| candle_core::Error::msg("Empty tensor"))?;
+            let hidden = *dims
+                .last()
+                .ok_or_else(|| candle_core::Error::msg("Empty tensor"))?;
             let weight_2d = self.weight.reshape((1, hidden))?;
 
             let variance = x.sqr()?.mean_keepdim(1)?;
@@ -121,7 +123,9 @@ pub fn rms_norm(x: &Tensor, weight: &Tensor, eps: f64) -> Result<Tensor> {
         let weight_broadcast = weight.reshape((1, hidden))?;
         normalized.broadcast_mul(&weight_broadcast)
     } else {
-        let hidden = *dims.last().ok_or_else(|| candle_core::Error::msg("Empty tensor"))?;
+        let hidden = *dims
+            .last()
+            .ok_or_else(|| candle_core::Error::msg("Empty tensor"))?;
         let weight_2d = weight.reshape((1, hidden))?;
 
         let variance = x.sqr()?.mean(1)?;
