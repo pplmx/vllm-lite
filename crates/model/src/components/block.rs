@@ -93,6 +93,11 @@ impl StandardBlock {
     }
 
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
+        tracing::trace!(
+            input_shape = ?x.dims(),
+            "TransformerBlock forward"
+        );
+
         let residual = x.clone();
         let x = self.input_layernorm.forward(x)?;
         let x = self.attention.forward(&x)?;
@@ -101,6 +106,12 @@ impl StandardBlock {
         let residual = x.clone();
         let x = self.post_attention_layernorm.forward(&x)?;
         let x = self.mlp.forward(&x)?;
+
+        tracing::trace!(
+            output_shape = ?x.dims(),
+            "TransformerBlock forward completed"
+        );
+
         &x + &residual
     }
 
