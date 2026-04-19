@@ -96,9 +96,20 @@ async fn handle_chat(
     req: ChatRequest,
 ) -> Result<ChatResponse, (axum::http::StatusCode, Json<ErrorResponse>)> {
     let start = std::time::Instant::now();
-    let request_id = format!("req_{}", uuid::Uuid::new_v4().to_string()[..8].to_uppercase());
+    let request_id = format!(
+        "req_{}",
+        uuid::Uuid::new_v4().to_string()[..8].to_uppercase()
+    );
 
-    validate_chat_request(&req)?;
+    if let Err((status, err_resp)) = validate_chat_request(&req) {
+        tracing::warn!(
+            request_id = %request_id,
+            status = %status,
+            error = %err_resp.error.message,
+            "Request validation failed"
+        );
+        return Err((status, err_resp));
+    }
 
     let prompt = build_prompt_from_messages(&req.messages);
     let prompt_tokens = state.tokenizer.encode(&prompt);
@@ -176,11 +187,26 @@ pub(crate) async fn chat_completions(
     State(state): State<ApiState>,
     Json(req): Json<ChatRequest>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    let request_id = format!(
+        "req_{}",
+        uuid::Uuid::new_v4().to_string()[..8].to_uppercase()
+    );
+
     let is_streaming = req.stream.unwrap_or(false);
 
     if is_streaming {
+        let start = std::time::Instant::now();
         let prompt = build_prompt_from_messages(&req.messages);
         let prompt_tokens = state.tokenizer.encode(&prompt);
+        let prompt_tokens_len = prompt_tokens.len();
+
+        tracing::info!(
+            request_id = %request_id,
+            model = %req.model,
+            prompt_tokens = prompt_tokens_len,
+            "Streaming request started"
+        );
+
         let max_tokens = req.max_tokens.unwrap_or(100) as usize;
         let total_max = prompt_tokens.len() + max_tokens;
 
@@ -211,6 +237,8 @@ pub(crate) async fn chat_completions(
         let stream = stream::unfold(response_rx, move |mut rx| {
             let tokenizer = tokenizer.clone();
             let model = model.clone();
+            let request_id = request_id.clone();
+            let start = start;
             async move {
                 match rx.recv().await {
                     Some(token) => {
@@ -253,6 +281,11 @@ pub(crate) async fn chat_completions(
                         );
                         let data =
                             serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
+                        tracing::info!(
+                            request_id = %request_id,
+                            duration_ms = %start.elapsed().as_millis() as u64,
+                            "Streaming request completed"
+                        );
                         Some((Ok(Event::default().data(format!("{data}\n\n[DONE]"))), rx))
                     }
                 }
