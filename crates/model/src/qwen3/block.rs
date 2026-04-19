@@ -1,8 +1,9 @@
 #![allow(clippy::type_complexity)]
 
-use super::{attention::Qwen3Attention, mlp::SwiGLU};
+use super::attention::Qwen3Attention;
 use crate::components::AttentionConfig;
 use crate::components::LnLayerNorm;
+use crate::components::SwiGLU;
 use crate::kv_cache::PagedKvCache;
 use candle_core::{Result, Tensor};
 use vllm_dist::TensorParallelConfig;
