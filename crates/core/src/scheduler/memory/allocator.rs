@@ -50,6 +50,11 @@ impl BlockAllocator {
     }
 
     pub fn allocate(&mut self, num_blocks: usize) -> Option<Vec<BlockId>> {
+        tracing::debug!(
+            requested = num_blocks,
+            available = self.stats.available_blocks,
+            "Block allocation requested"
+        );
         if self.stats.available_blocks < num_blocks {
             return None;
         }
@@ -69,6 +74,11 @@ impl BlockAllocator {
             self.stats.available_blocks -= 1;
         }
         self.stats.allocation_count += 1;
+        tracing::trace!(
+            allocated = ?blocks,
+            remaining_free = self.stats.available_blocks,
+            "Blocks allocated"
+        );
         Some(blocks)
     }
 
@@ -88,6 +98,12 @@ impl BlockAllocator {
     }
 
     pub fn free(&mut self, blocks: &[BlockId]) {
+        tracing::trace!(
+            blocks = ?blocks,
+            freed_count = blocks.len(),
+            remaining_free = self.stats.available_blocks,
+            "Blocks freed"
+        );
         for &block in blocks {
             if block < self.num_blocks as BlockId {
                 if self.is_free[block] {
