@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
+use tracing::{debug, trace, warn};
 
 /// Circuit breaker state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,10 +84,15 @@ impl CircuitBreaker {
 
         match operation().await {
             Ok(result) => {
+                trace!("Circuit breaker: call succeeded, resetting failure count");
                 self.on_success().await;
                 Ok(result)
             }
             Err(e) => {
+                warn!(
+                    error = %e,
+                    "Circuit breaker: call failed, incrementing failure count"
+                );
                 self.on_failure().await;
                 Err(CircuitBreakerError::OperationFailed(e.to_string()))
             }
@@ -94,6 +100,11 @@ impl CircuitBreaker {
     }
 
     async fn check_and_transition(&self) {
+        debug!(
+            current_state = ?*self.state.read().await,
+            failure_count = self.failure_count.load(Ordering::Relaxed),
+            "Circuit breaker check"
+        );
         let mut state = self.state.write().await;
         if matches!(*state, CircuitState::Open) {
             let should_attempt = {
@@ -102,6 +113,7 @@ impl CircuitBreaker {
                     .unwrap_or(false)
             };
             if should_attempt {
+                trace!("Circuit breaker: Closed -> HalfOpen");
                 *state = CircuitState::HalfOpen;
                 self.half_open_calls.store(0, Ordering::Relaxed);
             }
@@ -111,6 +123,7 @@ impl CircuitBreaker {
     async fn on_success(&self) {
         let mut state = self.state.write().await;
         if matches!(*state, CircuitState::HalfOpen) {
+            trace!("Circuit breaker: HalfOpen -> Closed");
             *state = CircuitState::Closed;
             self.failure_count.store(0, Ordering::Relaxed);
         }
@@ -120,6 +133,10 @@ impl CircuitBreaker {
         let count = self.failure_count.fetch_add(1, Ordering::Relaxed);
         *self.last_failure_time.write().await = Some(Instant::now());
         if count + 1 >= self.config.failure_threshold as u64 {
+            warn!(
+                last_failure = ?*self.last_failure_time.read().await,
+                "Circuit breaker: entering Open state"
+            );
             let mut state = self.state.write().await;
             *state = CircuitState::Open;
         }
