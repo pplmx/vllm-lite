@@ -134,7 +134,16 @@ impl PrefixCache {
         if let Some(&matched_key) = self.prefix_match_cache.get(&query_key) {
             self.lru_order.retain(|k| *k != matched_key);
             self.lru_order.push_front(matched_key);
-            return self.entries.get(&matched_key);
+            if let Some(entry) = self.entries.get(&matched_key) {
+                tracing::trace!(
+                    matched_tokens = entry.token_count,
+                    total_tokens = tokens.len(),
+                    new_tokens = tokens.len() - entry.token_count,
+                    blocks = ?entry.blocks,
+                    "Prefix cache hit"
+                );
+                return Some(entry);
+            }
         }
 
         for prefix_len in (1..=tokens.len()).rev() {
@@ -142,9 +151,21 @@ impl PrefixCache {
             let key = hash_tokens(prefix);
             if let Some(entry) = self.entries.get(&key) {
                 self.prefix_match_cache.insert(query_key, key);
+                tracing::trace!(
+                    matched_tokens = entry.token_count,
+                    total_tokens = tokens.len(),
+                    new_tokens = tokens.len() - entry.token_count,
+                    blocks = ?entry.blocks,
+                    "Prefix cache hit"
+                );
                 return Some(entry);
             }
         }
+
+        tracing::trace!(
+            tokens = tokens.len(),
+            "Prefix cache miss"
+        );
         None
     }
 
