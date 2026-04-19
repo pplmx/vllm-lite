@@ -242,13 +242,6 @@ impl Qwen3Model {
             ));
 
             let theta = config.rope_theta();
-            eprintln!(
-                "DEBUG from_weights: hidden={}, num_heads={}, num_kv_heads={}, head_dim={}",
-                hidden_size,
-                config.num_attention_heads(),
-                config.num_key_value_heads(),
-                config.head_dim()
-            );
             let layer = TransformerBlock::new_with_weights(
                 hidden_size,
                 config.num_attention_heads(), // num_heads
@@ -323,9 +316,11 @@ impl Qwen3Model {
         is_prefill: bool,
     ) -> EngineResult<(Tensor, usize)> {
         if tokens.is_empty() {
-            eprintln!(
-                "WARN: Empty tokens received, num_computed={}, positions={:?}, is_prefill={}",
-                num_computed_tokens, positions, is_prefill
+            tracing::warn!(
+                num_computed = num_computed_tokens,
+                positions = ?positions,
+                is_prefill = is_prefill,
+                "Empty tokens received"
             );
             let hidden_size = self.config.hidden_size();
             let _dummy = Tensor::zeros((1, 1, hidden_size), candle_core::DType::F32, &self.device)

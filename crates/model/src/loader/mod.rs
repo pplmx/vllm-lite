@@ -27,17 +27,8 @@ pub fn load_file(path: &Path) -> Result<Vec<u8>> {
     let file_size = metadata.len();
 
     if (MMAP_THRESHOLD_BYTES..=MAX_MMAP_SIZE).contains(&file_size) {
-        match load_mmap(path) {
-            Ok(mmap) => {
-                return Ok(mmap.to_vec());
-            }
-            Err(e) => {
-                eprintln!(
-                    "mmap failed for {}, falling back to read(): {}",
-                    path.display(),
-                    e
-                );
-            }
+        if let Ok(mmap) = load_mmap(path) {
+            return Ok(mmap.to_vec());
         }
     }
 
@@ -55,8 +46,6 @@ pub fn detect_architecture(config: &serde_json::Value) -> Architecture {
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_lowercase();
-
-    eprintln!("DEBUG: config.model_type = {:?}", model_type);
 
     match model_type.as_str() {
         "llama" | "llama2" | "llama3" => Architecture::Llama,
@@ -159,14 +148,7 @@ pub fn do_load_weights(model_dir: &str, device: &Device) -> Result<HashMap<Strin
         })
         .collect();
 
-    let total: usize = tensor_vec
-        .iter()
-        .filter_map(|r| r.as_ref().ok())
-        .map(|tensors| tensors.len())
-        .sum();
-
     let mut weights = HashMap::new();
-    let mut loaded = 0;
 
     for result in tensor_vec {
         let tensors = result?;
@@ -177,14 +159,9 @@ pub fn do_load_weights(model_dir: &str, device: &Device) -> Result<HashMap<Strin
                     name
                 )));
             }
-            loaded += 1;
-            if loaded % 20 == 0 {
-                eprintln!("Loading: {}/{}", loaded, total);
-            }
         }
     }
 
-    eprintln!("Loaded {} tensors total", loaded);
     Ok(weights)
 }
 

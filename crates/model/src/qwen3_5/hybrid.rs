@@ -267,12 +267,6 @@ impl LinearAttentionBlock {
 
         let x_proj_out = self.input_proj.forward(x)?;
 
-        eprintln!(
-            "LinearAttentionBlock::forward - x.dims={:?}, x_proj_out.dims={:?}",
-            x.dims(),
-            x_proj_out.dims()
-        );
-
         let batch = x_proj_out.dims()[0];
         let seq_len = if x_proj_out.dims().len() == 3 {
             x_proj_out.dims()[1]
@@ -534,7 +528,7 @@ impl Qwen35HybridModel {
 
         let rope = MRoPE::from_config(&config);
 
-        for (i, &layer_type) in layer_types.iter().enumerate() {
+        for layer_type in &layer_types {
             let layer = match layer_type {
                 LayerType::LinearAttention => HybridBlock::Linear(LinearAttentionBlock::new(
                     hidden_size,
@@ -555,7 +549,6 @@ impl Qwen35HybridModel {
                 )?),
             };
             layers.push(layer);
-            eprintln!("Created layer {}: {:?}", i, layer_type);
         }
 
         let norm = candle_nn::layer_norm(
@@ -624,18 +617,11 @@ impl Qwen35HybridModel {
         } else if weights.contains_key("language_model.embed_tokens.weight") {
             "language_model.embed_tokens.weight"
         } else {
-            eprintln!("WARNING: embed_tokens key not found, searching...");
-            for k in weights.keys() {
-                if k.contains("embed") {
-                    eprintln!("  Found: {}", k);
-                }
-            }
             return Err(candle_core::Error::msg("Missing embed_tokens weight"));
         };
 
         if let Some(w) = weights.get(embed_key) {
             model.embed_tokens = Embedding::new(w.clone(), w.dims()[1]);
-            eprintln!("Loaded embed_tokens from {}", embed_key);
         }
 
         let num_layers = config.num_hidden_layers();
@@ -675,21 +661,17 @@ impl Qwen35HybridModel {
             };
 
             model.layers[i] = layer;
-            eprintln!("Loaded layer {}: {:?}", i, model.layer_types[i]);
         }
 
         if let Some(w) = weights.get("model.norm.weight") {
             let bias = Tensor::zeros(w.dim(0).unwrap_or(hidden_size), w.dtype(), w.device())?;
             model.norm = candle_nn::LayerNorm::new(w.clone(), bias, config.rms_norm_eps() as f64);
-            eprintln!("Loaded final norm");
         } else if let Some(w) = weights.get("model.language_model.norm.weight") {
             let bias = Tensor::zeros(w.dim(0).unwrap_or(hidden_size), w.dtype(), w.device())?;
             model.norm = candle_nn::LayerNorm::new(w.clone(), bias, config.rms_norm_eps() as f64);
-            eprintln!("Loaded final norm (language_model fallback)");
         } else if let Some(w) = weights.get("model.final_layernorm.weight") {
             let bias = Tensor::zeros(w.dim(0).unwrap_or(hidden_size), w.dtype(), w.device())?;
             model.norm = candle_nn::LayerNorm::new(w.clone(), bias, config.rms_norm_eps() as f64);
-            eprintln!("Loaded final norm (fallback)");
         }
 
         let lm_head_key: Option<&str> = if weights.contains_key("lm_head.weight") {
@@ -697,17 +679,13 @@ impl Qwen35HybridModel {
         } else if weights.contains_key("model.lm_head.weight") {
             Some("model.lm_head.weight")
         } else {
-            eprintln!("NOTE: lm_head not found, will use tied embeddings");
             None
         };
 
         if let Some(key) = lm_head_key {
             if let Some(w) = weights.get(key) {
                 model.lm_head = Some(Linear::new(w.clone(), None));
-                eprintln!("Loaded lm_head from {}", key);
             }
-        } else if config.tie_word_embeddings() {
-            eprintln!("Using tied embeddings for lm_head");
         }
 
         Ok(model)
@@ -979,16 +957,7 @@ impl ModelBackend for Qwen35HybridModel {
                 .forward(&token_tensor)
                 .map_err(|e| EngineError::new(e.to_string()))?;
 
-            eprintln!(
-                "DEBUG forward: tokens.len()={}, hidden_2d.dims={:?}",
-                tokens.len(),
-                hidden_2d.dims()
-            );
             let mut hidden = hidden_2d.unsqueeze(0)?;
-            eprintln!(
-                "DEBUG forward: after unsqueeze hidden.dims={:?}",
-                hidden.dims()
-            );
 
             for layer in &mut self.layers {
                 hidden = layer
