@@ -4,8 +4,10 @@ use candle_core::{Result, Tensor};
 
 pub mod flash;
 pub mod gqa;
+pub mod mla;
 
 pub use gqa::GqaAttention;
+pub use mla::MlaAttention;
 
 #[derive(Debug, Clone, Default)]
 pub struct AttentionConfig {
