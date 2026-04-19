@@ -1,8 +1,8 @@
 #![allow(clippy::too_many_arguments)]
 
-use super::rope::apply_rope;
 pub use crate::components::AttentionConfig;
 use crate::components::attention::GqaAttention as SharedGqaAttention;
+use crate::components::positional::apply_rope;
 use crate::kv_cache::PagedKvCache;
 use candle_core::{Result, Tensor};
 
