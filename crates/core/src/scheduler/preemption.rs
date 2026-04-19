@@ -29,6 +29,14 @@ impl PreemptionManager {
         blocks_needed: usize,
         blocks_available: usize,
     ) -> bool {
+        tracing::debug!(
+            running = running_len,
+            waiting = waiting_len,
+            blocks_needed,
+            blocks_available,
+            "Preemption check"
+        );
+
         if waiting_len == 0 || running_len == 0 {
             return false;
         }
@@ -54,6 +62,11 @@ impl PreemptionManager {
     }
 
     pub fn select_victim(&self, running: &[Sequence]) -> Option<(usize, Sequence)> {
+        tracing::debug!(
+            candidates = running.len(),
+            "Selecting preemption victim"
+        );
+
         if running.len() <= 1 {
             return None;
         }
@@ -64,7 +77,7 @@ impl PreemptionManager {
             .filter(|(_, s)| s.status == Status::Decoding)
             .collect();
 
-        if decode_sequences.is_empty() {
+        let victim = if decode_sequences.is_empty() {
             running
                 .iter()
                 .enumerate()
@@ -75,7 +88,17 @@ impl PreemptionManager {
                 .into_iter()
                 .min_by_key(|(_, seq)| seq.consecutive_decode_rounds)
                 .map(|(idx, seq)| (idx, seq.clone()))
+        };
+
+        if let Some((idx, ref seq)) = victim {
+            tracing::trace!(
+                seq_id = seq.id,
+                idx,
+                "Preemption victim selected"
+            );
         }
+
+        victim
     }
 
     pub fn preempted_count(&self) -> u64 {
