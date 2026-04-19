@@ -7,10 +7,10 @@ rust-version.workspace = true
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-thiserror = { version = "2", optional = true }
+thiserror = "2"
 candle-core = { version = "0.10.2", optional = true }
 
 [features]
 default = []
 candle = ["candle-core"]
-kernels = ["thiserror"]
+kernels = []
