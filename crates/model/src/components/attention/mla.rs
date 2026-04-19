@@ -2,9 +2,9 @@
 
 use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;
-use tracing::trace;
 
 use super::AttentionConfig;
+use crate::components::positional::rope::apply_rope;
 
 pub struct MlaAttention {
     q_proj: Linear,
@@ -101,6 +101,64 @@ impl MlaAttention {
         let v = v_flat.reshape((batch_size, seq_len, self.num_kv_heads, self.v_head_dim))?;
         let v = v.transpose(1, 2)?;
         v.contiguous()
+    }
+
+    fn reshape_q_rope_for_rope(&self, q_rope_flat: &Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
+        q_rope_flat.reshape((batch_size, seq_len, self.num_heads, self.qk_rope_dim))
+    }
+
+    pub fn forward(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
+        let batch_size = x.dims()[0];
+        let seq_len = x.dims()[1];
+
+        let q_compressed = self.q_proj.forward(x)?;
+        let (q_nope, q_rope) = self.split_q(&q_compressed, seq_len)?;
+
+        let q_rope_4d = self.reshape_q_rope_for_rope(&q_rope, batch_size, seq_len)?;
+        let q_rope_rotated_4d = apply_rope(&q_rope_4d, positions, 10000.0)?;
+        let q_rope_rotated = q_rope_rotated_4d.reshape((batch_size, seq_len, self.num_heads * self.qk_rope_dim))?;
+
+        let kv_compressed = self.kv_proj.forward(x)?;
+        let k_decompressed = self.k_decompress.forward(&kv_compressed)?;
+        let k = self.reshape_k(&k_decompressed, batch_size, seq_len)?;
+        let v_decompressed = self.v_decompress.forward(&kv_compressed)?;
+        let v = self.reshape_v(&v_decompressed, batch_size, seq_len)?;
+
+        let q_nope_4d = self.reshape_q_nope_for_attn(&q_nope, batch_size, seq_len)?;
+        let attn_output = self.attention_with_compressed_kv(&q_nope_4d, &k, &v)?;
+
+        let q_concat = Tensor::cat(&[&attn_output, &q_rope_rotated], 2)?;
+        let o = self.o_proj.forward(&q_concat)?;
+
+        Ok(o)
+    }
+
+    fn reshape_q_nope_for_attn(&self, q_nope_flat: &Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
+        let q_nope_4d = q_nope_flat.reshape((batch_size, seq_len, self.num_heads, self.qk_nope_dim))?;
+        let q_nope_transposed = q_nope_4d.transpose(1, 2)?;
+        q_nope_transposed.contiguous()
+    }
+
+    fn attention_with_compressed_kv(&self, q_nope: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
+        let batch_size = q_nope.dims()[0];
+        let seq_len = q_nope.dims()[2];
+        let num_heads = self.num_heads;
+
+        let q = q_nope.contiguous()?;
+        let k_t = k.transpose(2, 3)?.contiguous()?;
+        let qk = q.matmul(&k_t)?;
+
+        let scale = 1.0 / (self.v_head_dim as f32).sqrt();
+        let scale_tensor = Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?;
+        let qk = qk.mul(&scale_tensor)?;
+
+        let attn_weights = candle_nn::ops::softmax(&qk, 3)?.contiguous()?;
+
+        let attn_output = attn_weights.matmul(&v.contiguous()?)?;
+        let attn_output = attn_output.transpose(1, 2)?;
+        let attn_output = attn_output.reshape((batch_size, seq_len, num_heads * self.v_head_dim))?;
+
+        Ok(attn_output)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -313,5 +371,58 @@ mod tests {
 
         // V: [batch, num_kv_heads, seq, v_head_dim] = [1, 16, 4, 128]
         assert_eq!(v.dims(), &[1, 16, 4, 128]);
+    }
+
+    #[test]
+    fn test_mla_forward_output_shape() {
+        let qk_nope_dim = 128;
+        let qk_rope_dim = 64;
+        let v_head_dim = qk_nope_dim;
+        let q_lora_rank = 16 * (qk_nope_dim + qk_rope_dim);
+        let attn = MlaAttention::new(
+            2048, 16, 16, q_lora_rank, 512, qk_nope_dim, qk_rope_dim, v_head_dim, None, AttentionConfig::default()
+        ).unwrap();
+
+        let x = Tensor::randn(0.0f32, 1.0, (1, 4, 2048), &candle_core::Device::Cpu).unwrap();
+        let positions: Vec<i64> = vec![0, 1, 2, 3];
+
+        let output = attn.forward(&x, &positions).unwrap();
+
+        assert_eq!(output.dims(), &[1, 4, 2048]);
+    }
+
+    #[test]
+    fn test_mla_forward_decode_mode() {
+        let qk_nope_dim = 128;
+        let qk_rope_dim = 64;
+        let v_head_dim = qk_nope_dim;
+        let q_lora_rank = 16 * (qk_nope_dim + qk_rope_dim);
+        let attn = MlaAttention::new(
+            2048, 16, 16, q_lora_rank, 512, qk_nope_dim, qk_rope_dim, v_head_dim, None, AttentionConfig::default()
+        ).unwrap();
+
+        let x = Tensor::randn(0.0f32, 1.0, (1, 1, 2048), &candle_core::Device::Cpu).unwrap();
+        let positions: Vec<i64> = vec![100];
+
+        let output = attn.forward(&x, &positions).unwrap();
+        assert_eq!(output.dims(), &[1, 1, 2048]);
+    }
+
+    #[test]
+    fn test_mla_output_finite() {
+        let qk_nope_dim = 128;
+        let qk_rope_dim = 64;
+        let v_head_dim = qk_nope_dim;
+        let q_lora_rank = 16 * (qk_nope_dim + qk_rope_dim);
+        let attn = MlaAttention::new(
+            2048, 16, 16, q_lora_rank, 512, qk_nope_dim, qk_rope_dim, v_head_dim, None, AttentionConfig::default()
+        ).unwrap();
+
+        let x = Tensor::randn(-2.0f32, 2.0, (1, 4, 2048), &candle_core::Device::Cpu).unwrap();
+        let positions: Vec<i64> = vec![0, 1, 2, 3];
+
+        let output = attn.forward(&x, &positions).unwrap();
+        let data: Vec<f32> = output.flatten_all().unwrap().to_vec1().unwrap();
+        assert!(data.iter().all(|v: &f32| v.is_finite()));
     }
 }
