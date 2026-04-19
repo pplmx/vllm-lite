@@ -2,12 +2,14 @@
 #![allow(unused_variables)]
 
 use crate::types::TokenId;
+use tracing::trace;
 
 fn random_f32() -> f32 {
     rand::random::<f32>()
 }
 
 pub fn greedy_sample(logits: &[f32]) -> TokenId {
+    trace!(vocab_size = logits.len(), "Greedy sampling");
     logits
         .iter()
         .enumerate()
@@ -22,6 +24,7 @@ pub fn greedy_sample(logits: &[f32]) -> TokenId {
 }
 
 pub fn temperature_sample(logits: &[f32], temperature: f32) -> TokenId {
+    trace!(vocab_size = logits.len(), temperature = temperature, "Temperature sampling");
     if temperature <= 0.0 || logits.is_empty() {
         return greedy_sample(logits);
     }
@@ -44,6 +47,7 @@ pub fn temperature_sample(logits: &[f32], temperature: f32) -> TokenId {
 }
 
 pub fn top_p_sample(logits: &[f32], top_p: f32) -> TokenId {
+    trace!(vocab_size = logits.len(), top_p = top_p, "Top-p sampling");
     if top_p >= 1.0 || logits.is_empty() {
         return greedy_sample(logits);
     }
