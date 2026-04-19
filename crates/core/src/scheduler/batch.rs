@@ -20,6 +20,12 @@ impl<M: ModelBackend + 'static> crate::engine::Engine<M> {
             "Engine step: processing batch"
         );
 
+        tracing::debug!(
+            seq_count = batch.seq_ids.len(),
+            total_input_tokens = batch.total_tokens,
+            "Processing batch"
+        );
+
         let output = self.target_model.lock().unwrap().forward(
             &batch.seq_ids,
             &batch.input_tokens,
