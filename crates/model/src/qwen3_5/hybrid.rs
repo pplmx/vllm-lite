@@ -187,6 +187,9 @@ impl SSMLayer35 {
     pub fn d_state(&self) -> usize {
         self.d_state
     }
+    pub fn a_log(&self) -> &Tensor {
+        &self.a_log
+    }
 }
 
 impl LinearAttentionBlock {
@@ -300,7 +303,7 @@ impl LinearAttentionBlock {
         let d_inner = self.ssm.d_inner();
         let d_state = self.ssm.d_state();
 
-        let a_log = &self.ssm.a_log;
+        let a_log = self.ssm.a_log();
 
         let mut h = Tensor::zeros((batch, d_state, d_inner), DType::F32, x.device())?;
         let mut outputs: Vec<Tensor> = Vec::with_capacity(seq_len);
