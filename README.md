@@ -8,7 +8,7 @@
   <a href="https://github.com/pplmx/vllm-lite/releases">
     <img src="https://img.shields.io/github/v/release/pplmx/vllm-lite?style=flat-square&color=brightgreen" alt="Release">
   </a>
-  <img src="https://img.shields.io/badge/Tests-849%20passing-success?style=flat-square" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-900%20passing-success?style=flat-square" alt="Tests">
 </p>
 
 <!-- PROJECT LOGO -->
@@ -100,11 +100,11 @@ cargo fmt --all --check
 
 <div align="center">
 
-| 🚀 **高性能**   | 🛡️ **生产就绪**      | 📊 **可观测性**    | 🐳 **云原生**   |
-| :-------------- | :------------------- | :----------------- | :-------------- |
-| Rust 原生实现   | Circuit Breaker 熔断 | Prometheus Metrics | Docker/K8s 支持 |
-| Paged Attention | 30+ E2E 测试        | Health Check       | 多阶段构建      |
-| Flash Attention | 自动故障恢复         | 实时指标监控       | HPA 自动扩缩    |
+| 🚀 **高性能**   | 🛡️ **生产就绪**      | 📊 **可观测性**          | 🐳 **云原生**   |
+| :-------------- | :------------------- | :--------------------- | :-------------- |
+| Rust 原生实现   | Circuit Breaker 熔断 | Structured Logging     | Docker/K8s 支持 |
+| Paged Attention | 30+ E2E 测试        | Prometheus Metrics     | 多阶段构建      |
+| Flash Attention | 自动故障恢复         | Health Check           | HPA 自动扩缩    |
 
 </div>
 
@@ -169,14 +169,56 @@ curl -X POST http://localhost:8000/v1/completions \
 │  ├── /metrics        │  ├── Circuit Breaker                  │
 │  ├── /health         │  ├── Retry Strategy                    │
 │  ├── /ready          │  ├── Degrade Strategy                  │
-│  └── Prometheus      │  └── Recovery Manager                  │
+│  ├── Prometheus      │  └── Recovery Manager                  │
+│  └── Structured Logs │                                        │
 ├─────────────────────────────────────────────────────────────┤
 │  🐳 Deployment         │  ✅ Testing                            │
 │  ├── Dockerfile        │  ├── 30+ E2E Tests                     │
-│  ├── docker-compose    │  ├── Unit Tests (683+)                │
+│  ├── docker-compose    │  ├── Unit Tests (900+)                │
 │  ├── K8s Manifests     │  └── Benchmarks                        │
 │  └── HPA               │                                        │
 └─────────────────────────────────────────────────────────────┘
+```
+
+### 📝 结构化日志系统
+
+vLLM-lite 提供 5 级结构化日志，支持控制台美化输出和 JSON 文件输出：
+
+| 级别 | 用途 | 示例 |
+|------|------|------|
+| **ERROR** | 系统失败 | 配置错误、模型加载失败 |
+| **WARN** | 降级/回退 | CUDA Graph 禁用、tokenizer 回退 |
+| **INFO** | 生命周期 | 启动、请求开始/结束 |
+| **DEBUG** | 内部流程 | 批处理、调度决策、内存分配 |
+| **TRACE** | 详细调试 | Token 生成、KV Cache、Attention 层 |
+
+**日志输出示例**：
+
+```bash
+# 控制台输出（彩色美化）
+2026-04-19 22:30:00 [INFO] vllm_server::main: Starting vllm-lite
+2026-04-19 22:30:05 [INFO] vllm_server::openai: Request started (request_id=req_ABC123, prompt_tokens=150)
+2026-04-19 22:30:06 [DEBUG] vllm_core::scheduler: Batch built (batch_size=4, phase=Prefill)
+2026-04-19 22:30:06 [INFO] vllm_server::openai: Request completed (request_id=req_ABC123, output_tokens=42, duration_ms=1234)
+
+# 文件输出（JSON 格式）
+{"timestamp":"2026-04-19T22:30:06.123Z","level":"INFO","target":"vllm_server::openai","message":"Request completed","request_id":"req_ABC123","output_tokens":42,"duration_ms":1234}
+```
+
+**启用不同日志级别**：
+
+```bash
+# 默认 info 级别
+cargo run -p vllm-server
+
+# 启用 debug 日志
+RUST_LOG=debug cargo run -p vllm-server
+
+# 启用 trace 日志（详细调试）
+RUST_LOG=trace cargo run -p vllm-server
+
+# 启用文件日志
+cargo run -p vllm-server -- --log-dir ./logs
 ```
 
 ---
@@ -193,7 +235,7 @@ curl -X POST http://localhost:8000/v1/completions \
 | **首 Token 延迟 (TTFT)** | < 50ms         | 1K token prompt        |
 | **P99 延迟**             | < 100ms        | end-to-end             |
 | **显存效率**             | +40%           | vs 传统 KV Cache       |
-| **测试覆盖率**           | 849+           | 单元 + 集成测试        |
+| **测试覆盖率**           | 900+           | 单元 + 集成测试        |
 | **E2E 测试**             | 30+            | 全场景覆盖             |
 
 </div>
