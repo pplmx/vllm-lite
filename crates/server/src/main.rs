@@ -95,17 +95,13 @@ async fn main() {
         for err in &errors {
             tracing::error!(error = %err, "Config validation failed");
         }
-        eprintln!("Config validation failed:");
-        for err in errors {
-            eprintln!("  - {}", err);
-        }
         std::process::exit(1);
     }
 
     let log_dir = app_config.server.log_dir.as_ref().map(PathBuf::from);
     logging::init_logging(log_dir, &app_config.server.log_level);
 
-    tracing::info!(config = ?app_config, "Starting vllm-lite");
+    tracing::info!("Starting vllm-lite");
 
     let device = Device::cuda_if_available(0).unwrap_or(Device::Cpu);
     tracing::info!(device = ?device, "Using device");
@@ -113,11 +109,6 @@ async fn main() {
     let model_path = cli.model_path().display().to_string();
     tracing::info!(model_path = %model_path, "Loading model from");
 
-    let tensor_parallel_size = app_config.engine.tensor_parallel_size;
-    tracing::info!(
-        tensor_parallel_size = tensor_parallel_size,
-        "Tensor parallel size"
-    );
 
     let loader = ModelLoader::builder(device.clone())
         .with_model_dir(model_path.clone())
@@ -144,6 +135,12 @@ async fn main() {
     };
 
     let mut engine = Engine::new_boxed(model, draft_model);
+
+    tracing::debug!(
+        draft_enabled = app_config.engine.max_draft_tokens > 0,
+        kv_blocks = app_config.engine.num_kv_blocks,
+        "Engine configured"
+    );
 
     if app_config.engine.max_draft_tokens > 0 {
         if app_config.engine.enable_adaptive_speculative {
@@ -179,15 +176,7 @@ async fn main() {
     let tokenizer: Arc<Tokenizer> = if tokenizer_path.exists() {
         match Tokenizer::from_file(tokenizer_path.to_str().unwrap()) {
             Ok(t) => {
-                tracing::info!("Loaded tokenizer from {:?}", tokenizer_path);
-                // Test encoding
-                let test_tokens = t.encode("hi");
-                let test_decode = t.decode(&test_tokens);
-                tracing::info!(
-                    "Tokenizer test: 'hi' -> {:?}, decode -> '{}'",
-                    test_tokens,
-                    test_decode
-                );
+                tracing::info!("Tokenizer loaded");
                 Arc::new(t)
             }
             Err(e) => {
