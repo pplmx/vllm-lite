@@ -48,6 +48,24 @@ impl MlaAttention {
         &self.config
     }
 
+    #[cfg(test)]
+    pub fn q_proj_test(&self) -> &Linear {
+        &self.q_proj
+    }
+
+    pub fn split_q(&self, q_compressed: &Tensor, seq_len: usize) -> Result<(Tensor, Tensor)> {
+        let batch_size = q_compressed.dims()[0];
+        let q_nope_dim = self.num_heads * self.qk_nope_dim;
+        let q_rope_dim_total = self.num_heads * self.qk_rope_dim;
+
+        let q_reshaped =
+            q_compressed.reshape((batch_size, seq_len, q_nope_dim + q_rope_dim_total))?;
+        let q_nope = q_reshaped.narrow(2, 0, q_nope_dim)?;
+        let q_rope = q_reshaped.narrow(2, q_nope_dim, q_rope_dim_total)?;
+
+        Ok((q_nope, q_rope))
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         hidden_size: usize,
@@ -126,5 +144,37 @@ mod tests {
         assert_eq!(attn.head_dim(), 128 + 64);  // qk_nope_dim + qk_rope_dim
         assert_eq!(attn.num_kv_heads(), 16);
         assert_eq!(attn.q_lora_rank(), 512);
+    }
+
+    #[test]
+    fn test_mla_q_projection_shape() {
+        let attn = MlaAttention::new(
+            2048, 16, 16, 512, 512, 128, 64, 128, None, AttentionConfig::default(),
+        )
+        .unwrap();
+
+        let x = Tensor::randn(0.0f32, 1.0, (1, 4, 2048), &candle_core::Device::Cpu).unwrap();
+        let q_compressed = attn.q_proj_test().forward(&x).unwrap();
+
+        assert_eq!(q_compressed.dims(), &[1, 4, 512]); // [batch, seq, q_lora_rank]
+    }
+
+    #[test]
+    fn test_mla_split_q_shape() {
+        let q_lora_rank = 16 * (128 + 64);
+        let attn = MlaAttention::new(
+            2048, 16, 16, q_lora_rank, 512, 128, 64, 128, None, AttentionConfig::default(),
+        )
+        .unwrap();
+
+        let x = Tensor::randn(0.0f32, 1.0, (1, 4, 2048), &candle_core::Device::Cpu).unwrap();
+        let q_compressed = attn.q_proj_test().forward(&x).unwrap();
+
+        let (q_nope, q_rope) = attn.split_q(&q_compressed, 4).unwrap();
+
+        // q_nope: [batch, seq, num_heads * qk_nope_dim] = [1, 4, 16 * 128]
+        assert_eq!(q_nope.dims(), &[1, 4, 2048]);
+        // q_rope: [batch, seq, num_heads * qk_rope_dim] = [1, 4, 16 * 64]
+        assert_eq!(q_rope.dims(), &[1, 4, 1024]);
     }
 }
