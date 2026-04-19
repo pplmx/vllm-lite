@@ -7,6 +7,7 @@ use crate::config::architecture::{LayerType, RoPEConfig};
 use crate::gemma4::rope::Gemma4RoPE;
 use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;
+use tracing::trace;
 
 pub struct Gemma4Attention {
     q_proj: Linear,
@@ -54,6 +55,15 @@ impl Gemma4Attention {
     }
 
     pub fn forward(&self, x: &Tensor, positions: &[usize]) -> Result<Tensor> {
+        let (batch_size, seq_len, _) = x.dims3().unwrap_or((1, 1, 0));
+        trace!(
+            batch_size,
+            seq_len,
+            num_heads = self.num_heads,
+            num_kv_heads = self.num_kv_heads,
+            "Gemma4Attention forward"
+        );
+
         match self.layer_type {
             LayerType::FullAttention => self.forward_full(x, positions),
             LayerType::SlidingAttention => self.forward_sliding(x, positions),
