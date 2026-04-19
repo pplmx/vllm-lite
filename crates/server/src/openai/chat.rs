@@ -95,14 +95,20 @@ async fn handle_chat(
     state: &ApiState,
     req: ChatRequest,
 ) -> Result<ChatResponse, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    let start = std::time::Instant::now();
+    let request_id = format!("req_{}", uuid::Uuid::new_v4().to_string()[..8].to_uppercase());
+
     validate_chat_request(&req)?;
 
     let prompt = build_prompt_from_messages(&req.messages);
-    tracing::info!(prompt = %prompt, "Built prompt");
-
     let prompt_tokens = state.tokenizer.encode(&prompt);
-    tracing::info!(prompt_tokens_len = prompt_tokens.len(), first_tokens = ?&prompt_tokens[..prompt_tokens.len().min(20)], "Prompt tokens");
     let prompt_tokens_len = prompt_tokens.len();
+
+    tracing::info!(
+        request_id = %request_id,
+        prompt_tokens = prompt_tokens_len,
+        "Request started"
+    );
     let max_tokens = req.max_tokens.unwrap_or(100) as usize;
     let total_max = prompt_tokens_len + max_tokens;
 
@@ -132,13 +138,19 @@ async fn handle_chat(
         tokens.push(token);
     }
 
-    tracing::info!(token_count = tokens.len(), first_tokens = ?&tokens[..tokens.len().min(10)], "Received tokens from engine");
-
     let raw_decode = state.tokenizer.decode(&tokens);
-    tracing::info!(raw_decode_len = raw_decode.len(), "Raw decode length");
 
     let completion_text = clean_completion_text(&state.tokenizer, &raw_decode);
-    tracing::info!(completion_text = %completion_text, "Final completion text");
+
+    let duration_ms = start.elapsed().as_millis() as u64;
+    let output_tokens_len = tokens.len();
+
+    tracing::info!(
+        request_id = %request_id,
+        output_tokens = output_tokens_len,
+        duration_ms = duration_ms,
+        "Request completed"
+    );
     let choice = ChatChoice {
         index: 0,
         message: ChatMessage {
