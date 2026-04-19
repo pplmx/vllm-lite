@@ -51,8 +51,18 @@ mod tests {
     #[test]
     fn test_qwen3_mla_attention_creation() {
         let attn = Qwen3MlaAttention::new(
-            2048, 16, 16, 3072, 512, 128, 64, 128, None, AttentionConfig::default()
-        ).unwrap();
+            2048,
+            16,
+            16,
+            3072,
+            512,
+            128,
+            64,
+            128,
+            None,
+            AttentionConfig::default(),
+        )
+        .unwrap();
 
         assert_eq!(attn.inner().num_heads(), 16);
         assert_eq!(attn.inner().kv_lora_rank(), 512);
@@ -63,8 +73,18 @@ mod tests {
         use candle_core::Device;
 
         let attn = Qwen3MlaAttention::new(
-            2048, 16, 16, 3072, 512, 128, 64, 128, None, AttentionConfig::default()
-        ).unwrap();
+            2048,
+            16,
+            16,
+            3072,
+            512,
+            128,
+            64,
+            128,
+            None,
+            AttentionConfig::default(),
+        )
+        .unwrap();
 
         let x = Tensor::randn(0.0f32, 1.0, (1, 4, 2048), &Device::Cpu).unwrap();
         let positions: Vec<i64> = vec![0, 1, 2, 3];

@@ -63,7 +63,7 @@ impl MlaKvCache {
                 let block_flat = self.cache[layer].to_vec3()?;
                 let flat: Vec<f32> = block_flat
                     .into_iter()
-                    .flat_map(|block_2d| block_2d.into_iter().flat_map(|row| row))
+                    .flat_map(|block_2d| block_2d.into_iter().flatten())
                     .collect();
 
                 let mut mutable_flat = flat;
@@ -130,11 +130,8 @@ mod tests {
         let device = Device::Cpu;
         let mut cache = MlaKvCache::new(1, 512, 8, 16, device.clone());
 
-        let kv_compressed =
-            Tensor::randn(0.0f32, 1.0, (1, 1, 512), &device).unwrap();
-        cache
-            .write_compressed(0, 0, 0, &kv_compressed)
-            .unwrap();
+        let kv_compressed = Tensor::randn(0.0f32, 1.0, (1, 1, 512), &device).unwrap();
+        cache.write_compressed(0, 0, 0, &kv_compressed).unwrap();
 
         let retrieved = cache.read_compressed(0, 0, 1).unwrap();
         assert_eq!(retrieved.dims(), &[1, 1, 512]);
