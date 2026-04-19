@@ -54,7 +54,7 @@ just clean
 
 ```text
 vllm-lite/
-├── Cargo.toml              # Workspace root (5 crates: traits, core, model, server, dist)
+├── Cargo.toml              # Workspace root (7 crates: traits, core, model, server, dist, testing, benches)
 ├── justfile                # Build automation
 ├── crates/
 │   ├── traits/             # Interface definitions (ModelBackend trait)
@@ -330,6 +330,8 @@ vllm-core     → vllm-traits [(optional) vllm-model with cuda-graph feature]
 vllm-model    → vllm-traits, candle
 vllm-server   → vllm-core, vllm-model, tokio
 vllm-dist     → vllm-traits
+vllm-testing  → vllm-traits, vllm-core, vllm-model
+benches       → vllm-traits, vllm-core, vllm-model
 ```
 
 ---
@@ -436,3 +438,86 @@ cargo test -p vllm-core test_name -- --nocapture
 # Check memory usage
 cargo build --release && valgrind ./target/release/vllm-server
 ```
+
+---
+
+## Logging System
+
+vLLM-lite provides a structured 5-level logging system with dual output (console formatted + JSON file).
+
+### Log Levels
+
+| Level | Usage | Coverage |
+|-------|-------|----------|
+| **ERROR** | System failures (config, model loading) | 2 logs |
+| **WARN** | Degradation (CUDA Graph disabled) | 7 logs |
+| **INFO** | Lifecycle (startup, request start/end) | 18 logs |
+| **DEBUG** | Internal flow (scheduling, batching) | 35 logs |
+| **TRACE** | Verbose (token, KV cache, attention) | 20 logs |
+
+### Configuration
+
+```bash
+# Default (info level)
+cargo run -p vllm-server
+
+# Enable debug logs
+RUST_LOG=debug cargo run -p vllm-server
+
+# Enable trace logs (all details)
+RUST_LOG=trace cargo run -p vllm-server
+
+# Enable file logging (JSON format)
+cargo run -p vllm-server -- --log-dir ./logs
+```
+
+### Log Fields Standard
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `request_id` | string | Request tracking ID |
+| `prompt_tokens` | usize | Input token count |
+| `output_tokens` | usize | Output token count |
+| `duration_ms` | u64 | Operation duration |
+| `seq_id` | SeqId | Sequence ID |
+| `batch_size` | usize | Batch size |
+| `phase` | Phase | Prefill/Decode |
+
+### Adding Logs
+
+```rust
+use tracing::{info, debug, trace, warn, error};
+
+// Info: lifecycle events
+info!(request_id = %id, prompt_tokens = 150, "Request started");
+info!(output_tokens = 42, duration_ms = 1234, "Request completed");
+
+// Debug: internal flow
+debug!(batch_size = 4, phase = ?batch.phase, "Batch built");
+debug!(running = 10, waiting = 5, "Scheduling decision");
+
+// Trace: verbose details
+trace!(seq_id = %seq_id, token = %token, "Token generated");
+trace!(layer_idx = 12, block_ids = ?blocks, "KV cache read");
+
+// Warn: degradation
+warn!("CUDA Graph disabled, falling back");
+
+// Error: failures
+error!(error = %e, "Model forward failed");
+```
+
+### Key Log Locations
+
+| Component | Level | Events |
+|-----------|-------|--------|
+| `server/main.rs` | info | Startup, model load, shutdown |
+| `server/openai/chat.rs` | info | Request start/complete |
+| `core/engine.rs` | debug | Model forward, token output |
+| `core/scheduler/engine.rs` | debug | Scheduling decision, batch build |
+| `core/scheduler/batch_composer.rs` | debug | Batch composition |
+| `core/scheduler/memory/allocator.rs` | debug/trace | Block allocation/free |
+| `core/sampling.rs` | trace | Sampling strategy |
+| `model/components/attention/gqa.rs` | trace | Attention layer |
+| `model/paged_tensor/tensor_store.rs` | trace | KV cache read/write |
+| `core/kv_cache/prefix_cache.rs` | trace | Prefix cache hit/miss |
