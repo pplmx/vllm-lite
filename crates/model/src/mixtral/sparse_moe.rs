@@ -2,6 +2,7 @@
 
 use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;
+use tracing::trace;
 
 pub struct MixtralSparseMoe {
     experts: Vec<Expert>,
@@ -101,6 +102,14 @@ impl MixtralSparseMoe {
 
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let (batch, seq, hidden) = x.dims3()?;
+
+        trace!(
+            batch_size = batch,
+            seq_len = seq,
+            num_experts = self.num_experts,
+            top_k = self.top_k,
+            "MoE forward"
+        );
 
         let gate_logits = self.gate.forward(x)?;
 
