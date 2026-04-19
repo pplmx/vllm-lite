@@ -313,3 +313,82 @@ MLA requires:
 - RoPE configuration for q_rope
 
 If these are missing, fall back to standard GQA.
+
+## 6. Logging
+
+### 6.1 Log Levels
+
+Follow the existing logging conventions in `gqa.rs` and `block.rs`:
+
+| Level | Usage | Style |
+|-------|-------|-------|
+| **trace** | Forward start/complete, shape info | `trace!(field1, field2, "MlaAttention forward started")` |
+| **debug** | KV compression, RoPE application | `debug!(compressed_dim, "KV compressed")` |
+| **warn** | Fallback to GQA | `warn!("MLA config missing, falling back to GQA")` |
+
+### 6.2 Log Messages
+
+```rust
+// Initialization
+trace!(
+    layers,
+    kv_lora_rank,
+    num_heads,
+    "MlaAttention initialized"
+);
+
+// Forward pass
+trace!(
+    batch_size,
+    seq_len,
+    kv_lora_rank,
+    "MlaAttention forward started"
+);
+
+trace!(
+    output_shape = ?o.dims(),
+    "MlaAttention forward completed"
+);
+
+// KV compression
+trace!(
+    kv_lora_rank,
+    original_dim,
+    "KV compressed to latent space"
+);
+
+trace!(
+    num_kv_heads,
+    v_head_dim,
+    "KV decompressed from latent space"
+);
+
+// RoPE
+trace!(
+    qk_rope_dim,
+    "RoPE applied to q_rope"
+);
+
+// Fallback
+tracing::warn!(
+    missing_field = ?field,
+    "MLA config incomplete, falling back to GQA"
+);
+```
+
+### 6.3 Field Format
+
+- Simple values: `field_name` (no prefix)
+- Debug formatting: `field_name = ?expr`
+- Messages: Short English, PascalCase class name + verb
+
+Example from existing code:
+```rust
+// gqa.rs:122-127
+trace!(
+    batch_size,
+    seq_len,
+    head_dim = self.head_dim,
+    "GqaAttention forward started"
+);
+```
