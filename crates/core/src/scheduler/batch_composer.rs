@@ -214,6 +214,12 @@ impl BatchComposer {
         let total = total_tokens;
         let max_len = max_seq_len;
 
+        tracing::debug!(
+            batch_seq_count = seq_ids.len(),
+            total_tokens = total,
+            "compose_decode: batch built"
+        );
+
         Batch {
             seq_ids,
             input_tokens,
