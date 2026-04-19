@@ -10,8 +10,8 @@ pub mod vision;
 
 pub use super::kernels::{fused_attention_layer, fused_mlp_layer};
 pub use attention::{
-    AttentionConfig, GqaAttention, causal_mask, causal_mask_tile, expand_kv, paged_attention,
-    tiled_attention,
+    AttentionConfig, GqaAttention, MlaAttention, causal_mask, causal_mask_tile, expand_kv,
+    paged_attention, tiled_attention,
 };
 pub use block::{BlockConfig, StandardBlock, TransformerBlock};
 pub use mlp::*;
