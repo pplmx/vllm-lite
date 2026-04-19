@@ -15,21 +15,36 @@ pub fn init_logging(log_dir: Option<PathBuf>, log_level: &str) {
         let file_appender = RollingFileAppender::new(Rotation::DAILY, dir, "vllm-lite.log");
         let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 
+        // 文件输出: JSON 格式 (用于程序解析)
+        let json_layer = fmt::layer()
+            .with_writer(non_blocking)
+            .with_ansi(false)
+            .json()
+            .with_target(true)
+            .with_thread_ids(false)
+            .with_file(true)
+            .with_line_number(true);
+
+        // 控制台输出: 美化格式 (人类可读)
+        let console_layer = fmt::layer()
+            .with_target(true)
+            .with_thread_ids(false)
+            .with_ansi(true)
+            .compact();
+
+        subscriber
+            .with(json_layer)
+            .with(console_layer)
+            .init();
+    } else {
+        // 仅控制台输出: 美化格式
         subscriber
             .with(
                 fmt::layer()
-                    .with_writer(non_blocking)
-                    .with_ansi(false)
-                    .json()
                     .with_target(true)
-                    .with_thread_ids(true)
-                    .with_file(true)
-                    .with_line_number(true),
+                    .with_ansi(true)
+                    .compact(),
             )
-            .init();
-    } else {
-        subscriber
-            .with(fmt::layer().with_target(true).with_thread_ids(false).json())
             .init();
     }
 }
