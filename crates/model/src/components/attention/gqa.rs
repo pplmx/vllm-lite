@@ -1,6 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use candle_core::{Module, Result, Tensor};
+use tracing::trace;
 use candle_nn::{LayerNorm, Linear};
 
 use super::{AttentionConfig, expand_kv, paged_attention, tiled_attention};
@@ -118,6 +119,13 @@ impl GqaAttention {
         let batch_size = x.dims()[0];
         let seq_len = x.dims()[1];
 
+        trace!(
+            batch_size,
+            seq_len,
+            head_dim = self.head_dim,
+            "GqaAttention forward started"
+        );
+
         let q = self.q_proj.forward(x)?;
         let k = self.k_proj.forward(x)?;
         let v = self.v_proj.forward(x)?;
@@ -152,6 +160,9 @@ impl GqaAttention {
             attn_output.reshape((batch_size, seq_len, self.num_heads * self.head_dim))?;
 
         let o = self.o_proj.forward(&attn_output)?;
+
+        trace!(output_shape = ?o.dims(), "GqaAttention forward completed");
+
         Ok(o)
     }
 
