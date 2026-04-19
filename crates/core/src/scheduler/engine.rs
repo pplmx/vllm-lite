@@ -262,6 +262,15 @@ impl SchedulerEngine {
         self.metrics
             .record_inference_latency(duration.as_nanos() as u64);
 
+        let prefill_count = batch.is_prefill.iter().filter(|&&x| x).count();
+        tracing::debug!(
+            batch_size = batch.seq_ids.len(),
+            prefill_count = prefill_count,
+            total_tokens = batch.total_tokens,
+            phase = ?batch.phase,
+            "Batch built"
+        );
+
         batch
     }
 
@@ -473,6 +482,28 @@ impl SchedulerEngine {
     #[must_use]
     pub fn has_pending(&self) -> bool {
         !self.request_queue.is_empty() || !self.running.is_empty()
+    }
+
+    /// Make scheduling decision and build batch
+    #[must_use]
+    pub fn schedule(&mut self) -> Option<Batch> {
+        let waiting = self.request_queue.len();
+        let running = self.running.len();
+        let free_blocks = self.memory.available_blocks();
+
+        tracing::debug!(
+            waiting = waiting,
+            running = running,
+            free_blocks = free_blocks,
+            "Scheduling decision"
+        );
+
+        let batch = self.build_batch();
+        if batch.is_empty() {
+            None
+        } else {
+            Some(batch)
+        }
     }
 
     /// Get the number of running sequences
