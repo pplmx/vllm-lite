@@ -49,6 +49,20 @@ impl HealthEndpoint {
         let status = self.checker.check_health();
         let uptime = self.start_time.elapsed().as_secs();
 
+        tracing::debug!(
+            status = ?status,
+            uptime_seconds = uptime,
+            requests_total = self.metrics.requests_total(),
+            failure_rate = self.metrics.failure_rate(),
+            "Health check"
+        );
+
+        tracing::trace!(
+            cuda_graph_hit_rate = self.metrics.cuda_graph_hit_rate(),
+            packing_efficiency = self.metrics.packing_efficiency(),
+            "Health metrics"
+        );
+
         HealthResponse {
             status: format!("{:?}", status),
             timestamp: std::time::SystemTime::now()
