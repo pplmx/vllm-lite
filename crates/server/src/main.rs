@@ -104,11 +104,10 @@ async fn main() {
     tracing::info!("Starting vllm-lite");
 
     let device = Device::cuda_if_available(0).unwrap_or(Device::Cpu);
-    tracing::info!(device = ?device, "Using device");
+    tracing::info!(device = ?device, "Device initialized: {:?}", device);
 
     let model_path = cli.model_path().display().to_string();
-    tracing::info!(model_path = %model_path, "Loading model from");
-
+    tracing::debug!(model_path = %model_path, "Model path configured");
 
     let loader = ModelLoader::builder(device.clone())
         .with_model_dir(model_path.clone())
@@ -120,6 +119,12 @@ async fn main() {
     let model = loader
         .load_model()
         .unwrap_or_else(|e| panic!("Failed to load model: {}", e));
+
+    tracing::info!(
+        model_path = %model_path,
+        device = ?device,
+        "Model loaded"
+    );
 
     // Only load draft model if speculative decoding is enabled
     let draft_model = if app_config.engine.max_draft_tokens > 0 {
