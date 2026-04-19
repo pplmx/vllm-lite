@@ -57,6 +57,14 @@ impl RequestQueue {
         policy: &dyn SchedulingPolicy,
         ctx: &SchedulingContext,
     ) {
+        tracing::debug!(
+            request_id = seq.id,
+            prompt_tokens = seq.prompt_len,
+            max_tokens = seq.max_tokens,
+            queue_size = self.in_queue.len(),
+            "Request enqueued"
+        );
+
         if self.in_queue.contains(&seq.id) {
             return;
         }
