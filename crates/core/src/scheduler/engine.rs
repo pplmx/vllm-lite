@@ -499,11 +499,7 @@ impl SchedulerEngine {
         );
 
         let batch = self.build_batch();
-        if batch.is_empty() {
-            None
-        } else {
-            Some(batch)
-        }
+        if batch.is_empty() { None } else { Some(batch) }
     }
 
     /// Get the number of running sequences

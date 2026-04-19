@@ -62,10 +62,7 @@ impl PreemptionManager {
     }
 
     pub fn select_victim(&self, running: &[Sequence]) -> Option<(usize, Sequence)> {
-        tracing::debug!(
-            candidates = running.len(),
-            "Selecting preemption victim"
-        );
+        tracing::debug!(candidates = running.len(), "Selecting preemption victim");
 
         if running.len() <= 1 {
             return None;
@@ -91,11 +88,7 @@ impl PreemptionManager {
         };
 
         if let Some((idx, ref seq)) = victim {
-            tracing::trace!(
-                seq_id = seq.id,
-                idx,
-                "Preemption victim selected"
-            );
+            tracing::trace!(seq_id = seq.id, idx, "Preemption victim selected");
         }
 
         victim
