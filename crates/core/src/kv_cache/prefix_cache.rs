@@ -162,10 +162,7 @@ impl PrefixCache {
             }
         }
 
-        tracing::trace!(
-            tokens = tokens.len(),
-            "Prefix cache miss"
-        );
+        tracing::trace!(tokens = tokens.len(), "Prefix cache miss");
         None
     }
 

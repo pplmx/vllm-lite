@@ -32,19 +32,11 @@ pub fn init_logging(log_dir: Option<PathBuf>, log_level: &str) {
             .with_ansi(true)
             .compact();
 
-        subscriber
-            .with(json_layer)
-            .with(console_layer)
-            .init();
+        subscriber.with(json_layer).with(console_layer).init();
     } else {
         // 仅控制台输出: 美化格式
         subscriber
-            .with(
-                fmt::layer()
-                    .with_target(true)
-                    .with_ansi(true)
-                    .compact(),
-            )
+            .with(fmt::layer().with_target(true).with_ansi(true).compact())
             .init();
     }
 }

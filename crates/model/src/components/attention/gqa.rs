@@ -1,8 +1,8 @@
 #![allow(clippy::too_many_arguments)]
 
 use candle_core::{Module, Result, Tensor};
-use tracing::trace;
 use candle_nn::{LayerNorm, Linear};
+use tracing::trace;
 
 use super::{AttentionConfig, expand_kv, paged_attention, tiled_attention};
 
