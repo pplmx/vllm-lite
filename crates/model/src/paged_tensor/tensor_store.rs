@@ -184,6 +184,13 @@ impl PagedKvCache {
         k: &Tensor,
         v: &Tensor,
     ) -> Result<()> {
+        tracing::trace!(
+            layer_idx = layer_idx,
+            block_id = block_id,
+            token_offset = token_offset,
+            "KV cache write"
+        );
+
         if layer_idx >= self.num_layers {
             return Err(candle_core::Error::msg(format!(
                 "layer_idx {} out of bounds for {} layers",
@@ -334,6 +341,13 @@ impl PagedKvCache {
                 Tensor::zeros((0, self.num_heads, self.head_dim), DType::F32, &self.device)?,
             ));
         }
+
+        tracing::trace!(
+            layer_idx = layer_idx,
+            block_ids = ?block_ids,
+            seq_len = seq_len,
+            "KV cache read"
+        );
 
         let mut k_parts = Vec::new();
         let mut v_parts = Vec::new();
