@@ -569,7 +569,7 @@ impl<M: ModelBackend + 'static> Engine<M> {
             Ok(output) => {
                 tracing::debug!(
                     elapsed_ms = elapsed,
-                    output_tokens = output.next_tokens.len(),
+                    tokens = output.next_tokens.len(),
                     "Model forward completed"
                 );
                 Ok(output)
@@ -589,8 +589,8 @@ impl<M: ModelBackend + 'static> Engine<M> {
         start: std::time::Instant,
     ) -> Result<Vec<(SeqId, TokenId)>> {
         tracing::debug!(
-            output_seq_ids = ?output.seq_ids,
-            output_tokens = ?output.next_tokens,
+            seq_ids = ?output.seq_ids,
+            tokens = ?output.next_tokens,
             "process_output: received model output"
         );
 
