@@ -11,8 +11,8 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
-use tracing::error;
-use vllm_traits::{BatchOutput, ModelBackend, Result as ModelResult, SeqId, TokenId};
+use tracing::{error, trace};
+use vllm_traits::{BatchOutput, BatchPhase, ModelBackend, Result as ModelResult, SeqId, TokenId};
 
 #[cfg(feature = "cuda-graph")]
 use vllm_model::kernels::BatchCudaGraphExecutor;
@@ -543,19 +543,18 @@ impl<M: ModelBackend + 'static> Engine<M> {
 
     /// Execute regular forward pass (existing logic)
     fn execute_regular(&mut self, batch: &vllm_traits::Batch) -> Result<BatchOutput> {
-        let first_input_len = batch.input_tokens.first().map(|t| t.len()).unwrap_or(0);
+        let total_tokens: usize = batch.input_tokens.iter().map(|t| t.len()).sum();
         tracing::debug!(
-            batch_seq_ids = ?batch.seq_ids,
-            batch_input_tokens_count = batch.input_tokens.len(),
-            batch_first_sequence_len = first_input_len,
-            batch_total_tokens = batch.input_tokens.iter().map(|t| t.len()).sum::<usize>(),
-            batch_is_prefill = ?batch.is_prefill,
-            "execute_regular: calling model.forward()"
+            batch_size = batch.seq_ids.len(),
+            total_tokens = total_tokens,
+            is_prefill = matches!(batch.phase, BatchPhase::Prefill),
+            "Model forward started"
         );
 
-        let mut model = self.target_model.lock().unwrap();
-        model
-            .forward(
+        let start = std::time::Instant::now();
+        let result = {
+            let mut model = self.target_model.lock().unwrap();
+            model.forward(
                 &batch.seq_ids,
                 &batch.input_tokens,
                 &batch.positions,
@@ -563,7 +562,23 @@ impl<M: ModelBackend + 'static> Engine<M> {
                 &batch.num_computed_tokens,
                 &batch.is_prefill,
             )
-            .map_err(|e| crate::error::EngineError::ModelError(e.to_string()))
+        };
+        let elapsed = start.elapsed().as_millis() as u64;
+
+        match result {
+            Ok(output) => {
+                tracing::debug!(
+                    elapsed_ms = elapsed,
+                    output_tokens = output.next_tokens.len(),
+                    "Model forward completed"
+                );
+                Ok(output)
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "Model forward failed");
+                Err(crate::error::EngineError::ModelError(e.to_string()))
+            }
+        }
     }
 
     /// Process model output and update state
@@ -581,6 +596,11 @@ impl<M: ModelBackend + 'static> Engine<M> {
 
         let mut results = Vec::new();
         for (seq_id, token) in output.seq_ids.iter().zip(&output.next_tokens) {
+            trace!(
+                seq_id = %seq_id,
+                token_id = %token,
+                "Token generated"
+            );
             tracing::debug!(seq_id = %seq_id, token = %token, "Sending token via channel");
             if let Some(tx) = self.response_txs.get(seq_id) {
                 let _ = tx.try_send(*token);
