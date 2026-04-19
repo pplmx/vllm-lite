@@ -328,13 +328,7 @@ impl PagedKvCache {
         block_ids: &[usize],
         seq_len: usize,
     ) -> Result<(Tensor, Tensor)> {
-        eprintln!(
-            "DEBUG read_kv: layer_idx={}, block_ids={:?}, seq_len={}, block_size={}",
-            layer_idx, block_ids, seq_len, self.block_size
-        );
-
         if block_ids.is_empty() || seq_len == 0 {
-            eprintln!("DEBUG read_kv: returning empty tensors");
             return Ok((
                 Tensor::zeros((0, self.num_heads, self.head_dim), DType::F32, &self.device)?,
                 Tensor::zeros((0, self.num_heads, self.head_dim), DType::F32, &self.device)?,
@@ -348,11 +342,6 @@ impl PagedKvCache {
             let start_token = block_idx * self.block_size;
             let end_token = std::cmp::min(start_token + self.block_size, seq_len);
             let block_len = end_token - start_token;
-
-            eprintln!(
-                "DEBUG read_kv: block_idx={}, block_id={}, start_token={}, end_token={}, block_len={}",
-                block_idx, block_id, start_token, end_token, block_len
-            );
 
             let k_block = self.key_cache[layer_idx]
                 .narrow(0, block_id, 1)?
@@ -372,11 +361,6 @@ impl PagedKvCache {
 
         let k = Tensor::cat(&k_parts, 1)?.transpose(0, 1)?;
         let v = Tensor::cat(&v_parts, 1)?.transpose(0, 1)?;
-        eprintln!(
-            "DEBUG read_kv: returning k.dims={:?}, v.dims={:?}",
-            k.dims(),
-            v.dims()
-        );
 
         if self.quantized {
             let scale = self.get_scale(layer_idx);

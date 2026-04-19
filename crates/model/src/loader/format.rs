@@ -52,17 +52,8 @@ impl SafetensorsLoader {
         let file_size = metadata.len();
 
         if (MMAP_THRESHOLD_BYTES..=MAX_MMAP_SIZE).contains(&file_size) {
-            match Self::load_mmap(path) {
-                Ok(mmap) => {
-                    return Ok(mmap.to_vec());
-                }
-                Err(e) => {
-                    eprintln!(
-                        "mmap failed for {}, falling back to read(): {}",
-                        path.display(),
-                        e
-                    );
-                }
+            if let Ok(mmap) = Self::load_mmap(path) {
+                return Ok(mmap.to_vec());
             }
         }
 
@@ -218,14 +209,7 @@ impl FormatLoader for SafetensorsLoader {
             })
             .collect();
 
-        let total: usize = tensor_vec
-            .iter()
-            .filter_map(|r| r.as_ref().ok())
-            .map(|tensors| tensors.len())
-            .sum();
-
         let mut weights = HashMap::new();
-        let mut loaded = 0;
 
         for result in tensor_vec {
             let tensors = result?;
@@ -236,14 +220,9 @@ impl FormatLoader for SafetensorsLoader {
                         name
                     )));
                 }
-                loaded += 1;
-                if loaded % 20 == 0 {
-                    eprintln!("Loading: {}/{}", loaded, total);
-                }
             }
         }
 
-        eprintln!("Loaded {} tensors total", loaded);
         Ok(weights)
     }
 }
