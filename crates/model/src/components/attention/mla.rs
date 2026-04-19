@@ -425,4 +425,46 @@ mod tests {
         let data: Vec<f32> = output.flatten_all().unwrap().to_vec1().unwrap();
         assert!(data.iter().all(|v: &f32| v.is_finite()));
     }
+
+    #[test]
+    fn test_mla_deterministic() {
+        let qk_nope_dim = 128;
+        let qk_rope_dim = 64;
+        let v_head_dim = qk_nope_dim;
+        let q_lora_rank = 16 * (qk_nope_dim + qk_rope_dim);
+        let attn = MlaAttention::new(
+            2048, 16, 16, q_lora_rank, 512, qk_nope_dim, qk_rope_dim, v_head_dim, None, AttentionConfig::default()
+        ).unwrap();
+
+        let x = Tensor::randn(0.0f32, 1.0, (1, 4, 2048), &candle_core::Device::Cpu).unwrap();
+        let positions: Vec<i64> = vec![0, 1, 2, 3];
+
+        let out1 = attn.forward(&x, &positions).unwrap();
+        let out2 = attn.forward(&x, &positions).unwrap();
+
+        let diff = (&out1 - &out2).unwrap().abs().unwrap();
+        let max_diff: f32 = diff.flatten_all().unwrap().to_vec1().unwrap()
+            .iter().cloned().fold(0.0f32, |a, b| a.max(b));
+        assert!(max_diff < 1e-5);
+    }
+
+    #[test]
+    fn test_mla_rope_affects_different_positions() {
+        let batch_size = 1;
+        let seq_len = 2;
+        let num_heads = 16;
+        let rope_dim = 64;
+
+        let q_rope = Tensor::randn(0.0f32, 1.0, (batch_size, seq_len, num_heads, rope_dim), &candle_core::Device::Cpu).unwrap();
+
+        let pos1: Vec<i64> = vec![0, 1];
+        let pos2: Vec<i64> = vec![10, 11];
+
+        let q_rope_rotated1 = apply_rope(&q_rope, &pos1, 10000.0).unwrap();
+        let q_rope_rotated2 = apply_rope(&q_rope, &pos2, 10000.0).unwrap();
+
+        let diff = (&q_rope_rotated1 - &q_rope_rotated2).unwrap().abs().unwrap();
+        let sum_diff: f32 = diff.sum_all().unwrap().to_scalar().unwrap();
+        assert!(sum_diff > 1e-5, "RoPE should produce different outputs for different positions");
+    }
 }
