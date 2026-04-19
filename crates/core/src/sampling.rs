@@ -24,7 +24,11 @@ pub fn greedy_sample(logits: &[f32]) -> TokenId {
 }
 
 pub fn temperature_sample(logits: &[f32], temperature: f32) -> TokenId {
-    trace!(vocab_size = logits.len(), temperature = temperature, "Temperature sampling");
+    trace!(
+        vocab_size = logits.len(),
+        temperature = temperature,
+        "Temperature sampling"
+    );
     if temperature <= 0.0 || logits.is_empty() {
         return greedy_sample(logits);
     }

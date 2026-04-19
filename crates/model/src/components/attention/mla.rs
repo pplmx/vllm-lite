@@ -103,7 +103,12 @@ impl MlaAttention {
         v.contiguous()
     }
 
-    fn reshape_q_rope_for_rope(&self, q_rope_flat: &Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
+    fn reshape_q_rope_for_rope(
+        &self,
+        q_rope_flat: &Tensor,
+        batch_size: usize,
+        seq_len: usize,
+    ) -> Result<Tensor> {
         q_rope_flat.reshape((batch_size, seq_len, self.num_heads, self.qk_rope_dim))
     }
 
@@ -116,7 +121,8 @@ impl MlaAttention {
 
         let q_rope_4d = self.reshape_q_rope_for_rope(&q_rope, batch_size, seq_len)?;
         let q_rope_rotated_4d = apply_rope(&q_rope_4d, positions, 10000.0)?;
-        let q_rope_rotated = q_rope_rotated_4d.reshape((batch_size, seq_len, self.num_heads * self.qk_rope_dim))?;
+        let q_rope_rotated =
+            q_rope_rotated_4d.reshape((batch_size, seq_len, self.num_heads * self.qk_rope_dim))?;
 
         let kv_compressed = self.kv_proj.forward(x)?;
         let k_decompressed = self.k_decompress.forward(&kv_compressed)?;
@@ -133,13 +139,24 @@ impl MlaAttention {
         Ok(o)
     }
 
-    fn reshape_q_nope_for_attn(&self, q_nope_flat: &Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
-        let q_nope_4d = q_nope_flat.reshape((batch_size, seq_len, self.num_heads, self.qk_nope_dim))?;
+    fn reshape_q_nope_for_attn(
+        &self,
+        q_nope_flat: &Tensor,
+        batch_size: usize,
+        seq_len: usize,
+    ) -> Result<Tensor> {
+        let q_nope_4d =
+            q_nope_flat.reshape((batch_size, seq_len, self.num_heads, self.qk_nope_dim))?;
         let q_nope_transposed = q_nope_4d.transpose(1, 2)?;
         q_nope_transposed.contiguous()
     }
 
-    fn attention_with_compressed_kv(&self, q_nope: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
+    fn attention_with_compressed_kv(
+        &self,
+        q_nope: &Tensor,
+        k: &Tensor,
+        v: &Tensor,
+    ) -> Result<Tensor> {
         let batch_size = q_nope.dims()[0];
         let seq_len = q_nope.dims()[2];
         let num_heads = self.num_heads;
@@ -156,7 +173,8 @@ impl MlaAttention {
 
         let attn_output = attn_weights.matmul(&v.contiguous()?)?;
         let attn_output = attn_output.transpose(1, 2)?;
-        let attn_output = attn_output.reshape((batch_size, seq_len, num_heads * self.v_head_dim))?;
+        let attn_output =
+            attn_output.reshape((batch_size, seq_len, num_heads * self.v_head_dim))?;
 
         Ok(attn_output)
     }
@@ -182,8 +200,10 @@ impl MlaAttention {
         let kv_proj = candle_nn::linear(hidden_size, kv_lora_rank, vb.pp("kv_proj"))?;
 
         let k_decompress_out_dim = num_kv_heads * v_head_dim;
-        let k_decompress = candle_nn::linear(kv_lora_rank, k_decompress_out_dim, vb.pp("k_decompress"))?;
-        let v_decompress = candle_nn::linear(kv_lora_rank, k_decompress_out_dim, vb.pp("v_decompress"))?;
+        let k_decompress =
+            candle_nn::linear(kv_lora_rank, k_decompress_out_dim, vb.pp("k_decompress"))?;
+        let v_decompress =
+            candle_nn::linear(kv_lora_rank, k_decompress_out_dim, vb.pp("v_decompress"))?;
 
         let head_dim = qk_nope_dim + qk_rope_dim;
         let o_proj = candle_nn::linear(num_heads * head_dim, hidden_size, vb.pp("o_proj"))?;
@@ -214,17 +234,18 @@ mod tests {
     #[test]
     fn test_mla_attention_new_creation() {
         let attn = MlaAttention::new(
-            2048,   // hidden_size
-            16,     // num_heads
-            16,     // num_kv_heads
-            512,    // q_lora_rank
-            512,    // kv_lora_rank
-            128,    // qk_nope_dim
-            64,     // qk_rope_dim
-            128,    // v_head_dim
-            None,   // vb
+            2048, // hidden_size
+            16,   // num_heads
+            16,   // num_kv_heads
+            512,  // q_lora_rank
+            512,  // kv_lora_rank
+            128,  // qk_nope_dim
+            64,   // qk_rope_dim
+            128,  // v_head_dim
+            None, // vb
             AttentionConfig::default(),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(attn.num_heads(), 16);
         assert_eq!(attn.kv_lora_rank(), 512);
@@ -233,10 +254,20 @@ mod tests {
     #[test]
     fn test_mla_attention_accessors() {
         let attn = MlaAttention::new(
-            2048, 16, 16, 512, 512, 128, 64, 128, None, AttentionConfig::default()
-        ).unwrap();
+            2048,
+            16,
+            16,
+            512,
+            512,
+            128,
+            64,
+            128,
+            None,
+            AttentionConfig::default(),
+        )
+        .unwrap();
 
-        assert_eq!(attn.head_dim(), 128 + 64);  // qk_nope_dim + qk_rope_dim
+        assert_eq!(attn.head_dim(), 128 + 64); // qk_nope_dim + qk_rope_dim
         assert_eq!(attn.num_kv_heads(), 16);
         assert_eq!(attn.q_lora_rank(), 512);
     }
@@ -244,7 +275,16 @@ mod tests {
     #[test]
     fn test_mla_q_projection_shape() {
         let attn = MlaAttention::new(
-            2048, 16, 16, 512, 512, 128, 64, 128, None, AttentionConfig::default(),
+            2048,
+            16,
+            16,
+            512,
+            512,
+            128,
+            64,
+            128,
+            None,
+            AttentionConfig::default(),
         )
         .unwrap();
 
@@ -258,7 +298,16 @@ mod tests {
     fn test_mla_split_q_shape() {
         let q_lora_rank = 16 * (128 + 64);
         let attn = MlaAttention::new(
-            2048, 16, 16, q_lora_rank, 512, 128, 64, 128, None, AttentionConfig::default(),
+            2048,
+            16,
+            16,
+            q_lora_rank,
+            512,
+            128,
+            64,
+            128,
+            None,
+            AttentionConfig::default(),
         )
         .unwrap();
 
@@ -276,8 +325,18 @@ mod tests {
     #[test]
     fn test_mla_kv_compression_shape() {
         let attn = MlaAttention::new(
-            2048, 16, 16, 3072, 512, 128, 64, 128, None, AttentionConfig::default()
-        ).unwrap();
+            2048,
+            16,
+            16,
+            3072,
+            512,
+            128,
+            64,
+            128,
+            None,
+            AttentionConfig::default(),
+        )
+        .unwrap();
 
         let x = Tensor::randn(0.0f32, 1.0, (1, 4, 2048), &candle_core::Device::Cpu).unwrap();
         let kv_compressed = attn.kv_proj_test().forward(&x).unwrap();
@@ -288,10 +347,21 @@ mod tests {
     #[test]
     fn test_mla_k_decompression_shape() {
         let attn = MlaAttention::new(
-            2048, 16, 16, 3072, 512, 128, 64, 128, None, AttentionConfig::default()
-        ).unwrap();
+            2048,
+            16,
+            16,
+            3072,
+            512,
+            128,
+            64,
+            128,
+            None,
+            AttentionConfig::default(),
+        )
+        .unwrap();
 
-        let kv_compressed = Tensor::randn(0.0f32, 1.0, (1, 4, 512), &candle_core::Device::Cpu).unwrap();
+        let kv_compressed =
+            Tensor::randn(0.0f32, 1.0, (1, 4, 512), &candle_core::Device::Cpu).unwrap();
         let k_decompressed = attn.k_decompress_test().forward(&kv_compressed).unwrap();
 
         // [batch, seq, num_kv_heads * v_head_dim] = [1, 4, 16 * 128]
@@ -301,10 +371,21 @@ mod tests {
     #[test]
     fn test_mla_v_decompression_shape() {
         let attn = MlaAttention::new(
-            2048, 16, 16, 3072, 512, 128, 64, 128, None, AttentionConfig::default()
-        ).unwrap();
+            2048,
+            16,
+            16,
+            3072,
+            512,
+            128,
+            64,
+            128,
+            None,
+            AttentionConfig::default(),
+        )
+        .unwrap();
 
-        let kv_compressed = Tensor::randn(0.0f32, 1.0, (1, 4, 512), &candle_core::Device::Cpu).unwrap();
+        let kv_compressed =
+            Tensor::randn(0.0f32, 1.0, (1, 4, 512), &candle_core::Device::Cpu).unwrap();
         let v_decompressed = attn.v_decompress_test().forward(&kv_compressed).unwrap();
 
         // [batch, seq, num_kv_heads * v_head_dim] = [1, 4, 16 * 128]
@@ -314,14 +395,36 @@ mod tests {
     #[test]
     fn test_mla_concat_q_nope_rope_shape() {
         let attn = MlaAttention::new(
-            2048, 16, 16, 3072, 512, 128, 64, 128, None, AttentionConfig::default()
-        ).unwrap();
+            2048,
+            16,
+            16,
+            3072,
+            512,
+            128,
+            64,
+            128,
+            None,
+            AttentionConfig::default(),
+        )
+        .unwrap();
 
         let batch_size = 1;
         let seq_len = 4;
 
-        let q_nope = Tensor::randn(0.0f32, 1.0, (batch_size, seq_len, 16 * 128), &candle_core::Device::Cpu).unwrap();
-        let q_rope = Tensor::randn(0.0f32, 1.0, (batch_size, seq_len, 16 * 64), &candle_core::Device::Cpu).unwrap();
+        let q_nope = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, seq_len, 16 * 128),
+            &candle_core::Device::Cpu,
+        )
+        .unwrap();
+        let q_rope = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, seq_len, 16 * 64),
+            &candle_core::Device::Cpu,
+        )
+        .unwrap();
 
         let q = attn.concat_q_nope_rope(&q_nope, &q_rope).unwrap();
 
@@ -338,7 +441,13 @@ mod tests {
         let num_heads = 16;
         let rope_dim = 64;
 
-        let q_rope = Tensor::randn(0.0f32, 1.0, (batch_size, seq_len, num_heads, rope_dim), &candle_core::Device::Cpu).unwrap();
+        let q_rope = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, seq_len, num_heads, rope_dim),
+            &candle_core::Device::Cpu,
+        )
+        .unwrap();
         let positions: Vec<i64> = vec![0, 1, 2, 3];
 
         let q_rope_rotated = apply_rope(&q_rope, &positions, 10000.0).unwrap();
@@ -353,21 +462,41 @@ mod tests {
     #[test]
     fn test_mla_reshape_kv() {
         let attn = MlaAttention::new(
-            2048, 16, 16, 3072, 512, 128, 64, 128, None, AttentionConfig::default()
-        ).unwrap();
+            2048,
+            16,
+            16,
+            3072,
+            512,
+            128,
+            64,
+            128,
+            None,
+            AttentionConfig::default(),
+        )
+        .unwrap();
 
         let batch_size = 1;
         let seq_len = 4;
-        let kv_compressed = Tensor::randn(0.0f32, 1.0, (batch_size, seq_len, 512), &candle_core::Device::Cpu).unwrap();
+        let kv_compressed = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, seq_len, 512),
+            &candle_core::Device::Cpu,
+        )
+        .unwrap();
 
         let k_decompressed = attn.k_decompress_test().forward(&kv_compressed).unwrap();
-        let k = attn.reshape_k(&k_decompressed, batch_size, seq_len).unwrap();
+        let k = attn
+            .reshape_k(&k_decompressed, batch_size, seq_len)
+            .unwrap();
 
         // K: [batch, num_kv_heads, seq, v_head_dim] = [1, 16, 4, 128]
         assert_eq!(k.dims(), &[1, 16, 4, 128]);
 
         let v_decompressed = attn.v_decompress_test().forward(&kv_compressed).unwrap();
-        let v = attn.reshape_v(&v_decompressed, batch_size, seq_len).unwrap();
+        let v = attn
+            .reshape_v(&v_decompressed, batch_size, seq_len)
+            .unwrap();
 
         // V: [batch, num_kv_heads, seq, v_head_dim] = [1, 16, 4, 128]
         assert_eq!(v.dims(), &[1, 16, 4, 128]);
@@ -380,8 +509,18 @@ mod tests {
         let v_head_dim = qk_nope_dim;
         let q_lora_rank = 16 * (qk_nope_dim + qk_rope_dim);
         let attn = MlaAttention::new(
-            2048, 16, 16, q_lora_rank, 512, qk_nope_dim, qk_rope_dim, v_head_dim, None, AttentionConfig::default()
-        ).unwrap();
+            2048,
+            16,
+            16,
+            q_lora_rank,
+            512,
+            qk_nope_dim,
+            qk_rope_dim,
+            v_head_dim,
+            None,
+            AttentionConfig::default(),
+        )
+        .unwrap();
 
         let x = Tensor::randn(0.0f32, 1.0, (1, 4, 2048), &candle_core::Device::Cpu).unwrap();
         let positions: Vec<i64> = vec![0, 1, 2, 3];
@@ -398,8 +537,18 @@ mod tests {
         let v_head_dim = qk_nope_dim;
         let q_lora_rank = 16 * (qk_nope_dim + qk_rope_dim);
         let attn = MlaAttention::new(
-            2048, 16, 16, q_lora_rank, 512, qk_nope_dim, qk_rope_dim, v_head_dim, None, AttentionConfig::default()
-        ).unwrap();
+            2048,
+            16,
+            16,
+            q_lora_rank,
+            512,
+            qk_nope_dim,
+            qk_rope_dim,
+            v_head_dim,
+            None,
+            AttentionConfig::default(),
+        )
+        .unwrap();
 
         let x = Tensor::randn(0.0f32, 1.0, (1, 1, 2048), &candle_core::Device::Cpu).unwrap();
         let positions: Vec<i64> = vec![100];
@@ -415,8 +564,18 @@ mod tests {
         let v_head_dim = qk_nope_dim;
         let q_lora_rank = 16 * (qk_nope_dim + qk_rope_dim);
         let attn = MlaAttention::new(
-            2048, 16, 16, q_lora_rank, 512, qk_nope_dim, qk_rope_dim, v_head_dim, None, AttentionConfig::default()
-        ).unwrap();
+            2048,
+            16,
+            16,
+            q_lora_rank,
+            512,
+            qk_nope_dim,
+            qk_rope_dim,
+            v_head_dim,
+            None,
+            AttentionConfig::default(),
+        )
+        .unwrap();
 
         let x = Tensor::randn(-2.0f32, 2.0, (1, 4, 2048), &candle_core::Device::Cpu).unwrap();
         let positions: Vec<i64> = vec![0, 1, 2, 3];
@@ -433,8 +592,18 @@ mod tests {
         let v_head_dim = qk_nope_dim;
         let q_lora_rank = 16 * (qk_nope_dim + qk_rope_dim);
         let attn = MlaAttention::new(
-            2048, 16, 16, q_lora_rank, 512, qk_nope_dim, qk_rope_dim, v_head_dim, None, AttentionConfig::default()
-        ).unwrap();
+            2048,
+            16,
+            16,
+            q_lora_rank,
+            512,
+            qk_nope_dim,
+            qk_rope_dim,
+            v_head_dim,
+            None,
+            AttentionConfig::default(),
+        )
+        .unwrap();
 
         let x = Tensor::randn(0.0f32, 1.0, (1, 4, 2048), &candle_core::Device::Cpu).unwrap();
         let positions: Vec<i64> = vec![0, 1, 2, 3];
@@ -443,8 +612,14 @@ mod tests {
         let out2 = attn.forward(&x, &positions).unwrap();
 
         let diff = (&out1 - &out2).unwrap().abs().unwrap();
-        let max_diff: f32 = diff.flatten_all().unwrap().to_vec1().unwrap()
-            .iter().cloned().fold(0.0f32, |a, b| a.max(b));
+        let max_diff: f32 = diff
+            .flatten_all()
+            .unwrap()
+            .to_vec1()
+            .unwrap()
+            .iter()
+            .cloned()
+            .fold(0.0f32, |a, b| a.max(b));
         assert!(max_diff < 1e-5);
     }
 
@@ -455,7 +630,13 @@ mod tests {
         let num_heads = 16;
         let rope_dim = 64;
 
-        let q_rope = Tensor::randn(0.0f32, 1.0, (batch_size, seq_len, num_heads, rope_dim), &candle_core::Device::Cpu).unwrap();
+        let q_rope = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, seq_len, num_heads, rope_dim),
+            &candle_core::Device::Cpu,
+        )
+        .unwrap();
 
         let pos1: Vec<i64> = vec![0, 1];
         let pos2: Vec<i64> = vec![10, 11];
@@ -463,8 +644,14 @@ mod tests {
         let q_rope_rotated1 = apply_rope(&q_rope, &pos1, 10000.0).unwrap();
         let q_rope_rotated2 = apply_rope(&q_rope, &pos2, 10000.0).unwrap();
 
-        let diff = (&q_rope_rotated1 - &q_rope_rotated2).unwrap().abs().unwrap();
+        let diff = (&q_rope_rotated1 - &q_rope_rotated2)
+            .unwrap()
+            .abs()
+            .unwrap();
         let sum_diff: f32 = diff.sum_all().unwrap().to_scalar().unwrap();
-        assert!(sum_diff > 1e-5, "RoPE should produce different outputs for different positions");
+        assert!(
+            sum_diff > 1e-5,
+            "RoPE should produce different outputs for different positions"
+        );
     }
 }
