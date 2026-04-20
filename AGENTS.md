@@ -133,13 +133,20 @@ The `QuantizationFormat` enum is designed for future support of:
 
 ## SSM Performance
 
-The `MambaBlock` uses optimized sequential processing with pre-allocated buffers for improved performance on medium to long sequences.
+The `SSMLayer`, `MambaBlock`, and `SSMHarmonicSSMLayer` (for Qwen3.5 hybrid models) use optimized sequential processing.
 
 Key optimizations:
 
 - Pre-allocated output buffers
 - Minimized tensor allocations in the forward loop
 - Local variable caching for frequently accessed dimensions
+
+### SSM Types
+
+| Type | Location | Use Case |
+|------|----------|----------|
+| `SSMLayer` + `MambaBlock` | `components/ssm.rs` | Standard Mamba (Qwen3.5 Mamba-only) |
+| `SSMHarmonicSSMLayer` | `components/ssm.rs` | Hybrid attention+SSM (Qwen3.5 hybrid) |
 
 ---
 
@@ -308,10 +315,19 @@ pub fn register_all_archs(registry: &ArchitectureRegistry) {
 | ------------ | --------- | -------- |
 | Llama | `model/src/llama/` | RMSNorm, RoPE, SwiGLU |
 | Mistral | `model/src/mistral/` | Sliding Window, GQA |
-| Qwen2/3 | `model/src/qwen3/` | GQA, RoPE, QK-Norm |
-| Qwen3.5 | `model/src/qwen3_5/` | Mamba SSM Hybrid |
+| Qwen2/3 | `model/src/qwen3/` | GQA, MLA, RoPE, QK-Norm |
+| Qwen3.5 | `model/src/qwen3_5/` | Mamba SSM Hybrid, HarmonicSSM |
 | Gemma4 | `model/src/gemma4/` | Hybrid Attention |
 | Mixtral | `model/src/mixtral/` | Sparse MoE |
+
+### Attention Mechanisms
+
+| Type | Class | Location | Description |
+|------|-------|----------|-------------|
+| GQA | `GqaAttention` | `components/attention/gqa.rs` | Grouped-query attention |
+| MLA | `MlaAttention` | `components/attention/mla.rs` | Multi-head Latent Attention (32x KV cache compression) |
+| Qwen3Attention | `Qwen3Attention` | `qwen3/attention.rs` | GQA + RoPE + QK-Norm wrapper |
+| Qwen3MlaAttention | `Qwen3MlaAttention` | `qwen3/mla_attention.rs` | MLA wrapper for Qwen3 |
 
 ### Benefits
 
@@ -343,9 +359,9 @@ The project uses a shared components architecture to reduce code duplication:
 ```
 crates/model/src/components/
 ├── attention/
-│   ├── mod.rs         # GqaAttention, utility functions
+│   ├── mod.rs         # GqaAttention, MlaAttention, utility functions
 │   ├── gqa.rs         # Grouped-query attention implementation
-│   └── flash.rs       # Flash attention placeholder
+│   └── mla.rs         # Multi-head Latent Attention (DeepSeek-V3)
 ├── mlp/
 │   ├── mod.rs
 │   └── swiglu.rs      # SwiGLU feed-forward
@@ -357,7 +373,9 @@ crates/model/src/components/
 │   ├── mod.rs
 │   ├── rope.rs        # Standard RoPE
 │   └── mrope.rs       # MRoPE (Qwen3.5)
-└── block.rs           # TransformerBlock base class
+├── block.rs           # StandardBlock (unused, model-specific blocks preferred)
+├── ssm.rs             # SSMLayer, MambaBlock, SSMHarmonicSSMLayer
+└── vision.rs          # VisionEncoder (placeholder)
 ```
 
 ### Feature Flags
@@ -518,6 +536,7 @@ error!(error = %e, "Model forward failed");
 | `core/scheduler/batch_composer.rs` | debug | Batch composition |
 | `core/scheduler/memory/allocator.rs` | debug/trace | Block allocation/free |
 | `core/sampling.rs` | trace | Sampling strategy |
-| `model/components/attention/gqa.rs` | trace | Attention layer |
+| `model/components/attention/gqa.rs` | trace | GQA attention layer |
+| `model/components/attention/mla.rs` | trace | MLA attention layer |
 | `model/paged_tensor/tensor_store.rs` | trace | KV cache read/write |
 | `core/kv_cache/prefix_cache.rs` | trace | Prefix cache hit/miss |
