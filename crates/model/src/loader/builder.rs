@@ -122,20 +122,30 @@ impl ModelLoader {
     }
 
     pub fn architecture(&self) -> ConfigArchitecture {
-        ConfigArchitecture::Llama
+        ARCHITECTURE_REGISTRY
+            .detect(&self.inner.config_json)
+            .map(|name| match name.as_str() {
+                "llama" => ConfigArchitecture::Llama,
+                "mistral" => ConfigArchitecture::Mistral,
+                "qwen3" | "qwen2" => ConfigArchitecture::Qwen3,
+                "qwen3.5" => ConfigArchitecture::Qwen35,
+                "gemma4" => ConfigArchitecture::Gemma4,
+                "mixtral" => ConfigArchitecture::Mixtral,
+                _ => ConfigArchitecture::Llama,
+            })
+            .unwrap_or(ConfigArchitecture::Llama)
     }
 
     pub fn config_json(&self) -> &serde_json::Value {
         &self.inner.config_json
     }
 
-    pub fn load_config(&self) -> Result<crate::qwen3_config::Qwen3Config> {
+    pub fn load_config<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
         let config_path = Path::new(&self.inner.model_dir).join("config.json");
         let content = std::fs::read_to_string(config_path)
             .map_err(|e| candle_core::Error::msg(format!("Failed to read config: {}", e)))?;
-        let config: crate::qwen3_config::Qwen3Config = serde_json::from_str(&content)
-            .map_err(|e| candle_core::Error::msg(format!("Failed to parse config: {}", e)))?;
-        Ok(config)
+        serde_json::from_str(&content)
+            .map_err(|e| candle_core::Error::msg(format!("Failed to parse config: {}", e)))
     }
 
     pub fn load_weights(&self) -> Result<std::collections::HashMap<String, Tensor>> {

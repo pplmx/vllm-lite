@@ -12,6 +12,29 @@ use crate::qwen3_config::Qwen3Config;
 
 use super::hybrid::Qwen35HybridModel;
 
+pub fn remap_qwen35_weight_keys(weights: HashMap<String, Tensor>) -> HashMap<String, Tensor> {
+    let mut remapped = HashMap::new();
+
+    for (key, value) in weights {
+        let new_key = if key.starts_with("model.language_model.") {
+            key.replace("model.language_model.", "model.")
+        } else if key.starts_with("lm_head.") || key.starts_with("model.lm_head.") {
+            if key.starts_with("lm_head.") {
+                key.replace("lm_head.", "model.lm_head.")
+            } else {
+                key
+            }
+        } else if key == "model.norm.weight" {
+            "model.final_layernorm.weight".to_string()
+        } else {
+            key
+        };
+        remapped.insert(new_key, value);
+    }
+
+    remapped
+}
+
 pub struct Qwen35Architecture;
 
 impl Qwen35Architecture {
@@ -60,7 +83,7 @@ impl Architecture for Qwen35Architecture {
         weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
     ) -> Result<Box<dyn ModelBackend>> {
-        let remapped_weights = crate::loader::remap_qwen35_weight_keys(weights);
+        let remapped_weights = remap_qwen35_weight_keys(weights);
 
         let qwen_config = Qwen3Config {
             vocab_size: Some(config.vocab_size),
@@ -82,7 +105,7 @@ impl Architecture for Qwen35Architecture {
     }
 
     fn remap_weights(&self, weights: HashMap<String, Tensor>) -> HashMap<String, Tensor> {
-        crate::loader::remap_qwen35_weight_keys(weights)
+        remap_qwen35_weight_keys(weights)
     }
 }
 
