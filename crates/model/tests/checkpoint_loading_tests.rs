@@ -19,7 +19,7 @@ mod tests {
 
     #[test]
     fn test_safetensors_loader_can_load() {
-        use vllm_model::loader::format::{FormatLoader, SafetensorsLoader};
+        use vllm_model::loader::SafetensorsLoader;
         let path = Path::new("model.safetensors");
         assert!(SafetensorsLoader::can_load(path));
         let path = Path::new("model.bin");

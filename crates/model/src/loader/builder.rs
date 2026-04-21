@@ -193,3 +193,139 @@ impl ModelLoader {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_builder_new() {
+        let loader = ModelLoader::new(Device::Cpu);
+        assert_eq!(loader.inner.num_kv_blocks, 1024);
+    }
+
+    #[test]
+    fn test_builder_requires_model_dir() {
+        let loader = ModelLoader::builder(Device::Cpu).build();
+        assert!(loader.is_err());
+    }
+
+    #[test]
+    fn test_builder_with_config_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+        std::fs::write(&config_path, r#"{"model_type": "llama"}"#).unwrap();
+
+        let loader = ModelLoader::builder(Device::Cpu)
+            .with_model_dir(temp_dir.path().to_str().unwrap().to_string())
+            .build()
+            .unwrap();
+
+        assert_eq!(loader.inner.model_dir, temp_dir.path().to_str().unwrap());
+        assert_eq!(loader.inner.num_kv_blocks, 1024);
+    }
+
+    #[test]
+    fn test_builder_with_kv_blocks() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+        std::fs::write(&config_path, r#"{"model_type": "llama"}"#).unwrap();
+
+        let loader = ModelLoader::builder(Device::Cpu)
+            .with_model_dir(temp_dir.path().to_str().unwrap().to_string())
+            .with_kv_blocks(2048)
+            .build()
+            .unwrap();
+        assert_eq!(loader.inner.num_kv_blocks, 2048);
+    }
+
+    #[test]
+    fn test_device_getter() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+        std::fs::write(&config_path, r#"{"model_type": "llama"}"#).unwrap();
+
+        let loader = ModelLoader::builder(Device::Cpu)
+            .with_model_dir(temp_dir.path().to_str().unwrap().to_string())
+            .build()
+            .unwrap();
+        let _device = loader.device();
+    }
+
+    #[test]
+    fn test_config_json_getter() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+        std::fs::write(&config_path, r#"{"model_type": "llama"}"#).unwrap();
+
+        let loader = ModelLoader::builder(Device::Cpu)
+            .with_model_dir(temp_dir.path().to_str().unwrap().to_string())
+            .build()
+            .unwrap();
+        let json = loader.config_json();
+        assert_eq!(json.get("model_type").and_then(|v| v.as_str()), Some("llama"));
+    }
+
+    #[test]
+    fn test_load_config_generic() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+        std::fs::write(&config_path, r#"{"test": "value"}"#).unwrap();
+
+        let loader = ModelLoader::builder(Device::Cpu)
+            .with_model_dir(temp_dir.path().to_str().unwrap().to_string())
+            .build()
+            .unwrap();
+
+        #[derive(serde::Deserialize, Debug, PartialEq)]
+        struct TestConfig {
+            test: String,
+        }
+
+        let config: TestConfig = loader.load_config().unwrap();
+        assert_eq!(config.test, "value");
+    }
+
+    #[test]
+    fn test_load_config_invalid_json() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+        std::fs::write(&config_path, "invalid json").unwrap();
+
+        let loader = ModelLoader::builder(Device::Cpu)
+            .with_model_dir(temp_dir.path().to_str().unwrap().to_string())
+            .build();
+
+        assert!(loader.is_err());
+    }
+
+    #[test]
+    fn test_clone() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+        std::fs::write(&config_path, r#"{"model_type": "llama"}"#).unwrap();
+
+        let loader = ModelLoader::builder(Device::Cpu)
+            .with_model_dir(temp_dir.path().to_str().unwrap().to_string())
+            .build()
+            .unwrap();
+        let cloned = loader.clone();
+        assert_eq!(loader.inner.model_dir, cloned.inner.model_dir);
+        assert_eq!(loader.inner.num_kv_blocks, cloned.inner.num_kv_blocks);
+    }
+
+    #[test]
+    fn test_architecture_getter() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+        std::fs::write(&config_path, r#"{"model_type": "llama"}"#).unwrap();
+
+        let loader = ModelLoader::builder(Device::Cpu)
+            .with_model_dir(temp_dir.path().to_str().unwrap().to_string())
+            .build()
+            .unwrap();
+        let arch = loader.architecture();
+        assert_eq!(arch, ConfigArchitecture::Llama);
+    }
+}
