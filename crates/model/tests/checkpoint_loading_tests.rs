@@ -2,7 +2,14 @@
 mod tests {
     use candle_core::Device;
     use std::path::Path;
-    use vllm_model::loader::do_load_weights;
+    use vllm_model::loader::load_checkpoint;
+
+    fn do_load_weights(
+        model_dir: &str,
+        device: &Device,
+    ) -> candle_core::Result<std::collections::HashMap<String, candle_core::Tensor>> {
+        load_checkpoint(Path::new(model_dir), device)
+    }
 
     #[test]
     fn test_format_loader_trait_exists() {
@@ -116,7 +123,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_qwen35_remapped_weight_structure() {
-        use vllm_model::loader::remap_qwen35_weight_keys;
+        use vllm_model::qwen3_5::arch::remap_qwen35_weight_keys;
 
         let model_path = "/models/Qwen3.5-0.8B";
         let device = Device::Cpu;
