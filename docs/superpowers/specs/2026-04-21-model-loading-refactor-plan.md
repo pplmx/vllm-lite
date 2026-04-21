@@ -1,8 +1,8 @@
-# Model Loading 架构重构计划 (修订版)
+# Model Loading 架构重构计划 (最终版)
 
 **日期**: 2026-04-21
-**版本**: v2 (修订自 v1)
-**目标**: 消除代码重复、修复安全隐患、补全缺失功能、提升可维护性
+**版本**: v3 (最终版 - 包含 GGUF 完整实现)
+**目标**: 消除代码重复、修复安全隐患、补全 GGUF 功能、提升可维护性
 
 ---
 
@@ -16,7 +16,6 @@
 4. **GGUF 占位** - 声称支持 GGUF 但实际返回空 HashMap
 5. **紧耦合** - `load_config()` 硬编码 Qwen3Config
 6. **关注点混乱** - Qwen3.5 特定的 remap 逻辑在通用模块中
-7. **配置返回硬编码** - `architecture()` 永远返回 Llama, 与实际模型无关
 
 ---
 
@@ -24,53 +23,21 @@
 
 1. 统一设计风格, 消除代码重复 (~180 行)
 2. 添加安全的锁处理 + 优化 detect 缓存
-3. 完成 GGUF 实现或移除 placeholder
+3. 实现完整的 GGUF 加载 (Q4_K_M, Q5_K_M, Q8_0)
 4. 通用化 config 加载
 5. 测试覆盖率从 ~40% 提升到 ~80%
 
 ---
 
-## 执行顺序 (修订)
+## 执行顺序
 
 ```
-1. Phase 4: 先解耦 (不依赖 Phase 1)
-   │
-   ├── Phase 3: GGUF 决策
-   │
-   ├── Phase 2: 修锁 + detect 缓存
-   │
-   ├── Phase 1: 消除重复 (统一设计)
-   │
-   └── Phase 5: 添加测试
+Phase 4 → Phase 2 → Phase 3 → Phase 1 → Phase 5
+   │         │        │        │         │
+   │         │        │        │         │
+   └─────────┴────────┴────────┴─────────┘
+                    最终目标
 ```
-
-**原因**:
-- Phase 4 可独立进行, 不会破坏现有代码
-- Phase 3 决策影响 Phase 1 的设计
-- Phase 1 是核心重构, 放在后面更安全
-
----
-
-## Phase 3: GGUF 需求确认 (先行)
-
-**需要用户决策**:
-
-| Option | 内容 | 工时 | 适用场景 |
-|--------|------|------|----------|
-| **A** | 实现完整 GGUF 加载 | 6h | 需要支持 .gguf 量化模型 |
-| **B** | 移除 placeholder | 1h | 只用 HF Safetensors 格式 |
-
-**现状**:
-- 项目中所有模型均为 HF Safetensors 格式
-- 没有 GGUF 模型测试用例
-- GGUF placeholder 只返回空 HashMap
-
-**建议**: 选择 Option B (移除), 理由:
-1. 当前不依赖 GGUF
-2. GGUF 解析复杂, 需要第三方库 (gguf-rs)
-3. 简化代码, 减少维护负担
-
-**Action Required**: 请确认 Option A 或 B
 
 ---
 
@@ -86,16 +53,15 @@
 |---|------|------|------|
 | 4.1 | 移动 `remap_qwen35_weight_keys` | `loader/mod.rs` → `qwen3_5/arch.rs` | 架构特定逻辑归位 |
 | 4.2 | 创建通用 `load_config<T>` | `loader/builder.rs` | 泛型替代硬编码 |
-| 4.3 | 移除/修正 `architecture()` | `loader/builder.rs:124-126` | 永远返回 Llama 是 bug |
+| 4.3 | 修正 `architecture()` | `loader/builder.rs:124-126` | 使用 registry 检测 |
 | 4.4 | 删除 `detect_architecture()` | `loader/mod.rs` | 被 `ARCHITECTURE_REGISTRY.detect()` 替代 |
-| 4.5 | 验证其他模型加载 | - | 添加 Llama/Mistral 加载测试 |
+| 4.5 | 清理 `do_load_weights` | `loader/mod.rs` | 删除, 使用 `load_checkpoint()` |
 
 **代码变更**:
 
 ```rust
-// builder.rs:124-126 - 删除或修正
+// builder.rs:124-126 - 修正
 pub fn architecture(&self) -> ConfigArchitecture {
-    // 当前永远返回 Llama, 应该使用 registry 检测
     ARCHITECTURE_REGISTRY
         .detect(&self.inner.config_json)
         .and_then(|name| match name.as_str() {
@@ -119,24 +85,23 @@ pub fn load_config<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
         .map_err(|e| candle_core::Error::msg(format!("Failed to parse config: {}", e)))
 }
 
-// mod.rs:63-84 - 移动到 qwen3_5/arch.rs
-pub fn remap_qwen35_weight_keys(weights: HashMap<String, Tensor>) -> HashMap<String, Tensor> {
-    // ... existing implementation
-}
-
-// mod.rs:43-61 - 删除 detect_architecture()
-// 已被 ARCHITECTURE_REGISTRY.detect() 替代
+// mod.rs - 删除以下内容:
+// - detect_architecture()
+// - remap_qwen35_weight_keys() (移动到 qwen3_5/arch.rs)
+// - do_load_weights()
+// - 相关 tests
 ```
+
+**API 兼容性检查**:
+- `load_config()` 返回类型从 `Qwen3Config` 变为泛型 `T`
+- 调用方需要修改: `load_config::<Qwen3Config>()`
+- `do_load_weights()` 删除, 使用 `load_checkpoint()` 替代
 
 **验证**:
 ```bash
 cargo test -p vllm-model
 cargo build -p vllm-model --all-features
 ```
-
-**API 兼容性检查**:
-- `load_config()` 返回类型从 `Qwen3Config` 变为泛型 `T`
-- 调用方需要修改: `load_config::<Qwen3Config>()`
 
 **估计工时**: 2-3 小时
 
@@ -146,7 +111,7 @@ cargo build -p vllm-model --all-features
 
 **目标**: 安全处理 RwLock, 优化 detect 缓存
 
-**前置条件**: Phase 4 (使用新的 `Architecture` enum)
+**前置条件**: Phase 4
 
 **任务**:
 
@@ -162,8 +127,13 @@ cargo build -p vllm-model --all-features
 **代码变更**:
 
 ```rust
-// arch/registry.rs - 优化 detect 缓存
+// arch/registry.rs
 impl ArchitectureRegistry {
+    // 使用 ok() 处理 poison 场景
+    pub fn get(&self, name: &str) -> Option<Box<dyn Architecture>> {
+        self.architectures.read().ok()?.get(name).map(|factory| factory())
+    }
+
     pub fn detect(&self, config_json: &Value) -> Option<String> {
         let regs = self.architectures.read().ok()?;
         for (name, factory) in regs.iter() {
@@ -175,30 +145,220 @@ impl ArchitectureRegistry {
         None
     }
 }
-
-// Note: RwLock poison 场景在单线程初始化时几乎不会发生
-// 使用 expect() 而不是 map_err() 是合理的, 因为这表示代码有 bug
 ```
+
+**注**: 使用 `expect()` 而非 `map_err()` 对于 `register`, 因为这表示代码 bug。
 
 **估计工时**: 1-2 小时
 
 ---
 
-## Phase 1: 消除代码重复 (统一设计)
+## Phase 3: 实现 GGUF 加载 (核心任务)
+
+**目标**: 实现完整的 GGUF checkpoint 加载
+
+**前置条件**: Phase 4 (提供基础结构)
+
+**GGUF 格式概述**:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ GGUF File Structure                                         │
+├─────────────────────────────────────────────────────────────┤
+│ Magic (4 bytes): "GGUF"                                     │
+│ Version (4 bytes): 3                                        │
+│ ─────────────────────────────────────────────────────────── │
+│ Tensor Count (8 bytes): N                                   │
+│ Metadata Part Count (8 bytes): M                            │
+│ ─────────────────────────────────────────────────────────── │
+│ Metadata Pairs (M items):                                   │
+│   - Key (string): "general.architecture", etc.              │
+│   - Type (1 byte): UINT8, INT8, UINT32, INT32, FLOAT32...   │
+│   - Value (variable): based on type                         │
+│ ─────────────────────────────────────────────────────────── │
+│ Tensor Infos (N items):                                     │
+│   - Name (string)                                           │
+│   - NDimensions (4 bytes): D                                │
+│   - Dimensions (D × 8 bytes): u64[]                         │
+│   - Type (4 bytes): F32, F16, Q4_0, Q4_K_M, Q5_K_M...       │
+│   - Offset (8 bytes): byte offset in file                   │
+│ ─────────────────────────────────────────────────────────── │
+│ Padding (optional)                                          │
+│ ─────────────────────────────────────────────────────────── │
+│ Tensor Data (variable): raw bytes                           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**支持的量化格式**:
+
+| 格式 | 位宽 | 质量 | 复杂度 | 状态 |
+|------|------|------|--------|------|
+| F32 | 32 | 100% | 低 | ✅ 已支持 (通过 StorageTensor::Fp32) |
+| F16 | 16 | 100% | 低 | ✅ 已支持 (通过 StorageTensor::Fp16) |
+| Q8_0 | 8 | ~99% | 低 | 🚧 待实现 |
+| Q5_K_M | 5 | ~97% | 中 | 🚧 待实现 |
+| Q4_K_M | 4 | ~95% | 中 | 🚧 待实现 |
+| Q4_0 | 4 | ~93% | 低 | 🚧 待实现 |
+
+### 实现任务
+
+| # | 任务 | 工时 | 描述 |
+|---|------|------|------|
+| 3.1 | 依赖检查 | 0.5h | 确认 `gguf` crate API |
+| 3.2 | 基础文件解析 | 1h | 读取 magic, version, tensor count |
+| 3.3 | 元数据解析 | 1h | 解析 kv 键值对 |
+| 3.4 | 张量信息解析 | 1h | 读取 name, shape, dtype, offset |
+| 3.5 | Q4_0 解码 | 1.5h | 最简单的 4-bit 量化 |
+| 3.6 | Q8_0 解码 | 1h | 8-bit 量化 |
+| 3.7 | Q4_K_M 解码 | 2h | 混合精度, 带 scale/zero |
+| 3.8 | Q5_K_M 解码 | 2h | 5-bit 混合精度 |
+| 3.9 | 集成到 FormatLoader | 1h | 替换 placeholder |
+| 3.10 | 测试 | 3h | 单元测试 + 集成测试 |
+
+**小计**: 14-15h
+
+**代码结构**:
+
+```rust
+// crates/model/src/quantize/gguf.rs (重写)
+
+#[derive(Debug)]
+pub struct GgufFile {
+    pub version: u32,
+    pub tensors: Vec<TensorInfo>,
+    pub metadata: HashMap<String, GgufValue>,
+}
+
+#[derive(Debug)]
+pub struct TensorInfo {
+    pub name: String,
+    pub shape: Vec<u64>,
+    pub dtype: GgufDtype,
+    pub offset: u64,
+    pub size: u64,
+}
+
+#[derive(Debug, Clone)]
+pub enum GgufDtype {
+    F32,
+    F16,
+    Q8_0,
+    Q4_0,
+    Q4_K_M,
+    Q5_K_M,
+    // ... 其他格式
+}
+
+pub fn load_gguf_tensors(path: &Path, device: &Device) -> Result<HashMap<String, StorageTensor>> {
+    // 1. 读取文件头
+    let mut file = std::fs::File::open(path)?;
+    let magic = read_u32(&mut file)?;
+    assert_eq!(magic, 0x46554647, "Not a GGUF file"); // "GGUF" in little-endian
+
+    let version = read_u32(&mut file)?;
+    let tensor_count = read_u64(&mut file)?;
+    let metadata_count = read_u64(&mut file)?;
+
+    // 2. 读取元数据
+    let mut metadata = HashMap::new();
+    for _ in 0..metadata_count {
+        let key = read_string(&mut file)?;
+        let value = read_value(&mut file)?;
+        metadata.insert(key, value);
+    }
+
+    // 3. 读取张量信息
+    let mut tensors = Vec::new();
+    for _ in 0..tensor_count {
+        let name = read_string(&mut file)?;
+        let n_dims = read_u32(&mut file)? as usize;
+        let shape = (0..n_dims).map(|_| read_u64(&mut file)).collect::<Result<Vec<_>>>()?;
+        let dtype = read_dtype(&mut file)?;
+        let offset = read_u64(&mut file)?;
+        let size = calculate_tensor_size(&shape, &dtype)?;
+        tensors.push(TensorInfo { name, shape, dtype, offset, size });
+    }
+
+    // 4. 读取张量数据
+    let mut result = HashMap::new();
+    for info in tensors {
+        let data = read_tensor_data(&mut file, &info)?;
+        let storage = match info.dtype {
+            GgufDtype::F32 => StorageTensor::Fp32(Tensor::from_slice(
+                cast_to_f32(&data), &info.shape, device
+            )?),
+            GgufDtype::F16 => StorageTensor::Fp16(Tensor::from_slice(
+                cast_to_f16(&data), &info.shape, device
+            )?),
+            GgufDtype::Q8_0 => decode_q8_0(&data, &info.shape, device)?,
+            GgufDtype::Q4_K_M => decode_q4_k_m(&data, &info.shape, device)?,
+            GgufDtype::Q5_K_M => decode_q5_k_m(&data, &info.shape, device)?,
+            // ... 其他格式
+        };
+        result.insert(info.name, storage);
+    }
+
+    Ok(result)
+}
+
+// 量化解码函数
+fn decode_q4_k_m(data: &[u8], shape: &[u64], device: &Device) -> Result<StorageTensor> {
+    // Q4_K_M 布局:
+    // - 每 256 元素为一组 (block)
+    // - 每 block: 128 字节量化数据 + 12 字节 scale/zero + 2 字节 (unused)
+    // - scale: float16 (2 bytes), 6 个
+    // - zero: float16 (2 bytes), 6 个
+    // - 量化数据: 4 bits per value, 128 values = 64 bytes
+
+    let block_size = 256;
+    let elements_per_block = 128; // Q4_K_M 每 block 128 值
+    let total_elements: usize = shape.iter().product();
+    let num_blocks = (total_elements + block_size - 1) / block_size;
+
+    let mut output = Vec::with_capacity(total_elements);
+
+    for block_idx in 0..num_blocks {
+        let block_offset = block_idx * 140; // 64 + 12 + padding
+        let quant_data = &data[block_offset..block_offset + 64];
+
+        // 读取 scales 和 zeros (各 6 个 float16)
+        let scales = read_float16_array(&data[block_offset + 64..], 6)?;
+        let zeros = read_float16_array(&data[block_offset + 68..], 6)?;
+
+        // 解码 128 个值
+        for i in 0..elements_per_block {
+            let byte_idx = i / 2;
+            let bit_shift = if i % 2 == 0 { 0 } else { 4 };
+            let q4_val = (quant_data[byte_idx] >> bit_shift) & 0x0F;
+
+            let scale_idx = i / 32;
+            let dequant = (f32::from(scales[scale_idx]) * (q4_val as f32 - f32::from(zeros[scale_idx])));
+
+            output.push(dequant);
+        }
+    }
+
+    let tensor = Tensor::from_slice(&output, shape, device)?;
+    Ok(StorageTensor::Fp32(tensor))
+}
+```
+
+**验证**:
+```bash
+# 需要实际 GGUF 模型文件测试
+cargo test -p vllm-model -- gguf
+cargo build -p vllm-model --features "gguf"
+```
+
+**估计工时**: 14-15 小时
+
+---
+
+## Phase 1: 消除代码重复
 
 **目标**: 创建统一的 checkpoint 加载模块
 
-**前置条件**: Phase 3 决策 + Phase 4 + Phase 2
-
-**设计决策**:
-
-| 选项 | 设计 | 优点 | 缺点 |
-|------|------|------|------|
-| **A** | trait-based (OOP) | 符合现有 `format.rs` | 调用复杂 |
-| **B** | functional (过程式) | 简单直接 | 扩展性差 |
-| **C** | hybrid | 最佳平衡 | 稍复杂 |
-
-**推荐**: Option C (Hybrid) - 保持 `FormatLoader` trait, 但提供 simple wrapper
+**前置条件**: Phase 2 + Phase 3 (基础结构完成)
 
 **任务**:
 
@@ -214,28 +374,29 @@ impl ArchitectureRegistry {
 **新文件结构**:
 
 ```rust
-// crates/model/src/loader/io.rs
+// crates/model/src/loader/
+├── mod.rs           # 模块导出 (简化)
+├── builder.rs       # ModelLoaderBuilder (不变)
+├── format.rs        # FormatLoader trait (保留)
+├── io.rs            # 新增: 统一 I/O 工具
+├── checkpoint.rs    # 新增: 统一加载逻辑
+└── tests/           # 可选: 集成测试
+
+// io.rs
 pub fn load_file_mmap_or_read(path: &Path) -> Result<Vec<u8>> { ... }
 pub fn find_safetensors_files(model_dir: &Path) -> Result<Vec<PathBuf>> { ... }
 pub fn convert_tensor(view: &TensorView, device: &Device) -> Result<Tensor> { ... }
 
-// crates/model/src/loader/checkpoint.rs
+// checkpoint.rs
 pub fn load_checkpoint(path: &Path, device: &Device) -> Result<HashMap<String, Tensor>> {
-    // 使用 FormatLoader trait
+    if SafetensorsLoader::can_load(path) {
+        SafetensorsLoader::load(path, device)
+    } else if GgufLoader::can_load(path) {
+        GgufLoader::load(path, device)
+    } else {
+        Err(candle_core::Error::msg("Unsupported format"))
+    }
 }
-
-// crates/model/src/loader/mod.rs (简化)
-pub mod builder;
-pub mod format;
-pub mod io;        // 新增
-pub mod checkpoint; // 新增
-
-pub use builder::{ModelLoader, ModelLoaderBuilder};
-pub use format::FormatLoader;
-pub use checkpoint::load_checkpoint;
-
-// 删除: load_file, find_safetensors_files, convert_tensor, do_load_weights
-// 保留: remap_qwen35_weight_keys (移动后)
 ```
 
 **验证**:
@@ -243,12 +404,6 @@ pub use checkpoint::load_checkpoint;
 cargo test -p vllm-model -- loader
 cargo clippy -p vllm-model
 ```
-
-**API 兼容性**:
-- 删除 `do_load_weights()` - 使用 `load_checkpoint()` 替代
-- 删除 `load_file()` - 内部使用
-- 删除 `find_safetensors_files()` - 内部使用
-- 删除 `convert_tensor()` - 内部使用
 
 **估计工时**: 3-4 小时
 
@@ -258,7 +413,7 @@ cargo clippy -p vllm-model
 
 **目标**: 提升测试覆盖率
 
-**前置条件**: Phase 1 + 2 + 4 全部完成
+**前置条件**: Phase 1 + 2 + 3 + 4 全部完成
 
 **任务**:
 
@@ -274,8 +429,11 @@ cargo clippy -p vllm-model
 | 5.8 | `test_io_load_file_mmap` | `loader/io.rs` | mmap 路径 |
 | 5.9 | `test_io_convert_bf16` | `loader/io.rs` | dtype 转换 |
 | 5.10 | `test_io_convert_f16` | `loader/io.rs` | dtype 转换 |
+| 5.11 | `test_gguf_basic_parse` | `quantize/gguf.rs` | 文件解析 |
+| 5.12 | `test_gguf_q4_decode` | `quantize/gguf.rs` | Q4 解码 |
+| 5.13 | `test_gguf_q8_decode` | `quantize/gguf.rs` | Q8 解码 |
 
-**测试位置**: Rust 惯例是 `#[cfg(test)] mod tests` 在原文件中
+**注**: GGUF 测试需要真实模型文件或生成的测试数据
 
 **验证**:
 ```bash
@@ -287,62 +445,35 @@ cargo test -p vllm-model
 
 ---
 
-## Phase 3 Option B: 移除 GGUF (如果选择 B)
-
-**目标**: 移除 GGUF placeholder 和 feature flag
-
-**任务**:
-
-| # | 任务 | 文件 | 变更 |
-|---|------|------|------|
-| 3.1 | 移除 GGUF feature flag | `Cargo.toml` | 删除 `gguf` feature |
-| 3.2 | 移除 `GgufLoader` | `loader/format.rs` | 删除 feature-gated code |
-| 3.3 | 移除 `quantize/gguf.rs` | - | 删除文件 |
-| 3.4 | 更新文档 | `AGENTS.md`, `README` | 移除 GGUF 引用 |
-
-**验证**:
-```bash
-cargo build -p vllm-model --all-features  # 应该不包含 gguf
-```
-
-**估计工时**: 1 小时
-
----
-
-## 工时估算 (修订)
+## 工时估算 (最终版)
 
 | Phase | 任务 | 工时 | 前置 |
 |-------|------|------|------|
-| 3 | GGUF 决策 | - | 无 |
 | 4 | 解耦架构 | 2-3h | 无 |
 | 2 | 修锁 + 缓存 | 1-2h | 4 |
+| 3 | GGUF 实现 | 14-15h | 4 |
 | 1 | 消除重复 | 3-4h | 2, 3 |
-| 3B | 移除 GGUF (Option B) | 1h | 无 |
-| 5 | 添加测试 | 3-4h | 1, 2, 4 |
-| **总计 (Option B)** | | **10-14h** | |
+| 5 | 添加测试 | 3-4h | 1, 2, 3, 4 |
+| **总计** | | **23-28h** | |
 
 ---
 
-## 依赖关系图 (修订)
+## 依赖关系图 (最终版)
 
 ```
-Phase 3: 决策
-    │
-    ├── Option A: 实现 GGUF (跳过 3B)
-    │
-    └── Option B: 移除 GGUF (执行 3B)
-           │
-           ▼
 Phase 4: 解耦架构 (独立)
     │
     ▼
 Phase 2: 修锁 + 缓存 (依赖 4)
     │
     ▼
+Phase 3: GGUF 实现 (依赖 4)
+    │
+    ▼
 Phase 1: 消除重复 (依赖 2, 3)
     │
     ▼
-Phase 5: 添加测试 (依赖 1, 2, 4)
+Phase 5: 添加测试 (依赖 1, 2, 3, 4)
 ```
 
 ---
@@ -351,31 +482,32 @@ Phase 5: 添加测试 (依赖 1, 2, 4)
 
 | 风险 | 影响 | 缓解 |
 |------|------|------|
-| Phase 4 改变 API | 低 | 显式 API 变更, 有测试 |
+| GGUF 格式复杂性 | 高 | 按量化格式分步实现 |
+| gguf crate API 不稳定 | 中 | 锁定版本号 |
+| 测试需要真实文件 | 高 | 生成合成测试数据 |
 | Phase 1 改动影响大 | 中 | 放在后面, 已有测试保护 |
-| GGUF Option A 复杂 | 高 | 先选 B 简化 |
-| 测试破坏现有功能 | 中 | 确保 CI 全量通过 |
 
 ---
 
 ## 验收标准
 
-1. `cargo clippy -p vllm-model` 无警告
-2. 新增 ~10 个测试用例
-3. `cargo test -p vllm-model` 全部通过
+1. `cargo clippy -p vllm-model --all-features` 无警告
+2. 新增 ~13 个测试用例
+3. `cargo test -p vllm-model --all-features` 全部通过
 4. 无代码重复 (使用 `cargo machete` 检查)
 5. `load_checkpoint()` 是唯一公开的加载入口
+6. GGUF Q4_K_M, Q5_K_M, Q8_0 格式可用
 
 ---
 
-## Action Required
+## 实施建议
 
-**请确认 Phase 3 决策**:
-
-1. **Option A** - 实现完整 GGUF 加载 (6h)
-2. **Option B** - 移除 GGUF placeholder (1h) ← 推荐
+1. **每天 4-6 小时**: 预计 5-7 天完成
+2. **每日检查点**: 每天结束前运行 `cargo test`
+3. **GGUF 测试**: 使用 llama.cpp 工具生成测试数据
+4. **PR 策略**: 每个 Phase 一个 PR, 便于 review
 
 ---
 
-*计划修订日期: 2026-04-21*
-*预计完成: 2-3 天 (按每天 4-6 小时)*
+*计划最终版日期: 2026-04-21*
+*预计完成: 5-7 天 (按每天 4-6 小时)*
