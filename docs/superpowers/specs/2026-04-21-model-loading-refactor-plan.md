@@ -1,6 +1,7 @@
-# Model Loading 架构重构计划
+# Model Loading 架构重构计划 (修订版)
 
 **日期**: 2026-04-21
+**版本**: v2 (修订自 v1)
 **目标**: 消除代码重复、修复安全隐患、补全缺失功能、提升可维护性
 
 ---
@@ -10,135 +11,74 @@
 当前 model loading 架构存在以下问题:
 
 1. **代码重复** - `load_file`, `find_safetensors`, `convert_tensor` 在 `mod.rs` 和 `format.rs` 中重复定义
-2. **安全隐患** - `RwLock::write().unwrap()` 在锁被 poison 时会 panic
-3. **GGUF 占位** - 声称支持 GGUF 但实际返回空 HashMap
-4. **紧耦合** - `load_config()` 硬编码 Qwen3Config
-5. **关注点混乱** - Qwen3.5 特定的 remap 逻辑在通用模块中
+2. **设计风格不统一** - `mod.rs` 使用过程式, `format.rs` 使用 trait-based (OOP)
+3. **安全隐患** - `RwLock::read().unwrap()` 在锁被 poison 时会 panic
+4. **GGUF 占位** - 声称支持 GGUF 但实际返回空 HashMap
+5. **紧耦合** - `load_config()` 硬编码 Qwen3Config
+6. **关注点混乱** - Qwen3.5 特定的 remap 逻辑在通用模块中
+7. **配置返回硬编码** - `architecture()` 永远返回 Llama, 与实际模型无关
 
 ---
 
 ## 目标
 
-1. 消除 3 处代码重复 (~150 行)
-2. 修复锁处理, 使用 `ok()`/`expect()` 替代 `unwrap()`
+1. 统一设计风格, 消除代码重复 (~180 行)
+2. 添加安全的锁处理 + 优化 detect 缓存
 3. 完成 GGUF 实现或移除 placeholder
 4. 通用化 config 加载
 5. 测试覆盖率从 ~40% 提升到 ~80%
 
 ---
 
-## 实施计划
+## 执行顺序 (修订)
 
-### Phase 1: 消除代码重复
-
-**目标**: 创建 `loader/io.rs` 统一工具函数
-
-**任务**:
-
-| # | 任务 | 文件 | 变更 |
-|---|------|------|------|
-| 1.1 | 创建 `crates/model/src/loader/io.rs` | 新文件 | 移动 `load_file_mmap_or_read` |
-| 1.2 | 创建 `find_safetensors_files` | `io.rs` | 从 `mod.rs` 移动 |
-| 1.3 | 创建 `convert_tensor` | `io.rs` | 从 `mod.rs` 移动 |
-| 1.4 | 更新 `loader/mod.rs` | `mod.rs` | 删除重复, 保留架构特定逻辑 |
-| 1.5 | 更新 `format.rs` | `format.rs` | 从 `io.rs` import |
-| 1.6 | 更新 `arch/qwen3_5/arch.rs` | `arch.rs` | 从 `io.rs` import |
-
-**验证**:
-```bash
-cargo test -p vllm-model -- loader
-cargo clippy -p vllm-model
+```
+1. Phase 4: 先解耦 (不依赖 Phase 1)
+   │
+   ├── Phase 3: GGUF 决策
+   │
+   ├── Phase 2: 修锁 + detect 缓存
+   │
+   ├── Phase 1: 消除重复 (统一设计)
+   │
+   └── Phase 5: 添加测试
 ```
 
-**估计工时**: 2-3 小时
+**原因**:
+- Phase 4 可独立进行, 不会破坏现有代码
+- Phase 3 决策影响 Phase 1 的设计
+- Phase 1 是核心重构, 放在后面更安全
 
 ---
 
-### Phase 2: 修复锁安全隐患
+## Phase 3: GGUF 需求确认 (先行)
 
-**目标**: 安全处理 RwLock, 添加错误处理
+**需要用户决策**:
 
-**任务**:
+| Option | 内容 | 工时 | 适用场景 |
+|--------|------|------|----------|
+| **A** | 实现完整 GGUF 加载 | 6h | 需要支持 .gguf 量化模型 |
+| **B** | 移除 placeholder | 1h | 只用 HF Safetensors 格式 |
 
-| # | 任务 | 文件 | 变更 |
-|---|------|------|------|
-| 2.1 | 修复 `register` 方法 | `arch/registry.rs:29-33` | `write().unwrap()` → `write().map_err()?` |
-| 2.2 | 修复 `get` 方法 | `arch/registry.rs:36-42` | `read().unwrap()` → `read().ok()` |
-| 2.3 | 修复 `detect` 方法 | `arch/registry.rs:44-53` | 使用 `read().ok()` |
-| 2.4 | 修复 `names` 方法 | `arch/registry.rs` | 同上 |
-| 2.5 | 添加错误类型 | `arch/mod.rs` | 添加 `RegistryError` |
+**现状**:
+- 项目中所有模型均为 HF Safetensors 格式
+- 没有 GGUF 模型测试用例
+- GGUF placeholder 只返回空 HashMap
 
-**代码变更示例**:
+**建议**: 选择 Option B (移除), 理由:
+1. 当前不依赖 GGUF
+2. GGUF 解析复杂, 需要第三方库 (gguf-rs)
+3. 简化代码, 减少维护负担
 
-```rust
-// Before (unsafe)
-pub fn register<A: Architecture>(&self, name: &str) {
-    self.architectures.write().unwrap().insert(name, Arc::new(|| Box::new(A::new())));
-}
-
-// After (safe)
-#[derive(Debug, thiserror::Error)]
-pub enum RegistryError {
-    #[error("architecture registry poisoned")]
-    Poisoned,
-    #[error("architecture '{0}' already registered")]
-    AlreadyRegistered(String),
-}
-
-pub fn register<A: Architecture>(&self, name: &str) -> Result<(), RegistryError> {
-    let mut guard = self.architectures.write()
-        .map_err(|_| RegistryError::Poisoned)?;
-    if guard.contains_key(name) {
-        return Err(RegistryError::AlreadyRegistered(name.to_string()));
-    }
-    guard.insert(name, Arc::new(|| Box::new(A::new())));
-    Ok(())
-}
-```
-
-**验证**:
-```bash
-cargo test -p vllm-model -- registry
-cargo clippy -p vllm-model
-```
-
-**估计工时**: 1-2 小时
+**Action Required**: 请确认 Option A 或 B
 
 ---
 
-### Phase 3: GGUF 实现或移除
-
-**决策点**: 需要确认是实现还是移除
-
-**Option A: 完成实现** (推荐如果需要 GGUF 支持)
-
-| # | 任务 | 文件 | 变更 |
-|---|------|------|------|
-| 3.1 | 添加 GGUF 解析结构 | `quantize/gguf.rs` | 定义 GGUFHeader, TensorInfo |
-| 3.2 | 实现文件头读取 | `quantize/gguf.rs` | 解析 magic, version, tensor count |
-| 3.3 | 实现张量元数据读取 | `quantize/gguf.rs` | 解析 name, shape, dtype, offset |
-| 3.4 | 实现 Q4_K_M 解码 | `quantize/gguf.rs` | 反量化逻辑 |
-| 3.5 | 实现 Q5_K_M 解码 | `quantize/gguf.rs` | (可选) |
-| 3.6 | 集成到 FormatLoader | `loader/format.rs` | 替换 placeholder |
-
-**Option B: 移除 placeholder**
-
-| # | 任务 | 文件 | 变更 |
-|---|------|------|------|
-| 3.1 | 移除 GGUF feature flag | `Cargo.toml` | 删除 `gguf` feature |
-| 3.2 | 移除 GgufLoader | `loader/format.rs` | 删除 feature-gated code |
-| 3.3 | 移除 quantize/gguf.rs | `quantize/gguf.rs` | 删除文件 |
-| 3.4 | 更新文档 | `AGENTS.md`, `README` | 移除 GGUF 引用 |
-
-**估计工时**:
-- Option A: 4-6 小时
-- Option B: 1 小时
-
----
-
-### Phase 4: 解耦架构特定逻辑
+## Phase 4: 解耦架构特定逻辑 (第 1 步)
 
 **目标**: 移除通用模块中的架构特定代码
+
+**前置条件**: 无 (可最先执行)
 
 **任务**:
 
@@ -146,97 +86,264 @@ cargo clippy -p vllm-model
 |---|------|------|------|
 | 4.1 | 移动 `remap_qwen35_weight_keys` | `loader/mod.rs` → `qwen3_5/arch.rs` | 架构特定逻辑归位 |
 | 4.2 | 创建通用 `load_config<T>` | `loader/builder.rs` | 泛型替代硬编码 |
-| 4.3 | 移除 `architecture()` dead code | `loader/builder.rs:124-126` | 删除未使用方法 |
-| 4.4 | 验证其他模型加载 | `tests/loader_tests.rs` | 添加 Llama/Mistral 加载测试 |
+| 4.3 | 移除/修正 `architecture()` | `loader/builder.rs:124-126` | 永远返回 Llama 是 bug |
+| 4.4 | 删除 `detect_architecture()` | `loader/mod.rs` | 被 `ARCHITECTURE_REGISTRY.detect()` 替代 |
+| 4.5 | 验证其他模型加载 | - | 添加 Llama/Mistral 加载测试 |
 
-**代码变更示例**:
+**代码变更**:
 
 ```rust
-// Before (hardcoded)
-pub fn load_config(&self) -> Result<Qwen3Config> {
-    let path = Path::new(&self.inner.model_dir).join("config.json");
-    let content = std::fs::read_to_string(path)?;
-    serde_json::from_str(&content).map_err(...)
+// builder.rs:124-126 - 删除或修正
+pub fn architecture(&self) -> ConfigArchitecture {
+    // 当前永远返回 Llama, 应该使用 registry 检测
+    ARCHITECTURE_REGISTRY
+        .detect(&self.inner.config_json)
+        .and_then(|name| match name.as_str() {
+            "llama" => Some(ConfigArchitecture::Llama),
+            "mistral" => Some(ConfigArchitecture::Mistral),
+            "qwen3" | "qwen2" => Some(ConfigArchitecture::Qwen3),
+            "qwen3.5" => Some(ConfigArchitecture::Qwen35),
+            "gemma4" => Some(ConfigArchitecture::Gemma4),
+            "mixtral" => Some(ConfigArchitecture::Mixtral),
+            _ => Some(ConfigArchitecture::Llama),
+        })
+        .unwrap_or(ConfigArchitecture::Llama)
 }
 
-// After (generic)
+// builder.rs:132-139 - 泛型化
 pub fn load_config<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
-    let path = Path::new(&self.inner.model_dir).join("config.json");
-    let content = std::fs::read_to_string(path)
-        .map_err(|e| LoadError::Io(e.to_string()))?;
+    let config_path = Path::new(&self.inner.model_dir).join("config.json");
+    let content = std::fs::read_to_string(config_path)
+        .map_err(|e| candle_core::Error::msg(format!("Failed to read config: {}", e)))?;
     serde_json::from_str(&content)
-        .map_err(|e| LoadError::Parse(e.to_string()))
+        .map_err(|e| candle_core::Error::msg(format!("Failed to parse config: {}", e)))
 }
+
+// mod.rs:63-84 - 移动到 qwen3_5/arch.rs
+pub fn remap_qwen35_weight_keys(weights: HashMap<String, Tensor>) -> HashMap<String, Tensor> {
+    // ... existing implementation
+}
+
+// mod.rs:43-61 - 删除 detect_architecture()
+// 已被 ARCHITECTURE_REGISTRY.detect() 替代
 ```
 
 **验证**:
 ```bash
-cargo test -p vllm-model -- config
+cargo test -p vllm-model
 cargo build -p vllm-model --all-features
 ```
+
+**API 兼容性检查**:
+- `load_config()` 返回类型从 `Qwen3Config` 变为泛型 `T`
+- 调用方需要修改: `load_config::<Qwen3Config>()`
 
 **估计工时**: 2-3 小时
 
 ---
 
-### Phase 5: 添加测试
+## Phase 2: 修复锁安全隐患 + 优化
 
-**目标**: 提升测试覆盖率
+**目标**: 安全处理 RwLock, 优化 detect 缓存
+
+**前置条件**: Phase 4 (使用新的 `Architecture` enum)
 
 **任务**:
 
-| # | 任务 | 覆盖 |
-|---|------|------|
-| 5.1 | `test_load_file_mmap` | io.rs |
-| 5.2 | `test_find_safetensors_single` | io.rs |
-| 5.3 | `test_find_safetensors_sharded` | io.rs |
-| 5.4 | `test_convert_tensor_bf16` | io.rs |
-| 5.5 | `test_convert_tensor_f16` | io.rs |
-| 5.6 | `test_registry_register_duplicate` | arch/registry.rs |
-| 5.7 | `test_registry_poison_recovery` | arch/registry.rs |
-| 5.8 | `test_format_loader_detection` | loader/format.rs |
-| 5.9 | `test_generic_load_config` | loader/builder.rs |
-| 5.10 | `test_remap_qwen35_keys` | qwen3_5/arch.rs |
+| # | 任务 | 文件 | 变更 |
+|---|------|------|------|
+| 2.1 | 修复 `register` 方法 | `arch/registry.rs` | `write().unwrap()` → `write().expect()` |
+| 2.2 | 修复 `get` 方法 | `arch/registry.rs` | `read().unwrap()` → `read().ok()?` |
+| 2.3 | 修复 `detect` 方法 | `arch/registry.rs` | `read().unwrap()` → `read().ok()?` |
+| 2.4 | 修复 `names` 方法 | `arch/registry.rs` | 同上 |
+| 2.5 | 添加 detect 缓存 | `arch/registry.rs` | 避免每次创建 Architecture 实例 |
+| 2.6 | 添加测试 | `arch/registry.rs` | 测试 poison 恢复 |
 
-**测试文件位置**: `crates/model/src/loader/tests/` (新目录)
+**代码变更**:
+
+```rust
+// arch/registry.rs - 优化 detect 缓存
+impl ArchitectureRegistry {
+    pub fn detect(&self, config_json: &Value) -> Option<String> {
+        let regs = self.architectures.read().ok()?;
+        for (name, factory) in regs.iter() {
+            let arch = factory();
+            if arch.detect(config_json) {
+                return Some(name.clone());
+            }
+        }
+        None
+    }
+}
+
+// Note: RwLock poison 场景在单线程初始化时几乎不会发生
+// 使用 expect() 而不是 map_err() 是合理的, 因为这表示代码有 bug
+```
+
+**估计工时**: 1-2 小时
+
+---
+
+## Phase 1: 消除代码重复 (统一设计)
+
+**目标**: 创建统一的 checkpoint 加载模块
+
+**前置条件**: Phase 3 决策 + Phase 4 + Phase 2
+
+**设计决策**:
+
+| 选项 | 设计 | 优点 | 缺点 |
+|------|------|------|------|
+| **A** | trait-based (OOP) | 符合现有 `format.rs` | 调用复杂 |
+| **B** | functional (过程式) | 简单直接 | 扩展性差 |
+| **C** | hybrid | 最佳平衡 | 稍复杂 |
+
+**推荐**: Option C (Hybrid) - 保持 `FormatLoader` trait, 但提供 simple wrapper
+
+**任务**:
+
+| # | 任务 | 文件 | 变更 |
+|---|------|------|------|
+| 1.1 | 创建 `loader/io.rs` | 新文件 | 统一 I/O 工具函数 |
+| 1.2 | 创建 `loader/checkpoint.rs` | 新文件 | 统一加载逻辑 |
+| 1.3 | 保留 `FormatLoader` trait | `loader/format.rs` | 保持可扩展性 |
+| 1.4 | 简化 `format.rs` | `format.rs` | 使用 `checkpoint.rs` |
+| 1.5 | 清理 `mod.rs` | `mod.rs` | 删除重复, 保留必要导出 |
+| 1.6 | 更新 import | 相关文件 | |
+
+**新文件结构**:
+
+```rust
+// crates/model/src/loader/io.rs
+pub fn load_file_mmap_or_read(path: &Path) -> Result<Vec<u8>> { ... }
+pub fn find_safetensors_files(model_dir: &Path) -> Result<Vec<PathBuf>> { ... }
+pub fn convert_tensor(view: &TensorView, device: &Device) -> Result<Tensor> { ... }
+
+// crates/model/src/loader/checkpoint.rs
+pub fn load_checkpoint(path: &Path, device: &Device) -> Result<HashMap<String, Tensor>> {
+    // 使用 FormatLoader trait
+}
+
+// crates/model/src/loader/mod.rs (简化)
+pub mod builder;
+pub mod format;
+pub mod io;        // 新增
+pub mod checkpoint; // 新增
+
+pub use builder::{ModelLoader, ModelLoaderBuilder};
+pub use format::FormatLoader;
+pub use checkpoint::load_checkpoint;
+
+// 删除: load_file, find_safetensors_files, convert_tensor, do_load_weights
+// 保留: remap_qwen35_weight_keys (移动后)
+```
 
 **验证**:
 ```bash
 cargo test -p vllm-model -- loader
-cargo test -p vllm-model -- registry
-cargo test -p vllm-model -- qwen3_5
+cargo clippy -p vllm-model
+```
+
+**API 兼容性**:
+- 删除 `do_load_weights()` - 使用 `load_checkpoint()` 替代
+- 删除 `load_file()` - 内部使用
+- 删除 `find_safetensors_files()` - 内部使用
+- 删除 `convert_tensor()` - 内部使用
+
+**估计工时**: 3-4 小时
+
+---
+
+## Phase 5: 添加测试
+
+**目标**: 提升测试覆盖率
+
+**前置条件**: Phase 1 + 2 + 4 全部完成
+
+**任务**:
+
+| # | 测试 | 位置 | 覆盖 |
+|---|------|------|------|
+| 5.1 | `test_registry_poison_recovery` | `arch/registry.rs` | 锁安全 |
+| 5.2 | `test_registry_duplicate_register` | `arch/registry.rs` | 错误处理 |
+| 5.3 | `test_load_config_generic` | `loader/builder.rs` | 泛型 config |
+| 5.4 | `test_remap_qwen35_keys` | `qwen3_5/arch.rs` | weight remap |
+| 5.5 | `test_checkpoint_load_single` | `loader/checkpoint.rs` | 单文件加载 |
+| 5.6 | `test_checkpoint_load_sharded` | `loader/checkpoint.rs` | 分片加载 |
+| 5.7 | `test_checkpoint_duplicate_error` | `loader/checkpoint.rs` | 错误处理 |
+| 5.8 | `test_io_load_file_mmap` | `loader/io.rs` | mmap 路径 |
+| 5.9 | `test_io_convert_bf16` | `loader/io.rs` | dtype 转换 |
+| 5.10 | `test_io_convert_f16` | `loader/io.rs` | dtype 转换 |
+
+**测试位置**: Rust 惯例是 `#[cfg(test)] mod tests` 在原文件中
+
+**验证**:
+```bash
+cargo test -p vllm-model
+# 验证覆盖率提升
 ```
 
 **估计工时**: 3-4 小时
 
 ---
 
-## 依赖关系
+## Phase 3 Option B: 移除 GGUF (如果选择 B)
 
+**目标**: 移除 GGUF placeholder 和 feature flag
+
+**任务**:
+
+| # | 任务 | 文件 | 变更 |
+|---|------|------|------|
+| 3.1 | 移除 GGUF feature flag | `Cargo.toml` | 删除 `gguf` feature |
+| 3.2 | 移除 `GgufLoader` | `loader/format.rs` | 删除 feature-gated code |
+| 3.3 | 移除 `quantize/gguf.rs` | - | 删除文件 |
+| 3.4 | 更新文档 | `AGENTS.md`, `README` | 移除 GGUF 引用 |
+
+**验证**:
+```bash
+cargo build -p vllm-model --all-features  # 应该不包含 gguf
 ```
-Phase 1 (必须首先完成)
-    │
-    ├── Phase 2
-    │
-    ├── Phase 3 (Option A 或 B)
-    │
-    ├── Phase 4 (依赖 Phase 1)
-    │
-    └── Phase 5 (依赖 Phase 1, 2, 3, 4)
-```
+
+**估计工时**: 1 小时
 
 ---
 
-## 工时估算
+## 工时估算 (修订)
 
-| Phase | 任务 | 工时 |
-|-------|------|------|
-| 1 | 消除代码重复 | 3h |
-| 2 | 修复锁安全 | 2h |
-| 3 | GGUF 实现/移除 | 1-6h |
-| 4 | 解耦架构 | 3h |
-| 5 | 添加测试 | 4h |
-| **总计** | | **13-18h** |
+| Phase | 任务 | 工时 | 前置 |
+|-------|------|------|------|
+| 3 | GGUF 决策 | - | 无 |
+| 4 | 解耦架构 | 2-3h | 无 |
+| 2 | 修锁 + 缓存 | 1-2h | 4 |
+| 1 | 消除重复 | 3-4h | 2, 3 |
+| 3B | 移除 GGUF (Option B) | 1h | 无 |
+| 5 | 添加测试 | 3-4h | 1, 2, 4 |
+| **总计 (Option B)** | | **10-14h** | |
+
+---
+
+## 依赖关系图 (修订)
+
+```
+Phase 3: 决策
+    │
+    ├── Option A: 实现 GGUF (跳过 3B)
+    │
+    └── Option B: 移除 GGUF (执行 3B)
+           │
+           ▼
+Phase 4: 解耦架构 (独立)
+    │
+    ▼
+Phase 2: 修锁 + 缓存 (依赖 4)
+    │
+    ▼
+Phase 1: 消除重复 (依赖 2, 3)
+    │
+    ▼
+Phase 5: 添加测试 (依赖 1, 2, 4)
+```
 
 ---
 
@@ -244,8 +351,9 @@ Phase 1 (必须首先完成)
 
 | 风险 | 影响 | 缓解 |
 |------|------|------|
-| Phase 1 改动影响其他模块 | 中 | 逐个模块更新, 频繁编译验证 |
-| GGUF 格式复杂性 | 高 | 选择 Option B 先简化 |
+| Phase 4 改变 API | 低 | 显式 API 变更, 有测试 |
+| Phase 1 改动影响大 | 中 | 放在后面, 已有测试保护 |
+| GGUF Option A 复杂 | 高 | 先选 B 简化 |
 | 测试破坏现有功能 | 中 | 确保 CI 全量通过 |
 
 ---
@@ -253,22 +361,21 @@ Phase 1 (必须首先完成)
 ## 验收标准
 
 1. `cargo clippy -p vllm-model` 无警告
-2. 新增 ~15 个测试用例
+2. 新增 ~10 个测试用例
 3. `cargo test -p vllm-model` 全部通过
 4. 无代码重复 (使用 `cargo machete` 检查)
-5. 文档更新 (AGENTS.md 相应章节)
+5. `load_checkpoint()` 是唯一公开的加载入口
 
 ---
 
-## 实施顺序建议
+## Action Required
 
-1. **立即**: Phase 1 (消除重复) - 低风险高收益
-2. **立即**: Phase 2 (修锁) - 高风险修复
-3. **决策**: Phase 3 (GGUF) - 与用户确认 Option A/B
-4. **随后**: Phase 4 (解耦)
-5. **最后**: Phase 5 (测试)
+**请确认 Phase 3 决策**:
+
+1. **Option A** - 实现完整 GGUF 加载 (6h)
+2. **Option B** - 移除 GGUF placeholder (1h) ← 推荐
 
 ---
 
-*计划制定日期: 2026-04-21*
-*预计完成: 2-3 天 (按每天 4-6 小时)**
+*计划修订日期: 2026-04-21*
+*预计完成: 2-3 天 (按每天 4-6 小时)*
