@@ -149,9 +149,8 @@ impl ModelLoader {
     }
 
     pub fn load_weights(&self) -> Result<std::collections::HashMap<String, Tensor>> {
-        // Use new unified loading
         let path = Path::new(&self.inner.model_dir);
-        crate::loader::format::load_checkpoint(path, &self.inner.device)
+        super::checkpoint::load_checkpoint(path, &self.inner.device)
     }
 
     pub fn load(&self) -> Result<Box<dyn vllm_traits::ModelBackend>> {

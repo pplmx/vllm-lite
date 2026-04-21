@@ -60,7 +60,7 @@ mod tests {
     fn test_model_loader_uses_new_checkpoint_loading() {
         use candle_core::Device;
         use std::path::Path;
-        use vllm_model::loader::format::load_checkpoint;
+        use vllm_model::loader::load_checkpoint;
         let result = load_checkpoint(Path::new("/nonexistent"), &Device::Cpu);
         assert!(result.is_err());
     }

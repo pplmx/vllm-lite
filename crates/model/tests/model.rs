@@ -440,7 +440,7 @@ fn test_qwen3_verify_model_weights() {
     use candle_core::Device;
 
     use std::path::Path;
-    use vllm_model::loader::format::load_checkpoint;
+    use vllm_model::loader::load_checkpoint;
 
     let device = Device::Cpu;
     let weights = load_checkpoint(Path::new("/models/Qwen3-0.6B"), &device).unwrap();
