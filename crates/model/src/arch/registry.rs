@@ -82,7 +82,10 @@ mod tests {
             "test"
         }
         fn detect(&self, config: &serde_json::Value) -> bool {
-            config.get("test").and_then(|v| v.as_bool()).unwrap_or(false)
+            config
+                .get("test")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
         }
         fn create_block(
             &self,
