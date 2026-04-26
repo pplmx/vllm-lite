@@ -17,6 +17,7 @@ pub mod config;
 pub mod health;
 pub mod logging;
 pub mod openai;
+pub mod security;
 
 pub use health::{HealthChecker, HealthStatus};
 
