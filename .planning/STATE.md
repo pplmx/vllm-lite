@@ -30,6 +30,26 @@ Last activity: 2026-04-27 — Phase 13.3 completed (Security hardening)
 
 ---
 
+## Deferred Items
+
+Items acknowledged and deferred at milestone close on 2026-04-27:
+
+| Category | Item | Status |
+|----------|------|--------|
+| tech_debt | K8S-02: Full Go Kubernetes Operator not implemented | Deferred |
+| tech_debt | gRPC multi-node testing deferred until K8s cluster available | Deferred |
+| tech_debt | Leader election needs K8s Lease API for production | Deferred |
+| tech_debt | Multi-node failover coordination deferred | Deferred |
+| tech_debt | TLS termination not fully integrated with axum | Deferred |
+| tech_debt | JWT validation stubbed, needs jsonwebtoken crate | Deferred |
+
+## Known Gaps at Close
+
+- K8S-02 (K8s Operator): Partial — scaffolded but Go implementation deferred
+- See: .planning/v13.0-MILESTONE-AUDIT.md for full gap details
+
+---
+
 ## Blockers/Concerns
 
 None.
