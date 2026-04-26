@@ -1,7 +1,9 @@
+pub mod distributed_kv;
 pub mod pipeline;
 pub mod tensor_parallel;
 pub mod types;
 
+pub use distributed_kv::{CacheConfig, CacheMessage, DistributedKVCache, NodeId};
 pub use pipeline::{PipelineError, PipelineParallel, Result};
 pub use pipeline::{PipelineStageConfig, StageInput, StageOutput};
 pub use pipeline::PipelineStageTrait as PipelineStage;
