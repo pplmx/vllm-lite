@@ -1,5 +1,5 @@
-pub mod protocol;
 pub mod cache;
+pub mod protocol;
 
 pub use cache::DistributedKVCache;
 pub use protocol::{CacheMessage, CacheOperation, NodeId};

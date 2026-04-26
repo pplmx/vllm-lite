@@ -63,15 +63,37 @@ impl CacheMessage {
     }
 
     pub fn read_request(key: u64, from: NodeId, to: NodeId) -> Self {
-        Self::new(from, to, CacheOperation::Read { key, requester: from })
+        Self::new(
+            from,
+            to,
+            CacheOperation::Read {
+                key,
+                requester: from,
+            },
+        )
     }
 
     pub fn invalidate(key: u64, from: NodeId, to: NodeId) -> Self {
-        Self::new(from, to, CacheOperation::Invalidate { key, requester: from })
+        Self::new(
+            from,
+            to,
+            CacheOperation::Invalidate {
+                key,
+                requester: from,
+            },
+        )
     }
 
     pub fn update(key: u64, hash: u64, from: NodeId, to: NodeId) -> Self {
-        Self::new(from, to, CacheOperation::Update { key, value_hash: hash, requester: from })
+        Self::new(
+            from,
+            to,
+            CacheOperation::Update {
+                key,
+                value_hash: hash,
+                requester: from,
+            },
+        )
     }
 }
 

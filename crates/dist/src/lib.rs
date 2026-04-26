@@ -4,9 +4,9 @@ pub mod tensor_parallel;
 pub mod types;
 
 pub use distributed_kv::{CacheConfig, CacheMessage, DistributedKVCache, NodeId};
+pub use pipeline::PipelineStageTrait as PipelineStage;
 pub use pipeline::{PipelineError, PipelineParallel, Result};
 pub use pipeline::{PipelineStageConfig, StageInput, StageOutput};
-pub use pipeline::PipelineStageTrait as PipelineStage;
 pub use tensor_parallel::AllReduce;
 pub use tensor_parallel::ColumnParallelLinear;
 pub use tensor_parallel::DeviceMesh;

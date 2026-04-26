@@ -113,10 +113,7 @@ impl PredictiveBatcher {
         let cutoff = now - window;
 
         let history = self.request_history.lock().unwrap();
-        let recent: Vec<_> = history
-            .iter()
-            .filter(|s| s.timestamp > cutoff)
-            .collect();
+        let recent: Vec<_> = history.iter().filter(|s| s.timestamp > cutoff).collect();
 
         if recent.is_empty() {
             return;
@@ -178,7 +175,8 @@ impl PredictiveBatcher {
 
     pub fn on_batch_complete(&self, batch_size: usize, tokens_processed: usize) {
         self.batch_counter.fetch_add(1, Ordering::SeqCst);
-        self.total_tokens_processed.fetch_add(tokens_processed, Ordering::SeqCst);
+        self.total_tokens_processed
+            .fetch_add(tokens_processed, Ordering::SeqCst);
         self.total_batches.fetch_add(1, Ordering::SeqCst);
         *self.last_batch_time.lock().unwrap() = Instant::now();
 
@@ -262,8 +260,7 @@ impl BatchOptimizer {
         let avg_throughput = if recent_throughputs.is_empty() {
             10.0
         } else {
-            recent_throughputs.iter().map(|(_, t)| t).sum::<f64>()
-                / recent_throughputs.len() as f64
+            recent_throughputs.iter().map(|(_, t)| t).sum::<f64>() / recent_throughputs.len() as f64
         };
 
         let latency_ratio = self.config.target_latency_ms as f64 / avg_latency.as_millis() as f64;
@@ -359,7 +356,10 @@ mod tests {
 
         let result2 = batcher.should_start_batch(2);
         let result4 = batcher.should_start_batch(4);
-        assert!(!result2 || result4, "Should generally start batches when enough pending");
+        assert!(
+            !result2 || result4,
+            "Should generally start batches when enough pending"
+        );
     }
 
     #[test]

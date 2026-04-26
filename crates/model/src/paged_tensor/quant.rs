@@ -124,7 +124,12 @@ impl AWQQuantization {
         Self { bits, group_size }
     }
 
-    pub fn quantize(&self, data: &[f32], _shape: &[usize], device: &Device) -> Result<QuantizedWeights> {
+    pub fn quantize(
+        &self,
+        data: &[f32],
+        _shape: &[usize],
+        device: &Device,
+    ) -> Result<QuantizedWeights> {
         let num_elements = data.len();
         let num_groups = num_elements.div_ceil(self.group_size);
 
@@ -162,14 +167,23 @@ impl AWQQuantization {
 
         let q_data: Vec<u8> = qweight.to_vec1()?;
         let scales_data: Vec<f32> = scales.to_vec1()?;
-        let g_idx_data = weights.g_idx.as_ref()
+        let g_idx_data = weights
+            .g_idx
+            .as_ref()
             .map(|t| t.to_vec1::<u32>().unwrap_or_default())
-            .unwrap_or_else(|| (0..q_data.len()).map(|i| i as u32 / self.group_size as u32).collect());
+            .unwrap_or_else(|| {
+                (0..q_data.len())
+                    .map(|i| i as u32 / self.group_size as u32)
+                    .collect()
+            });
 
         let mut output = Vec::with_capacity(q_data.len());
 
         for (i, &q) in q_data.iter().enumerate() {
-            let g_idx = g_idx_data.get(i).copied().unwrap_or(i as u32 / self.group_size as u32) as usize;
+            let g_idx = g_idx_data
+                .get(i)
+                .copied()
+                .unwrap_or(i as u32 / self.group_size as u32) as usize;
             let scale = scales_data.get(g_idx).copied().unwrap_or(1.0);
             let w = q as f32 * scale;
             output.push(w);
@@ -190,7 +204,12 @@ impl GPTQQuantization {
         Self { bits, group_size }
     }
 
-    pub fn quantize(&self, data: &[f32], _shape: &[usize], device: &Device) -> Result<QuantizedWeights> {
+    pub fn quantize(
+        &self,
+        data: &[f32],
+        _shape: &[usize],
+        device: &Device,
+    ) -> Result<QuantizedWeights> {
         let num_elements = data.len();
         let num_groups = num_elements.div_ceil(self.group_size);
 
@@ -256,11 +275,17 @@ mod tests {
         let dequantized = awq.dequantize(&weights).unwrap();
 
         let deq_data: Vec<f32> = dequantized.to_vec1().unwrap();
-        let max_diff = data.iter().zip(deq_data.iter())
+        let max_diff = data
+            .iter()
+            .zip(deq_data.iter())
             .map(|(a, b)| (a - b).abs())
             .fold(0.0f32, f32::max);
 
-        assert!(max_diff < 10.0, "Dequantization error too large: {}", max_diff);
+        assert!(
+            max_diff < 10.0,
+            "Dequantization error too large: {}",
+            max_diff
+        );
     }
 
     #[test]
@@ -273,7 +298,9 @@ mod tests {
         let dequantized = gptq.dequantize(&weights).unwrap();
 
         let deq_data: Vec<f32> = dequantized.to_vec1().unwrap();
-        let max_diff = data.iter().zip(deq_data.iter())
+        let max_diff = data
+            .iter()
+            .zip(deq_data.iter())
             .map(|(a, b)| (a - b).abs())
             .fold(0.0f32, f32::max);
 
@@ -282,9 +309,18 @@ mod tests {
 
     #[test]
     fn test_quantization_types() {
-        assert_eq!(QuantizationType::from_str("awq"), Some(QuantizationType::Awq));
-        assert_eq!(QuantizationType::from_str("gptq"), Some(QuantizationType::Gptq));
-        assert_eq!(QuantizationType::from_str("llm-awq"), Some(QuantizationType::Awq));
+        assert_eq!(
+            QuantizationType::from_str("awq"),
+            Some(QuantizationType::Awq)
+        );
+        assert_eq!(
+            QuantizationType::from_str("gptq"),
+            Some(QuantizationType::Gptq)
+        );
+        assert_eq!(
+            QuantizationType::from_str("llm-awq"),
+            Some(QuantizationType::Awq)
+        );
 
         assert_eq!(QuantizationType::Awq.bits(), 4);
         assert_eq!(QuantizationType::Gptq.bits(), 4);
