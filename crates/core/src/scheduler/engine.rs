@@ -101,6 +101,14 @@ impl SchedulerEngine {
     /// Checks the prefix cache for matching prompts and creates a sequence.
     /// Returns the assigned sequence ID.
     pub fn add_request(&mut self, mut req: Request) -> SeqId {
+        let _span = tracing::info_span!(
+            "scheduler.add_request",
+            request_id = req.id,
+            prompt_len = req.prompt.len(),
+            max_tokens = req.max_tokens
+        )
+        .entered();
+
         // Record metrics: request received
         self.metrics.record_request();
 
@@ -112,13 +120,18 @@ impl SchedulerEngine {
         // Check prefix cache for prompt reuse
         let (tokens, kv_blocks, num_computed) =
             if let Some(result) = self.prefix_cache.longest_prefix_match(&req.prompt) {
-                // Keep full tokens, use num_computed_tokens to track progress
+                tracing::trace!(
+                    request_id = req.id,
+                    matched_tokens = result.matched_tokens,
+                    "Prefix cache hit"
+                );
                 (
                     req.prompt.clone(),
                     result.blocks.clone(),
                     result.matched_tokens,
                 )
             } else {
+                tracing::trace!(request_id = req.id, "Prefix cache miss");
                 (req.prompt.clone(), Arc::new(vec![]), 0)
             };
 
@@ -159,6 +172,11 @@ impl SchedulerEngine {
             prompt_len: req.prompt.len(),
         });
 
+        tracing::info!(
+            request_id = req.id,
+            queue_depth = self.request_queue.len(),
+            "Request added"
+        );
         req.id
     }
 
@@ -168,6 +186,13 @@ impl SchedulerEngine {
     /// then composes the batch according to memory constraints.
     #[must_use]
     pub fn build_batch(&mut self) -> Batch {
+        let _span = tracing::info_span!(
+            "scheduler.build_batch",
+            waiting = self.request_queue.len(),
+            running = self.running.len()
+        )
+        .entered();
+
         let start_time = Instant::now();
 
         // Get current scheduler state
@@ -350,6 +375,13 @@ impl SchedulerEngine {
         next_tokens: &[TokenId],
         input_token_counts: &[usize],
     ) {
+        let _span = tracing::info_span!(
+            "scheduler.update",
+            seq_count = seq_ids.len(),
+            token_count = next_tokens.len()
+        )
+        .entered();
+
         tracing::debug!(
             seq_ids_len = seq_ids.len(),
             next_tokens_len = next_tokens.len(),
@@ -359,6 +391,10 @@ impl SchedulerEngine {
         for ((&seq_id, &token), &input_count) in
             seq_ids.iter().zip(next_tokens).zip(input_token_counts)
         {
+            let _token_span =
+                tracing::trace_span!("scheduler.decode_token", seq_id = seq_id, token = token)
+                    .entered();
+
             if let Some(seq) = self.running.iter_mut().find(|s| s.id == seq_id) {
                 tracing::debug!(
                     seq_id = seq_id,
@@ -372,6 +408,7 @@ impl SchedulerEngine {
                     seq.num_computed_tokens += input_count;
                     if seq.num_computed_tokens >= seq.prompt_len {
                         seq.status = Status::Decoding;
+                        tracing::info!(seq_id = seq_id, "Sequence transitioned to Decode phase");
                     } else {
                         seq.status = Status::Prefilling;
                     }

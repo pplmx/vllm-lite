@@ -1,9 +1,4 @@
-use axum::{
-    extract::Request,
-    http::HeaderValue,
-    middleware::Next,
-    response::Response,
-};
+use axum::{extract::Request, http::HeaderValue, middleware::Next, response::Response};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;
@@ -28,10 +23,14 @@ impl CorrelationIdMiddleware {
     pub async fn generate_id(&self) -> String {
         let mut counter = self.id_generator.write().await;
         *counter += 1;
-        format!("{:x}-{:x}", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos() as u64, *counter)
+        format!(
+            "{:x}-{:x}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos() as u64,
+            *counter
+        )
     }
 
     pub fn extract_id(headers: &axum::http::HeaderMap) -> Option<String> {
@@ -48,17 +47,11 @@ impl Default for CorrelationIdMiddleware {
     }
 }
 
-pub async fn correlation_id_middleware(
-    request: Request,
-    next: Next,
-) -> Response {
+pub async fn correlation_id_middleware(request: Request, next: Next) -> Response {
     let middleware = CorrelationIdMiddleware::new();
 
     let request_id = CorrelationIdMiddleware::extract_id(request.headers())
-        .unwrap_or_else(|| {
-            tokio::runtime::Handle::current()
-                .block_on(middleware.generate_id())
-        });
+        .unwrap_or_else(|| tokio::runtime::Handle::current().block_on(middleware.generate_id()));
 
     info!(
         request_id = %request_id,

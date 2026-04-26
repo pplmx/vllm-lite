@@ -45,8 +45,8 @@ pub(crate) async fn health_details(State(state): State<ApiState>) -> Json<Health
     })
 }
 
-pub async fn shutdown(State(engine_tx): State<EngineHandle>) -> &'static str {
-    let _ = engine_tx.send(EngineMessage::Shutdown);
+pub async fn shutdown(State(state): State<ApiState>) -> &'static str {
+    let _ = state.engine_tx.send(EngineMessage::Shutdown);
     "Shutting down"
 }
 

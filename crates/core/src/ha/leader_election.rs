@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{watch, RwLock};
+use tokio::sync::{RwLock, watch};
 use tracing::{info, warn};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -56,7 +56,8 @@ impl AuditLogger {
             request_id: request_id.to_string(),
             ip_address: None,
             user_agent: None,
-        }).await;
+        })
+        .await;
     }
 
     pub async fn log_auth_failure(&self, reason: &str, request_id: &str) {
@@ -69,7 +70,8 @@ impl AuditLogger {
             request_id: request_id.to_string(),
             ip_address: None,
             user_agent: None,
-        }).await;
+        })
+        .await;
 
         warn!(
             request_id = %request_id,
@@ -95,7 +97,8 @@ impl AuditLogger {
             request_id: request_id.to_string(),
             ip_address: None,
             user_agent: None,
-        }).await;
+        })
+        .await;
     }
 
     pub async fn get_events(&self) -> Vec<AuditEvent> {
@@ -134,16 +137,18 @@ mod tests {
         let logger = AuditLogger::new(3);
 
         for i in 0..5 {
-            logger.log(AuditEvent {
-                timestamp: chrono::Utc::now().to_rfc3339(),
-                user_id: None,
-                action: format!("action-{}", i),
-                resource: "test".to_string(),
-                result: "success".to_string(),
-                request_id: format!("req-{}", i),
-                ip_address: None,
-                user_agent: None,
-            }).await;
+            logger
+                .log(AuditEvent {
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    user_id: None,
+                    action: format!("action-{}", i),
+                    resource: "test".to_string(),
+                    result: "success".to_string(),
+                    request_id: format!("req-{}", i),
+                    ip_address: None,
+                    user_agent: None,
+                })
+                .await;
         }
 
         let events = logger.get_events().await;
