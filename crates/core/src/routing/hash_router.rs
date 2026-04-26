@@ -75,9 +75,11 @@ impl HashRouter {
             }
         }
 
-        let least_loaded = nodes
-            .iter()
-            .min_by(|a, b| a.load.partial_cmp(&b.load).unwrap_or(std::cmp::Ordering::Equal));
+        let least_loaded = nodes.iter().min_by(|a, b| {
+            a.load
+                .partial_cmp(&b.load)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         match least_loaded {
             Some(node) => {

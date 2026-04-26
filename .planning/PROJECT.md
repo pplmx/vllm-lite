@@ -20,15 +20,14 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 - ✅ High availability (leader election, failover, HPA metrics, PodDisruptionBudget)
 - ✅ Security hardening (TLS, mTLS, authentication, RBAC, audit logging)
 
-## Current Milestone: v14.0 Developer Tooling
+## Current Milestone: v15.0 Performance + Models + Production
 
-**Goal:** Comprehensive developer tooling suite with benchmarking, debugging, CLI improvements, and test infrastructure.
+**Goal:** Major performance improvements with FlashAttention V3 and KV cache optimization, plus 4 new model architectures and production hardening.
 
 **Target features:**
-- Benchmarking suite — standardized throughput/latency benchmarks, profiling tools
-- Debug utilities — request tracing, KV cache inspection, batch visualization
-- CLI improvements — model management, config validation, hot reload
-- Test infrastructure — integration test harnesses, fuzzing, model comparison
+- Performance — FlashAttention V3, continuous batching improvements, KV cache compression
+- Models — Gemma3, Phi-4, Llama 4, Mistral Small
+- Production — Go Kubernetes Operator (full), TLS/JWT integration
 
 ## Requirements
 
@@ -59,23 +58,22 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 
 ### Active
 
-- In progress: Developer Tooling — v14.0 (benchmarking, debug, CLI, test infra)
+- In progress: Performance + Models + Production — v15.0 (FA-V3, KV cache, Gemma3, Phi-4, Llama 4, Mistral Small, Go Operator, TLS/JWT)
 
 ### Out of Scope
 
 - WebAssembly support — 长期愿景
-- 多租户隔离 — 企业特性
+- Multi-tenant isolation — Enterprise feature
 - Online fine-tuning — 长期愿景
 - Real-time fine-tuning — 长期愿景
-- Full K8s Operator (Go) — deferred from v13.0 (scaffolded only)
+- Vision end-to-end — deferred from v14.0 (architecture only)
 
 ## Context
 
-v13.0 shipped with 22/23 requirements satisfied. Known gaps:
-- K8S-02: Full Go Kubernetes Operator deferred (scaffolded only)
-- Multi-node testing requires actual K8s cluster
-- TLS integration with axum server incomplete
-- JWT validation stubbed
+v14.0 shipped with 12/12 requirements satisfied. v15.0 focus areas:
+- Performance: FA-V3 needs kernel implementation, KV cache compression research
+- Models: Architecture detection for Gemma3, Phi-4, Llama 4, Mistral Small
+- Production: Go Operator full implementation, TLS/JWT completion
 
 Tech stack: Rust + Candle, multi-GPU CUDA support, Kubernetes, gRPC.
 
@@ -90,14 +88,16 @@ Tech stack: Rust + Candle, multi-GPU CUDA support, Kubernetes, gRPC.
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Multi-node architecture | Horizontal scaling beyond single host | — Pending |
-| K8s Operator vs Helm-only | Operator for declarative management | Deferred — Helm only for now |
+| Multi-node architecture | Horizontal scaling beyond single host | Implemented — v13.0 |
+| K8s Operator vs Helm-only | Operator for declarative management | In progress — v15.0 |
 | Consensus protocol | Raft vs etcd for HA leader election | Using K8s Lease API |
-| TLS approach | mTLS for cluster internal, simple TLS for external | Scaffolded |
+| TLS approach | mTLS for cluster internal, simple TLS for external | In progress — v15.0 |
+| FA-V3 kernel approach | FlashAttention V3 integration | Planned — v15.0 |
+| KV cache compression | FP8 vs INT8 vs mixed precision | Research needed — v15.0 |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
 ---
-*Last updated: 2026-04-27 after v14.0 milestone started*
+*Last updated: 2026-04-27 after v15.0 milestone started*

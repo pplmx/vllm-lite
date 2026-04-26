@@ -4,6 +4,7 @@ mod api;
 mod auth;
 mod cli;
 mod config;
+mod debug;
 mod health;
 mod logging;
 pub mod openai;
@@ -224,7 +225,7 @@ async fn main() {
     use openai::embeddings::embeddings;
     use openai::models::models_handler;
 
-    let mut app = Router::new()
+    let mut app: axum::Router<()> = Router::new()
         // OpenAI API
         .route("/v1/models", get(models_handler))
         .route("/v1/chat/completions", post(chat_completions))
@@ -242,6 +243,12 @@ async fn main() {
         .route("/ready", get(ready_handler))
         .route("/metrics", get(metrics_handler))
         .route("/health/details", get(api::health_details))
+        // Debug endpoints
+        .route("/debug/metrics", get(debug::metrics_snapshot))
+        .route("/debug/kv-cache", get(debug::kv_cache_dump))
+        .route("/debug/trace", get(debug::trace_status))
+        // Shutdown
+        .route("/shutdown", get(api::shutdown))
         .with_state(state);
 
     if let Some(auth) = auth_middleware {
@@ -251,13 +258,11 @@ async fn main() {
         ));
     }
 
-    let app = app.route("/shutdown", get(api::shutdown).with_state(msg_tx));
-
     let addr = format!("{}:{}", app_config.server.host, app_config.server.port);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     tracing::info!(address = %addr, "Server listening");
 
-    axum::serve(listener, app)
+    axum::serve(listener, app.into_make_service())
         .with_graceful_shutdown(shutdown_signal())
         .await
         .unwrap();

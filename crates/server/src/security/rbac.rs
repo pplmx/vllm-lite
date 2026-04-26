@@ -1,9 +1,4 @@
-use axum::{
-    extract::Request,
-    http::HeaderMap,
-    middleware::Next,
-    response::Response,
-};
+use axum::{extract::Request, http::HeaderMap, middleware::Next, response::Response};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -15,6 +10,7 @@ pub enum Role {
 }
 
 impl Role {
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "admin" => Role::Admin,
@@ -83,10 +79,7 @@ impl RbacMiddleware {
     }
 }
 
-pub async fn rbac_middleware(
-    request: Request,
-    next: Next,
-) -> Response {
+pub async fn rbac_middleware(request: Request, next: Next) -> Response {
     next.run(request).await
 }
 

@@ -3,39 +3,72 @@
 **Defined:** 2026-04-27
 **Core Value:** Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism
 
-## v1 Requirements
+---
+
+## v15.0 Requirements (In Progress)
+
+### Performance
+
+- [ ] **PERF-01**: FlashAttention V3 kernel implemented with support for multi-query and grouped-query attention
+- [ ] **PERF-02**: Continuous batching scheduler improved with dynamic chunked prefill and better preemption
+- [ ] **PERF-03**: KV cache compression implemented using FP8 quantization with accuracy preservation
+
+### Model Support
+
+- [ ] **MODEL-01**: Gemma3 architecture support (Gemma3-2B, 9B, 27B) with sliding window attention
+- [ ] **MODEL-02**: Phi-4 architecture support with extended vocabulary and NoPos embedding
+- [ ] **MODEL-03**: Llama 4 architecture support with MoE variants (Scout/Maverick)
+- [ ] **MODEL-04**: Mistral Small architecture support with expert routing for MoE variants
+
+### Production Hardening
+
+- [ ] **PROD-01**: Full Go Kubernetes Operator implemented for declarative resource management
+- [ ] **PROD-02**: TLS termination fully integrated with axum server (cert-manager compatible)
+- [ ] **PROD-03**: JWT validation implemented using jsonwebtoken crate with RS256/ES256 support
+
+---
+
+## v14.0 Requirements
 
 ### Benchmarking
 
-- [ ] **BENCH-01**: Developer can run throughput benchmark measuring tokens/sec under concurrent load
-- [ ] **BENCH-02**: Developer can run latency benchmark reporting TTFT, P50, P95, P99 percentiles
-- [ ] **BENCH-03**: Benchmark runner handles warmup by discarding initial iterations
+- [x] **BENCH-01**: Developer can run throughput benchmark measuring tokens/sec under concurrent load
+- [x] **BENCH-02**: Developer can run latency benchmark reporting TTFT, P50, P95, P99 percentiles
+- [x] **BENCH-03**: Benchmark runner handles warmup by discarding initial iterations
 
 ### Debug Utilities
 
-- [ ] **DEBUG-01**: Developer can enable request tracing via tracing spans to debug request execution
-- [ ] **DEBUG-02**: Developer can dump KV cache state to inspect cached prompts
-- [ ] **DEBUG-03**: Developer can snapshot current metrics via HTTP endpoint
+- [x] **DEBUG-01**: Developer can enable request tracing via tracing spans to debug request execution
+- [x] **DEBUG-02**: Developer can dump KV cache state to inspect cached prompts
+- [x] **DEBUG-03**: Developer can snapshot current metrics via HTTP endpoint
 
 ### CLI Tools
 
-- [ ] **CLI-01**: Developer can validate config file syntax and schema at startup
-- [ ] **CLI-02**: Developer can list available models in model directory
-- [ ] **CLI-03**: Developer can view model metadata (architecture, params, config)
+- [x] **CLI-01**: Developer can validate config file syntax and schema at startup
+- [x] **CLI-02**: Developer can list available models in model directory
+- [x] **CLI-03**: Developer can view model metadata (architecture, params, config)
 
 ### Test Infrastructure
 
-- [ ] **TEST-01**: Test harness provides common utilities (TestHarness::new()) for integration tests
-- [ ] **TEST-02**: Mock model variants available (NeverProgressModel, SlowModel) for deterministic testing
-- [ ] **TEST-03**: Request factory generates test requests with configurable properties
+- [x] **TEST-01**: Test harness provides common utilities (TestHarness::new()) for integration tests
+- [x] **TEST-02**: Mock model variants available (NeverProgressModel, SlowModel) for deterministic testing
+- [x] **TEST-03**: Request factory generates test requests with configurable properties
 
-## v2 Requirements
+---
 
-### Benchmarking
+## Future Requirements
 
-- **BENCH-04**: Throughput sweep at multiple concurrency levels with throughput curve output
-- **BENCH-05**: Memory profiling tracking peak GPU memory during benchmark
-- **BENCH-06**: CUDA graph impact comparison (with/without graphs)
+### Performance
+
+- **PERF-04**: Ring Attention for multi-GPU sequence parallelism with 1M+ context length
+- **PERF-05**: Speculative decoding with draft model integration
+- **PERF-06**: INT4 KV cache for extreme memory reduction
+
+### Model Support
+
+- **MODEL-05**: DeepSeek-V3 architecture with MoE and MLA attention
+- **MODEL-06**: Qwen2.5-VL multimodal support with vision encoder
+- **MODEL-07**: Granite-v3 architecture for enterprise workloads
 
 ### Debug Utilities
 
@@ -55,71 +88,37 @@
 - **TEST-05**: Fuzzing corpus for edge case inputs
 - **TEST-06**: CI performance regression check (fail PR if >5% regression)
 
+---
+
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Full GUI debugger | Binary bloat, complexity - CLI REPL sufficient |
-| Cloud-based profiling | Privacy concerns, latency - local perfetto export only |
-| Real-time dashboard | Complexity - use existing Prometheus + Grafana |
-| Multi-user debug session | Auth complexity - single-user CLI tool |
-| Web UI for benchmarking | Over-engineering - CLI + JSON output |
+| WebAssembly support | 长期愿景 — complexity, performance trade-offs |
+| Multi-tenant isolation | Enterprise feature — separate product |
+| Online fine-tuning | 长期愿景 — different optimization path |
+| Vision end-to-end | Architecture ready, no model integration yet |
+| Full GUI debugger | Binary bloat, CLI REPL sufficient |
+
+---
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BENCH-01 | Phase 14.1 | Pending |
-| BENCH-02 | Phase 14.1 | Pending |
-| BENCH-03 | Phase 14.1 | Pending |
-| DEBUG-01 | Phase 14.2 | Pending |
-| DEBUG-02 | Phase 14.2 | Pending |
-| DEBUG-03 | Phase 14.2 | Pending |
-| CLI-01 | Phase 14.3 | Pending |
-| CLI-02 | Phase 14.3 | Pending |
-| CLI-03 | Phase 14.3 | Pending |
-| TEST-01 | Phase 14.4 | Pending |
-| TEST-02 | Phase 14.4 | Pending |
-| TEST-03 | Phase 14.4 | Pending |
+| PERF-01 | 15.1 | Pending |
+| PERF-02 | 15.2 | Pending |
+| PERF-03 | 15.2 | Pending |
+| MODEL-01 | 15.3 | Pending |
+| MODEL-02 | 15.3 | Pending |
+| MODEL-03 | 15.4 | Pending |
+| MODEL-04 | 15.4 | Pending |
+| PROD-01 | 15.5 | Pending |
+| PROD-02 | 15.6 | Pending |
+| PROD-03 | 15.6 | Pending |
 
-**Coverage:** 12/12 v1 requirements mapped (0 unmapped)
-
----
-
-## Phase Details
-
-### Phase 14.1: Benchmarking
-- **Goal:** Developer can run standardized benchmarks measuring throughput and latency
-- **Requirements:** BENCH-01, BENCH-02, BENCH-03
-- **Success Criteria:**
-  1. Throughput benchmark reports tokens/sec under concurrent load
-  2. Latency benchmark reports TTFT, P50, P95, P99 percentiles
-  3. Warmup discards initial iterations, producing stable results
-
-### Phase 14.2: Debug Utilities
-- **Goal:** Developer can inspect and trace engine internals during execution
-- **Requirements:** DEBUG-01, DEBUG-02, DEBUG-03
-- **Success Criteria:**
-  1. Request tracing shows hierarchical spans in logs
-  2. KV cache dump returns readable cache state
-  3. Metrics snapshot returns JSON endpoint response
-
-### Phase 14.3: CLI Tools
-- **Goal:** Developer can manage models and validate configuration via CLI
-- **Requirements:** CLI-01, CLI-02, CLI-03
-- **Success Criteria:**
-  1. Config validation reports syntax/schema errors
-  2. Model listing shows available models with names/sizes
-  3. Model info displays architecture, parameters, config
-
-### Phase 14.4: Test Infrastructure
-- **Goal:** Test infrastructure provides reusable components for integration tests
-- **Requirements:** TEST-01, TEST-02, TEST-03
-- **Success Criteria:**
-  1. TestHarness::new() initializes test environment
-  2. NeverProgressModel blocks, SlowModel delays deterministically
-  3. Request factory generates configurable test requests
+**Coverage:** 10/10 v15.0 requirements defined (0 unmapped)
 
 ---
 *Requirements defined: 2026-04-27*
-*Last updated: 2026-04-27 — roadmap created with phase details*
+*Last updated: 2026-04-27 — v15.0 requirements defined*

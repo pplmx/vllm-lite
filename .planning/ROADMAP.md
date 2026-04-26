@@ -1,107 +1,146 @@
-# Roadmap: vllm-lite
+# Roadmap: v15.0 Performance + Models + Production
 
-## Milestones
+**Created:** 2026-04-27
+**Milestone:** v15.0
+**Goal:** Major performance improvements with FA-V3 and KV cache optimization, plus 4 new model architectures and production hardening.
 
-- ✅ **v13.0 主机部署** — Phases 13.1-13.3 (shipped 2026-04-27)
-- 🚧 **v14.0 Developer Tooling** — Phases 14.1-14.4 (in progress)
+---
 
-## Phase History
+## Proposed Roadmap
 
-<details>
-<summary>✅ v13.0 主机部署 (Phases 13.1-13.3) — SHIPPED 2026-04-27</summary>
+**6 phases** | **10 requirements mapped** | All covered ✓
 
-- [x] Phase 13.1: K8s 基础 (10/10 req, K8S-02 partial) — completed 2026-04-27
-- [x] Phase 13.2: 高可用 (7/7 req) — completed 2026-04-27
-- [x] Phase 13.3: 安全加固 (6/6 req) — completed 2026-04-27
-
-Full details: [.planning/milestones/v13.0-ROADMAP.md](.planning/milestones/v13.0-ROADMAP.md)
-
-</details>
-
-## Phases
-
-- [ ] **Phase 14.1: Benchmarking** — Throughput/latency benchmarks with warmup handling
-- [ ] **Phase 14.2: Debug Utilities** — Request tracing, KV cache dump, metrics snapshot
-- [ ] **Phase 14.3: CLI Tools** — Config validation, model listing, model info
-- [ ] **Phase 14.4: Test Infrastructure** — Test harness, mock models, request factory
+| # | Phase | Goal | Requirements | Success Criteria |
+|---|-------|------|--------------|------------------|
+| 15.1 | FlashAttention V3 | FA-V3 kernel with MQA/GQA | PERF-01 | 3 criteria |
+| 15.2 | KV Cache Optimization | Improved batching + FP8 | PERF-02, PERF-03 | 3 criteria |
+| 15.3 | Gemma3 + Phi-4 | Google and Microsoft models | MODEL-01, MODEL-02 | 3 criteria |
+| 15.4 | Llama 4 + Mistral Small | Meta and Mistral models | MODEL-03, MODEL-04 | 3 criteria |
+| 15.5 | Go K8s Operator | Full Operator implementation | PROD-01 | 3 criteria |
+| 15.6 | TLS + JWT | Complete production hardening | PROD-02, PROD-03 | 3 criteria |
 
 ---
 
 ## Phase Details
 
-### Phase 14.1: Benchmarking
+### Phase 15.1: FlashAttention V3
 
-**Goal:** Developer can run standardized benchmarks measuring throughput and latency
-**Depends on:** Phase 13 (completed)
-**Requirements:** BENCH-01, BENCH-02, BENCH-03
-**Success Criteria** (what must be TRUE):
-  1. Developer can run throughput benchmark that reports tokens/sec under concurrent load
-  2. Developer can run latency benchmark that reports TTFT, P50, P95, P99 percentiles
-  3. Benchmark warmup discards initial iterations, producing stable benchmark results
-**Plans:** TBD
-**UI hint:** no
+**Goal:** Implement FlashAttention V3 kernel with improved memory efficiency and MQA/GQA support
 
-### Phase 14.2: Debug Utilities
+**Requirements:** PERF-01
 
-**Goal:** Developer can inspect and trace engine internals during execution
-**Depends on:** Phase 14.1
-**Requirements:** DEBUG-01, DEBUG-02, DEBUG-03
-**Success Criteria** (what must be TRUE):
-  1. Request tracing via tracing spans shows hierarchical execution in logs
-  2. KV cache dump endpoint returns current cache state in readable format
-  3. Metrics snapshot endpoint returns current metrics as JSON
-**Plans:** TBD
-**UI hint:** no
-
-### Phase 14.3: CLI Tools
-
-**Goal:** Developer can manage models and validate configuration via CLI
-**Depends on:** Phase 14.2
-**Requirements:** CLI-01, CLI-02, CLI-03
-**Success Criteria** (what must be TRUE):
-  1. CLI validates config file syntax and schema, reports validation errors
-  2. CLI lists available models in model directory with names and sizes
-  3. CLI displays model metadata (architecture, parameters, config options)
-**Plans:** TBD
-**UI hint:** no
-
-### Phase 14.4: Test Infrastructure
-
-**Goal:** Test infrastructure provides reusable components for integration tests
-**Depends on:** Phase 14.3
-**Requirements:** TEST-01, TEST-02, TEST-03
-**Success Criteria** (what must be TRUE):
-  1. TestHarness::new() initializes test environment with common utilities
-  2. NeverProgressModel blocks indefinitely, SlowModel delays for deterministic testing
-  3. Request factory generates test requests with configurable tokens, settings
-**Plans:** TBD
-**UI hint:** no
+**Success Criteria:**
+1. FA-V3 kernel implemented with causal masking and softmax scaling
+2. MQA (Multi-Query Attention) support for models like Llama 3
+3. GQA (Grouped-Query Attention) support for Gemma2, Mistral, Llama 4
+4. Benchmark shows >30% speedup vs current FlashAttention V2
 
 ---
 
-## Progress
+### Phase 15.2: KV Cache Optimization
 
-| Phase | Milestone | Requirements | Status |
-|-------|-----------|--------------|--------|
-| 1-11 | Prior milestones | Various | Complete |
-| 12 | Advanced features | AWQ/GPTQ, backpressure, predictive batching | Complete |
-| 13.1 | K8s 基础 | 9/10 (K8S-02 partial) | Complete |
-| 13.2 | 高可用 | 7/7 | Complete |
-| 13.3 | 安全加固 | 6/6 | Complete |
-| 14.1 | Benchmarking | BENCH-01, BENCH-02, BENCH-03 | Not started |
-| 14.2 | Debug Utilities | DEBUG-01, DEBUG-02, DEBUG-03 | Not started |
-| 14.3 | CLI Tools | CLI-01, CLI-02, CLI-03 | Not started |
-| 14.4 | Test Infrastructure | TEST-01, TEST-02, TEST-03 | Not started |
+**Goal:** Improved continuous batching and KV cache compression for memory efficiency
+
+**Requirements:** PERF-02, PERF-03
+
+**Success Criteria:**
+1. Dynamic chunked prefill implemented for large prompts
+2. Preemption strategy handles memory pressure gracefully
+3. FP8 KV cache quantization with <0.5% accuracy loss
+4. Memory usage reduced by 40%+ with FP8 cache
 
 ---
 
-## Long-term Vision
+### Phase 15.3: Gemma3 + Phi-4
 
-- Phase 15: Cross-region replication
-- WebAssembly support (out of scope for now)
-- Multi-tenant KV cache isolation (requires coherence v2)
+**Goal:** Support Google's Gemma3 and Microsoft's Phi-4 model architectures
+
+**Requirements:** MODEL-01, MODEL-02
+
+**Success Criteria:**
+1. Gemma3 architecture registered with sliding window attention (SWA)
+2. Gemma3-2B, 9B, 27B models load and generate tokens
+3. Phi-4 architecture registered with NoPos (rotary) embedding
+4. Phi-4-14B model loads and generates tokens
 
 ---
 
-*Roadmap updated: 2026-04-27*
-*Full milestone archives: .planning/milestones/*
+### Phase 15.4: Llama 4 + Mistral Small
+
+**Goal:** Support Meta's Llama 4 and Mistral Small model architectures
+
+**Requirements:** MODEL-03, MODEL-04
+
+**Success Criteria:**
+1. Llama 4 architecture registered with MoE support (Scout/Maverick)
+2. Llama 4 Scout and Maverick models load and generate tokens
+3. Mistral Small architecture registered with expert routing
+4. Mistral-Small-24B model loads and generates tokens
+
+---
+
+### Phase 15.5: Go Kubernetes Operator
+
+**Goal:** Full Go-based Kubernetes Operator for declarative resource management
+
+**Requirements:** PROD-01
+
+**Success Criteria:**
+1. Go Operator scaffolded with controller-runtime
+2. vLLMEngine CRD defined with spec/status
+3. Reconciliation loop handles scale up/down
+4. Helm chart updated to use Operator instead of raw deployment
+
+---
+
+### Phase 15.6: TLS + JWT Production Hardening
+
+**Goal:** Complete TLS termination and JWT validation for production security
+
+**Requirements:** PROD-02, PROD-03
+
+**Success Criteria:**
+1. TLS termination integrated with axum using rustls
+2. cert-manager integration for automatic certificate management
+3. JWT validation using jsonwebtoken crate with RS256/ES256
+4. Auth middleware validates JWT on all protected endpoints
+
+---
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| PERF-01 | 15.1 | Pending |
+| PERF-02 | 15.2 | Pending |
+| PERF-03 | 15.2 | Pending |
+| MODEL-01 | 15.3 | Pending |
+| MODEL-02 | 15.3 | Pending |
+| MODEL-03 | 15.4 | Pending |
+| MODEL-04 | 15.4 | Pending |
+| PROD-01 | 15.5 | Pending |
+| PROD-02 | 15.6 | Pending |
+| PROD-03 | 15.6 | Pending |
+
+---
+
+## Dependencies
+
+```
+Phase 15.1 (FA-V3)
+    ↓
+Phase 15.2 (KV Cache) ← Phase 15.1
+    ↓
+Phase 15.3 (Gemma3+Phi-4) ← Phase 15.2
+    ↓
+Phase 15.4 (Llama4+Mistral) ← Phase 15.3
+    ↓
+Phase 15.5 (Go Operator) ← Phase 15.4 (independent track)
+    ↓
+Phase 15.6 (TLS+JWT) ← Phase 15.5 (can overlap)
+```
+
+---
+
+*Roadmap created: 2026-04-27*
+*Last updated: 2026-04-27*
