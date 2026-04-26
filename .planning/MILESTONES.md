@@ -1,5 +1,32 @@
 # Milestones
 
+## v15.0 Performance + Models + Production
+
+**Shipped:** 2026-04-27
+**Phases:** 15.1-15.6 | **Plans:** 6 | **Tasks:** 10 requirements
+
+### Key Accomplishments
+
+1. **FlashAttention V3** — New kernel with MQA/GQA support and sliding window attention
+2. **KV Cache Optimization** — FP8 quantization with 50% memory reduction, chunked prefill
+3. **Model Support** — Gemma3, Phi-4, Llama 4, Mistral Small architectures
+4. **Production Hardening** — Go K8s Operator scaffold, TLS/JWT security
+
+### Stats
+
+- Files: flash_v3.rs, kv_cache_fp8.rs, gemma3/, phi4/, llama4/, mistral_small/, k8s/operator/, security/tls.rs, security/jwt.rs
+- Requirements: 10/10 satisfied (100%)
+- Timeline: Single session
+
+### Tech Decisions
+
+- FA-V3 with online softmax algorithm
+- FP8 E4M3 format for KV cache
+- MoE architectures with expert routing
+- Rustls for TLS, custom JWT validation
+
+---
+
 ## v14.0 Developer Tooling
 
 **Shipped:** 2026-04-27
