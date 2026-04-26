@@ -5,6 +5,7 @@ pub struct CudaGraphConfig {
     pub enabled: bool,
     pub batch_sizes: Vec<usize>,
     pub model_config: ModelGraphConfig,
+    pub enable_graph_pooling: Option<bool>,
 }
 
 impl Default for CudaGraphConfig {
@@ -13,6 +14,7 @@ impl Default for CudaGraphConfig {
             enabled: false,
             batch_sizes: vec![1, 4, 8, 16, 32, 64],
             model_config: ModelGraphConfig::default(),
+            enable_graph_pooling: Some(true),
         }
     }
 }
@@ -46,10 +48,15 @@ impl CudaGraphConfig {
             .map(|v| v.split(',').filter_map(|s| s.trim().parse().ok()).collect())
             .unwrap_or_else(|| vec![1, 4, 8, 16, 32, 64]);
 
+        let enable_graph_pooling = std::env::var("VLLM_CUDA_GRAPH_POOLING")
+            .ok()
+            .and_then(|v| v.parse().ok());
+
         Self {
             enabled,
             batch_sizes,
             model_config: ModelGraphConfig::default(),
+            enable_graph_pooling,
         }
     }
 }

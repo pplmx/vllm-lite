@@ -14,7 +14,7 @@ pub use format::{FormatLoader, SafetensorsLoader};
 
 #[cfg(test)]
 mod tests {
-    use super::{load_checkpoint, SafetensorsLoader};
+    use super::{SafetensorsLoader, load_checkpoint};
     use candle_core::Device;
     use std::path::Path;
     use tempfile::TempDir;

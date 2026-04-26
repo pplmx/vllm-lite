@@ -264,7 +264,10 @@ mod tests {
             .build()
             .unwrap();
         let json = loader.config_json();
-        assert_eq!(json.get("model_type").and_then(|v| v.as_str()), Some("llama"));
+        assert_eq!(
+            json.get("model_type").and_then(|v| v.as_str()),
+            Some("llama")
+        );
     }
 
     #[test]
