@@ -30,6 +30,7 @@ tracing-appender = "0.2"
 uuid = { version = "1", features = ["v4"] }
 clap = { version = "4", features = ["derive", "env"] }
 reqwest = { version = "0.12", features = ["blocking"] }
+chrono = { version = "0.4", features = ["serde"] }
 
 [dev-dependencies]
 axum = { version = "0.8", features = ["tokio", "macros"] }
