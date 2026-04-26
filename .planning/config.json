@@ -1,0 +1,25 @@
+{
+  "version": "1.0",
+  "milestone": {
+    "name": "性能优化",
+    "version": "10.0"
+  },
+  "mode": "yolo",
+  "granularity": "standard",
+  "parallelization": true,
+  "commit_docs": true,
+  "model_profile": "balanced",
+  "workflow": {
+    "research": true,
+    "plan_check": true,
+    "verifier": true,
+    "nyquist_validation": true,
+    "auto_advance": true,
+    "code_review": true,
+    "skip_discuss": false
+  },
+  "planning": {
+    "sub_repos": [],
+    "commit_docs": true
+  }
+}
