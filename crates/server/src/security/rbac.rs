@@ -1,6 +1,6 @@
 use axum::{
     extract::Request,
-    http::{HeaderMap, StatusCode, header::AUTHORIZATION},
+    http::HeaderMap,
     middleware::Next,
     response::Response,
 };
@@ -78,7 +78,7 @@ impl RbacMiddleware {
         headers
             .get("X-User-Role")
             .and_then(|v| v.to_str().ok())
-            .map(|s| Role::from_str(s))
+            .map(Role::from_str)
             .unwrap_or(self.default_role)
     }
 }
