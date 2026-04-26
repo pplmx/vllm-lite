@@ -1,21 +1,23 @@
-# vllm-lite Phase 12: 高级功能
+# vllm-lite Phase 13: 主机部署
 
 ## What This Is
 
-Phase 12 milestone focused on advanced features — extended quantization support, streaming improvements, and smart request batching.
+Phase 13 milestone focused on production host deployment — multi-node clusters, Kubernetes integration, high availability, operations tooling, and security hardening.
 
 ## Core Value
 
-Expand vllm-lite's production capabilities with more quantization options, better streaming, and intelligent request batching for optimal throughput.
+Make vllm-lite production-ready for host/datacenter deployment with cluster support, Kubernetes Operator, HA/DR capabilities, ops tools, and enterprise security.
 
-## Current Milestone: v12.0 高级功能
+## Current Milestone: v13.0 主机部署
 
-**Goal:** More quantizations, streaming improvements, and smart batching
+**Goal:** Production-ready host deployment with cluster, K8s, HA, ops, and security
 
 **Target features:**
-- More quantizations — AWQ, GPTQ support
-- Streaming improvements — Better backpressure handling
-- Request batching enhancements — Predictive batching
+- Multi-node/cluster support — Distributed inference across servers
+- Kubernetes integration — Operator, Helm Chart, auto-scaling
+- High availability/fault recovery — Hot standby, multi-replica, failover
+- Operations tools — Deployment scripts, health checks, config management
+- Security hardening — TLS, authentication, RBAC, audit logs
 
 ## Requirements
 
@@ -34,6 +36,9 @@ Expand vllm-lite's production capabilities with more quantization options, bette
 - ✓ 性能基准测试 — Phase 10.3
 - ✓ Pipeline Parallelism — Phase 11.1
 - ✓ Distributed KV Cache — Phase 11.2
+- ✓ AWQ/GPTQ quantization support — Phase 12.1
+- ✓ Backpressure handling for streaming — Phase 12.2
+- ✓ Predictive batching — Phase 12.3
 
 ### Active
 
@@ -48,12 +53,11 @@ Expand vllm-lite's production capabilities with more quantization options, bette
 
 ## Context
 
-Phase 10 completed with FlashAttention V2, CUDA Graph pooling, and Chunked Prefill. The engine is now ready for horizontal scaling.
+Phase 12 completed with AWQ/GPTQ quantization, streaming improvements, and predictive batching. The engine is production-ready for single-node multi-GPU.
 
-Existing distributed infrastructure needs:
-- `crates/dist/` — Tensor Parallel support (already exists, needs expansion)
-- Communication layer for multi-node coordination
-- KV Cache invalidation/ coherency protocol
+v13.0 focuses on multi-node cluster deployment:
+- Existing: `crates/dist/` — Tensor Parallel support
+- Needed: Multi-node coordination, Kubernetes integration, HA/DR
 
 ## Constraints
 
@@ -66,10 +70,10 @@ Existing distributed infrastructure needs:
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| AWQ support | Popular low-bit quantization | — Pending |
-| GPTQ support | Widely used in production | — Pending |
-| Streaming backpressure | Handle slow clients | — Pending |
-| Predictive batching | Anticipate request patterns | — Pending |
+| Multi-node architecture | Horizontal scaling beyond single host | — Pending |
+| K8s Operator vs Helm-only | Operator for declarative management | — Pending |
+| Consensus protocol | Raft vs etcd for HA leader election | — Pending |
+| TLS approach | mTLS for cluster internal, simple TLS for external | — Pending |
 
 ## Evolution
 
@@ -89,4 +93,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-26 after Phase 12 initialization*
+*Last updated: 2026-04-27 after Phase 13 initialization*

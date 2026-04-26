@@ -2,33 +2,31 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-26)
+See: .planning/PROJECT.md (updated 2026-04-27)
 
-**Core value:** Expand vllm-lite with advanced features
-**Current focus:** Phase 12.3 — 智能批处理
+**Core value:** Production-ready host deployment with cluster, K8s, HA, ops, and security
+**Current focus:** Defining requirements for v13.0
 
 ---
 
 ## Milestone Progress
 
-**Phase 12: 高级功能**
+**Phase 13: 主机部署**
 
 | Phase | Name | Status |
 |-------|------|--------|
-| 12.1 | 量化扩展 | Complete |
-| 12.2 | 流式改进 | Complete |
-| 12.3 | 智能批处理 | Complete |
+| 13.1 | — | Pending |
+| 13.2 | — | Pending |
+| 13.3 | — | Pending |
 
 ---
 
-## Current Phase
+## Current Position
 
-**Phase 12.0: 高级功能** — Complete ✓
-
-**All phases completed:**
-- 12.1: AWQ/GPTQ quantization support
-- 12.2: Backpressure handling for streaming
-- 12.3: Predictive batching
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-27 — Milestone v13.0 started
 
 ---
 
@@ -48,8 +46,8 @@ None.
 
 ## Notes
 
-- Phase 12 全部完成
-- Milestone v12.0 complete
+- Phase 12 complete, starting Phase 13
+- Focus: host deployment (no edge/mobile)
 
 ---
-*State updated: 2026-04-26*
+*State updated: 2026-04-27*
