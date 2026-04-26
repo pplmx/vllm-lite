@@ -68,7 +68,9 @@ pub fn register_all_archs(registry: &ArchitectureRegistry) {
     crate::mistral::register::register(registry);
     crate::qwen3::register::register(registry);
     crate::qwen3_5::register::register(registry);
+    crate::gemma3::register::register(registry);
     crate::gemma4::register::register(registry);
+    crate::phi4::register::register(registry);
     crate::mixtral::register::register(registry);
 }
 
