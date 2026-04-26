@@ -4,29 +4,50 @@
 
 See: .planning/PROJECT.md (updated 2026-04-27)
 
-**Core value:** Production-ready host deployment with cluster, K8s, HA, ops, and security
-**Current focus:** Phase 13 complete
+**Core value:** Production-ready LLM inference engine with continuous batching, paged KV cache, tensor parallelism
+**Current focus:** v14.0 Developer Tooling — roadmap created, planning phase 14.1
 
 ---
 
 ## Milestone Progress
 
-**Phase 13: 主机部署**
+**Milestone v14.0: Developer Tooling** (planning phase)
 
-| Phase | Name | Status |
-|-------|------|--------|
-| 13.1 | K8s 基础 | Complete |
-| 13.2 | 高可用 | Complete |
-| 13.3 | 安全加固 | Complete |
+| Phase | Name | Requirements | Status |
+|-------|------|--------------|--------|
+| 14.1 | Benchmarking | BENCH-01, BENCH-02, BENCH-03 | Not started |
+| 14.2 | Debug Utilities | DEBUG-01, DEBUG-02, DEBUG-03 | Not started |
+| 14.3 | CLI Tools | CLI-01, CLI-02, CLI-03 | Not started |
+| 14.4 | Test Infrastructure | TEST-01, TEST-02, TEST-03 | Not started |
 
 ---
 
 ## Current Position
 
-Phase: Milestone Complete
-Plan: All phases complete
-Status: Milestone v13.0 ready
-Last activity: 2026-04-27 — Phase 13.3 completed (Security hardening)
+Phase: 14.1 (ready for planning)
+Plan: Roadmap created — awaiting approval to plan Phase 14.1
+Status: Roadmap phase
+Last activity: 2026-04-27 — Roadmap created for v14.0
+
+---
+
+## Accumulated Context
+
+### Key Decisions (v14.0)
+
+| Decision | Rationale | Status |
+|----------|-----------|--------|
+| Benchmarking integrated via SchedulerObservers | Non-invasive to hot path | Implemented |
+| Debug utilities use existing tracing infrastructure | Leverage existing tracing spans | Implemented |
+| CLI extends existing clap-based server CLI | Consistent UX | Implemented |
+| Test infrastructure in vllm_testing crate | Reusable across test targets | Implemented |
+
+### Architecture Notes
+
+- All tooling uses observer/publisher pattern via `SchedulerObservers` trait
+- Metrics collection via `EnhancedMetricsCollector`
+- CLI commands added to `crates/server/src/cli.rs`
+- Test helpers in `vllm_testing` crate
 
 ---
 
@@ -66,8 +87,10 @@ None.
 
 ## Notes
 
-- Phase 12 complete, starting Phase 13
-- Focus: host deployment (no edge/mobile)
+- v14.0 roadmap created with 4 phases (14.1-14.4)
+- 12 requirements mapped: 3 benchmarking, 3 debug, 3 CLI, 3 test infrastructure
+- Next step: Plan Phase 14.1 (Benchmarking)
 
 ---
-*State updated: 2026-04-27*
+
+*State updated: 2026-04-27 — Roadmap created*

@@ -1,107 +1,165 @@
-# Feature Landscape: vllm-lite v13.0 Host Deployment
+# Feature Landscape: vllm-lite v14.0 Developer Tooling
 
-**Domain:** LLM Inference Engine — Host Deployment
+**Domain:** LLM Inference Engine Developer Tooling
 **Researched:** 2026-04-27
 
 ## Table Stakes
 
-Features users expect from a production inference deployment. Missing = not production-ready.
+Features users expect. Missing = product feels incomplete.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| **K8s Deployment** | Standard for production infra | Low | CRD + Operator |
-| **Multi-replica** | HA, throughput | Med | Pod scaling, request routing |
-| **Health checks** | K8s probe integration | Low | Extend existing HealthChecker |
-| **Metrics** | Observability | Low | Extend existing metrics |
-| **Config management** | Declarative deployment | Med | CRD + ConfigMap |
-| **Leader election** | Scheduler HA | High | K8s Lease API |
-| **Graceful shutdown** | Zero-downtime deploys | Med | Drain requests, complete KV |
+| Throughput benchmark | Measure tokens/sec under load | Med | Use criterion + custom runner |
+| Latency benchmarks | Measure TTFT, inter-token latency | Med | P50, P95, P99 percentiles |
+| Request tracing | Debug specific request issues | Med | Use tracing spans |
+| Metrics endpoint | `/v1/metrics` already exists | Low | Extend with tooling-specific metrics |
+| Config validation | Catch config errors at startup | Low | Use serde schema validation |
+| Model listing | Know what models are available | Low | CLI `list-models` command |
 
 ## Differentiators
 
-Features that set vllm-lite apart from competitors. Not expected, but valued.
+Features that set product apart. Not expected, but valued.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **Cross-node KV cache** | Efficient long-context sharing | High | Coherence protocol needed |
-| **Lightweight operator** | Less resource overhead | Low | vs vLLM Ray-based |
-| **Rust-native coordination** | Type-safe cluster management | Med | vs Python/Golang alternatives |
-| **Hybrid attention+SSM** | Qwen3.5 hybrid models | Med | Existing, extend to cluster |
+| Interactive debug REPL | Step through request execution | High | NanoClaw-style REPL |
+| KV cache visualizer | See cache state graphically | High | Web UI or CLI tree |
+| Prefix cache analysis | Understand prompt reuse rates | Med | CLI `analyze-cache` command |
+| Speculative decoding profiler | Tune draft parameters | Med | Track acceptance rates |
+| GPU memory timeline | Visualize memory allocation | Med | Use perfetto |
+| Fuzzing harness | Catch edge cases automatically | Med | cargo-fuzz integration |
 
 ## Anti-Features
 
-Features to explicitly NOT build in v13.0.
+Features to explicitly NOT build.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| **Full service mesh (Istio)** | Complexity, resource cost | Optional, opt-in later |
-| **Multi-tenant isolation** | Significant complexity | Phase 2 or 3 |
-| **Dynamic model loading** | KV cache invalidation complexity | Static model per deployment |
-| **Cross-cluster federation** | Not needed yet | Single cluster focus |
+| Full GUI debugger | Binary bloat, complexity | CLI REPL is sufficient |
+| Cloud-based profiling | Privacy concerns, latency | Local perfetto export |
+| Real-time dashboard | Complexity, maintenance | Prometheus + Grafana (existing) |
+| Multi-user debug session | Auth complexity | Single-user CLI tool |
+| Web UI for benchmarking | Over-engineering | CLI + JSON output |
 
 ## Feature Dependencies
 
 ```
-Phase 1: K8s Deployment
-├── K8s Operator (Go)
-│   └── CRD definitions
-├── StatefulSet controller
-│   └── ConfigMap integration
-└── Health check extension
-    └── Readying checking model loaded
+Feature A → Feature B (B requires A)
 
-Phase 2: Multi-Node Coordination
-├── NodeMesh
-│   └── DeviceMesh extension
-├── ClusterManager
-│   └── Service discovery
-└── Cross-node KV cache
-    └── DistributedKVCache extension
+Benchmark Suite
+├── Basic throughput → Latency percentiles
+├── Single request → Concurrent requests
+└── Local metrics → Prometheus export
 
-Phase 3: High Availability
-├── LeaderElection
-│   └── K8s Lease API
-├── ClusterSchedulerEngine
-│   └── SchedulerEngine extension
-└── Request routing
-    └── Ingress to leader
+Debug Utilities
+├── Request tracing → KV cache inspection
+├── Span recording → Trace playback
+└── Cache stats → Prefix analysis
 
-Phase 4: Security Hardening
-├── TLS/mTLS
-│   └── rustls + cert-manager
-├── JWT auth
-│   └── AuthMiddleware extension
-└── Cluster rate limiting
-    └── Distributed rate limiter
+CLI Tools
+├── Model listing → Model info
+├── Config validation → Config generation
+└── Basic commands → Interactive REPL
+
+Test Infrastructure  
+├── Mock models → Integration tests
+├── Property tests → Fuzzing harness
+└── Unit tests → E2E benchmarks
 ```
 
 ## MVP Recommendation
 
-**v13.0 scope (4 phases as planned):**
-
 Prioritize:
-1. K8s Deployment (Phase 1) — operational foundation
-2. Multi-Node Coordination (Phase 2) — core differentiation
-3. Leader Election (Phase 3) — production reliability
-4. Security (Phase 4) — hardening
+
+1. **Throughput benchmark** - Core metric, easy to implement
+2. **Latency benchmarks** - P50/P95/P99, important for SLA
+3. **Request tracing** - Uses existing tracing infrastructure
+4. **Metrics extension** - Adds tooling metrics to existing endpoint
+5. **Config validation** - Prevents startup errors
 
 Defer:
-- **Multi-tenant isolation**: Requires separate auth namespace, not v13.0
-- **Dynamic model loading**: KV cache coherence too complex for v13.0
-- **Full service mesh**: Add as optional integration later
+- **Interactive REPL** (High complexity, nice-to-have)
+- **Fuzzing harness** (Good for long-term quality, not MVP)
+- **GPU memory timeline** (Requires CUDA-specific tooling)
 
-## Phase Deliverables
+## Benchmarking Feature List
 
-| Phase | Deliverable | Acceptance Criteria |
-|-------|-------------|---------------------|
-| 1 | K8s Operator + CRDs | `kubectl apply -f` deploys N replicas |
-| 2 | Multi-node TP | TP=2 across 2 pods, correct all-reduce |
-| 3 | HA failover | Kill leader, follower takes over, no dropped requests |
-| 4 | mTLS + JWT | All node-to-node encrypted, JWT validation works |
+### Required (MVP)
+
+| Feature | Description | Acceptance Criteria |
+|---------|-------------|---------------------|
+| Throughput test | Sustained load test | Reports tokens/sec at N concurrent requests |
+| Latency test | Timing per request | Reports TTFT, P50, P95, P99 latency |
+| Warmup handling | Skip cold-start data | Discards first N iterations as warmup |
+
+### Nice-to-Have
+
+| Feature | Description | Acceptance Criteria |
+|---------|-------------|---------------------|
+| Throughput sweep | Test multiple concurrency levels | Generate throughput curve |
+| Memory profiling | Track memory during test | Report peak memory usage |
+| CUDA graph impact | Compare with/without CUDA graphs | Report speedup percentage |
+
+## Debug Feature List
+
+### Required (MVP)
+
+| Feature | Description | Acceptance Criteria |
+|---------|-------------|---------------------|
+| Request trace | Log all operations for a request | JSON output with timestamps |
+| KV cache dump | Inspect cache state | List all cached prompts |
+| Metrics snapshot | Point-in-time metrics | Export current metric values |
+
+### Nice-to-Have
+
+| Feature | Description | Acceptance Criteria |
+|---------|-------------|---------------------|
+| Cache hit analysis | Explain why prefix hit/miss | Show matching and divergence |
+| Memory timeline | GPU memory over time | Export for visualization |
+| Batch visualization | See batch composition | ASCII art of batch |
+
+## CLI Feature List
+
+### Required (MVP)
+
+| Feature | Description | Command |
+|---------|-------------|---------|
+| Serve server | Run inference server | `vllm-server -m model` (default) |
+| Validate config | Check config file | `vllm-tool validate config.yaml` |
+| List models | Show available models | `vllm-tool list-models ./models` |
+| Get model info | Show model metadata | `vllm-tool model-info -m llama` |
+
+### Nice-to-Have
+
+| Feature | Description | Command |
+|---------|-------------|---------|
+| Model download | Download from HuggingFace | `vllm-tool download Qwen/Qwen2-0.5B` |
+| Config generate | Scaffold config | `vllm-tool init-config` |
+| Benchmark | Run benchmark suite | `vllm-tool benchmark --duration 60` |
+
+## Test Infrastructure Feature List
+
+### Required (MVP)
+
+| Feature | Description | Acceptance Criteria |
+|---------|-------------|---------------------|
+| Integration test helpers | Common test utilities | `TestHarness::new()` |
+| Mock model variants | Different behavior mocks | `NeverProgressModel`, `SlowModel` |
+| Request factory | Generate test requests | `TestRequest::random()` |
+
+### Nice-to-Have
+
+| Feature | Description | Acceptance Criteria |
+|---------|-------------|---------------------|
+| Property-based tests | Generative testing | 1000+ test cases auto-generated |
+| Fuzzing corpus | Edge case inputs | Model behavior under mutation |
+| Benchmark CI check | Reject regressions | Fail PR if regression > 5% |
+
+---
 
 ## Sources
 
-- vllm-lite existing features
-- Kubernetes production deployment patterns
-- vLLM Ray vs K8s comparison (community wisdom)
-- Leader election patterns
+- [vLLM Performance Guide](https://docs.vllm.ai/en/latest/dev PERFORMANCE.html)
+- [Criterion Examples](https://github.com/bheisner/criterion.rs)
+- [Rust Fuzzing Book](https://rust-fuzz.github.io/book/)
+- [Proptest Tutorial](https://proptest-rs.github.io/proptest-book/)
