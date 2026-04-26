@@ -315,13 +315,13 @@ mod tests {
         };
         let batcher = PredictiveBatcher::new(config);
 
-        for i in 0..20 {
+        for _ in 0..20 {
             batcher.record_request(128, 64);
             std::thread::sleep(Duration::from_millis(1));
         }
 
         let predicted = batcher.predict_batch_size(10);
-        assert!(predicted >= 10 && predicted <= 32);
+        assert!((10..=32).contains(&predicted));
     }
 
     #[test]
@@ -340,7 +340,7 @@ mod tests {
         }
 
         let predicted = batcher.predict_batch_size(8);
-        assert!(predicted >= 4 && predicted <= 32);
+        assert!((4..=32).contains(&predicted));
     }
 
     #[test]
@@ -408,7 +408,7 @@ mod tests {
         }
 
         let optimal = optimizer.calculate_optimal_batch_size();
-        assert!(optimal >= 4 && optimal <= 32);
+        assert!((4..=32).contains(&optimal));
     }
 
     #[test]
