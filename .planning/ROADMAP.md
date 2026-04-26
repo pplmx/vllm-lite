@@ -10,11 +10,11 @@
 
 ## Phase Summary
 
-| # | Phase | Goal | Requirements | Success Criteria |
-|---|-------|------|--------------|------------------|
-| 10.1 | Kernel 优化 | FlashAttention V2 + CUDA Graph | PERF-01, PERF-02 | 3 |
-| 10.2 | 调度优化 | PD 分离 + Chunked Prefill | PERF-03, PERF-04 | 3 |
-| 10.3 | 基准测试 | 性能验证 + 文档 | QUAL-01 | 2 |
+| # | Phase | Goal | Requirements | Status |
+|---|-------|------|--------------|--------|
+| 10.1 | Kernel 优化 | FlashAttention V2 + CUDA Graph | PERF-01, PERF-02 | ✅ Complete |
+| 10.2 | 调度优化 | PD 分离 + Chunked Prefill | PERF-03, PERF-04 | ✅ Complete |
+| 10.3 | 基准测试 | 性能验证 + 文档 | QUAL-01 | ✅ Complete |
 
 ---
 
