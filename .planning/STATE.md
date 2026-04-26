@@ -5,7 +5,7 @@
 See: .planning/PROJECT.md (updated 2026-04-27)
 
 **Core value:** Production-ready host deployment with cluster, K8s, HA, ops, and security
-**Current focus:** Phase 13.1 complete, Phase 13.2 pending
+**Current focus:** Phase 13.3 security hardening
 
 ---
 
@@ -16,17 +16,17 @@ See: .planning/PROJECT.md (updated 2026-04-27)
 | Phase | Name | Status |
 |-------|------|--------|
 | 13.1 | K8s 基础 | Complete |
-| 13.2 | 高可用 | Pending |
+| 13.2 | 高可用 | Complete |
 | 13.3 | 安全加固 | Pending |
 
 ---
 
 ## Current Position
 
-Phase: 13.2 (High Availability)
+Phase: 13.3 (Security Hardening)
 Plan: Ready
 Status: Planning phase
-Last activity: 2026-04-27 — Phase 13.1 completed (K8s infrastructure)
+Last activity: 2026-04-27 — Phase 13.2 completed (HA and observability)
 
 ---
 
