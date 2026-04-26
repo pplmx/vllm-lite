@@ -4,31 +4,35 @@
 
 See: .planning/PROJECT.md (updated 2026-04-26)
 
-**Core value:** 交付生产级性能优化，使 vllm-lite 在标准基准测试中具有竞争力
-**Current focus:** Phase 10.1 — Kernel 优化
+**Core value:** Enable vllm-lite to scale across multiple GPUs and nodes
+**Current focus:** Phase 11.1 — Pipeline Parallelism
 
 ---
 
 ## Milestone Progress
 
-**Phase 10: 性能优化**
+**Phase 11: 分布式支持**
 
 | Phase | Name | Status |
 |-------|------|--------|
-| 10.1 | Kernel 优化 | Not Started |
-| 10.2 | 调度优化 | Not Started |
-| 10.3 | 基准测试 | Not Started |
+| 11.1 | Pipeline Parallelism | Not Started |
+| 11.2 | Distributed KV Cache | Not Started |
 
 ---
 
 ## Current Phase
 
-**10.3: 基准测试** — Complete ✓
+**11.1: Pipeline Parallelism** — Not Started
 
-**Completed Phases:**
-- 10.1: Kernel 优化 ✓ — FlashAttention V2, CUDA Graph pooling
-- 10.2: 调度优化 ✓ — Chunked Prefill 实现
-- 10.3: 基准测试 ✓ — 基准测试套件
+**Goal:** 实现多 GPU 流水线并行
+
+**Requirements:**
+- PP-01: Pipeline Parallelism 实现
+
+**Success Criteria:**
+1. 模型层跨 GPU 分割正确工作
+2. Forward pass 流水线传递
+3. 跨 GPU 数据传输正确
 
 ---
 
@@ -40,14 +44,14 @@ None currently.
 
 ## Recent Commits
 
-- `8f7d9c2` — docs: add initial codebase map
+- `0875405` — docs: add Phase 10 completion to ROADMAP.md
 
 ---
 
 ## Notes
 
-- Phase 10 初始化完成
-- 等待开始 Phase 10.1 执行
+- Phase 11 初始化完成
+- 等待开始 Phase 11.1 执行
 
 ---
 *State updated: 2026-04-26*

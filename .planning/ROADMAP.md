@@ -1,10 +1,10 @@
-# Phase 10 Roadmap: 性能优化
+# Phase 11 Roadmap: 分布式支持
 
 ## Overview
 
-**Milestone:** Phase 10 — 性能优化
-**Core Value:** 交付生产级性能优化，使 vllm-lite 在标准基准测试中具有竞争力
-**Phases:** 3 | **Requirements:** 5 | **Started:** 2026-04-26
+**Milestone:** Phase 11 — 分布式支持
+**Core Value:** Enable vllm-lite to scale across multiple GPUs and nodes
+**Phases:** 2 | **Requirements:** 2 | **Started:** 2026-04-26
 
 ---
 
@@ -12,68 +12,48 @@
 
 | # | Phase | Goal | Requirements | Status |
 |---|-------|------|--------------|--------|
-| 10.1 | Kernel 优化 | FlashAttention V2 + CUDA Graph | PERF-01, PERF-02 | ✅ Complete |
-| 10.2 | 调度优化 | PD 分离 + Chunked Prefill | PERF-03, PERF-04 | ✅ Complete |
-| 10.3 | 基准测试 | 性能验证 + 文档 | QUAL-01 | ✅ Complete |
+| 11.1 | Pipeline Parallelism | Multi-GPU layer pipeline | PP-01 | Not Started |
+| 11.2 | Distributed KV Cache | Cluster KV sharing | KV-01 | Not Started |
 
 ---
 
-## Phase 10.1: Kernel 优化
+## Phase 11.1: Pipeline Parallelism
 
-**Goal:** 实现 FlashAttention V2 和 CUDA Graph 优化
+**Goal:** Implement multi-GPU pipeline parallelism for layer distribution
 
 **Requirements:**
-- PERF-01: FlashAttention V2 实现
-- PERF-02: CUDA Graph 优化完善
+- PP-01: Pipeline Parallelism implementation
 
 **Success Criteria:**
-1. FlashAttention V2 实现并通过精度验证 (误差 < 1e-3)
-2. CUDA Graph 覆盖范围扩大，kernel 启动开销减少 30%+
-3. 单元测试覆盖核心路径
+1. Model layers split across available GPUs
+2. Forward pass correctly pipelines through stages
+3. Backward pass coordination works
+4. Linear speedup with GPU count (target: 1.8x per GPU)
 
 **Implementation Notes:**
-- 参考 `crates/model/src/kernels/flash_attention.rs`
-- 参考 `crates/model/src/kernels/cuda_graph.rs`
-- 需要与 RoPE 实现协调
+- Reference `crates/dist/` for existing TP support
+- Implement stage partitioning
+- Add pipeline scheduler
 
 ---
 
-## Phase 10.2: 调度优化
+## Phase 11.2: Distributed KV Cache
 
-**Goal:** 完善 PD 分离和 Chunked Prefill
-
-**Requirements:**
-- PERF-03: PD 分离完善
-- PERF-04: Chunked Prefill 优化
-
-**Success Criteria:**
-1. PD 分离调度正确工作，prefill 吞吐量提升 20%+
-2. Chunked Prefill 支持 32k+ 上下文无 OOM
-3. 调度器指标正确收集
-
-**Implementation Notes:**
-- 参考 `crates/core/src/scheduler/`
-- PD 分离需要 PhaseScheduler 修改
-- Chunked Prefill 需要内存管理协调
-
----
-
-## Phase 10.3: 基准测试
-
-**Goal:** 性能验证和文档
+**Goal:** Enable KV cache sharing across cluster nodes
 
 **Requirements:**
-- QUAL-01: 性能基准测试
+- KV-01: Distributed KV Cache
 
 **Success Criteria:**
-1. 基准测试套件可运行
-2. 性能对比数据记录
-3. 优化文档更新
+1. KV cache invalidation protocol
+2. Cross-node cache coherence
+3. Memory reduction vs replication
+4. Latency overhead < 10%
 
 **Implementation Notes:**
-- 创建 `benches/` 目录下的基准测试
-- 使用真实模型和输入进行测试
-- 记录优化前后对比
+- Design cache coherence protocol
+- Implement inter-node communication
+- Handle cache misses gracefully
 
 ---
 
@@ -85,7 +65,7 @@ After each phase, run verification and update ROADMAP.md progress.
 
 ## Long-term Vision
 
-Phase 11: 分布式支持 (Pipeline Parallelism, Distributed KV Cache)
+Phase 12: Enterprise features (Multi-tenancy, TLS, Audit logging)
 
 ---
 *Roadmap created: 2026-04-26*
