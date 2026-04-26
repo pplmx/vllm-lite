@@ -11,12 +11,7 @@ pub struct PipelineStageConfig {
 }
 
 impl PipelineStageConfig {
-    pub fn new(
-        stage_id: usize,
-        num_stages: usize,
-        num_layers: usize,
-        device: Device,
-    ) -> Self {
+    pub fn new(stage_id: usize, num_stages: usize, num_layers: usize, device: Device) -> Self {
         let layers_per_stage = num_layers.div_ceil(num_stages);
         let layer_start = stage_id * layers_per_stage;
         let layer_end = (layer_start + layers_per_stage).min(num_layers);
@@ -95,9 +90,9 @@ mod tests {
     fn test_stage_config_unequal_layers() {
         let config = PipelineStageConfig::new(1, 2, 5, Device::Cpu);
 
-        assert_eq!(config.layer_start, 3);  // stage 1 starts at layer 3 (ceil(5/2) = 3)
+        assert_eq!(config.layer_start, 3); // stage 1 starts at layer 3 (ceil(5/2) = 3)
         assert_eq!(config.layer_end, 5);
-        assert_eq!(config.num_layers_in_stage(), 2);  // layers 3 and 4 = 2 layers
+        assert_eq!(config.num_layers_in_stage(), 2); // layers 3 and 4 = 2 layers
     }
 
     #[test]

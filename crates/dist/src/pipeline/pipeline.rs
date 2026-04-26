@@ -1,5 +1,5 @@
-use candle_core::Result;
 use super::stage::{PipelineStage, StageInput, StageOutput};
+use candle_core::Result;
 use std::sync::Arc;
 
 #[allow(dead_code)]
@@ -117,8 +117,8 @@ impl Default for PipelineParallel {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::PipelineStageConfig;
+    use super::*;
     use candle_core::{Device, Tensor};
     use std::sync::Mutex;
 
@@ -202,7 +202,8 @@ mod tests {
 
         let inputs: Vec<_> = (0..3)
             .map(|_| StageInput {
-                hidden_states: Tensor::ones((1, 10, 64), candle_core::DType::F32, &Device::Cpu).unwrap(),
+                hidden_states: Tensor::ones((1, 10, 64), candle_core::DType::F32, &Device::Cpu)
+                    .unwrap(),
                 position_ids: Tensor::ones((1, 10), candle_core::DType::U32, &Device::Cpu).unwrap(),
                 positions: vec![0; 10],
                 kv_block_ids: vec![vec![0]],

@@ -108,11 +108,15 @@ impl DistributedKVCache {
                     },
                 ))
             }
-            super::protocol::CacheOperation::Update { key, value_hash, .. } => {
+            super::protocol::CacheOperation::Update {
+                key, value_hash, ..
+            } => {
                 self.put(*key, *value_hash);
                 None
             }
-            super::protocol::CacheOperation::Write { key, value_hash, .. } => {
+            super::protocol::CacheOperation::Write {
+                key, value_hash, ..
+            } => {
                 self.put(*key, *value_hash);
                 None
             }

@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(Debug, Clone)]
 pub struct BackpressureConfig {
@@ -79,7 +79,8 @@ impl BackpressureState {
             || (pending >= self.config.high_water_mark && matches!(*last, FlowControlState::Normal))
         {
             FlowControlState::Throttled
-        } else if pending <= self.config.resume_threshold && matches!(*last, FlowControlState::Throttled)
+        } else if pending <= self.config.resume_threshold
+            && matches!(*last, FlowControlState::Throttled)
         {
             FlowControlState::Resumed
         } else {
