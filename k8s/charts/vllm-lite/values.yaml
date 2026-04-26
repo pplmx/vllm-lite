@@ -1,0 +1,94 @@
+replicaCount: 3
+
+image:
+  repository: ghcr.io/pplmx/vllm-lite
+  pullPolicy: IfNotPresent
+  tag: latest
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 8000
+  grpcPort: 50051
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  capabilities:
+    drop:
+      - ALL
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+
+resources:
+  limits:
+    nvidia.com/gpu: 1
+    memory: 32Gi
+    cpu: 8
+  requests:
+    memory: 16Gi
+    cpu: 4
+
+nodeSelector:
+  node.kubernetes.io/gpu-type: nvidia
+
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+affinity: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: vllm-lite.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+config:
+  modelPath: /models/llama-7b
+  maxBatchSize: 256
+  numKvBlocks: 1024
+  tensorParallelSize: 1
+
+healthCheck:
+  enabled: true
+  livenessPath: /health/live
+  readinessPath: /health/ready
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  failureThreshold: 3
+
+persistence:
+  enabled: false
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 10Gi
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+rbac:
+  create: true
+
+networkPolicy:
+  enabled: false

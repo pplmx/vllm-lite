@@ -235,7 +235,9 @@ async fn main() {
         .route("/v1/batches", get(list_batches))
         .route("/v1/batches/{id}", get(get_batch))
         .route("/v1/batches/{id}/results", get(get_batch_results))
-        // Health, readiness, and metrics endpoints
+        // Health, readiness, and metrics endpoints (K8s-compatible paths)
+        .route("/health/live", get(health_handler))
+        .route("/health/ready", get(ready_handler))
         .route("/health", get(health_handler))
         .route("/ready", get(ready_handler))
         .route("/metrics", get(metrics_handler))

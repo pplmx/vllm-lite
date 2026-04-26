@@ -200,6 +200,17 @@ impl AppConfig {
             }
         }
 
+        if let Ok(env_path) = std::env::var("VLLM_CONFIG_PATH") {
+            let env_config_path = PathBuf::from(env_path);
+            if env_config_path.exists() {
+                if let Ok(contents) = std::fs::read_to_string(&env_config_path) {
+                    if let Ok(loaded) = serde_yaml::from_str::<AppConfig>(&contents) {
+                        config = loaded;
+                    }
+                }
+            }
+        }
+
         config
     }
 
