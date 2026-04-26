@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package vllm.distributed;
+
+service NodeService {
+  rpc Ping(PingRequest) returns (PingResponse);
+  rpc AllReduce(AllReduceRequest) returns (AllReduceResponse);
+  rpc GetKVCache(GetKVCacheRequest) returns (GetKVCacheResponse);
+  rpc GetPeers(GetPeersRequest) returns (GetPeersResponse);
+}
+
+message PingRequest {
+  string node_id = 1;
+  uint64 timestamp = 2;
+}
+
+message PingResponse {
+  bool success = 1;
+  string node_id = 2;
+  uint64 timestamp = 3;
+}
+
+message AllReduceRequest {
+  bytes data = 1;
+  string op = 2;
+  uint32 root = 3;
+}
+
+message AllReduceResponse {
+  bool success = 1;
+  bytes result = 2;
+}
+
+message GetKVCacheRequest {
+  string block_hash = 1;
+}
+
+message GetKVCacheResponse {
+  bool found = 1;
+  bytes data = 2;
+  uint32 num_tokens = 3;
+}
+
+message GetPeersRequest {
+  string node_id = 1;
+}
+
+message GetPeersResponse {
+  repeated string peer_addresses = 1;
+}

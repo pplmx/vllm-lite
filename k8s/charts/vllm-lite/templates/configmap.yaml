@@ -1,0 +1,23 @@
+{{/*
+ConfigMap for engine configuration
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vllm-lite.fullname" . }}-config
+  labels:
+    {{- include "vllm-lite.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    server:
+      host: 0.0.0.0
+      port: 8000
+      log_level: info
+    engine:
+      max_batch_size: {{ .Values.config.maxBatchSize }}
+      num_kv_blocks: {{ .Values.config.numKvBlocks }}
+      tensor_parallel_size: {{ .Values.config.tensorParallelSize }}
+    auth:
+      api_keys: []
+      rate_limit_requests: 100
+      rate_limit_window_secs: 60

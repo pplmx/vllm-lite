@@ -5,7 +5,7 @@
 See: .planning/PROJECT.md (updated 2026-04-27)
 
 **Core value:** Production-ready host deployment with cluster, K8s, HA, ops, and security
-**Current focus:** Defining requirements for v13.0
+**Current focus:** Phase 13.1 complete, Phase 13.2 pending
 
 ---
 
@@ -15,18 +15,18 @@ See: .planning/PROJECT.md (updated 2026-04-27)
 
 | Phase | Name | Status |
 |-------|------|--------|
-| 13.1 | — | Pending |
-| 13.2 | — | Pending |
-| 13.3 | — | Pending |
+| 13.1 | K8s 基础 | Complete |
+| 13.2 | 高可用 | Pending |
+| 13.3 | 安全加固 | Pending |
 
 ---
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-04-27 — Milestone v13.0 started
+Phase: 13.2 (High Availability)
+Plan: Ready
+Status: Planning phase
+Last activity: 2026-04-27 — Phase 13.1 completed (K8s infrastructure)
 
 ---
 

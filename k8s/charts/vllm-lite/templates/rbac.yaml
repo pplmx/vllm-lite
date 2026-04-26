@@ -1,0 +1,50 @@
+{{/*
+ServiceAccount
+*/}}
+{{- if .Values.rbac.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "vllm-lite.serviceAccountName" . }}
+  labels:
+    {{- include "vllm-lite.labels" . | nindent 4 }}
+  {{- with .Values.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+---
+{{/*
+ClusterRole for leader election
+*/}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "vllm-lite.fullname" . }}
+  labels:
+    {{- include "vllm-lite.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+{{/*
+ClusterRoleBinding
+*/}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "vllm-lite.fullname" . }}
+  labels:
+    {{- include "vllm-lite.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "vllm-lite.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vllm-lite.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

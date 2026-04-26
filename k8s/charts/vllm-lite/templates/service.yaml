@@ -1,0 +1,41 @@
+{{/*
+API Service - LoadBalancer for external access
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vllm-lite.fullname" . }}
+  labels:
+    {{- include "vllm-lite.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: {{ .Values.service.grpcPort }}
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+  selector:
+    {{- include "vllm-lite.selectorLabels" . | nindent 4 }}
+---
+{{/*
+Headless Service for peer discovery
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vllm-lite.fullname" . }}-peer
+  labels:
+    {{- include "vllm-lite.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  ports:
+    - port: {{ .Values.service.grpcPort }}
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+  selector:
+    {{- include "vllm-lite.selectorLabels" . | nindent 4 }}

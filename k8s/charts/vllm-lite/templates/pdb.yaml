@@ -1,0 +1,20 @@
+{{/*
+PodDisruptionBudget for safe evictions
+*/}}
+{{- if and .Values.podDisruptionBudget.enabled (gt (int .Values.replicaCount) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "vllm-lite.fullname" . }}
+  labels:
+    {{- include "vllm-lite.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  {{- else }}
+  maxUnavailable: 1
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "vllm-lite.selectorLabels" . | nindent 6 }}
+{{- end }}
