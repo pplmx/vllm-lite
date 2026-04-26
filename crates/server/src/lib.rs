@@ -11,6 +11,7 @@ use vllm_model::tokenizer::Tokenizer;
 
 pub mod api;
 pub mod auth;
+pub mod backpressure;
 pub mod cli;
 pub mod config;
 pub mod health;
