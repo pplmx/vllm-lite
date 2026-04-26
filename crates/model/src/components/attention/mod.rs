@@ -3,9 +3,11 @@
 use candle_core::{Result, Tensor};
 
 pub mod flash;
+pub mod flash_v3;
 pub mod gqa;
 pub mod mla;
 
+pub use flash_v3::{FlashAttentionV3, FlashAttentionV3Config, GqaFlashAttention, MqaFlashAttention};
 pub use gqa::GqaAttention;
 pub use mla::MlaAttention;
 

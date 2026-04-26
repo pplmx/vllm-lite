@@ -1,6 +1,7 @@
 pub mod arch;
 pub mod components;
 pub mod config;
+pub mod gemma3;
 pub mod gemma4;
 pub mod kernels;
 pub mod kv_cache;
@@ -9,6 +10,7 @@ pub mod loader;
 pub mod mistral;
 pub mod mixtral;
 pub mod paged_tensor;
+pub mod phi4;
 pub mod quantize;
 pub mod qwen3;
 pub mod qwen3_5;
