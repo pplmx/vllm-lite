@@ -20,6 +20,16 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 - ✅ High availability (leader election, failover, HPA metrics, PodDisruptionBudget)
 - ✅ Security hardening (TLS, mTLS, authentication, RBAC, audit logging)
 
+## Current Milestone: v14.0 Developer Tooling
+
+**Goal:** Comprehensive developer tooling suite with benchmarking, debugging, CLI improvements, and test infrastructure.
+
+**Target features:**
+- Benchmarking suite — standardized throughput/latency benchmarks, profiling tools
+- Debug utilities — request tracing, KV cache inspection, batch visualization
+- CLI improvements — model management, config validation, hot reload
+- Test infrastructure — integration test harnesses, fuzzing, model comparison
+
 ## Requirements
 
 ### Validated
@@ -49,7 +59,7 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 
 ### Active
 
-(None yet — define next milestone with `/gsd-new-milestone`)
+- In progress: Developer Tooling — v14.0 (benchmarking, debug, CLI, test infra)
 
 ### Out of Scope
 
@@ -90,4 +100,4 @@ Tech stack: Rust + Candle, multi-GPU CUDA support, Kubernetes, gRPC.
 This document evolves at phase transitions and milestone boundaries.
 
 ---
-*Last updated: 2026-04-27 after v13.0 milestone*
+*Last updated: 2026-04-27 after v14.0 milestone started*

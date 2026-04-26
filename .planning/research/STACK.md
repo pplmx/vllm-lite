@@ -1,106 +1,141 @@
-# Technology Stack: vllm-lite v13.0 Host Deployment
+# Technology Stack: vllm-lite v14.0 Developer Tooling
 
-**Project:** vllm-lite Host Deployment Infrastructure
+**Project:** vllm-lite Developer Tooling
 **Researched:** 2026-04-27
 
-## Deployment Stack
+## Recommended Stack
 
-### Container Runtime
+### Core Framework
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
-| Docker | 24+ | Container building | Industry standard, NVIDIA support |
-| containerd | 1.7+ | Container runtime | K8s default, better performance than dockershim |
+| Rust stable | 1.85+ | Language | Existing codebase uses 1.85, no need to upgrade |
+| criterion | 0.5 | Micro-benchmarking | Mature, async-friendly, statistical rigor |
+| tracing | 0.1 | Distributed tracing | Already used in engine (tracing crate) |
+| clap | 4.x | CLI argument parsing | Already used (v4.x in deps) |
 
-### Kubernetes
-| Component | Version | Purpose | Why |
-|-----------|---------|---------|-----|
-| Kubernetes | 1.28+ | Container orchestration | Required for production deployment |
-| NVIDIA GPU Operator | 23.9+ | GPU node management | Enables GPU scheduling in K8s |
-| Metrics Server | 0.6+ | Resource metrics | Required for HPA |
-| cert-manager | 1.14+ | TLS certificate management | Automated certificate rotation |
-
-### Monitoring
+### Benchmarking
 | Technology | Version | Purpose | When to Use |
-|------------|---------|---------|-------------|
-| Prometheus | 2.48+ | Metrics collection | Always (required for HPA) |
-| Grafana | 10+ | Visualization | Optional, for dashboards |
-| kube-prometheus | 0.13+ | Full stack | Production deployment |
+|-----------|---------|---------|-------------|
+| criterion | 0.5 | Statistical micro-benchmarks | Unit-level performance testing |
+| tokio test | 1.x | Async benchmarking | Server endpoint benchmarks |
+| perfetto | - | GPU profiling | CUDA kernel profiling |
 
-### Service Networking
-| Technology | Purpose | When to Use |
-|------------|---------|-------------|
-| CoreDNS | Cluster DNS | Always |
-| Metallb | Load balancer | Bare metal clusters |
-| Cloud LB | Load balancer | Cloud providers (GKE, EKS, AKS) |
+### Debugging
+| Technology | Version | Purpose | When to Use |
+|-----------|---------|---------|-------------|
+| tracing | 0.1 | Structured spans | Request tracing |
+| tracing-subscriber | 0.3 | Output formatting | Development debugging |
+| opentelemetry | 0.21 | Trace export | Production observability |
 
-## Deployment Tools
+### CLI
+| Technology | Version | Purpose | When to Use |
+|-----------|---------|---------|-------------|
+| clap | 4.x | Argument parsing | Already a dep |
+| serde | 1.x | Config serialization | Config validation |
+| prettytable-rs | 0.10 | Table formatting | CLI output |
 
-### Helm Charts (Recommended)
-| Option | Purpose | Notes |
-|--------|---------|-------|
-| Custom Helm chart | vllm-lite deployment | Build in v13.0 |
-| Kustomize | Overlay configuration | Alternative to Helm |
+### Testing
+| Technology | Version | Purpose | When to Use |
+|-----------|---------|---------|-------------|
+| cargo-fuzz | - | Coverage-guided fuzzing | Input fuzzing |
+| proptest | 1.x | Property-based testing | Generative testing |
+| tokio test | 1.x | Async integration tests | Already in use |
 
-### Configuration
-```bash
-# Deployment command
-helm install vllm-lite ./charts/vllm-lite \
-  --set model.path=/models/llama-7b \
-  --set engine.max_batch_size=256 \
-  --namespace vllm-lite
+### Existing Dependencies (Already in Workspace)
 
-# Upgrade command
-helm upgrade vllm-lite ./charts/vllm-lite \
-  --set image.tag=v0.13.0
+From `Cargo.toml` workspace dependencies:
+```toml
+tokio = { version = "1", features = ["sync", "rt", "macros"] }
+metrics = "0.22"
+tracing = "0.1"  # Add: tracing-subscriber
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
 ```
 
-## Supporting Infrastructure
+## Alternatives Considered
 
-### Required Cluster Components
-```yaml
-# GPU node requirements
-nodeSelector:
-  node.kubernetes.io/gpu-type: nvidia
-tolerations:
-- key: "nvidia.com/gpu"
-  operator: "Exists"
-  effect: "NoSchedule"
+| Category | Recommended | Alternative | Why Not |
+|----------|-------------|-------------|---------|
+| Benchmarking | criterion | i Benchmark | criterion is more battle-tested with better statistical output |
+| Tracing | tracing (existing) | log + tracing compat | Already in use, opentelemetry integration exists |
+| CLI | clap (existing) | picocli | clap is already a dependency |
+| Fuzzing | cargo-fuzz | libfuzzer | cargo-fuzz integrates better with Rust, no external deps |
+| Property tests | proptest | quickcheck | proptest has better shrinking, more flexible strategies |
+
+## New Dependencies to Add
+
+### crates/tooling/Cargo.toml
+```toml
+[package]
+name = "vllm-tooling"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Core
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }
+tokio-bench = "0.1"  # Not real - use tokio::spawn + Instant
+
+# Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+
+# CLI (extends existing clap in server)
+clap = { workspace = true }
+prettytable-rs = "0.10"
+
+# Testing
+proptest = "1"
+
+[dev-dependencies]
+cargo-fuzz = "0.11"
 ```
 
-### Optional Components
-| Component | Purpose | Required for |
-|-----------|---------|--------------|
-| Istio/Linkerd | Service mesh | Advanced traffic management |
-| Vault | Secret management | Enterprise security |
-| ArgoCD/Flux | GitOps | Automated deployments |
+### crates/core/Cargo.toml additions
+```toml
+[features]
+default = ["cuda", "gguf"]
+cuda = ["vllm-model/cuda"]
+gguf = ["vllm-model/gguf"]
+# NEW
+profiling = []  # Enable profiling spans in hot path
+```
 
-## Existing Dependencies
-
-vllm-lite already uses:
-- `tokio` — Async runtime (K8s-compatible)
-- `tracing` — Structured logging (prometheus-metrics compatible)
-- `serde` — Serialization (K8s resource compatible)
-- `axum` — HTTP server (K8s health probes)
+### crates/testing/Cargo.toml additions
+```toml
+[dependencies]
+proptest = "1"
+quickcheck = "1"
+```
 
 ## Installation
 
 ```bash
-# Build container
-docker build -t vllm-lite:v0.13.0 .
+# Add to workspace
+cargo add -p vllm-tooling criterion tracing tracing-subscriber proptest prettytable-rs
 
-# Optional: Push to registry
-docker push registry.example.com/vllm-lite:v0.13.0
+# Enable profiling feature
+cargo build -p vllm-core --features profiling
 
-# Deploy to K8s
-kubectl apply -f k8s/manifests/
+# Run benchmarks
+cargo bench -p benches
 
-# Check status
-kubectl get pods -n vllm-lite
+# Fuzzing (requires nightly)
+cargo +nightly fuzz run model_forward
 ```
 
 ## Sources
 
-- [Kubernetes Documentation](https://kubernetes.io/docs/)
-- [NVIDIA GPU Operator](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/)
-- [Prometheus Operator](https://prometheus-operator.dev/)
-- [Helm Charts Best Practices](https://helm.sh/docs/chart_best_practices/)
+- [Criterion Rust Benchmarking](https://bheisner.github.io/criterion.rs/)
+- [Tokio Tracing Tutorial](https://tokio.rs/tokio/tutorial/tracing)
+- [Proptest Book](https://proptest-rs.github.io/proptest-book/)
+- [Clap CLI Tutorial](https://docs.rs/clap/latest/clap/_tutorial/)

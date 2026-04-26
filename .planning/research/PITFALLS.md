@@ -1,245 +1,302 @@
-# Domain Pitfalls: vllm-lite v13.0 Host Deployment
+# Domain Pitfalls: vllm-lite v14.0 Developer Tooling
 
-**Domain:** LLM Inference Engine Production Deployment
+**Domain:** LLM Inference Engine Developer Tooling
 **Researched:** 2026-04-27
 
 ## Critical Pitfalls
 
 Mistakes that cause rewrites or major issues.
 
-### Pitfall 1: OOM on GPU Memory Exhaustion
+### Pitfall 1: Profiling Overhead in Hot Path
 
-**What goes wrong:** Pod gets OOMKilled, request fails, KV cache lost.
+**What goes wrong:** Tooling code adds latency to `Engine::step()`, increasing inference latency.
 
-**Why it happens:** LLM inference uses variable memory based on:
-- Batch size
-- Sequence length
-- KV cache block count
-
-Without proper limits, memory grows unbounded until GPU OOM.
+**Why it happens:** Adding tracing spans, metrics recording, or serialization in the critical path.
 
 **Consequences:**
-- Request failure mid-generation
-- KV cache loss (regeneration required)
-- Pod restart loop (crash → OOM → crash)
+- Performance regression in production
+- Benchmarks show incorrect numbers (tooling overhead included)
+- SLA violations
 
 **Prevention:**
-```yaml
-resources:
-  limits:
-    nvidia.com/gpu: 1
-    memory: 32Gi  # Conservative estimate
-  requests:
-    memory: 16Gi
-```
-
-Calculate memory requirements:
-```
-Model weights (FP16): ~2 bytes per parameter
-KV cache per token: ~2 * 2 * layers * hidden_size bytes
-Max memory = model_weights + (max_seq_len * kv_per_token * max_batch)
-```
-
-**Detection:**
-```bash
-# Watch GPU memory
-nvidia-smi -l 1
-
-# Check pod memory
-kubectl top pod vllm-lite-xxx -n vllm-lite
-```
-
----
-
-### Pitfall 2: Model Load Time Blocks Readiness
-
-**What goes wrong:** Pod stays in "NotReady" for minutes during model load. K8s doesn't route traffic, but probes may timeout.
-
-**Why it happens:** Large models (7B+) take 30-60s to load from disk. Readiness probe waits for model load.
-
-**Consequences:**
-- Rolling update takes forever (new pods stuck in NotReady)
-- Probe timeouts if load exceeds probe settings
-- Service degraded during scale-up
-
-**Prevention:**
-```yaml
-readinessProbe:
-  httpGet:
-    path: /health/ready
-    port: 8000
-  initialDelaySeconds: 60  # Wait for model load
-  periodSeconds: 5
-  failureThreshold: 60     # Allow 5 minutes of loading
-```
-
-**Alternative:** Split liveness from model readiness:
-- Liveness: Always returns OK (process running)
-- Readiness: Returns OK when model loaded
-
-**Detection:**
-```bash
-# Check pod events
-kubectl describe pod vllm-lite-xxx -n vllm-lite
-# Look for: "Readiness probe failed"
-```
-
----
-
-### Pitfall 3: ConfigMap Not Propagating Changes
-
-**What goes wrong:** ConfigMap updated, pods don't pick up changes.
-
-**Why it happens:** ConfigMap updates don't automatically trigger pod restarts. Pods may use stale config.
-
-**Consequences:**
-- Config change has no effect
-- Unexpected behavior (e.g., wrong batch size)
-- Debugging difficulty
-
-**Prevention:**
-- Use `subPath` mounting (NOT recommended, causes restart issues)
-- Use ConfigMap reload operator (recommended)
-- Implement SIGHUP handling in application
-
-**Recommended pattern:** Annotation-based reload
 ```rust
-// On config change, check annotation and reload
-async fn watch_config_map(client: Client) {
-    let cm = client.config_maps().get("vllm-lite-config").await;
-    let config_hash = cm.annotations().get("config.hash");
-    if config_hash != current_hash {
-        reload_config().await;
+// BAD: Always serialize on hot path
+fn step(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
+    let result = self.execute_regular(&batch)?;
+    
+    // BAD: Serialization in hot path
+    if self.trace_enabled {
+        let trace = serde_json::to_string(&result).unwrap();
+        self.trace_buffer.push(trace);
+    }
+    
+    result
+}
+
+// GOOD: Buffer and flush async
+fn step(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
+    let result = self.execute_regular(&batch)?;
+    
+    // GOOD: Record raw data, serialize off critical path
+    if self.trace_enabled {
+        self.trace_buffer.push(TraceEvent {
+            timestamp: Instant::now(),
+            result: (&result.seq_ids, result.next_tokens.len()),
+        });
+    }
+    
+    result
+}
+```
+
+**Detection:** Benchmark with/without `--features profiling`, expect < 1% overhead.
+
+---
+
+### Pitfall 2: Memory Bloat in Metrics Collection
+
+**What goes wrong:** Metrics buffer grows unbounded, consuming memory.
+
+**Why it happens:** Accumulating events without bounds or TTLs.
+
+**Consequences:**
+- OOM on long-running servers
+- Memory metrics show tooling as source of leak
+- False memory regression in benchmarks
+
+**Prevention:**
+```rust
+// BAD: Unbounded accumulation
+pub struct ToolingMetrics {
+    latency_samples: Vec<u64>,  // Grows forever!
+}
+
+// GOOD: Bounded buffer with circular behavior
+pub struct ToolingMetrics {
+    latency_samples: VecDeque<u64>,
+    max_samples: usize,
+}
+
+impl ToolingMetrics {
+    pub fn record_latency(&mut self, ns: u64) {
+        if self.latency_samples.len() >= self.max_samples {
+            self.latency_samples.pop_front();
+        }
+        self.latency_samples.push_back(ns);
     }
 }
 ```
 
-**Detection:**
-```bash
-# Check config hash annotation
-kubectl get configmap vllm-lite-config -n vllm-lite -o jsonpath='{.metadata.annotations}'
-```
+**Detection:** Monitor memory after 24h run, set upper bound on buffers.
 
 ---
 
-### Pitfall 4: Distributed Cache Coherence Complexity
+### Pitfall 3: Blocking in Async Context
 
-**What goes wrong:** Attempting distributed KV cache without proper architecture leads to correctness bugs and performance regression.
+**What goes wrong:** Benchmark or debug code uses blocking I/O in async runtime.
 
-**Why it happens:** 
-- KV cache coherence requires network round-trips
-- Invalidation protocols add latency
-- Race conditions in multi-writer scenarios
+**Why it happens:** Using `std::fs` instead of `tokio::fs`, `thread::sleep` instead of `tokio::time::sleep`.
 
 **Consequences:**
-- Incorrect outputs (stale KV data)
-- Latency spikes (coherence overhead)
-- Complexity explosion (debugging distributed state)
+- Server hangs during benchmarks
+- Starvation of other async tasks
+- "Too many open files" errors
 
-**Prevention:** Defer distributed KV cache to v13.1+. Use per-node caching only.
+**Prevention:**
+```rust
+// BAD: Blocking I/O
+async fn run_benchmark(&self) {
+    let data = std::fs::read("config.json").unwrap();  // Blocks!
+    tokio::time::sleep(Duration::from_secs(1)).await;  // Fine
+}
 
-**Detection:** Monitor cache coherence overhead metrics.
+// GOOD: Async I/O
+async fn run_benchmark(&self) {
+    let data = tokio::fs::read("config.json").await.unwrap();  // Non-blocking!
+    tokio::time::sleep(Duration::from_secs(1)).await;
+}
+```
+
+**Detection:** Use `tokio-console` to detect blocked tasks.
 
 ---
 
 ## Moderate Pitfalls
 
-### Pitfall 5: Health Probe Port Mismatch
+### Pitfall 4: Benchmark Non-Determinism
 
-**What goes wrong:** Probe configured on wrong port, always fails or always succeeds.
+**What goes wrong:** Benchmark results vary wildly between runs.
 
-**Why it happens:** Default port differs from actual port (8000 vs 8080).
+**Why it happens:** Not accounting for warmup, not isolating requests, using wall-clock time without synchronization.
+
+**Consequences:**
+- Can't detect regressions
+- Conflicting benchmark reports
+- CI/CD failures on flaky benchmarks
 
 **Prevention:**
-```yaml
-livenessProbe:
-  httpGet:
-    path: /health/live
-    port: 8000  # Must match server config
+```rust
+// GOOD: Proper benchmark setup
+fn run_throughput_benchmark() -> BenchmarkResult {
+    // 1. Warmup phase (discard results)
+    for _ in 0..WARMUP_ITERATIONS {
+        engine.add_request(test_request());
+        engine.step();
+    }
+    
+    // 2. Synchronize before measurement
+    engine.sync();  // Ensure GPU is idle
+    
+    // 3. Timed phase
+    let start = Instant::now();
+    for _ in 0..MEASURE_ITERATIONS {
+        engine.add_request(test_request());
+        engine.step();
+    }
+    let elapsed = start.elapsed();
+    
+    // 4. Statistical analysis
+    calculate_statistics(elapsed)
+}
 ```
 
 ---
 
-### Pitfall 6: Pod Disruption Budget Starvation
+### Pitfall 5: Config Validation After Engine Start
 
-**What goes wrong:** PDB blocks all evictions, cluster upgrades stuck.
+**What goes wrong:** Invalid config causes panic mid-initialization.
 
-**Why it happens:** `minAvailable: 50%` prevents evicting pods when at minimum replicas.
+**Why it happens:** Validation happens too late, after partial state setup.
+
+**Consequences:**
+- Crash during startup
+- Half-initialized state
+- Hard to debug
 
 **Prevention:**
-```yaml
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: vllm-lite-pdb
-spec:
-  minAvailable: 1  # Allow all but 1 to be evicted
-  # OR
-  maxUnavailable: 1  # Allow 1 pod down at a time
+```rust
+// GOOD: Validate early
+fn AppConfig::load(path: PathBuf) -> Self {
+    let raw = std::fs::read_to_string(&path).unwrap();
+    let config: AppConfig = serde_yaml::from_str(&raw).unwrap();
+    
+    // Validate BEFORE any state
+    config.validate().expect("Invalid config");
+    
+    config
+}
+
+fn AppConfig::validate(&self) -> Result<(), ConfigError> {
+    if self.engine.max_batch_size > 8192 {
+        return Err(ConfigError::BatchSizeTooLarge);
+    }
+    if self.engine.num_kv_blocks == 0 {
+        return Err(ConfigError::KvBlocksRequired);
+    }
+    Ok(())
+}
 ```
 
 ---
 
-### Pitfall 7: GPU Node Affinity Issues
+### Pitfall 6: Tool Binary Bloating Server
 
-**What goes wrong:** Pods unschedulable because GPU nodes have taints.
+**What goes wrong:** Adding CLI subcommands bloats the server binary.
 
-**Why it happens:** GPU nodes often have `NoSchedule` taints.
+**Why it happens:** Putting tooling code in `vllm-server` instead of `vllm-tool`.
+
+**Consequences:**
+- Slower compile times
+- Larger binary
+- Users pay for tooling they don't use
 
 **Prevention:**
-```yaml
-tolerations:
-- key: "nvidia.com/gpu"
-  operator: "Exists"
-  effect: "NoSchedule"
+```rust
+// GOOD: Separate binaries
+[workspace]
+members = [
+    "crates/server",      # vllm-server only
+    "crates/tooling",     # vllm-tool only
+]
+
+// Server: minimal
+[package]
+name = "vllm-server"
+
+# Tooling: rich
+[package]
+name = "vllm-tool"
 ```
 
 ---
 
 ## Minor Pitfalls
 
-### Pitfall 8: Missing ServiceAccount
+### Pitfall 7: Ignoring GPU State in Benchmarks
 
-**What goes wrong:** Pod can't access K8s APIs (for leader election, metrics, etc.)
+**What goes wrong:** Benchmarks don't reset GPU between runs.
+
+**Why it happens:** Not calling `cudaDeviceReset()` or not waiting for GPU to finish.
+
+**Consequences:**
+- First benchmark run is always slower (cold start)
+- Memory fragmentation affects later runs
 
 **Prevention:**
-```yaml
-serviceAccountName: vllm-lite
+```rust
+#[cfg(feature = "cuda")]
+fn reset_gpu_state() {
+    unsafe { cudaDeviceReset() };
+}
+
+fn run_benchmark_suite() {
+    reset_gpu_state();
+    
+    for benchmark in benchmarks {
+        reset_gpu_state();  // Isolate each benchmark
+        benchmark.run();
+    }
+}
 ```
 
-### Pitfall 9: ImagePullBackOff
+---
 
-**What goes wrong:** Image not accessible from cluster.
+### Pitfall 8: Not Versioning Benchmark Format
 
-**Prevention:**
-- Use public registry or configure imagePullSecrets
-- Test `docker pull` from cluster network
+**What goes wrong:** Changing output format breaks scripts.
 
-### Pitfall 10: Log Volume Pressure
-
-**What goes wrong:** Excessive logging fills ephemeral storage.
+**Why it happens:** No version in output format, no changelog.
 
 **Prevention:**
-- Configure log rotation (journald or logrotate)
-- Set log level appropriately for production
+```rust
+#[derive(Serialize)]
+struct BenchmarkReport {
+    version: &'static str,  // "v1.0"
+    timestamp: DateTime<Utc>,
+    results: Vec<BenchmarkResult>,
+}
+
+impl BenchmarkReport {
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+}
+```
 
 ---
 
 ## Phase-Specific Warnings
 
-| Phase | Feature | Pitfall | Mitigation |
-|-------|---------|---------|------------|
-| v13.0 | K8s Deployment | OOM on GPU | Set resource limits |
-| v13.0 | Health Checks | Probe timeout | Increase initialDelaySeconds |
-| v13.0 | ConfigMap | Stale config | Implement reload mechanism |
-| v13.1 | Multi-Node | Coherence bugs | Defer, use per-node only |
-| v13.1 | HPA | Metric missing | Implement /metrics endpoint |
-| v13.1 | HA | Failover delay | Pre-warm standby |
-
----
+| Phase | Pitfall | Mitigation |
+|-------|---------|------------|
+| Infrastructure | Observer trait changes break observers | Add new events via enum extension, not trait changes |
+| Benchmarking | Non-deterministic results | Require warmup, use statistical validation |
+| Debugging | Trace buffer unbounded | Implement circular buffer with max size |
+| CLI | Config schema drift | Keep schema in sync with code, validate on load |
+| Testing | Test flakiness from GPU state | Reset GPU in test setup/teardown |
 
 ## Sources
 
-- [Kubernetes Best Practices - Resource Management](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
-- [Pod Lifecycle](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/)
-- [Disruption Budgets](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/)
+- [Criterion.rs Best Practices](https://bheisner.github.io/criterion.rs/book/user_guide/)
+- [Tokio Anti-Patterns](https://tokio.rs/tokio/topics/anti-patterns)
+- [Rust Fuzzing Pitfalls](https://rust-fuzz.github.io/book/introduction.html)
