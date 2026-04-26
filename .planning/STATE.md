@@ -4,35 +4,37 @@
 
 See: .planning/PROJECT.md (updated 2026-04-26)
 
-**Core value:** Enable vllm-lite to scale across multiple GPUs and nodes
-**Current focus:** Phase 11.1 — Pipeline Parallelism
+**Core value:** Expand vllm-lite with advanced features
+**Current focus:** Phase 12.1 — 量化扩展
 
 ---
 
 ## Milestone Progress
 
-**Phase 11: 分布式支持**
+**Phase 12: 高级功能**
 
 | Phase | Name | Status |
 |-------|------|--------|
-| 11.1 | Pipeline Parallelism | Not Started |
-| 11.2 | Distributed KV Cache | Not Started |
+| 12.1 | 量化扩展 | Not Started |
+| 12.2 | 流式改进 | Not Started |
+| 12.3 | 智能批处理 | Not Started |
 
 ---
 
 ## Current Phase
 
-**11.1: Pipeline Parallelism** — Not Started
+**12.1: 量化扩展** — Not Started
 
-**Goal:** 实现多 GPU 流水线并行
+**Goal:** 实现 AWQ/GPTQ 量化支持
 
 **Requirements:**
-- PP-01: Pipeline Parallelism 实现
+- QUANT-01: AWQ/GPTQ support
 
 **Success Criteria:**
-1. 模型层跨 GPU 分割正确工作
-2. Forward pass 流水线传递
-3. 跨 GPU 数据传输正确
+1. AWQ weight loading and dequantization
+2. GPTQ weight loading and dequantization
+3. Runtime compatibility with attention kernels
+4. Memory savings vs FP16 baseline
 
 ---
 
@@ -44,14 +46,14 @@ None currently.
 
 ## Recent Commits
 
-- `0875405` — docs: add Phase 10 completion to ROADMAP.md
+- `02a598b` — docs: complete Phase 11 milestones
 
 ---
 
 ## Notes
 
-- Phase 11 初始化完成
-- 等待开始 Phase 11.1 执行
+- Phase 12 初始化完成
+- 等待开始 Phase 12.1 执行
 
 ---
 *State updated: 2026-04-26*

@@ -1,10 +1,10 @@
-# Phase 11 Roadmap: 分布式支持
+# Phase 12 Roadmap: 高级功能
 
 ## Overview
 
-**Milestone:** Phase 11 — 分布式支持
-**Core Value:** Enable vllm-lite to scale across multiple GPUs and nodes
-**Phases:** 2 | **Requirements:** 2 | **Started:** 2026-04-26
+**Milestone:** Phase 12 — 高级功能
+**Core Value:** Expand vllm-lite with more quantization, streaming, and batching features
+**Phases:** 3 | **Requirements:** 3 | **Started:** 2026-04-26
 
 ---
 
@@ -12,48 +12,69 @@
 
 | # | Phase | Goal | Requirements | Status |
 |---|-------|------|--------------|--------|
-| 11.1 | Pipeline Parallelism | Multi-GPU layer pipeline | PP-01 | ✅ Complete |
-| 11.2 | Distributed KV Cache | Cluster KV sharing | KV-01 | ✅ Complete |
+| 12.1 | 量化扩展 | AWQ/GPTQ 支持 | QUANT-01 | Not Started |
+| 12.2 | 流式改进 | 背压处理优化 | STREAM-01 | Not Started |
+| 12.3 | 智能批处理 | 预测性批处理 | BATCH-01 | Not Started |
 
 ---
 
-## Phase 11.1: Pipeline Parallelism
+## Phase 12.1: 量化扩展
 
-**Goal:** Implement multi-GPU pipeline parallelism for layer distribution
+**Goal:** Add AWQ and GPTQ quantization support beyond current GGUF Q4_K_M
 
 **Requirements:**
-- PP-01: Pipeline Parallelism implementation
+- QUANT-01: AWQ/GPTQ support
 
 **Success Criteria:**
-1. Model layers split across available GPUs
-2. Forward pass correctly pipelines through stages
-3. Backward pass coordination works
-4. Linear speedup with GPU count (target: 1.8x per GPU)
+1. AWQ weight loading and dequantization
+2. GPTQ weight loading and dequantization
+3. Runtime compatibility with existing attention kernels
+4. Memory savings vs FP16 baseline
 
 **Implementation Notes:**
-- Reference `crates/dist/` for existing TP support
-- Implement stage partitioning
-- Add pipeline scheduler
+- Reference `crates/model/src/paged_tensor/quantization.rs`
+- Implement dequantization kernels
+- Test with real quantized weights
 
 ---
 
-## Phase 11.2: Distributed KV Cache
+## Phase 12.2: 流式改进
 
-**Goal:** Enable KV cache sharing across cluster nodes
+**Goal:** Improve streaming with backpressure handling and flow control
 
 **Requirements:**
-- KV-01: Distributed KV Cache
+- STREAM-01: Streaming improvements
 
 **Success Criteria:**
-1. KV cache invalidation protocol
-2. Cross-node cache coherence
-3. Memory reduction vs replication
-4. Latency overhead < 10%
+1. Backpressure handling for slow clients
+2. Buffer management improvements
+3. Graceful degradation under load
+4. Connection lifecycle management
 
 **Implementation Notes:**
-- Design cache coherence protocol
-- Implement inter-node communication
-- Handle cache misses gracefully
+- Reference `crates/server/` for streaming endpoints
+- Implement flow control mechanism
+- Add buffer size limits
+
+---
+
+## Phase 12.3: 智能批处理
+
+**Goal:** Implement predictive batching for better throughput
+
+**Requirements:**
+- BATCH-01: Predictive batching
+
+**Success Criteria:**
+1. Request pattern detection
+2. Proactive batching decisions
+3. Latency/throughput balance tuning
+4. Metrics for batching effectiveness
+
+**Implementation Notes:**
+- Reference `crates/core/src/scheduler/`
+- Implement prediction heuristics
+- Add batching strategy configuration
 
 ---
 
@@ -65,7 +86,7 @@ After each phase, run verification and update ROADMAP.md progress.
 
 ## Long-term Vision
 
-Phase 12: Enterprise features (Multi-tenancy, TLS, Audit logging)
+Phase 13: Mobile/Edge optimization
 
 ---
 *Roadmap created: 2026-04-26*
