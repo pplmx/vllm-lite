@@ -5,7 +5,7 @@
 See: .planning/PROJECT.md (updated 2026-04-26)
 
 **Core value:** Expand vllm-lite with advanced features
-**Current focus:** Phase 12.2 — 流式改进
+**Current focus:** Phase 12.3 — 智能批处理
 
 ---
 
@@ -16,24 +16,24 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 | Phase | Name | Status |
 |-------|------|--------|
 | 12.1 | 量化扩展 | Complete |
-| 12.2 | 流式改进 | In Progress |
-| 12.3 | 智能批处理 | Not Started |
+| 12.2 | 流式改进 | Complete |
+| 12.3 | 智能批处理 | In Progress |
 
 ---
 
 ## Current Phase
 
-**12.2: 流式改进** — In Progress
+**12.3: 智能批处理** — In Progress
 
-**Goal:** 实现背压处理优化
+**Goal:** 实现预测性批处理
 
 **Requirements:**
-- STREAM-01: Backpressure handling
+- BATCH-01: Predictive batching
 
 **Success Criteria:**
-1. Client can signal backpressure
-2. Server respects client flow control
-3. Partial results returned on backpressure
+1. Request arrival prediction
+2. Dynamic batch sizing based on load
+3. Latency-throughput trade-off optimization
 
 ---
 
@@ -45,15 +45,16 @@ None currently.
 
 ## Recent Commits
 
+- `2d78e6d` — feat(server): add backpressure handling for streaming
 - `89eddd2` — feat(model): add AWQ/GPTQ quantization support
-- `02a598b` — docs: complete Phase 11 milestones
 
 ---
 
 ## Notes
 
 - Phase 12.1 量化扩展完成
-- Phase 12.2 流式改进进行中
+- Phase 12.2 流式改进完成
+- Phase 12.3 智能批处理进行中
 
 ---
 *State updated: 2026-04-26*
