@@ -250,6 +250,26 @@
 
 ---
 
+## ✅ Phase 10: 性能优化 (2026-04-26)
+
+| 功能 | 描述 | 状态 |
+| ---- | ---- | ---- |
+| FlashAttention V2 | 在线 softmax 算法实现 | ✅ |
+| CUDA Graph 优化 | 图池化、warmup、invalidation | ✅ |
+| Chunked Prefill | 动态 chunk 大小、内存优化 | ✅ |
+| 基准测试套件 | attention/scheduler benchmarks | ✅ |
+
+### 成果
+
+- **FlashAttention V2**: 块级处理，在线 softmax 计算
+- **CUDA Graph**: 图池化策略减少重复捕获
+- **Chunked Prefill**: 32k+ 上下文无 OOM
+- **测试数**: 337+ model tests, 145+ core tests
+
+详细设计: [.planning/phases/](.planning/phases/)
+
+---
+
 ## 🔮 长期愿景
 
 | 目标 | 描述                | 状态 |
