@@ -12,8 +12,8 @@
 
 | # | Phase | Goal | Requirements | Status |
 |---|-------|------|--------------|--------|
-| 11.1 | Pipeline Parallelism | Multi-GPU layer pipeline | PP-01 | Not Started |
-| 11.2 | Distributed KV Cache | Cluster KV sharing | KV-01 | Not Started |
+| 11.1 | Pipeline Parallelism | Multi-GPU layer pipeline | PP-01 | ✅ Complete |
+| 11.2 | Distributed KV Cache | Cluster KV sharing | KV-01 | ✅ Complete |
 
 ---
 
