@@ -1,50 +1,59 @@
-# Requirements: vllm-lite Phase 11
+# Requirements: vllm-lite Phase 12
 
 **Defined:** 2026-04-26
-**Core Value:** Enable vllm-lite to scale across multiple GPUs and nodes
+**Core Value:** Expand vllm-lite with advanced features for production
 
 ## v1 Requirements
 
-### Distributed Computing
+### Quantization
 
-- [ ] **PP-01**: Pipeline Parallelism 实现
-  - 模型层跨 GPU 分割
-  - 流水线前向传递
-  - 阶段间数据传输
+- [ ] **QUANT-01**: AWQ/GPTQ support
+  - AWQ weight loading and dequantization
+  - GPTQ weight loading and dequantization
+  - Runtime compatibility with attention kernels
 
-- [ ] **KV-01**: Distributed KV Cache
-  - KV 缓存失效协议
-  - 跨节点缓存一致性
-  - 内存使用优化
+### Streaming
+
+- [ ] **STREAM-01**: Streaming improvements
+  - Backpressure handling for slow clients
+  - Buffer management improvements
+  - Connection lifecycle management
+
+### Batching
+
+- [ ] **BATCH-01**: Predictive batching
+  - Request pattern detection
+  - Proactive batching decisions
+  - Latency/throughput balance tuning
 
 ## v2 Requirements
 
 Deferred to future release.
 
-- **PP-02**: Dynamic pipeline rebalancing
-- **KV-02**: Cache prefetching
-- **PP-03**: Tensor Parallelism integration
+- **QUANT-02**: SmoothQuant support
+- **STREAM-02**: Bidirectional streaming
+- **BATCH-02**: SLA-aware prioritization
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| WebAssembly 支持 | 长期愿景，依赖 WASM 编译目标 |
-| 多租户隔离 | 企业特性，由外部组件处理 |
-| Online fine-tuning | 长期愿景 |
+| Real-time fine-tuning | 长期愿景 |
+| Multi-tenancy isolation | 企业特性 |
+| WebAssembly support | 长期愿景 |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PP-01 | Phase 11.1 | Pending |
-| KV-01 | Phase 11.2 | Pending |
+| QUANT-01 | Phase 12.1 | Pending |
+| STREAM-01 | Phase 12.2 | Pending |
+| BATCH-01 | Phase 12.3 | Pending |
 
 **Coverage:**
-- v1 requirements: 2 total
-- Mapped to phases: 2
+- v1 requirements: 3 total
+- Mapped to phases: 3
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-26*
-*Last updated: 2026-04-26 after initial definition*

@@ -1,26 +1,27 @@
-# vllm-lite Phase 11: 分布式支持
+# vllm-lite Phase 12: 高级功能
 
 ## What This Is
 
-Phase 11 milestone focused on distributed computing support — enabling multi-GPU inference through Pipeline Parallelism and cluster-wide KV Cache sharing.
+Phase 12 milestone focused on advanced features — extended quantization support, streaming improvements, and smart request batching.
 
 ## Core Value
 
-Enable vllm-lite to scale across multiple GPUs and nodes, supporting larger models and higher throughput in distributed deployments.
+Expand vllm-lite's production capabilities with more quantization options, better streaming, and intelligent request batching for optimal throughput.
 
-## Current Milestone: v11.0 分布式支持
+## Current Milestone: v12.0 高级功能
 
-**Goal:** Multi-GPU support with Pipeline Parallelism and Distributed KV Cache
+**Goal:** More quantizations, streaming improvements, and smart batching
 
 **Target features:**
-- Pipeline Parallelism — Multi-GPU tensor pipeline
-- Distributed KV Cache — Cluster-wide KV cache sharing
+- More quantizations — AWQ, GPTQ support
+- Streaming improvements — Better backpressure handling
+- Request batching enhancements — Predictive batching
 
 ## Requirements
 
 ### Validated
 
-<!-- Shipped from Phase 1-10 -->
+<!-- Shipped from Phase 1-11 -->
 
 - ✓ 核心推理引擎 — Continuous Batching, Paged KV Cache, Prefix Caching (Phase 1)
 - ✓ 多模型支持 — Llama, Mistral, Qwen, DeepSeek, Gemma4, Mixtral (Phase 6)
@@ -31,6 +32,8 @@ Enable vllm-lite to scale across multiple GPUs and nodes, supporting larger mode
 - ✓ PD 分离完善 — Phase 10.2
 - ✓ Chunked Prefill 优化 — Phase 10.2
 - ✓ 性能基准测试 — Phase 10.3
+- ✓ Pipeline Parallelism — Phase 11.1
+- ✓ Distributed KV Cache — Phase 11.2
 
 ### Active
 
@@ -41,6 +44,7 @@ Enable vllm-lite to scale across multiple GPUs and nodes, supporting larger mode
 - WebAssembly 支持 — 长期愿景
 - 多租户隔离 — 企业特性
 - Online fine-tuning — 长期愿景
+- Real-time fine-tuning — 长期愿景
 
 ## Context
 
@@ -62,9 +66,10 @@ Existing distributed infrastructure needs:
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Pipeline Parallelism | Split model layers across GPUs | — Pending |
-| Distributed KV Cache | Share KV across nodes | — Pending |
-| Communication | gRPC for inter-node | — Pending |
+| AWQ support | Popular low-bit quantization | — Pending |
+| GPTQ support | Widely used in production | — Pending |
+| Streaming backpressure | Handle slow clients | — Pending |
+| Predictive batching | Anticipate request patterns | — Pending |
 
 ## Evolution
 
@@ -84,4 +89,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-26 after Phase 11 initialization*
+*Last updated: 2026-04-26 after Phase 12 initialization*
