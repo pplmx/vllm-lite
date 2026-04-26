@@ -117,6 +117,7 @@ pub mod batch_composer;
 pub mod batch_planner;
 pub mod engine;
 pub mod observer;
+pub mod predictive_batching;
 pub mod stats;
 
 // === Public Re-exports ===
@@ -128,6 +129,9 @@ pub use memory::MemoryManager;
 pub use observer::{ObserverEvent, SchedulerObserver, SchedulerObservers};
 pub use packing::{PackedBatch, SequencePacker};
 pub use phase_scheduler::{PhaseScheduler, PhaseSwitchPolicy, SchedulerState};
+pub use predictive_batching::{
+    BatchOptimizer, BatcherMetrics, BatchingStrategy, PredictiveBatcher, PredictiveBatchingConfig,
+};
 pub use radix_cache::{PrefixMatchResult, RadixNode, RadixTree};
 pub use request_queue::RequestQueue;
 pub use stats::SchedulerStats;
