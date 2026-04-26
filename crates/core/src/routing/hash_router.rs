@@ -13,6 +13,7 @@ pub struct NodeInfo {
 
 pub struct HashRouter {
     nodes: Arc<RwLock<Vec<NodeInfo>>>,
+    #[allow(dead_code)]
     virtual_nodes: usize,
 }
 
@@ -64,7 +65,7 @@ impl HashRouter {
 
         let hash = self.hash_key(key);
 
-        for i in 0..nodes.len() {
+        for _i in 0..nodes.len() {
             let idx = (hash % nodes.len() as u64) as usize;
             let node = &nodes[idx];
 

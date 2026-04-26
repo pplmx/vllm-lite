@@ -12,7 +12,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build_server(true)
         .build_client(true)
         .out_dir(&out_dir)
-        .file_descriptor_set_path(&out_dir.join("vllm_descriptor.bin"))
+        .file_descriptor_set_path(out_dir.join("vllm_descriptor.bin"))
         .compile_protos(&[&proto_file], &[&proto_include])?;
 
     println!("cargo:rerun-if-changed={}", proto_file.display());

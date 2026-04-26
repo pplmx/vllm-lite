@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, warn, error};
+use tracing::{info, warn};
 use vllm_traits::SeqId;
 
 use super::leader_election::LeaderElection;
@@ -89,7 +89,7 @@ impl FailoverManager {
     }
 
     pub async fn on_node_failure(&self, failed_node: &str) -> Vec<SeqId> {
-        let mut requests = self.inflight_requests.write().await;
+        let requests = self.inflight_requests.write().await;
 
         let to_migrate: Vec<SeqId> = requests
             .iter()

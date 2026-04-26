@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{watch, RwLock};
-use tracing::{info, warn, error};
+use tracing::{info, warn};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LeadershipState {
@@ -10,10 +10,12 @@ pub enum LeadershipState {
     Candidate,
 }
 
+#[allow(dead_code)]
 pub struct LeaderElection {
     state: Arc<RwLock<LeadershipState>>,
     is_leader: Arc<RwLock<bool>>,
     leader_id: Arc<RwLock<Option<String>>>,
+    #[allow(dead_code)]
     shutdown_tx: Arc<RwLock<Option<watch::Sender<()>>>>,
 }
 
