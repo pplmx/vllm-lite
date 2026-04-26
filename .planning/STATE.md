@@ -11,25 +11,23 @@ See: .planning/PROJECT.md (updated 2026-04-27)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-04-27 — Milestone v15.0 started
+Status: Milestone v15.0 complete
+Last activity: 2026-04-27 — All phases shipped
 
 ---
 
 ## Milestone Progress
 
-**Milestone v15.0: Performance + Models + Production** 🚧 IN PROGRESS
+**Milestone v15.0: Performance + Models + Production** ✅ SHIPPED
 
 | Phase | Name | Requirements | Status |
 |-------|------|--------------|--------|
-| 15.1 | FlashAttention V3 | PERF-01 | Not started |
-| 15.2 | KV Cache Optimization | PERF-02, PERF-03 | Not started |
-| 15.3 | Gemma3 + Phi-4 | MODEL-01, MODEL-02 | Not started |
-| 15.4 | Llama 4 + Mistral Small | MODEL-03, MODEL-04 | Not started |
-| 15.5 | Go K8s Operator | PROD-01 | Not started |
-| 15.6 | TLS + JWT | PROD-02, PROD-03 | Not started |
+| 15.1 | FlashAttention V3 | PERF-01 | ✅ Complete |
+| 15.2 | KV Cache Optimization | PERF-02, PERF-03 | ✅ Complete |
+| 15.3 | Gemma3 + Phi-4 | MODEL-01, MODEL-02 | ✅ Complete |
+| 15.4 | Llama 4 + Mistral Small | MODEL-03, MODEL-04 | ✅ Complete |
+| 15.5 | Go K8s Operator | PROD-01 | ✅ Complete |
+| 15.6 | TLS + JWT | PROD-02, PROD-03 | ✅ Complete |
 
 ---
 
