@@ -21,10 +21,15 @@ Deliver production-grade performance optimizations that make vllm-lite competiti
 
 ### Active
 
-- [ ] FlashAttention V2 实现
-- [ ] CUDA Graph 优化完善
-- [ ] PD 分离完善
-- [ ] Chunked Prefill 优化
+(None — Phase 10 complete)
+
+### Validated
+
+- ✓ FlashAttention V2 实现 — Phase 10.1
+- ✓ CUDA Graph 优化完善 — Phase 10.1
+- ✓ PD 分离完善 — Phase 10.2 (already existed)
+- ✓ Chunked Prefill 优化 — Phase 10.2
+- ✓ 性能基准测试 — Phase 10.3
 
 ### Out of Scope
 
