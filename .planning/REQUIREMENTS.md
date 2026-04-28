@@ -1,104 +1,40 @@
-# Requirements: vllm-lite
+# Requirements: v16.0 Speculative Decoding
 
-**Defined:** 2026-04-27
-**Core Value:** Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism
-
----
-
-## v15.0 Requirements (In Progress)
-
-### Performance
-
-- [ ] **PERF-01**: FlashAttention V3 kernel implemented with support for multi-query and grouped-query attention
-- [ ] **PERF-02**: Continuous batching scheduler improved with dynamic chunked prefill and better preemption
-- [ ] **PERF-03**: KV cache compression implemented using FP8 quantization with accuracy preservation
-
-### Model Support
-
-- [ ] **MODEL-01**: Gemma3 architecture support (Gemma3-2B, 9B, 27B) with sliding window attention
-- [ ] **MODEL-02**: Phi-4 architecture support with extended vocabulary and NoPos embedding
-- [ ] **MODEL-03**: Llama 4 architecture support with MoE variants (Scout/Maverick)
-- [ ] **MODEL-04**: Mistral Small architecture support with expert routing for MoE variants
-
-### Production Hardening
-
-- [ ] **PROD-01**: Full Go Kubernetes Operator implemented for declarative resource management
-- [ ] **PROD-02**: TLS termination fully integrated with axum server (cert-manager compatible)
-- [ ] **PROD-03**: JWT validation implemented using jsonwebtoken crate with RS256/ES256 support
+**Milestone:** v16.0
+**Created:** 2026-04-28
 
 ---
 
-## v14.0 Requirements
+## Requirements
 
-### Benchmarking
+### Architecture (SPEC-01)
 
-- [x] **BENCH-01**: Developer can run throughput benchmark measuring tokens/sec under concurrent load
-- [x] **BENCH-02**: Developer can run latency benchmark reporting TTFT, P50, P95, P99 percentiles
-- [x] **BENCH-03**: Benchmark runner handles warmup by discarding initial iterations
+- [ ] **SPEC-01.1**: DraftVerifier trait defines draft model contract with `generate_draft` and `verify` methods
+- [ ] **SPEC-01.2**: SpeculativeModel wrapper wraps ModelBackend with speculative execution logic
+- [ ] **SPEC-01.3**: SpeculationConfig allows configuring draft count, max depth, temperature
+- [ ] **SPEC-01.4**: RejectionStrategy enum with Accepted/N rejected strategies (token-level, block-level)
+- [ ] **SPEC-01.5**: KV cache reuse across draft verification pass (no recomputation of accepted prefixes)
 
-### Debug Utilities
+### Draft Model (SPEC-02)
 
-- [x] **DEBUG-01**: Developer can enable request tracing via tracing spans to debug request execution
-- [x] **DEBUG-02**: Developer can dump KV cache state to inspect cached prompts
-- [x] **DEBUG-03**: Developer can snapshot current metrics via HTTP endpoint
+- [ ] **SPEC-02.1**: Self-speculation using same model with reduced layer count (e.g., 4 layers for 32-layer model)
+- [ ] **SPEC-02.2**: Layer count configuration per model in config.json
+- [ ] **SPEC-02.3**: Draft model shares weights with target model (no extra memory for weights)
+- [ ] **SPEC-02.4**: Draft sampling with configurable temperature (lower temp = more conservative)
 
-### CLI Tools
+### Verification (SPEC-03)
 
-- [x] **CLI-01**: Developer can validate config file syntax and schema at startup
-- [x] **CLI-02**: Developer can list available models in model directory
-- [x] **CLI-03**: Developer can view model metadata (architecture, params, config)
+- [ ] **SPEC-03.1**: Parallel verification using target model on all draft tokens simultaneously
+- [ ] **SPEC-03.2**: Token acceptance based on target vs draft probability comparison
+- [ ] **SPEC-03.3**: Early termination when token rejected (no verification of subsequent draft tokens)
+- [ ] **SPEC-03.4**: KV cache management for verification pass (append draft KV to target KV)
 
-### Test Infrastructure
+### Benchmarks (SPEC-04)
 
-- [x] **TEST-01**: Test harness provides common utilities (TestHarness::new()) for integration tests
-- [x] **TEST-02**: Mock model variants available (NeverProgressModel, SlowModel) for deterministic testing
-- [x] **TEST-03**: Request factory generates test requests with configurable properties
-
----
-
-## Future Requirements
-
-### Performance
-
-- **PERF-04**: Ring Attention for multi-GPU sequence parallelism with 1M+ context length
-- **PERF-05**: Speculative decoding with draft model integration
-- **PERF-06**: INT4 KV cache for extreme memory reduction
-
-### Model Support
-
-- **MODEL-05**: DeepSeek-V3 architecture with MoE and MLA attention
-- **MODEL-06**: Qwen2.5-VL multimodal support with vision encoder
-- **MODEL-07**: Granite-v3 architecture for enterprise workloads
-
-### Debug Utilities
-
-- **DEBUG-04**: Cache hit analysis explaining prefix match/miss reasons
-- **DEBUG-05**: Memory timeline exportable for visualization (perfetto format)
-- **DEBUG-06**: Batch composition visualization (ASCII art)
-
-### CLI Tools
-
-- **CLI-04**: Model download from HuggingFace Hub
-- **CLI-05**: Config generation scaffolding with defaults
-- **CLI-06**: Interactive benchmark runner with live progress
-
-### Test Infrastructure
-
-- **TEST-04**: Property-based tests with proptest (1000+ auto-generated cases)
-- **TEST-05**: Fuzzing corpus for edge case inputs
-- **TEST-06**: CI performance regression check (fail PR if >5% regression)
-
----
-
-## Out of Scope
-
-| Feature | Reason |
-|---------|--------|
-| WebAssembly support | 长期愿景 — complexity, performance trade-offs |
-| Multi-tenant isolation | Enterprise feature — separate product |
-| Online fine-tuning | 长期愿景 — different optimization path |
-| Vision end-to-end | Architecture ready, no model integration yet |
-| Full GUI debugger | Binary bloat, CLI REPL sufficient |
+- [ ] **SPEC-04.1**: Throughput benchmark comparing speculative vs standard decoding on repetitive tasks
+- [ ] **SPEC-04.2**: Acceptance rate metrics (percentage of draft tokens accepted)
+- [ ] **SPEC-04.3**: Memory overhead measurement (KV cache, overhead per request)
+- [ ] **SPEC-04.4**: Latency percentiles (P50/P95/P99) for first token and per-token
 
 ---
 
@@ -106,19 +42,20 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PERF-01 | 15.1 | Pending |
-| PERF-02 | 15.2 | Pending |
-| PERF-03 | 15.2 | Pending |
-| MODEL-01 | 15.3 | Pending |
-| MODEL-02 | 15.3 | Pending |
-| MODEL-03 | 15.4 | Pending |
-| MODEL-04 | 15.4 | Pending |
-| PROD-01 | 15.5 | Pending |
-| PROD-02 | 15.6 | Pending |
-| PROD-03 | 15.6 | Pending |
-
-**Coverage:** 10/10 v15.0 requirements defined (0 unmapped)
-
----
-*Requirements defined: 2026-04-27*
-*Last updated: 2026-04-27 — v15.0 requirements defined*
+| SPEC-01.1 | 16.1 | Pending |
+| SPEC-01.2 | 16.1 | Pending |
+| SPEC-01.3 | 16.1 | Pending |
+| SPEC-01.4 | 16.1 | Pending |
+| SPEC-01.5 | 16.2 | Pending |
+| SPEC-02.1 | 16.2 | Pending |
+| SPEC-02.2 | 16.2 | Pending |
+| SPEC-02.3 | 16.2 | Pending |
+| SPEC-02.4 | 16.2 | Pending |
+| SPEC-03.1 | 16.3 | Pending |
+| SPEC-03.2 | 16.3 | Pending |
+| SPEC-03.3 | 16.3 | Pending |
+| SPEC-03.4 | 16.3 | Pending |
+| SPEC-04.1 | 16.4 | Pending |
+| SPEC-04.2 | 16.4 | Pending |
+| SPEC-04.3 | 16.4 | Pending |
+| SPEC-04.4 | 16.4 | Pending |
