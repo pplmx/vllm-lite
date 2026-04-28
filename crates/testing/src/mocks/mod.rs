@@ -54,6 +54,14 @@ impl ModelBackend for StubModel {
     fn vocab_size(&self) -> usize {
         151936
     }
+
+    fn num_layers(&self) -> usize {
+        32
+    }
+
+    fn num_heads(&self) -> usize {
+        32
+    }
 }
 
 /// Model that returns seq_id + 1 as next token.
@@ -104,6 +112,14 @@ impl ModelBackend for IncrementModel {
 
     fn vocab_size(&self) -> usize {
         151936
+    }
+
+    fn num_layers(&self) -> usize {
+        32
+    }
+
+    fn num_heads(&self) -> usize {
+        32
     }
 }
 
@@ -164,6 +180,14 @@ impl ModelBackend for ConstModel {
 
     fn vocab_size(&self) -> usize {
         151936
+    }
+
+    fn num_layers(&self) -> usize {
+        32
+    }
+
+    fn num_heads(&self) -> usize {
+        32
     }
 }
 
@@ -235,6 +259,14 @@ impl ModelBackend for FakeModel {
     fn vocab_size(&self) -> usize {
         self.vocab_size
     }
+
+    fn num_layers(&self) -> usize {
+        32
+    }
+
+    fn num_heads(&self) -> usize {
+        32
+    }
 }
 
 /// Model that never progresses (always returns same token).
@@ -293,6 +325,14 @@ impl ModelBackend for NeverProgressModel {
 
     fn vocab_size(&self) -> usize {
         151936
+    }
+
+    fn num_layers(&self) -> usize {
+        32
+    }
+
+    fn num_heads(&self) -> usize {
+        32
     }
 }
 

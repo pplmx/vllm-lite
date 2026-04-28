@@ -91,6 +91,14 @@ impl ModelBackend for BoxedModelBackend {
     fn vocab_size(&self) -> usize {
         self.0.vocab_size()
     }
+
+    fn num_layers(&self) -> usize {
+        self.0.num_layers()
+    }
+
+    fn num_heads(&self) -> usize {
+        self.0.num_heads()
+    }
 }
 
 /// Core inference engine managing requests, scheduling, and model execution.
@@ -726,6 +734,14 @@ mod tests {
 
         fn vocab_size(&self) -> usize {
             151936
+        }
+
+        fn num_layers(&self) -> usize {
+            32
+        }
+
+        fn num_heads(&self) -> usize {
+            32
         }
     }
 

@@ -163,4 +163,13 @@ impl ModelBackend for MistralModel {
     fn vocab_size(&self) -> usize {
         self.config.vocab_size
     }
+
+    fn num_layers(&self) -> usize {
+        self.config.num_layers
+    }
+
+    #[allow(clippy::misnamed_getters)]
+    fn num_heads(&self) -> usize {
+        self.config.num_kv_heads
+    }
 }

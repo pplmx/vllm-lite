@@ -1073,6 +1073,14 @@ impl ModelBackend for Qwen35HybridModel {
     fn vocab_size(&self) -> usize {
         self.config.vocab_size()
     }
+
+    fn num_layers(&self) -> usize {
+        self.config.num_hidden_layers()
+    }
+
+    fn num_heads(&self) -> usize {
+        self.config.num_key_value_heads()
+    }
 }
 
 #[cfg(test)]

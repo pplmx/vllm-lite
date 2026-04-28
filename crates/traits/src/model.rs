@@ -97,4 +97,8 @@ pub trait ModelBackend: Send + Sync {
 
     #[cfg(feature = "candle")]
     fn vocab_size(&self) -> usize;
+
+    fn num_layers(&self) -> usize;
+
+    fn num_heads(&self) -> usize;
 }

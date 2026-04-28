@@ -122,4 +122,12 @@ impl ModelBackend for Gemma4Model {
     fn vocab_size(&self) -> usize {
         self.config.vocab_size
     }
+
+    fn num_layers(&self) -> usize {
+        self.config.num_layers
+    }
+
+    fn num_heads(&self) -> usize {
+        self.config.num_heads
+    }
 }
