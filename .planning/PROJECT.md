@@ -10,8 +10,15 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 
 ## Current State
 
-**Latest Milestone:** v15.0 Performance + Models + Production (shipped 2026-04-27)
-**Status:** Production-ready with FA-V3, FP8 KV cache, 8 model architectures
+**Latest Milestone:** v16.0 Speculative Decoding (planning)
+**Status:** Production-ready with FA-V3, FP8 KV cache, 12 model architectures
+
+### Phase 16 Goals
+
+- Speculative Decoding architecture (draft model + verification)
+- KV cache reuse across draft verification
+- Adaptive speculation depth based on content patterns
+- Benchmarks showing 2-3x speedup on repetitive tasks
 
 ### Phase 15 Achievements
 
@@ -68,7 +75,7 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 
 ### Active
 
-None — Planning next milestone
+**v16.0: Speculative Decoding** — Draft-then-verify token generation for 2-3x speedup
 
 ### Out of Scope
 
@@ -123,4 +130,4 @@ Tech stack: Rust + Candle, multi-GPU CUDA support, Kubernetes, gRPC.
 This document evolves at phase transitions and milestone boundaries.
 
 ---
-*Last updated: 2026-04-27 after v15.0 milestone shipped*
+*Last updated: 2026-04-28 — v16.0 Speculative Decoding started*
