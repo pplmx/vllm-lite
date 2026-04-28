@@ -25,7 +25,7 @@ Last activity: 2026-04-28 — Milestone v16.0 started
 | Phase | Name | Requirements | Status |
 |-------|------|--------------|--------|
 | 16.1 | Architecture | SPEC-01 | ✅ Complete |
-| 16.2 | Draft Model | SPEC-02 | ⏳ Pending |
+| 16.2 | Draft Model | SPEC-02 | ✅ Complete |
 | 16.3 | Verification | SPEC-03 | ⏳ Pending |
 | 16.4 | Benchmarks | SPEC-04 | ⏳ Pending |
 
