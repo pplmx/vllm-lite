@@ -105,6 +105,14 @@ impl ModelBackend for SlowModel {
     fn vocab_size(&self) -> usize {
         151936
     }
+
+    fn num_layers(&self) -> usize {
+        32
+    }
+
+    fn num_heads(&self) -> usize {
+        32
+    }
 }
 
 #[cfg(test)]

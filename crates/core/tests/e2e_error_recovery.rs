@@ -96,6 +96,14 @@ impl ModelBackend for FaultInjectedModel {
     fn vocab_size(&self) -> usize {
         self.inner.vocab_size()
     }
+
+    fn num_layers(&self) -> usize {
+        self.inner.num_layers()
+    }
+
+    fn num_heads(&self) -> usize {
+        self.inner.num_heads()
+    }
 }
 
 /// Engine wrapper with error tracking
