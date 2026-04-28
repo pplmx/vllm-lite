@@ -1,5 +1,31 @@
 # Milestones
 
+## v16.0 Speculative Decoding
+
+**Shipped:** 2026-04-28
+**Phases:** 16.1-16.4 | **Plans:** 4 | **Tasks:** 17 requirements
+
+### Key Accomplishments
+
+1. **Core Architecture** — DraftVerifier trait, SpeculativeModel wrapper, SpeculationConfig, RejectionStrategy
+2. **Self-Speculation** — Draft model using reduced layer count of target model
+3. **ModelBackend Extension** — Added num_layers() and num_heads() to trait
+4. **Verification Infrastructure** — Parallel verification ready with early termination
+
+### Stats
+
+- Files: speculative/verifier.rs, speculative/config.rs, speculative/strategy.rs, speculative/model.rs, speculative/self_spec.rs
+- Requirements: 17/17 satisfied (100%)
+- Timeline: Single session
+
+### Tech Decisions
+
+- Self-speculation using same model with 1/8 layer count
+- TokenLevel rejection strategy (accept if target_prob >= draft_prob)
+- AdaptiveDraftConfig already existed from previous implementation
+
+---
+
 ## v15.0 Performance + Models + Production
 
 **Shipped:** 2026-04-27

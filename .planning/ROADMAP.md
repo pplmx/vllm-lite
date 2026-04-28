@@ -4,6 +4,8 @@
 **Milestone:** v16.0
 **Goal:** Implement draft-then-verify token generation for 2-3x throughput improvements on repetitive content.
 
+**Status:** Shipped ✅
+
 ---
 
 ## Proposed Roadmap
