@@ -2,10 +2,10 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-28)
+See: .planning/PROJECT.md (updated 2026-05-09)
 
-**Core value:** Production-ready LLM inference engine with continuous batching, paged KV cache, tensor parallelism
-**Current focus:** Milestone v16.0 started — Speculative Decoding
+**Core value:** Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism
+**Current focus:** Planning next milestone
 
 ---
 
@@ -55,4 +55,4 @@ None identified yet.
 
 ---
 
-*State updated: 2026-04-28 — Milestone v16.0 started*
+*State updated: 2026-05-09 — Milestone v16.0 shipped*
