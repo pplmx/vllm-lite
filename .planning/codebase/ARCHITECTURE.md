@@ -1,187 +1,56 @@
 # Architecture
 
-**Analysis Date:** 2026-04-26
+**Last updated:** 2026-05-09
+**Focus:** Architecture
 
-## System Overview
+## System Architecture Overview
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          HTTP Server (Axum)                                  │
-│                      `crates/server/src/main.rs`                             │
-├─────────────────────────────────┬───────────────────────────────────────────┤
-│   OpenAI API Layer              │   Health/Metrics                          │
-│   ├── chat/completions          │   ├── /health                             │
-│   ├── completions               │   ├── /ready                              │
-│   ├── embeddings                │   ├── /metrics                            │
-│   └── batches                   │   └── /shutdown                           │
-└─────────────────────┬───────────┴───────────────────────────────────────────┘
-                      │ mpsc channel
-                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        Engine (`crates/core/src/engine/`)                    │
-│  ┌──────────────────┬──────────────────┬──────────────────────────────────┐ │
-│  │ SchedulerEngine  │   MetricsCollector  │    Speculative Decoder        │ │
-│  │ scheduling/      │   metrics/        │    speculative.rs              │ │
-│  │ engine.rs        │                   │    (draft + target model)       │ │
-│  └────────┬─────────┴──────────────────┴──────────────────────────────────┘ │
-└─────────────────────┬───────────────────────────────────────────────────────┘
-                      │ ModelBackend trait
-                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                     Model Implementations (`crates/model/`)                  │
-│  ┌────────────────────┬─────────────────────┬─────────────────────────────┐ │
-│  │ Architecture       │  Shared Components  │  GPU Kernels                │ │
-│  │ Registry           │  ├── attention/     │  ├── flash_attention.rs      │ │
-│  │ arch/registry.rs   │  │   gqa.rs         │  ├── fused_mlp.rs            │ │
-│  │                    │  │   mla.rs         │  └── cuda_graph.rs           │ │
-│  │ ├── llama/         │  ├── mlp/           │                              │ │
-│  │ ├── mistral/       │  │   swiglu.rs      │  Paged KV Cache              │ │
-│  │ ├── qwen3/         │  ├── norm/          │  paged_tensor/               │ │
-│  │ ├── qwen3_5/       │  │   rms_norm.rs    │  └── kv_cache.rs             │ │
-│  │ ├── gemma4/        │  ├── positional/    │                              │ │
-│  │ └── mixtral/       │  │   rope.rs        │  Model Loader                │ │
-│  │                    │  └── ssm.rs         │  loader/                     │ │
-│  └────────────────────┴─────────────────────┴─────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────────────────┘
+vLLM-lite uses a modular, trait-based architecture with clear separation of concerns across 7 crates. The core design follows the **actor model** with message-passing concurrency.
+
+```
+┌────────────────────────────────────────────────────────────┐
+│                    vllm-server (HTTP API)                   │
+│  axum Router → OpenAI endpoints → EngineHandle (mpsc tx)   │
+└──────────────────────────┬─────────────────────────────────┘
+                           │ EngineMessage (IPC)
+┌──────────────────────────▼─────────────────────────────────┐
+│                      vllm-core (Engine)                     │
+│  ┌──────────┐  ┌──────────────┐  ┌──────────────────────┐  │
+│  │Scheduler │  │ModelBackend  │  │Speculative Decoding  │  │
+│  │Engine    │──┤(trait)       │  │(Adaptive/Self/Std)   │  │
+│  │          │  │              │  │                      │  │
+│  ├─RequestQ │  │BoxedModelBknd│  ├─SpeculativeModel     │  │
+│  ├─PhaseSc  │  │              │  ├─DraftVerifier        │  │
+│  ├─MemMgr   │  │              │  └─RejectionStrategy    │  │
+│  ├─BatchCmp │  │              │                          │  │
+│  └─Prefix   │  └──────────────┘                          │  │
+│    Cache    │                                            │  │
+└─────────────┴────────────────────────────────────────────┘
+                     │
+        ┌────────────┼────────────┐
+        ▼            ▼            ▼
+  vllm-model    vllm-dist     vllm-traits
+  (Candle ops)  (gRPC/TP)     (interfaces)
 ```
 
-## Component Responsibilities
+## Core Architecture Pattern: Trait-Based Abstraction
 
-| Component | Responsibility | Location |
-|-----------|----------------|----------|
-| `SchedulerEngine` | Request queuing, batch building, memory allocation | `crates/core/src/scheduler/engine.rs` |
-| `RequestQueue` | O(1) lookup/removal with phase-aware indexing | `crates/core/src/scheduler/request_queue.rs` |
-| `PhaseScheduler` | Prefill/Decode phase separation | `crates/core/src/scheduler/phase_scheduler.rs` |
-| `BatchComposer` | Phase-specific batch construction | `crates/core/src/scheduler/batch_composer.rs` |
-| `MemoryManager` | Block allocation and eviction | `crates/core/src/scheduler/memory/` |
-| `RadixTree` | Prefix caching for prompt reuse | `crates/core/src/scheduler/radix_cache/` |
-| `ModelBackend` | ML model inference abstraction | `crates/traits/src/model.rs` |
-| `ArchitectureRegistry` | Dynamic model architecture registration | `crates/model/src/arch/registry.rs` |
-| `Engine` | Main inference loop orchestration | `crates/core/src/engine/speculative.rs` |
-
-## Pattern Overview
-
-**Overall:** Dynamic Registry + Trait-Based Plugin Architecture with Componentized Scheduler
-
-### Key Characteristics
-
-- **Trait-based abstraction**: `ModelBackend` trait in `crates/traits/` allows pluggable model implementations
-- **Dynamic registration**: `ArchitectureRegistry` enables adding new architectures without modifying core code
-- **Componentized scheduler**: SchedulerEngine composes multiple specialized components (RequestQueue, PhaseScheduler, BatchComposer, MemoryManager, RadixTree)
-- **Channel-based IPC**: Async message passing between HTTP server and inference engine via tokio mpsc
-
-## Layers
-
-### HTTP Layer (Server)
-
-**Purpose:** OpenAI-compatible REST API endpoint
-- **Location:** `crates/server/src/`
-- **Contains:** Axum router, OpenAI API handlers, auth middleware
-- **Depends on:** vllm-core (Engine), vllm-model (Tokenizer)
-- **Used by:** External HTTP clients
-
-### Core Engine Layer
-
-**Purpose:** Request scheduling, batch management, inference orchestration
-- **Location:** `crates/core/src/`
-- **Contains:** SchedulerEngine, MemoryManager, MetricsCollector, KV Cache
-- **Depends on:** vllm-traits (types, ModelBackend trait)
-- **Used by:** Server (via mpsc channel), vllm-model (for forward passes)
-
-### Model Layer
-
-**Purpose:** ML model implementations and GPU kernels
-- **Location:** `crates/model/src/`
-- **Contains:** Architecture implementations (Llama, Mistral, Qwen, etc.), attention, MLP, normalization, positional encoding, SSM components
-- **Depends on:** vllm-traits, candle (ML framework)
-- **Used by:** vllm-core (Engine)
-
-### Traits Layer
-
-**Purpose:** Core interfaces and shared types
-- **Location:** `crates/traits/src/`
-- **Contains:** ModelBackend trait, Batch/SeqId/TokenId types, BlockSize constant
-- **Depends on:** None (no internal crate dependencies)
-- **Used by:** All crates
-
-### Tensor Parallel Layer (Distributed)
-
-**Purpose:** Multi-GPU model parallelism
-- **Location:** `crates/dist/src/`
-- **Contains:** Tensor parallel utilities, all-reduce operations
-- **Depends on:** vllm-traits
-- **Used by:** vllm-core (optional feature)
-
-## Data Flow
-
-### Primary Request Path
-
-1. **HTTP Request** → `crates/server/src/openai/chat.rs:chat_completions()`
-   - Parse OpenAI chat completion request
-   - Encode text to tokens via Tokenizer
-
-2. **Message Send** → `crates/server/src/main.rs:ApiState.engine_tx`
-   - Send `EngineMessage::AddRequest` via mpsc channel
-
-3. **Engine Loop** → `crates/core/src/engine/speculative.rs:Engine::run()`
-   - Receive message, add to scheduler via `SchedulerEngine::add_request()`
-
-4. **Scheduling** → `crates/core/src/scheduler/engine.rs:SchedulerEngine::build_batch()`
-   - PhaseScheduler selects Prefill or Decode
-   - BatchComposer builds batch respecting memory/token limits
-   - Prefix cache checked for prompt reuse
-
-5. **Model Forward** → `crates/traits/src/model.rs:ModelBackend::forward()`
-   - LlamaModel/MistralModel/etc. performs actual inference
-   - KV cache updated via PagedKvCache
-
-6. **Scheduler Update** → `crates/core/src/scheduler/engine.rs:SchedulerEngine::update()`
-   - Process output tokens, update sequence status
-   - Allocate/release KV blocks
-   - Check completion, add finished prompts to prefix cache
-
-7. **Response** → Token sent via `response_tx` channel back to client
-
-### Speculative Decoding Path
-
-1. **Draft Generation** → `crates/core/src/engine/speculative.rs:generate_draft_tokens()`
-   - Optional smaller draft model generates candidate tokens
-
-2. **Verification** → `crates/core/src/engine/speculative.rs:verify_draft_tokens()`
-   - Target model verifies draft tokens in parallel
-   - Accepted tokens emitted, rejected tokens replaced with target output
-
-3. **Adaptive Adjustment** → `crates/core/src/engine/speculative.rs:step_adaptive_speculative()`
-   - Track acceptance rate, dynamically adjust max draft tokens
-
-**State Management:**
-- Sequences tracked in `SchedulerEngine.running: Vec<Sequence>`
-- RequestQueue holds waiting sequences by phase
-- `Sequence.kv_blocks: Arc<Vec<BlockId>>` for efficient sharing
-
-## Key Abstractions
-
-### ModelBackend Trait
-
-**Purpose:** Unified interface for all ML model implementations
-- **File:** `crates/traits/src/model.rs`
-- **Examples:** `crates/model/src/llama/model.rs:LlamaModel`, `crates/model/src/mistral/model.rs:MistralModel`
-- **Pattern:** Strategy pattern with trait object returns (`Box<dyn ModelBackend>`)
+### ModelBackend Trait (`crates/traits/src/model.rs`)
+The central abstraction point. All model architectures implement this trait:
 
 ```rust
 pub trait ModelBackend: Send + Sync {
-    fn forward(&mut self, seq_ids: &[SeqId], ...) -> Result<BatchOutput>;
-    fn forward_logits(&mut self, seq_ids: &[SeqId], ...) -> Result<Vec<Vec<f32>>>;
-    fn embed(&mut self, input_tokens: &[Vec<TokenId>], ...) -> Result<Vec<Vec<f32>>>;
+    fn forward(...) -> Result<BatchOutput>;
+    fn forward_logits(...) -> Result<Vec<Vec<f32>>>;
+    fn embed(...) -> Result<Vec<Vec<f32>>>;
+    fn vocab_size(&self) -> usize;
+    fn num_layers(&self) -> usize;
+    fn num_heads(&self) -> usize;
 }
 ```
 
-### Architecture Trait
-
-**Purpose:** Dynamic model architecture registration and instantiation
-- **File:** `crates/model/src/arch/mod.rs`
-- **Examples:** `crates/model/src/llama/arch.rs:LlamaArchitecture`
-- **Pattern:** Factory pattern with detection logic
+### Architecture Trait (`crates/model/src/arch/mod.rs`)
+Factory pattern for dynamic model architecture registration:
 
 ```rust
 pub trait Architecture: Send + Sync + 'static {
@@ -191,89 +60,125 @@ pub trait Architecture: Send + Sync + 'static {
 }
 ```
 
-### SchedulerPolicy Trait
+### Architecture Registry (`crates/model/src/arch/registry.rs`)
+Lazy-initialized singleton that auto-detects model architecture from config.json. Uses `RwLock<HashMap<String, ArchFactory>>`.
 
-**Purpose:** Pluggable scheduling algorithms
-- **File:** `crates/core/src/scheduler/policy/mod.rs`
-- **Examples:** `FcfsPolicy`, `SjfPolicy`, `PriorityPolicy`
+## Engine Architecture
 
-### TransformerBlock Trait
+### Engine (`crates/core/src/engine.rs`)
+- Actor-based: receives `EngineMessage` via `mpsc::UnboundedReceiver`
+- Main loop in `run()`: processes messages, steps scheduler + model forward
+- Supports both generic `Engine<M>` and type-erased `Engine<BoxedModelBackend>`
 
-**Purpose:** Unified transformer layer interface
-- **File:** `crates/model/src/components/block.rs`
-- **Examples:** `LlamaBlock`, `MistralBlock`, `Qwen3Block`
+### SchedulerEngine (`crates/core/src/scheduler/engine.rs`)
+Componentized scheduler with 6 sub-components:
+1. **RequestQueue** — Phase-aware request indexing (prefill/decode)
+2. **PhaseScheduler** — Strict prefill/decode separation with configurable switch policies
+3. **BatchComposer** — Phase-specific batch construction with token packing
+4. **MemoryManager** — Block allocation and eviction for KV cache
+5. **RadixTree** — Prefix caching for reusable prompt computations
+6. **SchedulingPolicy** — Pluggable policies (FCFS, SJF, Priority)
 
-## Entry Points
+### Sampling (`crates/core/src/sampling.rs`)
+- Token selection strategies (greedy, temperature, top-k, top-p)
+- Pluggable sampling strategy pattern
 
-### Server Entry Point
+## Model Layer Architecture
 
-**Location:** `crates/server/src/main.rs:main()`
-- **Triggers:** `cargo run -p vllm-server`
-- **Responsibilities:** Parse CLI args, load model, initialize Engine, start Axum HTTP server
+### Shared Components (`crates/model/src/components/`)
+Reusable neural network components:
+- `attention/` — GQA (`gqa.rs`), MLA (`mla.rs`), Flash Attention (`flash.rs`, `flash_v3.rs`)
+- `mlp/` — SwiGLU feed-forward
+- `norm/` — RMSNorm, LayerNorm
+- `positional/` — RoPE, MRoPE (for Qwen3.5)
+- `ssm.rs` — SSM, Mamba blocks, HarmonicSSM for hybrid models
 
-### Engine Loop
+### Model Architectures (10 supported)
+Each in its own module with `arch.rs` + `register.rs`:
+- `llama/` — Llama (RMSNorm, RoPE, SwiGLU)
+- `mistral/` — Mistral (Sliding Window, GQA)
+- `qwen3/` — Qwen2/3 (GQA, MLA, RoPE, QK-Norm)
+- `qwen3_5/` — Qwen3.5 (Mamba SSM Hybrid, HarmonicSSM)
+- `gemma4/` — Gemma4 (Hybrid Attention)
+- `mixtral/` — Mixtral (Sparse MoE)
+- `llama4/` — Llama4
+- `gemma3/` — Gemma3
+- `mistral_small/` — Mistral Small
+- `phi4/` — Phi-4
 
-**Location:** `crates/core/src/engine/speculative.rs:Engine<M>::run()`
-- **Triggers:** Spawned as separate thread from main()
-- **Responsibilities:** Process EngineMessage channel, call step methods, manage lifecycle
+### KV Cache (`crates/model/src/kv_cache.rs`)
+Paged attention KV cache with block-level management. Two tensor storage strategies:
+- `paged_tensor/` — Physical KV cache with block IDs and quantization
+- `tensor_store.rs` — KV cache read/write with logging
 
-### Test Entry Points
+### Model Loading (`crates/model/src/loader/`)
+- `builder.rs` — `ModelLoaderBuilder` and `ModelLoader`
+- `format.rs` — Auto-detection of safetensors vs GGUF
+- `checkpoint.rs` — Weight loading from sharded checkpoints
+- `io.rs` — File I/O utilities
 
-**Location:** Various `#[cfg(test)]` modules throughout crates
-- **Triggers:** `cargo test --package vllm-core -- test_name`
-- **Responsibilities:** Unit test individual components
+## Distributed Architecture (`crates/dist/`)
 
-## Crate Dependencies
+### Tensor Parallel (`crates/dist/src/tensor_parallel/`)
+- `device_mesh.rs` — Device/node topology management
+- `parallel_linear.rs` — Column/Row parallel linear layers
+- `all_reduce.rs` — NCCL-based all-reduce (stub)
 
+### Pipeline Parallel (`crates/dist/src/pipeline/`)
+- `pipeline.rs` — Pipeline parallelism orchestrator
+- `stage.rs` — Pipeline stage definition
+
+### Distributed KV Cache (`crates/dist/src/distributed_kv/`)
+- `cache.rs` — Distributed KV cache with message protocol
+- `protocol.rs` — Message types for cache operations
+
+## Server Architecture (`crates/server/`)
+
+### API Layer (`crates/server/src/openai/`)
+- `chat.rs` — Chat completions (streaming SSE + non-streaming)
+- `completions.rs` — Text completions
+- `embeddings.rs` — Embedding endpoints
+- `models.rs` — Model listing
+- `types.rs` — OpenAI-compatible request/response types
+
+### Security Layer (`crates/server/src/security/`)
+- JWT validation, RBAC, TLS, audit logging, correlation IDs
+
+### Backpressure (`crates/server/src/backpressure.rs`)
+- Dynamic backpressure based on queue depth and latency
+
+## Data Flow
+
+### Request Lifecycle
 ```
-vllm-traits   → (no dependencies)
-vllm-core     → vllm-traits, [vllm-model with cuda-graph feature]
-vllm-model    → vllm-traits, candle, candle-nn
-vllm-server   → vllm-core, vllm-model, tokio, axum
-vllm-dist     → vllm-traits
-vllm-testing  → vllm-traits, vllm-core, vllm-model
-benches       → vllm-traits, vllm-core, vllm-model
+Client → HTTP POST /chat/completions
+  → axum handler (chat.rs)
+  → Build EngineMessage::AddRequest
+  → mpsc channel → Engine::run() loop
+  → SchedulerEngine::add_request()
+  → Engine::step() loop:
+      → SchedulerEngine::build_batch()
+      → ModelBackend::forward() (CUDA/CPU)
+      → SchedulerEngine::update()
+      → Send tokens via mpsc response channel
+  → SSE stream back to client
 ```
 
-## Architectural Constraints
+### Batch Construction
+```
+AddRequest → RequestQueue (phase-aware)
+  → PhaseScheduler (select phase)
+  → MemoryManager (allocate KV blocks)
+  → BatchComposer (build vllm_traits::Batch)
+  → ModelBackend::forward()
+  → Process outputs → Update scheduler state
+```
 
-- **Threading:** Single-threaded inference loop spawned on `std::thread::spawn`. Model operations use internal Rayon parallelism for tensor ops.
-- **Global state:** `ARCHITECTURE_REGISTRY` is a global `Lazy<ArchitectureRegistry>` at `crates/model/src/arch/registry.rs:64`
-- **Circular imports:** None detected. Layer hierarchy strictly enforced.
-- **Blocking:** Engine loop uses `mpsc::UnboundedReceiver` for async message handling
+## Key Design Decisions
 
-## Anti-Patterns
-
-### ModelBackend Lock Contention
-
-**What happens:** `self.target_model.lock().unwrap()` called frequently in speculative decoding path
-**Why it's wrong:** Mutex lock overhead on every forward pass, potential contention
-**Do this instead:** Use `parking_lot::RwLock` or redesign to avoid per-call locking
-
-### Batch Composition Duplication
-
-**What happens:** Two `build_batch` methods exist: `build_batch()` and `build_batch_with_graph()`
-**Why it's wrong:** Code duplication and potential inconsistency between code paths
-**Do this instead:** Consolidate into single method with optional graph routing parameter
-
-## Error Handling
-
-**Strategy:** `thiserror` enums with `?` propagation
-
-**Patterns:**
-- `ModelError` in `crates/traits/src/model.rs` wraps candle errors
-- `EngineError` via `thiserror` in engine modules
-- `Result<T>` type aliases for fallible functions
-- Global `tracing` for observability (info, debug, warn, error levels)
-
-## Cross-Cutting Concerns
-
-**Logging:** `tracing` crate with structured spans. Levels: ERROR (2 logs), WARN (7), INFO (18), DEBUG (35), TRACE (20).
-
-**Validation:** Config validation in `crates/server/src/config.rs:AppConfig::validate()`
-
-**Authentication:** API key validation via `crates/server/src/auth.rs:AuthMiddleware`
-
----
-
-*Architecture analysis: 2026-04-26*
+1. **Actor model** for engine concurrency — single-threaded engine loop with message passing
+2. **Type-erased models** via `BoxedModelBackend` — allows runtime model selection
+3. **Dynamic architecture detection** — registry pattern, no enum matching
+4. **Paged KV cache** — block-based memory management with prefix caching
+5. **Continuous batching** — dynamic batch composition each step
+6. **Feature-gated CUDA** — `cuda` and `cuda-graph` features, graceful CPU fallback
