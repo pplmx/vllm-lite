@@ -1,356 +1,152 @@
-# Codebase Concerns
+# Technical Concerns & Technical Debt
 
-**Analysis Date:** 2026-04-26
+**Last updated:** 2026-05-09
+**Focus:** Concerns
 
-## Technical Debt
+## Critical Concerns
 
-### Qwen3.5 Hybrid Block Abstraction Incomplete
+### 1. Widespread `#[allow(dead_code)]` Suppressions (~72 instances)
+The codebase has extensive `#[allow(dead_code)]` annotations throughout production code, including entire files. This indicates significant unused code that should either be removed or properly integrated.
 
-**Issue:** The `Architecture::create_block` method returns `todo!()` for Qwen3.5 hybrid architecture. Instead, the system uses model-level integration (`crates/model/src/qwen3_5/hybrid.rs`).
+**Affected areas:**
+- `crates/server/src/openai/` — chat.rs, completions.rs, embeddings.rs (entire files have `#![allow(dead_code)]`)
+- `crates/model/src/` — Most model architectures: llama, mistral, qwen3, gemma4, mixtral blocks and models
+- `crates/model/src/components/` — block.rs, attention/flash_v3.rs, positionals, ssm.rs
+- `crates/core/src/sampling.rs` — Entire file suppressed
+- `crates/core/src/speculative/self_spec.rs` — Entire file suppressed
+- Newer architectures: gemma3, llama4, mistral_small, phi4 — many suppressed fields in `arch.rs` files
 
-**Files:**
-- `crates/model/src/qwen3_5/arch.rs:76`
-- `crates/model/src/qwen3_5/hybrid.rs`
+**Risk:** Dead code accumulates maintenance burden, creates confusion, and could introduce bugs during refactoring.
 
-**Impact:** Cannot use the standard `TransformerBlock` abstraction for hybrid Mamba+Attention models. Changes to the hybrid model require modifying the monolithic hybrid module rather than using composable block patterns.
+### 2. Server OpenAI Endpoints — Largely Unused Infrastructure
+The entire `crates/server/src/openai/` module has `#![allow(dead_code)]` on chat.rs, completions.rs, and embeddings.rs. While the server binary exists (`crates/server/src/main.rs`), the OpenAI API endpoints appear to be built but not actively wired into the running server.
 
-**Fix approach:** Implement `Qwen3Block` following the pattern of other model blocks (`LlamaBlock`, `MistralBlock`) to properly integrate with the architecture registry system.
+**Files with dead code crate-level suppression:**
+- `crates/server/src/main.rs` — entry point itself
+- `crates/server/src/auth.rs` — auth middleware
+- `crates/server/src/api.rs` — health/ endpoints
+- `crates/server/src/config.rs` — server config
+- `crates/server/src/logging.rs` — logging config
 
----
+### 3. Several Model Architectures with Skeleton Implementations
+Newer model architectures (gemma3, llama4, mistral_small, phi4) have minimal `arch.rs` files with `#[allow(dead_code)]` on nearly every struct field. These are registration stubs without full model implementations.
 
-### Test Architecture Has Unimplemented Methods
+**Architecture completeness concerns:**
+| Architecture | Status |
+|---|---|
+| Llama | Complete (block.rs, model.rs, register.rs) |
+| Mistral | Complete (block.rs, model.rs, register.rs) |
+| Qwen3 | Complete (attention, mla, block, model) |
+| Qwen3.5 | Complete (hybrid, ssm, model) |
+| Gemma4 | Complete (attention, block, mlp, rope, model) |
+| Mixtral | Complete (block, model, sparse_moe) |
+| Gemma3 | Minimal (stub only) |
+| Llama4 | Minimal (stub only) |
+| Mistral_small | Minimal (stub only) |
+| Phi4 | Minimal (stub only) |
 
-**Issue:** The test struct `TestArch` in the registry test module has `todo!()` in `create_block()` and `create_model()` methods, making it unsuitable for integration testing.
+### 4. Vision Encoder — Placeholder Implementation
+`crates/model/src/components/vision.rs` contains a `VisionEncoder` that is a pass-through (returns input unchanged). The `PatchEmbed` is initialized but the vision pipeline is not fully implemented.
 
-**Files:** `crates/model/src/arch/registry.rs:97,106`
+## Security Concerns
 
-**Impact:** The test architecture cannot be used for end-to-end architecture testing. Only unit tests exist for the registry.
+### 5. Unsafe Code in Model Loading
+`crates/model/src/loader/io.rs` contains:
+- `unsafe { Mmap::map(&file) }` — memory mapping
+- `unsafe { std::slice::from_raw_parts(...) }` — raw pointer reinterpretation (3 instances for u16/f32)
 
-**Fix approach:** Either implement stub methods or use a real model like `LlamaArchitecture` for integration tests.
+These are necessary for performance but must be carefully reviewed for correctness, especially with untrusted model files.
 
----
-
-## Known Bugs and Limitations
-
-### Ignored Tests (7 tests)
-
-**Issue:** Seven integration tests are marked `#[ignore]` in `crates/model/tests/checkpoint_loading_tests.rs` because they require external model files.
-
-**Files:**
-- `crates/model/tests/checkpoint_loading_tests.rs:69,124,167,189,215,269,299`
-
-**Tests:**
-- `test_qwen35_weight_keys` - Requires `/models/Qwen3.5-0.8B`
-- `test_qwen35_remapped_weight_structure` - Requires `/models/Qwen3.5-0.8B`
-- `test_qwen3_tokenizer_roundtrip` - Requires `/models/Qwen3-0.6B`
-- `test_qwen3_direct_inference` - Requires `/models/Qwen3-0.6B`
-- `test_qwen3_weight_diagnostics` - Requires `/models/Qwen3-0.6B`
-- `test_qwen3_qk_norm_weights` - Requires `/models/Qwen3-0.6B`
-- `test_all_models_loadable` - Requires multiple model directories
-
-**Impact:** Critical checkpoint loading and multi-model loading workflows are not validated in CI.
-
-**Fix approach:** Either download models during test setup or mock the checkpoint loading for unit tests.
-
----
-
-## Unimplemented Features
-
-### From ROADMAP.md (Long-term Vision)
-
-| Feature | Status | Impact |
-|---------|--------|--------|
-| Pipeline Parallelism | Not started | Cannot scale across multiple GPUs with pipeline strategy |
-| Distributed KV Cache | Not started | Memory cannot be shared across GPU nodes |
-| Mobile/Edge Deployment | Not started | Cannot deploy to resource-constrained environments |
-| WebAssembly Support | Not started | Cannot run in browsers or edge runtimes |
-| Online Fine-tuning Interface | Not started | Cannot adapt models at runtime |
-
-**Files:** `ROADMAP.md:110-111,255-260`
-
-**Fix approach:** These are long-term roadmap items. Pipeline parallelism should be prioritized for multi-GPU deployments.
-
----
-
-### Quantization Limitations
-
-**Issue:** Only GGUF Q4_K_M quantization is supported. Other formats (GPTQ, AWQ, INT8) have stubs but no implementation.
-
-**Files:**
-- `crates/model/src/paged_tensor/quantization.rs`
-- `crates/model/Cargo.toml:22`
-
-**Current support:**
-- FP16 (native)
-- FP32 (native)
-- GGUF Q4_K_M (dequantizes to FP16)
-
-**Missing:**
-- GPTQ support
-- AWQ support
-- INT8 Weight-Only quantization runtime
-- INT8 KV Cache runtime
-
-**Fix approach:** Implement quantization kernels for each format following the candle quantization patterns.
-
----
-
-## Performance Bottlenecks
-
-### Hash-based Prefix Cache (Collision Risk)
-
-**Issue:** The prefix cache uses a simple u64 hash for cache keys. The hash function in `crates/core/src/kv_cache/prefix_cache.rs:83-92` converts floats to u64 via truncation, which can cause hash collisions.
-
+### 6. Unsafe Send impl for CudaGraph
+`crates/model/src/kernels/cuda_graph.rs:47`:
 ```rust
-// Current hash - collisions likely
-data.iter().map(|&x| (x.abs() * 1000.0) as u64)
-    .fold(0u64, |acc, x| acc.wrapping_mul(31).wrapping_add(x))
-```
-
-**Files:** `crates/core/src/kv_cache/prefix_cache.rs:83-92`
-
-**Impact:** Hash collisions can cause incorrect prefix matches, returning wrong cached blocks for prompts.
-
-**Fix approach:** Use a cryptographic hash (e.g., xxhash, sha256) with proper byte serialization.
-
----
-
-### Speculative Decoding Fallback
-
-**Issue:** When speculative decoding is enabled but no draft model is set, the system falls back silently without logging a performance warning.
-
-**Files:** `crates/core/src/engine/speculative.rs:60-64`
-
-**Impact:** Users may enable speculative decoding expecting acceleration but get no speedup without realizing the draft model isn't loaded.
-
-**Fix approach:** Return an error during initialization if speculative decoding is enabled without a draft model, rather than falling back silently.
-
----
-
-## Architecture Issues
-
-### Heavy Use of expect/unwrap (1162 occurrences)
-
-**Issue:** The codebase has 1162 instances of `.expect()`, `.unwrap()`, and `.unwrap_or()` that can panic on unexpected conditions.
-
-**Files:** Throughout codebase, concentrated in:
-- `crates/model/tests/*.rs`
-- `crates/model/src/loader/*.rs`
-- `crates/server/src/openai/chat.rs:263,283`
-
-**Impact:** Unexpected errors (malformed models, corrupted data) cause panics rather than graceful error handling.
-
-**Fix approach:** Replace with proper `Result` propagation and user-friendly error messages.
-
----
-
-### Model Loading Panics
-
-**Issue:** The main server binary uses `panic!()` for model loading failures, causing process termination instead of graceful degradation.
-
-**Files:** `crates/server/src/main.rs:117,121,135`
-
-```rust
-.unwrap_or_else(|e| panic!("Failed to create loader: {}", e));
-.unwrap_or_else(|e| panic!("Failed to load model: {}", e));
-.unwrap_or_else(|e| panic!("Failed to load draft model: {}", e));
-```
-
-**Impact:** A corrupted model file crashes the entire server instead of returning an error to the user.
-
-**Fix approach:** Return a proper error code with descriptive message instead of panicking.
-
----
-
-## Security Considerations
-
-### API Key Authentication Location
-
-**Issue:** The `crates/server/src/auth/` directory was not found. Auth middleware is referenced in main.rs but the implementation is unclear.
-
-**Files:**
-- `crates/server/src/main.rs:41` (references `Option<Arc<AuthMiddleware>>`)
-- `crates/server/src/auth/mod.rs` (missing)
-
-**Impact:** API key authentication may not be properly implemented or may be a placeholder.
-
-**Fix approach:** Verify auth middleware implementation exists and add integration tests.
-
----
-
-### TLS/SSL Not Implemented
-
-**Issue:** Per ROADMAP.md, TLS/SSL is delegated to external components (nginx).
-
-**Files:** `ROADMAP.md:227`
-
-**Impact:** API traffic is unencrypted by default. Production deployments require external termination.
-
-**Mitigation:** Document that production deployments must use reverse proxy with TLS.
-
----
-
-### Unsafe Code (4 instances)
-
-**Issue:** Unsafe code is used for memory-mapped I/O and tensor data conversion.
-
-**Files:** `crates/model/src/loader/io.rs:28,75,85,95`
-
-```rust
-// Line 28: mmap
-unsafe { Mmap::map(&file) }
-
-// Lines 75, 85, 95: slice conversion from raw pointers
-unsafe { std::slice::from_raw_parts(tensor_data.as_ptr() as *const u16, n) }
-```
-
-**Impact:** Memory-mapped files and raw pointer conversions can lead to undefined behavior if bounds are incorrect or file is modified during access.
-
-**Mitigation:** The mmap threshold checks and length calculations are conservative. Audit bounds carefully if modifying tensor loading.
-
----
-
-### Unsafe Send Implementation
-
-**Issue:** `CudaGraph` uses `unsafe impl Send` with a comment claiming thread safety.
-
-**Files:** `crates/model/src/kernels/cuda_graph.rs:47`
-
-```rust
-// SAFETY: CudaGraph can be Send because it only contains thread-safe types
 unsafe impl Send for CudaGraph {}
 ```
+This manual Send implementation requires correctness verification — CudaGraph wraps CUDA resources that must be properly synchronized across threads.
 
-**Impact:** If assumptions about thread safety are incorrect, data races may occur.
+## Performance Concerns
 
-**Fix approach:** Verify that `Arc<dyn CudaGraphNode>` and all contained types are truly `Send + Sync`. Add integration tests with concurrent execution.
+### 7. CPU-Only Default Path
+Without the `cuda` feature, all model inference runs on CPU via Candle. This means:
+- No GPU acceleration for attention or MLP operations
+- Flash attention kernel not available
+- CUDA Graph optimization entirely disabled
+- The `cuda-graph` feature is in the default features of vllm-core but fails gracefully with a warning
 
----
+### 8. Single-Threaded Engine Loop
+`Engine::run()` uses a single-threaded event loop with `std::thread::sleep()`. While this simplifies the actor model, it means:
+- Only one core processes inference (no intra-op parallelism beyond Candle's internal ops)
+- Sleep-based polling (`SleepPolicy` with exponential backoff) is less efficient than condition variable / event-driven wakeup
+- The engine blocks on model forward calls
 
-## Fragile Areas
+### 9. Expansive Synchronous Mutex Usage
+`Engine` wraps models in `Arc<Mutex<dyn ModelBackend>>`:
+- `target_model: Arc<Mutex<dyn ModelBackend>>`
+- `draft_model: Option<Arc<Mutex<dyn ModelBackend>>>`
 
-### Qwen3.5 Weight Key Remapping
+This serializes all model access. In a multi-engine or async setting, this becomes a bottleneck.
 
-**Issue:** The weight key remapping function for Qwen3.5 is brittle and depends on specific naming conventions.
+## Maintainability Concerns
 
-**Files:** `crates/model/src/qwen3_5/arch.rs:15-65`
+### 10. TODO Items in Production Code
+`crates/model/src/arch/registry.rs` has `todo!()` in test architecture implementations for `create_block()` and `create_model()`. These are in test code (`#[cfg(test)]`) but `todo!()` will panic if reached.
 
-**Why fragile:** Any change to HuggingFace model naming conventions will break model loading.
+### 11. Duplicate Prefix Cache Implementations
+There are multiple prefix cache implementations:
+- `crates/core/src/kv_cache/prefix_cache.rs` — Legacy prefix cache
+- `crates/core/src/scheduler/cache/prefix_cache.rs` — Secondary prefix cache
+- `crates/core/src/scheduler/radix_cache/` — Radix tree-based prefix cache (primary)
 
-**Safe modification:** Add validation that expected keys exist before remapping, with clear error messages.
+The coexistence of multiple implementations increases cognitive load and risks inconsistency.
 
----
+### 12. No Coverage Threshold
+The project has a coverage tool (`cargo tarpaulin`) configured but no coverage threshold enforcement. This means coverage can regress without CI catching it.
 
-### Prefix Cache Hash Invalidation
+### 13. Extensive Suppressions in vllm-server
+The server crate has `#![allow(dead_code)]` at the file level on 8 out of ~15 source files. This suggests significant portions of the server code may be scaffolding that was built but never fully integrated.
 
-**Issue:** The prefix match cache is cleared on every insert, potentially losing valid prefix matches.
+### 14. Legacy Metrics Layer
+`crates/core/src/metrics/` has both:
+- `legacy.rs` — Legacy metrics collector
+- `collector.rs` — Current `MetricsCollector`
+- `enhanced.rs` — `EnhancedMetricsCollector`
 
-**Files:** `crates/core/src/kv_cache/prefix_cache.rs:93`
+The `EnhancedMetricsCollector` is what's used in the Scheduler and Engine, but the older collectors remain.
 
-```rust
-self.prefix_match_cache.clear();
-```
+### 15. `#[allow(clippy::derivable_impls)]` Pattern
+`crates/server/src/config.rs` and `crates/server/src/cli.rs` suppress a clippy lint suggesting that `Default` implementations could be derived. This indicates manually written `Default` impls where `#[derive(Default)]` would suffice.
 
-**Impact:** Repeated prefix cache lookups for non-cached prefixes may perform unnecessary searches.
+## Testing Concerns
 
-**Fix approach:** Implement LRU eviction for `prefix_match_cache` instead of full clear.
+### 16. Model Checkpoint Tests All Ignored
+All 7 tests in `crates/model/tests/checkpoint_loading_tests.rs` are marked `#[ignore]`. While this is understandable (they require downloading real model weights), it means there is no automated verification that model loading works correctly in CI.
 
----
+### 17. No Fast-Path Model Integration Tests
+There are no lightweight model verification tests that run without checkpoints. A synthetic weight-based model test would provide regression coverage without external dependencies.
 
-## Scaling Limits
+### 18. Minimal Server Integration Tests
+Only one server integration test file (`tests/models_handler_test.rs`). The chat completions, embeddings, and streaming endpoints have no automated integration coverage.
 
-### Block Size Fixed at Compile Time
+## Distributed Concerns
 
-**Issue:** `BLOCK_SIZE` is defined as a constant in `vllm_traits::BLOCK_SIZE`.
+### 19. Distributed Features Are Unproven
+The `vllm-dist` crate has extensive infrastructure (gRPC, tensor parallel, pipeline parallel, distributed KV cache) but:
+- NCCL all-reduce is a stub
+- Pipeline parallelism is annotated with `#[allow(dead_code)]`
+- Distributed KV cache has dead code suppression
+- No integration tests exercise the distributed path
 
-**Files:** `crates/traits/src/types.rs`
+## Summary
 
-**Impact:** Cannot tune block size for different hardware configurations without recompilation.
-
-**Fix approach:** Make block size configurable via CLI/env at startup.
-
----
-
-### Single-device CUDA Support
-
-**Issue:** CUDA device selection is limited to single device (device 0 or CPU fallback).
-
-**Files:** `crates/server/src/main.rs:106`
-
-```rust
-let device = Device::cuda_if_available(0).unwrap_or(Device::Cpu);
-```
-
-**Impact:** Cannot utilize multiple GPUs for single-request parallelism.
-
-**Fix approach:** Add multi-GPU configuration and tensor parallelism support.
-
----
-
-## Dependencies at Risk
-
-### candle-core 0.10.2
-
-**Issue:** The candle version is pinned. Newer candle versions may have breaking API changes.
-
-**Files:**
-- `crates/model/Cargo.toml:11-12`
-- `Cargo.toml:workspace.dependencies`
-
-**Risk:** Upgrading candle may require significant changes to tensor operations.
-
-**Fix approach:** Pin to minor version and test upgrades in isolation.
-
----
-
-### gguf 0.1
-
-**Issue:** GGUF support uses a relatively new crate (version 0.1).
-
-**Files:** `crates/model/Cargo.toml:22`
-
-**Risk:** Breaking changes in gguf crate updates.
-
-**Fix approach:** Review gguf changelog before updating, maintain integration tests.
-
----
-
-## Test Coverage Gaps
-
-### No Integration Tests for Auth Middleware
-
-**What's not tested:** API key authentication middleware has no dedicated tests.
-
-**Files:** `crates/server/src/auth/` (missing)
-
-**Risk:** Auth bypass vulnerabilities could go undetected.
-
-**Priority:** High
-
----
-
-### No E2E Tests with Real Models
-
-**What's not tested:** End-to-end inference with real HuggingFace models.
-
-**Files:** All `#[ignore]` tests in `crates/model/tests/checkpoint_loading_tests.rs`
-
-**Risk:** Model loading bugs may only appear with real model files.
-
-**Priority:** Medium
-
----
-
-### No Concurrency Tests for Scheduler
-
-**What's not tested:** Concurrent request handling in `SchedulerEngine`.
-
-**Files:** `crates/core/src/scheduler/engine.rs`
-
-**Risk:** Data races in request queue or memory manager could cause corruption.
-
-**Priority:** High
-
----
-
-*Concerns audit: 2026-04-26*
+| Area | Severity | Status |
+|------|----------|--------|
+| Dead code (72 suppressions) | High | Widespread across server, model, core |
+| Unused server endpoints | High | OpenAI API endpoints not wired |
+| Skeleton architectures (5 of 10) | Medium | Stub registrations, no model impl |
+| Vision encoder | Medium | Placeholder pass-through |
+| Unsafe code in loader | Low | Necessary but needs auditing |
+| Single-threaded engine | Medium | Limits throughput |
+| Duplicate prefix cache | Low | Multiple implementations |
+| No coverage threshold | Low | tarpaulin configured but not enforced |
+| All model tests ignored | Medium | Checkpoint loading unverified |
+| Distributed features unproven | Medium | gRPC/TP/Pipeline stubs |

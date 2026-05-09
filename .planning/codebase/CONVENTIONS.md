@@ -1,219 +1,135 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-04-26
-
-## Naming Patterns
-
-| Type | Convention | Example |
-|------|------------|---------|
-| Types | PascalCase | `SchedulerEngine`, `Status` |
-| Functions/Variables | snake_case | `add_request`, `running_count` |
-| Constants | SCREAMING_SNAKE_CASE | `BLOCK_SIZE`, `MAX_BATCH_SIZE` |
-| Modules | snake_case | `queue_manager`, `eviction` |
-| Crate names | kebab-case | `vllm-core` |
+**Last updated:** 2026-05-09
+**Focus:** Quality
 
 ## Code Style
 
-**Formatting:**
-- Tool: `cargo fmt` (Rust standard)
-- 4-space indentation
-- Max line length: 100 characters (soft limit)
+### Imports
+- Absolute imports preferred: `use crate::types::Request;`
+- External crates: `use vllm_traits::{ModelBackend, SeqId};`
+- Group order: std → external → crate
+- `super` for sibling module access
 
-**Linting:**
-- Tool: `cargo clippy`
-- CI enforcement: `cargo clippy --all-targets --workspace -- -D warnings`
+### Formatting
+- 4-space indentation (Rust standard)
+- 100-character soft line limit
+- `cargo fmt` required before commits
+- `cargo clippy --all-targets --workspace -- -D warnings` required
 
-**Allowances:**
-- Use `#![allow(clippy::too_many_arguments)]` when needed for function signatures
+### Lint Suppressions
+- `#![allow(clippy::too_many_arguments)]` — common in attention layers (`gqa.rs:1`, `mla.rs:1`)
+- `#![allow(dead_code)]` — used in WIP code (`chat.rs:68`, `completions.rs:26`, `embeddings.rs:9`)
+- `#[allow(clippy::derivable_impls)]` — server config (`config.rs`, `cli.rs`)
+- `#[allow(clippy::should_implement_trait)]` — RBAC (`rbac.rs:13`)
 
-## Import Organization
+## Naming Conventions
 
-Imports are grouped in this order:
-
-1. **Standard library** (`std::`, `core::`)
-2. **External crates** (e.g., `tokio::`, `tracing::`, `candle_core::`)
-3. **Crate local** (`crate::`, `super::`, `use vllm_traits::`)
-
-```rust
-// Example from `crates/core/src/engine.rs`
-mod speculative;
-
-use crate::beam::BeamSequence;
-use crate::error::Result;
-use crate::metrics::{EnhancedMetricsCollector, MetricsCollector};
-use crate::scheduler::engine::SchedulerEngine;
-use std::collections::HashMap;
-use std::marker::PhantomData;
-use tokio::sync::mpsc;
-use tracing::{error, trace};
-use vllm_traits::{BatchOutput, BatchPhase, ModelBackend, Result as ModelResult, SeqId, TokenId};
-
-#[cfg(feature = "cuda-graph")]
-use vllm_model::kernels::BatchCudaGraphExecutor;
-
-#[cfg(feature = "cuda-graph")]
-use vllm_traits::kernels::CudaGraphConfig;
-```
-
-**Key patterns:**
-- Use `use crate::types::Request` for absolute crate paths
-- Use `use super::sibling::Module` for sibling module access
-- Use `vllm_traits::{Type1, Type2}` for external trait crate imports
+| Type | Convention | Example |
+|------|------------|---------|
+| Crates | kebab-case | `vllm-core`, `vllm-model` |
+| Modules | snake_case | `scheduler/engine.rs`, `attention/gqa.rs` |
+| Types | PascalCase | `SchedulerEngine`, `GqaAttention` |
+| Traits | PascalCase | `ModelBackend`, `SchedulingPolicy` |
+| Functions | snake_case | `add_request`, `build_batch` |
+| Variables | snake_case | `running_count`, `max_batch_size` |
+| Constants | SCREAMING_SNAKE_CASE | `BLOCK_SIZE`, `MAX_BATCH_SIZE` |
+| Error types | PascalCase | `EngineError`, `VerifierError` |
 
 ## Error Handling
 
-**Pattern: Use `thiserror` for error enums**
-
+### Pattern: `thiserror` enums with `Result<T>` type aliases
 ```rust
-// From `crates/core/src/error/mod.rs`
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {
     #[error("sequence {id} not found")]
     SeqNotFound { id: u64 },
-
-    #[error("invalid request: {0}")]
-    InvalidRequest(String),
-
     #[error("model forward failed: {0}")]
     ModelError(String),
-
-    #[error("sampling failed: {0}")]
-    SamplingError(String),
 }
+pub type Result<T> = std::result::Result<T, EngineError>;
+```
 
+### Error type locations:
+- `crates/core/src/error/mod.rs` — `EngineError`
+- `crates/traits/src/model.rs` — `ModelError`
+- `crates/traits/src/types.rs` — `TensorParallelError`
+- `crates/core/src/speculative/verifier.rs` — `VerifierError`
+- `crates/core/src/circuit_breaker/breaker.rs` — `CircuitBreakerError`
+- `crates/core/src/metrics/exporter.rs` — `MetricsError`
+- `crates/server/src/security/jwt.rs` — `JwtError`
+- `crates/server/src/security/tls.rs` — `TlsError`
+- `crates/model/src/components/ssm.rs` — `SSMError`
+- `crates/dist/src/pipeline/mod.rs` — `PipelineError`
+
+### Error conversion:
+```rust
 impl From<vllm_traits::ModelError> for EngineError {
     fn from(err: vllm_traits::ModelError) -> Self {
         EngineError::ModelError(err.to_string())
     }
 }
-
-pub type Result<T> = std::result::Result<T, EngineError>;
-```
-
-**Key conventions:**
-- Derive `Debug` and `thiserror::Error`
-- Use `#[error("...")]` with field interpolation for descriptive messages
-- Implement `From` traits for automatic error conversion
-- Define a type alias `pub type Result<T> = std::result::Result<T, ErrorEnum>`
-- Return `Result<T>` from all fallible functions, use `?` for propagation
-
-## Logging Conventions
-
-**Framework:** `tracing` crate with structured logging
-
-**Log Levels:**
-
-| Level | Usage | Example |
-|-------|-------|---------|
-| `error!` | System failures (config, model loading) | `error!(error = %e, "Model forward failed")` |
-| `warn!` | Degradation (CUDA Graph disabled) | `warn!("CUDA Graph support not enabled")` |
-| `info!` | Lifecycle (startup, request start/end) | `info!(address = %addr, "Server listening")` |
-| `debug!` | Internal flow (scheduling, batching) | `debug!(batch_size = 4, phase = ?batch.phase, "Batch built")` |
-| `trace!` | Verbose (token, KV cache, attention) | `trace!(seq_id = %seq_id, token = %token, "Token generated")` |
-
-**Structured Fields:**
-```rust
-// Include relevant context as structured fields
-tracing::info!(
-    request_id = %id,
-    prompt_tokens = 150,
-    "Request started"
-);
-
-tracing::debug!(
-    running = 10,
-    waiting = 5,
-    "Scheduling decision"
-);
-
-tracing::trace!(
-    layer_idx = 12,
-    block_ids = ?blocks,
-    "KV cache read"
-);
-```
-
-**Environment Configuration:**
-```bash
-RUST_LOG=debug cargo run -p vllm-server  # Enable debug logs
-RUST_LOG=trace cargo run                 # Enable trace logs
-```
-
-## Documentation Standards
-
-**Public APIs:** Use `///` doc comments
-
-```rust
-/// Core inference engine managing requests, scheduling, and model execution.
-///
-/// The Engine orchestrates the entire inference pipeline:
-/// - Receives requests via `add_request`
-/// - Schedules batches via the Scheduler
-pub struct Engine { ... }
-```
-
-**Implementation comments:** Use `//` for inline notes
-
-```rust
-// Step 1: Process prompt token
-engine.step().unwrap();
-assert!(rx.try_recv().is_ok(), "should get first token");
-```
-
-**Module-level docs:** Use `//!` at top of module files
-
-```rust
-//! Unified mock implementations for testing.
-//!
-//! This module consolidates all mock ModelBackend implementations
-//! previously scattered across the codebase.
-```
-
-**Documentation CI Check:**
-```bash
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --workspace --all-features
 ```
 
 ## Type Conventions
+- `usize` for sizes/lengths
+- `u64` for IDs (`SeqId`, `TokenId`)
+- `u32` for token values
+- `Option<T>` for nullable values (never `null`)
+- `&T` for read-only, `&mut T` for mutable references
 
-| Type | Usage |
-|------|-------|
-| `usize` | Sizes, lengths, counts |
-| `u64` | IDs (`SeqId`, `TokenId`) |
-| `&T` | Read-only references |
-| `&mut T` | Mutable references |
-| `Option<T>` | Nullable values (never `null`) |
+## Logging
 
-## Function Design
+5-level structured logging with `tracing` crate:
 
-**Size:** Keep functions focused; use `#![allow(clippy::too_many_arguments)]` when needed
+```rust
+use tracing::{info, debug, trace, warn, error};
 
-**Return types:** Always return `Result<T>` for fallible operations
-
-**Parameters:** Prefer explicit type annotations in function signatures
-
-## Commit Message Format
-
-```text
-<type>(<scope>): <subject>
+// Structured fields with key=value syntax
+info!(request_id = %id, prompt_tokens = 150, "Request started");
+debug!(batch_size = 4, phase = ?batch.phase, "Batch built");
+trace!(seq_id = %seq_id, token = %token, "Token generated");
+warn!("CUDA Graph disabled, falling back");
+error!(error = %e, "Model forward failed");
 ```
 
-| Type | Description |
-|------|-------------|
-| `feat` | New feature |
-| `fix` | Bug fix |
-| `refactor` | Code restructuring |
-| `test` | Adding/updating tests |
-| `docs` | Documentation |
-| `chore` | Maintenance |
+### Log level distribution:
+- **ERROR** — System failures (config, model loading) — 2 logs
+- **WARN** — Degradation (CUDA Graph disabled) — 7 logs
+- **INFO** — Lifecycle (startup, request start/end) — 18 logs
+- **DEBUG** — Internal flow (scheduling, batching) — 35 logs
+- **TRACE** — Verbose (token, KV cache, attention) — 20 logs
 
-**Examples:**
-```bash
-git commit -m "feat(model): add forward_prefill to GqaAttention"
-git commit -m "fix(core): resolve prefix cache eviction bug"
-git commit -m "test(core): add prefix cache hit test"
+## Common Patterns
+
+### Feature-gated code
+```rust
+#[cfg(feature = "cuda-graph")]
+pub fn step_with_graph(&mut self) -> Result<Vec<(SeqId, TokenId)>> { ... }
+
+#[cfg(not(feature = "cuda-graph"))]
+pub fn step_with_graph(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
+    tracing::warn!("CUDA Graph support not enabled, using regular step");
+    self.step()
+}
 ```
 
----
+### Architecture registration pattern
+```rust
+// In register.rs
+pub fn register(registry: &ArchitectureRegistry) {
+    registry.register("llama", || Box::new(LlamaArchitecture));
+}
+```
 
-*Convention analysis: 2026-04-26*
+### Test pattern: inline `#[cfg(test)]` modules
+- Tests are placed in the same file as implementation
+- Use `StubModel` or `FakeModel` for mocking `ModelBackend`
+
+### Unsafe code
+Minimal: only in `crates/model/src/loader/io.rs` (memory-mapped file I/O with `std::slice::from_raw_parts`) and `crates/model/src/kernels/cuda_graph.rs` (unsafe impl Send for CudaGraph).
+
+## Documentation
+- Public APIs documented with `///` doc comments (some areas sparse)
+- AGENTS.md serves as primary developer onboarding document
+- README not present (project uses `.planning/` for docs)
