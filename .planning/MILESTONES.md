@@ -16,13 +16,22 @@
 
 - Files: speculative/verifier.rs, speculative/config.rs, speculative/strategy.rs, speculative/model.rs, speculative/self_spec.rs
 - Requirements: 17/17 satisfied (100%)
-- Timeline: Single session
+- Files modified: 41
+- Lines: +2029 / -130
+- Commits: 10
+- Timeline: 2026-04-28 (single session)
+- Audit: passed ✓
 
 ### Tech Decisions
 
 - Self-speculation using same model with 1/8 layer count
 - TokenLevel rejection strategy (accept if target_prob >= draft_prob)
 - AdaptiveDraftConfig already existed from previous implementation
+
+### Tech Debt & Known Gaps
+
+- Full Engine integration (step_speculative) not implemented
+- Actual performance benchmarks deferred (infrastructure ready)
 
 ---
 
