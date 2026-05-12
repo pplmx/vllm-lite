@@ -53,7 +53,13 @@ impl FlashAttentionV3 {
         }
 
         if let Some((left, right)) = self.window_size {
-            let mask = self.create_sliding_window_mask_simple(q.dims()[2], k.dims()[2], left, right, q.device())?;
+            let mask = self.create_sliding_window_mask_simple(
+                q.dims()[2],
+                k.dims()[2],
+                left,
+                right,
+                q.device(),
+            )?;
             let _qk = qk.broadcast_add(&mask)?;
         }
 
@@ -88,7 +94,8 @@ impl FlashAttentionV3 {
         let col_indices = col_indices.broadcast_as((1, 1, seq_len, seq_len))?;
         let mask = row_indices.ge(&col_indices)?;
         let zero = Tensor::new(0.0f32, device)?.broadcast_as((1, 1, seq_len, seq_len))?;
-        let neg_inf = Tensor::new(f32::NEG_INFINITY, device)?.broadcast_as((1, 1, seq_len, seq_len))?;
+        let neg_inf =
+            Tensor::new(f32::NEG_INFINITY, device)?.broadcast_as((1, 1, seq_len, seq_len))?;
         mask.where_cond(&zero, &neg_inf)
     }
 
@@ -174,7 +181,8 @@ impl MqaFlashAttention {
     }
 
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
-        let (_batch_size, _, seq_q, head_dim) = (q.dims()[0], q.dims()[1], q.dims()[2], q.dims()[3]);
+        let (_batch_size, _, seq_q, head_dim) =
+            (q.dims()[0], q.dims()[1], q.dims()[2], q.dims()[3]);
 
         let k_expanded = self.expand_kv(k, self.num_heads)?;
         let v_expanded = self.expand_kv(v, self.num_heads)?;
@@ -212,7 +220,8 @@ impl MqaFlashAttention {
         let col_indices = col_indices.broadcast_as((1, 1, seq_len, seq_len))?;
         let mask = row_indices.ge(&col_indices)?;
         let zero = Tensor::new(0.0f32, device)?.broadcast_as((1, 1, seq_len, seq_len))?;
-        let neg_inf = Tensor::new(f32::NEG_INFINITY, device)?.broadcast_as((1, 1, seq_len, seq_len))?;
+        let neg_inf =
+            Tensor::new(f32::NEG_INFINITY, device)?.broadcast_as((1, 1, seq_len, seq_len))?;
         mask.where_cond(&zero, &neg_inf)
     }
 }
@@ -237,7 +246,8 @@ impl GqaFlashAttention {
     }
 
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
-        let (_batch_size, _, seq_q, head_dim) = (q.dims()[0], q.dims()[1], q.dims()[2], q.dims()[3]);
+        let (_batch_size, _, seq_q, head_dim) =
+            (q.dims()[0], q.dims()[1], q.dims()[2], q.dims()[3]);
 
         let k_expanded = self.expand_kv(k, self.num_heads)?;
         let v_expanded = self.expand_kv(v, self.num_heads)?;
@@ -282,7 +292,8 @@ impl GqaFlashAttention {
         let col_indices = col_indices.broadcast_as((1, 1, seq_len, seq_len))?;
         let mask = row_indices.ge(&col_indices)?;
         let zero = Tensor::new(0.0f32, device)?.broadcast_as((1, 1, seq_len, seq_len))?;
-        let neg_inf = Tensor::new(f32::NEG_INFINITY, device)?.broadcast_as((1, 1, seq_len, seq_len))?;
+        let neg_inf =
+            Tensor::new(f32::NEG_INFINITY, device)?.broadcast_as((1, 1, seq_len, seq_len))?;
         mask.where_cond(&zero, &neg_inf)
     }
 }
@@ -300,12 +311,27 @@ mod tests {
         let num_heads = 4;
         let head_dim = 32;
 
-        let q = Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, seq_len, head_dim), DEVICE)
-            .unwrap();
-        let k = Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, seq_len, head_dim), DEVICE)
-            .unwrap();
-        let v = Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, seq_len, head_dim), DEVICE)
-            .unwrap();
+        let q = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_len, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+        let k = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_len, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+        let v = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_len, head_dim),
+            DEVICE,
+        )
+        .unwrap();
 
         let flash = FlashAttentionV3::new(FlashAttentionV3Config {
             num_heads,
@@ -326,12 +352,27 @@ mod tests {
         let num_heads = 4;
         let head_dim = 32;
 
-        let q = Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, seq_len, head_dim), DEVICE)
-            .unwrap();
-        let k = Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, seq_len, head_dim), DEVICE)
-            .unwrap();
-        let v = Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, seq_len, head_dim), DEVICE)
-            .unwrap();
+        let q = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_len, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+        let k = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_len, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+        let v = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_len, head_dim),
+            DEVICE,
+        )
+        .unwrap();
 
         let flash = FlashAttentionV3::new(FlashAttentionV3Config {
             num_heads,
@@ -352,12 +393,27 @@ mod tests {
         let num_heads = 4;
         let head_dim = 32;
 
-        let q = Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, seq_len, head_dim), DEVICE)
-            .unwrap();
-        let k = Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, seq_len, head_dim), DEVICE)
-            .unwrap();
-        let v = Tensor::randn(0.0f32, 1.0, (batch_size, num_heads, seq_len, head_dim), DEVICE)
-            .unwrap();
+        let q = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_len, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+        let k = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_len, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+        let v = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_len, head_dim),
+            DEVICE,
+        )
+        .unwrap();
 
         let flash = FlashAttentionV3::new(FlashAttentionV3Config {
             num_heads,
@@ -486,12 +542,27 @@ mod tests {
         let num_heads = 8;
         let head_dim = 64;
 
-        let q = Tensor::randn(-2.0f32, 2.0, (batch_size, num_heads, seq_len, head_dim), DEVICE)
-            .unwrap();
-        let k = Tensor::randn(-2.0f32, 2.0, (batch_size, num_heads, seq_len, head_dim), DEVICE)
-            .unwrap();
-        let v = Tensor::randn(-2.0f32, 2.0, (batch_size, num_heads, seq_len, head_dim), DEVICE)
-            .unwrap();
+        let q = Tensor::randn(
+            -2.0f32,
+            2.0,
+            (batch_size, num_heads, seq_len, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+        let k = Tensor::randn(
+            -2.0f32,
+            2.0,
+            (batch_size, num_heads, seq_len, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+        let v = Tensor::randn(
+            -2.0f32,
+            2.0,
+            (batch_size, num_heads, seq_len, head_dim),
+            DEVICE,
+        )
+        .unwrap();
 
         let flash = FlashAttentionV3::new(FlashAttentionV3Config {
             num_heads,

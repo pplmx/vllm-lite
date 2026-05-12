@@ -60,8 +60,7 @@ impl SpeculationConfig {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(1.0),
             target_model: Arc::new(
-                std::env::var("VLLM_SPECULATIVE_TARGET_MODEL")
-                    .unwrap_or_default(),
+                std::env::var("VLLM_SPECULATIVE_TARGET_MODEL").unwrap_or_default(),
             ),
             draft_layers: std::env::var("VLLM_SPECULATIVE_DRAFT_LAYERS")
                 .ok()

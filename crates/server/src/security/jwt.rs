@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -83,10 +85,7 @@ pub struct JwtValidator {
 impl JwtValidator {
     pub fn new(config: JwtConfig) -> Self {
         let secret_key = config.secret.as_ref().map(|s| s.as_bytes().to_vec());
-        Self {
-            config,
-            secret_key,
-        }
+        Self { config, secret_key }
     }
 
     pub fn validate(&self, token: &str) -> Result<Claims, JwtError> {
@@ -103,8 +102,8 @@ impl JwtValidator {
             .decode(payload_part)
             .map_err(|_| JwtError::InvalidFormat("Invalid base64".to_string()))?;
 
-        let claims: Claims = serde_json::from_slice(&payload)
-            .map_err(|e| JwtError::InvalidFormat(e.to_string()))?;
+        let claims: Claims =
+            serde_json::from_slice(&payload).map_err(|e| JwtError::InvalidFormat(e.to_string()))?;
 
         if self.config.validate_exp {
             let now = std::time::SystemTime::now()
@@ -129,11 +128,7 @@ impl JwtValidator {
     }
 
     pub fn extract_token(auth_header: &str) -> Option<&str> {
-        if auth_header.starts_with("Bearer ") {
-            Some(&auth_header[7..])
-        } else {
-            None
-        }
+        auth_header.strip_prefix("Bearer ")
     }
 }
 
@@ -149,7 +144,7 @@ impl JwtAuthMiddleware {
     }
 
     pub async fn validate_request(&self, auth_header: &str) -> Result<Claims, JwtError> {
-        let token = JwtAuthMiddleware::extract_token(auth_header)
+        let token = JwtValidator::extract_token(auth_header)
             .ok_or_else(|| JwtError::InvalidFormat("Missing Bearer token".to_string()))?;
 
         let validator = self.validator.read().await;
@@ -184,12 +179,9 @@ mod tests {
 
     #[test]
     fn test_extract_token() {
-        assert_eq!(
-            JwtAuthMiddleware::extract_token("Bearer abc123"),
-            Some("abc123")
-        );
-        assert_eq!(JwtAuthMiddleware::extract_token("Basic abc"), None);
-        assert_eq!(JwtAuthMiddleware::extract_token("bearer abc"), None);
+        assert_eq!(JwtValidator::extract_token("Bearer abc123"), Some("abc123"));
+        assert_eq!(JwtValidator::extract_token("Basic abc"), None);
+        assert_eq!(JwtValidator::extract_token("bearer abc"), None);
     }
 
     #[test]

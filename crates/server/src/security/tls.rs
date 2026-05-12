@@ -1,14 +1,13 @@
+use rustls_pemfile::{certs, private_key};
 use std::fs;
-use std::path::Path;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::net::TcpListener;
-use tokio_rustls::rustls::{
-    internal::pemfile::{certs, pkcs8_private_keys},
-    server::AllowAnyAuthenticatedClient,
-    CertRequest, Dumenor, NoClientAuth, PrivateKey, ServerConfig, ServerSession,
-};
 use tokio_rustls::TlsAcceptor;
+use tokio_rustls::rustls::RootCertStore;
+use tokio_rustls::rustls::pki_types::CertificateDer;
+use tokio_rustls::rustls::server::WebPkiClientVerifier;
+use tokio_rustls::rustls::{self, ServerConfig};
 
 #[derive(Debug, Error)]
 pub enum TlsError {
@@ -49,40 +48,45 @@ impl TlsConfig {
         let cert_file = fs::File::open(&self.cert_path)
             .map_err(|e| TlsError::CertificateRead(e.to_string()))?;
         let mut cert_reader = std::io::BufReader::new(cert_file);
-        let cert_chain = certs(&mut cert_reader)
+        let cert_chain: Vec<CertificateDer<'static>> = certs(&mut cert_reader)
+            .collect::<Result<Vec<_>, _>>()
             .map_err(|e| TlsError::InvalidConfig(format!("Invalid certificate: {:?}", e)))?;
 
-        let key_file = fs::File::open(&self.key_path)
-            .map_err(|e| TlsError::KeyRead(e.to_string()))?;
+        let key_file =
+            fs::File::open(&self.key_path).map_err(|e| TlsError::KeyRead(e.to_string()))?;
         let mut key_reader = std::io::BufReader::new(key_file);
-        let mut keys: Vec<PrivateKey> = pkcs8_private_keys(&mut key_reader)
-            .map_err(|e| TlsError::InvalidConfig(format!("Invalid key: {:?}", e)))?;
+        let key = private_key(&mut key_reader)
+            .map_err(|e| TlsError::InvalidConfig(format!("Invalid key: {:?}", e)))?
+            .ok_or(TlsError::InvalidConfig("No private key found".to_string()))?;
 
-        if keys.is_empty() {
-            return Err(TlsError::InvalidConfig("No private key found".to_string()));
-        }
-
-        let mut config = if self.mtls {
-            let ca_cert_file = fs::File::open(self.ca_cert_path.as_ref().unwrap())
+        let config = if self.mtls {
+            let ca_file = fs::File::open(self.ca_cert_path.as_ref().unwrap())
                 .map_err(|e| TlsError::CertificateRead(e.to_string()))?;
-            let mut ca_reader = std::io::BufReader::new(ca_cert_file);
-            let ca_chain = certs(&mut ca_reader)
-                .map_err(|e| TlsError::InvalidConfig(format!("Invalid CA certificate: {:?}", e)))?;
+            let mut ca_reader = std::io::BufReader::new(ca_file);
+            let ca_chain: Vec<CertificateDer<'static>> = certs(&mut ca_reader)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| TlsError::InvalidConfig(format!("Invalid CA: {:?}", e)))?;
 
-            let verifier = AllowAnyAuthenticatedClient::new(ca_chain.into());
-            let mut cfg = ServerConfig::new(verifier);
-            cfg.set_single_cert(cert_chain, keys.remove(0))
+            let mut root_store = RootCertStore::empty();
+            for cert in ca_chain {
+                root_store
+                    .add(cert)
+                    .map_err(|e| TlsError::InvalidConfig(format!("Invalid CA cert: {:?}", e)))?;
+            }
+            let verifier = WebPkiClientVerifier::builder(Arc::new(root_store))
+                .build()
                 .map_err(|e| TlsError::InvalidConfig(e.to_string()))?;
-            cfg
+
+            ServerConfig::builder()
+                .with_client_cert_verifier(verifier)
+                .with_single_cert(cert_chain, key)
+                .map_err(|e: rustls::Error| TlsError::InvalidConfig(e.to_string()))?
         } else {
-            let verifier = NoClientAuth::new();
-            let mut cfg = ServerConfig::new(verifier);
-            cfg.set_single_cert(cert_chain, keys.remove(0))
-                .map_err(|e| TlsError::InvalidConfig(e.to_string()))?;
-            cfg
+            ServerConfig::builder()
+                .with_no_client_auth()
+                .with_single_cert(cert_chain, key)
+                .map_err(|e| TlsError::InvalidConfig(e.to_string()))?
         };
-
-        config.set_protocols(&["h2".into(), "http/1.1".into()]);
 
         Ok(config)
     }
@@ -124,8 +128,8 @@ mod tests {
 
     #[test]
     fn test_tls_config_with_ca() {
-        let config = TlsConfig::new("/path/to/cert.pem", "/path/to/key.pem")
-            .with_ca_cert("/path/to/ca.pem");
+        let config =
+            TlsConfig::new("/path/to/cert.pem", "/path/to/key.pem").with_ca_cert("/path/to/ca.pem");
         assert!(config.mtls);
         assert!(config.ca_cert_path.is_some());
     }

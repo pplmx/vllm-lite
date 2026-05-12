@@ -16,8 +16,8 @@ use vllm_core::engine::Engine;
 use vllm_core::speculative::SelfSpeculativeModel;
 use vllm_core::speculative::SpeculationConfig;
 use vllm_core::types::{AdaptiveDraftConfig, Request, SchedulerConfig};
-use vllm_traits::ModelBackend;
 use vllm_testing::IncrementModel;
+use vllm_traits::ModelBackend;
 
 /// SPEC-04.3: Verify that the memory overhead of speculative decoding is bounded.
 ///
@@ -79,13 +79,8 @@ fn test_speculative_memory_overhead_vs_standard() {
     let num_kv_blocks = 1024;
 
     // Standard engine (no speculative)
-    let mut std_engine = Engine::with_config(
-        IncrementModel,
-        None,
-        config.clone(),
-        4,
-        num_kv_blocks,
-    );
+    let mut std_engine =
+        Engine::with_config(IncrementModel, None, config.clone(), 4, num_kv_blocks);
 
     let (tx_std, _rx_std) = mpsc::channel(64);
     std_engine.add_request(Request::new(1, vec![10, 20, 30], 10), tx_std);
@@ -93,7 +88,10 @@ fn test_speculative_memory_overhead_vs_standard() {
     // Measure KV usage after prefill (peak usage during inference)
     let _ = std_engine.step();
     let (std_used, _) = std_engine.scheduler.get_kv_cache_usage();
-    assert!(std_used > 0, "Standard engine should have KV blocks after prefill");
+    assert!(
+        std_used > 0,
+        "Standard engine should have KV blocks after prefill"
+    );
     while std_engine.has_pending() {
         let _ = std_engine.step();
     }
@@ -114,7 +112,10 @@ fn test_speculative_memory_overhead_vs_standard() {
 
     let _ = spec_engine.step(); // prefill
     let (spec_used, _) = spec_engine.scheduler.get_kv_cache_usage();
-    assert!(spec_used > 0, "Speculative engine should have KV blocks after prefill");
+    assert!(
+        spec_used > 0,
+        "Speculative engine should have KV blocks after prefill"
+    );
 
     while spec_engine.has_pending() {
         let _ = spec_engine.step_adaptive_speculative();
@@ -138,9 +139,7 @@ fn test_self_speculative_weight_sharing() {
     // SelfSpeculativeModel wraps the same IncrementModel without allocating
     // additional weight storage. The draft_layer_count specifies how many
     // layers to use from the target model.
-    let config = SpeculationConfig::builder()
-        .draft_layers(4)
-        .build();
+    let config = SpeculationConfig::builder().draft_layers(4).build();
 
     let model = IncrementModel;
     let self_spec = SelfSpeculativeModel::new(model, config);

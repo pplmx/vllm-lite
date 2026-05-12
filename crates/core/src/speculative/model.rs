@@ -3,10 +3,10 @@
 //! Wraps a ModelBackend with speculative execution logic,
 //! managing the draft-verify-accept cycle.
 
-use vllm_traits::ModelBackend;
 use super::config::SpeculationConfig;
 use super::strategy::RejectionStrategy;
 use super::verifier::DraftVerifier;
+use vllm_traits::ModelBackend;
 
 pub struct SpeculativeModel<M: ModelBackend> {
     target_model: M,
@@ -66,8 +66,8 @@ impl<M: ModelBackend> SpeculativeModel<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::speculative::verifier::{Result as VerifierResult, VerificationResult};
     use crate::types::{SeqId, TokenId};
-    use crate::speculative::verifier::{VerificationResult, Result as VerifierResult};
 
     struct MockVerifier {
         accepted: usize,
