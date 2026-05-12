@@ -5,10 +5,10 @@
 
 #![allow(dead_code)]
 
-use vllm_traits::ModelBackend;
-use crate::types::{SeqId, TokenId};
 use crate::speculative::config::SpeculationConfig;
-use crate::speculative::verifier::{DraftVerifier, VerificationResult, Result as VerifierResult};
+use crate::speculative::verifier::{DraftVerifier, Result as VerifierResult, VerificationResult};
+use crate::types::{SeqId, TokenId};
+use vllm_traits::ModelBackend;
 
 pub struct SelfSpeculativeModel<M: ModelBackend> {
     model: M,
@@ -19,9 +19,9 @@ pub struct SelfSpeculativeModel<M: ModelBackend> {
 impl<M: ModelBackend> SelfSpeculativeModel<M> {
     pub fn new(model: M, config: SpeculationConfig) -> Self {
         let total_layers = model.num_layers();
-        let draft_layer_count = config.draft_layers.unwrap_or_else(|| {
-            (total_layers as f32 * 0.125).max(1.0) as usize
-        });
+        let draft_layer_count = config
+            .draft_layers
+            .unwrap_or_else(|| (total_layers as f32 * 0.125).max(1.0) as usize);
         Self {
             model,
             config,
@@ -62,10 +62,7 @@ impl<M: ModelBackend> SelfSpeculativeModel<M> {
                 .subsec_nanos();
             let r: f32 = nanos as f32 / u32::MAX as f32;
 
-            let probs: Vec<f32> = logits
-                .iter()
-                .map(|&x| (x / temperature).exp())
-                .collect();
+            let probs: Vec<f32> = logits.iter().map(|&x| (x / temperature).exp()).collect();
             let sum: f32 = probs.iter().sum();
             let probs: Vec<f32> = probs.iter().map(|&x| x / sum).collect();
             let mut cumsum = 0.0;
@@ -152,9 +149,7 @@ mod tests {
 
     #[test]
     fn test_draft_layer_count_calculation() {
-        let config = SpeculationConfig::builder()
-            .draft_layers(4)
-            .build();
+        let config = SpeculationConfig::builder().draft_layers(4).build();
         assert_eq!(config.draft_layers, Some(4));
     }
 

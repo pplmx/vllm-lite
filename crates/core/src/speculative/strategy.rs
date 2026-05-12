@@ -7,7 +7,9 @@
 pub enum RejectionStrategy {
     #[default]
     TokenLevel,
-    BlockLevel { block_size: usize },
+    BlockLevel {
+        block_size: usize,
+    },
 }
 
 impl RejectionStrategy {
