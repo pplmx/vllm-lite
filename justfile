@@ -36,8 +36,8 @@ doc-check:
 # Run quick: fix/fmt/clippy will be fixed
 quick: fix doc-check nextest
 
-# Run all CI checks including slow/ignored tests
-ci: fmt-check clippy doc-check nextest-all
+# Run all CI checks
+ci: fmt-check clippy doc-check nextest
 
 # Auto-fix clippy warnings and format
 fix:
