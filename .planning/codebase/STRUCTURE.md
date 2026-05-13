@@ -1,304 +1,440 @@
-# Project Structure
+# Codebase Structure
 
-**Last updated:** 2026-05-09
-**Focus:** Architecture
+**Analysis Date:** 2026-05-13
 
-## Top-Level Layout
+## Directory Layout
 
-```
-vllm-lite/
-├── Cargo.toml              # Workspace root (7 members)
-├── justfile                # Task automation
-├── AGENTS.md               # Development guide
-├── .planning/              # Project planning artifacts
-│   ├── codebase/           # Codebase mapping docs (this directory)
-│   ├── milestones/         # Milestone definitions
-│   ├── phases/             # Phase plans
-│   ├── config.json         # GSD config
-│   ├── PROJECT.md          # Project overview
-│   ├── ROADMAP.md          # Development roadmap
-│   ├── REQUIREMENTS.md     # Requirements spec
-│   ├── STATE.md            # Project state tracking
-│   └── RETROSPECTIVE.md    # Retrospective notes
+```text
+vllm-lite/                          # Repository root
+├── Cargo.toml                      # Workspace root (7 crates + benches)
+├── justfile                        # Build automation (build, test, clippy, bench, ci)
+├── AGENTS.md                       # AI agent development guide
+├── CLAUDE.md                       # Claude-specific instructions
 ├── crates/
-│   ├── traits/             # Interface definitions (no deps)
-│   ├── core/               # Engine + Scheduler
-│   ├── model/              # Model architectures + components
-│   ├── server/             # HTTP API server
-│   ├── dist/               # Distributed inference
-│   ├── testing/            # Test utilities + mocks
-│   └── benches/            # Benchmarks
-├── tests/                  # Integration tests (top-level)
-└── images/                 # Architecture diagrams
-```
-
-## Crate Structure
-
-### `crates/traits/` (vllm-traits)
-Core trait definitions with minimal dependencies:
-```
-src/
-├── lib.rs          # Re-exports
-├── model.rs        # ModelBackend trait, ModelError
-├── types.rs        # Batch, BatchOutput, SeqId, TokenId, BlockId, BatchPhase
-└── kernels.rs      # CudaGraphConfig, GraphExecutionError
-tests/
-├── mod.rs
-└── model_backend.rs
-```
-
-### `crates/core/` (vllm-core)
-Inference engine and scheduler:
-```
-src/
-├── lib.rs                     # Module exports
-├── engine.rs                  # Main Engine (actor loop, step, beam search)
-├── types.rs                   # Request, Sequence, EngineMessage, SchedulerConfig
-├── sampling.rs                # Token sampling strategies
-├── beam.rs                    # Beam search
-├── tensor_parallel.rs         # Tensor parallel integration
-├── health.rs                  # Health check
-├── circuit_breaker/
-│   ├── mod.rs
-│   ├── breaker.rs             # Circuit breaker pattern
-│   ├── strategy.rs            # Configurable strategies
-├── engine/
-│   └── speculative.rs         # Speculative decoding in engine
-├── error/
-│   ├── mod.rs                 # EngineError enum
-│   └── recovery.rs            # Error recovery
-├── ha/
-│   ├── mod.rs
-│   ├── failover.rs            # HA failover
-│   └── leader_election.rs     # Leader election
-├── kv_cache/
-│   ├── mod.rs
-│   └── prefix_cache.rs        # Prefix cache helper
-├── metrics/
-│   ├── mod.rs
-│   ├── collector.rs           # MetricsCollector
-│   ├── enhanced.rs            # EnhancedMetricsCollector
-│   ├── exporter.rs            # Metrics export
-│   ├── legacy.rs              # Legacy metrics
-│   └── types.rs               # Metrics types
-├── routing/
-│   ├── mod.rs
-│   └── hash_router.rs         # Request routing
-├── scheduler/
-│   ├── mod.rs                 # Module exports
-│   ├── engine.rs              # SchedulerEngine (componentized)
-│   ├── request_queue.rs       # Phase-aware request queue
-│   ├── phase_scheduler.rs     # Prefill/decode phase mgmt
-│   ├── batch_composer.rs      # Batch construction
-│   ├── batch.rs               # Batch types
-│   ├── batch_planner.rs       # Batch planning
-│   ├── predictive_batching.rs # Predictive batching
-│   ├── preemption.rs          # Request preemption
-│   ├── packing.rs             # Token packing
-│   ├── cuda_graph.rs          # CUDA graph batch types
-│   ├── observer.rs            # Scheduler observers
-│   ├── stats.rs               # Scheduler stats
-│   ├── memory/
-│   │   ├── mod.rs
-│   │   ├── allocator.rs       # Block allocator
-│   │   └── eviction.rs        # Block eviction
-│   ├── cache/
-│   │   ├── mod.rs
-│   │   └── prefix_cache.rs    # Prefix cache (legacy)
-│   ├── poolicy/
-│   │   ├── mod.rs
-│   │   ├── trait_def.rs       # SchedulingPolicy trait
-│   │   ├── fcfs.rs            # First-come first-served
-│   │   ├── sjf.rs             # Shortest job first
-│   │   ├── priority.rs        # Priority scheduling
-│   │   └── tests.rs           # Policy tests
-│   └── radix_cache/
-│       ├── mod.rs
-│       ├── node.rs            # Radix tree node
-│       └── tree.rs            # Radix tree implementation
-└── speculative/
-    ├── mod.rs
-    ├── adaptive.rs            # Adaptive speculative decoding
-    ├── config.rs              # Speculation config
-    ├── model.rs               # SpeculativeModel
-    ├── self_spec.rs           # Self-speculative decoding
-    ├── strategy.rs            # Rejection strategies
-    └── verifier.rs            # Draft verification
-benches/                       # Core benchmarks
-tests/                         # Integration tests (16 files)
-```
-
-### `crates/model/` (vllm-model)
-Model architectures and neural network components:
-```
-src/
-├── lib.rs                     # Module exports
-├── qwen3_config.rs            # Qwen3 config parsing
-├── tokenizer.rs               # Tokenizer wrapper (tiktoken + tokenizers)
-├── kv_cache.rs                # KV cache struct
-├── arch/
-│   ├── mod.rs                 # Architecture trait
-│   └── registry.rs            # ArchitectureRegistry + register_all_archs
+│   ├── traits/                     # vllm-traits: Interface definitions (no heavy deps)
+│   │   └── src/
+│   │       ├── lib.rs              # Re-exports: ModelBackend, types, kernels
+│   │       ├── model.rs            # ModelBackend trait + ModelError
+│   │       ├── types.rs            # Batch, BatchOutput, SeqId, TokenId, BlockId, BLOCK_SIZE
+│   │       └── kernels.rs          # CUDA Graph config traits
+│   ├── core/                       # vllm-core: Engine, Scheduler, KV cache, Metrics
+│   │   └── src/
+│   │       ├── lib.rs              # Re-exports: Engine, SchedulerEngine, Metrics, etc.
+│   │       ├── engine.rs           # Engine: actor loop, model forward, step orchestration
+│   │       ├── engine/
+│   │       │   └── speculative.rs  # Speculative/adaptive step dispatch (800 lines)
+│   │       ├── types.rs            # Request, Sequence, Status, SchedulerConfig, SamplingParams
+│   │       ├── error/
+│   │       │   ├── mod.rs          # EngineError enum (thiserror)
+│   │       │   └── recovery.rs     # Error recovery strategies
+│   │       ├── scheduler/
+│   │       │   ├── mod.rs          # Module docs + re-exports
+│   │       │   ├── engine.rs       # SchedulerEngine: orchestrates all sub-components
+│   │       │   ├── request_queue.rs # O(1) request queue with phase-aware indexing
+│   │       │   ├── phase_scheduler.rs # Prefill/decode phase separation
+│   │       │   ├── batch_composer.rs  # Batch construction from sequences
+│   │       │   ├── batch_planner.rs   # Adaptive batch planning
+│   │       │   ├── batch.rs           # Batch data structures
+│   │       │   ├── packing.rs         # Sequence packing utilities
+│   │       │   ├── packing/           # Sequence packing sub-module
+│   │       │   ├── policy/
+│   │       │   │   ├── mod.rs         # Re-exports
+│   │       │   │   ├── trait_def.rs   # SchedulingPolicy trait + SchedulingContext
+│   │       │   │   ├── fcfs.rs        # First-Come-First-Served policy
+│   │       │   │   ├── sjf.rs         # Shortest Job First policy
+│   │       │   │   ├── priority.rs    # Priority-based scheduling policy
+│   │       │   │   └── tests.rs       # Policy tests
+│   │       │   ├── memory/
+│   │       │   │   ├── mod.rs         # MemoryManager interface
+│   │       │   │   ├── allocator.rs   # BlockAllocator with free list
+│   │       │   │   └── eviction.rs    # LRU-based eviction policies
+│   │       │   ├── cache/             # KV cache management
+│   │       │   ├── radix_cache/       # Radix tree for O(k) prefix lookup
+│   │       │   ├── preemption.rs      # Request preemption manager
+│   │       │   ├── cuda_graph.rs      # CUDA graph capture/replay config
+│   │       │   ├── observer.rs        # SchedulerObserver trait + event system
+│   │       │   ├── predictive_batching.rs # Predictive batch optimization
+│   │       │   └── stats.rs           # Scheduler statistics
+│   │       ├── kv_cache/
+│   │       │   ├── mod.rs             # Re-exports: BLOCK_SIZE, BlockAllocator, PrefixCache
+│   │       │   └── prefix_cache.rs    # Hash-based prefix cache (used by SchedulerEngine)
+│   │       ├── metrics/
+│   │       │   ├── mod.rs             # Re-exports
+│   │       │   ├── collector.rs       # Core metrics collection
+│   │       │   ├── enhanced.rs        # EnhancedMetricsCollector
+│   │       │   ├── exporter.rs        # Prometheus exporter
+│   │       │   ├── legacy.rs          # Legacy metrics support
+│   │       │   └── types.rs           # MetricsSnapshot, metric types
+│   │       ├── speculative/
+│   │       │   ├── mod.rs             # Re-exports
+│   │       │   ├── adaptive.rs        # AdaptiveSpeculativeDecoder (draft count tuning)
+│   │       │   ├── config.rs          # SpeculationConfig + builder
+│   │       │   ├── model.rs           # SpeculativeModel trait
+│   │       │   ├── self_spec.rs       # Self-speculation (model predicts own tokens)
+│   │       │   ├── strategy.rs        # RejectionStrategy for draft verification
+│   │       │   └── verifier.rs        # DraftVerifier + VerificationResult
+│   │       ├── circuit_breaker/
+│   │       │   ├── mod.rs             # Re-exports
+│   │       │   ├── breaker.rs         # Circuit breaker implementation
+│   │       │   └── strategy.rs        # Breaker strategies
+│   │       ├── ha/
+│   │       │   ├── mod.rs             # Re-exports
+│   │       │   ├── failover.rs        # FailoverManager
+│   │       │   └── leader_election.rs # LeaderElection for HA
+│   │       ├── routing/
+│   │       │   ├── mod.rs             # Re-exports
+│   │       │   └── hash_router.rs     # Hash-based request router
+│   │       ├── beam.rs                # Beam search decoding
+│   │       ├── sampling.rs            # Token sampling (top-k, top-p, temperature)
+│   │       ├── health.rs              # Engine health tracking
+│   │       └── tensor_parallel.rs     # TP support (re-exports from vllm-dist)
+│   ├── model/                       # vllm-model: Model implementations + components
+│   │   └── src/
+│   │       ├── lib.rs                # Re-exports: arch, kernels, loader, quantize
+│   │       ├── arch/
+│   │       │   ├── mod.rs            # Architecture trait definition
+│   │       │   └── registry.rs       # ArchitectureRegistry + ARCHITECTURE_REGISTRY global
+│   │       ├── components/
+│   │       │   ├── mod.rs            # Re-exports: attention, mlp, norm, positional, ssm, vision
+│   │       │   ├── block.rs          # StandardBlock + TransformerBlock trait
+│   │       │   ├── attention/
+│   │       │   │   ├── mod.rs        # AttentionConfig + utility functions (causal_mask, expand_kv, paged_attention, tiled_attention)
+│   │       │   │   ├── gqa.rs        # GqaAttention: Grouped-Query Attention
+│   │       │   │   ├── mla.rs        # MlaAttention: Multi-head Latent Attention
+│   │       │   │   ├── flash.rs      # FlashAttention kernel (v1/v2)
+│   │       │   │   └── flash_v3.rs   # FlashAttentionV3 kernel
+│   │       │   ├── mlp/
+│   │       │   │   ├── mod.rs        # Re-exports
+│   │       │   │   └── swiglu.rs     # SwiGLU feed-forward layer
+│   │       │   ├── norm/
+│   │       │   │   ├── mod.rs        # Re-exports: layer_norm, rms_norm
+│   │       │   │   ├── rms_norm.rs   # RMSNorm implementation
+│   │       │   │   └── layer_norm.rs # LayerNorm implementation
+│   │       │   ├── positional/
+│   │       │   │   ├── mod.rs        # Re-exports: RoPE, MRoPE, apply_rope
+│   │       │   │   ├── rope.rs       # Standard Rotary Position Embedding
+│   │       │   │   └── mrope.rs      # MRoPE (Qwen3.5 hybrid models)
+│   │       │   ├── ssm.rs            # SSMLayer, MambaBlock, SSMHarmonicSSMLayer
+│   │       │   ├── vision.rs         # VisionEncoder (placeholder)
+│   │       │   └── kv_cache_fp8.rs   # FP8 KV cache compression
+│   │       ├── llama/                # Llama architecture
+│   │       │   ├── mod.rs, arch.rs, block.rs, model.rs, register.rs
+│   │       ├── mistral/              # Mistral architecture
+│   │       │   ├── mod.rs, arch.rs, block.rs, model.rs, register.rs
+│   │       ├── qwen3/                # Qwen2/3 architecture
+│   │       │   ├── mod.rs, arch.rs, attention.rs, block.rs, mla_attention.rs, model.rs, register.rs
+│   │       ├── qwen3_5/              # Qwen3.5 Mamba SSM Hybrid
+│   │       │   ├── mod.rs, arch.rs, hybrid.rs, model.rs, register.rs, ssm.rs
+│   │       ├── gemma3/               # Gemma3 architecture
+│   │       ├── gemma4/               # Gemma4 (Hybrid Attention)
+│   │       ├── llama4/               # Llama4 architecture
+│   │       ├── mistral_small/        # Mistral Small architecture
+│   │       ├── mixtral/              # Mixtral (Sparse MoE)
+│   │       ├── phi4/                 # Phi-4 architecture
+│   │       ├── config/
+│   │       │   ├── mod.rs            # Re-exports
+│   │       │   ├── model_config.rs   # ModelConfig struct
+│   │       │   └── architecture.rs   # Architecture enum
+│   │       ├── loader/
+│   │       │   ├── mod.rs            # Re-exports: ModelLoader, ModelLoaderBuilder
+│   │       │   ├── builder.rs        # ModelLoaderBuilder (334 lines)
+│   │       │   ├── checkpoint.rs     # Checkpoint loading logic
+│   │       │   ├── format.rs         # FormatLoader trait + SafetensorsLoader
+│   │       │   └── io.rs             # I/O utilities for weight loading
+│   │       ├── paged_tensor/
+│   │       │   ├── mod.rs            # Re-exports
+│   │       │   ├── tensor_store.rs   # Physical KV cache tensor storage
+│   │       │   ├── quant.rs          # Quantized tensor types
+│   │       │   └── quantization.rs   # Quantization utilities
+│   │       ├── kernels/
+│   │       │   ├── mod.rs            # Re-exports: FlashAttention, CudaGraph, fused ops
+│   │       │   ├── flash_attention.rs # FlashAttention kernel config
+│   │       │   ├── fused_mlp.rs      # Fused MLP kernel
+│   │       │   ├── cuda_graph.rs     # CUDA graph capture/replay
+│   │       │   └── cuda_graph/       # CUDA graph sub-modules
+│   │       ├── quantize/
+│   │       │   ├── mod.rs            # Re-exports: QuantizationConfig, StorageTensor, etc.
+│   │       │   ├── types.rs          # QuantizationFormat enum
+│   │       │   └── gguf.rs           # GGUF Q4_K_M loading/dequantization
+│   │       ├── tokenizer.rs          # Tokenizer (tiktoken + tokenizers backends)
+│   │       ├── qwen3_config.rs       # Qwen3-specific config helpers
+│   │       └── kv_cache.rs           # Model-side KV cache helpers
+│   ├── server/                       # vllm-server: HTTP API + CLI
+│   │   └── src/
+│   │       ├── main.rs               # Binary entry point (#[tokio::main] async)
+│   │       ├── lib.rs                # Library crate root + ApiState
+│   │       ├── cli.rs                # Clap CLI argument parsing (528 lines)
+│   │       ├── config.rs             # AppConfig struct + validation
+│   │       ├── api.rs                # EngineHandle, health, shutdown, metrics handlers
+│   │       ├── auth.rs               # AuthMiddleware (API key auth + rate limiting)
+│   │       ├── health.rs             # HealthChecker (liveness/readiness probes)
+│   │       ├── logging.rs            # Tracing/logging initialization
+│   │       ├── backpressure.rs       # Backpressure manager (buffer limits)
+│   │       ├── debug.rs              # Debug endpoints (/debug/metrics, /debug/kv-cache)
+│   │       ├── security/             # Security utilities
+│   │       ├── openai/
+│   │       │   ├── mod.rs            # Module declarations
+│   │       │   ├── chat.rs           # Chat completions (SSE streaming, prompt building, 485 lines)
+│   │       │   ├── completions.rs    # Text completions endpoint
+│   │       │   ├── embeddings.rs     # Embeddings endpoint
+│   │       │   ├── models.rs         # /v1/models listing endpoint
+│   │       │   ├── types.rs          # OpenAI API types (Usage, ErrorResponse, ChatMessage, etc.)
+│   │       │   └── batch/
+│   │       │       ├── mod.rs, handler.rs, manager.rs, types.rs
+│   │       └── bin/
+│   │           └── vllm.rs           # Lightweight CLI binary (no HTTP server)
+│   ├── dist/                         # vllm-dist: Tensor/pipeline parallelism + distributed KV
+│   │   └── src/
+│   │       ├── lib.rs                # Re-exports
+│   │       ├── types.rs              # TensorParallelConfig
+│   │       ├── grpc.rs               # gRPC service definitions
+│   │       ├── generated/            # Prost-generated protobuf code
+│   │       ├── tensor_parallel/
+│   │       │   ├── mod.rs            # Re-exports
+│   │       │   ├── all_reduce.rs     # AllReduce + NcclAllReduce
+│   │       │   ├── device_mesh.rs    # DeviceMesh / NodeMesh
+│   │       │   └── parallel_linear.rs # ColumnParallelLinear, RowParallelLinear, TensorParallelManager
+│   │       ├── pipeline/
+│   │       │   ├── mod.rs            # Re-exports
+│   │       │   ├── pipeline.rs       # PipelineParallel executor
+│   │       │   └── stage.rs          # PipelineStage trait + StageInput/StageOutput
+│   │       └── distributed_kv/
+│   │           ├── mod.rs            # Re-exports
+│   │           ├── cache.rs          # DistributedKVCache
+│   │           └── protocol.rs       # Cache protocol messages
+│   └── testing/                      # vllm-testing: Shared test infrastructure
+│       └── src/
+│           ├── lib.rs                # Re-exports + prelude module
+│           ├── harness.rs            # TestHarness (scheduler + metrics setup)
+│           ├── mocks/                # Mock models (FakeModel, StubModel, ConstModel, etc.)
+│           ├── request_factory.rs    # RequestFactory for generating test requests
+│           ├── slow_model.rs         # SlowModel (artificially slow for timeout tests)
+│           ├── builders/             # Test builders
+│           ├── fixtures/             # Test data fixtures
+│           └── utils/                # Test utilities
+├── benches/                          # Benchmark suite
+│   ├── Cargo.toml                    # vllm-lite-benchmarks crate
+│   ├── src/
+│   │   ├── lib.rs                    # Benchmark library
+│   │   └── bin/benchmark.rs          # Benchmark binary
+│   ├── integration.rs                # Integration benchmarks
+│   ├── attention.rs                  # Attention benchmarks
+│   ├── scheduler.rs                  # Scheduler benchmarks
+│   └── speculative.rs                # Speculative decoding benchmarks
 ├── config/
-│   └── architecture.rs        # Architecture config detection
-├── components/
-│   ├── mod.rs
-│   ├── block.rs               # TransformerBlock trait
-│   ├── ssm.rs                 # SSMLayer, MambaBlock, HarmonicSSM
-│   ├── vision.rs              # Vision encoder (placeholder)
-│   ├── kv_cache_fp8.rs        # FP8 KV cache
-│   ├── attention/
-│   │   ├── mod.rs             # Module + utility functions
-│   │   ├── gqa.rs             # GQA attention (725 lines)
-│   │   ├── mla.rs             # MLA attention (657 lines)
-│   │   ├── flash.rs           # Flash attention
-│   │   └── flash_v3.rs        # Flash attention v3
-│   ├── mlp/
-│   │   ├── mod.rs
-│   │   └── swiglu.rs          # SwiGLU MLP
-│   ├── norm/
-│   │   ├── mod.rs
-│   │   ├── rms_norm.rs        # RMSNorm
-│   │   └── layer_norm.rs      # LayerNorm
-│   └── positional/
-│       ├── mod.rs
-│       ├── rope.rs            # Rotary Position Embedding
-│       └── mrope.rs           # MRoPE (Qwen3.5)
-├── kernels/
-│   ├── mod.rs
-│   ├── flash_attention.rs     # Flash attention kernel
-│   ├── fused_mlp.rs           # Fused MLP kernel
-│   ├── cuda_graph.rs          # CUDA graph kernel
-│   └── cuda_graph/
-│       ├── config.rs          # CUDA graph config
-│       └── executor.rs        # CUDA graph executor
-├── loader/
-│   ├── mod.rs
-│   ├── builder.rs             # ModelLoaderBuilder
-│   ├── checkpoint.rs          # Checkpoint loading
-│   ├── format.rs              # Format detection
-│   └── io.rs                  # File I/O
-├── paged_tensor/
-│   ├── mod.rs
-│   ├── tensor_store.rs        # KV tensor store
-│   ├── quantization.rs        # Quantization schemes
-│   └── quant.rs               # Quantized tensor types
-├── quantize/
-│   ├── mod.rs
-│   ├── types.rs               # QuantizationFormat, StorageTensor
-│   └── gguf.rs                # GGUF quantization support
-├── llama/
-│   ├── mod.rs, arch.rs, block.rs, model.rs, register.rs
-├── mistral/
-│   ├── mod.rs, arch.rs, block.rs, model.rs, register.rs
-├── qwen3/
-│   ├── mod.rs, arch.rs, attention.rs, mla_attention.rs, block.rs, model.rs, register.rs
-├── qwen3_5/
-│   ├── mod.rs, arch.rs, hybrid.rs, model.rs, ssm.rs, register.rs
-├── gemma3/
-│   ├── (mod.rs, arch.rs, model.rs, register.rs)
-├── gemma4/
-│   ├── mod.rs, arch.rs, attention.rs, block.rs, mlp.rs, model.rs, register.rs, rope.rs
-├── llama4/
-│   ├── mod.rs, arch.rs, register.rs
-├── mistral_small/
-│   ├── mod.rs, arch.rs, register.rs
-├── mixtral/
-│   ├── mod.rs, arch.rs, block.rs, model.rs, register.rs, sparse_moe.rs
-├── phi4/
-│   ├── mod.rs, arch.rs, register.rs
-tests/                         # Model tests (11 files)
-benches/
-└── attention.rs               # Attention benchmarks
+│   └── prometheus.yml                # Prometheus scrape config
+├── docs/                             # Documentation
+├── tests/                            # Integration tests (currently empty)
+├── k8s/                              # Kubernetes deployment manifests
+├── scripts/                          # Utility scripts
+├── models/                           # Model storage (empty — populated at runtime)
+├── .github/                          # GitHub Actions CI workflows
+└── docker-compose.yml                # Docker Compose for local deployment
 ```
 
-### `crates/server/` (vllm-server)
-HTTP API server:
-```
-src/
-├── main.rs                    # Entry point
-├── lib.rs                     # ApiState, module re-exports
-├── api.rs                     # Health, metrics, shutdown endpoints
-├── cli.rs                     # CLI arg parsing (clap)
-├── config.rs                  # Server configuration
-├── auth.rs                    # Auth middleware
-├── backpressure.rs            # Backpressure management
-├── debug.rs                   # Debug utilities
-├── health.rs                  # Health check types
-├── logging.rs                 # Logging configuration
-├── bin/
-│   └── vllm.rs                # Alternative binary entry
-├── openai/
-│   ├── mod.rs
-│   ├── chat.rs                # Chat completions (SSE streaming)
-│   ├── completions.rs         # Text completions
-│   ├── embeddings.rs          # Embeddings
-│   ├── models.rs              # Model listing
-│   ├── types.rs               # OpenAI API types
-│   └── batch/
-│       ├── mod.rs
-│       ├── handler.rs         # Batch request handler
-│       ├── manager.rs         # Batch manager
-│       └── types.rs           # Batch types
-├── security/
-│   ├── mod.rs
-│   ├── audit.rs               # Audit logging
-│   ├── correlation.rs         # Correlation IDs
-│   ├── jwt.rs                 # JWT validation
-│   ├── rbac.rs                # RBAC
-│   └── tls.rs                 # TLS listener
-└── tests/
-    └── models_handler_test.rs
-```
+## Directory Purposes
 
-### `crates/dist/` (vllm-dist)
-Distributed inference:
-```
-src/
-├── lib.rs                     # Re-exports
-├── grpc.rs                    # gRPC state management
-├── types.rs                   # TensorParallelConfig
-├── generated/
-│   └── vllm.distributed.rs    # Generated protobuf code
-├── distributed_kv/
-│   ├── mod.rs
-│   ├── cache.rs               # Distributed KVCache
-│   └── protocol.rs            # Cache protocol messages
-├── pipeline/
-│   ├── mod.rs
-│   ├── pipeline.rs            # Pipeline parallel
-│   └── stage.rs               # Pipeline stage
-├── tensor_parallel/
-│   ├── mod.rs
-│   ├── device_mesh.rs         # Device mesh topology
-│   ├── parallel_linear.rs     # Column/Row parallel linear
-│   └── all_reduce.rs          # All-reduce (NCCL stub)
-└── build.rs                   # tonic-build protobuf compilation
-```
+**`crates/traits/`:**
 
-### `crates/testing/` (vllm-testing)
-Test utilities:
-```
-src/
-├── lib.rs
-├── harness.rs                 # Test harness
-├── request_factory.rs         # Request builder for tests
-├── slow_model.rs              # Slow model simulation
-├── builders/
-│   └── mod.rs                 # Builder utilities
-├── fixtures/
-│   └── mod.rs                 # Test fixtures
-├── mocks/
-│   └── mod.rs                 # Mock implementations
-└── utils/
-    └── mod.rs                 # Test utilities
-```
+- Purpose: Define the `ModelBackend` trait and shared types that all crates depend on
+- Contains: 4 source files — trait definition, type aliases, batch/output structs, CUDA graph config traits
+- Key files: `lib.rs`, `model.rs`, `types.rs`, `kernels.rs`
+
+**`crates/core/`:**
+
+- Purpose: Inference engine, request scheduling, KV cache memory management, token generation loop
+- Contains: 16 top-level modules + `engine/` sub-module; the scheduler alone has 18 files across 10 sub-directories
+- Key files: `engine.rs`, `scheduler/engine.rs`, `scheduler/request_queue.rs`, `scheduler/batch_composer.rs`, `scheduler/memory/allocator.rs`, `speculative/mod.rs`
+
+**`crates/model/`:**
+
+- Purpose: Model implementations, architecture registry, shared transformer components, GPU kernels, KV cache tensor storage, tokenization
+- Contains: 21 top-level modules including 10 per-architecture modules (`llama/`, `mistral/`, etc.), 5 shared component modules (`attention/`, `mlp/`, `norm/`, `positional/`, `ssm.rs`), plus loader, kernels, paged tensor, quantize
+- Key files: `arch/registry.rs`, `loader/builder.rs`, `components/block.rs`, `components/attention/gqa.rs`, `components/attention/mla.rs`, `components/ssm.rs`, `tokenizer.rs`
+
+**`crates/server/`:**
+
+- Purpose: HTTP API server exposing OpenAI-compatible endpoints
+- Contains: 13 top-level modules + `bin/` directory; the `openai/` sub-module contains 7 files
+- Key files: `main.rs`, `lib.rs`, `cli.rs`, `openai/chat.rs`, `openai/types.rs`, `api.rs`
+
+**`crates/dist/`:**
+
+- Purpose: Multi-GPU and multi-node distributed inference support
+- Contains: 7 top-level modules; `tensor_parallel/` (4 files), `pipeline/` (3 files), `distributed_kv/` (3 files)
+- Key files: `lib.rs`, `grpc.rs`, `tensor_parallel/parallel_linear.rs`
+
+**`crates/testing/`:**
+
+- Purpose: Reusable test infrastructure consumed as dev-dependency by all other crates
+- Contains: 8 top-level modules; mock models, test harness, request factory, slow model
+- Key files: `harness.rs`, `mocks/`, `request_factory.rs`
+
+**`benches/`:**
+
+- Purpose: Criterion benchmarks for scheduler, attention, speculative decoding, and integration scenarios
+- Contains: 4 benchmark files + binary entry point
+- Key files: `integration.rs`, `scheduler.rs`, `attention.rs`, `speculative.rs`
+
+## Key File Locations
+
+**Entry Points:**
+
+- `crates/server/src/main.rs:91` — Main server binary (`#[tokio::main] async fn main()`)
+- `crates/server/src/bin/vllm.rs` — Lightweight CLI binary
+- `crates/core/src/engine.rs:361` — Engine actor loop (`Engine::run()`)
+- `crates/model/src/arch/registry.rs:64` — Lazy global `ARCHITECTURE_REGISTRY`
+
+**Configuration:**
+
+- `Cargo.toml` — Workspace root, version=0.1.0, edition=2024, rust-version=1.85
+- `crates/server/src/cli.rs` — Clap CLI arg parsing (~528 lines)
+- `crates/server/src/config.rs` — `AppConfig` struct + validation
+- `crates/core/src/types.rs:182` — `SchedulerConfig` (default and builder)
+- `justfile` — Build automation (build, test, ci, bench, clean, fmt-check, clippy)
+
+**Core Logic:**
+
+- `crates/core/src/engine.rs` — `Engine<M: ModelBackend>` struct + `run()` loop (930 lines)
+- `crates/core/src/scheduler/engine.rs` — `SchedulerEngine` (771 lines)
+- `crates/core/src/engine/speculative.rs` — Speculative step dispatch (800 lines)
+- `crates/core/src/scheduler/batch_composer.rs` — Batch assembly logic
+- `crates/core/src/scheduler/memory/allocator.rs` — Block allocation with free list
+- `crates/core/src/scheduler/radix_cache/` — Radix tree prefix matching
+
+**Protocol/Trait Definitions:**
+
+- `crates/traits/src/model.rs` — `ModelBackend` trait (128 lines)
+- `crates/model/src/arch/mod.rs` — `Architecture` trait (41 lines, plus tests)
+- `crates/model/src/components/block.rs` — `TransformerBlock` trait (line 135) + `StandardBlock` (536 lines)
+- `crates/core/src/scheduler/policy/trait_def.rs` — `SchedulingPolicy` trait (19 lines)
+
+**OpenAI API Surface:**
+
+- `crates/server/src/openai/chat.rs` — Chat completions with SSE streaming (485 lines)
+- `crates/server/src/openai/completions.rs` — Text completions
+- `crates/server/src/openai/embeddings.rs` — Embedding endpoint
+- `crates/server/src/openai/batch/handler.rs` — Batch API CRUD handlers
+- `crates/server/src/openai/types.rs` — OpenAI-format types (Usage, ErrorResponse, ChatMessage; 227 lines)
+
+**Testing Infrastructure:**
+
+- `crates/testing/src/harness.rs` — `TestHarness` and `TestHarnessConfig` (215 lines)
+- `crates/testing/src/mocks/` — Mock model implementations
+- `crates/testing/src/request_factory.rs` — Test request generation
+
+**Benchmarks:**
+
+- `benches/scheduler.rs` — Scheduler benchmarks
+- `benches/attention.rs` — Attention benchmarks
+- `benches/speculative.rs` — Speculative decoding benchmarks
+- `crates/core/benches/scheduler_benchmarks.rs` — Core scheduler benchmarks (criterion)
+- `crates/core/benches/prefix_cache_benchmarks.rs` — Prefix cache benchmarks (criterion)
 
 ## Naming Conventions
 
-- **Crates**: kebab-case (`vllm-core`, `vllm-model`)
-- **Modules**: snake_case (`scheduler/engine.rs`, `attention/gqa.rs`)
-- **Types**: PascalCase (`SchedulerEngine`, `GqaAttention`)
-- **Functions**: snake_case (`add_request`, `build_batch`)
-- **Test files**: snake_case (`scheduler_integration.rs`, `e2e_concurrent.rs`)
-- **Arch directories**: flat structure per model (`llama/`, `qwen3/`, `mixtral/`)
+**Files:**
+
+- `snake_case.rs` — All source files (`batch_composer.rs`, `request_queue.rs`, `phase_scheduler.rs`)
+- `mod.rs` — Module directory roots (`scheduler/mod.rs`, `attention/mod.rs`)
+- `trait_def.rs` — Trait-only files when separated from implementations (`policy/trait_def.rs`)
+
+**Directories:**
+
+- `snake_case/` — All directory names (`scheduler/`, `kv_cache/`, `paged_tensor/`, `radix_cache/`)
+- Per-architecture directories: `llama/`, `mistral/`, `qwen3/`, `qwen3_5/`, `gemma3/`, `gemma4/`, `llama4/`, `mixtral/`, `mistral_small/`, `phi4/`
+
+**Crates:**
+
+- `kebab-case` — Crate names (`vllm-core`, `vllm-model`, `vllm-server`, `vllm-traits`, `vllm-dist`, `vllm-testing`)
+- `vllm-lite-benchmarks` — Benches crate
+
+**Per-architecture module pattern:**
+Each architecture directory contains the same 5-file layout:
+
+```text
+{arch}/
+├── mod.rs         # Module declaration + re-exports
+├── arch.rs        # Architecture trait implementation (detect + create_model)
+├── block.rs       # TransformerBlock trait implementation
+├── model.rs       # ModelBackend trait implementation
+└── register.rs    # Registry registration function
+```
+
+## Where to Add New Code
+
+**New Model Architecture (e.g., "Falcon"):**
+
+- Primary code: `crates/model/src/falcon/` (5 files: `mod.rs`, `arch.rs`, `block.rs`, `model.rs`, `register.rs`)
+- Registration: Call `crate::falcon::register::register(registry)` in `crates/model/src/arch/registry.rs:77`'s `register_all_archs()`
+- Components: If needed, add new attention/norm/positional variants in `crates/model/src/components/`
+
+**New Scheduler Policy (e.g., "RoundRobinPolicy"):**
+
+- Implementation: `crates/core/src/scheduler/policy/round_robin.rs`
+- Register: Export from `crates/core/src/scheduler/policy/mod.rs`
+- Tests: `crates/core/src/scheduler/policy/tests.rs`
+
+**New HTTP Endpoint:**
+
+- Handler: `crates/server/src/openai/{endpoint}.rs`
+- Route: Add to the `Router` builder in `crates/server/src/main.rs` (around line 230)
+- Types: Add request/response types to `crates/server/src/openai/types.rs`
+
+**New Scheduler Component:**
+
+- Implementation: `crates/core/src/scheduler/{component}.rs`
+- Integration: Wire into `SchedulerEngine::new()` in `crates/core/src/scheduler/engine.rs`
+
+**Utilities / Shared Helpers:**
+
+- Engine utilities: `crates/core/src/` (e.g., `beam.rs`, `sampling.rs`)
+- Model utilities: `crates/model/src/components/` (for attention, norm, positional, etc.)
+- Test utilities: `crates/testing/src/`
+
+**Benchmarks:**
+
+- Core benchmarks: `crates/core/Cargo.toml` (`[[bench]]` sections) or `benches/`
+- New benchmark: Add `[[bench]]` entry to relevant `Cargo.toml` + create benchmark file
+
+## Special Directories
+
+**`crates/dist/src/generated/`:**
+
+- Purpose: Prost-generated Rust code from protobuf definitions for gRPC services
+- Generated: Yes (via `tonic-build` in `crates/dist/build.rs`)
+- Committed: Yes (checked into version control)
+
+**`config/`:**
+
+- Purpose: Infrastructure configuration files (currently `prometheus.yml` for metrics scraping)
+- Generated: No
+- Committed: Yes
+
+**`models/`:**
+
+- Purpose: Runtime model storage directory (populated at deployment, not in repo)
+- Generated: No
+- Committed: No (empty directory in repo)
+
+**`target/`:**
+
+- Purpose: Cargo build output; generated at build time
+- Generated: Yes
+- Committed: No (in `.gitignore`)
+
+**`.planning/`:**
+
+- Purpose: GSD planning artifacts (codebase maps, implementation plans)
+- Generated: Yes (by GSD commands)
+- Committed: Yes
+
+**`.rumdl_cache/`:**
+
+- Purpose: Cached results for `rumdl` (Rust markdown linter)
+- Generated: Yes
+- Committed: No (in `.gitignore`)
+
+---
+
+*Structure analysis: 2026-05-13*
