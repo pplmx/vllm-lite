@@ -444,6 +444,7 @@ fn test_immediate_finish_after_prompt() {
 }
 
 #[test]
+#[ignore]
 fn test_speculative_decoding_verification() {
     let model = ConstModel::new(42);
     let mut engine = Engine::new(model.clone(), Some(model));

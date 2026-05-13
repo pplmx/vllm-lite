@@ -143,10 +143,10 @@ Key optimizations:
 
 ### SSM Types
 
-| Type | Location | Use Case |
-|------|----------|----------|
-| `SSMLayer` + `MambaBlock` | `components/ssm.rs` | Standard Mamba (Qwen3.5 Mamba-only) |
-| `SSMHarmonicSSMLayer` | `components/ssm.rs` | Hybrid attention+SSM (Qwen3.5 hybrid) |
+| Type                      | Location            | Use Case                              |
+| ------------------------- | ------------------- | ------------------------------------- |
+| `SSMLayer` + `MambaBlock` | `components/ssm.rs` | Standard Mamba (Qwen3.5 Mamba-only)   |
+| `SSMHarmonicSSMLayer`     | `components/ssm.rs` | Hybrid attention+SSM (Qwen3.5 hybrid) |
 
 ---
 
@@ -254,14 +254,14 @@ just ci           # Full CI
 
 ## Key Design Patterns
 
-| Pattern                     | Description                            |
-| --------------------------- | -------------------------------------- |
-| **ModelBackend trait**      | Abstracts ML model implementations     |
-| **Paged KV Cache**          | Block-based KV memory management       |
-| **Prefix Caching**          | Reuse KV for repeated prompts          |
-| **Speculative Decoding**    | Draft-then-verify token generation     |
-| **Continuous Batching**     | Dynamic batch scheduling with fairness |
-| **Architecture Registry**   | Dynamic model architecture registration |
+| Pattern                   | Description                             |
+| ------------------------- | --------------------------------------- |
+| **ModelBackend trait**    | Abstracts ML model implementations      |
+| **Paged KV Cache**        | Block-based KV memory management        |
+| **Prefix Caching**        | Reuse KV for repeated prompts           |
+| **Speculative Decoding**  | Draft-then-verify token generation      |
+| **Continuous Batching**   | Dynamic batch scheduling with fairness  |
+| **Architecture Registry** | Dynamic model architecture registration |
 
 ---
 
@@ -288,12 +288,14 @@ pub struct ArchitectureRegistry {
 ### Adding a New Architecture (3 steps)
 
 1. **Create `arch.rs`** in the model module:
+
 ```rust
 pub struct NewModelArchitecture;
 impl Architecture for NewModelArchitecture { ... }
 ```
 
 2. **Create `register.rs`** to register the architecture:
+
 ```rust
 use crate::arch::{Architecture, ArchitectureRegistry};
 pub fn register(registry: &ArchitectureRegistry) {
@@ -302,6 +304,7 @@ pub fn register(registry: &ArchitectureRegistry) {
 ```
 
 3. **Update `register_all_archs()`** in `arch/registry.rs`:
+
 ```rust
 pub fn register_all_archs(registry: &ArchitectureRegistry) {
     // ... existing registrations
@@ -311,23 +314,23 @@ pub fn register_all_archs(registry: &ArchitectureRegistry) {
 
 ### Supported Architectures
 
-| Architecture | Directory | Features |
-| ------------ | --------- | -------- |
-| Llama | `model/src/llama/` | RMSNorm, RoPE, SwiGLU |
-| Mistral | `model/src/mistral/` | Sliding Window, GQA |
-| Qwen2/3 | `model/src/qwen3/` | GQA, MLA, RoPE, QK-Norm |
-| Qwen3.5 | `model/src/qwen3_5/` | Mamba SSM Hybrid, HarmonicSSM |
-| Gemma4 | `model/src/gemma4/` | Hybrid Attention |
-| Mixtral | `model/src/mixtral/` | Sparse MoE |
+| Architecture | Directory            | Features                      |
+| ------------ | -------------------- | ----------------------------- |
+| Llama        | `model/src/llama/`   | RMSNorm, RoPE, SwiGLU         |
+| Mistral      | `model/src/mistral/` | Sliding Window, GQA           |
+| Qwen2/3      | `model/src/qwen3/`   | GQA, MLA, RoPE, QK-Norm       |
+| Qwen3.5      | `model/src/qwen3_5/` | Mamba SSM Hybrid, HarmonicSSM |
+| Gemma4       | `model/src/gemma4/`  | Hybrid Attention              |
+| Mixtral      | `model/src/mixtral/` | Sparse MoE                    |
 
 ### Attention Mechanisms
 
-| Type | Class | Location | Description |
-|------|-------|----------|-------------|
-| GQA | `GqaAttention` | `components/attention/gqa.rs` | Grouped-query attention |
-| MLA | `MlaAttention` | `components/attention/mla.rs` | Multi-head Latent Attention (32x KV cache compression) |
-| Qwen3Attention | `Qwen3Attention` | `qwen3/attention.rs` | GQA + RoPE + QK-Norm wrapper |
-| Qwen3MlaAttention | `Qwen3MlaAttention` | `qwen3/mla_attention.rs` | MLA wrapper for Qwen3 |
+| Type              | Class               | Location                      | Description                                            |
+| ----------------- | ------------------- | ----------------------------- | ------------------------------------------------------ |
+| GQA               | `GqaAttention`      | `components/attention/gqa.rs` | Grouped-query attention                                |
+| MLA               | `MlaAttention`      | `components/attention/mla.rs` | Multi-head Latent Attention (32x KV cache compression) |
+| Qwen3Attention    | `Qwen3Attention`    | `qwen3/attention.rs`          | GQA + RoPE + QK-Norm wrapper                           |
+| Qwen3MlaAttention | `Qwen3MlaAttention` | `qwen3/mla_attention.rs`      | MLA wrapper for Qwen3                                  |
 
 ### Benefits
 
@@ -356,7 +359,7 @@ benches       → vllm-traits, vllm-core, vllm-model
 
 The project uses a shared components architecture to reduce code duplication:
 
-```
+```text
 crates/model/src/components/
 ├── attention/
 │   ├── mod.rs         # GqaAttention, MlaAttention, utility functions
@@ -465,13 +468,13 @@ vLLM-lite provides a structured 5-level logging system with dual output (console
 
 ### Log Levels
 
-| Level | Usage | Coverage |
-|-------|-------|----------|
-| **ERROR** | System failures (config, model loading) | 2 logs |
-| **WARN** | Degradation (CUDA Graph disabled) | 7 logs |
-| **INFO** | Lifecycle (startup, request start/end) | 18 logs |
-| **DEBUG** | Internal flow (scheduling, batching) | 35 logs |
-| **TRACE** | Verbose (token, KV cache, attention) | 20 logs |
+| Level     | Usage                                   | Coverage |
+| --------- | --------------------------------------- | -------- |
+| **ERROR** | System failures (config, model loading) | 2 logs   |
+| **WARN**  | Degradation (CUDA Graph disabled)       | 7 logs   |
+| **INFO**  | Lifecycle (startup, request start/end)  | 18 logs  |
+| **DEBUG** | Internal flow (scheduling, batching)    | 35 logs  |
+| **TRACE** | Verbose (token, KV cache, attention)    | 20 logs  |
 
 ### Configuration
 
@@ -491,15 +494,15 @@ cargo run -p vllm-server -- --log-dir ./logs
 
 ### Log Fields Standard
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `request_id` | string | Request tracking ID |
-| `prompt_tokens` | usize | Input token count |
-| `output_tokens` | usize | Output token count |
-| `duration_ms` | u64 | Operation duration |
-| `seq_id` | SeqId | Sequence ID |
-| `batch_size` | usize | Batch size |
-| `phase` | Phase | Prefill/Decode |
+| Field           | Type   | Description         |
+| --------------- | ------ | ------------------- |
+| `request_id`    | string | Request tracking ID |
+| `prompt_tokens` | usize  | Input token count   |
+| `output_tokens` | usize  | Output token count  |
+| `duration_ms`   | u64    | Operation duration  |
+| `seq_id`        | SeqId  | Sequence ID         |
+| `batch_size`    | usize  | Batch size          |
+| `phase`         | Phase  | Prefill/Decode      |
 
 ### Adding Logs
 
@@ -527,16 +530,16 @@ error!(error = %e, "Model forward failed");
 
 ### Key Log Locations
 
-| Component | Level | Events |
-|-----------|-------|--------|
-| `server/main.rs` | info | Startup, model load, shutdown |
-| `server/openai/chat.rs` | info | Request start/complete |
-| `core/engine.rs` | debug | Model forward, token output |
-| `core/scheduler/engine.rs` | debug | Scheduling decision, batch build |
-| `core/scheduler/batch_composer.rs` | debug | Batch composition |
-| `core/scheduler/memory/allocator.rs` | debug/trace | Block allocation/free |
-| `core/sampling.rs` | trace | Sampling strategy |
-| `model/components/attention/gqa.rs` | trace | GQA attention layer |
-| `model/components/attention/mla.rs` | trace | MLA attention layer |
-| `model/paged_tensor/tensor_store.rs` | trace | KV cache read/write |
-| `core/kv_cache/prefix_cache.rs` | trace | Prefix cache hit/miss |
+| Component                            | Level       | Events                           |
+| ------------------------------------ | ----------- | -------------------------------- |
+| `server/main.rs`                     | info        | Startup, model load, shutdown    |
+| `server/openai/chat.rs`              | info        | Request start/complete           |
+| `core/engine.rs`                     | debug       | Model forward, token output      |
+| `core/scheduler/engine.rs`           | debug       | Scheduling decision, batch build |
+| `core/scheduler/batch_composer.rs`   | debug       | Batch composition                |
+| `core/scheduler/memory/allocator.rs` | debug/trace | Block allocation/free            |
+| `core/sampling.rs`                   | trace       | Sampling strategy                |
+| `model/components/attention/gqa.rs`  | trace       | GQA attention layer              |
+| `model/components/attention/mla.rs`  | trace       | MLA attention layer              |
+| `model/paged_tensor/tensor_store.rs` | trace       | KV cache read/write              |
+| `core/kv_cache/prefix_cache.rs`      | trace       | Prefix cache hit/miss            |

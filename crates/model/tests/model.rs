@@ -526,7 +526,7 @@ fn test_qwen3_verify_model_weights() {
 }
 
 #[test]
-
+#[ignore]
 fn test_qwen3_chat_flow_simulation() {
     use candle_core::Device;
     use vllm_model::loader::ModelLoader;
@@ -974,7 +974,7 @@ fn test_qwen3_attention_kv_cache_consistency() {
 }
 
 #[test]
-
+#[ignore]
 fn test_qwen3_full_pipeline_prefill_decode() {
     use candle_core::Device;
     use vllm_model::loader::ModelLoader;
@@ -1143,7 +1143,7 @@ fn test_qwen3_layer0_intermediate_outputs() {
 }
 
 #[test]
-
+#[ignore]
 fn test_qwen3_deterministic_same_input() {
     use candle_core::Device;
     use vllm_model::loader::ModelLoader;

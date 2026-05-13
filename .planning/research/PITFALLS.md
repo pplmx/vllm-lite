@@ -34,6 +34,7 @@
 **What goes wrong:** The adaptive draft depth continuously oscillates between high and low values, never stabilizing. Acceptance rate is inherently noisy (varies by prompt content, generation phase, etc.). Simple threshold-based control (current implementation: ±1 step, cooldown) is prone to oscillation.
 
 **Why it happens:** Current `AdaptiveSpeculativeDecoder.maybe_adjust()` uses:
+
 - `rate > target + 0.1` → increase
 - `rate < target - 0.1` → decrease
 
@@ -60,6 +61,7 @@ With a single cooldown, the system overcorrects. High drafts → lower acceptanc
 ### Pitfall 5: Token Matching Rejection Is Too Aggressive
 
 **What goes wrong:** The current `verify_draft_tokens()` uses exact token matching:
+
 ```rust
 if target_tokens[j] == draft_token {
     // accept
@@ -120,13 +122,13 @@ This is a *deterministic* acceptance rule (token must match). The theoretical sp
 
 ## Phase-Specific Warnings
 
-| Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| Engine Integration | Pitfall 1: Code path divergence + Pitfall 10: Cold start | Refactor into a single path with hooks. Add warmup pre-step. |
-| Benchmarks | Pitfall 4: Warmup contamination + Pitfall 5: Incorrect rejection for sampling | Measure warmup adequacy. Always note sampling config. |
-| Adaptive Depth | Pitfall 3: Oscillation | Use EWMA + PID-style control. Add deadband hysteresis. |
-| Speculative Warmup | Pitfall 10: Cold KV cache | Warm draft KV cache from prefill output. Validate block allocation. |
-| Multi-model | Pitfall 6: Memory leak + Pitfall 7: Tokenizer mismatch | Memory estimation at load. Strict vocab validation. |
+| Phase Topic        | Likely Pitfall                                                                | Mitigation                                                          |
+| ------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Engine Integration | Pitfall 1: Code path divergence + Pitfall 10: Cold start                      | Refactor into a single path with hooks. Add warmup pre-step.        |
+| Benchmarks         | Pitfall 4: Warmup contamination + Pitfall 5: Incorrect rejection for sampling | Measure warmup adequacy. Always note sampling config.               |
+| Adaptive Depth     | Pitfall 3: Oscillation                                                        | Use EWMA + PID-style control. Add deadband hysteresis.              |
+| Speculative Warmup | Pitfall 10: Cold KV cache                                                     | Warm draft KV cache from prefill output. Validate block allocation. |
+| Multi-model        | Pitfall 6: Memory leak + Pitfall 7: Tokenizer mismatch                        | Memory estimation at load. Strict vocab validation.                 |
 
 ## Sources
 
@@ -138,5 +140,6 @@ This is a *deterministic* acceptance rule (token must match). The theoretical sp
 - vLLM-lite benchmark infrastructure: `benches/src/e2e.rs`, `benches/src/speculative_benchmark.rs` — **HIGH confidence**
 
 ---
+
 *Pitfalls research for: Production Speculative Decoding in LLM Inference Engine*
 *Researched: 2026-05-13*

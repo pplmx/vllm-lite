@@ -230,14 +230,14 @@
 
 ## ✅ Phase 9: 架构重构 (2026-04-19)
 
-| 功能 | 描述 | 状态 |
-| ---- | ---- | ---- |
-| Cargo.toml 优化 | tokio features 精确化, release profile 优化 | ✅ |
-| Feature Flags | cuda/gguf/real_weights 可选 | ✅ |
-| 共享组件层 | attention, mlp, norm, positional 子模块 | ✅ |
-| TransformerBlock | 基类设计, 支持组合模式 | ✅ |
-| core→model 解耦 | vllm-core 对 vllm-model 可选依赖 | ✅ |
-| 文档完善 | ADR, SPEC 更新 | ✅ |
+| 功能             | 描述                                        | 状态 |
+| ---------------- | ------------------------------------------- | ---- |
+| Cargo.toml 优化  | tokio features 精确化, release profile 优化 | ✅   |
+| Feature Flags    | cuda/gguf/real_weights 可选                 | ✅   |
+| 共享组件层       | attention, mlp, norm, positional 子模块     | ✅   |
+| TransformerBlock | 基类设计, 支持组合模式                      | ✅   |
+| core→model 解耦  | vllm-core 对 vllm-model 可选依赖            | ✅   |
+| 文档完善         | ADR, SPEC 更新                              | ✅   |
 
 ### 成果
 
@@ -252,12 +252,12 @@
 
 ## ✅ Phase 10: 性能优化 (2026-04-26)
 
-| 功能 | 描述 | 状态 |
-| ---- | ---- | ---- |
-| FlashAttention V2 | 在线 softmax 算法实现 | ✅ |
-| CUDA Graph 优化 | 图池化、warmup、invalidation | ✅ |
-| Chunked Prefill | 动态 chunk 大小、内存优化 | ✅ |
-| 基准测试套件 | attention/scheduler benchmarks | ✅ |
+| 功能              | 描述                           | 状态 |
+| ----------------- | ------------------------------ | ---- |
+| FlashAttention V2 | 在线 softmax 算法实现          | ✅   |
+| CUDA Graph 优化   | 图池化、warmup、invalidation   | ✅   |
+| Chunked Prefill   | 动态 chunk 大小、内存优化      | ✅   |
+| 基准测试套件      | attention/scheduler benchmarks | ✅   |
 
 ### 成果
 
@@ -272,12 +272,12 @@
 
 ## 🔮 长期愿景
 
-| 目标 | 描述                | 状态 |
-| ---- | ------------------- | ---- |
-| 🚧   | 更多模型架构支持    | 新架构可快速添加 |
-| 🚧   | 移动端/边缘部署优化 | 依赖轻量级后端 |
+| 目标 | 描述                | 状态               |
+| ---- | ------------------- | ------------------ |
+| 🚧   | 更多模型架构支持    | 新架构可快速添加   |
+| 🚧   | 移动端/边缘部署优化 | 依赖轻量级后端     |
 | 🚧   | WebAssembly 支持    | 依赖 WASM 编译目标 |
-| 🚧   | 在线微调接口        | 未来规划 |
+| 🚧   | 在线微调接口        | 未来规划           |
 
 ### 架构扩展性
 

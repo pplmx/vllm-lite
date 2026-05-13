@@ -60,45 +60,47 @@ Deferred to future release. Tracked but not in current roadmap.
 
 Explicitly excluded. Documented to prevent scope creep.
 
-| Feature | Reason |
-|---------|--------|
-| Tree-based speculation (draft tree) | Sigmoidally more complex, linear draft is sufficient |
-| Medusa-style multiple heads | Requires custom model training, incompatible with off-the-shelf models |
-| Speculative decoding for prefill | Prefill is compute-bound, speculative decode only |
-| Dynamic model switching mid-request | Complex state management, low ROI |
-| External draft model (multi-model) | Deferred to v18.0 |
+| Feature                             | Reason                                                                 |
+| ----------------------------------- | ---------------------------------------------------------------------- |
+| Tree-based speculation (draft tree) | Sigmoidally more complex, linear draft is sufficient                   |
+| Medusa-style multiple heads         | Requires custom model training, incompatible with off-the-shelf models |
+| Speculative decoding for prefill    | Prefill is compute-bound, speculative decode only                      |
+| Dynamic model switching mid-request | Complex state management, low ROI                                      |
+| External draft model (multi-model)  | Deferred to v18.0                                                      |
 
 ## Traceability
 
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| ENG-01 | Phase 17.1 | Pending |
-| ENG-02 | Phase 17.1 | Pending |
-| ENG-03 | Phase 17.1 | Pending |
-| ENG-04 | Phase 17.1 | Pending |
-| ENG-05 | Phase 17.1 | Pending |
-| ENG-06 | Phase 17.1 | Pending |
-| SELF-01 | Phase 17.2 | Pending |
-| SELF-02 | Phase 17.2 | Pending |
-| SELF-03 | Phase 17.2 | Pending |
-| ADPT-01 | Phase 17.3 | Pending |
-| ADPT-02 | Phase 17.3 | Pending |
-| ADPT-03 | Phase 17.3 | Pending |
-| BENCH-01 | Phase 17.3 | Pending |
-| BENCH-02 | Phase 17.3 | Pending |
-| BENCH-03 | Phase 17.3 | Pending |
-| BENCH-04 | Phase 17.3 | Pending |
-| WARM-01 | Phase 17.4 | Pending |
-| WARM-02 | Phase 17.4 | Pending |
-| MTRC-01 | Phase 17.4 | Pending |
-| MTRC-02 | Phase 17.4 | Pending |
-| MTRC-03 | Phase 17.4 | Pending |
+| Requirement | Phase      | Status  |
+| ----------- | ---------- | ------- |
+| ENG-01      | Phase 17.1 | Pending |
+| ENG-02      | Phase 17.1 | Pending |
+| ENG-03      | Phase 17.1 | Pending |
+| ENG-04      | Phase 17.1 | Pending |
+| ENG-05      | Phase 17.1 | Pending |
+| ENG-06      | Phase 17.1 | Pending |
+| SELF-01     | Phase 17.2 | Pending |
+| SELF-02     | Phase 17.2 | Pending |
+| SELF-03     | Phase 17.2 | Pending |
+| ADPT-01     | Phase 17.3 | Pending |
+| ADPT-02     | Phase 17.3 | Pending |
+| ADPT-03     | Phase 17.3 | Pending |
+| BENCH-01    | Phase 17.3 | Pending |
+| BENCH-02    | Phase 17.3 | Pending |
+| BENCH-03    | Phase 17.3 | Pending |
+| BENCH-04    | Phase 17.3 | Pending |
+| WARM-01     | Phase 17.4 | Pending |
+| WARM-02     | Phase 17.4 | Pending |
+| MTRC-01     | Phase 17.4 | Pending |
+| MTRC-02     | Phase 17.4 | Pending |
+| MTRC-03     | Phase 17.4 | Pending |
 
 **Coverage:**
+
 - v17.0 requirements: 21 total
 - Mapped to phases: 21
 - Unmapped: 0
 
 ---
+
 *Requirements defined: 2026-05-13*
 *Last updated: 2026-05-13 after initial definition*

@@ -100,11 +100,11 @@ cargo fmt --all --check
 
 <div align="center">
 
-| 🚀 **高性能**   | 🛡️ **生产就绪**      | 📊 **可观测性**          | 🐳 **云原生**   |
-| :-------------- | :------------------- | :--------------------- | :-------------- |
-| Rust 原生实现   | Circuit Breaker 熔断 | Structured Logging     | Docker/K8s 支持 |
-| Paged Attention | 30+ E2E 测试        | Prometheus Metrics     | 多阶段构建      |
-| Flash Attention | 自动故障恢复         | Health Check           | HPA 自动扩缩    |
+| 🚀 **高性能**   | 🛡️ **生产就绪**      | 📊 **可观测性**    | 🐳 **云原生**   |
+| :-------------- | :------------------- | :----------------- | :-------------- |
+| Rust 原生实现   | Circuit Breaker 熔断 | Structured Logging | Docker/K8s 支持 |
+| Paged Attention | 30+ E2E 测试         | Prometheus Metrics | 多阶段构建      |
+| Flash Attention | 自动故障恢复         | Health Check       | HPA 自动扩缩    |
 
 </div>
 
@@ -112,7 +112,7 @@ cargo fmt --all --check
 
 <a name="快速开始"></a>
 
-## ⚡ 快速开始
+## 🚀 安装与启动
 
 ### 🎯 一行命令启动
 
@@ -184,13 +184,13 @@ curl -X POST http://localhost:8000/v1/completions \
 
 vLLM-lite 提供 5 级结构化日志，支持控制台美化输出和 JSON 文件输出：
 
-| 级别 | 用途 | 示例 |
-|------|------|------|
-| **ERROR** | 系统失败 | 配置错误、模型加载失败 |
-| **WARN** | 降级/回退 | CUDA Graph 禁用、tokenizer 回退 |
-| **INFO** | 生命周期 | 启动、请求开始/结束 |
-| **DEBUG** | 内部流程 | 批处理、调度决策、内存分配 |
-| **TRACE** | 详细调试 | Token 生成、KV Cache、Attention 层 |
+| 级别      | 用途      | 示例                               |
+| --------- | --------- | ---------------------------------- |
+| **ERROR** | 系统失败  | 配置错误、模型加载失败             |
+| **WARN**  | 降级/回退 | CUDA Graph 禁用、tokenizer 回退    |
+| **INFO**  | 生命周期  | 启动、请求开始/结束                |
+| **DEBUG** | 内部流程  | 批处理、调度决策、内存分配         |
+| **TRACE** | 详细调试  | Token 生成、KV Cache、Attention 层 |
 
 **日志输出示例**：
 
@@ -498,20 +498,20 @@ vllm-lite/
 
 核心组件提取到 `components/` 子模块，实现代码复用：
 
-| 组件 | 文件 | 描述 |
-|------|------|------|
-| Attention | `components/attention/` | GqaAttention, paged/tiled attention |
-| MLP | `components/mlp/` | SwiGLU feed-forward |
-| Norm | `components/norm/` | RMSNorm, LayerNorm |
-| Positional | `components/positional/` | RoPE, MRoPE |
+| 组件       | 文件                     | 描述                                |
+| ---------- | ------------------------ | ----------------------------------- |
+| Attention  | `components/attention/`  | GqaAttention, paged/tiled attention |
+| MLP        | `components/mlp/`        | SwiGLU feed-forward                 |
+| Norm       | `components/norm/`       | RMSNorm, LayerNorm                  |
+| Positional | `components/positional/` | RoPE, MRoPE                         |
 
 ### Feature Flags
 
-| Feature | 描述 |
-|---------|------|
-| `cuda` | Candle CUDA 支持 |
-| `gguf` | GGUF 模型加载 |
-| `full` | cuda + gguf |
+| Feature | 描述             |
+| ------- | ---------------- |
+| `cuda`  | Candle CUDA 支持 |
+| `gguf`  | GGUF 模型加载    |
+| `full`  | cuda + gguf      |
 
 Note: Tokenizer (tiktoken, tokenizers) is always enabled - required for model inference.
 

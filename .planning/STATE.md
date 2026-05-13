@@ -36,6 +36,7 @@ Progress: [░░░░░░░░░░] 0%
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0
 - Average duration: —
 - Total execution time: —
@@ -43,10 +44,11 @@ Progress: [░░░░░░░░░░] 0%
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| — | — | — | — |
+| ----- | ----- | ----- | -------- |
+| —     | —     | —     | —        |
 
 **Recent Trend:**
+
 - Last 5 plans: —
 - Trend: —
 
@@ -73,9 +75,9 @@ None yet.
 
 ## Deferred Items
 
-| Category | Item | Status | Deferred At |
-|----------|------|--------|-------------|
-| Multi-Model | External draft model support (MULTI-01, MULTI-02) | Deferred to v18.0 | 2026-05-13 |
+| Category    | Item                                              | Status            | Deferred At |
+| ----------- | ------------------------------------------------- | ----------------- | ----------- |
+| Multi-Model | External draft model support (MULTI-01, MULTI-02) | Deferred to v18.0 | 2026-05-13  |
 
 ## Session Continuity
 
