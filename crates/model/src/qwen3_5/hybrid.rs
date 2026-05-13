@@ -1081,6 +1081,87 @@ impl ModelBackend for Qwen35HybridModel {
     fn num_heads(&self) -> usize {
         self.config.num_key_value_heads()
     }
+
+    fn forward_to_layer(
+        &mut self,
+        seq_ids: &[SeqId],
+        input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+        _kv_block_ids: &[Vec<usize>],
+        _num_computed_tokens: &[usize],
+        _is_prefill: &[bool],
+        upto_layer: usize,
+    ) -> EngineResult<BatchOutput> {
+        if seq_ids.is_empty() {
+            return Ok(BatchOutput {
+                seq_ids: vec![],
+                next_tokens: vec![],
+            });
+        }
+
+        let mut next_tokens = Vec::with_capacity(seq_ids.len());
+        let upto = upto_layer.min(self.layers.len());
+
+        for tokens in input_tokens.iter() {
+            if tokens.is_empty() {
+                next_tokens.push(0);
+                continue;
+            }
+
+            let token_tensor = Tensor::new(tokens.as_slice(), &self.device)
+                .map_err(|e| EngineError::new(e.to_string()))?;
+
+            let hidden_2d = self
+                .embed_tokens
+                .forward(&token_tensor)
+                .map_err(|e| EngineError::new(e.to_string()))?;
+
+            let mut hidden = hidden_2d
+                .unsqueeze(0)
+                .map_err(|e| EngineError::new(e.to_string()))?;
+
+            for layer in self.layers.iter_mut().take(upto) {
+                hidden = layer
+                    .forward(&hidden)
+                    .map_err(|e| EngineError::new(e.to_string()))?;
+            }
+
+            hidden = self
+                .norm
+                .forward(&hidden)
+                .map_err(|e| EngineError::new(e.to_string()))?;
+
+            let lm_head = match &self.lm_head {
+                Some(h) => h,
+                None => {
+                    let embed_w = self.embed_tokens.embeddings().clone();
+                    &candle_nn::Linear::new(embed_w, None)
+                }
+            };
+
+            let logits = lm_head
+                .forward(&hidden)
+                .map_err(|e| EngineError::new(e.to_string()))?;
+
+            let seq_len = logits.dims()[0];
+            let last_logits = logits
+                .get(seq_len - 1)
+                .map_err(|e| EngineError::new(e.to_string()))?;
+
+            let max_idx = last_logits
+                .argmax(0)
+                .map_err(|e| EngineError::new(e.to_string()))?
+                .to_scalar::<u32>()
+                .unwrap_or(0);
+
+            next_tokens.push(max_idx as TokenId);
+        }
+
+        Ok(BatchOutput {
+            seq_ids: seq_ids.to_vec(),
+            next_tokens,
+        })
+    }
 }
 
 #[cfg(test)]
