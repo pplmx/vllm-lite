@@ -3,28 +3,87 @@
 ## Milestones
 
 - ✅ **v16.0 Speculative Decoding** — Phases 16.1-16.4 (shipped 2026-04-28)
+- 🚧 **v17.0 Production Speculative Decoding** — Phases 17.1-17.4 (in progress)
 
 ## Phases
 
-<details>
-<summary>✅ v16.0 Speculative Decoding (Phases 16.1-16.4) — SHIPPED 2026-04-28</summary>
+- [ ] **Phase 17.1: Engine Integration** - Fix and wire `step_speculative()` as the unified entry point for speculative decode
+- [ ] **Phase 17.2: Self-Speculation Forward Pass** - Implement real layer-truncated forward pass with KV cache isolation
+- [ ] **Phase 17.3: Adaptive Depth & Benchmarks** - Wire adaptive decoder and run comprehensive A/B benchmarks
+- [ ] **Phase 17.4: Speculative Warmup & Metrics** - Prefill draft KV cache, wire acceptance/speedup metrics
 
-- [x] Phase 16.1: Architecture (1/1 plan) — completed 2026-04-28
-- [x] Phase 16.2: Draft Model (1/1 plan) — completed 2026-04-28
-- [x] Phase 16.3: Verification (1/1 plan) — completed 2026-04-28
-- [x] Phase 16.4: Benchmarks (1/1 plan) — completed 2026-04-28
+## Phase Details
 
-</details>
+### Phase 17.1: Engine Integration
+**Goal**: Engine executes correct speculative decode with batched draft generation, logit-based verification, KV rollback, and graceful fallback
+**Depends on**: Phase 16.4 (architectural scaffold from v16.0)
+**Requirements**: ENG-01, ENG-02, ENG-03, ENG-04, ENG-05, ENG-06
+**Success Criteria** (what must be TRUE):
+  1. Engine dispatches through a single unified `step(max_draft)` method that handles both speculative and non-speculative paths
+  2. Draft tokens are generated in a batched per-position forward pass across all sequences (not per-sequence loop)
+  3. Token verification uses logit-based probability comparison (not exact match), enabling correct rejection sampling
+  4. Rejected draft tokens' KV cache entries are rolled back via MemoryManager without leaking into subsequent steps
+  5. Scheduler correctly tracks input token counts when multiple draft tokens are accepted per step
+  6. Speculative path falls back to non-speculative decode gracefully on any draft model error
+**Plans**: TBD
+
+Plans:
+- (to be defined during plan-phase)
+
+### Phase 17.2: Self-Speculation Forward Pass
+**Goal**: SelfSpeculativeModel generates actual draft tokens via layer-truncated forward pass with isolated KV cache
+**Depends on**: Phase 17.1
+**Requirements**: SELF-01, SELF-02, SELF-03
+**Success Criteria** (what must be TRUE):
+  1. SelfSpeculativeModel.generate_draft() runs a real forward pass through 1/8 layers with weight sharing (no stub)
+  2. Draft generation uses greedy argmax sampling to select the most probable next token
+  3. Draft and target maintain separate KV cache block IDs — no silent state corruption between passes
+  4. Weight sharing uses zero-copy references to target model weights (no additional GPU memory allocated)
+**Plans**: TBD
+
+Plans:
+- (to be defined during plan-phase)
+
+### Phase 17.3: Adaptive Depth & Benchmarks
+**Goal**: Draft depth adjusts dynamically based on acceptance rates; comprehensive A/B benchmarks validate real-world speedup
+**Depends on**: Phase 17.2
+**Requirements**: ADPT-01, ADPT-02, ADPT-03, BENCH-01, BENCH-02, BENCH-03, BENCH-04
+**Success Criteria** (what must be TRUE):
+  1. AdaptiveSpeculativeDecoder is wired into the speculative decode loop and adjusts draft depth in real time
+  2. Draft depth adjusts based on EWMA-smoothed acceptance rate with deadband hysteresis (no oscillation)
+  3. Benchmark suite runs speculative vs non-speculative comparison with P50/P95/P99 latency and tokens/sec throughput
+  4. Benchmark methodology includes proper model warmup phase and multi-sequence workloads
+  5. Results are reported for at least one target model architecture (e.g., Llama)
+**Plans**: TBD
+
+Plans:
+- (to be defined during plan-phase)
+
+### Phase 17.4: Speculative Warmup & Metrics
+**Goal**: Draft KV cache is populated after prefill; comprehensive spec decode metrics track acceptance rate, efficiency, and speedup
+**Depends on**: Phase 17.3
+**Requirements**: WARM-01, WARM-02, MTRC-01, MTRC-02, MTRC-03
+**Success Criteria** (what must be TRUE):
+  1. Draft model's KV cache is populated during/after target prefill so the first speculative step has valid draft state
+  2. Acceptance rate is tracked per-request and aggregated across the batch via Prometheus counters
+  3. Speculative efficiency (draft tokens / total tokens) is reported as a structured metric
+  4. Throughput speedup ratio vs non-speculative baseline is reported in metrics output
+**Plans**: TBD
+
+Plans:
+- (to be defined during plan-phase)
 
 ## Progress
 
+**Execution Order:** 17.1 → 17.2 → 17.3 → 17.4
+
 | Phase | Milestone | Plans Complete | Status | Completed |
-| ----- | --------- | -------------- | ------ | --------- |
-| 16.1 Architecture | v16.0 | 1/1 | Complete | 2026-04-28 |
-| 16.2 Draft Model | v16.0 | 1/1 | Complete | 2026-04-28 |
-| 16.3 Verification | v16.0 | 1/1 | Complete | 2026-04-28 |
-| 16.4 Benchmarks | v16.0 | 1/1 | Complete | 2026-04-28 |
+|-------|-----------|----------------|--------|-----------|
+| 17.1 Engine Integration | v17.0 | 0/0 | Not started | - |
+| 17.2 Self-Speculation | v17.0 | 0/0 | Not started | - |
+| 17.3 Adaptive Depth & Benchmarks | v17.0 | 0/0 | Not started | - |
+| 17.4 Speculative Warmup & Metrics | v17.0 | 0/0 | Not started | - |
 
 ---
 
-*Roadmap updated: 2026-05-09 — v16.0 archived, ready for next milestone*
+*Roadmap updated: 2026-05-13 — v17.0 phases defined*

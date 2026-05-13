@@ -72,32 +72,32 @@ Explicitly excluded. Documented to prevent scope creep.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ENG-01 | — | Pending |
-| ENG-02 | — | Pending |
-| ENG-03 | — | Pending |
-| ENG-04 | — | Pending |
-| ENG-05 | — | Pending |
-| ENG-06 | — | Pending |
-| SELF-01 | — | Pending |
-| SELF-02 | — | Pending |
-| SELF-03 | — | Pending |
-| ADPT-01 | — | Pending |
-| ADPT-02 | — | Pending |
-| ADPT-03 | — | Pending |
-| BENCH-01 | — | Pending |
-| BENCH-02 | — | Pending |
-| BENCH-03 | — | Pending |
-| BENCH-04 | — | Pending |
-| WARM-01 | — | Pending |
-| WARM-02 | — | Pending |
-| MTRC-01 | — | Pending |
-| MTRC-02 | — | Pending |
-| MTRC-03 | — | Pending |
+| ENG-01 | Phase 17.1 | Pending |
+| ENG-02 | Phase 17.1 | Pending |
+| ENG-03 | Phase 17.1 | Pending |
+| ENG-04 | Phase 17.1 | Pending |
+| ENG-05 | Phase 17.1 | Pending |
+| ENG-06 | Phase 17.1 | Pending |
+| SELF-01 | Phase 17.2 | Pending |
+| SELF-02 | Phase 17.2 | Pending |
+| SELF-03 | Phase 17.2 | Pending |
+| ADPT-01 | Phase 17.3 | Pending |
+| ADPT-02 | Phase 17.3 | Pending |
+| ADPT-03 | Phase 17.3 | Pending |
+| BENCH-01 | Phase 17.3 | Pending |
+| BENCH-02 | Phase 17.3 | Pending |
+| BENCH-03 | Phase 17.3 | Pending |
+| BENCH-04 | Phase 17.3 | Pending |
+| WARM-01 | Phase 17.4 | Pending |
+| WARM-02 | Phase 17.4 | Pending |
+| MTRC-01 | Phase 17.4 | Pending |
+| MTRC-02 | Phase 17.4 | Pending |
+| MTRC-03 | Phase 17.4 | Pending |
 
 **Coverage:**
 - v17.0 requirements: 21 total
-- Mapped to phases: 0
-- Unmapped: 21
+- Mapped to phases: 21
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-13*
