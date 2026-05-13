@@ -13,6 +13,7 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 **Goal:** Complete the speculative decoding pipeline end-to-end — wire engine integration, validate on real hardware, add adaptive optimization and external draft model support.
 
 **Target features:**
+
 - Engine integration (`step_speculative`) — hook spec decode into the main inference loop
 - Real hardware benchmarks — throughput/latency with P50/P95/P99 vs non-speculative baseline
 - Adaptive draft depth — dynamic adjustment based on acceptance rates
@@ -117,11 +118,13 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 ## Context
 
 v16.0 shipped with 17/17 requirements satisfied. v15.0 focus areas:
+
 - Performance: FA-V3 needs kernel implementation, KV cache compression research
 - Models: Architecture detection for Gemma3, Phi-4, Llama 4, Mistral Small
 - Production: Go Operator full implementation, TLS/JWT completion
 
 v16.0 achievements:
+
 - Speculative decoding architecture shipped (4 phases, 10 commits, +2029 lines)
 - Self-speculation with weight sharing — no additional GPU memory for draft model
 - Parallel verification infrastructure ready
@@ -139,21 +142,22 @@ Codebase: Speculative decoding module added (verifier, model, config, strategy, 
 
 ## Key Decisions
 
-| Decision | Rationale | Outcome |
-|----------|-----------|---------|
-| Multi-node architecture | Horizontal scaling beyond single host | Implemented — v13.0 |
-| K8s Operator vs Helm-only | Operator for declarative management | Scaffolded — v15.0 |
-| Consensus protocol | Raft vs etcd for HA leader election | Using K8s Lease API — v13.0 |
-| TLS approach | mTLS for cluster internal, simple TLS for external | Implemented — v15.0 |
-| FA-V3 kernel approach | FlashAttention V3 integration | Implemented — v15.0 |
-| KV cache compression | FP8 E4M3 format | Implemented — v15.0 |
-| Speculative strategy | Self-speculation with 1/8 layer count | Implemented — v16.0 |
-| Token rejection | TokenLevel (accept if target_p >= draft_p) | Implemented — v16.0 |
-| Draft weight sharing | Zero-copy weight references, no extra GPU memory | Implemented — v16.0 |
+| Decision                  | Rationale                                          | Outcome                     |
+| ------------------------- | -------------------------------------------------- | --------------------------- |
+| Multi-node architecture   | Horizontal scaling beyond single host              | Implemented — v13.0         |
+| K8s Operator vs Helm-only | Operator for declarative management                | Scaffolded — v15.0          |
+| Consensus protocol        | Raft vs etcd for HA leader election                | Using K8s Lease API — v13.0 |
+| TLS approach              | mTLS for cluster internal, simple TLS for external | Implemented — v15.0         |
+| FA-V3 kernel approach     | FlashAttention V3 integration                      | Implemented — v15.0         |
+| KV cache compression      | FP8 E4M3 format                                    | Implemented — v15.0         |
+| Speculative strategy      | Self-speculation with 1/8 layer count              | Implemented — v16.0         |
+| Token rejection           | TokenLevel (accept if target_p >= draft_p)         | Implemented — v16.0         |
+| Draft weight sharing      | Zero-copy weight references, no extra GPU memory   | Implemented — v16.0         |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
 ---
+
 *Last updated: 2026-05-13 — v17.0 milestone started*

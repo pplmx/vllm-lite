@@ -73,9 +73,9 @@
 
 ## Cross-Milestone Trends
 
-| Metric | v13.0 | v14.0 | v16.0 |
-|--------|-------|-------|-------|
-| Phases | 3 | 4 | 4 |
-| Requirements | 23 | 12 | 17 |
-| Completion | 96% | 100% | 100% |
-| Tech Debt | High | Low | Low |
+| Metric       | v13.0 | v14.0 | v16.0 |
+| ------------ | ----- | ----- | ----- |
+| Phases       | 3     | 4     | 4     |
+| Requirements | 23    | 12    | 17    |
+| Completion   | 96%   | 100%  | 100%  |
+| Tech Debt    | High  | Low   | Low   |

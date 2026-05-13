@@ -11,7 +11,7 @@ vllm-lite supports multiple model architectures (Llama, Mistral, Qwen, Mixtral, 
 
 Extract shared components to `crates/model/src/components/`:
 
-```
+```text
 components/
 ├── attention/
 │   ├── mod.rs
@@ -39,12 +39,14 @@ components/
 ## Consequences
 
 **Positive:**
+
 - Reduced code duplication
 - Single point of maintenance for shared logic
 - Easier to add new architectures
 - Consistent behavior across models
 
 **Negative:**
+
 - Architecture-specific variations require wrapper types or generics
 - Must balance between shared code and architecture-specific needs
 - Careful design required to avoid over-abstraction

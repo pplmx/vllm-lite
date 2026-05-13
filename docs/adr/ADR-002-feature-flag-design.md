@@ -21,15 +21,16 @@ full = ["cuda", "gguf"]
 ```
 
 Core dependencies (always enabled):
+
 - `tiktoken` - BPE tokenization
 - `tokenizers` - HuggingFace tokenizer support
 - `safetensors` - Primary model weight format
 
-| Feature | Purpose | Dependencies |
-|---------|---------|--------------|
-| `cuda` | Candle CUDA support for GPU acceleration | candle-core/cuda, candle-nn/cuda |
-| `gguf` | GGUF model file loading | gguf crate |
-| `full` | All optional features enabled | cuda, gguf |
+| Feature | Purpose                                  | Dependencies                     |
+| ------- | ---------------------------------------- | -------------------------------- |
+| `cuda`  | Candle CUDA support for GPU acceleration | candle-core/cuda, candle-nn/cuda |
+| `gguf`  | GGUF model file loading                  | gguf crate                       |
+| `full`  | All optional features enabled            | cuda, gguf                       |
 
 ## Rationale
 
@@ -43,11 +44,13 @@ Note: Tokenizer is always enabled because it's essential for model inference. Al
 ## Consequences
 
 **Positive:**
+
 - Faster CPU-only compilation
 - Smaller binaries for minimal deployments
 - Clear dependency boundaries
 - Development flexibility (can build without GPU)
 
 **Negative:**
+
 - More complex feature matrix to test
 - Potential for feature interaction bugs

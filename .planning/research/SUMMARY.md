@@ -20,6 +20,7 @@ The key risk is silent correctness bugs from shared KV cache references between 
 No new dependencies required. All speculative decoding additions use the existing Rust + Candle stack. The project already has an `AdaptiveSpeculativeDecoder`, `DraftVerifier`, `SelfSpeculativeModel`, `BenchmarkSuite`, `MetricsCollector`, and `PercentileStats` infrastructure — all from v16.0. The work is purely integration and implementation.
 
 **Core technologies (existing, to be extended):**
+
 - **Rust + Candle**: Core inference engine — model forward passes for both draft and target use the same `ModelBackend::forward()` interface
 - **`criterion` (bench)**: Already in `benches/` Cargo.toml — end-to-end benchmark suite uses `ThroughputBenchmark` / `LatencyBenchmark` (not microbenchmarks)
 - **`metrics` / `metrics-exporter-prometheus`**: Add three spec decode counters: draft_count, accepted_count, rejection_rate
@@ -28,6 +29,7 @@ No new dependencies required. All speculative decoding additions use the existin
 - **`tokio`**: Async runtime for benchmark runners and the HTTP server path
 
 **Key design decisions (from research):**
+
 - **Self-speculation over separate draft model**: Zero additional GPU memory via weight sharing (1/8 layer trunk). Separate draft model (multi-model) is deferred to v18.0.
 - **EWMA + deadband over PID controller**: A full PID is overkill for a single-variable system with noisy measurements. EWMA smoothing + ±5% deadband + 10-step cooldown has fewer tuning parameters.
 - **Prometheus counters over OpenTelemetry**: Prometheus is already integrated. Three additional counters are trivially addable.
@@ -37,6 +39,7 @@ No new dependencies required. All speculative decoding additions use the existin
 ### Expected Features
 
 **Must have (table stakes) — Phase A engine integration:**
+
 - **Batched draft generation** — the #1 bottleneck fix. Current per-sequence loop does O(seqs × max_draft) sequential forward passes. Must batch across ALL sequences so each iteration generates 1 draft token per sequence. This is the highest-complexity item.
 - **Logit-based token verification** — must call `forward_logits()` not just `forward()` for probability comparison. Exact token matching is too aggressive for non-greedy decoding.
 - **Correct `is_prefill` for verification** — the concatenated [input + draft] sequence must use decode mode with logits from all positions. Using prefill mode is O(n²) incorrect.
@@ -46,6 +49,7 @@ No new dependencies required. All speculative decoding additions use the existin
 - **Acceptance rate metrics** — `DraftAccuracyTracker` already exists, just needs to be wired into the metrics pipeline.
 
 **Should have (differentiators) — Phase B/C:**
+
 - **Adaptive draft depth** — `AdaptiveSpeculativeDecoder` is already fully implemented! Sliding window tracking, threshold adjustment. Just needs to be wired into the step loop.
 - **Self-speculation with weight sharing** — implemented but `generate_draft()` is a stub. Needs actual layer-truncated forward pass (1/8 layers, weight-shared).
 - **Speculative warmup** — prefill draft KV cache during target prefill to avoid cold-start garbage on first step.
@@ -53,6 +57,7 @@ No new dependencies required. All speculative decoding additions use the existin
 - **Benchmark suite for spec vs non-spec** — A/B comparison with P50/P95/P99 latency and throughput.
 
 **Defer (v18.0+):**
+
 - **Multi-model speculation** — separate small draft model. High ROI but doubles GPU memory, needs lifecycle management, tokenizer validation, speculative warmup. Only valuable if self-speculation underperforms.
 - **Production hardening** — graceful fallback is nice but the engine already has error handling.
 - **Tree-based speculation (draft tree)** — sigmoidally more complex. Linear draft is good enough.
@@ -64,6 +69,7 @@ No new dependencies required. All speculative decoding additions use the existin
 The target architecture unifies all decode paths through a single `step()` entry point. `step()` checks `speculative_mode` and either dispatches to `step_speculative_inner()` (batch-aware, with draft generation + verification + metrics) or the standard decode path. This prevents code path divergence — the cardinal sin of speculative decode engine integration.
 
 **Major components:**
+
 1. **Engine** (`engine.rs`) — Main inference loop. Dispatches to spec or non-spec paths. Manages speculative warmup, metrics recording, and fallback. Target: single unified `step()` method.
 2. **SchedulerEngine** — Batch construction, position tracking, KV block allocation, prefix caching. Must support `update_with_accepted()` to handle variable-length token acceptance (not fixed 1 token/step).
 3. **DraftVerifier** — Verifies draft tokens against target output. Implements TokenLevel rejection (exact match for greedy, probability-based for sampling). Already built.
@@ -156,6 +162,7 @@ Based on combined research, the milestone should be structured in 5 phases:
 ### Phase E: Multi-Model Speculation (Deferred to v18.0)
 
 **Rationale:** Multi-model speculation (separate small draft model) doubles GPU memory, requires lifecycle management (load/unload/swap), tokenizer validation, and speculative warmup. The research recommends deferring because:
+
 - Self-speculation (Phase B) may already provide sufficient speedup
 - GPU memory is the primary constraint for most deployments
 - Multi-model adds significant complexity (DraftModelLifecycle controller, separate CUDA memory pools, unload/cleanup)
@@ -181,22 +188,24 @@ Based on combined research, the milestone should be structured in 5 phases:
 ### Research Flags
 
 Phases likely needing deeper research during planning:
+
 - **Phase B (Self-Spec Forward Pass):** The layer-truncated forward pass across the architecture registry boundary needs careful design. How does the truncated model interact with `ModelBackend`? How do residual connections and normalization layers that span the truncation boundary behave? Current `SelfSpeculativeModel` needs a concrete implementation plan.
 - **Phase E (Multi-Model):** If pursued, needs research on CUDA memory pool separation, lifecycle management patterns, and tokenizer validation across arbitrary model pairs.
 
 Phases with standard patterns (skip research-phase):
+
 - **Phase A (Engine Integration):** Well-documented in vLLM's `SpecDecodeBaseProposer`, TensorRT-LLM docs, and the existing (broken) code structure. Follow vLLM's batched draft generation pattern and the current engine's scheduler contract.
 - **Phase C (Adaptive + Benchmarks):** EWMA control loop is a textbook pattern. Benchmarks follow existing `BenchmarkSuite` infrastructure. Add separate warmup phase before measurement.
 - **Phase D (Warmup + Streaming):** Warmup = copy KV cache from prefill. Streaming = buffer-and-send. Both are straightforward extensions of existing patterns.
 
 ## Confidence Assessment
 
-| Area | Confidence | Notes |
-|------|------------|-------|
-| Stack | HIGH | All existing code analysis. No new dependencies. `Cargo.toml` and `AGENTS.md` verified. |
-| Features | HIGH | Derived from direct codebase analysis of all speculative decoding files + vLLM competitive reference + Leviathan et al. (2023) academic paper. Feature dependency graph is cross-validated against architecture. |
-| Architecture | HIGH | Current engine.rs code, vLLM v1 engine source, TensorRT-LLM docs all agree on the architecture pattern. Data flow diagrams validated against existing infrastructure. |
-| Pitfalls | HIGH | 11 pitfalls derived from current code analysis + vLLM production experience + TensorRT-LLM limitations documentation. Each pitfall has detection strategy. |
+| Area         | Confidence | Notes                                                                                                                                                                                                            |
+| ------------ | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stack        | HIGH       | All existing code analysis. No new dependencies. `Cargo.toml` and `AGENTS.md` verified.                                                                                                                          |
+| Features     | HIGH       | Derived from direct codebase analysis of all speculative decoding files + vLLM competitive reference + Leviathan et al. (2023) academic paper. Feature dependency graph is cross-validated against architecture. |
+| Architecture | HIGH       | Current engine.rs code, vLLM v1 engine source, TensorRT-LLM docs all agree on the architecture pattern. Data flow diagrams validated against existing infrastructure.                                            |
+| Pitfalls     | HIGH       | 11 pitfalls derived from current code analysis + vLLM production experience + TensorRT-LLM limitations documentation. Each pitfall has detection strategy.                                                       |
 
 **Overall confidence:** HIGH
 
@@ -211,6 +220,7 @@ Phases with standard patterns (skip research-phase):
 ## Sources
 
 ### Primary (HIGH confidence)
+
 - Current vLLM-lite codebase: `engine.rs`, `engine/speculative.rs`, `speculative/adaptive.rs`, `speculative/self_spec.rs`, `speculative/verifier.rs` — direct code analysis
 - vLLM v1 engine source: `vllm/v1/engine/core.py`, `vllm/v1/spec_decode/llm_base_proposer.py`, `vllm/v1/spec_decode/draft_model.py` — reference architecture
 - TensorRT-LLM Speculative Decoding documentation — production architecture patterns
@@ -219,13 +229,16 @@ Phases with standard patterns (skip research-phase):
 - `Cargo.toml` (workspace), `benches/Cargo.toml` — dependency verification
 
 ### Secondary (MEDIUM confidence)
+
 - SpecInfer (2023) "Accelerating Generative LLM Serving with Speculative Inference" — tree-based speculation patterns (not used, confirms linear draft is sufficient)
 - vLLM blog on speculative decoding throughput characteristics — concurrency scaling insight (batch > 32, disable speculation)
 
 ### Tertiary (LOW confidence)
+
 - Multi-model memory estimates — 1/50th ratio is approximate, needs empirical validation
 - Streaming behavior under speculative decode — identified as untested, needs design validation
 
 ---
+
 *Research completed: 2026-05-13*
 *Ready for roadmap: yes*

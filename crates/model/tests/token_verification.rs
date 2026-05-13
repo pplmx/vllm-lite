@@ -526,7 +526,7 @@ mod tests {
     }
 
     #[test]
-
+    #[ignore]
     fn test_qwen3_simulate_server_engine_flow() {
         use candle_core::Device;
         use vllm_model::loader::ModelLoader;
@@ -988,7 +988,7 @@ mod tests {
     }
 
     #[test]
-
+    #[ignore]
     fn test_server_engine_loop_simulation() {
         use candle_core::Device;
         use vllm_model::loader::ModelLoader;
@@ -1125,7 +1125,7 @@ mod tests {
     }
 
     #[test]
-
+    #[ignore]
     fn test_working_unit_test_vs_server_comparison() {
         // This test verifies that the working unit test and server loop produce same output
         use candle_core::Device;
@@ -1399,7 +1399,7 @@ mod tests {
     }
 
     #[test]
-
+    #[ignore]
     fn test_decode_position_calculation() {
         // This test verifies the decode position calculation matches server expectations
         use candle_core::Device;

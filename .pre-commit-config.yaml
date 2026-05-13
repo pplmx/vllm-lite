@@ -1,29 +1,23 @@
 fail_fast: true
 repos:
-  - repo: builtin
-    hooks:
-      - id: end-of-file-fixer
-      - id: trailing-whitespace
-        exclude: \.md$
-      - id: check-toml
-      - id: check-yaml
-      - id: check-merge-conflict
-      - id: mixed-line-ending
-        args: ["--fix=lf"]
+    - repo: builtin
+      hooks:
+          - id: end-of-file-fixer
+          - id: trailing-whitespace
+            exclude: \.md$
+          - id: check-toml
+          - id: check-yaml
+          - id: check-merge-conflict
+          - id: mixed-line-ending
+            args: ["--fix=lf"]
 
-  - repo: https://github.com/commitizen-tools/commitizen
-    rev: v4.13.9
-    hooks:
-      - id: commitizen
-      - id: commitizen-branch
-        stages: [pre-push]
+    - repo: https://github.com/commitizen-tools/commitizen
+      rev: v4.16.0
+      hooks:
+          - id: commitizen
 
-  - repo: local
-    hooks:
-      - id: rumdl
-        name: rumdl fmt & check
-        language: system
-        entry: rumdl fmt && rumdl check
-        files: \.md$
-        pass_filenames: true
-        require_serial: true
+    - repo: https://github.com/rvben/rumdl-pre-commit
+      rev: v0.1.91
+      hooks:
+          - id: rumdl # Lint + auto-fix, fails if unfixable issues remain
+          - id: rumdl-fmt # Pure format, always exits 0
