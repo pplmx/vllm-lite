@@ -4100,8 +4100,10 @@ dependencies = [
  "criterion 0.5.1",
  "serde",
  "serde_json",
+ "tokio",
  "vllm-core",
  "vllm-model",
+ "vllm-testing",
  "vllm-traits",
 ]
 

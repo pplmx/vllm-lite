@@ -1,6 +1,7 @@
 // crates/core/src/metrics/collector.rs
 use dashmap::DashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
+use vllm_traits::SeqId;
 
 /// Centralized metrics collector for all optimization components
 #[derive(Debug)]
@@ -17,10 +18,15 @@ pub struct EnhancedMetricsCollector {
     packing_efficiency: AtomicU64,
     speculative_acceptance_rate: AtomicU64,
     speculative_draft_count: AtomicU64,
+    speculative_efficiency: AtomicU64,
+    throughput_speedup_ratio: AtomicU64,
     request_queue_depth: AtomicU64,
     active_sequences: AtomicU64,
+    speculative_per_request_count: AtomicU64,
     // Histograms
     inference_latency_ns: DashMap<String, Vec<u64>>,
+    // Per-request acceptance tracking
+    per_request_acceptance: DashMap<SeqId, (AtomicU64, AtomicU64)>,
 }
 
 impl EnhancedMetricsCollector {
@@ -36,9 +42,13 @@ impl EnhancedMetricsCollector {
             packing_efficiency: AtomicU64::new(0),
             speculative_acceptance_rate: AtomicU64::new(0),
             speculative_draft_count: AtomicU64::new(0),
+            speculative_efficiency: AtomicU64::new(0),
+            throughput_speedup_ratio: AtomicU64::new(0),
             request_queue_depth: AtomicU64::new(0),
             active_sequences: AtomicU64::new(0),
+            speculative_per_request_count: AtomicU64::new(0),
             inference_latency_ns: DashMap::new(),
+            per_request_acceptance: DashMap::new(),
         }
     }
 
@@ -81,6 +91,53 @@ impl EnhancedMetricsCollector {
 
     pub fn record_speculative_adjustment(&self) {
         self.speculative_adjustments.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_speculative_efficiency(&self, efficiency: f64) {
+        let fixed = (efficiency * 100000.0) as u64;
+        self.speculative_efficiency.store(fixed, Ordering::Relaxed);
+    }
+
+    pub fn record_throughput_speedup(&self, ratio: f64) {
+        let fixed = (ratio * 100000.0) as u64;
+        self.throughput_speedup_ratio
+            .store(fixed, Ordering::Relaxed);
+    }
+
+    // Per-request acceptance tracking
+    pub fn record_per_request_acceptance(&self, seq_id: SeqId, accepted: usize, total: usize) {
+        let entry = self
+            .per_request_acceptance
+            .entry(seq_id)
+            .or_insert_with(|| (AtomicU64::new(0), AtomicU64::new(0)));
+        entry
+            .value()
+            .0
+            .fetch_add(accepted as u64, Ordering::Relaxed);
+        entry.value().1.fetch_add(total as u64, Ordering::Relaxed);
+        self.speculative_per_request_count
+            .store(self.per_request_acceptance.len() as u64, Ordering::Relaxed);
+    }
+
+    pub fn get_per_request_acceptance_rate(&self, seq_id: SeqId) -> f64 {
+        self.per_request_acceptance
+            .get(&seq_id)
+            .map(|entry| {
+                let accepted = entry.0.load(Ordering::Relaxed);
+                let total = entry.1.load(Ordering::Relaxed);
+                if total == 0 {
+                    0.0
+                } else {
+                    accepted as f64 / total as f64
+                }
+            })
+            .unwrap_or(0.0)
+    }
+
+    pub fn remove_per_request(&self, seq_id: SeqId) {
+        self.per_request_acceptance.remove(&seq_id);
+        self.speculative_per_request_count
+            .store(self.per_request_acceptance.len() as u64, Ordering::Relaxed);
     }
 
     // System metrics
@@ -132,8 +189,13 @@ impl EnhancedMetricsCollector {
                 self.speculative_acceptance_rate.load(Ordering::Relaxed)
             }
             "speculative_draft_count" => self.speculative_draft_count.load(Ordering::Relaxed),
+            "speculative_efficiency" => self.speculative_efficiency.load(Ordering::Relaxed),
+            "throughput_speedup_ratio" => self.throughput_speedup_ratio.load(Ordering::Relaxed),
             "request_queue_depth" => self.request_queue_depth.load(Ordering::Relaxed),
             "active_sequences" => self.active_sequences.load(Ordering::Relaxed),
+            "speculative_per_request_count" => {
+                self.speculative_per_request_count.load(Ordering::Relaxed)
+            }
             _ => 0,
         }
     }

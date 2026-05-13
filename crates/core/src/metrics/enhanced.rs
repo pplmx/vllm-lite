@@ -30,6 +30,8 @@ pub struct EnhancedMetrics {
     pub speculative_verification_failures: Arc<AtomicU64>,
     pub speculative_adjustments: Arc<AtomicU64>,
     pub speculative_current_draft_count: Arc<AtomicU64>,
+    pub speculative_efficiency_percent: Arc<AtomicU64>,
+    pub throughput_speedup_ratio: Arc<AtomicU64>,
 
     // General health metrics
     pub requests_total: Arc<AtomicU64>,
@@ -66,6 +68,8 @@ impl EnhancedMetrics {
             speculative_verification_failures: Arc::new(AtomicU64::new(0)),
             speculative_adjustments: Arc::new(AtomicU64::new(0)),
             speculative_current_draft_count: Arc::new(AtomicU64::new(0)),
+            speculative_efficiency_percent: Arc::new(AtomicU64::new(0)),
+            throughput_speedup_ratio: Arc::new(AtomicU64::new(0)),
 
             // General health
             requests_total: Arc::new(AtomicU64::new(0)),
@@ -177,6 +181,29 @@ impl EnhancedMetrics {
         } else {
             accepted as f64 / generated as f64
         }
+    }
+
+    /// Get speculative efficiency (draft_tokens / total_tokens, 0.0-1.0)
+    pub fn speculative_efficiency(&self) -> f64 {
+        let draft = self.speculative_draft_tokens_generated.load(Ordering::Relaxed);
+        let accepted = self.speculative_draft_tokens_accepted.load(Ordering::Relaxed);
+        let total = draft + accepted;
+        if total == 0 {
+            0.0
+        } else {
+            draft as f64 / total as f64
+        }
+    }
+
+    /// Set throughput speedup ratio (computed offline via benchmark comparison)
+    pub fn set_throughput_speedup_ratio(&self, ratio: f64) {
+        let fixed = (ratio * 100000.0) as u64;
+        self.throughput_speedup_ratio.store(fixed, Ordering::Relaxed);
+    }
+
+    /// Get throughput speedup ratio
+    pub fn throughput_speedup(&self) -> f64 {
+        self.throughput_speedup_ratio.load(Ordering::Relaxed) as f64 / 100000.0
     }
 
     // General health metrics

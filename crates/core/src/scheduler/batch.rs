@@ -2,7 +2,14 @@ use crate::error::Result;
 use vllm_traits::{ModelBackend, SeqId, TokenId};
 
 impl<M: ModelBackend + 'static> crate::engine::Engine<M> {
+    /// Backward-compatible non-speculative step.
+    /// Delegates to the unified `step(Some(0))` path.
     pub fn step(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
+        self.step_internal()
+    }
+
+    /// Internal non-speculative step implementation.
+    pub(crate) fn step_internal(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
         let start = std::time::Instant::now();
         let batch = self.scheduler.build_batch();
         if batch.is_empty() {
@@ -50,7 +57,7 @@ impl<M: ModelBackend + 'static> crate::engine::Engine<M> {
         for (seq_id, token) in batch.seq_ids.iter().zip(output.next_tokens.iter()) {
             tracing::debug!(seq_id = %seq_id, token = %token, "Sending token to channel");
             if let Some(tx) = self.response_txs.get(seq_id) {
-                let _ = tx.try_send(*token); // Use try_send to avoid blocking
+                let _ = tx.try_send(*token);
             }
             results.push((*seq_id, *token));
         }

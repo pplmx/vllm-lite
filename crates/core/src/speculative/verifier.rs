@@ -51,7 +51,7 @@ impl VerificationResult {
 
 pub trait DraftVerifier: Send + Sync {
     fn generate_draft(
-        &self,
+        &mut self,
         batch: &Batch,
         num_tokens: usize,
     ) -> Result<Vec<(SeqId, Vec<TokenId>)>>;

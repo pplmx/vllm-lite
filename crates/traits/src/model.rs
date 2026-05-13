@@ -101,4 +101,28 @@ pub trait ModelBackend: Send + Sync {
     fn num_layers(&self) -> usize;
 
     fn num_heads(&self) -> usize;
+
+    /// Forward pass stopped after `upto_layer` layers.
+    /// Default impl ignores `upto_layer` and calls `self.forward()`.
+    #[allow(clippy::too_many_arguments)]
+    fn forward_to_layer(
+        &mut self,
+        seq_ids: &[SeqId],
+        input_tokens: &[Vec<TokenId>],
+        positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
+        upto_layer: usize,
+    ) -> Result<BatchOutput> {
+        let _ = upto_layer;
+        self.forward(
+            seq_ids,
+            input_tokens,
+            positions,
+            kv_block_ids,
+            num_computed_tokens,
+            is_prefill,
+        )
+    }
 }

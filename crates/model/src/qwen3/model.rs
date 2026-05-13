@@ -656,6 +656,124 @@ impl ModelBackend for Qwen3Model {
     fn num_heads(&self) -> usize {
         self.config.num_key_value_heads()
     }
+
+    fn forward_to_layer(
+        &mut self,
+        seq_ids: &[SeqId],
+        input_tokens: &[Vec<TokenId>],
+        positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
+        upto_layer: usize,
+    ) -> EngineResult<BatchOutput> {
+        if seq_ids.is_empty() {
+            return Ok(BatchOutput {
+                seq_ids: vec![],
+                next_tokens: vec![],
+            });
+        }
+
+        let mut next_tokens = vec![0u32; seq_ids.len()];
+
+        for i in 0..seq_ids.len() {
+            let tokens = &input_tokens[i];
+            let pos = &positions[i];
+            let blocks = &kv_block_ids[i];
+            let computed = num_computed_tokens[i];
+            let pf = is_prefill[i];
+
+            if tokens.is_empty() {
+                continue;
+            }
+
+            let hidden = if pf {
+                let t = Tensor::new(tokens.as_slice(), &self.device)
+                    .map_err(|e| EngineError::new(e.to_string()))?;
+                self.embed_tokens
+                    .forward(&t)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .unsqueeze(0)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+            } else {
+                let last_token = tokens.last().copied().unwrap_or(0);
+                let t = Tensor::new(&[last_token], &self.device)
+                    .map_err(|e| EngineError::new(e.to_string()))?;
+                self.embed_tokens
+                    .forward(&t)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .unsqueeze(0)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+            };
+            let mut hidden = hidden;
+
+            let upto = upto_layer.min(self.layers.len());
+            if pf {
+                for layer_idx in 0..upto {
+                    hidden = self.layers[layer_idx]
+                        .forward_prefill(&hidden, &mut self.kv_cache, layer_idx, blocks, pos)
+                        .map_err(|e| EngineError::new(e.to_string()))?;
+                }
+            } else {
+                let decode_position = [pos[0]];
+                for layer_idx in 0..upto {
+                    hidden = self.layers[layer_idx]
+                        .forward_decode(
+                            &hidden,
+                            &mut self.kv_cache,
+                            layer_idx,
+                            blocks,
+                            computed,
+                            &decode_position,
+                        )
+                        .map_err(|e| EngineError::new(e.to_string()))?;
+                }
+            }
+
+            hidden = self
+                .norm
+                .forward(&hidden)
+                .map_err(|e| EngineError::new(e.to_string()))?;
+            let logits = self
+                .lm_head
+                .forward(&hidden)
+                .map_err(|e| EngineError::new(e.to_string()))?;
+
+            use candle_core::D;
+            if pf {
+                let seq_len = logits.dims()[1];
+                let last_logits = logits
+                    .narrow(1, seq_len - 1, 1)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .squeeze(1)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .squeeze(0)
+                    .map_err(|e| EngineError::new(e.to_string()))?;
+                let next = last_logits
+                    .argmax(D::Minus1)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .to_vec0::<u32>()
+                    .map_err(|e| EngineError::new(e.to_string()))?;
+                next_tokens[i] = next;
+            } else {
+                let next = logits
+                    .squeeze(0)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .squeeze(0)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .argmax(D::Minus1)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .to_vec0::<u32>()
+                    .map_err(|e| EngineError::new(e.to_string()))?;
+                next_tokens[i] = next;
+            }
+        }
+
+        Ok(BatchOutput {
+            seq_ids: seq_ids.to_vec(),
+            next_tokens,
+        })
+    }
 }
 
 #[cfg(test)]

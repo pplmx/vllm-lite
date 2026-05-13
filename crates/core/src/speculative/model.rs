@@ -75,7 +75,7 @@ mod tests {
 
     impl DraftVerifier for MockVerifier {
         fn generate_draft(
-            &self,
+            &mut self,
             _batch: &crate::types::Batch,
             _num_tokens: usize,
         ) -> VerifierResult<Vec<(SeqId, Vec<TokenId>)>> {

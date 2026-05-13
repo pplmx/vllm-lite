@@ -37,7 +37,7 @@ pub struct SchedulerEngine {
     /// CUDA Graph configuration for decode optimization
     cuda_graph: SchedulerCudaGraphConfig,
     /// Metrics collector for tracking engine performance
-    metrics: Arc<EnhancedMetricsCollector>,
+    pub metrics: Arc<EnhancedMetricsCollector>,
 }
 
 impl SchedulerEngine {
@@ -46,7 +46,7 @@ impl SchedulerEngine {
     /// # Arguments
     /// * `config` - Scheduler configuration
     /// * `num_kv_blocks` - Number of KV cache blocks available
-    /// * `metrics` - Metrics collector for tracking performance
+    /// * `metrics` - Metrics collector for tracking engine performance
     pub fn new(
         config: SchedulerConfig,
         num_kv_blocks: usize,
@@ -555,6 +555,13 @@ impl SchedulerEngine {
     pub fn prefix_cache_hit_rate(&self) -> f64 {
         // Placeholder - would need stats tracking
         0.0
+    }
+
+    /// Rollback KV cache for rejected draft tokens (Plan 17.1-D).
+    pub fn memory_rollback(&mut self, seq_id: SeqId, num_tokens: usize) {
+        if let Some(seq) = self.running.iter_mut().find(|s| s.id == seq_id) {
+            self.memory.rollback(seq, num_tokens);
+        }
     }
 
     /// Cancel a request by sequence ID

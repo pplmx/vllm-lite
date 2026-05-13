@@ -25,10 +25,15 @@
   4. Rejected draft tokens' KV cache entries are rolled back via MemoryManager without leaking into subsequent steps
   5. Scheduler correctly tracks input token counts when multiple draft tokens are accepted per step
   6. Speculative path falls back to non-speculative decode gracefully on any draft model error
-**Plans**: TBD
+**Plans**: 6 sub-plans (17.1-A through 17.1-F)
 
 Plans:
-- (to be defined during plan-phase)
+- [ ] 17.1-A: Unified `step()` entry point - adds `step(max_draft)` dispatch, error fallback
+- [ ] 17.1-B: Batched draft generation - replace per-sequence loop with per-position batching
+- [ ] 17.1-C: Logit-based verification - probability-based rejection sampling via `forward_logits()`
+- [ ] 17.1-D: KV cache rollback - `MemoryManager::rollback()` for rejected draft positions
+- [ ] 17.1-E: Multi-token scheduler input - wire actual accepted counts into `scheduler.update()`
+- [ ] 17.1-F: Tests - unit + integration tests for speculative engine integration
 
 ### Phase 17.2: Self-Speculation Forward Pass
 **Goal**: SelfSpeculativeModel generates actual draft tokens via layer-truncated forward pass with isolated KV cache
@@ -79,7 +84,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 17.1 Engine Integration | v17.0 | 0/0 | Not started | - |
+| 17.1 Engine Integration | v17.0 | 0/6 | In planning | - |
 | 17.2 Self-Speculation | v17.0 | 0/0 | Not started | - |
 | 17.3 Adaptive Depth & Benchmarks | v17.0 | 0/0 | Not started | - |
 | 17.4 Speculative Warmup & Metrics | v17.0 | 0/0 | Not started | - |

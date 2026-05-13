@@ -8,7 +8,7 @@ last_activity: 2026-05-13
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
+  total_plans: 6
   completed_plans: 0
   percent: 0
 ---
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-05-13)
 ## Current Position
 
 Phase: 1 of 4 (Phase 17.1: Engine Integration)
-Plan: — (not yet planned)
-Status: Roadmap created, ready to plan
-Last activity: 2026-05-13 — Milestone v17.0 roadmap created
+Plan: 6 plans defined (17.1-A through 17.1-F)
+Status: Planned, ready to execute
+Last activity: 2026-05-13 — Phase 17.1 plan created
 
 Progress: [░░░░░░░░░░] 0%
 

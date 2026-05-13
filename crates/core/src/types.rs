@@ -20,6 +20,10 @@ pub struct AdaptiveDraftConfig {
     pub adjustment_step: usize,
     /// Cooldown steps between adjustments
     pub cooldown_steps: usize,
+    /// EWMA smoothing factor (0.0-1.0). Higher = more responsive to recent changes.
+    pub ewma_alpha: f32,
+    /// Deadband threshold for hysteresis. Only adjusts when |rate - target| > threshold.
+    pub deadband_threshold: f32,
 }
 
 impl Default for AdaptiveDraftConfig {
@@ -31,6 +35,8 @@ impl Default for AdaptiveDraftConfig {
             accuracy_window_size: 20,
             adjustment_step: 1,
             cooldown_steps: 5,
+            ewma_alpha: 0.1,
+            deadband_threshold: 0.05,
         }
     }
 }
