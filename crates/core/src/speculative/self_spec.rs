@@ -168,7 +168,6 @@ impl<M: ModelBackend> DraftVerifier for SelfSpeculativeModel<M> {
             let mut current_num_computed = num_computed;
 
             for step in 0..num_tokens {
-                // Decode phase: only the last token matters
                 let last_token = vec![*current_tokens.last().unwrap_or(&0)];
                 let step_position = if positions.is_empty() {
                     vec![current_num_computed]
@@ -185,7 +184,7 @@ impl<M: ModelBackend> DraftVerifier for SelfSpeculativeModel<M> {
                         &[step_position],
                         std::slice::from_ref(draft_block_ids),
                         &[current_num_computed],
-                        &[false], // draft is always decode
+                        &[false],
                         self.draft_layer_count,
                     )
                     .map_err(|e| VerifierError::DraftGeneration(e.to_string()))?;
@@ -194,7 +193,6 @@ impl<M: ModelBackend> DraftVerifier for SelfSpeculativeModel<M> {
                 draft_tokens.push(next_token);
                 current_tokens.push(next_token);
                 current_num_computed += 1;
-                *draft_block_ids = batch.kv_block_ids[batch_idx].clone();
             }
 
             drafts.push((seq_id, draft_tokens));

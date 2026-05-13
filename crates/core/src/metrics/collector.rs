@@ -243,4 +243,44 @@ mod tests {
         let buckets = collector.inference_latency_ns.get("inference").unwrap();
         assert_eq!(buckets.len(), 2);
     }
+
+    // ---- Plan 17.4-H: Metrics Tests ----
+
+    #[test]
+    fn test_speculative_efficiency_basic() {
+        let collector = EnhancedMetricsCollector::new();
+        collector.record_speculative_efficiency(0.6667);
+        let gauge = collector.get_gauge("speculative_efficiency");
+        assert!(gauge > 66000 && gauge < 67000);
+    }
+
+    #[test]
+    fn test_speculative_efficiency_zero() {
+        let collector = EnhancedMetricsCollector::new();
+        let gauge = collector.get_gauge("speculative_efficiency");
+        assert_eq!(gauge, 0);
+    }
+
+    #[test]
+    fn test_throughput_speedup_set_get() {
+        let collector = EnhancedMetricsCollector::new();
+        collector.record_throughput_speedup(1.5);
+        let gauge = collector.get_gauge("throughput_speedup_ratio");
+        assert_eq!(gauge, 150000);
+    }
+
+    #[test]
+    fn test_throughput_speedup_default() {
+        let collector = EnhancedMetricsCollector::new();
+        let gauge = collector.get_gauge("throughput_speedup_ratio");
+        assert_eq!(gauge, 0);
+    }
+
+    #[test]
+    fn test_collector_records_speculative_efficiency() {
+        let collector = EnhancedMetricsCollector::new();
+        collector.record_speculative_efficiency(0.75);
+        let gauge = collector.get_gauge("speculative_efficiency");
+        assert_eq!(gauge, 75000);
+    }
 }
