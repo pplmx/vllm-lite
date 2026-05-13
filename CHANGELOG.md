@@ -52,7 +52,7 @@
     - Moved `cuda_graph.rs` from core to `model/kernels/cuda_graph.rs`
     - Updated `components/` to use kernels module
 
-### Added
+### Added (Phase 4)
 
 #### Phase 4: Performance Optimization
 
