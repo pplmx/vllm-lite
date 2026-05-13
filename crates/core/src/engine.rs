@@ -342,6 +342,7 @@ impl<M: ModelBackend + 'static> Engine<M> {
         let canceled = self.scheduler.cancel_request(seq_id);
         if canceled {
             self.response_txs.remove(&seq_id);
+            self.scheduler.metrics.remove_per_request(seq_id);
         }
         canceled
     }
