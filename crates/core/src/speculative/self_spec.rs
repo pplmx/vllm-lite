@@ -333,7 +333,7 @@ mod tests {
             forward_called: false,
             layers_processed: 0,
         };
-        let batch = vllm_traits::types::Batch {
+        let _batch = vllm_traits::types::Batch {
             seq_ids: vec![1],
             input_tokens: vec![vec![10]],
             positions: vec![vec![0]],
@@ -401,6 +401,7 @@ mod tests {
 
     struct TrackingModel {
         forward_called: bool,
+        #[allow(dead_code)]
         layers_processed: usize,
     }
 
