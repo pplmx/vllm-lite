@@ -1,302 +1,142 @@
-# Domain Pitfalls: vllm-lite v14.0 Developer Tooling
+# Domain Pitfalls: Production Speculative Decoding
 
-**Domain:** LLM Inference Engine Developer Tooling
-**Researched:** 2026-04-27
+**Domain:** LLM Inference Engine — Speculative Decoding
+**Researched:** 2026-05-13
 
 ## Critical Pitfalls
 
-Mistakes that cause rewrites or major issues.
+### Pitfall 1: Engine Loop Divergence — Two Code Paths That Rot
 
-### Pitfall 1: Profiling Overhead in Hot Path
+**What goes wrong:** The speculative decode path (`step_speculative`) and the standard decode path (`step`) are implemented as entirely separate methods. Over time, they diverge as features are added to only one path. This creates a "shadow engine" where speculative users miss bug fixes and optimizations added to the standard path.
 
-**What goes wrong:** Tooling code adds latency to `Engine::step()`, increasing inference latency.
+**Why it happens:** It's natural to add a feature to `step()` and forget `step_speculative()` needs the same change. The current architecture has THREE paths: `step()`, `step_speculative()`, `step_adaptive_speculative()`. Currently 904-line `engine.rs` with separate speculative file at `engine/speculative.rs`.
 
-**Why it happens:** Adding tracing spans, metrics recording, or serialization in the critical path.
+**Consequences:** Silent correctness bugs in the speculative path. Performance optimizations (CUDA Graph, chunked prefill) apply to one path but not the other. Users who enable speculative decoding get different behavior.
 
-**Consequences:**
-- Performance regression in production
-- Benchmarks show incorrect numbers (tooling overhead included)
-- SLA violations
+**Prevention:** Either (a) refactor so speculative decoding is a *modifier* on the standard step, not a replacement, or (b) create a `step_inner()` that both paths call, with spec decode adding draft generation + verification as hooks. vLLM v1 solution: always calls `step()` in `EngineCore`, speculative decoding is just a model executor feature (proposer loaded as part of model).
 
-**Prevention:**
+**Detection:** Run same request through both paths with `speculative_mode = false` and assert output tokens match exactly. This should be a CI gate.
+
+### Pitfall 2: Draft KV Cache Corruption Through Shared References
+
+**What goes wrong:** In self-speculation (weight sharing), the draft model uses a subset of target layers. If KV cache block IDs are shared between draft and target passes, the draft forward can modify KV cache entries that the target pass expects to be stable. This produces silently wrong tokens (no crash, just incorrect output).
+
+**Why it happens:** The current `SelfSpeculativeModel` shares weights and KV block IDs. The draft forward at layer L modifies KV cache blocks. When the target later re-runs verification on the same block IDs, it loads corrupted data.
+
+**Consequences:** Non-deterministic output corruption. Only shows up under load (contention). Impossible to debug without KV cache snapshot comparison.
+
+**Prevention:** Use separate KV block IDs for draft vs target during the same step, or use copy-on-write semantics. vLLM's EAGLE approach avoids this entirely by using the target's KV cache directly (eagle layers don't write to KV cache — they read-only). For self-speculation: allocate a scratch KV block for draft output that is NOT shared with target.
+
+**Detection:** Compare KV cache block contents before and after draft forward. Any modification to target blocks = corruption.
+
+### Pitfall 3: Adaptive Depth Oscillation
+
+**What goes wrong:** The adaptive draft depth continuously oscillates between high and low values, never stabilizing. Acceptance rate is inherently noisy (varies by prompt content, generation phase, etc.). Simple threshold-based control (current implementation: ±1 step, cooldown) is prone to oscillation.
+
+**Why it happens:** Current `AdaptiveSpeculativeDecoder.maybe_adjust()` uses:
+- `rate > target + 0.1` → increase
+- `rate < target - 0.1` → decrease
+
+With a single cooldown, the system overcorrects. High drafts → lower acceptance → decrease drafts → higher acceptance → increase drafts → cycle repeats.
+
+**Consequences:** Users see constant "Adjusted max_draft_tokens" log spam. Effective throughput oscillates. The feature feels broken.
+
+**Prevention:** Use (a) EWMA (exponential weighted moving average) for smoothing acceptance rate, (b) PID-style control with proportional term only (no integral to avoid windup), (c) deadband with hysteresis. Log adjustments at INFO but reduce frequency. Consider per-gen-phase adaptation: drafts matter more during stable decode than during prefill.
+
+**Detection:** Parse logs for "Adjusted max_draft_tokens.* -> " and count adjustments over a 100-step window. >10 adjustments = oscillation.
+
+### Pitfall 4: Benchmark Contamination — Warmup Effects
+
+**What goes wrong:** First speculative decode step is always slower because KV caches are cold. Benchmark results conflate warmup effects with true spec decode performance. Non-speculative vs speculative comparison is invalid because the non-speculative baseline benefits from the same warmup.
+
+**Why it happens:** The current benchmark infrastructure has `warmup_iterations` (default 3), but speculative warmup is separate from benchmark warmup. The first spec decode step runs draft layers on empty KV cache → bad performance → pollutes latency P99 metrics.
+
+**Consequences:** Benchmarks show speculative decoding as *slower* than baseline. Incorrect conclusions about whether to enable the feature.
+
+**Prevention:** (a) Require a separate "speculative warmup phase" before any benchmark measurement — run N tokens through spec decode, discard results. (b) In benchmark reports, explicitly state "Warmup tokens: N (discarded)". (c) Offer a `--spec-warmup-tokens` flag. (d) Run spec and non-spec benchmarks in the *same* process to ensure identical conditions.
+
+**Detection:** Run the benchmark twice: once with default warmup, once with 10x warmup. If results differ significantly, warmup is insufficient.
+
+### Pitfall 5: Token Matching Rejection Is Too Aggressive
+
+**What goes wrong:** The current `verify_draft_tokens()` uses exact token matching:
 ```rust
-// BAD: Always serialize on hot path
-fn step(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
-    let result = self.execute_regular(&batch)?;
-    
-    // BAD: Serialization in hot path
-    if self.trace_enabled {
-        let trace = serde_json::to_string(&result).unwrap();
-        self.trace_buffer.push(trace);
-    }
-    
-    result
-}
-
-// GOOD: Buffer and flush async
-fn step(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
-    let result = self.execute_regular(&batch)?;
-    
-    // GOOD: Record raw data, serialize off critical path
-    if self.trace_enabled {
-        self.trace_buffer.push(TraceEvent {
-            timestamp: Instant::now(),
-            result: (&result.seq_ids, result.next_tokens.len()),
-        });
-    }
-    
-    result
+if target_tokens[j] == draft_token {
+    // accept
+} else {
+    break;  // reject ALL remaining drafts
 }
 ```
 
-**Detection:** Benchmark with/without `--features profiling`, expect < 1% overhead.
+This is a *deterministic* acceptance rule (token must match). The theoretical spec decode rejection uses *probability-based* acceptance (sample from max(0, target_prob - draft_prob) / target_prob). The exact-token approach matches the greedy decoding case but is incorrect for non-greedy (sampling) modes.
 
----
+**Why it happens:** Simpler to implement. The current code doesn't track logits/probabilities — it only tracks token IDs stolen from `ModelBackend::forward().next_tokens`.
 
-### Pitfall 2: Memory Bloat in Metrics Collection
+**Consequences:** With temperature > 0 or top-k sampling, the rejection strategy incorrectly classifies valid alternative tokens as "rejected." Speculative throughput is lower than theoretically possible.
 
-**What goes wrong:** Metrics buffer grows unbounded, consuming memory.
+**Prevention:** Extend `ModelBackend::forward()` to return both token IDs and their logits/probabilities. Implement true speculative rejection: sample r ~ Uniform(0,1), accept draft if `r < min(1, target_prob(draft) / draft_prob(draft))`. This requires the model to return per-token probabilities.
 
-**Why it happens:** Accumulating events without bounds or TTLs.
-
-**Consequences:**
-- OOM on long-running servers
-- Memory metrics show tooling as source of leak
-- False memory regression in benchmarks
-
-**Prevention:**
-```rust
-// BAD: Unbounded accumulation
-pub struct ToolingMetrics {
-    latency_samples: Vec<u64>,  // Grows forever!
-}
-
-// GOOD: Bounded buffer with circular behavior
-pub struct ToolingMetrics {
-    latency_samples: VecDeque<u64>,
-    max_samples: usize,
-}
-
-impl ToolingMetrics {
-    pub fn record_latency(&mut self, ns: u64) {
-        if self.latency_samples.len() >= self.max_samples {
-            self.latency_samples.pop_front();
-        }
-        self.latency_samples.push_back(ns);
-    }
-}
-```
-
-**Detection:** Monitor memory after 24h run, set upper bound on buffers.
-
----
-
-### Pitfall 3: Blocking in Async Context
-
-**What goes wrong:** Benchmark or debug code uses blocking I/O in async runtime.
-
-**Why it happens:** Using `std::fs` instead of `tokio::fs`, `thread::sleep` instead of `tokio::time::sleep`.
-
-**Consequences:**
-- Server hangs during benchmarks
-- Starvation of other async tasks
-- "Too many open files" errors
-
-**Prevention:**
-```rust
-// BAD: Blocking I/O
-async fn run_benchmark(&self) {
-    let data = std::fs::read("config.json").unwrap();  // Blocks!
-    tokio::time::sleep(Duration::from_secs(1)).await;  // Fine
-}
-
-// GOOD: Async I/O
-async fn run_benchmark(&self) {
-    let data = tokio::fs::read("config.json").await.unwrap();  // Non-blocking!
-    tokio::time::sleep(Duration::from_secs(1)).await;
-}
-```
-
-**Detection:** Use `tokio-console` to detect blocked tasks.
-
----
+**Detection:** Compare acceptance rates between greedy (temp=0) and non-greedy (temp=0.7) modes. If non-greedy rates are significantly lower, the rejection strategy is too aggressive.
 
 ## Moderate Pitfalls
 
-### Pitfall 4: Benchmark Non-Determinism
+### Pitfall 6: Draft Model Lifecycle Leaks GPU Memory
 
-**What goes wrong:** Benchmark results vary wildly between runs.
+**What goes wrong:** Loading a separate draft model doubles GPU memory usage. If loading fails mid-way, partial weights orphan GPU memory. Swapping draft models without proper cleanup causes memory fragmentation. Currently: `server/main.rs` loads draft model via `loader.load_model()` — same loader, blocks same GPU memory pool.
 
-**Why it happens:** Not accounting for warmup, not isolating requests, using wall-clock time without synchronization.
+**Prevention:** (a) Estimate draft model memory before loading. (b) Fail fast with clear memory requirements if insufficient VRAM. (c) Use separate CUDA memory pools for draft vs target. (d) Implement `unload_draft_model()` that properly frees all GPU allocations.
 
-**Consequences:**
-- Can't detect regressions
-- Conflicting benchmark reports
-- CI/CD failures on flaky benchmarks
+### Pitfall 7: Tokenizer Mismatch Between Draft and Target
 
-**Prevention:**
-```rust
-// GOOD: Proper benchmark setup
-fn run_throughput_benchmark() -> BenchmarkResult {
-    // 1. Warmup phase (discard results)
-    for _ in 0..WARMUP_ITERATIONS {
-        engine.add_request(test_request());
-        engine.step();
-    }
-    
-    // 2. Synchronize before measurement
-    engine.sync();  // Ensure GPU is idle
-    
-    // 3. Timed phase
-    let start = Instant::now();
-    for _ in 0..MEASURE_ITERATIONS {
-        engine.add_request(test_request());
-        engine.step();
-    }
-    let elapsed = start.elapsed();
-    
-    // 4. Statistical analysis
-    calculate_statistics(elapsed)
-}
-```
+**What goes wrong:** Self-speculation shares the tokenizer (same model, fewer layers). Multi-model speculation requires the draft model to use the EXACT same tokenizer. If vocabularies differ even by one token, draft token IDs are meaningless to the target model exacerbating into silent garbage output.
 
----
+**Prevention:** (a) Validate `vocab_size` matches at model load time (vLLM's `verify_equal_vocab_size_if_draft_model()`). (b) Validate tokenizer configs match (same `tokenizer_config.json`). (c) Reject mismatched pairs with clear error message.
 
-### Pitfall 5: Config Validation After Engine Start
+### Pitfall 8: Batch Size Mismatch in Draft vs Target Forward
 
-**What goes wrong:** Invalid config causes panic mid-initialization.
+**What goes wrong:** The draft model forward is called per-sequence in a loop (`generate_draft_tokens()` iterates `for (i, seq_id) in batch.seq_ids.iter().enumerate()`). This means draft generation is NOT batched — it's O(seqs * max_draft) sequential forward passes. This can be slower than the target model's batched forward for large batches.
 
-**Why it happens:** Validation happens too late, after partial state setup.
+**Prevention:** Batch the draft model forward vLLM-style: process all draft tokens in parallel where possible. For self-speculation with 1/8 layers, the per-draft-token cost is small, but iterating in a loop loses batch parallelism. See: `SpecDecodeBaseProposer.propose()` in vLLM which handles all draft tokens in a single batched call.
 
-**Consequences:**
-- Crash during startup
-- Half-initialized state
-- Hard to debug
+### Pitfall 9: Metrics Overload from Per-Token Tracing
 
-**Prevention:**
-```rust
-// GOOD: Validate early
-fn AppConfig::load(path: PathBuf) -> Self {
-    let raw = std::fs::read_to_string(&path).unwrap();
-    let config: AppConfig = serde_yaml::from_str(&raw).unwrap();
-    
-    // Validate BEFORE any state
-    config.validate().expect("Invalid config");
-    
-    config
-}
+**What goes wrong:** Enabling TRACE-level speculative logging (`trace!(seq_id = %seq_id, token = %token, "Token generated")` for each draft token) generates O(draft_tokens * batch_size * steps_per_second) log entries per second. On a busy server (e.g., 256 drafts/step, 100 steps/s), that's 25,600 log lines/second.
 
-fn AppConfig::validate(&self) -> Result<(), ConfigError> {
-    if self.engine.max_batch_size > 8192 {
-        return Err(ConfigError::BatchSizeTooLarge);
-    }
-    if self.engine.num_kv_blocks == 0 {
-        return Err(ConfigError::KvBlocksRequired);
-    }
-    Ok(())
-}
-```
-
----
-
-### Pitfall 6: Tool Binary Bloating Server
-
-**What goes wrong:** Adding CLI subcommands bloats the server binary.
-
-**Why it happens:** Putting tooling code in `vllm-server` instead of `vllm-tool`.
-
-**Consequences:**
-- Slower compile times
-- Larger binary
-- Users pay for tooling they don't use
-
-**Prevention:**
-```rust
-// GOOD: Separate binaries
-[workspace]
-members = [
-    "crates/server",      # vllm-server only
-    "crates/tooling",     # vllm-tool only
-]
-
-// Server: minimal
-[package]
-name = "vllm-server"
-
-# Tooling: rich
-[package]
-name = "vllm-tool"
-```
-
----
+**Prevention:** Keep per-token logs at TRACE level (not DEBUG). Use aggregated metrics for production: count of drafts/accepted/rejected, not per-token events. Implement rate-limited logging for unexpected conditions (e.g., "all drafts rejected" logged at WARN but at most once per N seconds).
 
 ## Minor Pitfalls
 
-### Pitfall 7: Ignoring GPU State in Benchmarks
+### Pitfall 10: Uninitialized Draft KV Cache on First Step
 
-**What goes wrong:** Benchmarks don't reset GPU between runs.
+**What goes wrong:** On the very first speculative step after startup (or after a long idle period), the draft model's KV cache blocks are uninitialized (zero-filled). The first draft forward produces garbage tokens → all rejected → first speculative step falls back to non-speculative → user perceives spec decoding as "not working."
 
-**Why it happens:** Not calling `cudaDeviceReset()` or not waiting for GPU to finish.
+**Prevention:** Run one warmup step (non-speculative) before enabling speculation, or initialize draft KV cache with the prefill output. This is SPEC-WARM-01.
 
-**Consequences:**
-- First benchmark run is always slower (cold start)
-- Memory fragmentation affects later runs
+### Pitfall 11: Speculative Decoding with Streaming
 
-**Prevention:**
-```rust
-#[cfg(feature = "cuda")]
-fn reset_gpu_state() {
-    unsafe { cudaDeviceReset() };
-}
+**What goes wrong:** Streaming sends tokens to the client one at a time. Speculative decoding decodes multiple tokens in one step. The streaming layer needs to buffer accepted tokens and send them one-by-one at the correct timing. Current code uses `try_send` which can silently drop tokens if the channel is full.
 
-fn run_benchmark_suite() {
-    reset_gpu_state();
-    
-    for benchmark in benchmarks {
-        reset_gpu_state();  // Isolate each benchmark
-        benchmark.run();
-    }
-}
-```
-
----
-
-### Pitfall 8: Not Versioning Benchmark Format
-
-**What goes wrong:** Changing output format breaks scripts.
-
-**Why it happens:** No version in output format, no changelog.
-
-**Prevention:**
-```rust
-#[derive(Serialize)]
-struct BenchmarkReport {
-    version: &'static str,  // "v1.0"
-    timestamp: DateTime<Utc>,
-    results: Vec<BenchmarkResult>,
-}
-
-impl BenchmarkReport {
-    pub fn to_json(&self) -> String {
-        serde_json::to_string(self).unwrap()
-    }
-}
-```
-
----
+**Prevention:** Use async streaming with backpressure for speculative tokens. Maintain a per-request buffer of verified tokens. Send at the correct rate matching the client's consumption.
 
 ## Phase-Specific Warnings
 
-| Phase | Pitfall | Mitigation |
-|-------|---------|------------|
-| Infrastructure | Observer trait changes break observers | Add new events via enum extension, not trait changes |
-| Benchmarking | Non-deterministic results | Require warmup, use statistical validation |
-| Debugging | Trace buffer unbounded | Implement circular buffer with max size |
-| CLI | Config schema drift | Keep schema in sync with code, validate on load |
-| Testing | Test flakiness from GPU state | Reset GPU in test setup/teardown |
+| Phase Topic | Likely Pitfall | Mitigation |
+|-------------|---------------|------------|
+| Engine Integration | Pitfall 1: Code path divergence + Pitfall 10: Cold start | Refactor into a single path with hooks. Add warmup pre-step. |
+| Benchmarks | Pitfall 4: Warmup contamination + Pitfall 5: Incorrect rejection for sampling | Measure warmup adequacy. Always note sampling config. |
+| Adaptive Depth | Pitfall 3: Oscillation | Use EWMA + PID-style control. Add deadband hysteresis. |
+| Speculative Warmup | Pitfall 10: Cold KV cache | Warm draft KV cache from prefill output. Validate block allocation. |
+| Multi-model | Pitfall 6: Memory leak + Pitfall 7: Tokenizer mismatch | Memory estimation at load. Strict vocab validation. |
 
 ## Sources
 
-- [Criterion.rs Best Practices](https://bheisner.github.io/criterion.rs/book/user_guide/)
-- [Tokio Anti-Patterns](https://tokio.rs/tokio/topics/anti-patterns)
-- [Rust Fuzzing Pitfalls](https://rust-fuzz.github.io/book/introduction.html)
+- vLLM v1 spec decode source: `vllm/v1/spec_decode/llm_base_proposer.py`, `draft_model.py`, `vllm/v1/engine/core.py` — **HIGH confidence** (actual source code)
+- TensorRT-LLM spec decode docs and limitations — **HIGH confidence**
+- Leviathan et al. (2023) speculative decoding paper — **HIGH confidence**
+- Speculative decoding theory: rejection sampling requires logit/probability access, not just token ID matching — **HIGH confidence**
+- Current vLLM-lite engine code: `engine.rs`, `engine/speculative.rs`, `speculative/adaptive.rs` — **HIGH confidence**
+- vLLM-lite benchmark infrastructure: `benches/src/e2e.rs`, `benches/src/speculative_benchmark.rs` — **HIGH confidence**
+
+---
+*Pitfalls research for: Production Speculative Decoding in LLM Inference Engine*
+*Researched: 2026-05-13*

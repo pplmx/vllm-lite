@@ -1,141 +1,59 @@
-# Technology Stack: vllm-lite v14.0 Developer Tooling
+# Technology Stack: Production Speculative Decoding
 
-**Project:** vllm-lite Developer Tooling
-**Researched:** 2026-04-27
+**Project:** vLLM-lite — Speculative Decoding (v17.0 milestone)
+**Researched:** 2026-05-13
 
 ## Recommended Stack
 
-### Core Framework
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Rust stable | 1.85+ | Language | Existing codebase uses 1.85, no need to upgrade |
-| criterion | 0.5 | Micro-benchmarking | Mature, async-friendly, statistical rigor |
-| tracing | 0.1 | Distributed tracing | Already used in engine (tracing crate) |
-| clap | 4.x | CLI argument parsing | Already used (v4.x in deps) |
+The project already has a well-defined Rust + Candle stack. This document focuses on the speculative decoding *additions* — what new technologies, if any, are needed.
 
-### Benchmarking
-| Technology | Version | Purpose | When to Use |
-|-----------|---------|---------|-------------|
-| criterion | 0.5 | Statistical micro-benchmarks | Unit-level performance testing |
-| tokio test | 1.x | Async benchmarking | Server endpoint benchmarks |
-| perfetto | - | GPU profiling | CUDA kernel profiling |
+### No New Dependencies Required
 
-### Debugging
-| Technology | Version | Purpose | When to Use |
-|-----------|---------|---------|-------------|
-| tracing | 0.1 | Structured spans | Request tracing |
-| tracing-subscriber | 0.3 | Output formatting | Development debugging |
-| opentelemetry | 0.21 | Trace export | Production observability |
+All features in the v17.0 milestone can be implemented using the existing technology stack:
 
-### CLI
-| Technology | Version | Purpose | When to Use |
-|-----------|---------|---------|-------------|
-| clap | 4.x | Argument parsing | Already a dep |
-| serde | 1.x | Config serialization | Config validation |
-| prettytable-rs | 0.10 | Table formatting | CLI output |
+| Technology | Already In Use | For Spec Decode |
+|------------|---------------|-----------------|
+| Rust + Candle | Core inference engine | Model forward for draft + target |
+| `criterion` (bench) | benchmarks/ Cargo.toml | Benchmark suite for spec vs non-spec |
+| `metrics` / `metrics-exporter-prometheus` | MetricsCollector | Spec decode acceptance rate counters |
+| `serde` / `serde_json` | Config serialization | Spec decode config serialization |
+| `tracing` | Logging system | Spec decode step tracing |
+| `tokio` | Async runtime (server) | Async benchmark runners |
 
-### Testing
-| Technology | Version | Purpose | When to Use |
-|-----------|---------|---------|-------------|
-| cargo-fuzz | - | Coverage-guided fuzzing | Input fuzzing |
-| proptest | 1.x | Property-based testing | Generative testing |
-| tokio test | 1.x | Async integration tests | Already in use |
+### Additional Library Considerations (Optional, Not Required)
 
-### Existing Dependencies (Already in Workspace)
-
-From `Cargo.toml` workspace dependencies:
-```toml
-tokio = { version = "1", features = ["sync", "rt", "macros"] }
-metrics = "0.22"
-tracing = "0.1"  # Add: tracing-subscriber
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-thiserror = "2"
-```
+| Library | Purpose | Why Use / Why Not |
+|---------|---------|-------------------|
+| `ndarray` / `ndarray-stats` | Percentile computation on GPU latency samples | Not needed. Current `PercentileStats` in `benches/src/percentile.rs` works on CPU-side f64 vectors. `ndarray-stats` would only help if we processed thousands of samples on GPU. |
+| `histogram` crate | Latency histogram bucketing for Prometheus | Potentially useful for production metrics. Prometheus prefers pre-bucketed histograms. Could replace the current raw sample collection approach. NOT required for v17.0. |
+| `csv` crate | Export benchmark results to CSV | Useful for benchmark comparison across runs. Currently results are in-memory `HashMap<String, BenchmarkResult>`. Add for v17.1. |
 
 ## Alternatives Considered
 
 | Category | Recommended | Alternative | Why Not |
 |----------|-------------|-------------|---------|
-| Benchmarking | criterion | i Benchmark | criterion is more battle-tested with better statistical output |
-| Tracing | tracing (existing) | log + tracing compat | Already in use, opentelemetry integration exists |
-| CLI | clap (existing) | picocli | clap is already a dependency |
-| Fuzzing | cargo-fuzz | libfuzzer | cargo-fuzz integrates better with Rust, no external deps |
-| Property tests | proptest | quickcheck | proptest has better shrinking, more flexible strategies |
+| Draft management | Self-speculation (1/8 layers, weight sharing) | Separate draft model | Self-spec: zero additional GPU memory, works immediately with existing ArchitectureRegistry. Separate model: doubles memory, requires lifecycle management, but can give higher acceptance rates (specialized drafter). Self-spec is the right starting point. |
+| Benchmark runner | Existing `BenchmarkSuite` | `iai` / `criterion` benches | Criterion-style microbenchmarks measure single-op latency (e.g., `flash_attention::forward`). For spec vs non-spec comparison, we need end-to-end request-level benchmarks. The existing `ThroughputBenchmark` / `LatencyBenchmark` are designed for this. |
+| Metrics format | Prometheus counters | OpenTelemetry metrics | Prometheus is already integrated (`metrics-exporter-prometheus`). Three spec decode counters is trivially addable. OpenTelemetry adds deployment complexity. |
+| Adaptive control | Simple threshold + EWMA | PID controller | A full PID controller is overkill for a single-variable system with noisy measurements. EWMA smooth + deadband ±5% + cooldown 10 steps has fewer tuning parameters and is easier to debug. |
 
-## New Dependencies to Add
+## Existing Infrastructure (Already Built)
 
-### crates/tooling/Cargo.toml
-```toml
-[package]
-name = "vllm-tooling"
-version = "0.1.0"
-edition = "2024"
+All of this is already in place and can be extended:
 
-[dependencies]
-# Core
-tokio = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-thiserror = { workspace = true }
-
-# Benchmarking
-criterion = { version = "0.5", features = ["html_reports"] }
-tokio-bench = "0.1"  # Not real - use tokio::spawn + Instant
-
-# Tracing
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-tracing-opentelemetry = { workspace = true }
-opentelemetry_sdk = { workspace = true }
-
-# CLI (extends existing clap in server)
-clap = { workspace = true }
-prettytable-rs = "0.10"
-
-# Testing
-proptest = "1"
-
-[dev-dependencies]
-cargo-fuzz = "0.11"
-```
-
-### crates/core/Cargo.toml additions
-```toml
-[features]
-default = ["cuda", "gguf"]
-cuda = ["vllm-model/cuda"]
-gguf = ["vllm-model/gguf"]
-# NEW
-profiling = []  # Enable profiling spans in hot path
-```
-
-### crates/testing/Cargo.toml additions
-```toml
-[dependencies]
-proptest = "1"
-quickcheck = "1"
-```
-
-## Installation
-
-```bash
-# Add to workspace
-cargo add -p vllm-tooling criterion tracing tracing-subscriber proptest prettytable-rs
-
-# Enable profiling feature
-cargo build -p vllm-core --features profiling
-
-# Run benchmarks
-cargo bench -p benches
-
-# Fuzzing (requires nightly)
-cargo +nightly fuzz run model_forward
-```
+- **`AdaptiveSpeculativeDecoder`** in `crates/core/src/speculative/adaptive.rs` — sliding window tracking, threshold adjustment
+- **`DraftAccuracyTracker`** in same file — per-token acceptance tracking
+- **`BenchmarkSuite`** in `benches/src/lib.rs` — named benchmarks with warmup, iteration config
+- **`ThroughputBenchmark`** / **`LatencyBenchmark`** in `benches/src/e2e.rs` — request-level benchmark runners
+- **`PercentileStats`** in `benches/src/percentile.rs` — P50/P95/P99 computation
+- **`MetricsCollector`** in `crates/core/src/metrics/` — counter + gauge tracking with Prometheus export
+- **`DraftVerifier`** in `crates/core/src/speculative/verifier.rs` — TokenLevel rejection strategy
+- **`SelfSpeculativeModel`** in `crates/core/src/speculative/self_spec.rs` — 1/8 layer, weight-shared draft
 
 ## Sources
 
-- [Criterion Rust Benchmarking](https://bheisner.github.io/criterion.rs/)
-- [Tokio Tracing Tutorial](https://tokio.rs/tokio/tutorial/tracing)
-- [Proptest Book](https://proptest-rs.github.io/proptest-book/)
-- [Clap CLI Tutorial](https://docs.rs/clap/latest/clap/_tutorial/)
+- Current vLLM-lite codebase: `Cargo.toml` (workspace), `benches/Cargo.toml`, `crates/core/src/metrics/` — **HIGH confidence**
+
+---
+*Stack research for: Production Speculative Decoding in LLM Inference Engine*
+*Researched: 2026-05-13*
