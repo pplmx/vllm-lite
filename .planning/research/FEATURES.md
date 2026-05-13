@@ -1,33 +1,35 @@
-# Feature Landscape: vllm-lite v14.0 Developer Tooling
+# Feature Landscape: Production Speculative Decoding
 
-**Domain:** LLM Inference Engine Developer Tooling
-**Researched:** 2026-04-27
+**Domain:** LLM speculative decoding engine integration
+**Researched:** 2026-05-13
 
 ## Table Stakes
 
-Features users expect. Missing = product feels incomplete.
+Features that any production speculative decoding system must implement. Missing these means the feature is non-functional.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Throughput benchmark | Measure tokens/sec under load | Med | Use criterion + custom runner |
-| Latency benchmarks | Measure TTFT, inter-token latency | Med | P50, P95, P99 percentiles |
-| Request tracing | Debug specific request issues | Med | Use tracing spans |
-| Metrics endpoint | `/v1/metrics` already exists | Low | Extend with tooling-specific metrics |
-| Config validation | Catch config errors at startup | Low | Use serde schema validation |
-| Model listing | Know what models are available | Low | CLI `list-models` command |
+| Batched draft generation | Single-threaded per-sequence draft kills throughput | High | This is the #1 bottleneck fix — draft steps must batch across ALL sequences |
+| Logit-based token verification | Exact matching gives poor acceptance rates | High | Must call `forward_logits()` not just `forward()` for probability comparison |
+| Correct is_prefill for verification | Using prefill mode for decode is O(n²) incorrect | Medium | Concatenated sequence needs decode mode with logits from all positions |
+| KV cache rollback for rejected tokens | Without rollback, rejected draft KV entries leak | Medium | Need `rollback_blocks()` in MemoryManager |
+| Unified speculative step method | Two code paths (spec + adaptive-spec) is a maintenance nightmare | Low | Merge into `step_speculative(max_draft)` with a parameter |
+| Graceful fallback to non-spec | Single point of failure: if draft model fails, engine must keep working | Medium | Already partially handled by mode checking in run() |
+| Acceptance rate metrics | Needed to evaluate spec quality and tune parameters | Low | DraftAccuracyTracker already exists |
 
 ## Differentiators
 
-Features that set product apart. Not expected, but valued.
+Features that set the vllm-lite implementation apart from basic speculative decoding.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Interactive debug REPL | Step through request execution | High | NanoClaw-style REPL |
-| KV cache visualizer | See cache state graphically | High | Web UI or CLI tree |
-| Prefix cache analysis | Understand prompt reuse rates | Med | CLI `analyze-cache` command |
-| Speculative decoding profiler | Tune draft parameters | Med | Track acceptance rates |
-| GPU memory timeline | Visualize memory allocation | Med | Use perfetto |
-| Fuzzing harness | Catch edge cases automatically | Med | cargo-fuzz integration |
+| Adaptive draft depth | No manual tuning needed — self-optimizes for different prompts/models | Medium | Already fully implemented! Just needs integration |
+| Self-speculation with weight sharing | Zero additional GPU memory for draft model | High | Implemented but blank — needs actual forward pass truncation |
+| External draft model support | Can use dedicated small model (e.g., 7B draft for 70B target) | High | Multi-model lifecycle manager needed |
+| Speculative warmup | Draft KV cache populated during prefill, avoiding cold-start garbage | Medium | Only needed for external draft (self-spec shares KV) |
+| Token-level + block-level strategies | Multiple rejection strategies (configurable per deployment) | Low | Already implemented in `RejectionStrategy` |
+| Automatic draft depth adjustment | Reacts to real-time acceptance rates, no operator intervention | Low | AdaptiveSpeculativeDecoder done — just needs to be wired |
+| Fine-grained per-model metrics | Track draft accuracy per model/draft combination | Low | Metrics infrastructure already exists |
 
 ## Anti-Features
 
@@ -35,131 +37,55 @@ Features to explicitly NOT build.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| Full GUI debugger | Binary bloat, complexity | CLI REPL is sufficient |
-| Cloud-based profiling | Privacy concerns, latency | Local perfetto export |
-| Real-time dashboard | Complexity, maintenance | Prometheus + Grafana (existing) |
-| Multi-user debug session | Auth complexity | Single-user CLI tool |
-| Web UI for benchmarking | Over-engineering | CLI + JSON output |
+| Tree-based speculation (draft tree) | Sigmoidally more complex: tree attention, verification, scoring | Linear draft sequence — well-established, simpler, good enough |
+| Medusa-style multiple heads | Needs custom model training, incompatible with off-the-shelf models | Self-speculation with layer truncation — no training needed |
+| Hardware-specific draft models | FPGA/ASIC draft models are niche and non-portable | Standard Candle model — portable across CUDA/CPU |
+| Dynamic model switching mid-request | Extremely complex state management, low ROI | Per-request draft model selection (simpler, future) |
+| Speculative decoding for prefill | Theoretically possible but practically useless — prefill is compute-bound anyway | Only speculative decode (post-prefill) — standard approach |
 
 ## Feature Dependencies
 
 ```
-Feature A → Feature B (B requires A)
+Basic Spec Path (Phase A)
+  ├── Batched draft generation ──────────────────────────── No dependency
+  ├── Logit-based verification ──────────────────────────── Needs batched draft output
+  ├── Correct is_prefill for verify ─────────────────────── Depends on verify pipeline design
+  ├── KV cache rollback ─────────────────────────────────── Depends on MemoryManager extension
+  └── Unified step_speculative(max_draft) ───────────────── Depends on all above
 
-Benchmark Suite
-├── Basic throughput → Latency percentiles
-├── Single request → Concurrent requests
-└── Local metrics → Prometheus export
+Self-Speculation (Phase B)
+  └── SelfSpeculativeModel implementation ──────────────── Depends on Phase A pipeline
 
-Debug Utilities
-├── Request tracing → KV cache inspection
-├── Span recording → Trace playback
-└── Cache stats → Prefix analysis
+Adaptive Depth (Phase C)
+  ├── AdaptiveDecoder wiring ───────────────────────────── Depends on Phase A
+  └── Benchmarks ──────────────────────────────────────── Depends on Phase A + B
 
-CLI Tools
-├── Model listing → Model info
-├── Config validation → Config generation
-└── Basic commands → Interactive REPL
+Multi-Model (Phase D)
+  ├── DraftModelManager ───────────────────────────────── Depends on Phase A
+  ├── Speculative warmup ──────────────────────────────── Depends on Phase A
+  └── Memory management ───────────────────────────────── Depends on Phase A
 
-Test Infrastructure  
-├── Mock models → Integration tests
-├── Property tests → Fuzzing harness
-└── Unit tests → E2E benchmarks
+Production Hardening (Phase E)
+  └── Everything above ────────────────────────────────── Depends on all phases
 ```
 
 ## MVP Recommendation
 
-Prioritize:
+Prioritize in order:
 
-1. **Throughput benchmark** - Core metric, easy to implement
-2. **Latency benchmarks** - P50/P95/P99, important for SLA
-3. **Request tracing** - Uses existing tracing infrastructure
-4. **Metrics extension** - Adds tooling metrics to existing endpoint
-5. **Config validation** - Prevents startup errors
+1. **Fix step_speculative (Phase A)** — batched draft generation + logit verification + correct decode phase + KV rollback. This is the foundational block. Without it, nothing speculative works correctly.
+
+2. **Implement SelfSpeculativeModel (Phase B)** — the actual layer-truncated forward pass. This gives speculative decoding with zero extra memory (weight sharing). This is the main deliverable.
+
+3. **Wire adaptive decoder + benchmarks (Phase C)** — the adaptive depth layer makes the system self-tuning competitiveness. Benchmarks validate correctness and quantify throughput gain.
 
 Defer:
-- **Interactive REPL** (High complexity, nice-to-have)
-- **Fuzzing harness** (Good for long-term quality, not MVP)
-- **GPU memory timeline** (Requires CUDA-specific tooling)
-
-## Benchmarking Feature List
-
-### Required (MVP)
-
-| Feature | Description | Acceptance Criteria |
-|---------|-------------|---------------------|
-| Throughput test | Sustained load test | Reports tokens/sec at N concurrent requests |
-| Latency test | Timing per request | Reports TTFT, P50, P95, P99 latency |
-| Warmup handling | Skip cold-start data | Discards first N iterations as warmup |
-
-### Nice-to-Have
-
-| Feature | Description | Acceptance Criteria |
-|---------|-------------|---------------------|
-| Throughput sweep | Test multiple concurrency levels | Generate throughput curve |
-| Memory profiling | Track memory during test | Report peak memory usage |
-| CUDA graph impact | Compare with/without CUDA graphs | Report speedup percentage |
-
-## Debug Feature List
-
-### Required (MVP)
-
-| Feature | Description | Acceptance Criteria |
-|---------|-------------|---------------------|
-| Request trace | Log all operations for a request | JSON output with timestamps |
-| KV cache dump | Inspect cache state | List all cached prompts |
-| Metrics snapshot | Point-in-time metrics | Export current metric values |
-
-### Nice-to-Have
-
-| Feature | Description | Acceptance Criteria |
-|---------|-------------|---------------------|
-| Cache hit analysis | Explain why prefix hit/miss | Show matching and divergence |
-| Memory timeline | GPU memory over time | Export for visualization |
-| Batch visualization | See batch composition | ASCII art of batch |
-
-## CLI Feature List
-
-### Required (MVP)
-
-| Feature | Description | Command |
-|---------|-------------|---------|
-| Serve server | Run inference server | `vllm-server -m model` (default) |
-| Validate config | Check config file | `vllm-tool validate config.yaml` |
-| List models | Show available models | `vllm-tool list-models ./models` |
-| Get model info | Show model metadata | `vllm-tool model-info -m llama` |
-
-### Nice-to-Have
-
-| Feature | Description | Command |
-|---------|-------------|---------|
-| Model download | Download from HuggingFace | `vllm-tool download Qwen/Qwen2-0.5B` |
-| Config generate | Scaffold config | `vllm-tool init-config` |
-| Benchmark | Run benchmark suite | `vllm-tool benchmark --duration 60` |
-
-## Test Infrastructure Feature List
-
-### Required (MVP)
-
-| Feature | Description | Acceptance Criteria |
-|---------|-------------|---------------------|
-| Integration test helpers | Common test utilities | `TestHarness::new()` |
-| Mock model variants | Different behavior mocks | `NeverProgressModel`, `SlowModel` |
-| Request factory | Generate test requests | `TestRequest::random()` |
-
-### Nice-to-Have
-
-| Feature | Description | Acceptance Criteria |
-|---------|-------------|---------------------|
-| Property-based tests | Generative testing | 1000+ test cases auto-generated |
-| Fuzzing corpus | Edge case inputs | Model behavior under mutation |
-| Benchmark CI check | Reject regressions | Fail PR if regression > 5% |
-
----
+- **Multi-model support (Phase D):** Only valuable if self-speculation underperforms on specific model architectures. Post-MVP.
+- **Production hardening (Phase E):** Graceful fallback is nice but the engine already has error handling. Post-MVP.
 
 ## Sources
 
-- [vLLM Performance Guide](https://docs.vllm.ai/en/latest/dev PERFORMANCE.html)
-- [Criterion Examples](https://github.com/bheisner/criterion.rs)
-- [Rust Fuzzing Book](https://rust-fuzz.github.io/book/)
-- [Proptest Tutorial](https://proptest-rs.github.io/proptest-book/)
+- Direct codebase analysis of all speculative decoding files
+- Competitive context: vLLM (Python) reference architecture for speculative decoding
+- Academic: Leviathan et al. "Fast Inference from Transformers via Speculative Decoding" (2023)
+- Academic: SpecInfer "Accelerating Generative LLM Serving with Speculative Inference" (2023)
