@@ -203,7 +203,11 @@ impl<M: ModelBackend> super::Engine<M> {
                 pos_positions.push(current_positions[i].clone());
                 pos_kv_block_ids.push(batch.kv_block_ids[i].clone());
                 pos_num_computed.push(batch.num_computed_tokens[i]);
-                pos_is_prefill.push(batch.is_prefill[i]);
+                pos_is_prefill.push(if _pos == 0 {
+                    batch.is_prefill[i]
+                } else {
+                    false // subsequent draft steps are decode
+                });
                 active_indices.push(i);
             }
 

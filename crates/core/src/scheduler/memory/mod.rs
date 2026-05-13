@@ -158,6 +158,14 @@ impl MemoryManager {
     ///
     /// Computes how many blocks to free based on `num_tokens` and block size,
     /// then returns freed blocks to the free pool.
+    ///
+    /// # Safety Invariant
+    ///
+    /// Physical KV cache tensor store entries for freed blocks are NOT cleared.
+    /// Any attention implementation that reads KV entries without position-based
+    /// bounds (e.g., tile-based flash attention reading full tile rows) MUST
+    /// respect `num_computed_tokens` to avoid consuming stale data from
+    /// rolled-back positions.
     pub fn rollback(&mut self, seq: &mut Sequence, num_tokens: usize) {
         if num_tokens == 0 {
             return;

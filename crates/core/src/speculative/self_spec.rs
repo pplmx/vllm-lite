@@ -153,7 +153,6 @@ impl<M: ModelBackend> DraftVerifier for SelfSpeculativeModel<M> {
         for batch_idx in 0..batch.seq_ids.len() {
             let seq_id = batch.seq_ids[batch_idx];
             let input_tokens = &batch.input_tokens[batch_idx];
-            let positions = &batch.positions[batch_idx];
             let num_computed = batch.num_computed_tokens[batch_idx];
 
             let draft_block_ids = self
@@ -167,14 +166,9 @@ impl<M: ModelBackend> DraftVerifier for SelfSpeculativeModel<M> {
             // Use position tracking to compute positions for each draft step
             let mut current_num_computed = num_computed;
 
-            for step in 0..num_tokens {
+            for _step in 0..num_tokens {
                 let last_token = vec![*current_tokens.last().unwrap_or(&0)];
-                let step_position = if positions.is_empty() {
-                    vec![current_num_computed]
-                } else {
-                    let base = positions[positions.len().saturating_sub(1)];
-                    vec![base + step]
-                };
+                let step_position = vec![current_num_computed];
 
                 let output = self
                     .model
@@ -201,6 +195,10 @@ impl<M: ModelBackend> DraftVerifier for SelfSpeculativeModel<M> {
         Ok(drafts)
     }
 
+    /// Verification is performed by `Engine::verify_draft_tokens_logits()`
+    /// using `forward_logits()` with argmax comparison. This trait method is
+    /// a stub — the engine bypasses the DraftVerifier trait for verification
+    /// and implements its own logit-based path.
     fn verify(
         &self,
         _seq_id: SeqId,
