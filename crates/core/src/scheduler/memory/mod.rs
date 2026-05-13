@@ -154,6 +154,30 @@ impl MemoryManager {
         preempted
     }
 
+    /// Rollback KV cache blocks for rejected draft tokens (Plan 17.1-D).
+    ///
+    /// Computes how many blocks to free based on `num_tokens` and block size,
+    /// then returns freed blocks to the free pool.
+    pub fn rollback(&mut self, seq: &mut Sequence, num_tokens: usize) {
+        if num_tokens == 0 {
+            return;
+        }
+        let block_size = crate::kv_cache::BLOCK_SIZE;
+        let tokens_after_rollback = seq.num_computed_tokens.saturating_sub(num_tokens);
+        let blocks_after = tokens_after_rollback.div_ceil(block_size);
+        let blocks_before = seq.num_computed_tokens.div_ceil(block_size);
+
+        if blocks_after < blocks_before {
+            let blocks_to_free: Vec<BlockId> = seq.kv_blocks[blocks_after..blocks_before].to_vec();
+            self.free(&blocks_to_free);
+            let mut new_blocks = (*seq.kv_blocks).clone();
+            new_blocks.truncate(blocks_after);
+            seq.kv_blocks = std::sync::Arc::new(new_blocks);
+        }
+
+        seq.num_computed_tokens = tokens_after_rollback;
+    }
+
     /// Returns preemption statistics: (preempted_count, rejected_count).
     pub fn preemption_stats(&self) -> (u64, u64) {
         (

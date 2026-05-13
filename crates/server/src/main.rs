@@ -161,6 +161,8 @@ async fn main() {
                 accuracy_window_size: 10,
                 adjustment_step: 1,
                 cooldown_steps: 5,
+                ewma_alpha: 0.1,
+                deadband_threshold: 0.05,
             });
         } else {
             tracing::info!(

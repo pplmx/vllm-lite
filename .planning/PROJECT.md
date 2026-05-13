@@ -8,10 +8,22 @@ A production-ready LLM inference engine in Rust, optimized for single and multi-
 
 Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
 
+## Current Milestone: v17.0 Production Speculative Decoding
+
+**Goal:** Complete the speculative decoding pipeline end-to-end — wire engine integration, validate on real hardware, add adaptive optimization and external draft model support.
+
+**Target features:**
+- Engine integration (`step_speculative`) — hook spec decode into the main inference loop
+- Real hardware benchmarks — throughput/latency with P50/P95/P99 vs non-speculative baseline
+- Adaptive draft depth — dynamic adjustment based on acceptance rates
+- Speculative warmup — prefill draft KV cache before decode
+- Multi-model speculation — optionally use smaller external model as drafter
+
 ## Current State
 
-**Latest Milestone:** v16.0 Speculative Decoding (shipped)
-**Status:** Production-ready with speculative decoding, FA-V3, FP8 KV cache, 12 model architectures
+**Current Milestone:** v17.0 Production Speculative Decoding (in progress)
+**Latest Shipped:** v16.0 Speculative Decoding
+**Status:** Wiring speculative decoding into engine, real benchmarks, adaptive optimization, multi-model draft support
 
 ### Phase 16 Achievements
 
@@ -82,7 +94,17 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 
 ### Active
 
-**v17.0: Next Milestone**
+**v17.0: Production Speculative Decoding**
+
+- [ ] **SPEC-ENG-01**: Engine integration of speculative decoding (`step_speculative`)
+- [ ] **SPEC-ENG-02**: Seamless fallback between speculative and non-speculative paths
+- [ ] **SPEC-BENCH-01**: Real hardware benchmark suite (throughput, latency, P50/P95/P99)
+- [ ] **SPEC-BENCH-02**: Baseline comparison vs non-speculative inference
+- [ ] **SPEC-ADAPT-01**: Adaptive draft depth based on real-time acceptance rates
+- [ ] **SPEC-ADAPT-02**: Acceptance rate monitoring and dynamic adjustment
+- [ ] **SPEC-WARM-01**: Speculative warmup (prefill draft KV cache before decode)
+- [ ] **SPEC-MULTI-01**: External draft model support (smaller model as drafter)
+- [ ] **SPEC-MULTI-02**: Draft model lifecycle management (load/unload/swap)
 
 ### Out of Scope
 
@@ -134,4 +156,4 @@ Codebase: Speculative decoding module added (verifier, model, config, strategy, 
 This document evolves at phase transitions and milestone boundaries.
 
 ---
-*Last updated: 2026-05-09 — v16.0 Speculative Decoding shipped*
+*Last updated: 2026-05-13 — v17.0 milestone started*

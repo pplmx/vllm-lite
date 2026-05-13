@@ -99,6 +99,27 @@ impl ModelBackend for BoxedModelBackend {
     fn num_heads(&self) -> usize {
         self.0.num_heads()
     }
+
+    fn forward_to_layer(
+        &mut self,
+        seq_ids: &[SeqId],
+        input_tokens: &[Vec<TokenId>],
+        positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
+        upto_layer: usize,
+    ) -> ModelResult<BatchOutput> {
+        self.0.forward_to_layer(
+            seq_ids,
+            input_tokens,
+            positions,
+            kv_block_ids,
+            num_computed_tokens,
+            is_prefill,
+            upto_layer,
+        )
+    }
 }
 
 /// Core inference engine managing requests, scheduling, and model execution.
@@ -383,9 +404,14 @@ impl<M: ModelBackend + 'static> Engine<M> {
             if self.scheduler.has_pending() {
                 step_count += 1;
                 let result = if self.adaptive_decoder.is_some() {
-                    self.step_adaptive_speculative()
+                    let max_draft = self
+                        .adaptive_decoder
+                        .as_ref()
+                        .map(|d| d.current_max_draft_tokens())
+                        .unwrap_or(self.max_draft_tokens);
+                    self.step_with_draft(Some(max_draft))
                 } else if self.speculative_mode {
-                    self.step_speculative()
+                    self.step_with_draft(Some(self.max_draft_tokens))
                 } else if self.cuda_graph_enabled() {
                     self.step_with_graph()
                 } else {

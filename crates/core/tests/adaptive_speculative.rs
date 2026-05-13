@@ -56,6 +56,8 @@ fn test_adaptive_speculative_adjusts_draft_count() {
         accuracy_window_size: 5,
         adjustment_step: 1,
         cooldown_steps: 2,
+        ewma_alpha: 0.1,
+        deadband_threshold: 0.05,
     });
 
     assert!(engine.adaptive_decoder.is_some());

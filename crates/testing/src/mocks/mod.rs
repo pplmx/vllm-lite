@@ -34,9 +34,18 @@ impl ModelBackend for StubModel {
         _num_computed_tokens: &[usize],
         _is_prefill: &[bool],
     ) -> Result<Vec<Vec<f32>>> {
+        let vocab_size = self.vocab_size();
         Ok(input_tokens
             .iter()
-            .map(|tokens| tokens.iter().map(|_| 0.0).collect())
+            .map(|tokens| {
+                let mut logits = Vec::with_capacity(tokens.len() * vocab_size);
+                for &t in tokens {
+                    let mut pos_logits = vec![-10.0; vocab_size];
+                    pos_logits[t as usize] = 10.0;
+                    logits.extend(pos_logits);
+                }
+                logits
+            })
             .collect())
     }
 
@@ -93,9 +102,18 @@ impl ModelBackend for IncrementModel {
         _num_computed_tokens: &[usize],
         _is_prefill: &[bool],
     ) -> Result<Vec<Vec<f32>>> {
+        let vocab_size = self.vocab_size();
         Ok(input_tokens
             .iter()
-            .map(|tokens| tokens.iter().map(|_| 0.0).collect())
+            .map(|tokens| {
+                let mut logits = Vec::with_capacity(tokens.len() * vocab_size);
+                for &t in tokens {
+                    let mut pos_logits = vec![-10.0; vocab_size];
+                    pos_logits[t as usize] = 10.0;
+                    logits.extend(pos_logits);
+                }
+                logits
+            })
             .collect())
     }
 
@@ -161,9 +179,18 @@ impl ModelBackend for ConstModel {
         _num_computed_tokens: &[usize],
         _is_prefill: &[bool],
     ) -> Result<Vec<Vec<f32>>> {
+        let vocab_size = self.vocab_size();
         Ok(input_tokens
             .iter()
-            .map(|t| t.iter().map(|_| 0.0).collect())
+            .map(|tokens| {
+                let mut logits = Vec::with_capacity(tokens.len() * vocab_size);
+                for &t in tokens {
+                    let mut pos_logits = vec![-10.0; vocab_size];
+                    pos_logits[t as usize] = 10.0;
+                    logits.extend(pos_logits);
+                }
+                logits
+            })
             .collect())
     }
 
@@ -233,14 +260,17 @@ impl ModelBackend for FakeModel {
         _num_computed_tokens: &[usize],
         _is_prefill: &[bool],
     ) -> Result<Vec<Vec<f32>>> {
-        let vocab_size = 32000;
+        let vocab_size = self.vocab_size();
         Ok(input_tokens
             .iter()
             .map(|tokens| {
-                tokens
-                    .iter()
-                    .map(|_| rand::random::<f32>() * vocab_size as f32)
-                    .collect()
+                let mut logits = Vec::with_capacity(tokens.len() * vocab_size);
+                for &t in tokens {
+                    let mut pos_logits = vec![-10.0; vocab_size];
+                    pos_logits[t as usize] = 10.0;
+                    logits.extend(pos_logits);
+                }
+                logits
             })
             .collect())
     }
@@ -306,9 +336,18 @@ impl ModelBackend for NeverProgressModel {
         _num_computed_tokens: &[usize],
         _is_prefill: &[bool],
     ) -> Result<Vec<Vec<f32>>> {
+        let vocab_size = self.vocab_size();
         Ok(input_tokens
             .iter()
-            .map(|t| t.iter().map(|_| 0.0).collect())
+            .map(|tokens| {
+                let mut logits = Vec::with_capacity(tokens.len() * vocab_size);
+                for _ in tokens {
+                    let mut pos_logits = vec![-10.0; vocab_size];
+                    pos_logits[self.token as usize] = 10.0;
+                    logits.extend(pos_logits);
+                }
+                logits
+            })
             .collect())
     }
 

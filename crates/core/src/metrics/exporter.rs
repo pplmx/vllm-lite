@@ -98,6 +98,27 @@ impl PrometheusExporter {
             self.collector.get_gauge("speculative_draft_count")
         ));
 
+        output.push_str("# HELP speculative_efficiency Draft token efficiency ratio (0-1)\n");
+        output.push_str("# TYPE speculative_efficiency gauge\n");
+        let eff = self.collector.get_gauge("speculative_efficiency") as f64 / 100000.0;
+        output.push_str(&format!("speculative_efficiency {:.3}\n", eff));
+
+        output.push_str(
+            "# HELP throughput_speedup_ratio Speculative speedup vs baseline (1.0 = same)\n",
+        );
+        output.push_str("# TYPE throughput_speedup_ratio gauge\n");
+        let speedup = self.collector.get_gauge("throughput_speedup_ratio") as f64 / 100000.0;
+        output.push_str(&format!("throughput_speedup_ratio {:.3}\n", speedup));
+
+        output.push_str(
+            "# HELP speculative_per_request_count Number of tracked per-request acceptance rates\n",
+        );
+        output.push_str("# TYPE speculative_per_request_count gauge\n");
+        output.push_str(&format!(
+            "speculative_per_request_count {}\n",
+            self.collector.get_gauge("speculative_per_request_count")
+        ));
+
         output.push_str("# HELP request_queue_depth Pending requests\n");
         output.push_str("# TYPE request_queue_depth gauge\n");
         output.push_str(&format!(
