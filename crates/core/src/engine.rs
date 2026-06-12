@@ -243,7 +243,13 @@ impl Engine {
         max_draft_tokens: usize,
         num_kv_blocks: usize,
     ) -> Self {
-        Self::with_config_boxed(target_model, draft_model, config, max_draft_tokens, num_kv_blocks)
+        Self::with_config_boxed(
+            target_model,
+            draft_model,
+            config,
+            max_draft_tokens,
+            num_kv_blocks,
+        )
     }
 
     #[cfg(feature = "cuda-graph")]

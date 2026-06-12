@@ -1,8 +1,8 @@
 //! KV cache utilities: block allocation and hash-based prefix cache.
 //!
 //! Production scheduling uses [`crate::scheduler::RadixTree`] for prefix matching.
-//! This module re-exports the hash-based [`PrefixCache`] used by [`CacheManager`]
-//! and integration tests.
+//! This module re-exports the hash-based [`PrefixCache`] used by
+//! [`crate::scheduler::cache::CacheManager`] and integration tests.
 
 pub use crate::scheduler::cache::{
     CacheKey, CachedEntry, PrefixCache, PrefixCacheConfig, PrefixCacheStats, hash_tokens,
