@@ -30,6 +30,12 @@ impl LnLayerNorm {
     }
 }
 
+impl Module for LnLayerNorm {
+    fn forward(&self, xs: &Tensor) -> Result<Tensor> {
+        LnLayerNorm::forward(self, xs)
+    }
+}
+
 pub fn layer_norm(x: &Tensor, weight: &Tensor, bias: &Tensor, eps: f64) -> Result<Tensor> {
     let dims = x.dims();
 

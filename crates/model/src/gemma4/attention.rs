@@ -5,7 +5,7 @@
 use crate::config::architecture::{LayerType, RoPEConfig};
 use crate::gemma4::rope::Gemma4RoPE;
 use crate::paged_tensor::PagedKvCache;
-use candle_core::{Module, Result, Tensor};
+use candle_core::{Device, Module, Result, Tensor};
 use candle_nn::Linear;
 use tracing::trace;
 
@@ -17,6 +17,7 @@ pub struct Gemma4Attention {
     num_heads: usize,
     num_kv_heads: usize,
     head_dim: usize,
+    sliding_window: usize,
     layer_type: LayerType,
     rope: Option<Gemma4RoPE>,
 }
@@ -27,6 +28,7 @@ impl Gemma4Attention {
         num_heads: usize,
         num_kv_heads: usize,
         head_dim: usize,
+        sliding_window: usize,
         layer_type: LayerType,
         rope_config: &RoPEConfig,
         vb: candle_nn::VarBuilder,
@@ -46,6 +48,7 @@ impl Gemma4Attention {
             num_heads,
             num_kv_heads,
             head_dim,
+            sliding_window,
             layer_type,
             rope: Some(rope),
         })
@@ -56,6 +59,7 @@ impl Gemma4Attention {
         num_heads: usize,
         num_kv_heads: usize,
         head_dim: usize,
+        sliding_window: usize,
         layer_type: LayerType,
         rope_config: &RoPEConfig,
         q_w: Tensor,
@@ -72,9 +76,46 @@ impl Gemma4Attention {
             num_heads,
             num_kv_heads,
             head_dim,
+            sliding_window,
             layer_type,
             rope: Some(rope),
         })
+    }
+
+    fn key_position(
+        &self,
+        key_idx: usize,
+        kv_seq: usize,
+        q_seq: usize,
+        positions: &[usize],
+    ) -> usize {
+        if kv_seq == q_seq {
+            positions.get(key_idx).copied().unwrap_or(key_idx)
+        } else {
+            key_idx
+        }
+    }
+
+    fn sliding_causal_mask(
+        &self,
+        q_seq: usize,
+        kv_seq: usize,
+        query_positions: &[usize],
+        device: &Device,
+    ) -> Result<Tensor> {
+        let mut mask_data = vec![0f32; q_seq * kv_seq];
+        for qi in 0..q_seq {
+            let q_pos = query_positions.get(qi).copied().unwrap_or(qi);
+            for kj in 0..kv_seq {
+                let k_pos = self.key_position(kj, kv_seq, q_seq, query_positions);
+                let in_window = q_pos.saturating_sub(k_pos) < self.sliding_window;
+                let causal = k_pos <= q_pos;
+                if !(causal && in_window) {
+                    mask_data[qi * kv_seq + kj] = f32::NEG_INFINITY;
+                }
+            }
+        }
+        Tensor::from_slice(&mask_data, (1, 1, q_seq, kv_seq), device)
     }
 
     fn project_qkv(&self, x: &Tensor) -> Result<(Tensor, Tensor, Tensor)> {
@@ -138,7 +179,7 @@ impl Gemma4Attention {
             kv_cache.write_kv_batch(layer_idx, *block_id, 0, &k_block, &v_block)?;
         }
 
-        self.compute_paged_attention(&q, &k_expanded, &v_expanded)
+        self.compute_paged_attention(&q, &k_expanded, &v_expanded, positions)
     }
 
     pub fn forward_decode(
@@ -190,15 +231,26 @@ impl Gemma4Attention {
 
         let full_k = full_k.unsqueeze(0)?.contiguous()?;
         let full_v = full_v.unsqueeze(0)?.contiguous()?;
-        self.compute_paged_attention(&q, &full_k, &full_v)
+        self.compute_paged_attention(&q, &full_k, &full_v, positions)
     }
 
     /// Attention with q/k/v in `[batch, num_heads, seq, head_dim]` layout (paged KV path).
-    fn compute_paged_attention(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
+    fn compute_paged_attention(
+        &self,
+        q: &Tensor,
+        k: &Tensor,
+        v: &Tensor,
+        query_positions: &[usize],
+    ) -> Result<Tensor> {
         let batch_size = q.dims()[0];
         let seq_len = q.dims()[2];
+        let kv_seq = k.dims()[2];
 
-        let qk = Tensor::matmul(q, &k.transpose(2, 3)?)?;
+        let mut qk = Tensor::matmul(q, &k.transpose(2, 3)?)?;
+        if matches!(self.layer_type, LayerType::SlidingAttention) {
+            let mask = self.sliding_causal_mask(seq_len, kv_seq, query_positions, q.device())?;
+            qk = qk.broadcast_add(&mask)?;
+        }
         let scale = 1.0f32 / (self.head_dim as f32).sqrt();
         let scale_tensor = Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?;
         let qk = qk.mul(&scale_tensor)?;
@@ -332,6 +384,7 @@ impl Default for Gemma4Attention {
             num_heads: 0,
             num_kv_heads: 0,
             head_dim: 0,
+            sliding_window: 512,
             layer_type: LayerType::FullAttention,
             rope: None,
         }

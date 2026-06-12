@@ -126,10 +126,11 @@ impl MixtralSparseMoe {
             for s in 0..seq {
                 let token_logits_slice = gate_logits.narrow(0, b, 1)?.narrow(1, s, 1)?;
                 let token_logits = token_logits_slice.reshape((self.num_experts,))?;
+                let routing_weights = candle_nn::ops::softmax(&token_logits, 0)?;
 
                 let mut top_experts: Vec<(f32, usize)> = Vec::new();
                 for e in 0..self.num_experts {
-                    let weight = token_logits
+                    let weight = routing_weights
                         .narrow(0, e, 1)?
                         .squeeze(0)?
                         .to_scalar::<f32>()?;
@@ -138,6 +139,13 @@ impl MixtralSparseMoe {
                 top_experts
                     .sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
                 top_experts.truncate(self.top_k);
+
+                let weight_sum: f32 = top_experts.iter().map(|(w, _)| *w).sum();
+                if weight_sum > 0.0 {
+                    for entry in &mut top_experts {
+                        entry.0 /= weight_sum;
+                    }
+                }
 
                 let token_hidden_slice = x.narrow(0, b, 1)?.narrow(1, s, 1)?;
                 let token_hidden = token_hidden_slice.reshape((hidden,))?.unsqueeze(0)?;

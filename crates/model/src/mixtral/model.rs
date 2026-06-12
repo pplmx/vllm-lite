@@ -3,13 +3,13 @@
 use std::collections::HashMap;
 
 use crate::causal_lm::{
-    embed_sequence, forward_batch, greedy_sample_token, logits_to_vector, map_candle,
+    forward_batch, forward_with_paged_kv, greedy_sample_token, logits_to_vector,
     mean_pool_embeddings,
 };
 use crate::components::LnLayerNorm;
 use crate::config::ModelConfig;
 use crate::paged_tensor::PagedKvCache;
-use candle_core::{Device, Module, Result as CandleResult, Tensor};
+use candle_core::{Device, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, Linear, VarBuilder};
 use vllm_traits::{BatchOutput, BlockId, ModelBackend, Result, SeqId, TokenId};
 
@@ -138,40 +138,6 @@ impl MixtralModel {
         })
     }
 
-    fn run_decoder_layers(
-        &mut self,
-        mut hidden: Tensor,
-        block_ids: &[usize],
-        positions: &[usize],
-        num_computed_tokens: usize,
-        is_prefill: bool,
-    ) -> Result<Tensor> {
-        if is_prefill {
-            for (layer_idx, layer) in self.layers.iter().enumerate() {
-                hidden = map_candle(layer.forward_prefill(
-                    &hidden,
-                    &mut self.kv_cache,
-                    layer_idx,
-                    block_ids,
-                    positions,
-                ))?;
-            }
-        } else {
-            let decode_position = [positions[0]];
-            for (layer_idx, layer) in self.layers.iter().enumerate() {
-                hidden = map_candle(layer.forward_decode(
-                    &hidden,
-                    &mut self.kv_cache,
-                    layer_idx,
-                    block_ids,
-                    num_computed_tokens,
-                    &decode_position,
-                ))?;
-            }
-        }
-        Ok(hidden)
-    }
-
     pub fn forward_with_cache(
         &mut self,
         tokens: &[TokenId],
@@ -180,26 +146,20 @@ impl MixtralModel {
         positions: &[usize],
         is_prefill: bool,
     ) -> Result<(Tensor, usize)> {
-        if tokens.is_empty() {
-            let logits = map_candle(Tensor::zeros(
-                (1, 1, self.config.vocab_size),
-                candle_core::DType::F32,
-                &self.device,
-            ))?;
-            return Ok((logits, 0));
-        }
-
-        let hidden = embed_sequence(&self.embed_tokens, tokens, &self.device, is_prefill)?;
-        let hidden = self.run_decoder_layers(
-            hidden,
+        forward_with_paged_kv(
+            &self.embed_tokens,
+            &self.layers,
+            &self.norm,
+            &self.lm_head,
+            &self.device,
+            self.config.vocab_size,
+            tokens,
+            num_computed_tokens,
             block_ids,
             positions,
-            num_computed_tokens,
             is_prefill,
-        )?;
-        let hidden = map_candle(self.norm.forward(&hidden))?;
-        let logits = map_candle(self.lm_head.forward(&hidden))?;
-        Ok((logits, 0))
+            &mut self.kv_cache,
+        )
     }
 }
 

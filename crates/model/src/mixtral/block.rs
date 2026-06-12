@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use crate::components::LnLayerNorm;
 use crate::components::attention::RopeGqaAttention;
+use crate::components::decoder_block::PagedDecoderBlock;
 use crate::config::ModelConfig;
 use crate::mixtral::sparse_moe::MixtralSparseMoe;
 use crate::paged_tensor::PagedKvCache;
@@ -279,6 +280,39 @@ impl MixtralBlock {
         x = self.post_attention_layernorm.forward(&x)?;
         x = self.mlp.forward(&x)?;
         x.add(&residual)
+    }
+}
+
+impl PagedDecoderBlock for MixtralBlock {
+    fn forward_prefill(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        positions: &[usize],
+    ) -> Result<Tensor> {
+        MixtralBlock::forward_prefill(self, x, kv_cache, layer_idx, block_ids, positions)
+    }
+
+    fn forward_decode(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        num_computed_tokens: usize,
+        positions: &[usize],
+    ) -> Result<Tensor> {
+        MixtralBlock::forward_decode(
+            self,
+            x,
+            kv_cache,
+            layer_idx,
+            block_ids,
+            num_computed_tokens,
+            positions,
+        )
     }
 }
 

@@ -98,14 +98,58 @@ impl RopeGqaDecoderBlock {
     }
 }
 
-/// View any decoder-layer wrapper as the shared block.
-pub trait AsDecoderBlock {
-    fn as_decoder_block(&self) -> &RopeGqaDecoderBlock;
+/// Paged-KV decoder layer: prefill and single-token decode with block table.
+pub trait PagedDecoderBlock {
+    fn forward_prefill(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        positions: &[usize],
+    ) -> Result<Tensor>;
+
+    fn forward_decode(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        num_computed_tokens: usize,
+        positions: &[usize],
+    ) -> Result<Tensor>;
 }
 
-impl AsDecoderBlock for RopeGqaDecoderBlock {
-    fn as_decoder_block(&self) -> &RopeGqaDecoderBlock {
-        self
+impl PagedDecoderBlock for RopeGqaDecoderBlock {
+    fn forward_prefill(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        positions: &[usize],
+    ) -> Result<Tensor> {
+        RopeGqaDecoderBlock::forward_prefill(self, x, kv_cache, layer_idx, block_ids, positions)
+    }
+
+    fn forward_decode(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        num_computed_tokens: usize,
+        positions: &[usize],
+    ) -> Result<Tensor> {
+        RopeGqaDecoderBlock::forward_decode(
+            self,
+            x,
+            kv_cache,
+            layer_idx,
+            block_ids,
+            num_computed_tokens,
+            positions,
+        )
     }
 }
 
