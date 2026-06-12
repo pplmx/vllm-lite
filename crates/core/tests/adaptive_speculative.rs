@@ -1,11 +1,11 @@
 use vllm_core::engine::Engine;
 use vllm_core::types::{AdaptiveDraftConfig, Request, SchedulerConfig};
-use vllm_testing::IncrementModel;
+use vllm_testing::{IncrementModel, TestFixtures};
 
 #[test]
 fn test_adaptive_speculative_disabled_by_default() {
     let config = SchedulerConfig::default();
-    let engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let engine = TestFixtures::increment_engine_with(config, 4, 1024);
 
     assert!(!engine.is_adaptive_speculative_enabled());
 }
@@ -13,7 +13,7 @@ fn test_adaptive_speculative_disabled_by_default() {
 #[test]
 fn test_enable_adaptive_speculative() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
 
     engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
     assert!(engine.is_adaptive_speculative_enabled());
@@ -23,7 +23,7 @@ fn test_enable_adaptive_speculative() {
 #[test]
 fn test_disable_adaptive_speculative() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
 
     engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
     assert!(engine.is_adaptive_speculative_enabled());
@@ -36,7 +36,7 @@ fn test_disable_adaptive_speculative() {
 #[test]
 fn test_adaptive_speculative_basic() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
 
     engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
 
@@ -47,7 +47,7 @@ fn test_adaptive_speculative_basic() {
 #[test]
 fn test_adaptive_speculative_adjusts_draft_count() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
 
     engine.enable_adaptive_speculative(AdaptiveDraftConfig {
         min_draft_tokens: 2,
@@ -141,7 +141,7 @@ fn test_adaptive_speculative_run_loop_uses_adaptive() {
 #[test]
 fn test_adaptive_speculative_max_draft_tokens() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
 
     engine.enable_adaptive_speculative(AdaptiveDraftConfig {
         min_draft_tokens: 1,

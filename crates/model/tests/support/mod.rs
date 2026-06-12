@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 pub mod qwen3;
+pub mod tokenizer;
 
 use candle_core::Device;
 use vllm_model::arch::{ARCHITECTURE_REGISTRY, register_all_archs};

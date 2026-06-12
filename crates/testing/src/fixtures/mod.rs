@@ -89,24 +89,36 @@ impl TestFixtures {
         }
     }
 
-    /// Engine backed by [`IncrementModel`] for E2E lifecycle tests.
+    /// Engine backed by [`IncrementModel`] with the default scheduler config.
     pub fn increment_engine(kv_blocks: usize) -> Engine {
-        Engine::with_config(
-            IncrementModel,
-            None,
-            Self::default_scheduler_config(),
-            4,
-            kv_blocks,
-        )
+        Self::increment_engine_with(Self::default_scheduler_config(), 4, kv_blocks)
+    }
+
+    /// Engine backed by [`IncrementModel`] with a custom scheduler config.
+    pub fn increment_engine_with(
+        config: SchedulerConfig,
+        max_draft_tokens: usize,
+        kv_blocks: usize,
+    ) -> Engine {
+        Engine::with_config(IncrementModel, None, config, max_draft_tokens, kv_blocks)
     }
 
     /// Target + draft engine for speculative-decoding E2E tests.
     pub fn increment_speculative_engine(kv_blocks: usize) -> Engine {
+        Self::increment_speculative_engine_with(Self::default_scheduler_config(), 4, kv_blocks)
+    }
+
+    /// Speculative engine with a custom scheduler config.
+    pub fn increment_speculative_engine_with(
+        config: SchedulerConfig,
+        max_draft_tokens: usize,
+        kv_blocks: usize,
+    ) -> Engine {
         Engine::with_config(
             IncrementModel,
             Some(IncrementModel),
-            Self::default_scheduler_config(),
-            4,
+            config,
+            max_draft_tokens,
             kv_blocks,
         )
     }

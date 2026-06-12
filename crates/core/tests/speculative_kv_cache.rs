@@ -7,12 +7,11 @@
 use std::sync::Arc;
 
 use tokio::sync::mpsc;
-use vllm_core::engine::Engine;
 use vllm_core::scheduler::BatchComposer;
 use vllm_core::types::{
     AdaptiveDraftConfig, Priority, Request, SamplingParams, SchedulerConfig, Sequence, Status,
 };
-use vllm_testing::IncrementModel;
+use vllm_testing::TestFixtures;
 
 /// Helper: create a test sequence with given tokens and status
 fn make_seq(id: u64, tokens: Vec<u32>, status: Status, kv_blocks: Vec<usize>) -> Sequence {
@@ -38,7 +37,7 @@ fn make_seq(id: u64, tokens: Vec<u32>, status: Status, kv_blocks: Vec<usize>) ->
 #[ignore]
 fn test_speculative_kv_append_draft_tokens_to_input() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, Some(IncrementModel), config, 4, 1024);
+    let mut engine = TestFixtures::increment_speculative_engine_with(config, 4, 1024);
 
     engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
 
@@ -67,13 +66,7 @@ fn test_speculative_kv_append_draft_tokens_to_input() {
 #[ignore]
 fn test_speculative_kv_append_multiple_drafts() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(
-        IncrementModel,
-        Some(IncrementModel),
-        config,
-        6, // higher max_draft_tokens
-        1024,
-    );
+    let mut engine = TestFixtures::increment_speculative_engine_with(config, 6, 1024);
 
     engine.enable_adaptive_speculative(AdaptiveDraftConfig {
         min_draft_tokens: 3,
@@ -119,7 +112,7 @@ fn test_speculative_kv_append_multiple_drafts() {
 #[ignore]
 fn test_speculative_kv_reuse_single_forward_pass() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, Some(IncrementModel), config, 4, 1024);
+    let mut engine = TestFixtures::increment_speculative_engine_with(config, 4, 1024);
 
     engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
 
@@ -145,7 +138,7 @@ fn test_speculative_kv_reuse_single_forward_pass() {
 #[ignore]
 fn test_speculative_kv_reuse_accepted_prefix() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, Some(IncrementModel), config, 4, 1024);
+    let mut engine = TestFixtures::increment_speculative_engine_with(config, 4, 1024);
 
     engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
 
@@ -236,7 +229,7 @@ fn test_speculative_kv_reuse_num_computed_tokens() {
 fn test_speculative_kv_and_standard_produce_same_output_count() {
     // Standard decoding
     let config = SchedulerConfig::default();
-    let mut std_engine = Engine::with_config(IncrementModel, None, config.clone(), 4, 1024);
+    let mut std_engine = TestFixtures::increment_engine_with(config.clone(), 4, 1024);
 
     let (tx_std, _rx_std) = mpsc::channel(64);
     std_engine.add_request(Request::new(1, vec![10, 20, 30], 5), tx_std);
@@ -251,13 +244,7 @@ fn test_speculative_kv_and_standard_produce_same_output_count() {
     }
 
     // Speculative decoding
-    let mut spec_engine = Engine::with_config(
-        IncrementModel,
-        Some(IncrementModel),
-        config.clone(),
-        4,
-        1024,
-    );
+    let mut spec_engine = TestFixtures::increment_speculative_engine_with(config.clone(), 4, 1024);
     spec_engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
 
     let (tx_spec, _rx_spec) = mpsc::channel(64);
