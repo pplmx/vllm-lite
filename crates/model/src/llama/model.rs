@@ -4,9 +4,11 @@ use std::collections::HashMap;
 
 use crate::config::ModelConfig;
 use crate::kv_cache::PagedKvCache;
-use candle_core::{Device, Result as CandleResult, Tensor};
+use candle_core::{D, Device, Module, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, Linear, VarBuilder};
-use vllm_traits::{BatchOutput, ModelBackend, SeqId, TokenId};
+use vllm_traits::{BatchOutput, BlockId, ModelBackend, Result as EngineResult, SeqId, TokenId};
+
+type EngineError = vllm_traits::ModelError;
 
 use super::block::LlamaBlock;
 
@@ -118,19 +120,134 @@ impl LlamaModel {
             device,
         })
     }
+
+    pub fn forward_with_cache(
+        &mut self,
+        tokens: &[TokenId],
+        num_computed_tokens: usize,
+        block_ids: &[BlockId],
+        positions: &[usize],
+        is_prefill: bool,
+    ) -> EngineResult<(Tensor, usize)> {
+        if tokens.is_empty() {
+            let logits = Tensor::zeros(
+                (1, 1, self.config.vocab_size),
+                candle_core::DType::F32,
+                &self.device,
+            )
+            .map_err(|e| EngineError::new(e.to_string()))?;
+            return Ok((logits, 0));
+        }
+
+        let hidden = if is_prefill {
+            let t =
+                Tensor::new(tokens, &self.device).map_err(|e| EngineError::new(e.to_string()))?;
+            self.embed_tokens
+                .forward(&t)
+                .map_err(|e| EngineError::new(e.to_string()))?
+                .unsqueeze(0)
+                .map_err(|e| EngineError::new(e.to_string()))?
+        } else {
+            let last_token = tokens.last().copied().unwrap_or(0);
+            let t = Tensor::new(&[last_token], &self.device)
+                .map_err(|e| EngineError::new(e.to_string()))?;
+            self.embed_tokens
+                .forward(&t)
+                .map_err(|e| EngineError::new(e.to_string()))?
+                .unsqueeze(0)
+                .map_err(|e| EngineError::new(e.to_string()))?
+        };
+
+        let mut hidden = hidden;
+        if is_prefill {
+            for (layer_idx, layer) in self.layers.iter().enumerate() {
+                hidden = layer
+                    .forward_prefill(&hidden, &mut self.kv_cache, layer_idx, block_ids, positions)
+                    .map_err(|e| EngineError::new(e.to_string()))?;
+            }
+        } else {
+            let decode_position = [positions[0]];
+            for (layer_idx, layer) in self.layers.iter().enumerate() {
+                hidden = layer
+                    .forward_decode(
+                        &hidden,
+                        &mut self.kv_cache,
+                        layer_idx,
+                        block_ids,
+                        num_computed_tokens,
+                        &decode_position,
+                    )
+                    .map_err(|e| EngineError::new(e.to_string()))?;
+            }
+        }
+
+        hidden = self
+            .norm
+            .forward(&hidden)
+            .map_err(|e| EngineError::new(e.to_string()))?;
+        let logits = self
+            .lm_head
+            .forward(&hidden)
+            .map_err(|e| EngineError::new(e.to_string()))?;
+
+        Ok((logits, 0))
+    }
 }
 
 impl ModelBackend for LlamaModel {
     fn forward(
         &mut self,
         seq_ids: &[SeqId],
-        _input_tokens: &[Vec<TokenId>],
-        _positions: &[Vec<usize>],
-        _kv_block_ids: &[Vec<usize>],
-        _num_computed_tokens: &[usize],
-        _is_prefill: &[bool],
-    ) -> vllm_traits::Result<BatchOutput> {
-        let next_tokens: Vec<TokenId> = seq_ids.iter().map(|_| 0).collect();
+        input_tokens: &[Vec<TokenId>],
+        positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
+    ) -> EngineResult<BatchOutput> {
+        if seq_ids.is_empty() {
+            return Ok(BatchOutput {
+                seq_ids: vec![],
+                next_tokens: vec![],
+            });
+        }
+
+        let mut next_tokens = vec![0u32; seq_ids.len()];
+        for i in 0..seq_ids.len() {
+            let (logits, _) = self.forward_with_cache(
+                &input_tokens[i],
+                num_computed_tokens[i],
+                &kv_block_ids[i],
+                &positions[i],
+                is_prefill[i],
+            )?;
+
+            let next = if is_prefill[i] {
+                let seq_len = logits.dims()[1];
+                logits
+                    .narrow(1, seq_len - 1, 1)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .squeeze(1)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .squeeze(0)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .argmax(D::Minus1)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .to_vec0::<u32>()
+                    .map_err(|e| EngineError::new(e.to_string()))?
+            } else {
+                logits
+                    .squeeze(0)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .squeeze(0)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .argmax(D::Minus1)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .to_vec0::<u32>()
+                    .map_err(|e| EngineError::new(e.to_string()))?
+            };
+            next_tokens[i] = next;
+        }
+
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
             next_tokens,
@@ -140,24 +257,69 @@ impl ModelBackend for LlamaModel {
     fn forward_logits(
         &mut self,
         seq_ids: &[SeqId],
-        _input_tokens: &[Vec<TokenId>],
-        _positions: &[Vec<usize>],
-        _kv_block_ids: &[Vec<usize>],
-        _num_computed_tokens: &[usize],
-        _is_prefill: &[bool],
-    ) -> vllm_traits::Result<Vec<Vec<f32>>> {
-        Ok(vec![vec![0.0_f32; self.config.vocab_size]; seq_ids.len()])
+        input_tokens: &[Vec<TokenId>],
+        positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
+    ) -> EngineResult<Vec<Vec<f32>>> {
+        let mut results = Vec::with_capacity(seq_ids.len());
+        for i in 0..seq_ids.len() {
+            let (logits, _) = self.forward_with_cache(
+                &input_tokens[i],
+                num_computed_tokens[i],
+                &kv_block_ids[i],
+                &positions[i],
+                is_prefill[i],
+            )?;
+
+            let logits_vec = if is_prefill[i] {
+                let seq_len = logits.dims()[1];
+                logits
+                    .narrow(1, seq_len - 1, 1)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .squeeze(1)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .to_vec1::<f32>()
+                    .map_err(|e| EngineError::new(e.to_string()))?
+            } else {
+                logits
+                    .squeeze(0)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .squeeze(0)
+                    .map_err(|e| EngineError::new(e.to_string()))?
+                    .to_vec1::<f32>()
+                    .map_err(|e| EngineError::new(e.to_string()))?
+            };
+            results.push(logits_vec);
+        }
+        Ok(results)
     }
 
     fn embed(
         &mut self,
         input_tokens: &[Vec<TokenId>],
         _positions: &[Vec<usize>],
-    ) -> vllm_traits::Result<Vec<Vec<f32>>> {
-        Ok(vec![
-            vec![0.0_f32; self.config.hidden_size];
-            input_tokens.len()
-        ])
+    ) -> EngineResult<Vec<Vec<f32>>> {
+        let mut results = Vec::with_capacity(input_tokens.len());
+        for tokens in input_tokens {
+            if tokens.is_empty() {
+                results.push(vec![0.0; self.config.hidden_size]);
+                continue;
+            }
+            let t = Tensor::new(tokens.as_slice(), &self.device)
+                .map_err(|e| EngineError::new(e.to_string()))?;
+            let emb = self
+                .embed_tokens
+                .forward(&t)
+                .map_err(|e| EngineError::new(e.to_string()))?
+                .mean(0)
+                .map_err(|e| EngineError::new(e.to_string()))?
+                .to_vec1::<f32>()
+                .map_err(|e| EngineError::new(e.to_string()))?;
+            results.push(emb);
+        }
+        Ok(results)
     }
 
     fn vocab_size(&self) -> usize {
