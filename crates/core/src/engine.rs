@@ -548,74 +548,12 @@ mod tests {
     use super::*;
     use crate::types::Request;
     use tokio::sync::mpsc;
-    use vllm_traits::{BatchOutput, Result, TokenId};
-
-    #[derive(Clone)]
-    struct StubModel {
-        token_to_return: TokenId,
-    }
-
-    impl ModelBackend for StubModel {
-        fn forward(
-            &mut self,
-            seq_ids: &[SeqId],
-            _input_tokens: &[Vec<TokenId>],
-            _positions: &[Vec<usize>],
-            _kv_block_ids: &[Vec<usize>],
-            _num_computed_tokens: &[usize],
-            _is_prefill: &[bool],
-        ) -> Result<BatchOutput> {
-            Ok(BatchOutput {
-                seq_ids: seq_ids.to_vec(),
-                next_tokens: seq_ids.iter().map(|_| self.token_to_return).collect(),
-            })
-        }
-
-        fn forward_logits(
-            &mut self,
-            _seq_ids: &[SeqId],
-            input_tokens: &[Vec<TokenId>],
-            _positions: &[Vec<usize>],
-            _kv_block_ids: &[Vec<usize>],
-            _num_computed_tokens: &[usize],
-            _is_prefill: &[bool],
-        ) -> Result<Vec<Vec<f32>>> {
-            Ok(input_tokens
-                .iter()
-                .map(|tokens| tokens.iter().map(|_| 0.0).collect())
-                .collect())
-        }
-
-        fn embed(
-            &mut self,
-            input_tokens: &[Vec<TokenId>],
-            _positions: &[Vec<usize>],
-        ) -> Result<Vec<Vec<f32>>> {
-            Ok(input_tokens
-                .iter()
-                .map(|tokens| tokens.iter().map(|_| 0.0).collect())
-                .collect())
-        }
-
-        fn vocab_size(&self) -> usize {
-            151936
-        }
-
-        fn num_layers(&self) -> usize {
-            32
-        }
-
-        fn num_heads(&self) -> usize {
-            32
-        }
-    }
+    use vllm_testing::StubModel;
 
     #[test]
     fn test_engine_streaming() {
-        let stub = StubModel {
-            token_to_return: 42,
-        };
-        let mut engine = Engine::new(stub.clone(), None);
+        let stub = StubModel::returning(42);
+        let mut engine = Engine::new(stub, None);
         let (tx, mut rx) = mpsc::channel(64);
 
         engine.add_request(Request::new(1, vec![10, 20], 5), tx);
@@ -644,10 +582,8 @@ mod tests {
 
     #[test]
     fn test_engine_multi_request() {
-        let stub = StubModel {
-            token_to_return: 10,
-        };
-        let mut engine = Engine::new(stub.clone(), None);
+        let stub = StubModel::returning(10);
+        let mut engine = Engine::new(stub, None);
         let (tx1, mut rx1) = mpsc::channel(64);
         let (tx2, mut rx2) = mpsc::channel(64);
 
@@ -667,19 +603,15 @@ mod tests {
 
     #[test]
     fn test_engine_no_requests() {
-        let stub = StubModel {
-            token_to_return: 42,
-        };
-        let mut engine = Engine::new(stub.clone(), None);
+        let stub = StubModel::returning(42);
+        let mut engine = Engine::new(stub, None);
         let out = engine.step().unwrap();
         assert!(out.is_empty());
     }
 
     #[test]
     fn test_engine_max_draft_tokens_config() {
-        let stub = StubModel {
-            token_to_return: 42,
-        };
+        let stub = StubModel::returning(42);
         let config = SchedulerConfig {
             max_num_seqs: 10,
             max_num_batched_tokens: 100,
@@ -693,16 +625,14 @@ mod tests {
             max_batch_size: 256,
             ..Default::default()
         };
-        let engine = Engine::with_config(stub.clone(), None, config, 8, 1024);
+        let engine = Engine::with_config(stub, None, config, 8, 1024);
         assert_eq!(engine.max_draft_tokens, 8);
     }
 
     #[test]
     fn test_engine_error_tracking() {
-        let stub = StubModel {
-            token_to_return: 42,
-        };
-        let mut engine = Engine::new(stub.clone(), None);
+        let stub = StubModel::returning(42);
+        let mut engine = Engine::new(stub, None);
         let (tx, _rx) = mpsc::channel(64);
         engine.add_request(Request::new(1, vec![10], 3), tx);
 
@@ -713,10 +643,8 @@ mod tests {
 
     #[test]
     fn test_engine_response_channel_cleanup() {
-        let stub = StubModel {
-            token_to_return: 42,
-        };
-        let mut engine = Engine::new(stub.clone(), None);
+        let stub = StubModel::returning(42);
+        let mut engine = Engine::new(stub, None);
         let (tx1, _rx1) = mpsc::channel(64);
         let (tx2, _rx2) = mpsc::channel(64);
 

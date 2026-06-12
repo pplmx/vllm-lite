@@ -1,5 +1,9 @@
 //! Shared helpers for model integration tests.
 
+#![allow(dead_code)]
+
+pub mod qwen3;
+
 use candle_core::Device;
 use vllm_model::arch::{ARCHITECTURE_REGISTRY, register_all_archs};
 use vllm_model::config::{Architecture, ModelConfig};

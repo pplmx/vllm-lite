@@ -1,5 +1,8 @@
+mod support;
+
 #[cfg(test)]
 mod tests {
+    use super::support;
     use candle_core::Device;
     use std::path::Path;
     use vllm_model::loader::load_checkpoint;
@@ -166,11 +169,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_qwen3_tokenizer_roundtrip() {
-        use std::path::PathBuf;
-        use vllm_model::tokenizer::Tokenizer;
-        let tokenizer_path = PathBuf::from("/models/Qwen3-0.6B/tokenizer.json");
-        let tokenizer = Tokenizer::from_file(tokenizer_path.to_str().unwrap())
-            .expect("Failed to load tokenizer");
+        let tokenizer = support::qwen3::tokenizer();
         let test_inputs = [
             "hi",
             "你好",
@@ -188,14 +187,10 @@ mod tests {
     #[test]
     #[ignore]
     fn test_qwen3_direct_inference() {
-        let model_path = "/models/Qwen3-0.6B";
-        let device = Device::Cpu;
-        let loader = vllm_model::ModelLoader::builder(device.clone())
-            .with_model_dir(model_path.to_string())
+        let mut model = support::qwen3::Qwen3Fixture::cpu()
             .with_kv_blocks(256)
-            .build()
-            .expect("Failed to create loader");
-        let mut model = loader.load_model().expect("Failed to load model");
+            .load_model()
+            .expect("Failed to load model");
 
         let tokens: Vec<u32> = vec![0u32, 151643, 9925];
         let positions: Vec<usize> = vec![0, 1, 2];
@@ -214,9 +209,9 @@ mod tests {
     #[test]
     #[ignore]
     fn test_qwen3_weight_diagnostics() {
-        let model_path = "/models/Qwen3-0.6B";
-        let device = Device::Cpu;
-        let weights = do_load_weights(model_path, &device).expect("Failed to load weights");
+        let weights = support::qwen3::Qwen3Fixture::cpu()
+            .checkpoint()
+            .expect("Failed to load weights");
 
         let key_weights = [
             "model.embed_tokens.weight",
@@ -268,9 +263,9 @@ mod tests {
     #[test]
     #[ignore]
     fn test_qwen3_qk_norm_weights() {
-        let model_path = "/models/Qwen3-0.6B";
-        let device = Device::Cpu;
-        let weights = do_load_weights(model_path, &device).expect("Failed to load weights");
+        let weights = support::qwen3::Qwen3Fixture::cpu()
+            .checkpoint()
+            .expect("Failed to load weights");
 
         for layer_idx in 0..3 {
             let q_norm_key = format!("model.layers.{}.self_attn.q_norm.weight", layer_idx);
@@ -298,15 +293,19 @@ mod tests {
     #[test]
     #[ignore]
     fn test_all_models_loadable() {
+        let qwen3_dir = support::qwen3::model_dir();
         let models = [
-            ("/models/Qwen3-0.6B", "Qwen3"),
-            ("/models/Qwen2.5-0.5B-Instruct", "Qwen2.5"),
-            ("/models/DeepSeek-R1-0528-Qwen3-8B", "DeepSeek-R1"),
+            (qwen3_dir.as_path(), "Qwen3"),
+            (Path::new("/models/Qwen2.5-0.5B-Instruct"), "Qwen2.5"),
+            (
+                Path::new("/models/DeepSeek-R1-0528-Qwen3-8B"),
+                "DeepSeek-R1",
+            ),
         ];
 
         for (path, name) in &models {
             let device = Device::Cpu;
-            match do_load_weights(path, &device) {
+            match load_checkpoint(path, &device) {
                 Ok(weights) => println!("{}: Loaded {} weights", name, weights.len()),
                 Err(e) => println!("{}: FAILED - {}", name, e),
             }

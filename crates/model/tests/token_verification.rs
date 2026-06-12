@@ -1,3 +1,5 @@
+mod support;
+
 use vllm_model::tokenizer::Tokenizer;
 
 #[cfg(test)]
@@ -9,11 +11,7 @@ mod tests {
     }
 
     fn setup_tokenizer() -> Tokenizer {
-        let path = std::path::PathBuf::from("/models/Qwen3-0.6B/tokenizer.json");
-        if !path.exists() {
-            panic!("Tokenizer not found at {:?}", path);
-        }
-        Tokenizer::from_file(path.to_str().unwrap()).expect("Failed to load tokenizer")
+        support::qwen3::tokenizer()
     }
 
     #[test]
@@ -231,17 +229,9 @@ mod tests {
     #[test]
     #[ignore = "Known issue: partial prefill produces different output than full prefill"]
     fn test_qwen3_partial_prefill_kv_cache_issue() {
-        use candle_core::Device;
-        use vllm_model::loader::ModelLoader;
-
-        let device = Device::Cpu;
-        let loader = ModelLoader::builder(device)
-            .with_model_dir("/models/Qwen3-0.6B".to_string())
-            .with_kv_blocks(1024)
-            .build()
-            .expect("Failed to build loader");
-
-        let mut model = loader.load_model().expect("Failed to load model");
+        let mut model = support::qwen3::Qwen3Fixture::cpu()
+            .load_model()
+            .expect("Failed to load model");
         let tokenizer = setup_tokenizer();
 
         // Full prompt
@@ -344,17 +334,9 @@ mod tests {
     #[test]
 
     fn test_qwen3_partial_prefill_simulation() {
-        use candle_core::Device;
-        use vllm_model::loader::ModelLoader;
-
-        let device = Device::Cpu;
-        let loader = ModelLoader::builder(device)
-            .with_model_dir("/models/Qwen3-0.6B".to_string())
-            .with_kv_blocks(1024)
-            .build()
-            .expect("Failed to build loader");
-
-        let mut model = loader.load_model().expect("Failed to load model");
+        let mut model = support::qwen3::Qwen3Fixture::cpu()
+            .load_model()
+            .expect("Failed to load model");
         let tokenizer = setup_tokenizer();
 
         // Simulate partial prefill: first 5 tokens
@@ -450,17 +432,9 @@ mod tests {
     #[test]
 
     fn test_qwen3_forward_with_exact_server_params() {
-        use candle_core::Device;
-        use vllm_model::loader::ModelLoader;
-
-        let device = Device::Cpu;
-        let loader = ModelLoader::builder(device)
-            .with_model_dir("/models/Qwen3-0.6B".to_string())
-            .with_kv_blocks(1024)
-            .build()
-            .expect("Failed to build loader");
-
-        let mut model = loader.load_model().expect("Failed to load model");
+        let mut model = support::qwen3::Qwen3Fixture::cpu()
+            .load_model()
+            .expect("Failed to load model");
         let tokenizer = setup_tokenizer();
 
         // Test 1: Exact prompt from server
@@ -528,17 +502,9 @@ mod tests {
     #[test]
     #[ignore]
     fn test_qwen3_simulate_server_engine_flow() {
-        use candle_core::Device;
-        use vllm_model::loader::ModelLoader;
-
-        let device = Device::Cpu;
-        let loader = ModelLoader::builder(device)
-            .with_model_dir("/models/Qwen3-0.6B".to_string())
-            .with_kv_blocks(1024)
-            .build()
-            .expect("Failed to build loader");
-
-        let mut model = loader.load_model().expect("Failed to load model");
+        let mut model = support::qwen3::Qwen3Fixture::cpu()
+            .load_model()
+            .expect("Failed to load model");
         let tokenizer = setup_tokenizer();
 
         // Exact server prompt tokens
@@ -624,17 +590,9 @@ mod tests {
     #[test]
 
     fn test_qwen3_multi_step_generation() {
-        use candle_core::Device;
-        use vllm_model::loader::ModelLoader;
-
-        let device = Device::Cpu;
-        let loader = ModelLoader::builder(device)
-            .with_model_dir("/models/Qwen3-0.6B".to_string())
-            .with_kv_blocks(1024)
-            .build()
-            .expect("Failed to build loader");
-
-        let mut model = loader.load_model().expect("Failed to load model");
+        let mut model = support::qwen3::Qwen3Fixture::cpu()
+            .load_model()
+            .expect("Failed to load model");
         let tokenizer = setup_tokenizer();
 
         let prompt = "hi";
@@ -782,17 +740,9 @@ mod tests {
     #[test]
 
     fn test_qwen3_with_special_tokens() {
-        use candle_core::Device;
-        use vllm_model::loader::ModelLoader;
-
-        let device = Device::Cpu;
-        let loader = ModelLoader::builder(device)
-            .with_model_dir("/models/Qwen3-0.6B".to_string())
-            .with_kv_blocks(1024)
-            .build()
-            .expect("Failed to build loader");
-
-        let mut model = loader.load_model().expect("Failed to load model");
+        let mut model = support::qwen3::Qwen3Fixture::cpu()
+            .load_model()
+            .expect("Failed to load model");
         let tokenizer = setup_tokenizer();
 
         // Server prompt tokens: [151643, 151644, 872, 198, 6023, 151645, 198, 151644, 77091, 198]
@@ -933,17 +883,9 @@ mod tests {
     #[test]
 
     fn test_model_token_to_text_pipeline() {
-        use candle_core::Device;
-        use vllm_model::loader::ModelLoader;
-
-        let device = Device::Cpu;
-        let loader = ModelLoader::builder(device)
-            .with_model_dir("/models/Qwen3-0.6B".to_string())
-            .with_kv_blocks(1024)
-            .build()
-            .expect("Failed to build loader");
-
-        let mut model = loader.load_model().expect("Failed to load model");
+        let mut model = support::qwen3::Qwen3Fixture::cpu()
+            .load_model()
+            .expect("Failed to load model");
         let tokenizer = setup_tokenizer();
 
         let tokens = vec![6023u32]; // "hi"
@@ -990,17 +932,9 @@ mod tests {
     #[test]
     #[ignore]
     fn test_server_engine_loop_simulation() {
-        use candle_core::Device;
-        use vllm_model::loader::ModelLoader;
-
-        let device = Device::Cpu;
-        let loader = ModelLoader::builder(device)
-            .with_model_dir("/models/Qwen3-0.6B".to_string())
-            .with_kv_blocks(1024)
-            .build()
-            .expect("Failed to build loader");
-
-        let mut model = loader.load_model().expect("Failed to load model");
+        let mut model = support::qwen3::Qwen3Fixture::cpu()
+            .load_model()
+            .expect("Failed to load model");
         let tokenizer = setup_tokenizer();
 
         // Exact server prompt tokens
@@ -1128,17 +1062,9 @@ mod tests {
     #[ignore]
     fn test_working_unit_test_vs_server_comparison() {
         // This test verifies that the working unit test and server loop produce same output
-        use candle_core::Device;
-        use vllm_model::loader::ModelLoader;
-
-        let device = Device::Cpu;
-        let loader = ModelLoader::builder(device)
-            .with_model_dir("/models/Qwen3-0.6B".to_string())
-            .with_kv_blocks(1024)
-            .build()
-            .expect("Failed to build loader");
-
-        let mut model = loader.load_model().expect("Failed to load model");
+        let mut model = support::qwen3::Qwen3Fixture::cpu()
+            .load_model()
+            .expect("Failed to load model");
         let tokenizer = setup_tokenizer();
 
         let prompt = "hi";
@@ -1402,17 +1328,9 @@ mod tests {
     #[ignore]
     fn test_decode_position_calculation() {
         // This test verifies the decode position calculation matches server expectations
-        use candle_core::Device;
-        use vllm_model::loader::ModelLoader;
-
-        let device = Device::Cpu;
-        let loader = ModelLoader::builder(device)
-            .with_model_dir("/models/Qwen3-0.6B".to_string())
-            .with_kv_blocks(1024)
-            .build()
-            .expect("Failed to build loader");
-
-        let mut model = loader.load_model().expect("Failed to load model");
+        let mut model = support::qwen3::Qwen3Fixture::cpu()
+            .load_model()
+            .expect("Failed to load model");
         let tokenizer = setup_tokenizer();
 
         let prompt_tokens = vec![6023u32]; // "hi"
