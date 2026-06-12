@@ -101,6 +101,7 @@ impl Architecture for Gemma3Architecture {
         device: Device,
         _weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
+        _kv_quantization: bool,
     ) -> Result<Box<dyn ModelBackend>> {
         let model = Gemma3Model::new(config, device, num_kv_blocks, self.sliding_window)?;
         Ok(Box::new(model))

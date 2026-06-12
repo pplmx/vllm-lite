@@ -1,4 +1,4 @@
-#![allow(dead_code, clippy::type_complexity, clippy::iter_cloned_collect)]
+#![allow(clippy::type_complexity, clippy::iter_cloned_collect)]
 
 use crate::error::Result;
 use crate::sync::lock_mutex;

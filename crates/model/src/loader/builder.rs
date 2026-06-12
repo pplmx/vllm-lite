@@ -72,7 +72,6 @@ struct ModelLoaderInner {
     device: Device,
     model_dir: String,
     num_kv_blocks: usize,
-    #[allow(dead_code)]
     kv_quantization: bool,
     config_json: serde_json::Value,
 }
@@ -174,6 +173,7 @@ impl ModelLoader {
             self.inner.device.clone(),
             weights,
             self.inner.num_kv_blocks,
+            self.inner.kv_quantization,
         )
     }
 

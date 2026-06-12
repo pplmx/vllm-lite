@@ -13,8 +13,6 @@ use vllm_traits::ModelBackend;
 
 pub struct SelfSpeculativeModel<M: ModelBackend> {
     model: M,
-    #[allow(dead_code)]
-    config: SpeculationConfig,
     draft_layer_count: usize,
     draft_kv_block_ids: HashMap<SeqId, Vec<usize>>,
 }
@@ -27,7 +25,6 @@ impl<M: ModelBackend> SelfSpeculativeModel<M> {
             .unwrap_or_else(|| (total_layers as f32 * 0.125).max(1.0) as usize);
         Self {
             model,
-            config,
             draft_layer_count,
             draft_kv_block_ids: HashMap::new(),
         }
@@ -59,82 +56,6 @@ impl<M: ModelBackend> SelfSpeculativeModel<M> {
 
     pub fn remove_draft_seq(&mut self, seq_id: SeqId) {
         self.draft_kv_block_ids.remove(&seq_id);
-    }
-
-    #[allow(dead_code)]
-    fn sample_token(&self, logits: &[f32]) -> TokenId {
-        let temperature = self.config.temperature;
-        if temperature == 0.0 {
-            logits
-                .iter()
-                .enumerate()
-                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-                .map(|(idx, _): (usize, &f32)| idx as TokenId)
-                .unwrap_or(0)
-        } else {
-            use std::time::{SystemTime, UNIX_EPOCH};
-            let nanos = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .subsec_nanos();
-            let r: f32 = nanos as f32 / u32::MAX as f32;
-
-            let probs: Vec<f32> = logits.iter().map(|&x| (x / temperature).exp()).collect();
-            let sum: f32 = probs.iter().sum();
-            let probs: Vec<f32> = probs.iter().map(|&x| x / sum).collect();
-            let mut cumsum = 0.0;
-            for (i, &p) in probs.iter().enumerate() {
-                cumsum += p;
-                if r < cumsum {
-                    return i as TokenId;
-                }
-            }
-            probs.len().saturating_sub(1) as TokenId
-        }
-    }
-
-    #[allow(dead_code)]
-    fn top_k_filter(&self, logits: &mut [f32], k: usize) {
-        if k == 0 {
-            return;
-        }
-        let threshold_idx = k.min(logits.len().saturating_sub(1));
-        let threshold = logits
-            .iter()
-            .enumerate()
-            .nth(threshold_idx)
-            .map(|(_idx, _)| {
-                let mut sorted = logits.to_vec();
-                sorted.sort_by(|a, b| b.partial_cmp(a).unwrap());
-                sorted[k.saturating_sub(1)]
-            })
-            .unwrap_or(f32::NEG_INFINITY);
-
-        for logit in logits.iter_mut() {
-            if *logit < threshold {
-                *logit = f32::NEG_INFINITY;
-            }
-        }
-    }
-
-    #[allow(dead_code)]
-    fn top_p_filter(&self, logits: &mut [f32], p: f32) {
-        if p >= 1.0 {
-            return;
-        }
-        let mut indices: Vec<usize> = (0..logits.len()).collect();
-        indices.sort_by(|&a, &b| logits[b].partial_cmp(&logits[a]).unwrap());
-        let mut cumsum = 0.0;
-        for &idx in indices.iter() {
-            let prob = (logits[idx] as f64).exp() as f32;
-            cumsum += prob;
-            if cumsum > p {
-                for &j in indices.iter().skip_while(|&&i| i == idx) {
-                    logits[j] = f32::NEG_INFINITY;
-                }
-                break;
-            }
-        }
     }
 }
 
@@ -284,23 +205,16 @@ mod tests {
 
     #[test]
     fn test_greedy_argmax_sampling() {
-        let config = SpeculationConfig::builder().temperature(0.0).build();
-        let model = StubSpecModel;
-        let ssm = SelfSpeculativeModel::new(model, config);
         let logits = vec![0.1, 0.5, 0.3, 0.8, 0.2];
-        let token = ssm.sample_token(&logits);
+        let token = crate::sampling::greedy_sample(&logits);
         assert_eq!(token, 3); // index 3 has highest value 0.8
     }
 
     #[test]
-    fn test_sample_token_argmax_tie() {
-        let config = SpeculationConfig::default();
-        let model = StubSpecModel;
-        let ssm = SelfSpeculativeModel::new(model, config);
+    fn test_greedy_sample_argmax_tie() {
         let logits = vec![0.1, 0.5, 0.3, 0.5, 0.2];
-        let token = ssm.sample_token(&logits);
-        // With temperature=0 and partial_cmp, max_by returns the last max
-        assert_eq!(token, 3); // index 3 is the last occurrence of max value 0.5
+        let token = crate::sampling::greedy_sample(&logits);
+        assert_eq!(token, 1); // first max at index 1
     }
 
     #[test]

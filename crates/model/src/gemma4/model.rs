@@ -24,7 +24,12 @@ pub struct Gemma4Model {
 }
 
 impl Gemma4Model {
-    pub fn new(config: ModelConfig, device: Device, num_kv_blocks: usize) -> CandleResult<Self> {
+    pub fn new(
+        config: ModelConfig,
+        device: Device,
+        num_kv_blocks: usize,
+        kv_quantization: bool,
+    ) -> CandleResult<Self> {
         let vocab_size = config.vocab_size;
         let hidden_size = config.hidden_size;
         let num_layers = config.num_layers;
@@ -55,7 +60,7 @@ impl Gemma4Model {
             config.head_dim,
             num_kv_blocks,
             device.clone(),
-            false,
+            kv_quantization,
         )?;
 
         Ok(Self {
@@ -74,8 +79,9 @@ impl Gemma4Model {
         device: Device,
         _weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
+        kv_quantization: bool,
     ) -> CandleResult<Self> {
-        Self::new(config, device, num_kv_blocks)
+        Self::new(config, device, num_kv_blocks, kv_quantization)
     }
 }
 

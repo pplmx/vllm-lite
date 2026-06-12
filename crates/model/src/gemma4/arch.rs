@@ -96,8 +96,10 @@ impl Architecture for Gemma4Architecture {
         device: Device,
         weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
+        kv_quantization: bool,
     ) -> Result<Box<dyn ModelBackend>> {
-        let model = Gemma4Model::from_weights(config, device, weights, num_kv_blocks)?;
+        let model =
+            Gemma4Model::from_weights(config, device, weights, num_kv_blocks, kv_quantization)?;
         Ok(Box::new(model))
     }
 }

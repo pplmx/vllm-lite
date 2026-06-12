@@ -33,6 +33,7 @@ pub trait Architecture: Send + Sync + 'static {
         device: Device,
         weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
+        kv_quantization: bool,
     ) -> Result<Box<dyn ModelBackend>>;
 
     fn remap_weights(&self, weights: HashMap<String, Tensor>) -> HashMap<String, Tensor> {
