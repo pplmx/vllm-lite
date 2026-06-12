@@ -183,7 +183,7 @@ async fn handle_chat(
 }
 
 #[allow(dead_code)]
-pub(crate) async fn chat_completions(
+pub async fn chat_completions(
     State(state): State<ApiState>,
     Json(req): Json<ChatRequest>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {

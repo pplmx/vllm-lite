@@ -7,7 +7,7 @@ use tokio::sync::mpsc;
 use vllm_core::types::EngineMessage;
 
 #[allow(dead_code)]
-pub(crate) async fn embeddings(
+pub async fn embeddings(
     State(state): State<ApiState>,
     Json(req): Json<EmbeddingsRequest>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {

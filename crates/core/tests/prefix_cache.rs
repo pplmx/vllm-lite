@@ -242,7 +242,7 @@ fn test_prefix_hit_partial_prefill() {
 
 #[test]
 fn test_prefix_match_caching() {
-    let mut cache = PrefixCache::new();
+    let mut cache = PrefixCache::default();
     let _alloc = BlockAllocator::new(1000);
 
     // Insert prefixes - more entries to make O(n) slower

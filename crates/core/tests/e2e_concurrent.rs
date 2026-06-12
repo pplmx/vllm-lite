@@ -10,7 +10,7 @@ use vllm_testing::IncrementModel;
 
 /// Thread-safe engine wrapper with background stepper
 struct ConcurrentEngine {
-    inner: Arc<Mutex<Engine<IncrementModel>>>,
+    inner: Arc<Mutex<Engine>>,
 }
 
 impl ConcurrentEngine {
