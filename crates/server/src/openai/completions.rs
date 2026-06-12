@@ -24,7 +24,7 @@ fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &st
 }
 
 #[allow(dead_code)]
-pub(crate) async fn completions(
+pub async fn completions(
     State(state): State<ApiState>,
     Json(req): Json<CompletionRequest>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {

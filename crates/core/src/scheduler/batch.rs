@@ -1,7 +1,7 @@
 use crate::error::Result;
-use vllm_traits::{ModelBackend, SeqId, TokenId};
+use vllm_traits::{SeqId, TokenId};
 
-impl<M: ModelBackend + 'static> crate::engine::Engine<M> {
+impl crate::engine::Engine {
     /// Backward-compatible non-speculative step.
     /// Delegates to the unified `step(Some(0))` path.
     pub fn step(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
@@ -72,13 +72,13 @@ impl<M: ModelBackend + 'static> crate::engine::Engine<M> {
         self.scheduler.clear_finished();
 
         if !batch.seq_ids.is_empty() {
-            self.metrics.record_tokens(total_tokens as u64);
-            self.metrics.record_batch_size(batch.seq_ids.len());
+            self.scheduler.metrics.record_tokens(total_tokens as u64);
+            self.scheduler.metrics.record_batch_size(batch.seq_ids.len());
         }
 
         let elapsed = start.elapsed().as_millis() as f64;
         if elapsed > 0.0 {
-            self.metrics.record_latency(elapsed);
+            self.scheduler.metrics.record_latency(elapsed);
         }
 
         Ok(results)

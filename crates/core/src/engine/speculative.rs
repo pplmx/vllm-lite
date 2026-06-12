@@ -1,13 +1,13 @@
 #![allow(dead_code, clippy::type_complexity, clippy::iter_cloned_collect)]
 
 use crate::error::Result;
-use vllm_traits::{Batch, BatchPhase, ModelBackend, SeqId, TokenId};
+use vllm_traits::{Batch, BatchPhase, SeqId, TokenId};
 
 /// Unified entry point for speculative and non-speculative decoding.
 ///
 /// `max_draft = None` or `Some(0)` → non-speculative step.
 /// `Some(n)` → internal speculative step with up to n draft tokens.
-impl<M: ModelBackend> super::Engine<M> {
+impl super::Engine {
     /// Unified step: dispatches to speculative or non-speculative path.
     /// Note: `step` (no args) is defined in scheduler/batch.rs for backward compat.
     pub fn step_with_draft(&mut self, max_draft: Option<usize>) -> Result<Vec<(SeqId, TokenId)>> {
@@ -149,13 +149,13 @@ impl<M: ModelBackend> super::Engine<M> {
 
         if !batch.seq_ids.is_empty() {
             let total_tokens: usize = batch.input_tokens.iter().map(|t| t.len()).sum();
-            self.metrics.record_tokens(total_tokens as u64);
-            self.metrics.record_batch_size(batch.seq_ids.len());
+            self.scheduler.metrics.record_tokens(total_tokens as u64);
+            self.scheduler.metrics.record_batch_size(batch.seq_ids.len());
         }
 
         let elapsed = start.elapsed().as_millis() as f64;
         if elapsed > 0.0 {
-            self.metrics.record_latency(elapsed);
+            self.scheduler.metrics.record_latency(elapsed);
         }
 
         Ok(results)
@@ -542,7 +542,7 @@ mod tests {
     use super::*;
     use crate::types::{Request, SchedulerConfig};
     use tokio::sync::mpsc as tokio_mpsc;
-    use vllm_traits::{BatchOutput, Result as ModelResult};
+    use vllm_traits::{BatchOutput, ModelBackend, Result as ModelResult};
 
     /// A fake model that returns fixed tokens for both forward and forward_logits.
     #[derive(Clone)]

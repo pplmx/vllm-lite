@@ -1,19 +1,17 @@
 // crates/core/src/metrics/collector.rs
+use super::legacy::{LockFreeMetrics, MetricsSnapshot};
 use dashmap::DashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use vllm_traits::SeqId;
 
-/// Centralized metrics collector for all optimization components
-#[derive(Debug)]
+/// Unified metrics collector for scheduler, engine, and HTTP export.
 pub struct EnhancedMetricsCollector {
-    // Counters
+    runtime: LockFreeMetrics,
     cuda_graph_hits: AtomicU64,
     cuda_graph_misses: AtomicU64,
     packing_sequences: AtomicU64,
     speculative_adjustments: AtomicU64,
-    requests_total: AtomicU64,
     errors_total: AtomicU64,
-    // Gauges (stored as fixed-point u64)
     packing_waste_ratio: AtomicU64,
     packing_efficiency: AtomicU64,
     speculative_acceptance_rate: AtomicU64,
@@ -23,20 +21,18 @@ pub struct EnhancedMetricsCollector {
     request_queue_depth: AtomicU64,
     active_sequences: AtomicU64,
     speculative_per_request_count: AtomicU64,
-    // Histograms
     inference_latency_ns: DashMap<String, Vec<u64>>,
-    // Per-request acceptance tracking
     per_request_acceptance: DashMap<SeqId, (AtomicU64, AtomicU64)>,
 }
 
 impl EnhancedMetricsCollector {
     pub fn new() -> Self {
         Self {
+            runtime: LockFreeMetrics::new(),
             cuda_graph_hits: AtomicU64::new(0),
             cuda_graph_misses: AtomicU64::new(0),
             packing_sequences: AtomicU64::new(0),
             speculative_adjustments: AtomicU64::new(0),
-            requests_total: AtomicU64::new(0),
             errors_total: AtomicU64::new(0),
             packing_waste_ratio: AtomicU64::new(0),
             packing_efficiency: AtomicU64::new(0),
@@ -50,6 +46,35 @@ impl EnhancedMetricsCollector {
             inference_latency_ns: DashMap::new(),
             per_request_acceptance: DashMap::new(),
         }
+    }
+
+    /// Snapshot for engine/API export (latency, throughput, KV usage).
+    pub fn snapshot(&self) -> MetricsSnapshot {
+        self.runtime.snapshot()
+    }
+
+    pub fn record_tokens(&self, count: u64) {
+        self.runtime.record_tokens(count);
+    }
+
+    pub fn record_batch_size(&self, size: usize) {
+        self.runtime.record_batch_size(size);
+    }
+
+    pub fn record_latency(&self, ms: f64) {
+        self.runtime.record_latency(ms);
+    }
+
+    pub fn record_kv_cache_usage(&self, used: u64, total: u64) {
+        self.runtime.record_kv_cache_usage(used, total);
+    }
+
+    pub fn record_prefix_cache_hit(&self) {
+        self.runtime.record_prefix_cache_hit();
+    }
+
+    pub fn record_prefix_cache_request(&self) {
+        self.runtime.record_prefix_cache_request();
     }
 
     // CUDA Graph metrics
@@ -142,7 +167,7 @@ impl EnhancedMetricsCollector {
 
     // System metrics
     pub fn record_request(&self) {
-        self.requests_total.fetch_add(1, Ordering::Relaxed);
+        self.runtime.record_request();
     }
 
     pub fn record_error(&self) {
@@ -175,7 +200,7 @@ impl EnhancedMetricsCollector {
             "cuda_graph_misses_total" => self.cuda_graph_misses.load(Ordering::Relaxed),
             "packing_sequences_total" => self.packing_sequences.load(Ordering::Relaxed),
             "speculative_adjustments_total" => self.speculative_adjustments.load(Ordering::Relaxed),
-            "requests_total" => self.requests_total.load(Ordering::Relaxed),
+            "requests_total" => self.runtime.requests_total(),
             "errors_total" => self.errors_total.load(Ordering::Relaxed),
             _ => 0,
         }

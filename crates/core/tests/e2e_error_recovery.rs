@@ -108,7 +108,7 @@ impl ModelBackend for FaultInjectedModel {
 
 /// Engine wrapper with error tracking
 struct ErrorTrackingEngine {
-    engine: Arc<Mutex<Engine<IncrementModel>>>,
+    engine: Arc<Mutex<Engine>>,
 }
 
 impl ErrorTrackingEngine {

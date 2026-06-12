@@ -16,7 +16,7 @@ struct RequestOutput {
 
 /// Engine wrapper for testing
 struct TestEngine {
-    engine: Engine<IncrementModel>,
+    engine: Engine,
 }
 
 impl TestEngine {

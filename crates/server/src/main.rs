@@ -1,16 +1,7 @@
 #![allow(dead_code)]
 
-mod api;
-mod auth;
-mod cli;
-mod config;
 mod debug;
-mod health;
-mod logging;
-pub mod openai;
 
-use crate::auth::AuthMiddleware;
-use crate::openai::batch::manager::BatchManager;
 use axum::{
     Router, extract::State, http::StatusCode, response::Response, routing::get, routing::post,
 };
@@ -27,24 +18,11 @@ use vllm_core::types::AdaptiveDraftConfig;
 use vllm_core::types::EngineMessage;
 use vllm_model::loader::ModelLoader;
 use vllm_model::tokenizer::Tokenizer;
-use vllm_server::health::HealthChecker;
-
-/// Shared state for all API handlers
-#[derive(Clone)]
-pub struct ApiState {
-    /// Channel to send messages to the inference engine
-    pub engine_tx: api::EngineHandle,
-    /// Tokenizer for encoding/decoding text
-    pub tokenizer: Arc<Tokenizer>,
-    /// Batch manager for handling batch API requests
-    pub batch_manager: Arc<BatchManager>,
-    /// Authentication middleware (None if disabled)
-    pub auth: Option<Arc<AuthMiddleware>>,
-    /// Health checker for liveness/readiness probes
-    pub health: Arc<std::sync::RwLock<HealthChecker>>,
-    /// Enhanced metrics collector
-    pub metrics: Arc<EnhancedMetricsCollector>,
-}
+use vllm_server::{
+    ApiState, api, auth, cli, health::HealthChecker, logging, openai,
+};
+use vllm_server::auth::AuthMiddleware;
+use vllm_server::openai::batch::manager::BatchManager;
 
 /// Health check endpoint - liveness probe
 async fn health_handler(State(state): State<ApiState>) -> Response {

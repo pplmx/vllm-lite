@@ -2,13 +2,12 @@ mod speculative;
 
 use crate::beam::BeamSequence;
 use crate::error::Result;
-use crate::metrics::{EnhancedMetricsCollector, MetricsCollector};
+use crate::metrics::EnhancedMetricsCollector;
 use crate::scheduler::engine::SchedulerEngine;
 use crate::speculative::AdaptiveSpeculativeDecoder;
 use crate::types::AdaptiveDraftConfig;
 use crate::types::{EngineMessage, Request, SchedulerConfig};
 use std::collections::HashMap;
-use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tracing::{error, trace};
@@ -135,7 +134,7 @@ impl ModelBackend for BoxedModelBackend {
 /// The Engine runs on its own dedicated thread (via `run`), using `RefCell`
 /// for interior mutability of model references. All external communication
 /// happens through mpsc channels (actor pattern).
-pub struct Engine<M: ModelBackend + 'static> {
+pub struct Engine {
     pub scheduler: SchedulerEngine,
     pub target_model: Arc<Mutex<dyn ModelBackend>>,
     pub draft_model: Option<Arc<Mutex<dyn ModelBackend>>>,
@@ -143,16 +142,14 @@ pub struct Engine<M: ModelBackend + 'static> {
     pub speculative_mode: bool,
     pub error_count: usize,
     pub last_error: Option<String>,
-    pub metrics: MetricsCollector,
     pub response_txs: HashMap<SeqId, mpsc::Sender<TokenId>>,
     sleep_policy: SleepPolicy,
-    _phantom: PhantomData<M>,
     #[cfg(feature = "cuda-graph")]
     cuda_graph: Option<BatchCudaGraphExecutor>,
     pub adaptive_decoder: Option<AdaptiveSpeculativeDecoder>,
 }
 
-impl Engine<BoxedModelBackend> {
+impl Engine {
     pub fn new_boxed(
         target_model: Box<dyn ModelBackend>,
         draft_model: Option<Box<dyn ModelBackend>>,
@@ -204,29 +201,16 @@ impl Engine<BoxedModelBackend> {
             speculative_mode: false,
             error_count: 0,
             last_error: None,
-            metrics: MetricsCollector::new(),
             response_txs: HashMap::with_capacity(max_seqs),
             sleep_policy: SleepPolicy::default(),
-            _phantom: PhantomData,
             #[cfg(feature = "cuda-graph")]
             cuda_graph,
             adaptive_decoder: None,
         }
     }
-}
 
-impl<M: ModelBackend + 'static> Engine<M> {
     /// Creates a new Engine with default configuration.
-    ///
-    /// # Arguments
-    /// * `target_model` - The primary model for inference
-    /// * `draft_model` - The draft model for speculative decoding
-    ///
-    /// # Example
-    /// ```ignore
-    /// let engine = Engine::new(my_model, Some(draft_model));
-    /// ```
-    pub fn new(target_model: M, draft_model: Option<M>) -> Self {
+    pub fn new<M: ModelBackend + 'static>(target_model: M, draft_model: Option<M>) -> Self {
         Self::with_config(
             target_model,
             draft_model,
@@ -236,50 +220,30 @@ impl<M: ModelBackend + 'static> Engine<M> {
         )
     }
 
-    pub fn with_config(
+    pub fn with_config<M: ModelBackend + 'static>(
         target_model: M,
         draft_model: Option<M>,
         config: SchedulerConfig,
         max_draft_tokens: usize,
         num_kv_blocks: usize,
     ) -> Self {
-        let max_seqs = config.max_num_seqs;
-        #[cfg(feature = "cuda-graph")]
-        let cuda_graph = if config.cuda_graph.enabled {
-            let graph_config = CudaGraphConfig {
-                enabled: true,
-                batch_sizes: config.cuda_graph.batch_sizes.clone(),
-                ..Default::default()
-            };
-            match BatchCudaGraphExecutor::new(graph_config) {
-                Ok(executor) => Some(executor),
-                Err(e) => {
-                    tracing::warn!("Failed to initialize CUDA Graph: {}", e);
-                    None
-                }
-            }
-        } else {
-            None
-        };
-        let enhanced_metrics = Arc::new(EnhancedMetricsCollector::new());
-        let draft_model =
-            draft_model.map(|m| Arc::new(Mutex::new(m)) as Arc<Mutex<dyn ModelBackend>>);
-        Self {
-            scheduler: SchedulerEngine::new(config, num_kv_blocks, enhanced_metrics),
-            target_model: Arc::new(Mutex::new(target_model)),
-            draft_model,
+        Self::with_models_boxed(
+            Box::new(target_model),
+            draft_model.map(|m| Box::new(m) as Box<dyn ModelBackend>),
+            config,
             max_draft_tokens,
-            speculative_mode: false,
-            error_count: 0,
-            last_error: None,
-            metrics: MetricsCollector::new(),
-            response_txs: HashMap::with_capacity(max_seqs),
-            sleep_policy: SleepPolicy::default(),
-            _phantom: PhantomData,
-            #[cfg(feature = "cuda-graph")]
-            cuda_graph,
-            adaptive_decoder: None,
-        }
+            num_kv_blocks,
+        )
+    }
+
+    fn with_models_boxed(
+        target_model: Box<dyn ModelBackend>,
+        draft_model: Option<Box<dyn ModelBackend>>,
+        config: SchedulerConfig,
+        max_draft_tokens: usize,
+        num_kv_blocks: usize,
+    ) -> Self {
+        Self::with_config_boxed(target_model, draft_model, config, max_draft_tokens, num_kv_blocks)
     }
 
     #[cfg(feature = "cuda-graph")]
@@ -372,8 +336,8 @@ impl<M: ModelBackend + 'static> Engine<M> {
                     }
                     EngineMessage::GetMetrics { response_tx } => {
                         let (used, total) = self.scheduler.get_kv_cache_usage();
-                        self.metrics.record_kv_cache_usage(used, total);
-                        let snapshot = self.metrics.snapshot();
+                        self.scheduler.metrics.record_kv_cache_usage(used, total);
+                        let snapshot = self.scheduler.metrics.snapshot();
                         let _ = response_tx.send(snapshot);
                     }
                     EngineMessage::GetEmbeddings {
@@ -657,11 +621,11 @@ impl<M: ModelBackend + 'static> Engine<M> {
 
         // Record metrics
         if !results.is_empty() {
-            self.metrics.record_tokens(results.len() as u64);
-            self.metrics.record_batch_size(results.len());
+            self.scheduler.metrics.record_tokens(results.len() as u64);
+            self.scheduler.metrics.record_batch_size(results.len());
             let elapsed = start.elapsed().as_millis() as f64;
             if elapsed > 0.0 {
-                self.metrics.record_latency(elapsed);
+                self.scheduler.metrics.record_latency(elapsed);
             }
         }
 

@@ -116,6 +116,10 @@ impl LockFreeMetrics {
         let _ = self.scheduler_wait_sender.try_send(ms);
     }
 
+    pub fn requests_total(&self) -> u64 {
+        self.requests_total.load(Ordering::Relaxed)
+    }
+
     pub fn snapshot(&self) -> MetricsSnapshot {
         let mut latencies = Vec::new();
         while let Ok(ms) = self.latency_receiver.try_recv() {

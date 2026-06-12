@@ -19,7 +19,7 @@ opentelemetry = { workspace = true, optional = true }
 dashmap = { workspace = true }
 
 [features]
-default = ["prometheus", "cuda-graph"]
+default = ["prometheus"]
 prometheus = ["metrics-exporter-prometheus"]
 opentelemetry = ["dep:opentelemetry"]
 cuda-graph = ["dep:vllm-model"]
@@ -31,11 +31,3 @@ optional = true
 [dev-dependencies]
 criterion = "0.8"
 vllm-testing = { path = "../testing" }
-
-[[bench]]
-name = "scheduler_benchmarks"
-harness = false
-
-[[bench]]
-name = "prefix_cache_benchmarks"
-harness = false
