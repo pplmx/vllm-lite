@@ -85,7 +85,7 @@ impl Architecture for LlamaArchitecture {
         weights: &HashMap<String, Tensor>,
         _device: &Device,
     ) -> Result<Box<dyn TransformerBlock>> {
-        let block = LlamaBlock::from_weights(config, layer_idx, weights)?;
+        let block = super::block::block_from_weights(config, layer_idx, weights)?;
         Ok(Box::new(LlamaBlockWrapper::new(block, config)))
     }
 

@@ -7,6 +7,7 @@ use crate::api::EngineHandle;
 use crate::auth::AuthMiddleware;
 use crate::openai::batch::manager::BatchManager;
 use vllm_core::metrics::EnhancedMetricsCollector;
+use vllm_model::config::Architecture;
 use vllm_model::tokenizer::Tokenizer;
 
 pub mod api;
@@ -28,6 +29,8 @@ pub struct ApiState {
     pub engine_tx: EngineHandle,
     /// Tokenizer for encoding/decoding text
     pub tokenizer: Arc<Tokenizer>,
+    /// Loaded model architecture (drives chat prompt formatting)
+    pub architecture: Architecture,
     /// Batch manager for handling batch API requests
     pub batch_manager: Arc<BatchManager>,
     /// Authentication middleware (None if disabled)

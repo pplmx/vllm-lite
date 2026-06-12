@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use crate::causal_lm::{
-    embed_sequence, forward_batch, greedy_sample_token, logits_to_vector, map_candle,
+    forward_batch, forward_with_paged_kv, greedy_sample_token, logits_to_vector,
 };
 use crate::paged_tensor::PagedKvCache;
 use crate::qwen3_config::Qwen3Config;
@@ -325,43 +325,22 @@ impl Qwen3Model {
                 is_prefill = is_prefill,
                 "Empty tokens received"
             );
-            let logits = map_candle(Tensor::zeros(
-                (1, 1, self.config.vocab_size()),
-                candle_core::DType::F32,
-                &self.device,
-            ))?;
-            return Ok((logits, 0));
         }
 
-        let mut hidden = embed_sequence(&self.embed_tokens, tokens, &self.device, is_prefill)?;
-
-        if is_prefill {
-            for (layer_idx, layer) in self.layers.iter_mut().enumerate() {
-                hidden = map_candle(layer.forward_prefill(
-                    &hidden,
-                    &mut self.kv_cache,
-                    layer_idx,
-                    block_ids,
-                    positions,
-                ))?;
-            }
-        } else {
-            let decode_position = [positions[0]];
-            for (layer_idx, layer) in self.layers.iter_mut().enumerate() {
-                hidden = map_candle(layer.forward_decode(
-                    &hidden,
-                    &mut self.kv_cache,
-                    layer_idx,
-                    block_ids,
-                    num_computed_tokens,
-                    &decode_position,
-                ))?;
-            }
-        }
-
-        hidden = map_candle(self.norm.forward(&hidden))?;
-        let logits = map_candle(self.lm_head.forward(&hidden))?;
-        Ok((logits, 0))
+        forward_with_paged_kv(
+            &self.embed_tokens,
+            &self.layers,
+            &self.norm,
+            &self.lm_head,
+            &self.device,
+            self.config.vocab_size(),
+            tokens,
+            num_computed_tokens,
+            block_ids,
+            positions,
+            is_prefill,
+            &mut self.kv_cache,
+        )
     }
 
     pub fn forward_quantized_demo(

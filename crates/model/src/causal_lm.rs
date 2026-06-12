@@ -3,6 +3,8 @@
 //! Centralizes greedy sampling and batch forward loops so architecture-specific
 //! models (Llama, Mistral, Qwen3, …) stay focused on layer wiring.
 
+use crate::components::decoder_block::AsDecoderBlock;
+use crate::paged_tensor::PagedKvCache;
 use candle_core::{D, Device, Module, Tensor};
 use candle_nn::Embedding;
 use vllm_traits::{BatchOutput, ModelError, Result, SeqId, TokenId};
@@ -85,6 +87,85 @@ where
         seq_ids: seq_ids.to_vec(),
         next_tokens,
     })
+}
+
+/// Run all decoder layers with paged KV cache (prefill or single-token decode).
+pub fn run_decoder_layers<L: AsDecoderBlock>(
+    layers: &[L],
+    mut hidden: Tensor,
+    kv_cache: &mut PagedKvCache,
+    block_ids: &[usize],
+    positions: &[usize],
+    num_computed_tokens: usize,
+    is_prefill: bool,
+) -> Result<Tensor> {
+    if is_prefill {
+        for (layer_idx, layer) in layers.iter().enumerate() {
+            hidden = map_candle(
+                layer
+                    .as_decoder_block()
+                    .forward_prefill(&hidden, kv_cache, layer_idx, block_ids, positions),
+            )?;
+        }
+    } else {
+        let decode_position = [positions[0]];
+        for (layer_idx, layer) in layers.iter().enumerate() {
+            hidden = map_candle(layer.as_decoder_block().forward_decode(
+                &hidden,
+                kv_cache,
+                layer_idx,
+                block_ids,
+                num_computed_tokens,
+                &decode_position,
+            ))?;
+        }
+    }
+    Ok(hidden)
+}
+
+/// Full causal-LM forward with embedding, decoder stack, final norm, and LM head.
+#[allow(clippy::too_many_arguments)]
+pub fn forward_with_paged_kv<L, Norm, Head>(
+    embed_tokens: &Embedding,
+    layers: &[L],
+    norm: &Norm,
+    lm_head: &Head,
+    device: &Device,
+    vocab_size: usize,
+    tokens: &[TokenId],
+    num_computed_tokens: usize,
+    block_ids: &[usize],
+    positions: &[usize],
+    is_prefill: bool,
+    kv_cache: &mut PagedKvCache,
+) -> Result<(Tensor, usize)>
+where
+    L: AsDecoderBlock,
+    Norm: Module,
+    Head: Module,
+{
+    if tokens.is_empty() {
+        let logits = map_candle(Tensor::zeros(
+            (1, 1, vocab_size),
+            candle_core::DType::F32,
+            device,
+        ))?;
+        return Ok((logits, 0));
+    }
+
+    let hidden = embed_sequence(embed_tokens, tokens, device, is_prefill)?;
+    let hidden = run_decoder_layers(
+        layers,
+        hidden,
+        kv_cache,
+        block_ids,
+        positions,
+        num_computed_tokens,
+        is_prefill,
+    )?;
+    let hidden = map_candle(norm.forward(&hidden))?;
+    let logits = map_candle(lm_head.forward(&hidden))?;
+    Ok((logits, 0))
 }
 
 pub fn mean_pool_embeddings(

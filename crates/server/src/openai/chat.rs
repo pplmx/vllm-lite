@@ -12,6 +12,7 @@ use futures::stream;
 use std::convert::Infallible;
 use tokio::sync::mpsc;
 
+use super::chat_template::{self, ChatTemplate};
 use super::types::*;
 use crate::ApiState;
 
@@ -23,46 +24,8 @@ fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &st
     tokenizer.clean_special_tokens(text)
 }
 
-pub fn build_prompt_from_messages(messages: &[ChatMessage]) -> String {
-    let mut prompt = String::new();
-
-    let im_start = "<|im_start|>";
-    let im_end = "<|im_end|>";
-    let bos_token = "<|endoftext|>"; // Qwen3 uses this as BOS
-
-    // Add BOS token at the beginning
-    prompt.push_str(bos_token);
-
-    for msg in messages {
-        match msg.role.as_str() {
-            "system" => {
-                prompt.push_str(im_start);
-                prompt.push_str("system\n");
-                prompt.push_str(&msg.content);
-                prompt.push_str(im_end);
-                prompt.push('\n');
-            }
-            "user" => {
-                prompt.push_str(im_start);
-                prompt.push_str("user\n");
-                prompt.push_str(&msg.content);
-                prompt.push_str(im_end);
-                prompt.push('\n');
-            }
-            "assistant" => {
-                prompt.push_str(im_start);
-                prompt.push_str("assistant\n");
-                prompt.push_str(&msg.content);
-                prompt.push_str(im_end);
-                prompt.push('\n');
-            }
-            _ => {}
-        }
-    }
-
-    prompt.push_str(im_start);
-    prompt.push_str("assistant\n");
-    prompt
+pub fn build_prompt_from_messages(template: ChatTemplate, messages: &[ChatMessage]) -> String {
+    chat_template::build_prompt(template, messages)
 }
 
 #[allow(dead_code)]
@@ -111,7 +74,8 @@ async fn handle_chat(
         return Err((status, err_resp));
     }
 
-    let prompt = build_prompt_from_messages(&req.messages);
+    let template = ChatTemplate::for_architecture(state.architecture);
+    let prompt = build_prompt_from_messages(template, &req.messages);
     let prompt_tokens = state.tokenizer.encode(&prompt);
     let prompt_tokens_len = prompt_tokens.len();
 
@@ -196,7 +160,8 @@ pub async fn chat_completions(
 
     if is_streaming {
         let start = std::time::Instant::now();
-        let prompt = build_prompt_from_messages(&req.messages);
+        let template = ChatTemplate::for_architecture(state.architecture);
+        let prompt = build_prompt_from_messages(template, &req.messages);
         let prompt_tokens = state.tokenizer.encode(&prompt);
         let prompt_tokens_len = prompt_tokens.len();
 
@@ -429,7 +394,7 @@ mod tests {
             content: "Hello".to_string(),
             name: None,
         }];
-        let prompt = build_prompt_from_messages(&messages);
+        let prompt = build_prompt_from_messages(ChatTemplate::ChatMl, &messages);
         assert_eq!(
             prompt,
             "<|endoftext|><|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\n"
@@ -450,7 +415,7 @@ mod tests {
                 name: None,
             },
         ];
-        let prompt = build_prompt_from_messages(&messages);
+        let prompt = build_prompt_from_messages(ChatTemplate::ChatMl, &messages);
         assert_eq!(
             prompt,
             "<|endoftext|><|im_start|>system\nYou are helpful<|im_end|>\n<|im_start|>user\nHi<|im_end|>\n<|im_start|>assistant\n"
@@ -476,7 +441,7 @@ mod tests {
                 name: None,
             },
         ];
-        let prompt = build_prompt_from_messages(&messages);
+        let prompt = build_prompt_from_messages(ChatTemplate::ChatMl, &messages);
         assert_eq!(
             prompt,
             "<|endoftext|><|im_start|>user\nHi<|im_end|>\n<|im_start|>assistant\nHello!<|im_end|>\n<|im_start|>user\nHow are you?<|im_end|>\n<|im_start|>assistant\n"
