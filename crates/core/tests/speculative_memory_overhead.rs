@@ -12,11 +12,10 @@
 //! since the draft runs on the same model.
 
 use tokio::sync::mpsc;
-use vllm_core::engine::Engine;
 use vllm_core::speculative::SelfSpeculativeModel;
 use vllm_core::speculative::SpeculationConfig;
 use vllm_core::types::{AdaptiveDraftConfig, Request, SchedulerConfig};
-use vllm_testing::IncrementModel;
+use vllm_testing::{IncrementModel, TestFixtures};
 use vllm_traits::ModelBackend;
 
 /// SPEC-04.3: Verify that the memory overhead of speculative decoding is bounded.
@@ -31,13 +30,8 @@ fn test_speculative_memory_overhead_bounded() {
     let num_kv_blocks = 1024;
 
     // Create engine with speculative mode
-    let mut spec_engine = Engine::with_config(
-        IncrementModel,
-        Some(IncrementModel), // same model as draft
-        config.clone(),
-        4,
-        num_kv_blocks,
-    );
+    let mut spec_engine =
+        TestFixtures::increment_speculative_engine_with(config.clone(), 4, num_kv_blocks);
 
     spec_engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
 
@@ -81,8 +75,7 @@ fn test_speculative_memory_overhead_vs_standard() {
     let num_kv_blocks = 1024;
 
     // Standard engine (no speculative)
-    let mut std_engine =
-        Engine::with_config(IncrementModel, None, config.clone(), 4, num_kv_blocks);
+    let mut std_engine = TestFixtures::increment_engine_with(config.clone(), 4, num_kv_blocks);
 
     let (tx_std, _rx_std) = mpsc::channel(64);
     std_engine.add_request(Request::new(1, vec![10, 20, 30], 10), tx_std);
@@ -99,13 +92,8 @@ fn test_speculative_memory_overhead_vs_standard() {
     }
 
     // Speculative engine
-    let mut spec_engine = Engine::with_config(
-        IncrementModel,
-        Some(IncrementModel),
-        config.clone(),
-        4,
-        num_kv_blocks,
-    );
+    let mut spec_engine =
+        TestFixtures::increment_speculative_engine_with(config.clone(), 4, num_kv_blocks);
 
     spec_engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
 
@@ -169,13 +157,8 @@ fn test_speculative_memory_overhead_scales_with_draft_count() {
     let num_kv_blocks = 1024;
 
     // Low draft count
-    let mut low_draft_engine = Engine::with_config(
-        IncrementModel,
-        Some(IncrementModel),
-        config.clone(),
-        2, // low max_draft_tokens
-        num_kv_blocks,
-    );
+    let mut low_draft_engine =
+        TestFixtures::increment_speculative_engine_with(config.clone(), 2, num_kv_blocks);
     low_draft_engine.enable_adaptive_speculative(AdaptiveDraftConfig {
         min_draft_tokens: 1,
         max_draft_tokens: 2,
@@ -193,13 +176,8 @@ fn test_speculative_memory_overhead_scales_with_draft_count() {
     }
 
     // High draft count
-    let mut high_draft_engine = Engine::with_config(
-        IncrementModel,
-        Some(IncrementModel),
-        config.clone(),
-        8, // high max_draft_tokens
-        num_kv_blocks,
-    );
+    let mut high_draft_engine =
+        TestFixtures::increment_speculative_engine_with(config.clone(), 8, num_kv_blocks);
     high_draft_engine.enable_adaptive_speculative(AdaptiveDraftConfig {
         min_draft_tokens: 4,
         max_draft_tokens: 8,
