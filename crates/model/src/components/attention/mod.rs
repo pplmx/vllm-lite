@@ -6,12 +6,14 @@ pub mod flash;
 pub mod flash_v3;
 pub mod gqa;
 pub mod mla;
+pub mod rope_gqa;
 
 pub use flash_v3::{
     FlashAttentionV3, FlashAttentionV3Config, GqaFlashAttention, MqaFlashAttention,
 };
 pub use gqa::GqaAttention;
 pub use mla::MlaAttention;
+pub use rope_gqa::RopeGqaAttention;
 
 #[derive(Debug, Clone, Default)]
 pub struct AttentionConfig {

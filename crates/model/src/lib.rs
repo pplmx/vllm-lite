@@ -1,4 +1,5 @@
 pub mod arch;
+pub mod causal_lm;
 pub mod components;
 pub mod config;
 pub mod gemma3;

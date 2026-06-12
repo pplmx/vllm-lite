@@ -1,23 +1,18 @@
 use crate::types::{BatchOutput, SeqId, TokenId};
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
 pub struct ModelError {
-    msg: String,
+    message: String,
 }
 
 impl ModelError {
-    pub fn new(msg: impl Into<String>) -> Self {
-        Self { msg: msg.into() }
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
     }
 }
-
-impl std::fmt::Display for ModelError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Model error: {}", self.msg)
-    }
-}
-
-impl std::error::Error for ModelError {}
 
 #[cfg(feature = "candle")]
 impl From<candle_core::Error> for ModelError {

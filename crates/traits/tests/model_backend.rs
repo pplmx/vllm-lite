@@ -146,7 +146,7 @@ fn test_batch_has_decode() {
 #[test]
 fn test_model_error_creation() {
     let err = ModelError::new("test error");
-    assert_eq!(err.to_string(), "Model error: test error");
+    assert_eq!(err.to_string(), "test error");
 }
 
 #[test]

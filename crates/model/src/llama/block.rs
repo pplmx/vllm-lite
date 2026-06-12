@@ -4,15 +4,15 @@ use std::collections::HashMap;
 
 use crate::components::LnLayerNorm;
 use crate::components::SwiGLU;
+use crate::components::attention::RopeGqaAttention;
 use crate::config::ModelConfig;
 use crate::kv_cache::PagedKvCache;
-use crate::qwen3::attention::Qwen3Attention;
 use candle_core::{Result, Tensor};
 
 pub struct LlamaBlock {
     input_layernorm: LnLayerNorm,
     post_attention_layernorm: LnLayerNorm,
-    attention: Qwen3Attention,
+    attention: RopeGqaAttention,
     mlp: SwiGLU,
 }
 
@@ -35,7 +35,7 @@ impl LlamaBlock {
         let post_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
         let post_attention_layernorm = LnLayerNorm::new(post_ln_weight, post_ln_bias, rms_norm_eps);
 
-        let attention = Qwen3Attention::new(
+        let attention = RopeGqaAttention::new(
             hidden_size,
             num_heads,
             num_kv_heads,
@@ -170,7 +170,7 @@ impl LlamaBlock {
         let post_attention_layernorm =
             LnLayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
 
-        let attention = Qwen3Attention::new_with_weights(
+        let attention = RopeGqaAttention::new_with_weights(
             hidden_size,
             num_heads,
             num_kv_heads,

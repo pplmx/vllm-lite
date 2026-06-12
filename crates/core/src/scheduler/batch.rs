@@ -1,4 +1,5 @@
 use crate::error::Result;
+use crate::sync::lock_mutex;
 use vllm_traits::{SeqId, TokenId};
 
 impl crate::engine::Engine {
@@ -33,7 +34,7 @@ impl crate::engine::Engine {
             "Processing batch"
         );
 
-        let output = self.target_model.lock().unwrap().forward(
+        let output = lock_mutex(&self.target_model)?.forward(
             &batch.seq_ids,
             &batch.input_tokens,
             &batch.positions,

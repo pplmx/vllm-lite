@@ -5,6 +5,7 @@ use crate::error::Result;
 use crate::metrics::EnhancedMetricsCollector;
 use crate::scheduler::engine::SchedulerEngine;
 use crate::speculative::AdaptiveSpeculativeDecoder;
+use crate::sync::lock_mutex;
 use crate::types::AdaptiveDraftConfig;
 use crate::types::{EngineMessage, Request, SchedulerConfig};
 use std::collections::HashMap;
@@ -443,7 +444,7 @@ impl Engine {
                     continue;
                 }
 
-                let logits = self.target_model.lock().unwrap().forward_logits(
+                let logits = lock_mutex(&self.target_model)?.forward_logits(
                     &[0],
                     &[vec![beam.tokens.last().copied().unwrap_or(0)]],
                     &[vec![beam.tokens.len()]],
@@ -558,7 +559,7 @@ impl Engine {
 
         let start = std::time::Instant::now();
         let result = {
-            let mut model = self.target_model.lock().unwrap();
+            let mut model = lock_mutex(&self.target_model)?;
             model.forward(
                 &batch.seq_ids,
                 &batch.input_tokens,
