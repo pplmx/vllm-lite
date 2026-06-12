@@ -61,6 +61,6 @@ clean:
 bench:
     cargo bench --workspace --all-features --no-fail-fast
 
-# Run quick benchmarks (when bench targets exist)
+# Run quick benchmarks (core radix cache only)
 bench-quick:
-    @echo "No benchmark targets configured; use 'just bench' after restoring bench crates."
+    cargo bench -p vllm-core --bench radix_cache -- --sample-size 10

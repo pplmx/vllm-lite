@@ -25,8 +25,8 @@ Thumbs.db
 # Test coverage
 coverage/
 
-# Benchmarks
-benches/
+# Workspace-level benchmark crate (not per-crate criterion benches)
+/benches/
 .worktrees/
 .worktrees/
 .claude/
