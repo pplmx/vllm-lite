@@ -1,5 +1,5 @@
 #![allow(clippy::all, unused)]
-use crate::kv_cache::PagedKvCache;
+use crate::paged_tensor::PagedKvCache;
 use crate::qwen3_5::ssm::{MambaBlock, SSMConfig};
 use crate::qwen3_config::Qwen3Config;
 use candle_core::{Device, Module, Result as CandleResult, Tensor};

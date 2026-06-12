@@ -1,5 +1,5 @@
 use candle_core::{DType, Device, Result, Tensor};
-use vllm_model::kv_cache::PagedKvCache;
+use vllm_model::paged_tensor::PagedKvCache;
 
 #[test]
 fn test_write_kv_batch_basic() -> Result<()> {

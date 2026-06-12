@@ -1,6 +1,6 @@
 #![allow(clippy::all, non_snake_case, dead_code, clippy::too_many_arguments)]
 use crate::components::positional::MRoPE;
-use crate::kv_cache::PagedKvCache;
+use crate::paged_tensor::PagedKvCache;
 use crate::qwen3_config::Qwen3Config;
 use candle_core::{DType, Device, Module, Result as CandleResult, Tensor};
 use candle_nn::{Conv1d, Embedding, LayerNorm, Linear, VarBuilder, conv1d};

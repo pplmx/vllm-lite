@@ -1,17 +1,17 @@
 #![allow(clippy::type_complexity)]
 
-use super::attention::Qwen3Attention;
 use crate::components::AttentionConfig;
 use crate::components::LnLayerNorm;
 use crate::components::SwiGLU;
-use crate::kv_cache::PagedKvCache;
+use crate::components::attention::RopeGqaAttention;
+use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 use vllm_dist::TensorParallelConfig;
 
 pub struct TransformerBlock {
     input_layernorm: LnLayerNorm,
     post_attention_layernorm: LnLayerNorm,
-    attention: Qwen3Attention,
+    attention: RopeGqaAttention,
     mlp: SwiGLU,
     #[allow(dead_code)]
     tp_config: Option<TensorParallelConfig>,
@@ -44,7 +44,7 @@ impl TransformerBlock {
         let post_attention_layernorm = LnLayerNorm::new(post_ln_weight, post_ln_bias, rms_norm_eps);
 
         let vb_attn = vb.pp("attn");
-        let attention = Qwen3Attention::new(
+        let attention = RopeGqaAttention::new(
             hidden_size,
             num_heads,
             num_kv_heads,
@@ -91,7 +91,7 @@ impl TransformerBlock {
         let post_attention_layernorm = LnLayerNorm::new(post_ln_weight, post_ln_bias, rms_norm_eps);
 
         let vb_attn = vb.pp("attn");
-        let attention = Qwen3Attention::new(
+        let attention = RopeGqaAttention::new(
             hidden_size,
             num_heads,
             num_kv_heads,
@@ -170,7 +170,7 @@ impl TransformerBlock {
         let post_attention_layernorm =
             LnLayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
 
-        let attention = Qwen3Attention::new_with_weights(
+        let attention = RopeGqaAttention::new_with_weights(
             hidden_size,
             num_heads,
             num_kv_heads,
@@ -444,8 +444,14 @@ mod tests {
             None,
             false,
         )?;
-        let mut kv_cache =
-            crate::kv_cache::PagedKvCache::new(1, num_heads, head_dim, 8, device.clone(), false)?;
+        let mut kv_cache = crate::paged_tensor::PagedKvCache::new(
+            1,
+            num_heads,
+            head_dim,
+            8,
+            device.clone(),
+            false,
+        )?;
 
         let x = Tensor::ones((1, hidden_size), DType::F32, &device)?;
 
@@ -479,8 +485,14 @@ mod tests {
             None,
             true,
         )?;
-        let mut kv_cache =
-            crate::kv_cache::PagedKvCache::new(1, num_heads, head_dim, 8, device.clone(), false)?;
+        let mut kv_cache = crate::paged_tensor::PagedKvCache::new(
+            1,
+            num_heads,
+            head_dim,
+            8,
+            device.clone(),
+            false,
+        )?;
 
         let x = Tensor::ones((1, hidden_size), DType::F32, &device)?;
         let block_ids: Vec<usize> = vec![0];
@@ -511,8 +523,14 @@ mod tests {
             None,
             false,
         )?;
-        let mut kv_cache =
-            crate::kv_cache::PagedKvCache::new(1, num_heads, head_dim, 16, device.clone(), false)?;
+        let mut kv_cache = crate::paged_tensor::PagedKvCache::new(
+            1,
+            num_heads,
+            head_dim,
+            16,
+            device.clone(),
+            false,
+        )?;
 
         for step in 0..5 {
             let x = Tensor::ones((1, hidden_size), DType::F32, &device)?;
@@ -553,8 +571,14 @@ mod tests {
             None,
             false,
         )?;
-        let mut kv_cache =
-            crate::kv_cache::PagedKvCache::new(1, num_heads, head_dim, 4, device.clone(), false)?;
+        let mut kv_cache = crate::paged_tensor::PagedKvCache::new(
+            1,
+            num_heads,
+            head_dim,
+            4,
+            device.clone(),
+            false,
+        )?;
 
         for step in 0..24 {
             let x = Tensor::ones((1, hidden_size), DType::F32, &device)?;

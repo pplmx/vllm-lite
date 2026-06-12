@@ -95,7 +95,7 @@ fn test_adaptive_speculative_with_same_model_for_draft() {
     // Then use adaptive speculative for decode steps
     let mut decode_iterations = 0;
     while engine.has_pending() && decode_iterations < 50 {
-        let result = engine.step_adaptive_speculative();
+        let result = engine.step();
         assert!(
             result.is_ok(),
             "step_adaptive_speculative failed: {:?}",
@@ -136,7 +136,7 @@ fn test_adaptive_speculative_run_loop_uses_adaptive() {
         if !engine.has_pending() {
             break;
         }
-        let _ = engine.step_adaptive_speculative();
+        let _ = engine.step();
     }
 
     assert!(!engine.has_pending());
@@ -187,7 +187,7 @@ fn test_speculative_verification_with_multiple_drafts() {
         if !engine.has_pending() {
             break;
         }
-        let result = engine.step_adaptive_speculative();
+        let result = engine.step();
         assert!(
             result.is_ok(),
             "Speculative step failed: {:?}",

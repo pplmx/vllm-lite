@@ -6,7 +6,7 @@ use crate::components::LnLayerNorm;
 use crate::components::SwiGLU;
 use crate::components::attention::RopeGqaAttention;
 use crate::config::ModelConfig;
-use crate::kv_cache::PagedKvCache;
+use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 
 pub struct MistralBlock {

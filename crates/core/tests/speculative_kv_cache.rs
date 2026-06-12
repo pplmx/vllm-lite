@@ -50,7 +50,7 @@ fn test_speculative_kv_append_draft_tokens_to_input() {
     assert!(prefill_result.is_ok(), "Prefill should succeed");
 
     // Run speculative decode step
-    let decode_result = engine.step_adaptive_speculative();
+    let decode_result = engine.step();
     assert!(decode_result.is_ok(), "Speculative step should succeed");
 
     // The engine should produce at least one output token per sequence
@@ -94,7 +94,7 @@ fn test_speculative_kv_append_multiple_drafts() {
         if !engine.has_pending() {
             break;
         }
-        let result = engine.step_adaptive_speculative();
+        let result = engine.step();
         assert!(result.is_ok(), "Speculative step should succeed");
         if let Ok(outputs) = result {
             total_outputs += outputs.len();
@@ -132,7 +132,7 @@ fn test_speculative_kv_reuse_single_forward_pass() {
 
     // Speculative step - this should invoke verify_and_track which
     // extends input_tokens with draft tokens in a single forward pass
-    let result = engine.step_adaptive_speculative();
+    let result = engine.step();
     assert!(result.is_ok(), "Speculative step should succeed");
 
     // Verify we got tokens
@@ -158,7 +158,7 @@ fn test_speculative_kv_reuse_accepted_prefix() {
 
     // Run speculative decode - since both models are IncrementModel,
     // all draft tokens should be accepted (100% acceptance rate)
-    let result = engine.step_adaptive_speculative();
+    let result = engine.step();
     assert!(result.is_ok());
 
     // After speculative step, engine should update with the verified output tokens.
@@ -269,7 +269,7 @@ fn test_speculative_kv_and_standard_produce_same_output_count() {
 
     let mut spec_tokens = 0;
     while spec_engine.has_pending() {
-        let result = spec_engine.step_adaptive_speculative();
+        let result = spec_engine.step();
         assert!(result.is_ok());
         if let Ok(outputs) = result {
             spec_tokens += outputs.len();

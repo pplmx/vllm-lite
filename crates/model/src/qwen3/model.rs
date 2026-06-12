@@ -1,5 +1,8 @@
 #![allow(dead_code)]
-use crate::kv_cache::PagedKvCache;
+use crate::causal_lm::{
+    embed_sequence, forward_batch, greedy_sample_token, logits_to_vector, map_candle,
+};
+use crate::paged_tensor::PagedKvCache;
 use crate::qwen3_config::Qwen3Config;
 use candle_core::{Device, Module, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, LayerNorm, Linear};
@@ -322,70 +325,42 @@ impl Qwen3Model {
                 is_prefill = is_prefill,
                 "Empty tokens received"
             );
-            let hidden_size = self.config.hidden_size();
-            let _dummy = Tensor::zeros((1, 1, hidden_size), candle_core::DType::F32, &self.device)
-                .map_err(|e| EngineError::new(e.to_string()))?;
-            let logits = Tensor::zeros(
+            let logits = map_candle(Tensor::zeros(
                 (1, 1, self.config.vocab_size()),
                 candle_core::DType::F32,
                 &self.device,
-            )
-            .map_err(|e| EngineError::new(e.to_string()))?;
+            ))?;
             return Ok((logits, 0));
         }
 
-        let hidden = if is_prefill {
-            let t =
-                Tensor::new(tokens, &self.device).map_err(|e| EngineError::new(e.to_string()))?;
-            self.embed_tokens
-                .forward(&t)
-                .map_err(|e| EngineError::new(e.to_string()))?
-                .unsqueeze(0)
-                .map_err(|e| EngineError::new(e.to_string()))?
-        } else {
-            let last_token = tokens.last().copied().unwrap_or(0);
-            let t = Tensor::new(&[last_token], &self.device)
-                .map_err(|e| EngineError::new(e.to_string()))?;
-            self.embed_tokens
-                .forward(&t)
-                .map_err(|e| EngineError::new(e.to_string()))?
-                .unsqueeze(0)
-                .map_err(|e| EngineError::new(e.to_string()))?
-        };
-        let mut hidden = hidden;
+        let mut hidden = embed_sequence(&self.embed_tokens, tokens, &self.device, is_prefill)?;
 
         if is_prefill {
             for (layer_idx, layer) in self.layers.iter_mut().enumerate() {
-                hidden = layer
-                    .forward_prefill(&hidden, &mut self.kv_cache, layer_idx, block_ids, positions)
-                    .map_err(|e| EngineError::new(e.to_string()))?;
+                hidden = map_candle(layer.forward_prefill(
+                    &hidden,
+                    &mut self.kv_cache,
+                    layer_idx,
+                    block_ids,
+                    positions,
+                ))?;
             }
         } else {
-            let position = positions[0]; // positions contains the current decode position
-            let decode_position = [position];
+            let decode_position = [positions[0]];
             for (layer_idx, layer) in self.layers.iter_mut().enumerate() {
-                hidden = layer
-                    .forward_decode(
-                        &hidden,
-                        &mut self.kv_cache,
-                        layer_idx,
-                        block_ids,
-                        num_computed_tokens,
-                        &decode_position,
-                    )
-                    .map_err(|e| EngineError::new(e.to_string()))?;
+                hidden = map_candle(layer.forward_decode(
+                    &hidden,
+                    &mut self.kv_cache,
+                    layer_idx,
+                    block_ids,
+                    num_computed_tokens,
+                    &decode_position,
+                ))?;
             }
         }
 
-        hidden = self
-            .norm
-            .forward(&hidden)
-            .map_err(|e| EngineError::new(e.to_string()))?;
-        let logits = self
-            .lm_head
-            .forward(&hidden)
-            .map_err(|e| EngineError::new(e.to_string()))?;
-
+        hidden = map_candle(self.norm.forward(&hidden))?;
+        let logits = map_candle(self.lm_head.forward(&hidden))?;
         Ok((logits, 0))
     }
 
@@ -438,96 +413,15 @@ impl ModelBackend for Qwen3Model {
         num_computed_tokens: &[usize],
         is_prefill: &[bool],
     ) -> EngineResult<BatchOutput> {
-        if seq_ids.is_empty() {
-            return Ok(BatchOutput {
-                seq_ids: vec![],
-                next_tokens: vec![],
-            });
-        }
-
-        // Group indices by prefill/decode status
-        let mut prefill_indices: Vec<usize> = vec![];
-        let mut decode_indices: Vec<usize> = vec![];
-
-        for (i, &is_pf) in is_prefill.iter().enumerate() {
-            if is_pf {
-                prefill_indices.push(i);
-            } else {
-                decode_indices.push(i);
-            }
-        }
-
-        let mut next_tokens = vec![0u32; seq_ids.len()];
-
-        // Process prefill sequences
-        if !prefill_indices.is_empty() {
-            for &idx in &prefill_indices {
-                let tokens = &input_tokens[idx];
-                let pos = &positions[idx];
-                let blocks = &kv_block_ids[idx];
-                let computed = num_computed_tokens[idx];
-
-                let (logits, _) = self
-                    .forward_with_cache(
-                        tokens, computed, blocks, pos, true, // is_prefill
-                    )
-                    .map_err(|e| EngineError::new(e.to_string()))?;
-
-                use candle_core::D;
-                // logits shape: [batch=1, seq_len, vocab_size]
-                // For prefill, take the last token's logits: narrow -> squeeze -> argmax
-                let seq_len = logits.dims()[1];
-                let last_logits = logits
-                    .narrow(1, seq_len - 1, 1)
-                    .map_err(|e| EngineError::new(e.to_string()))?
-                    .squeeze(1)
-                    .map_err(|e| EngineError::new(e.to_string()))?
-                    .squeeze(0)
-                    .map_err(|e| EngineError::new(e.to_string()))?;
-
-                // argmax on last dim gives scalar
-                let next = last_logits
-                    .argmax(D::Minus1)
-                    .map_err(|e| EngineError::new(e.to_string()))?
-                    .to_vec0::<u32>()
-                    .map_err(|e| EngineError::new(e.to_string()))?;
-                next_tokens[idx] = next;
-            }
-        }
-
-        // Process decode sequences
-        if !decode_indices.is_empty() {
-            for &idx in &decode_indices {
-                let tokens = &input_tokens[idx];
-                let pos = &positions[idx];
-                let blocks = &kv_block_ids[idx];
-                let computed = num_computed_tokens[idx];
-
-                let (logits, _) = self
-                    .forward_with_cache(
-                        tokens, computed, blocks, pos, false, // is_decode
-                    )
-                    .map_err(|e| EngineError::new(e.to_string()))?;
-
-                use candle_core::D;
-                // logits shape: [batch=1, seq=1, vocab_size] for decode (3D)
-                // squeeze batch and seq, then argmax
-                let next = logits
-                    .squeeze(0)
-                    .map_err(|e| EngineError::new(e.to_string()))?
-                    .squeeze(0)
-                    .map_err(|e| EngineError::new(e.to_string()))?
-                    .argmax(D::Minus1)
-                    .map_err(|e| EngineError::new(e.to_string()))?
-                    .to_vec0::<u32>()
-                    .map_err(|e| EngineError::new(e.to_string()))?;
-                next_tokens[idx] = next;
-            }
-        }
-
-        Ok(BatchOutput {
-            seq_ids: seq_ids.to_vec(),
-            next_tokens,
+        forward_batch(seq_ids, is_prefill, |i, prefill| {
+            let (logits, _) = self.forward_with_cache(
+                &input_tokens[i],
+                num_computed_tokens[i],
+                &kv_block_ids[i],
+                &positions[i],
+                prefill,
+            )?;
+            greedy_sample_token(&logits, prefill)
         })
     }
 
@@ -540,47 +434,17 @@ impl ModelBackend for Qwen3Model {
         num_computed_tokens: &[usize],
         is_prefill: &[bool],
     ) -> EngineResult<Vec<Vec<f32>>> {
-        if seq_ids.is_empty() {
-            return Ok(vec![]);
-        }
-
         let mut results = Vec::with_capacity(seq_ids.len());
-
         for i in 0..seq_ids.len() {
-            let tokens = &input_tokens[i];
-            let pos = &positions[i];
-            let blocks = &kv_block_ids[i];
-            let computed = num_computed_tokens[i];
-            let pf = is_prefill[i];
-
-            let (logits, _) = self.forward_with_cache(tokens, computed, blocks, pos, pf)?;
-
-            // logits shape: [batch, seq_len, vocab_size]
-            // Take last token's logits for sampling
-            let logits_vec = if pf {
-                // Prefill: take last position
-                let seq_len = logits.dims()[1];
-                logits
-                    .narrow(1, seq_len - 1, 1)
-                    .map_err(|e| EngineError::new(e.to_string()))?
-                    .squeeze(1)
-                    .map_err(|e| EngineError::new(e.to_string()))?
-                    .to_vec1::<f32>()
-                    .map_err(|e| EngineError::new(e.to_string()))?
-            } else {
-                // Decode: squeeze batch and seq dimensions
-                logits
-                    .squeeze(0)
-                    .map_err(|e| EngineError::new(e.to_string()))?
-                    .squeeze(0)
-                    .map_err(|e| EngineError::new(e.to_string()))?
-                    .to_vec1::<f32>()
-                    .map_err(|e| EngineError::new(e.to_string()))?
-            };
-
-            results.push(logits_vec);
+            let (logits, _) = self.forward_with_cache(
+                &input_tokens[i],
+                num_computed_tokens[i],
+                &kv_block_ids[i],
+                &positions[i],
+                is_prefill[i],
+            )?;
+            results.push(logits_to_vector(&logits, is_prefill[i])?);
         }
-
         Ok(results)
     }
 

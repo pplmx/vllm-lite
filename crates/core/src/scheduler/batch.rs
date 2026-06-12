@@ -3,14 +3,8 @@ use crate::sync::lock_mutex;
 use vllm_traits::{SeqId, TokenId};
 
 impl crate::engine::Engine {
-    /// Backward-compatible non-speculative step.
-    /// Delegates to the unified `step(Some(0))` path.
-    pub fn step(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
-        self.step_internal()
-    }
-
-    /// Internal non-speculative step implementation.
-    pub(crate) fn step_internal(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
+    /// Regular (non-speculative) decode step.
+    pub(crate) fn step_regular(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
         let start = std::time::Instant::now();
         let batch = self.scheduler.build_batch();
         if batch.is_empty() {
@@ -85,5 +79,19 @@ impl crate::engine::Engine {
         }
 
         Ok(results)
+    }
+
+    /// Run one scheduling step (regular or speculative depending on engine configuration).
+    pub fn step(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
+        if self.speculative_mode && self.draft_model.is_some() {
+            let max_draft = self
+                .adaptive_decoder
+                .as_ref()
+                .map(|d| d.current_max_draft_tokens())
+                .unwrap_or(self.max_draft_tokens);
+            self.step_speculative_inner(max_draft)
+        } else {
+            self.step_regular()
+        }
     }
 }
