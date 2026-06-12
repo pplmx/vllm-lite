@@ -32,8 +32,8 @@ fn make_seq(id: u64, tokens: Vec<u32>, status: Status, kv_blocks: Vec<usize>) ->
 
 /// SPEC-03.4: Verify that the verification pass builds a batch that includes
 /// draft tokens in the input (i.e., the KV cache inputs are extended to include
-/// draft positions). This checks that `verify_and_track` and `verify_draft_tokens`
-/// in engine/speculative.rs create the extended input_tokens with draft tokens.
+/// draft positions). This checks that logit-based verification in
+/// engine/speculative.rs extends input_tokens with draft tokens.
 #[test]
 #[ignore]
 fn test_speculative_kv_append_draft_tokens_to_input() {
@@ -130,8 +130,7 @@ fn test_speculative_kv_reuse_single_forward_pass() {
     let prefill = engine.step();
     assert!(prefill.is_ok());
 
-    // Speculative step - this should invoke verify_and_track which
-    // extends input_tokens with draft tokens in a single forward pass
+    // Speculative step extends input_tokens with draft tokens in a single forward pass
     let result = engine.step();
     assert!(result.is_ok(), "Speculative step should succeed");
 
@@ -278,7 +277,7 @@ fn test_speculative_kv_and_standard_produce_same_output_count() {
 
     // Both should produce at least one output token and the engine should
     // have completed processing (no pending remaining).
-    // Note: step_adaptive_speculative uses a different verification loop than
+    // Note: speculative step() uses logit verification rather than
     // step(), so the exact token count may differ. The key behavioral assertion
     // is that both complete without errors.
     assert!(

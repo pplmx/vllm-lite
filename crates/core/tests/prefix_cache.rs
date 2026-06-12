@@ -1,6 +1,6 @@
 use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
-use vllm_core::kv_cache::{BlockAllocator, PrefixCache, hash_tokens};
+use vllm_core::scheduler::RadixTree;
 use vllm_core::types::{Request, SchedulerConfig, SeqId, TokenId};
 use vllm_testing::StubModel;
 
@@ -241,33 +241,25 @@ fn test_prefix_hit_partial_prefill() {
 }
 
 #[test]
-fn test_prefix_match_caching() {
-    let mut cache = PrefixCache::default();
-    let _alloc = BlockAllocator::new(1000);
-
-    // Insert prefixes - more entries to make O(n) slower
+fn test_radix_repeated_prefix_lookup_is_fast() {
+    let mut tree = RadixTree::new();
     for i in 0usize..500 {
         let tokens: Vec<u32> = (0u32..(i as u32) + 1).collect();
-        let key = hash_tokens(&tokens);
-        cache.insert(key, vec![i], i + 1);
+        tree.insert(&tokens, vec![i]);
     }
 
-    // Find same prefix multiple times - should hit cache
     let search_tokens: Vec<u32> = (0u32..250).collect();
-
-    // Warm up
-    let _ = cache.find_prefix_match(&search_tokens);
+    let _ = tree.longest_prefix_match(&search_tokens);
 
     let start = std::time::Instant::now();
     for _ in 0..1000 {
-        let _ = cache.find_prefix_match(&search_tokens);
+        let _ = tree.longest_prefix_match(&search_tokens);
     }
     let elapsed = start.elapsed();
 
-    // With caching, 1000 lookups should be very fast
     assert!(
         elapsed.as_millis() < 100,
-        "Caching should make repeated lookups fast: {:?}",
+        "Radix prefix lookups should stay fast: {:?}",
         elapsed
     );
 }

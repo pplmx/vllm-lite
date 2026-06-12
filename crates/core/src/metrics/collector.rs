@@ -1,5 +1,5 @@
 // crates/core/src/metrics/collector.rs
-use super::legacy::{LockFreeMetrics, MetricsSnapshot};
+use super::lock_free::{LockFreeMetrics, MetricsSnapshot};
 use dashmap::DashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use vllm_traits::SeqId;

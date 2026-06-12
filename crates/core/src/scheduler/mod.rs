@@ -65,9 +65,6 @@
 //!   - `MemoryManager` - Main interface
 //!   - `allocator` - Block allocation with free list
 //!   - `eviction` - LRU-based eviction policies
-//! - `cache` - KV cache management
-//!   - `prefix_cache` - Prefix-based cache lookup
-//!
 //! ### Prefix Caching
 //! - `radix_cache` - Radix tree for O(k) prefix lookup
 //!   - `RadixTree` - Prefix matching
@@ -101,7 +98,6 @@
 
 // === Module Declarations ===
 
-pub mod cache;
 pub mod cuda_graph;
 pub mod packing;
 pub mod phase_scheduler;

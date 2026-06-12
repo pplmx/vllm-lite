@@ -478,55 +478,6 @@ fn test_memory_manager_select_victims() {
 }
 
 #[test]
-fn test_cache_manager_prefix_match() {
-    use vllm_core::scheduler::cache::{CacheManager, hash_tokens};
-
-    let mut cache = CacheManager::new();
-
-    // Insert a cached entry
-    let key = hash_tokens(&[1, 2, 3]);
-    cache.insert(key, vec![1, 2], 3);
-
-    // Find prefix match
-    let result = cache.find_prefix_match(&[1, 2, 3, 4, 5]);
-    assert!(result.is_some());
-    assert_eq!(result.unwrap().token_count, 3);
-
-    // No match for unrelated tokens
-    let no_result = cache.find_prefix_match(&[10, 20]);
-    assert!(no_result.is_none());
-
-    // Test cache stats
-    let stats = cache.stats();
-    assert_eq!(stats.entries, 1);
-}
-
-#[test]
-fn test_cache_manager_eviction() {
-    use vllm_core::scheduler::cache::{CacheManager, PrefixCacheConfig};
-    use vllm_core::scheduler::memory::BlockAllocator;
-
-    // Create cache with small limits
-    let mut cache = CacheManager::with_config(PrefixCacheConfig {
-        max_entries: Some(2),
-        max_blocks: Some(10),
-    });
-    let mut allocator = BlockAllocator::new(20);
-
-    // Insert 3 entries (should trigger eviction during insert)
-    cache.insert(1, vec![1, 2], 2);
-    cache.insert(2, vec![3, 4], 2);
-    cache.insert(3, vec![5, 6], 2);
-
-    // Should have at most 2 entries due to limit (or 3 if auto-evict not triggered yet)
-    // The cache may still have 3 entries but eviction should work when called explicitly
-    cache.evict(&mut allocator);
-
-    // After explicit evict, should be within limits
-    assert!(cache.len() <= 3); // Can't guarantee exact count due to timing
-}
-
-#[test]
 fn test_preemption_execution() {
     let config = SchedulerConfig {
         max_num_seqs: 10,
