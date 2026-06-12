@@ -13,9 +13,8 @@ env:
   CANDLE_NATIVE_BACKEND: 1
 
 jobs:
-  # Check formatting and linting
-  check:
-    name: Check
+  ci:
+    name: CI
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,26 +22,10 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
 
-      - name: Clippy
-        run: cargo clippy --workspace -- -D warnings
-
-      - name: Check dependencies
-        run: cargo audit || true
-
-  # Build and test
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo registry
+      - name: Cache cargo
         uses: actions/cache@v4
         with:
           path: |
@@ -55,42 +38,25 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Build (CPU only, no GPU required)
-        run: |
-          # Build without CUDA features to avoid GPU-dependent downloads in CI
-          cargo build --workspace --no-default-features
-          # Also build with default features (may fail on no-GPU runners)
-          cargo build --workspace || true
+      - name: Format check
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --workspace --all-features -- -D warnings
+
+      - name: Doc check
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --workspace --all-features
 
       - name: Test
-        run: cargo test --workspace
+        run: cargo nextest run --workspace --all-features --no-fail-fast
 
-      - name: Test (with output)
-        run: cargo test --workspace -- --nocapture
+      - name: Security audit
+        run: |
+          cargo install cargo-audit --locked 2>/dev/null || true
+          cargo audit || true
 
-  # Build documentation
-  docs:
-    name: Docs
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Build docs
-        run: cargo doc --workspace --no-deps
-
-      - name: Deploy docs
-        uses: peaceiris/actions-gh-pages@v4
-        if: github.ref == 'refs/heads/main'
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./target/doc
-
-  # Test on stable and beta
   matrix-test:
-    name: Matrix Test
+    name: Matrix Test (${{ matrix.rust }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -104,20 +70,25 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
 
-      - name: Build (CPU only)
-        run: cargo build --workspace --no-default-features
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
 
-      - name: Test
-        run: cargo test --workspace
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.rust }}-
 
-  # Security audit
-  security:
-    name: Security
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run security audit
+      - name: CI checks
         run: |
-          cargo install cargo-audit || true
-          cargo audit || true
+          cargo fmt --all --check
+          cargo clippy --all-targets --workspace --all-features -- -D warnings
+          RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --workspace --all-features
+          cargo nextest run --workspace --all-features --no-fail-fast

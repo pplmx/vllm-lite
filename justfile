@@ -27,7 +27,7 @@ fmt-check:
 
 # Run clippy (CI style)
 clippy:
-    cargo clippy --all-targets --workspace -- -D warnings
+    cargo clippy --all-targets --workspace --all-features -- -D warnings
 
 # Check documentation (CI style)
 doc-check:
@@ -61,6 +61,6 @@ clean:
 bench:
     cargo bench --workspace --all-features --no-fail-fast
 
-# Run quick benchmarks (scheduler and core only)
+# Run quick benchmarks (when bench targets exist)
 bench-quick:
-    cargo bench -p vllm-core -p vllm-lite-benchmarks -- --test-threads=1
+    @echo "No benchmark targets configured; use 'just bench' after restoring bench crates."

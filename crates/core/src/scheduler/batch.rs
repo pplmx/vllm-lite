@@ -73,7 +73,9 @@ impl crate::engine::Engine {
 
         if !batch.seq_ids.is_empty() {
             self.scheduler.metrics.record_tokens(total_tokens as u64);
-            self.scheduler.metrics.record_batch_size(batch.seq_ids.len());
+            self.scheduler
+                .metrics
+                .record_batch_size(batch.seq_ids.len());
         }
 
         let elapsed = start.elapsed().as_millis() as f64;
