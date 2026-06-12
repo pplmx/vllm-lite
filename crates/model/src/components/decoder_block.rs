@@ -108,3 +108,62 @@ impl AsDecoderBlock for RopeGqaDecoderBlock {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::components::AttentionConfig;
+    use crate::components::LnLayerNorm;
+    use crate::components::SwiGLU;
+    use crate::components::attention::RopeGqaAttention;
+    use candle_core::{DType, Device, Tensor};
+
+    fn tiny_block(device: &Device) -> RopeGqaDecoderBlock {
+        let hidden = 64usize;
+        let input_ln_weight = Tensor::ones(hidden, DType::F32, device).unwrap();
+        let input_ln_bias = Tensor::zeros(hidden, DType::F32, device).unwrap();
+        let input_layernorm = LnLayerNorm::new(input_ln_weight, input_ln_bias, 1e-5);
+
+        let post_ln_weight = Tensor::ones(hidden, DType::F32, device).unwrap();
+        let post_ln_bias = Tensor::zeros(hidden, DType::F32, device).unwrap();
+        let post_attention_layernorm = LnLayerNorm::new(post_ln_weight, post_ln_bias, 1e-5);
+
+        let attention = RopeGqaAttention::new(
+            hidden,
+            4,
+            2,
+            16,
+            10_000.0,
+            None,
+            AttentionConfig::default(),
+            false,
+        )
+        .unwrap();
+        let mlp = SwiGLU::new(hidden, 128, None).unwrap();
+
+        RopeGqaDecoderBlock::new(input_layernorm, post_attention_layernorm, attention, mlp)
+    }
+
+    #[test]
+    fn test_decoder_prefill_then_decode_shape() {
+        let device = Device::Cpu;
+        let block = tiny_block(&device);
+        let mut kv_cache = PagedKvCache::new(1, 4, 16, 32, device.clone(), false).unwrap();
+
+        let seq_len = 4usize;
+        let x = Tensor::ones((1, seq_len, 64), DType::F32, &device).unwrap();
+        let block_ids: Vec<usize> = (0..seq_len).map(|i| i / 16).collect();
+        let positions: Vec<usize> = (0..seq_len).collect();
+
+        let prefill_out = block
+            .forward_prefill(&x, &mut kv_cache, 0, &block_ids, &positions)
+            .unwrap();
+        assert_eq!(prefill_out.dims(), &[1, seq_len, 64]);
+
+        let decode_x = Tensor::ones((1, 64), DType::F32, &device).unwrap();
+        let decode_out = block
+            .forward_decode(&decode_x, &mut kv_cache, 0, &[0], seq_len, &[seq_len])
+            .unwrap();
+        assert_eq!(decode_out.dims(), &[1, 64]);
+    }
+}

@@ -31,3 +31,7 @@ optional = true
 [dev-dependencies]
 criterion = "0.8"
 vllm-testing = { path = "../testing" }
+
+[[bench]]
+name = "radix_cache"
+harness = false

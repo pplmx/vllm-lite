@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use crate::causal_lm::{
     forward_batch, forward_with_paged_kv, greedy_sample_token, logits_to_vector,
 };
@@ -341,26 +340,6 @@ impl Qwen3Model {
             is_prefill,
             &mut self.kv_cache,
         )
-    }
-
-    pub fn forward_quantized_demo(
-        &mut self,
-        input_tokens: &[TokenId],
-    ) -> EngineResult<(Tensor, usize)> {
-        let positions: Vec<usize> = (0..input_tokens.len()).collect();
-        self.forward_with_cache(input_tokens, 0, &[0], &positions, true)
-            .map_err(|e| EngineError::new(e.to_string()))
-    }
-
-    fn stack_tokens(&self, tokens: &[Vec<TokenId>]) -> EngineResult<Tensor> {
-        let batch_size = tokens.len();
-        let token_ids: Vec<u32> = tokens
-            .iter()
-            .map(|t| t.last().copied().unwrap_or(0))
-            .collect();
-
-        Tensor::from_slice(&token_ids, &[batch_size], &self.device)
-            .map_err(|e| EngineError::new(e.to_string()))
     }
 }
 

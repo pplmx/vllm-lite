@@ -97,29 +97,30 @@ fn build_mistral_inst_prompt(messages: &[ChatMessage]) -> String {
         .join("\n");
 
     let mut prompt = String::from("<s>");
-    let mut expect_user = true;
+    let mut first_user = true;
+    let mut after_assistant = false;
 
     for msg in messages {
         match msg.role.as_str() {
             "system" => {}
-            "user" if expect_user => {
-                if system.is_empty() {
-                    prompt.push_str(&format!("[INST] {} [/INST]", msg.content));
-                } else {
+            "user" => {
+                if after_assistant {
+                    prompt.push(' ');
+                }
+                if first_user && !system.is_empty() {
                     prompt.push_str(&format!(
                         "[INST] <<SYS>>\n{}\n<</SYS>>\n\n{} [/INST]",
                         system, msg.content
                     ));
+                } else {
+                    prompt.push_str(&format!("[INST] {} [/INST]", msg.content));
                 }
-                expect_user = false;
-            }
-            "user" => {
-                prompt.push_str(&format!(" [INST] {} [/INST]", msg.content));
-                expect_user = false;
+                first_user = false;
+                after_assistant = false;
             }
             "assistant" => {
                 prompt.push_str(&msg.content);
-                expect_user = true;
+                after_assistant = true;
             }
             _ => {}
         }
@@ -186,5 +187,68 @@ mod tests {
             ChatTemplate::for_architecture(Architecture::Llama),
             ChatTemplate::Llama3
         );
+    }
+
+    #[test]
+    fn test_template_for_mistral() {
+        assert_eq!(
+            ChatTemplate::for_architecture(Architecture::Mistral),
+            ChatTemplate::MistralInst
+        );
+    }
+
+    #[test]
+    fn test_llama3_system_and_user() {
+        let prompt = build_prompt(
+            ChatTemplate::Llama3,
+            &[msg("system", "Be concise"), msg("user", "Hi")],
+        );
+        assert!(prompt.contains("system"));
+        assert!(prompt.contains("Be concise"));
+        assert!(prompt.contains("user"));
+        assert!(prompt.contains("Hi"));
+        assert!(prompt.ends_with("assistant<|end_header_id|>\n"));
+    }
+
+    #[test]
+    fn test_mistral_system_and_user() {
+        let prompt = build_prompt(
+            ChatTemplate::MistralInst,
+            &[msg("system", "You are helpful"), msg("user", "Hello")],
+        );
+        assert_eq!(
+            prompt,
+            "<s>[INST] <<SYS>>\nYou are helpful\n<</SYS>>\n\nHello [/INST]"
+        );
+    }
+
+    #[test]
+    fn test_mistral_multi_turn() {
+        let prompt = build_prompt(
+            ChatTemplate::MistralInst,
+            &[
+                msg("user", "Hi"),
+                msg("assistant", "Hello!"),
+                msg("user", "Bye"),
+            ],
+        );
+        assert_eq!(prompt, "<s>[INST] Hi [/INST]Hello! [INST] Bye [/INST]");
+    }
+
+    #[test]
+    fn test_plain_prompt() {
+        let prompt = build_prompt(ChatTemplate::Plain, &[msg("user", "Hi")]);
+        assert_eq!(prompt, "user: Hi\n\nassistant: ");
+    }
+
+    #[test]
+    fn test_different_architectures_produce_different_prompts() {
+        let messages = vec![msg("user", "Hello")];
+        let qwen = build_prompt(ChatTemplate::ChatMl, &messages);
+        let llama = build_prompt(ChatTemplate::Llama3, &messages);
+        let mistral = build_prompt(ChatTemplate::MistralInst, &messages);
+        assert_ne!(qwen, llama);
+        assert_ne!(qwen, mistral);
+        assert_ne!(llama, mistral);
     }
 }

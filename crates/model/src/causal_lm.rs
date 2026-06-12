@@ -184,7 +184,72 @@ pub fn mean_pool_embeddings(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candle_nn::Embedding;
+    use crate::config::ModelConfig;
+    use crate::llama::block::new_block;
+    use candle_nn::{Embedding, VarBuilder};
+
+    #[test]
+    fn test_forward_with_paged_kv_prefill_and_decode() {
+        let config = ModelConfig::test_tiny();
+        let device = Device::Cpu;
+        let layer = new_block(&config, 0).unwrap();
+        let layers = vec![layer];
+
+        let vocab = config.vocab_size;
+        let hidden = config.hidden_size;
+        let embeddings = Tensor::zeros((vocab, hidden), candle_core::DType::F32, &device).unwrap();
+        let embed_tokens = Embedding::new(embeddings, hidden);
+
+        let vb = VarBuilder::zeros(candle_core::DType::F32, &device);
+        let norm = candle_nn::linear(hidden, hidden, vb.pp("norm")).unwrap();
+        let lm_head = candle_nn::linear(hidden, vocab, vb.pp("lm_head")).unwrap();
+
+        let mut kv_cache = PagedKvCache::new(
+            1,
+            config.num_heads,
+            config.head_dim,
+            16,
+            device.clone(),
+            false,
+        )
+        .unwrap();
+
+        let tokens = vec![1u32, 2, 3];
+        let positions: Vec<usize> = (0..tokens.len()).collect();
+        let (prefill_logits, _) = forward_with_paged_kv(
+            &embed_tokens,
+            &layers,
+            &norm,
+            &lm_head,
+            &device,
+            vocab,
+            &tokens,
+            0,
+            &[0],
+            &positions,
+            true,
+            &mut kv_cache,
+        )
+        .unwrap();
+        assert_eq!(prefill_logits.dims(), &[1, tokens.len(), vocab]);
+
+        let (decode_logits, _) = forward_with_paged_kv(
+            &embed_tokens,
+            &layers,
+            &norm,
+            &lm_head,
+            &device,
+            vocab,
+            &tokens,
+            tokens.len(),
+            &[0],
+            &[tokens.len()],
+            false,
+            &mut kv_cache,
+        )
+        .unwrap();
+        assert_eq!(decode_logits.dims(), &[1, 1, vocab]);
+    }
 
     #[test]
     fn test_greedy_sample_prefill_takes_last_position() {
