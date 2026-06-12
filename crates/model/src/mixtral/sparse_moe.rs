@@ -101,6 +101,13 @@ impl MixtralSparseMoe {
     }
 
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
+        let squeeze_seq = x.dims().len() == 2;
+        let x = if squeeze_seq {
+            x.unsqueeze(1)?
+        } else {
+            x.clone()
+        };
+
         let (batch, seq, hidden) = x.dims3()?;
 
         trace!(
@@ -111,7 +118,7 @@ impl MixtralSparseMoe {
             "MoE forward"
         );
 
-        let gate_logits = self.gate.forward(x)?;
+        let gate_logits = self.gate.forward(&x)?;
 
         let mut outputs = Vec::new();
 
@@ -149,7 +156,11 @@ impl MixtralSparseMoe {
         }
 
         let output = Tensor::stack(&outputs, 0)?.reshape((batch, seq, hidden))?;
-        Ok(output)
+        if squeeze_seq {
+            output.squeeze(1)
+        } else {
+            Ok(output)
+        }
     }
 }
 
@@ -189,6 +200,23 @@ mod tests {
         let output = moe.forward(&x)?;
 
         assert_eq!(output.dims(), &[2, 3, 256]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_sparse_moe_forward_decode_shape() -> Result<()> {
+        let device = candle_core::Device::Cpu;
+        let moe = MixtralSparseMoe::new(
+            256,
+            4,
+            512,
+            2,
+            candle_nn::VarBuilder::zeros(DType::F32, &device),
+        )?;
+
+        let x = Tensor::ones((2, 256), DType::F32, &device)?;
+        let output = moe.forward(&x)?;
+        assert_eq!(output.dims(), &[2, 256]);
         Ok(())
     }
 }

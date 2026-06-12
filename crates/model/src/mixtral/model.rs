@@ -1,31 +1,37 @@
-//! Mixtral model implementation.
-//!
-//! Weight loading exists; `forward` is still a stub until MoE decode is wired up.
+//! Mixtral causal language model with paged KV cache and sparse MoE.
 
 use std::collections::HashMap;
 
+use crate::causal_lm::{
+    embed_sequence, forward_batch, greedy_sample_token, logits_to_vector, map_candle,
+    mean_pool_embeddings,
+};
+use crate::components::LnLayerNorm;
 use crate::config::ModelConfig;
 use crate::paged_tensor::PagedKvCache;
-use candle_core::{Device, Result as CandleResult, Tensor};
+use candle_core::{Device, Module, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, Linear, VarBuilder};
-use vllm_traits::{BatchOutput, ModelBackend, SeqId, TokenId};
+use vllm_traits::{BatchOutput, BlockId, ModelBackend, Result, SeqId, TokenId};
 
 use super::block::MixtralBlock;
 
-/// Weights are loaded in `from_weights`; `forward` is still a stub.
-#[allow(dead_code)]
 pub struct MixtralModel {
     config: ModelConfig,
     embed_tokens: Embedding,
     layers: Vec<MixtralBlock>,
-    norm: Linear,
+    norm: LnLayerNorm,
     lm_head: Linear,
     kv_cache: PagedKvCache,
     device: Device,
 }
 
 impl MixtralModel {
-    pub fn new(config: ModelConfig, device: Device, num_kv_blocks: usize) -> CandleResult<Self> {
+    pub fn new(
+        config: ModelConfig,
+        device: Device,
+        num_kv_blocks: usize,
+        kv_quantization: bool,
+    ) -> CandleResult<Self> {
         let vocab_size = config.vocab_size;
         let hidden_size = config.hidden_size;
         let num_layers = config.num_layers;
@@ -39,17 +45,20 @@ impl MixtralModel {
             layers.push(MixtralBlock::new(&config, i)?);
         }
 
+        let norm_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
+        let norm_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
+        let norm = LnLayerNorm::new(norm_weight, norm_bias, config.rms_norm_eps);
+
         let vb = VarBuilder::zeros(candle_core::DType::F32, &device);
-        let norm = candle_nn::linear(hidden_size, hidden_size, vb.pp("norm"))?;
         let lm_head = candle_nn::linear(hidden_size, vocab_size, vb.pp("lm_head"))?;
 
         let kv_cache = PagedKvCache::new(
             num_layers,
-            config.num_kv_heads,
+            config.num_heads,
             config.head_dim,
             num_kv_blocks,
             device.clone(),
-            false,
+            kv_quantization,
         )?;
 
         Ok(Self {
@@ -71,7 +80,6 @@ impl MixtralModel {
         kv_quantization: bool,
     ) -> CandleResult<Self> {
         let hidden_size = config.hidden_size;
-        let _vocab_size = config.vocab_size;
         let num_layers = config.num_layers;
 
         let embed_key = "model.embed_tokens.weight";
@@ -91,7 +99,12 @@ impl MixtralModel {
             .get(norm_key)
             .cloned()
             .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", norm_key)))?;
-        let norm = Linear::new(norm_weight, None);
+        let norm_bias = Tensor::zeros(
+            norm_weight.dim(0).unwrap_or(hidden_size),
+            norm_weight.dtype(),
+            norm_weight.device(),
+        )?;
+        let norm = LnLayerNorm::new(norm_weight, norm_bias, config.rms_norm_eps);
 
         let lm_head = if config.tie_word_embeddings {
             Linear::new(embed_weight, None)
@@ -100,14 +113,14 @@ impl MixtralModel {
             let lm_weight = weights
                 .get(lm_key)
                 .cloned()
-                .or_else(|| weights.get("model.embed_tokens.weight").cloned())
+                .or_else(|| weights.get(embed_key).cloned())
                 .ok_or_else(|| candle_core::Error::msg("Missing lm_head.weight"))?;
             Linear::new(lm_weight, None)
         };
 
         let kv_cache = PagedKvCache::new(
             num_layers,
-            config.num_kv_heads,
+            config.num_heads,
             config.head_dim,
             num_kv_blocks,
             device.clone(),
@@ -124,46 +137,133 @@ impl MixtralModel {
             device,
         })
     }
+
+    fn run_decoder_layers(
+        &mut self,
+        mut hidden: Tensor,
+        block_ids: &[usize],
+        positions: &[usize],
+        num_computed_tokens: usize,
+        is_prefill: bool,
+    ) -> Result<Tensor> {
+        if is_prefill {
+            for (layer_idx, layer) in self.layers.iter().enumerate() {
+                hidden = map_candle(layer.forward_prefill(
+                    &hidden,
+                    &mut self.kv_cache,
+                    layer_idx,
+                    block_ids,
+                    positions,
+                ))?;
+            }
+        } else {
+            let decode_position = [positions[0]];
+            for (layer_idx, layer) in self.layers.iter().enumerate() {
+                hidden = map_candle(layer.forward_decode(
+                    &hidden,
+                    &mut self.kv_cache,
+                    layer_idx,
+                    block_ids,
+                    num_computed_tokens,
+                    &decode_position,
+                ))?;
+            }
+        }
+        Ok(hidden)
+    }
+
+    pub fn forward_with_cache(
+        &mut self,
+        tokens: &[TokenId],
+        num_computed_tokens: usize,
+        block_ids: &[BlockId],
+        positions: &[usize],
+        is_prefill: bool,
+    ) -> Result<(Tensor, usize)> {
+        if tokens.is_empty() {
+            let logits = map_candle(Tensor::zeros(
+                (1, 1, self.config.vocab_size),
+                candle_core::DType::F32,
+                &self.device,
+            ))?;
+            return Ok((logits, 0));
+        }
+
+        let hidden = embed_sequence(&self.embed_tokens, tokens, &self.device, is_prefill)?;
+        let hidden = self.run_decoder_layers(
+            hidden,
+            block_ids,
+            positions,
+            num_computed_tokens,
+            is_prefill,
+        )?;
+        let hidden = map_candle(self.norm.forward(&hidden))?;
+        let logits = map_candle(self.lm_head.forward(&hidden))?;
+        Ok((logits, 0))
+    }
 }
 
 impl ModelBackend for MixtralModel {
     fn forward(
         &mut self,
         seq_ids: &[SeqId],
-        _input_tokens: &[Vec<TokenId>],
-        _positions: &[Vec<usize>],
-        _kv_block_ids: &[Vec<usize>],
-        _num_computed_tokens: &[usize],
-        _is_prefill: &[bool],
-    ) -> vllm_traits::Result<BatchOutput> {
-        let next_tokens: Vec<TokenId> = seq_ids.iter().map(|_| 0).collect();
-        Ok(BatchOutput {
-            seq_ids: seq_ids.to_vec(),
-            next_tokens,
+        input_tokens: &[Vec<TokenId>],
+        positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
+    ) -> Result<BatchOutput> {
+        forward_batch(seq_ids, is_prefill, |i, prefill| {
+            let (logits, _) = self.forward_with_cache(
+                &input_tokens[i],
+                num_computed_tokens[i],
+                &kv_block_ids[i],
+                &positions[i],
+                prefill,
+            )?;
+            greedy_sample_token(&logits, prefill)
         })
     }
 
     fn forward_logits(
         &mut self,
         seq_ids: &[SeqId],
-        _input_tokens: &[Vec<TokenId>],
-        _positions: &[Vec<usize>],
-        _kv_block_ids: &[Vec<usize>],
-        _num_computed_tokens: &[usize],
-        _is_prefill: &[bool],
-    ) -> vllm_traits::Result<Vec<Vec<f32>>> {
-        Ok(vec![vec![0.0_f32; self.config.vocab_size]; seq_ids.len()])
+        input_tokens: &[Vec<TokenId>],
+        positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
+    ) -> Result<Vec<Vec<f32>>> {
+        let mut results = Vec::with_capacity(seq_ids.len());
+        for i in 0..seq_ids.len() {
+            let (logits, _) = self.forward_with_cache(
+                &input_tokens[i],
+                num_computed_tokens[i],
+                &kv_block_ids[i],
+                &positions[i],
+                is_prefill[i],
+            )?;
+            results.push(logits_to_vector(&logits, is_prefill[i])?);
+        }
+        Ok(results)
     }
 
     fn embed(
         &mut self,
         input_tokens: &[Vec<TokenId>],
         _positions: &[Vec<usize>],
-    ) -> vllm_traits::Result<Vec<Vec<f32>>> {
-        Ok(vec![
-            vec![0.0_f32; self.config.hidden_size];
-            input_tokens.len()
-        ])
+    ) -> Result<Vec<Vec<f32>>> {
+        input_tokens
+            .iter()
+            .map(|tokens| {
+                mean_pool_embeddings(
+                    &self.embed_tokens,
+                    tokens,
+                    &self.device,
+                    self.config.hidden_size,
+                )
+            })
+            .collect()
     }
 
     fn vocab_size(&self) -> usize {
@@ -174,8 +274,58 @@ impl ModelBackend for MixtralModel {
         self.config.num_layers
     }
 
-    #[allow(clippy::misnamed_getters)]
     fn num_heads(&self) -> usize {
-        self.config.num_kv_heads
+        self.config.num_heads
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Architecture;
+
+    fn tiny_config() -> ModelConfig {
+        ModelConfig {
+            architecture: Architecture::Mixtral,
+            hidden_size: 64,
+            num_layers: 1,
+            num_heads: 4,
+            num_kv_heads: 2,
+            head_dim: 16,
+            vocab_size: 128,
+            intermediate_size: 128,
+            rope_theta: 10000.0,
+            rms_norm_eps: 1e-5,
+            sliding_window: Some(4096),
+            tie_word_embeddings: false,
+            max_position_embeddings: 512,
+            layer_types: vec![],
+            rope_configs: vec![],
+            use_double_wide_mlp: false,
+            num_experts: Some(4),
+            top_k_experts: Some(2),
+            expert_intermediate_size: Some(128),
+        }
+    }
+
+    #[test]
+    fn test_mixtral_model_forward_prefill_and_decode() {
+        let config = tiny_config();
+        let device = Device::Cpu;
+        let mut model = MixtralModel::new(config, device, 8, false).unwrap();
+
+        let tokens = vec![1u32, 2, 3, 4];
+        let positions: Vec<usize> = (0..tokens.len()).collect();
+        let block_ids = vec![0usize];
+
+        let (logits, _) = model
+            .forward_with_cache(&tokens, 0, &block_ids, &positions, true)
+            .unwrap();
+        assert_eq!(logits.dims()[2], 128);
+
+        let (logits, _) = model
+            .forward_with_cache(&[5], 4, &block_ids, &[4], false)
+            .unwrap();
+        assert_eq!(logits.dims()[2], 128);
     }
 }
