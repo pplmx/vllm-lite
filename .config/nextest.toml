@@ -52,6 +52,18 @@ filter = 'test(~test_forward_prefill_batch_performance)'
 threads-required = 2
 slow-timeout = { period = "15s", terminate-after = 2 }
 
+[[profile.default.overrides]]
+filter = 'test(~qwen3_)'
+test-group = 'heavy-model-tests'
+threads-required = 1
+slow-timeout = { period = "120s", terminate-after = 2 }
+
+[[profile.default.overrides]]
+filter = 'package(vllm-model) and test(~token_verification)'
+test-group = 'heavy-model-tests'
+threads-required = 1
+slow-timeout = { period = "120s", terminate-after = 2 }
+
 [[profile.ci.overrides]]
 filter = 'test(~test_llama_block)'
 retries = { backoff = "exponential", count = 2, delay = "2s" }

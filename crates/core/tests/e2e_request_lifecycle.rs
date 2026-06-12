@@ -4,15 +4,13 @@
 
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
-use vllm_core::engine::Engine;
-use vllm_core::types::{Request, SchedulerConfig};
-use vllm_testing::IncrementModel;
+use vllm_core::types::Request;
+use vllm_testing::TestFixtures;
 
 /// Test complete request lifecycle
 #[test]
 fn test_e2e_complete_lifecycle() {
-    let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine(1024);
 
     let (tx, mut rx) = mpsc::channel(64);
     let seq_id = engine.add_request(Request::new(1, vec![10, 20, 30], 5), tx);
@@ -47,8 +45,7 @@ fn test_e2e_complete_lifecycle() {
 /// Test concurrent requests
 #[test]
 fn test_e2e_concurrent_requests() {
-    let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine(1024);
 
     let num_requests = 10;
     let mut receivers = Vec::new();
@@ -101,8 +98,7 @@ fn test_e2e_concurrent_requests() {
 /// Test request cancellation
 #[test]
 fn test_e2e_request_cancellation() {
-    let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine(1024);
 
     let (tx, mut rx) = mpsc::channel(64);
     let seq_id = engine.add_request(Request::new(1, vec![10, 20, 30, 40, 50], 100), tx);
@@ -130,8 +126,7 @@ fn test_e2e_request_cancellation() {
 /// Test graceful shutdown
 #[test]
 fn test_e2e_graceful_shutdown() {
-    let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine(1024);
 
     // Add some requests
     let (tx, _rx) = mpsc::channel(64);
@@ -158,8 +153,7 @@ fn test_e2e_graceful_shutdown() {
 /// Tests that the engine properly handles adaptive speculative configuration
 #[test]
 fn test_e2e_with_all_optimizations() {
-    let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, Some(IncrementModel), config, 4, 1024);
+    let mut engine = TestFixtures::increment_speculative_engine(1024);
 
     engine.enable_adaptive_speculative(vllm_core::types::AdaptiveDraftConfig::default());
     assert!(engine.is_adaptive_speculative_enabled());
@@ -194,8 +188,7 @@ fn test_e2e_with_all_optimizations() {
 /// Test error recovery
 #[test]
 fn test_e2e_error_recovery() {
-    let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine(1024);
 
     // Add multiple requests
     let num_requests = 5;
@@ -227,8 +220,7 @@ fn test_e2e_error_recovery() {
 /// Test performance SLO
 #[test]
 fn test_e2e_latency_slo() {
-    let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine(1024);
 
     let (tx, _rx) = mpsc::channel(64);
     engine.add_request(Request::new(1, vec![10, 20], 10), tx);

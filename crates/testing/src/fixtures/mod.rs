@@ -1,7 +1,10 @@
 //! Test fixtures for common scenarios.
 
+use vllm_core::engine::Engine;
 use vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig;
 use vllm_core::types::{SchedulerConfig, SequencePackingConfig};
+
+use crate::mocks::IncrementModel;
 
 pub struct TestFixtures;
 
@@ -84,6 +87,28 @@ impl TestFixtures {
             cuda_graph: SchedulerCudaGraphConfig::default(),
             packing: SequencePackingConfig::default(),
         }
+    }
+
+    /// Engine backed by [`IncrementModel`] for E2E lifecycle tests.
+    pub fn increment_engine(kv_blocks: usize) -> Engine {
+        Engine::with_config(
+            IncrementModel,
+            None,
+            Self::default_scheduler_config(),
+            4,
+            kv_blocks,
+        )
+    }
+
+    /// Target + draft engine for speculative-decoding E2E tests.
+    pub fn increment_speculative_engine(kv_blocks: usize) -> Engine {
+        Engine::with_config(
+            IncrementModel,
+            Some(IncrementModel),
+            Self::default_scheduler_config(),
+            4,
+            kv_blocks,
+        )
     }
 }
 

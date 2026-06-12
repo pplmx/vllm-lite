@@ -1,271 +1,17 @@
-use vllm_model::qwen3_config::Qwen3Config;
-use vllm_testing::FakeModel;
-use vllm_traits::ModelBackend;
+//! Qwen3 integration tests against on-disk checkpoints.
+//!
+//! Requires weights at [`support::qwen3::model_dir()`] (override via `VLLM_TEST_MODEL_DIR`).
 
-#[test]
-fn test_fake_model_output_count() {
-    let mut model = FakeModel::new(1000);
-    let seq_ids = vec![1u64, 2, 3];
-    let input_tokens = vec![vec![1u32, 2], vec![3, 4], vec![5, 6]];
-    let positions = vec![vec![0usize, 1], vec![0, 1], vec![0, 1]];
-    let kv_block_ids = vec![vec![0usize], vec![0], vec![0]];
-    let num_computed_tokens = vec![0usize, 0, 0];
-    let is_prefill = vec![true, true, true];
+mod support;
 
-    let output = model
-        .forward(
-            &seq_ids,
-            &input_tokens,
-            &positions,
-            &kv_block_ids,
-            &num_computed_tokens,
-            &is_prefill,
-        )
-        .unwrap();
-    assert_eq!(output.seq_ids.len(), 3);
-    assert_eq!(output.next_tokens.len(), 3);
-}
-
-#[test]
-fn test_fake_model_deterministic() {
-    let mut model = FakeModel::new(42);
-    let seq_ids = vec![1u64];
-    let input_tokens = vec![vec![1u32, 2, 3]];
-    let positions = vec![vec![0usize, 1, 2]];
-    let kv_block_ids = vec![vec![0usize]];
-    let num_computed_tokens = vec![0usize];
-    let is_prefill = vec![true];
-
-    let output1 = model
-        .forward(
-            &seq_ids,
-            &input_tokens,
-            &positions,
-            &kv_block_ids,
-            &num_computed_tokens,
-            &is_prefill,
-        )
-        .unwrap();
-    let output2 = model
-        .forward(
-            &seq_ids,
-            &input_tokens,
-            &positions,
-            &kv_block_ids,
-            &num_computed_tokens,
-            &is_prefill,
-        )
-        .unwrap();
-
-    // Same input should produce same output
-    assert_eq!(output1.next_tokens, output2.next_tokens);
-}
-
-#[test]
-fn test_fake_model_different_seqs_different_output() {
-    let mut model = FakeModel::new(100);
-    let seq_ids = vec![1u64, 2u64];
-    let input_tokens = vec![vec![1u32], vec![1u32]];
-    let positions = vec![vec![0usize], vec![0usize]];
-    let kv_block_ids = vec![vec![0usize], vec![0]];
-    let num_computed_tokens = vec![0usize, 0];
-    let is_prefill = vec![true, true];
-
-    let output = model
-        .forward(
-            &seq_ids,
-            &input_tokens,
-            &positions,
-            &kv_block_ids,
-            &num_computed_tokens,
-            &is_prefill,
-        )
-        .unwrap();
-
-    // Different sequence IDs should produce different tokens
-    assert_ne!(
-        output.next_tokens[0], output.next_tokens[1],
-        "different seq_ids should produce different tokens"
-    );
-}
-
-#[test]
-fn test_fake_model_batch_size_respected() {
-    let mut model = FakeModel::new(1000);
-
-    // Test various batch sizes
-    for batch_size in [1, 2, 5, 10] {
-        let seq_ids: Vec<u64> = (0..batch_size).map(|i| i as u64).collect();
-        let input_tokens: Vec<Vec<u32>> = (0..batch_size).map(|_| vec![1]).collect();
-        let positions: Vec<Vec<usize>> = (0..batch_size).map(|_| vec![0]).collect();
-        let kv_block_ids: Vec<Vec<usize>> = (0..batch_size).map(|_| vec![0]).collect();
-        let num_computed_tokens: Vec<usize> = (0..batch_size).map(|_| 0).collect();
-        let is_prefill: Vec<bool> = (0..batch_size).map(|_| true).collect();
-
-        let output = model
-            .forward(
-                &seq_ids,
-                &input_tokens,
-                &positions,
-                &kv_block_ids,
-                &num_computed_tokens,
-                &is_prefill,
-            )
-            .unwrap();
-        assert_eq!(
-            output.seq_ids.len(),
-            batch_size,
-            "batch size {} not respected",
-            batch_size
-        );
-        assert_eq!(
-            output.next_tokens.len(),
-            batch_size,
-            "batch size {} not respected",
-            batch_size
-        );
-    }
-}
-
-#[test]
-fn test_model_empty_batch() {
-    let mut model = FakeModel::new(1000);
-    let seq_ids: Vec<u64> = vec![];
-    let input_tokens: Vec<Vec<u32>> = vec![];
-    let positions: Vec<Vec<usize>> = vec![];
-    let kv_block_ids: Vec<Vec<usize>> = vec![];
-    let num_computed_tokens: Vec<usize> = vec![];
-    let is_prefill: Vec<bool> = vec![];
-
-    let output = model
-        .forward(
-            &seq_ids,
-            &input_tokens,
-            &positions,
-            &kv_block_ids,
-            &num_computed_tokens,
-            &is_prefill,
-        )
-        .unwrap();
-    assert_eq!(output.seq_ids.len(), 0);
-    assert_eq!(output.next_tokens.len(), 0);
-}
-
-#[test]
-fn test_model_single_token_batch() {
-    let mut model = FakeModel::new(1000);
-    let seq_ids = vec![1u64];
-    let input_tokens = vec![vec![42u32]];
-    let positions = vec![vec![0usize]];
-    let kv_block_ids = vec![vec![0usize]];
-    let num_computed_tokens = vec![0usize];
-    let is_prefill = vec![true];
-
-    let output = model
-        .forward(
-            &seq_ids,
-            &input_tokens,
-            &positions,
-            &kv_block_ids,
-            &num_computed_tokens,
-            &is_prefill,
-        )
-        .unwrap();
-    assert_eq!(output.seq_ids.len(), 1);
-    assert_eq!(output.next_tokens.len(), 1);
-    assert_eq!(output.next_tokens[0], 1);
-}
-
-#[test]
-fn test_model_large_batch() {
-    let mut model = FakeModel::new(1000);
-    let batch_size = 32;
-    let seq_ids: Vec<u64> = (0..batch_size).map(|i| i as u64).collect();
-    let input_tokens: Vec<Vec<u32>> = (0..batch_size).map(|i| vec![i as u32]).collect();
-    let positions: Vec<Vec<usize>> = (0..batch_size).map(|_| vec![0]).collect();
-    let kv_block_ids: Vec<Vec<usize>> = (0..batch_size).map(|_| vec![0]).collect();
-    let num_computed_tokens: Vec<usize> = (0..batch_size).map(|_| 0).collect();
-    let is_prefill: Vec<bool> = (0..batch_size).map(|_| true).collect();
-
-    let output = model
-        .forward(
-            &seq_ids,
-            &input_tokens,
-            &positions,
-            &kv_block_ids,
-            &num_computed_tokens,
-            &is_prefill,
-        )
-        .unwrap();
-    assert_eq!(output.seq_ids.len(), batch_size);
-    assert_eq!(output.next_tokens.len(), batch_size);
-}
-
-#[test]
-fn test_qwen3_config_default() {
-    let config = Qwen3Config::default();
-    assert_eq!(config.vocab_size(), 151936);
-    assert_eq!(config.hidden_size(), 4096);
-    assert_eq!(config.num_hidden_layers(), 32);
-}
-
-#[test]
-fn test_qwen3_config_builder() {
-    let config = Qwen3Config {
-        vocab_size: Some(1000),
-        hidden_size: Some(512),
-        num_hidden_layers: Some(2),
-        num_attention_heads: Some(8),
-        num_key_value_heads: Some(2),
-        intermediate_size: Some(1024),
-        ..Default::default()
-    };
-
-    assert_eq!(config.vocab_size(), 1000);
-    assert_eq!(config.hidden_size(), 512);
-    assert_eq!(config.num_hidden_layers(), 2);
-    assert_eq!(config.intermediate_size(), 1024);
-}
-
-#[test]
-fn test_qwen3_config_text_config_fallback() {
-    let text_config = vllm_model::qwen3_config::TextConfig {
-        vocab_size: Some(5000),
-        hidden_size: Some(256),
-        num_hidden_layers: Some(4),
-        num_attention_heads: Some(4),
-        num_key_value_heads: Some(4),
-        intermediate_size: Some(512),
-        sliding_window: None,
-        rope_theta: None,
-        max_position_embeddings: None,
-        rms_norm_eps: None,
-        layer_types: None,
-    };
-    let config = Qwen3Config {
-        text_config: Some(text_config),
-        ..Default::default()
-    };
-
-    assert_eq!(config.vocab_size(), 5000);
-    assert_eq!(config.hidden_size(), 256);
-    assert_eq!(config.num_hidden_layers(), 4);
-}
+use support::qwen3::{HIDDEN_SIZE, VOCAB_SIZE};
 
 #[test]
 
 fn test_qwen3_real_model_prefill() {
-    use candle_core::Device;
-    use vllm_model::loader::ModelLoader;
-
-    let device = Device::Cpu;
-    let loader = ModelLoader::builder(device)
-        .with_model_dir("/models/Qwen3-0.6B".to_string())
-        .with_kv_blocks(1024)
-        .build()
-        .expect("Failed to build loader");
-
-    let mut model = loader.load_model().expect("Failed to load model");
+    let mut model = support::qwen3::Qwen3Fixture::cpu()
+        .load_model()
+        .expect("Failed to load model");
 
     // Test prefill with simple tokens
     let tokens = vec![1u32, 2, 3, 4, 5];
@@ -280,7 +26,11 @@ fn test_qwen3_real_model_prefill() {
     assert_eq!(logits.dims().len(), 3, "logits should be 3D");
     assert_eq!(logits.dims()[0], 1, "batch size should be 1");
     assert_eq!(logits.dims()[1], 5, "seq_len should be 5");
-    assert_eq!(logits.dims()[2], 151936, "vocab_size should be 151936");
+    assert_eq!(
+        logits.dims()[2],
+        VOCAB_SIZE,
+        "vocab_size should match checkpoint"
+    );
 
     // Get next token from last position
     use candle_core::D;
@@ -297,23 +47,15 @@ fn test_qwen3_real_model_prefill() {
         .unwrap();
 
     println!("Next token from prefill: {}", next_token);
-    assert!(next_token < 151936, "Token should be valid");
+    assert!(next_token < VOCAB_SIZE as u32, "Token should be valid");
 }
 
 #[test]
 
 fn test_qwen3_real_model_decode() {
-    use candle_core::Device;
-    use vllm_model::loader::ModelLoader;
-
-    let device = Device::Cpu;
-    let loader = ModelLoader::builder(device)
-        .with_model_dir("/models/Qwen3-0.6B".to_string())
-        .with_kv_blocks(1024)
-        .build()
-        .expect("Failed to build loader");
-
-    let mut model = loader.load_model().expect("Failed to load model");
+    let mut model = support::qwen3::Qwen3Fixture::cpu()
+        .load_model()
+        .expect("Failed to load model");
 
     // Test decode
     let tokens = vec![42u32];
@@ -329,7 +71,11 @@ fn test_qwen3_real_model_decode() {
     assert_eq!(logits.dims().len(), 3, "logits should be 3D");
     assert_eq!(logits.dims()[0], 1, "batch size should be 1");
     assert_eq!(logits.dims()[1], 1, "seq_len should be 1 for decode");
-    assert_eq!(logits.dims()[2], 151936, "vocab_size should be 151936");
+    assert_eq!(
+        logits.dims()[2],
+        VOCAB_SIZE,
+        "vocab_size should match checkpoint"
+    );
 
     // Get next token
     use candle_core::D;
@@ -344,7 +90,7 @@ fn test_qwen3_real_model_decode() {
         .unwrap();
 
     println!("Next token from decode: {}", next_token);
-    assert!(next_token < 151936, "Token should be valid");
+    assert!(next_token < VOCAB_SIZE as u32, "Token should be valid");
 
     // Check logits distribution - top token should have significantly higher logit than random
     // Decode logits are 2D [batch, vocab_size], need to flatten
@@ -354,7 +100,7 @@ fn test_qwen3_real_model_decode() {
         .iter()
         .cloned()
         .fold(f32::NEG_INFINITY, f32::max);
-    let random_expected = max_logit - (151936f32).ln(); // Expected if uniform distribution
+    let random_expected = max_logit - (VOCAB_SIZE as f32).ln();
 
     // Top logit should be significantly higher than random chance
     let entropy_bonus = max_logit - random_expected;
@@ -371,17 +117,9 @@ fn test_qwen3_real_model_decode() {
 #[test]
 
 fn test_qwen3_generated_tokens_decodable() {
-    use candle_core::Device;
-    use vllm_model::loader::ModelLoader;
-
-    let device = Device::Cpu;
-    let loader = ModelLoader::builder(device)
-        .with_model_dir("/models/Qwen3-0.6B".to_string())
-        .with_kv_blocks(1024)
-        .build()
-        .expect("Failed to build loader");
-
-    let mut model = loader.load_model().expect("Failed to load model");
+    let mut model = support::qwen3::Qwen3Fixture::cpu()
+        .load_model()
+        .expect("Failed to load model");
 
     // Simulate prefill with "hi" prompt tokens
     let prompt_tokens = vec![6023u32]; // "hi" token
@@ -407,7 +145,7 @@ fn test_qwen3_generated_tokens_decodable() {
         .unwrap();
 
     println!("First generated token: {}", first_token);
-    assert!(first_token < 151936, "Token out of range");
+    assert!(first_token < VOCAB_SIZE as u32, "Token out of range");
 
     // Simulate decode step
     let decode_tokens = vec![first_token];
@@ -428,7 +166,7 @@ fn test_qwen3_generated_tokens_decodable() {
         .unwrap();
 
     println!("Second generated token: {}", second_token);
-    assert!(second_token < 151936, "Token out of range");
+    assert!(second_token < VOCAB_SIZE as u32, "Token out of range");
 
     // Both tokens should be valid
     println!("Generated sequence: [{}, {}]", first_token, second_token);
@@ -437,13 +175,9 @@ fn test_qwen3_generated_tokens_decodable() {
 #[test]
 
 fn test_qwen3_verify_model_weights() {
-    use candle_core::Device;
-
-    use std::path::Path;
-    use vllm_model::loader::load_checkpoint;
-
-    let device = Device::Cpu;
-    let weights = load_checkpoint(Path::new("/models/Qwen3-0.6B"), &device).unwrap();
+    let weights = support::qwen3::Qwen3Fixture::cpu()
+        .checkpoint()
+        .expect("load checkpoint");
 
     println!("Loaded {} tensors", weights.len());
 
@@ -473,10 +207,14 @@ fn test_qwen3_verify_model_weights() {
         println!("embed_tokens weight shape: {:?}", embed_w.dims());
         assert_eq!(
             embed_w.dims()[0],
-            151936,
+            VOCAB_SIZE,
             "embed_tokens vocab_size mismatch"
         );
-        assert_eq!(embed_w.dims()[1], 1024, "embed_tokens hidden_size mismatch");
+        assert_eq!(
+            embed_w.dims()[1],
+            HIDDEN_SIZE,
+            "embed_tokens hidden_size mismatch"
+        );
     } else {
         panic!("model.embed_tokens.weight not found");
     }
@@ -526,19 +264,11 @@ fn test_qwen3_verify_model_weights() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "slow: multi-step chat simulation on real weights"]
 fn test_qwen3_chat_flow_simulation() {
-    use candle_core::Device;
-    use vllm_model::loader::ModelLoader;
-
-    let device = Device::Cpu;
-    let loader = ModelLoader::builder(device)
-        .with_model_dir("/models/Qwen3-0.6B".to_string())
-        .with_kv_blocks(1024)
-        .build()
-        .expect("Failed to build loader");
-
-    let mut model = loader.load_model().expect("Failed to load model");
+    let mut model = support::qwen3::Qwen3Fixture::cpu()
+        .load_model()
+        .expect("Failed to load model");
 
     // Build prompt exactly as server does
     let im_start = "<|im_start|>";
@@ -592,7 +322,11 @@ fn test_qwen3_chat_flow_simulation() {
         );
 
         all_tokens.push(next_token);
-        assert!(next_token < 151936, "Token {} out of range", next_token);
+        assert!(
+            next_token < VOCAB_SIZE as u32,
+            "Token {} out of range",
+            next_token
+        );
 
         // If not the last step, run decode with this token
         if step < 2 {
@@ -620,24 +354,20 @@ fn test_qwen3_chat_flow_simulation() {
 #[test]
 
 fn test_qwen3_embedding_layer() {
-    use candle_core::Device;
-    use vllm_model::loader::ModelLoader;
-
-    let device = Device::Cpu;
-    let loader = ModelLoader::builder(device)
-        .with_model_dir("/models/Qwen3-0.6B".to_string())
-        .with_kv_blocks(1024)
-        .build()
-        .expect("Failed to build loader");
-
-    let mut model = loader.load_model().expect("Failed to load model");
+    let mut model = support::qwen3::Qwen3Fixture::cpu()
+        .load_model()
+        .expect("Failed to load model");
 
     // Test embedding for "hi" token (6023)
     let hi_token = vec![6023u32];
     let embeddings = model.embed(&[hi_token], &[vec![0]]).expect("Embed failed");
 
     assert_eq!(embeddings.len(), 1, "Should return 1 embedding");
-    assert_eq!(embeddings[0].len(), 1024, "Embedding dim should be 1024");
+    assert_eq!(
+        embeddings[0].len(),
+        HIDDEN_SIZE,
+        "Embedding dim should match hidden size"
+    );
 
     // Verify embedding is not all zeros
     let emb_data = &embeddings[0];
@@ -664,17 +394,9 @@ fn test_qwen3_embedding_layer() {
 #[test]
 
 fn test_qwen3_embedding_different_tokens_different_embeddings() {
-    use candle_core::Device;
-    use vllm_model::loader::ModelLoader;
-
-    let device = Device::Cpu;
-    let loader = ModelLoader::builder(device)
-        .with_model_dir("/models/Qwen3-0.6B".to_string())
-        .with_kv_blocks(1024)
-        .build()
-        .expect("Failed to build loader");
-
-    let mut model = loader.load_model().expect("Failed to load model");
+    let mut model = support::qwen3::Qwen3Fixture::cpu()
+        .load_model()
+        .expect("Failed to load model");
 
     // Test embeddings for different tokens
     let tokens = vec![
@@ -710,156 +432,10 @@ fn test_qwen3_embedding_different_tokens_different_embeddings() {
 }
 
 #[test]
-
-fn test_qwen3_rope_position_encoding() {
-    use candle_core::{Device, Tensor};
-    use vllm_model::components::positional::apply_rope;
-
-    let device = Device::Cpu;
-    let head_dim = 128;
-    let theta = 1000000.0f32;
-
-    let batch = 1;
-    let seq_len = 3;
-    let num_heads = 2;
-    let query = Tensor::randn(0.0, 1.0, (batch, seq_len, num_heads, head_dim), &device)
-        .expect("Failed to create query tensor")
-        .to_dtype(candle_core::DType::F32)
-        .expect("Failed to convert to F32");
-
-    let positions: Vec<i64> = vec![0, 5, 10]; // Use non-zero positions
-    let rotated = apply_rope(&query, &positions, theta).expect("RoPE failed");
-
-    assert_eq!(
-        rotated.dims(),
-        query.dims(),
-        "RoPE should preserve dimensions"
-    );
-
-    // RoPE at position 0 is identity, so test at position 5
-    let rotated_at_5 = rotated.narrow(1, 1, 1).unwrap();
-
-    // After narrow, tensor is [1, num_heads, head_dim] -> reshape to [num_heads * head_dim]
-    let rot_data = rotated_at_5
-        .reshape((num_heads * head_dim,))
-        .unwrap()
-        .to_vec1::<f32>()
-        .unwrap();
-
-    // Check that RoPE produces normalized output (magnitude preserved)
-    let norm: f32 = rot_data.iter().map(|&x| x * x).sum::<f32>().sqrt();
-    println!("RoPE output norm at position 5: {:.6}", norm);
-    assert!(norm > 0.01, "RoPE output should have non-trivial magnitude");
-
-    let rotated_at_10 = rotated.narrow(1, 2, 1).unwrap();
-    let rot_data_5 = rotated_at_5
-        .reshape((num_heads * head_dim,))
-        .unwrap()
-        .to_vec1::<f32>()
-        .unwrap();
-    let rot_data_10 = rotated_at_10
-        .reshape((num_heads * head_dim,))
-        .unwrap()
-        .to_vec1::<f32>()
-        .unwrap();
-
-    let diff_pos: f32 = rot_data_5
-        .iter()
-        .zip(rot_data_10.iter())
-        .map(|(a, b)| (a - b).abs())
-        .sum::<f32>()
-        / (num_heads * head_dim) as f32;
-
-    println!(
-        "Average difference between position 5 and 10: {:.6}",
-        diff_pos
-    );
-    assert!(
-        diff_pos > 0.001,
-        "Different positions should produce different results"
-    );
-}
-
-#[test]
-
-fn test_qwen3_rope_consistency_and_norm() {
-    use candle_core::{Device, Tensor};
-    use vllm_model::components::positional::apply_rope;
-
-    let device = Device::Cpu;
-    let head_dim = 128;
-    let theta = 1000000.0f32;
-
-    let query = Tensor::randn(0.0, 1.0, (1, 1, 2, head_dim), &device)
-        .expect("Failed to create query tensor")
-        .to_dtype(candle_core::DType::F32)
-        .expect("Failed to convert to F32");
-    let positions = vec![5i64];
-
-    let rotated1 = apply_rope(&query, &positions, theta).expect("RoPE failed");
-    let rotated2 = apply_rope(&query, &positions, theta).expect("RoPE failed");
-
-    // Tensor is [1, 1, 2, 128] -> reshape to [256]
-    let rot_data1 = rotated1
-        .reshape((2 * head_dim,))
-        .unwrap()
-        .to_vec1::<f32>()
-        .unwrap();
-    let rot_data2 = rotated2
-        .reshape((2 * head_dim,))
-        .unwrap()
-        .to_vec1::<f32>()
-        .unwrap();
-
-    let diff: f32 = rot_data1
-        .iter()
-        .zip(rot_data2.iter())
-        .map(|(a, b)| (a - b).abs())
-        .sum::<f32>()
-        / (2 * head_dim) as f32;
-
-    println!("Difference between two identical RoPE calls: {:.10}", diff);
-    assert!(diff < 1e-6, "RoPE should be deterministic");
-
-    let orig_data = query
-        .reshape((2 * head_dim,))
-        .unwrap()
-        .to_vec1::<f32>()
-        .unwrap();
-    let rotated_data = rotated1
-        .reshape((2 * head_dim,))
-        .unwrap()
-        .to_vec1::<f32>()
-        .unwrap();
-
-    let orig_norm: f32 = orig_data.iter().map(|&x| x * x).sum::<f32>().sqrt();
-    let rotated_norm: f32 = rotated_data.iter().map(|&x| x * x).sum::<f32>().sqrt();
-
-    let norm_diff = (orig_norm - rotated_norm).abs() / orig_norm;
-    println!(
-        "Norm before: {:.4}, after: {:.4}, diff: {:.6}",
-        orig_norm, rotated_norm, norm_diff
-    );
-    assert!(
-        norm_diff < 0.01,
-        "RoPE should approximately preserve L2 norm"
-    );
-}
-
-#[test]
-
 fn test_qwen3_attention_layer_output() {
-    use candle_core::Device;
-    use vllm_model::loader::ModelLoader;
-
-    let device = Device::Cpu;
-    let loader = ModelLoader::builder(device)
-        .with_model_dir("/models/Qwen3-0.6B".to_string())
-        .with_kv_blocks(1024)
-        .build()
-        .expect("Failed to build loader");
-
-    let mut model = loader.load_model().expect("Failed to load model");
+    let mut model = support::qwen3::Qwen3Fixture::cpu()
+        .load_model()
+        .expect("Failed to load model");
 
     // Test with prompt tokens
     let tokens = vec![6023u32]; // "hi"
@@ -870,11 +446,15 @@ fn test_qwen3_attention_layer_output() {
         .forward_with_cache(&tokens, 0, &[0], &positions, true)
         .expect("Forward failed");
 
-    // Verify logits shape [batch=1, seq=1, vocab=151936]
+    // Verify logits shape [batch=1, seq=1, vocab=VOCAB_SIZE]
     assert_eq!(logits.dims().len(), 3, "Logits should be 3D");
     assert_eq!(logits.dims()[0], 1, "Batch size should be 1");
     assert_eq!(logits.dims()[1], 1, "Seq len should be 1");
-    assert_eq!(logits.dims()[2], 151936, "Vocab size should be 151936");
+    assert_eq!(
+        logits.dims()[2],
+        VOCAB_SIZE,
+        "Vocab size should match checkpoint"
+    );
 
     // Verify logits have reasonable distribution
     let logits_data = logits.flatten_all().unwrap().to_vec1::<f32>().unwrap();
@@ -903,23 +483,18 @@ fn test_qwen3_attention_layer_output() {
         .unwrap();
 
     println!("Top token: {}", top_token);
-    assert!(top_token < 151936, "Top token should be in vocab range");
+    assert!(
+        top_token < VOCAB_SIZE as u32,
+        "Top token should be in vocab range"
+    );
 }
 
 #[test]
 
 fn test_qwen3_attention_kv_cache_consistency() {
-    use candle_core::Device;
-    use vllm_model::loader::ModelLoader;
-
-    let device = Device::Cpu;
-    let loader = ModelLoader::builder(device)
-        .with_model_dir("/models/Qwen3-0.6B".to_string())
-        .with_kv_blocks(1024)
-        .build()
-        .expect("Failed to build loader");
-
-    let mut model = loader.load_model().expect("Failed to load model");
+    let mut model = support::qwen3::Qwen3Fixture::cpu()
+        .load_model()
+        .expect("Failed to load model");
 
     // First forward: compute hidden state
     let tokens1 = vec![6023u32];
@@ -974,19 +549,11 @@ fn test_qwen3_attention_kv_cache_consistency() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "slow: full prefill/decode pipeline on real weights"]
 fn test_qwen3_full_pipeline_prefill_decode() {
-    use candle_core::Device;
-    use vllm_model::loader::ModelLoader;
-
-    let device = Device::Cpu;
-    let loader = ModelLoader::builder(device)
-        .with_model_dir("/models/Qwen3-0.6B".to_string())
-        .with_kv_blocks(1024)
-        .build()
-        .expect("Failed to build loader");
-
-    let mut model = loader.load_model().expect("Failed to load model");
+    let mut model = support::qwen3::Qwen3Fixture::cpu()
+        .load_model()
+        .expect("Failed to load model");
 
     // Build chat prompt: "<|im_start|>user\nhi<|im_end|>\n\n<|im_start|>assistant\n"
     let prompt_tokens = vec![
@@ -1021,7 +588,10 @@ fn test_qwen3_full_pipeline_prefill_decode() {
         .unwrap();
 
     println!("First generated token: {}", next_token);
-    assert!(next_token < 151936, "Token should be in vocab range");
+    assert!(
+        next_token < VOCAB_SIZE as u32,
+        "Token should be in vocab range"
+    );
 
     // Decode phase (first decode step)
     let decode_position = prompt_tokens.len();
@@ -1060,7 +630,10 @@ fn test_qwen3_full_pipeline_prefill_decode() {
         .unwrap();
 
     println!("Second generated token: {}", next_token2);
-    assert!(next_token2 < 151936, "Token should be in vocab range");
+    assert!(
+        next_token2 < VOCAB_SIZE as u32,
+        "Token should be in vocab range"
+    );
 
     // Third decode step
     let (decode_logits2, _) = model
@@ -1090,9 +663,9 @@ fn test_qwen3_full_pipeline_prefill_decode() {
     );
 
     // Verify all tokens are valid
-    assert!(next_token < 151936);
-    assert!(next_token2 < 151936);
-    assert!(next_token3 < 151936);
+    assert!(next_token < VOCAB_SIZE as u32);
+    assert!(next_token2 < VOCAB_SIZE as u32);
+    assert!(next_token3 < VOCAB_SIZE as u32);
 
     // Verify tokens are not all the same (model should generate diverse output)
     let unique_tokens = std::collections::HashSet::from([next_token, next_token2, next_token3]);
@@ -1106,17 +679,9 @@ fn test_qwen3_full_pipeline_prefill_decode() {
 #[test]
 
 fn test_qwen3_layer0_intermediate_outputs() {
-    use candle_core::Device;
-    use vllm_model::loader::ModelLoader;
-
-    let device = Device::Cpu;
-    let loader = ModelLoader::builder(device)
-        .with_model_dir("/models/Qwen3-0.6B".to_string())
-        .with_kv_blocks(1024)
-        .build()
-        .expect("Failed to build loader");
-
-    let mut model = loader.load_model().expect("Failed to load model");
+    let mut model = support::qwen3::Qwen3Fixture::cpu()
+        .load_model()
+        .expect("Failed to load model");
 
     let tokens = vec![6023u32];
     let positions: Vec<usize> = vec![0];
@@ -1143,19 +708,11 @@ fn test_qwen3_layer0_intermediate_outputs() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "slow: repeated forward passes on real weights"]
 fn test_qwen3_deterministic_same_input() {
-    use candle_core::Device;
-    use vllm_model::loader::ModelLoader;
-
-    let device = Device::Cpu;
-    let loader = ModelLoader::builder(device)
-        .with_model_dir("/models/Qwen3-0.6B".to_string())
-        .with_kv_blocks(1024)
-        .build()
-        .expect("Failed to build loader");
-
-    let mut model = loader.load_model().expect("Failed to load model");
+    let mut model = support::qwen3::Qwen3Fixture::cpu()
+        .load_model()
+        .expect("Failed to load model");
 
     let tokens = vec![6023u32];
     let positions: Vec<usize> = vec![0];
@@ -1198,17 +755,9 @@ fn test_qwen3_deterministic_same_input() {
 #[test]
 
 fn test_qwen3_different_prompts_different_outputs() {
-    use candle_core::Device;
-    use vllm_model::loader::ModelLoader;
-
-    let device = Device::Cpu;
-    let loader = ModelLoader::builder(device)
-        .with_model_dir("/models/Qwen3-0.6B".to_string())
-        .with_kv_blocks(1024)
-        .build()
-        .expect("Failed to build loader");
-
-    let mut model = loader.load_model().expect("Failed to load model");
+    let mut model = support::qwen3::Qwen3Fixture::cpu()
+        .load_model()
+        .expect("Failed to load model");
 
     // Test with two different prompts
     let tokens1 = vec![6023u32]; // "hi"

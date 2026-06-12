@@ -5,9 +5,23 @@
 
 use vllm_traits::{BatchOutput, ModelBackend, Result, SeqId, TokenId};
 
-/// Stub model that returns seq_id as next token.
-/// Used in: prefix_cache tests.
-pub struct StubModel;
+/// Deterministic stub that returns a fixed token for every sequence.
+#[derive(Debug, Clone, Copy)]
+pub struct StubModel {
+    token: TokenId,
+}
+
+impl Default for StubModel {
+    fn default() -> Self {
+        Self::returning(1)
+    }
+}
+
+impl StubModel {
+    pub const fn returning(token: TokenId) -> Self {
+        Self { token }
+    }
+}
 
 impl ModelBackend for StubModel {
     fn forward(
@@ -21,7 +35,7 @@ impl ModelBackend for StubModel {
     ) -> Result<BatchOutput> {
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
-            next_tokens: seq_ids.iter().map(|_| 1 as TokenId).collect(),
+            next_tokens: seq_ids.iter().map(|_| self.token).collect(),
         })
     }
 
@@ -438,10 +452,26 @@ mod tests {
 
     #[test]
     fn test_stub_model() {
-        let mut model = StubModel;
+        let mut model = StubModel::default();
         let output = model
             .forward(&[1], &[vec![1]], &[vec![0]], &[vec![0]], &[0], &[true])
             .unwrap();
         assert_eq!(output.next_tokens, vec![1]);
+    }
+
+    #[test]
+    fn test_stub_model_custom_token() {
+        let mut model = StubModel::returning(42);
+        let output = model
+            .forward(
+                &[1, 2],
+                &[vec![1], vec![2]],
+                &[vec![0], vec![0]],
+                &[vec![0], vec![0]],
+                &[0, 0],
+                &[true, true],
+            )
+            .unwrap();
+        assert_eq!(output.next_tokens, vec![42, 42]);
     }
 }

@@ -4,8 +4,8 @@
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
-use vllm_core::types::{Request, SchedulerConfig};
-use vllm_testing::IncrementModel;
+use vllm_core::types::Request;
+use vllm_testing::TestFixtures;
 
 /// Output from processing a request
 #[derive(Debug)]
@@ -21,8 +21,7 @@ struct TestEngine {
 
 impl TestEngine {
     fn new() -> Self {
-        let config = SchedulerConfig::default();
-        let engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+        let engine = TestFixtures::increment_engine(1024);
         Self { engine }
     }
 
@@ -111,8 +110,7 @@ fn test_request_with_different_token_counts() {
 
 #[test]
 fn test_multiple_requests_lifecycle() {
-    let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine(1024);
 
     let _seq_ids: Vec<u64> = (0..5)
         .map(|i| {
@@ -143,8 +141,7 @@ fn test_multiple_requests_lifecycle() {
 
 #[test]
 fn test_empty_request_rejected() {
-    let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine(1024);
     let (tx, _rx) = mpsc::channel(64);
 
     // Empty prompt should return 0
@@ -155,8 +152,7 @@ fn test_empty_request_rejected() {
 
 #[test]
 fn test_request_cancellation_lifecycle() {
-    let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine(1024);
 
     let (tx, _rx) = mpsc::channel(64);
     let seq_id = engine.add_request(Request::new(1, vec![10, 20, 30], 100), tx);
@@ -179,8 +175,7 @@ fn test_request_cancellation_lifecycle() {
 
 #[test]
 fn test_streaming_tokens() {
-    let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine(1024);
 
     let (tx, mut rx) = mpsc::channel(64);
     let seq_id = engine.add_request(Request::new(1, vec![10, 20, 30], 5), tx);
