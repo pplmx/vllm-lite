@@ -414,7 +414,8 @@ impl Engine {
         self.step()
     }
 
-    /// Execute regular forward pass (existing logic)
+    /// Execute regular forward pass (used by CUDA Graph fallback path).
+    #[cfg(feature = "cuda-graph")]
     fn execute_regular(&mut self, batch: &vllm_traits::Batch) -> Result<BatchOutput> {
         let total_tokens: usize = batch.input_tokens.iter().map(|t| t.len()).sum();
         tracing::debug!(
@@ -454,7 +455,8 @@ impl Engine {
         }
     }
 
-    /// Process model output and update state
+    /// Process model output and update state (CUDA Graph path).
+    #[cfg(feature = "cuda-graph")]
     fn process_output(
         &mut self,
         output: BatchOutput,

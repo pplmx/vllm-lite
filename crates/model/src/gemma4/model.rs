@@ -1,7 +1,7 @@
 //! Gemma4 Model implementation.
-
-#![allow(dead_code)]
-#![allow(unused_variables)]
+//!
+//! Weight loading and forward pass are not implemented yet; registration exists so
+//! configs detect correctly and tests can exercise block-level code.
 
 use crate::config::ModelConfig;
 use crate::gemma4::block::Gemma4Block;
@@ -11,6 +11,8 @@ use candle_nn::{Embedding, Linear};
 use std::collections::HashMap;
 use vllm_traits::{BatchOutput, ModelBackend, SeqId, TokenId};
 
+/// Weights are loaded in `from_weights`; `forward` is still a stub.
+#[allow(dead_code)]
 pub struct Gemma4Model {
     config: ModelConfig,
     embed_tokens: Embedding,
@@ -70,11 +72,9 @@ impl Gemma4Model {
     pub fn from_weights(
         config: ModelConfig,
         device: Device,
-        weights: HashMap<String, Tensor>,
+        _weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
     ) -> CandleResult<Self> {
-        // Simplified: just create with config
-        // Full weight loading would need proper key mapping
         Self::new(config, device, num_kv_blocks)
     }
 }
@@ -83,11 +83,11 @@ impl ModelBackend for Gemma4Model {
     fn forward(
         &mut self,
         seq_ids: &[SeqId],
-        input_tokens: &[Vec<TokenId>],
-        positions: &[Vec<usize>],
-        kv_block_ids: &[Vec<usize>],
-        num_computed_tokens: &[usize],
-        is_prefill: &[bool],
+        _input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+        _kv_block_ids: &[Vec<usize>],
+        _num_computed_tokens: &[usize],
+        _is_prefill: &[bool],
     ) -> vllm_traits::Result<BatchOutput> {
         let next_tokens: Vec<TokenId> = seq_ids.iter().map(|_| 0).collect();
         Ok(BatchOutput {
@@ -99,11 +99,11 @@ impl ModelBackend for Gemma4Model {
     fn forward_logits(
         &mut self,
         seq_ids: &[SeqId],
-        input_tokens: &[Vec<TokenId>],
-        positions: &[Vec<usize>],
-        kv_block_ids: &[Vec<usize>],
-        num_computed_tokens: &[usize],
-        is_prefill: &[bool],
+        _input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+        _kv_block_ids: &[Vec<usize>],
+        _num_computed_tokens: &[usize],
+        _is_prefill: &[bool],
     ) -> vllm_traits::Result<Vec<Vec<f32>>> {
         Ok(vec![vec![0.0_f32; self.config.vocab_size]; seq_ids.len()])
     }
@@ -111,7 +111,7 @@ impl ModelBackend for Gemma4Model {
     fn embed(
         &mut self,
         input_tokens: &[Vec<TokenId>],
-        positions: &[Vec<usize>],
+        _positions: &[Vec<usize>],
     ) -> vllm_traits::Result<Vec<Vec<f32>>> {
         Ok(vec![
             vec![0.0_f32; self.config.hidden_size];

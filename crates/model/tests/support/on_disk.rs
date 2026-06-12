@@ -27,7 +27,7 @@ impl OnDiskFixture {
     }
 
     pub fn qwen3() -> Self {
-        Self::new("VLLM_TEST_MODEL_DIR", "/models/Qwen3-0.6B")
+        Self::new(super::qwen3::ENV_VAR, super::qwen3::DEFAULT_DIR)
     }
 
     pub fn qwen2() -> Self {
