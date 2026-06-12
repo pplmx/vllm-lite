@@ -30,6 +30,20 @@ pub struct ModelConfig {
 impl ModelConfig {
     /// Tiny configuration for fast unit tests
     /// Hidden size: 128, Heads: 4, Head dim: 32
+    /// Tiny config for a specific architecture (fast CPU smoke tests).
+    pub fn test_tiny_for(architecture: Architecture) -> Self {
+        let sliding_window = if architecture == Architecture::Mistral {
+            Some(4096)
+        } else {
+            None
+        };
+        Self {
+            architecture,
+            sliding_window,
+            ..Self::test_tiny()
+        }
+    }
+
     pub fn test_tiny() -> Self {
         Self {
             architecture: Architecture::Llama,

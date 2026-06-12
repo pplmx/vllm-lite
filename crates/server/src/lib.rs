@@ -20,6 +20,10 @@ pub mod logging;
 pub mod openai;
 pub mod security;
 
+/// Hidden test helpers for unit/integration tests.
+#[doc(hidden)]
+pub mod test_fixtures;
+
 pub use health::{HealthChecker, HealthStatus};
 
 /// Shared state for all API handlers

@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn test_mistral_block_forward() {
-        let config = ModelConfig::mistral_7b();
+        let config = ModelConfig::test_tiny_for(crate::config::Architecture::Mistral);
         let block = new_block(&config, 0).unwrap();
         let input = Tensor::ones(
             (1, 4, config.hidden_size),
@@ -177,7 +177,7 @@ mod tests {
 
     #[test]
     fn test_mistral_block_sliding_window_config() {
-        let config = ModelConfig::mistral_7b();
+        let config = ModelConfig::test_tiny_for(crate::config::Architecture::Mistral);
         let _block = new_block(&config, 0).unwrap();
         assert_eq!(config.sliding_window, Some(4096));
     }
