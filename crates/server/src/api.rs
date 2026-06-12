@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use axum::{Json, extract::State};
 use serde::Serialize;
 use tokio::sync::mpsc;
@@ -21,12 +19,6 @@ pub struct HealthDetailResponse {
     pub gpu_available: bool,
     pub gpu_utilization: Option<f32>,
     pub kv_cache_usage_percent: Option<f32>,
-}
-
-pub(crate) async fn health() -> Json<HealthResponse> {
-    Json(HealthResponse {
-        status: "ok".to_string(),
-    })
 }
 
 pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailResponse> {
@@ -116,6 +108,12 @@ mod tests {
         routing::get,
     };
     use tower::ServiceExt;
+
+    async fn health() -> Json<HealthResponse> {
+        Json(HealthResponse {
+            status: "ok".to_string(),
+        })
+    }
 
     async fn send_request(app: Router, request: Request<Body>) -> Response {
         app.oneshot(request).await.expect("Failed to send request")

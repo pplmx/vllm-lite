@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use candle_core::{Result, Tensor};
 use candle_nn::VarBuilder;
 

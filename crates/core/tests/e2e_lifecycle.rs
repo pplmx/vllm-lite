@@ -204,3 +204,92 @@ fn test_streaming_tokens() {
         received_tokens
     );
 }
+
+#[test]
+fn test_high_concurrency_lifecycle() {
+    let mut engine = TestFixtures::increment_engine(1024);
+
+    let num_requests = 10;
+    let mut receivers = Vec::new();
+
+    for i in 0..num_requests {
+        let (tx, rx) = mpsc::channel(64);
+        engine.add_request(Request::new(i as u64, vec![10, 20], 5), tx);
+        receivers.push(rx);
+    }
+
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(60) {
+        let _ = engine.step();
+
+        if engine.scheduler.running().is_empty() && engine.scheduler.waiting_count() == 0 {
+            break;
+        }
+    }
+
+    let mut tokens_received = 0usize;
+    for rx in &mut receivers {
+        while rx.try_recv().is_ok() {
+            tokens_received += 1;
+        }
+    }
+
+    assert!(
+        tokens_received >= num_requests,
+        "expected tokens for all {num_requests} requests, got {tokens_received}"
+    );
+}
+
+#[test]
+fn test_adaptive_speculative_toggle_lifecycle() {
+    let mut engine = TestFixtures::increment_speculative_engine(1024);
+
+    engine.enable_adaptive_speculative(vllm_core::types::AdaptiveDraftConfig::default());
+    assert!(engine.is_adaptive_speculative_enabled());
+
+    engine.disable_adaptive_speculative();
+    assert!(!engine.is_adaptive_speculative_enabled());
+
+    let (tx, mut rx) = mpsc::channel(64);
+    let seq_id = engine.add_request(Request::new(1, vec![10, 20, 30], 5), tx);
+
+    let mut completed = false;
+    let mut tokens_received = 0;
+    let start = Instant::now();
+
+    while !completed && start.elapsed() < Duration::from_secs(10) {
+        let results = engine.step().unwrap();
+        for _ in &results {
+            if rx.try_recv().is_ok() {
+                tokens_received += 1;
+            }
+        }
+        completed = !engine.scheduler.running().iter().any(|s| s.id == seq_id);
+    }
+
+    assert!(
+        completed,
+        "request should complete after disabling speculative mode"
+    );
+    assert!(tokens_received > 0);
+}
+
+#[test]
+fn test_step_latency_slo() {
+    let mut engine = TestFixtures::increment_engine(1024);
+
+    let (tx, _rx) = mpsc::channel(64);
+    engine.add_request(Request::new(1, vec![10, 20], 10), tx);
+
+    let mut latencies = Vec::new();
+    for _ in 0..20 {
+        let start = Instant::now();
+        engine.step().unwrap();
+        latencies.push(start.elapsed().as_millis());
+    }
+
+    latencies.sort();
+    let p99 = latencies[(latencies.len() as f64 * 0.99) as usize];
+
+    assert!(p99 < 1000, "P99 step latency {p99}ms exceeds 1000ms SLO");
+}

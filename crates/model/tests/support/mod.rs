@@ -2,6 +2,7 @@
 
 #![allow(dead_code)]
 
+pub mod on_disk;
 pub mod qwen3;
 pub mod tokenizer;
 
@@ -45,7 +46,7 @@ pub fn cpu_device() -> Device {
 }
 
 /// Run a single prefill + decode step and assert logits shapes.
-pub fn assert_forward_smoke<M: ModelBackend>(model: &mut M, vocab_size: usize) {
+pub fn assert_forward_smoke<M: ModelBackend + ?Sized>(model: &mut M, vocab_size: usize) {
     let seq_ids = vec![1u64];
     let input_tokens = vec![vec![10u32, 20, 30]];
     let positions = vec![vec![0, 1, 2]];

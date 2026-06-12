@@ -1,5 +1,4 @@
 //! Shared fixtures for server unit and integration tests.
-#![allow(dead_code)]
 
 use std::sync::Arc;
 

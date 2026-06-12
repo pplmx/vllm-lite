@@ -2,11 +2,10 @@ use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use vllm_core::engine::Engine;
 use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_core::scheduler::SchedulerEngine;
 use vllm_core::types::{AdaptiveDraftConfig, Request, SchedulerConfig};
-use vllm_testing::IncrementModel;
+use vllm_testing::TestFixtures;
 
 /// Benchmark Sequence Packing vs FIFO
 fn bench_sequence_packing(c: &mut Criterion) {
@@ -71,7 +70,7 @@ fn bench_adaptive_speculative(c: &mut Criterion) {
     // Fixed draft tokens
     group.bench_function("fixed_draft", |b| {
         let config = SchedulerConfig::default();
-        let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+        let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
 
         let (tx, _rx) = mpsc::channel(64);
         engine.add_request(Request::new(1, vec![10, 20], 50), tx);
@@ -84,7 +83,7 @@ fn bench_adaptive_speculative(c: &mut Criterion) {
     // Adaptive draft tokens
     group.bench_function("adaptive_draft", |b| {
         let config = SchedulerConfig::default();
-        let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+        let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
         engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
 
         let (tx, _rx) = mpsc::channel(64);
@@ -116,7 +115,7 @@ fn bench_throughput(c: &mut Criterion) {
                     },
                     ..Default::default()
                 };
-                let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+                let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
 
                 for i in 0..num_requests {
                     let (tx, _rx) = mpsc::channel(64);
@@ -139,8 +138,7 @@ fn bench_throughput(c: &mut Criterion) {
             num_requests,
             |b, &num_requests| {
                 let config = SchedulerConfig::default();
-                let mut engine =
-                    Engine::with_config(IncrementModel, Some(IncrementModel), config, 4, 1024);
+                let mut engine = TestFixtures::increment_speculative_engine_with(config, 4, 1024);
                 engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
 
                 for i in 0..num_requests {
