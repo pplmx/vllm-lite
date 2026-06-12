@@ -1,6 +1,6 @@
 //! Mixtral model implementation.
-
-#![allow(dead_code)]
+//!
+//! Weight loading exists; `forward` is still a stub until MoE decode is wired up.
 
 use std::collections::HashMap;
 
@@ -12,6 +12,8 @@ use vllm_traits::{BatchOutput, ModelBackend, SeqId, TokenId};
 
 use super::block::MixtralBlock;
 
+/// Weights are loaded in `from_weights`; `forward` is still a stub.
+#[allow(dead_code)]
 pub struct MixtralModel {
     config: ModelConfig,
     embed_tokens: Embedding,
