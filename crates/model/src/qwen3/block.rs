@@ -2,19 +2,29 @@
 
 use crate::components::AttentionConfig;
 use crate::components::LnLayerNorm;
+use crate::components::RopeGqaDecoderBlock;
 use crate::components::SwiGLU;
 use crate::components::attention::RopeGqaAttention;
-use crate::paged_tensor::PagedKvCache;
+use crate::components::decoder_block::AsDecoderBlock;
 use candle_core::{Result, Tensor};
+use std::ops::Deref;
 use vllm_dist::TensorParallelConfig;
 
-pub struct TransformerBlock {
-    input_layernorm: LnLayerNorm,
-    post_attention_layernorm: LnLayerNorm,
-    attention: RopeGqaAttention,
-    mlp: SwiGLU,
-    #[allow(dead_code)]
-    tp_config: Option<TensorParallelConfig>,
+/// Qwen3 decoder layer wrapping the shared RoPE-GQA block.
+pub struct TransformerBlock(RopeGqaDecoderBlock);
+
+impl Deref for TransformerBlock {
+    type Target = RopeGqaDecoderBlock;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl AsDecoderBlock for TransformerBlock {
+    fn as_decoder_block(&self) -> &RopeGqaDecoderBlock {
+        &self.0
+    }
 }
 
 impl TransformerBlock {
@@ -58,13 +68,12 @@ impl TransformerBlock {
         let vb_mlp = vb.pp("mlp");
         let mlp = SwiGLU::new(hidden_size, intermediate_size, Some(vb_mlp))?;
 
-        Ok(Self {
+        Ok(Self(RopeGqaDecoderBlock::new(
             input_layernorm,
             post_attention_layernorm,
             attention,
             mlp,
-            tp_config: None,
-        })
+        )))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -76,7 +85,7 @@ impl TransformerBlock {
         intermediate_size: usize,
         theta: f32,
         rms_norm_eps: f64,
-        tp_config: Option<TensorParallelConfig>,
+        _tp_config: Option<TensorParallelConfig>,
         has_qk_norm: bool,
     ) -> Result<Self> {
         let vb = candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu);
@@ -105,13 +114,12 @@ impl TransformerBlock {
         let vb_mlp = vb.pp("mlp");
         let mlp = SwiGLU::new(hidden_size, intermediate_size, Some(vb_mlp))?;
 
-        Ok(Self {
+        Ok(Self(RopeGqaDecoderBlock::new(
             input_layernorm,
             post_attention_layernorm,
             attention,
             mlp,
-            tp_config,
-        })
+        )))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -188,13 +196,12 @@ impl TransformerBlock {
 
         let mlp = SwiGLU::new_with_weights(hidden_size, intermediate_size, gate_w, up_w, down_w)?;
 
-        Ok(Self {
+        Ok(Self(RopeGqaDecoderBlock::new(
             input_layernorm,
             post_attention_layernorm,
             attention,
             mlp,
-            tp_config: None,
-        })
+        )))
     }
 
     pub fn from_weights(
@@ -283,76 +290,6 @@ impl TransformerBlock {
             has_qk_norm,
             layer_weights,
         )
-    }
-
-    pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        let residual = x.clone();
-        let x = self.input_layernorm.forward(x)?;
-        let x = self.attention.forward(&x)?;
-        let x = (x + residual)?;
-
-        let residual = x.clone();
-        let x = self.post_attention_layernorm.forward(&x)?;
-        let x = self.mlp.forward(&x)?;
-        x.add(&residual)
-    }
-
-    pub fn forward_prefill(
-        &self,
-        x: &Tensor,
-        kv_cache: &mut PagedKvCache,
-        layer_idx: usize,
-        block_ids: &[usize],
-        positions: &[usize],
-    ) -> Result<Tensor> {
-        let residual = x.clone();
-        let x = self.input_layernorm.forward(x)?;
-        let x = self
-            .attention
-            .forward_prefill(&x, kv_cache, layer_idx, block_ids, positions)?;
-        let x = (&x + &residual)?;
-
-        let residual = x.clone();
-        let x = self.post_attention_layernorm.forward(&x)?;
-        let x = self.mlp.forward(&x)?;
-        let x = (&x + &residual)?;
-
-        Ok(x)
-    }
-
-    pub fn forward_decode(
-        &self,
-        x: &Tensor,
-        kv_cache: &mut PagedKvCache,
-        layer_idx: usize,
-        block_ids: &[usize],
-        num_computed_tokens: usize,
-        positions: &[usize],
-    ) -> Result<Tensor> {
-        let residual = x.clone();
-        let mut x = self.input_layernorm.forward(x)?;
-        x = self.attention.forward_decode(
-            &x,
-            kv_cache,
-            layer_idx,
-            block_ids,
-            num_computed_tokens,
-            positions,
-        )?;
-        if x.dims().len() == 3 && x.dims()[1] == 1 && residual.dims().len() == 2 {
-            let dims = x.dims();
-            let batch_size = dims[0];
-            let hidden_size: usize = dims[2];
-            x = x.reshape((batch_size, hidden_size))?;
-        }
-        x = (&x + &residual)?;
-
-        let residual = x.clone();
-        x = self.post_attention_layernorm.forward(&x)?;
-        x = self.mlp.forward(&x)?;
-        x = (&x + &residual)?;
-
-        Ok(x)
     }
 }
 

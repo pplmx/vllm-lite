@@ -81,7 +81,7 @@ impl Architecture for MistralArchitecture {
         weights: &HashMap<String, Tensor>,
         _device: &Device,
     ) -> Result<Box<dyn TransformerBlock>> {
-        let block = MistralBlock::from_weights(config, layer_idx, weights)?;
+        let block = super::block::block_from_weights(config, layer_idx, weights)?;
         Ok(Box::new(MistralBlockWrapper::new(block, config)))
     }
 

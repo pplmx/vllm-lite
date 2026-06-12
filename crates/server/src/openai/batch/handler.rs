@@ -178,6 +178,7 @@ mod tests {
         crate::ApiState {
             engine_tx,
             tokenizer: Arc::new(tokenizer),
+            architecture: vllm_model::config::Architecture::Qwen3,
             batch_manager: Arc::new(BatchManager::new()),
             auth: None,
             health: Arc::new(std::sync::RwLock::new(crate::HealthChecker::new(

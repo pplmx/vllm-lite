@@ -1,5 +1,6 @@
 pub mod attention;
 pub mod block;
+pub mod decoder_block;
 pub mod mlp;
 pub mod norm;
 pub mod positional;
@@ -14,6 +15,7 @@ pub use attention::{
     paged_attention, tiled_attention,
 };
 pub use block::{BlockConfig, StandardBlock, TransformerBlock};
+pub use decoder_block::RopeGqaDecoderBlock;
 pub use mlp::*;
 pub use norm::{LnLayerNorm, RmsNorm, layer_norm, rms_norm};
 pub use positional::*;

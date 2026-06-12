@@ -16,6 +16,7 @@ async fn test_models_handler_returns_list() {
     let state = ApiState {
         engine_tx: tx,
         tokenizer,
+        architecture: vllm_model::config::Architecture::Qwen3,
         batch_manager,
         auth: None,
         health,

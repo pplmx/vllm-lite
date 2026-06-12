@@ -188,9 +188,12 @@ async fn main() {
     let health_checker = Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true)));
     let metrics_collector = Arc::new(EnhancedMetricsCollector::new());
 
+    let architecture = loader.architecture();
+
     let state = ApiState {
         engine_tx: msg_tx.clone(),
         tokenizer,
+        architecture,
         batch_manager,
         auth: auth_middleware.clone(),
         health: health_checker,

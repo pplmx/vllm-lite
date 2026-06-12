@@ -3,16 +3,16 @@
 use std::collections::HashMap;
 
 use crate::causal_lm::{
-    embed_sequence, forward_batch, greedy_sample_token, logits_to_vector, map_candle,
+    forward_batch, forward_with_paged_kv, greedy_sample_token, logits_to_vector,
     mean_pool_embeddings,
 };
 use crate::config::ModelConfig;
 use crate::paged_tensor::PagedKvCache;
-use candle_core::{Device, Module, Result as CandleResult, Tensor};
+use candle_core::{Device, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, Linear, VarBuilder};
 use vllm_traits::{BatchOutput, BlockId, ModelBackend, Result, SeqId, TokenId};
 
-use super::block::LlamaBlock;
+use super::block::{LlamaBlock, block_from_weights, new_block};
 
 pub struct LlamaModel {
     config: ModelConfig,
@@ -36,7 +36,7 @@ impl LlamaModel {
 
         let mut layers = Vec::new();
         for _ in 0..num_layers {
-            layers.push(LlamaBlock::new(&config, 0)?);
+            layers.push(new_block(&config, 0)?);
         }
 
         let vb = VarBuilder::zeros(candle_core::DType::F32, &device);
@@ -81,7 +81,7 @@ impl LlamaModel {
 
         let mut layers = Vec::new();
         for i in 0..num_layers {
-            layers.push(LlamaBlock::from_weights(&config, i, &weights)?);
+            layers.push(block_from_weights(&config, i, &weights)?);
         }
 
         let norm_key = "model.norm.weight";
@@ -131,44 +131,20 @@ impl LlamaModel {
         positions: &[usize],
         is_prefill: bool,
     ) -> Result<(Tensor, usize)> {
-        if tokens.is_empty() {
-            let logits = map_candle(Tensor::zeros(
-                (1, 1, self.config.vocab_size),
-                candle_core::DType::F32,
-                &self.device,
-            ))?;
-            return Ok((logits, 0));
-        }
-
-        let mut hidden = embed_sequence(&self.embed_tokens, tokens, &self.device, is_prefill)?;
-
-        if is_prefill {
-            for (layer_idx, layer) in self.layers.iter().enumerate() {
-                hidden = map_candle(layer.forward_prefill(
-                    &hidden,
-                    &mut self.kv_cache,
-                    layer_idx,
-                    block_ids,
-                    positions,
-                ))?;
-            }
-        } else {
-            let decode_position = [positions[0]];
-            for (layer_idx, layer) in self.layers.iter().enumerate() {
-                hidden = map_candle(layer.forward_decode(
-                    &hidden,
-                    &mut self.kv_cache,
-                    layer_idx,
-                    block_ids,
-                    num_computed_tokens,
-                    &decode_position,
-                ))?;
-            }
-        }
-
-        hidden = map_candle(self.norm.forward(&hidden))?;
-        let logits = map_candle(self.lm_head.forward(&hidden))?;
-        Ok((logits, 0))
+        forward_with_paged_kv(
+            &self.embed_tokens,
+            &self.layers,
+            &self.norm,
+            &self.lm_head,
+            &self.device,
+            self.config.vocab_size,
+            tokens,
+            num_computed_tokens,
+            block_ids,
+            positions,
+            is_prefill,
+            &mut self.kv_cache,
+        )
     }
 }
 
