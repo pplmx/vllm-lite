@@ -2,17 +2,17 @@
 
 use std::collections::HashMap;
 
-use crate::components::GqaAttention;
 use crate::components::LnLayerNorm;
 use crate::components::SwiGLU;
+use crate::components::attention::RopeGqaAttention;
 use crate::config::ModelConfig;
-use candle_core::Result;
-use candle_core::Tensor;
+use crate::kv_cache::PagedKvCache;
+use candle_core::{Result, Tensor};
 
 pub struct MistralBlock {
     input_layernorm: LnLayerNorm,
     post_attention_layernorm: LnLayerNorm,
-    attention: GqaAttention,
+    attention: RopeGqaAttention,
     mlp: SwiGLU,
     sliding_window: usize,
 }
@@ -37,11 +37,12 @@ impl MistralBlock {
         let post_attention_layernorm =
             LnLayerNorm::new(post_ln_weight, post_ln_bias, config.rms_norm_eps);
 
-        let attention = GqaAttention::new(
+        let attention = RopeGqaAttention::new(
             hidden_size,
             num_heads,
             num_kv_heads,
             head_dim,
+            config.rope_theta,
             None,
             crate::components::AttentionConfig::default(),
             false,
@@ -173,11 +174,12 @@ impl MistralBlock {
         let post_attention_layernorm =
             LnLayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
 
-        let attention = GqaAttention::new_with_weights(
+        let attention = RopeGqaAttention::new_with_weights(
             hidden_size,
             num_heads,
             num_kv_heads,
             head_dim,
+            config.rope_theta,
             q_w,
             k_w,
             v_w,
@@ -208,6 +210,60 @@ impl MistralBlock {
         let residual = x.clone();
         let x = self.post_attention_layernorm.forward(&x)?;
         let x = self.mlp.forward(&x)?;
+        x.add(&residual)
+    }
+
+    pub fn forward_prefill(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        positions: &[usize],
+    ) -> Result<Tensor> {
+        let residual = x.clone();
+        let x = self.input_layernorm.forward(x)?;
+        let x = self
+            .attention
+            .forward_prefill(&x, kv_cache, layer_idx, block_ids, positions)?;
+        let x = (&x + &residual)?;
+
+        let residual = x.clone();
+        let x = self.post_attention_layernorm.forward(&x)?;
+        let x = self.mlp.forward(&x)?;
+        x.add(&residual)
+    }
+
+    pub fn forward_decode(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        num_computed_tokens: usize,
+        positions: &[usize],
+    ) -> Result<Tensor> {
+        let residual = x.clone();
+        let mut x = self.input_layernorm.forward(x)?;
+        x = self.attention.forward_decode(
+            &x,
+            kv_cache,
+            layer_idx,
+            block_ids,
+            num_computed_tokens,
+            positions,
+        )?;
+        if x.dims().len() == 3 && x.dims()[1] == 1 && residual.dims().len() == 2 {
+            let dims = x.dims();
+            let batch_size = dims[0];
+            let hidden_size: usize = dims[2];
+            x = x.reshape((batch_size, hidden_size))?;
+        }
+        x = (&x + &residual)?;
+
+        let residual = x.clone();
+        x = self.post_attention_layernorm.forward(&x)?;
+        x = self.mlp.forward(&x)?;
         x.add(&residual)
     }
 }

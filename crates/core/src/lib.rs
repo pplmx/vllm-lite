@@ -24,6 +24,7 @@ pub mod routing;
 pub mod sampling;
 pub mod scheduler;
 pub mod speculative;
+pub mod sync;
 pub mod types;
 
 pub use beam::BeamSequence;

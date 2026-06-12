@@ -1,6 +1,7 @@
 #![allow(dead_code, clippy::type_complexity, clippy::iter_cloned_collect)]
 
 use crate::error::Result;
+use crate::sync::lock_mutex;
 use vllm_traits::{Batch, BatchPhase, SeqId, TokenId};
 
 /// Unified entry point for speculative and non-speculative decoding.
@@ -43,7 +44,7 @@ impl super::Engine {
             None => return Ok(()),
         };
         for (i, seq_id) in batch.seq_ids.iter().enumerate() {
-            draft_model.lock().unwrap().forward(
+            lock_mutex(&draft_model)?.forward(
                 &[*seq_id],
                 std::slice::from_ref(&batch.input_tokens[i]),
                 std::slice::from_ref(&batch.positions[i]),
@@ -218,7 +219,7 @@ impl super::Engine {
             }
 
             // Single forward pass per position across all active sequences
-            let output = match draft_model.lock().unwrap().forward(
+            let output = match lock_mutex(&draft_model)?.forward(
                 &pos_seq_ids,
                 &pos_input_tokens,
                 &pos_positions,
@@ -261,7 +262,7 @@ impl super::Engine {
             let drafts = &draft_outputs[i];
 
             if drafts.is_empty() {
-                let logits = self.target_model.lock().unwrap().forward_logits(
+                let logits = lock_mutex(&self.target_model)?.forward_logits(
                     &[*seq_id],
                     std::slice::from_ref(&batch.input_tokens[i]),
                     std::slice::from_ref(&batch.positions[i]),
@@ -288,7 +289,7 @@ impl super::Engine {
             let verify_positions: Vec<usize> = (0..verify_tokens.len()).collect();
 
             // Get logits from target model for all positions
-            let logits = self.target_model.lock().unwrap().forward_logits(
+            let logits = lock_mutex(&self.target_model)?.forward_logits(
                 &[*seq_id],
                 std::slice::from_ref(&verify_tokens),
                 std::slice::from_ref(&verify_positions),
@@ -298,7 +299,7 @@ impl super::Engine {
             )?;
 
             let logits: &[f32] = logits.first().map(|v| v.as_slice()).unwrap_or(&[]);
-            let vocab_size = self.target_model.lock().unwrap().vocab_size();
+            let vocab_size = lock_mutex(&self.target_model)?.vocab_size();
 
             let mut accepted = 0usize;
 
@@ -373,7 +374,7 @@ impl super::Engine {
             };
 
             for _ in 0..max_draft {
-                let output = draft_model.lock().unwrap().forward(
+                let output = lock_mutex(&draft_model)?.forward(
                     &[*seq_id],
                     std::slice::from_ref(&current_tokens),
                     std::slice::from_ref(&current_positions),
@@ -403,7 +404,7 @@ impl super::Engine {
             let drafts = &draft_outputs[i];
 
             if drafts.is_empty() {
-                let target_output = self.target_model.lock().unwrap().forward(
+                let target_output = lock_mutex(&self.target_model)?.forward(
                     &[*seq_id],
                     std::slice::from_ref(&batch.input_tokens[i]),
                     std::slice::from_ref(&batch.positions[i]),
@@ -425,7 +426,7 @@ impl super::Engine {
             let verify_num_computed: Vec<usize> = vec![batch.num_computed_tokens[i] + drafts.len()];
             let verify_is_prefill: Vec<bool> = vec![true];
 
-            let target_output = self.target_model.lock().unwrap().forward(
+            let target_output = lock_mutex(&self.target_model)?.forward(
                 &[*seq_id],
                 std::slice::from_ref(&verify_tokens),
                 std::slice::from_ref(&verify_positions),
@@ -471,7 +472,7 @@ impl super::Engine {
             let mut accepted_count = 0usize;
 
             if drafts.is_empty() {
-                let target_output = self.target_model.lock().unwrap().forward(
+                let target_output = lock_mutex(&self.target_model)?.forward(
                     &[*seq_id],
                     std::slice::from_ref(&batch.input_tokens[i]),
                     std::slice::from_ref(&batch.positions[i]),
@@ -493,7 +494,7 @@ impl super::Engine {
                     vec![batch.num_computed_tokens[i] + drafts.len(); verify_tokens.len()];
                 let verify_is_prefill = vec![false; verify_tokens.len()];
 
-                let target_output = self.target_model.lock().unwrap().forward(
+                let target_output = lock_mutex(&self.target_model)?.forward(
                     &[*seq_id],
                     std::slice::from_ref(&verify_tokens),
                     std::slice::from_ref(&verify_positions),

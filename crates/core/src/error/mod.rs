@@ -13,6 +13,9 @@ pub enum EngineError {
 
     #[error("sampling failed: {0}")]
     SamplingError(String),
+
+    #[error("internal lock poisoned")]
+    LockPoisoned,
 }
 
 impl From<vllm_traits::ModelError> for EngineError {
