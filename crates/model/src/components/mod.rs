@@ -14,7 +14,7 @@ pub use attention::{
     AttentionConfig, GqaAttention, MlaAttention, causal_mask, causal_mask_tile, expand_kv,
     paged_attention, tiled_attention,
 };
-pub use block::{BlockConfig, StandardBlock, TransformerBlock};
+pub use block::TransformerBlock;
 pub use decoder_block::RopeGqaDecoderBlock;
 pub use mlp::*;
 pub use norm::{LnLayerNorm, RmsNorm, layer_norm, rms_norm};

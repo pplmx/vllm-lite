@@ -98,7 +98,7 @@ mod tests {
             _weights: &HashMap<String, candle_core::Tensor>,
             _device: &candle_core::Device,
         ) -> candle_core::Result<Box<dyn crate::components::TransformerBlock>> {
-            todo!()
+            Err(candle_core::Error::Msg("test arch has no blocks".into()))
         }
         fn create_model(
             &self,
@@ -107,7 +107,7 @@ mod tests {
             _weights: HashMap<String, candle_core::Tensor>,
             _num_kv_blocks: usize,
         ) -> candle_core::Result<Box<dyn vllm_traits::ModelBackend>> {
-            todo!()
+            Err(candle_core::Error::Msg("test arch has no model".into()))
         }
     }
 

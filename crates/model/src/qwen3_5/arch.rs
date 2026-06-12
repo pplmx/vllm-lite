@@ -73,7 +73,10 @@ impl Architecture for Qwen35Architecture {
         _weights: &HashMap<String, Tensor>,
         _device: &Device,
     ) -> Result<Box<dyn TransformerBlock>> {
-        todo!("Qwen3.5 hybrid block not yet implemented - using model-level integration")
+        Err(candle_core::Error::Msg(
+            "Qwen3.5 hybrid blocks are only available via create_model (SSM+attention layers)"
+                .into(),
+        ))
     }
 
     fn create_model(
