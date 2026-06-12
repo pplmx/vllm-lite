@@ -5,7 +5,7 @@ pub mod types;
 
 pub use collector::EnhancedMetricsCollector;
 pub use exporter::{MetricsExporter, PrometheusExporter};
-pub use legacy::{LockFreeMetrics, MetricsCollector, MetricsSnapshot};
+pub use lock_free::{LockFreeMetrics, MetricsCollector, MetricsSnapshot};
 pub use types::{MetricLabels, MetricType, MetricValue};
 
-mod legacy;
+mod lock_free;

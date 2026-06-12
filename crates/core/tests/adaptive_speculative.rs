@@ -96,11 +96,7 @@ fn test_adaptive_speculative_with_same_model_for_draft() {
     let mut decode_iterations = 0;
     while engine.has_pending() && decode_iterations < 50 {
         let result = engine.step();
-        assert!(
-            result.is_ok(),
-            "step_adaptive_speculative failed: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "engine step failed: {:?}", result);
         decode_iterations += 1;
     }
 

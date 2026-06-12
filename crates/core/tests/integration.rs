@@ -1,6 +1,5 @@
 use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
-use vllm_core::scheduler::cache::PrefixCacheConfig;
 use vllm_core::types::{Request, SchedulerConfig, SequencePackingConfig, TokenId};
 use vllm_testing::{ConstModel, IncrementModel};
 
@@ -1001,23 +1000,4 @@ fn test_scheduler_config_rejects_invalid_ratio() {
         10,
         SequencePackingConfig::default(),
     );
-}
-
-#[test]
-#[should_panic(expected = "max_entries must be > 0")]
-fn test_prefix_cache_config_rejects_zero_entries() {
-    let _ = PrefixCacheConfig::new(Some(0), Some(100));
-}
-
-#[test]
-#[should_panic(expected = "max_blocks must be > 0")]
-fn test_prefix_cache_config_rejects_zero_blocks() {
-    let _ = PrefixCacheConfig::new(Some(100), Some(0));
-}
-
-#[test]
-fn test_prefix_cache_config_allows_none_values() {
-    let config = PrefixCacheConfig::new(None, None);
-    assert_eq!(config.max_entries, None);
-    assert_eq!(config.max_blocks, None);
 }

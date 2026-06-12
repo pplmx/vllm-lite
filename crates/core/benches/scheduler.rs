@@ -56,13 +56,18 @@ fn scheduler_build_batch(c: &mut Criterion) {
     group.finish();
 }
 
-fn hash_tokens_benchmark(c: &mut Criterion) {
-    use vllm_core::kv_cache::hash_tokens;
+fn radix_prefix_match_benchmark(c: &mut Criterion) {
+    use vllm_core::scheduler::RadixTree;
 
-    let tokens: Vec<u32> = (0..512).collect();
+    let mut tree = RadixTree::new();
+    for i in 0..256u32 {
+        let tokens: Vec<u32> = (0..=i).collect();
+        tree.insert(&tokens, vec![i as usize]);
+    }
+    let query: Vec<u32> = (0..200).collect();
 
-    c.bench_function("hash_tokens_512", |b| {
-        b.iter(|| hash_tokens(black_box(&tokens)));
+    c.bench_function("radix_prefix_match_200", |b| {
+        b.iter(|| tree.longest_prefix_match(black_box(&query)));
     });
 }
 
@@ -70,6 +75,6 @@ criterion_group!(
     benches,
     scheduler_add_request,
     scheduler_build_batch,
-    hash_tokens_benchmark
+    radix_prefix_match_benchmark
 );
 criterion_main!(benches);
