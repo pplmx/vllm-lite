@@ -1,6 +1,6 @@
 //! RMSNorm (Root Mean Square Layer Normalization) implementation.
 
-use candle_core::{Result, Tensor};
+use candle_core::{Module, Result, Tensor};
 
 pub struct RmsNorm {
     weight: Tensor,
@@ -35,6 +35,12 @@ impl RmsNorm {
             let x_normed = x.broadcast_div(&(variance + self.eps)?.sqrt()?)?;
             x_normed.broadcast_mul(&weight_2d)
         }
+    }
+}
+
+impl Module for RmsNorm {
+    fn forward(&self, xs: &Tensor) -> Result<Tensor> {
+        RmsNorm::forward(self, xs)
     }
 }
 

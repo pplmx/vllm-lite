@@ -3,7 +3,7 @@
 //! Centralizes greedy sampling and batch forward loops so architecture-specific
 //! models (Llama, Mistral, Qwen3, …) stay focused on layer wiring.
 
-use crate::components::decoder_block::AsDecoderBlock;
+use crate::components::decoder_block::PagedDecoderBlock;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{D, Device, Module, Tensor};
 use candle_nn::Embedding;
@@ -90,7 +90,7 @@ where
 }
 
 /// Run all decoder layers with paged KV cache (prefill or single-token decode).
-pub fn run_decoder_layers<L: AsDecoderBlock>(
+pub fn run_decoder_layers<L: PagedDecoderBlock>(
     layers: &[L],
     mut hidden: Tensor,
     kv_cache: &mut PagedKvCache,
@@ -102,15 +102,13 @@ pub fn run_decoder_layers<L: AsDecoderBlock>(
     if is_prefill {
         for (layer_idx, layer) in layers.iter().enumerate() {
             hidden = map_candle(
-                layer
-                    .as_decoder_block()
-                    .forward_prefill(&hidden, kv_cache, layer_idx, block_ids, positions),
+                layer.forward_prefill(&hidden, kv_cache, layer_idx, block_ids, positions),
             )?;
         }
     } else {
         let decode_position = [positions[0]];
         for (layer_idx, layer) in layers.iter().enumerate() {
-            hidden = map_candle(layer.as_decoder_block().forward_decode(
+            hidden = map_candle(layer.forward_decode(
                 &hidden,
                 kv_cache,
                 layer_idx,
@@ -140,7 +138,7 @@ pub fn forward_with_paged_kv<L, Norm, Head>(
     kv_cache: &mut PagedKvCache,
 ) -> Result<(Tensor, usize)>
 where
-    L: AsDecoderBlock,
+    L: PagedDecoderBlock,
     Norm: Module,
     Head: Module,
 {

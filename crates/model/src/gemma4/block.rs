@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use crate::components::RmsNorm;
+use crate::components::decoder_block::PagedDecoderBlock;
 use crate::config::{LayerType, ModelConfig, RoPEConfig};
 use crate::gemma4::attention::Gemma4Attention;
 use crate::gemma4::mlp::GeGLU;
@@ -23,6 +24,7 @@ impl Gemma4Block {
         let num_kv_heads = config.num_kv_heads;
         let head_dim = config.head_dim;
         let intermediate_size = config.intermediate_size;
+        let sliding_window = config.sliding_window.unwrap_or(512);
 
         let layer_type = config
             .layer_types
@@ -44,6 +46,7 @@ impl Gemma4Block {
             num_heads,
             num_kv_heads,
             head_dim,
+            sliding_window,
             layer_type,
             &rope_config,
             vb.clone(),
@@ -73,6 +76,7 @@ impl Gemma4Block {
         let num_kv_heads = config.num_kv_heads;
         let head_dim = config.head_dim;
         let intermediate_size = config.intermediate_size;
+        let sliding_window = config.sliding_window.unwrap_or(512);
 
         let layer_type = config
             .layer_types
@@ -132,6 +136,7 @@ impl Gemma4Block {
             num_heads,
             num_kv_heads,
             head_dim,
+            sliding_window,
             layer_type,
             &rope_config,
             q_w,
@@ -213,6 +218,39 @@ impl Gemma4Block {
         x = self.post_attention_layernorm.forward(&x)?;
         x = self.mlp.forward(&x)?;
         x.add(&residual)
+    }
+}
+
+impl PagedDecoderBlock for Gemma4Block {
+    fn forward_prefill(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        positions: &[usize],
+    ) -> Result<Tensor> {
+        Gemma4Block::forward_prefill(self, x, kv_cache, layer_idx, block_ids, positions)
+    }
+
+    fn forward_decode(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        num_computed_tokens: usize,
+        positions: &[usize],
+    ) -> Result<Tensor> {
+        Gemma4Block::forward_decode(
+            self,
+            x,
+            kv_cache,
+            layer_idx,
+            block_ids,
+            num_computed_tokens,
+            positions,
+        )
     }
 }
 

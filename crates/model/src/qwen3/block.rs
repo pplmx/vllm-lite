@@ -5,7 +5,7 @@ use crate::components::LnLayerNorm;
 use crate::components::RopeGqaDecoderBlock;
 use crate::components::SwiGLU;
 use crate::components::attention::RopeGqaAttention;
-use crate::components::decoder_block::AsDecoderBlock;
+use crate::components::decoder_block::PagedDecoderBlock;
 use candle_core::{Result, Tensor};
 use std::ops::Deref;
 use vllm_dist::TensorParallelConfig;
@@ -21,9 +21,36 @@ impl Deref for TransformerBlock {
     }
 }
 
-impl AsDecoderBlock for TransformerBlock {
-    fn as_decoder_block(&self) -> &RopeGqaDecoderBlock {
-        &self.0
+impl PagedDecoderBlock for TransformerBlock {
+    fn forward_prefill(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut crate::paged_tensor::PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        positions: &[usize],
+    ) -> Result<Tensor> {
+        self.0
+            .forward_prefill(x, kv_cache, layer_idx, block_ids, positions)
+    }
+
+    fn forward_decode(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut crate::paged_tensor::PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        num_computed_tokens: usize,
+        positions: &[usize],
+    ) -> Result<Tensor> {
+        self.0.forward_decode(
+            x,
+            kv_cache,
+            layer_idx,
+            block_ids,
+            num_computed_tokens,
+            positions,
+        )
     }
 }
 
