@@ -61,24 +61,9 @@ mod tests {
     use super::*;
 
     use axum::http::StatusCode;
-    use std::sync::Arc;
-    use tokio::sync::mpsc;
-    use vllm_model::tokenizer::Tokenizer;
 
     fn create_test_state() -> crate::ApiState {
-        use vllm_core::metrics::EnhancedMetricsCollector;
-        let (engine_tx, _rx) = mpsc::unbounded_channel();
-        crate::ApiState {
-            engine_tx,
-            tokenizer: Arc::new(Tokenizer::new()),
-            architecture: vllm_model::config::Architecture::Qwen3,
-            batch_manager: Arc::new(crate::openai::batch::manager::BatchManager::new()),
-            auth: None,
-            health: Arc::new(std::sync::RwLock::new(crate::HealthChecker::new(
-                true, true,
-            ))),
-            metrics: Arc::new(EnhancedMetricsCollector::new()),
-        }
+        crate::test_fixtures::api_state(vllm_model::config::Architecture::Qwen3)
     }
 
     #[tokio::test]

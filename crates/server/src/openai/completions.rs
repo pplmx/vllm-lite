@@ -122,27 +122,10 @@ pub async fn completions(
 
 #[cfg(test)]
 mod tests {
-    #[allow(unused_imports)]
     use super::*;
-    use crate::openai::batch::manager::BatchManager;
-    use std::sync::Arc;
-    use vllm_model::tokenizer::Tokenizer;
 
     fn create_test_state() -> crate::ApiState {
-        use vllm_core::metrics::EnhancedMetricsCollector;
-        let tokenizer = Tokenizer::new();
-        let (engine_tx, _engine_rx) = mpsc::unbounded_channel();
-        crate::ApiState {
-            engine_tx,
-            tokenizer: Arc::new(tokenizer),
-            architecture: vllm_model::config::Architecture::Qwen3,
-            batch_manager: Arc::new(BatchManager::new()),
-            auth: None,
-            health: Arc::new(std::sync::RwLock::new(crate::HealthChecker::new(
-                true, true,
-            ))),
-            metrics: Arc::new(EnhancedMetricsCollector::new()),
-        }
+        crate::test_fixtures::api_state(vllm_model::config::Architecture::Qwen3)
     }
 
     #[tokio::test]

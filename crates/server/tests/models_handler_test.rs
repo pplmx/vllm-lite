@@ -1,27 +1,11 @@
 use axum::http::StatusCode;
-use tokio::sync::mpsc;
-use vllm_server::ApiState;
+use vllm_model::config::Architecture;
 use vllm_server::openai::models::models_handler;
+use vllm_server::test_fixtures::api_state;
 
 #[tokio::test]
 async fn test_models_handler_returns_list() {
-    let (tx, _rx) = mpsc::unbounded_channel();
-    let tokenizer = Arc::new(vllm_model::tokenizer::Tokenizer::new());
-    let batch_manager = Arc::new(vllm_server::openai::batch::manager::BatchManager::new());
-    let health = Arc::new(std::sync::RwLock::new(
-        vllm_server::health::HealthChecker::new(true, true),
-    ));
-    let metrics = Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new());
-
-    let state = ApiState {
-        engine_tx: tx,
-        tokenizer,
-        architecture: vllm_model::config::Architecture::Qwen3,
-        batch_manager,
-        auth: None,
-        health,
-        metrics,
-    };
+    let state = api_state(Architecture::Qwen3);
 
     let response = models_handler(axum::extract::State(state)).await;
 
@@ -35,5 +19,3 @@ async fn test_models_handler_returns_list() {
     assert!(json_str.contains("\"object\":\"list\""));
     assert!(json_str.contains("\"model\""));
 }
-
-use std::sync::Arc;
