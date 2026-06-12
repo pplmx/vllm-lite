@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::{Mutex, mpsc};
 use vllm_core::engine::Engine;
 use vllm_core::types::{Request, SchedulerConfig};
-use vllm_testing::IncrementModel;
+use vllm_testing::{IncrementModel, TestFixtures};
 use vllm_traits::{BatchOutput, ModelBackend, ModelError, SeqId, TokenId};
 
 /// Model that simulates failures after a threshold
@@ -114,7 +114,7 @@ struct ErrorTrackingEngine {
 impl ErrorTrackingEngine {
     fn new() -> Self {
         let config = SchedulerConfig::default();
-        let engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+        let engine = TestFixtures::increment_engine_with(config, 4, 1024);
         Self {
             engine: Arc::new(Mutex::new(engine)),
         }
@@ -161,7 +161,7 @@ impl Clone for ErrorTrackingEngine {
 #[test]
 fn test_error_tracking_accumulates() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
 
     // Initially healthy
     assert!(engine.is_healthy(), "Engine should start healthy");
@@ -187,7 +187,7 @@ fn test_error_tracking_accumulates() {
 #[test]
 fn test_request_failure_recovery() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
 
     // Test that we can recover from individual request processing
     let request_count = 20;
@@ -218,7 +218,7 @@ fn test_request_failure_recovery() {
 #[test]
 fn test_empty_prompt_rejected() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
 
     // Create empty request
     let (tx, _rx) = mpsc::channel(64);
@@ -269,7 +269,7 @@ async fn test_concurrent_error_handling() {
 #[test]
 fn test_engine_health_with_errors() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
 
     // Initially healthy
     assert!(engine.is_healthy());
@@ -295,7 +295,7 @@ fn test_engine_health_with_errors() {
 #[test]
 fn test_request_cancellation() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
 
     // Add a request
     let (tx, _rx) = mpsc::channel(64);
@@ -322,7 +322,7 @@ fn test_request_cancellation() {
 #[test]
 fn test_multiple_cancellations() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
 
     let (tx, _rx) = mpsc::channel(64);
     let mut seq_ids = Vec::new();

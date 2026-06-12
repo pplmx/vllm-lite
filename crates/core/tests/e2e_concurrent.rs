@@ -6,7 +6,7 @@ use std::time::Duration;
 use tokio::sync::{Mutex, mpsc};
 use vllm_core::engine::Engine;
 use vllm_core::types::{Request, SchedulerConfig};
-use vllm_testing::IncrementModel;
+use vllm_testing::TestFixtures;
 
 /// Thread-safe engine wrapper with background stepper
 struct ConcurrentEngine {
@@ -16,7 +16,7 @@ struct ConcurrentEngine {
 impl ConcurrentEngine {
     fn new() -> Self {
         let config = SchedulerConfig::default();
-        let engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+        let engine = TestFixtures::increment_engine_with(config, 4, 1024);
         Self {
             inner: Arc::new(Mutex::new(engine)),
         }
@@ -194,7 +194,7 @@ async fn test_staggered_requests() {
 #[test]
 fn test_batch_processing() {
     let config = SchedulerConfig::default();
-    let mut engine = Engine::with_config(IncrementModel, None, config, 4, 1024);
+    let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
 
     // Add multiple requests with total tokens = prompt + max_tokens
     let num_requests = 10;

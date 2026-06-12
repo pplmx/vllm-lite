@@ -59,10 +59,15 @@ threads-required = 1
 slow-timeout = { period = "120s", terminate-after = 2 }
 
 [[profile.default.overrides]]
-filter = 'package(vllm-model) and test(~token_verification)'
+filter = 'package(vllm-model) and test(~qwen3_token_pipeline)'
 test-group = 'heavy-model-tests'
 threads-required = 1
 slow-timeout = { period = "120s", terminate-after = 2 }
+
+[[profile.default.overrides]]
+filter = 'package(vllm-model) and test(~tokenizer_verification)'
+threads-required = 1
+slow-timeout = { period = "30s", terminate-after = 2 }
 
 [[profile.ci.overrides]]
 filter = 'test(~test_llama_block)'
