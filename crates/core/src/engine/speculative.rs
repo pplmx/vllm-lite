@@ -4,35 +4,7 @@ use crate::error::Result;
 use crate::sync::lock_mutex;
 use vllm_traits::{Batch, BatchPhase, SeqId, TokenId};
 
-/// Unified entry point for speculative and non-speculative decoding.
-///
-/// `max_draft = None` or `Some(0)` → non-speculative step.
-/// `Some(n)` → internal speculative step with up to n draft tokens.
 impl super::Engine {
-    /// Unified step: dispatches to speculative or non-speculative path.
-    /// Note: `step` (no args) is defined in scheduler/batch.rs for backward compat.
-    pub fn step_with_draft(&mut self, max_draft: Option<usize>) -> Result<Vec<(SeqId, TokenId)>> {
-        match max_draft {
-            None | Some(0) => self.step_internal(),
-            Some(n) => self.step_speculative_inner(n),
-        }
-    }
-
-    /// Public entry for speculative step (backward compatible).
-    pub fn step_speculative(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
-        self.step_with_draft(Some(self.max_draft_tokens))
-    }
-
-    /// Public entry for adaptive speculative step (backward compatible).
-    pub fn step_adaptive_speculative(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
-        let max_draft = self
-            .adaptive_decoder
-            .as_ref()
-            .map(|d| d.current_max_draft_tokens())
-            .unwrap_or(self.max_draft_tokens);
-        self.step_with_draft(Some(max_draft))
-    }
-
     /// Warm up draft model's KV cache after target prefill.
     /// This ensures the first speculative decode step has valid draft state.
     fn warmup_draft_kv(&mut self, batch: &Batch) -> Result<()> {
@@ -60,8 +32,11 @@ impl super::Engine {
         Ok(())
     }
 
-    /// Internal speculative decode step.
-    fn step_speculative_inner(&mut self, max_draft: usize) -> Result<Vec<(SeqId, TokenId)>> {
+    /// Speculative decode step (called from `Engine::step` when speculative mode is on).
+    pub(crate) fn step_speculative_inner(
+        &mut self,
+        max_draft: usize,
+    ) -> Result<Vec<(SeqId, TokenId)>> {
         let start = std::time::Instant::now();
         let batch = self.scheduler.build_batch();
         if batch.is_empty() {
@@ -79,7 +54,7 @@ impl super::Engine {
             Ok(drafts) => drafts,
             Err(e) => {
                 tracing::warn!(error = %e, "Draft generation failed, falling back to non-speculative");
-                return self.step_internal();
+                return self.step_regular();
             }
         };
 
@@ -335,200 +310,6 @@ impl super::Engine {
 
         Ok((results, accepted_counts))
     }
-
-    // Legacy methods kept for backward compatibility but no longer used internally
-    fn generate_draft_tokens(&mut self, batch: &Batch) -> Result<Vec<Vec<TokenId>>> {
-        self.generate_draft_tokens_with_limit(batch, self.max_draft_tokens)
-    }
-
-    fn generate_draft_tokens_with_limit(
-        &mut self,
-        batch: &Batch,
-        max_draft: usize,
-    ) -> Result<Vec<Vec<TokenId>>> {
-        let mut draft_outputs = Vec::new();
-
-        if self.draft_model.is_none() {
-            tracing::warn!(
-                "Speculative decoding enabled but no draft model set, using target model"
-            );
-        }
-
-        for (i, ((seq_id, tokens), positions)) in batch
-            .seq_ids
-            .iter()
-            .zip(batch.input_tokens.iter())
-            .zip(batch.positions.iter())
-            .enumerate()
-        {
-            let mut draft = Vec::new();
-            let mut current_tokens = tokens.clone();
-            let mut current_positions = positions.clone();
-
-            let draft_model = match &self.draft_model {
-                Some(dm) => dm.clone(),
-                None => {
-                    draft_outputs.push(Vec::new());
-                    continue;
-                }
-            };
-
-            for _ in 0..max_draft {
-                let output = lock_mutex(&draft_model)?.forward(
-                    &[*seq_id],
-                    std::slice::from_ref(&current_tokens),
-                    std::slice::from_ref(&current_positions),
-                    std::slice::from_ref(&batch.kv_block_ids[i]),
-                    std::slice::from_ref(&batch.num_computed_tokens[i]),
-                    std::slice::from_ref(&batch.is_prefill[i]),
-                )?;
-                let token = *output.next_tokens.first().unwrap_or(&0);
-                draft.push(token);
-                current_tokens.push(token);
-                current_positions.push(current_positions.len());
-            }
-            draft_outputs.push(draft);
-        }
-
-        Ok(draft_outputs)
-    }
-
-    fn verify_draft_tokens(
-        &mut self,
-        batch: &Batch,
-        draft_outputs: &[Vec<TokenId>],
-    ) -> Result<Vec<(SeqId, TokenId)>> {
-        let mut results = Vec::new();
-
-        for (i, seq_id) in batch.seq_ids.iter().enumerate() {
-            let drafts = &draft_outputs[i];
-
-            if drafts.is_empty() {
-                let target_output = lock_mutex(&self.target_model)?.forward(
-                    &[*seq_id],
-                    std::slice::from_ref(&batch.input_tokens[i]),
-                    std::slice::from_ref(&batch.positions[i]),
-                    std::slice::from_ref(&batch.kv_block_ids[i]),
-                    std::slice::from_ref(&batch.num_computed_tokens[i]),
-                    std::slice::from_ref(&batch.is_prefill[i]),
-                )?;
-                if let Some(&token) = target_output.next_tokens.first() {
-                    results.push((*seq_id, token));
-                }
-                continue;
-            }
-
-            let mut verify_tokens = batch.input_tokens[i].clone();
-            verify_tokens.extend(drafts.iter().cloned());
-
-            let verify_positions: Vec<usize> = (0..verify_tokens.len()).collect();
-            let verify_kv_block_ids: Vec<Vec<usize>> = vec![batch.kv_block_ids[i].clone()];
-            let verify_num_computed: Vec<usize> = vec![batch.num_computed_tokens[i] + drafts.len()];
-            let verify_is_prefill: Vec<bool> = vec![true];
-
-            let target_output = lock_mutex(&self.target_model)?.forward(
-                &[*seq_id],
-                std::slice::from_ref(&verify_tokens),
-                std::slice::from_ref(&verify_positions),
-                &verify_kv_block_ids,
-                &verify_num_computed,
-                &verify_is_prefill,
-            )?;
-
-            let target_tokens = &target_output.next_tokens;
-
-            for (j, &draft_token) in drafts.iter().enumerate() {
-                if j < target_tokens.len() && target_tokens[j] == draft_token {
-                    results.push((*seq_id, draft_token));
-                } else {
-                    break;
-                }
-            }
-
-            let target_idx = drafts.len();
-            if target_idx < target_tokens.len() {
-                results.push((*seq_id, target_tokens[target_idx]));
-            } else if let Some(&first) = target_tokens.first() {
-                results.push((*seq_id, first));
-            }
-        }
-
-        Ok(results)
-    }
-
-    fn verify_and_track(
-        &mut self,
-        batch: &Batch,
-        draft_outputs: &[Vec<TokenId>],
-    ) -> Result<Vec<(SeqId, TokenId)>> {
-        let mut results = Vec::new();
-        let mut total_draft = 0usize;
-        let mut total_accepted = 0usize;
-
-        for (i, seq_id) in batch.seq_ids.iter().enumerate() {
-            let drafts = &draft_outputs[i];
-            total_draft += drafts.len();
-
-            let mut accepted_count = 0usize;
-
-            if drafts.is_empty() {
-                let target_output = lock_mutex(&self.target_model)?.forward(
-                    &[*seq_id],
-                    std::slice::from_ref(&batch.input_tokens[i]),
-                    std::slice::from_ref(&batch.positions[i]),
-                    std::slice::from_ref(&batch.kv_block_ids[i]),
-                    std::slice::from_ref(&batch.num_computed_tokens[i]),
-                    std::slice::from_ref(&batch.is_prefill[i]),
-                )?;
-                if let Some(&token) = target_output.next_tokens.first() {
-                    results.push((*seq_id, token));
-                    accepted_count = 1;
-                }
-            } else {
-                let mut verify_tokens = batch.input_tokens[i].clone();
-                verify_tokens.extend(drafts.iter().cloned());
-
-                let verify_positions: Vec<usize> = (0..verify_tokens.len()).collect();
-                let verify_kv_block_ids = vec![batch.kv_block_ids[i].clone(); verify_tokens.len()];
-                let verify_num_computed =
-                    vec![batch.num_computed_tokens[i] + drafts.len(); verify_tokens.len()];
-                let verify_is_prefill = vec![false; verify_tokens.len()];
-
-                let target_output = lock_mutex(&self.target_model)?.forward(
-                    &[*seq_id],
-                    std::slice::from_ref(&verify_tokens),
-                    std::slice::from_ref(&verify_positions),
-                    &verify_kv_block_ids,
-                    &verify_num_computed,
-                    &verify_is_prefill,
-                )?;
-
-                let target_tokens = &target_output.next_tokens;
-
-                for (j, &draft_token) in drafts.iter().enumerate() {
-                    if j < target_tokens.len() && target_tokens[j] == draft_token {
-                        results.push((*seq_id, draft_token));
-                        accepted_count += 1;
-                    } else {
-                        break;
-                    }
-                }
-
-                let target_idx = accepted_count;
-                if target_idx < target_tokens.len() {
-                    results.push((*seq_id, target_tokens[target_idx]));
-                }
-            }
-
-            total_accepted += accepted_count;
-        }
-
-        if let Some(ref mut decoder) = self.adaptive_decoder {
-            decoder.record_verification(total_draft, total_accepted);
-        }
-
-        Ok(results)
-    }
 }
 
 fn argmax(logits: &[f32]) -> TokenId {
@@ -644,7 +425,7 @@ mod tests {
         engine.add_request(Request::new(1, vec![10, 20], 5), tx);
 
         // step(None) should go to non-speculative path
-        let result = engine.step_with_draft(None).unwrap();
+        let result = engine.step().unwrap();
         assert!(!result.is_empty());
 
         // step(Some(5)) should go to speculative path
@@ -656,7 +437,7 @@ mod tests {
         let (tx2, _rx2) = tokio_mpsc::channel(64);
         engine.add_request(Request::new(2, vec![10, 20], 5), tx2);
         engine.enable_speculative();
-        let result = engine.step_with_draft(Some(5)).unwrap();
+        let result = engine.step().unwrap();
         assert!(!result.is_empty());
     }
 
@@ -673,7 +454,7 @@ mod tests {
         // The batch is built internally; we test via step(Some(4))
         let (tx, _rx) = tokio_mpsc::channel(64);
         engine.add_request(Request::new(1, vec![10, 20], 10), tx);
-        let result = engine.step_with_draft(Some(4)).unwrap();
+        let result = engine.step().unwrap();
         assert!(!result.is_empty());
     }
 
@@ -690,7 +471,7 @@ mod tests {
 
         let (tx, mut rx) = tokio_mpsc::channel(64);
         engine.add_request(Request::new(1, vec![10, 20], 10), tx);
-        let result = engine.step_with_draft(Some(3)).unwrap();
+        let result = engine.step().unwrap();
         assert!(!result.is_empty());
         assert_eq!(result[0].1, 42);
         let _ = rx.try_recv().ok();
@@ -708,7 +489,7 @@ mod tests {
 
         let (tx, _rx) = tokio_mpsc::channel(64);
         engine.add_request(Request::new(1, vec![10, 20], 5), tx);
-        let result = engine.step_with_draft(Some(3)).unwrap();
+        let result = engine.step().unwrap();
         assert!(!result.is_empty());
         assert_eq!(result[0].1, 42);
     }
@@ -751,7 +532,7 @@ mod tests {
         let (tx, _rx) = tokio_mpsc::channel(64);
         engine.add_request(Request::new(1, vec![10, 20], 5), tx);
         // Should not panic even without draft model in spec mode
-        let result = engine.step_with_draft(Some(3));
+        let result = engine.step();
         assert!(result.is_ok());
     }
 
@@ -767,7 +548,7 @@ mod tests {
 
         let (tx, mut rx) = tokio_mpsc::channel(64);
         engine.add_request(Request::new(1, vec![10, 20], 10), tx);
-        let result = engine.step_with_draft(Some(4)).unwrap();
+        let result = engine.step().unwrap();
         assert!(!result.is_empty());
         assert_eq!(result[0].1, 42);
 
@@ -788,7 +569,7 @@ mod tests {
         let mut engine_ns = super::super::Engine::new_boxed(Box::new(target.clone()), None);
         let (tx1, _rx1) = tokio_mpsc::channel(64);
         engine_ns.add_request(Request::new(1, vec![10, 20], 5), tx1);
-        let result_ns = engine_ns.step_with_draft(None).unwrap();
+        let result_ns = engine_ns.step().unwrap();
 
         // Speculative (with matching draft)
         let mut engine_sp =
@@ -797,7 +578,7 @@ mod tests {
         engine_sp.max_draft_tokens = 3;
         let (tx2, _rx2) = tokio_mpsc::channel(64);
         engine_sp.add_request(Request::new(2, vec![10, 20], 5), tx2);
-        let result_sp = engine_sp.step_with_draft(Some(3)).unwrap();
+        let result_sp = engine_sp.step().unwrap();
 
         // First token should match
         assert!(!result_ns.is_empty());

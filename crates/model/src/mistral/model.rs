@@ -7,7 +7,7 @@ use crate::causal_lm::{
     mean_pool_embeddings,
 };
 use crate::config::ModelConfig;
-use crate::kv_cache::PagedKvCache;
+use crate::paged_tensor::PagedKvCache;
 use candle_core::{Device, Module, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, Linear, VarBuilder};
 use vllm_traits::{BatchOutput, BlockId, ModelBackend, Result, SeqId, TokenId};

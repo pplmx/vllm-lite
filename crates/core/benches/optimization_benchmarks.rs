@@ -77,7 +77,7 @@ fn bench_adaptive_speculative(c: &mut Criterion) {
         engine.add_request(Request::new(1, vec![10, 20], 50), tx);
 
         b.iter(|| {
-            black_box(engine.step_speculative().unwrap());
+            black_box(engine.step().unwrap());
         });
     });
 
@@ -91,7 +91,7 @@ fn bench_adaptive_speculative(c: &mut Criterion) {
         engine.add_request(Request::new(1, vec![10, 20], 50), tx);
 
         b.iter(|| {
-            black_box(engine.step_adaptive_speculative().unwrap());
+            black_box(engine.step().unwrap());
         });
     });
 
@@ -151,7 +151,7 @@ fn bench_throughput(c: &mut Criterion) {
                 b.iter(|| {
                     let mut completed = 0;
                     while completed < num_requests {
-                        let results = black_box(engine.step_adaptive_speculative().unwrap());
+                        let results = black_box(engine.step().unwrap());
                         completed += results.len();
                     }
                 });

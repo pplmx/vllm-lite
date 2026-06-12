@@ -67,7 +67,7 @@ fn test_speculative_memory_overhead_bounded() {
 
     // Run to completion
     while spec_engine.has_pending() {
-        let _ = spec_engine.step_adaptive_speculative();
+        let _ = spec_engine.step();
     }
 }
 
@@ -120,7 +120,7 @@ fn test_speculative_memory_overhead_vs_standard() {
     );
 
     while spec_engine.has_pending() {
-        let _ = spec_engine.step_adaptive_speculative();
+        let _ = spec_engine.step();
     }
 
     // Speculative decoding should NOT use significantly more KV blocks than standard.
@@ -189,7 +189,7 @@ fn test_speculative_memory_overhead_scales_with_draft_count() {
     // Measure KV usage after prefill
     let (low_used, _) = low_draft_engine.scheduler.get_kv_cache_usage();
     while low_draft_engine.has_pending() {
-        let _ = low_draft_engine.step_adaptive_speculative();
+        let _ = low_draft_engine.step();
     }
 
     // High draft count
@@ -212,7 +212,7 @@ fn test_speculative_memory_overhead_scales_with_draft_count() {
 
     let (high_used, _) = high_draft_engine.scheduler.get_kv_cache_usage();
     while high_draft_engine.has_pending() {
-        let _ = high_draft_engine.step_adaptive_speculative();
+        let _ = high_draft_engine.step();
     }
 
     // Both should have allocated blocks after prefill

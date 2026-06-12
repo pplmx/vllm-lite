@@ -12,115 +12,13 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tracing::{error, trace};
-use vllm_traits::{BatchOutput, BatchPhase, ModelBackend, Result as ModelResult, SeqId, TokenId};
+use vllm_traits::{BatchOutput, BatchPhase, ModelBackend, SeqId, TokenId};
 
 #[cfg(feature = "cuda-graph")]
 use vllm_model::kernels::BatchCudaGraphExecutor;
 
 #[cfg(feature = "cuda-graph")]
 use vllm_traits::kernels::CudaGraphConfig;
-
-pub struct BoxedModelBackend(Box<dyn ModelBackend>);
-
-impl BoxedModelBackend {
-    pub fn new(model: Box<dyn ModelBackend>) -> Self {
-        Self(model)
-    }
-}
-
-impl std::ops::Deref for BoxedModelBackend {
-    type Target = dyn ModelBackend;
-    fn deref(&self) -> &Self::Target {
-        &*self.0
-    }
-}
-
-impl std::ops::DerefMut for BoxedModelBackend {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut *self.0
-    }
-}
-
-impl ModelBackend for BoxedModelBackend {
-    fn forward(
-        &mut self,
-        seq_ids: &[SeqId],
-        input_tokens: &[Vec<TokenId>],
-        positions: &[Vec<usize>],
-        kv_block_ids: &[Vec<usize>],
-        num_computed_tokens: &[usize],
-        is_prefill: &[bool],
-    ) -> ModelResult<BatchOutput> {
-        self.0.forward(
-            seq_ids,
-            input_tokens,
-            positions,
-            kv_block_ids,
-            num_computed_tokens,
-            is_prefill,
-        )
-    }
-
-    fn forward_logits(
-        &mut self,
-        seq_ids: &[SeqId],
-        input_tokens: &[Vec<TokenId>],
-        positions: &[Vec<usize>],
-        kv_block_ids: &[Vec<usize>],
-        num_computed_tokens: &[usize],
-        is_prefill: &[bool],
-    ) -> ModelResult<Vec<Vec<f32>>> {
-        self.0.forward_logits(
-            seq_ids,
-            input_tokens,
-            positions,
-            kv_block_ids,
-            num_computed_tokens,
-            is_prefill,
-        )
-    }
-
-    fn embed(
-        &mut self,
-        input_tokens: &[Vec<TokenId>],
-        positions: &[Vec<usize>],
-    ) -> ModelResult<Vec<Vec<f32>>> {
-        self.0.embed(input_tokens, positions)
-    }
-
-    fn vocab_size(&self) -> usize {
-        self.0.vocab_size()
-    }
-
-    fn num_layers(&self) -> usize {
-        self.0.num_layers()
-    }
-
-    fn num_heads(&self) -> usize {
-        self.0.num_heads()
-    }
-
-    fn forward_to_layer(
-        &mut self,
-        seq_ids: &[SeqId],
-        input_tokens: &[Vec<TokenId>],
-        positions: &[Vec<usize>],
-        kv_block_ids: &[Vec<usize>],
-        num_computed_tokens: &[usize],
-        is_prefill: &[bool],
-        upto_layer: usize,
-    ) -> ModelResult<BatchOutput> {
-        self.0.forward_to_layer(
-            seq_ids,
-            input_tokens,
-            positions,
-            kv_block_ids,
-            num_computed_tokens,
-            is_prefill,
-            upto_layer,
-        )
-    }
-}
 
 /// Core inference engine managing requests, scheduling, and model execution.
 ///
@@ -137,8 +35,8 @@ impl ModelBackend for BoxedModelBackend {
 /// happens through mpsc channels (actor pattern).
 pub struct Engine {
     pub scheduler: SchedulerEngine,
-    pub target_model: Arc<Mutex<dyn ModelBackend>>,
-    pub draft_model: Option<Arc<Mutex<dyn ModelBackend>>>,
+    pub target_model: Arc<Mutex<Box<dyn ModelBackend>>>,
+    pub draft_model: Option<Arc<Mutex<Box<dyn ModelBackend>>>>,
     pub max_draft_tokens: usize,
     pub speculative_mode: bool,
     pub error_count: usize,
@@ -190,13 +88,10 @@ impl Engine {
             None
         };
         let enhanced_metrics = Arc::new(EnhancedMetricsCollector::new());
-        let draft = draft_model.map(|m| {
-            Arc::new(Mutex::new(BoxedModelBackend::new(m))) as Arc<Mutex<dyn ModelBackend>>
-        });
+        let draft = draft_model.map(|m| Arc::new(Mutex::new(m)));
         Self {
             scheduler: SchedulerEngine::new(config, num_kv_blocks, enhanced_metrics),
-            target_model: Arc::new(Mutex::new(BoxedModelBackend::new(target_model)))
-                as Arc<Mutex<dyn ModelBackend>>,
+            target_model: Arc::new(Mutex::new(target_model)),
             draft_model: draft,
             max_draft_tokens,
             speculative_mode: false,
@@ -228,25 +123,9 @@ impl Engine {
         max_draft_tokens: usize,
         num_kv_blocks: usize,
     ) -> Self {
-        Self::with_models_boxed(
+        Self::with_config_boxed(
             Box::new(target_model),
             draft_model.map(|m| Box::new(m) as Box<dyn ModelBackend>),
-            config,
-            max_draft_tokens,
-            num_kv_blocks,
-        )
-    }
-
-    fn with_models_boxed(
-        target_model: Box<dyn ModelBackend>,
-        draft_model: Option<Box<dyn ModelBackend>>,
-        config: SchedulerConfig,
-        max_draft_tokens: usize,
-        num_kv_blocks: usize,
-    ) -> Self {
-        Self::with_config_boxed(
-            target_model,
-            draft_model,
             config,
             max_draft_tokens,
             num_kv_blocks,
@@ -355,12 +234,9 @@ impl Engine {
                             .iter()
                             .map(|tokens| (0..tokens.len()).collect())
                             .collect();
-                        match self
-                            .target_model
-                            .lock()
-                            .unwrap()
-                            .embed(&input_tokens, &positions)
-                        {
+                        match lock_mutex(&self.target_model).and_then(|mut model| {
+                            model.embed(&input_tokens, &positions).map_err(Into::into)
+                        }) {
                             Ok(embeddings) => {
                                 let _ = response_tx.send(embeddings);
                             }
@@ -375,16 +251,7 @@ impl Engine {
 
             if self.scheduler.has_pending() {
                 step_count += 1;
-                let result = if self.adaptive_decoder.is_some() {
-                    let max_draft = self
-                        .adaptive_decoder
-                        .as_ref()
-                        .map(|d| d.current_max_draft_tokens())
-                        .unwrap_or(self.max_draft_tokens);
-                    self.step_with_draft(Some(max_draft))
-                } else if self.speculative_mode {
-                    self.step_with_draft(Some(self.max_draft_tokens))
-                } else if self.cuda_graph_enabled() {
+                let result = if self.cuda_graph_enabled() && !self.speculative_mode {
                     self.step_with_graph()
                 } else {
                     self.step()

@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use crate::config::ModelConfig;
-use crate::kv_cache::PagedKvCache;
+use crate::paged_tensor::PagedKvCache;
 use candle_core::{Device, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, Linear, VarBuilder};
 use vllm_traits::{BatchOutput, ModelBackend, SeqId, TokenId};

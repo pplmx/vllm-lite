@@ -454,7 +454,7 @@ fn test_speculative_decoding_verification() {
     engine.add_request(Request::new(1, vec![1, 2, 3], 10), tx);
 
     // Run speculative step
-    let results = engine.step_speculative().unwrap();
+    let results = engine.step().unwrap();
 
     // Should return at least one token (target)
     assert!(!results.is_empty());

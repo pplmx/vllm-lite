@@ -5,7 +5,7 @@
 
 use crate::config::ModelConfig;
 use crate::gemma4::block::Gemma4Block;
-use crate::kv_cache::PagedKvCache;
+use crate::paged_tensor::PagedKvCache;
 use candle_core::{Device, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, Linear};
 use std::collections::HashMap;

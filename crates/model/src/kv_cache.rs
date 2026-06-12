@@ -1,9 +1,6 @@
-use candle_core::{Device, Result, Tensor};
+//! MLA-specific compressed KV cache (separate from paged tensor store).
 
-#[deprecated(since = "0.2.0", note = "Use paged_tensor module instead")]
-pub use crate::paged_tensor::{
-    dequantize, quantization::QuantizedTensor, quantize, tensor_store::PagedKvCache,
-};
+use candle_core::{Device, Result, Tensor};
 
 pub struct MlaKvCache {
     kv_lora_rank: usize,

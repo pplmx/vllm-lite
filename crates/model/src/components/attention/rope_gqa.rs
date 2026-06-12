@@ -3,7 +3,7 @@
 pub use crate::components::AttentionConfig;
 use crate::components::attention::GqaAttention as SharedGqaAttention;
 use crate::components::positional::apply_rope;
-use crate::kv_cache::PagedKvCache;
+use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 
 pub struct RopeGqaAttention {
@@ -326,9 +326,15 @@ mod tests {
         .unwrap();
 
         let x = Tensor::ones((1, hidden_size), candle_core::DType::F32, &device).unwrap();
-        let mut kv_cache =
-            crate::kv_cache::PagedKvCache::new(1, num_heads, head_dim, 8, device.clone(), false)
-                .unwrap();
+        let mut kv_cache = crate::paged_tensor::PagedKvCache::new(
+            1,
+            num_heads,
+            head_dim,
+            8,
+            device.clone(),
+            false,
+        )
+        .unwrap();
 
         let block_ids: Vec<usize> = vec![0];
         let positions = vec![0];
@@ -360,9 +366,15 @@ mod tests {
         )
         .unwrap();
 
-        let mut kv_cache =
-            crate::kv_cache::PagedKvCache::new(1, num_heads, head_dim, 16, device.clone(), false)
-                .unwrap();
+        let mut kv_cache = crate::paged_tensor::PagedKvCache::new(
+            1,
+            num_heads,
+            head_dim,
+            16,
+            device.clone(),
+            false,
+        )
+        .unwrap();
 
         for step in 0..8 {
             let x = Tensor::ones((1, hidden_size), candle_core::DType::F32, &device).unwrap();
