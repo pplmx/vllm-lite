@@ -85,6 +85,7 @@ impl Architecture for Qwen35Architecture {
         device: Device,
         weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
+        kv_quantization: bool,
     ) -> Result<Box<dyn ModelBackend>> {
         let remapped_weights = remap_qwen35_weight_keys(weights);
 
@@ -102,8 +103,13 @@ impl Architecture for Qwen35Architecture {
             ..Default::default()
         };
 
-        let model =
-            Qwen35HybridModel::from_weights(qwen_config, device, remapped_weights, num_kv_blocks)?;
+        let model = Qwen35HybridModel::from_weights(
+            qwen_config,
+            device,
+            remapped_weights,
+            num_kv_blocks,
+            kv_quantization,
+        )?;
         Ok(Box::new(model))
     }
 

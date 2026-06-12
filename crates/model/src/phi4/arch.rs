@@ -94,6 +94,7 @@ impl Architecture for Phi4Architecture {
         device: Device,
         _weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
+        _kv_quantization: bool,
     ) -> Result<Box<dyn ModelBackend>> {
         let model = Phi4Model::new(config, device, num_kv_blocks)?;
         Ok(Box::new(model))

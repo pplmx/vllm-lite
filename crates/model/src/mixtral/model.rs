@@ -68,6 +68,7 @@ impl MixtralModel {
         device: Device,
         weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
+        kv_quantization: bool,
     ) -> CandleResult<Self> {
         let hidden_size = config.hidden_size;
         let _vocab_size = config.vocab_size;
@@ -110,7 +111,7 @@ impl MixtralModel {
             config.head_dim,
             num_kv_blocks,
             device.clone(),
-            false,
+            kv_quantization,
         )?;
 
         Ok(Self {

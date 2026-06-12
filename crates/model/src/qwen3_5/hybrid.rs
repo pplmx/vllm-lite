@@ -518,7 +518,12 @@ impl Module for MLP35 {
 }
 
 impl Qwen35HybridModel {
-    pub fn new(config: Qwen3Config, device: Device, num_kv_blocks: usize) -> CandleResult<Self> {
+    pub fn new(
+        config: Qwen3Config,
+        device: Device,
+        num_kv_blocks: usize,
+        kv_quantization: bool,
+    ) -> CandleResult<Self> {
         let vocab_size = config.vocab_size();
         let hidden_size = config.hidden_size();
 
@@ -566,7 +571,7 @@ impl Qwen35HybridModel {
             config.head_dim(),
             num_kv_blocks,
             device.clone(),
-            false,
+            kv_quantization,
         )?;
 
         Ok(Self {
@@ -610,8 +615,14 @@ impl Qwen35HybridModel {
         device: Device,
         weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
+        kv_quantization: bool,
     ) -> CandleResult<Self> {
-        let mut model = Self::new(config.clone(), device.clone(), num_kv_blocks)?;
+        let mut model = Self::new(
+            config.clone(),
+            device.clone(),
+            num_kv_blocks,
+            kv_quantization,
+        )?;
 
         let embed_key = if weights.contains_key("model.language_model.embed_tokens.weight") {
             "model.language_model.embed_tokens.weight"
@@ -1292,7 +1303,7 @@ mod tests {
         };
 
         let device = Device::Cpu;
-        let model = Qwen35HybridModel::new(config.clone(), device, 16).unwrap();
+        let model = Qwen35HybridModel::new(config.clone(), device, 16, false).unwrap();
 
         assert_eq!(model.kv_cache.num_layers(), 4);
     }
@@ -1309,7 +1320,7 @@ mod tests {
         };
 
         let device = Device::Cpu;
-        let model = Qwen35HybridModel::new(config.clone(), device, 8).unwrap();
+        let model = Qwen35HybridModel::new(config.clone(), device, 8, false).unwrap();
 
         assert_eq!(model.layers.len(), 12);
         assert_eq!(model.layer_types.len(), 12);

@@ -96,6 +96,7 @@ impl Architecture for Qwen3Architecture {
         device: Device,
         weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
+        kv_quantization: bool,
     ) -> Result<Box<dyn ModelBackend>> {
         let qwen_config = Qwen3Config {
             vocab_size: Some(config.vocab_size),
@@ -111,7 +112,8 @@ impl Architecture for Qwen3Architecture {
             head_dim: Some(config.head_dim),
             ..Default::default()
         };
-        let model = Qwen3Model::from_weights(qwen_config, device, weights, num_kv_blocks, false)?;
+        let model =
+            Qwen3Model::from_weights(qwen_config, device, weights, num_kv_blocks, kv_quantization)?;
         Ok(Box::new(model))
     }
 }

@@ -22,8 +22,6 @@ pub struct Qwen3Model {
     lm_head: Linear,
     kv_cache: PagedKvCache,
     device: Device,
-    #[allow(dead_code)]
-    tp_config: Option<TensorParallelConfig>,
 }
 
 impl Qwen3Model {
@@ -80,7 +78,6 @@ impl Qwen3Model {
             lm_head,
             kv_cache,
             device,
-            tp_config: None,
         })
     }
 
@@ -146,7 +143,6 @@ impl Qwen3Model {
             lm_head,
             kv_cache,
             device,
-            tp_config,
         })
     }
 
@@ -164,7 +160,7 @@ impl Qwen3Model {
         device: Device,
         weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
-        _kv_quantization: bool,
+        kv_quantization: bool,
     ) -> CandleResult<Self> {
         let _vocab_size = config.vocab_size();
         let hidden_size = config.hidden_size();
@@ -294,7 +290,7 @@ impl Qwen3Model {
             config.head_dim(),
             num_kv_blocks,
             device.clone(),
-            false,
+            kv_quantization,
         )?;
 
         Ok(Self {
@@ -305,7 +301,6 @@ impl Qwen3Model {
             lm_head,
             kv_cache,
             device,
-            tp_config: None,
         })
     }
 

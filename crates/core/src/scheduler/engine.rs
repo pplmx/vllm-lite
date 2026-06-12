@@ -28,8 +28,6 @@ pub struct SchedulerEngine {
     memory: MemoryManager,
     prefix_cache: RadixTree,
     policy: Box<dyn SchedulingPolicy>,
-    #[allow(dead_code)]
-    config: SchedulerConfig,
     running: Vec<Sequence>,
     finished: Vec<Sequence>,
     next_seq_id: SeqId,
@@ -81,7 +79,6 @@ impl SchedulerEngine {
             memory: MemoryManager::new(config.clone(), num_kv_blocks),
             prefix_cache: RadixTree::new(),
             policy: Box::new(FcfsPolicy::new()),
-            config,
             running: Vec::new(),
             finished: Vec::new(),
             next_seq_id: 1,

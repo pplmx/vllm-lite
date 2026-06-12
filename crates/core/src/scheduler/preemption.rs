@@ -1,6 +1,5 @@
 use crate::types::{SchedulerConfig, Sequence, Status};
 
-#[allow(dead_code)]
 pub struct PreemptionManager {
     config: SchedulerConfig,
     preempted_count: u64,
@@ -45,7 +44,7 @@ impl PreemptionManager {
             return false;
         }
 
-        if running_len <= 1 {
+        if running_len <= self.config.min_batch_size.max(1) {
             return false;
         }
 
@@ -53,8 +52,11 @@ impl PreemptionManager {
             return false;
         }
 
+        // Scale aggressiveness with configured batch pressure.
+        let shortage_threshold = 1.0
+            + (self.config.max_num_seqs as f32 / self.config.max_batch_size as f32).min(2.0) * 0.1;
         let memory_shortage_ratio = blocks_needed as f32 / (blocks_available - 1) as f32;
-        if memory_shortage_ratio < 1.2 {
+        if memory_shortage_ratio < shortage_threshold {
             return false;
         }
 
@@ -64,7 +66,7 @@ impl PreemptionManager {
     pub fn select_victim(&self, running: &[Sequence]) -> Option<(usize, Sequence)> {
         tracing::debug!(candidates = running.len(), "Selecting preemption victim");
 
-        if running.len() <= 1 {
+        if running.len() <= self.config.min_batch_size.max(1) {
             return None;
         }
 

@@ -126,6 +126,7 @@ impl Architecture for Llama4Architecture {
         device: Device,
         _weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
+        _kv_quantization: bool,
     ) -> Result<Box<dyn ModelBackend>> {
         let model = Llama4Model::new(config, device, num_kv_blocks, self.is_moe, self.num_experts)?;
         Ok(Box::new(model))
