@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;
 

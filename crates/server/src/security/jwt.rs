@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -79,13 +77,11 @@ impl JwtConfig {
 
 pub struct JwtValidator {
     config: JwtConfig,
-    secret_key: Option<Vec<u8>>,
 }
 
 impl JwtValidator {
     pub fn new(config: JwtConfig) -> Self {
-        let secret_key = config.secret.as_ref().map(|s| s.as_bytes().to_vec());
-        Self { config, secret_key }
+        Self { config }
     }
 
     pub fn validate(&self, token: &str) -> Result<Claims, JwtError> {
@@ -160,22 +156,6 @@ impl JwtAuthMiddleware {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn create_test_claims(exp: u64) -> String {
-        let claims = Claims {
-            sub: "user123".to_string(),
-            iss: "vllm".to_string(),
-            aud: "vllm-api".to_string(),
-            exp,
-            iat: 0,
-            roles: vec!["user".to_string()],
-            scope: None,
-            extra: HashMap::new(),
-        };
-        let json = serde_json::to_string(&claims).unwrap();
-        let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(json.as_bytes());
-        format!("header.{}.signature", encoded)
-    }
 
     #[test]
     fn test_extract_token() {

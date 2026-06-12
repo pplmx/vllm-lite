@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use super::types::*;
 use crate::ApiState;
 use axum::{Json, extract::State, response::IntoResponse};
