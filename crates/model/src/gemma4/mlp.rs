@@ -24,6 +24,20 @@ impl GeGLU {
         })
     }
 
+    pub fn new_with_weights(
+        _hidden_size: usize,
+        _intermediate_size: usize,
+        gate: Tensor,
+        up: Tensor,
+        down: Tensor,
+    ) -> Result<Self> {
+        Ok(Self {
+            gate_proj: Linear::new(gate, None),
+            up_proj: Linear::new(up, None),
+            down_proj: Linear::new(down, None),
+        })
+    }
+
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let gate = self.gate_proj.forward(x)?;
         let up = self.up_proj.forward(x)?;
