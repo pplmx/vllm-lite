@@ -1,23 +1,20 @@
 //! Mixtral block (Transformer layer with MoE).
 
-#![allow(dead_code)]
-
 use std::collections::HashMap;
 
-use crate::components::GqaAttention;
 use crate::components::LnLayerNorm;
+use crate::components::attention::RopeGqaAttention;
 use crate::config::ModelConfig;
 use crate::mixtral::sparse_moe::MixtralSparseMoe;
-use candle_core::Result;
-use candle_core::Tensor;
+use crate::paged_tensor::PagedKvCache;
+use candle_core::{Result, Tensor};
 use candle_nn::VarBuilder;
 
 pub struct MixtralBlock {
-    attention: GqaAttention,
+    attention: RopeGqaAttention,
     mlp: MixtralSparseMoe,
     input_layernorm: LnLayerNorm,
     post_attention_layernorm: LnLayerNorm,
-    sliding_window: usize,
 }
 
 impl MixtralBlock {
@@ -27,7 +24,6 @@ impl MixtralBlock {
         let num_kv_heads = config.num_kv_heads;
         let head_dim = config.head_dim;
         let rms_norm_eps = config.rms_norm_eps;
-        let sliding_window = config.sliding_window.unwrap_or(4096);
 
         let num_experts = config.num_experts.unwrap_or(8);
         let expert_intermediate_size = config
@@ -46,11 +42,12 @@ impl MixtralBlock {
         let post_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
         let post_attention_layernorm = LnLayerNorm::new(post_ln_weight, post_ln_bias, rms_norm_eps);
 
-        let attention = GqaAttention::new(
+        let attention = RopeGqaAttention::new(
             hidden_size,
             num_heads,
             num_kv_heads,
             head_dim,
+            config.rope_theta,
             Some(vb.clone()),
             crate::components::AttentionConfig::default(),
             false,
@@ -69,7 +66,6 @@ impl MixtralBlock {
             mlp,
             input_layernorm,
             post_attention_layernorm,
-            sliding_window,
         })
     }
 
@@ -83,7 +79,6 @@ impl MixtralBlock {
         let num_kv_heads = config.num_kv_heads;
         let head_dim = config.head_dim;
         let rms_norm_eps = config.rms_norm_eps;
-        let sliding_window = config.sliding_window.unwrap_or(4096);
 
         let num_experts = config.num_experts.unwrap_or(8);
         let expert_intermediate_size = config
@@ -96,66 +91,43 @@ impl MixtralBlock {
                 "model.layers.{}.self_attn.q_proj.weight",
                 layer_idx
             ))
-            .cloned();
+            .cloned()
+            .ok_or_else(|| candle_core::Error::msg("Missing q_proj weight"))?;
         let k_w = weights
             .get(&format!(
                 "model.layers.{}.self_attn.k_proj.weight",
                 layer_idx
             ))
-            .cloned();
+            .cloned()
+            .ok_or_else(|| candle_core::Error::msg("Missing k_proj weight"))?;
         let v_w = weights
             .get(&format!(
                 "model.layers.{}.self_attn.v_proj.weight",
                 layer_idx
             ))
-            .cloned();
+            .cloned()
+            .ok_or_else(|| candle_core::Error::msg("Missing v_proj weight"))?;
         let o_w = weights
             .get(&format!(
                 "model.layers.{}.self_attn.o_proj.weight",
                 layer_idx
             ))
-            .cloned();
+            .cloned()
+            .ok_or_else(|| candle_core::Error::msg("Missing o_proj weight"))?;
         let input_ln_w = weights
             .get(&format!(
                 "model.layers.{}.input_layernorm.weight",
                 layer_idx
             ))
-            .cloned();
+            .cloned()
+            .ok_or_else(|| candle_core::Error::msg("Missing input_layernorm weight"))?;
         let post_attn_ln_w = weights
             .get(&format!(
                 "model.layers.{}.post_attention_layernorm.weight",
                 layer_idx
             ))
-            .cloned();
-
-        let q_w = match q_w {
-            Some(w) => w,
-            None => return Err(candle_core::Error::msg("Missing q_proj weight")),
-        };
-        let k_w = match k_w {
-            Some(w) => w,
-            None => return Err(candle_core::Error::msg("Missing k_proj weight")),
-        };
-        let v_w = match v_w {
-            Some(w) => w,
-            None => return Err(candle_core::Error::msg("Missing v_proj weight")),
-        };
-        let o_w = match o_w {
-            Some(w) => w,
-            None => return Err(candle_core::Error::msg("Missing o_proj weight")),
-        };
-        let input_ln_w = match input_ln_w {
-            Some(w) => w,
-            None => return Err(candle_core::Error::msg("Missing input_layernorm weight")),
-        };
-        let post_attn_ln_w = match post_attn_ln_w {
-            Some(w) => w,
-            None => {
-                return Err(candle_core::Error::msg(
-                    "Missing post_attention_layernorm weight",
-                ));
-            }
-        };
+            .cloned()
+            .ok_or_else(|| candle_core::Error::msg("Missing post_attention_layernorm weight"))?;
 
         let input_ln_bias = Tensor::zeros(
             input_ln_w.dim(0).unwrap_or(hidden_size),
@@ -172,11 +144,12 @@ impl MixtralBlock {
         let post_attention_layernorm =
             LnLayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
 
-        let attention = GqaAttention::new_with_weights(
+        let attention = RopeGqaAttention::new_with_weights(
             hidden_size,
             num_heads,
             num_kv_heads,
             head_dim,
+            config.rope_theta,
             q_w,
             k_w,
             v_w,
@@ -194,47 +167,28 @@ impl MixtralBlock {
                     "model.layers.{}.block_sparse_moe.experts.{}.gate_proj.weight",
                     layer_idx, i
                 ))
-                .cloned();
+                .cloned()
+                .ok_or_else(|| {
+                    candle_core::Error::msg(format!("Missing expert {}.gate_proj weight", i))
+                })?;
             let up_w = weights
                 .get(&format!(
                     "model.layers.{}.block_sparse_moe.experts.{}.up_proj.weight",
                     layer_idx, i
                 ))
-                .cloned();
+                .cloned()
+                .ok_or_else(|| {
+                    candle_core::Error::msg(format!("Missing expert {}.up_proj weight", i))
+                })?;
             let down_w = weights
                 .get(&format!(
                     "model.layers.{}.block_sparse_moe.experts.{}.down_proj.weight",
                     layer_idx, i
                 ))
-                .cloned();
-
-            let gate_w = match gate_w {
-                Some(w) => w,
-                None => {
-                    return Err(candle_core::Error::msg(format!(
-                        "Missing expert {}.gate_proj weight",
-                        i
-                    )));
-                }
-            };
-            let up_w = match up_w {
-                Some(w) => w,
-                None => {
-                    return Err(candle_core::Error::msg(format!(
-                        "Missing expert {}.up_proj weight",
-                        i
-                    )));
-                }
-            };
-            let down_w = match down_w {
-                Some(w) => w,
-                None => {
-                    return Err(candle_core::Error::msg(format!(
-                        "Missing expert {}.down_proj weight",
-                        i
-                    )));
-                }
-            };
+                .cloned()
+                .ok_or_else(|| {
+                    candle_core::Error::msg(format!("Missing expert {}.down_proj weight", i))
+                })?;
             expert_weights.push((gate_w, up_w, down_w));
         }
 
@@ -243,11 +197,8 @@ impl MixtralBlock {
                 "model.layers.{}.block_sparse_moe.gate.weight",
                 layer_idx
             ))
-            .cloned();
-        let gate_w = match gate_w {
-            Some(w) => w,
-            None => return Err(candle_core::Error::msg("Missing gate weight")),
-        };
+            .cloned()
+            .ok_or_else(|| candle_core::Error::msg("Missing gate weight"))?;
 
         let mlp = MixtralSparseMoe::new_with_weights(
             hidden_size,
@@ -263,7 +214,6 @@ impl MixtralBlock {
             mlp,
             input_layernorm,
             post_attention_layernorm,
-            sliding_window,
         })
     }
 
@@ -277,5 +227,110 @@ impl MixtralBlock {
         let x = self.post_attention_layernorm.forward(&x)?;
         let x = self.mlp.forward(&x)?;
         x.add(&residual)
+    }
+
+    pub fn forward_prefill(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        positions: &[usize],
+    ) -> Result<Tensor> {
+        let residual = x.clone();
+        let x = self.input_layernorm.forward(x)?;
+        let x = self
+            .attention
+            .forward_prefill(&x, kv_cache, layer_idx, block_ids, positions)?;
+        let x = (&x + &residual)?;
+
+        let residual = x.clone();
+        let x = self.post_attention_layernorm.forward(&x)?;
+        let x = self.mlp.forward(&x)?;
+        x.add(&residual)
+    }
+
+    pub fn forward_decode(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        num_computed_tokens: usize,
+        positions: &[usize],
+    ) -> Result<Tensor> {
+        let residual = x.clone();
+        let mut x = self.input_layernorm.forward(x)?;
+        x = self.attention.forward_decode(
+            &x,
+            kv_cache,
+            layer_idx,
+            block_ids,
+            num_computed_tokens,
+            positions,
+        )?;
+        if x.dims().len() == 3 && x.dims()[1] == 1 && residual.dims().len() == 2 {
+            let dims = x.dims();
+            x = x.reshape((dims[0], dims[2]))?;
+        }
+        x = (&x + &residual)?;
+
+        let residual = x.clone();
+        x = self.post_attention_layernorm.forward(&x)?;
+        x = self.mlp.forward(&x)?;
+        x.add(&residual)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{Architecture, ModelConfig};
+    use candle_core::DType;
+
+    fn tiny_config() -> ModelConfig {
+        ModelConfig {
+            architecture: Architecture::Mixtral,
+            hidden_size: 64,
+            num_layers: 1,
+            num_heads: 4,
+            num_kv_heads: 2,
+            head_dim: 16,
+            vocab_size: 128,
+            intermediate_size: 128,
+            rope_theta: 10000.0,
+            rms_norm_eps: 1e-5,
+            sliding_window: Some(4096),
+            tie_word_embeddings: false,
+            max_position_embeddings: 512,
+            layer_types: vec![],
+            rope_configs: vec![],
+            use_double_wide_mlp: false,
+            num_experts: Some(4),
+            top_k_experts: Some(2),
+            expert_intermediate_size: Some(128),
+        }
+    }
+
+    #[test]
+    fn test_mixtral_block_prefill_then_decode() {
+        let config = tiny_config();
+        let device = candle_core::Device::Cpu;
+        let block = MixtralBlock::new(&config, 0).unwrap();
+        let mut kv_cache = PagedKvCache::new(1, 4, 16, 8, device.clone(), false).unwrap();
+
+        let x = Tensor::ones((1, 4, 64), DType::F32, &device).unwrap();
+        let block_ids: Vec<usize> = (0..4).map(|i| i / 16).collect();
+        let positions: Vec<usize> = (0..4).collect();
+        let out = block
+            .forward_prefill(&x, &mut kv_cache, 0, &block_ids, &positions)
+            .unwrap();
+        assert_eq!(out.dims(), &[1, 4, 64]);
+
+        let decode_x = Tensor::ones((1, 64), DType::F32, &device).unwrap();
+        let decode_out = block
+            .forward_decode(&decode_x, &mut kv_cache, 0, &[0], 4, &[4])
+            .unwrap();
+        assert_eq!(decode_out.dims(), &[1, 64]);
     }
 }
