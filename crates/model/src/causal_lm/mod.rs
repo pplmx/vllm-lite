@@ -8,7 +8,7 @@ mod layer_loop;
 mod model;
 
 pub use block_wrapper::BlockWrapper;
-pub use layer_loop::{DecoderLayer, LayerAuxMut, LayerCtx, run_layers};
+pub use layer_loop::{DecoderLayer, LayerAuxMut, LayerCtx, run_layers, run_layers_upto};
 pub use model::CausalLm;
 
 use crate::components::decoder_block::PagedDecoderBlock;

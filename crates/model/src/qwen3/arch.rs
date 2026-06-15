@@ -68,20 +68,7 @@ impl Architecture for Qwen3Architecture {
         num_kv_blocks: usize,
         kv_quantization: bool,
     ) -> Result<Box<dyn ModelBackend>> {
-        let qwen_config = Qwen3Config {
-            vocab_size: Some(config.vocab_size),
-            hidden_size: Some(config.hidden_size),
-            num_hidden_layers: Some(config.num_layers),
-            num_attention_heads: Some(config.num_heads),
-            num_key_value_heads: Some(config.num_kv_heads),
-            intermediate_size: Some(config.intermediate_size),
-            rope_theta: Some(config.rope_theta),
-            max_position_embeddings: Some(config.max_position_embeddings),
-            rms_norm_eps: Some(config.rms_norm_eps as f32),
-            tie_word_embeddings: Some(config.tie_word_embeddings),
-            head_dim: Some(config.head_dim),
-            ..Default::default()
-        };
+        let qwen_config = Qwen3Config::from(config);
         let model =
             Qwen3Model::from_weights(qwen_config, device, weights, num_kv_blocks, kv_quantization)?;
         Ok(Box::new(model))
