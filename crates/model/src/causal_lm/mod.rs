@@ -4,10 +4,12 @@
 //! models (Llama, Mistral, Qwen3, …) stay focused on layer wiring.
 
 mod block_wrapper;
+mod hybrid_lm;
 mod layer_loop;
 mod model;
 
 pub use block_wrapper::BlockWrapper;
+pub use hybrid_lm::{HybridLm, HybridLmConfig};
 pub use layer_loop::{DecoderLayer, LayerAuxMut, LayerCtx, run_layers, run_layers_upto};
 pub use model::CausalLm;
 

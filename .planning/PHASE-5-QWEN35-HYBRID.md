@@ -1,7 +1,7 @@
 # Phase 5：Qwen3.5 Hybrid 收敛计划
 
 > **创建日期:** 2026-06-12  
-> **状态:** ⬜ 未开始（规划完成，待执行）  
+> **状态:** 🔄 Wave 2 完成（待 commit）  
 > **前置:** Phase 0–4 完成（`main` @ `e192492`+）  
 > **关联:** `.planning/MODEL-ARCHITECTURE-REFACTOR.md`、`.planning/SESSION-HANDOFF.md`
 
@@ -268,7 +268,8 @@ Wave 4  →  test(qwen3_5): speculative parity and capability upgrade (if green)
 | 日期 | Wave | 动作 | Commit |
 |------|------|------|--------|
 | 2026-06-12 | — | Phase 5 规划文档创建 | — |
-| 2026-06-15 | 1 | 拆分 hybrid.rs → block/model/weights/config | 待提交 |
+| 2026-06-15 | 1 | 拆分 hybrid.rs → block/model/weights/config | `decc8c8` |
+| 2026-06-15 | 2 | HybridLm shell + GatedDelta 上移 components | 待提交 |
 | — | 2 | — | — |
 | — | 3 | — | — |
 | — | 4 | — | — |

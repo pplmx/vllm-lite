@@ -2,7 +2,7 @@
 
 use crate::components::decoder_block::PagedDecoderBlock;
 use crate::paged_tensor::PagedKvCache;
-use crate::qwen3_5::gated_delta::GatedDeltaState;
+use crate::components::gated_delta::GatedDeltaState;
 use candle_core::{Result, Tensor};
 use vllm_traits::Result as EngineResult;
 

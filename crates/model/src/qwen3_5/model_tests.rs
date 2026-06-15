@@ -3,7 +3,8 @@ use crate::components::SwiGLU;
 use crate::components::positional::MRoPE;
 use crate::qwen3_5::attention35::Attention35WithRoPE;
 use crate::qwen3_config::Qwen3Config;
-use candle_core::{DType, Device, Tensor};
+use candle_core::{DType, Device, Module, Tensor};
+use vllm_traits::ModelBackend;
 use candle_nn::VarBuilder;
 
 #[test]
@@ -63,7 +64,7 @@ fn test_qwen35_hybrid_model_kv_cache_init() {
     let device = Device::Cpu;
     let model = Qwen35HybridModel::new(config.clone(), device, 16, false).unwrap();
 
-    assert_eq!(model.kv_cache.num_layers(), 4);
+    assert_eq!(model.num_layers(), 4);
 }
 
 #[test]
@@ -119,6 +120,5 @@ fn test_qwen35_hybrid_model_layer_count() {
     let device = Device::Cpu;
     let model = Qwen35HybridModel::new(config.clone(), device, 8, false).unwrap();
 
-    assert_eq!(model.layers.len(), 12);
-    assert_eq!(model.layer_types.len(), 12);
+    assert_eq!(model.num_layers(), 12);
 }

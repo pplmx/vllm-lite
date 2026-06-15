@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use crate::qwen3_5::gated_delta::{GatedDeltaConfig, GatedDeltaNet, GatedDeltaState};
+use crate::components::gated_delta::{GatedDeltaConfig, GatedDeltaNet, GatedDeltaState};
 use candle_core::{DType, Result as CandleResult, Tensor};
 use candle_nn::{Conv1d, LayerNorm, Linear, VarBuilder, conv1d};
 

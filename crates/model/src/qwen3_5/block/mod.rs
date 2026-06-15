@@ -9,73 +9,11 @@ pub use full::FullAttentionBlock35;
 pub use linear::LinearAttentionBlock;
 
 use crate::causal_lm::{DecoderLayer, LayerAuxMut, LayerCtx};
-use crate::paged_tensor::PagedKvCache;
-use crate::qwen3_5::gated_delta::GatedDeltaState;
 use candle_core::{Result as CandleResult, Tensor};
 
 pub enum HybridBlock {
     Linear(LinearAttentionBlock),
     Full(FullAttentionBlock35),
-}
-
-impl HybridBlock {
-    pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
-        match self {
-            HybridBlock::Linear(b) => b.forward(x),
-            HybridBlock::Full(b) => b.forward(x),
-        }
-    }
-
-    pub fn forward_prefill(
-        &self,
-        x: &Tensor,
-        kv_cache: &mut PagedKvCache,
-        layer_idx: usize,
-        block_ids: &[usize],
-        positions: &[usize],
-        gdn_state: &mut Option<GatedDeltaState>,
-    ) -> CandleResult<Tensor> {
-        match self {
-            HybridBlock::Linear(b) => {
-                let (out, state) = b.forward_prefill(x)?;
-                *gdn_state = Some(state);
-                Ok(out)
-            }
-            HybridBlock::Full(b) => {
-                b.forward_prefill(x, kv_cache, layer_idx, block_ids, positions)
-            }
-        }
-    }
-
-    pub fn forward_decode(
-        &self,
-        x: &Tensor,
-        kv_cache: &mut PagedKvCache,
-        layer_idx: usize,
-        block_ids: &[usize],
-        num_computed_tokens: usize,
-        positions: &[usize],
-        gdn_state: &mut Option<GatedDeltaState>,
-    ) -> CandleResult<Tensor> {
-        match self {
-            HybridBlock::Linear(b) => {
-                let state = gdn_state.as_mut().ok_or_else(|| {
-                    candle_core::Error::msg(format!(
-                        "missing GDN state for linear layer {layer_idx}"
-                    ))
-                })?;
-                b.forward_decode(x, state)
-            }
-            HybridBlock::Full(b) => b.forward_decode(
-                x,
-                kv_cache,
-                layer_idx,
-                block_ids,
-                num_computed_tokens,
-                positions,
-            ),
-        }
-    }
 }
 
 impl DecoderLayer for HybridBlock {
@@ -100,7 +38,16 @@ impl DecoderLayer for HybridBlock {
                 )));
             }
         };
-        self.forward_prefill(x, kv_cache, layer_idx, block_ids, positions, gdn_state)
+        match self {
+            HybridBlock::Linear(b) => {
+                let (out, state) = b.forward_prefill(x)?;
+                *gdn_state = Some(state);
+                Ok(out)
+            }
+            HybridBlock::Full(b) => {
+                b.forward_prefill(x, kv_cache, layer_idx, block_ids, positions)
+            }
+        }
     }
 
     fn forward_decode(
@@ -126,15 +73,24 @@ impl DecoderLayer for HybridBlock {
             }
         };
         let decode_pos = [positions[0]];
-        self.forward_decode(
-            x,
-            kv_cache,
-            layer_idx,
-            block_ids,
-            *num_computed_tokens,
-            &decode_pos,
-            gdn_state,
-        )
+        match self {
+            HybridBlock::Linear(b) => {
+                let state = gdn_state.as_mut().ok_or_else(|| {
+                    candle_core::Error::msg(format!(
+                        "missing GDN state for linear layer {layer_idx}"
+                    ))
+                })?;
+                b.forward_decode(x, state)
+            }
+            HybridBlock::Full(b) => b.forward_decode(
+                x,
+                kv_cache,
+                layer_idx,
+                block_ids,
+                *num_computed_tokens,
+                &decode_pos,
+            ),
+        }
     }
 }
 
