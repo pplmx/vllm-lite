@@ -13,7 +13,6 @@ pub struct BatchCudaGraphExecutor {
     /// Map from batch_size to captured graph
     graphs: HashMap<usize, CudaGraph>,
     /// Configuration
-    #[allow(dead_code)]
     config: CudaGraphConfig,
     /// Whether CUDA Graph is enabled
     enabled: bool,
@@ -84,6 +83,11 @@ impl BatchCudaGraphExecutor {
         }
 
         pool
+    }
+
+    /// Configuration used when capturing graphs.
+    pub fn config(&self) -> &CudaGraphConfig {
+        &self.config
     }
 
     /// Check if CUDA Graph is enabled
@@ -262,6 +266,17 @@ mod tests {
             total_tokens: batch_size,
             max_seq_len: 1,
         }
+    }
+
+    #[test]
+    fn test_config_accessor() {
+        let config = CudaGraphConfig {
+            enabled: true,
+            batch_sizes: vec![1, 2, 4],
+            ..Default::default()
+        };
+        let executor = BatchCudaGraphExecutor::new(config.clone()).unwrap();
+        assert_eq!(executor.config().batch_sizes, config.batch_sizes);
     }
 
     #[test]

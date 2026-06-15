@@ -1,4 +1,7 @@
 //! Vision encoder components for Sam/Vision models.
+//!
+//! `VisionEncoder` is a placeholder for future VLM integration. It preserves tensor
+//! shapes today and does not run a real ViT stack yet.
 
 use candle_core::{Module, Result as CandleResult, Tensor};
 use candle_nn::{Linear, VarBuilder};
@@ -45,7 +48,7 @@ impl PatchEmbed {
     }
 }
 
-#[allow(dead_code)]
+/// Placeholder vision tower until a vision-language architecture is wired in.
 pub struct VisionEncoder {
     config: VisionConfig,
 }
@@ -55,6 +58,10 @@ impl VisionEncoder {
         Ok(Self {
             config: config.clone(),
         })
+    }
+
+    pub fn config(&self) -> &VisionConfig {
+        &self.config
     }
 
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {

@@ -43,13 +43,12 @@ impl FlashAttentionV3 {
 
         let scale = 1.0 / (self.head_dim as f32).sqrt();
 
-        let qk = Tensor::matmul(q, &k.transpose(2, 3)?.contiguous()?)?;
-        let qk = qk.mul(&Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?)?;
+        let mut qk = Tensor::matmul(q, &k.transpose(2, 3)?.contiguous()?)?;
+        qk = qk.mul(&Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?)?;
 
         if self.causal {
-            let seq_len = q.dims()[2];
-            let mask = self.create_causal_mask(seq_len, q.device())?;
-            let _qk = qk.broadcast_add(&mask)?;
+            let mask = self.create_causal_mask(q.dims()[2], q.device())?;
+            qk = qk.broadcast_add(&mask)?;
         }
 
         if let Some((left, right)) = self.window_size {
@@ -60,7 +59,7 @@ impl FlashAttentionV3 {
                 right,
                 q.device(),
             )?;
-            let _qk = qk.broadcast_add(&mask)?;
+            qk = qk.broadcast_add(&mask)?;
         }
 
         let attn_weights = candle_nn::ops::softmax(&qk, 3)?;
@@ -99,35 +98,6 @@ impl FlashAttentionV3 {
         mask.where_cond(&zero, &neg_inf)
     }
 
-    #[allow(dead_code)]
-    fn create_sliding_window_mask(
-        &self,
-        dims: &[usize],
-        left: i32,
-        right: i32,
-        device: &candle_core::Device,
-    ) -> Result<Tensor> {
-        let batch_size = dims[0];
-        let num_heads = dims[1];
-        let seq_q = dims[2];
-        let seq_k = dims[2];
-
-        let mask: Vec<f32> = (0..seq_q)
-            .flat_map(|i| {
-                (0..seq_k).map(move |j| {
-                    let offset = i as i32 - j as i32;
-                    if offset < -left || offset > right {
-                        f32::NEG_INFINITY
-                    } else {
-                        0.0
-                    }
-                })
-            })
-            .collect();
-
-        Tensor::from_slice(&mask, (batch_size, num_heads, seq_q, seq_k), device)
-    }
-
     fn create_sliding_window_mask_simple(
         &self,
         seq_q: usize,
@@ -163,9 +133,7 @@ impl FlashAttentionV3 {
 
 pub struct MqaFlashAttention {
     num_heads: usize,
-    #[allow(dead_code)]
     num_kv_heads: usize,
-    #[allow(dead_code)]
     head_dim: usize,
     causal: bool,
 }
@@ -181,19 +149,19 @@ impl MqaFlashAttention {
     }
 
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
-        let (_batch_size, _, seq_q, head_dim) =
-            (q.dims()[0], q.dims()[1], q.dims()[2], q.dims()[3]);
+        let (_batch_size, num_heads_q, seq_q, _) = q.dims4()?;
+        debug_assert_eq!(num_heads_q, self.num_heads);
 
         let k_expanded = self.expand_kv(k, self.num_heads)?;
         let v_expanded = self.expand_kv(v, self.num_heads)?;
 
-        let scale = 1.0 / (head_dim as f32).sqrt();
-        let qk = Tensor::matmul(q, &k_expanded.transpose(2, 3)?.contiguous()?)?;
-        let qk = qk.mul(&Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?)?;
+        let scale = 1.0 / (self.head_dim as f32).sqrt();
+        let mut qk = Tensor::matmul(q, &k_expanded.transpose(2, 3)?.contiguous()?)?;
+        qk = qk.mul(&Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?)?;
 
         if self.causal {
             let mask = self.create_causal_mask(seq_q, q.device())?;
-            let _qk = qk.broadcast_add(&mask)?;
+            qk = qk.broadcast_add(&mask)?;
         }
 
         let attn_weights = candle_nn::ops::softmax(&qk, 3)?;
@@ -204,6 +172,7 @@ impl MqaFlashAttention {
 
     fn expand_kv(&self, kv: &Tensor, num_q_heads: usize) -> Result<Tensor> {
         let num_kv_heads = kv.dims()[1];
+        debug_assert_eq!(num_kv_heads, self.num_kv_heads);
         if num_kv_heads == num_q_heads {
             return Ok(kv.clone());
         }
@@ -228,9 +197,7 @@ impl MqaFlashAttention {
 
 pub struct GqaFlashAttention {
     num_heads: usize,
-    #[allow(dead_code)]
     num_kv_heads: usize,
-    #[allow(dead_code)]
     head_dim: usize,
     causal: bool,
 }
@@ -246,19 +213,19 @@ impl GqaFlashAttention {
     }
 
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
-        let (_batch_size, _, seq_q, head_dim) =
-            (q.dims()[0], q.dims()[1], q.dims()[2], q.dims()[3]);
+        let (_batch_size, num_heads_q, seq_q, _) = q.dims4()?;
+        debug_assert_eq!(num_heads_q, self.num_heads);
 
         let k_expanded = self.expand_kv(k, self.num_heads)?;
         let v_expanded = self.expand_kv(v, self.num_heads)?;
 
-        let scale = 1.0 / (head_dim as f32).sqrt();
-        let qk = Tensor::matmul(q, &k_expanded.transpose(2, 3)?.contiguous()?)?;
-        let qk = qk.mul(&Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?)?;
+        let scale = 1.0 / (self.head_dim as f32).sqrt();
+        let mut qk = Tensor::matmul(q, &k_expanded.transpose(2, 3)?.contiguous()?)?;
+        qk = qk.mul(&Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?)?;
 
         if self.causal {
             let mask = self.create_causal_mask(seq_q, q.device())?;
-            let _qk = qk.broadcast_add(&mask)?;
+            qk = qk.broadcast_add(&mask)?;
         }
 
         let attn_weights = candle_nn::ops::softmax(&qk, 3)?;
@@ -269,6 +236,7 @@ impl GqaFlashAttention {
 
     fn expand_kv(&self, kv: &Tensor, num_q_heads: usize) -> Result<Tensor> {
         let num_kv_heads = kv.dims()[1];
+        debug_assert_eq!(num_kv_heads, self.num_kv_heads);
         if num_kv_heads == num_q_heads {
             return Ok(kv.clone());
         }
@@ -575,6 +543,50 @@ mod tests {
         let output = flash.forward(&q, &k, &v).unwrap();
         let data: Vec<f32> = output.flatten_all().unwrap().to_vec1().unwrap();
         assert!(data.iter().all(|v| v.is_finite()));
+    }
+
+    #[test]
+    fn test_gqa_flash_attention_causal_changes_output() {
+        let batch_size = 1;
+        let seq_len = 6;
+        let num_heads = 4;
+        let num_kv_heads = 2;
+        let head_dim = 16;
+
+        let q = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_heads, seq_len, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+        let k = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_kv_heads, seq_len, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+        let v = Tensor::randn(
+            0.0f32,
+            1.0,
+            (batch_size, num_kv_heads, seq_len, head_dim),
+            DEVICE,
+        )
+        .unwrap();
+
+        let causal = GqaFlashAttention::new(num_heads, num_kv_heads, head_dim, true);
+        let full = GqaFlashAttention::new(num_heads, num_kv_heads, head_dim, false);
+
+        let causal_out = causal.forward(&q, &k, &v).unwrap();
+        let full_out = full.forward(&q, &k, &v).unwrap();
+
+        let diff = (&causal_out - &full_out).unwrap().abs().unwrap();
+        let max_diff: f32 = diff.max_all().unwrap().to_scalar().unwrap();
+        assert!(
+            max_diff > 1e-6,
+            "causal GQA flash attention should differ from unmasked, max_diff={max_diff}"
+        );
     }
 
     #[test]

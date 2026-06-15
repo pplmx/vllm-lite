@@ -5,11 +5,10 @@ use std::sync::{Arc, RwLock};
 pub struct DistributedKVCache {
     config: CacheConfig,
     local_cache: Arc<RwLock<HashMap<u64, CacheEntry>>>,
-    stats: CacheStats,
+    stats: RwLock<CacheStats>,
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 struct CacheEntry {
     key: u64,
     value_hash: u64,
@@ -19,7 +18,6 @@ struct CacheEntry {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 enum CacheState {
     Shared,
     Modified,
@@ -40,45 +38,66 @@ impl DistributedKVCache {
         Self {
             config,
             local_cache: Arc::new(RwLock::new(HashMap::new())),
-            stats: CacheStats::default(),
+            stats: RwLock::new(CacheStats::default()),
         }
     }
 
     pub fn get(&self, key: u64) -> Option<u64> {
-        let cache = self.local_cache.read().ok()?;
+        let mut cache = self.local_cache.write().ok()?;
 
-        if let Some(entry) = cache.get(&key) {
+        if let Some(entry) = cache.get_mut(&key) {
+            debug_assert_eq!(entry.key, key);
             if entry.state != CacheState::Invalid {
+                entry.last_access = current_timestamp();
+                if let Ok(mut stats) = self.stats.write() {
+                    stats.hits += 1;
+                }
                 return Some(entry.value_hash);
             }
         }
 
+        if let Ok(mut stats) = self.stats.write() {
+            stats.misses += 1;
+        }
         None
     }
 
     pub fn put(&self, key: u64, value_hash: u64) {
         let owner_nodes = self.compute_owner_nodes(key);
+        let timestamp = current_timestamp();
 
-        let entry = CacheEntry {
-            key,
-            value_hash,
-            owner_nodes: owner_nodes.clone(),
-            state: if self.config.node_id == owner_nodes[0] {
+        if let Ok(mut cache) = self.local_cache.write() {
+            let state = if cache.contains_key(&key) {
+                CacheState::Modified
+            } else if self.config.node_id == owner_nodes[0] {
                 CacheState::Exclusive
             } else {
                 CacheState::Shared
-            },
-            last_access: current_timestamp(),
-        };
+            };
 
-        if let Ok(mut cache) = self.local_cache.write() {
-            cache.insert(key, entry);
+            cache.insert(
+                key,
+                CacheEntry {
+                    key,
+                    value_hash,
+                    owner_nodes,
+                    state,
+                    last_access: timestamp,
+                },
+            );
+        }
+
+        if let Ok(mut stats) = self.stats.write() {
+            stats.updates += 1;
         }
     }
 
     pub fn invalidate(&self, key: u64) {
         if let Ok(mut cache) = self.local_cache.write() {
             cache.remove(&key);
+        }
+        if let Ok(mut stats) = self.stats.write() {
+            stats.invalidations += 1;
         }
     }
 
@@ -125,7 +144,7 @@ impl DistributedKVCache {
     }
 
     pub fn stats(&self) -> CacheStats {
-        self.stats.clone()
+        self.stats.read().map(|s| s.clone()).unwrap_or_default()
     }
 
     fn compute_owner_nodes(&self, key: u64) -> Vec<NodeId> {
@@ -142,7 +161,11 @@ impl DistributedKVCache {
 
     pub fn memory_usage(&self) -> usize {
         if let Ok(cache) = self.local_cache.read() {
-            cache.len() * std::mem::size_of::<CacheEntry>()
+            cache
+                .values()
+                .filter(|entry| entry.owner_nodes.contains(&self.config.node_id))
+                .count()
+                * std::mem::size_of::<CacheEntry>()
         } else {
             0
         }
@@ -178,6 +201,21 @@ mod tests {
 
         let result = cache.get(999);
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_cache_stats_track_hits_and_misses() {
+        let config = CacheConfig::new(NodeId(0), 4);
+        let cache = DistributedKVCache::new(config);
+
+        cache.put(1, 100);
+        assert_eq!(cache.get(1), Some(100));
+        assert_eq!(cache.get(999), None);
+
+        let stats = cache.stats();
+        assert_eq!(stats.hits, 1);
+        assert_eq!(stats.misses, 1);
+        assert_eq!(stats.updates, 1);
     }
 
     #[test]
