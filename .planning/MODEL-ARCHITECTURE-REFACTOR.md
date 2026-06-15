@@ -1,7 +1,7 @@
 # Model 层架构重构计划（生产化 / Rustic）
 
 > **创建日期:** 2026-06-12  
-> **最后更新:** 2026-06-12  
+> **最后更新:** 2026-06-12（Phase 4 完成）  
 > **目标:** 消除重复、统一推理抽象、区分生产级与 stub 架构，使 `vllm-model` 可维护、可扩展、可安全部署  
 > **关联文档:** `.planning/codebase/ARCHITECTURE.md`、`.planning/SESSION-HANDOFF.md`
 
@@ -12,13 +12,13 @@
 | Phase | 名称 | 状态 | 进度 | 目标 PR/Commit |
 |-------|------|------|------|----------------|
 | **Pre** | 近期已完成（GDN / Hybrid cache） | ✅ 完成 | 100% | `26520ab` 及之前 |
-| **0** | Capability 与 Stub 隔离 | ✅ 完成 | 4/4 | — |
-| **1** | 泛型 CausalLm + BlockWrapper | ✅ 完成 | 6/6 | — |
-| **2** | 统一 Attention Core + MLP | ⬜ 未开始 | 0/5 | — |
-| **3** | DecoderLayer 统一 Loop + Config | ⬜ 未开始 | 0/5 | — |
-| **4** | Qwen3 瘦身 + Stub 实现或移除 | ⬜ 未开始 | 0/4 | — |
+| **0** | Capability 与 Stub 隔离 | ✅ 完成 | 4/4 | `11a4ad4` |
+| **1** | 泛型 CausalLm + BlockWrapper | ✅ 完成 | 6/6 | `8043a02` |
+| **2** | 统一 Attention Core + MLP | ✅ 完成 | 5/5 | `9dcfd10` |
+| **3** | DecoderLayer 统一 Loop + Config | ✅ 完成 | 5/5 | `cbafe75` |
+| **4** | Qwen3 瘦身 + Stub 实现或移除 | ✅ 完成 | 4/4 | `88f54df` |
 
-**整体进度:** `[████░░░░░░] 42%`（Pre + Phase 0 完成，Phase 1 进行中）
+**整体进度:** `[██████████] 100%`（Phase 0–4 全部完成）
 
 **图例:** ✅ 完成 · 🔄 进行中 · ⬜ 未开始 · ⏸ 暂停 · ❌ 取消
 
@@ -40,8 +40,8 @@
 | 档位 | 架构 | 推理 | 备注 |
 |------|------|------|------|
 | **A 生产级** | Llama, Mistral, Mixtral, Gemma4, Qwen3, Qwen3.5 | `forward_with_paged_kv` / `run_hybrid_layers` | 可 serving |
-| **B 半完成** | Qwen3.5 hybrid | 主路径 OK；`embed`/`forward_to_layer` naive | Phase 3 收尾 |
-| **C Stub** | Gemma3, Llama4, Phi4, MistralSmall | 返回 0 / `passthrough_paged_*` | Phase 0 隔离 |
+| **B 半完成** | Qwen3.5 hybrid | 主路径 OK；speculative hooks 未完整 | 后续可选 |
+| **C Stub** | Gemma3, Llama4, Phi4, MistralSmall | 返回 0；loader 默认拒绝（`--allow-stub` 可 override） | Phase 0 + 4.4 Option C |
 
 ---
 
@@ -99,7 +99,7 @@ cargo clippy -p vllm-model -- -D warnings
 
 | 日期 | 动作 | Commit |
 |------|------|--------|
-| 2026-06-12 | Phase 0：`ArchCapabilities` + loader/server `--allow-stub` | 待提交 |
+| 2026-06-12 | Phase 0：`ArchCapabilities` + loader/server `--allow-stub` | `11a4ad4` |
 
 ---
 
@@ -194,7 +194,7 @@ cargo clippy -p vllm-model -- -D warnings
 | 日期 | 动作 | Commit |
 |------|------|--------|
 | 2026-06-12 | Phase 3.1–3.3：`LayerCtx` + `run_layers` + hybrid 接入 | 3fa4543 |
-| 2026-06-12 | Phase 3.4–3.5：`ModelHyperparams` + hybrid embed/forward_to_layer | 待提交 |
+| 2026-06-12 | Phase 3.4–3.5：`ModelHyperparams` + hybrid embed/forward_to_layer | `cbafe75` |
 
 ---
 
@@ -206,25 +206,24 @@ cargo clippy -p vllm-model -- -D warnings
 
 ### 任务清单
 
-- [ ] **4.1** Qwen3 TP 逻辑下沉到 `causal_lm` 或 `dist/`
-- [ ] **4.2** Qwen3 `forward_to_layer` 基于 `DecoderLayer` + layer index，删除手写 loop
-- [ ] **4.3** 修复 `ModelBackend::forward_with_cache` default（禁止假 logits；stub 返回 Err）
-- [ ] **4.4** Stub 架构（Gemma3/Llama4/Phi4/MistralSmall）三选一：
-  - **A)** 移出 `register_all_archs`，仅 feature flag
-  - **B)** 实现最小真实 forward（复用 CausalLm）
-  - **C)** 保留 registry 但 server 拒绝加载
+- [x] **4.1** Qwen3 TP 逻辑下沉到 `qwen3/tp.rs`（`new_with_tp`）
+- [x] **4.2** Qwen3 `forward_to_layer` 基于 `CausalLm::run_layers_upto` + `DecoderLayer`
+- [x] **4.3** 修复 `ModelBackend::forward_with_cache` default（返回 Err，不再假 logits）
+- [x] **4.4** Stub 架构（Gemma3/Llama4/Phi4/MistralSmall）→ **Option C**：
+  - 保留 `register_all_archs` 用于 detect
+  - `ModelLoader` / server 默认拒绝 stub（`--allow-stub` / `VLLM_ALLOW_STUB`）
 
 ### 验收标准
 
-- [ ] `qwen3/model.rs` < 500 行
-- [ ] Speculative decoding 测试不运行在 stub 上
-- [ ] 架构 capability 文档与代码一致
+- [x] `qwen3/model.rs` < 500 行（当前 ~52 行）
+- [x] Speculative decoding 测试不运行在 stub 上（core 测试仅用 FakeModel）
+- [x] 架构 capability 文档与代码一致（见 `arch/capabilities.rs` + 成熟度基线表）
 
 ### 进度记录
 
 | 日期 | 动作 | Commit |
 |------|------|--------|
-| — | — | — |
+| 2026-06-12 | Phase 4：Qwen3→CausalLm、TP 下沉、embed 修复、trait 默认实现 | `88f54df` |
 
 ---
 
@@ -272,7 +271,7 @@ cargo test -p vllm-model --lib gemma4
 |----|------|------|------|
 | D1 | Phase 0 先于大规模合并 | 避免 stub 在 refactor 中混入生产路径 | 2026-06-12 |
 | D2 | `CausalLm` 用泛型而非 trait object | 与现有 `Vec<LlamaBlock>` 零成本抽象一致 | 2026-06-12 |
-| D3 | Stub 默认策略待定（4.4 A/B/C） | 需产品侧确认是否暴露 Gemma3 等 detect | 2026-06-12 |
+| D3 | Stub 策略选 **Option C** | 保留 detect/registry；loader 默认拒绝，需 `--allow-stub` | 2026-06-12 |
 | D4 | Qwen3Config 短期保留 | 避免一次性破坏 Qwen3.5 weight remap | 2026-06-12 |
 
 ---
@@ -286,7 +285,7 @@ cargo test -p vllm-model --lib gemma4
 3. 跑 **验证清单** 确认基线绿  
 4. 完成后更新：勾选 `- [ ]` → `- [x]`，填写 **进度记录** 表与 **最后更新** 日期  
 
-**Git 基线（计划创建时）:** `main` @ `26520ab`（领先 origin 11 commits）
+**Git 基线:** `main` @ `88f54df`（Phase 0–4 完成，领先 origin 17 commits）
 
 ---
 
@@ -295,3 +294,4 @@ cargo test -p vllm-model --lib gemma4
 | 日期 | 变更 |
 |------|------|
 | 2026-06-12 | 初版：基于全仓架构 review 制定 Phase 0–4 + Pre 已完成项 |
+| 2026-06-12 | Phase 4 完成：Qwen3 瘦身、stub Option C、规划文档同步 |
