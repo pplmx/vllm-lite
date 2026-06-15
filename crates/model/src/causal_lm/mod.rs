@@ -4,9 +4,11 @@
 //! models (Llama, Mistral, Qwen3, …) stay focused on layer wiring.
 
 mod block_wrapper;
+mod layer_loop;
 mod model;
 
 pub use block_wrapper::BlockWrapper;
+pub use layer_loop::{DecoderLayer, LayerAuxMut, LayerCtx, run_layers};
 pub use model::CausalLm;
 
 use crate::components::decoder_block::PagedDecoderBlock;
@@ -98,33 +100,22 @@ where
 /// Run all decoder layers with paged KV cache (prefill or single-token decode).
 pub fn run_decoder_layers<L: PagedDecoderBlock>(
     layers: &[L],
-    mut hidden: Tensor,
+    hidden: Tensor,
     kv_cache: &mut PagedKvCache,
     block_ids: &[usize],
     positions: &[usize],
     num_computed_tokens: usize,
     is_prefill: bool,
 ) -> Result<Tensor> {
-    if is_prefill {
-        for (layer_idx, layer) in layers.iter().enumerate() {
-            hidden = map_candle(
-                layer.forward_prefill(&hidden, kv_cache, layer_idx, block_ids, positions),
-            )?;
-        }
-    } else {
-        let decode_position = [positions[0]];
-        for (layer_idx, layer) in layers.iter().enumerate() {
-            hidden = map_candle(layer.forward_decode(
-                &hidden,
-                kv_cache,
-                layer_idx,
-                block_ids,
-                num_computed_tokens,
-                &decode_position,
-            ))?;
-        }
-    }
-    Ok(hidden)
+    let mut ctx = LayerCtx {
+        kv_cache,
+        block_ids,
+        positions,
+        num_computed_tokens,
+        is_prefill,
+        aux: None,
+    };
+    run_layers(layers, hidden, &mut ctx)
 }
 
 /// Full causal-LM forward with embedding, decoder stack, final norm, and LM head.

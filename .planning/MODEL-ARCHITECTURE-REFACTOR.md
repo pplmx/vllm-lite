@@ -165,7 +165,7 @@ cargo clippy -p vllm-model -- -D warnings
 
 | 日期 | 动作 | Commit |
 |------|------|--------|
-| 2026-06-12 | Phase 2：`paged_gqa` + attention refactor + MLP35→SwiGLU | 待提交 |
+| 2026-06-12 | Phase 2：`paged_gqa` + attention refactor + MLP35→SwiGLU | 9dcfd10 |
 
 ---
 
@@ -177,23 +177,23 @@ cargo clippy -p vllm-model -- -D warnings
 
 ### 任务清单
 
-- [ ] **3.1** 定义 `DecoderLayer` trait + `LayerCtx`（KV + 可选 `GatedDeltaState`）
-- [ ] **3.2** 单一 `run_layers(ctx, layers, hidden)` 替代 hybrid 专用 loop
-- [ ] **3.3** `HybridBlock` 实现 `DecoderLayer`；逐步废弃独立 `run_hybrid_layers`
+- [x] **3.1** 定义 `DecoderLayer` trait + `LayerCtx`（KV + 可选 `GatedDeltaState`）
+- [x] **3.2** 单一 `run_layers(ctx, layers, hidden)` 替代 hybrid 专用 loop
+- [x] **3.3** `HybridBlock` 实现 `DecoderLayer`；删除 `run_hybrid_layers`
 - [ ] **3.4** `ModelConfig` / `Qwen3Config` 统一：trait `ModelHyperparams` 或 `From` 转换
 - [ ] **3.5** Qwen3.5 `embed()` / `forward_to_layer()` 接入 cache 路径
 
 ### 验收标准
 
-- [ ] Qwen3.5 hybrid 集成测试 prefill+decode 仍 parity
-- [ ] 仅一条 layer loop 被 production 路径使用
-- [ ] 移除 `hybrid.rs` 顶部 `#![allow(clippy::all)]`
+- [x] Qwen3.5 hybrid 集成测试 prefill+decode 仍 parity（1034 nextest）
+- [x] 仅一条 layer loop 被 production 路径使用（`causal_lm::run_layers`）
+- [x] 移除 `hybrid.rs` 顶部 `#![allow(clippy::all)]`
 
 ### 进度记录
 
 | 日期 | 动作 | Commit |
 |------|------|--------|
-| — | — | — |
+| 2026-06-12 | Phase 3.1–3.3：`LayerCtx` + `run_layers` + hybrid 接入 | 待提交 |
 
 ---
 
