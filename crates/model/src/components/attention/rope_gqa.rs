@@ -1,6 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 
 pub use crate::components::AttentionConfig;
+use crate::components::attention::paged_gqa::{read_decode_kv, write_prefill_kv};
 use crate::components::attention::GqaAttention as SharedGqaAttention;
 use crate::components::positional::apply_rope;
 use crate::paged_tensor::PagedKvCache;
@@ -139,28 +140,7 @@ impl RopeGqaAttention {
         let k_expanded = k_expanded.transpose(1, 2)?.contiguous()?;
         let v_expanded = v_expanded.transpose(1, 2)?.contiguous()?;
 
-        let mut block_groups: std::collections::BTreeMap<usize, Vec<usize>> =
-            std::collections::BTreeMap::new();
-        for (token_idx, &block_id) in block_ids.iter().take(seq_len).enumerate() {
-            block_groups.entry(block_id).or_default().push(token_idx);
-        }
-
-        for (block_id, token_indices) in &block_groups {
-            if token_indices.is_empty() {
-                continue;
-            }
-
-            let indices: Vec<u32> = token_indices.iter().map(|&i| i as u32).collect();
-            let indices_tensor = Tensor::new(indices.as_slice(), k.device())?;
-
-            let k_block = k_expanded.index_select(&indices_tensor, 2)?.contiguous()?;
-            let v_block = v_expanded.index_select(&indices_tensor, 2)?.contiguous()?;
-
-            let k_block = k_block.transpose(1, 2)?.contiguous()?;
-            let v_block = v_block.transpose(1, 2)?.contiguous()?;
-
-            kv_cache.write_kv_batch(layer_idx, *block_id, 0, &k_block, &v_block)?;
-        }
+        write_prefill_kv(kv_cache, layer_idx, block_ids, seq_len, &k_expanded, &v_expanded)?;
 
         self.inner.run_attention_fn(&q, &k_expanded, &v_expanded)
     }
@@ -196,40 +176,20 @@ impl RopeGqaAttention {
 
         let q = q.transpose(1, 2)?;
 
-        let k_transposed = k_expanded.transpose(1, 2)?;
-        let k_for_cache = k_transposed.squeeze(0)?.contiguous()?;
-        let v_transposed = v_expanded.transpose(1, 2)?;
-        let v_for_cache = v_transposed.squeeze(0)?.contiguous()?;
+        let k_for_cache = k_expanded.transpose(1, 2)?.squeeze(0)?.contiguous()?;
+        let v_for_cache = v_expanded.transpose(1, 2)?.squeeze(0)?.contiguous()?;
 
-        let (cached_k, cached_v) = kv_cache.read_kv(layer_idx, block_ids, num_computed_tokens)?;
-
-        let cached_k = cached_k.transpose(0, 1)?.contiguous()?;
-        let cached_v = cached_v.transpose(0, 1)?.contiguous()?;
-
-        let full_k = Tensor::cat(&[&cached_k, &k_for_cache], 1)?.contiguous()?;
-        let full_v = Tensor::cat(&[&cached_v, &v_for_cache], 1)?.contiguous()?;
-
-        if !block_ids.is_empty() {
-            let block_size = kv_cache.block_size();
-            let token_offset = num_computed_tokens % block_size;
-            let block_id = num_computed_tokens / block_size;
-
-            let k_for_write = k_for_cache.permute((1, 0, 2))?.contiguous()?;
-            let v_for_write = v_for_cache.permute((1, 0, 2))?.contiguous()?;
-            kv_cache.write_kv(
-                layer_idx,
-                block_id,
-                token_offset,
-                &k_for_write,
-                &v_for_write,
-            )?;
-        }
-
-        let full_k_unsqueezed = full_k.unsqueeze(0)?.contiguous()?;
-        let full_v_unsqueezed = full_v.unsqueeze(0)?.contiguous()?;
+        let (full_k, full_v) = read_decode_kv(
+            kv_cache,
+            layer_idx,
+            block_ids,
+            num_computed_tokens,
+            &k_for_cache,
+            &v_for_cache,
+        )?;
 
         self.inner
-            .run_attention_fn(&q, &full_k_unsqueezed, &full_v_unsqueezed)
+            .run_attention_fn(&q, &full_k, &full_v)
     }
 }
 

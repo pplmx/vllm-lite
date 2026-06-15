@@ -1,5 +1,6 @@
 #![allow(clippy::all, non_snake_case, clippy::too_many_arguments)]
 use crate::causal_lm::{embed_sequence, forward_batch, greedy_sample_token, logits_to_vector, map_candle};
+use crate::components::SwiGLU;
 use crate::components::positional::MRoPE;
 use crate::qwen3_5::attention35::Attention35WithRoPE;
 use crate::qwen3_5::gated_delta::{GatedDeltaConfig, GatedDeltaNet, GatedDeltaState};
@@ -103,15 +104,9 @@ pub struct LinearAttentionBlock {
 pub struct FullAttentionBlock35 {
     input_ln: LayerNorm,
     self_attn: Attention35WithRoPE,
-    mlp: MLP35,
+    mlp: SwiGLU,
     post_attn_ln: LayerNorm,
     gate: Option<Linear>,
-}
-
-pub struct MLP35 {
-    gate_proj: Linear,
-    up_proj: Linear,
-    down_proj: Linear,
 }
 
 fn run_hybrid_layers(
@@ -230,7 +225,7 @@ impl FullAttentionBlock35 {
             rope,
             vb.clone(),
         )?;
-        let mlp = MLP35::new(hidden_size, intermediate_size, vb.clone())?;
+        let mlp = SwiGLU::new(hidden_size, intermediate_size, Some(vb.clone()))?;
         let post_attn_ln = candle_nn::layer_norm(hidden_size, eps, vb)?;
 
         Ok(Self {
@@ -307,30 +302,6 @@ impl FullAttentionBlock35 {
         let x = self.post_attn_ln.forward(&x)?;
         let x = self.mlp.forward(&x)?;
         x + residual
-    }
-}
-
-impl MLP35 {
-    pub fn new(hidden_size: usize, intermediate_size: usize, vb: VarBuilder) -> CandleResult<Self> {
-        Ok(Self {
-            gate_proj: candle_nn::linear(hidden_size, intermediate_size, vb.pp("gate_proj"))?,
-            up_proj: candle_nn::linear(hidden_size, intermediate_size, vb.pp("up_proj"))?,
-            down_proj: candle_nn::linear(intermediate_size, hidden_size, vb.pp("down_proj"))?,
-        })
-    }
-
-    pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
-        let gate = self.gate_proj.forward(x)?;
-        let up = self.up_proj.forward(x)?;
-        let gate = candle_nn::ops::silu(&gate)?;
-        let gate = gate.broadcast_mul(&up)?;
-        self.down_proj.forward(&gate)
-    }
-}
-
-impl Module for MLP35 {
-    fn forward(&self, x: &Tensor) -> candle_core::Result<Tensor> {
-        self.forward(x)
     }
 }
 
@@ -644,7 +615,7 @@ impl FullAttentionBlock35 {
         num_heads: usize,
         num_kv_heads: usize,
         head_dim: usize,
-        _intermediate_size: usize,
+        intermediate_size: usize,
         eps: f64,
         rope: MRoPE,
     ) -> CandleResult<Self> {
@@ -687,11 +658,13 @@ impl FullAttentionBlock35 {
             .cloned()
             .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", down_proj_key)))?;
 
-        let mlp = MLP35 {
-            gate_proj: Linear::new(gate_proj_w, None),
-            up_proj: Linear::new(up_proj_w, None),
-            down_proj: Linear::new(down_proj_w, None),
-        };
+        let mlp = SwiGLU::new_with_weights(
+            hidden_size,
+            intermediate_size,
+            gate_proj_w,
+            up_proj_w,
+            down_proj_w,
+        )?;
 
         let post_ln_key = format!("{}.post_attention_layernorm.weight", prefix);
         let post_ln_w = weights
@@ -1026,9 +999,9 @@ mod tests {
     }
 
     #[test]
-    fn test_mlp_forward() {
+    fn test_swiglu_forward() {
         let device = Device::Cpu;
-        let mlp = MLP35::new(128, 512, VarBuilder::zeros(DType::F32, &device)).unwrap();
+        let mlp = SwiGLU::new(128, 512, None).unwrap();
 
         let x = Tensor::ones((1, 2, 128), DType::F32, &device).unwrap();
         let out = mlp.forward(&x).unwrap();
@@ -1182,9 +1155,9 @@ mod tests {
     }
 
     #[test]
-    fn test_mlp_output_shape_different_intermediate_size() {
+    fn test_swiglu_output_shape_different_intermediate_size() {
         let device = Device::Cpu;
-        let mlp = MLP35::new(256, 1024, VarBuilder::zeros(DType::F32, &device)).unwrap();
+        let mlp = SwiGLU::new(256, 1024, None).unwrap();
 
         let x = Tensor::ones((1, 3, 256), DType::F32, &device).unwrap();
         let out = mlp.forward(&x).unwrap();

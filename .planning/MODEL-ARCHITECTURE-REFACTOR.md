@@ -136,7 +136,7 @@ cargo clippy -p vllm-model -- -D warnings
 
 | 日期 | 动作 | Commit |
 |------|------|--------|
-| 2026-06-12 | Phase 1：`CausalLm` + `BlockWrapper` + shared factory | 待提交 |
+| 2026-06-12 | Phase 1：`CausalLm` + `BlockWrapper` + shared factory | 8043a02 |
 
 ---
 
@@ -148,24 +148,24 @@ cargo clippy -p vllm-model -- -D warnings
 
 ### 任务清单
 
-- [ ] **2.1** 新增 `components/attention/paged_gqa.rs`：
+- [x] **2.1** 新增 `components/attention/paged_gqa.rs`：
   - `project_qkv` / `write_prefill_kv` / `read_decode_kv` / `compute_attention`
-- [ ] **2.2** RoPE 插件：标准 RoPE / MRoPE / none（Gemma sliding 用 mask 插件）
-- [ ] **2.3** `RopeGqaAttention` 重构为 core + flash 路径（保留 `run_attention_fn`）
-- [ ] **2.4** `Gemma4Attention` / `Attention35WithRoPE` 变薄 wrapper
-- [ ] **2.5** 删除 `MLP35`，Qwen3.5 改用 `SwiGLU`；评估 `GeGLU` 是否并入 `components/mlp`
+- [x] **2.2** RoPE 插件：标准 RoPE / MRoPE / none（Gemma sliding 用 mask 插件）— `QkRotaryEmb` trait
+- [x] **2.3** `RopeGqaAttention` 重构为 core + flash 路径（保留 `run_attention_fn`）
+- [x] **2.4** `Gemma4Attention` / `Attention35WithRoPE` 变薄 wrapper
+- [x] **2.5** 删除 `MLP35`，Qwen3.5 改用 `SwiGLU`；评估 `GeGLU` 是否并入 `components/mlp`（暂缓）
 
 ### 验收标准
 
-- [ ] Gemma4 / Qwen3.5 / RopeGqa parity 测试通过
-- [ ] attention 相关重复逻辑减少（diff stat）
-- [ ] Full 层可选走 flash（`AttentionConfig.use_fused`）
+- [x] Gemma4 / Qwen3.5 / RopeGqa parity 测试通过（1033 nextest）
+- [x] attention 相关重复逻辑减少（-105 行 net）
+- [ ] Full 层可选走 flash（`AttentionConfig.use_fused`）— 已有 `run_attention_fn`
 
 ### 进度记录
 
 | 日期 | 动作 | Commit |
 |------|------|--------|
-| — | — | — |
+| 2026-06-12 | Phase 2：`paged_gqa` + attention refactor + MLP35→SwiGLU | 待提交 |
 
 ---
 

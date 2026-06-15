@@ -2,6 +2,9 @@
 
 #![allow(clippy::too_many_arguments)]
 
+use crate::components::attention::paged_gqa::{
+    compute_gqa_attention, project_attention_output, read_decode_kv, write_prefill_kv,
+};
 use crate::config::architecture::{LayerType, RoPEConfig};
 use crate::gemma4::rope::Gemma4RoPE;
 use crate::paged_tensor::PagedKvCache;
@@ -160,24 +163,14 @@ impl Gemma4Attention {
         let k_expanded = k_expanded.transpose(1, 2)?.contiguous()?;
         let v_expanded = v_expanded.transpose(1, 2)?.contiguous()?;
 
-        let mut block_groups: std::collections::BTreeMap<usize, Vec<usize>> =
-            std::collections::BTreeMap::new();
-        for (token_idx, &block_id) in block_ids.iter().take(seq_len).enumerate() {
-            block_groups.entry(block_id).or_default().push(token_idx);
-        }
-
-        for (block_id, token_indices) in &block_groups {
-            if token_indices.is_empty() {
-                continue;
-            }
-            let indices: Vec<u32> = token_indices.iter().map(|&i| i as u32).collect();
-            let indices_tensor = Tensor::new(indices.as_slice(), k.device())?;
-            let k_block = k_expanded.index_select(&indices_tensor, 2)?.contiguous()?;
-            let v_block = v_expanded.index_select(&indices_tensor, 2)?.contiguous()?;
-            let k_block = k_block.transpose(1, 2)?.contiguous()?;
-            let v_block = v_block.transpose(1, 2)?.contiguous()?;
-            kv_cache.write_kv_batch(layer_idx, *block_id, 0, &k_block, &v_block)?;
-        }
+        write_prefill_kv(
+            kv_cache,
+            layer_idx,
+            block_ids,
+            seq_len,
+            &k_expanded,
+            &v_expanded,
+        )?;
 
         self.compute_paged_attention(&q, &k_expanded, &v_expanded, positions)
     }
@@ -207,30 +200,15 @@ impl Gemma4Attention {
         let k_for_cache = k_expanded.transpose(1, 2)?.squeeze(0)?.contiguous()?;
         let v_for_cache = v_expanded.transpose(1, 2)?.squeeze(0)?.contiguous()?;
 
-        let (cached_k, cached_v) = kv_cache.read_kv(layer_idx, block_ids, num_computed_tokens)?;
-        let cached_k = cached_k.transpose(0, 1)?.contiguous()?;
-        let cached_v = cached_v.transpose(0, 1)?.contiguous()?;
+        let (full_k, full_v) = read_decode_kv(
+            kv_cache,
+            layer_idx,
+            block_ids,
+            num_computed_tokens,
+            &k_for_cache,
+            &v_for_cache,
+        )?;
 
-        let full_k = Tensor::cat(&[&cached_k, &k_for_cache], 1)?.contiguous()?;
-        let full_v = Tensor::cat(&[&cached_v, &v_for_cache], 1)?.contiguous()?;
-
-        if !block_ids.is_empty() {
-            let block_size = kv_cache.block_size();
-            let token_offset = num_computed_tokens % block_size;
-            let block_id = num_computed_tokens / block_size;
-            let k_for_write = k_for_cache.permute((1, 0, 2))?.contiguous()?;
-            let v_for_write = v_for_cache.permute((1, 0, 2))?.contiguous()?;
-            kv_cache.write_kv(
-                layer_idx,
-                block_id,
-                token_offset,
-                &k_for_write,
-                &v_for_write,
-            )?;
-        }
-
-        let full_k = full_k.unsqueeze(0)?.contiguous()?;
-        let full_v = full_v.unsqueeze(0)?.contiguous()?;
         self.compute_paged_attention(&q, &full_k, &full_v, positions)
     }
 
@@ -246,21 +224,22 @@ impl Gemma4Attention {
         let seq_len = q.dims()[2];
         let kv_seq = k.dims()[2];
 
-        let mut qk = Tensor::matmul(q, &k.transpose(2, 3)?)?;
-        if matches!(self.layer_type, LayerType::SlidingAttention) {
-            let mask = self.sliding_causal_mask(seq_len, kv_seq, query_positions, q.device())?;
-            qk = qk.broadcast_add(&mask)?;
-        }
-        let scale = 1.0f32 / (self.head_dim as f32).sqrt();
-        let scale_tensor = Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?;
-        let qk = qk.mul(&scale_tensor)?;
-        let attn_weights = candle_nn::ops::softmax(&qk, 3)?;
-        let attn_output = Tensor::matmul(&attn_weights, v)?;
+        let mask = if matches!(self.layer_type, LayerType::SlidingAttention) {
+            Some(self.sliding_causal_mask(seq_len, kv_seq, query_positions, q.device())?)
+        } else {
+            None
+        };
 
-        let attn_output = attn_output.transpose(1, 2)?;
         let attn_output =
-            attn_output.reshape((batch_size, seq_len, self.num_heads * self.head_dim))?;
-        self.o_proj.forward(&attn_output)
+            compute_gqa_attention(q, k, v, self.head_dim, mask.as_ref())?;
+        project_attention_output(
+            &attn_output,
+            batch_size,
+            seq_len,
+            self.num_heads,
+            self.head_dim,
+            &self.o_proj,
+        )
     }
 
     pub fn forward(&self, x: &Tensor, positions: &[usize]) -> Result<Tensor> {
