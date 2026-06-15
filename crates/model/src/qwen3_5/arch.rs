@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use candle_core::{Device, Result, Tensor};
 use vllm_traits::ModelBackend;
 
-use crate::arch::Architecture;
+use crate::arch::{ArchCapabilities, Architecture};
 use crate::components::TransformerBlock;
 use crate::config::ModelConfig;
 use crate::qwen3_config::Qwen3Config;
@@ -64,6 +64,10 @@ impl Architecture for Qwen35Architecture {
             model_type.to_lowercase().as_str(),
             "qwen3.5" | "qwen3_5" | "mamba"
         )
+    }
+
+    fn capabilities(&self) -> ArchCapabilities {
+        ArchCapabilities::HYBRID
     }
 
     fn create_block(

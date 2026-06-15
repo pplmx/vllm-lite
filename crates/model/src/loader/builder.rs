@@ -2,7 +2,7 @@ use candle_core::{Device, Result, Tensor};
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::arch::{ARCHITECTURE_REGISTRY, register_all_archs};
+use crate::arch::{ARCHITECTURE_REGISTRY, ArchCapabilities, register_all_archs};
 use crate::config::Architecture as ConfigArchitecture;
 use crate::config::ModelConfig;
 
@@ -11,6 +11,7 @@ pub struct ModelLoaderBuilder {
     model_dir: Option<String>,
     num_kv_blocks: Option<usize>,
     kv_quantization: Option<bool>,
+    allow_stub: bool,
 }
 
 impl ModelLoaderBuilder {
@@ -20,6 +21,7 @@ impl ModelLoaderBuilder {
             model_dir: None,
             num_kv_blocks: None,
             kv_quantization: None,
+            allow_stub: false,
         }
     }
 
@@ -38,6 +40,12 @@ impl ModelLoaderBuilder {
         self
     }
 
+    /// Allow loading stub architectures (Gemma3, Llama4, Phi4, …) that do not perform real inference.
+    pub fn with_allow_stub(mut self, allow: bool) -> Self {
+        self.allow_stub = allow;
+        self
+    }
+
     pub fn build(self) -> Result<ModelLoader> {
         let model_dir = self
             .model_dir
@@ -51,6 +59,7 @@ impl ModelLoaderBuilder {
                 model_dir,
                 num_kv_blocks,
                 kv_quantization,
+                self.allow_stub,
             )?),
         })
     }
@@ -73,6 +82,7 @@ struct ModelLoaderInner {
     model_dir: String,
     num_kv_blocks: usize,
     kv_quantization: bool,
+    allow_stub: bool,
     config_json: serde_json::Value,
 }
 
@@ -82,6 +92,7 @@ impl ModelLoaderInner {
         model_dir: String,
         num_kv_blocks: usize,
         kv_quantization: bool,
+        allow_stub: bool,
     ) -> Result<Self> {
         let config_path = Path::new(&model_dir).join("config.json");
         let content = std::fs::read_to_string(&config_path)
@@ -94,6 +105,7 @@ impl ModelLoaderInner {
             model_dir,
             num_kv_blocks,
             kv_quantization,
+            allow_stub,
             config_json,
         })
     }
@@ -107,6 +119,7 @@ impl ModelLoader {
                 model_dir: String::new(),
                 num_kv_blocks: 1024,
                 kv_quantization: false,
+                allow_stub: false,
                 config_json: serde_json::Value::Null,
             }),
         }
@@ -139,6 +152,21 @@ impl ModelLoader {
         &self.inner.config_json
     }
 
+    /// Returns capability flags for the architecture detected from the model config.
+    pub fn detected_capabilities(&self) -> Result<ArchCapabilities> {
+        register_all_archs(&ARCHITECTURE_REGISTRY);
+
+        let arch_name = ARCHITECTURE_REGISTRY
+            .detect(&self.inner.config_json)
+            .ok_or_else(|| candle_core::Error::msg("Unsupported architecture"))?;
+
+        let arch = ARCHITECTURE_REGISTRY
+            .get(&arch_name)
+            .ok_or_else(|| candle_core::Error::msg("Architecture not found"))?;
+
+        Ok(arch.capabilities())
+    }
+
     pub fn load_config<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
         let config_path = Path::new(&self.inner.model_dir).join("config.json");
         let content = std::fs::read_to_string(config_path)
@@ -162,6 +190,31 @@ impl ModelLoader {
         let arch = ARCHITECTURE_REGISTRY
             .get(&arch_name)
             .ok_or_else(|| candle_core::Error::msg("Architecture not found"))?;
+
+        let caps = arch.capabilities();
+        if caps.is_stub() {
+            if self.inner.allow_stub {
+                tracing::warn!(
+                    architecture = %arch_name,
+                    tier = caps.tier(),
+                    "Loading stub architecture with --allow-stub; inference output is not meaningful"
+                );
+            } else {
+                return Err(candle_core::Error::msg(format!(
+                    "Architecture '{arch_name}' is a stub and cannot be used for inference \
+                     (tier: {}). Pass --allow-stub to override (not recommended for production).",
+                    caps.tier()
+                )));
+            }
+        } else {
+            tracing::info!(
+                architecture = %arch_name,
+                tier = caps.tier(),
+                paged_kv = caps.paged_kv,
+                speculative = caps.speculative,
+                "Architecture capabilities"
+            );
+        }
 
         let config = ModelConfig::from_config_json(&self.inner.config_json)
             .map_err(|e| candle_core::Error::msg(format!("Failed to parse model config: {}", e)))?;
@@ -330,5 +383,60 @@ mod tests {
             .unwrap();
         let arch = loader.architecture();
         assert_eq!(arch, ConfigArchitecture::Llama);
+    }
+
+    #[test]
+    fn test_stub_architecture_rejected_without_allow_stub() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+        std::fs::write(
+            &config_path,
+            r#"{"model_type": "gemma3", "hidden_size": 128}"#,
+        )
+        .unwrap();
+
+        let loader = ModelLoader::builder(Device::Cpu)
+            .with_model_dir(temp_dir.path().to_str().unwrap().to_string())
+            .build()
+            .unwrap();
+
+        let caps = loader.detected_capabilities().unwrap();
+        assert!(caps.is_stub());
+
+        match loader.load() {
+            Err(e) => {
+                let msg = e.to_string();
+                assert!(msg.contains("stub"), "expected stub error, got: {msg}");
+            }
+            Ok(_) => panic!("expected stub architecture to be rejected"),
+        }
+    }
+
+    #[test]
+    fn test_stub_architecture_passes_capability_gate_with_allow_stub() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+        std::fs::write(
+            &config_path,
+            r#"{"model_type": "gemma3", "hidden_size": 128}"#,
+        )
+        .unwrap();
+
+        let loader = ModelLoader::builder(Device::Cpu)
+            .with_model_dir(temp_dir.path().to_str().unwrap().to_string())
+            .with_allow_stub(true)
+            .build()
+            .unwrap();
+
+        match loader.load() {
+            Err(e) => {
+                let msg = e.to_string();
+                assert!(
+                    !msg.contains("cannot be used for inference"),
+                    "should pass stub gate, got: {msg}"
+                );
+            }
+            Ok(_) => panic!("expected weight load to fail without checkpoint files"),
+        }
     }
 }

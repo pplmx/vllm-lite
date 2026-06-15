@@ -1,6 +1,6 @@
 //! Gemma4 architecture implementation.
 
-use crate::arch::Architecture;
+use crate::arch::{ArchCapabilities, Architecture};
 use crate::components::TransformerBlock;
 use crate::components::decoder_block::PagedDecoderBlock;
 use crate::config::ModelConfig;
@@ -100,6 +100,10 @@ impl Architecture for Gemma4Architecture {
             model_type.to_lowercase().as_str(),
             "gemma2" | "gemma3" | "gemma4"
         )
+    }
+
+    fn capabilities(&self) -> ArchCapabilities {
+        ArchCapabilities::PRODUCTION
     }
 
     fn create_block(
