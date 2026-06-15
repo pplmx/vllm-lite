@@ -5,8 +5,8 @@
 # Fail fast on first failure
 fail-fast = false
 
-# Number of retries for flaky tests
-retries = { backoff = "exponential", count = 2, delay = "1s", jitter = true }
+# Number of retries for flaky tests (CI profile retries more aggressively)
+retries = { backoff = "fixed", count = 0 }
 
 # Slow test threshold
 slow-timeout = { period = "30s", terminate-after = 2, grace-period = "10s" }
@@ -30,6 +30,15 @@ status-level = "skip"
 final-status-level = "slow"
 retries = { backoff = "fixed", count = 1, delay = "500ms" }
 slow-timeout = { period = "10s", terminate-after = 1 }
+default-filter = 'not test(checkpoint_forward_smoke)'
+
+[profile.checkpoint]
+# Slow on-disk checkpoint tests (run via `just nextest-checkpoint`)
+fail-fast = false
+status-level = "slow"
+final-status-level = "slow"
+retries = { backoff = "fixed", count = 0 }
+slow-timeout = { period = "180s", terminate-after = 2, grace-period = "30s" }
 
 # Override for specific slow tests
 [[profile.default.overrides]]
@@ -52,17 +61,10 @@ filter = 'test(~test_forward_prefill_batch_performance)'
 threads-required = 2
 slow-timeout = { period = "15s", terminate-after = 2 }
 
-[[profile.default.overrides]]
-filter = 'test(~qwen3_)'
+[[profile.checkpoint.overrides]]
+filter = 'package(vllm-model) and (test(qwen3_integration) or test(qwen3_token_pipeline))'
 test-group = 'heavy-model-tests'
 threads-required = 1
-slow-timeout = { period = "120s", terminate-after = 2 }
-
-[[profile.default.overrides]]
-filter = 'package(vllm-model) and test(~qwen3_token_pipeline)'
-test-group = 'heavy-model-tests'
-threads-required = 1
-slow-timeout = { period = "120s", terminate-after = 2 }
 
 [[profile.default.overrides]]
 filter = 'package(vllm-model) and test(~tokenizer_verification)'

@@ -13,13 +13,23 @@ init:
 build:
     cargo build --release
 
-# Run tests with nextest (skips #[ignore] tests by default)
+# Run tests with nextest (skips #[ignore] tests by default; one checkpoint smoke remains)
 nextest:
     cargo nextest run --workspace --all-features --no-fail-fast
+
+# Faster local loop: no checkpoint smoke, fail-fast, default features only
+nextest-fast:
+    cargo nextest run --workspace --no-fail-fast -P optimized
 
 # Run nextest including all tests (with #[ignore])
 nextest-all:
     cargo nextest run --release --workspace --all-features --run-ignored all --no-fail-fast
+
+# On-disk checkpoint integration tests (ignored by default in `just nextest`)
+nextest-checkpoint:
+    cargo nextest run -p vllm-model --all-features --no-fail-fast -P checkpoint \
+        --test qwen3_integration --test qwen3_token_pipeline --test arch_checkpoint_smoke \
+        --test checkpoint_loading_tests --run-ignored all
 
 # Format code
 fmt-check:
