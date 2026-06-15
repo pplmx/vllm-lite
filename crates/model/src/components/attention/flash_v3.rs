@@ -216,8 +216,16 @@ impl GqaFlashAttention {
         let (_batch_size, num_heads_q, seq_q, _) = q.dims4()?;
         debug_assert_eq!(num_heads_q, self.num_heads);
 
-        let k_expanded = self.expand_kv(k, self.num_heads)?;
-        let v_expanded = self.expand_kv(v, self.num_heads)?;
+        let k_expanded = if k.dims()[1] == num_heads_q {
+            k.clone()
+        } else {
+            self.expand_kv(k, self.num_heads)?
+        };
+        let v_expanded = if v.dims()[1] == num_heads_q {
+            v.clone()
+        } else {
+            self.expand_kv(v, self.num_heads)?
+        };
 
         let scale = 1.0 / (self.head_dim as f32).sqrt();
         let mut qk = Tensor::matmul(q, &k_expanded.transpose(2, 3)?.contiguous()?)?;
@@ -236,10 +244,10 @@ impl GqaFlashAttention {
 
     fn expand_kv(&self, kv: &Tensor, num_q_heads: usize) -> Result<Tensor> {
         let num_kv_heads = kv.dims()[1];
-        debug_assert_eq!(num_kv_heads, self.num_kv_heads);
         if num_kv_heads == num_q_heads {
             return Ok(kv.clone());
         }
+        debug_assert_eq!(num_kv_heads, self.num_kv_heads);
 
         if num_q_heads % num_kv_heads != 0 {
             let repeat_factor = num_q_heads.div_ceil(num_kv_heads);

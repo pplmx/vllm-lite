@@ -162,12 +162,7 @@ impl RopeGqaAttention {
             kv_cache.write_kv_batch(layer_idx, *block_id, 0, &k_block, &v_block)?;
         }
 
-        let tile_size = self.inner.config().tile_size.unwrap_or(16);
-        if seq_len > tile_size {
-            self.inner.tiled_attention_fn(&q, &k_expanded, &v_expanded)
-        } else {
-            self.inner.paged_attention_fn(&q, &k_expanded, &v_expanded)
-        }
+        self.inner.run_attention_fn(&q, &k_expanded, &v_expanded)
     }
 
     pub fn forward_decode(
@@ -180,11 +175,9 @@ impl RopeGqaAttention {
         positions: &[usize],
     ) -> Result<Tensor> {
         let batch_size = x.dims()[0];
-        let seq_len = num_computed_tokens + 1;
         let num_heads = self.inner.num_heads();
         let num_kv_heads = self.inner.num_kv_heads();
         let head_dim = self.inner.head_dim();
-        let tile_size = self.inner.config().tile_size.unwrap_or(16);
 
         let (q, k, v) = self.inner.project_qkv(x)?;
 
@@ -235,13 +228,8 @@ impl RopeGqaAttention {
         let full_k_unsqueezed = full_k.unsqueeze(0)?.contiguous()?;
         let full_v_unsqueezed = full_v.unsqueeze(0)?.contiguous()?;
 
-        if seq_len > tile_size {
-            self.inner
-                .tiled_attention_fn(&q, &full_k_unsqueezed, &full_v_unsqueezed)
-        } else {
-            self.inner
-                .paged_attention_fn(&q, &full_k_unsqueezed, &full_v_unsqueezed)
-        }
+        self.inner
+            .run_attention_fn(&q, &full_k_unsqueezed, &full_v_unsqueezed)
     }
 }
 
@@ -387,6 +375,93 @@ mod tests {
                 .unwrap();
 
             assert_eq!(result.dims(), &[1, 1, hidden_size], "step={}", step);
+        }
+    }
+
+    fn make_rope_attention(use_fused: bool) -> RopeGqaAttention {
+        let device = candle_core::Device::Cpu;
+        let num_heads = 4;
+        let num_kv_heads = 2;
+        let head_dim = 32;
+        let hidden_size = num_heads * head_dim;
+
+        RopeGqaAttention::new(
+            hidden_size,
+            num_heads,
+            num_kv_heads,
+            head_dim,
+            10000.0,
+            Some(candle_nn::VarBuilder::zeros(candle_core::DType::F32, &device)),
+            AttentionConfig {
+                tile_size: Some(16),
+                use_fused,
+            },
+            false,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn test_rope_gqa_prefill_fused_matches_paged() {
+        let device = candle_core::Device::Cpu;
+        let hidden_size = 128;
+        let seq_len = 6;
+
+        let standard = make_rope_attention(false);
+        let fused = make_rope_attention(true);
+
+        let mut cache_std = PagedKvCache::new(1, 4, 32, 16, device.clone(), false).unwrap();
+        let mut cache_fused = PagedKvCache::new(1, 4, 32, 16, device.clone(), false).unwrap();
+
+        let x = Tensor::randn(0.0f32, 1.0, (1, seq_len, hidden_size), &device).unwrap();
+        let block_ids: Vec<usize> = (0..seq_len).map(|i| i / 16).collect();
+        let positions: Vec<usize> = (0..seq_len).collect();
+
+        let out_std = standard
+            .forward_prefill(&x, &mut cache_std, 0, &block_ids, &positions)
+            .unwrap();
+        let out_fused = fused
+            .forward_prefill(&x, &mut cache_fused, 0, &block_ids, &positions)
+            .unwrap();
+
+        let diff = (&out_std - &out_fused).unwrap().abs().unwrap();
+        let max_diff: f32 = diff.max_all().unwrap().to_scalar().unwrap();
+        assert!(
+            max_diff < 1e-4,
+            "fused prefill should match paged path, max_diff={max_diff}"
+        );
+    }
+
+    #[test]
+    fn test_rope_gqa_decode_fused_matches_paged() {
+        let device = candle_core::Device::Cpu;
+        let hidden_size = 128;
+
+        let standard = make_rope_attention(false);
+        let fused = make_rope_attention(true);
+
+        let mut cache_std = PagedKvCache::new(1, 4, 32, 16, device.clone(), false).unwrap();
+        let mut cache_fused = PagedKvCache::new(1, 4, 32, 16, device.clone(), false).unwrap();
+
+        for step in 0..5 {
+            let x = Tensor::randn(0.0f32, 1.0, (1, hidden_size), &device).unwrap();
+            let block_id = step / 16;
+            let block_ids = vec![block_id];
+            let positions = vec![step];
+
+            let out_std = standard
+                .forward_decode(&x, &mut cache_std, 0, &block_ids, step, &positions)
+                .unwrap();
+            let out_fused = fused
+                .forward_decode(&x, &mut cache_fused, 0, &block_ids, step, &positions)
+                .unwrap();
+
+            let diff = (&out_std - &out_fused).unwrap().abs().unwrap();
+            let max_diff: f32 = diff.max_all().unwrap().to_scalar().unwrap();
+            assert!(
+                max_diff < 1e-4,
+                "fused decode should match paged at step {step}, max_diff={max_diff}"
+            );
         }
     }
 }

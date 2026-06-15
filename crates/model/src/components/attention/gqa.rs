@@ -222,6 +222,19 @@ impl GqaAttention {
         self.o_proj.forward(&attn_output)
     }
 
+    /// Prefill/decode attention: flash when `use_fused`, else tiled or paged matmul.
+    pub fn run_attention_fn(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
+        if self.config.use_fused {
+            return self.flash_attention_fn(q, k, v);
+        }
+        let tile_size = self.config.tile_size.unwrap_or(16);
+        if q.dims()[2] > tile_size {
+            self.tiled_attention_fn(q, k, v)
+        } else {
+            self.paged_attention_fn(q, k, v)
+        }
+    }
+
     fn apply_q_norm(&self, q: Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
         if let Some(ref q_norm) = self.q_norm {
             let q = q.transpose(1, 2)?;
