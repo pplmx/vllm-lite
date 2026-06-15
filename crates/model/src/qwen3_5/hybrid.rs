@@ -1,6 +1,6 @@
 #![allow(clippy::all, non_snake_case, dead_code, clippy::too_many_arguments)]
 use crate::components::positional::MRoPE;
-use crate::qwen3_5::gated_delta::{GatedDeltaConfig, GatedDeltaNet};
+use crate::qwen3_5::gated_delta::{GatedDeltaConfig, GatedDeltaNet, GatedDeltaState};
 use crate::paged_tensor::PagedKvCache;
 use crate::qwen3_config::Qwen3Config;
 use candle_core::{DType, Device, Module, Result as CandleResult, Tensor};
@@ -37,6 +37,27 @@ impl HybridBlock {
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
         match self {
             HybridBlock::Linear(b) => b.forward(x),
+            HybridBlock::Full(b) => b.forward(x),
+        }
+    }
+
+    pub fn forward_prefill(&self, x: &Tensor) -> CandleResult<(Tensor, Option<GatedDeltaState>)> {
+        match self {
+            HybridBlock::Linear(b) => {
+                let (out, state) = b.forward_prefill(x)?;
+                Ok((out, Some(state)))
+            }
+            HybridBlock::Full(b) => Ok((b.forward(x)?, None)),
+        }
+    }
+
+    pub fn forward_decode(
+        &self,
+        x: &Tensor,
+        state: &mut GatedDeltaState,
+    ) -> CandleResult<Tensor> {
+        match self {
+            HybridBlock::Linear(b) => b.forward_decode(x, state),
             HybridBlock::Full(b) => b.forward(x),
         }
     }
@@ -185,6 +206,14 @@ impl LinearAttentionBlock {
 
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
         self.gdn.forward(x)
+    }
+
+    pub fn forward_prefill(&self, x: &Tensor) -> CandleResult<(Tensor, GatedDeltaState)> {
+        self.gdn.forward_prefill(x)
+    }
+
+    pub fn forward_decode(&self, x: &Tensor, state: &mut GatedDeltaState) -> CandleResult<Tensor> {
+        self.gdn.forward_decode(x, state)
     }
 }
 
@@ -1122,6 +1151,45 @@ mod tests {
         let x = Tensor::randn(0.0f32, 1.0, (1, 6, 64), &device).unwrap();
         let out = block.forward(&x).unwrap();
         assert_eq!(out.dims(), x.dims());
+    }
+
+    #[test]
+    fn test_linear_attention_block_prefill_decode_parity() {
+        let device = Device::Cpu;
+        let block = LinearAttentionBlock::new(64, 8, 4, 2, VarBuilder::zeros(DType::F32, &device))
+            .unwrap();
+        let prefill_len = 6;
+        let decode_len = 2;
+        let total_len = prefill_len + decode_len;
+        let full_x = Tensor::randn(0.0f32, 1.0, (1, total_len, 64), &device).unwrap();
+        let x_prefill = full_x.narrow(1, 0, prefill_len).unwrap().contiguous().unwrap();
+
+        let (_prefill_out, mut state) = block.forward_prefill(&x_prefill).unwrap();
+        let mut decode_outs = Vec::new();
+        for t in 0..decode_len {
+            let token = full_x
+                .narrow(1, prefill_len + t, 1)
+                .unwrap()
+                .contiguous()
+                .unwrap();
+            decode_outs.push(block.forward_decode(&token, &mut state).unwrap());
+        }
+        let decode_cat = Tensor::cat(&decode_outs, 1).unwrap();
+        let full_out = block.forward(&full_x).unwrap();
+        let expected = full_out
+            .narrow(1, prefill_len, decode_len)
+            .unwrap()
+            .contiguous()
+            .unwrap();
+        let max_diff: f32 = (decode_cat - expected)
+            .unwrap()
+            .abs()
+            .unwrap()
+            .max_all()
+            .unwrap()
+            .to_scalar()
+            .unwrap();
+        assert!(max_diff < 1e-4, "linear block parity failed: {max_diff}");
     }
 
     #[test]
