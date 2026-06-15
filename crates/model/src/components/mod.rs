@@ -1,6 +1,7 @@
 pub mod attention;
 pub mod block;
 pub mod decoder_block;
+pub mod gated_delta;
 pub mod mlp;
 pub mod norm;
 pub mod positional;
@@ -16,6 +17,7 @@ pub use attention::{
 };
 pub use block::TransformerBlock;
 pub use decoder_block::{PagedDecoderBlock, RopeGqaDecoderBlock};
+pub use gated_delta::{GatedDeltaConfig, GatedDeltaNet, GatedDeltaState};
 pub use mlp::*;
 pub use norm::{LnLayerNorm, RmsNorm, layer_norm, rms_norm};
 pub use positional::*;

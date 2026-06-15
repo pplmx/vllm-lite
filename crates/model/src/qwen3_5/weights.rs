@@ -2,16 +2,16 @@
 
 use std::collections::HashMap;
 
+use crate::causal_lm::HybridLm;
 use crate::components::positional::MRoPE;
 use crate::qwen3_5::block::{FullAttentionBlock35, HybridBlock, LinearAttentionBlock};
-use crate::qwen3_5::config::LayerType;
-use crate::qwen3_5::model::Qwen35HybridModel;
+use crate::qwen3_5::config::{parse_layer_types, LayerType};
 use crate::qwen3_config::Qwen3Config;
 use candle_core::{Result as CandleResult, Tensor};
-use candle_nn::{Embedding, Linear};
+use candle_nn::{Embedding, LayerNorm, Linear};
 
 pub fn load_hybrid_weights(
-    model: &mut Qwen35HybridModel,
+    model: &mut HybridLm<HybridBlock, LayerNorm, Qwen3Config>,
     config: &Qwen3Config,
     weights: &HashMap<String, Tensor>,
 ) -> CandleResult<()> {
@@ -32,10 +32,10 @@ pub fn load_hybrid_weights(
     let num_layers = config.num_hidden_layers();
     let hidden_size = config.hidden_size();
     let rope = MRoPE::from_config(config);
+    let layer_types = parse_layer_types(config);
 
-    for i in 0..num_layers {
+    for (i, layer_type) in layer_types.iter().enumerate().take(num_layers) {
         let prefix = format!("model.layers.{}", i);
-        let layer_type = &model.layer_types[i];
 
         let layer = match layer_type {
             LayerType::LinearAttention => {
@@ -70,13 +70,13 @@ pub fn load_hybrid_weights(
 
     if let Some(w) = weights.get("model.norm.weight") {
         let bias = Tensor::zeros(w.dim(0).unwrap_or(hidden_size), w.dtype(), w.device())?;
-        model.norm = candle_nn::LayerNorm::new(w.clone(), bias, config.rms_norm_eps());
+        model.norm = LayerNorm::new(w.clone(), bias, config.rms_norm_eps());
     } else if let Some(w) = weights.get("model.language_model.norm.weight") {
         let bias = Tensor::zeros(w.dim(0).unwrap_or(hidden_size), w.dtype(), w.device())?;
-        model.norm = candle_nn::LayerNorm::new(w.clone(), bias, config.rms_norm_eps());
+        model.norm = LayerNorm::new(w.clone(), bias, config.rms_norm_eps());
     } else if let Some(w) = weights.get("model.final_layernorm.weight") {
         let bias = Tensor::zeros(w.dim(0).unwrap_or(hidden_size), w.dtype(), w.device())?;
-        model.norm = candle_nn::LayerNorm::new(w.clone(), bias, config.rms_norm_eps());
+        model.norm = LayerNorm::new(w.clone(), bias, config.rms_norm_eps());
     }
 
     let lm_head_key: Option<&str> = if weights.contains_key("lm_head.weight") {
