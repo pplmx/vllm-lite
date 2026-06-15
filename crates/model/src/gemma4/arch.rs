@@ -40,7 +40,7 @@ impl Architecture for Gemma4Architecture {
 
         matches!(
             model_type.to_lowercase().as_str(),
-            "gemma2" | "gemma3" | "gemma4"
+            "gemma2" | "gemma4"
         )
     }
 
@@ -82,7 +82,7 @@ mod tests {
     #[test]
     fn test_gemma4_architecture_detect() {
         let arch = Gemma4Architecture::new();
-        for model_type in ["gemma2", "gemma3", "gemma4"] {
+        for model_type in ["gemma2", "gemma4"] {
             let config = json!({"model_type": model_type});
             assert!(
                 arch.detect(&config),
@@ -95,7 +95,7 @@ mod tests {
     #[test]
     fn test_gemma4_architecture_detect_case_insensitive() {
         let arch = Gemma4Architecture::new();
-        for model_type in ["Gemma2", "GEMMA3", "Gemma4"] {
+        for model_type in ["Gemma2", "GEMMA4", "Gemma4"] {
             let config = json!({"model_type": model_type});
             assert!(
                 arch.detect(&config),
