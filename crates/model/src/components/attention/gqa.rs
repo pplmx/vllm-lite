@@ -4,7 +4,7 @@ use candle_core::{Module, Result, Tensor};
 use candle_nn::{LayerNorm, Linear};
 use tracing::trace;
 
-use super::{AttentionConfig, expand_kv, paged_attention, tiled_attention};
+use super::{AttentionConfig, GqaFlashAttention, expand_kv, paged_attention, tiled_attention};
 
 pub struct GqaAttention {
     q_proj: Linear,
@@ -137,14 +137,32 @@ impl GqaAttention {
         let q = self.apply_q_norm(q, batch_size, seq_len)?;
         let k = self.apply_k_norm(k, batch_size, seq_len)?;
 
+        let q = q.transpose(1, 2)?.contiguous()?;
+
+        if self.config.use_fused {
+            let k_heads = k.transpose(1, 2)?.contiguous()?;
+            let v_heads = v.transpose(1, 2)?.contiguous()?;
+            let flash = GqaFlashAttention::new(
+                self.num_heads,
+                self.num_kv_heads,
+                self.head_dim,
+                false,
+            );
+            let attn_output = flash.forward(&q, &k_heads, &v_heads)?;
+            let attn_output = attn_output.transpose(1, 2)?;
+            let attn_output =
+                attn_output.reshape((batch_size, seq_len, self.num_heads * self.head_dim))?;
+            let o = self.o_proj.forward(&attn_output)?;
+            trace!(output_shape = ?o.dims(), "GqaAttention fused forward completed");
+            return Ok(o);
+        }
+
         let k = self.expand_kv(&k, self.num_heads, self.num_kv_heads)?;
         let v = self.expand_kv(&v, self.num_heads, self.num_kv_heads)?;
 
-        let q = q.transpose(1, 2)?;
         let k = k.transpose(1, 2)?;
         let v = v.transpose(1, 2)?;
 
-        let q = q.contiguous()?;
         let k_t = k.transpose(2, 3)?.contiguous()?;
         let qk = Tensor::matmul(&q, &k_t)?;
 
@@ -186,6 +204,22 @@ impl GqaAttention {
         let attn_output = tiled_attention(q, k, v, self.num_heads, tile_size)?;
         let o = self.o_proj.forward(&attn_output)?;
         Ok(o)
+    }
+
+    pub fn flash_attention_fn(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
+        let flash = GqaFlashAttention::new(
+            self.num_heads,
+            self.num_kv_heads,
+            self.head_dim,
+            true,
+        );
+        let attn_output = flash.forward(q, k, v)?;
+        let batch_size = q.dims()[0];
+        let seq_len = q.dims()[2];
+        let attn_output = attn_output.transpose(1, 2)?;
+        let attn_output =
+            attn_output.reshape((batch_size, seq_len, self.num_heads * self.head_dim))?;
+        self.o_proj.forward(&attn_output)
     }
 
     fn apply_q_norm(&self, q: Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
@@ -343,6 +377,72 @@ mod tests {
         let output = attention.forward(&x).unwrap();
 
         assert_eq!(output.dims(), &[batch_size, seq_len, hidden_size]);
+    }
+
+    #[test]
+    fn test_gqa_attention_fused_matches_standard() {
+        let device = candle_core::Device::Cpu;
+        let num_heads = 8;
+        let num_kv_heads = 4;
+        let head_dim = 32;
+        let batch_size = 1;
+        let seq_len = 6;
+        let hidden_size = num_heads * head_dim;
+
+        let q_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device).unwrap();
+        let k_w =
+            Tensor::randn(0.0f32, 1.0, (num_kv_heads * head_dim, hidden_size), &device).unwrap();
+        let v_w =
+            Tensor::randn(0.0f32, 1.0, (num_kv_heads * head_dim, hidden_size), &device).unwrap();
+        let o_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device).unwrap();
+
+        let standard = GqaAttention::new_with_weights(
+            hidden_size,
+            num_heads,
+            num_kv_heads,
+            head_dim,
+            q_w.clone(),
+            k_w.clone(),
+            v_w.clone(),
+            o_w.clone(),
+            AttentionConfig {
+                use_fused: false,
+                ..Default::default()
+            },
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+        let fused = GqaAttention::new_with_weights(
+            hidden_size,
+            num_heads,
+            num_kv_heads,
+            head_dim,
+            q_w,
+            k_w,
+            v_w,
+            o_w,
+            AttentionConfig {
+                use_fused: true,
+                ..Default::default()
+            },
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let x = Tensor::randn(0.0f32, 1.0, (batch_size, seq_len, hidden_size), &device).unwrap();
+        let out_standard = standard.forward(&x).unwrap();
+        let out_fused = fused.forward(&x).unwrap();
+
+        let diff = (&out_standard - &out_fused).unwrap().abs().unwrap();
+        let max_diff: f32 = diff.max_all().unwrap().to_scalar().unwrap();
+        assert!(
+            max_diff < 1e-4,
+            "fused GQA path should match standard, max_diff={max_diff}"
+        );
     }
 
     #[test]
