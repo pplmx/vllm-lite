@@ -2,7 +2,6 @@ use super::stage::{PipelineStage, StageInput, StageOutput};
 use candle_core::Result;
 use std::sync::Arc;
 
-#[allow(dead_code)]
 pub struct PipelineParallel {
     stages: Vec<Arc<dyn PipelineStage>>,
     config: PipelineParallelConfig,
@@ -41,6 +40,10 @@ impl PipelineParallel {
 
     pub fn num_stages(&self) -> usize {
         self.stages.len()
+    }
+
+    pub fn config(&self) -> &PipelineParallelConfig {
+        &self.config
     }
 
     pub fn is_pipeline_parallel(&self) -> bool {
@@ -84,10 +87,13 @@ impl PipelineParallel {
         }
 
         let mut all_outputs = Vec::with_capacity(inputs.len());
+        let chunk_size = self.config.num_microbatches.max(1);
 
-        for input in inputs {
-            let output = self.forward(input)?;
-            all_outputs.push(output);
+        for chunk in inputs.chunks(chunk_size) {
+            for input in chunk {
+                let output = self.forward(input.clone())?;
+                all_outputs.push(output);
+            }
         }
 
         Ok(all_outputs)

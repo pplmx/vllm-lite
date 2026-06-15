@@ -114,7 +114,6 @@ pub struct ScaledDotProductAttention {
 pub struct FlashAttentionV2 {
     scale: f32,
     block_size: usize,
-    #[allow(dead_code)]
     num_heads: usize,
     head_dim: usize,
 }
@@ -157,6 +156,7 @@ impl FlashAttentionV2 {
     fn forward_flash_v2(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let (batch_size, num_heads_q, _seq_len_q, _head_dim) = q.dims4()?;
         let (_, num_heads_k, _seq_len_k, _) = k.dims4()?;
+        debug_assert_eq!(num_heads_q, self.num_heads);
 
         let mut outputs = Vec::with_capacity(batch_size);
 
