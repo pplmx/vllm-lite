@@ -69,6 +69,11 @@ impl ArchitectureRegistry {
 
 pub static ARCHITECTURE_REGISTRY: Lazy<ArchitectureRegistry> = Lazy::new(ArchitectureRegistry::new);
 
+/// Register all known architectures for config detection and model creation.
+///
+/// Stub architectures (Gemma3, Llama4, Phi4, MistralSmall) remain registered so
+/// `detect()` works, but `ModelLoader` rejects them unless `--allow-stub` is set
+/// (see Phase 4.4 Option C in `.planning/MODEL-ARCHITECTURE-REFACTOR.md`).
 pub fn register_all_archs(registry: &ArchitectureRegistry) {
     crate::llama::register::register(registry);
     crate::mistral::register::register(registry);
