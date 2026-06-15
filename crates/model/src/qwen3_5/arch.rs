@@ -10,7 +10,7 @@ use crate::components::TransformerBlock;
 use crate::config::ModelConfig;
 use crate::qwen3_config::Qwen3Config;
 
-use super::hybrid::Qwen35HybridModel;
+use super::model::Qwen35HybridModel;
 
 pub fn remap_qwen35_weight_keys(weights: HashMap<String, Tensor>) -> HashMap<String, Tensor> {
     let mut remapped = HashMap::new();

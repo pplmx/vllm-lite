@@ -1,10 +1,15 @@
 pub mod arch;
 pub mod attention35;
+pub mod block;
+pub mod config;
 pub mod gated_delta;
 pub mod hybrid;
+pub mod model;
 pub mod register;
 pub mod ssm;
+pub mod weights;
 
 pub use attention35::Attention35WithRoPE;
+pub use config::{LayerType, parse_layer_types};
 pub use gated_delta::{GatedDeltaNet, GatedDeltaState};
 pub use hybrid::Qwen35HybridModel;
