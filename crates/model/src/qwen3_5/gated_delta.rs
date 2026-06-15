@@ -10,6 +10,7 @@ pub struct GatedDeltaConfig {
     pub num_v_heads: usize,
     pub key_head_dim: usize,
     pub value_head_dim: usize,
+    pub conv_kernel_size: usize,
 }
 
 impl GatedDeltaConfig {
@@ -23,6 +24,43 @@ impl GatedDeltaConfig {
 
     pub fn qkv_proj_dim(&self) -> usize {
         2 * self.key_dim() + self.value_dim()
+    }
+
+    pub fn conv_state_width(&self) -> usize {
+        self.conv_kernel_size.saturating_sub(1)
+    }
+}
+
+/// Fixed-size recurrent + causal conv cache for GDN decode.
+#[derive(Clone, Debug)]
+pub struct GatedDeltaState {
+    pub recurrent: Tensor,
+    pub conv: Tensor,
+}
+
+impl GatedDeltaState {
+    pub fn new(
+        batch: usize,
+        config: &GatedDeltaConfig,
+        device: &candle_core::Device,
+    ) -> CandleResult<Self> {
+        Ok(Self {
+            recurrent: Tensor::zeros(
+                (
+                    batch,
+                    config.num_v_heads,
+                    config.key_head_dim,
+                    config.value_head_dim,
+                ),
+                DType::F32,
+                device,
+            )?,
+            conv: Tensor::zeros(
+                (batch, config.qkv_proj_dim(), config.conv_state_width()),
+                DType::F32,
+                device,
+            )?,
+        })
     }
 }
 
@@ -62,6 +100,28 @@ fn repeat_kv_heads(kv: &Tensor, num_v_heads: usize) -> CandleResult<Tensor> {
     kv.repeat(&[1, 1, repeat, 1])
 }
 
+fn mixed_qkv_flat(q: &Tensor, k: &Tensor, v: &Tensor) -> CandleResult<Tensor> {
+    let q_flat = q.flatten(2, 3)?;
+    let k_flat = k.flatten(2, 3)?;
+    let v_flat = v.flatten(2, 3)?;
+    Tensor::cat(&[&q_flat, &k_flat, &v_flat], 2)
+}
+
+fn split_mixed_qkv(
+    mixed: &Tensor,
+    q_shape: &[usize],
+    k_shape: &[usize],
+    v_shape: &[usize],
+) -> CandleResult<(Tensor, Tensor, Tensor)> {
+    let q_dim = q_shape[2] * q_shape[3];
+    let k_dim = k_shape[2] * k_shape[3];
+    let v_dim = v_shape[2] * v_shape[3];
+    let q_out = mixed.narrow(2, 0, q_dim)?.reshape(q_shape)?;
+    let k_out = mixed.narrow(2, q_dim, k_dim)?.reshape(k_shape)?;
+    let v_out = mixed.narrow(2, q_dim + k_dim, v_dim)?.reshape(v_shape)?;
+    Ok((q_out, k_out, v_out))
+}
+
 fn apply_causal_conv(
     conv: &Conv1d,
     q: &Tensor,
@@ -69,10 +129,7 @@ fn apply_causal_conv(
     v: &Tensor,
 ) -> CandleResult<(Tensor, Tensor, Tensor)> {
     let seq_len = q.dims()[1];
-    let q_flat = q.flatten(2, 3)?;
-    let k_flat = k.flatten(2, 3)?;
-    let v_flat = v.flatten(2, 3)?;
-    let mixed = Tensor::cat(&[&q_flat, &k_flat, &v_flat], 2)?;
+    let mixed = mixed_qkv_flat(q, k, v)?;
     let mixed = mixed.transpose(1, 2)?;
     let mixed = conv.forward(&mixed)?;
     let mixed = mixed.transpose(1, 2)?;
@@ -82,17 +139,49 @@ fn apply_causal_conv(
     let start = out_len.saturating_sub(seq_len);
     let mixed = mixed.narrow(1, start, seq_len)?;
 
-    let q_dim = q_flat.dims()[2];
-    let k_dim = k_flat.dims()[2];
-    let v_dim = v_flat.dims()[2];
+    split_mixed_qkv(&mixed, q.dims(), k.dims(), v.dims())
+}
 
-    let q_out = mixed.narrow(2, 0, q_dim)?.reshape(q.dims())?;
-    let k_out = mixed.narrow(2, q_dim, k_dim)?.reshape(k.dims())?;
-    let v_out = mixed
-        .narrow(2, q_dim + k_dim, v_dim)?
-        .reshape(v.dims())?;
+fn apply_causal_conv_incremental(
+    conv: &Conv1d,
+    q: &Tensor,
+    k: &Tensor,
+    v: &Tensor,
+    conv_state: &Tensor,
+) -> CandleResult<(Tensor, Tensor, Tensor, Tensor)> {
+    let mixed = mixed_qkv_flat(q, k, v)?;
+    let frame = mixed.transpose(1, 2)?;
+    let window = Tensor::cat(&[conv_state, &frame], 2)?;
+    let conv_out = conv.forward(&window)?;
+    let last = conv_out.narrow(2, window.dims()[2] - 1, 1)?;
+    let activated = candle_nn::ops::silu(&last.transpose(1, 2)?)?;
+    let (q_out, k_out, v_out) = split_mixed_qkv(&activated, q.dims(), k.dims(), v.dims())?;
+    let state_width = conv_state.dims()[2];
+    let new_state = window.narrow(2, window.dims()[2] - state_width, state_width)?;
+    Ok((q_out, k_out, v_out, new_state))
+}
 
-    Ok((q_out, k_out, v_out))
+fn update_conv_state_from_prefill(
+    q: &Tensor,
+    k: &Tensor,
+    v: &Tensor,
+    config: &GatedDeltaConfig,
+) -> CandleResult<Tensor> {
+    let mixed = mixed_qkv_flat(q, k, v)?;
+    let mixed = mixed.transpose(1, 2)?;
+    let seq_len = mixed.dims()[2];
+    let width = config.conv_state_width();
+    if seq_len >= width {
+        Ok(mixed.narrow(2, seq_len - width, width)?)
+    } else {
+        let pad = Tensor::zeros(
+            (mixed.dims()[0], mixed.dims()[1], width - seq_len),
+            mixed.dtype(),
+            mixed.device(),
+        )?;
+        let padded = Tensor::cat(&[&pad, &mixed], 2)?;
+        Ok(padded)
+    }
 }
 
 fn split_qkv(qkv: &Tensor, config: &GatedDeltaConfig) -> CandleResult<(Tensor, Tensor, Tensor)> {
@@ -117,6 +206,36 @@ fn compute_decay(g_alpha: &Tensor, a_log: &Tensor, dt_bias: &Tensor) -> CandleRe
     alpha.exp()
 }
 
+/// Single recurrent GDN step. `q/k/v/g/beta` are `(batch, num_heads, ...)`.
+pub fn gated_delta_step(
+    q_t: &Tensor,
+    k_t: &Tensor,
+    v_t: &Tensor,
+    g_t: &Tensor,
+    beta_t: &Tensor,
+    state: &Tensor,
+) -> CandleResult<(Tensor, Tensor)> {
+    let (batch, num_heads, _value_head_dim) = v_t.dims3()?;
+    let key_head_dim = q_t.dims()[2];
+    let scale = 1.0f32 / (key_head_dim as f32).sqrt();
+
+    let g_4d = g_t.reshape((batch, num_heads, 1, 1))?;
+    let mut next_state = state.broadcast_mul(&g_4d)?;
+
+    let k_exp = k_t.unsqueeze(3)?;
+    let kv_mem = next_state.broadcast_mul(&k_exp)?.sum(2)?;
+    let delta = (v_t - kv_mem)?.broadcast_mul(&beta_t.reshape((batch, num_heads, 1))?)?;
+
+    let k_outer = k_t.unsqueeze(3)?;
+    let delta_outer = delta.unsqueeze(2)?;
+    next_state = (next_state + k_outer.broadcast_mul(&delta_outer)?)?;
+
+    let q_exp = q_t.unsqueeze(3)?;
+    let out_t = next_state.broadcast_mul(&q_exp)?.sum(2)?;
+    let out_t = out_t.mul(&Tensor::new(scale, q_t.device())?.broadcast_as(out_t.dims())?)?;
+    Ok((out_t, next_state))
+}
+
 /// Recurrent gated delta rule over a sequence (prefill-style sequential scan).
 pub fn gated_delta_recurrent(
     q: &Tensor,
@@ -124,13 +243,29 @@ pub fn gated_delta_recurrent(
     v: &Tensor,
     g: &Tensor,
     beta: &Tensor,
-) -> CandleResult<Tensor> {
+) -> CandleResult<(Tensor, Tensor)> {
+    gated_delta_recurrent_with_state(q, k, v, g, beta, None)
+}
+
+pub fn gated_delta_recurrent_with_state(
+    q: &Tensor,
+    k: &Tensor,
+    v: &Tensor,
+    g: &Tensor,
+    beta: &Tensor,
+    initial_state: Option<&Tensor>,
+) -> CandleResult<(Tensor, Tensor)> {
     let (batch, seq_len, num_heads, value_head_dim) = v.dims4()?;
     let key_head_dim = q.dims()[3];
-    let scale = 1.0f32 / (key_head_dim as f32).sqrt();
 
-    let mut state =
-        Tensor::zeros((batch, num_heads, key_head_dim, value_head_dim), DType::F32, q.device())?;
+    let mut state = match initial_state {
+        Some(s) => s.clone(),
+        None => Tensor::zeros(
+            (batch, num_heads, key_head_dim, value_head_dim),
+            DType::F32,
+            q.device(),
+        )?,
+    };
     let mut outputs = Vec::with_capacity(seq_len);
 
     for t in 0..seq_len {
@@ -139,26 +274,12 @@ pub fn gated_delta_recurrent(
         let v_t = v.narrow(1, t, 1)?.squeeze(1)?;
         let g_t = g.narrow(1, t, 1)?.squeeze(1)?;
         let beta_t = beta.narrow(1, t, 1)?.squeeze(1)?;
-
-        let g_4d = g_t.reshape((batch, num_heads, 1, 1))?;
-        state = state.broadcast_mul(&g_4d)?;
-
-        let k_exp = k_t.unsqueeze(3)?;
-        let kv_mem = state.broadcast_mul(&k_exp)?.sum(2)?;
-
-        let delta = (v_t - kv_mem)?.broadcast_mul(&beta_t.reshape((batch, num_heads, 1))?)?;
-
-        let k_outer = k_t.unsqueeze(3)?;
-        let delta_outer = delta.unsqueeze(2)?;
-        state = (state + k_outer.broadcast_mul(&delta_outer)?)?;
-
-        let q_exp = q_t.unsqueeze(3)?;
-        let out_t = state.broadcast_mul(&q_exp)?.sum(2)?;
-        let out_t = out_t.mul(&Tensor::new(scale, q.device())?.broadcast_as(out_t.dims())?)?;
+        let (out_t, next_state) = gated_delta_step(&q_t, &k_t, &v_t, &g_t, &beta_t, &state)?;
         outputs.push(out_t.unsqueeze(1)?);
+        state = next_state;
     }
 
-    Tensor::cat(&outputs, 1)
+    Ok((Tensor::cat(&outputs, 1)?, state))
 }
 
 impl GatedDeltaNet {
@@ -190,6 +311,10 @@ impl GatedDeltaNet {
     }
 
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
+        self.forward_prefill(x).map(|(out, _)| out)
+    }
+
+    pub fn forward_prefill(&self, x: &Tensor) -> CandleResult<(Tensor, GatedDeltaState)> {
         let residual = x.clone();
         let (batch, seq_len, _hidden) = x.dims3()?;
 
@@ -197,7 +322,9 @@ impl GatedDeltaNet {
             let qkv = self.in_proj_qkv.forward(x)?;
             let gated = candle_nn::ops::silu(&qkv)?;
             let output = self.out_proj.forward(&gated)?;
-            return output.add(&residual);
+            let output = output.add(&residual)?;
+            let state = GatedDeltaState::new(batch, &self.config, x.device())?;
+            return Ok((output, state));
         }
 
         let qkv = self.in_proj_qkv.forward(x)?;
@@ -205,26 +332,88 @@ impl GatedDeltaNet {
         let a = self.in_proj_a.forward(x)?;
         let b = self.in_proj_b.forward(x)?;
 
-        let (mut q, mut k, mut v) = split_qkv(&qkv, &self.config)?;
-        (q, k, v) = apply_causal_conv(&self.conv, &q, &k, &v)?;
+        let (q_raw, k_raw, v_raw) = split_qkv(&qkv, &self.config)?;
+        let conv = update_conv_state_from_prefill(&q_raw, &k_raw, &v_raw, &self.config)?;
 
+        let (mut q, mut k, v) = apply_causal_conv(&self.conv, &q_raw, &k_raw, &v_raw)?;
         k = repeat_kv_heads(&k, self.config.num_v_heads)?;
         q = repeat_kv_heads(&q, self.config.num_v_heads)?;
-
         q = l2_normalize(&q, 1e-6)?;
         k = l2_normalize(&k, 1e-6)?;
 
         let g = compute_decay(&a, &self.a_log, &self.dt_bias)?;
         let beta = candle_nn::ops::sigmoid(&b)?;
 
-        let core_out = gated_delta_recurrent(&q, &k, &v, &g, &beta)?;
+        let (core_out, recurrent) = gated_delta_recurrent(&q, &k, &v, &g, &beta)?;
+        let output = self.finalize_output(&core_out, &z, &residual, batch, seq_len)?;
 
+        Ok((
+            output,
+            GatedDeltaState {
+                recurrent,
+                conv,
+            },
+        ))
+    }
+
+    pub fn forward_decode(&self, x: &Tensor, state: &mut GatedDeltaState) -> CandleResult<Tensor> {
+        let residual = x.clone();
+        let (batch, seq_len, _hidden) = x.dims3()?;
+        if seq_len != 1 {
+            return Err(candle_core::Error::msg(format!(
+                "GDN decode expects seq_len=1, got {seq_len}"
+            )));
+        }
+
+        if self.config.conv_state_width() == 0 {
+            return self.forward(x);
+        }
+
+        let qkv = self.in_proj_qkv.forward(x)?;
+        let z = self.in_proj_z.forward(x)?;
+        let a = self.in_proj_a.forward(x)?;
+        let b = self.in_proj_b.forward(x)?;
+
+        let (q_raw, k_raw, v_raw) = split_qkv(&qkv, &self.config)?;
+        let (q, k, v, conv) =
+            apply_causal_conv_incremental(&self.conv, &q_raw, &k_raw, &v_raw, &state.conv)?;
+
+        let mut q = repeat_kv_heads(&q, self.config.num_v_heads)?;
+        let mut k = repeat_kv_heads(&k, self.config.num_v_heads)?;
+        q = l2_normalize(&q, 1e-6)?;
+        k = l2_normalize(&k, 1e-6)?;
+
+        let g = compute_decay(&a, &self.a_log, &self.dt_bias)?;
+        let beta = candle_nn::ops::sigmoid(&b)?;
+
+        let q_t = q.squeeze(1)?;
+        let k_t = k.squeeze(1)?;
+        let v_t = v.squeeze(1)?;
+        let g_t = g.squeeze(1)?;
+        let beta_t = beta.squeeze(1)?;
+
+        let (core_t, recurrent) =
+            gated_delta_step(&q_t, &k_t, &v_t, &g_t, &beta_t, &state.recurrent)?;
+        state.recurrent = recurrent;
+        state.conv = conv;
+
+        let core_out = core_t.unsqueeze(1)?;
+        self.finalize_output(&core_out, &z, &residual, batch, 1)
+    }
+
+    fn finalize_output(
+        &self,
+        core_out: &Tensor,
+        z: &Tensor,
+        residual: &Tensor,
+        batch: usize,
+        seq_len: usize,
+    ) -> CandleResult<Tensor> {
         let core_flat = core_out.reshape((batch, seq_len, self.config.value_dim()))?;
-        let z_gate = candle_nn::ops::silu(&z)?;
+        let z_gate = candle_nn::ops::silu(z)?;
         let gated = core_flat.broadcast_mul(&z_gate)?;
-
         let output = self.out_proj.forward(&gated)?;
-        let output = output.add(&residual)?;
+        let output = output.add(residual)?;
         self.norm.forward(&output)
     }
 
@@ -249,6 +438,7 @@ mod tests {
             num_v_heads: 4,
             key_head_dim: 8,
             value_head_dim: 8,
+            conv_kernel_size: 4,
         }
     }
 
@@ -320,7 +510,7 @@ mod tests {
         let beta = Tensor::full(0.5f32, (batch, seq, heads), &device).unwrap();
 
         let out = gated_delta_recurrent(&q, &k, &v, &g, &beta).unwrap();
-        assert_eq!(out.dims(), &[batch, seq, heads, dv]);
+        assert_eq!(out.0.dims(), &[batch, seq, heads, dv]);
     }
 
     #[test]
@@ -343,5 +533,48 @@ mod tests {
         let vals: Vec<f32> = beta.flatten_all().unwrap().to_vec1().unwrap();
         assert!(vals[0] > 0.99);
         assert!(vals[1] < 0.01);
+    }
+
+    #[test]
+    fn test_prefill_decode_parity() {
+        let gdn = build_tiny_gdn();
+        let device = Device::Cpu;
+        let batch = 1;
+        let hidden = 64;
+        let prefill_len = 6;
+        let decode_len = 3;
+        let total_len = prefill_len + decode_len;
+
+        let full_x = Tensor::randn(0.0f32, 1.0, (batch, total_len, hidden), &device).unwrap();
+        let x_prefill = full_x.narrow(1, 0, prefill_len).unwrap().contiguous().unwrap();
+
+        let (prefill_out, mut state) = gdn.forward_prefill(&x_prefill).unwrap();
+        assert_eq!(prefill_out.dims(), x_prefill.dims());
+
+        let mut decode_outs = Vec::new();
+        for t in 0..decode_len {
+            let token = full_x
+                .narrow(1, prefill_len + t, 1)
+                .unwrap()
+                .contiguous()
+                .unwrap();
+            let out = gdn.forward_decode(&token, &mut state).unwrap();
+            decode_outs.push(out);
+        }
+        let decode_cat = Tensor::cat(&decode_outs, 1).unwrap();
+
+        let full_out = gdn.forward(&full_x).unwrap();
+        let expected = full_out
+            .narrow(1, prefill_len, decode_len)
+            .unwrap()
+            .contiguous()
+            .unwrap();
+
+        let diff = (decode_cat - expected).unwrap().abs().unwrap();
+        let max_diff: f32 = diff.max_all().unwrap().to_scalar().unwrap();
+        assert!(
+            max_diff < 1e-4,
+            "prefill+decode parity failed: max_diff={max_diff}"
+        );
     }
 }

@@ -101,6 +101,7 @@ impl LinearAttentionBlock {
             num_v_heads,
             key_head_dim,
             value_head_dim,
+            conv_kernel_size: d_conv,
         };
 
         let conv_cfg = candle_nn::Conv1dConfig {
@@ -606,12 +607,14 @@ impl LinearAttentionBlock {
         let key_dim = (qkv_dim - value_dim) / 2;
         let key_head_dim = value_head_dim;
         let num_k_heads = key_dim / key_head_dim;
+        let conv_kernel_size = conv_w.dims().get(2).copied().unwrap_or(4);
 
         let config = GatedDeltaConfig {
             num_k_heads,
             num_v_heads,
             key_head_dim,
             value_head_dim,
+            conv_kernel_size,
         };
 
         let conv_in = conv_w.dim(1).unwrap_or(config.qkv_proj_dim());
