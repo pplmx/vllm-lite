@@ -343,6 +343,7 @@ mod tests {
             num_experts: Some(4),
             top_k_experts: Some(2),
             expert_intermediate_size: Some(128),
+            has_qk_norm: false,
         }
     }
 

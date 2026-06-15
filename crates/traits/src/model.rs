@@ -56,38 +56,15 @@ pub trait ModelBackend: Send + Sync {
     #[cfg(feature = "candle")]
     fn forward_with_cache(
         &mut self,
-        input_tokens: &[TokenId],
-        num_computed: usize,
-        kv_block_ids: &[usize],
-        positions: &[usize],
-        is_prefill: bool,
+        _input_tokens: &[TokenId],
+        _num_computed: usize,
+        _kv_block_ids: &[usize],
+        _positions: &[usize],
+        _is_prefill: bool,
     ) -> Result<(Tensor, usize)> {
-        let seq_id: SeqId = 1;
-        let tokens = vec![input_tokens.to_vec()];
-        let pos = vec![positions.to_vec()];
-        let blocks = vec![kv_block_ids.to_vec()];
-        let num_computed = vec![num_computed];
-        let is_prefill = vec![is_prefill];
-
-        let output = self.forward(
-            &[seq_id],
-            &tokens,
-            &pos,
-            &blocks,
-            &num_computed,
-            &is_prefill,
-        )?;
-
-        if let Some(&next_token) = output.next_tokens.first() {
-            let logits = Tensor::zeros(
-                (1, 1, self.vocab_size()),
-                candle_core::DType::F32,
-                &candle_core::Device::Cpu,
-            )?;
-            Ok((logits, next_token as usize))
-        } else {
-            Err(ModelError::new("No output token"))
-        }
+        Err(ModelError::new(
+            "forward_with_cache not implemented for this model backend",
+        ))
     }
 
     #[cfg(feature = "candle")]

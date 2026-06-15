@@ -118,6 +118,52 @@ pub fn run_decoder_layers<L: PagedDecoderBlock>(
     run_layers(layers, hidden, &mut ctx)
 }
 
+/// Mean-pool hidden states after a full prefill pass through decoder layers.
+#[allow(clippy::too_many_arguments)]
+pub fn embed_with_paged_layers<B: DecoderLayer>(
+    embed_tokens: &Embedding,
+    layers: &[B],
+    norm: &impl Module,
+    device: &Device,
+    hidden_size: usize,
+    kv_cache: &mut PagedKvCache,
+    input_tokens: &[Vec<TokenId>],
+    positions: &[Vec<usize>],
+) -> Result<Vec<Vec<f32>>> {
+    const EMBED_BLOCK: [usize; 1] = [0];
+    let mut embeddings = Vec::with_capacity(input_tokens.len());
+
+    for (i, tokens) in input_tokens.iter().enumerate() {
+        if tokens.is_empty() {
+            embeddings.push(vec![0.0; hidden_size]);
+            continue;
+        }
+
+        let positions = if i < positions.len() && !positions[i].is_empty() {
+            positions[i].clone()
+        } else {
+            (0..tokens.len()).collect()
+        };
+
+        let hidden = embed_sequence(embed_tokens, tokens, device, true)?;
+        let mut ctx = LayerCtx {
+            kv_cache,
+            block_ids: &EMBED_BLOCK,
+            positions: &positions,
+            num_computed_tokens: 0,
+            is_prefill: true,
+            aux: None,
+        };
+        let hidden = run_layers(layers, hidden, &mut ctx)?;
+        let hidden = map_candle(norm.forward(&hidden))?;
+        let hidden = map_candle(hidden.squeeze(0))?;
+        let pooled = map_candle(hidden.mean(0)?.flatten_all()?.to_vec1::<f32>())?;
+        embeddings.push(pooled);
+    }
+
+    Ok(embeddings)
+}
+
 /// Full causal-LM forward with embedding, decoder stack, final norm, and LM head.
 #[allow(clippy::too_many_arguments)]
 pub fn forward_with_paged_kv<L, Norm, Head>(

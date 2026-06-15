@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use super::{
-    forward_batch, forward_with_paged_kv, greedy_sample_token, logits_to_vector,
-    mean_pool_embeddings,
+    embed_sequence, embed_with_paged_layers, forward_batch, forward_with_paged_kv,
+    greedy_sample_token, logits_to_vector, map_candle, mean_pool_embeddings, run_layers_upto,
+    LayerCtx,
 };
 use crate::components::decoder_block::PagedDecoderBlock;
 use crate::components::{LnLayerNorm, RmsNorm};
@@ -21,6 +22,7 @@ pub struct CausalLm<B, Norm, Head> {
     lm_head: Head,
     kv_cache: PagedKvCache,
     device: Device,
+    embed_through_layers: bool,
 }
 
 impl<B, Norm, Head> CausalLm<B, Norm, Head>
@@ -29,6 +31,11 @@ where
     Norm: Module,
     Head: Module,
 {
+    pub fn with_embed_through_layers(mut self, enabled: bool) -> Self {
+        self.embed_through_layers = enabled;
+        self
+    }
+
     pub fn forward_with_cache(
         &mut self,
         tokens: &[TokenId],
@@ -105,6 +112,7 @@ where
             lm_head,
             kv_cache,
             device,
+            embed_through_layers: false,
         })
     }
 
@@ -165,6 +173,7 @@ where
             lm_head,
             kv_cache,
             device,
+            embed_through_layers: false,
         })
     }
 }
@@ -219,6 +228,7 @@ where
             lm_head,
             kv_cache,
             device,
+            embed_through_layers: false,
         })
     }
 
@@ -274,6 +284,7 @@ where
             lm_head,
             kv_cache,
             device,
+            embed_through_layers: false,
         })
     }
 }
@@ -284,6 +295,23 @@ where
     Norm: Module + Send + Sync,
     Head: Module + Send + Sync,
 {
+    fn forward_with_cache(
+        &mut self,
+        input_tokens: &[TokenId],
+        num_computed: usize,
+        kv_block_ids: &[usize],
+        positions: &[usize],
+        is_prefill: bool,
+    ) -> Result<(Tensor, usize)> {
+        self.forward_with_cache(
+            input_tokens,
+            num_computed,
+            kv_block_ids,
+            positions,
+            is_prefill,
+        )
+    }
+
     fn forward(
         &mut self,
         seq_ids: &[SeqId],
@@ -331,19 +359,32 @@ where
     fn embed(
         &mut self,
         input_tokens: &[Vec<TokenId>],
-        _positions: &[Vec<usize>],
+        positions: &[Vec<usize>],
     ) -> Result<Vec<Vec<f32>>> {
-        input_tokens
-            .iter()
-            .map(|tokens| {
-                mean_pool_embeddings(
-                    &self.embed_tokens,
-                    tokens,
-                    &self.device,
-                    self.config.hidden_size,
-                )
-            })
-            .collect()
+        if self.embed_through_layers {
+            embed_with_paged_layers(
+                &self.embed_tokens,
+                &self.layers,
+                &self.norm,
+                &self.device,
+                self.config.hidden_size,
+                &mut self.kv_cache,
+                input_tokens,
+                positions,
+            )
+        } else {
+            input_tokens
+                .iter()
+                .map(|tokens| {
+                    mean_pool_embeddings(
+                        &self.embed_tokens,
+                        tokens,
+                        &self.device,
+                        self.config.hidden_size,
+                    )
+                })
+                .collect()
+        }
     }
 
     fn vocab_size(&self) -> usize {
@@ -356,6 +397,38 @@ where
 
     fn num_heads(&self) -> usize {
         self.config.num_heads
+    }
+
+    fn forward_to_layer(
+        &mut self,
+        seq_ids: &[SeqId],
+        input_tokens: &[Vec<TokenId>],
+        positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
+        upto_layer: usize,
+    ) -> Result<BatchOutput> {
+        forward_batch(seq_ids, is_prefill, |i, prefill| {
+            let tokens = &input_tokens[i];
+            if tokens.is_empty() {
+                return Ok(0);
+            }
+
+            let hidden = embed_sequence(&self.embed_tokens, tokens, &self.device, prefill)?;
+            let mut ctx = LayerCtx {
+                kv_cache: &mut self.kv_cache,
+                block_ids: &kv_block_ids[i],
+                positions: &positions[i],
+                num_computed_tokens: num_computed_tokens[i],
+                is_prefill: prefill,
+                aux: None,
+            };
+            let hidden = run_layers_upto(&self.layers, hidden, &mut ctx, upto_layer)?;
+            let hidden = map_candle(self.norm.forward(&hidden))?;
+            let logits = map_candle(self.lm_head.forward(&hidden))?;
+            greedy_sample_token(&logits, prefill)
+        })
     }
 }
 
@@ -371,6 +444,8 @@ fn load_lm_head(
         let lm_weight = weights
             .get(lm_key)
             .cloned()
+            .or_else(|| weights.get("output.weight").cloned())
+            .or_else(|| weights.get("model.lm_head.weight").cloned())
             .or_else(|| weights.get("model.embed_tokens.weight").cloned())
             .ok_or_else(|| candle_core::Error::msg("Missing lm_head.weight"))?;
         Ok(Linear::new(lm_weight, None))
