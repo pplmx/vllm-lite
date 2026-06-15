@@ -1,4 +1,7 @@
 //! Qwen3 token-generation and server-flow simulation tests.
+//!
+//! Tests that call `load_model()` are `#[ignore]` by default — run `just nextest-checkpoint`.
+//! Tokenizer-only tests (no model load) stay in the default `just nextest` suite.
 
 mod support;
 
@@ -112,6 +115,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
 
     fn test_qwen3_partial_prefill_simulation() {
         let mut model = support::qwen3::Qwen3Fixture::cpu()
@@ -210,6 +214,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
 
     fn test_qwen3_forward_with_exact_server_params() {
         let mut model = support::qwen3::Qwen3Fixture::cpu()
@@ -280,7 +285,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
     fn test_qwen3_simulate_server_engine_flow() {
         let mut model = support::qwen3::Qwen3Fixture::cpu()
             .load_model()
@@ -368,6 +373,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
 
     fn test_qwen3_multi_step_generation() {
         let mut model = support::qwen3::Qwen3Fixture::cpu()
@@ -518,6 +524,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
 
     fn test_qwen3_with_special_tokens() {
         let mut model = support::qwen3::Qwen3Fixture::cpu()
@@ -661,6 +668,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
 
     fn test_model_token_to_text_pipeline() {
         let mut model = support::qwen3::Qwen3Fixture::cpu()
@@ -710,7 +718,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
     fn test_server_engine_loop_simulation() {
         let mut model = support::qwen3::Qwen3Fixture::cpu()
             .load_model()
@@ -839,7 +847,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
     fn test_working_unit_test_vs_server_comparison() {
         // This test verifies that the working unit test and server loop produce same output
         let mut model = support::qwen3::Qwen3Fixture::cpu()
@@ -1105,7 +1113,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
     fn test_decode_position_calculation() {
         // This test verifies the decode position calculation matches server expectations
         let mut model = support::qwen3::Qwen3Fixture::cpu()

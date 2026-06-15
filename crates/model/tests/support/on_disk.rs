@@ -1,11 +1,54 @@
 //! Generic on-disk checkpoint fixtures for architecture integration tests.
 
+use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 
 use candle_core::{Device, Result as CandleResult};
 use vllm_model::loader::{ModelLoader, load_checkpoint};
 use vllm_model::tokenizer::Tokenizer;
 use vllm_traits::ModelBackend;
+
+type ModelCache = HashMap<String, Box<dyn ModelBackend>>;
+
+fn model_cache() -> &'static Mutex<ModelCache> {
+    static CACHE: OnceLock<Mutex<ModelCache>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Mutable handle to a process-wide cached [`ModelBackend`] for a checkpoint directory.
+///
+/// Reuses loaded weights within a single test process (multiple `load_model()` calls in one
+/// `#[test]` are cheap). Nextest runs each test in an isolated subprocess, so cache does not
+/// carry across tests — use one consolidated checkpoint test or `just nextest-checkpoint`.
+///
+/// Holds the cache mutex for the lifetime of this handle; do not call `load_model()` again
+/// while a `CachedModel` is still alive (would deadlock).
+pub struct CachedModel {
+    _guard: std::sync::MutexGuard<'static, ModelCache>,
+    key: String,
+}
+
+impl Deref for CachedModel {
+    type Target = dyn ModelBackend;
+
+    fn deref(&self) -> &Self::Target {
+        self._guard
+            .get(self.key.as_str())
+            .expect("cached model")
+            .as_ref()
+    }
+}
+
+impl DerefMut for CachedModel {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self._guard
+            .get_mut(self.key.as_str())
+            .expect("cached model")
+            .as_mut()
+    }
+}
 
 /// Points at a HuggingFace-style model directory (`config.json` + weights).
 #[derive(Debug, Clone)]
@@ -75,8 +118,20 @@ impl OnDiskFixture {
             .build()
     }
 
-    pub fn load_model(&self) -> CandleResult<Box<dyn ModelBackend>> {
-        self.loader()?.load_model()
+    /// Load (or reuse) a cached model for this checkpoint directory.
+    pub fn load_model(&self) -> CandleResult<CachedModel> {
+        let dir = self.require_weights().to_string_lossy().into_owned();
+        let mut guard = model_cache()
+            .lock()
+            .expect("model cache mutex poisoned");
+        if !guard.contains_key(&dir) {
+            let model = self.loader()?.load_model()?;
+            guard.insert(dir.clone(), model);
+        }
+        Ok(CachedModel {
+            _guard: guard,
+            key: dir,
+        })
     }
 
     pub fn checkpoint(

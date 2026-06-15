@@ -6,9 +6,8 @@ use std::ops::Deref;
 use std::path::PathBuf;
 
 use vllm_model::tokenizer::Tokenizer;
-use vllm_traits::ModelBackend;
 
-use super::on_disk::OnDiskFixture;
+use super::on_disk::{CachedModel, OnDiskFixture};
 
 pub const ENV_VAR: &str = "VLLM_TEST_MODEL_DIR";
 pub const DEFAULT_DIR: &str = "/models/Qwen3-0.6B";
@@ -73,7 +72,7 @@ pub fn tokenizer_path() -> PathBuf {
 }
 
 /// Skip-friendly guard: returns `None` when weights are absent.
-pub fn try_load_model() -> Option<Box<dyn ModelBackend>> {
+pub fn try_load_model() -> Option<CachedModel> {
     if !weights_available() {
         return None;
     }

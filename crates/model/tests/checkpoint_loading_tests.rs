@@ -90,6 +90,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "slow: on-disk Qwen3.5 weight inspection (run: just nextest-checkpoint)"]
     fn test_qwen35_full_weight_structure() {
         let model_path = "/models/Qwen3.5-0.8B";
         let device = Device::Cpu;
