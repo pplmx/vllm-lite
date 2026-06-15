@@ -12,6 +12,15 @@ use crate::qwen3_config::Qwen3Config;
 
 use super::model::Qwen35HybridModel;
 
+/// Normalize Qwen3.5 / Qwen3-VL hybrid checkpoint keys to the loader layout.
+///
+/// HF checkpoints may nest the language model under `model.language_model.*` and use
+/// alternate final-norm / lm_head prefixes. After remapping, `load_hybrid_weights` expects:
+///
+/// - Embeddings: `model.embed_tokens.weight` (or pre-remap `model.language_model.embed_tokens.weight`)
+/// - Per-layer blocks: `model.layers.{i}.*` with `linear_attn.*` (GDN) or `self_attn.*` (full)
+/// - Final norm: `model.final_layernorm.weight` (from `model.norm.weight` in VL checkpoints)
+/// - LM head: `model.lm_head.weight` (from top-level `lm_head.weight`)
 pub fn remap_qwen35_weight_keys(weights: HashMap<String, Tensor>) -> HashMap<String, Tensor> {
     let mut remapped = HashMap::new();
 
@@ -67,7 +76,7 @@ impl Architecture for Qwen35Architecture {
     }
 
     fn capabilities(&self) -> ArchCapabilities {
-        ArchCapabilities::HYBRID
+        ArchCapabilities::PRODUCTION_SPECULATIVE
     }
 
     fn create_block(
@@ -113,7 +122,37 @@ impl Architecture for Qwen35Architecture {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use candle_core::{DType, Device, Tensor};
     use serde_json::json;
+
+    #[test]
+    fn test_qwen35_capabilities_speculative() {
+        let arch = Qwen35Architecture::new();
+        assert_eq!(
+            arch.capabilities(),
+            ArchCapabilities::PRODUCTION_SPECULATIVE
+        );
+        assert!(arch.capabilities().speculative);
+    }
+
+    #[test]
+    fn test_remap_qwen35_weight_keys() {
+        let device = Device::Cpu;
+        let t = Tensor::zeros(4, DType::F32, &device).unwrap();
+
+        let mut weights = HashMap::new();
+        weights.insert(
+            "model.language_model.embed_tokens.weight".to_string(),
+            t.clone(),
+        );
+        weights.insert("lm_head.weight".to_string(), t.clone());
+        weights.insert("model.norm.weight".to_string(), t.clone());
+
+        let remapped = remap_qwen35_weight_keys(weights);
+        assert!(remapped.contains_key("model.embed_tokens.weight"));
+        assert!(remapped.contains_key("model.lm_head.weight"));
+        assert!(remapped.contains_key("model.final_layernorm.weight"));
+    }
 
     #[test]
     fn test_qwen35_architecture_detect() {

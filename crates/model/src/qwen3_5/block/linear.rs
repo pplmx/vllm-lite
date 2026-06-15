@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 
 use crate::components::gated_delta::{GatedDeltaConfig, GatedDeltaNet, GatedDeltaState};
+use crate::qwen3_5::config::GdnLinearConfig;
 use candle_core::{DType, Result as CandleResult, Tensor};
 use candle_nn::{Conv1d, LayerNorm, Linear, VarBuilder, conv1d};
 
@@ -12,27 +13,25 @@ pub struct LinearAttentionBlock {
 }
 
 impl LinearAttentionBlock {
-    pub fn new(
-        d_model: usize,
-        d_state: usize,
-        d_conv: usize,
-        _expand: usize,
-        vb: VarBuilder,
-    ) -> CandleResult<Self> {
-        let num_v_heads = d_state.max(1);
-        let num_k_heads = (num_v_heads / 2).max(1);
-        let key_head_dim = 16;
-        let value_head_dim = 16;
+    pub fn new(d_model: usize, gdn: GdnLinearConfig, vb: VarBuilder) -> CandleResult<Self> {
+        let GdnLinearConfig {
+            num_k_heads,
+            num_v_heads,
+            key_head_dim,
+            value_head_dim,
+            conv_kernel_size,
+        } = gdn;
+
         let config = GatedDeltaConfig {
             num_k_heads,
             num_v_heads,
             key_head_dim,
             value_head_dim,
-            conv_kernel_size: d_conv,
+            conv_kernel_size,
         };
 
         let conv_cfg = candle_nn::Conv1dConfig {
-            padding: d_conv - 1,
+            padding: conv_kernel_size - 1,
             groups: config.qkv_proj_dim(),
             ..Default::default()
         };
@@ -45,7 +44,7 @@ impl LinearAttentionBlock {
             conv1d(
                 config.qkv_proj_dim(),
                 config.qkv_proj_dim(),
-                d_conv,
+                conv_kernel_size,
                 conv_cfg,
                 vb.pp("conv"),
             )?,
@@ -76,9 +75,6 @@ impl LinearAttentionBlock {
         prefix: &str,
         weights: &HashMap<String, Tensor>,
         d_model: usize,
-        _d_state: usize,
-        _d_conv: usize,
-        _expand: usize,
     ) -> CandleResult<Self> {
         let in_proj_qkv_key = format!("{}.linear_attn.in_proj_qkv.weight", prefix);
         let in_proj_z_key = format!("{}.linear_attn.in_proj_z.weight", prefix);
@@ -189,12 +185,20 @@ mod tests {
     use candle_core::{DType, Device};
     use candle_nn::VarBuilder;
 
+    use crate::qwen3_5::config::GdnLinearConfig;
+
     #[test]
     fn test_linear_attention_block_creation() {
         let device = Device::Cpu;
+        let gdn = GdnLinearConfig {
+            num_k_heads: 8,
+            num_v_heads: 16,
+            key_head_dim: 16,
+            value_head_dim: 16,
+            conv_kernel_size: 4,
+        };
         let block =
-            LinearAttentionBlock::new(1024, 16, 4, 2, VarBuilder::zeros(DType::F32, &device))
-                .unwrap();
+            LinearAttentionBlock::new(1024, gdn, VarBuilder::zeros(DType::F32, &device)).unwrap();
 
         assert_eq!(block.gdn.config.num_v_heads, 16);
         assert_eq!(block.gdn.config.num_k_heads, 8);
@@ -203,7 +207,14 @@ mod tests {
     #[test]
     fn test_linear_attention_block_forward_shape() {
         let device = Device::Cpu;
-        let block = LinearAttentionBlock::new(64, 8, 4, 2, VarBuilder::zeros(DType::F32, &device))
+        let gdn = GdnLinearConfig {
+            num_k_heads: 4,
+            num_v_heads: 8,
+            key_head_dim: 16,
+            value_head_dim: 16,
+            conv_kernel_size: 4,
+        };
+        let block = LinearAttentionBlock::new(64, gdn, VarBuilder::zeros(DType::F32, &device))
             .unwrap();
         let x = Tensor::randn(0.0f32, 1.0, (1, 6, 64), &device).unwrap();
         let out = block.forward(&x).unwrap();

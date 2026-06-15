@@ -269,10 +269,9 @@ Wave 4  →  test(qwen3_5): speculative parity and capability upgrade (if green)
 |------|------|------|--------|
 | 2026-06-12 | — | Phase 5 规划文档创建 | — |
 | 2026-06-15 | 1 | 拆分 hybrid.rs → block/model/weights/config | `decc8c8` |
-| 2026-06-15 | 2 | HybridLm shell + GatedDelta 上移 components | 待提交 |
-| — | 2 | — | — |
-| — | 3 | — | — |
-| — | 4 | — | — |
+| 2026-06-15 | 2 | HybridLm shell + GatedDelta 上移 components | `73dab5e` |
+| 2026-06-12 | 3 | GDN 维度从 config 读取；统一 norm/lm_head 加载 | 待提交 |
+| 2026-06-12 | 4 | speculative parity 测试 + `PRODUCTION_SPECULATIVE` | 待提交 |
 
 ---
 

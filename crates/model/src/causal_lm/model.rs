@@ -154,7 +154,7 @@ where
         )?;
         let norm = LnLayerNorm::new(norm_weight, norm_bias, config.rms_norm_eps);
 
-        let lm_head = load_lm_head(&weights, embed_weight, config.tie_word_embeddings)?;
+        let lm_head = super::weights::load_lm_head(&weights, embed_weight, config.tie_word_embeddings)?;
 
         let kv_cache = PagedKvCache::new(
             num_layers,
@@ -265,7 +265,7 @@ where
             .ok_or_else(|| candle_core::Error::msg(format!("Missing {norm_key}")))?;
         let norm = RmsNorm::new(norm_weight, config.rms_norm_eps);
 
-        let lm_head = load_lm_head(&weights, embed_weight, config.tie_word_embeddings)?;
+        let lm_head = super::weights::load_lm_head(&weights, embed_weight, config.tie_word_embeddings)?;
 
         let kv_cache = PagedKvCache::new(
             num_layers,
@@ -432,22 +432,3 @@ where
     }
 }
 
-fn load_lm_head(
-    weights: &HashMap<String, Tensor>,
-    embed_weight: Tensor,
-    tie_word_embeddings: bool,
-) -> CandleResult<Linear> {
-    if tie_word_embeddings {
-        Ok(Linear::new(embed_weight, None))
-    } else {
-        let lm_key = "lm_head.weight";
-        let lm_weight = weights
-            .get(lm_key)
-            .cloned()
-            .or_else(|| weights.get("output.weight").cloned())
-            .or_else(|| weights.get("model.lm_head.weight").cloned())
-            .or_else(|| weights.get("model.embed_tokens.weight").cloned())
-            .ok_or_else(|| candle_core::Error::msg("Missing lm_head.weight"))?;
-        Ok(Linear::new(lm_weight, None))
-    }
-}
