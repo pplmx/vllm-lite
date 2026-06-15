@@ -280,14 +280,19 @@ impl Gemma4Attention {
     }
 
     fn forward_full(&self, x: &Tensor, positions: &[usize]) -> Result<Tensor> {
-        self.gqa_attention(x, positions)
+        self.gqa_attention(x, positions, false)
     }
 
     fn forward_sliding(&self, x: &Tensor, positions: &[usize]) -> Result<Tensor> {
-        self.gqa_attention(x, positions)
+        self.gqa_attention(x, positions, true)
     }
 
-    fn gqa_attention(&self, x: &Tensor, positions: &[usize]) -> Result<Tensor> {
+    fn gqa_attention(
+        &self,
+        x: &Tensor,
+        positions: &[usize],
+        apply_sliding_mask: bool,
+    ) -> Result<Tensor> {
         let (batch, seq_len, _) = x.dims3()?;
 
         let q = self
@@ -313,9 +318,9 @@ impl Gemma4Attention {
             let (q_rope, k_rope) = rope.apply(&q, &k, &positions_i64)?;
             let q = q_rope.transpose(1, 2)?;
             let k = k_rope.transpose(1, 2)?;
-            self.compute_attention(&q, &k, &v, seq_len, batch)
+            self.compute_attention(&q, &k, &v, seq_len, batch, positions, apply_sliding_mask)
         } else {
-            self.compute_attention(&q, &k, &v, seq_len, batch)
+            self.compute_attention(&q, &k, &v, seq_len, batch, positions, apply_sliding_mask)
         }
     }
 
@@ -326,12 +331,21 @@ impl Gemma4Attention {
         v: &Tensor,
         seq_len: usize,
         batch: usize,
+        query_positions: &[usize],
+        apply_sliding_mask: bool,
     ) -> Result<Tensor> {
         let q = q.transpose(1, 2)?;
         let k = k.transpose(1, 2)?;
         let v = v.transpose(1, 2)?;
 
-        let qk = Tensor::matmul(&q, &k.transpose(2, 3)?)?;
+        let mut qk = Tensor::matmul(&q, &k.transpose(2, 3)?)?;
+
+        if apply_sliding_mask {
+            let kv_seq = k.dims()[2];
+            let mask =
+                self.sliding_causal_mask(seq_len, kv_seq, query_positions, q.device())?;
+            qk = qk.broadcast_add(&mask)?;
+        }
 
         let scale = 1.0f32 / (self.head_dim as f32).sqrt();
         let scale_tensor = Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?;
@@ -359,6 +373,90 @@ impl Gemma4Attention {
         let expanded = expanded.reshape((batch, seq, heads * repeat_factor, dim))?;
 
         Ok(expanded)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::architecture::RoPEConfig;
+    use candle_core::DType;
+
+    fn tiny_sliding_attention(sliding_window: usize) -> Result<Gemma4Attention> {
+        let device = Device::Cpu;
+        let hidden = 32;
+        let num_heads = 4;
+        let num_kv_heads = 2;
+        let head_dim = 8;
+        let rope_config = RoPEConfig {
+            rope_theta: 10000.0,
+            partial_rotary_factor: 1.0,
+        };
+        Gemma4Attention::new(
+            hidden,
+            num_heads,
+            num_kv_heads,
+            head_dim,
+            sliding_window,
+            LayerType::SlidingAttention,
+            &rope_config,
+            candle_nn::VarBuilder::zeros(DType::F32, &device),
+        )
+    }
+
+    #[test]
+    fn test_sliding_causal_mask_blocks_out_of_window() -> Result<()> {
+        let attn = tiny_sliding_attention(2)?;
+        let device = Device::Cpu;
+        let seq_len = 4;
+        let positions: Vec<usize> = (0..seq_len).collect();
+        let mask = attn.sliding_causal_mask(seq_len, seq_len, &positions, &device)?;
+        let data: Vec<f32> = mask.flatten_all()?.to_vec1()?;
+
+        // Query at position 3 should not attend to key at position 0 (distance 3 > window 2).
+        let idx = 3 * seq_len + 0;
+        assert!(
+            data[idx].is_infinite() && data[idx].is_sign_negative(),
+            "expected -inf mask for out-of-window key, got {}",
+            data[idx]
+        );
+
+        // Query at position 3 should attend to key at position 2 (distance 1 <= window 2).
+        let idx = 3 * seq_len + 2;
+        assert_eq!(data[idx], 0.0, "in-window causal pair should be unmasked");
+        Ok(())
+    }
+
+    #[test]
+    fn test_sliding_mask_matches_paged_path() -> Result<()> {
+        let attn = tiny_sliding_attention(3)?;
+        let device = Device::Cpu;
+        let seq_len = 5;
+        let hidden = 32;
+        let x = Tensor::randn(0.0f32, 1.0, (1, seq_len, hidden), &device)?;
+        let positions: Vec<usize> = (0..seq_len).collect();
+
+        let non_paged = attn.forward(&x, &positions)?;
+
+        let (q, k, v) = attn.project_qkv(&x)?;
+        let q = q.reshape((1, seq_len, attn.num_heads, attn.head_dim))?;
+        let k = k.reshape((1, seq_len, attn.num_kv_heads, attn.head_dim))?;
+        let v = v.reshape((1, seq_len, attn.num_kv_heads, attn.head_dim))?;
+        let (q, k) = attn.apply_rope(&q, &k, &positions)?;
+        let k = attn.expand_kv(&k, attn.num_heads)?;
+        let v = attn.expand_kv(&v, attn.num_heads)?;
+        let q = q.transpose(1, 2)?.contiguous()?;
+        let k = k.transpose(1, 2)?.contiguous()?;
+        let v = v.transpose(1, 2)?.contiguous()?;
+        let paged = attn.compute_paged_attention(&q, &k, &v, &positions)?;
+
+        let diff = (&non_paged - &paged)?.abs()?;
+        let max_diff: f32 = diff.max_all()?.to_scalar()?;
+        assert!(
+            max_diff < 1e-5,
+            "non-paged sliding path should match paged attention, max_diff={max_diff}"
+        );
+        Ok(())
     }
 }
 
