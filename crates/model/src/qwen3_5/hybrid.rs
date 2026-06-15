@@ -1,12 +1,14 @@
-#![allow(clippy::all, non_snake_case, dead_code, clippy::too_many_arguments)]
+#![allow(clippy::all, non_snake_case, clippy::too_many_arguments)]
+use crate::causal_lm::{embed_sequence, forward_batch, greedy_sample_token, logits_to_vector, map_candle};
 use crate::components::positional::MRoPE;
+use crate::qwen3_5::attention35::Attention35WithRoPE;
 use crate::qwen3_5::gated_delta::{GatedDeltaConfig, GatedDeltaNet, GatedDeltaState};
 use crate::paged_tensor::PagedKvCache;
 use crate::qwen3_config::Qwen3Config;
 use candle_core::{DType, Device, Module, Result as CandleResult, Tensor};
 use candle_nn::{Conv1d, Embedding, LayerNorm, Linear, VarBuilder, conv1d};
 use std::collections::HashMap;
-use vllm_traits::{BatchOutput, SeqId, TokenId};
+use vllm_traits::{BatchOutput, BlockId, SeqId, TokenId};
 use vllm_traits::{ModelBackend, Result as EngineResult};
 
 pub type EngineError = vllm_traits::ModelError;
@@ -24,6 +26,7 @@ pub struct Qwen35HybridModel {
     norm: LayerNorm,
     lm_head: Option<Linear>,
     kv_cache: PagedKvCache,
+    gdn_states: HashMap<SeqId, Vec<Option<GatedDeltaState>>>,
     device: Device,
     layer_types: Vec<LayerType>,
 }
@@ -41,43 +44,60 @@ impl HybridBlock {
         }
     }
 
-    pub fn forward_prefill(&self, x: &Tensor) -> CandleResult<(Tensor, Option<GatedDeltaState>)> {
+    pub fn forward_prefill(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        positions: &[usize],
+        gdn_state: &mut Option<GatedDeltaState>,
+    ) -> CandleResult<Tensor> {
         match self {
             HybridBlock::Linear(b) => {
                 let (out, state) = b.forward_prefill(x)?;
-                Ok((out, Some(state)))
+                *gdn_state = Some(state);
+                Ok(out)
             }
-            HybridBlock::Full(b) => Ok((b.forward(x)?, None)),
+            HybridBlock::Full(b) => {
+                b.forward_prefill(x, kv_cache, layer_idx, block_ids, positions)
+            }
         }
     }
 
     pub fn forward_decode(
         &self,
         x: &Tensor,
-        state: &mut GatedDeltaState,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        num_computed_tokens: usize,
+        positions: &[usize],
+        gdn_state: &mut Option<GatedDeltaState>,
     ) -> CandleResult<Tensor> {
         match self {
-            HybridBlock::Linear(b) => b.forward_decode(x, state),
-            HybridBlock::Full(b) => b.forward(x),
+            HybridBlock::Linear(b) => {
+                let state = gdn_state.as_mut().ok_or_else(|| {
+                    candle_core::Error::msg(format!(
+                        "missing GDN state for linear layer {layer_idx}"
+                    ))
+                })?;
+                b.forward_decode(x, state)
+            }
+            HybridBlock::Full(b) => b.forward_decode(
+                x,
+                kv_cache,
+                layer_idx,
+                block_ids,
+                num_computed_tokens,
+                positions,
+            ),
         }
     }
 }
 
 pub struct LinearAttentionBlock {
     pub(crate) gdn: GatedDeltaNet,
-    linear_attn: Option<LinearAttentionForMamba>,
-    gate: Option<Linear>,
-}
-
-pub struct LinearAttentionForMamba {
-    q_proj: Linear,
-    k_proj: Linear,
-    v_proj: Linear,
-    o_proj: Linear,
-    num_heads: usize,
-    num_kv_heads: usize,
-    head_dim: usize,
-    rope: MRoPE,
 }
 
 pub struct FullAttentionBlock35 {
@@ -88,21 +108,46 @@ pub struct FullAttentionBlock35 {
     gate: Option<Linear>,
 }
 
-pub struct Attention35WithRoPE {
-    q_proj: Linear,
-    k_proj: Linear,
-    v_proj: Linear,
-    o_proj: Linear,
-    num_heads: usize,
-    num_kv_heads: usize,
-    head_dim: usize,
-    rope: MRoPE,
-}
-
 pub struct MLP35 {
     gate_proj: Linear,
     up_proj: Linear,
     down_proj: Linear,
+}
+
+fn run_hybrid_layers(
+    layers: &[HybridBlock],
+    mut hidden: Tensor,
+    kv_cache: &mut PagedKvCache,
+    gdn_states: &mut [Option<GatedDeltaState>],
+    block_ids: &[usize],
+    positions: &[usize],
+    num_computed_tokens: usize,
+    is_prefill: bool,
+) -> CandleResult<Tensor> {
+    for (layer_idx, layer) in layers.iter().enumerate() {
+        hidden = if is_prefill {
+            layer.forward_prefill(
+                &hidden,
+                kv_cache,
+                layer_idx,
+                block_ids,
+                positions,
+                &mut gdn_states[layer_idx],
+            )?
+        } else {
+            let decode_pos = [positions[0]];
+            layer.forward_decode(
+                &hidden,
+                kv_cache,
+                layer_idx,
+                block_ids,
+                num_computed_tokens,
+                &decode_pos,
+                &mut gdn_states[layer_idx],
+            )?
+        };
+    }
+    Ok(hidden)
 }
 
 impl LinearAttentionBlock {
@@ -149,59 +194,7 @@ impl LinearAttentionBlock {
             candle_nn::layer_norm(d_model, 1e-5, vb.pp("norm"))?,
         );
 
-        Ok(Self {
-            gdn,
-            linear_attn: None,
-            gate: None,
-        })
-    }
-
-    pub fn with_linear_attn(
-        mut self,
-        hidden_size: usize,
-        num_heads: usize,
-        num_kv_heads: usize,
-        head_dim: usize,
-        rope: MRoPE,
-    ) -> CandleResult<Self> {
-        let linear_q = candle_nn::linear(
-            hidden_size,
-            num_kv_heads * head_dim,
-            candle_nn::VarBuilder::zeros(DType::F32, &Device::Cpu).pp("linear_q"),
-        )?;
-        let linear_k = candle_nn::linear(
-            hidden_size,
-            num_kv_heads * head_dim,
-            candle_nn::VarBuilder::zeros(DType::F32, &Device::Cpu).pp("linear_k"),
-        )?;
-        let linear_v = candle_nn::linear(
-            hidden_size,
-            num_kv_heads * head_dim,
-            candle_nn::VarBuilder::zeros(DType::F32, &Device::Cpu).pp("linear_v"),
-        )?;
-        let linear_o = candle_nn::linear(
-            num_kv_heads * head_dim,
-            hidden_size,
-            candle_nn::VarBuilder::zeros(DType::F32, &Device::Cpu).pp("linear_o"),
-        )?;
-
-        self.linear_attn = Some(LinearAttentionForMamba {
-            q_proj: linear_q,
-            k_proj: linear_k,
-            v_proj: linear_v,
-            o_proj: linear_o,
-            num_heads,
-            num_kv_heads,
-            head_dim,
-            rope,
-        });
-
-        Ok(self)
-    }
-
-    pub fn with_attn_gate(mut self, gate: Linear) -> Self {
-        self.gate = Some(gate);
-        self
+        Ok(Self { gdn })
     }
 
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
@@ -214,39 +207,6 @@ impl LinearAttentionBlock {
 
     pub fn forward_decode(&self, x: &Tensor, state: &mut GatedDeltaState) -> CandleResult<Tensor> {
         self.gdn.forward_decode(x, state)
-    }
-}
-
-impl LinearAttentionForMamba {
-    pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
-        let (batch, seq_len, _) = x.dims3()?;
-
-        let q = self.q_proj.forward(x)?;
-        let k = self.k_proj.forward(x)?;
-        let v = self.v_proj.forward(x)?;
-
-        let q = q.reshape((batch, seq_len, self.num_kv_heads, self.head_dim))?;
-        let k = k.reshape((batch, seq_len, self.num_kv_heads, self.head_dim))?;
-        let v = v.reshape((batch, seq_len, self.num_kv_heads, self.head_dim))?;
-
-        let positions: Vec<i64> = (0..seq_len as i64).collect();
-        let (q, k) = self.rope.apply(&q, &k, &positions)?;
-
-        let q = q.transpose(1, 2)?.contiguous()?;
-        let k_t = k.transpose(1, 2)?.transpose(2, 3)?.contiguous()?;
-        let v = v.transpose(1, 2)?.contiguous()?;
-
-        let qk = Tensor::matmul(&q, &k_t)?;
-        let scale = 1.0 / (self.head_dim as f32).sqrt();
-        let qk = qk.mul(&Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?)?;
-        let attn_weights = candle_nn::ops::softmax(&qk, 3)?;
-
-        let attn_output = Tensor::matmul(&attn_weights, &v)?;
-        let attn_output = attn_output.transpose(1, 2)?;
-        let attn_output =
-            attn_output.reshape((batch, seq_len, self.num_kv_heads * self.head_dim))?;
-
-        self.o_proj.forward(&attn_output)
     }
 }
 
@@ -288,10 +248,52 @@ impl FullAttentionBlock35 {
     }
 
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
+        self.forward_with_attn(x, |x| self.self_attn.forward(x))
+    }
+
+    pub fn forward_prefill(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        positions: &[usize],
+    ) -> CandleResult<Tensor> {
+        self.forward_with_attn(x, |x| {
+            self.self_attn
+                .forward_prefill(x, kv_cache, layer_idx, block_ids, positions)
+        })
+    }
+
+    pub fn forward_decode(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        num_computed_tokens: usize,
+        positions: &[usize],
+    ) -> CandleResult<Tensor> {
+        self.forward_with_attn(x, |x| {
+            self.self_attn.forward_decode(
+                x,
+                kv_cache,
+                layer_idx,
+                block_ids,
+                num_computed_tokens,
+                positions,
+            )
+        })
+    }
+
+    fn forward_with_attn<F>(&self, x: &Tensor, attn_fn: F) -> CandleResult<Tensor>
+    where
+        F: FnOnce(&Tensor) -> CandleResult<Tensor>,
+    {
         let residual = x.clone();
         let x = self.input_ln.forward(x)?;
 
-        let mut attn_out = self.self_attn.forward(&x)?;
+        let mut attn_out = attn_fn(&x)?;
 
         if let Some(ref g) = self.gate {
             let g_val = g.forward(&residual)?;
@@ -305,58 +307,6 @@ impl FullAttentionBlock35 {
         let x = self.post_attn_ln.forward(&x)?;
         let x = self.mlp.forward(&x)?;
         x + residual
-    }
-}
-
-impl Attention35WithRoPE {
-    pub fn new(
-        hidden_size: usize,
-        num_heads: usize,
-        num_kv_heads: usize,
-        head_dim: usize,
-        rope: MRoPE,
-        vb: VarBuilder,
-    ) -> CandleResult<Self> {
-        Ok(Self {
-            q_proj: candle_nn::linear(hidden_size, num_heads * head_dim, vb.pp("q_proj"))?,
-            k_proj: candle_nn::linear(hidden_size, num_kv_heads * head_dim, vb.pp("k_proj"))?,
-            v_proj: candle_nn::linear(hidden_size, num_kv_heads * head_dim, vb.pp("v_proj"))?,
-            o_proj: candle_nn::linear(num_heads * head_dim, hidden_size, vb.pp("o_proj"))?,
-            num_heads,
-            num_kv_heads,
-            head_dim,
-            rope,
-        })
-    }
-
-    pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
-        let (batch, seq_len, _) = x.dims3()?;
-
-        let q = self.q_proj.forward(x)?;
-        let k = self.k_proj.forward(x)?;
-        let v = self.v_proj.forward(x)?;
-
-        let q = q.reshape((batch, seq_len, self.num_heads, self.head_dim))?;
-        let k = k.reshape((batch, seq_len, self.num_kv_heads, self.head_dim))?;
-        let v = v.reshape((batch, seq_len, self.num_kv_heads, self.head_dim))?;
-
-        let positions: Vec<i64> = (0..seq_len as i64).collect();
-        let (q, k) = self.rope.apply(&q, &k, &positions)?;
-
-        let q = q.transpose(1, 2)?.contiguous()?;
-        let k = k.transpose(1, 2)?.contiguous()?;
-        let v = v.transpose(1, 2)?.contiguous()?;
-
-        let qk = Tensor::matmul(&q, &k.transpose(2, 3)?)?;
-        let scale = 1.0 / (self.head_dim as f32).sqrt();
-        let qk = qk.mul(&Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?)?;
-        let attn_weights = candle_nn::ops::softmax(&qk, 3)?;
-
-        let attn_output = Tensor::matmul(&attn_weights, &v)?;
-        let attn_output = attn_output.transpose(1, 2)?;
-        let attn_output = attn_output.reshape((batch, seq_len, self.num_heads * self.head_dim))?;
-
-        self.o_proj.forward(&attn_output)
     }
 }
 
@@ -448,6 +398,7 @@ impl Qwen35HybridModel {
             norm,
             lm_head: None,
             kv_cache,
+            gdn_states: HashMap::new(),
             device,
             layer_types,
         })
@@ -681,11 +632,7 @@ impl LinearAttentionBlock {
             LayerNorm::new(norm_w, norm_b, 1e-5),
         );
 
-        Ok(Self {
-            gdn,
-            linear_attn: None,
-            gate: None,
-        })
+        Ok(Self { gdn })
     }
 }
 
@@ -768,48 +715,52 @@ impl FullAttentionBlock35 {
     }
 }
 
-impl Attention35WithRoPE {
-    pub fn from_weights(
-        prefix: &str,
-        weights: &HashMap<String, Tensor>,
-        _hidden_size: usize,
-        num_heads: usize,
-        num_kv_heads: usize,
-        head_dim: usize,
-        rope: MRoPE,
-    ) -> CandleResult<Self> {
-        let q_proj_key = format!("{}.self_attn.q_proj.weight", prefix);
-        let k_proj_key = format!("{}.self_attn.k_proj.weight", prefix);
-        let v_proj_key = format!("{}.self_attn.v_proj.weight", prefix);
-        let o_proj_key = format!("{}.self_attn.o_proj.weight", prefix);
+impl Qwen35HybridModel {
+    pub fn forward_with_cache(
+        &mut self,
+        seq_id: SeqId,
+        tokens: &[TokenId],
+        num_computed_tokens: usize,
+        block_ids: &[BlockId],
+        positions: &[usize],
+        is_prefill: bool,
+    ) -> EngineResult<(Tensor, usize)> {
+        let vocab_size = self.config.vocab_size();
+        if tokens.is_empty() {
+            let logits = map_candle(Tensor::zeros(
+                (1, 1, vocab_size),
+                DType::F32,
+                &self.device,
+            ))?;
+            return Ok((logits, 0));
+        }
 
-        let q_w = weights
-            .get(&q_proj_key)
-            .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", q_proj_key)))?;
-        let k_w = weights
-            .get(&k_proj_key)
-            .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", k_proj_key)))?;
-        let v_w = weights
-            .get(&v_proj_key)
-            .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", v_proj_key)))?;
-        let o_w = weights
-            .get(&o_proj_key)
-            .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", o_proj_key)))?;
+        let hidden = embed_sequence(&self.embed_tokens, tokens, &self.device, is_prefill)?;
+        let num_layers = self.layers.len();
+        let gdn_states = self
+            .gdn_states
+            .entry(seq_id)
+            .or_insert_with(|| vec![None; num_layers]);
 
-        Ok(Self {
-            q_proj: Linear::new(q_w, None),
-            k_proj: Linear::new(k_w, None),
-            v_proj: Linear::new(v_w, None),
-            o_proj: Linear::new(o_w, None),
-            num_heads,
-            num_kv_heads,
-            head_dim,
-            rope,
-        })
+        let hidden = map_candle(run_hybrid_layers(
+            &self.layers,
+            hidden,
+            &mut self.kv_cache,
+            gdn_states,
+            block_ids,
+            positions,
+            num_computed_tokens,
+            is_prefill,
+        ))?;
+        let hidden = map_candle(self.norm.forward(&hidden))?;
+
+        let logits = if let Some(ref lm_head) = self.lm_head {
+            map_candle(lm_head.forward(&hidden))?
+        } else {
+            let embed_w = self.embed_tokens.embeddings().clone();
+            map_candle(Linear::new(embed_w, None).forward(&hidden))?
+        };
+        Ok((logits, 0))
     }
 }
 
@@ -818,93 +769,46 @@ impl ModelBackend for Qwen35HybridModel {
         &mut self,
         seq_ids: &[SeqId],
         input_tokens: &[Vec<TokenId>],
-        _positions: &[Vec<usize>],
-        _kv_block_ids: &[Vec<usize>],
-        _num_computed_tokens: &[usize],
-        _is_prefill: &[bool],
+        positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
     ) -> EngineResult<BatchOutput> {
-        if seq_ids.is_empty() {
-            return Ok(BatchOutput {
-                seq_ids: vec![],
-                next_tokens: vec![],
-            });
-        }
-
-        let mut next_tokens = Vec::with_capacity(seq_ids.len());
-
-        for tokens in input_tokens.iter() {
-            if tokens.is_empty() {
-                next_tokens.push(0);
-                continue;
-            }
-
-            let token_tensor = Tensor::new(tokens.as_slice(), &self.device)
-                .map_err(|e| EngineError::new(e.to_string()))?;
-
-            let hidden_2d = self
-                .embed_tokens
-                .forward(&token_tensor)
-                .map_err(|e| EngineError::new(e.to_string()))?;
-
-            let mut hidden = hidden_2d.unsqueeze(0)?;
-
-            for layer in &mut self.layers {
-                hidden = layer
-                    .forward(&hidden)
-                    .map_err(|e| EngineError::new(e.to_string()))?;
-            }
-
-            hidden = self
-                .norm
-                .forward(&hidden)
-                .map_err(|e| EngineError::new(e.to_string()))?;
-
-            let lm_head = match &self.lm_head {
-                Some(h) => h,
-                None => {
-                    let embed_w = self.embed_tokens.embeddings().clone();
-                    &Linear::new(embed_w, None)
-                }
-            };
-
-            let logits = lm_head
-                .forward(&hidden)
-                .map_err(|e| EngineError::new(e.to_string()))?;
-
-            let seq_len = logits.dims()[0];
-            let last_logits = logits
-                .get(seq_len - 1)
-                .map_err(|e| EngineError::new(e.to_string()))?;
-
-            let max_idx = last_logits
-                .argmax(0)
-                .map_err(|e| EngineError::new(e.to_string()))?
-                .to_scalar::<u32>()
-                .unwrap_or(0);
-
-            next_tokens.push(max_idx as TokenId);
-        }
-
-        Ok(BatchOutput {
-            seq_ids: seq_ids.to_vec(),
-            next_tokens,
+        forward_batch(seq_ids, is_prefill, |i, prefill| {
+            let (logits, _) = self.forward_with_cache(
+                seq_ids[i],
+                &input_tokens[i],
+                num_computed_tokens[i],
+                &kv_block_ids[i],
+                &positions[i],
+                prefill,
+            )?;
+            greedy_sample_token(&logits, prefill)
         })
     }
 
     fn forward_logits(
         &mut self,
-        _seq_ids: &[SeqId],
+        seq_ids: &[SeqId],
         input_tokens: &[Vec<TokenId>],
-        _positions: &[Vec<usize>],
-        _kv_block_ids: &[Vec<usize>],
-        _num_computed_tokens: &[usize],
-        _is_prefill: &[bool],
+        positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
     ) -> EngineResult<Vec<Vec<f32>>> {
-        let vocab_size = self.config.vocab_size();
-        Ok(input_tokens
-            .iter()
-            .map(|t| vec![0.0; vocab_size * t.len()])
-            .collect())
+        let mut results = Vec::with_capacity(seq_ids.len());
+        for i in 0..seq_ids.len() {
+            let (logits, _) = self.forward_with_cache(
+                seq_ids[i],
+                &input_tokens[i],
+                num_computed_tokens[i],
+                &kv_block_ids[i],
+                &positions[i],
+                is_prefill[i],
+            )?;
+            results.push(logits_to_vector(&logits, is_prefill[i])?);
+        }
+        Ok(results)
     }
 
     fn embed(
@@ -1154,45 +1058,6 @@ mod tests {
     }
 
     #[test]
-    fn test_linear_attention_block_prefill_decode_parity() {
-        let device = Device::Cpu;
-        let block = LinearAttentionBlock::new(64, 8, 4, 2, VarBuilder::zeros(DType::F32, &device))
-            .unwrap();
-        let prefill_len = 6;
-        let decode_len = 2;
-        let total_len = prefill_len + decode_len;
-        let full_x = Tensor::randn(0.0f32, 1.0, (1, total_len, 64), &device).unwrap();
-        let x_prefill = full_x.narrow(1, 0, prefill_len).unwrap().contiguous().unwrap();
-
-        let (_prefill_out, mut state) = block.forward_prefill(&x_prefill).unwrap();
-        let mut decode_outs = Vec::new();
-        for t in 0..decode_len {
-            let token = full_x
-                .narrow(1, prefill_len + t, 1)
-                .unwrap()
-                .contiguous()
-                .unwrap();
-            decode_outs.push(block.forward_decode(&token, &mut state).unwrap());
-        }
-        let decode_cat = Tensor::cat(&decode_outs, 1).unwrap();
-        let full_out = block.forward(&full_x).unwrap();
-        let expected = full_out
-            .narrow(1, prefill_len, decode_len)
-            .unwrap()
-            .contiguous()
-            .unwrap();
-        let max_diff: f32 = (decode_cat - expected)
-            .unwrap()
-            .abs()
-            .unwrap()
-            .max_all()
-            .unwrap()
-            .to_scalar()
-            .unwrap();
-        assert!(max_diff < 1e-4, "linear block parity failed: {max_diff}");
-    }
-
-    #[test]
     fn test_full_attention_block_residual_connection() {
         let device = Device::Cpu;
         let rope = MRoPE::new(32, 10000.0, vec![10, 10, 12], 0.25);
@@ -1230,6 +1095,45 @@ mod tests {
         let model = Qwen35HybridModel::new(config.clone(), device, 16, false).unwrap();
 
         assert_eq!(model.kv_cache.num_layers(), 4);
+    }
+
+    #[test]
+    fn test_qwen35_hybrid_model_forward_prefill_and_decode() {
+        let config = Qwen3Config {
+            text_config: Some(crate::qwen3_config::TextConfig {
+                num_hidden_layers: Some(2),
+                num_attention_heads: Some(2),
+                num_key_value_heads: Some(2),
+                hidden_size: Some(64),
+                intermediate_size: Some(128),
+                layer_types: Some(vec![
+                    "linear_attention".to_string(),
+                    "full_attention".to_string(),
+                ]),
+                ..Default::default()
+            }),
+            head_dim: Some(32),
+            vocab_size: Some(128),
+            ..Default::default()
+        };
+
+        let device = Device::Cpu;
+        let mut model = Qwen35HybridModel::new(config, device, 16, false).unwrap();
+        let seq_id = 1u64;
+        let tokens = vec![1u32, 2, 3, 4];
+        let positions: Vec<usize> = (0..tokens.len()).collect();
+        let block_ids = vec![0usize; tokens.len()];
+
+        let (prefill_logits, _) = model
+            .forward_with_cache(seq_id, &tokens, 0, &block_ids, &positions, true)
+            .unwrap();
+        assert_eq!(prefill_logits.dims(), &[1, tokens.len(), 128]);
+
+        let decode_positions = vec![tokens.len()];
+        let (decode_logits, _) = model
+            .forward_with_cache(seq_id, &tokens, tokens.len(), &[0], &decode_positions, false)
+            .unwrap();
+        assert_eq!(decode_logits.dims(), &[1, 1, 128]);
     }
 
     #[test]
