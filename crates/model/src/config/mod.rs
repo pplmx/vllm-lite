@@ -13,7 +13,9 @@
 //! ```
 
 pub mod architecture;
+pub mod hyperparams;
 pub mod model_config;
 
 pub use architecture::{Architecture, AttentionType, LayerType, MlpType, NormType, RoPEConfig};
+pub use hyperparams::ModelHyperparams;
 pub use model_config::ModelConfig;

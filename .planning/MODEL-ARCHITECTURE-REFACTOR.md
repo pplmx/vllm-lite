@@ -180,12 +180,12 @@ cargo clippy -p vllm-model -- -D warnings
 - [x] **3.1** 定义 `DecoderLayer` trait + `LayerCtx`（KV + 可选 `GatedDeltaState`）
 - [x] **3.2** 单一 `run_layers(ctx, layers, hidden)` 替代 hybrid 专用 loop
 - [x] **3.3** `HybridBlock` 实现 `DecoderLayer`；删除 `run_hybrid_layers`
-- [ ] **3.4** `ModelConfig` / `Qwen3Config` 统一：trait `ModelHyperparams` 或 `From` 转换
-- [ ] **3.5** Qwen3.5 `embed()` / `forward_to_layer()` 接入 cache 路径
+- [x] **3.4** `ModelConfig` / `Qwen3Config` 统一：`ModelHyperparams` + `From<ModelConfig>`
+- [x] **3.5** Qwen3.5 `embed()` / `forward_to_layer()` 接入 cache 路径
 
 ### 验收标准
 
-- [x] Qwen3.5 hybrid 集成测试 prefill+decode 仍 parity（1034 nextest）
+- [x] Qwen3.5 hybrid 集成测试 prefill+decode 仍 parity
 - [x] 仅一条 layer loop 被 production 路径使用（`causal_lm::run_layers`）
 - [x] 移除 `hybrid.rs` 顶部 `#![allow(clippy::all)]`
 
@@ -193,7 +193,8 @@ cargo clippy -p vllm-model -- -D warnings
 
 | 日期 | 动作 | Commit |
 |------|------|--------|
-| 2026-06-12 | Phase 3.1–3.3：`LayerCtx` + `run_layers` + hybrid 接入 | 待提交 |
+| 2026-06-12 | Phase 3.1–3.3：`LayerCtx` + `run_layers` + hybrid 接入 | 3fa4543 |
+| 2026-06-12 | Phase 3.4–3.5：`ModelHyperparams` + hybrid embed/forward_to_layer | 待提交 |
 
 ---
 

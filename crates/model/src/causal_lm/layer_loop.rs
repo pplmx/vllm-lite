@@ -78,10 +78,21 @@ impl<L: PagedDecoderBlock> DecoderLayer for L {
 /// Run all decoder layers (prefill or single-token decode).
 pub fn run_layers<L: DecoderLayer>(
     layers: &[L],
-    mut hidden: Tensor,
+    hidden: Tensor,
     ctx: &mut LayerCtx<'_>,
 ) -> EngineResult<Tensor> {
-    for (layer_idx, layer) in layers.iter().enumerate() {
+    run_layers_upto(layers, hidden, ctx, layers.len())
+}
+
+/// Run decoder layers up to (but not including) `upto_layer`.
+pub fn run_layers_upto<L: DecoderLayer>(
+    layers: &[L],
+    mut hidden: Tensor,
+    ctx: &mut LayerCtx<'_>,
+    upto_layer: usize,
+) -> EngineResult<Tensor> {
+    let upto = upto_layer.min(layers.len());
+    for (layer_idx, layer) in layers.iter().enumerate().take(upto) {
         hidden = map_candle(if ctx.is_prefill {
             layer.forward_prefill(&hidden, ctx, layer_idx)
         } else {

@@ -1,7 +1,7 @@
 #![allow(non_snake_case, clippy::too_many_arguments)]
 use crate::causal_lm::{
     DecoderLayer, LayerAuxMut, LayerCtx, embed_sequence, forward_batch, greedy_sample_token,
-    logits_to_vector, map_candle, run_layers,
+    logits_to_vector, map_candle, run_layers, run_layers_upto,
 };
 use crate::components::SwiGLU;
 use crate::components::positional::MRoPE;
@@ -813,46 +813,45 @@ impl ModelBackend for Qwen35HybridModel {
     fn embed(
         &mut self,
         input_tokens: &[Vec<TokenId>],
-        _positions: &[Vec<usize>],
+        positions: &[Vec<usize>],
     ) -> EngineResult<Vec<Vec<f32>>> {
+        const EMBED_SEQ_ID: SeqId = 0;
         let mut embeddings = Vec::with_capacity(input_tokens.len());
         let hidden_size = self.config.hidden_size();
+        let num_layers = self.layers.len();
 
-        for tokens in input_tokens {
+        for (i, tokens) in input_tokens.iter().enumerate() {
             if tokens.is_empty() {
                 embeddings.push(vec![0.0; hidden_size]);
                 continue;
             }
 
-            let token_tensor = Tensor::new(tokens.as_slice(), &self.device)
-                .map_err(|e| EngineError::new(e.to_string()))?;
+            let positions = if i < positions.len() && !positions[i].is_empty() {
+                positions[i].clone()
+            } else {
+                (0..tokens.len()).collect()
+            };
+            let block_ids = [0usize];
 
-            let hidden_2d = self
-                .embed_tokens
-                .forward(&token_tensor)
-                .map_err(|e| EngineError::new(e.to_string()))?;
+            let hidden = embed_sequence(&self.embed_tokens, tokens, &self.device, true)?;
+            self.gdn_states
+                .insert(EMBED_SEQ_ID, vec![None; num_layers]);
+            let gdn_states = self
+                .gdn_states
+                .get_mut(&EMBED_SEQ_ID)
+                .expect("embed gdn states");
 
-            let mut hidden = hidden_2d.unsqueeze(0)?;
-
-            for layer in &mut self.layers {
-                hidden = layer
-                    .forward(&hidden)
-                    .map_err(|e| EngineError::new(e.to_string()))?;
-            }
-
-            hidden = self
-                .norm
-                .forward(&hidden)
-                .map_err(|e| EngineError::new(e.to_string()))?;
-
-            let pooled: Vec<f32> = hidden
-                .mean(0)
-                .map_err(|e| EngineError::new(e.to_string()))?
-                .flatten_all()
-                .map_err(|e| EngineError::new(e.to_string()))?
-                .to_vec1::<f32>()
-                .map_err(|e| EngineError::new(e.to_string()))?;
-
+            let mut ctx = LayerCtx {
+                kv_cache: &mut self.kv_cache,
+                block_ids: &block_ids,
+                positions: &positions,
+                num_computed_tokens: 0,
+                is_prefill: true,
+                aux: Some(LayerAuxMut::Gdn(gdn_states)),
+            };
+            let hidden = run_layers(&self.layers, hidden, &mut ctx)?;
+            let hidden = map_candle(self.norm.forward(&hidden))?;
+            let pooled = map_candle(hidden.mean(0)?.flatten_all()?.to_vec1::<f32>())?;
             embeddings.push(pooled);
         }
 
@@ -875,80 +874,44 @@ impl ModelBackend for Qwen35HybridModel {
         &mut self,
         seq_ids: &[SeqId],
         input_tokens: &[Vec<TokenId>],
-        _positions: &[Vec<usize>],
-        _kv_block_ids: &[Vec<usize>],
-        _num_computed_tokens: &[usize],
-        _is_prefill: &[bool],
+        positions: &[Vec<usize>],
+        kv_block_ids: &[Vec<usize>],
+        num_computed_tokens: &[usize],
+        is_prefill: &[bool],
         upto_layer: usize,
     ) -> EngineResult<BatchOutput> {
-        if seq_ids.is_empty() {
-            return Ok(BatchOutput {
-                seq_ids: vec![],
-                next_tokens: vec![],
-            });
-        }
-
-        let mut next_tokens = Vec::with_capacity(seq_ids.len());
-        let upto = upto_layer.min(self.layers.len());
-
-        for tokens in input_tokens.iter() {
+        forward_batch(seq_ids, is_prefill, |i, prefill| {
+            let tokens = &input_tokens[i];
             if tokens.is_empty() {
-                next_tokens.push(0);
-                continue;
+                return Ok(0);
             }
 
-            let token_tensor = Tensor::new(tokens.as_slice(), &self.device)
-                .map_err(|e| EngineError::new(e.to_string()))?;
+            let hidden = embed_sequence(&self.embed_tokens, tokens, &self.device, prefill)?;
+            let num_layers = self.layers.len();
+            let gdn_states = self
+                .gdn_states
+                .entry(seq_ids[i])
+                .or_insert_with(|| vec![None; num_layers]);
 
-            let hidden_2d = self
-                .embed_tokens
-                .forward(&token_tensor)
-                .map_err(|e| EngineError::new(e.to_string()))?;
+            let mut ctx = LayerCtx {
+                kv_cache: &mut self.kv_cache,
+                block_ids: &kv_block_ids[i],
+                positions: &positions[i],
+                num_computed_tokens: num_computed_tokens[i],
+                is_prefill: prefill,
+                aux: Some(LayerAuxMut::Gdn(gdn_states)),
+            };
+            let hidden = run_layers_upto(&self.layers, hidden, &mut ctx, upto_layer)?;
+            let hidden = map_candle(self.norm.forward(&hidden))?;
 
-            let mut hidden = hidden_2d
-                .unsqueeze(0)
-                .map_err(|e| EngineError::new(e.to_string()))?;
-
-            for layer in self.layers.iter_mut().take(upto) {
-                hidden = layer
-                    .forward(&hidden)
-                    .map_err(|e| EngineError::new(e.to_string()))?;
-            }
-
-            hidden = self
-                .norm
-                .forward(&hidden)
-                .map_err(|e| EngineError::new(e.to_string()))?;
-
-            let lm_head = match &self.lm_head {
-                Some(h) => h,
-                None => {
-                    let embed_w = self.embed_tokens.embeddings().clone();
-                    &candle_nn::Linear::new(embed_w, None)
-                }
+            let logits = if let Some(ref lm_head) = self.lm_head {
+                map_candle(lm_head.forward(&hidden))?
+            } else {
+                let embed_w = self.embed_tokens.embeddings().clone();
+                map_candle(candle_nn::Linear::new(embed_w, None).forward(&hidden))?
             };
 
-            let logits = lm_head
-                .forward(&hidden)
-                .map_err(|e| EngineError::new(e.to_string()))?;
-
-            let seq_len = logits.dims()[0];
-            let last_logits = logits
-                .get(seq_len - 1)
-                .map_err(|e| EngineError::new(e.to_string()))?;
-
-            let max_idx = last_logits
-                .argmax(0)
-                .map_err(|e| EngineError::new(e.to_string()))?
-                .to_scalar::<u32>()
-                .unwrap_or(0);
-
-            next_tokens.push(max_idx as TokenId);
-        }
-
-        Ok(BatchOutput {
-            seq_ids: seq_ids.to_vec(),
-            next_tokens,
+            greedy_sample_token(&logits, prefill)
         })
     }
 }

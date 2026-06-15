@@ -93,19 +93,7 @@ impl Architecture for Qwen35Architecture {
     ) -> Result<Box<dyn ModelBackend>> {
         let remapped_weights = remap_qwen35_weight_keys(weights);
 
-        let qwen_config = Qwen3Config {
-            vocab_size: Some(config.vocab_size),
-            hidden_size: Some(config.hidden_size),
-            num_hidden_layers: Some(config.num_layers),
-            num_attention_heads: Some(config.num_heads),
-            num_key_value_heads: Some(config.num_kv_heads),
-            intermediate_size: Some(config.intermediate_size),
-            rope_theta: Some(config.rope_theta),
-            max_position_embeddings: Some(config.max_position_embeddings),
-            rms_norm_eps: Some(config.rms_norm_eps as f32),
-            tie_word_embeddings: Some(config.tie_word_embeddings),
-            ..Default::default()
-        };
+        let qwen_config = Qwen3Config::from(config);
 
         let model = Qwen35HybridModel::from_weights(
             qwen_config,
