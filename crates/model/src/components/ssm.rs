@@ -10,6 +10,14 @@ use candle_core::{DType, Module, Result as CandleResult, Tensor};
 use candle_nn::{Conv1d, LayerNorm, Linear, VarBuilder, conv1d};
 use thiserror::Error;
 
+/// Numerically stable softplus: log(1 + exp(x)).
+pub fn softplus(xs: &Tensor) -> CandleResult<Tensor> {
+    let exp_x = xs.exp()?;
+    let one = Tensor::new(1.0f32, xs.device())?.to_dtype(xs.dtype())?;
+    let one = one.broadcast_as(exp_x.dims())?;
+    (exp_x + one)?.log()
+}
+
 #[derive(Clone, Debug)]
 pub struct SSMConfig {
     pub d_model: usize,
@@ -300,12 +308,10 @@ impl MambaBlock {
     }
 }
 
-#[allow(dead_code)]
 pub struct SSMHarmonicSSMLayer {
     x_proj: Linear,
     in_proj_a: Linear,
     a_log: Tensor,
-    #[allow(dead_code)]
     dt_bias: Tensor,
     conv: Conv1d,
     d_inner: usize,
@@ -407,6 +413,10 @@ impl SSMHarmonicSSMLayer {
 
     pub fn a_log(&self) -> &Tensor {
         &self.a_log
+    }
+
+    pub fn dt_bias(&self) -> &Tensor {
+        &self.dt_bias
     }
 
     pub fn from_weights(
@@ -517,6 +527,24 @@ mod tests {
     fn test_ssm_harmonic_creates() {
         let vb = VarBuilder::zeros(DType::F32, &Device::Cpu);
         SSMHarmonicSSMLayer::new(256, 16, 4, vb).unwrap();
+    }
+
+    #[test]
+    fn test_ssm_harmonic_exposes_dt_bias() {
+        let vb = VarBuilder::zeros(DType::F32, &Device::Cpu);
+        let ssm = SSMHarmonicSSMLayer::new(256, 16, 4, vb).unwrap();
+        assert_eq!(ssm.dt_bias().dims(), &[16]);
+    }
+
+    #[test]
+    fn test_softplus() {
+        let device = Device::Cpu;
+        let x = Tensor::new(&[-1.0f32, 0.0, 1.0], &device).unwrap();
+        let y = softplus(&x).unwrap();
+        let vals: Vec<f32> = y.to_vec1().unwrap();
+        assert!(vals[0] > 0.0);
+        assert!((vals[1] - 0.693_147).abs() < 1e-4);
+        assert!(vals[2] > vals[1]);
     }
 
     #[test]
