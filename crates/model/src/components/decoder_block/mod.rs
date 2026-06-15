@@ -3,11 +3,15 @@
 //! Used by Llama, Mistral, and Qwen3 causal-LM stacks.
 //! Registry blocks implement this trait via [`super::block::TransformerBlock`].
 
+pub mod factory;
+
 use crate::components::LnLayerNorm;
 use crate::components::SwiGLU;
 use crate::components::attention::RopeGqaAttention;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
+
+pub use factory::{block_from_weights, new_block};
 
 /// Standard decoder layer with RoPE group-query attention and SwiGLU FFN.
 pub struct RopeGqaDecoderBlock {
@@ -158,9 +162,6 @@ impl PagedDecoderBlock for RopeGqaDecoderBlock {
 mod tests {
     use super::*;
     use crate::components::AttentionConfig;
-    use crate::components::LnLayerNorm;
-    use crate::components::SwiGLU;
-    use crate::components::attention::RopeGqaAttention;
     use candle_core::{DType, Device, Tensor};
 
     fn tiny_block(device: &Device) -> RopeGqaDecoderBlock {

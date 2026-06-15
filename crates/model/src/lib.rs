@@ -25,5 +25,5 @@ pub use kernels::{
     AttentionVariant, CudaGraph, FlashAttention, FlashAttentionConfig, FlashAttentionKernel,
     fused_attention_layer, fused_mlp_layer,
 };
-pub use loader::{ModelLoader, ModelLoaderBuilder};
+pub use causal_lm::{BlockWrapper, CausalLm};
 pub use quantize::{QuantizationConfig, QuantizationFormat, QuantizedTensor, StorageTensor};
