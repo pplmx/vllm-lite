@@ -1,5 +1,6 @@
 #![allow(clippy::all, non_snake_case, dead_code, clippy::too_many_arguments)]
 use crate::components::positional::MRoPE;
+use crate::components::ssm::softplus;
 use crate::paged_tensor::PagedKvCache;
 use crate::qwen3_config::Qwen3Config;
 use candle_core::{DType, Device, Module, Result as CandleResult, Tensor};
@@ -190,6 +191,10 @@ impl SSMLayer35 {
     pub fn a_log(&self) -> &Tensor {
         &self.a_log
     }
+
+    pub fn dt_bias(&self) -> &Tensor {
+        &self.dt_bias
+    }
 }
 
 impl LinearAttentionBlock {
@@ -308,6 +313,9 @@ impl LinearAttentionBlock {
         let mut h = Tensor::zeros((batch, d_state, d_inner), DType::F32, x.device())?;
         let mut outputs: Vec<Tensor> = Vec::with_capacity(seq_len);
 
+        let dt_bias = self.ssm.dt_bias().reshape((1, d_state))?;
+        let neg_a_log_exp = a_log.reshape((1, d_state))?.exp()?.neg()?;
+
         for t in 0..seq_len {
             let dt_t = delta.narrow(1, t, 1)?.squeeze(1)?;
             let a_t = a_proj_out
@@ -317,8 +325,9 @@ impl LinearAttentionBlock {
             let b_t = b.narrow(1, t, 1)?.squeeze(1)?.reshape((batch, d_state))?;
             let c_t = c.narrow(1, t, 1)?.squeeze(1)?.reshape((batch, d_state))?;
 
-            let a_combined = (a_log.reshape((1, d_state))? + a_t)?;
-            let a_decay = a_combined.exp()?;
+            let softplus_a = softplus(&a_t.broadcast_add(&dt_bias)?)?;
+            let g = neg_a_log_exp.broadcast_mul(&softplus_a)?;
+            let a_decay = g.exp()?;
 
             let dt_act = candle_nn::ops::silu(&dt_t)?.reshape((batch, 1, d_inner))?;
 
@@ -1416,6 +1425,13 @@ mod tests {
         assert_eq!(x_conv.dims()[0], 1);
         assert_eq!(x_conv.dims()[2], d_inner * 3);
         assert!(x_conv.dims()[1] >= 3);
+    }
+
+    #[test]
+    fn test_ssm_layer35_exposes_dt_bias() {
+        let device = Device::Cpu;
+        let ssm = SSMLayer35::new(256, 16, 4, VarBuilder::zeros(DType::F32, &device)).unwrap();
+        assert_eq!(ssm.dt_bias().dims(), &[16]);
     }
 
     #[test]
