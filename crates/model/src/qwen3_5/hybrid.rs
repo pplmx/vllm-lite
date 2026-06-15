@@ -1,5 +1,8 @@
-#![allow(clippy::all, non_snake_case, clippy::too_many_arguments)]
-use crate::causal_lm::{embed_sequence, forward_batch, greedy_sample_token, logits_to_vector, map_candle};
+#![allow(non_snake_case, clippy::too_many_arguments)]
+use crate::causal_lm::{
+    DecoderLayer, LayerAuxMut, LayerCtx, embed_sequence, forward_batch, greedy_sample_token,
+    logits_to_vector, map_candle, run_layers,
+};
 use crate::components::SwiGLU;
 use crate::components::positional::MRoPE;
 use crate::qwen3_5::attention35::Attention35WithRoPE;
@@ -97,52 +100,68 @@ impl HybridBlock {
     }
 }
 
+impl DecoderLayer for HybridBlock {
+    fn forward_prefill(
+        &self,
+        x: &Tensor,
+        ctx: &mut LayerCtx<'_>,
+        layer_idx: usize,
+    ) -> CandleResult<Tensor> {
+        let LayerCtx {
+            kv_cache,
+            block_ids,
+            positions,
+            aux,
+            ..
+        } = ctx;
+        let gdn_state = match aux {
+            Some(LayerAuxMut::Gdn(states)) => &mut states[layer_idx],
+            None => {
+                return Err(candle_core::Error::msg(format!(
+                    "missing GDN aux state for hybrid layer {layer_idx}"
+                )));
+            }
+        };
+        self.forward_prefill(x, kv_cache, layer_idx, block_ids, positions, gdn_state)
+    }
+
+    fn forward_decode(
+        &self,
+        x: &Tensor,
+        ctx: &mut LayerCtx<'_>,
+        layer_idx: usize,
+    ) -> CandleResult<Tensor> {
+        let LayerCtx {
+            kv_cache,
+            block_ids,
+            positions,
+            num_computed_tokens,
+            aux,
+            ..
+        } = ctx;
+        let gdn_state = match aux {
+            Some(LayerAuxMut::Gdn(states)) => &mut states[layer_idx],
+            None => {
+                return Err(candle_core::Error::msg(format!(
+                    "missing GDN aux state for hybrid layer {layer_idx}"
+                )));
+            }
+        };
+        let decode_pos = [positions[0]];
+        self.forward_decode(
+            x,
+            kv_cache,
+            layer_idx,
+            block_ids,
+            *num_computed_tokens,
+            &decode_pos,
+            gdn_state,
+        )
+    }
+}
+
 pub struct LinearAttentionBlock {
     pub(crate) gdn: GatedDeltaNet,
-}
-
-pub struct FullAttentionBlock35 {
-    input_ln: LayerNorm,
-    self_attn: Attention35WithRoPE,
-    mlp: SwiGLU,
-    post_attn_ln: LayerNorm,
-    gate: Option<Linear>,
-}
-
-fn run_hybrid_layers(
-    layers: &[HybridBlock],
-    mut hidden: Tensor,
-    kv_cache: &mut PagedKvCache,
-    gdn_states: &mut [Option<GatedDeltaState>],
-    block_ids: &[usize],
-    positions: &[usize],
-    num_computed_tokens: usize,
-    is_prefill: bool,
-) -> CandleResult<Tensor> {
-    for (layer_idx, layer) in layers.iter().enumerate() {
-        hidden = if is_prefill {
-            layer.forward_prefill(
-                &hidden,
-                kv_cache,
-                layer_idx,
-                block_ids,
-                positions,
-                &mut gdn_states[layer_idx],
-            )?
-        } else {
-            let decode_pos = [positions[0]];
-            layer.forward_decode(
-                &hidden,
-                kv_cache,
-                layer_idx,
-                block_ids,
-                num_computed_tokens,
-                &decode_pos,
-                &mut gdn_states[layer_idx],
-            )?
-        };
-    }
-    Ok(hidden)
 }
 
 impl LinearAttentionBlock {
@@ -203,6 +222,14 @@ impl LinearAttentionBlock {
     pub fn forward_decode(&self, x: &Tensor, state: &mut GatedDeltaState) -> CandleResult<Tensor> {
         self.gdn.forward_decode(x, state)
     }
+}
+
+pub struct FullAttentionBlock35 {
+    input_ln: LayerNorm,
+    self_attn: Attention35WithRoPE,
+    mlp: SwiGLU,
+    post_attn_ln: LayerNorm,
+    gate: Option<Linear>,
 }
 
 impl FullAttentionBlock35 {
@@ -468,13 +495,13 @@ impl Qwen35HybridModel {
 
         if let Some(w) = weights.get("model.norm.weight") {
             let bias = Tensor::zeros(w.dim(0).unwrap_or(hidden_size), w.dtype(), w.device())?;
-            model.norm = candle_nn::LayerNorm::new(w.clone(), bias, config.rms_norm_eps() as f64);
+            model.norm = candle_nn::LayerNorm::new(w.clone(), bias, config.rms_norm_eps());
         } else if let Some(w) = weights.get("model.language_model.norm.weight") {
             let bias = Tensor::zeros(w.dim(0).unwrap_or(hidden_size), w.dtype(), w.device())?;
-            model.norm = candle_nn::LayerNorm::new(w.clone(), bias, config.rms_norm_eps() as f64);
+            model.norm = candle_nn::LayerNorm::new(w.clone(), bias, config.rms_norm_eps());
         } else if let Some(w) = weights.get("model.final_layernorm.weight") {
             let bias = Tensor::zeros(w.dim(0).unwrap_or(hidden_size), w.dtype(), w.device())?;
-            model.norm = candle_nn::LayerNorm::new(w.clone(), bias, config.rms_norm_eps() as f64);
+            model.norm = candle_nn::LayerNorm::new(w.clone(), bias, config.rms_norm_eps());
         }
 
         let lm_head_key: Option<&str> = if weights.contains_key("lm_head.weight") {
@@ -715,16 +742,15 @@ impl Qwen35HybridModel {
             .entry(seq_id)
             .or_insert_with(|| vec![None; num_layers]);
 
-        let hidden = map_candle(run_hybrid_layers(
-            &self.layers,
-            hidden,
-            &mut self.kv_cache,
-            gdn_states,
+        let mut ctx = LayerCtx {
+            kv_cache: &mut self.kv_cache,
             block_ids,
             positions,
             num_computed_tokens,
             is_prefill,
-        ))?;
+            aux: Some(LayerAuxMut::Gdn(gdn_states)),
+        };
+        let hidden = run_layers(&self.layers, hidden, &mut ctx)?;
         let hidden = map_candle(self.norm.forward(&hidden))?;
 
         let logits = if let Some(ref lm_head) = self.lm_head {
