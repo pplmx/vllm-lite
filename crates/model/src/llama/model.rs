@@ -4,6 +4,7 @@ use crate::causal_lm::{
     forward_batch, forward_with_paged_kv, greedy_sample_token, logits_to_vector,
     mean_pool_embeddings,
 };
+use crate::components::RmsNorm;
 use crate::config::ModelConfig;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Device, Result as CandleResult, Tensor};
@@ -16,7 +17,7 @@ pub struct LlamaModel {
     config: ModelConfig,
     embed_tokens: Embedding,
     layers: Vec<LlamaBlock>,
-    norm: Linear,
+    norm: RmsNorm,
     lm_head: Linear,
     kv_cache: PagedKvCache,
     device: Device,
@@ -38,7 +39,8 @@ impl LlamaModel {
         }
 
         let vb = VarBuilder::zeros(candle_core::DType::F32, &device);
-        let norm = candle_nn::linear(hidden_size, hidden_size, vb.pp("norm"))?;
+        let norm_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
+        let norm = RmsNorm::new(norm_weight, config.rms_norm_eps);
         let lm_head = candle_nn::linear(hidden_size, vocab_size, vb.pp("lm_head"))?;
 
         let kv_cache = PagedKvCache::new(
@@ -88,7 +90,7 @@ impl LlamaModel {
             .get(norm_key)
             .cloned()
             .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", norm_key)))?;
-        let norm = Linear::new(norm_weight, None);
+        let norm = RmsNorm::new(norm_weight, config.rms_norm_eps);
 
         let lm_head = if config.tie_word_embeddings {
             Linear::new(embed_weight, None)
