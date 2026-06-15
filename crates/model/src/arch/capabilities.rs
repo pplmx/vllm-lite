@@ -30,7 +30,7 @@ impl ArchCapabilities {
         speculative: true,
     };
 
-    /// Hybrid production path; main inference OK, speculative hooks incomplete (Qwen3.5).
+    /// Hybrid production path without speculative hooks (reserved for partial integrations).
     pub const HYBRID: Self = Self {
         inference: true,
         paged_kv: true,

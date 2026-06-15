@@ -54,6 +54,20 @@ pub struct TextConfig {
     pub rms_norm_eps: Option<f32>,
     #[serde(default)]
     pub layer_types: Option<Vec<String>>,
+    /// Gated DeltaNet (linear attention) head counts — HF `text_config` fields.
+    #[serde(default)]
+    pub linear_num_key_heads: Option<usize>,
+    #[serde(default)]
+    pub linear_num_value_heads: Option<usize>,
+    #[serde(default)]
+    pub linear_key_head_dim: Option<usize>,
+    #[serde(default)]
+    pub linear_value_head_dim: Option<usize>,
+    #[serde(default)]
+    pub linear_conv_kernel_dim: Option<usize>,
+    /// Every N-th layer is full attention when `layer_types` is absent (default 4).
+    #[serde(default)]
+    pub full_attention_interval: Option<usize>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -139,6 +153,38 @@ impl TextConfig {
 
     pub fn layer_types(&self) -> Option<&[String]> {
         self.layer_types.as_deref()
+    }
+
+    pub fn linear_num_key_heads(&self) -> usize {
+        self.linear_num_key_heads.unwrap_or(16)
+    }
+
+    pub fn linear_num_value_heads(&self) -> usize {
+        self.linear_num_value_heads.unwrap_or(64)
+    }
+
+    pub fn linear_key_head_dim(&self) -> usize {
+        self.linear_key_head_dim.unwrap_or(128)
+    }
+
+    pub fn linear_value_head_dim(&self) -> usize {
+        self.linear_value_head_dim.unwrap_or(128)
+    }
+
+    pub fn linear_conv_kernel_dim(&self) -> usize {
+        self.linear_conv_kernel_dim.unwrap_or(4)
+    }
+
+    pub fn full_attention_interval(&self) -> usize {
+        self.full_attention_interval.unwrap_or(4).max(1)
+    }
+
+    pub fn has_explicit_gdn_config(&self) -> bool {
+        self.linear_num_key_heads.is_some()
+            || self.linear_num_value_heads.is_some()
+            || self.linear_key_head_dim.is_some()
+            || self.linear_value_head_dim.is_some()
+            || self.linear_conv_kernel_dim.is_some()
     }
 }
 
@@ -229,6 +275,13 @@ impl Qwen3Config {
 
     pub fn layer_types(&self) -> Option<&[String]> {
         self.text_config.as_ref().and_then(|c| c.layer_types())
+    }
+
+    pub fn full_attention_interval(&self) -> usize {
+        self.text_config
+            .as_ref()
+            .map(|c| c.full_attention_interval())
+            .unwrap_or(4)
     }
 
     pub fn attention_type(&self) -> AttentionType {
@@ -337,6 +390,7 @@ mod tests {
             max_position_embeddings: None,
             rms_norm_eps: None,
             layer_types: None,
+            ..Default::default()
         };
 
         let config = Qwen3Config {

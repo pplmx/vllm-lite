@@ -105,11 +105,10 @@ mod tests {
         let device = Device::Cpu;
         let hidden_size = 128;
 
+        let gdn = crate::qwen3_5::config::GdnLinearConfig::legacy_heuristic(hidden_size);
         let linear = LinearAttentionBlock::new(
             hidden_size,
-            16,
-            4,
-            2,
+            gdn,
             VarBuilder::zeros(DType::F32, &device),
         )
         .unwrap();

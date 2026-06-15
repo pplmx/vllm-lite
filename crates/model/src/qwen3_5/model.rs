@@ -7,7 +7,7 @@ use crate::causal_lm::{HybridLm, HybridLmConfig};
 use crate::components::positional::MRoPE;
 use crate::paged_tensor::PagedKvCache;
 use crate::qwen3_5::block::{FullAttentionBlock35, HybridBlock, LinearAttentionBlock};
-use crate::qwen3_5::config::{parse_layer_types, LayerType};
+use crate::qwen3_5::config::{parse_layer_types, GdnLinearConfig, LayerType};
 use crate::qwen3_5::weights::load_hybrid_weights;
 use crate::qwen3_config::Qwen3Config;
 use candle_core::{DType, Device, Result as CandleResult, Tensor};
@@ -47,6 +47,7 @@ impl Qwen35HybridModel {
             Tensor::zeros((vocab_size, hidden_size), candle_core::DType::F32, &device)?;
         let embed_tokens = Embedding::new(embeddings, hidden_size);
 
+        let gdn_config = GdnLinearConfig::from_qwen3_config(&config);
         let layer_types = parse_layer_types(&config);
         let mut layers = Vec::new();
         let rope = MRoPE::from_config(&config);
@@ -55,9 +56,7 @@ impl Qwen35HybridModel {
             let layer = match layer_type {
                 LayerType::LinearAttention => HybridBlock::Linear(LinearAttentionBlock::new(
                     hidden_size,
-                    16,
-                    4,
-                    2,
+                    gdn_config,
                     VarBuilder::zeros(DType::F32, &device),
                 )?),
                 LayerType::FullAttention => HybridBlock::Full(FullAttentionBlock35::new(
@@ -121,3 +120,7 @@ impl Qwen35HybridModel {
 #[cfg(test)]
 #[path = "model_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "speculative_tests.rs"]
+mod speculative_tests;

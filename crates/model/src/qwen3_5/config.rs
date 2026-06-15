@@ -1,6 +1,64 @@
 //! Qwen3.5 hybrid layer-type configuration.
 
-use crate::qwen3_config::Qwen3Config;
+use crate::qwen3_config::{Qwen3Config, TextConfig};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GdnLinearConfig {
+    pub num_k_heads: usize,
+    pub num_v_heads: usize,
+    pub key_head_dim: usize,
+    pub value_head_dim: usize,
+    pub conv_kernel_size: usize,
+}
+
+impl GdnLinearConfig {
+    /// HF Qwen3.5 production defaults (e.g. Qwen3.5-397B-A17B `text_config`).
+    pub fn production_defaults() -> Self {
+        Self {
+            num_k_heads: 16,
+            num_v_heads: 64,
+            key_head_dim: 128,
+            value_head_dim: 128,
+            conv_kernel_size: 4,
+        }
+    }
+
+    /// Zero-init fallback when no explicit GDN fields are present in config.
+    pub fn legacy_heuristic(hidden_size: usize) -> Self {
+        let num_v_heads = if hidden_size >= 512 {
+            16
+        } else {
+            (hidden_size / 8).max(4)
+        };
+        let num_k_heads = (num_v_heads / 2).max(1);
+        Self {
+            num_k_heads,
+            num_v_heads,
+            key_head_dim: 16,
+            value_head_dim: 16,
+            conv_kernel_size: 4,
+        }
+    }
+
+    pub fn from_text_config(tc: &TextConfig) -> Self {
+        Self {
+            num_k_heads: tc.linear_num_key_heads(),
+            num_v_heads: tc.linear_num_value_heads(),
+            key_head_dim: tc.linear_key_head_dim(),
+            value_head_dim: tc.linear_value_head_dim(),
+            conv_kernel_size: tc.linear_conv_kernel_dim(),
+        }
+    }
+
+    pub fn from_qwen3_config(config: &Qwen3Config) -> Self {
+        if let Some(tc) = config.text_config.as_ref() {
+            if tc.has_explicit_gdn_config() {
+                return Self::from_text_config(tc);
+            }
+        }
+        Self::legacy_heuristic(config.hidden_size())
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayerType {
@@ -20,9 +78,10 @@ pub fn parse_layer_types(config: &Qwen3Config) -> Vec<LayerType> {
             .collect()
     } else {
         let num_layers = config.num_hidden_layers();
+        let interval = config.full_attention_interval();
         (0..num_layers)
             .map(|i| {
-                if i % 4 == 3 {
+                if (i + 1) % interval == 0 {
                     LayerType::FullAttention
                 } else {
                     LayerType::LinearAttention
@@ -36,6 +95,58 @@ pub fn parse_layer_types(config: &Qwen3Config) -> Vec<LayerType> {
 mod tests {
     use super::*;
     use crate::qwen3_config::Qwen3Config;
+
+    #[test]
+    fn test_gdn_linear_config_from_hf_fields() {
+        let config = Qwen3Config {
+            text_config: Some(TextConfig {
+                linear_num_key_heads: Some(16),
+                linear_num_value_heads: Some(64),
+                linear_key_head_dim: Some(128),
+                linear_value_head_dim: Some(128),
+                linear_conv_kernel_dim: Some(4),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let gdn = GdnLinearConfig::from_qwen3_config(&config);
+        assert_eq!(gdn.num_k_heads, 16);
+        assert_eq!(gdn.num_v_heads, 64);
+        assert_eq!(gdn.key_head_dim, 128);
+        assert_eq!(gdn.value_head_dim, 128);
+        assert_eq!(gdn.conv_kernel_size, 4);
+    }
+
+    #[test]
+    fn test_gdn_linear_config_legacy_heuristic() {
+        let config = Qwen3Config {
+            hidden_size: Some(64),
+            ..Default::default()
+        };
+        let gdn = GdnLinearConfig::from_qwen3_config(&config);
+        assert_eq!(gdn.num_v_heads, 8);
+        assert_eq!(gdn.num_k_heads, 4);
+        assert_eq!(gdn.key_head_dim, 16);
+    }
+
+    #[test]
+    fn test_full_attention_interval_from_config() {
+        let config = Qwen3Config {
+            text_config: Some(TextConfig {
+                num_hidden_layers: Some(6),
+                full_attention_interval: Some(3),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let layer_types = parse_layer_types(&config);
+        assert_eq!(layer_types.len(), 6);
+        assert_eq!(layer_types[2], LayerType::FullAttention);
+        assert_eq!(layer_types[5], LayerType::FullAttention);
+        assert_eq!(layer_types[0], LayerType::LinearAttention);
+    }
 
     #[test]
     fn test_layer_type_parsing() {

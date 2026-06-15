@@ -7,6 +7,7 @@ mod block_wrapper;
 mod hybrid_lm;
 mod layer_loop;
 mod model;
+pub(crate) mod weights;
 
 pub use block_wrapper::BlockWrapper;
 pub use hybrid_lm::{HybridLm, HybridLmConfig};
