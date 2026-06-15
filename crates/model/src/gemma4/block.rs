@@ -254,6 +254,21 @@ impl PagedDecoderBlock for Gemma4Block {
     }
 }
 
+/// Build a zero-initialized Gemma4 block for `CausalLm::new_rms`.
+pub fn new_block(config: &ModelConfig, layer_idx: usize) -> Result<Gemma4Block> {
+    let vb = candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu);
+    Gemma4Block::new(config, layer_idx, vb)
+}
+
+/// Load a Gemma4 block from HuggingFace-style weight keys.
+pub fn block_from_weights(
+    config: &ModelConfig,
+    layer_idx: usize,
+    weights: &HashMap<String, Tensor>,
+) -> Result<Gemma4Block> {
+    Gemma4Block::from_weights(config, layer_idx, weights)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
