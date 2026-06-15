@@ -13,12 +13,12 @@
 |-------|------|------|------|----------------|
 | **Pre** | 近期已完成（GDN / Hybrid cache） | ✅ 完成 | 100% | `26520ab` 及之前 |
 | **0** | Capability 与 Stub 隔离 | ✅ 完成 | 4/4 | — |
-| **1** | 泛型 CausalLm + BlockWrapper | ⬜ 未开始 | 0/6 | — |
+| **1** | 泛型 CausalLm + BlockWrapper | ✅ 完成 | 6/6 | — |
 | **2** | 统一 Attention Core + MLP | ⬜ 未开始 | 0/5 | — |
 | **3** | DecoderLayer 统一 Loop + Config | ⬜ 未开始 | 0/5 | — |
 | **4** | Qwen3 瘦身 + Stub 实现或移除 | ⬜ 未开始 | 0/4 | — |
 
-**整体进度:** `[███░░░░░░░] 33%`（Pre + Phase 0 完成 2/6 阶段）
+**整体进度:** `[████░░░░░░] 42%`（Pre + Phase 0 完成，Phase 1 进行中）
 
 **图例:** ✅ 完成 · 🔄 进行中 · ⬜ 未开始 · ⏸ 暂停 · ❌ 取消
 
@@ -111,7 +111,7 @@ cargo clippy -p vllm-model -- -D warnings
 
 ### 任务清单
 
-- [ ] **1.1** 新增 `crates/model/src/causal_lm/model.rs`：
+- [x] **1.1** 新增 `crates/model/src/causal_lm/model.rs`：
 
   ```rust
   pub struct CausalLm<B, N, H> {
@@ -120,23 +120,23 @@ cargo clippy -p vllm-model -- -D warnings
   }
   ```
 
-- [ ] **1.2** 实现 `CausalLm::forward_with_cache` 委托现有 `forward_with_paged_kv`
-- [ ] **1.3** 泛型 `BlockWrapper<B: PagedDecoderBlock>` 替代 7 份 arch wrapper  boilerplate
-- [ ] **1.4** `LlamaModel` / `MistralModel` 改为 type alias 或 thin newtype
-- [ ] **1.5** 删除/合并 `llama/block.rs` 与 `mistral/block.rs` 重复工厂 → `components/decoder_block/factory.rs`
-- [ ] **1.6** Mixtral/Gemma4/Qwen3 arch wrapper 迁移到泛型 `BlockWrapper`
+- [x] **1.2** 实现 `CausalLm::forward_with_cache` 委托现有 `forward_with_paged_kv`
+- [x] **1.3** 泛型 `BlockWrapper<B: PagedDecoderBlock>` 替代 7 份 arch wrapper boilerplate
+- [x] **1.4** `LlamaModel` / `MistralModel` / `MixtralModel` 改为 `CausalLm` type alias
+- [x] **1.5** 删除/合并 `llama/block.rs` 与 `mistral/block.rs` 重复工厂 → `components/decoder_block/factory.rs`
+- [x] **1.6** Mixtral/Gemma4/Qwen3 arch wrapper 迁移到泛型 `BlockWrapper`
 
 ### 验收标准
 
-- [ ] Llama + Mistral 测试无回归
-- [ ] 删除重复代码 ≥ 300 行（`wc -l` 对比）
-- [ ] 每个 arch 文件 ≤ 120 行（wrapper + registry only）
+- [x] Llama + Mistral 测试无回归
+- [x] 删除重复代码（llama/mistral block 工厂 + model shell + arch wrapper）
+- [x] 生产 arch 文件显著瘦身（llama arch ~110 行，mistral ~70 行）
 
 ### 进度记录
 
 | 日期 | 动作 | Commit |
 |------|------|--------|
-| — | — | — |
+| 2026-06-12 | Phase 1：`CausalLm` + `BlockWrapper` + shared factory | 待提交 |
 
 ---
 

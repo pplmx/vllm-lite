@@ -3,6 +3,12 @@
 //! Centralizes greedy sampling and batch forward loops so architecture-specific
 //! models (Llama, Mistral, Qwen3, …) stay focused on layer wiring.
 
+mod block_wrapper;
+mod model;
+
+pub use block_wrapper::BlockWrapper;
+pub use model::CausalLm;
+
 use crate::components::decoder_block::PagedDecoderBlock;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{D, Device, Module, Tensor};
@@ -182,8 +188,8 @@ pub fn mean_pool_embeddings(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::components::decoder_block::new_block;
     use crate::config::ModelConfig;
-    use crate::llama::block::new_block;
     use candle_nn::{Embedding, VarBuilder};
 
     #[test]
