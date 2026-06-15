@@ -243,7 +243,7 @@ impl TransformerBlock {
         let intermediate_size = config.intermediate_size;
         let theta = config.rope_theta;
         let rms_norm_eps = config.rms_norm_eps;
-        let has_qk_norm = false;
+        let has_qk_norm = config.has_qk_norm;
 
         let get_weight = |keys: &[&str]| -> Option<&Tensor> {
             for key in keys {
@@ -318,6 +318,28 @@ impl TransformerBlock {
             layer_weights,
         )
     }
+}
+
+pub fn new_block(config: &crate::config::ModelConfig, _layer_idx: usize) -> Result<TransformerBlock> {
+    TransformerBlock::new(
+        config.hidden_size,
+        config.num_heads,
+        config.num_kv_heads,
+        config.head_dim,
+        config.intermediate_size,
+        config.rope_theta,
+        config.rms_norm_eps,
+        None,
+        config.has_qk_norm,
+    )
+}
+
+pub fn block_from_weights(
+    config: &crate::config::ModelConfig,
+    layer_idx: usize,
+    weights: &std::collections::HashMap<String, Tensor>,
+) -> Result<TransformerBlock> {
+    TransformerBlock::from_weights(config, layer_idx, weights)
 }
 
 #[cfg(test)]

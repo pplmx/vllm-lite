@@ -124,7 +124,35 @@ impl From<&ModelConfig> for Qwen3Config {
             max_position_embeddings: Some(config.max_position_embeddings),
             rms_norm_eps: Some(config.rms_norm_eps as f32),
             tie_word_embeddings: Some(config.tie_word_embeddings),
+            has_qk_norm: Some(config.has_qk_norm),
             ..Default::default()
+        }
+    }
+}
+
+impl From<&Qwen3Config> for ModelConfig {
+    fn from(config: &Qwen3Config) -> Self {
+        Self {
+            architecture: crate::config::Architecture::Qwen3,
+            hidden_size: config.hidden_size(),
+            num_layers: config.num_hidden_layers(),
+            num_heads: config.num_attention_heads(),
+            num_kv_heads: config.num_key_value_heads(),
+            head_dim: config.head_dim(),
+            vocab_size: config.vocab_size(),
+            intermediate_size: config.intermediate_size(),
+            rope_theta: config.rope_theta(),
+            rms_norm_eps: config.rms_norm_eps(),
+            tie_word_embeddings: config.tie_word_embeddings(),
+            max_position_embeddings: config.max_position_embeddings(),
+            sliding_window: None,
+            layer_types: vec![],
+            rope_configs: vec![],
+            use_double_wide_mlp: false,
+            num_experts: None,
+            top_k_experts: None,
+            expert_intermediate_size: None,
+            has_qk_norm: config.has_qk_norm(),
         }
     }
 }

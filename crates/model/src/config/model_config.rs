@@ -25,6 +25,8 @@ pub struct ModelConfig {
     pub num_experts: Option<usize>,
     pub top_k_experts: Option<usize>,
     pub expert_intermediate_size: Option<usize>,
+    /// Qwen3-style Q/K RMSNorm before RoPE (default false for other architectures).
+    pub has_qk_norm: bool,
 }
 
 impl ModelConfig {
@@ -65,6 +67,7 @@ impl ModelConfig {
             num_experts: None,
             top_k_experts: None,
             expert_intermediate_size: None,
+            has_qk_norm: false,
         }
     }
 
@@ -91,6 +94,7 @@ impl ModelConfig {
             num_experts: None,
             top_k_experts: None,
             expert_intermediate_size: None,
+            has_qk_norm: false,
         }
     }
 
@@ -116,6 +120,7 @@ impl ModelConfig {
             num_experts: None,
             top_k_experts: None,
             expert_intermediate_size: None,
+            has_qk_norm: false,
         }
     }
 
@@ -140,6 +145,7 @@ impl ModelConfig {
             num_experts: None,
             top_k_experts: None,
             expert_intermediate_size: None,
+            has_qk_norm: false,
         }
     }
 
@@ -164,6 +170,7 @@ impl ModelConfig {
             num_experts: None,
             top_k_experts: None,
             expert_intermediate_size: None,
+            has_qk_norm: false,
         }
     }
 
@@ -188,6 +195,7 @@ impl ModelConfig {
             num_experts: Some(8),
             top_k_experts: Some(2),
             expert_intermediate_size: Some(14336),
+            has_qk_norm: false,
         }
     }
 
@@ -261,6 +269,10 @@ impl ModelConfig {
             .get("expert_intermediate_size")
             .and_then(|v| v.as_u64())
             .map(|v| v as usize);
+        let has_qk_norm = value
+            .get("has_qk_norm")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
 
         Ok(Self {
             architecture,
@@ -282,6 +294,7 @@ impl ModelConfig {
             num_experts,
             top_k_experts,
             expert_intermediate_size,
+            has_qk_norm,
         })
     }
 }

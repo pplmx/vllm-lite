@@ -262,6 +262,7 @@ mod tests {
             num_experts: None,
             top_k_experts: None,
             expert_intermediate_size: None,
+            has_qk_norm: false,
         }
     }
 
