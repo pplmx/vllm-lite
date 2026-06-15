@@ -1,6 +1,6 @@
 //! Llama architecture implementation.
 
-use crate::arch::Architecture;
+use crate::arch::{ArchCapabilities, Architecture};
 use crate::components::TransformerBlock;
 use crate::components::decoder_block::PagedDecoderBlock;
 use crate::config::ModelConfig;
@@ -100,6 +100,10 @@ impl Architecture for LlamaArchitecture {
             model_type.to_lowercase().as_str(),
             "llama" | "llama2" | "llama3"
         )
+    }
+
+    fn capabilities(&self) -> ArchCapabilities {
+        ArchCapabilities::PRODUCTION
     }
 
     fn create_block(

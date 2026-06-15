@@ -5,7 +5,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use super::Architecture;
+use super::{ArchCapabilities, Architecture};
 
 type ArchFactory = Arc<dyn Fn() -> Box<dyn Architecture> + Send + Sync>;
 
@@ -59,6 +59,12 @@ impl ArchitectureRegistry {
             .map(|guard| guard.keys().cloned().collect())
             .unwrap_or_default()
     }
+
+    /// Returns capabilities for the architecture detected from `config_json`.
+    pub fn capabilities_for(&self, config_json: &Value) -> Option<ArchCapabilities> {
+        let name = self.detect(config_json)?;
+        self.get(&name).map(|arch| arch.capabilities())
+    }
 }
 
 pub static ARCHITECTURE_REGISTRY: Lazy<ArchitectureRegistry> = Lazy::new(ArchitectureRegistry::new);
@@ -90,6 +96,9 @@ mod tests {
                 .get("test")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false)
+        }
+        fn capabilities(&self) -> ArchCapabilities {
+            ArchCapabilities::STUB
         }
         fn create_block(
             &self,

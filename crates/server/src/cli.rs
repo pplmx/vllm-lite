@@ -111,6 +111,10 @@ struct ServerArgs {
 pub struct ModelArgs {
     #[arg(long, required = true, env = "VLLM_MODEL", short = 'm')]
     pub model: PathBuf,
+
+    /// Allow loading stub architectures that do not perform real inference.
+    #[arg(long, default_value = "false", env = "VLLM_ALLOW_STUB")]
+    pub allow_stub: bool,
 }
 
 #[derive(clap::Args, Debug, Clone)]

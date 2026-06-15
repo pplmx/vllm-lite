@@ -1,6 +1,6 @@
 //! Qwen3 architecture implementation.
 
-use crate::arch::Architecture;
+use crate::arch::{ArchCapabilities, Architecture};
 use crate::components::TransformerBlock;
 use crate::components::decoder_block::PagedDecoderBlock;
 use crate::config::ModelConfig;
@@ -101,6 +101,10 @@ impl Architecture for Qwen3Architecture {
             model_type.to_lowercase().as_str(),
             "qwen2" | "qwen2.5" | "qwen2_5" | "qwen3" | "qwen_3"
         )
+    }
+
+    fn capabilities(&self) -> ArchCapabilities {
+        ArchCapabilities::PRODUCTION_SPECULATIVE
     }
 
     fn create_block(

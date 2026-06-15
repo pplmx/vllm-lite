@@ -1,6 +1,6 @@
 //! Phi-4 architecture implementation.
 
-use crate::arch::Architecture;
+use crate::arch::{ArchCapabilities, Architecture};
 use crate::components::block::{
     passthrough_paged_decode, passthrough_paged_prefill, TransformerBlock,
 };
@@ -101,6 +101,10 @@ impl Architecture for Phi4Architecture {
         let is_phi = model_type.to_lowercase().starts_with("phi");
 
         is_phi && hidden_size > 0
+    }
+
+    fn capabilities(&self) -> ArchCapabilities {
+        ArchCapabilities::STUB
     }
 
     fn create_block(

@@ -1,6 +1,6 @@
 //! Mistral Small architecture implementation.
 
-use crate::arch::Architecture;
+use crate::arch::{ArchCapabilities, Architecture};
 use crate::components::block::{
     passthrough_paged_decode, passthrough_paged_prefill, TransformerBlock,
 };
@@ -129,6 +129,10 @@ impl Architecture for MistralSmallArchitecture {
                 || model_type.to_lowercase().contains("mistral-small"));
 
         is_mistral_small && hidden_size > 0 && num_experts > 1
+    }
+
+    fn capabilities(&self) -> ArchCapabilities {
+        ArchCapabilities::STUB
     }
 
     fn create_block(

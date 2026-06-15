@@ -1,6 +1,6 @@
 //! Llama 4 architecture implementation.
 
-use crate::arch::Architecture;
+use crate::arch::{ArchCapabilities, Architecture};
 use crate::components::block::{
     passthrough_paged_decode, passthrough_paged_prefill, TransformerBlock,
 };
@@ -129,6 +129,10 @@ impl Architecture for Llama4Architecture {
         );
 
         is_llama4 && hidden_size > 0
+    }
+
+    fn capabilities(&self) -> ArchCapabilities {
+        ArchCapabilities::STUB
     }
 
     fn create_block(

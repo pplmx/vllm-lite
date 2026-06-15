@@ -10,14 +10,18 @@ use vllm_traits::ModelBackend;
 use crate::components::TransformerBlock;
 use crate::config::ModelConfig;
 
+pub mod capabilities;
 pub mod registry;
 
+pub use capabilities::ArchCapabilities;
 pub use registry::{ARCHITECTURE_REGISTRY, ArchitectureRegistry, register_all_archs};
 
 pub trait Architecture: Send + Sync + 'static {
     fn name(&self) -> &'static str;
 
     fn detect(&self, config_json: &serde_json::Value) -> bool;
+
+    fn capabilities(&self) -> ArchCapabilities;
 
     fn create_block(
         &self,

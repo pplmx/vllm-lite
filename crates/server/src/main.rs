@@ -88,6 +88,7 @@ async fn main() {
         .with_model_dir(model_path.clone())
         .with_kv_blocks(app_config.engine.num_kv_blocks)
         .with_kv_quantization(app_config.engine.kv_quantization)
+        .with_allow_stub(cli.model.allow_stub)
         .build()
         .unwrap_or_else(|e| panic!("Failed to create loader: {}", e));
 
