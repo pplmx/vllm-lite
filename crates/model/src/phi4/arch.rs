@@ -1,8 +1,12 @@
 //! Phi-4 architecture implementation.
 
 use crate::arch::Architecture;
-use crate::components::TransformerBlock;
+use crate::components::block::{
+    passthrough_paged_decode, passthrough_paged_prefill, TransformerBlock,
+};
+use crate::components::decoder_block::PagedDecoderBlock;
 use crate::config::ModelConfig;
+use crate::paged_tensor::PagedKvCache;
 use candle_core::{Device, Result, Tensor};
 use std::collections::HashMap;
 use vllm_traits::ModelBackend;
@@ -36,18 +40,39 @@ impl Phi4BlockWrapper {
     }
 }
 
-impl TransformerBlock for Phi4BlockWrapper {
-    fn forward(
-        &mut self,
-        hidden_states: &Tensor,
-        _positions: &[usize],
-        _kv_block_ids: &[usize],
-        _num_computed: usize,
-        _is_prefill: bool,
+impl PagedDecoderBlock for Phi4BlockWrapper {
+    fn forward_prefill(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        positions: &[usize],
     ) -> Result<Tensor> {
-        Ok(hidden_states.clone())
+        passthrough_paged_prefill(x, kv_cache, layer_idx, block_ids, positions)
     }
 
+    fn forward_decode(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        num_computed_tokens: usize,
+        positions: &[usize],
+    ) -> Result<Tensor> {
+        passthrough_paged_decode(
+            x,
+            kv_cache,
+            layer_idx,
+            block_ids,
+            num_computed_tokens,
+            positions,
+        )
+    }
+}
+
+impl TransformerBlock for Phi4BlockWrapper {
     fn inner_dim(&self) -> usize {
         self.inner_dim
     }

@@ -1,6 +1,7 @@
 //! Shared pre-norm decoder block: RMSNorm → RoPE GQA → residual → RMSNorm → SwiGLU → residual.
 //!
 //! Used by Llama, Mistral, and Qwen3 causal-LM stacks.
+//! Registry blocks implement this trait via [`super::block::TransformerBlock`].
 
 use crate::components::LnLayerNorm;
 use crate::components::SwiGLU;
