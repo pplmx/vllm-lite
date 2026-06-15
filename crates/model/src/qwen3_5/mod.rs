@@ -5,5 +5,5 @@ pub mod model;
 pub mod register;
 pub mod ssm;
 
-pub use gated_delta::GatedDeltaNet;
+pub use gated_delta::{GatedDeltaNet, GatedDeltaState};
 pub use hybrid::Qwen35HybridModel;
