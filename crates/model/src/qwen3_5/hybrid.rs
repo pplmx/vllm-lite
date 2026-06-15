@@ -1,6 +1,6 @@
 #![allow(clippy::all, non_snake_case, dead_code, clippy::too_many_arguments)]
 use crate::components::positional::MRoPE;
-use crate::components::ssm::softplus;
+use crate::qwen3_5::gated_delta::{GatedDeltaConfig, GatedDeltaNet};
 use crate::paged_tensor::PagedKvCache;
 use crate::qwen3_config::Qwen3Config;
 use candle_core::{DType, Device, Module, Result as CandleResult, Tensor};
@@ -43,10 +43,7 @@ impl HybridBlock {
 }
 
 pub struct LinearAttentionBlock {
-    input_proj: Linear,
-    ssm: SSMLayer35,
-    output_proj: Linear,
-    norm: LayerNorm,
+    pub(crate) gdn: GatedDeltaNet,
     linear_attn: Option<LinearAttentionForMamba>,
     gate: Option<Linear>,
 }
@@ -87,136 +84,51 @@ pub struct MLP35 {
     down_proj: Linear,
 }
 
-pub struct SSMLayer35 {
-    x_proj: Linear,
-    in_proj_a: Linear,
-    a_log: Tensor,
-    dt_bias: Tensor,
-    conv: Conv1d,
-    d_inner: usize,
-    d_state: usize,
-}
-
-impl SSMLayer35 {
-    pub fn new(
-        d_inner: usize,
-        d_state: usize,
-        d_conv: usize,
-        vb: VarBuilder,
-    ) -> CandleResult<Self> {
-        let x_proj = candle_nn::linear(d_inner * 3, d_inner * 3, vb.pp("x_proj"))?;
-        let in_proj_a = candle_nn::linear(d_inner, d_state, vb.pp("in_proj_a"))?;
-        let a_log = Tensor::zeros(d_state, DType::F32, vb.device())?;
-        let dt_bias = Tensor::zeros(d_state, DType::F32, vb.device())?;
-        let conv_cfg = candle_nn::Conv1dConfig {
-            padding: d_conv - 1,
-            ..Default::default()
-        };
-        let conv = conv1d(d_inner * 3, d_inner * 3, d_conv, conv_cfg, vb.pp("conv"))?;
-
-        Ok(Self {
-            x_proj,
-            in_proj_a,
-            a_log,
-            dt_bias,
-            conv,
-            d_inner,
-            d_state,
-        })
-    }
-
-    pub fn forward(&self, x: &Tensor) -> CandleResult<(Tensor, Tensor, Tensor, Tensor)> {
-        let x_conv = x.transpose(1, 2)?;
-        let x_conv = self.conv.forward(&x_conv)?;
-        let x_conv = x_conv.transpose(1, 2)?;
-        let x_conv = candle_nn::ops::silu(&x_conv)?;
-
-        let x_ssm = self.x_proj.forward(&x_conv)?;
-
-        let parts = x_ssm.chunk(3, 2)?;
-        let delta = &parts[0];
-        let b = &parts[1];
-        let c = &parts[2];
-
-        let delta = candle_nn::ops::silu(delta)?;
-
-        Ok((delta, b.clone(), c.clone(), x_conv))
-    }
-
-    pub fn forward_with_a(
-        &self,
-        x: &Tensor,
-        a_input: &Tensor,
-    ) -> CandleResult<(Tensor, Tensor, Tensor, Tensor, Tensor)> {
-        let x_conv = x.transpose(1, 2)?;
-        let x_conv = self.conv.forward(&x_conv)?;
-        let x_conv = x_conv.transpose(1, 2)?;
-        let x_conv = candle_nn::ops::silu(&x_conv)?;
-
-        let x_conv_len = x_conv.dims()[1];
-        let x_len = x.dims()[1];
-        let x_conv = if x_conv_len > x_len {
-            x_conv.narrow(1, x_conv_len - x_len, x_len)?
-        } else if x_conv_len < x_len {
-            let pad = Tensor::zeros(
-                (x_conv.dims()[0], x_len - x_conv_len, x_conv.dims()[2]),
-                x_conv.dtype(),
-                x.device(),
-            )?;
-            Tensor::cat(&[&x_conv, &pad], 1)?
-        } else {
-            x_conv
-        };
-
-        let x_ssm = self.x_proj.forward(&x_conv)?;
-
-        let parts = x_ssm.chunk(3, 2)?;
-        let delta = &parts[0];
-        let b = &parts[1];
-        let c = &parts[2];
-
-        let a_proj_out = self.in_proj_a.forward(a_input)?;
-
-        let delta = candle_nn::ops::silu(delta)?;
-
-        Ok((delta, b.clone(), c.clone(), x_conv, a_proj_out))
-    }
-
-    pub fn d_inner(&self) -> usize {
-        self.d_inner
-    }
-    pub fn d_state(&self) -> usize {
-        self.d_state
-    }
-    pub fn a_log(&self) -> &Tensor {
-        &self.a_log
-    }
-
-    pub fn dt_bias(&self) -> &Tensor {
-        &self.dt_bias
-    }
-}
-
 impl LinearAttentionBlock {
     pub fn new(
         d_model: usize,
         d_state: usize,
         d_conv: usize,
-        expand: usize,
+        _expand: usize,
         vb: VarBuilder,
     ) -> CandleResult<Self> {
-        let d_inner = expand * d_model;
+        let num_v_heads = d_state.max(1);
+        let num_k_heads = (num_v_heads / 2).max(1);
+        let key_head_dim = 16;
+        let value_head_dim = 16;
+        let config = GatedDeltaConfig {
+            num_k_heads,
+            num_v_heads,
+            key_head_dim,
+            value_head_dim,
+        };
 
-        let input_proj = candle_nn::linear(d_model, d_inner * 3, vb.pp("in_proj"))?;
-        let ssm = SSMLayer35::new(d_inner, d_state, d_conv, vb.clone())?;
-        let output_proj = candle_nn::linear(d_inner, d_model, vb.pp("out_proj"))?;
-        let norm = candle_nn::layer_norm(d_model, 1e-5, vb.pp("norm"))?;
+        let conv_cfg = candle_nn::Conv1dConfig {
+            padding: d_conv - 1,
+            groups: config.qkv_proj_dim(),
+            ..Default::default()
+        };
+        let gdn = GatedDeltaNet::from_components(
+            config,
+            candle_nn::linear(d_model, config.qkv_proj_dim(), vb.pp("in_proj_qkv"))?,
+            candle_nn::linear(d_model, config.value_dim(), vb.pp("in_proj_z"))?,
+            candle_nn::linear(d_model, num_v_heads, vb.pp("in_proj_a"))?,
+            candle_nn::linear(d_model, num_v_heads, vb.pp("in_proj_b"))?,
+            conv1d(
+                config.qkv_proj_dim(),
+                config.qkv_proj_dim(),
+                d_conv,
+                conv_cfg,
+                vb.pp("conv"),
+            )?,
+            Tensor::zeros(num_v_heads, DType::F32, vb.device())?,
+            Tensor::zeros(num_v_heads, DType::F32, vb.device())?,
+            candle_nn::linear(config.value_dim(), d_model, vb.pp("out_proj"))?,
+            candle_nn::layer_norm(d_model, 1e-5, vb.pp("norm"))?,
+        );
 
         Ok(Self {
-            input_proj,
-            ssm,
-            output_proj,
-            norm,
+            gdn,
             linear_attn: None,
             gate: None,
         })
@@ -271,91 +183,7 @@ impl LinearAttentionBlock {
     }
 
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
-        let residual = x.clone();
-
-        let x_proj_out = self.input_proj.forward(x)?;
-
-        let batch = x_proj_out.dims()[0];
-        let seq_len = if x_proj_out.dims().len() == 3 {
-            x_proj_out.dims()[1]
-        } else {
-            1
-        };
-
-        if x_proj_out.dims().len() == 2 {
-            let x_3d = x_proj_out.unsqueeze(1)?;
-            let output = self.output_proj.forward(&x_3d)?;
-            return output.squeeze(1)?.add(&residual);
-        }
-
-        if seq_len < 4 {
-            let gated = candle_nn::ops::silu(&x_proj_out)?;
-            let output = self.output_proj.forward(&gated)?;
-            let output = if output.dims().len() == 3 && output.dims()[1] == 1 {
-                output.squeeze(1)?
-            } else {
-                output
-            };
-
-            return output.add(&residual);
-        }
-
-        let parts = x_proj_out.chunk(3, 2)?;
-        let z = &parts[0];
-
-        let (delta, b, c, _x_conv, a_proj_out) = self.ssm.forward_with_a(&x_proj_out, &residual)?;
-
-        let d_inner = self.ssm.d_inner();
-        let d_state = self.ssm.d_state();
-
-        let a_log = self.ssm.a_log();
-
-        let mut h = Tensor::zeros((batch, d_state, d_inner), DType::F32, x.device())?;
-        let mut outputs: Vec<Tensor> = Vec::with_capacity(seq_len);
-
-        let dt_bias = self.ssm.dt_bias().reshape((1, d_state))?;
-        let neg_a_log_exp = a_log.reshape((1, d_state))?.exp()?.neg()?;
-
-        for t in 0..seq_len {
-            let dt_t = delta.narrow(1, t, 1)?.squeeze(1)?;
-            let a_t = a_proj_out
-                .narrow(1, t, 1)?
-                .squeeze(1)?
-                .reshape((batch, d_state))?;
-            let b_t = b.narrow(1, t, 1)?.squeeze(1)?.reshape((batch, d_state))?;
-            let c_t = c.narrow(1, t, 1)?.squeeze(1)?.reshape((batch, d_state))?;
-
-            let softplus_a = softplus(&a_t.broadcast_add(&dt_bias)?)?;
-            let g = neg_a_log_exp.broadcast_mul(&softplus_a)?;
-            let a_decay = g.exp()?;
-
-            let dt_act = candle_nn::ops::silu(&dt_t)?.reshape((batch, 1, d_inner))?;
-
-            let a_decay_3d = a_decay.reshape((batch, d_state, 1))?;
-            let h_new = a_decay_3d.broadcast_mul(&h)?;
-
-            let b_dt = b_t.reshape((batch, d_state, 1))?.broadcast_mul(&dt_act)?;
-            let h_new = h_new.broadcast_add(&b_dt)?;
-
-            let c_3d = c_t.reshape((batch, d_state, 1))?;
-            let y_t = c_3d.broadcast_mul(&h_new)?;
-
-            outputs.push(y_t);
-            h = h_new;
-        }
-
-        let ssm_out = Tensor::cat(&outputs, 1)?;
-
-        let ssm_act = candle_nn::ops::silu(&ssm_out)?;
-
-        let gated = z.broadcast_mul(&ssm_act)?;
-
-        let output = self.output_proj.forward(&gated)?;
-
-        let output = output.add(&residual)?;
-        let output = self.norm.forward(&output)?;
-
-        Ok(output)
+        self.gdn.forward(x)
     }
 }
 
@@ -720,103 +548,109 @@ impl LinearAttentionBlock {
         prefix: &str,
         weights: &HashMap<String, Tensor>,
         d_model: usize,
-        d_state: usize,
+        _d_state: usize,
         _d_conv: usize,
-        expand: usize,
+        _expand: usize,
     ) -> CandleResult<Self> {
-        let d_inner = expand * d_model;
-
-        let in_proj_key = format!("{}.linear_attn.in_proj_qkv.weight", prefix);
-        let in_proj_w = match weights.get(&in_proj_key).cloned() {
-            Some(w) => w,
-            None => return Err(candle_core::Error::msg(format!("Missing {}", in_proj_key))),
-        };
-        let input_proj = Linear::new(in_proj_w, None);
-
-        let x_proj_key = format!("{}.linear_attn.in_proj_qkv.weight", prefix);
+        let in_proj_qkv_key = format!("{}.linear_attn.in_proj_qkv.weight", prefix);
+        let in_proj_z_key = format!("{}.linear_attn.in_proj_z.weight", prefix);
         let in_proj_a_key = format!("{}.linear_attn.in_proj_a.weight", prefix);
+        let in_proj_b_key = format!("{}.linear_attn.in_proj_b.weight", prefix);
         let a_log_key = format!("{}.linear_attn.A_log", prefix);
         let dt_bias_key = format!("{}.linear_attn.dt_bias", prefix);
         let conv_key = format!("{}.linear_attn.conv1d.weight", prefix);
+        let out_proj_key = format!("{}.linear_attn.out_proj.weight", prefix);
+        let norm_key = format!("{}.linear_attn.norm.weight", prefix);
 
-        let x_proj_w = match weights.get(&x_proj_key).cloned() {
-            Some(w) => w,
-            None => return Err(candle_core::Error::msg(format!("Missing {}", x_proj_key))),
-        };
-        let in_proj_a_w = match weights.get(&in_proj_a_key).cloned() {
-            Some(w) => w,
-            None => {
-                return Err(candle_core::Error::msg(format!(
-                    "Missing {}",
-                    in_proj_a_key
-                )));
-            }
-        };
-        let a_log_w = match weights.get(&a_log_key).cloned() {
-            Some(w) => w,
-            None => return Err(candle_core::Error::msg(format!("Missing {}", a_log_key))),
-        };
-        let dt_bias_w = match weights.get(&dt_bias_key).cloned() {
-            Some(w) => w,
-            None => return Err(candle_core::Error::msg(format!("Missing {}", dt_bias_key))),
-        };
-        let conv_w = match weights.get(&conv_key).cloned() {
-            Some(w) => w,
-            None => return Err(candle_core::Error::msg(format!("Missing {}", conv_key))),
+        let in_proj_qkv_w = weights
+            .get(&in_proj_qkv_key)
+            .cloned()
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", in_proj_qkv_key)))?;
+        let in_proj_z_w = weights
+            .get(&in_proj_z_key)
+            .cloned()
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", in_proj_z_key)))?;
+        let in_proj_a_w = weights
+            .get(&in_proj_a_key)
+            .cloned()
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", in_proj_a_key)))?;
+        let in_proj_b_w = weights
+            .get(&in_proj_b_key)
+            .cloned()
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", in_proj_b_key)))?;
+        let a_log_w = weights
+            .get(&a_log_key)
+            .cloned()
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", a_log_key)))?;
+        let dt_bias_w = weights
+            .get(&dt_bias_key)
+            .cloned()
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", dt_bias_key)))?;
+        let conv_w = weights
+            .get(&conv_key)
+            .cloned()
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", conv_key)))?;
+        let out_proj_w = weights
+            .get(&out_proj_key)
+            .cloned()
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", out_proj_key)))?;
+        let norm_w = weights
+            .get(&norm_key)
+            .cloned()
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", norm_key)))?;
+
+        let num_v_heads = a_log_w.dims()[0];
+        let value_dim = in_proj_z_w.dim(0).unwrap_or(d_model);
+        let value_head_dim = value_dim / num_v_heads;
+        let qkv_dim = in_proj_qkv_w.dim(0).unwrap_or(value_dim);
+        let key_dim = (qkv_dim - value_dim) / 2;
+        let key_head_dim = value_head_dim;
+        let num_k_heads = key_dim / key_head_dim;
+
+        let config = GatedDeltaConfig {
+            num_k_heads,
+            num_v_heads,
+            key_head_dim,
+            value_head_dim,
         };
 
-        let x_proj = Linear::new(x_proj_w, None);
-        let in_proj_a = Linear::new(in_proj_a_w, None);
-
+        let conv_in = conv_w.dim(1).unwrap_or(config.qkv_proj_dim());
         let conv_cfg = candle_nn::Conv1dConfig {
             padding: 3,
             stride: 1,
             dilation: 1,
-            groups: 6144,
+            groups: conv_in,
             cudnn_fwd_algo: None,
         };
         let conv = Conv1d::new(conv_w, None, conv_cfg);
 
-        let ssm = SSMLayer35 {
-            x_proj,
-            in_proj_a,
-            a_log: a_log_w,
-            dt_bias: dt_bias_w,
-            conv,
-            d_inner,
-            d_state,
-        };
-
-        let out_proj_key = format!("{}.linear_attn.out_proj.weight", prefix);
-        let out_proj_w = match weights.get(&out_proj_key).cloned() {
-            Some(w) => w,
-            None => return Err(candle_core::Error::msg(format!("Missing {}", out_proj_key))),
-        };
-        let output_proj = Linear::new(out_proj_w, None);
-
-        let norm_key = format!("{}.linear_attn.norm.weight", prefix);
-        let norm_w = match weights.get(&norm_key).cloned() {
-            Some(w) => w,
-            None => return Err(candle_core::Error::msg(format!("Missing {}", norm_key))),
-        };
-        let norm_b = match weights
+        let norm_b = weights
             .get(&format!("{}.linear_attn.norm.bias", prefix))
             .cloned()
-        {
-            Some(w) => w,
-            None => Tensor::zeros(
-                norm_w.dim(0).unwrap_or(d_model),
-                DType::F32,
-                norm_w.device(),
-            )?,
-        };
-        let norm = LayerNorm::new(norm_w, norm_b, 1e-5);
+            .unwrap_or_else(|| {
+                Tensor::zeros(
+                    norm_w.dim(0).unwrap_or(d_model),
+                    DType::F32,
+                    norm_w.device(),
+                )
+                .expect("Failed to create norm bias")
+            });
+
+        let gdn = GatedDeltaNet::from_components(
+            config,
+            Linear::new(in_proj_qkv_w, None),
+            Linear::new(in_proj_z_w, None),
+            Linear::new(in_proj_a_w, None),
+            Linear::new(in_proj_b_w, None),
+            conv,
+            a_log_w,
+            dt_bias_w,
+            Linear::new(out_proj_w, None),
+            LayerNorm::new(norm_w, norm_b, 1e-5),
+        );
 
         Ok(Self {
-            input_proj,
-            ssm,
-            output_proj,
-            norm,
+            gdn,
             linear_attn: None,
             gate: None,
         })
@@ -1273,8 +1107,18 @@ mod tests {
             LinearAttentionBlock::new(1024, 16, 4, 2, VarBuilder::zeros(DType::F32, &device))
                 .unwrap();
 
-        assert_eq!(block.ssm.d_inner(), 2048);
-        assert_eq!(block.ssm.d_state(), 16);
+        assert_eq!(block.gdn.config.num_v_heads, 16);
+        assert_eq!(block.gdn.config.num_k_heads, 8);
+    }
+
+    #[test]
+    fn test_linear_attention_block_forward_shape() {
+        let device = Device::Cpu;
+        let block = LinearAttentionBlock::new(64, 8, 4, 2, VarBuilder::zeros(DType::F32, &device))
+            .unwrap();
+        let x = Tensor::randn(0.0f32, 1.0, (1, 6, 64), &device).unwrap();
+        let out = block.forward(&x).unwrap();
+        assert_eq!(out.dims(), x.dims());
     }
 
     #[test]
@@ -1371,67 +1215,6 @@ mod tests {
         let out = mlp.forward(&x).unwrap();
 
         assert_eq!(out.dims(), &[1, 3, 256]);
-    }
-
-    #[test]
-    fn test_ssm_layer_dimensions() {
-        let device = Device::Cpu;
-        let ssm = SSMLayer35::new(256, 16, 4, VarBuilder::zeros(DType::F32, &device)).unwrap();
-
-        assert_eq!(ssm.d_inner(), 256);
-        assert_eq!(ssm.d_state(), 16);
-    }
-
-    #[test]
-    fn test_ssm_layer_forward_output_shapes() {
-        let device = Device::Cpu;
-        let d_inner = 128;
-        let ssm = SSMLayer35::new(d_inner, 16, 4, VarBuilder::zeros(DType::F32, &device)).unwrap();
-
-        let x = Tensor::ones((2, 5, d_inner * 3), DType::F32, &device).unwrap();
-        let (delta, b, c, x_conv) = ssm.forward(&x).unwrap();
-
-        assert_eq!(delta.dims()[0], 2);
-        assert_eq!(delta.dims()[2], d_inner);
-        assert_eq!(b.dims()[0], 2);
-        assert_eq!(b.dims()[2], d_inner);
-        assert_eq!(c.dims()[0], 2);
-        assert_eq!(c.dims()[2], d_inner);
-        assert_eq!(x_conv.dims()[0], 2);
-        assert_eq!(x_conv.dims()[2], d_inner * 3);
-        assert!(x_conv.dims()[1] >= 5);
-    }
-
-    #[test]
-    fn test_linear_attention_block_ssm_output_shape() {
-        let device = Device::Cpu;
-        let d_model = 256;
-        let expand = 2;
-        let d_inner = expand * d_model;
-        let block = LinearAttentionBlock::new(
-            d_model,
-            16,
-            4,
-            expand,
-            VarBuilder::zeros(DType::F32, &device),
-        )
-        .unwrap();
-
-        let x = Tensor::ones((1, 3, d_model), DType::F32, &device).unwrap();
-        let x_proj = block.input_proj.forward(&x).unwrap();
-
-        let (_delta, _b, _c, x_conv) = block.ssm.forward(&x_proj).unwrap();
-
-        assert_eq!(x_conv.dims()[0], 1);
-        assert_eq!(x_conv.dims()[2], d_inner * 3);
-        assert!(x_conv.dims()[1] >= 3);
-    }
-
-    #[test]
-    fn test_ssm_layer35_exposes_dt_bias() {
-        let device = Device::Cpu;
-        let ssm = SSMLayer35::new(256, 16, 4, VarBuilder::zeros(DType::F32, &device)).unwrap();
-        assert_eq!(ssm.dt_bias().dims(), &[16]);
     }
 
     #[test]
