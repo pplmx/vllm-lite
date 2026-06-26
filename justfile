@@ -67,9 +67,9 @@ cov:
 clean:
     cargo clean
 
-# Run benchmarks
+# Run all benchmarks (CPU; ~5-10 min)
 bench:
-    cargo bench --workspace --all-features --no-fail-fast
+    cargo bench --workspace --all-features --no-fail-fast -- --output-format bencher
 
 # Run quick benchmarks (core radix cache only)
 bench-quick:
