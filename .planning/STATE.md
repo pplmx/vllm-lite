@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v17.0
 milestone_name: Production Speculative Decoding
 status: complete
-last_updated: "2026-06-26T15:27:09.000Z"
+last_updated: "2026-06-26T17:37:07.000Z"
 last_activity: 2026-06-26
 progress:
   total_phases: 4
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-26)
 
 **Core value:** Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
-**Current focus:** Wave 4 of 5 (SPEC-WARM-01 测试覆盖 + doc sync) — Wave 5 (SPEC-BENCH) 在 pipeline
+**Current focus:** Wave 5 of 5 (SPEC-BENCH-01/02 benchmark suite + doc sync) — v17.0 收官中
 
 ---
 
 ## Current Position
 
-Wave: 4 of 5 (Wave 4: SPEC-WARM-01 测试覆盖 + doc sync)
-Status: Wave 4 in progress; Wave 5 in pipeline
+Wave: 5 of 5 (Wave 5: SPEC-BENCH-01/02 benchmark suite + doc sync)
+Status: Wave 5 in progress; v17.0 收官 in pipeline
 Last activity: 2026-06-26 — Wave 1 spec 落地 (`d42b151`)
 
 Progress: [██████████] 100%

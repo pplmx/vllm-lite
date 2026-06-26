@@ -146,6 +146,8 @@
 
 > 2026-06-26 更新：Wave 4 完成 SPEC-WARM-01 测试覆盖（`Engine::warmup_draft_kv` 改 `pub(crate)` + `CounterModel` wrapper + fast 单测 `test_warmup_draft_kv_invokes_draft_per_sequence`）。Wave 5 (SPEC-BENCH real-hardware benchmarks) 待启动。
 
+> 2026-06-26 更新：Wave 5 完成 SPEC-BENCH-01/02（2 新 bench: `latency_percentiles` 报 p50/p95/p99 + `speculative_vs_baseline`；suite 文档 `docs/benchmark-suite.md`；justfile `bench` entry）。v17.0 9 条 SPEC 中 7 条完成（剩 SPEC-MULTI-01/02 deferred v18.0）。
+
 ---
 
 ## ✅ Phase 6: 多模型支持

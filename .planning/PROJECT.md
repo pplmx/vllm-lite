@@ -99,8 +99,8 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 
 - [x] **SPEC-ENG-01**: Engine integration — `step_speculative_inner` (commit `52f77ce`)
 - [x] **SPEC-ENG-02**: Seamless fallback — parity tests in `qwen3_5/speculative_tests.rs`
-- [ ] **SPEC-BENCH-01**: Real hardware benchmark suite → Wave 5
-- [ ] **SPEC-BENCH-02**: Baseline comparison vs non-speculative inference → Wave 5
+- [x] **SPEC-BENCH-01**: Real hardware benchmark suite — `latency_percentiles` bench with p50/p95/p99 + `docs/benchmark-suite.md` (commits `259bbfc` + `5cce9b1`)
+- [x] **SPEC-BENCH-02**: Baseline comparison — `speculative_vs_baseline` bench + `bench_throughput` (commits `b270b23` + `259bbfc`)
 - [x] **SPEC-ADAPT-01**: Adaptive draft depth — `AdaptiveSpeculativeDecoder` + EWMA + deadband + cooldown (commit `736b35f`)
 - [x] **SPEC-ADAPT-02**: Acceptance rate monitoring — `record_per_request_acceptance` + Prometheus `speculative_adjustments_total` + `/debug/metrics` (commit `736b35f`)
 - [x] **SPEC-WARM-01**: Speculative warmup — `Engine::warmup_draft_kv` after prefill + `draft_kv_block_ids` tracking (commit `4154d23`)
@@ -160,4 +160,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-26 — Wave 3 Dependabot 完成 + Wave 4 SPEC-WARM 测试覆盖；Wave 5 (SPEC-BENCH) 待启动*
+*Last updated: 2026-06-26 — Wave 5 SPEC-BENCH 完成；v17.0 SPEC-ENG/ADAPT/WARM/BENCH 全部完成，剩 SPEC-MULTI (deferred v18.0)*
