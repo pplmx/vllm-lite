@@ -13,11 +13,11 @@ use vllm_traits::ModelBackend;
 use vllm_traits::types::BatchOutput;
 
 pub struct Llama4Architecture {
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     is_moe: bool,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     num_experts: usize,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     num_active_experts: usize,
 }
 
@@ -48,9 +48,9 @@ impl Default for Llama4Architecture {
 pub struct Llama4BlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     is_moe: bool,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     num_experts: usize,
 }
 
@@ -164,13 +164,13 @@ impl Architecture for Llama4Architecture {
 
 pub struct Llama4Model {
     config: ModelConfig,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     device: Device,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     num_kv_blocks: usize,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     is_moe: bool,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     num_experts: usize,
 }
 

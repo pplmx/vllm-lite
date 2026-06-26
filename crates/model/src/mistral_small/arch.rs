@@ -13,9 +13,9 @@ use vllm_traits::ModelBackend;
 use vllm_traits::types::BatchOutput;
 
 pub struct MistralSmallArchitecture {
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     num_experts: usize,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     num_active_experts: usize,
 }
 
@@ -44,9 +44,9 @@ impl Default for MistralSmallArchitecture {
 pub struct MistralSmallBlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     num_experts: usize,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     num_active_experts: usize,
 }
 
@@ -170,13 +170,13 @@ impl Architecture for MistralSmallArchitecture {
 
 pub struct MistralSmallModel {
     config: ModelConfig,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     device: Device,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     num_kv_blocks: usize,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     num_experts: usize,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     num_active_experts: usize,
 }
 
