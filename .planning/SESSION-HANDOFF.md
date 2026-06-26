@@ -1,27 +1,33 @@
 # vLLM-lite Session Handoff
 
 > 新 session 可直接读取本文恢复进度。最后更新：2026-06-26  
-> Git：`main` @ `b5c587e` (Wave 1 + 1.6 + 2 全部完成：18 commits；Phase 0–5 + SPEC-ADAPT counter wire-up)
+> Git：`main` @ `4d58829` (Wave 1 + 1.6 + 2 + 3 全部完成：21 commits)
 
 ---
 
-## 下一优先级（2026-06-26，Wave 2 完成）
+## 下一优先级（2026-06-26，Wave 3 完成）
 
-**Wave 1 + 1.6 + 2 全部完成（18 commits）**
+**Wave 1 + 1.6 + 2 + 3 全部完成（21 commits）**
 
 | Wave | Commit 范围 | 描述 |
 |------|------------|------|
 | 1 | `d42b151` ~ `1499fcd` | 文档同步 + dead_code 审计（11 commits） |
 | 1.6 | `a4886a7` | 清理 vllm-model pre-existing clippy（11 lints） |
 | 2 | `9e564f6` ~ `b5c587e` | SPEC-ADAPT counter wire-up + docs sync（5 commits） |
+| 3 | `c93ba5e` ~ `4d58829` | Dependabot bumps: openssl 0.10.80 + memmap2 0.9.11 + SECURITY.md audit history（3 commits） |
 
-**下一 Wave:** Wave 3 (Dependabot 5 漏洞：1 high, 4 moderate)
-- 1 high 漏洞需要 bump 主版本号或选择替换库
-- 需独立风险评估（不在 Wave 3 子任务范围内强行推进）
+**下一 Wave:** Wave 4 (SPEC-WARM-01 speculative warmup)
+- prefill draft model KV cache before decode
+- 需扩展 `SelfSpeculativeModel` 或草稿模型预热路径
+- 中等工作量
 
-**Wave 2 spec/plan:**
-- Spec: `docs/superpowers/specs/2026-06-26-wave2-adapt-spec.md` (commit `9e564f6`)
-- Plan: `docs/superpowers/plans/2026-06-26-wave2-adapt-wireup.md` (commit `16d9578`)
+**Wave 3 spec/plan:**
+- Spec: `docs/superpowers/specs/2026-06-26-wave3-dependabot-audit.md` (commit `c93ba5e`)
+- Plan: `docs/superpowers/plans/2026-06-26-wave3-dependabot-bumps.md` (commit `d3394bb`)
+
+**Deferred from Wave 3 (记录于 SECURITY.md):**
+- rustls-pemfile 2.2.0 unmaintained (RUSTSEC-2025-0134): 需 tls.rs API 重构
+- paste 1.0.15 unmaintained (RUSTSEC-2024-0436): deep transitive via gemm→candle；需 candle 升级
 
 ---
 
@@ -125,7 +131,7 @@ pub trait PagedDecoderBlock {
 
 ### 中价值（Wave 2+ 处理）
 
-- **Dependabot** — GitHub 报 5 个漏洞（1 high, 4 moderate），未处理 → Wave 3
+- ✅ **Dependabot** — Wave 3 完成：openssl 0.10.79→0.10.80, memmap2 0.9.10→0.9.11；audit warnings 从 3→2（rustls-pemfile + paste 留 deferred，详见 SECURITY.md）
 - **Mistral/Llama final norm shape 风险** — `from_weights` 用 `Linear` + 1D 权重（Gemma4 已改 `RmsNorm`）；若遇 shape 问题需统一 → Wave 2+ 视情
 - **Flash 真 CUDA kernel** — 需 GPU 环境 → 延后至 Wave 5 验收后
 
