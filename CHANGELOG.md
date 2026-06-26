@@ -52,6 +52,18 @@
     - Moved `cuda_graph.rs` from core to `model/kernels/cuda_graph.rs`
     - Updated `components/` to use kernels module
 
+#### Architecture Refactor Phase 5 (Qwen3.5 Hybrid 收敛, 2026-06-15)
+
+- Split `qwen3_5/hybrid.rs` (1176 lines) into `block/` + `model.rs` + `weights.rs` + `config.rs`
+- Introduce `HybridLm<B, Norm>` shell paralleling `CausalLm<B, N, H>`
+- Move `GatedDeltaState` from `qwen3_5::gated_delta` to `components::gated_delta`
+- Remove `causal_lm → qwen3_5` reverse dependency (`rg 'use qwen3_5' crates/model/src/causal_lm/` → 0 matches)
+- GDN dims now read from `Qwen3Config` (no more hardcoded `(16, 4, 2)`)
+- `Qwen35Architecture::capabilities()` upgraded to `PRODUCTION_SPECULATIVE`
+- Speculative parity tests in `model_tests.rs` (124 lines) + `speculative_tests.rs` (285 lines)
+
+Refs: `decc8c8`, `73dab5e`, `52f77ce`
+
 ### Added (Phase 4)
 
 #### Phase 4: Performance Optimization
