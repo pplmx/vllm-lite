@@ -13,7 +13,7 @@ pub struct NodeInfo {
 
 pub struct HashRouter {
     nodes: Arc<RwLock<Vec<NodeInfo>>>,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): consistent-hashing virtual-nodes placeholder; current route() uses nodes.len() modulo
     virtual_nodes: usize,
 }
 
