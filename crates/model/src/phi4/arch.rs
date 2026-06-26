@@ -132,9 +132,9 @@ impl Architecture for Phi4Architecture {
 
 pub struct Phi4Model {
     config: ModelConfig,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     device: Device,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     num_kv_blocks: usize,
 }
 

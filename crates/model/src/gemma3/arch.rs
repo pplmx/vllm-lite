@@ -139,11 +139,11 @@ impl Architecture for Gemma3Architecture {
 
 pub struct Gemma3Model {
     config: ModelConfig,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     device: Device,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     num_kv_blocks: usize,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     sliding_window: usize,
 }
 
