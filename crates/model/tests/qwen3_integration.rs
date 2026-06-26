@@ -10,7 +10,6 @@ mod support;
 
 use candle_core::D;
 use support::qwen3::{HIDDEN_SIZE, VOCAB_SIZE};
-use vllm_traits::ModelBackend;
 
 fn require_model() -> support::on_disk::CachedModel {
     let fixture = support::qwen3::Qwen3Fixture::cpu();

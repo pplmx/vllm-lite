@@ -3,7 +3,7 @@ use crate::components::SwiGLU;
 use crate::components::positional::MRoPE;
 use crate::qwen3_5::attention35::Attention35WithRoPE;
 use crate::qwen3_config::Qwen3Config;
-use candle_core::{DType, Device, Module, Tensor};
+use candle_core::{DType, Device, Tensor};
 use vllm_traits::ModelBackend;
 use candle_nn::VarBuilder;
 

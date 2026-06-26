@@ -355,6 +355,35 @@ impl Gemma4Attention {
     }
 }
 
+impl Default for Gemma4Attention {
+    fn default() -> Self {
+        Self {
+            q_proj: Linear::new(
+                Tensor::zeros((1, 1), candle_core::DType::F32, &candle_core::Device::Cpu).unwrap(),
+                None,
+            ),
+            k_proj: Linear::new(
+                Tensor::zeros((1, 1), candle_core::DType::F32, &candle_core::Device::Cpu).unwrap(),
+                None,
+            ),
+            v_proj: Linear::new(
+                Tensor::zeros((1, 1), candle_core::DType::F32, &candle_core::Device::Cpu).unwrap(),
+                None,
+            ),
+            o_proj: Linear::new(
+                Tensor::zeros((1, 1), candle_core::DType::F32, &candle_core::Device::Cpu).unwrap(),
+                None,
+            ),
+            num_heads: 0,
+            num_kv_heads: 0,
+            head_dim: 0,
+            sliding_window: 512,
+            layer_type: LayerType::FullAttention,
+            rope: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -393,7 +422,7 @@ mod tests {
         let data: Vec<f32> = mask.flatten_all()?.to_vec1()?;
 
         // Query at position 3 should not attend to key at position 0 (distance 3 > window 2).
-        let idx = 3 * seq_len + 0;
+        let idx = 3 * seq_len;
         assert!(
             data[idx].is_infinite() && data[idx].is_sign_negative(),
             "expected -inf mask for out-of-window key, got {}",
@@ -436,34 +465,5 @@ mod tests {
             "non-paged sliding path should match paged attention, max_diff={max_diff}"
         );
         Ok(())
-    }
-}
-
-impl Default for Gemma4Attention {
-    fn default() -> Self {
-        Self {
-            q_proj: Linear::new(
-                Tensor::zeros((1, 1), candle_core::DType::F32, &candle_core::Device::Cpu).unwrap(),
-                None,
-            ),
-            k_proj: Linear::new(
-                Tensor::zeros((1, 1), candle_core::DType::F32, &candle_core::Device::Cpu).unwrap(),
-                None,
-            ),
-            v_proj: Linear::new(
-                Tensor::zeros((1, 1), candle_core::DType::F32, &candle_core::Device::Cpu).unwrap(),
-                None,
-            ),
-            o_proj: Linear::new(
-                Tensor::zeros((1, 1), candle_core::DType::F32, &candle_core::Device::Cpu).unwrap(),
-                None,
-            ),
-            num_heads: 0,
-            num_kv_heads: 0,
-            head_dim: 0,
-            sliding_window: 512,
-            layer_type: LayerType::FullAttention,
-            rope: None,
-        }
     }
 }

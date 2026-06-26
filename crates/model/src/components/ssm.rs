@@ -543,7 +543,7 @@ mod tests {
         let y = softplus(&x).unwrap();
         let vals: Vec<f32> = y.to_vec1().unwrap();
         assert!(vals[0] > 0.0);
-        assert!((vals[1] - 0.693_147).abs() < 1e-4);
+        assert!((vals[1] - std::f32::consts::LN_2).abs() < 1e-4);
         assert!(vals[2] > vals[1]);
     }
 
