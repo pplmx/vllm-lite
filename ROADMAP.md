@@ -142,6 +142,8 @@
 - [x] 环境变量
 - [x] 配置验证
 
+> 2026-06-26 更新：Wave 2 完成 `speculative_adjustments_total` Prometheus counter wire-up（`AdaptiveSpeculativeDecoder::record_verification` 返回 `bool` adjustment 事件）。SPEC-ADAPT-01/02 实现已完整；Wave 3 (Dependabot) 待启动。
+
 ---
 
 ## ✅ Phase 6: 多模型支持

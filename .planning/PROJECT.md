@@ -101,8 +101,8 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 - [x] **SPEC-ENG-02**: Seamless fallback — parity tests in `qwen3_5/speculative_tests.rs`
 - [ ] **SPEC-BENCH-01**: Real hardware benchmark suite → Wave 5
 - [ ] **SPEC-BENCH-02**: Baseline comparison vs non-speculative inference → Wave 5
-- [ ] **SPEC-ADAPT-01**: Adaptive draft depth → Wave 2
-- [ ] **SPEC-ADAPT-02**: Acceptance rate monitoring → Wave 2
+- [x] **SPEC-ADAPT-01**: Adaptive draft depth — `AdaptiveSpeculativeDecoder` + EWMA + deadband + cooldown (commit `736b35f`)
+- [x] **SPEC-ADAPT-02**: Acceptance rate monitoring — `record_per_request_acceptance` + Prometheus `speculative_adjustments_total` + `/debug/metrics` (commit `736b35f`)
 - [ ] **SPEC-WARM-01**: Speculative warmup → Wave 4
 - [ ] **SPEC-MULTI-01**: External draft model support → deferred to v18.0
 - [ ] **SPEC-MULTI-02**: Draft model lifecycle management → deferred to v18.0
@@ -160,4 +160,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-26 — Wave 1 收口；Wave 2–5 spec decode 增量在 pipeline*
+*Last updated: 2026-06-26 — Wave 2 SPEC-ADAPT counter wire-up + docs sync 完成；Wave 3 (Dependabot) 待启动*
