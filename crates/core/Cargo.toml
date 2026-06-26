@@ -35,3 +35,7 @@ vllm-testing = { path = "../testing" }
 [[bench]]
 name = "radix_cache"
 harness = false
+
+[[bench]]
+name = "latency_percentiles"
+harness = false
