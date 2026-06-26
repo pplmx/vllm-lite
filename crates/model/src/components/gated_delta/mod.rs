@@ -347,13 +347,7 @@ impl GatedDeltaNet {
         let (core_out, recurrent) = gated_delta_recurrent(&q, &k, &v, &g, &beta)?;
         let output = self.finalize_output(&core_out, &z, &residual, batch, seq_len)?;
 
-        Ok((
-            output,
-            GatedDeltaState {
-                recurrent,
-                conv,
-            },
-        ))
+        Ok((output, GatedDeltaState { recurrent, conv }))
     }
 
     pub fn forward_decode(&self, x: &Tensor, state: &mut GatedDeltaState) -> CandleResult<Tensor> {
@@ -546,7 +540,11 @@ mod tests {
         let total_len = prefill_len + decode_len;
 
         let full_x = Tensor::randn(0.0f32, 1.0, (batch, total_len, hidden), &device).unwrap();
-        let x_prefill = full_x.narrow(1, 0, prefill_len).unwrap().contiguous().unwrap();
+        let x_prefill = full_x
+            .narrow(1, 0, prefill_len)
+            .unwrap()
+            .contiguous()
+            .unwrap();
 
         let (prefill_out, mut state) = gdn.forward_prefill(&x_prefill).unwrap();
         assert_eq!(prefill_out.dims(), x_prefill.dims());

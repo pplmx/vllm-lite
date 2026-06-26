@@ -1,8 +1,8 @@
 //! Unified decoder layer loop with optional per-layer auxiliary state (e.g. GDN).
 
 use crate::components::decoder_block::PagedDecoderBlock;
-use crate::paged_tensor::PagedKvCache;
 use crate::components::gated_delta::GatedDeltaState;
+use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 use vllm_traits::Result as EngineResult;
 
@@ -48,13 +48,7 @@ impl<L: PagedDecoderBlock> DecoderLayer for L {
         ctx: &mut LayerCtx<'_>,
         layer_idx: usize,
     ) -> Result<Tensor> {
-        self.forward_prefill(
-            x,
-            ctx.kv_cache,
-            layer_idx,
-            ctx.block_ids,
-            ctx.positions,
-        )
+        self.forward_prefill(x, ctx.kv_cache, layer_idx, ctx.block_ids, ctx.positions)
     }
 
     fn forward_decode(
@@ -115,9 +109,15 @@ mod tests {
         let device = Device::Cpu;
         let layer = new_block(&config, 0).unwrap();
         let layers = vec![layer];
-        let mut kv_cache =
-            PagedKvCache::new(1, config.num_heads, config.head_dim, 32, device.clone(), false)
-                .unwrap();
+        let mut kv_cache = PagedKvCache::new(
+            1,
+            config.num_heads,
+            config.head_dim,
+            32,
+            device.clone(),
+            false,
+        )
+        .unwrap();
 
         let seq_len = 3usize;
         let hidden = Tensor::ones((1, seq_len, config.hidden_size), DType::F32, &device).unwrap();

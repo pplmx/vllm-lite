@@ -136,11 +136,7 @@ impl Attention35WithRoPE {
         positions: &[usize],
     ) -> CandleResult<Tensor> {
         let batch_size = x.dims()[0];
-        let seq_len = if x.dims().len() == 3 {
-            x.dims()[1]
-        } else {
-            1
-        };
+        let seq_len = if x.dims().len() == 3 { x.dims()[1] } else { 1 };
 
         let (q, k, v) = self.project_qkv(x, batch_size, seq_len)?;
         let (q, k) = self.apply_mrope(&q, &k, positions)?;
@@ -174,14 +170,14 @@ impl Attention35WithRoPE {
             .q_proj
             .forward(x)?
             .reshape((batch, seq_len, self.num_heads, self.head_dim))?;
-        let k = self
-            .k_proj
-            .forward(x)?
-            .reshape((batch, seq_len, self.num_kv_heads, self.head_dim))?;
-        let v = self
-            .v_proj
-            .forward(x)?
-            .reshape((batch, seq_len, self.num_kv_heads, self.head_dim))?;
+        let k =
+            self.k_proj
+                .forward(x)?
+                .reshape((batch, seq_len, self.num_kv_heads, self.head_dim))?;
+        let v =
+            self.v_proj
+                .forward(x)?
+                .reshape((batch, seq_len, self.num_kv_heads, self.head_dim))?;
         Ok((q, k, v))
     }
 
@@ -258,8 +254,9 @@ mod tests {
     fn test_attention35_forward_shape() {
         let device = Device::Cpu;
         let rope = MRoPE::new(32, 10_000.0, vec![10, 10, 12], 0.25);
-        let attn = Attention35WithRoPE::new(128, 2, 2, 32, rope, VarBuilder::zeros(DType::F32, &device))
-            .unwrap();
+        let attn =
+            Attention35WithRoPE::new(128, 2, 2, 32, rope, VarBuilder::zeros(DType::F32, &device))
+                .unwrap();
         let x = Tensor::randn(0.0f32, 1.0, (1, 4, 128), &device).unwrap();
         let out = attn.forward(&x).unwrap();
         assert_eq!(out.dims(), &[1, 4, 128]);

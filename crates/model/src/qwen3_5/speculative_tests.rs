@@ -115,13 +115,7 @@ fn simulate_draft_tokens(
     let mut drafts = Vec::with_capacity(num_tokens);
 
     for _ in 0..num_tokens {
-        let next = decode_token_to_layer(
-            model,
-            seq_id,
-            current_token,
-            num_computed,
-            draft_layers,
-        );
+        let next = decode_token_to_layer(model, seq_id, current_token, num_computed, draft_layers);
         drafts.push(next);
         current_token = next;
         num_computed += 1;
@@ -146,8 +140,7 @@ fn test_forward_to_layer_matches_full_forward_full_attention_only() {
         tokens.len(),
     );
 
-    let mut partial_model =
-        Qwen35HybridModel::new(config, device, 16, false).unwrap();
+    let mut partial_model = Qwen35HybridModel::new(config, device, 16, false).unwrap();
     let num_layers = partial_model.num_layers();
     prefill(&mut partial_model, seq_id, &tokens);
     let partial_token = decode_token_to_layer(
@@ -181,8 +174,7 @@ fn test_gdn_prefill_decode_sequence_is_stable() {
         chain.push(next);
     }
 
-    let mut reference =
-        Qwen35HybridModel::new(config, device, 16, false).unwrap();
+    let mut reference = Qwen35HybridModel::new(config, device, 16, false).unwrap();
     prefill(&mut reference, seq_id, &tokens);
     let mut ref_chain = tokens;
     for step in 0..3 {
@@ -215,8 +207,7 @@ fn test_multi_seq_gdn_state_isolation() {
     let _b1 = decode_token(&mut model, seq_b, *tokens_b.last().unwrap(), tokens_b.len());
     let a2 = decode_token(&mut model, seq_a, a1, tokens_a.len() + 1);
 
-    let mut reference =
-        Qwen35HybridModel::new(config, device, 16, false).unwrap();
+    let mut reference = Qwen35HybridModel::new(config, device, 16, false).unwrap();
     prefill(&mut reference, seq_a, &tokens_a);
     let r1 = decode_token(
         &mut reference,
@@ -261,13 +252,11 @@ fn test_full_forward_unchanged_after_partial_draft() {
     let start_token = *tokens.last().unwrap();
     let start_num_computed = tokens.len();
 
-    let mut baseline =
-        Qwen35HybridModel::new(config.clone(), device.clone(), 16, false).unwrap();
+    let mut baseline = Qwen35HybridModel::new(config.clone(), device.clone(), 16, false).unwrap();
     prefill(&mut baseline, seq_id, &tokens);
     let expected = decode_token(&mut baseline, seq_id, start_token, start_num_computed);
 
-    let mut after_draft =
-        Qwen35HybridModel::new(config, device, 16, false).unwrap();
+    let mut after_draft = Qwen35HybridModel::new(config, device, 16, false).unwrap();
     prefill(&mut after_draft, seq_id, &tokens);
     let _drafts = simulate_draft_tokens(
         &mut after_draft,

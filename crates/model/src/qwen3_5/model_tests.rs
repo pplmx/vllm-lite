@@ -4,8 +4,8 @@ use crate::components::positional::MRoPE;
 use crate::qwen3_5::attention35::Attention35WithRoPE;
 use crate::qwen3_config::Qwen3Config;
 use candle_core::{DType, Device, Tensor};
-use vllm_traits::ModelBackend;
 use candle_nn::VarBuilder;
+use vllm_traits::ModelBackend;
 
 #[test]
 fn test_swiglu_forward() {
@@ -101,7 +101,14 @@ fn test_qwen35_hybrid_model_forward_prefill_and_decode() {
 
     let decode_positions = vec![tokens.len()];
     let (decode_logits, _) = model
-        .forward_with_cache(seq_id, &tokens, tokens.len(), &[0], &decode_positions, false)
+        .forward_with_cache(
+            seq_id,
+            &tokens,
+            tokens.len(),
+            &[0],
+            &decode_positions,
+            false,
+        )
         .unwrap();
     assert_eq!(decode_logits.dims(), &[1, 1, 128]);
 }

@@ -1,6 +1,6 @@
 use crate::causal_lm::CausalLm;
-use crate::components::decoder_block::RopeGqaDecoderBlock;
 use crate::components::RmsNorm;
+use crate::components::decoder_block::RopeGqaDecoderBlock;
 use crate::config::ModelConfig;
 use candle_core::{Device, Result as CandleResult, Tensor};
 use candle_nn::Linear;

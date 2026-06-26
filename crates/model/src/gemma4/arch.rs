@@ -38,10 +38,7 @@ impl Architecture for Gemma4Architecture {
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
-        matches!(
-            model_type.to_lowercase().as_str(),
-            "gemma2" | "gemma4"
-        )
+        matches!(model_type.to_lowercase().as_str(), "gemma2" | "gemma4")
     }
 
     fn capabilities(&self) -> ArchCapabilities {

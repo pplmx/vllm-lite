@@ -164,12 +164,8 @@ impl MixtralSparseMoe {
         );
 
         let gate_logits = self.gate.forward(&x)?;
-        let routes_by_expert = compute_topk_routing(
-            &gate_logits,
-            num_tokens,
-            self.num_experts,
-            self.top_k,
-        )?;
+        let routes_by_expert =
+            compute_topk_routing(&gate_logits, num_tokens, self.num_experts, self.top_k)?;
 
         let flat_x = x.reshape((num_tokens, hidden))?;
         let mut output = Tensor::zeros((num_tokens, hidden), x.dtype(), x.device())?;

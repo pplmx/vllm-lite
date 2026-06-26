@@ -214,8 +214,8 @@ mod tests {
             value_head_dim: 16,
             conv_kernel_size: 4,
         };
-        let block = LinearAttentionBlock::new(64, gdn, VarBuilder::zeros(DType::F32, &device))
-            .unwrap();
+        let block =
+            LinearAttentionBlock::new(64, gdn, VarBuilder::zeros(DType::F32, &device)).unwrap();
         let x = Tensor::randn(0.0f32, 1.0, (1, 6, 64), &device).unwrap();
         let out = block.forward(&x).unwrap();
         assert_eq!(out.dims(), x.dims());

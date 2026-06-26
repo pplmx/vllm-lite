@@ -14,9 +14,9 @@ use tokio::sync::mpsc;
 use tracing::error;
 #[cfg(feature = "cuda-graph")]
 use tracing::trace;
-use vllm_traits::{ModelBackend, SeqId, TokenId};
 #[cfg(feature = "cuda-graph")]
 use vllm_traits::{BatchOutput, BatchPhase};
+use vllm_traits::{ModelBackend, SeqId, TokenId};
 
 #[cfg(feature = "cuda-graph")]
 use vllm_model::kernels::BatchCudaGraphExecutor;

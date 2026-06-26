@@ -2,7 +2,7 @@
 
 use crate::arch::{ArchCapabilities, Architecture};
 use crate::components::block::{
-    passthrough_paged_decode, passthrough_paged_prefill, TransformerBlock,
+    TransformerBlock, passthrough_paged_decode, passthrough_paged_prefill,
 };
 use crate::components::decoder_block::PagedDecoderBlock;
 use crate::config::ModelConfig;
