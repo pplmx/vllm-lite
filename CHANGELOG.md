@@ -64,6 +64,16 @@
 
 Refs: `decc8c8`, `73dab5e`, `52f77ce`
 
+#### Adaptive Speculative Decoding Counter Wire-up (Wave 2, 2026-06-26)
+
+- `AdaptiveSpeculativeDecoder::record_verification` now returns `bool` adjustment event
+- Engine `step_speculative_inner` calls `MetricsCollector::record_speculative_adjustment()` on actual adjustment
+- `speculative_adjustments_total` Prometheus counter now correctly tracks adaptive decoder activity
+- 3 new unit tests locking the bool return contract (high acceptance, low acceptance, deadband)
+- Documentation: `SPEC-ADAPT-01` / `SPEC-ADAPT-02` marked complete in `.planning/PROJECT.md`
+
+Refs: `docs/superpowers/specs/2026-06-26-wave2-adapt-spec.md`
+
 ### Added (Phase 4)
 
 #### Phase 4: Performance Optimization
