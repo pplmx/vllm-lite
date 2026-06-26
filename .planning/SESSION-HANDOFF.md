@@ -1,22 +1,31 @@
 # vLLM-lite Session Handoff
 
-> 新 session 可直接读取本文恢复进度。最后更新：2026-06-12  
-> Git：`main` @ `e192492`+（Phase 0–4 + Gemma4→CausalLm 完成）
+> 新 session 可直接读取本文恢复进度。最后更新：2026-06-26  
+> Git：`main` @ `54af5ad` (Wave 1 全部完成：11 commits；Phase 0–5 + Qwen3.5 Hybrid 收敛)
 
 ---
 
-## 下一优先级（2026-06-12）
+## 下一优先级（2026-06-26，Wave 1 完成）
 
-**Phase 5：Qwen3.5 Hybrid 收敛** — [`.planning/PHASE-5-QWEN35-HYBRID.md`](./PHASE-5-QWEN35-HYBRID.md)
+**Wave 1: 文档同步 + dead_code 审计** ✅ 完成（11 commits）
 
-| Wave | 内容 | 风险 |
-|------|------|------|
-| **1** | 拆分 `hybrid.rs`（1176 行）→ block / model / weights | 低 |
-| **2** | 新建 `HybridLm` shell；`GatedDeltaState` 上移 components | 中 |
-| **3** | GDN 维度从 config 读取；权重加载统一 | 中 |
-| **4** | Speculative 验收 + capability 升级（可选） | 高 |
+| Task | Commit | 描述 |
+|------|--------|------|
+| 1 | `4344b77` | 同步 MODEL-ARCHITECTURE-REFACTOR.md |
+| 2 | `1f91686` | 同步 PHASE-5-QWEN35-HYBRID.md |
+| 3 | `20ce45e` | 同步 STATE/PROJECT/ROADMAP（amended） |
+| 4 | `6fd37b2` | CHANGELOG 补 Phase 5 |
+| 5a | `5d963a7` | dead_code 审计（vllm-core） |
+| 5b | `fa7350a` | dead_code 审计（vllm-model） |
+| 1.5d | `2eb1340` | cfg-gate cuda-graph 引入（unblock clippy -D warnings） |
+| 5b+ | `16908c1` | RoPE/MRoPE audit correction |
+| 5a+ | `54af5ad` | HashRouter audit completion |
 
-总览： [`.planning/MODEL-ARCHITECTURE-REFACTOR.md`](./MODEL-ARCHITECTURE-REFACTOR.md)
+**后续 Wave:** Wave 2 (adaptive draft depth) → Wave 3 (Dependabot) → Wave 4 (warmup) → Wave 5 (benchmarks)
+
+**Wave 1 spec/plan:**
+- Spec: `docs/superpowers/specs/2026-06-26-wave1-doc-sync-design.md` (commit `d42b151`)
+- Plan: `docs/superpowers/plans/2026-06-26-wave1-doc-sync.md` (commit `dba9f5e`)
 
 ---
 
@@ -110,17 +119,19 @@ pub trait PagedDecoderBlock {
 
 ## 已知差距 / 下一批优先级
 
-### 高价值（性能 / 正确性）
+### Wave 1 已收口（2026-06-26）
 
-1. ~~**MoE 向量化**~~ ✅ — `mixtral/sparse_moe.rs` expert-grouped batching + scatter_add
-2. ~~**Gemma4 非 paged `forward_sliding`**~~ ✅ — `compute_attention` 已对齐 sliding causal mask
-3. ~~**`TransformerBlock` trait vs `PagedDecoderBlock`**~~ ✅ — `TransformerBlock: PagedDecoderBlock` + metadata
+- ✅ MoE 向量化（`mixtral/sparse_moe.rs` expert-grouped batching + scatter_add）
+- ✅ Gemma4 sliding window mask（`compute_attention` 已对齐）
+- ✅ `TransformerBlock: PagedDecoderBlock` + metadata
+- ✅ Phase 0–5 架构重构（`decc8c8` ~ `52f77ce` + Wave 1 docs sync）
+- ✅ dead_code 审计：31 处全部处置（22 stub 注释 + 5 删除 + 2 keep 注释 + 2 redundant-annotation 修复）
 
-### 中价值（工程质量）
+### 中价值（Wave 2+ 处理）
 
-4. **Flash attention / dist / vision** — 仍有窄 scope 的 `#[allow(dead_code)]` + 文档化 stub
-5. **Mistral/Llama final norm** — `from_weights` 用 `Linear` + 1D 权重（Gemma4 已改 `RmsNorm`）；若遇 shape 问题需统一
-6. **Dependabot** — GitHub 报 5 个漏洞（1 high, 4 moderate），未处理
+- **Dependabot** — GitHub 报 5 个漏洞（1 high, 4 moderate），未处理 → Wave 3
+- **Mistral/Llama final norm shape 风险** — `from_weights` 用 `Linear` + 1D 权重（Gemma4 已改 `RmsNorm`）；若遇 shape 问题需统一 → Wave 2+ 视情
+- **Flash 真 CUDA kernel** — 需 GPU 环境 → 延后至 Wave 5 验收后
 
 ### 低优先级
 
