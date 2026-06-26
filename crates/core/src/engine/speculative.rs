@@ -89,11 +89,13 @@ impl super::Engine {
             .collect();
         self.scheduler.update(&seq_ids, &tokens, &input_counts);
 
-        // Track accuracy in adaptive decoder
+        // Track accuracy in adaptive decoder and record adjustment events
         if let Some(ref mut decoder) = self.adaptive_decoder {
             let total_draft: usize = draft_outputs.iter().map(|d| d.len()).sum();
             let total_accepted: usize = accepted_counts.iter().sum();
-            decoder.record_verification(total_draft, total_accepted);
+            if decoder.record_verification(total_draft, total_accepted) {
+                self.scheduler.metrics.record_speculative_adjustment();
+            }
         }
 
         // Record speculative efficiency metric (Plan 17.4-F / MTRC-02)
