@@ -74,6 +74,15 @@ Refs: `decc8c8`, `73dab5e`, `52f77ce`
 
 Refs: `docs/superpowers/specs/2026-06-26-wave2-adapt-spec.md`
 
+#### Speculative Warmup Test Coverage (Wave 4, 2026-06-26)
+
+- `Engine::warmup_draft_kv` visibility relaxed from `fn` to `pub(crate) fn` for test access
+- New `CounterModel` wrapper in `engine::speculative::tests` mod (counts forward/forward_logits calls via AtomicUsize)
+- New fast unit test `test_warmup_draft_kv_invokes_draft_per_sequence` verifies draft model receives exactly N forward() calls for N-seq Prefill batch
+- Documentation: `SPEC-WARM-01` marked complete in `.planning/PROJECT.md`
+
+Refs: `docs/superpowers/specs/2026-06-26-wave4-warmup-test.md`
+
 ### Added (Phase 4)
 
 #### Phase 4: Performance Optimization
