@@ -1,31 +1,27 @@
 # vLLM-lite Session Handoff
 
 > 新 session 可直接读取本文恢复进度。最后更新：2026-06-26  
-> Git：`main` @ `54af5ad` (Wave 1 全部完成：11 commits；Phase 0–5 + Qwen3.5 Hybrid 收敛)
+> Git：`main` @ `b5c587e` (Wave 1 + 1.6 + 2 全部完成：18 commits；Phase 0–5 + SPEC-ADAPT counter wire-up)
 
 ---
 
-## 下一优先级（2026-06-26，Wave 1 完成）
+## 下一优先级（2026-06-26，Wave 2 完成）
 
-**Wave 1: 文档同步 + dead_code 审计** ✅ 完成（11 commits）
+**Wave 1 + 1.6 + 2 全部完成（18 commits）**
 
-| Task | Commit | 描述 |
-|------|--------|------|
-| 1 | `4344b77` | 同步 MODEL-ARCHITECTURE-REFACTOR.md |
-| 2 | `1f91686` | 同步 PHASE-5-QWEN35-HYBRID.md |
-| 3 | `20ce45e` | 同步 STATE/PROJECT/ROADMAP（amended） |
-| 4 | `6fd37b2` | CHANGELOG 补 Phase 5 |
-| 5a | `5d963a7` | dead_code 审计（vllm-core） |
-| 5b | `fa7350a` | dead_code 审计（vllm-model） |
-| 1.5d | `2eb1340` | cfg-gate cuda-graph 引入（unblock clippy -D warnings） |
-| 5b+ | `16908c1` | RoPE/MRoPE audit correction |
-| 5a+ | `54af5ad` | HashRouter audit completion |
+| Wave | Commit 范围 | 描述 |
+|------|------------|------|
+| 1 | `d42b151` ~ `1499fcd` | 文档同步 + dead_code 审计（11 commits） |
+| 1.6 | `a4886a7` | 清理 vllm-model pre-existing clippy（11 lints） |
+| 2 | `9e564f6` ~ `b5c587e` | SPEC-ADAPT counter wire-up + docs sync（5 commits） |
 
-**后续 Wave:** Wave 2 (adaptive draft depth) → Wave 3 (Dependabot) → Wave 4 (warmup) → Wave 5 (benchmarks)
+**下一 Wave:** Wave 3 (Dependabot 5 漏洞：1 high, 4 moderate)
+- 1 high 漏洞需要 bump 主版本号或选择替换库
+- 需独立风险评估（不在 Wave 3 子任务范围内强行推进）
 
-**Wave 1 spec/plan:**
-- Spec: `docs/superpowers/specs/2026-06-26-wave1-doc-sync-design.md` (commit `d42b151`)
-- Plan: `docs/superpowers/plans/2026-06-26-wave1-doc-sync.md` (commit `dba9f5e`)
+**Wave 2 spec/plan:**
+- Spec: `docs/superpowers/specs/2026-06-26-wave2-adapt-spec.md` (commit `9e564f6`)
+- Plan: `docs/superpowers/plans/2026-06-26-wave2-adapt-wireup.md` (commit `16d9578`)
 
 ---
 
