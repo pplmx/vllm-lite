@@ -11,8 +11,12 @@ use crate::types::{EngineMessage, Request, SchedulerConfig};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
-use tracing::{error, trace};
-use vllm_traits::{BatchOutput, BatchPhase, ModelBackend, SeqId, TokenId};
+use tracing::error;
+#[cfg(feature = "cuda-graph")]
+use tracing::trace;
+use vllm_traits::{ModelBackend, SeqId, TokenId};
+#[cfg(feature = "cuda-graph")]
+use vllm_traits::{BatchOutput, BatchPhase};
 
 #[cfg(feature = "cuda-graph")]
 use vllm_model::kernels::BatchCudaGraphExecutor;
