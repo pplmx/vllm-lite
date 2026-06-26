@@ -1,7 +1,7 @@
 # Model 层架构重构计划（生产化 / Rustic）
 
 > **创建日期:** 2026-06-12  
-> **最后更新:** 2026-06-12（Phase 4 完成；Phase 5 规划见 `.planning/PHASE-5-QWEN35-HYBRID.md`）  
+> **最后更新:** 2026-06-26（Phase 0–5 全部完成；进入 Wave 1 收口 + Wave 2 增量）  
 > **目标:** 消除重复、统一推理抽象、区分生产级与 stub 架构，使 `vllm-model` 可维护、可扩展、可安全部署  
 > **关联文档:** `.planning/codebase/ARCHITECTURE.md`、`.planning/SESSION-HANDOFF.md`
 
@@ -18,9 +18,9 @@
 | **3** | DecoderLayer 统一 Loop + Config | ✅ 完成 | 5/5 | `cbafe75` |
 | **4** | Qwen3 瘦身 + Stub 实现或移除 | ✅ 完成 | 4/4 | `88f54df` |
 | **4b** | Gemma4 → CausalLm | ✅ 完成 | 1/1 | `e192492` |
-| **5** | Qwen3.5 Hybrid 收敛 | ⬜ 未开始 | 0/4 waves | [规划](./PHASE-5-QWEN35-HYBRID.md) |
+| **5** | Qwen3.5 Hybrid 收敛 | ✅ 完成 | 4/4 waves | `decc8c8` / `73dab5e` / `52f77ce` |
 
-**整体进度:** `[██████████░] Phase 0–4 + Gemma4 完成；Phase 5 待执行`
+**整体进度:** `[██████████] Phase 0–5 全部完成；进入 Wave 1 文档收口 + Wave 2–5 spec decode 增量`
 
 **图例:** ✅ 完成 · 🔄 进行中 · ⬜ 未开始 · ⏸ 暂停 · ❌ 取消
 
@@ -42,7 +42,7 @@
 | 档位 | 架构 | 推理 | 备注 |
 |------|------|------|------|
 | **A 生产级** | Llama, Mistral, Mixtral, Gemma4, Qwen3 | `CausalLm` + paged KV | 可 serving |
-| **A- 生产级（hybrid）** | Qwen3.5 | `run_layers` + GDN state | 主路径 OK；[Phase 5](./PHASE-5-QWEN35-HYBRID.md) 收敛中 |
+| **A 生产级（hybrid + spec）** | Qwen3.5 | `HybridLm` + `run_layers` + GDN state | 主路径 + 自投机 OK；`PRODUCTION_SPECULATIVE` 自 `52f77ce` |
 | **C Stub** | Gemma3, Llama4, Phi4, MistralSmall | 返回 0；loader 默认拒绝（`--allow-stub` 可 override） | Phase 0 + 4.4 Option C |
 
 ---
