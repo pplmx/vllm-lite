@@ -39,3 +39,7 @@ harness = false
 [[bench]]
 name = "latency_percentiles"
 harness = false
+
+[[bench]]
+name = "speculative_vs_baseline"
+harness = false
