@@ -8,7 +8,7 @@ use candle_core::{Device, Result, Tensor};
 use std::collections::HashMap;
 use vllm_traits::ModelBackend;
 
-use super::block::{block_from_weights, MistralBlock};
+use super::block::{MistralBlock, block_from_weights};
 use super::model::MistralModel;
 
 pub struct MistralArchitecture;

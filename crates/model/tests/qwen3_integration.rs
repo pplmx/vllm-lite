@@ -99,5 +99,8 @@ fn test_qwen3_checkpoint_e2e() {
     let norm_a = a.iter().map(|&x| x * x).sum::<f32>().sqrt();
     let norm_b = b.iter().map(|&x| x * x).sum::<f32>().sqrt();
     let cosine = dot / (norm_a * norm_b);
-    assert!(cosine < 0.99, "different tokens should differ, cosine={cosine}");
+    assert!(
+        cosine < 0.99,
+        "different tokens should differ, cosine={cosine}"
+    );
 }

@@ -6,8 +6,8 @@
 use std::collections::HashMap;
 
 use super::{
-    embed_sequence, forward_batch, greedy_sample_token, logits_to_vector, map_candle, run_layers,
-    run_layers_upto, LayerAuxMut, LayerCtx,
+    LayerAuxMut, LayerCtx, embed_sequence, forward_batch, greedy_sample_token, logits_to_vector,
+    map_candle, run_layers, run_layers_upto,
 };
 use crate::components::gated_delta::GatedDeltaState;
 use crate::paged_tensor::PagedKvCache;
@@ -72,11 +72,7 @@ where
     ) -> Result<(Tensor, usize)> {
         let vocab_size = self.config.vocab_size();
         if tokens.is_empty() {
-            let logits = map_candle(Tensor::zeros(
-                (1, 1, vocab_size),
-                DType::F32,
-                &self.device,
-            ))?;
+            let logits = map_candle(Tensor::zeros((1, 1, vocab_size), DType::F32, &self.device))?;
             return Ok((logits, 0));
         }
 
@@ -178,8 +174,7 @@ where
             let block_ids = [0usize];
 
             let hidden = embed_sequence(&self.embed_tokens, tokens, &self.device, true)?;
-            self.gdn_states
-                .insert(EMBED_SEQ_ID, vec![None; num_layers]);
+            self.gdn_states.insert(EMBED_SEQ_ID, vec![None; num_layers]);
             let gdn_states = self
                 .gdn_states
                 .get_mut(&EMBED_SEQ_ID)

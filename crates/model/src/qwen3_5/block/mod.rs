@@ -44,9 +44,7 @@ impl DecoderLayer for HybridBlock {
                 *gdn_state = Some(state);
                 Ok(out)
             }
-            HybridBlock::Full(b) => {
-                b.forward_prefill(x, kv_cache, layer_idx, block_ids, positions)
-            }
+            HybridBlock::Full(b) => b.forward_prefill(x, kv_cache, layer_idx, block_ids, positions),
         }
     }
 
@@ -106,12 +104,9 @@ mod tests {
         let hidden_size = 128;
 
         let gdn = crate::qwen3_5::config::GdnLinearConfig::legacy_heuristic(hidden_size);
-        let linear = LinearAttentionBlock::new(
-            hidden_size,
-            gdn,
-            VarBuilder::zeros(DType::F32, &device),
-        )
-        .unwrap();
+        let linear =
+            LinearAttentionBlock::new(hidden_size, gdn, VarBuilder::zeros(DType::F32, &device))
+                .unwrap();
 
         let linear_block = HybridBlock::Linear(linear);
         match linear_block {

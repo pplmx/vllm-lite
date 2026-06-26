@@ -126,12 +126,7 @@ pub fn project_attention_output(
 
 /// Plugin for applying rotary embeddings to Q/K before paged KV write.
 pub trait QkRotaryEmb: Send + Sync {
-    fn apply_qk(
-        &self,
-        q: &Tensor,
-        k: &Tensor,
-        positions: &[usize],
-    ) -> Result<(Tensor, Tensor)>;
+    fn apply_qk(&self, q: &Tensor, k: &Tensor, positions: &[usize]) -> Result<(Tensor, Tensor)>;
 }
 
 #[cfg(test)]
@@ -162,8 +157,7 @@ mod tests {
 
         let k_new = Tensor::randn(0.0f32, 1.0, (num_heads, 1, head_dim), &device)?;
         let v_new = Tensor::randn(0.0f32, 1.0, (num_heads, 1, head_dim), &device)?;
-        let (full_k, full_v) =
-            read_decode_kv(&mut kv_cache, 0, &[0], seq_len, &k_new, &v_new)?;
+        let (full_k, full_v) = read_decode_kv(&mut kv_cache, 0, &[0], seq_len, &k_new, &v_new)?;
 
         assert_eq!(full_k.dims(), &[1, num_heads, seq_len + 1, head_dim]);
         assert_eq!(full_v.dims(), &[1, num_heads, seq_len + 1, head_dim]);

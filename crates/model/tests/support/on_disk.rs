@@ -121,9 +121,7 @@ impl OnDiskFixture {
     /// Load (or reuse) a cached model for this checkpoint directory.
     pub fn load_model(&self) -> CandleResult<CachedModel> {
         let dir = self.require_weights().to_string_lossy().into_owned();
-        let mut guard = model_cache()
-            .lock()
-            .expect("model cache mutex poisoned");
+        let mut guard = model_cache().lock().expect("model cache mutex poisoned");
         if !guard.contains_key(&dir) {
             let model = self.loader()?.load_model()?;
             guard.insert(dir.clone(), model);

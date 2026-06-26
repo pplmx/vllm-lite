@@ -17,7 +17,7 @@ impl Qwen3Model {
         Self::new_with_block_fn(model_config, device, num_kv_blocks, false, |c, idx| {
             new_block(c, idx)
         })
-            .map(|m| m.with_embed_through_layers(true))
+        .map(|m| m.with_embed_through_layers(true))
     }
 
     pub fn new_with_tp(

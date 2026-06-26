@@ -8,7 +8,7 @@ use crate::config::ModelConfig;
 use candle_core::{Device, Result as CandleResult, Tensor};
 use candle_nn::Linear;
 
-use super::block::{block_from_weights, new_block, Gemma4Block};
+use super::block::{Gemma4Block, block_from_weights, new_block};
 
 pub type Gemma4Model = CausalLm<Gemma4Block, RmsNorm, Linear>;
 

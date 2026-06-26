@@ -8,7 +8,7 @@ use candle_core::{Device, Result, Tensor};
 use std::collections::HashMap;
 use vllm_traits::ModelBackend;
 
-use super::block::{block_from_weights, LlamaBlock};
+use super::block::{LlamaBlock, block_from_weights};
 use super::model::LlamaModel;
 
 pub struct LlamaArchitecture;

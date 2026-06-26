@@ -19,7 +19,13 @@ impl MixtralModel {
         num_kv_blocks: usize,
         kv_quantization: bool,
     ) -> CandleResult<Self> {
-        Self::new_with_block_fn(config, device, num_kv_blocks, kv_quantization, MixtralBlock::new)
+        Self::new_with_block_fn(
+            config,
+            device,
+            num_kv_blocks,
+            kv_quantization,
+            MixtralBlock::new,
+        )
     }
 
     pub fn from_weights(

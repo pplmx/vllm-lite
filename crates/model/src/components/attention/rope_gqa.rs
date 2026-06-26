@@ -1,8 +1,8 @@
 #![allow(clippy::too_many_arguments)]
 
 pub use crate::components::AttentionConfig;
-use crate::components::attention::paged_gqa::{read_decode_kv, write_prefill_kv};
 use crate::components::attention::GqaAttention as SharedGqaAttention;
+use crate::components::attention::paged_gqa::{read_decode_kv, write_prefill_kv};
 use crate::components::positional::apply_rope;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
@@ -140,7 +140,14 @@ impl RopeGqaAttention {
         let k_expanded = k_expanded.transpose(1, 2)?.contiguous()?;
         let v_expanded = v_expanded.transpose(1, 2)?.contiguous()?;
 
-        write_prefill_kv(kv_cache, layer_idx, block_ids, seq_len, &k_expanded, &v_expanded)?;
+        write_prefill_kv(
+            kv_cache,
+            layer_idx,
+            block_ids,
+            seq_len,
+            &k_expanded,
+            &v_expanded,
+        )?;
 
         self.inner.run_attention_fn(&q, &k_expanded, &v_expanded)
     }
@@ -188,8 +195,7 @@ impl RopeGqaAttention {
             &v_for_cache,
         )?;
 
-        self.inner
-            .run_attention_fn(&q, &full_k, &full_v)
+        self.inner.run_attention_fn(&q, &full_k, &full_v)
     }
 }
 
@@ -351,7 +357,10 @@ mod tests {
             num_kv_heads,
             head_dim,
             10000.0,
-            Some(candle_nn::VarBuilder::zeros(candle_core::DType::F32, &device)),
+            Some(candle_nn::VarBuilder::zeros(
+                candle_core::DType::F32,
+                &device,
+            )),
             AttentionConfig {
                 tile_size: Some(16),
                 use_fused,

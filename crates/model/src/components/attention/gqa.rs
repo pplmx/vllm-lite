@@ -142,12 +142,8 @@ impl GqaAttention {
         if self.config.use_fused {
             let k_heads = k.transpose(1, 2)?.contiguous()?;
             let v_heads = v.transpose(1, 2)?.contiguous()?;
-            let flash = GqaFlashAttention::new(
-                self.num_heads,
-                self.num_kv_heads,
-                self.head_dim,
-                false,
-            );
+            let flash =
+                GqaFlashAttention::new(self.num_heads, self.num_kv_heads, self.head_dim, false);
             let attn_output = flash.forward(&q, &k_heads, &v_heads)?;
             let attn_output = attn_output.transpose(1, 2)?;
             let attn_output =
@@ -207,12 +203,7 @@ impl GqaAttention {
     }
 
     pub fn flash_attention_fn(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
-        let flash = GqaFlashAttention::new(
-            self.num_heads,
-            self.num_kv_heads,
-            self.head_dim,
-            true,
-        );
+        let flash = GqaFlashAttention::new(self.num_heads, self.num_kv_heads, self.head_dim, true);
         let attn_output = flash.forward(q, k, v)?;
         let batch_size = q.dims()[0];
         let seq_len = q.dims()[2];

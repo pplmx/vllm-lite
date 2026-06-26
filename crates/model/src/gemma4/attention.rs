@@ -230,8 +230,7 @@ impl Gemma4Attention {
             None
         };
 
-        let attn_output =
-            compute_gqa_attention(q, k, v, self.head_dim, mask.as_ref())?;
+        let attn_output = compute_gqa_attention(q, k, v, self.head_dim, mask.as_ref())?;
         project_attention_output(
             &attn_output,
             batch_size,
@@ -321,8 +320,7 @@ impl Gemma4Attention {
 
         if apply_sliding_mask {
             let kv_seq = k.dims()[2];
-            let mask =
-                self.sliding_causal_mask(seq_len, kv_seq, query_positions, q.device())?;
+            let mask = self.sliding_causal_mask(seq_len, kv_seq, query_positions, q.device())?;
             qk = qk.broadcast_add(&mask)?;
         }
 
