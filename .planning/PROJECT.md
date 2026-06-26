@@ -97,15 +97,15 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 
 **v17.0: Production Speculative Decoding**
 
-- [ ] **SPEC-ENG-01**: Engine integration of speculative decoding (`step_speculative`)
-- [ ] **SPEC-ENG-02**: Seamless fallback between speculative and non-speculative paths
-- [ ] **SPEC-BENCH-01**: Real hardware benchmark suite (throughput, latency, P50/P95/P99)
-- [ ] **SPEC-BENCH-02**: Baseline comparison vs non-speculative inference
-- [ ] **SPEC-ADAPT-01**: Adaptive draft depth based on real-time acceptance rates
-- [ ] **SPEC-ADAPT-02**: Acceptance rate monitoring and dynamic adjustment
-- [ ] **SPEC-WARM-01**: Speculative warmup (prefill draft KV cache before decode)
-- [ ] **SPEC-MULTI-01**: External draft model support (smaller model as drafter)
-- [ ] **SPEC-MULTI-02**: Draft model lifecycle management (load/unload/swap)
+- [x] **SPEC-ENG-01**: Engine integration — `step_speculative_inner` (commit `52f77ce`)
+- [x] **SPEC-ENG-02**: Seamless fallback — parity tests in `qwen3_5/speculative_tests.rs`
+- [ ] **SPEC-BENCH-01**: Real hardware benchmark suite → Wave 5
+- [ ] **SPEC-BENCH-02**: Baseline comparison vs non-speculative inference → Wave 5
+- [ ] **SPEC-ADAPT-01**: Adaptive draft depth → Wave 2
+- [ ] **SPEC-ADAPT-02**: Acceptance rate monitoring → Wave 2
+- [ ] **SPEC-WARM-01**: Speculative warmup → Wave 4
+- [ ] **SPEC-MULTI-01**: External draft model support → deferred to v18.0
+- [ ] **SPEC-MULTI-02**: Draft model lifecycle management → deferred to v18.0
 
 ### Out of Scope
 
@@ -160,4 +160,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-05-13 — v17.0 milestone started*
+*Last updated: 2026-06-26 — Wave 1 收口；Wave 2–5 spec decode 增量在 pipeline*

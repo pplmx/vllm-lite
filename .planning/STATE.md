@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v17.0
 milestone_name: Production Speculative Decoding
 status: complete
-last_updated: "2026-05-13T05:00:00.000Z"
-last_activity: 2026-05-13
+last_updated: "2026-06-26T00:00:00.000Z"
+last_activity: 2026-06-26
 progress:
   total_phases: 4
   completed_phases: 4
@@ -17,19 +17,18 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-13)
+See: .planning/PROJECT.md (updated 2026-06-26)
 
 **Core value:** Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
-**Current focus:** Milestone v17.0 Production Speculative Decoding — Phase 17.1 Engine Integration
+**Current focus:** Wave 1 of 5 (文档同步 + dead_code 审计) — Wave 2–5 spec decode 增量在 pipeline
 
 ---
 
 ## Current Position
 
-Phase: 4 of 4 (Phase 17.4: Speculative Warmup & Metrics)
-Plan: 24 plans completed (17.1-A through 17.4-H)
-Status: ALL PHASES COMPLETE
-Last activity: 2026-05-13 — Phase 17.4 verified complete
+Wave: 1 of 5 (Wave 1: 文档同步 + dead_code 审计)
+Status: Wave 1 in progress; Wave 2–5 in pipeline
+Last activity: 2026-06-26 — Wave 1 spec 落地 (`d42b151`)
 
 Progress: [██████████] 100%
 
@@ -87,4 +86,5 @@ Resume file: None
 
 ---
 
-*State updated: 2026-05-13 — Milestone v17.0 roadmap created*
+*State updated: 2026-06-26 — Wave 1 doc sync 收口；3 处 stale cross-ref 已 amend Task 3*
+*Prior state: 2026-05-13 — Milestone v17.0 roadmap created*
