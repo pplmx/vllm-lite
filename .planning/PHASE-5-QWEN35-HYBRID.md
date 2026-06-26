@@ -1,7 +1,7 @@
 # Phase 5：Qwen3.5 Hybrid 收敛计划
 
 > **创建日期:** 2026-06-12  
-> **状态:** 🔄 Wave 2 完成（待 commit）  
+> **状态:** ✅ 完成（2026-06-26；Wave 1–4 全部合并至 main）  
 > **前置:** Phase 0–4 完成（`main` @ `e192492`+）  
 > **关联:** `.planning/MODEL-ARCHITECTURE-REFACTOR.md`、`.planning/SESSION-HANDOFF.md`
 
@@ -270,8 +270,9 @@ Wave 4  →  test(qwen3_5): speculative parity and capability upgrade (if green)
 | 2026-06-12 | — | Phase 5 规划文档创建 | — |
 | 2026-06-15 | 1 | 拆分 hybrid.rs → block/model/weights/config | `decc8c8` |
 | 2026-06-15 | 2 | HybridLm shell + GatedDelta 上移 components | `73dab5e` |
-| 2026-06-12 | 3 | GDN 维度从 config 读取；统一 norm/lm_head 加载 | 待提交 |
-| 2026-06-12 | 4 | speculative parity 测试 + `PRODUCTION_SPECULATIVE` | 待提交 |
+| 2026-06-15 | 3 | GDN 维度从 config 读取；统一 norm/lm_head 加载 | `52f77ce` |
+| 2026-06-15 | 4 | speculative parity 测试 + `PRODUCTION_SPECULATIVE` 升级 | `52f77ce`（同 Wave 3 commit） |
+| 2026-06-26 | 1.5 | 文档同步：状态、引用、CHANGELOG 补录 | `d42b151` + 本 Wave 后续 commit |
 
 ---
 
@@ -280,3 +281,4 @@ Wave 4  →  test(qwen3_5): speculative parity and capability upgrade (if green)
 | 日期 | 变更 |
 |------|------|
 | 2026-06-12 | 初版：基于 Phase 4 完成后的 codebase 分析 |
+| 2026-06-26 | Wave 1 收口：状态标完成；同步 Wave 3–4 commit；CHANGELOG 补录 |
