@@ -2,7 +2,7 @@ use crate::qwen3_config::Qwen3Config;
 use candle_core::{Result, Tensor};
 
 #[derive(Clone)]
-#[allow(dead_code)]
+#[allow(dead_code)] // audited 2026-06-26 (Wave 1): pub(crate) fields never read externally; struct only used in self-tests
 pub struct RoPE {
     pub(crate) theta: f32,
     pub(crate) head_dim: usize,
