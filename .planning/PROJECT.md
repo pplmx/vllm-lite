@@ -103,7 +103,7 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 - [ ] **SPEC-BENCH-02**: Baseline comparison vs non-speculative inference → Wave 5
 - [x] **SPEC-ADAPT-01**: Adaptive draft depth — `AdaptiveSpeculativeDecoder` + EWMA + deadband + cooldown (commit `736b35f`)
 - [x] **SPEC-ADAPT-02**: Acceptance rate monitoring — `record_per_request_acceptance` + Prometheus `speculative_adjustments_total` + `/debug/metrics` (commit `736b35f`)
-- [ ] **SPEC-WARM-01**: Speculative warmup → Wave 4
+- [x] **SPEC-WARM-01**: Speculative warmup — `Engine::warmup_draft_kv` after prefill + `draft_kv_block_ids` tracking (commit `4154d23`)
 - [ ] **SPEC-MULTI-01**: External draft model support → deferred to v18.0
 - [ ] **SPEC-MULTI-02**: Draft model lifecycle management → deferred to v18.0
 
@@ -160,4 +160,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-26 — Wave 2 SPEC-ADAPT counter wire-up + docs sync 完成；Wave 3 (Dependabot) 待启动*
+*Last updated: 2026-06-26 — Wave 3 Dependabot 完成 + Wave 4 SPEC-WARM 测试覆盖；Wave 5 (SPEC-BENCH) 待启动*
