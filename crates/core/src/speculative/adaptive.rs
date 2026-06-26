@@ -121,8 +121,10 @@ impl AdaptiveSpeculativeDecoder {
         &self.accuracy_tracker
     }
 
-    /// Record verification results and potentially adjust
-    pub fn record_verification(&mut self, num_draft: usize, num_accepted: usize) {
+    /// Record verification results and potentially adjust.
+    /// Returns `true` if `current_max_draft_tokens` was actually changed,
+    /// `false` if within deadband, clamped to bound, or cooldown not elapsed.
+    pub fn record_verification(&mut self, num_draft: usize, num_accepted: usize) -> bool {
         // Record each draft token result
         for i in 0..num_draft {
             let accepted = i < num_accepted;
@@ -132,12 +134,15 @@ impl AdaptiveSpeculativeDecoder {
         // Check if we should adjust
         self.steps_since_adjustment += 1;
         if self.steps_since_adjustment >= self.config.cooldown_steps {
-            self.maybe_adjust();
+            self.maybe_adjust()
+        } else {
+            false
         }
     }
 
-    /// Potentially adjust draft token count based on EWMA accuracy and deadband hysteresis
-    fn maybe_adjust(&mut self) {
+    /// Potentially adjust draft token count based on EWMA accuracy and deadband hysteresis.
+    /// Returns `true` if `current_max_draft_tokens` was actually changed.
+    fn maybe_adjust(&mut self) -> bool {
         let rate = self.accuracy_tracker.acceptance_rate_ewma();
         let target = self.config.target_acceptance_rate;
         let threshold = self.config.deadband_threshold;
@@ -172,10 +177,15 @@ impl AdaptiveSpeculativeDecoder {
                 );
                 self.current_max_draft_tokens = new_max;
                 self.steps_since_adjustment = 0;
+                true
+            } else {
+                // Clamped to bound: adjustment would not change value
+                false
             }
         } else {
             // Within deadband: reset cooldown to prevent stale accumulation
             self.steps_since_adjustment = 0;
+            false
         }
     }
 
@@ -584,6 +594,93 @@ mod tests {
             "Should increase after high acceptance, got {} > {}",
             after_high,
             after_low
+        );
+    }
+
+    // ---- Bool return contract tests (Wave 2 D2-3) ----
+
+    #[test]
+    fn test_record_verification_returns_true_on_increase() {
+        let config = AdaptiveDraftConfig {
+            min_draft_tokens: 2,
+            max_draft_tokens: 8,
+            target_acceptance_rate: 0.5,
+            accuracy_window_size: 5,
+            adjustment_step: 1,
+            cooldown_steps: 1,
+            ewma_alpha: 0.5,
+            deadband_threshold: 0.1,
+        };
+        let mut decoder = AdaptiveSpeculativeDecoder::new(config);
+        // Pre-decrease to create room (test starts at config.max_draft_tokens=8).
+        // 0% acceptance drops to 7; otherwise high-acceptance step would be
+        // clamped to the same value and the test would not exercise a true
+        // adjustment.
+        decoder.record_verification(5, 0);
+        let before = decoder.current_max_draft_tokens();
+        assert!(before < 8, "pre-condition: must be below max");
+
+        // 100% acceptance → deviation > threshold → should adjust up to 8
+        let adjusted = decoder.record_verification(5, 5);
+        assert!(
+            adjusted,
+            "100% acceptance with room to grow should return true"
+        );
+        assert!(
+            decoder.current_max_draft_tokens() > before,
+            "max_draft_tokens should increase on high acceptance when below max"
+        );
+    }
+
+    #[test]
+    fn test_record_verification_returns_true_on_decrease() {
+        let config = AdaptiveDraftConfig {
+            min_draft_tokens: 2,
+            max_draft_tokens: 8,
+            target_acceptance_rate: 0.7,
+            accuracy_window_size: 5,
+            adjustment_step: 1,
+            cooldown_steps: 1,
+            ewma_alpha: 0.5,
+            deadband_threshold: 0.1,
+        };
+        let mut decoder = AdaptiveSpeculativeDecoder::new(config);
+
+        let adjusted = decoder.record_verification(5, 0);
+        assert!(
+            adjusted,
+            "0% acceptance should trigger adjustment (return true)"
+        );
+        assert!(
+            decoder.current_max_draft_tokens() < 8,
+            "max_draft_tokens should decrease below initial max on 0% acceptance"
+        );
+    }
+
+    #[test]
+    fn test_record_verification_returns_false_within_deadband() {
+        let config = AdaptiveDraftConfig {
+            min_draft_tokens: 2,
+            max_draft_tokens: 8,
+            target_acceptance_rate: 0.7,
+            accuracy_window_size: 5,
+            adjustment_step: 1,
+            cooldown_steps: 1,
+            ewma_alpha: 0.5,
+            deadband_threshold: 0.5, // very wide deadband
+        };
+        let mut decoder = AdaptiveSpeculativeDecoder::new(config);
+        let initial = decoder.current_max_draft_tokens();
+
+        let adjusted = decoder.record_verification(5, 3);
+        assert!(
+            !adjusted,
+            "Within deadband should NOT trigger adjustment (return false)"
+        );
+        assert_eq!(
+            decoder.current_max_draft_tokens(),
+            initial,
+            "max_draft_tokens should be unchanged within deadband"
         );
     }
 }
