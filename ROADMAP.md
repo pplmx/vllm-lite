@@ -144,6 +144,8 @@
 
 > 2026-06-26 更新：Wave 2 完成 `speculative_adjustments_total` Prometheus counter wire-up（`AdaptiveSpeculativeDecoder::record_verification` 返回 `bool` adjustment 事件）。SPEC-ADAPT-01/02 实现已完整；Wave 3 (Dependabot) 待启动。
 
+> 2026-06-26 更新：Wave 4 完成 SPEC-WARM-01 测试覆盖（`Engine::warmup_draft_kv` 改 `pub(crate)` + `CounterModel` wrapper + fast 单测 `test_warmup_draft_kv_invokes_draft_per_sequence`）。Wave 5 (SPEC-BENCH real-hardware benchmarks) 待启动。
+
 ---
 
 ## ✅ Phase 6: 多模型支持
