@@ -1,34 +1,36 @@
 # vLLM-lite Session Handoff
 
 > 新 session 可直接读取本文恢复进度。最后更新：2026-06-26  
-> Git：`main` @ `053e68f` (Wave 1 + 1.6 + 2 + 3 + 4 全部完成：26 commits)
+> Git：`main` @ `ccfd238` (Wave 1 + 1.6 + 2 + 3 + 4 + 5 全部完成：v17.0 收官)
 
 ---
 
-## 下一优先级（2026-06-26，Wave 4 完成）
+## 下一优先级（2026-06-26，Wave 5 完成；v17.0 收官）
 
-**Wave 1 + 1.6 + 2 + 3 + 4 全部完成（26 commits）**
+**Wave 1 + 1.6 + 2 + 3 + 4 + 5 全部完成**
 
 | Wave | Commit 范围 | 描述 |
 |------|------------|------|
 | 1 | `d42b151` ~ `1499fcd` | 文档同步 + dead_code 审计（11 commits） |
 | 1.6 | `a4886a7` | 清理 vllm-model pre-existing clippy（11 lints） |
 | 2 | `9e564f6` ~ `b5c587e` | SPEC-ADAPT counter wire-up + docs sync（5 commits） |
-| 3 | `c93ba5e` ~ `2240065` | Dependabot bumps + SECURITY.md audit history（5 commits） |
-| 4 | `55bc82d` ~ `053e68f` | SPEC-WARM-01 测试覆盖 + doc sync（5 commits） |
+| 3 | `c93ba5e` ~ `2240065` | Dependabot bumps + SECURITY.md audit history（4 commits） |
+| 4 | `55bc82d` ~ `a9d4250` | SPEC-WARM-01 测试覆盖 + doc sync（5 commits） |
+| 5 | `1866d7b` ~ `ccfd238` | SPEC-BENCH-01/02 benchmark suite + doc sync（6 commits） |
 
-**下一 Wave:** Wave 5 (SPEC-BENCH-01/02 real-hardware benchmarks)
-- 多数 metrics 已就位（`speculative_acceptance_rate`, `efficiency`, `per_request_acceptance`, `adjustments_total`）
-- 需 benchmark harness（`criterion` / 自定义）+ 报告模板
-- 部分项目需 GPU 环境，可能仅文档化
+**v17.0 状态：7/9 SPECs 完成。** 剩 SPEC-MULTI-01/02 deferred to v18.0。
 
-**Wave 4 spec/plan:**
-- Spec: `docs/superpowers/specs/2026-06-26-wave4-warmup-test.md` (commit `55bc82d`)
-- Plan: `docs/superpowers/plans/2026-06-26-wave4-warmup-test.md` (commit `1e86a77`)
+**下一 Wave 候选（v18.0 brainstorm）：**
+- Multi-model draft support（SPEC-MULTI-01/02 — deferred from v17）
+- 长上下文（>32K）
+- Vision/multimodal 路径
+- Real GPU benchmark 跑分（SPEC-BENCH-01 "real hardware"）
 
-**Deferred from Wave 3 (记录于 SECURITY.md):**
-- rustls-pemfile 2.2.0 unmaintained (RUSTSEC-2025-0134): 需 tls.rs API 重构
-- paste 1.0.15 unmaintained (RUSTSEC-2024-0436): deep transitive via gemm→candle；需 candle 升级
+**或：push origin/main checkpoint**（v17 收官是好的阶段性节点，main 领先 origin ~50 commits）
+
+**Wave 5 spec/plan:**
+- Spec: `docs/superpowers/specs/2026-06-26-wave5-benchmark-suite.md` (commit `1866d7b`)
+- Plan: `docs/superpowers/plans/2026-06-26-wave5-bench-suite.md` (commit `1636063`)
 
 ---
 
