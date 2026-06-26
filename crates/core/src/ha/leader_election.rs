@@ -10,12 +10,11 @@ pub enum LeadershipState {
     Candidate,
 }
 
-#[allow(dead_code)]
 pub struct LeaderElection {
     state: Arc<RwLock<LeadershipState>>,
     is_leader: Arc<RwLock<bool>>,
     leader_id: Arc<RwLock<Option<String>>>,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // audited 2026-06-26 (Wave 1): HA shutdown signaling placeholder
     shutdown_tx: Arc<RwLock<Option<watch::Sender<()>>>>,
 }
 

@@ -130,24 +130,6 @@ impl ErrorTrackingEngine {
             Err("Failed to add request".to_string())
         }
     }
-
-    #[allow(dead_code)]
-    async fn get_error_count(&self) -> usize {
-        let engine = self.engine.lock().await;
-        engine.error_count
-    }
-
-    #[allow(dead_code)]
-    async fn is_healthy(&self) -> bool {
-        let engine = self.engine.lock().await;
-        engine.is_healthy()
-    }
-
-    #[allow(dead_code)]
-    async fn get_last_error(&self) -> Option<String> {
-        let engine = self.engine.lock().await;
-        engine.get_last_error().map(|s| s.to_string())
-    }
 }
 
 impl Clone for ErrorTrackingEngine {

@@ -241,7 +241,6 @@ mod tests {
         // Verify that forward_to_layer default impl delegates to forward()
         let mut model = TrackingModel {
             forward_called: false,
-            layers_processed: 0,
         };
         let _batch = vllm_traits::types::Batch {
             seq_ids: vec![1],
@@ -311,8 +310,6 @@ mod tests {
 
     struct TrackingModel {
         forward_called: bool,
-        #[allow(dead_code)]
-        layers_processed: usize,
     }
 
     impl ModelBackend for TrackingModel {
