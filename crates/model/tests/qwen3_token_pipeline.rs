@@ -116,7 +116,6 @@ mod tests {
 
     #[test]
     #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
-
     fn test_qwen3_partial_prefill_simulation() {
         let mut model = support::qwen3::Qwen3Fixture::cpu()
             .load_model()
@@ -215,7 +214,6 @@ mod tests {
 
     #[test]
     #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
-
     fn test_qwen3_forward_with_exact_server_params() {
         let mut model = support::qwen3::Qwen3Fixture::cpu()
             .load_model()
@@ -374,7 +372,6 @@ mod tests {
 
     #[test]
     #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
-
     fn test_qwen3_multi_step_generation() {
         let mut model = support::qwen3::Qwen3Fixture::cpu()
             .load_model()
@@ -525,7 +522,6 @@ mod tests {
 
     #[test]
     #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
-
     fn test_qwen3_with_special_tokens() {
         let mut model = support::qwen3::Qwen3Fixture::cpu()
             .load_model()
@@ -669,7 +665,6 @@ mod tests {
 
     #[test]
     #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
-
     fn test_model_token_to_text_pipeline() {
         let mut model = support::qwen3::Qwen3Fixture::cpu()
             .load_model()

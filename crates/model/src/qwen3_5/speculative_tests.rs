@@ -162,6 +162,7 @@ fn test_forward_to_layer_matches_full_forward_full_attention_only() {
 }
 
 #[test]
+#[allow(clippy::needless_range_loop)]
 fn test_gdn_prefill_decode_sequence_is_stable() {
     let config = tiny_config(vec!["linear_attention", "linear_attention"]);
     let device = Device::Cpu;
@@ -192,7 +193,7 @@ fn test_gdn_prefill_decode_sequence_is_stable() {
             *ref_chain.last().unwrap(),
             num_computed,
         );
-        assert_eq!(next, decoded[step as usize]);
+        assert_eq!(next, decoded[step]);
         ref_chain.push(next);
     }
 }
