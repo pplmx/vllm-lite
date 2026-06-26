@@ -7,7 +7,7 @@ use vllm_traits::{Batch, BatchPhase, SeqId, TokenId};
 impl super::Engine {
     /// Warm up draft model's KV cache after target prefill.
     /// This ensures the first speculative decode step has valid draft state.
-    fn warmup_draft_kv(&mut self, batch: &Batch) -> Result<()> {
+    pub(crate) fn warmup_draft_kv(&mut self, batch: &Batch) -> Result<()> {
         if !self.speculative_mode {
             return Ok(());
         }
@@ -412,6 +412,132 @@ mod tests {
         fn num_heads(&self) -> usize {
             1
         }
+    }
+
+    /// Wrapper around FakeModel that counts forward/forward_logits invocations.
+    /// Used to verify warmup_draft_kv calls draft model per sequence.
+    /// `Arc<AtomicUsize>` + Clone enable inspecting call count after the model
+    /// has been moved into the engine (the engine clones the Arc internally).
+    #[derive(Clone)]
+    struct CounterModel {
+        inner: FakeModel,
+        forward_count: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl CounterModel {
+        fn new(token: TokenId) -> Self {
+            Self {
+                inner: FakeModel::new(token),
+                forward_count: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            }
+        }
+        fn forward_count(&self) -> usize {
+            self.forward_count
+                .load(std::sync::atomic::Ordering::Relaxed)
+        }
+    }
+
+    impl ModelBackend for CounterModel {
+        fn forward(
+            &mut self,
+            seq_ids: &[SeqId],
+            input_tokens: &[Vec<TokenId>],
+            positions: &[Vec<usize>],
+            kv_block_ids: &[Vec<usize>],
+            num_computed_tokens: &[usize],
+            is_prefill: &[bool],
+        ) -> ModelResult<BatchOutput> {
+            self.forward_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            self.inner.forward(
+                seq_ids,
+                input_tokens,
+                positions,
+                kv_block_ids,
+                num_computed_tokens,
+                is_prefill,
+            )
+        }
+
+        fn forward_logits(
+            &mut self,
+            seq_ids: &[SeqId],
+            input_tokens: &[Vec<TokenId>],
+            positions: &[Vec<usize>],
+            kv_block_ids: &[Vec<usize>],
+            num_computed_tokens: &[usize],
+            is_prefill: &[bool],
+        ) -> ModelResult<Vec<Vec<f32>>> {
+            self.forward_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            self.inner.forward_logits(
+                seq_ids,
+                input_tokens,
+                positions,
+                kv_block_ids,
+                num_computed_tokens,
+                is_prefill,
+            )
+        }
+
+        fn embed(
+            &mut self,
+            input_tokens: &[Vec<TokenId>],
+            positions: &[Vec<usize>],
+        ) -> ModelResult<Vec<Vec<f32>>> {
+            self.inner.embed(input_tokens, positions)
+        }
+
+        fn vocab_size(&self) -> usize {
+            self.inner.vocab_size()
+        }
+
+        fn num_layers(&self) -> usize {
+            self.inner.num_layers()
+        }
+
+        fn num_heads(&self) -> usize {
+            self.inner.num_heads()
+        }
+    }
+
+    /// Test Plan 17.4-A: warmup_draft_kv invokes draft model once per sequence.
+    /// Fast unit test (no #[ignore]): directly constructs a Prefill batch and
+    /// calls warmup_draft_kv to verify the contract independently of step().
+    #[test]
+    fn test_warmup_draft_kv_invokes_draft_per_sequence() {
+        let target = FakeModel::new(42);
+        let draft = CounterModel::new(42);
+        let draft_count_before = draft.forward_count();
+        let mut engine =
+            super::super::Engine::new_boxed(Box::new(target), Some(Box::new(draft.clone())));
+        engine.enable_speculative();
+
+        // Construct a Prefill batch with 3 sequences.
+        let batch = vllm_traits::types::Batch {
+            seq_ids: vec![1, 2, 3],
+            input_tokens: vec![vec![10, 20], vec![30], vec![40, 50, 60]],
+            positions: vec![vec![0, 1], vec![0], vec![0, 1, 2]],
+            kv_block_ids: vec![vec![0], vec![0], vec![0]],
+            num_computed_tokens: vec![0, 0, 0],
+            is_prefill: vec![true, true, true],
+            phase: vllm_traits::BatchPhase::Prefill,
+            total_tokens: 6,
+            max_seq_len: 3,
+        };
+
+        // Execute warmup directly.
+        engine
+            .warmup_draft_kv(&batch)
+            .expect("warmup_draft_kv should succeed");
+
+        // Verify: draft model forward() called once per seq_id.
+        let calls = draft.forward_count() - draft_count_before;
+        assert_eq!(
+            calls, 3,
+            "warmup_draft_kv should invoke draft.forward() exactly once per seq_id (got {})",
+            calls
+        );
     }
 
     /// Test Plan 17.1-A: Unified step() dispatches correctly
