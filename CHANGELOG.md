@@ -83,6 +83,16 @@ Refs: `docs/superpowers/specs/2026-06-26-wave2-adapt-spec.md`
 
 Refs: `docs/superpowers/specs/2026-06-26-wave4-warmup-test.md`
 
+#### Benchmark Suite Closure (Wave 5, 2026-06-26)
+
+- New `crates/core/benches/latency_percentiles.rs` — per-request latency distribution with criterion auto-reported p50/p95/p99 (SPEC-BENCH-01)
+- New `crates/core/benches/speculative_vs_baseline.rs` — explicit baseline vs adaptive speculative throughput comparison (SPEC-BENCH-02)
+- New `docs/benchmark-suite.md` — suite documentation covering all 9 benchmarks
+- New `just bench` recipe — runs all benchmarks with `--output-format bencher`
+- Documentation: `SPEC-BENCH-01` / `SPEC-BENCH-02` marked complete in `.planning/PROJECT.md`; v17.0 milestone closes 7/9 SPECs
+
+Refs: `docs/superpowers/specs/2026-06-26-wave5-benchmark-suite.md`
+
 ### Added (Phase 4)
 
 #### Phase 4: Performance Optimization
