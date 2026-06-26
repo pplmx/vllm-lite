@@ -2,7 +2,7 @@ use crate::qwen3_config::Qwen3Config;
 use candle_core::{Device, Result as CandleResult, Tensor};
 
 #[derive(Clone)]
-#[allow(dead_code)]
+#[allow(dead_code)] // audited 2026-06-26 (Wave 1): pub(crate) fields never read externally; callers use struct via from_config or pass through to Attention35WithRoPE
 pub struct MRoPE {
     pub(crate) dim: usize,
     pub(crate) theta: f32,
