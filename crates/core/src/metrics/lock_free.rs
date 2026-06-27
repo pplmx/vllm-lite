@@ -138,6 +138,16 @@ impl LockFreeMetrics {
         self.requests_total.load(Ordering::Relaxed)
     }
 
+    /// prefix_cache_hits: total prefix cache hits since start.
+    pub fn prefix_cache_hits(&self) -> u64 {
+        self.prefix_cache_hits.load(Ordering::Relaxed)
+    }
+
+    /// prefix_cache_requests: total prefix cache lookups since start.
+    pub fn prefix_cache_requests(&self) -> u64 {
+        self.prefix_cache_requests.load(Ordering::Relaxed)
+    }
+
     /// snapshot: snapshot.
     pub fn snapshot(&self) -> MetricsSnapshot {
         let mut latencies = Vec::new();

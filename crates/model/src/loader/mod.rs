@@ -7,6 +7,8 @@
 pub mod builder;
 /// checkpoint: checkpoint module.
 pub mod checkpoint;
+/// error: error module.
+pub mod error;
 /// format: format module.
 pub mod format;
 /// io: io module.
@@ -14,6 +16,7 @@ pub mod io;
 
 pub use builder::{ModelLoader, ModelLoaderBuilder};
 pub use checkpoint::load_checkpoint;
+pub use error::LoadError;
 pub use format::{FormatLoader, SafetensorsLoader};
 
 #[cfg(test)]

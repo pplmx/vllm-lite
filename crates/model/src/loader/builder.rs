@@ -217,11 +217,13 @@ impl ModelLoader {
                     "Loading stub architecture with --allow-stub; inference output is not meaningful"
                 );
             } else {
-                return Err(candle_core::Error::msg(format!(
-                    "Architecture '{arch_name}' is a stub and cannot be used for inference \
-                     (tier: {}). Pass --allow-stub to override (not recommended for production).",
-                    caps.tier()
-                )));
+                return Err(candle_core::Error::msg(
+                    crate::loader::LoadError::StubNotAllowed {
+                        name: arch_name,
+                        tier: caps.tier().to_string(),
+                    }
+                    .to_string(),
+                ));
             }
         } else {
             tracing::info!(

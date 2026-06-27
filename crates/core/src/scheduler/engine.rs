@@ -552,10 +552,15 @@ impl SchedulerEngine {
         self.request_queue.len()
     }
 
-    /// Get prefix cache hit rate (placeholder - would need stats tracking)
+    /// Get prefix cache hit rate (hits / requests); returns 0.0 when no requests.
     pub fn prefix_cache_hit_rate(&self) -> f64 {
-        // Placeholder - would need stats tracking
-        0.0
+        let hits = self.metrics.prefix_cache_hits();
+        let requests = self.metrics.prefix_cache_requests();
+        if requests == 0 {
+            0.0
+        } else {
+            hits as f64 / requests as f64
+        }
     }
 
     /// Rollback KV cache for rejected draft tokens (Plan 17.1-D).
