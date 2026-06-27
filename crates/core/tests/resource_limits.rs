@@ -1,4 +1,4 @@
-use vllm_core::kv_cache::BlockAllocator;
+use vllm_core::scheduler::memory::BlockAllocator;
 
 #[test]
 fn test_allocate_exact_fit() {

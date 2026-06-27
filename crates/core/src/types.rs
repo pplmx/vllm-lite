@@ -2,7 +2,6 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 pub use vllm_traits::{Batch, BatchOutput, BlockId, SeqId, TokenId};
 
-pub use crate::kv_cache::BLOCK_SIZE;
 use crate::scheduler::cuda_graph::SchedulerCudaGraphConfig;
 
 pub use crate::speculative::DraftId;

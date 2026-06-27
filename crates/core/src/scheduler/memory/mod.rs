@@ -171,7 +171,7 @@ impl MemoryManager {
         if num_tokens == 0 {
             return;
         }
-        let block_size = crate::kv_cache::BLOCK_SIZE;
+        let block_size = vllm_traits::BLOCK_SIZE;
         let tokens_after_rollback = seq.num_computed_tokens.saturating_sub(num_tokens);
         let blocks_after = tokens_after_rollback.div_ceil(block_size);
         let blocks_before = seq.num_computed_tokens.div_ceil(block_size);

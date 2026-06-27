@@ -11,26 +11,22 @@
 //! - [`Engine`] - Main inference engine
 //! - [`SchedulerEngine`] - Request scheduling and batch building
 //! - [`EnhancedMetricsCollector`] - Performance metrics
-//! - [`kv_cache`] - Block allocation and prefix cache helpers
 
 pub mod beam;
-pub mod circuit_breaker;
+pub(crate) mod circuit_breaker;
 pub mod engine;
 pub mod error;
-pub mod ha;
-pub mod kv_cache;
+pub(crate) mod ha;
 pub mod metrics;
-pub mod routing;
+pub(crate) mod routing;
 pub mod sampling;
 pub mod scheduler;
 pub mod speculative;
-pub mod sync;
+pub(crate) mod sync;
 pub mod types;
 
 pub use beam::BeamSequence;
 pub use engine::Engine;
-pub use ha::{FailoverManager, LeaderElection, LeadershipState};
 pub use metrics::{EnhancedMetricsCollector, MetricsSnapshot};
-pub use routing::HashRouter;
 pub use scheduler::SchedulerEngine;
 pub use types::Priority;
