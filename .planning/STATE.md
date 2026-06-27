@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v17.0
-milestone_name: Production Speculative Decoding
-status: complete
-last_updated: "2026-06-26T17:37:07.000Z"
-last_activity: 2026-06-26
+milestone: v18.0
+milestone_name: Multi-Model Speculative Decoding
+status: planning
+last_updated: "2026-06-27T01:53:50.746Z"
+last_activity: 2026-06-27
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 24
-  completed_plans: 24
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -26,11 +26,10 @@ See: .planning/PROJECT.md (updated 2026-06-26)
 
 ## Current Position
 
-Wave: 5 of 5 (Wave 5: SPEC-BENCH-01/02 benchmark suite + doc sync)
-Status: Wave 5 in progress; v17.0 收官 in pipeline
-Last activity: 2026-06-26 — Wave 1 spec 落地 (`d42b151`)
-
-Progress: [██████████] 100%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-27 — Milestone v18.0 started
 
 ## Performance Metrics
 
