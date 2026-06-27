@@ -78,7 +78,7 @@ impl PrometheusExporter {
         // v18.0 multi-model speculative decoding metrics
         let draft_snap = self.collector.draft_metrics_snapshot();
         output.push_str(
-            "# HELP draft_resolutions_external_total Total draft resolutions → external backend\n",
+            "# HELP draft_resolutions_external_total Total draft resolutions -> external backend\n",
         );
         output.push_str("# TYPE draft_resolutions_external_total counter\n");
         output.push_str(&format!(
@@ -86,14 +86,14 @@ impl PrometheusExporter {
             draft_snap.resolutions_external_total
         ));
 
-        output.push_str("# HELP draft_resolutions_self_spec_total Total draft resolutions → self-spec fallback\n");
+        output.push_str("# HELP draft_resolutions_self_spec_total Total draft resolutions -> self-spec fallback\n");
         output.push_str("# TYPE draft_resolutions_self_spec_total counter\n");
         output.push_str(&format!(
             "draft_resolutions_self_spec_total {}\n",
             draft_snap.resolutions_self_spec_total
         ));
 
-        output.push_str("# HELP draft_resolutions_none_total Total draft resolutions → no draft (pure target decode)\n");
+        output.push_str("# HELP draft_resolutions_none_total Total draft resolutions -> no draft (pure target decode)\n");
         output.push_str("# TYPE draft_resolutions_none_total counter\n");
         output.push_str(&format!(
             "draft_resolutions_none_total {}\n",
