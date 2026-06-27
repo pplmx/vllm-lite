@@ -75,6 +75,12 @@ pub enum CircuitBreakerError {
     Open,
     #[error("operation failed: {0}")]
     OperationFailed(String),
+    /// Half-open state rejected an additional probe because the configured
+    /// `half_open_max_calls` was already reached. The `u32` carries the
+    /// configured limit so callers can distinguish "tried too early" from
+    /// "policy set too tight".
+    #[error("half-open circuit rejected probe (max={0})")]
+    HalfOpenRejected(u32),
 }
 
 /// Circuit breaker implementation
