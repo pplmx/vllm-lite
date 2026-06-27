@@ -3,16 +3,15 @@ gsd_state_version: 1.0
 milestone: v19.0
 milestone_name: Codebase Health Audit
 status: planning
-last_updated: "2026-06-27T04:29:55.306Z"
+last_updated: "2026-06-27T05:00:00.000Z"
 last_activity: 2026-06-27
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
-  total_plans: 0
+  total_plans: 5
   completed_plans: 0
   percent: 0
 ---
-
 # Project State
 
 ## Project Reference
@@ -20,20 +19,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-26)
 
 **Core value:** Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
-**Current focus:** v18.0 Multi-Model Speculative Decoding — SHIPPED 2026-06-27 (4 phases, 14/14 requirements; gap closure via Phase 19)
+**Current focus:** v19.0 Codebase Health Audit (analysis-only, no code changes) — roadmap defined (5 phases), execution not started.
 
 ---
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Phase 20 (Architecture Audit) — planning complete, execution not started
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-27 — Milestone v19.0 started
+Status: Defining roadmap
+Last activity: 2026-06-27 — Milestone v19.0 roadmap created (Phases 20-24)
 
 ## Performance Metrics
 
-**Velocity:**
+**Velocity (v18.0 historical):**
 
 - Total plans completed: 5 (v18.0)
 - Total commits across v18.0: 5 (one per phase) + 9 review fixes + 1 fmt
@@ -42,7 +41,14 @@ Last activity: 2026-06-27 — Milestone v19.0 started
 - Total integration test count: 14 → 23 (+9 in engine_v18_wiring.rs)
 - Total bench count: 3 → 4 (+1 bench)
 
-**By Phase:**
+**v19.0 Projection:**
+
+- 5 phases, all analysis-only (no code modifications)
+- Each phase produces concrete artifacts in `.planning/audit/`
+- Phase 24 (synthesis) gates on Phase 20-23 outputs
+- No test changes expected (existing 287+ tests still validate code as-is)
+
+**By Phase (v18.0 historical):**
 
 | Phase | Plans | Tests Added | Cumulative Lib Total |
 | ----- | ----- | ----------- | -------------------- |
@@ -69,6 +75,11 @@ Last activity: 2026-06-27 — Milestone v19.0 started
 - Phase 18.1 collocates MMLT-01..03 + LIFE-01 (registry foundation before lifecycle/routing depend on it)
 - Phase 18.4 is a validation phase with 0 direct requirements — verifies Phase 18.1-18.3 work end-to-end
 - Phase 19 is the v18.0 audit gap closure — wires resolver into Engine step loop, FALL-02, exporter, server config, production DraftLoader
+- **v19.0 roadmap decision**: 5 phases (20-24), one per audit dimension + synthesis; v18.0 ended at Phase 19, so v19.0 starts at Phase 20
+- **v19.0 execution model**: Each audit phase (20-23) is a single read-only subagent dispatch producing `REPORT.md` + `SUMMARY.md` in `.planning/audit/{dimension}/`; Phase 24 reads all four reports and produces synthesis + backlog + migration roadmap
+- **v19.0 parallelism**: Phases 20-23 each read disjoint slices of the codebase, so they could run in parallel — but reports are sequenced 20→21→22→23 to make the audit dimension narrative coherent for Phase 24's synthesis reader
+- **v19.0 out-of-scope**: No code changes, no new features, no performance optimization, no test re-runs, no CI changes — strictly audit artifacts only
+- **v19.0 deliverable shape**: `.planning/audit/` directory with 4 dimension subdirs (each with REPORT.md + SUMMARY.md) + 3 root files (SYNTHESIS.md / BACKLOG.md / MIGRATION-ROADMAP.md)
 
 ### Architecture Patterns Established
 
@@ -86,13 +97,20 @@ Last activity: 2026-06-27 — Milestone v19.0 started
 
 7. **Forward error capture via catch_unwind** — `generate_per_seq_drafts` wraps each per-seq forward in `catch_unwind(AssertUnwindSafe(...))` to handle both `Result::Err` and panic. Degraded seqs are skipped on subsequent steps.
 
+8. **Audit-before-refactor (v19.0)** — Non-functional refactoring work (file renaming, module boundary tightening, error-type unification, doc coverage catch-up) is gated on a structured audit. Audit findings become input to v20.0+ remediation phases, each with measurable acceptance criteria.
+
 ### Pending Todos
 
-None — milestone complete.
+- Phase 20: Architecture Audit — execute subagent to produce `.planning/audit/architecture/{REPORT.md,SUMMARY.md}`
+- Phase 21: Naming Audit — execute subagent after Phase 20
+- Phase 22: Comments + Documentation Audit — execute subagent after Phase 21
+- Phase 23: API + Error Handling Audit — execute subagent after Phase 22
+- Phase 24: Synthesis — execute after all four dimension reports exist; produces SYNTHESIS.md / BACKLOG.md / MIGRATION-ROADMAP.md
 
 ### Blockers/Concerns
 
-- `Engine::step()` in speculative mode hangs — pre-existing bug (not introduced by v18.0). 2 Phase 19 integration tests are `#[ignore]`d awaiting the fix.
+- `Engine::step()` in speculative mode hangs — pre-existing bug (not introduced by v18.0). 2 Phase 19 integration tests are `#[ignore]`d awaiting the fix. **Audit does not require code changes**, so this does not block v19.0.
+- Real-model benchmark missing — current bench uses stub backends. Deferred until a small real checkpoint is available. **Out of scope for v19.0.**
 
 ---
 
@@ -103,18 +121,22 @@ None — milestone complete.
 | Multi-Model | External draft model support (MULTI-01, MULTI-02) | Shipped in v18.0  | 2026-05-13   |
 | Multi-Model | Draft hot-swap mid-request (MULTI-04)             | Deferred to v19+  | 2026-06-27   |
 | Multi-Model | Draft fine-tuning hooks (MULTI-05)                | Out of scope      | 2026-05-13   |
-| Multi-Model | Cross-GPU draft placement (MULTI-06)              | Deferred to v19+  | 2026-05-13   |
+| Multi-Model | Cross-GPU draft placement (MULTI-06)              | Deferred to v19+  | 2026-06-27   |
 | Engine      | Wire DraftResolver into step_speculative loop     | **Closed by Phase 19** | 2026-06-27 |
 | Engine      | HTTP exporter integration of v18.0 metrics        | **Closed by Phase 19** | 2026-06-27 |
 | Engine      | Real-model benchmark (vs stub backend)            | Deferred to v19+  | 2026-06-27   |
 | Engine      | Fix Engine::step() speculative-mode hang         | Deferred to v19+  | 2026-06-27   |
+| Refactor    | File renaming (`17_*.rs` stage-info cleanup)      | Deferred to v20.0+ (after v19.0 audit) | 2026-06-27 |
+| Refactor    | Module boundary tightening                        | Deferred to v20.0+ (after v19.0 audit) | 2026-06-27 |
+| Refactor    | Doc-comment coverage catch-up to ≥80%              | Deferred to v20.0+ (after v19.0 audit) | 2026-06-27 |
+| Refactor    | Error type unification across crates              | Deferred to v20.0+ (after v19.0 audit) | 2026-06-27 |
 
 ## Session Continuity
 
-Last session: 2026-06-27 v18.0 + Phase 19 gap closure complete
-Stopped at: Milestone complete and cleaned up — audit passed
+Last session: 2026-06-27 v18.0 + Phase 19 gap closure complete; v19.0 milestone started
+Stopped at: v19.0 roadmap defined (5 phases, 23/23 requirements mapped)
 Resume file: None
 
 ---
 
-*State updated: 2026-06-27 — v18.0 milestone complete (5/5 phases, audit passed, 287+ tests passing)*
+*State updated: 2026-06-27 — v19.0 roadmap created (5 audit phases, analysis-only); v18.0 milestone complete (5/5 phases, audit passed, 287+ tests passing)*

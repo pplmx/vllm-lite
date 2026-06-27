@@ -4,7 +4,8 @@
 
 - ✅ **v16.0 Speculative Decoding** — Phases 16.1-16.4 (shipped 2026-04-28)
 - ✅ **v17.0 Production Speculative Decoding** — Phases 17.1-17.4 (shipped 2026-05-13)
-- ✅ **v18.0 Multi-Model Speculative Decoding** — Phases 18.1-18.4 (shipped 2026-06-27)
+- ✅ **v18.0 Multi-Model Speculative Decoding** — Phases 18.1-18.4 + Phase 19 gap closure (shipped 2026-06-27)
+- 📋 **v19.0 Codebase Health Audit** — Phases 20-24 (planned; analysis-only, no code changes)
 
 ## Phases
 
@@ -12,10 +13,16 @@
 - [x] **Phase 18.2: Lifecycle + Memory Budget** - 卸载时回收 KV cache,执行 VRAM 预算
 - [x] **Phase 18.3: Request Routing + Fallback** - 请求级 draft 路由,失败回退到 self-spec
 - [x] **Phase 18.4: Integration Tests + Benchmarks** - E2E 验证 + 多 draft 性能基线
+- [x] **Phase 19: Wire v18.0 into Engine step loop** - DraftResolver 接入 + HTTP exporter + ServerDraftLoader
+- [ ] **Phase 20: Architecture Audit** - crate 依赖图 / 模块边界 / 循环依赖 / 分层一致性 / 测试架构
+- [ ] **Phase 21: Naming Audit** - 文件 / 类型 / 方法 / 变量 / 模块命名一致性 + 语义清晰度
+- [ ] **Phase 22: Comments + Documentation Audit** - doc 覆盖率 / 模块文档 / 过期注释 / 外部文档 / ADR
+- [ ] **Phase 23: API + Error Handling Audit** - API 一致性 / 错误类型 / 错误人体工学 / trait 设计 / 弃用卫生
+- [ ] **Phase 24: Synthesis + Remediation Backlog** - 跨维度综合 + P0/P1/P2 优先级清单 + v20.0+ 迁移路线图
 
 ## Phase Details
 
-### 📋 v18.0 Multi-Model Speculative Decoding (Planned)
+### ✅ v18.0 Multi-Model Speculative Decoding (Phases 18.1-18.4 + 19) — SHIPPED 2026-06-27
 
 **Milestone Goal:** 兑现 v17 延期的 MULTI-01/02/03,引入外部 draft model(可与 target 不同架构/尺寸),实现请求级 draft 路由、并发 target + draft 显存预算与运行时回退语义。Self-spec 路径(v17)保持为基线回退。
 
@@ -95,117 +102,160 @@ Plans:
 
 - [x] 18.4: Integration tests (14) + criterion bench (3 configs) — validates full v18.0 pipeline end-to-end
 
-<details>
-<summary>✅ v17.0 Production Speculative Decoding (Phases 17.1-17.4) — SHIPPED 2026-05-13</summary>
+#### Phase 19: Wire v18.0 into Engine step loop + HTTP exporter
 
-### Phase 17.1: Engine Integration
-
-**Goal**: Engine executes correct speculative decode with batched draft generation, logit-based verification, KV rollback, and graceful fallback
-**Depends on**: Phase 16.4 (architectural scaffold from v16.0)
-**Requirements**: ENG-01, ENG-02, ENG-03, ENG-04, ENG-05, ENG-06
+**Goal**: 修复 v18.0 审计中识别的 3 个 gap — DraftResolver 接入 Engine step 循环 / FALL-02 sticky 语义生效 / 5 个 v18.0 counter 通过 /metrics 暴露,并补全 ServerDraftLoader 用于生产加载
+**Depends on**: Phase 18.4
+**Requirements**: RTE-02 (resolver wired), RTE-03 (mixed routing live), FALL-02 (sticky degraded_draft live)
 **Success Criteria** (what must be TRUE):
 
-1. Engine dispatches through a single unified `step(max_draft)` method that handles both speculative and non-speculative paths
-2. Draft tokens are generated in a batched per-position forward pass across all sequences (not per-sequence loop)
-3. Token verification uses logit-based probability comparison (not exact match), enabling correct rejection sampling
-4. Rejected draft tokens' KV cache entries are rolled back via MemoryManager without leaking into subsequent steps
-5. Scheduler correctly tracks input token counts when multiple draft tokens are accepted per step
-6. Speculative path falls back to non-speculative decode gracefully on any draft model error
+  1. `Engine::step_speculative_inner` 通过 `DraftResolver::resolve` 按请求分发 draft,而不是单 draft 全局路径
+  2. 同 batch 内多个请求携带不同 `draft_model_id` 时,各 seq 独立 resolve,无状态泄漏
+  3. FALL-02 运行时错误 → `Sequence.degraded_draft = true`,后续 step 跳过该 seq 的 draft 尝试(sticky)
+  4. 5 个 v18.0 counter(draft resolutions / load failures / runtime errors)通过 /metrics 端点暴露
+  5. `ServerDraftLoader` 包装 `ModelLoader`,server 启动时按声明加载 draft model,失败时按 FALL-01 静默回退
 
-**Plans**: 6 sub-plans (17.1-A through 17.1-F)
-
-Plans:
-
-- [x] 17.1-A: Unified `step()` entry point - adds `step(max_draft)` dispatch, error fallback
-- [x] 17.1-B: Batched draft generation - replace per-sequence loop with per-position batching
-- [x] 17.1-C: Logit-based verification - probability-based rejection sampling via `forward_logits()`
-- [x] 17.1-D: KV cache rollback - `MemoryManager::rollback()` for rejected draft positions
-- [x] 17.1-E: Multi-token scheduler input - wire actual accepted counts into `scheduler.update()`
-- [x] 17.1-F: Tests - unit + integration tests for speculative engine integration
-
-### Phase 17.2: Self-Speculation Forward Pass
-
-**Goal**: SelfSpeculativeModel generates actual draft tokens via layer-truncated forward pass with isolated KV cache
-**Depends on**: Phase 17.1
-**Requirements**: SELF-01, SELF-02, SELF-03
-**Success Criteria** (what must be TRUE):
-
-1. SelfSpeculativeModel.generate_draft() runs a real forward pass through 1/8 layers with weight sharing (no stub)
-2. Draft generation uses greedy argmax sampling to select the most probable next token
-3. Draft and target maintain separate KV cache block IDs — no silent state corruption between passes
-4. Weight sharing uses zero-copy references to target model weights (no additional GPU memory allocated)
-
-**Plans**: TBD
+**Plans**: 1 plan (19)
 
 Plans:
 
-- (to be defined during plan-phase)
-
-### Phase 17.3: Adaptive Depth & Benchmarks
-
-**Goal**: Draft depth adjusts dynamically based on acceptance rates; comprehensive A/B benchmarks validate real-world speedup
-**Depends on**: Phase 17.2
-**Requirements**: ADPT-01, ADPT-02, ADPT-03, BENCH-01, BENCH-02, BENCH-03, BENCH-04
-**Success Criteria** (what must be TRUE):
-
-1. AdaptiveSpeculativeDecoder is wired into the speculative decode loop and adjusts draft depth in real time
-2. Draft depth adjusts based on EWMA-smoothed acceptance rate with deadband hysteresis (no oscillation)
-3. Benchmark suite runs speculative vs non-speculative comparison with P50/P95/P99 latency and tokens/sec throughput
-4. Benchmark methodology includes proper model warmup phase and multi-sequence workloads
-5. Results are reported for at least one target model architecture (e.g., Llama)
-
-**Plans**: TBD
-
-Plans:
-
-- (to be defined during plan-phase)
-
-### Phase 17.4: Speculative Warmup & Metrics
-
-**Goal**: Draft KV cache is populated after prefill; comprehensive spec decode metrics track acceptance rate, efficiency, and speedup
-**Depends on**: Phase 17.3
-**Requirements**: WARM-01, WARM-02, MTRC-01, MTRC-02, MTRC-03
-**Success Criteria** (what must be TRUE):
-
-1. Draft model's KV cache is populated during/after target prefill so the first speculative step has valid draft state
-2. Acceptance rate is tracked per-request and aggregated across the batch via Prometheus counters
-3. Speculative efficiency (draft tokens / total tokens) is reported as a structured metric
-4. Throughput speedup ratio vs non-speculative baseline is reported in metrics output
-
-**Plans**: TBD
-
-Plans:
-
-- (to be defined during plan-phase)
-
-</details>
-
-## Progress
-
-**Execution Order:** 18.1 → 18.2 → 18.3 → 18.4
-
-| Phase                                   | Milestone | Plans Complete | Status      | Completed    |
-| --------------------------------------- | --------- | -------------- | ----------- | ------------ |
-| 17.1 Engine Integration                 | v17.0     | 6/6            | Complete    | 2026-05-13   |
-| 17.2 Self-Speculation                   | v17.0     | 6/6            | Complete    | 2026-05-13   |
-| 17.3 Adaptive Depth & Benchmarks        | v17.0     | 6/6            | Complete    | 2026-05-13   |
-| 17.4 Speculative Warmup & Metrics       | v17.0     | 8/8            | Complete    | 2026-05-13   |
-| 18.1 Draft Registry + External Loading  | v18.0     | 1/1            | Complete    | 2026-06-27   |
-| 18.2 Lifecycle + Memory Budget          | v18.0     | 1/1            | Complete    | 2026-06-27   |
-| 18.3 Request Routing + Fallback         | v18.0     | 1/1            | Complete    | 2026-06-27   |
-| 18.4 Integration Tests + Benchmarks     | v18.0     | 1/1            | Complete    | 2026-06-27   |
-
-### Phase 19: Wire v18.0 into Engine step loop + HTTP exporter
-
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 18
-**Plans:** 0 plans
-
-Plans:
-
-- [ ] TBD (run /gsd-plan-phase 19 to break down)
+- [x] 19: DraftResolver wiring + FALL-02 sticky + HTTP exporter + ServerDraftLoader — 9 integration tests + 1 phase + 2 #[ignore]d awaiting Engine::step() hang fix
 
 ---
 
-*Roadmap updated: 2026-06-27 — v18.0 phases defined (4 phases, 14/14 requirements mapped)*
+### 📋 v19.0 Codebase Health Audit (Phases 20-24) — PLANNED (analysis-only)
+
+**Milestone Goal:** 对 vllm-lite 整个 codebase 做多维度深度审计(架构 / 命名 / 注释文档 / API + 错误处理),产出 P0/P1/P2 优先级清单与具体修复建议。**本 milestone 不执行任何代码修改**,清单用于指导后续 milestone(v20.0+)的重构工作。
+
+**Audit Execution Model:**
+
+Each audit phase produces:
+
+1. A detailed report at `.planning/audit/{dimension}/REPORT.md`
+2. A summary table at `.planning/audit/{dimension}/SUMMARY.md` (P0/P1/P2 prioritized)
+3. Raw inventory data (file lists, naming tables, doc-coverage stats) where applicable
+
+Synthesis phase (Phase 24) reads all four dimension reports and produces:
+
+- `.planning/audit/SYNTHESIS.md` — cross-cutting findings
+- `.planning/audit/BACKLOG.md` — P0/P1/P2 remediation backlog with impact / cost / suggested-phase columns
+- `.planning/audit/MIGRATION-ROADMAP.md` — proposed v20.0+ phase breakdown (advisory only)
+
+#### Phase 20: Architecture Audit
+
+**Goal**: 验证 7-crate 架构的依赖方向、模块边界、循环依赖、分层一致性与测试架构健康度,产出 `.planning/audit/architecture/REPORT.md` 与 `SUMMARY.md`
+**Depends on**: Phase 19 (v18.0 shipped; v19.0 starting point)
+**Requirements**: ARCH-01, ARCH-02, ARCH-03, ARCH-04, ARCH-05
+**Success Criteria** (what must be TRUE):
+
+  1. `.planning/audit/architecture/REPORT.md` 包含 crate 依赖图,明确记录 `traits ← core ← {model, server, dist}` 方向,任何反向依赖被标记为 P0/P1/P2;并伴随 `.planning/audit/architecture/SUMMARY.md` 用 P0/P1/P2 表格汇总所有架构问题
+  2. REPORT.md 中每个 crate 的所有模块都有 single-responsibility 一句话陈述;任何 God module(行数 / 公开项超过阈值)被显式标记
+  3. REPORT.md 包含基于 `cargo metadata` 的循环依赖扫描结果;任何循环依赖被以严重度分级列出
+  4. REPORT.md 包含 layering consistency 矩阵(行 = crate,列 = 允许的入向依赖),任何越层 import 被标记
+  5. REPORT.md 包含测试架构审计:unit / integration / bench 的目录边界、`vllm-testing` crate 的复用情况、以及共享测试 fixture 的卫生度
+
+**Plans**: 1 plan (20)
+
+Plans:
+
+- [ ] 20-01: Architecture audit — 1 subagent dispatch producing REPORT.md + SUMMARY.md (no code changes)
+
+#### Phase 21: Naming Audit
+
+**Goal**: 识别文件 / 类型 / 方法 / 变量 / 模块五个维度的命名不一致与语义不清问题,产出 `.planning/audit/naming/REPORT.md` 与 `SUMMARY.md`
+**Depends on**: Phase 20 (并行可选,但报告顺序固定为 architecture → naming → docs → api → synthesis)
+**Requirements**: NAME-01, NAME-02, NAME-03, NAME-04, NAME-05
+**Success Criteria** (what must be TRUE):
+
+  1. `.planning/audit/naming/REPORT.md` 包含文件命名审计表,显式列出所有含 stage-info 命名的文件(如 `17_*.rs`、`18_*.rs`),以及与目录 / 模块名不匹配的文件;并伴随 `.planning/audit/naming/SUMMARY.md` 用 P0/P1/P2 表格汇总所有命名问题
+  2. REPORT.md 包含 type 命名审计表,覆盖所有 `pub struct` / `pub enum` / `pub trait`,标注 PascalCase 合规与冗余后缀(如 `Info`、`Data`、`Manager` 当语义重复时)
+  3. REPORT.md 包含 function / method 命名审计,覆盖所有 `pub fn`,标注 snake_case 合规、动词一致性(get / set / with / is / has 前缀使用规范)
+  4. REPORT.md 包含变量命名审计(对 top-N 大文件全部变量做单字母 / 一致性扫描),列出所有单字母变量(非循环索引)与同名异义 / 异名同义的对
+  5. REPORT.md 包含 module 命名审计:模块名与文件名一致性表 + 嵌套深度一致性表
+
+**Plans**: 1 plan (21)
+
+Plans:
+
+- [ ] 21-01: Naming audit — 1 subagent dispatch producing REPORT.md + SUMMARY.md (no code changes)
+
+#### Phase 22: Comments + Documentation Audit
+
+**Goal**: 度量 doc-comment 覆盖率、模块文档完整度、过期注释与外部文档漂移,产出 `.planning/audit/docs/REPORT.md` 与 `SUMMARY.md`
+**Depends on**: Phase 21 (reports sequential; data independent)
+**Requirements**: DOCS-01, DOCS-02, DOCS-03, DOCS-04, DOCS-05
+**Success Criteria** (what must be TRUE):
+
+  1. `.planning/audit/docs/REPORT.md` 包含 doc-comment 覆盖率表(每个 crate 的 `pub` 项总数 / 有 `///` 的数量 / 覆盖率 %);未达 80% 目标的 crate 显式列出未覆盖项;并伴随 `.planning/audit/docs/SUMMARY.md` 用 P0/P1/P2 表格汇总所有文档问题
+  2. REPORT.md 包含 module-level 文档审计表:每个 `.rs` 文件顶部是否有 `//!` 或同等上下文注释;缺失模块被列出
+  3. REPORT.md 包含 stale comment / TODO 扫描:所有 `// TODO` / `// FIXME` / `// XXX` 及指向已删除代码或过期 API 的 docstring,带 file:line 与建议处理
+  4. REPORT.md 包含外部文档审计:根 README、AGENTS.md、.planning/PROJECT.md / REQUIREMENTS.md / STATE.md / ROADMAP.md 与当前 codebase 的一致性核对,任何事实性偏差被列出
+  5. REPORT.md 包含 ADR 现状盘点:`docs/adr/` 已有 ADR 列表 + 已识别但未文档化的架构决策(基于代码注释 / commit 历史推断);缺失 ADR 被列出
+
+**Plans**: 1 plan (22)
+
+Plans:
+
+- [ ] 22-01: Comments + documentation audit — 1 subagent dispatch producing REPORT.md + SUMMARY.md (no code changes)
+
+#### Phase 23: API + Error Handling Audit
+
+**Goal**: 审计公开 API 一致性、错误类型完整度、错误人体工学、trait 设计与弃用卫生,产出 `.planning/audit/api/REPORT.md` 与 `SUMMARY.md`
+**Depends on**: Phase 22 (reports sequential; data independent)
+**Requirements**: API-01, API-02, API-03, API-04, API-05
+**Success Criteria** (what must be TRUE):
+
+  1. `.planning/audit/api/REPORT.md` 包含公开 API 清单(每个 crate 的 `pub` 项),标注函数签名一致性(参数顺序、可变性、生命周期)与 builder 模式使用情况;并伴随 `.planning/audit/api/SUMMARY.md` 用 P0/P1/P2 表格汇总所有 API 问题
+  2. REPORT.md 包含 error 类型审计:每个 crate 的 error enum / struct,thiserror 使用率、变体覆盖度、错误消息质量(含相关 ID / file / line)
+  3. REPORT.md 包含 error ergonomics 审计:`Result<T>` 传播路径中缺失的 `From` impl、缺失的 `.context()` / `.with_context()`、过度 `unwrap()` / `expect()` 使用
+  4. REPORT.md 包含 trait 设计审计:每个公开 trait 的 object safety、async/sync 一致性、default method 使用、`dyn Trait` 兼容性
+  5. REPORT.md 包含 deprecation 卫生审计:所有 `#[deprecated]` 项 + 缺失迁移路径的项;内部已删除但仍被外部文档提及的项
+
+**Plans**: 1 plan (23)
+
+Plans:
+
+- [ ] 23-01: API + error handling audit — 1 subagent dispatch producing REPORT.md + SUMMARY.md (no code changes)
+
+#### Phase 24: Synthesis + Remediation Backlog
+
+**Goal**: 消费 Phase 20-23 的四个 dimension 报告,产出跨维度综合、P0/P1/P2 优先级清单与 v20.0+ 迁移路线图,作为审计 milestone 的最终交付
+**Depends on**: Phase 20, Phase 21, Phase 22, Phase 23 (MUST wait for all four dimension REPORT.md files to exist)
+**Requirements**: SYNTH-01, SYNTH-02, SYNTH-03
+**Success Criteria** (what must be TRUE):
+
+  1. 开始前必须验证四个 dimension 报告全部存在:`.planning/audit/{architecture,naming,docs,api}/REPORT.md`;任一缺失则 SYNTH 不可启动(在 SYNTHESIS.md 顶部记录输入清单 + 完整性校验)
+  2. `.planning/audit/SYNTHESIS.md` 包含跨维度综合:将 ARCH/NAME/DOCS/API 发现按 root cause 重新归类(如 "命名不一致" 可能是 DOCS drift 也可能是 ARCH 模块边界不清的表象),识别重复问题与协同修复机会
+  3. `.planning/audit/BACKLOG.md` 包含 P0/P1/P2 优先级 backlog:每行含 ID / 描述 / 来源 dimension / 影响范围 / 修复成本估算(小时) / 建议阶段(v20.0+ 哪个 phase);P0 项必须先列出
+  4. `.planning/audit/MIGRATION-ROADMAP.md` 包含 v20.0+ 迁移建议:将 backlog 项分组到提议的未来 phase(如 "Phase 25: 文件重命名 + 文档补全" / "Phase 26: 错误类型统一" / "Phase 27: 模块边界重构"),明确依赖关系
+  5. milestone 结束时 `.planning/audit/` 目录树结构完整(每个 dimension 含 REPORT.md + SUMMARY.md,根目录含 SYNTHESIS.md / BACKLOG.md / MIGRATION-ROADMAP.md),且 `git diff --stat` 显示仅 `.planning/` 与 `.planning/audit/` 下有变更 — 验证本 milestone 是纯分析、未触发任何代码改动
+
+**Plans**: 1 plan (24)
+
+Plans:
+
+- [ ] 24-01: Cross-dimensional synthesis + backlog + v20.0+ migration roadmap — consumes Phases 20-23 outputs, produces SYNTHESIS.md / BACKLOG.md / MIGRATION-ROADMAP.md
+
+---
+
+## Progress
+
+**Execution Order:** 20 → 21 → 22 → 23 → 24
+**Audit Dimension Reports Parallelism:** Phases 20-23 各自独立可并行 dispatch(只读 codebase),但 Phase 24 必须在 20-23 全部完成后执行。
+
+| Phase                                              | Milestone | Plans Complete | Status      | Completed    |
+| -------------------------------------------------- | --------- | -------------- | ----------- | ------------ |
+| 18.1 Draft Registry + External Loading             | v18.0     | 1/1            | Complete    | 2026-06-27   |
+| 18.2 Lifecycle + Memory Budget                     | v18.0     | 1/1            | Complete    | 2026-06-27   |
+| 18.3 Request Routing + Fallback                    | v18.0     | 1/1            | Complete    | 2026-06-27   |
+| 18.4 Integration Tests + Benchmarks                | v18.0     | 1/1            | Complete    | 2026-06-27   |
+| 19 Wire v18.0 into Engine step loop                | v18.0     | 1/1            | Complete    | 2026-06-27   |
+| 20 Architecture Audit                              | v19.0     | 0/1            | Not started | -            |
+| 21 Naming Audit                                    | v19.0     | 0/1            | Not started | -            |
+| 22 Comments + Documentation Audit                  | v19.0     | 0/1            | Not started | -            |
+| 23 API + Error Handling Audit                      | v19.0     | 0/1            | Not started | -            |
+| 24 Synthesis + Remediation Backlog                 | v19.0     | 0/1            | Not started | -            |
+
+---
+
+*Roadmap updated: 2026-06-27 — v19.0 phases defined (5 phases, 23/23 requirements mapped, analysis-only milestone, Phase 24 explicitly gates on Phases 20-23 outputs)*
