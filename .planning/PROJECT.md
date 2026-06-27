@@ -8,23 +8,33 @@ A production-ready LLM inference engine in Rust, optimized for single and multi-
 
 Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
 
-## Current Milestone: v17.0 Production Speculative Decoding
+## Current Milestone: v18.0 Multi-Model Speculative Decoding
 
-**Goal:** Complete the speculative decoding pipeline end-to-end — wire engine integration, validate on real hardware, add adaptive optimization and external draft model support.
+**Goal:** 兑现 v17 延期的 MULTI-01/02/03 — 引入外部 draft model（不同架构/尺寸），实现请求级 draft 路由，并发 target + draft 显存预算。
 
 **Target features:**
 
-- Engine integration (`step_speculative`) — hook spec decode into the main inference loop
-- Real hardware benchmarks — throughput/latency with P50/P95/P99 vs non-speculative baseline
-- Adaptive draft depth — dynamic adjustment based on acceptance rates
-- Speculative warmup — prefill draft KV cache before decode
-- Multi-model speculation — optionally use smaller external model as drafter
+- 外部 drafter 模型加载 — Engine 接受独立 draft model（不同架构/size），独立 KV cache
+- Draft model 生命周期管理 — 运行时注册/卸载，KV cache 回收，registry 跟踪活跃 drafts
+- GPU 显存预算 — 加载前估算 + 运行时并发检查，超额拒绝
+- 请求级 draft 路由 — Scheduler 按 request 选择 draft，多 draft 共存 batch
+- Fallback 兼容 — 若外部 draft 加载失败，回退到 self-spec（v17 已有的能力）
 
 ## Current State
 
-**Current Milestone:** v17.0 Production Speculative Decoding (in progress)
-**Latest Shipped:** v16.0 Speculative Decoding
-**Status:** Wiring speculative decoding into engine, real benchmarks, adaptive optimization, multi-model draft support
+**Current Milestone:** v18.0 Multi-Model Speculative Decoding (planning)
+**Latest Shipped:** v17.0 Production Speculative Decoding (2026-06-26, 21/21 SPECs)
+**Status:** v17.0 收官；开始 v18.0 规划
+
+### Phase 17 Achievements (v17.0 shipped)
+
+- ✅ Engine integration (`step_speculative_inner`, commit `52f77ce`)
+- ✅ Seamless fallback parity tests (`qwen3_5/speculative_tests.rs`)
+- ✅ Real hardware benchmark suite (`latency_percentiles`, `speculative_vs_baseline`, `bench_throughput`)
+- ✅ Adaptive draft depth (`AdaptiveSpeculativeDecoder` + EWMA + deadband + cooldown)
+- ✅ Speculative warmup (`warmup_draft_kv` after prefill)
+- ✅ Acceptance rate monitoring + Prometheus + `/debug/metrics`
+- ⏸ MULTI-01/02 deferred to v18.0
 
 ### Phase 16 Achievements
 
@@ -33,14 +43,6 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 - ✅ Parallel verification with token-level rejection
 - ✅ Draft accuracy tracking and metrics infrastructure
 - ✅ ModelBackend trait extended with num_layers()/num_heads()
-
-### Phase 15 Achievements
-
-- ✅ FlashAttention V3 with MQA/GQA support
-- ✅ FP8 KV cache quantization (50% memory reduction)
-- ✅ Gemma3, Phi-4, Llama 4, Mistral Small architectures
-- ✅ Go K8s Operator scaffold (controller-runtime)
-- ✅ TLS + JWT security hardening
 
 ## Requirements
 
@@ -81,6 +83,15 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 - ✓ Parallel verification infrastructure — v16.0 (token acceptance, early termination)
 - ✓ Draft accuracy metrics — v16.0 (DraftAccuracyTracker, acceptance rate)
 
+<!-- Shipped from Phase 17 (v17.0) -->
+- ✓ Engine integration — v17.0 (`step_speculative_inner`, commit `52f77ce`)
+- ✓ Seamless fallback parity tests — v17.0 (`qwen3_5/speculative_tests.rs`)
+- ✓ Real hardware benchmark suite — v17.0 (`latency_percentiles`, `speculative_vs_baseline`)
+- ✓ Baseline comparison benchmarks — v17.0 (`bench_throughput`)
+- ✓ Adaptive draft depth — v17.0 (`AdaptiveSpeculativeDecoder` + EWMA + deadband)
+- ✓ Acceptance rate monitoring — v17.0 (Prometheus `speculative_adjustments_total`)
+- ✓ Speculative warmup — v17.0 (`Engine::warmup_draft_kv` after prefill)
+
 <!-- Shipped from Phase 15 -->
 - ✓ FlashAttention V3 — v15.0 (MQA/GQA, sliding window)
 - ✓ KV cache FP8 quantization — v15.0 (50% memory reduction)
@@ -95,17 +106,40 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 
 ### Active
 
-**v17.0: Production Speculative Decoding**
+**v18.0: Multi-Model Speculative Decoding**
 
-- [x] **SPEC-ENG-01**: Engine integration — `step_speculative_inner` (commit `52f77ce`)
-- [x] **SPEC-ENG-02**: Seamless fallback — parity tests in `qwen3_5/speculative_tests.rs`
-- [x] **SPEC-BENCH-01**: Real hardware benchmark suite — `latency_percentiles` bench with p50/p95/p99 + `docs/benchmark-suite.md` (commits `259bbfc` + `5cce9b1`)
-- [x] **SPEC-BENCH-02**: Baseline comparison — `speculative_vs_baseline` bench + `bench_throughput` (commits `b270b23` + `259bbfc`)
-- [x] **SPEC-ADAPT-01**: Adaptive draft depth — `AdaptiveSpeculativeDecoder` + EWMA + deadband + cooldown (commit `736b35f`)
-- [x] **SPEC-ADAPT-02**: Acceptance rate monitoring — `record_per_request_acceptance` + Prometheus `speculative_adjustments_total` + `/debug/metrics` (commit `736b35f`)
-- [x] **SPEC-WARM-01**: Speculative warmup — `Engine::warmup_draft_kv` after prefill + `draft_kv_block_ids` tracking (commit `4154d23`)
-- [ ] **SPEC-MULTI-01**: External draft model support → deferred to v18.0
-- [ ] **SPEC-MULTI-02**: Draft model lifecycle management → deferred to v18.0
+- [ ] **MMLT-01**: Engine loads separate draft model instance (different architecture/size from target)
+- [ ] **MMLT-02**: Draft model uses own ModelBackend instance with independent KV cache
+- [ ] **MMLT-03**: Draft weights loaded lazily (deferred until first request using it)
+- [ ] **LIFE-01**: DraftModelRegistry registers/loads/unloads draft models at runtime
+- [ ] **LIFE-02**: Unloading a draft model frees its KV cache blocks via MemoryManager
+- [ ] **LIFE-03**: Registry tracks active drafts + reference counts
+- [ ] **MEM-01**: Engine enforces total VRAM budget for target + N concurrent drafts
+- [ ] **MEM-02**: Load-time weight-size estimation; runtime KV-cache growth tracking
+- [ ] **MEM-03**: Engine refuses to load draft if budget would exceed
+- [ ] **RTE-01**: Request can specify `draft_model_id` in SamplingParams or Request
+- [ ] **RTE-02**: Scheduler routes request to correct draft model instance
+- [ ] **RTE-03**: Multiple drafts coexist in same batch (mixed draft routing)
+- [ ] **FALL-01**: External draft load failure → fallback to self-spec (v17 path)
+- [ ] **FALL-02**: Runtime draft error → graceful degradation to non-speculative decode
+
+### Out of Scope (carried from v17)
+
+- Tree-based speculation (draft tree) — sigmoidally complex
+- Medusa-style multiple heads — incompatible with off-the-shelf models
+- Speculative decoding for prefill — compute-bound, only decode
+- Dynamic model switching mid-request — complex state management
+- Draft model retraining/fine-tuning — out of engine scope
+
+## v18.0 Replaces (Deferred Then Promoted)
+
+The following v17 deferred items are now active in v18.0:
+
+- ✓ **SPEC-MULTI-01 → MMLT-01..03** (external draft model support)
+- ✓ **SPEC-MULTI-02 → LIFE-01..03** (lifecycle management)
+- ✓ **SPEC-MULTI-03 → MEM-01..03** (GPU memory budgeting)
+- ✓ **NEW: RTE-01..03** (request-level routing) — emerged from "请求间动态选择" design decision
+- ✓ **NEW: FALL-01..02** (fallback semantics) — required for safety in production
 
 ### Out of Scope
 
@@ -117,21 +151,21 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 
 ## Context
 
-v16.0 shipped with 17/17 requirements satisfied. v15.0 focus areas:
+v17.0 shipped 21/21 SPECs satisfied (Wave 5 benchmark suite closure, 2026-06-26):
 
-- Performance: FA-V3 needs kernel implementation, KV cache compression research
-- Models: Architecture detection for Gemma3, Phi-4, Llama 4, Mistral Small
-- Production: Go Operator full implementation, TLS/JWT completion
+- Engine integration, fallback parity, real hardware bench suite
+- Adaptive depth with EWMA + deadband, warmup after prefill
+- Metrics: acceptance rate, Prometheus counters, `/debug/metrics`
+- MULTI-01/02 deferred to v18.0 per original design
 
-v16.0 achievements:
+v18.0 build-on:
 
-- Speculative decoding architecture shipped (4 phases, 10 commits, +2029 lines)
-- Self-speculation with weight sharing — no additional GPU memory for draft model
-- Parallel verification infrastructure ready
-- Engine integration (step_speculative) and full benchmarks deferred
+- Self-speculation path remains baseline fallback (zero extra VRAM, weight sharing)
+- External draft model is opt-in extension; lazy load keeps cold-start fast
+- Request-level draft routing enables heterogeneous deployment (multi-tenant, A/B testing)
 
 Tech stack: Rust + Candle, multi-GPU CUDA support, Kubernetes, gRPC.
-Codebase: Speculative decoding module added (verifier, model, config, strategy, self_spec).
+Codebase: Speculative decoding module (verifier, model, config, strategy, self_spec); draft registry to be added in v18.0.
 
 ## Constraints
 
@@ -153,6 +187,9 @@ Codebase: Speculative decoding module added (verifier, model, config, strategy, 
 | Speculative strategy      | Self-speculation with 1/8 layer count              | Implemented — v16.0         |
 | Token rejection           | TokenLevel (accept if target_p >= draft_p)         | Implemented — v16.0         |
 | Draft weight sharing      | Zero-copy weight references, no extra GPU memory   | Implemented — v16.0         |
+| Multi-draft routing       | Per-request `draft_model_id` for heterogeneous A/B | Planned — v18.0             |
+| External draft lifecycle  | Runtime registry + refcount + unload frees KV      | Planned — v18.0             |
+| VRAM budget strategy      | Load-time estimate + runtime check; refuse on over | Planned — v18.0             |
 
 ## Evolution
 
@@ -160,4 +197,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-26 — Wave 5 SPEC-BENCH 完成；v17.0 SPEC-ENG/ADAPT/WARM/BENCH 全部完成，剩 SPEC-MULTI (deferred v18.0)*
+*Last updated: 2026-06-27 — v18.0 milestone started; v17.0 archived (21/21 SPECs shipped)*
