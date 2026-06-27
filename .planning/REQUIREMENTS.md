@@ -102,21 +102,28 @@ Explicitly excluded from v22.0:
 | OPS-02      | Phase 36 | Pending |
 | OPS-03      | Phase 36 | Pending |
 | GGUF-01     | Phase 36 | Pending |
+| FINAL-01    | Phase 36 | Pending |
 | SEC-01      | Phase 37 | Pending |
 | SEC-02      | Phase 37 | Pending |
 | SEC-03      | Phase 37 | Pending |
 | SEC-04      | Phase 37 | Pending |
 | SEC-05      | Phase 37 | Pending |
 | SEC-06      | Phase 37 | Pending |
+| FINAL-01    | Phase 37 | Pending |
 | RFU-05      | Phase 38 | Pending |
 | OPS-01      | Phase 38 | Pending |
 | PERF-01     | Phase 38 | Pending |
 | PERF-02     | Phase 38 | Pending |
 | PERF-03     | Phase 38 | Pending |
 | DOC-01      | Phase 38 | Pending |
+| FINAL-01    | Phase 38 | Pending |
 | ARF-06      | Phase 39 | Pending |
 | ARF-07      | Phase 39 | Pending |
-| FINAL-01 (per phase) | Phase 36-39 | Pending |
+| FINAL-01    | Phase 39 | Pending |
+| FINAL-02    | Phase 39 | Pending |
+| FINAL-03    | Phase 39 | Pending |
+| FINAL-04    | Phase 39 | Pending |
+| FINAL-05    | Phase 39 | Pending |
 
 ### v21.0 Requirements (HISTORICAL — Shipped 2026-06-27)
 
@@ -127,8 +134,12 @@ Explicitly excluded from v22.0:
 48/48 Complete ✅
 
 **Coverage:**
-- v22.0 requirements: 21 total (4 bug + 6 sec + 6 polish + 5 engine+FINAL across 4 phases)
-- Mapped to phases: 21
+- v22.0 requirements: 25 total across 4 phases
+  - Phase 36 (Critical Bug Fixes): 4 reqs — OPS-02, OPS-03, GGUF-01, FINAL-01
+  - Phase 37 (Security Hardening): 7 reqs — SEC-01..06, FINAL-01
+  - Phase 38 (Production Polish): 7 reqs — RFU-05, OPS-01, PERF-01..03, DOC-01, FINAL-01
+  - Phase 39 (Engine Refactor + FINAL): 7 reqs — ARF-06, ARF-07, FINAL-01..05
+- Mapped to phases: 25/25 ✓
 - Unmapped: 0 ✓
 - v21.0 historical: 38/42 Complete ✅
 - v20.0 historical: 48/48 Complete ✅
@@ -136,4 +147,4 @@ Explicitly excluded from v22.0:
 ---
 
 *Requirements defined: 2026-06-27 (v20.0)*
-*Last updated: 2026-06-27 after v22.0 Production Hardening scope definition (21 requirements across Phase 36-39)*
+*Last updated: 2026-06-27 after v22.0 Production Hardening roadmap creation (25 requirements across Phase 36-39, all mapped)*
