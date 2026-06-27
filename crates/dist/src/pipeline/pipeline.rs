@@ -1,12 +1,16 @@
+//! pipeline: pipeline.
+
 use super::stage::{PipelineStage, StageInput, StageOutput};
 use candle_core::Result;
 use std::sync::Arc;
 
+/// PipelineParallel: pipeline parallel.
 pub struct PipelineParallel {
     stages: Vec<Arc<dyn PipelineStage>>,
     config: PipelineParallelConfig,
 }
 
+/// PipelineParallelConfig: pipeline parallel configuration.
 #[derive(Debug, Clone)]
 pub struct PipelineParallelConfig {
     pub num_stages: usize,
@@ -27,6 +31,7 @@ impl Default for PipelineParallelConfig {
 }
 
 impl PipelineParallel {
+/// new: new.
     pub fn new(config: PipelineParallelConfig) -> Self {
         Self {
             stages: Vec::new(),
@@ -34,22 +39,27 @@ impl PipelineParallel {
         }
     }
 
+/// add_stage: add stage.
     pub fn add_stage(&mut self, stage: Arc<dyn PipelineStage>) {
         self.stages.push(stage);
     }
 
+/// num_stages: num stages.
     pub fn num_stages(&self) -> usize {
         self.stages.len()
     }
 
+/// config: config.
     pub fn config(&self) -> &PipelineParallelConfig {
         &self.config
     }
 
+/// is_pipeline_parallel: is pipeline parallel.
     pub fn is_pipeline_parallel(&self) -> bool {
         self.stages.len() > 1
     }
 
+/// forward: forward.
     pub fn forward(&self, input: StageInput) -> Result<StageOutput> {
         if !self.is_pipeline_parallel() {
             if let Some(stage) = self.stages.first() {
@@ -78,6 +88,7 @@ impl PipelineParallel {
         Result::Err(candle_core::Error::msg("No output generated"))
     }
 
+/// forward_microbatches: forward microbatches.
     pub fn forward_microbatches(&self, inputs: Vec<StageInput>) -> Result<Vec<StageOutput>> {
         if !self.is_pipeline_parallel() {
             if let Some(stage) = self.stages.first() {
@@ -99,6 +110,7 @@ impl PipelineParallel {
         Ok(all_outputs)
     }
 
+/// forward_with_schedule: forward with schedule.
     pub fn forward_with_schedule(&self, inputs: Vec<StageInput>) -> Result<Vec<StageOutput>> {
         if !self.is_pipeline_parallel() {
             return self.forward_microbatches(inputs);

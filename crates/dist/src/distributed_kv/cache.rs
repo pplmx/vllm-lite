@@ -1,7 +1,10 @@
+//! cache: cache.
+
 use super::{CacheConfig, CacheMessage, NodeId};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+/// DistributedKVCache: distributed kv cache.
 pub struct DistributedKVCache {
     config: CacheConfig,
     local_cache: Arc<RwLock<HashMap<u64, CacheEntry>>>,
@@ -25,6 +28,7 @@ enum CacheState {
     Invalid,
 }
 
+/// CacheStats: cache statistics.
 #[derive(Debug, Default, Clone)]
 pub struct CacheStats {
     pub hits: u64,
@@ -34,6 +38,7 @@ pub struct CacheStats {
 }
 
 impl DistributedKVCache {
+/// new: new.
     pub fn new(config: CacheConfig) -> Self {
         Self {
             config,
@@ -42,6 +47,7 @@ impl DistributedKVCache {
         }
     }
 
+/// get: get.
     pub fn get(&self, key: u64) -> Option<u64> {
         let mut cache = self.local_cache.write().ok()?;
 
@@ -62,6 +68,7 @@ impl DistributedKVCache {
         None
     }
 
+/// put: put.
     pub fn put(&self, key: u64, value_hash: u64) {
         let owner_nodes = self.compute_owner_nodes(key);
         let timestamp = current_timestamp();
@@ -92,6 +99,7 @@ impl DistributedKVCache {
         }
     }
 
+/// invalidate: invalidate.
     pub fn invalidate(&self, key: u64) {
         if let Ok(mut cache) = self.local_cache.write() {
             cache.remove(&key);
@@ -101,6 +109,7 @@ impl DistributedKVCache {
         }
     }
 
+/// handle_message: handle message.
     pub fn handle_message(&self, msg: &CacheMessage) -> Option<CacheMessage> {
         match &msg.operation {
             super::protocol::CacheOperation::Read { key, .. } => {
@@ -143,6 +152,7 @@ impl DistributedKVCache {
         }
     }
 
+/// stats: stats.
     pub fn stats(&self) -> CacheStats {
         self.stats.read().map(|s| s.clone()).unwrap_or_default()
     }
@@ -159,6 +169,7 @@ impl DistributedKVCache {
         nodes
     }
 
+/// memory_usage: memory usage.
     pub fn memory_usage(&self) -> usize {
         if let Ok(cache) = self.local_cache.read() {
             cache
