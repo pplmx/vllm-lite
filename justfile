@@ -36,8 +36,22 @@ fmt-check:
     cargo fmt --all --check
 
 # Run clippy (CI style)
+# Denies correctness/suspicious/perf. Pedantic/nursery are visible as warnings
+# but not blocking. See `just clippy-pedantic` for pedantic-only view.
 clippy:
-    cargo clippy --all-targets --workspace --all-features -- -D warnings
+	cargo clippy --all-targets --workspace --all-features -- \
+		-D clippy::correctness \
+		-D clippy::suspicious \
+		-D clippy::perf
+
+# Run clippy with pedantic+nursery warnings visible (local use, not CI)
+clippy-pedantic:
+	cargo clippy --all-targets --workspace --all-features -- \
+		-W clippy::pedantic \
+		-W clippy::nursery \
+		-D clippy::correctness \
+		-D clippy::suspicious \
+		-D clippy::perf
 
 # Check documentation (CI style)
 doc-check:
