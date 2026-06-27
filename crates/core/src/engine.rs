@@ -253,13 +253,21 @@ impl Engine {
     /// server calls this after constructing the Engine so that lazy-loaded
     /// drafts can actually be loaded from disk. Existing registrations are
     /// preserved.
-    pub fn set_draft_loader(&mut self, loader: Arc<dyn DraftLoader>) {
+    ///
+    /// Returns `true` when a resolver was present and the new loader was
+    /// installed. Returns `false` when the Engine was constructed without a
+    /// resolver (e.g. via `new_boxed`) — the call is a no-op in that case
+    /// and callers should log a warning to surface the misconfiguration.
+    pub fn set_draft_loader(&mut self, loader: Arc<dyn DraftLoader>) -> bool {
         if let Some(resolver) = &self.draft_resolver {
             let registry = resolver.registry().clone();
             let self_spec = resolver.self_spec();
             let metrics = self.scheduler.metrics.clone();
             let new_resolver = Arc::new(DraftResolver::new(registry, self_spec, loader, metrics));
             self.draft_resolver = Some(new_resolver);
+            true
+        } else {
+            false
         }
     }
 
