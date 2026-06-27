@@ -1,140 +1,114 @@
 # Requirements: vllm-lite
 
-**Defined:** 2026-05-13
-**Core Value:** Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism
+**Defined:** 2026-06-27
+**Milestone:** v19.0 Codebase Health Audit (analysis-only)
+**Core Value:** Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
 
-## v18.0 Requirements (Active)
+## v19.0 Requirements
 
-Requirements for milestone v18.0: Multi-Model Speculative Decoding.
-Carries forward v17 deferred MULTI-01/02/03 plus new RTE/FALL items.
+This milestone is **analysis-only**. No code changes will be made. Each requirement produces an audit artifact (report, table, list) consumed by future milestones (v20.0+) for actual remediation.
 
-### Multi-Model Loading (MMLT)
+### Architecture audit
 
-- [ ] **MMLT-01**: Engine can load a separate draft model instance (different architecture and/or size from target)
-- [ ] **MMLT-02**: External draft uses its own `ModelBackend` instance with independent KV cache block IDs (no state leak with target)
-- [ ] **MMLT-03**: Draft weights loaded lazily — deferred until first request selects this draft model
+- [ ] **ARCH-01**: Crate dependency graph audited (verify directional flow: traits ← core ← model/server/dist; no upward deps)
+- [ ] **ARCH-02**: Module boundary audit complete (each module has single, clear responsibility; no God modules)
+- [ ] **ARCH-03**: Circular dependency scan complete (cargo metadata + manual review)
+- [ ] **ARCH-04**: Layering consistency audit (e.g., scheduler doesn't import from server; model doesn't import from core)
+- [ ] **ARCH-05**: Test architecture audit (unit/integration/bench separation; shared testing crate hygiene)
 
-### Lifecycle Management (LIFE)
+### Naming audit
 
-- [ ] **LIFE-01**: `DraftModelRegistry` provides register / load / unload operations for draft models at runtime
-- [ ] **LIFE-02**: Unloading a draft model frees its KV cache blocks via `MemoryManager` (no orphan blocks)
-- [ ] **LIFE-03**: Registry tracks active drafts with reference counts; auto-unload when refcount hits zero
+- [ ] **NAME-01**: File naming audit complete (identify casually-named files like `17_*.rs` stage-info-named files; document each finding)
+- [ ] **NAME-02**: Type/struct/enum naming consistency audit (PascalCase, descriptive, no redundant suffixes)
+- [ ] **NAME-03**: Function/method naming audit (snake_case, action verbs, consistent prefix patterns)
+- [ ] **NAME-04**: Variable naming audit (descriptive, no single-letter except indices; consistent naming for similar concepts)
+- [ ] **NAME-05**: Module name audit (matches file name; consistent depth)
 
-### Memory Budget (MEM)
+### Comments + documentation audit
 
-- [ ] **MEM-01**: Engine enforces total VRAM budget = target weights + target KV cache + N concurrent drafts
-- [ ] **MEM-02**: Load-time weight-size estimation (from model loader metadata); runtime KV cache growth tracking
-- [ ] **MEM-03**: Engine refuses to load a draft if estimated VRAM would exceed budget, with structured error
+- [ ] **DOCS-01**: Doc-comment coverage measured for public API (target: ≥80% on `pub` items)
+- [ ] **DOCS-02**: Module-level documentation audit (each module has `//!` or top-of-file context)
+- [ ] **DOCS-03**: Stale comment / TODO audit (identify comments referencing old code, dead TODOs, misleading docstrings)
+- [ ] **DOCS-04**: External documentation audit (root README, AGENTS.md, .planning docs accuracy against current codebase)
+- [ ] **DOCS-05**: Architecture-decision records (ADRs) — identify documented rationale vs. tribal knowledge
 
-### Request Routing (RTE)
+### API + error handling audit
 
-- [ ] **RTE-01**: Request can specify `draft_model_id` via `SamplingParams` or `Request` struct
-- [ ] **RTE-02**: Scheduler routes request to correct draft model instance during batch composition
-- [ ] **RTE-03**: Multiple drafts can coexist in the same batch (mixed draft routing across requests)
+- [ ] **API-01**: Public API surface consistency (function signatures, return types, builder patterns)
+- [ ] **API-02**: Error type audit (thiserror usage, error variants coverage, error message quality)
+- [ ] **API-03**: Error ergonomics audit (Result types, error context propagation, `From` conversions)
+- [ ] **API-04**: Trait design audit (object safety, async/sync consistency, default method usage)
+- [ ] **API-05**: Deprecation hygiene (deprecated items properly marked, migration paths documented)
 
-### Fallback Semantics (FALL)
+### Synthesis
 
-- [ ] **FALL-01**: External draft load failure → automatic fallback to self-spec path (v17 baseline)
-- [ ] **FALL-02**: Runtime draft inference error → graceful degradation to non-speculative decode for that request
-
-## v17.0 Validated
-
-Shipped in v17.0 (2026-06-26). All requirements complete; reference for traceability.
-
-### Engine Integration
-
-- ✓ **ENG-01**: Engine executes `step_speculative` as unified entry point for speculative decode
-- ✓ **ENG-02**: Draft tokens generated via batched per-position forward passes across all sequences
-- ✓ **ENG-03**: Token verification uses logit-based rejection (not exact match)
-- ✓ **ENG-04**: Rejected draft tokens' KV cache entries rolled back via MemoryManager
-- ✓ **ENG-05**: Speculative and non-speculative paths fall back gracefully on error
-- ✓ **ENG-06**: Scheduler correctly tracks input token counts for multi-token draft acceptance
-
-### Self-Speculation
-
-- ✓ **SELF-01**: `SelfSpeculativeModel` implements greedy (argmax) draft generation via layer-truncated forward pass
-- ✓ **SELF-02**: Draft model uses 1/8 target model layers with weight sharing (zero-copy references)
-- ✓ **SELF-03**: Draft and target maintain separate KV cache isolation
-
-### Adaptive Depth
-
-- ✓ **ADPT-01**: `AdaptiveSpeculativeDecoder` wired into the speculative decode loop
-- ✓ **ADPT-02**: Draft depth adjusts dynamically based on real-time acceptance rates
-- ✓ **ADPT-03**: Acceptance rate monitoring uses EWMA smoothing with deadband hysteresis
-
-### Benchmarks
-
-- ✓ **BENCH-01**: Throughput and latency benchmarks compare speculative vs non-speculative paths
-- ✓ **BENCH-02**: Metrics include P50/P95/P99 latency and tokens/sec throughput
-- ✓ **BENCH-03**: Benchmark methodology includes proper warmup and multi-sequence workloads
-- ✓ **BENCH-04**: Results reported for at least one target model architecture (e.g., Llama)
-
-### Speculative Warmup
-
-- ✓ **WARM-01**: Draft model KV cache populated during/after target prefill
-- ✓ **WARM-02**: Warmup ensures first speculative decode step has valid draft KV cache
-
-### Metrics
-
-- ✓ **MTRC-01**: Acceptance rate tracked per-request and aggregated across the batch
-- ✓ **MTRC-02**: Speculative efficiency (draft tokens / total tokens) reported
-- ✓ **MTRC-03**: Throughput speedup ratio vs non-speculative baseline reported
-
-## v19.0+ Requirements (Deferred)
-
-Tracked but not in current roadmap. Promotion requires roadmap update.
-
-### Multi-Model Extensions
-
-- **MULTI-04**: Hot-swap of draft model during long-running request (state migration)
-- **MULTI-05**: Draft model training / fine-tuning hooks (currently out of engine scope)
-- **MULTI-06**: Cross-GPU draft model placement (draft on GPU 0, target on GPU 1)
+- [ ] **SYNTH-01**: Cross-dimensional synthesis report complete (correlates findings across ARCH/NAME/DOCS/API)
+- [ ] **SYNTH-02**: Prioritized remediation backlog produced (P0/P1/P2 with impact, cost, suggested phase)
+- [ ] **SYNTH-03**: Suggested v20.0+ migration roadmap (which findings group into which future phase)
 
 ## Out of Scope
 
 Explicitly excluded. Documented to prevent scope creep.
 
-| Feature                             | Reason                                                                 |
-| ----------------------------------- | ---------------------------------------------------------------------- |
-| Tree-based speculation (draft tree) | Sigmoidally more complex, linear draft is sufficient                   |
-| Medusa-style multiple heads         | Requires custom model training, incompatible with off-the-shelf models |
-| Speculative decoding for prefill    | Prefill is compute-bound, speculative decode only                      |
-| Dynamic model switching mid-request | Complex state management, low ROI                                      |
-| Draft model retraining              | Engine-only scope; training belongs to a separate training service     |
+| Excluded                                  | Reason                                                                                          |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Any code modification                     | v19.0 is analysis-only; renaming/refactoring deferred to v20.0+                                 |
+| New features                              | Not the goal of an audit milestone                                                              |
+| Performance optimization                  | Separate audit/optimization cycle                                                               |
+| Test re-runs / CI changes                 | No code touched, existing CI still validates                                                    |
+| Migration execution (even simple rename)  | Even trivial changes deferred to dedicated future milestone with its own audit + execution cycle |
+| Security audit                            | Out of scope — covered by earlier security hardening (v13.0)                                    |
+| Performance benchmarking                  | Out of scope — covered by earlier benchmarking suite (v14.0)                                    |
 
 ## Traceability
 
-| Requirement | Phase     | Status  |
-| ----------- | --------- | ------- |
-| MMLT-01     | Phase 18.1 | Pending |
-| MMLT-02     | Phase 18.1 | Pending |
-| MMLT-03     | Phase 18.1 | Pending |
-| LIFE-01     | Phase 18.1 | Pending |
-| LIFE-02     | Phase 18.2 | Pending |
-| LIFE-03     | Phase 18.2 | Pending |
-| MEM-01      | Phase 18.2 | Pending |
-| MEM-02      | Phase 18.2 | Pending |
-| MEM-03      | Phase 18.2 | Pending |
-| RTE-01      | Phase 18.3 | Pending |
-| RTE-02      | Phase 18.3 | Pending |
-| RTE-03      | Phase 18.3 | Pending |
-| FALL-01     | Phase 18.3 | Pending |
-| FALL-02     | Phase 18.3 | Pending |
+| Requirement | Phase    | Status   |
+| ----------- | -------- | -------- |
+| ARCH-01     | Phase 20 | Pending  |
+| ARCH-02     | Phase 20 | Pending  |
+| ARCH-03     | Phase 20 | Pending  |
+| ARCH-04     | Phase 20 | Pending  |
+| ARCH-05     | Phase 20 | Pending  |
+| NAME-01     | Phase 21 | Pending  |
+| NAME-02     | Phase 21 | Pending  |
+| NAME-03     | Phase 21 | Pending  |
+| NAME-04     | Phase 21 | Pending  |
+| NAME-05     | Phase 21 | Pending  |
+| DOCS-01     | Phase 22 | Pending  |
+| DOCS-02     | Phase 22 | Pending  |
+| DOCS-03     | Phase 22 | Pending  |
+| DOCS-04     | Phase 22 | Pending  |
+| DOCS-05     | Phase 22 | Pending  |
+| API-01      | Phase 23 | Pending  |
+| API-02      | Phase 23 | Pending  |
+| API-03      | Phase 23 | Pending  |
+| API-04      | Phase 23 | Pending  |
+| API-05      | Phase 23 | Pending  |
+| SYNTH-01    | Phase 24 | Pending  |
+| SYNTH-02    | Phase 24 | Pending  |
+| SYNTH-03    | Phase 24 | Pending  |
 
 **Coverage:**
 
-- v18.0 requirements: 14 total
-- Mapped to phases: 14 ✓
-- Unmapped: 0
+- v19.0 requirements: 23 total
+- Mapped to phases: 23
+- Unmapped: 0 ✓
 
-**Phase mapping (v18.0):**
+**Audit execution model:**
 
-- Phase 18.1 (Draft Registry + External Loading): MMLT-01, MMLT-02, MMLT-03, LIFE-01 (4 reqs)
-- Phase 18.2 (Lifecycle + Memory Budget): LIFE-02, LIFE-03, MEM-01, MEM-02, MEM-03 (5 reqs)
-- Phase 18.3 (Request Routing + Fallback): RTE-01, RTE-02, RTE-03, FALL-01, FALL-02 (5 reqs)
-- Phase 18.4 (Integration Tests + Benchmarks): 0 reqs (validation phase)
+Each audit phase produces:
+
+1. A report at `.planning/audit/{dimension}/REPORT.md` with detailed findings
+2. A summary table at `.planning/audit/{dimension}/SUMMARY.md` (P0/P1/P2 prioritized)
+3. Raw inventory data (file lists, naming tables, doc-coverage stats) where applicable
+
+Synthesis phase (Phase 24) reads all four dimension reports and produces:
+
+- `.planning/audit/SYNTHESIS.md` — cross-cutting findings
+- `.planning/audit/BACKLOG.md` — P0/P1/P2 remediation backlog with impact/cost/suggested-phase columns
+- `.planning/audit/MIGRATION-ROADMAP.md` — proposed v20.0+ phase breakdown (advisory only)
 
 ---
 
-*Requirements defined: 2026-05-13*
-*Last updated: 2026-06-27 — v18.0 traceability populated (14/14 mapped)*
+*Requirements defined: 2026-06-27*
+*Last updated: 2026-06-27 after initial definition*
