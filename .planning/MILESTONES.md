@@ -1,5 +1,34 @@
 # Milestones
 
+## v19.0 Codebase Health Audit
+
+**Shipped:** 2026-06-27
+**Phases:** 20-24 | **Plans:** 5 | **Tasks:** 23 requirements (analysis-only)
+
+### Key Accomplishments
+
+1. **Architecture audit** — 17 findings (2 P0, 3 P1, 8 P2, 4 P3); flagged `vllm-model → vllm-dist` and `vllm-core → vllm-model` layering violations; `engine.rs` God module (1,038 LOC)
+2. **Naming audit** — 26 findings (0 P0, 7 P1, 19 P2); user-reported stage-info file `engine_v18_wiring.rs`; orphan modules `kv_cache_fp8.rs` + `debug.rs` unreachable
+3. **Comments + documentation audit** — 24 findings (0 P0, 20 P1, 4 P2); workspace doc coverage **7.6%**; README code example broken
+4. **API + error handling audit** — 33 findings (3 P0, 8 P1, 13 P2, 9 P3); `ModelError` struct (defeats pattern matching); 8 non-object-safe traits; 0 `#[deprecated]` markers
+5. **Synthesis** — 100 raw findings consolidated; 8 cross-dimensional themes; 6 proposed v20.x phases (~190h)
+
+### Stats
+
+- Files: 11 audit artifacts in `.planning/audit/` (4 REPORT.md + 4 SUMMARY.md + SYNTHESIS.md + BACKLOG.md + MIGRATION-ROADMAP.md)
+- Total artifact volume: 3,578 lines
+- Requirements: 23/23 covered (100%)
+- **Source code modified: 0 lines** (analysis-only constraint honored)
+- Timeline: 2026-06-27 (single session, autonomous)
+
+### Tech Debt & Known Limitations
+
+- All 100 audit findings deferred to v20.x — by design (analysis-only)
+- `vllm-dist` fate undecided (continue / feature-gate / remove) — open question for v20.1
+- README code example broken — must fix in v20.4 or 20.5
+
+---
+
 ## v18.0 Multi-Model Speculative Decoding
 
 **Shipped:** 2026-06-27

@@ -12,19 +12,15 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 
 **Goal:** 对 vllm-lite 整个 codebase 做多维度深度审计(架构/命名/注释文档/API+错误处理),产出优先级清单与具体修复建议;**本 milestone 不执行任何修改**,清单用于指导后续 milestone(v20.0+)的重构工作。
 
-**Target features (审计产出物):**
+**Status:** ✅ SHIPPED 2026-06-27 — 23/23 requirements covered, audit passed, 100 findings consolidated
 
-- 架构审计报告 — crate 依赖图、模块边界、循环依赖、分层一致性
-- 命名规范审计 — 文件名/类名/方法名/变量名的一致性 + 语义清晰度
-- 注释 + 文档审计 — /// 文档覆盖度、模块级 README、过期注释、TODO 清理
-- API + 错误处理审计 — 公开 API 一致性、错误类型冗余/缺失、信息完整度
-- 综合优先级清单 — P0/P1/P2 排序,每项标注影响范围、修复成本、建议阶段
+**Next Milestone Goals:** v20.0+ — selectively execute the prioritized backlog from `.planning/audit/BACKLOG.md` (5 P0 critical fixes, 38 P1 issues, 44 P2). Suggested phasing in `.planning/audit/MIGRATION-ROADMAP.md`.
 
 ## Current State
 
-**Current Milestone:** v19.0 Codebase Health Audit (planning)
-**Latest Shipped:** v18.0 Multi-Model Speculative Decoding (2026-06-27, 14/14 requirements + Phase 19 gap closure)
-**Status:** v18.0 收官;开始 v19.0 审计规划
+**Current Milestone:** v19.0 Codebase Health Audit (✅ shipped 2026-06-27)
+**Latest Shipped:** v19.0 — 23/23 requirements, audit passed, 0 source code modified (analysis-only)
+**Next:** v20.0+ — backlog from `.planning/audit/BACKLOG.md` (~190h of recommended work)
 
 ### Phase 17 Achievements (v17.0 shipped)
 
@@ -99,6 +95,13 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 - ✓ Per-request routing — v18.0 (`Request.draft_model_id`, `DraftResolver` for mixed routing)
 - ✓ Fallback semantics — v18.0 (FALL-01 silent fallback, FALL-02 sticky `degraded_draft`)
 - ✓ Phase 19 gap closure — v18.0 (resolver wired into `step_speculative_inner`, HTTP exporter, server config, `ServerDraftLoader`)
+
+<!-- Shipped from v19.0 (Codebase Health Audit) -->
+- ✓ Architecture audit — v19.0 (17 findings; 2 P0 layering violations, 1 P1 God module)
+- ✓ Naming audit — v19.0 (26 findings; 7 P1; orphan modules `kv_cache_fp8.rs`/`debug.rs`; stage-info file `engine_v18_wiring.rs`)
+- ✓ Comments + documentation audit — v19.0 (24 findings; 20 P1; doc coverage 7.6%; README broken example)
+- ✓ API + error handling audit — v19.0 (33 findings; 3 P0; `ModelError` struct; 8 non-object-safe traits)
+- ✓ Synthesis + remediation backlog — v19.0 (100 findings consolidated; 8 themes; 6 proposed v20.x phases; ~190h)
 
 <!-- Shipped from Phase 15 -->
 - ✓ FlashAttention V3 — v15.0 (MQA/GQA, sliding window)
@@ -232,7 +235,8 @@ Codebase state (v18.0 end): 7 crates; speculative decoding complete; draft regis
 | Multi-draft routing       | Per-request `draft_model_id` for heterogeneous A/B | Implemented — v18.0         |
 | External draft lifecycle  | Runtime registry + refcount + unload frees KV      | Implemented — v18.0         |
 | VRAM budget strategy      | Load-time estimate + runtime check; refuse on over | Implemented — v18.0         |
-| Audit-before-refactor     | Analyze codebase health before non-functional work | Planned — v19.0             |
+| Audit-before-refactor     | Analyze codebase health before non-functional work | Implemented — v19.0         |
+| Analysis-only milestone   | Produce audit reports without code changes; backlog consumed by v20.0+ | Implemented — v19.0 |
 
 ## Evolution
 
