@@ -8,6 +8,7 @@ use crate::speculative::AdaptiveSpeculativeDecoder;
 use crate::speculative::draft_registry::{
     DraftId, DraftModelRegistry, DraftRegistryError, DraftSpec,
 };
+use crate::speculative::draft_resolver::{DraftLoader, DraftResolver, NoopLoader};
 use crate::speculative::memory_budget::MemoryBudget;
 use crate::sync::lock_mutex;
 use crate::types::AdaptiveDraftConfig;
@@ -54,7 +55,12 @@ pub struct Engine {
     #[cfg(feature = "cuda-graph")]
     cuda_graph: Option<BatchCudaGraphExecutor>,
     pub adaptive_decoder: Option<AdaptiveSpeculativeDecoder>,
-    pub draft_registry: DraftModelRegistry,
+    pub draft_registry: Arc<DraftModelRegistry>,
+    /// v18.0 per-request draft resolver. When `Some`, the step loop dispatches
+    /// each request to its named draft via `resolver.resolve()`. When `None`,
+    /// the legacy single-`draft_model` path is used (v17 behavior, backward
+    /// compatible with `Engine::new_boxed`).
+    pub draft_resolver: Option<Arc<DraftResolver>>,
 }
 
 impl Engine {
@@ -111,7 +117,8 @@ impl Engine {
             #[cfg(feature = "cuda-graph")]
             cuda_graph,
             adaptive_decoder: None,
-            draft_registry: DraftModelRegistry::new(),
+            draft_registry: Arc::new(DraftModelRegistry::new()),
+            draft_resolver: None,
         }
     }
 
@@ -147,7 +154,10 @@ impl Engine {
     /// All specs are registered in the [`DraftModelRegistry`] as `Unloaded`.
     /// They will be loaded lazily on first use (or eagerly via
     /// [`Self::preload_drafts`]) by the caller — this method does NOT trigger
-    /// any I/O.
+    /// any I/O. The Engine's `draft_resolver` is wired with a `NoopLoader`:
+    /// any attempt to lazy-load falls back to self-spec via FALL-01. The
+    /// server should construct a real `DraftLoader` via
+    /// [`Self::set_draft_loader`] before serving requests that name drafts.
     pub fn with_drafts_boxed(
         target_model: Box<dyn ModelBackend>,
         draft_model: Option<Box<dyn ModelBackend>>,
@@ -156,7 +166,7 @@ impl Engine {
         max_draft_tokens: usize,
         num_kv_blocks: usize,
     ) -> Self {
-        let engine = Self::with_config_boxed(
+        let mut engine = Self::with_config_boxed(
             target_model,
             draft_model,
             config,
@@ -170,6 +180,7 @@ impl Engine {
                 .register(spec)
                 .expect("with_drafts_boxed: duplicate draft id in spec list");
         }
+        engine.install_default_resolver();
         engine
     }
 
@@ -193,7 +204,8 @@ impl Engine {
     }
 
     /// Construct an Engine with a custom memory budget. The same budget is
-    /// shared with the draft registry.
+    /// shared with the draft registry. `draft_resolver` is wired with a
+    /// `NoopLoader` (callers may replace via [`Self::set_draft_loader`]).
     pub fn with_budget_boxed(
         target_model: Box<dyn ModelBackend>,
         draft_model: Option<Box<dyn ModelBackend>>,
@@ -212,14 +224,43 @@ impl Engine {
         );
         // Replace the default unlimited-budget registry with one bound to the
         // caller's budget.
-        engine.draft_registry = DraftModelRegistry::with_budget(budget.clone());
+        engine.draft_registry = Arc::new(DraftModelRegistry::with_budget(budget.clone()));
         for spec in draft_specs {
             engine
                 .draft_registry
                 .register(spec)
                 .expect("with_budget_boxed: duplicate draft id in spec list");
         }
+        engine.install_default_resolver();
         engine
+    }
+
+    /// Install a `DraftResolver` with a `NoopLoader` on this Engine. Called by
+    /// `with_drafts_boxed` / `with_budget_boxed`. Idempotent — replaces any
+    /// existing resolver. The resolver shares the same `Arc<DraftModelRegistry>`
+    /// as `self.draft_registry`, so register/unload operations on the Engine
+    /// are immediately visible to the resolver.
+    fn install_default_resolver(&mut self) {
+        let registry = self.draft_registry.clone();
+        let metrics = self.scheduler.metrics.clone();
+        let self_spec: Option<Arc<Mutex<Box<dyn ModelBackend>>>> = self.draft_model.clone();
+        let loader: Arc<dyn DraftLoader> = Arc::new(NoopLoader);
+        let resolver = Arc::new(DraftResolver::new(registry, self_spec, loader, metrics));
+        self.draft_resolver = Some(resolver);
+    }
+
+    /// Replace the draft resolver's loader with a real implementation. The
+    /// server calls this after constructing the Engine so that lazy-loaded
+    /// drafts can actually be loaded from disk. Existing registrations are
+    /// preserved.
+    pub fn set_draft_loader(&mut self, loader: Arc<dyn DraftLoader>) {
+        if let Some(resolver) = &self.draft_resolver {
+            let registry = resolver.registry().clone();
+            let self_spec = resolver.self_spec();
+            let metrics = self.scheduler.metrics.clone();
+            let new_resolver = Arc::new(DraftResolver::new(registry, self_spec, loader, metrics));
+            self.draft_resolver = Some(new_resolver);
+        }
     }
 
     /// Access the shared memory budget.

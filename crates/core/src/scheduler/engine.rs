@@ -596,6 +596,21 @@ impl SchedulerEngine {
         self.running.clone()
     }
 
+    /// Look up a running sequence by id. Returns `Some(&Sequence)` if found,
+    /// `None` if not in the running set. v18.0 — used by the per-seq draft
+    /// dispatch to read `Sequence.degraded_draft` and `draft_model_id` without
+    /// cloning the whole running vec.
+    pub fn get_sequence(&self, seq_id: SeqId) -> Option<&Sequence> {
+        self.running.iter().find(|s| s.id == seq_id)
+    }
+
+    /// Mutable variant of [`Self::get_sequence`]. v18.0 — used by the per-seq
+    /// draft dispatch to set `Sequence.degraded_draft = true` when a draft
+    /// runtime error occurs (FALL-02).
+    pub fn get_sequence_mut(&mut self, seq_id: SeqId) -> Option<&mut Sequence> {
+        self.running.iter_mut().find(|s| s.id == seq_id)
+    }
+
     /// Get finished sequences
     pub fn finished_sequences(&self) -> Vec<Sequence> {
         self.finished.clone()
