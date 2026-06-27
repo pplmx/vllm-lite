@@ -91,21 +91,13 @@ impl super::Engine {
             // v18.0 per-request dispatch: resolve each seq's draft via the
             // resolver, then run draft generation per-seq. Mixed-routing
             // (RTE-03) and FALL-02 (runtime errors) live here.
-            match self.generate_per_seq_drafts(&batch, max_draft) {
-                Ok(drafts) => drafts,
-                Err(e) => {
-                    tracing::warn!(error = %e, "Per-seq draft generation failed, falling back to non-speculative");
-                    return self.step_regular();
-                }
-            }
+            // `generate_per_seq_drafts` always returns Ok — per-seq errors
+            // are caught internally and degrade the affected sequence. If
+            // a future batch-wide failure mode is added, restore the Err
+            // arm here to fall back to non-speculative decode.
+            self.generate_per_seq_drafts(&batch, max_draft)?
         } else {
-            match self.generate_batched_drafts(&batch, max_draft) {
-                Ok(drafts) => drafts,
-                Err(e) => {
-                    tracing::warn!(error = %e, "Draft generation failed, falling back to non-speculative");
-                    return self.step_regular();
-                }
-            }
+            self.generate_batched_drafts(&batch, max_draft)?
         };
 
         let (verified, accepted_counts) =
