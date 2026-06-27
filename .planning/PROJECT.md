@@ -54,7 +54,7 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 
 <!-- Shipped from Phase 1-12 -->
 - ✓ 核心推理引擎 — Continuous Batching, Paged KV Cache, Prefix Caching (Phase 1)
-- ✓ 多模型支持 — Llama, Mistral, Qwen, DeepSeek, Gemma4, Mixtral (Phase 6)
+- ✓ 多模型支持 — Llama, Mistral, Qwen, Qwen2/3, Qwen3.5, Gemma4, Mixtral, Llama4, Mistral Small, Phi-4 (Phase 6+)
 - ✓ OpenAI 兼容 API — Chat, Completions, Embeddings (Phase 7)
 - ✓ 生产就绪 — 监控、日志、可靠性 (Phase 5)
 - ✓ FlashAttention V2 实现 (Phase 10.1)
@@ -380,30 +380,39 @@ Codebase state (v20.0 end): 6 crates; speculative decoding complete (v18.0); dra
 
 ## Key Decisions
 
-| Decision                  | Rationale                                          | Outcome                     |
-| ------------------------- | -------------------------------------------------- | --------------------------- |
-| Multi-node architecture   | Horizontal scaling beyond single host              | Implemented — v13.0         |
-| K8s Operator vs Helm-only | Operator for declarative management                | Scaffolded — v15.0          |
-| Consensus protocol        | Raft vs etcd for HA leader election                | Using K8s Lease API — v13.0 |
-| TLS approach              | mTLS for cluster internal, simple TLS for external | Implemented — v15.0         |
-| FA-V3 kernel approach     | FlashAttention V3 integration                      | Implemented — v15.0         |
-| KV cache compression      | FP8 E4M3 format                                    | Implemented — v15.0         |
-| Speculative strategy      | Self-speculation with 1/8 layer count              | Implemented — v16.0         |
-| Token rejection           | TokenLevel (accept if target_p >= draft_p)         | Implemented — v16.0         |
-| Draft weight sharing      | Zero-copy weight references, no extra GPU memory   | Implemented — v16.0         |
-| Multi-draft routing       | Per-request `draft_model_id` for heterogeneous A/B | Implemented — v18.0         |
-| External draft lifecycle  | Runtime registry + refcount + unload frees KV      | Implemented — v18.0         |
-| VRAM budget strategy      | Load-time estimate + runtime check; refuse on over | Implemented — v18.0         |
-| Audit-before-refactor     | Analyze codebase health before non-functional work | Implemented — v19.0         |
-| Analysis-only milestone   | Produce audit reports without code changes; backlog consumed by v20.0+ | Implemented — v19.0 |
-| vllm-dist feature-gate    | Keep code, exclude from default build; enable for multi-node | Planned — v20.0              |
-| Object-safety co-fix      | Fix `ModelError` + non-object-safe traits together in v20.1 | Planned — v20.0              |
-| Single big v20.0 milestone | All 6 sub-phases in one milestone (vs splitting v20.1-v20.6) | Shipped — v20.0              |
-| EmbeddingData rename | Rename + #[deprecated] alias (vs breaking change) | Shipped — v20.0              |
-| Verb policy formalization | Document `get_/load_/read_/create_/build_` semantics in AGENTS.md rather than enforce mechanically | Shipped — v20.0              |
-| P2/P3 scope for v21.0 | All 44 P2 + selected actionable P3 (vs only high-impact subset) | Planned — v21.0              |
-| v21.0 phase structure | 5 phases (Phase 31-35) mirroring v20.0's 6-phase pattern; each phase ~one theme | Planned — v21.0              |
-| P3 items mostly informational | Only ~6 of 13 P3 items need action; rest are "no action" or "vacuous positive" findings | Planned — v21.0              |
+| Decision                  | Rationale                                          | Outcome                     | ADR                                       |
+| ------------------------- | -------------------------------------------------- | --------------------------- | ----------------------------------------- |
+| Multi-node architecture   | Horizontal scaling beyond single host              | Implemented — v13.0         | —                                         |
+| K8s Operator vs Helm-only | Operator for declarative management                | Scaffolded — v15.0          | —                                         |
+| Consensus protocol        | Raft vs etcd for HA leader election                | Using K8s Lease API — v13.0 | —                                         |
+| TLS approach              | mTLS for cluster internal, simple TLS for external | Implemented — v15.0         | —                                         |
+| Component sharing         | Traits crate as boundary between core and model    | Implemented — v1.0          | [ADR-001](../docs/adr/ADR-001-component-sharing-strategy.md) |
+| Feature flag design       | Single binary, compile-time + runtime feature gating | Implemented — v1.0          | [ADR-002](../docs/adr/ADR-002-feature-flag-design.md) |
+| FA-V3 kernel approach     | FlashAttention V3 integration                      | Implemented — v15.0         | —                                         |
+| KV cache compression      | FP8 E4M3 format                                    | Implemented — v15.0         | [ADR-004](../docs/adr/ADR-004-fp8-e4m3-kv-cache.md) |
+| KV cache split across 3 locations | Logical vs Physical vs Prefix for memory tiering | Implemented — v1.0          | [ADR-005](../docs/adr/ADR-005-kv-cache-split.md) |
+| Continuous batching       | Token-level scheduling instead of request-level    | Implemented — v1.0          | [ADR-012](../docs/adr/ADR-012-continuous-batching.md) |
+| Paged KV cache            | Block-based allocation, copy-on-write semantics    | Implemented — v1.0          | [ADR-013](../docs/adr/ADR-013-paged-kv-cache.md) |
+| Architecture registry     | Dynamic registration enables extensibility         | Implemented — v6.0          | [ADR-014](../docs/adr/ADR-014-architecture-registry.md) |
+| Speculative architecture  | Self-spec + external draft + per-request routing   | Implemented — v16.0-v18.0   | [ADR-006](../docs/adr/ADR-006-speculative-decoding-architecture.md) |
+| Self-speculation 1/8 ratio | Reduced layer count with weight sharing            | Implemented — v16.0         | [ADR-003](../docs/adr/ADR-003-self-speculation-1-8-layer-ratio.md) |
+| Per-request draft routing | Heterogeneous draft selection per request           | Implemented — v18.0         | [ADR-007](../docs/adr/ADR-007-per-request-draft-routing.md) |
+| Multi-draft routing       | Per-request `draft_model_id` for heterogeneous A/B | Implemented — v18.0         | [ADR-007](../docs/adr/ADR-007-per-request-draft-routing.md) |
+| External draft lifecycle  | Runtime registry + refcount + unload frees KV      | Implemented — v18.0         | [ADR-007](../docs/adr/ADR-007-per-request-draft-routing.md) |
+| VRAM budget strategy      | Load-time estimate + runtime check; refuse on over | Implemented — v18.0         | [ADR-007](../docs/adr/ADR-007-per-request-draft-routing.md) |
+| CUDA Graph feature-gating | Trait abstraction so core doesn't depend on model  | Implemented — v10.1         | [ADR-010](../docs/adr/ADR-010-cuda-graph-feature-gating.md) |
+| Audit-before-refactor     | Analyze codebase health before non-functional work | Implemented — v19.0         | —                                         |
+| Analysis-only milestone   | Produce audit reports without code changes; backlog consumed by v20.0+ | Implemented — v19.0 | —                                         |
+| vllm-dist feature-gate    | Keep code, exclude from default build; enable for multi-node | Planned — v20.0              | [ADR-008](../docs/adr/ADR-008-vllm-dist-feature-gated.md), [ADR-015](../docs/adr/ADR-015-vllm-dist-investment-decision.md) |
+| FP8 quantizer orphan      | Move into `components/` module tree                | Shipped — v20.2             | [ADR-009](../docs/adr/ADR-009-fp8-quantizer-orphan-decision.md) |
+| Cross-crate error boundaries | Typed enums per crate; `From<E>` impls at boundaries | Implemented — v20.3       | [ADR-011](../docs/adr/ADR-011-cross-crate-error-boundaries.md) |
+| Object-safety co-fix      | Fix `ModelError` + non-object-safe traits together in v20.1 | Planned — v20.0              | —                                         |
+| Single big v20.0 milestone | All 6 sub-phases in one milestone (vs splitting v20.1-v20.6) | Shipped — v20.0              | —                                         |
+| EmbeddingData rename | Rename + #[deprecated] alias (vs breaking change) | Shipped — v20.0              | —                                         |
+| Verb policy formalization | Document `get_/load_/read_/create_/build_` semantics in AGENTS.md rather than enforce mechanically | Shipped — v20.0              | —                                         |
+| P2/P3 scope for v21.0 | All 44 P2 + selected actionable P3 (vs only high-impact subset) | Planned — v21.0              | —                                         |
+| v21.0 phase structure | 5 phases (Phase 31-35) mirroring v20.0's 6-phase pattern; each phase ~one theme | Planned — v21.0              | —                                         |
+| P3 items mostly informational | Only ~6 of 13 P3 items need action; rest are "no action" or "vacuous positive" findings | Planned — v21.0              | —                                         |
 
 ## Evolution
 
