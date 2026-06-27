@@ -11,14 +11,14 @@
 
 ## 📊 Release Statistics
 
-|     版本     | 日期  | 测试  | 覆盖率 |
-| :----------: | :---: | :---: | :----: |
-| [Unreleased] |   -   | 1179+ |  97.8% |
-| [v22.0]      | 2026-06-27 | 1179+ | 97.8% |
-| [v21.0]      | 2026-06-27 | 1146+ | 97.8% |
-| [v20.0]      | 2026-06-27 | 1144+ | 97.8% |
-| [v19.0]      | 2026-06-27 | 1139+ | 97.8% |
-| [v18.0]      | 2026-06-27 | 277 (vllm-core) + 654+ | 90%+ |
+|     版本     |    日期    |          测试          | 覆盖率 |
+| :----------: | :--------: | :--------------------: | :----: |
+| [Unreleased] |     -      |         1179+          | 97.8%  |
+|   [v22.0]    | 2026-06-27 |         1179+          | 97.8%  |
+|   [v21.0]    | 2026-06-27 |         1146+          | 97.8%  |
+|   [v20.0]    | 2026-06-27 |         1144+          | 97.8%  |
+|   [v19.0]    | 2026-06-27 |         1139+          | 97.8%  |
+|   [v18.0]    | 2026-06-27 | 277 (vllm-core) + 654+ |  90%+  |
 
 ---
 
@@ -366,11 +366,11 @@ No migration needed - initial release.
 ### Added
 
 - **5 analysis-only phases** (Phase 20-24) producing `.planning/audit/` directory:
-  - Architecture audit (crate deps, module boundaries, layering matrix)
-  - Naming audit (NAME-* findings)
-  - Comments/docs audit (placeholder doc survey)
-  - API/error audit (error type hygiene)
-  - Test/benchmark audit
+    - Architecture audit (crate deps, module boundaries, layering matrix)
+    - Naming audit (NAME-* findings)
+    - Comments/docs audit (placeholder doc survey)
+    - API/error audit (error type hygiene)
+    - Test/benchmark audit
 - **No code changes** — analysis-only milestone; findings drive v20.0-v23.0 remediation
 
 ### Stats

@@ -56,17 +56,20 @@ Rationale:
 ## Alternatives Considered
 
 ### Deprecate entirely
+
 - **Pro:** Removes ~1,600 LOC of "dead" code; reduces confusion
 - **Con:** Loses tribal knowledge; future multi-node work starts from zero
 - **Verdict:** Rejected. Sunk cost is low relative to future re-implementation cost.
 
 ### Invest heavily now
+
 - **Pro:** Multi-node ready sooner; competitive advantage
 - **Con:** Competes with single-node optimization; multi-month effort
   without validated demand
 - **Verdict:** Deferred. Re-evaluate when external demand materializes.
 
 ### Keep as feature-gated (chosen)
+
 - **Pro:** Lowest cost; preserves optionality; no behavioral change
 - **Con:** Maintenance burden even if unused (mitigated by ADR-008)
 - **Verdict:** Accepted.
@@ -74,6 +77,7 @@ Rationale:
 ## Consequences
 
 ### Positive
+
 - `vllm-dist` remains available for future multi-node work without a
   re-implementation cost.
 - Default builds are unaffected (feature-gated).
@@ -81,6 +85,7 @@ Rationale:
   but optional crate.
 
 ### Negative
+
 - The crate remains unmaintained until external demand materializes.
 - Tests for `vllm-dist` are limited (no integration tests against real
   multi-node setup).

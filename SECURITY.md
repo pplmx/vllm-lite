@@ -53,12 +53,12 @@ This section records the periodic `cargo audit` results and any remediation take
 
 `cargo audit` baseline: 0 vulnerabilities + 3 warnings.
 
-| Crate | Version | Advisory | Status |
-|-------|---------|----------|--------|
-| `openssl` | 0.10.79 | (Dependabot; no RUSTSEC) | ✅ Bumped to 0.10.80 |
-| `memmap2` | 0.9.10 | RUSTSEC-2026-0186 (unsound: unchecked pointer offset) | ✅ Bumped to 0.9.11 |
-| `rustls-pemfile` | 2.2.0 | RUSTSEC-2025-0134 (unmaintained) | ⚠️ Deferred — 2.x line terminated; replacement requires `crates/server/src/security/tls.rs` API refactor |
-| `paste` | 1.0.15 | RUSTSEC-2024-0436 (unmaintained) | ⚠️ Deferred — deep transitive via `gemm` → `candle-core`; resolution requires candle-core upgrade (independent scope) |
+| Crate            | Version | Advisory                                              | Status                                                                                                                |
+| ---------------- | ------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `openssl`        | 0.10.79 | (Dependabot; no RUSTSEC)                              | ✅ Bumped to 0.10.80                                                                                                  |
+| `memmap2`        | 0.9.10  | RUSTSEC-2026-0186 (unsound: unchecked pointer offset) | ✅ Bumped to 0.9.11                                                                                                   |
+| `rustls-pemfile` | 2.2.0   | RUSTSEC-2025-0134 (unmaintained)                      | ⚠️ Deferred — 2.x line terminated; replacement requires `crates/server/src/security/tls.rs` API refactor              |
+| `paste`          | 1.0.15  | RUSTSEC-2024-0436 (unmaintained)                      | ⚠️ Deferred — deep transitive via `gemm` → `candle-core`; resolution requires candle-core upgrade (independent scope) |
 
 Post-remediation audit: 2 warnings remaining (rustls-pemfile + paste).
 

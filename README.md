@@ -248,18 +248,18 @@ cargo run -p vllm-server -- --log-dir ./logs
 
 <div align="center">
 
-| 模型              | 架构                       | 状态      | 显存需求  |
-| ----------------- | -------------------------- | :-------: | --------: |
-| **Llama**         | GQA + RMSNorm              |    ✅     |   2-8 GB |
-| **Llama 4**       | MoE + Hybrid Attention     | 🟡 stub   |  16-64 GB |
-| **Mistral**       | Sliding Window + GQA       |    ✅     |   2-8 GB |
-| **Mistral Small** | Grouped Query + Sliding    | 🟡 stub   |   4-8 GB |
-| **Qwen3**         | GQA + MLA + RoPE           |    ✅     |   1-4 GB |
-| **Qwen3.5**       | Mamba SSM Hybrid           |    ✅     |   1-4 GB |
-| **Gemma3**        | GQA + GeLU                 | 🟡 stub   |   2-4 GB |
-| **Gemma4**        | Hybrid Attention + GeGLU   |    ✅     |   2-8 GB |
-| **Mixtral**       | Sparse MoE (8 experts)     |    ✅     |  8-16 GB |
-| **Phi-4**         | GQA + RoPE                 | 🟡 stub   |   4-8 GB |
+| 模型              | 架构                     |  状态   | 显存需求 |
+| ----------------- | ------------------------ | :-----: | -------: |
+| **Llama**         | GQA + RMSNorm            |   ✅    |   2-8 GB |
+| **Llama 4**       | MoE + Hybrid Attention   | 🟡 stub | 16-64 GB |
+| **Mistral**       | Sliding Window + GQA     |   ✅    |   2-8 GB |
+| **Mistral Small** | Grouped Query + Sliding  | 🟡 stub |   4-8 GB |
+| **Qwen3**         | GQA + MLA + RoPE         |   ✅    |   1-4 GB |
+| **Qwen3.5**       | Mamba SSM Hybrid         |   ✅    |   1-4 GB |
+| **Gemma3**        | GQA + GeLU               | 🟡 stub |   2-4 GB |
+| **Gemma4**        | Hybrid Attention + GeGLU |   ✅    |   2-8 GB |
+| **Mixtral**       | Sparse MoE (8 experts)   |   ✅    |  8-16 GB |
+| **Phi-4**         | GQA + RoPE               | 🟡 stub |   4-8 GB |
 
 </div>
 
