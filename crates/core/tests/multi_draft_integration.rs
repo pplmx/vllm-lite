@@ -230,7 +230,7 @@ fn test_budget_refuse_just_over() {
 }
 
 #[test]
-fn test_budget_concurrent_n_drafts_within_budget() {
+fn test_budget_accepts_n_drafts_within_budget() {
     // 5 GB budget; each draft is ~16 MiB → all fit comfortably.
     let h = harness_with_budget(5_000_000_000);
     for name in ["a", "b", "c", "d", "e"] {
@@ -247,7 +247,7 @@ fn test_budget_concurrent_n_drafts_within_budget() {
 }
 
 #[test]
-fn test_budget_concurrent_n_plus_one_over_budget() {
+fn test_budget_refuses_n_plus_one_drafts_over_budget() {
     // 32 MiB budget; each draft's kv_blocks=2 → 2 * 16MiB = 32 MiB footprint.
     // 1 fits, 2 doesn't.
     let h = harness_with_budget(32 * 1024 * 1024);
