@@ -197,6 +197,19 @@ Version history prior to v20.0 is available via git history:
 git log --oneline --grep="^docs: start milestone"
 ```
 
+## Audit Closure Note
+
+The v21.0 milestone closed 100% of the v19.0 codebase audit backlog (5 P0,
+38 P1, 44 P2, 13 P3 = 100 findings). Two findings (ARCH-F-09 `#[path]`
+directives, API-F-29 `DraftLoader::load` returning `Box<dyn ModelBackend>`)
+were not addressed via dedicated v21.0 plans but were resolved implicitly
+by earlier phases' work:
+
+- **ARCH-F-09** — resolved by Phase 26 (test files moved out of `src/`)
+- **API-F-29** — resolved by Phase 25 (`ModelBackend` made object-safe)
+
+See `.planning/v21.0-MILESTONE-AUDIT.md` for full audit trail.
+
 ---
 
 *Last updated: 2026-06-27 — v21.0 P2/P3 Backlog Cleanup milestone*
