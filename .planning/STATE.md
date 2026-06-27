@@ -1,17 +1,18 @@
 ---
 gsd_state_version: 1.0
-milestone: v19.0
-milestone_name: Codebase Health Audit
-status: complete
-last_updated: "2026-06-27T13:30:00.000Z"
+milestone: v20.0
+milestone_name: Codebase Remediation (BACKLOG.md-driven)
+status: planning
+last_updated: "2026-06-27T05:21:56.199Z"
 last_activity: 2026-06-27
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 5
-  completed_plans: 5
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
+
 # Project State
 
 ## Project Reference
@@ -25,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-06-27)
 
 ## Current Position
 
-Phase: All v19.0 phases complete (20, 21, 22, 23, 24)
-Plan: All 5 plans shipped
-Status: Milestone complete — audit passed, archived to .planning/milestones/v19.0-*
-Last activity: 2026-06-27 — v19.0 archived; next milestone (v20.0+) should consume `.planning/audit/BACKLOG.md`
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-27 — Milestone v20.0 started
 
 ## Performance Metrics
 

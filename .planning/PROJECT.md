@@ -8,19 +8,24 @@ A production-ready LLM inference engine in Rust, optimized for single and multi-
 
 Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
 
-## Current Milestone: v19.0 Codebase Health Audit (Analysis-Only)
+## Current Milestone: v20.0 Codebase Remediation (BACKLOG.md-driven)
 
-**Goal:** 对 vllm-lite 整个 codebase 做多维度深度审计(架构/命名/注释文档/API+错误处理),产出优先级清单与具体修复建议;**本 milestone 不执行任何修改**,清单用于指导后续 milestone(v20.0+)的重构工作。
+**Goal:** 执行 v19.0 审计产出的修复 backlog,按 MIGRATION-ROADMAP.md 提议顺序执行 6 个子 phase(v20.1→v20.6),系统化恢复 codebase 健康度;**这是 v19.0 审计清单的修复 milestone**,所有改动基于 `.planning/audit/BACKLOG.md` 的 100 个 finding。
 
-**Status:** ✅ SHIPPED 2026-06-27 — 23/23 requirements covered, audit passed, 100 findings consolidated
+**Target features (按 phase 分组):**
 
-**Next Milestone Goals:** v20.0+ — selectively execute the prioritized backlog from `.planning/audit/BACKLOG.md` (5 P0 critical fixes, 38 P1 issues, 44 P2). Suggested phasing in `.planning/audit/MIGRATION-ROADMAP.md`.
+- **Phase 25 (v20.1): P0 关键修复** — 消除 `vllm-model → vllm-dist` 依赖 (feature-gate),`ModelError` struct → enum,8 个 non-object-safe trait 同步修
+- **Phase 26 (v20.2): 模块树恢复** — orphan 模块挂回,stage-info 文件改名,3 个未注册 test 文件迁出
+- **Phase 27 (v20.3): 错误处理标准化** — 13 个错误类型统一,`Result<_, String>` 消除,context propagation
+- **Phase 28 (v20.4): 文档覆盖率提升** — workspace 7.6% → ≥60%,`///` 补 776 个 pub item,121 个文件补 `//!`,README 修复
+- **Phase 29 (v20.5): 外部文档调和** — README/AGENTS.md 准确性,补 12+ 缺失 ADR
+- **Phase 30 (v20.6): 命名 + 收尾** — 7 P1 + 19 P2 命名,弃用卫生,注释清理
 
 ## Current State
 
-**Current Milestone:** v19.0 Codebase Health Audit (✅ shipped 2026-06-27)
-**Latest Shipped:** v19.0 — 23/23 requirements, audit passed, 0 source code modified (analysis-only)
-**Next:** v20.0+ — backlog from `.planning/audit/BACKLOG.md` (~190h of recommended work)
+**Current Milestone:** v20.0 Codebase Remediation (planning)
+**Latest Shipped:** v19.0 Codebase Health Audit (2026-06-27, 23/23 requirements, audit passed, 0 source code modified)
+**Status:** v19.0 收官;v20.0 修复 milestone 启动
 
 ### Phase 17 Achievements (v17.0 shipped)
 
@@ -117,53 +122,82 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 
 ### Active
 
-**v19.0: Codebase Health Audit (analysis-only, no code changes)**
+**v20.0: Codebase Remediation (BACKLOG.md-driven)**
 
-#### Architecture audit
+#### Phase 25 (v20.1): P0 关键修复
 
-- [ ] **ARCH-01**: Crate dependency graph audited (verify directional flow: traits ← core ← model/server/dist; no upward deps)
-- [ ] **ARCH-02**: Module boundary audit complete (each module has single, clear responsibility; no God modules)
-- [ ] **ARCH-03**: Circular dependency scan complete (cargo metadata + manual review)
-- [ ] **ARCH-04**: Layering consistency audit (e.g., scheduler doesn't import from server; model doesn't import from core)
-- [ ] **ARCH-05**: Test architecture audit (unit/integration/bench separation; shared testing crate hygiene)
+- [ ] **P0-01**: Eliminate `vllm-model → vllm-dist` dependency (feature-gate `vllm-dist`)
+- [ ] **P0-02**: Make `vllm-core → vllm-model` feature-gated
+- [ ] **P0-03**: Convert `ModelError` struct → enum (pattern-matchable)
+- [ ] **P0-04**: Make 8 non-object-safe traits object-safe (add `where Self: Sized` or split traits)
+- [ ] **P0-05**: Refactor `CudaGraphError` to use thiserror (currently hand-rolled Display/Error)
 
-#### Naming audit
+#### Phase 26 (v20.2): 模块树恢复
 
-- [ ] **NAME-01**: File naming audit complete (identify casually-named files like `17_*.rs` stage-info-named files; document each finding)
-- [ ] **NAME-02**: Type/struct/enum naming consistency audit (PascalCase, descriptive, no redundant suffixes)
-- [ ] **NAME-03**: Function/method naming audit (snake_case, action verbs, consistent prefix patterns)
-- [ ] **NAME-04**: Variable naming audit (descriptive, no single-letter except indices; consistent naming for similar concepts)
-- [ ] **NAME-05**: Module name audit (matches file name; consistent depth)
+- [ ] **MT-01**: Wire `kv_cache_fp8.rs` into module tree (currently orphan, 289 LOC unreachable)
+- [ ] **MT-02**: Wire `debug.rs` into module tree (currently orphan, 175 LOC unreachable)
+- [ ] **MT-03**: Rename `engine_v18_wiring.rs` → `engine_wiring.rs` (stage-info file)
+- [ ] **MT-04**: Migrate `qwen3/model_tests.rs` from `src/` → `tests/`
+- [ ] **MT-05**: Migrate `qwen3_5/model_tests.rs` from `src/` → `tests/`
+- [ ] **MT-06**: Migrate `qwen3_5/speculative_tests.rs` from `src/` → `tests/`
+- [ ] **MT-07**: Decide and resolve fate of `vllm-dist` (~1,600 LOC unused) — feature-gate per v20.1
 
-#### Comments + documentation audit
+#### Phase 27 (v20.3): 错误处理标准化
 
-- [ ] **DOCS-01**: Doc-comment coverage measured for public API (target: ≥80% on `pub` items)
-- [ ] **DOCS-02**: Module-level documentation audit (each module has `//!` or top-of-file context)
-- [ ] **DOCS-03**: Stale comment / TODO audit (identify comments referencing old code, dead TODOs, misleading docstrings)
-- [ ] **DOCS-04**: External documentation audit (root README, AGENTS.md, .planning docs accuracy against current codebase)
-- [ ] **DOCS-05**: Architecture-decision records (ADRs) — identify documented rationale vs. tribal knowledge
+- [ ] **ERR-01**: Eliminate 10 `Result<_, String>` anti-patterns (use proper error types)
+- [ ] **ERR-02**: Convert `CudaGraphError` to thiserror enum (P0-05 redux for clarity)
+- [ ] **ERR-03**: Refactor 25+ mutex-poison `.expect()` calls (use `.context()` or convert to Result)
+- [ ] **ERR-04**: Add missing `From` impls for cross-crate error conversion
+- [ ] **ERR-05**: Add `EngineError::Timeout`, `Cancelled`, `ResourceExhausted`, `BackendUnavailable` variants
+- [ ] **ERR-06**: Adopt `anyhow` for top-level server error reporting
+- [ ] **ERR-07**: Add `.context()` to error propagation paths losing information
 
-#### API + error handling audit
+#### Phase 28 (v20.4): 文档覆盖率提升
 
-- [ ] **API-01**: Public API surface consistency (function signatures, return types, builder patterns)
-- [ ] **API-02**: Error type audit (thiserror usage, error variants coverage, error message quality)
-- [ ] **API-03**: Error ergonomics audit (Result types, error context propagation, `From` conversions)
-- [ ] **API-04**: Trait design audit (object safety, async/sync consistency, default method usage)
-- [ ] **API-05**: Deprecation hygiene (deprecated items properly marked, migration paths documented)
+- [ ] **DOC-01**: Raise workspace doc coverage 7.6% → ≥60%
+- [ ] **DOC-02**: Add `///` doc comments to 776 undocumented `pub` items
+- [ ] **DOC-03**: Add `//!` module-level docs to 121 files lacking them
+- [ ] **DOC-04**: Fix README.md broken code example (`SchedulerEngine::new(config, 1024)` → 3-arg form)
+- [ ] **DOC-05**: Update README.md "Supported Architectures" list (currently lists 5-6 vs 10 actually registered)
+- [ ] **DOC-06**: Reconcile crate count in README.md (claims 7, Cargo.toml has 6)
+- [ ] **DOC-07**: Update AGENTS.md "Architecture" section to match current state
 
-#### Synthesis
+#### Phase 29 (v20.5): 外部文档调和 + ADRs
 
-- [ ] **SYNTH-01**: Cross-dimensional synthesis report complete (correlates findings across ARCH/NAME/DOCS/API)
-- [ ] **SYNTH-02**: Prioritized remediation backlog produced (P0/P1/P2 with impact, cost, suggested phase)
-- [ ] **SYNTH-03**: Suggested v20.0+ migration roadmap (which findings group into which future phase)
+- [ ] **EXT-01**: Reconcile README.md vs AGENTS.md vs Cargo.toml claims
+- [ ] **EXT-02**: Create ADR: "Why self-spec uses 1/8 layer count" (tribal knowledge)
+- [ ] **EXT-03**: Create ADR: "FP8 E4M3 format choice for KV cache"
+- [ ] **EXT-04**: Create ADR: "KV cache split strategy (prefix vs paged)"
+- [ ] **EXT-05**: Create ADR: "Speculative decoding architecture overview"
+- [ ] **EXT-06**: Create ADR: "Per-request draft routing (RTE-01..03)"
+- [ ] **EXT-07**: Create ADR: "Why `vllm-dist` is feature-gated (v20.1 decision)"
+- [ ] **EXT-08**: Create ADR: "FP8 quantizer orphan module decision (v20.2 outcome)"
+- [ ] **EXT-09**: Create ADR: "Cuda graph feature gating strategy"
+- [ ] **EXT-10**: Create ADR: "Cross-crate error type boundaries (v20.3 decision)"
+- [ ] **EXT-11**: Document 2+ additional ADRs from v15.0-v18.0 tribal knowledge
+- [ ] **EXT-12**: Update `.planning/PROJECT.md` Core Value section if drifted
 
-### Out of Scope (v19.0 — analysis only, no code changes)
+#### Phase 30 (v20.6): 命名 + 收尾
 
-- Any code modification (renaming, refactoring, re-architecture) — deferred to v20.0+
-- New features — not the goal of an audit milestone
-- Performance optimization — separate audit/optimization cycle
-- Test re-runs or CI changes — no code touched, so existing CI still validates
-- Migration execution — even renaming is deferred to a future milestone
+- [ ] **NAM-01**: Apply 7 P1 naming fixes (variable single-letter, redundant suffixes, etc.)
+- [ ] **NAM-02**: Apply 19 P2 naming consistency fixes
+- [ ] **DEP-01**: Add `#[deprecated]` markers to public API items removed or replaced in v20.0
+- [ ] **DEP-02**: Provide migration paths for all newly-deprecated items
+- [ ] **CMT-01**: Clean up stale comments referencing old code (per DOCS-03 audit)
+- [ ] **CMT-02**: Remove or update dead TODOs / FIXMEs discovered during v19.0 audit
+- [ ] **FINAL-01**: Verify all 287+ tests pass post-remediation
+- [ ] **FINAL-02**: Verify `cargo clippy --workspace -- -D warnings` clean
+- [ ] **FINAL-03**: Verify `cargo fmt --all --check` clean
+- [ ] **FINAL-04**: Update `.planning/PROJECT.md` and `.planning/STATE.md` with v20.0 outcomes
+
+### Out of Scope (v20.0)
+
+- New features — milestone is purely remediation; no new capabilities
+- Performance optimization — orthogonal to audit findings; separate cycle if needed
+- Real-model benchmarks — already deferred from v18.0
+- New architecture (e.g., adding a new crate) — out of scope; v20.0 only removes/fixes
+- Tree-based speculation — still too complex (carried from v18.0)
+- vllm-dist resurrection — feature-gated but not deleted; multi-node work is future
 
 ### Out of Scope (carried from earlier milestones)
 
@@ -172,6 +206,25 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 - Speculative decoding for prefill — compute-bound, only decode
 - Dynamic model switching mid-request — complex state management
 - Draft model retraining/fine-tuning — out of engine scope
+
+## v20.0 Replaces (Deferred Then Promoted) — now active
+
+The v19.0 audit identified 100 findings (5 P0 + 38 P1 + 44 P2 + 13 P3). v20.0 executes the remediation backlog in 6 sub-phases per `.planning/audit/MIGRATION-ROADMAP.md`:
+
+| Sub-phase | Focus | Estimate |
+|-----------|-------|---------:|
+| 25 (v20.1) | P0 critical fixes + object-safety + vllm-dist feature-gate | ~22h |
+| 26 (v20.2) | Module tree restoration + orphan files | ~12h |
+| 27 (v20.3) | Error handling standardization | ~30h |
+| 28 (v20.4) | Doc coverage 7.6% → ≥60% | ~40h |
+| 29 (v20.5) | External docs reconciliation + ADRs | ~16h |
+| 30 (v20.6) | Naming + deprecation hygiene + final verification | ~20h |
+| **Total** | | **~190h** |
+
+Key v20.0 decisions (from user input):
+- **vllm-dist fate**: feature-gate (not remove, not retain)
+- **Object-safety + ModelError**: fixed together in v20.1 (both P0)
+- **Scope**: all 6 sub-phases within single v20.0 milestone
 
 ## v18.0 Replaces (Deferred Then Promoted) — now historical
 
@@ -193,24 +246,23 @@ The following v17 deferred items shipped in v18.0:
 
 ## Context
 
-v18.0 shipped 14/14 requirements satisfied (5 phases, 2026-06-27):
+v19.0 audit shipped 23/23 requirements, 0 source code modified (analysis-only). 100 findings consolidated:
 
-- DraftModelRegistry (loader-agnostic), MemoryBudget, refcount lifecycle
-- Per-request routing, fallback semantics (silent FALL-01, sticky FALL-02)
-- Phase 19 gap closure: resolver wired into step_speculative_inner, HTTP exporter, server config, ServerDraftLoader
-- 287+ tests, 16 commits, audit passed
+- **5 P0** (must fix): layering violations, `ModelError` struct, non-object-safe traits
+- **38 P1** (should fix): orphan modules, stage-info files, doc coverage 7.6%, error ergonomics
+- **44 P2** + **13 P3** (optional)
 
-v19.0 build-on:
+Full backlog: `.planning/audit/BACKLOG.md` — proposed phasing: `.planning/audit/MIGRATION-ROADMAP.md`
 
-- 7 crates have grown over 18 milestones; accumulated technical debt likely exists in:
-  - File naming (user-reported: some files named with stage info like `17_*.rs`)
-  - Module boundaries (speculative/, scheduler/, kv_cache/, paged_tensor/ all grew organically)
-  - Documentation drift (some doc-comments may reference pre-v15 APIs)
-  - Error handling consistency (each subsystem may have its own error type)
-- Audit is non-destructive: findings become input to v20.0+ refactoring phases
+v20.0 build-on:
+
+- Direct execution of prioritized audit findings, organized into 6 sub-phases
+- Backward-compat: existing public API must remain stable (with `#[deprecated]` for removed items)
+- All 287+ existing tests must remain green
+- v18.0 speculative decoding functionality preserved
 
 Tech stack: Rust + Candle, multi-GPU CUDA support, Kubernetes, gRPC.
-Codebase state (v18.0 end): 7 crates; speculative decoding complete; draft registry + memory budget live in core; HTTP server with OpenAI-compatible API + v18.0 metrics exposed.
+Codebase state (v19.0 end): 7 crates; speculative decoding complete (v18.0); draft registry + memory budget live in core; HTTP server with OpenAI-compatible API; 100 remediation findings ready.
 
 ## Constraints
 
@@ -237,6 +289,9 @@ Codebase state (v18.0 end): 7 crates; speculative decoding complete; draft regis
 | VRAM budget strategy      | Load-time estimate + runtime check; refuse on over | Implemented — v18.0         |
 | Audit-before-refactor     | Analyze codebase health before non-functional work | Implemented — v19.0         |
 | Analysis-only milestone   | Produce audit reports without code changes; backlog consumed by v20.0+ | Implemented — v19.0 |
+| vllm-dist feature-gate    | Keep code, exclude from default build; enable for multi-node | Planned — v20.0              |
+| Object-safety co-fix      | Fix `ModelError` + non-object-safe traits together in v20.1 | Planned — v20.0              |
+| Single big v20.0 milestone | All 6 sub-phases in one milestone (vs splitting v20.1-v20.6) | Planned — v20.0              |
 
 ## Evolution
 
@@ -257,4 +312,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-27 — v19.0 audit milestone started; v18.0 archived (14/14 requirements shipped, 5 phases)*
+*Last updated: 2026-06-27 — v20.0 remediation milestone started; v19.0 archived (100 findings consolidated, 6 proposed sub-phases)*
