@@ -248,13 +248,18 @@ cargo run -p vllm-server -- --log-dir ./logs
 
 <div align="center">
 
-| 模型        | 架构                     | 状态  | 显存需求 |
-| ----------- | ------------------------ | :---: | -------: |
-| **Qwen3**   | GQA + RoPE               |  ✅   |   1-4 GB |
-| **Llama**   | GQA + RMSNorm            |  ✅   |   2-8 GB |
-| **Mistral** | Sliding Window + GQA     |  ✅   |   2-8 GB |
-| **Gemma4**  | Hybrid Attention + GeGLU |  ✅   |   2-8 GB |
-| **Mixtral** | Sparse MoE (8 experts)   |  ✅   |  8-16 GB |
+| 模型              | 架构                       | 状态      | 显存需求  |
+| ----------------- | -------------------------- | :-------: | --------: |
+| **Llama**         | GQA + RMSNorm              |    ✅     |   2-8 GB |
+| **Llama 4**       | MoE + Hybrid Attention     | 🟡 stub   |  16-64 GB |
+| **Mistral**       | Sliding Window + GQA       |    ✅     |   2-8 GB |
+| **Mistral Small** | Grouped Query + Sliding    | 🟡 stub   |   4-8 GB |
+| **Qwen3**         | GQA + MLA + RoPE           |    ✅     |   1-4 GB |
+| **Qwen3.5**       | Mamba SSM Hybrid           |    ✅     |   1-4 GB |
+| **Gemma3**        | GQA + GeLU                 | 🟡 stub   |   2-4 GB |
+| **Gemma4**        | Hybrid Attention + GeGLU   |    ✅     |   2-8 GB |
+| **Mixtral**       | Sparse MoE (8 experts)     |    ✅     |  8-16 GB |
+| **Phi-4**         | GQA + RoPE                 | 🟡 stub   |   4-8 GB |
 
 </div>
 
@@ -262,9 +267,15 @@ cargo run -p vllm-server -- --log-dir ./logs
   <summary>📋 查看模型详情</summary>
 
 - ✅ **Qwen3**: 支持 0.5B 到 110B 参数模型
+- ✅ **Qwen3.5**: Mamba SSM Hybrid 架构
 - ✅ **Llama**: 支持 Llama 2/3 系列
+- ✅ **Llama 4**: 已注册架构 (stub 实现,等待权重层)
 - ✅ **Mistral**: 支持 Mistral 7B 和 Mixtral 8x7B
+- ✅ **Mistral Small**: 已注册架构 (stub 实现)
+- ✅ **Gemma3**: 已注册架构 (stub 实现)
 - ✅ **Gemma4**: Google Gemma 4 系列
+- ✅ **Mixtral**: Sparse MoE (8 experts)
+- 🟡 **Phi-4**: 已注册架构 (stub 实现)
 - ⏳ **更多模型**: 持续添加中...
 
 </details>
@@ -446,10 +457,13 @@ curl -X POST http://localhost:8000/v1/completions \
 ### 使用不同的调度策略
 
 ```rust
+use std::sync::Arc;
 use vllm_core::scheduler::{SchedulerEngine, FcfsPolicy, SjfPolicy, PriorityPolicy};
+use vllm_core::metrics::EnhancedMetricsCollector;
 
 // 默认使用 FCFS
-let mut engine = SchedulerEngine::new(config, 1024);
+let metrics = Arc::new(EnhancedMetricsCollector::new());
+let mut engine = SchedulerEngine::new(config, 1024, metrics);
 
 // 切换到 SJF (最短作业优先)
 engine.set_policy(Box::new(SjfPolicy::default()));
@@ -464,7 +478,7 @@ engine.set_policy(Box::new(PriorityPolicy::default()));
 
 ```text
 vllm-lite/
-├── Cargo.toml              # Workspace (7 crates)
+├── Cargo.toml              # Workspace (6 crates)
 ├── justfile                # 构建自动化
 ├── crates/
 │   ├── traits/             # 接口定义 (ModelBackend, Batch, Kernel traits)
