@@ -109,23 +109,17 @@ impl ModelBackend for StubBackend {
 /// `LoadFailed` if the id isn't in the map.
 pub struct MapLoader {
     pub backends: Mutex<HashMap<DraftId, Box<dyn ModelBackend>>>,
-    pub fail_on: Mutex<Vec<DraftId>>,
 }
 
 impl MapLoader {
     pub fn new() -> Self {
         Self {
             backends: Mutex::new(HashMap::new()),
-            fail_on: Mutex::new(vec![]),
         }
     }
 
     pub fn insert(&self, id: DraftId, backend: Box<dyn ModelBackend>) {
         self.backends.lock().unwrap().insert(id, backend);
-    }
-
-    pub fn will_fail(&self, id: DraftId) {
-        self.fail_on.lock().unwrap().push(id);
     }
 }
 
@@ -137,11 +131,6 @@ impl Default for MapLoader {
 
 impl DraftLoader for MapLoader {
     fn load(&self, id: &DraftId) -> std::result::Result<Box<dyn ModelBackend>, DraftRegistryError> {
-        if self.fail_on.lock().unwrap().iter().any(|f| f == id) {
-            return Err(DraftRegistryError::LoadFailed(format!(
-                "stub loader configured to fail on {id}"
-            )));
-        }
         self.backends
             .lock()
             .unwrap()
