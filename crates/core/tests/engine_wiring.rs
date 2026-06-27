@@ -440,13 +440,10 @@ fn test_per_request_routing_different_draft_ids_yield_different_resolution_paths
 ///   (b) seq.degraded_draft == true on a subsequent get_sequence_mut
 ///   (c) no panic escaped
 ///
-/// `#[ignore]`d: `Engine::step()` in speculative mode currently hangs (the
-/// existing speculative.rs tests are also `#[ignore]`d for the same root
-/// cause). The test fully documents the intended end-to-end FALL-02 contract
-/// and will pass once step() is fixed. Run with:
-///     cargo test -- --ignored
+/// Root cause of the previously-`#[ignore]`d hang was a DashMap shard
+/// re-entry in `record_per_request_acceptance` (entry guard held across a
+/// `len()` call). Fixed in v22.0 (OPS-02).
 #[test]
-#[ignore = "step() in spec mode hangs (pre-existing); enable when step() is fixed"]
 fn test_fall02_engine_step_catches_runtime_error() {
     let target = StubBackend::new("target");
     let self_spec = StubBackend::new("self-spec");
@@ -504,13 +501,10 @@ fn test_fall02_engine_step_catches_runtime_error() {
 /// Engine::step() and each resolves to its own backend. Verified via
 /// forward() call counts on the per-id CountingBackend instances.
 ///
-/// `#[ignore]`d: `Engine::step()` in speculative mode currently hangs (the
-/// existing speculative.rs tests are also `#[ignore]`d for the same root
-/// cause). The test fully documents the intended end-to-end mixed-routing
-/// contract and will pass once step() is fixed. Run with:
-///     cargo test -- --ignored
+/// Root cause of the previously-`#[ignore]`d hang was a DashMap shard
+/// re-entry in `record_per_request_acceptance` (entry guard held across a
+/// `len()` call). Fixed in v22.0 (OPS-02).
 #[test]
-#[ignore = "step() in spec mode hangs (pre-existing); enable when step() is fixed"]
 fn test_engine_step_routes_to_correct_draft_backend() {
     let target = StubBackend::new("target");
     let self_spec = StubBackend::new("self-spec");
@@ -570,11 +564,11 @@ fn test_engine_step_routes_to_correct_draft_backend() {
 
 // ─────────────────── WR-02 (light): resolver routing via Engine ────────
 
-/// Lighter version of WR-02 that exercises the routing path without
-/// `engine.step()` (which hangs in spec mode — see the `#[ignore]` tests
-/// above). Verifies that the Engine's `set_draft_loader` + resolver correctly
-/// returns distinct backends for distinct draft ids, which is the same
-/// routing logic that `generate_per_seq_drafts` invokes at step time.
+/// Lighter-weight companion to `test_engine_step_routes_to_correct_draft_backend`.
+/// Verifies that the Engine's `set_draft_loader` + resolver correctly
+/// returns distinct backends for distinct draft ids — the same routing
+/// logic that `generate_per_seq_drafts` invokes at step time, but
+/// exercised directly against the resolver without the full step pipeline.
 #[test]
 fn test_engine_resolver_routes_to_distinct_backends_per_id() {
     let target = StubBackend::new("target");
