@@ -41,7 +41,9 @@ impl Architecture for Gemma4Architecture {
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
-        matches!(model_type.to_lowercase().as_str(), "gemma2" | "gemma4")
+        // PERF-02: avoid per-load `String` allocation from
+        // `to_lowercase()`; use byte-wise case-insensitive compare.
+        model_type.eq_ignore_ascii_case("gemma2") || model_type.eq_ignore_ascii_case("gemma4")
     }
 
     fn capabilities(&self) -> ArchCapabilities {
