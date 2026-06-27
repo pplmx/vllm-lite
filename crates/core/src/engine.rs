@@ -1037,10 +1037,4 @@ mod tests {
         engine.force_unload_draft(&DraftId("a".into())).unwrap();
         assert!(!engine.draft_registry().is_loaded(&DraftId("a".into())));
     }
-
-    #[test]
-    fn test_empty_beam_list_error_message() {
-        let err = crate::error::EngineError::EmptyBeamList;
-        assert_eq!(err.to_string(), "beam search produced no candidate beams");
-    }
 }

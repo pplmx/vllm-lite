@@ -174,6 +174,12 @@ mod tests {
     }
 
     #[test]
+    fn test_empty_beam_list_error_message() {
+        let err = EngineError::EmptyBeamList;
+        assert_eq!(err.to_string(), "beam search produced no candidate beams");
+    }
+
+    #[test]
     fn test_with_request_id_returns_self() {
         let err = EngineError::InvalidRequest("test".into()).with_request_id(42);
         // No variant carries request_id yet — this is a stable no-op hook.
