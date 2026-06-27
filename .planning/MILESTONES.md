@@ -191,4 +191,43 @@
 
 ---
 
+## v20.0 Codebase Remediation
+
+**Shipped:** 2026-06-27
+**Phases:** 25-30 | **Plans:** 39 | **Tasks:** 48 requirements
+
+### Key Accomplishments
+
+1. **P0 architecture/API fixes (Phase 25)** — Eliminated `vllm-model → vllm-dist` edge (feature-gated); confirmed `vllm-core → vllm-model` is `cuda-graph` feature-gated; converted `ModelError` struct → 5-variant `#[non_exhaustive]` enum; converted `CudaGraphError` to `#[derive(thiserror::Error)]`; added 8 compile-only object-safety tests
+2. **Module tree restoration (Phase 26)** — Wired orphan `kv_cache_fp8.rs` (289 LOC) + `debug.rs` (175 LOC); renamed `engine_v18_wiring.rs` → `engine_wiring.rs`; migrated 3 test files from `src/` to `tests/`; workspace `default-members` excludes `vllm-dist` from default build
+3. **Error handling standardization (Phase 27)** — 13 error enums all `#[derive(thiserror::Error)]`; zero `Result<_, String>` in production; 8 mutex `.expect()` + 13 poisoned `.unwrap()` → graceful recovery; 4 new `EngineError` variants (`Timeout`/`Cancelled`/`ResourceExhausted`/`BackendUnavailable`); cross-crate `From` impls; `vllm` binary uses `anyhow::Result`
+4. **Documentation coverage push (Phase 28)** — 1,299 `///` + 125 `//!` across 212 files. Workspace pub coverage 19.5% → 97.8%, module coverage 48.0% → 99.6%. Per-crate all ≥80% pub (traits 80, dist 84.4, server 94.8, testing 100, model 100, core 99.8). Fixed README example + architecture table + crate count; reconciled AGENTS.md Architecture section
+5. **External docs + 12 ADRs (Phase 29)** — Created ADR-003..014 capturing tribal knowledge from v1.0-v20.0. ADR-003: self-spec 1/8 ratio (v16); ADR-004: FP8 E4M3 (v15); ADR-005: KV cache split (v1); ADR-006: speculative architecture (v16); ADR-007: per-request draft routing (v18); ADR-008: vllm-dist feature-gate (v20.1); ADR-009: FP8 orphan decision (v20.2); ADR-010: CUDA graph gating (v10.1); ADR-011: cross-crate error boundaries (v20.3); ADR-012: continuous batching (v1); ADR-013: paged KV cache (v1); ADR-014: architecture registry (v17)
+6. **Naming + final polish (Phase 30)** — NAM-01 P1: 6 `data` variable renames, `EmbeddingData` → `Embedding` with `#[deprecated]` alias. NAM-02 P2: AGENTS.md additions (verb policy, suffix conventions, tensor-math single-letter exemption, test-file location). DEP-01/02: 1 deprecation marker. CMT-01: 3 stale comments resolved. Fixed 3 pre-existing kv_cache_fp8 clippy errors. cargo fmt --all auto-formatted 133 files
+
+### Stats
+
+- Commits: 32 (Phase 25 onward)
+- Files changed: 416
+- Insertions: 4,366 lines
+- Deletions: 1,079 lines
+- Test count: 287+ → **1144** (4× growth, 0 regressions)
+- Doc coverage: 19.5% → **97.8%** pub / 48.0% → **99.6%** module
+- ADRs: **12 new** (ADR-003..014)
+- Requirements: 48/48 covered (100%)
+- Timeline: 2026-06-27 (single day, autonomous)
+
+### Tech Debt (deferred to v20.7+)
+
+- `Engine::step()` speculative-mode hang (pre-existing bug)
+- Real-model benchmark (vs stub backend)
+- 44 P2 issues + 13 P3 informational findings (out of v20.0 scope)
+- `vllm-dist` resurrection (multi-node work — feature-gated, not removed)
+- 5 pre-existing cargo doc broken-link warnings
+- 4 `Result<_, String>` in vllm_server test fixtures (production clean)
+- 1 actionable TODO in gguf parser
+- RFU-02 / RFU-03 / ARF-01..03 / OPS-01..03 (carry-over backlog)
+
+---
+
 *Full milestone archives: .planning/milestones/*

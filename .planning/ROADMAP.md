@@ -6,7 +6,7 @@
 - ✅ **v17.0 Production Speculative Decoding** — Phases 17.1-17.4 (shipped 2026-05-13)
 - ✅ **v18.0 Multi-Model Speculative Decoding** — Phases 18.1-18.4 + Phase 19 gap closure (shipped 2026-06-27)
 - ✅ **v19.0 Codebase Health Audit** — Phases 20-24 (shipped 2026-06-27; analysis-only, no code changes; see `.planning/audit/` for deliverables)
-- 🚧 **v20.0 Codebase Remediation** — Phases 25-30 (in progress; BACKLOG.md-driven; 6 sub-phases v20.1-v20.6)
+- ✅ **v20.0 Codebase Remediation** — Phases 25-30 (shipped 2026-06-27; BACKLOG.md-driven; 6 sub-phases v20.1-v20.6; 48/48 requirements; see `.planning/milestones/v20.0-ROADMAP.md`)
 
 ## Phases
 
@@ -245,7 +245,7 @@ Plans:
 
 ---
 
-### 🚧 v20.0 Codebase Remediation (Phases 25-30) — IN PROGRESS
+### ✅ v20.0 Codebase Remediation (Phases 25-30) — SHIPPED 2026-06-27
 
 **Milestone Goal:** 执行 v19.0 审计产出的修复 backlog,按 MIGRATION-ROADMAP.md 提议顺序执行 6 个子 phase(v20.1→v20.6),系统化恢复 codebase 健康度。**这是 v19.0 审计清单的修复 milestone**,所有改动基于 `.planning/audit/BACKLOG.md` 的 100 个 finding。
 
