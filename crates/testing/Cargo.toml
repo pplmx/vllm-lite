@@ -6,14 +6,17 @@ edition.workspace = true
 [dependencies]
 vllm-traits = { path = "../traits", features = ["candle"] }
 vllm-core = { path = "../core" }
+vllm-dist = { path = "../dist", optional = true }
 candle-core = "0.10.2"
 tokio = { version = "1", features = ["sync"] }
 rand = "0.10"
 
 [dev-dependencies]
+vllm-model = { path = "../model" }
 criterion = "0.8"
 proptest = "1.11"
 
 [features]
 default = []
 cuda = ["candle-core/cuda"]
+multi-node = ["dep:vllm-dist"]

@@ -6,7 +6,7 @@ rust-version.workspace = true
 
 [dependencies]
 vllm-traits = { path = "../traits", features = ["candle"] }
-vllm-dist = { path = "../dist" }
+vllm-dist = { path = "../dist", optional = true }
 rand = "0.10"
 candle-core = "0.10.2"
 candle-nn = "0.10.2"
@@ -32,4 +32,5 @@ criterion = "0.8"
 default = []
 cuda = ["candle-core/cuda", "candle-nn/cuda"]
 gguf = ["dep:gguf"]
+multi-node = ["dep:vllm-dist"]
 full = ["cuda", "gguf"]

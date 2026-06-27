@@ -5,6 +5,7 @@ use crate::qwen3_config::Qwen3Config;
 use candle_core::{Device, Result as CandleResult, Tensor};
 use candle_nn::Linear;
 use std::collections::HashMap;
+#[cfg(feature = "multi-node")]
 use vllm_dist::TensorParallelConfig;
 
 use super::block::{block_from_weights, new_block};
@@ -20,6 +21,7 @@ impl Qwen3Model {
         .map(|m| m.with_embed_through_layers(true))
     }
 
+    #[cfg(feature = "multi-node")]
     pub fn new_with_tp(
         config: Qwen3Config,
         tp_config: Option<TensorParallelConfig>,
