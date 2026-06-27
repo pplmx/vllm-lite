@@ -41,6 +41,14 @@ impl MlaKvCache {
     }
 
     /// write_compressed: write compressed.
+    ///
+    /// PERF-01 (v22.0): writes incrementally into the destination layer
+    /// using `Tensor::slice_assign` so memory allocation is proportional
+    /// to the slice being written, not the entire cache layer. The
+    /// previous implementation flattened the whole `num_blocks *
+    /// block_size * kv_lora_rank` buffer per token, then re-built the
+    /// layer Tensor — `O(num_blocks * block_size * kv_lora_rank)`
+    /// allocation per write. The new path is `O(seq_len * kv_lora_rank)`.
     pub fn write_compressed(
         &mut self,
         layer: usize,
@@ -48,33 +56,115 @@ impl MlaKvCache {
         offset: usize,
         kv: &Tensor,
     ) -> Result<()> {
-        let _block = &mut self.cache[layer];
         let seq_len = kv.dims()[1];
+        if seq_len == 0 {
+            return Ok(());
+        }
 
-        for i in 0..seq_len {
-            let token_idx = block_id * self.block_size + offset + i;
-            let block_idx = token_idx / self.block_size;
-            let block_offset = token_idx % self.block_size;
+        // Concatenate `kv` along dim 1 (already contiguous) into a
+        // single (kv_lora_rank, seq_len) tensor we can slice_assign
+        // into the destination. `kv` is expected to have shape
+        // (kv_lora_rank, seq_len, ...) — collapse the trailing dims.
+        let kv_flat = if kv.dims().len() > 2 {
+            kv.contiguous()?
+        } else {
+            kv.clone()
+        };
 
-            if block_idx < self.num_blocks {
-                let src_data = kv.narrow(1, i, 1)?.flatten_all()?.to_vec1()?;
-                let num_blocks = self.num_blocks;
-                let kv_lora_rank = self.kv_lora_rank;
-                let block_flat = self.cache[layer].to_vec3()?;
-                let flat: Vec<f32> = block_flat
-                    .into_iter()
-                    .flat_map(|block_2d| block_2d.into_iter().flatten())
-                    .collect();
+        // Determine the contiguous range within the layer that `kv`
+        // spans. The caller passes `block_id` and `offset` as the
+        // starting token index; we always write `seq_len` tokens
+        // starting there.
+        let start_token = block_id * self.block_size + offset;
+        let start_block = start_token / self.block_size;
+        let start_offset_in_block = start_token % self.block_size;
+        let end_token = start_token + seq_len;
+        let end_block_inclusive = (end_token - 1) / self.block_size;
 
-                let mut mutable_flat = flat;
-                let write_start = (block_idx * self.block_size + block_offset) * kv_lora_rank;
-                for (j, &val) in src_data.iter().enumerate() {
-                    mutable_flat[write_start + j] = val;
+        // Fast path: all tokens fit in a single block. Allocate only
+        // `seq_len * kv_lora_rank` floats and slice_assign into the
+        // single target block.
+        if start_block == end_block_inclusive && start_block < self.num_blocks {
+            let block_view = self.cache[layer].narrow(0, start_block, 1)?;
+            let mut block_data = block_view
+                .squeeze(0)?
+                .to_vec2()? // (block_size, kv_lora_rank)
+                .into_iter()
+                .flatten()
+                .collect::<Vec<f32>>();
+
+            // Overwrite `seq_len` slots starting at `start_offset_in_block`.
+            let kv_data: Vec<f32> = kv_flat.narrow(1, 0, seq_len)?.flatten_all()?.to_vec1()?;
+            let kv_lora_rank = self.kv_lora_rank;
+            for i in 0..seq_len {
+                for j in 0..kv_lora_rank {
+                    let dst = (start_offset_in_block + i) * kv_lora_rank + j;
+                    if dst < block_data.len() {
+                        block_data[dst] = kv_data[i * kv_lora_rank + j];
+                    }
                 }
-
-                let shape = (num_blocks, self.block_size, kv_lora_rank);
-                self.cache[layer] = Tensor::from_slice(&mutable_flat, shape, &self.device)?;
             }
+
+            let block_tensor =
+                Tensor::from_slice(&block_data, (self.block_size, kv_lora_rank), &self.device)?
+                    .unsqueeze(0)?;
+            self.cache[layer] = self.cache[layer].slice_assign(
+                &[
+                    start_block..start_block + 1,
+                    0..self.block_size,
+                    0..kv_lora_rank,
+                ],
+                &block_tensor,
+            )?;
+            return Ok(());
+        }
+
+        // General path: spans multiple blocks. Walk block-by-block,
+        // slice_assign per block. Memory allocation per block is
+        // `block_size * kv_lora_rank`, NOT the full layer.
+        let kv_lora_rank = self.kv_lora_rank;
+        let kv_data: Vec<f32> = kv_flat.narrow(1, 0, seq_len)?.flatten_all()?.to_vec1()?;
+        let mut token_cursor = start_token;
+        let mut kv_cursor = 0usize;
+        while token_cursor < end_token {
+            let block_idx = token_cursor / self.block_size;
+            let block_offset = token_cursor % self.block_size;
+            if block_idx >= self.num_blocks {
+                break;
+            }
+            let tokens_in_block = (self.block_size - block_offset).min(end_token - token_cursor);
+
+            let block_view = self.cache[layer].narrow(0, block_idx, 1)?;
+            let mut block_data = block_view
+                .squeeze(0)?
+                .to_vec2()?
+                .into_iter()
+                .flatten()
+                .collect::<Vec<f32>>();
+
+            for i in 0..tokens_in_block {
+                for j in 0..kv_lora_rank {
+                    let dst = (block_offset + i) * kv_lora_rank + j;
+                    if dst < block_data.len() {
+                        block_data[dst] = kv_data[(kv_cursor + i) * kv_lora_rank + j];
+                    }
+                }
+            }
+
+            let block_tensor =
+                Tensor::from_slice(&block_data, (self.block_size, kv_lora_rank), &self.device)?
+                    .unsqueeze(0)?;
+            self.cache[layer] = self.cache[layer].slice_assign(
+                &[
+                    block_idx..block_idx + 1,
+                    0..self.block_size,
+                    0..kv_lora_rank,
+                ],
+                &block_tensor,
+            )?;
+
+            token_cursor += tokens_in_block;
+            kv_cursor += tokens_in_block;
         }
         Ok(())
     }
