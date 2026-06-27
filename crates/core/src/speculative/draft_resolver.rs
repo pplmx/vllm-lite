@@ -179,13 +179,6 @@ impl DraftResolver {
         &self.registry
     }
 
-    /// Replace the loader used for lazy draft loading. Preserves the registry
-    /// and self-spec backend. Used by the server after constructing the
-    /// Engine, when the real model loader becomes available.
-    pub fn set_loader(&mut self, loader: Arc<dyn DraftLoader>) {
-        self.loader = loader;
-    }
-
     /// Access the self-spec backend, if any. Returns the Arc clone so callers
     /// (e.g., the Engine) can keep a reference after the resolver is rebuilt.
     pub fn self_spec(&self) -> Option<Arc<Mutex<Box<dyn ModelBackend>>>> {
