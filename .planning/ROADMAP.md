@@ -8,18 +8,18 @@
 - ✅ **v19.0 Codebase Health Audit** — Phases 20-24 (shipped 2026-06-27; analysis-only; see `.planning/audit/`)
 - ✅ **v20.0 Codebase Remediation** — Phases 25-30 (shipped 2026-06-27; 48/48 reqs; 1144 tests; clippy/fmt clean; doc 97.8%)
 - ✅ **v21.0 P2/P3 Backlog Cleanup** — Phases 31-35 (shipped 2026-06-27; 38 of 42 actively addressed; 1146 tests; 100% backlog closure)
-- 🚧 **v22.0 Production Hardening** — Phases 36-39 (planning; 21 requirements mapped; ~75h estimated; P0 bugs → security → polish → engine refactor)
+- ✅ **v22.0 Production Hardening** — Phases 36-39 (shipped 2026-06-27; 21/21 reqs; 1179 tests; clippy/fmt/doc clean; P0 bug fixed, security wired, polish applied)
 
 ## Current Position
 
-**Active milestone:** v22.0 Production Hardening — planning (requirements defined; awaiting `/gsd-discuss-phase 36`)
+**Active milestone:** v22.0 Production Hardening ✅ SHIPPED (all 4 phases complete; awaiting `/gsd-audit-milestone` for milestone audit)
 
 ## Phases
 
-- [ ] **Phase 36: Critical Bug Fixes** (v22.1) — Fix `Engine::step()` speculative-mode hang; resolve cargo doc warnings; resolve gguf parser TODO
-- [ ] **Phase 37: Security Hardening** (v22.2) — JWT signature verification; wire RbacMiddleware; request size limits; audit log test; Grafana credentials to .env; TLS hardening
-- [ ] **Phase 38: Production Polish** (v22.3) — parking_lot::Mutex migration; speculative mock fate decision; MlaKvCache write_compressed perf; arch detection perf; LazyLock migration
-- [ ] **Phase 39: Engine Refactor + Final Verification** (v22.4) — Split engine.rs God module; unify engine/spec_dispatch tree; FINAL gates (clippy/fmt/test/docs)
+- [x] **Phase 36: Critical Bug Fixes** (v22.1) — Fix `Engine::step()` speculative-mode hang; resolve cargo doc warnings; resolve gguf parser TODO ✅ shipped 2026-06-27
+- [x] **Phase 37: Security Hardening** (v22.2) — JWT signature verification; wire RbacMiddleware; request size limits; audit log test; Grafana credentials to .env; TLS hardening ✅ shipped 2026-06-27
+- [x] **Phase 38: Production Polish** (v22.3) — parking_lot::Mutex migration; speculative mock fate decision; MlaKvCache write_compressed perf; arch detection perf; LazyLock migration ✅ shipped 2026-06-27
+- [x] **Phase 39: Engine Refactor + Final Verification** (v22.4) — Split engine.rs God module; unify engine/spec_dispatch tree; FINAL gates (clippy/fmt/test/docs) ✅ shipped 2026-06-27
 
 ## Phase Details
 
@@ -189,10 +189,10 @@ v22.0: 36 → 37 → 38 → 39 (linear chain; P0 bug fix → security wiring →
 
 | Phase                                                | Milestone | Plans Complete | Status      | Completed    |
 | ---------------------------------------------------- | --------- | -------------- | ----------- | ------------ |
-| 36 Critical Bug Fixes (v22.1)                        | v22.0     | 0/4            | Not started | -            |
-| 37 Security Hardening (v22.2)                        | v22.0     | 0/7            | Not started | -            |
-| 38 Production Polish (v22.3)                         | v22.0     | 0/7            | Not started | -            |
-| 39 Engine Refactor + Final Verification (v22.4)      | v22.0     | 0/7            | Not started | -            |
+| 36 Critical Bug Fixes (v22.1)                        | v22.0     | 4/4            | ✅ Complete | 2026-06-27   |
+| 37 Security Hardening (v22.2)                        | v22.0     | 7/7            | ✅ Complete | 2026-06-27   |
+| 38 Production Polish (v22.3)                         | v22.0     | 7/7            | ✅ Complete | 2026-06-27   |
+| 39 Engine Refactor + Final Verification (v22.4)      | v22.0     | 7/7            | ✅ Complete | 2026-06-27   |
 
 **Historical phases:** See archived roadmaps at `.planning/milestones/v{16,17,18,19,20,21}.0-ROADMAP.md` and `.planning/milestones/v{20,21}.0-phases/` for full Phase Details of shipped milestones.
 

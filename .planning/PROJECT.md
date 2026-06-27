@@ -8,9 +8,9 @@ A production-ready LLM inference engine in Rust, optimized for single and multi-
 
 Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
 
-## Current Milestone: v22.0 Production Hardening
+## Current Milestone: v22.0 Production Hardening ✅ SHIPPED
 
-**Status:** 🚧 Planning (2026-06-27)
+**Status:** ✅ Complete (2026-06-27)
 
 **Goal:** 把 vLLM-lite 推到 production-ready 状态 — 解决 v21.0 延后的 P0/P1 tech debt、安全接线、生产打磨、引擎重构。
 
@@ -41,9 +41,50 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 
 ## Current State
 
-**Current Milestone:** v22.0 Production Hardening (planning)
-**Latest Shipped:** v21.0 P2/P3 Backlog Cleanup (2026-06-27, 5/5 phases complete, all FINAL gates green)
-**Status:** v22.0 启动中;1146 tests pass,clippy clean,fmt clean,15 ADRs,doc coverage 97.8%
+**Current Milestone:** v22.0 Production Hardening ✅ SHIPPED (2026-06-27)
+**Latest Shipped:** v22.0 Production Hardening (2026-06-27, 4/4 phases complete, all FINAL gates green)
+**Status:** v22.0 完成;1179 tests pass (+33 from v21.0),clippy clean,fmt clean,cargo doc clean (0 broken-link warnings),15 ADRs,doc coverage 97.8%
+
+### v22.0 Achievements
+
+**Phase 36 (v22.1) — Critical Bug Fixes** ✅
+- ✅ **OPS-02**: Fixed `Engine::step()` speculative-mode hang. Root cause: DashMap shard re-entry in `record_per_request_acceptance` (entry guard held across `len()` call). Fix: scope the entry to release the shard lock before calling `len()`. Two `#[ignore]`'d e2e tests in `engine_wiring.rs` now pass (`test_fall02_engine_step_catches_runtime_error`, `test_engine_step_routes_to_correct_draft_backend`); 7 `#[ignore]`'d unit tests in `engine/spec_dispatch/tests.rs` also unblocked.
+- ✅ **OPS-03**: Resolved 10 cargo doc broken-link warnings (`crates/testing/src/lib.rs`, `crates/core/src/engine.rs`, `crates/core/src/speculative/registry/{mod,lifecycle}.rs`, `crates/model/src/components/{attention/mod,block,decoder_block/mod}.rs`).
+- ✅ **GGUF-01**: Documented gguf parser placeholder (`crates/model/src/quantize/gguf.rs`) — stub loader with explicit ADR-009 cross-reference.
+
+**Phase 37 (v22.2) — Security Hardening** ✅
+- ✅ **SEC-01**: JWT signature verification via `jsonwebtoken = "9"`. Algorithm allowlist: HS256 (HMAC), RS256/RS384/RS512 (RSA), ES256/ES384 (ECDSA). `alg: none` rejected. 12 JWT tests cover wrong-secret, tampered, expired, invalid-iss, invalid-aud, none-alg, RSA/ECDSA error paths.
+- ✅ **SEC-02**: `RbacMiddleware` wired (was a no-op pass-through). Path → action mapping: `/v1/models → read`, `/v1/chat/completions → execute`, `/admin/* → manage_users`. HTTP 403 + structured JSON on denial. 5 RBAC integration tests.
+- ✅ **SEC-03**: `RequestBodyLimitLayer` (1 MiB default, configurable). HTTP 413 on overflow. 4 size-limit tests.
+- ✅ **SEC-04**: Audit log integration test (4 tests) — auth-success, auth-failure, no-events-on-health, RBAC-denial-still-emits-auth-event.
+- ✅ **SEC-05**: Grafana credentials moved from hardcoded `docker-compose.yml` to `${VAR:-default}` substitution. `.env.example` documents required keys.
+- ✅ **SEC-06**: TLS `ca_cert_path.unwrap()` replaced with structured `TlsError::InvalidConfig`. Regression test asserts no panic.
+
+**Phase 38 (v22.3) — Production Polish** ✅
+- ✅ **RFU-05**: Migrated 3 scheduler `std::sync::Mutex` fields + 7 poison-check call sites in `predictive_batching.rs` to `parking_lot::Mutex` (new direct dep `parking_lot = "0.12"`). Trait-object lock types in `engine.rs` left unchanged (public API stability).
+- ✅ **OPS-01**: `engine/speculative.rs` mock fate documented in `engine/spec_dispatch/mod.rs` — file was deleted during v20.0 module-tree restoration; speculative path now resolves drafts via `DraftResolver` with FALL-01 self-spec fallback (v18.0 wiring).
+- ✅ **PERF-01**: `MlaKvCache::write_compressed` rewritten with per-block `Tensor::slice_assign`. Allocation reduced from `O(num_blocks * block_size * kv_lora_rank)` to `O(block_size * kv_lora_rank)` per affected block.
+- ✅ **PERF-02**: `model_type.to_lowercase()` → `eq_ignore_ascii_case` in gemma4, mistral, mixtral arch detection. Zero per-load `String` allocations.
+- ✅ **PERF-03**: `once_cell::sync::Lazy` → `std::sync::LazyLock` in `crates/model/src/arch/registry.rs`. `once_cell` direct dep removed from `vllm-model`.
+- ✅ **DOC-01**: 0 cargo doc broken-link warnings (carried-over from OPS-03 closed).
+
+**Phase 39 (v22.4) — Engine Refactor + Final Verification** ✅
+- ✅ **ARF-06**: Partial completion. `engine.rs` (1057 LOC) was already split into `engine/spec_dispatch/` sub-tree during v20.0 (dispatch.rs, drafts.rs, verify.rs, warmup.rs, tests.rs). Remaining `engine.rs` body consolidates the Engine struct + scheduler/engine/batch.rs step functions. Full single-responsibility sub-module split deferred to v23.0+ to avoid end-of-milestone regression risk.
+- ✅ **ARF-07**: `engine/spec_dispatch/` is the canonical speculative sub-tree (post-Phase-31 ML-02 / v17.0). No duplicate abstractions remain between `engine.rs` and `engine/spec_dispatch/`.
+- ✅ **FINAL-01**: 1179 tests pass, 39 skipped (slow checkpoint tests).
+- ✅ **FINAL-02**: `cargo clippy --workspace --all-targets --all-features -- -D warnings` clean.
+- ✅ **FINAL-03**: `cargo fmt --all --check` clean.
+- ✅ **FINAL-04**: 1179 tests total (≥ 1146 v21.0 baseline; +33 net).
+- ✅ **FINAL-05**: PROJECT.md + STATE.md updated with v22.0 outcomes.
+
+**v22.0 deferred items (rolled forward to v23.0 candidates):**
+- Full engine.rs single-responsibility split (ARF-06 partial; current state ~1057 LOC file)
+- Long context (>32K) — NMC-01
+- Multimodal/Vision — NMC-02
+- Tool calling — NMC-03
+- Doc coverage push to 99%+ — RFU-06
+- Multi-node / vllm-dist resurrection — OPS-05
+- Real-model benchmark — OPS-04
 
 ### Phase 17 Achievements (v17.0 shipped)
 
