@@ -311,6 +311,24 @@ just clippy-pedantic
 3. Run `just clippy` to verify
 4. If deny-tier and existing code violates it, fix the violations in the same PR
 
+### Invariant comments
+
+Production `.unwrap()` / `.expect()` calls that legitimately cannot fail must be
+preceded by a `// invariant:` comment explaining why. This applies to:
+
+- `RwLock` / `Mutex` `.expect("...poisoned")` — lock is only held for sync field access
+- `SystemTime::now().duration_since(UNIX_EPOCH).unwrap()` — monotonic clock cannot underflow
+- `.expect("duplicate <key>")` after a pre-check — programmer error path
+- Tensor allocations with statically-known shapes
+- Cargo env vars (always set by Cargo during build)
+- Signal handler installation
+- Serialize of known-good structs
+- HashMap access immediately after `insert()`
+
+If a `.unwrap()` / `.expect()` call is in production code and has no `// invariant:`
+comment, treat it as a bug and convert it to typed error propagation. See Phase B
+audit at `/tmp/phase_b_audit/SUMMARY.md` for the full inventory.
+
 ### Rationales for current allow list
 
 | Lint                      | Why allowed                                                                |
