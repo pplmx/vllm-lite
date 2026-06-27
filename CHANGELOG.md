@@ -14,6 +14,7 @@
 |     版本     | 日期  | 测试  | 覆盖率 |
 | :----------: | :---: | :---: | :----: |
 | [Unreleased] |   -   | 654+  |  90%+  |
+| [v18.0]      | 2026-06-27 | 277 (vllm-core) + 654+ | 90%+ |
 
 ---
 
@@ -26,6 +27,78 @@
     - Implemented full weight loading for Qwen3.5 Mamba models
     - Supports fallback for embed_tokens and lm_head weight names
     - Supports tied embeddings (tie_word_embeddings)
+
+---
+
+## 🚀 [v18.0] — Multi-Model Speculative Decoding (2026-06-27)
+
+### Added
+
+- **DraftModelRegistry** (`crates/core/src/speculative/draft_registry.rs`)
+    - Runtime registry for heterogeneous external draft models
+    - Each draft owns a private `ModelBackend` and `BlockAllocator` (KV isolation by construction)
+    - Lazy weight loading via `register` (Unloaded) → `attach_loaded` (Loaded) state machine
+    - `Engine::with_drafts_boxed` constructor for pre-loading specs at engine startup
+    - Loader-agnostic — does not depend on `vllm-model`; caller drives actual ModelLoader
+
+- **MemoryBudget** (`crates/core/src/speculative/memory_budget.rs`)
+    - VRAM budget enforcement for target + concurrent drafts
+    - Atomic `try_reserve_draft` with structured `MemoryBudgetExceeded { requested_bytes, available_bytes, draft_id }` error
+    - Runtime KV-cache growth tracking via `record_draft_kv_growth`
+    - Default is `u64::MAX` (unlimited) — existing flows unchanged
+
+- **Refcount-driven lifecycle**
+    - `unload` returns `InUse(refcount)` if refcount > 0 (LIFE-02)
+    - `force_unload` bypasses refcount for admin/test paths
+    - `decrement_ref` auto-unloads when count reaches zero (LIFE-03)
+    - Releases budget reservation on unload
+
+- **DraftResolver** (`crates/core/src/speculative/draft_resolver.rs`)
+    - Per-request draft selection with FALL-01 fallback semantics
+    - `ResolvedDraft::{External, SelfSpec, None}` enum makes outcomes explicit
+    - `DraftLoader` trait abstracts actual model loading (no vllm-model coupling)
+    - Records metrics for every resolution (external / self_spec / none)
+
+- **Per-request routing**
+    - `Request.draft_model_id: Option<DraftId>` + `Request::with_draft_model` builder (RTE-01)
+    - `Sequence.draft_model_id` propagated from Request (RTE-02)
+    - Per-request resolution enables mixed drafts in one batch (RTE-03)
+
+- **Fallback semantics**
+    - FALL-01: load failure / unknown id / budget exceeded → silent fallback to self-spec
+    - FALL-02: `Sequence.degraded_draft: bool` sticky flag set on runtime draft errors
+
+- **Metrics** (5 new counters in `EnhancedMetricsCollector`)
+    - `draft_resolutions_external_total`
+    - `draft_resolutions_self_spec_total`
+    - `draft_resolutions_none_total`
+    - `draft_load_failures_total`
+    - `draft_runtime_errors_total`
+
+- **Integration tests** (`crates/core/tests/multi_draft_integration.rs`)
+    - 14 tests covering full lifecycle, budget boundaries, mixed routing, all fallback paths
+    - Stub backends with configurable failure injection
+
+- **Benchmark** (`crates/core/benches/multi_draft_speculative.rs`)
+    - Criterion benchmark: `no_draft` vs `self_spec` vs `external_draft` (3 configs)
+    - Measures orchestration overhead (~1.7-2.1 µs per 16-step iteration)
+
+### Changed
+
+- `Sequence` gained `degraded_draft: bool` and `draft_model_id: Option<DraftId>` fields
+- `Request` gained `draft_model_id: Option<DraftId>` field
+- `BlockAllocator` gained `bytes_per_block()` and `allocated_bytes()` methods
+- `DraftSpec` gained `weight_size_estimate_bytes: u64` field for MEM-02 budget estimation
+
+### Requirements Satisfied
+
+- MMLT-01, MMLT-02, MMLT-03 (multi-model loading)
+- LIFE-01, LIFE-02, LIFE-03 (lifecycle management)
+- MEM-01, MEM-02, MEM-03 (memory budget)
+- RTE-01, RTE-02, RTE-03 (request routing)
+- FALL-01, FALL-02 (fallback semantics)
+
+**14/14 requirements passed.** Test count: 209 → 277 (+68).
 
 ### Refactored
 

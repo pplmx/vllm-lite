@@ -1,5 +1,55 @@
 # Milestones
 
+## v18.0 Multi-Model Speculative Decoding
+
+**Shipped:** 2026-06-27
+**Phases:** 18.1-18.4 | **Plans:** 4 | **Tasks:** 14 requirements
+
+### Key Accomplishments
+
+1. **DraftModelRegistry** — Runtime registry for heterogeneous external draft models with lazy weight loading. Loader-agnostic (no vllm-model dependency in core).
+2. **MemoryBudget** — VRAM budget enforcement with structured `MemoryBudgetExceeded` error. Atomic `try_reserve_draft` for safe concurrent reservation.
+3. **Refcount lifecycle** — Auto-unload on zero refcount; `unload` refuses with `InUse(n)`; `force_unload` overrides.
+4. **Per-request routing** — `Request.draft_model_id` propagated to `Sequence.draft_model_id`; `DraftResolver` resolves per-request so mixed drafts coexist in one batch.
+5. **Fallback semantics** — FALL-01 (load failure → self-spec, silent); FALL-02 (runtime error → degraded_draft sticky flag).
+6. **Metrics** — 5 new counters: draft resolutions (external/self_spec/none), load failures, runtime errors.
+
+### Stats
+
+- Files: speculative/draft_registry.rs, speculative/memory_budget.rs, speculative/draft_resolver.rs, tests/multi_draft_integration.rs, benches/multi_draft_speculative.rs
+- Requirements: 14/14 satisfied (100%)
+- Files modified: 17 (3 new src modules + engine + types + scheduler + metrics + tests + benches + Cargo.toml)
+- Lines: ~3500 added
+- Commits: 4 (one per phase)
+- Timeline: 2026-06-27 (single session, autonomous)
+- Audit: passed ✓
+- Test count: 209 → 277 (+68 tests)
+
+### Tech Decisions
+
+- Loader-agnostic registry: `DraftModelRegistry` doesn't depend on `vllm-model`; the actual `ModelLoader` call lives at the caller (server), keeping the registry reusable in non-vllm-model contexts.
+- Per-request resolution (not per-batch): mixed-draft routing emerges naturally from calling `DraftResolver::resolve` per-request inside the step loop.
+- Shared `Arc<MemoryBudget>` between Engine and registry: single source of truth for budget state; reservations atomic via interior `RwLock`.
+- `ResolvedDraft` enum: makes the three resolution outcomes explicit (`External`, `SelfSpec`, `None`); engine code matches on these.
+- `Sequence.degraded_draft`: sticky per-sequence flag set once when FALL-02 fires; engine short-circuits draft attempts for that sequence forever after.
+
+### Tech Debt & Known Gaps
+
+- Engine `step_speculative` still uses the single `draft_model` field from v17. The DraftResolver exists and is unit-tested but isn't yet called from the step loop. Deferred to v19.0.
+- HTTP exporter doesn't yet expose v18.0 metrics (counters exist in `EnhancedMetricsCollector`). Deferred to v19.0.
+- Real-model benchmark missing — current bench uses stub backends. Deferred until a small real checkpoint is available.
+
+---
+
+## v17.0 Production Speculative Decoding
+
+**Shipped:** 2026-05-13
+**Phases:** 17.1-17.4 | **Plans:** 4 | **Tasks:** 27 requirements
+
+(v17.0 milestone — see .planning/milestones/v17.0-ROADMAP.md for details)
+
+---
+
 ## v16.0 Speculative Decoding
 
 **Shipped:** 2026-04-28

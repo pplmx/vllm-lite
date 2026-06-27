@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_core::speculative::{
     DraftId, DraftLoader, DraftModelRegistry, DraftRegistryError, DraftResolver, DraftSpec,
@@ -129,9 +129,8 @@ fn make_harness(config: &str) -> BenchHarness {
     let metrics = Arc::new(EnhancedMetricsCollector::new());
     let loader = Arc::new(BenchLoader::new());
     let loader_dyn: Arc<dyn DraftLoader> = loader.clone();
-    let self_spec: Arc<Mutex<Box<dyn ModelBackend>>> = Arc::new(Mutex::new(Box::new(
-        BenchBackend::new("self-spec"),
-    )));
+    let self_spec: Arc<Mutex<Box<dyn ModelBackend>>> =
+        Arc::new(Mutex::new(Box::new(BenchBackend::new("self-spec"))));
 
     if config == "external_draft" {
         let spec = DraftSpec::new("external", "/nope", 4).with_weight_size(1_000_000_000);
