@@ -164,7 +164,7 @@ fn run_iteration(h: &BenchHarness, config: &str) {
 }
 
 fn bench_throughput(c: &mut Criterion) {
-    let mut group = c.benchmark_group("multi_draft_throughput");
+    let mut group = c.benchmark_group("multi_draft_iter_total");
 
     for config in ["no_draft", "self_spec", "external_draft"] {
         let h = make_harness(config);
