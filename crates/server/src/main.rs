@@ -173,6 +173,26 @@ async fn main() {
         Engine::new_boxed(model, draft_model)
     };
 
+    // v18.0: wire a real DraftLoader so the resolver can actually load draft
+    // weights from disk. The engine installs a NoopLoader by default in the
+    // v18.0 constructors, which would silently fall back to self-spec for any
+    // declared spec. Replace it with ServerDraftLoader when a resolver is
+    // installed (i.e. the v18.0 path was taken).
+    if engine.draft_resolver.is_some() {
+        let draft_loader = vllm_server::draft_loader::ServerDraftLoader::new(
+            device.clone(),
+            &app_config.engine.draft_specs,
+        )
+        .with_kv_blocks(app_config.engine.num_kv_blocks)
+        .with_kv_quantization(app_config.engine.kv_quantization)
+        .with_allow_stub(cli.model.allow_stub);
+        tracing::info!(
+            registered_drafts = draft_loader.len(),
+            "Installed ServerDraftLoader (replaces NoopLoader)"
+        );
+        engine.set_draft_loader(Arc::new(draft_loader));
+    }
+
     tracing::debug!(
         draft_enabled = app_config.engine.max_draft_tokens > 0,
         kv_blocks = app_config.engine.num_kv_blocks,
