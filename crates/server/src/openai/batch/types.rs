@@ -1,5 +1,8 @@
+//! types: shared type definitions.
+
 use serde::{Deserialize, Serialize};
 
+/// SimpleBatchRequest: simple batch request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimpleBatchRequest {
     pub prompts: Vec<String>,
@@ -9,6 +12,7 @@ pub struct SimpleBatchRequest {
     pub temperature: Option<f32>,
 }
 
+/// BatchResponse: batch response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchResponse {
     pub id: String,
@@ -21,6 +25,7 @@ pub struct BatchResponse {
     pub request_counts: Option<RequestCounts>,
 }
 
+/// RequestCounts: request counts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestCounts {
     pub total: i32,
@@ -28,6 +33,7 @@ pub struct RequestCounts {
     pub failed: i32,
 }
 
+/// BatchResults: batch results.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchResults {
     pub batch_id: String,
@@ -35,6 +41,7 @@ pub struct BatchResults {
     pub results: Vec<BatchResultItem>,
 }
 
+/// BatchResultItem: batch result item.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchResultItem {
     pub index: usize,
@@ -43,6 +50,7 @@ pub struct BatchResultItem {
     pub error: Option<String>,
 }
 
+/// BatchStatus: batch status.
 #[derive(Debug, Clone)]
 pub enum BatchStatus {
     Pending,
@@ -51,6 +59,7 @@ pub enum BatchStatus {
     Failed,
 }
 
+/// BatchJob: batch job.
 #[derive(Clone)]
 pub struct BatchJob {
     pub id: String,
@@ -66,6 +75,7 @@ pub struct BatchJob {
 }
 
 impl BatchJob {
+/// new: new.
     pub fn new(
         id: String,
         endpoint: String,

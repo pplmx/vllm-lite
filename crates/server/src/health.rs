@@ -1,3 +1,5 @@
+//! health: health.
+
 // crates/server/src/health.rs
 //! Health check endpoints
 
@@ -10,10 +12,12 @@ pub enum HealthStatus {
 }
 
 impl HealthStatus {
+/// is_ok: is ok.
     pub fn is_ok(&self) -> bool {
         matches!(self, HealthStatus::Ok)
     }
 
+/// as_str: as str.
     pub fn as_str(&self) -> &'static str {
         match self {
             HealthStatus::Ok => "ok",
@@ -22,6 +26,7 @@ impl HealthStatus {
         }
     }
 
+/// http_status: http status.
     pub fn http_status(&self) -> u16 {
         match self {
             HealthStatus::Ok => 200,
@@ -38,6 +43,7 @@ pub struct HealthChecker {
 }
 
 impl HealthChecker {
+/// new: new.
     pub fn new(alive: bool, ready: bool) -> Self {
         Self { alive, ready }
     }

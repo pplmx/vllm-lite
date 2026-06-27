@@ -1,3 +1,5 @@
+//! completions: completions.
+
 use axum::{
     Json,
     extract::State,
@@ -21,6 +23,7 @@ fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &st
     tokenizer.clean_special_tokens(text)
 }
 
+/// completions: completions.
 pub async fn completions(
     State(state): State<ApiState>,
     Json(req): Json<CompletionRequest>,

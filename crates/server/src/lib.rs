@@ -1,3 +1,5 @@
+//! server: crate root.
+
 // crates/server/src/lib.rs
 //! vLLM server crate - HTTP API server for LLM inference
 
@@ -10,16 +12,27 @@ use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_model::config::Architecture;
 use vllm_model::tokenizer::Tokenizer;
 
+/// api: api module.
 pub mod api;
+/// auth: auth module.
 pub mod auth;
+/// backpressure: backpressure module.
 pub mod backpressure;
+/// cli: cli module.
 pub mod cli;
+/// config: config module.
 pub mod config;
+/// debug: debug module.
 pub mod debug;
+/// draft_loader: draft loader module.
 pub mod draft_loader;
+/// health: health module.
 pub mod health;
+/// logging: logging module.
 pub mod logging;
+/// openai: openai module.
 pub mod openai;
+/// security: security module.
 pub mod security;
 
 /// Hidden test helpers for unit/integration tests.

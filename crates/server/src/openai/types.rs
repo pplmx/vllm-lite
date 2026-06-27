@@ -1,3 +1,5 @@
+//! types: shared type definitions.
+
 use serde::{Deserialize, Serialize};
 
 /// Token usage statistics for API responses.
@@ -9,6 +11,7 @@ pub struct Usage {
 }
 
 impl Usage {
+/// new: new.
     pub fn new(prompt: usize, completion: usize) -> Self {
         let prompt = prompt as i64;
         let completion = completion as i64;
@@ -36,6 +39,7 @@ pub struct ErrorResponse {
 }
 
 impl ErrorResponse {
+/// new: new.
     pub fn new(message: &str, error_type: &str) -> Self {
         Self {
             error: ErrorDetail {
@@ -88,6 +92,7 @@ pub struct ChatResponse {
 }
 
 impl ChatResponse {
+/// new: new.
     pub fn new(id: String, model: String, choices: Vec<ChatChoice>, usage: Usage) -> Self {
         Self {
             id,
@@ -103,6 +108,7 @@ impl ChatResponse {
     }
 }
 
+/// ChatChunkChoice: chat chunk choice.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChunkChoice {
     pub index: i32,
@@ -110,6 +116,7 @@ pub struct ChatChunkChoice {
     pub finish_reason: Option<String>,
 }
 
+/// ChatChunk: chat chunk.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChunk {
     pub id: String,
@@ -120,6 +127,7 @@ pub struct ChatChunk {
 }
 
 impl ChatChunk {
+/// new: new.
     pub fn new(id: String, model: String, choice: ChatChunkChoice) -> Self {
         Self {
             id,
@@ -146,6 +154,7 @@ pub struct CompletionRequest {
     pub stop: Option<Vec<String>>,
 }
 
+/// CompletionChoice: completion choice.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompletionChoice {
     pub text: String,
@@ -165,6 +174,7 @@ pub struct CompletionResponse {
 }
 
 impl CompletionResponse {
+/// new: new.
     pub fn new(id: String, model: String, choices: Vec<CompletionChoice>, usage: Usage) -> Self {
         Self {
             id,
@@ -187,6 +197,7 @@ pub struct EmbeddingsRequest {
     pub input: Vec<String>,
 }
 
+/// EmbeddingData: embedding data.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingData {
     pub object: String,
@@ -204,6 +215,7 @@ pub struct EmbeddingsResponse {
 }
 
 impl EmbeddingsResponse {
+/// new: new.
     pub fn new(embeddings: Vec<Vec<f32>>, model: String) -> Self {
         let data: Vec<EmbeddingData> = embeddings
             .into_iter()

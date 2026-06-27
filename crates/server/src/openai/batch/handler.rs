@@ -1,9 +1,12 @@
+//! handler: handler.
+
 use axum::{Json, extract::State};
 
 use super::types::*;
 use crate::ApiState;
 use crate::openai::types::ErrorResponse;
 
+/// create_batch: create batch.
 pub async fn create_batch(
     State(state): State<ApiState>,
     Json(req): Json<SimpleBatchRequest>,
@@ -61,6 +64,7 @@ pub async fn create_batch(
     }))
 }
 
+/// get_batch: get batch.
 pub async fn get_batch(
     State(state): State<ApiState>,
     axum::extract::Path(id): axum::extract::Path<String>,
@@ -99,6 +103,7 @@ pub async fn get_batch(
     }))
 }
 
+/// get_batch_results: get batch results.
 pub async fn get_batch_results(
     State(state): State<ApiState>,
     axum::extract::Path(id): axum::extract::Path<String>,
@@ -125,6 +130,7 @@ pub async fn get_batch_results(
     }))
 }
 
+/// list_batches: list batches.
 pub async fn list_batches(State(state): State<ApiState>) -> Json<Vec<BatchResponse>> {
     let jobs = state.batch_manager.get_all_jobs().await;
     let now = std::time::SystemTime::now()
