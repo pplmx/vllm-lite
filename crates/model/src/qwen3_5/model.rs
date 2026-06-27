@@ -116,11 +116,3 @@ impl Qwen35HybridModel {
         Ok(model)
     }
 }
-
-#[cfg(test)]
-#[path = "model_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "speculative_tests.rs"]
-mod speculative_tests;

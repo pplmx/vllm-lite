@@ -4,7 +4,7 @@ use candle_core::{Device, Result as CandleResult, Tensor};
 #[derive(Clone)]
 #[allow(dead_code)] // audited 2026-06-26 (Wave 1): pub(crate) fields never read externally; callers use struct via from_config or pass through to Attention35WithRoPE
 pub struct MRoPE {
-    pub(crate) dim: usize,
+    pub dim: usize,
     pub(crate) theta: f32,
     pub(crate) sections: Vec<usize>,
     pub(crate) partial_rotary_factor: f32,

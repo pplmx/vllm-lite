@@ -15,6 +15,7 @@ pub mod auth;
 pub mod backpressure;
 pub mod cli;
 pub mod config;
+pub mod debug;
 pub mod draft_loader;
 pub mod health;
 pub mod logging;

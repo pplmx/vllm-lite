@@ -17,9 +17,9 @@ pub struct Attention35WithRoPE {
     k_proj: Linear,
     v_proj: Linear,
     o_proj: Linear,
-    pub(crate) num_heads: usize,
-    pub(crate) num_kv_heads: usize,
-    pub(crate) head_dim: usize,
+    pub num_heads: usize,
+    pub num_kv_heads: usize,
+    pub head_dim: usize,
     rope: MRoPE,
 }
 

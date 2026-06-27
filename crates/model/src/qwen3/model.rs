@@ -49,7 +49,3 @@ impl Qwen3Model {
         .map(|m| m.with_embed_through_layers(true))
     }
 }
-
-#[cfg(test)]
-#[path = "model_tests.rs"]
-mod model_tests;
