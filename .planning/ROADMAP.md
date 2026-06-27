@@ -20,9 +20,9 @@
 - [x] **Phase 22: Comments + Documentation Audit** - doc 覆盖率 / 模块文档 / 过期注释 / 外部文档 / ADR
 - [x] **Phase 23: API + Error Handling Audit** - API 一致性 / 错误类型 / 错误人体工学 / trait 设计 / 弃用卫生
 - [x] **Phase 24: Synthesis + Remediation Backlog** - 跨维度综合 + P0/P1/P2 优先级清单 + v20.0+ 迁移路线图
-- [ ] **Phase 25: P0 Critical Fixes** (v20.1) - 消除 vllm-model→vllm-dist 依赖 + ModelError enum + 8 个 trait object-safe + CudaGraphError thiserror
-- [ ] **Phase 26: Module Tree Restoration** (v20.2) - orphan 模块挂回 (kv_cache_fp8 + debug) + stage-info 重命名 + 3 个测试文件迁移 + vllm-dist feature-gate
-- [ ] **Phase 27: Error Handling Standardization** (v20.3) - 13 个 error enum 用 thiserror + Result<_,String> 消除 + mutex-poison 修复 + EngineError 4 新变体 + anyhow 边界
+- [x] **Phase 25: P0 Critical Fixes** (v20.1) - 消除 vllm-model→vllm-dist 依赖 + ModelError enum + 8 个 trait object-safe + CudaGraphError thiserror
+- [x] **Phase 26: Module Tree Restoration** (v20.2) - orphan 模块挂回 (kv_cache_fp8 + debug) + stage-info 重命名 + 3 个测试文件迁移 + vllm-dist feature-gate
+- [x] **Phase 27: Error Handling Standardization** (v20.3) - 13 个 error enum 用 thiserror + Result<_,String> 消除 + mutex-poison 修复 + EngineError 4 新变体 + anyhow 边界
 - [ ] **Phase 28: Documentation Coverage Push** (v20.4) - workspace doc 7.6%→≥60% + 776 个 pub item /// + 121 个文件 //! + README 修复
 - [ ] **Phase 29: External Docs + ADRs** (v20.5) - README/AGENTS.md 调和 + 12 个新 ADR
 - [ ] **Phase 30: Naming + Final Polish** (v20.6) - 7 P1 + 19 P2 命名 + #[deprecated] 卫生 + 注释清理 + 最终验证 (test pass + clippy + fmt)
