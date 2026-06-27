@@ -1,5 +1,6 @@
 //! predictive_batching: predictive batching.
 
+use parking_lot::Mutex;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
@@ -126,12 +127,12 @@ struct RequestSample {
 #[derive(Debug)]
 pub struct PredictiveBatcher {
     config: PredictiveBatchingConfig,
-    request_history: std::sync::Mutex<VecDeque<RequestSample>>,
-    current_pattern: std::sync::Mutex<RequestPattern>,
+    request_history: Mutex<VecDeque<RequestSample>>,
+    current_pattern: Mutex<RequestPattern>,
     batch_counter: AtomicUsize,
     total_tokens_processed: AtomicUsize,
     total_batches: AtomicUsize,
-    last_batch_time: std::sync::Mutex<Instant>,
+    last_batch_time: Mutex<Instant>,
 }
 
 impl PredictiveBatcher {
@@ -139,12 +140,12 @@ impl PredictiveBatcher {
     pub fn new(config: PredictiveBatchingConfig) -> Self {
         Self {
             config,
-            request_history: std::sync::Mutex::new(VecDeque::with_capacity(1000)),
-            current_pattern: std::sync::Mutex::new(RequestPattern::default()),
+            request_history: Mutex::new(VecDeque::with_capacity(1000)),
+            current_pattern: Mutex::new(RequestPattern::default()),
             batch_counter: AtomicUsize::new(0),
             total_tokens_processed: AtomicUsize::new(0),
             total_batches: AtomicUsize::new(0),
-            last_batch_time: std::sync::Mutex::new(Instant::now()),
+            last_batch_time: Mutex::new(Instant::now()),
         }
     }
 
@@ -156,10 +157,7 @@ impl PredictiveBatcher {
             decode_tokens,
         };
 
-        let mut history = self
-            .request_history
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut history = self.request_history.lock();
         history.push_back(sample);
         if history.len() > 1000 {
             history.pop_front();
@@ -174,10 +172,7 @@ impl PredictiveBatcher {
         let now = Instant::now();
         let cutoff = now - window;
 
-        let history = self
-            .request_history
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let history = self.request_history.lock();
         let recent: Vec<_> = history.iter().filter(|s| s.timestamp > cutoff).collect();
 
         if recent.is_empty() {
@@ -188,10 +183,7 @@ impl PredictiveBatcher {
         let avg_prompt = recent.iter().map(|s| s.prompt_tokens).sum::<usize>() / recent.len();
         let avg_decode = recent.iter().map(|s| s.decode_tokens).sum::<usize>() / recent.len();
 
-        let mut pattern = self
-            .current_pattern
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut pattern = self.current_pattern.lock();
         pattern.arrival_rate = arrival_rate;
         pattern.avg_prompt_tokens = avg_prompt;
         pattern.avg_decode_tokens = avg_decode;
@@ -204,10 +196,7 @@ impl PredictiveBatcher {
             BatchingStrategy::Static => self.config.max_batch_size.min(pending_requests),
 
             BatchingStrategy::Dynamic => {
-                let pattern = self
-                    .current_pattern
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner());
+                let pattern = self.current_pattern.lock();
                 if pattern.arrival_rate < 10.0 {
                     self.config.min_batch_size.max(pending_requests)
                 } else if pattern.arrival_rate < 50.0 {
@@ -218,10 +207,7 @@ impl PredictiveBatcher {
             }
 
             BatchingStrategy::Predictive => {
-                let pattern = self
-                    .current_pattern
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner());
+                let pattern = self.current_pattern.lock();
 
                 let load_factor = (pattern.arrival_rate / 100.0).min(1.0);
                 let latency_weight = 1.0 - self.config.throughput_weight;
@@ -242,10 +228,7 @@ impl PredictiveBatcher {
     pub fn should_start_batch(&self, pending_count: usize) -> bool {
         let optimal = self.predict_batch_size(pending_count);
 
-        let last_time = *self
-            .last_batch_time
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let last_time = *self.last_batch_time.lock();
         let elapsed = last_time.elapsed();
         let latency_threshold = Duration::from_millis(self.config.target_latency_ms);
 
@@ -258,10 +241,7 @@ impl PredictiveBatcher {
         self.total_tokens_processed
             .fetch_add(tokens_processed, Ordering::SeqCst);
         self.total_batches.fetch_add(1, Ordering::SeqCst);
-        *self
-            .last_batch_time
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = Instant::now();
+        *self.last_batch_time.lock() = Instant::now();
 
         tracing::debug!(
             batch_size = batch_size,
@@ -282,11 +262,7 @@ impl PredictiveBatcher {
             } else {
                 0.0
             },
-            current_pattern: self
-                .current_pattern
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .clone(),
+            current_pattern: self.current_pattern.lock().clone(),
         }
     }
 }
