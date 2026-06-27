@@ -630,7 +630,7 @@ impl SchedulerEngine {
     pub fn register_observer(
         &mut self,
         observer: Box<dyn crate::scheduler::observer::SchedulerObserver>,
-    ) -> Result<(), String> {
+    ) -> Result<(), crate::scheduler::observer::SchedulerObserverError> {
         self.observers.register(observer)
     }
 }

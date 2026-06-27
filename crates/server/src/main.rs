@@ -68,7 +68,7 @@ async fn main() {
     let app_config = cli.to_app_config();
 
     if let Err(errors) = app_config.validate() {
-        for err in &errors {
+        for err in &errors.0 {
             tracing::error!(error = %err, "Config validation failed");
         }
         std::process::exit(1);

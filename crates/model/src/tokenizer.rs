@@ -1,5 +1,15 @@
 use tokenizers::Tokenizer as HFTokenizer;
 
+#[derive(Debug, thiserror::Error)]
+pub enum TokenizerError {
+    #[error("failed to load tokenizer from {path}: {source}")]
+    LoadFailed {
+        path: String,
+        #[source]
+        source: tokenizers::Error,
+    },
+}
+
 pub struct Tokenizer {
     inner: Option<Box<HFTokenizer>>,
     vocab_size: usize,
@@ -21,9 +31,11 @@ impl Tokenizer {
         }
     }
 
-    pub fn from_file(path: &str) -> std::result::Result<Self, String> {
-        let tokenizer =
-            HFTokenizer::from_file(path).map_err(|e| format!("Failed to load tokenizer: {}", e))?;
+    pub fn from_file(path: &str) -> std::result::Result<Self, TokenizerError> {
+        let tokenizer = HFTokenizer::from_file(path).map_err(|e| TokenizerError::LoadFailed {
+            path: path.to_string(),
+            source: e,
+        })?;
         let vocab_size = tokenizer.get_vocab_size(true);
 
         let mut special_tokens = Vec::new();

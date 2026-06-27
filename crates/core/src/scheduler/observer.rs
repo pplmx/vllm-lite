@@ -1,6 +1,14 @@
 use crate::types::{SeqId, TokenId};
 use std::sync::RwLock;
 
+#[derive(Debug, thiserror::Error)]
+pub enum SchedulerObserverError {
+    #[error("observer mutex poisoned")]
+    Poisoned,
+    #[error("max observers reached ({0})")]
+    MaxObserversReached(usize),
+}
+
 pub trait SchedulerObserver: Send + Sync {
     fn on_request_arrived(&self, seq_id: SeqId, prompt_len: usize);
     fn on_batch_scheduled(&self, seq_ids: &[SeqId], batch_size: usize);
@@ -50,10 +58,16 @@ impl SchedulerObservers {
 
     pub const MAX_OBSERVERS: usize = 16;
 
-    pub fn register(&self, observer: Box<dyn SchedulerObserver>) -> Result<(), String> {
-        let mut guards = self.observers.write().map_err(|e| e.to_string())?;
+    pub fn register(
+        &self,
+        observer: Box<dyn SchedulerObserver>,
+    ) -> Result<(), SchedulerObserverError> {
+        let mut guards = self
+            .observers
+            .write()
+            .map_err(|_| SchedulerObserverError::Poisoned)?;
         if guards.len() >= Self::MAX_OBSERVERS {
-            return Err("Max observers reached".to_string());
+            return Err(SchedulerObserverError::MaxObserversReached(Self::MAX_OBSERVERS));
         }
         guards.push(observer);
         Ok(())
