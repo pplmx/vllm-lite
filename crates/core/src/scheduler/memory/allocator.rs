@@ -3,6 +3,13 @@ use tracing::warn;
 
 const NULL_BLOCK: BlockId = BlockId::MAX;
 
+/// Bytes per KV block, used for VRAM budget tracking.
+///
+/// This is a default sizing — it does NOT track per-token KV cache size
+/// or model-specific head dimensions. Callers needing exact VRAM accounting
+/// should compute their own block size and use the helper APIs.
+pub const BLOCK_BYTES: usize = 16 * 1024 * 1024;
+
 #[derive(Clone, Default)]
 pub struct BlockAllocatorStats {
     pub total_blocks: usize,
@@ -141,6 +148,19 @@ impl BlockAllocator {
     pub fn stats(&self) -> BlockAllocatorStats {
         self.stats.clone()
     }
+
+    /// Bytes per KV block. Static — same constant for all allocators in the
+    /// process. Used for VRAM budget accounting.
+    pub fn bytes_per_block() -> usize {
+        BLOCK_BYTES
+    }
+
+    /// Number of bytes currently allocated (in use) by this allocator.
+    /// Computed as `(total_blocks - available_blocks) * BLOCK_BYTES`.
+    pub fn allocated_bytes(&self) -> usize {
+        let allocated_blocks = self.num_blocks.saturating_sub(self.stats.available_blocks);
+        allocated_blocks.saturating_mul(BLOCK_BYTES)
+    }
 }
 
 #[cfg(test)]
@@ -198,5 +218,41 @@ mod tests {
 
         alloc.free(&blocks);
         assert_eq!(alloc.stats().free_count, 1);
+    }
+
+    #[test]
+    fn test_bytes_per_block_constant() {
+        assert_eq!(
+            BlockAllocator::bytes_per_block(),
+            16 * 1024 * 1024,
+            "BLOCK_BYTES is the v18.0 VRAM accounting constant"
+        );
+    }
+
+    #[test]
+    fn test_allocated_bytes_scales_with_allocations() {
+        let mut alloc = BlockAllocator::new(10);
+        assert_eq!(alloc.allocated_bytes(), 0);
+
+        let blocks = alloc.allocate(3).unwrap();
+        assert_eq!(
+            alloc.allocated_bytes(),
+            3 * BlockAllocator::bytes_per_block()
+        );
+
+        let more = alloc.allocate(2).unwrap();
+        assert_eq!(
+            alloc.allocated_bytes(),
+            5 * BlockAllocator::bytes_per_block()
+        );
+
+        alloc.free(&blocks);
+        assert_eq!(
+            alloc.allocated_bytes(),
+            2 * BlockAllocator::bytes_per_block()
+        );
+
+        alloc.free(&more);
+        assert_eq!(alloc.allocated_bytes(), 0);
     }
 }

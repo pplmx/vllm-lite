@@ -8,6 +8,7 @@ use crate::speculative::AdaptiveSpeculativeDecoder;
 use crate::speculative::draft_registry::{
     DraftId, DraftModelRegistry, DraftRegistryError, DraftSpec,
 };
+use crate::speculative::memory_budget::MemoryBudget;
 use crate::sync::lock_mutex;
 use crate::types::AdaptiveDraftConfig;
 use crate::types::{EngineMessage, Request, SchedulerConfig};
@@ -191,6 +192,41 @@ impl Engine {
         )
     }
 
+    /// Construct an Engine with a custom memory budget. The same budget is
+    /// shared with the draft registry.
+    pub fn with_budget_boxed(
+        target_model: Box<dyn ModelBackend>,
+        draft_model: Option<Box<dyn ModelBackend>>,
+        draft_specs: Vec<DraftSpec>,
+        budget: Arc<MemoryBudget>,
+        config: SchedulerConfig,
+        max_draft_tokens: usize,
+        num_kv_blocks: usize,
+    ) -> Self {
+        let mut engine = Self::with_config_boxed(
+            target_model,
+            draft_model,
+            config,
+            max_draft_tokens,
+            num_kv_blocks,
+        );
+        // Replace the default unlimited-budget registry with one bound to the
+        // caller's budget.
+        engine.draft_registry = DraftModelRegistry::with_budget(budget.clone());
+        for spec in draft_specs {
+            engine
+                .draft_registry
+                .register(spec)
+                .expect("with_budget_boxed: duplicate draft id in spec list");
+        }
+        engine
+    }
+
+    /// Access the shared memory budget.
+    pub fn memory_budget(&self) -> Arc<MemoryBudget> {
+        self.draft_registry.memory_budget().clone()
+    }
+
     /// Access the draft registry for read-only inspection.
     pub fn draft_registry(&self) -> &DraftModelRegistry {
         &self.draft_registry
@@ -204,7 +240,9 @@ impl Engine {
 
     /// Attach a loaded backend to a previously-registered draft id, promoting
     /// it from `Unloaded` to `Loaded`. Used by callers that drive the actual
-    /// `ModelLoader` invocation.
+    /// `ModelLoader` invocation. Does NOT reserve memory budget — use
+    /// [`Self::attach_draft_budgeted`] when the registry was constructed with
+    /// a budget and you want VRAM enforcement.
     pub fn attach_draft(
         &self,
         id: &DraftId,
@@ -213,9 +251,43 @@ impl Engine {
         self.draft_registry.attach_loaded(id, backend)
     }
 
+    /// Attach a loaded backend AND reserve the draft's estimated footprint in
+    /// the memory budget. Returns `MemoryBudgetExceeded` if the load would
+    /// exceed the configured budget.
+    pub fn attach_draft_budgeted(
+        &self,
+        id: &DraftId,
+        backend: Box<dyn ModelBackend>,
+    ) -> std::result::Result<(), DraftRegistryError> {
+        self.draft_registry.attach_loaded_budgeted(id, backend)
+    }
+
     /// Unload a draft by id, releasing its backend and KV allocator.
+    /// Returns `InUse(refcount)` if the draft is still referenced; use
+    /// [`Self::force_unload_draft`] to bypass.
     pub fn unload_draft(&self, id: &DraftId) -> std::result::Result<(), DraftRegistryError> {
         self.draft_registry.unload(id)
+    }
+
+    /// Force-unload a draft, bypassing refcount checks. Used by admin tooling
+    /// and tests.
+    pub fn force_unload_draft(&self, id: &DraftId) -> std::result::Result<(), DraftRegistryError> {
+        self.draft_registry.force_unload(id)
+    }
+
+    /// Increment the reference count for a draft. Phase 18.3 will drive this
+    /// from routing logic.
+    pub fn increment_draft_ref(&self, id: &DraftId) -> std::result::Result<(), DraftRegistryError> {
+        self.draft_registry.increment_ref(id)
+    }
+
+    /// Decrement the reference count for a draft. Auto-unloads when count
+    /// reaches zero. Returns `true` if auto-unload was triggered.
+    pub fn decrement_draft_ref(
+        &self,
+        id: &DraftId,
+    ) -> std::result::Result<bool, DraftRegistryError> {
+        self.draft_registry.decrement_ref(id)
     }
 
     #[cfg(feature = "cuda-graph")]
@@ -821,5 +893,97 @@ mod tests {
         // Unload of unknown id errors
         let err = engine.unload_draft(&DraftId("nope".into())).unwrap_err();
         assert!(matches!(err, DraftRegistryError::UnknownDraftId(_)));
+    }
+
+    #[test]
+    fn test_engine_default_has_unlimited_budget() {
+        let stub = StubModel::returning(42);
+        let engine = Engine::new(stub, None);
+        assert_eq!(
+            engine.memory_budget().total_bytes(),
+            u64::MAX,
+            "default Engine memory budget should be unlimited"
+        );
+    }
+
+    #[test]
+    fn test_engine_with_budget_shares_with_registry() {
+        use crate::speculative::memory_budget::MemoryBudget;
+        let stub = StubModel::returning(42);
+        let budget = Arc::new(MemoryBudget::new(1024).unwrap());
+        let engine = Engine::with_budget_boxed(
+            Box::new(stub),
+            None,
+            vec![DraftSpec::new("a", "/tmp", 0).with_weight_size(100)],
+            budget.clone(),
+            SchedulerConfig::default(),
+            4,
+            1024,
+        );
+        assert_eq!(engine.memory_budget().total_bytes(), 1024);
+        assert_eq!(engine.draft_registry().memory_budget().total_bytes(), 1024);
+    }
+
+    #[test]
+    fn test_engine_attach_draft_budgeted_refuses_oversized() {
+        use crate::speculative::memory_budget::MemoryBudget;
+        let stub = StubModel::returning(42);
+        let budget = Arc::new(MemoryBudget::new(100).unwrap());
+        let engine = Engine::with_budget_boxed(
+            Box::new(stub),
+            None,
+            vec![DraftSpec::new("huge", "/tmp", 4).with_weight_size(1000)],
+            budget,
+            SchedulerConfig::default(),
+            4,
+            1024,
+        );
+        let backend: Box<dyn ModelBackend> = Box::new(StubModel::returning(1));
+        let err = engine
+            .attach_draft_budgeted(&DraftId("huge".into()), backend)
+            .unwrap_err();
+        assert!(matches!(err, DraftRegistryError::MemoryBudgetExceeded(_)));
+        assert!(!engine.draft_registry().is_loaded(&DraftId("huge".into())));
+    }
+
+    #[test]
+    fn test_engine_increment_decrement_ref_auto_unloads() {
+        let stub = StubModel::returning(42);
+        let engine = Engine::new(stub, None);
+        engine
+            .register_draft(DraftSpec::new("a", "/tmp", 4))
+            .unwrap();
+        let backend: Box<dyn ModelBackend> = Box::new(StubModel::returning(1));
+        engine.attach_draft(&DraftId("a".into()), backend).unwrap();
+        engine.increment_draft_ref(&DraftId("a".into())).unwrap();
+        engine.increment_draft_ref(&DraftId("a".into())).unwrap();
+
+        // First decrement: still in use
+        let auto_unloaded = engine.decrement_draft_ref(&DraftId("a".into())).unwrap();
+        assert!(!auto_unloaded);
+        assert!(engine.draft_registry().is_loaded(&DraftId("a".into())));
+
+        // Second decrement: count -> 0, auto-unload
+        let auto_unloaded = engine.decrement_draft_ref(&DraftId("a".into())).unwrap();
+        assert!(auto_unloaded);
+        assert!(!engine.draft_registry().is_loaded(&DraftId("a".into())));
+    }
+
+    #[test]
+    fn test_engine_unload_draft_with_refcount_errors_in_use() {
+        let stub = StubModel::returning(42);
+        let engine = Engine::new(stub, None);
+        engine
+            .register_draft(DraftSpec::new("a", "/tmp", 4))
+            .unwrap();
+        let backend: Box<dyn ModelBackend> = Box::new(StubModel::returning(1));
+        engine.attach_draft(&DraftId("a".into()), backend).unwrap();
+        engine.increment_draft_ref(&DraftId("a".into())).unwrap();
+        let err = engine.unload_draft(&DraftId("a".into())).unwrap_err();
+        assert!(matches!(err, DraftRegistryError::InUse(1)));
+
+        // force_unload_draft bypasses
+        engine.force_unload_draft(&DraftId("a".into())).unwrap();
+        assert!(!engine.draft_registry().is_loaded(&DraftId("a".into())));
     }
 }
