@@ -454,6 +454,8 @@ fn test_memory_manager_select_victims() {
         sampling_params: SamplingParams::default(),
         consecutive_decode_rounds: 5,
         priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
     };
 
     let seq2 = Sequence {
@@ -467,6 +469,8 @@ fn test_memory_manager_select_victims() {
         sampling_params: SamplingParams::default(),
         consecutive_decode_rounds: 20, // Higher - should be selected first
         priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
     };
 
     let running = vec![seq1, seq2];

@@ -21,7 +21,7 @@ use crate::scheduler::memory::BlockAllocator;
 use crate::speculative::memory_budget::{DEFAULT_BLOCK_BYTES, MemoryBudget, MemoryBudgetExceeded};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use vllm_traits::ModelBackend;
 
 /// Opaque, user-supplied identifier for a draft model.
@@ -114,7 +114,7 @@ impl DraftSpec {
 /// A loaded draft: backend + its private block allocator.
 pub struct LoadedDraft {
     pub spec: DraftSpec,
-    pub backend: Box<dyn ModelBackend>,
+    pub backend: Arc<Mutex<Box<dyn ModelBackend>>>,
     pub block_allocator: BlockAllocator,
 }
 
@@ -241,7 +241,7 @@ impl DraftModelRegistry {
         let kv_blocks = spec.kv_blocks;
         let loaded = LoadedDraft {
             spec,
-            backend,
+            backend: Arc::new(Mutex::new(backend)),
             block_allocator: BlockAllocator::new(kv_blocks),
         };
         *entry = DraftState::Loaded(loaded);
@@ -371,11 +371,25 @@ impl DraftModelRegistry {
         };
         let loaded = LoadedDraft {
             spec,
-            backend,
+            backend: Arc::new(Mutex::new(backend)),
             block_allocator: BlockAllocator::new(kv_blocks),
         };
         *entry = DraftState::Loaded(loaded);
         Ok(())
+    }
+
+    /// Get a clone of the Arc<Mutex<Box<dyn ModelBackend>>> for a loaded draft.
+    /// Returns None if the draft is unloaded or unknown. Used by
+    /// `DraftResolver` to hand the backend to the engine.
+    pub fn get_loaded_backend(&self, id: &DraftId) -> Option<Arc<Mutex<Box<dyn ModelBackend>>>> {
+        let guard = self
+            .drafts
+            .read()
+            .expect("DraftModelRegistry mutex poisoned");
+        match guard.get(id) {
+            Some(DraftState::Loaded(loaded)) => Some(loaded.backend.clone()),
+            _ => None,
+        }
     }
 
     /// Read-only lookup of the current state. Does NOT trigger loading.

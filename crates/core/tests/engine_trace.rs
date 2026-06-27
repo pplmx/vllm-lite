@@ -240,6 +240,8 @@ fn test_scheduler_decode_position_trace() {
         sampling_params: SamplingParams::default(),
         consecutive_decode_rounds: 3,
         priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
     };
 
     let batch = composer.compose(vec![seq], Phase::Decode);

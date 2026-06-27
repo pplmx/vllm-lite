@@ -147,6 +147,8 @@ impl SchedulerEngine {
             sampling_params: req.sampling_params,
             consecutive_decode_rounds: 0,
             priority: req.priority,
+            degraded_draft: false,
+            draft_model_id: req.draft_model_id.clone(),
         };
 
         let ctx = SchedulingContext {

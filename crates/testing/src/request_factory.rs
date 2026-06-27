@@ -174,6 +174,7 @@ impl RequestFactory {
             max_tokens,
             sampling_params: params,
             priority: Priority::default(),
+            draft_model_id: None,
         }
     }
 
