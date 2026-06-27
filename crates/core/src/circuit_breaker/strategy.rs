@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Fallback strategies for the circuit breaker.
 //!
 //! # Sync vs Async Trait Split (Phase 32 / API-08)

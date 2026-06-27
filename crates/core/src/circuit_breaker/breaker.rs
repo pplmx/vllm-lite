@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // crates/core/src/circuit_breaker/breaker.rs
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
