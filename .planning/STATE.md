@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v20.0
 milestone_name: Codebase Remediation (BACKLOG.md-driven)
-status: in_progress
-last_updated: "2026-06-27T14:05:00.000Z"
+status: complete
+last_updated: "2026-06-27T18:00:00.000Z"
 last_activity: 2026-06-27
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 6
   total_plans: 39
-  completed_plans: 17
-  percent: 50
+  completed_plans: 39
+  percent: 100
 ---
 
 # Project State
@@ -20,60 +20,48 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-27)
 
 **Core value:** Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
-**Current focus:** v20.0 Codebase Remediation — Phases 25/26/27 shipped (commit 2ffd4af, f940639, 6fdf94e); executing Phase 28 (Documentation Coverage Push)
+**Current focus:** v20.0 Codebase Remediation — COMPLETE (6/6 phases shipped; FINAL-01..04 gates all green)
 
 ---
 
 ## Current Position
 
-Phase: 28 of 30 (Phase 28 — Documentation Coverage Push)
-Plan: —
-Status: Phases 25/26/27 complete in git history; autonomous workflow resumed for 28/29/30
-Last activity: 2026-06-27 — detected Phases 25-27 already shipped via git log; ROADMAP.md heading format repaired; STATE.md updated
+Phase: 30 of 30 (Phase 30 — Naming + Final Polish + Verification) — COMPLETE
+Plan: All 6 phases (25-30) shipped
+Status: v20.0 milestone complete; ready for `/gsd-complete-milestone` ceremony
+Last activity: 2026-06-27 — Phase 30 NAM-01/02 + DEP-01/02 + CMT-01/02 + FINAL-01..04 all green
 
-Progress: [█████░░░░░] 50%
+Progress: [██████████] 100%
 
 ---
 
 ## Performance Metrics
 
-**Velocity (v20.0 baseline — from v18.0/v19.0 historical):**
+**Velocity (v20.0 actual — MILESTONE COMPLETE):**
 
-- Total test count at v19.0 end: 287+ tests (lib + integration; +78 vs v17.0)
-- Test count target post-v20.0: 297+ tests (Phase 25: +8 dyn_safety, Phase 27: +15 error variant/context)
-- Audit artifacts: 11 markdown files / 3,578 lines in `.planning/audit/`
-- Findings to remediate: 100 (5 P0 + 38 P1 + 44 P2 + 13 P3)
-- P0 items being addressed in Phase 25: 5 (ARCH-F-11, ARCH-F-12, API-F-01, API-F-02, API-F-03)
-- Estimated effort: ~190h total (per MIGRATION-ROADMAP.md)
+- Total test count post-v20.0: **1144 tests** (+857 vs v19.0's 287; final count with --all-features)
+- Test count change: 287 (v19.0) → 1139 (default) → 1144 (--all-features)
+- Doc coverage: 19.5% → **97.8%** (workspace pub items); 99.6% module docs (Phase 28 outcome)
+- Clippy: clean (0 warnings, 0 errors, including 3 pre-existing kv_cache_fp8 errors fixed in Phase 30)
+- cargo fmt: clean (133 files auto-fixed for Phase 28 doc-backfill indent issue)
+- ADRs created: **12** (Phase 29)
+- Phases shipped: 6/6 (Phase 25/26/27/28/29/30)
 
-**Velocity (v19.0 actual — for context):**
+**By Phase (actual v20.0):**
 
-- Total plans completed: 5 (v19.0)
-- Audit-only milestone (0 source code modified; analysis-only constraint honored)
-- Findings consolidated: 100 across 4 audit dimensions
-
-**Velocity (v18.0 historical):**
-
-- Total plans completed: 5 (v18.0) + 1 (Phase 19 gap closure)
-- Total test count change: 209 → 287+ tests
-- Total bench count: 3 → 4
-
-**By Phase (planned v20.0):**
-
-| Phase | Plans | Requirements | Theme |
-| ----- | ----- | ------------:| ----- |
-| 25    | 5     | 5            | P0 critical fixes + object-safety + vllm-dist feature-gate |
-| 26    | 4     | 7            | Module tree restoration + vllm-dist feature-gate |
-| 27    | 7     | 7            | Error handling standardization |
-| 28    | 10    | 7            | Doc coverage 7.6% → ≥60% |
-| 29    | 4     | 12           | External docs reconciliation + ADRs |
-| 30    | 9     | 10           | Naming + deprecation hygiene + final verification |
+| Phase | Plans | Requirements | Theme | Status |
+| ----- | ----- | ------------:| ----- | :----: |
+| 25    | 5     | 5            | P0 critical fixes + object-safety + vllm-dist feature-gate | ✓ |
+| 26    | 4     | 7            | Module tree restoration + vllm-dist feature-gate | ✓ |
+| 27    | 7     | 7            | Error handling standardization | ✓ |
+| 28    | 10    | 7            | Doc coverage 7.6% → 97.8% | ✓ |
+| 29    | 4     | 12           | External docs reconciliation + 12 ADRs | ✓ |
+| 30    | 9     | 10           | Naming + deprecation hygiene + final verification | ✓ |
 
 **Recent Trend:**
 
-- Last 5 commits: docs(audit) phase 20 → 21 → 22 → 23 → 24, then archive v19.0, then v20.0 milestone + requirements definition, then v20.0 roadmap
-- v19.0 shipped cleanly: all 5 audit phases delivered, 100 findings consolidated, archived
-- v20.0 starting position: 6-phase roadmap defined; 48/48 v1 requirements mapped; BACKLOG.md-driven execution
+- Last 5 commits (v20.0): refactor(model) Phase 30 NAM/DEP/CMT, chore(fmt) Phase 28 indent fix, docs(adr) Phase 29, docs(core) Phase 28 DOC-02/03 backfill, docs(AGENTS) Phase 28 DOC-07
+- v20.0 shipped cleanly: all 6 phases delivered, FINAL-01..04 gates green, ready for milestone archive
 
 ---
 
@@ -112,14 +100,13 @@ Progress: [█████░░░░░] 50%
 
 ### Pending Todos
 
-None — v20.0 roadmap defined; awaiting first phase plan (Phase 25).
+None — v20.0 milestone complete; awaiting `/gsd-complete-milestone` ceremony.
 
 ### Blockers/Concerns
 
 - `Engine::step()` in speculative mode hangs — pre-existing bug (not introduced by v18.0 or v19.0). 2 Phase 19 integration tests are `#[ignore]`d awaiting the fix. NOT blocking v20.0; will be addressed in v20.7+ or later remediation cycle.
 - Real-model benchmark missing — current bench uses stub backends. Out of scope for v20.0 (purely remediation); deferred indefinitely.
-- v20.0 Phase 25 risk — P0 architectural changes (layering, ModelError enum, object-safety) have non-trivial blast radius; rollback criteria defined in ROADMAP.md but real-world test impact unknown until execution begins.
-- v20.0 doc coverage target — REQUIREMENTS.md DOC-01 target is ≥60% workspace (per-crate target ≥80%); MIGRATION-ROADMAP.md proposes 60% as achievable in ~46h, 80% in ~60h. Phase 28 plan accommodates both targets via per-crate thresholds.
+- 44 P2 + 13 P3 audit findings — out of scope for v20.0; deferred to v20.7+ (per REQUIREMENTS.md traceability).
 
 ---
 
@@ -150,11 +137,11 @@ None — v20.0 roadmap defined; awaiting first phase plan (Phase 25).
 
 ## Session Continuity
 
-Last session: 2026-06-27 v20.0 roadmap defined
-Stopped at: v20.0 roadmap written (6 phases, 48/48 requirements mapped from REQUIREMENTS.md traceability); STATE.md and ROADMAP.md committed; ready for `/gsd-plan-phase 25`
+Last session: 2026-06-27 v20.0 milestone complete
+Stopped at: v20.0 milestone complete (6/6 phases shipped; FINAL-01..04 all green); PROJECT.md and STATE.md updated
 Resume file: None
-Next command: `/gsd-plan-phase 25` (Phase 25 — P0 Critical Fixes; high-risk architectural changes with rollback criteria)
+Next command: `/gsd-complete-milestone v20.0` (milestone archive ceremony)
 
 ---
 
-*State updated: 2026-06-27 — v20.0 roadmap defined (6 phases, 48/48 requirements mapped, phase dependency graph captured, Phase 25 includes rollback criteria, Phase 30 includes FINAL-01..04 verification gates)*
+*State updated: 2026-06-27 — v20.0 milestone complete (6/6 phases shipped: P0 fixes, module tree, error handling, doc coverage 97.8%, 12 ADRs, naming + final polish; FINAL-01..04 gates all green; 1144 tests pass; clippy/fmt clean)*
