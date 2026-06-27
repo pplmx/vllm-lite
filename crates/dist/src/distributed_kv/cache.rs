@@ -175,6 +175,7 @@ impl DistributedKVCache {
 }
 
 fn current_timestamp() -> u64 {
+    // invariant: monotonic clock is always >= UNIX_EPOCH.
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()

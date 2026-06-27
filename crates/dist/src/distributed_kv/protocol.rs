@@ -58,6 +58,7 @@ impl CacheMessage {
             source,
             destination,
             operation,
+            // invariant: monotonic clock is always >= UNIX_EPOCH.
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()

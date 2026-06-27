@@ -63,6 +63,7 @@ impl node_service_server::NodeService for NodeServiceImpl {
         Ok(Response::new(PingResponse {
             success: true,
             node_id: self.state.node_id.clone(),
+            // invariant: monotonic clock is always >= UNIX_EPOCH.
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
