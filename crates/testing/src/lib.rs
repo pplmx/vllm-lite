@@ -76,7 +76,7 @@ pub use slow_model::SlowModel;
 /// prelude: prelude module.
 ///
 /// Re-exports the commonly-used test utilities for `use vllm_testing::prelude::*;`.
-/// Excludes `SlowModel` (heavyweight; only needed for #[ignore] benchmark tests).
+/// Excludes `SlowModel` (heavyweight; only needed for `#[ignore]` benchmark tests).
 pub mod prelude {
     pub use super::{
         ConstModel, FakeModel, IncrementModel, RequestFactory, StubModel, TestFixtures, TestHarness,

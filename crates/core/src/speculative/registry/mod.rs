@@ -22,11 +22,11 @@
 //!
 //! The registry is split into focused files:
 //!
-//! - [`types`] — data types: [`DraftId`], [`DraftSpec`], [`LoadedDraft`],
+//! - `types` — data types: [`DraftId`], [`DraftSpec`], [`LoadedDraft`],
 //!   [`DraftState`]
-//! - [`errors`] — [`DraftRegistryError`]
-//! - [`loader`] — `register`, `attach_loaded`, `attach_loaded_budgeted`
-//! - [`lifecycle`] — unload, refcount, lookup, memory reporting
+//! - `errors` — [`DraftRegistryError`]
+//! - `loader` — `register`, `attach_loaded`, `attach_loaded_budgeted`
+//! - `lifecycle` — unload, refcount, lookup, memory reporting
 
 mod errors;
 mod lifecycle;

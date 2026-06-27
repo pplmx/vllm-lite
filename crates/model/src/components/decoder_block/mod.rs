@@ -1,7 +1,9 @@
 //! Shared pre-norm decoder block: RMSNorm → RoPE GQA → residual → RMSNorm → SwiGLU → residual.
 //!
 //! Used by Llama, Mistral, and Qwen3 causal-LM stacks.
-//! Registry blocks implement this trait via [`super::block::TransformerBlock`].
+//! Registry blocks implement this trait via [`TransformerBlock`].
+//!
+//! [`TransformerBlock`]: crate::components::block::TransformerBlock
 
 /// factory: factory module.
 pub mod factory;
