@@ -5,6 +5,8 @@ pub use vllm_traits::{Batch, BatchOutput, BlockId, SeqId, TokenId};
 pub use crate::kv_cache::BLOCK_SIZE;
 use crate::scheduler::cuda_graph::SchedulerCudaGraphConfig;
 
+pub use crate::speculative::DraftId;
+
 /// Configuration for adaptive speculative decoding
 #[derive(Clone, Debug)]
 pub struct AdaptiveDraftConfig {
@@ -51,6 +53,17 @@ pub struct Request {
     pub max_tokens: usize,
     pub sampling_params: SamplingParams,
     pub priority: Priority,
+    /// Optional external draft model to use for speculative decoding this
+    /// request (v18.0 RTE-01).
+    ///
+    /// - `None` → no external draft; engine uses self-spec (if enabled) or
+    ///   pure target decode.
+    /// - `Some(id)` → engine resolves `id` against the `DraftModelRegistry`.
+    ///   If the draft cannot be loaded, the engine silently falls back to
+    ///   self-spec (FALL-01). If the draft errors at runtime, the request
+    ///   degrades to non-spec decode for the remainder of its lifetime
+    ///   (FALL-02).
+    pub draft_model_id: Option<DraftId>,
 }
 
 impl Request {
@@ -61,11 +74,19 @@ impl Request {
             max_tokens,
             sampling_params: SamplingParams::default(),
             priority: Priority::default(),
+            draft_model_id: None,
         }
     }
 
     pub fn with_priority(mut self, priority: Priority) -> Self {
         self.priority = priority;
+        self
+    }
+
+    /// Bind this request to a specific external draft model. The engine will
+    /// resolve `id` against the registry at step time.
+    pub fn with_draft_model(mut self, id: impl Into<DraftId>) -> Self {
+        self.draft_model_id = Some(id.into());
         self
     }
 }
@@ -107,6 +128,14 @@ pub struct Sequence {
     pub sampling_params: SamplingParams,
     pub consecutive_decode_rounds: u32,
     pub priority: Priority,
+    /// Set to true when the draft model errored at runtime (v18.0 FALL-02).
+    /// While true, the engine routes this sequence through non-spec decode
+    /// (no draft attempts). Sticky for the lifetime of the sequence.
+    pub degraded_draft: bool,
+    /// The external draft model this sequence is bound to (v18.0 RTE-01/02).
+    /// `None` means no external draft — engine uses self-spec or non-spec.
+    /// Resolved against the `DraftModelRegistry` at step time.
+    pub draft_model_id: Option<DraftId>,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]

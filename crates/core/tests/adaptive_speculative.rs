@@ -212,6 +212,8 @@ fn test_speculative_verify_batch_dimensions_consistency() {
             sampling_params: SamplingParams::default(),
             consecutive_decode_rounds: 0,
             priority: Priority::default(),
+            degraded_draft: false,
+            draft_model_id: None,
         }
     }
 
@@ -262,6 +264,8 @@ fn test_prefill_batch_single_sequence() {
             sampling_params: SamplingParams::default(),
             consecutive_decode_rounds: 0,
             priority: Priority::default(),
+            degraded_draft: false,
+            draft_model_id: None,
         }
     }
 
@@ -301,6 +305,8 @@ fn test_prefill_batch_with_partial_computed() {
             sampling_params: SamplingParams::default(),
             consecutive_decode_rounds: 0,
             priority: Priority::default(),
+            degraded_draft: false,
+            draft_model_id: None,
         }
     }
 
@@ -350,6 +356,8 @@ fn test_decode_batch_contains_only_last_token() {
             sampling_params: SamplingParams::default(),
             consecutive_decode_rounds: 0,
             priority: Priority::default(),
+            degraded_draft: false,
+            draft_model_id: None,
         }
     }
 
@@ -402,6 +410,8 @@ fn test_decode_batch_position_is_tokens_len_minus_one() {
             sampling_params: SamplingParams::default(),
             consecutive_decode_rounds: 0,
             priority: Priority::default(),
+            degraded_draft: false,
+            draft_model_id: None,
         }
     }
 

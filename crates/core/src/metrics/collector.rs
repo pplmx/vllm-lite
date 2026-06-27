@@ -21,6 +21,12 @@ pub struct EnhancedMetricsCollector {
     request_queue_depth: AtomicU64,
     active_sequences: AtomicU64,
     speculative_per_request_count: AtomicU64,
+    // v18.0 multi-model speculative decoding
+    draft_resolutions_external_total: AtomicU64,
+    draft_resolutions_self_spec_total: AtomicU64,
+    draft_resolutions_none_total: AtomicU64,
+    draft_load_failures_total: AtomicU64,
+    draft_runtime_errors_total: AtomicU64,
     inference_latency_ns: DashMap<String, Vec<u64>>,
     per_request_acceptance: DashMap<SeqId, (AtomicU64, AtomicU64)>,
 }
@@ -43,6 +49,11 @@ impl EnhancedMetricsCollector {
             request_queue_depth: AtomicU64::new(0),
             active_sequences: AtomicU64::new(0),
             speculative_per_request_count: AtomicU64::new(0),
+            draft_resolutions_external_total: AtomicU64::new(0),
+            draft_resolutions_self_spec_total: AtomicU64::new(0),
+            draft_resolutions_none_total: AtomicU64::new(0),
+            draft_load_failures_total: AtomicU64::new(0),
+            draft_runtime_errors_total: AtomicU64::new(0),
             inference_latency_ns: DashMap::new(),
             per_request_acceptance: DashMap::new(),
         }
@@ -193,6 +204,55 @@ impl EnhancedMetricsCollector {
         }
     }
 
+    // ───────────────────── v18.0 multi-model spec metrics ─────────────────────
+
+    /// Increment the draft-resolution counter for the given result kind.
+    /// `kind` is one of "external", "self_spec", "none".
+    pub fn inc_draft_resolution(&self, kind: &str) {
+        match kind {
+            "external" => {
+                self.draft_resolutions_external_total
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+            "self_spec" => {
+                self.draft_resolutions_self_spec_total
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+            "none" => {
+                self.draft_resolutions_none_total
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+            _ => {}
+        }
+    }
+
+    /// Increment the draft-load-failure counter (FALL-01 trigger).
+    pub fn inc_draft_load_failure(&self) {
+        self.draft_load_failures_total
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Increment the draft-runtime-error counter (FALL-02 trigger).
+    pub fn inc_draft_runtime_error(&self) {
+        self.draft_runtime_errors_total
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Snapshot the v18.0 counters as a struct (for tests / exporters).
+    pub fn draft_metrics_snapshot(&self) -> DraftMetricsSnapshot {
+        DraftMetricsSnapshot {
+            resolutions_external_total: self
+                .draft_resolutions_external_total
+                .load(Ordering::Relaxed),
+            resolutions_self_spec_total: self
+                .draft_resolutions_self_spec_total
+                .load(Ordering::Relaxed),
+            resolutions_none_total: self.draft_resolutions_none_total.load(Ordering::Relaxed),
+            load_failures_total: self.draft_load_failures_total.load(Ordering::Relaxed),
+            runtime_errors_total: self.draft_runtime_errors_total.load(Ordering::Relaxed),
+        }
+    }
+
     // Getters for testing and export
     pub fn get_counter(&self, name: &str) -> u64 {
         match name {
@@ -308,4 +368,38 @@ mod tests {
         let gauge = collector.get_gauge("speculative_efficiency");
         assert_eq!(gauge, 75000);
     }
+
+    #[test]
+    fn test_collector_records_draft_resolution_metrics() {
+        let collector = EnhancedMetricsCollector::new();
+        collector.inc_draft_resolution("external");
+        collector.inc_draft_resolution("external");
+        collector.inc_draft_resolution("self_spec");
+        collector.inc_draft_resolution("none");
+        let snap = collector.draft_metrics_snapshot();
+        assert_eq!(snap.resolutions_external_total, 2);
+        assert_eq!(snap.resolutions_self_spec_total, 1);
+        assert_eq!(snap.resolutions_none_total, 1);
+    }
+
+    #[test]
+    fn test_collector_records_draft_failures() {
+        let collector = EnhancedMetricsCollector::new();
+        collector.inc_draft_load_failure();
+        collector.inc_draft_load_failure();
+        collector.inc_draft_runtime_error();
+        let snap = collector.draft_metrics_snapshot();
+        assert_eq!(snap.load_failures_total, 2);
+        assert_eq!(snap.runtime_errors_total, 1);
+    }
+}
+
+/// Snapshot of v18.0 multi-model speculative decoding metrics.
+#[derive(Debug, Clone, Default)]
+pub struct DraftMetricsSnapshot {
+    pub resolutions_external_total: u64,
+    pub resolutions_self_spec_total: u64,
+    pub resolutions_none_total: u64,
+    pub load_failures_total: u64,
+    pub runtime_errors_total: u64,
 }

@@ -35,6 +35,8 @@ fn bench_request_queue_operations(c: &mut Criterion) {
                 sampling_params: vllm_core::types::SamplingParams::default(),
                 consecutive_decode_rounds: 0,
                 priority: Priority::default(),
+                degraded_draft: false,
+                draft_model_id: None,
             };
             queue.enqueue(seq, &policy, &ctx);
         }
@@ -58,6 +60,8 @@ fn bench_request_queue_operations(c: &mut Criterion) {
                         sampling_params: vllm_core::types::SamplingParams::default(),
                         consecutive_decode_rounds: 0,
                         priority: Priority::default(),
+                        degraded_draft: false,
+                        draft_model_id: None,
                     };
                     q.enqueue(seq, &policy, &ctx);
                 }
@@ -83,6 +87,8 @@ fn bench_scheduling_policies(c: &mut Criterion) {
         sampling_params: vllm_core::types::SamplingParams::default(),
         consecutive_decode_rounds: 0,
         priority: Priority(50),
+        degraded_draft: false,
+        draft_model_id: None,
     };
     let ctx = SchedulingContext {
         current_time: Instant::now(),

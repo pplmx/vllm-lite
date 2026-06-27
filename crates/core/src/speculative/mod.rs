@@ -6,6 +6,7 @@
 pub mod adaptive;
 pub mod config;
 pub mod draft_registry;
+pub mod draft_resolver;
 pub mod memory_budget;
 pub mod model;
 pub mod self_spec;
@@ -17,6 +18,7 @@ pub use config::{SpeculationConfig, SpeculationConfigBuilder};
 pub use draft_registry::{
     DraftId, DraftModelRegistry, DraftRegistryError, DraftSpec, DraftState, LoadedDraft,
 };
+pub use draft_resolver::{DraftLoader, DraftResolver, ResolvedDraft};
 pub use memory_budget::{
     DEFAULT_BLOCK_BYTES, MemoryBudget, MemoryBudgetExceeded, MemoryBudgetSnapshot,
 };

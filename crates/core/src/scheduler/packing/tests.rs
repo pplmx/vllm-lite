@@ -14,6 +14,8 @@ fn create_sequence(id: u64, len: usize) -> Sequence {
         sampling_params: SamplingParams::default(),
         consecutive_decode_rounds: 0,
         priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
     }
 }
 
