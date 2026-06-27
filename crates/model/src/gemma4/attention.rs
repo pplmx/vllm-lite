@@ -361,21 +361,32 @@ impl Gemma4Attention {
 
 impl Default for Gemma4Attention {
     fn default() -> Self {
+        // 1x1 F32 CPU tensor allocation cannot realistically fail (4 bytes).
+        // Using `.expect` with a descriptive message instead of `.unwrap()`
+        // to satisfy ERR-03 (documented production .expect() sites).
         Self {
             q_proj: Linear::new(
-                Tensor::zeros((1, 1), candle_core::DType::F32, &candle_core::Device::Cpu).unwrap(),
+                Tensor::zeros((1, 1), candle_core::DType::F32, &candle_core::Device::Cpu).expect(
+                    "failed to allocate 1x1 F32 CPU tensor for Gemma4Attention::default q_proj",
+                ),
                 None,
             ),
             k_proj: Linear::new(
-                Tensor::zeros((1, 1), candle_core::DType::F32, &candle_core::Device::Cpu).unwrap(),
+                Tensor::zeros((1, 1), candle_core::DType::F32, &candle_core::Device::Cpu).expect(
+                    "failed to allocate 1x1 F32 CPU tensor for Gemma4Attention::default k_proj",
+                ),
                 None,
             ),
             v_proj: Linear::new(
-                Tensor::zeros((1, 1), candle_core::DType::F32, &candle_core::Device::Cpu).unwrap(),
+                Tensor::zeros((1, 1), candle_core::DType::F32, &candle_core::Device::Cpu).expect(
+                    "failed to allocate 1x1 F32 CPU tensor for Gemma4Attention::default v_proj",
+                ),
                 None,
             ),
             o_proj: Linear::new(
-                Tensor::zeros((1, 1), candle_core::DType::F32, &candle_core::Device::Cpu).unwrap(),
+                Tensor::zeros((1, 1), candle_core::DType::F32, &candle_core::Device::Cpu).expect(
+                    "failed to allocate 1x1 F32 CPU tensor for Gemma4Attention::default o_proj",
+                ),
                 None,
             ),
             num_heads: 0,
