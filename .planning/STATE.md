@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v20.0
-milestone_name: Codebase Remediation (BACKLOG.md-driven)
-status: complete
-last_updated: "2026-06-27T18:00:00.000Z"
+milestone: v21.0
+milestone_name: P2/P3 Backlog Cleanup
+status: planning
+last_updated: "2026-06-27T11:29:54.848Z"
 last_activity: 2026-06-27
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 39
-  completed_plans: 39
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,20 +20,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-27)
 
 **Core value:** Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
-**Current focus:** v20.0 Codebase Remediation — COMPLETE (6/6 phases shipped; FINAL-01..04 gates all green)
+**Current focus:** v21.0 P2/P3 Backlog Cleanup — PLANNING (defining requirements + roadmap; 5 phases scoped: 31-35)
 
 ---
 
 ## Current Position
 
-Phase: 30 of 30 (Phase 30 — Naming + Final Polish + Verification) — COMPLETE
-Plan: All 6 phases (25-30) shipped
-Status: v20.0 milestone complete; ready for `/gsd-complete-milestone` ceremony
-Last activity: 2026-06-27 — Phase 30 NAM-01/02 + DEP-01/02 + CMT-01/02 + FINAL-01..04 all green
-
-Progress: [██████████] 100%
-
----
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-27 — Milestone v21.0 started
 
 ## Performance Metrics
 
