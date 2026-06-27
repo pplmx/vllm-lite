@@ -1,7 +1,9 @@
 //! Architecture registry block trait.
 //!
-//! [`TransformerBlock`] extends [`super::decoder_block::PagedDecoderBlock`] with layer
-//! metadata for [`crate::arch::Architecture::create_block`] dynamic dispatch.
+//! [`TransformerBlock`] extends [`PagedDecoderBlock`] with layer metadata
+//! for [`crate::arch::Architecture::create_block`] dynamic dispatch.
+//!
+//! [`PagedDecoderBlock`]: crate::components::decoder_block::PagedDecoderBlock
 
 use crate::components::decoder_block::PagedDecoderBlock;
 use crate::paged_tensor::PagedKvCache;

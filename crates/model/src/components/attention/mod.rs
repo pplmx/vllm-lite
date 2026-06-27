@@ -4,7 +4,7 @@
 //! Most call sites should `use` the specific submodule (`gqa`, `mla`,
 //! `paged_gqa`, etc.). The utility helpers (`expand_kv`, `causal_mask`,
 //! `paged_attention`, `tiled_attention`, `AttentionConfig`) live in
-//! [`util`] and are re-exported here for convenience.
+//! the `util` module and are re-exported here for convenience.
 
 /// flash: flash module.
 pub mod flash;

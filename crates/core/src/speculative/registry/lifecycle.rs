@@ -145,7 +145,7 @@ impl DraftModelRegistry {
         Ok(entry.spec().ref_count)
     }
 
-    /// Get a clone of the Arc<Mutex<Box<dyn ModelBackend>>> for a loaded draft.
+    /// Get a clone of the `Arc<Mutex<Box<dyn ModelBackend>>>` for a loaded draft.
     /// Returns None if the draft is unloaded or unknown. Used by
     /// `DraftResolver` to hand the backend to the engine.
     pub fn get_loaded_backend(&self, id: &DraftId) -> Option<Arc<Mutex<Box<dyn ModelBackend>>>> {

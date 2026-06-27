@@ -155,8 +155,8 @@ impl Engine {
     /// Construct an Engine pre-loaded with a set of draft specs.
     ///
     /// All specs are registered in the [`DraftModelRegistry`] as `Unloaded`.
-    /// They will be loaded lazily on first use (or eagerly via
-    /// [`Self::preload_drafts`]) by the caller — this method does NOT trigger
+    /// They will be loaded lazily on first use (or eagerly by the caller —
+    /// see `DraftModelRegistry::attach_loaded`) — this method does NOT trigger
     /// any I/O. The Engine's `draft_resolver` is wired with a `NoopLoader`:
     /// any attempt to lazy-load falls back to self-spec via FALL-01. The
     /// server should construct a real `DraftLoader` via
