@@ -14,3 +14,6 @@ candle-core = { version = "0.10.2", optional = true }
 default = []
 candle = ["candle-core"]
 kernels = []
+
+[lints]
+workspace = true
