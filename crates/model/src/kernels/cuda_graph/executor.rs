@@ -115,6 +115,28 @@ impl BatchCudaGraphExecutor {
         }
     }
 
+    /// Look up a captured graph by key, returning a typed error if absent.
+    ///
+    /// This is the post-`find_graph_key` lookup site. In normal operation
+    /// `find_graph_key` only returns `Some(k)` when `self.graphs.contains_key(&k)`,
+    /// so this branch is unreachable. The typed error protects against future
+    /// refactors that may weaken that invariant (or against logic errors where
+    /// a graph is invalidated between the key lookup and the actual retrieval).
+    fn lookup_graph(
+        &self,
+        graph_key: usize,
+        batch_size: usize,
+    ) -> Result<&CudaGraph, GraphExecutionError> {
+        self.graphs.get(&graph_key).ok_or_else(|| {
+            tracing::warn!(
+                batch_size,
+                graph_key,
+                "CUDA graph cache miss; key remapped but not found"
+            );
+            GraphExecutionError::GraphNotFound(batch_size)
+        })
+    }
+
     /// Get number of captured graphs
     pub fn graph_count(&self) -> usize {
         self.graphs.len()
@@ -219,9 +241,8 @@ impl BatchCudaGraphExecutor {
             self.cache_hits.fetch_add(1, Ordering::Relaxed);
         }
 
-        let graph = self.graphs.get(&graph_key).unwrap();
         let mut tensors: Vec<Box<dyn crate::kernels::cuda_graph::CudaGraphTensor>> = vec![];
-        graph
+        self.lookup_graph(graph_key, batch_size)?
             .execute(&mut tensors)
             .map_err(|e| GraphExecutionError::GraphExecutionFailed(e.to_string()))?;
 
@@ -333,6 +354,37 @@ mod tests {
             result.unwrap_err(),
             GraphExecutionError::GraphNotFound(2)
         ));
+    }
+
+    #[test]
+    fn test_lookup_graph_returns_not_found_for_missing_key() {
+        // Verifies the unwrap-to-error conversion at the post-find_graph_key
+        // lookup site. In normal operation this branch is unreachable because
+        // find_graph_key checks contains_key before returning Some, but the
+        // typed error protects against future refactors that weaken that
+        // invariant or against logic errors where a graph is invalidated
+        // between the key lookup and the actual retrieval.
+        let config = CudaGraphConfig {
+            enabled: true,
+            ..Default::default()
+        };
+        let executor = BatchCudaGraphExecutor::new(config).unwrap();
+        let result = executor.lookup_graph(999, 999);
+        assert!(matches!(
+            result,
+            Err(GraphExecutionError::GraphNotFound(999))
+        ));
+    }
+
+    #[test]
+    fn test_lookup_graph_returns_graph_for_captured_key() {
+        // Positive control: verifies lookup_graph returns the captured graph
+        // when the key is present, so the typed-error test above cannot be
+        // passing because of an unrelated always-Err implementation.
+        let mut executor = BatchCudaGraphExecutor::new(CudaGraphConfig::default()).unwrap();
+        executor.capture_graph_for_batch_size(4).unwrap();
+        let result = executor.lookup_graph(4, 4);
+        assert!(result.is_ok());
     }
 
     #[test]
