@@ -8,24 +8,27 @@ A production-ready LLM inference engine in Rust, optimized for single and multi-
 
 Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
 
-## Current Milestone: v20.0 Codebase Remediation (BACKLOG.md-driven) — SHIPPED 2026-06-27
+## Current Milestone: v21.0 P2/P3 Backlog Cleanup — STARTING 2026-06-27
 
-**Goal:** 执行 v19.0 审计产出的修复 backlog,按 MIGRATION-ROADMAP.md 提议顺序执行 6 个子 phase(v20.1→v20.6),系统化恢复 codebase 健康度;**这是 v19.0 审计清单的修复 milestone**,所有改动基于 `.planning/audit/BACKLOG.md` 的 100 个 finding。
+**Goal:** 收尾 v19.0 审计 backlog 剩下的 44 P2 + 13 P3 条 finding(v20.0 已修完 5 P0 + 38 P1);目标 100% backlog closure。
 
-**Target features (按 phase 分组):**
+**Target scope (按主题分组):**
 
-- **Phase 25 (v20.1): P0 关键修复** — 消除 `vllm-model → vllm-dist` 依赖 (feature-gate),`ModelError` struct → enum,8 个 non-object-safe trait 同步修
-- **Phase 26 (v20.2): 模块树恢复** — orphan 模块挂回,stage-info 文件改名,3 个未注册 test 文件迁出
-- **Phase 27 (v20.3): 错误处理标准化** — 13 个错误类型统一,`Result<_, String>` 消除,context propagation
-- **Phase 28 (v20.4): 文档覆盖率提升** — workspace 7.6% → ≥60%,`///` 补 776 个 pub item,121 个文件补 `//!`,README 修复
-- **Phase 29 (v20.5): 外部文档调和** — README/AGENTS.md 准确性,补 12+ 缺失 ADR
-- **Phase 30 (v20.6): 命名 + 收尾** — 7 P1 + 19 P2 命名,弃用卫生,注释清理
+- **模块布局重组 (9 项, ARCH-F-05..F-19)** — `draft_registry.rs` 拆分、`engine/` 子树整理、`qwen3_config.rs` 下沉、`attention/mod.rs` 工具外移、`vllm-testing` lemon pair 拆分、`TensorParallelError` 迁回 `vllm-dist`、test_fixtures 迁移、`vllm-testing` exports 验证
+- **API 一致性 (12 项, API-F-12..F-24)** — builder vs struct-literal 文档化、`Box<dyn Error>` 替换、`predictive_batching.rs` unwrap 修、22 个 builder 引入、`#[source]` 补、`Default` for object-safe traits、FallbackStrategy sync/async 拆分、`From<candle_core::Error>`、`request_id`/`seq_id` 错误 context 携带
+- **命名一致性 (12 项, NAME-F-08..F-21)** — `flash_v3.rs` 重命名、`NodeInfo` 评估、`*Manager`/`*Data` 文档化、async/sync split 文档化、单字母变量 tensor-math 例外文档化、非 tensor 单字母变量重命名、test 文件位置约定
+- **外部 doc 修复 (4 项, DOCS-F-21..F-24)** — DeepSeek in REQUIREMENTS.md 修正、vllm-dist 投资 ADR、Phase 5 Wave 4 ref 修正、PROJECT.md Key Decisions 交叉链接 ADRs
+- **P3 actionable 验证 (~5 项)** — ARCH-F-15 dead mod 清理、API-F-25 gemma4 unwrap、API-F-27 MIGRATING.md、API-F-31 CircuitBreakerError 变体、API-F-32 unwrap 计数重核、API-F-33 CudaGraphError Clone
+
+**估算:** ~75h (~2 working weeks)
+
+**Phase 编号延续:** v20.0 收尾于 Phase 30 → v21.0 从 Phase 31 开始
 
 ## Current State
 
-**Current Milestone:** v20.0 Codebase Remediation (FINAL — Phase 30 complete)
+**Current Milestone:** v21.0 P2/P3 Backlog Cleanup (planning)
 **Latest Shipped:** v20.0 Codebase Remediation (2026-06-27, 6/6 sub-phases complete, all FINAL gates green)
-**Status:** v20.0 收官;1139+ tests pass,clippy clean,fmt clean,12 new ADRs,doc coverage 19.5% → 97.8%
+**Status:** v21.0 启动中;1139+ tests pass,clippy clean,fmt clean,12 new ADRs,doc coverage 19.5% → 97.8%
 
 ### Phase 17 Achievements (v17.0 shipped)
 
@@ -198,6 +201,65 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 - [x] **FINAL-03**: Verify `cargo fmt --all --check` clean (**clean** — auto-fixed 133 files from Phase 28 doc-backfill indent issue)
 - [x] **FINAL-04**: Update `.planning/PROJECT.md` and `.planning/STATE.md` with v20.0 outcomes
 
+**v21.0: P2/P3 Backlog Cleanup**
+
+#### Phase 31 (v21.1): 模块布局重组 (Module Layout Reorganization) — ~37h
+
+- [ ] **ML-01** (ARCH-F-05): Split `draft_registry.rs` (929 LOC) into `registry/loader.rs`
+- [ ] **ML-02** (ARCH-F-06): Collapse `engine.rs` + `engine/speculative.rs` into `engine/speculative/` sub-tree
+- [ ] **ML-03** (ARCH-F-07/09): Move `qwen3_config.rs` (487 LOC, top-level) into `qwen3/config.rs`
+- [ ] **ML-04** (ARCH-F-08): Move `attention/mod.rs` utilities (180+ LOC) to `attention/util.rs`
+- [ ] **ML-05** (ARCH-F-10): Split `vllm-testing` into `vllm-testkit` + `vllm-harness` (lemon pair)
+- [ ] **ML-06** (ARCH-F-13): Move `TensorParallelError` to `vllm-dist::error`; re-export from `vllm-traits`
+- [ ] **ML-07** (ARCH-F-14): Move `crates/server/src/test_fixtures.rs` into `vllm-testing`
+- [ ] **ML-08** (ARCH-F-16): Migrate server tests to use `vllm-testing` instead of `test_fixtures`
+- [ ] **ML-09** (ARCH-F-19): Verify or remove unused `vllm-testing` exports
+
+#### Phase 32 (v21.2): API 一致性 (API Consistency) — ~21h
+
+- [ ] **API-01** (API-F-12): Document builder vs struct-literal convention in AGENTS.md
+- [ ] **API-02** (API-F-14): Add `#[source]` to `DraftRegistryError::LoadFailed(String)`
+- [ ] **API-03** (API-F-15): Replace 2 `Box<dyn Error>` in `model` lib with typed errors
+- [ ] **API-04** (API-F-16): Replace `Mutex::lock().unwrap()` in `predictive_batching.rs` (8 sites) with parking_lot or sync helper
+- [ ] **API-05** (API-F-17): Introduce 22 builders where only `Default` exists (ergonomics)
+- [ ] **API-06** (API-F-18): Add `dyn Trait` compile-only tests per trait
+- [ ] **API-07** (API-F-19): Add public re-exports of common trait bounds at crate roots
+- [ ] **API-08** (API-F-20): Split `FallbackStrategy` into sync + async traits
+- [ ] **API-09** (API-F-21): Add missing `From<candle_core::Error>` for `EngineError`
+- [ ] **API-10** (API-F-22): Add `Default` impl for object-safe traits (`DraftVerifier`, `SchedulerObserver`)
+- [ ] **API-11** (API-F-24): Carry `request_id`/`seq_id` in error context (structured fields)
+
+#### Phase 33 (v21.3): 命名一致性 (Naming Consistency) — ~5h
+
+- [ ] **NAM-01** (NAME-F-08): Rename `flash_v3.rs` → `flash_attention_v3.rs`
+- [ ] **NAM-02** (NAME-F-10): Document `*Manager` suffix usage in AGENTS.md
+- [ ] **NAM-03** (NAME-F-11): Consider renaming `NodeInfo` → `NodeSummary`/`NodeMetadata` (decide + execute)
+- [ ] **NAM-04** (NAME-F-14): Document `create_*` vs `build_*` policy in AGENTS.md
+- [ ] **NAM-05** (NAME-F-16): Document async/sync split rationale in AGENTS.md
+- [ ] **NAM-06** (NAME-F-17): Add AGENTS.md exemption for tensor-math single-letter variables (`q`/`k`/`v`/`o`/`b`/`c`/`h`/`z`/`d`/`x`)
+- [ ] **NAM-07** (NAME-F-18): Rename non-tensor single-letter variables in scheduler/sampling code
+- [ ] **NAM-08** (NAME-F-19): Document test-file location convention in AGENTS.md
+
+#### Phase 34 (v21.4): 外部 doc 修复 (External Doc Fixes) — ~3.25h
+
+- [ ] **DOC-01** (DOCS-F-21): Remove DeepSeek from `REQUIREMENTS.md:53` or add directory back
+- [ ] **DOC-02** (DOCS-F-22): ADR for vllm-dist investment vs deprecation decision
+- [ ] **DOC-03** (DOCS-F-23): Reframe `qwen3_5/speculative_tests.rs:1` "Phase 5 Wave 4" reference
+- [ ] **DOC-04** (DOCS-F-24): Cross-link `.planning/PROJECT.md` "Key Decisions" to ADRs
+
+#### Phase 35 (v21.5): P3 actionable + Final Verification — ~5h
+
+- [ ] **P3-01** (ARCH-F-15): Clean up dead `crates/traits/tests/mod.rs`
+- [ ] **P3-02** (API-F-25): Fix `gemma4/attention.rs` `Tensor::zeros((1,1), …).unwrap()` non-test
+- [ ] **P3-03** (API-F-27): Create `MIGRATING.md` or versioned changelog
+- [ ] **P3-04** (API-F-31): Add `HalfOpenRejected(u32)` variant to `CircuitBreakerError`
+- [ ] **P3-05** (API-F-32): Re-verify `model` crate production `unwrap()` count after v21.0 changes
+- [ ] **P3-06** (API-F-33): Verify `CudaGraphError` `Clone` derive intent (keep or remove)
+- [ ] **FINAL-01**: All 1100+ tests remain green post-remediation
+- [ ] **FINAL-02**: `cargo clippy --workspace --all-targets --all-features -- -D warnings` clean
+- [ ] **FINAL-03**: `cargo fmt --all --check` clean
+- [ ] **FINAL-04**: `cargo test --workspace --all-features` ≥ 1144 tests pass
+
 ### Out of Scope (v20.0)
 
 - New features — milestone is purely remediation; no new capabilities
@@ -206,6 +268,14 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 - New architecture (e.g., adding a new crate) — out of scope; v20.0 only removes/fixes
 - Tree-based speculation — still too complex (carried from v18.0)
 - vllm-dist resurrection — feature-gated but not deleted; multi-node work is future
+
+### Out of Scope (v21.0)
+
+- Engine::step() speculative-mode hang fix — pre-existing bug, deferred to bug-fix milestone
+- Real-model benchmarks — out of scope (carried from v18.0)
+- Multi-node / vllm-dist resurrection — feature-gated, not in scope for v21.0
+- New features — milestone is purely backlog closure
+- v20.0 carry-over (5 cargo doc warnings, 1 gguf TODO) — low priority, optional in v21.x
 
 ### Out of Scope (carried from earlier milestones)
 
@@ -233,6 +303,26 @@ Key v20.0 decisions (from user input):
 - **vllm-dist fate**: feature-gate (not remove, not retain)
 - **Object-safety + ModelError**: fixed together in v20.1 (both P0)
 - **Scope**: all 6 sub-phases within single v20.0 milestone
+
+## v21.0 Replaces (Deferred Then Promoted) — now active
+
+The v19.0 audit produced 100 findings. v20.0 executed 5 P0 + 38 P1. v21.0 closes the remaining 44 P2 + 13 P3 backlog per `.planning/audit/BACKLOG.md`:
+
+| Sub-phase | Focus | Items | Effort |
+|-----------|-------|------:|-------:|
+| 31 (v21.1) | 模块布局重组 (ARCH-F-05..F-19) | 9 | ~37h |
+| 32 (v21.2) | API 一致性 (API-F-12..F-24) | 11 | ~21h |
+| 33 (v21.3) | 命名一致性 (NAME-F-08..F-19) | 8 | ~5h |
+| 34 (v21.4) | 外部 doc 修复 (DOCS-F-21..F-24) | 4 | ~3.25h |
+| 35 (v21.5) | P3 actionable + Final verification | 6 + 4 FINAL | ~5h |
+| **Total** | | **42** | **~71h** |
+
+Note: 2 of the 44 P2 items (NAME-F-13, NAME-F-20) are zero-effort "no action" findings per BACKLOG.md, so effective P2 work = 42.
+
+Key v21.0 decisions (from user input):
+- **Scope**: All 44 P2 + selected actionable P3 (not just P2 high-impact subset)
+- **Phase numbering**: Continue from Phase 30 → Phase 31
+- **Carry-over from v20.0 audit**: Engine::step() hang + cargo doc warnings + gguf TODO — out of scope for v21.0 (separate bug-fix milestone if desired)
 
 ## v18.0 Replaces (Deferred Then Promoted) — now historical
 
@@ -262,15 +352,24 @@ v19.0 audit shipped 23/23 requirements, 0 source code modified (analysis-only). 
 
 Full backlog: `.planning/audit/BACKLOG.md` — proposed phasing: `.planning/audit/MIGRATION-ROADMAP.md`
 
-v20.0 build-on:
+v20.0 build-on (SHIPPED 2026-06-27):
 
 - Direct execution of prioritized audit findings, organized into 6 sub-phases
 - Backward-compat: existing public API must remain stable (with `#[deprecated]` for removed items)
 - All 1100+ existing tests must remain green
 - v18.0 speculative decoding functionality preserved
+- **Outcome**: 5 P0 + 38 P1 = 43 findings fixed; 1144 tests pass; clippy/fmt clean; doc coverage 97.8%
+
+v21.0 build-on:
+
+- Direct execution of remaining 44 P2 + selected actionable P3 (13 total), organized into 5 sub-phases
+- Same backward-compat constraints (no breaking changes without `#[deprecated]`)
+- Same test invariants (1100+ tests must remain green; aim for ≥ 1144 post-v21.0)
+- v20.0 architectural improvements preserved
+- **Goal**: 100% backlog closure (all 100 v19 findings addressed)
 
 Tech stack: Rust + Candle, multi-GPU CUDA support, Kubernetes, gRPC.
-Codebase state (v19.0 end): 7 crates; speculative decoding complete (v18.0); draft registry + memory budget live in core; HTTP server with OpenAI-compatible API; 100 remediation findings ready.
+Codebase state (v20.0 end): 6 crates; speculative decoding complete (v18.0); draft registry + memory budget live in core; HTTP server with OpenAI-compatible API; 100 v19 audit findings → 43 fixed (v20.0), 57 deferred (v21.0 scope).
 
 ## Constraints
 
@@ -302,6 +401,9 @@ Codebase state (v19.0 end): 7 crates; speculative decoding complete (v18.0); dra
 | Single big v20.0 milestone | All 6 sub-phases in one milestone (vs splitting v20.1-v20.6) | Shipped — v20.0              |
 | EmbeddingData rename | Rename + #[deprecated] alias (vs breaking change) | Shipped — v20.0              |
 | Verb policy formalization | Document `get_/load_/read_/create_/build_` semantics in AGENTS.md rather than enforce mechanically | Shipped — v20.0              |
+| P2/P3 scope for v21.0 | All 44 P2 + selected actionable P3 (vs only high-impact subset) | Planned — v21.0              |
+| v21.0 phase structure | 5 phases (Phase 31-35) mirroring v20.0's 6-phase pattern; each phase ~one theme | Planned — v21.0              |
+| P3 items mostly informational | Only ~6 of 13 P3 items need action; rest are "no action" or "vacuous positive" findings | Planned — v21.0              |
 
 ## Evolution
 
@@ -322,4 +424,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-27 — v20.0 remediation milestone complete (Phase 30 NAM-01/02 + DEP + CMT + FINAL gates all green); 12 new ADRs, doc coverage 19.5% → 97.8%, 1144 tests pass, clippy/fmt clean*
+*Last updated: 2026-06-27 — v20.0 remediation milestone complete (Phase 30 NAM-01/02 + DEP + CMT + FINAL gates all green); 12 new ADRs, doc coverage 19.5% → 97.8%, 1144 tests pass, clippy/fmt clean; **v21.0 P2/P3 Backlog Cleanup milestone initialized** (5 phases: Module Layout → API → Naming → External Docs → P3 verification)*
