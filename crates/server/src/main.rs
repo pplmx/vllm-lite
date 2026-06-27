@@ -14,6 +14,7 @@ use vllm_core::engine::Engine;
 use vllm_core::metrics::{EnhancedMetricsCollector, PrometheusExporter};
 use vllm_core::types::AdaptiveDraftConfig;
 use vllm_core::types::EngineMessage;
+use vllm_core::types::SchedulerConfig;
 use vllm_model::loader::ModelLoader;
 use vllm_model::tokenizer::Tokenizer;
 use vllm_server::auth::AuthMiddleware;
@@ -115,11 +116,67 @@ async fn main() {
         None
     };
 
-    let mut engine = Engine::new_boxed(model, draft_model);
+    // v18.0: build the engine using with_budget_boxed / with_drafts_boxed when
+    // the server config declares a VRAM budget or external draft specs. The
+    // legacy new_boxed path is preserved for backward compatibility.
+    let draft_specs: Vec<vllm_core::speculative::DraftSpec> = app_config
+        .engine
+        .draft_specs
+        .iter()
+        .map(|c| {
+            let mut spec =
+                vllm_core::speculative::DraftSpec::new(c.id.clone(), c.path.clone(), c.num_layers);
+            if c.weight_size_bytes > 0 {
+                spec = spec.with_weight_size(c.weight_size_bytes);
+            }
+            if let Some(arch) = &c.architecture {
+                spec = spec.with_arch_hint(arch.clone());
+            }
+            spec
+        })
+        .collect();
+
+    let mut engine = if let Some(budget_bytes) = app_config.engine.vram_budget_bytes {
+        use std::sync::Arc;
+        let budget = Arc::new(
+            vllm_core::speculative::MemoryBudget::new(budget_bytes)
+                .expect("server config: invalid vram_budget_bytes"),
+        );
+        tracing::info!(
+            budget_bytes,
+            draft_specs = draft_specs.len(),
+            "Constructing Engine with VRAM budget (v18.0 path)"
+        );
+        Engine::with_budget_boxed(
+            model,
+            draft_model,
+            draft_specs,
+            budget,
+            SchedulerConfig::default(),
+            app_config.engine.max_draft_tokens,
+            app_config.engine.num_kv_blocks,
+        )
+    } else if !draft_specs.is_empty() {
+        tracing::info!(
+            draft_specs = draft_specs.len(),
+            "Constructing Engine with draft specs (v18.0 path, no budget)"
+        );
+        Engine::with_drafts_boxed(
+            model,
+            draft_model,
+            draft_specs,
+            SchedulerConfig::default(),
+            app_config.engine.max_draft_tokens,
+            app_config.engine.num_kv_blocks,
+        )
+    } else {
+        Engine::new_boxed(model, draft_model)
+    };
 
     tracing::debug!(
         draft_enabled = app_config.engine.max_draft_tokens > 0,
         kv_blocks = app_config.engine.num_kv_blocks,
+        has_resolver = engine.draft_resolver.is_some(),
         "Engine configured"
     );
 

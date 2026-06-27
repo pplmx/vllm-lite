@@ -102,7 +102,23 @@ fn default_rate_limit_window() -> u64 {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DraftSpecConfig {
+    pub id: String,
+    pub path: String,
+    #[serde(default = "default_draft_layers")]
+    pub num_layers: usize,
+    #[serde(default)]
+    pub weight_size_bytes: u64,
+    #[serde(default)]
+    pub architecture: Option<String>,
+}
+
+fn default_draft_layers() -> usize {
+    4
+}
+
 #[allow(clippy::derivable_impls)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct EngineConfig {
     #[serde(default = "default_max_draft_tokens")]
     pub max_draft_tokens: usize,
@@ -118,6 +134,16 @@ pub struct EngineConfig {
     pub kv_quantization: bool,
     #[serde(default = "default_enable_adaptive_speculative")]
     pub enable_adaptive_speculative: bool,
+    /// v18.0: VRAM budget for speculative draft models in bytes. When set,
+    /// the Engine is constructed with `with_budget_boxed` so all draft
+    /// registrations share this budget. When `None`, drafts are unbounded.
+    #[serde(default)]
+    pub vram_budget_bytes: Option<u64>,
+    /// v18.0: Pre-declared external draft model specs. Each becomes a
+    /// `DraftSpec` registered with the Engine's draft registry. The server
+    /// does NOT load weights at startup; lazy loading via `DraftLoader`.
+    #[serde(default)]
+    pub draft_specs: Vec<DraftSpecConfig>,
 }
 
 impl Default for EngineConfig {
@@ -130,6 +156,8 @@ impl Default for EngineConfig {
             tensor_parallel_size: default_tensor_parallel_size(),
             kv_quantization: default_kv_quantization(),
             enable_adaptive_speculative: default_enable_adaptive_speculative(),
+            vram_budget_bytes: None,
+            draft_specs: Vec::new(),
         }
     }
 }
