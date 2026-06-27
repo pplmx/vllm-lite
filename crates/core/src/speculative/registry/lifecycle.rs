@@ -28,6 +28,7 @@ impl DraftModelRegistry {
     /// - `InUse(refcount)` if the draft is `Loaded` and has refcount > 0.
     ///   Use `force_unload` to bypass.
     pub fn unload(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
+        // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let mut guard = self
             .drafts
             .write()
@@ -56,6 +57,7 @@ impl DraftModelRegistry {
     /// Errors:
     /// - `UnknownDraftId` if no entry with `id` exists
     pub fn force_unload(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
+        // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let mut guard = self
             .drafts
             .write()
@@ -87,6 +89,7 @@ impl DraftModelRegistry {
     /// Updated in v18.3 — increment is driven by per-request routing logic;
     /// see ADR-007 for the routing design.
     pub fn increment_ref(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
+        // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let mut guard = self
             .drafts
             .write()
@@ -107,6 +110,7 @@ impl DraftModelRegistry {
     ///
     /// Returns `true` if auto-unload was triggered by this call.
     pub fn decrement_ref(&self, id: &DraftId) -> Result<bool, DraftRegistryError> {
+        // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let mut guard = self
             .drafts
             .write()
@@ -135,6 +139,7 @@ impl DraftModelRegistry {
 
     /// Snapshot the reference count for a registered draft.
     pub fn ref_count(&self, id: &DraftId) -> Result<usize, DraftRegistryError> {
+        // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let guard = self
             .drafts
             .read()
@@ -149,6 +154,7 @@ impl DraftModelRegistry {
     /// Returns None if the draft is unloaded or unknown. Used by
     /// `DraftResolver` to hand the backend to the engine.
     pub fn get_loaded_backend(&self, id: &DraftId) -> Option<Arc<Mutex<Box<dyn ModelBackend>>>> {
+        // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let guard = self
             .drafts
             .read()
@@ -163,6 +169,7 @@ impl DraftModelRegistry {
     ///
     /// Returns `None` if no entry with `id` is registered.
     pub fn lookup(&self, id: &DraftId) -> Option<DraftState> {
+        // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let guard = self
             .drafts
             .read()
@@ -180,6 +187,7 @@ impl DraftModelRegistry {
 
     /// Check whether a draft is registered (either state).
     pub fn contains(&self, id: &DraftId) -> bool {
+        // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let guard = self
             .drafts
             .read()
@@ -189,6 +197,7 @@ impl DraftModelRegistry {
 
     /// Check whether a draft is currently loaded.
     pub fn is_loaded(&self, id: &DraftId) -> bool {
+        // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let guard = self
             .drafts
             .read()
@@ -200,6 +209,7 @@ impl DraftModelRegistry {
     /// Returns 0 if the draft is `Unloaded`. Used by the Engine for runtime
     /// KV-cache growth tracking (MEM-02).
     pub fn draft_allocated_bytes(&self, id: &DraftId) -> Result<u64, DraftRegistryError> {
+        // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let guard = self
             .drafts
             .read()
@@ -216,6 +226,7 @@ impl DraftModelRegistry {
     /// Estimated total VRAM footprint reserved for this draft in the budget.
     /// Zero for `Unloaded` drafts.
     pub fn draft_reserved_bytes(&self, id: &DraftId) -> Result<u64, DraftRegistryError> {
+        // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let guard = self
             .drafts
             .read()
@@ -231,6 +242,7 @@ impl DraftModelRegistry {
 
     /// List all registered draft ids (sorted).
     pub fn ids(&self) -> Vec<DraftId> {
+        // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let guard = self
             .drafts
             .read()
@@ -242,6 +254,7 @@ impl DraftModelRegistry {
 
     /// Count of registered drafts (both states).
     pub fn len(&self) -> usize {
+        // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let guard = self
             .drafts
             .read()

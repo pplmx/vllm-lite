@@ -23,6 +23,7 @@ use vllm_server::{ApiState, api, auth, cli, health::HealthChecker, logging, open
 
 /// Health check endpoint - liveness probe
 async fn health_handler(State(state): State<ApiState>) -> Response {
+    // invariant: lock is only held for synchronous field access; no panic possible while holding.
     let health = state.health.read().unwrap();
     let status = health.check_liveness();
     let http_status = StatusCode::from_u16(status.http_status()).unwrap_or(StatusCode::OK);
@@ -37,6 +38,7 @@ async fn health_handler(State(state): State<ApiState>) -> Response {
 
 /// Readiness check endpoint
 async fn ready_handler(State(state): State<ApiState>) -> Response {
+    // invariant: lock is only held for synchronous field access; no panic possible while holding.
     let health = state.health.read().unwrap();
     let status = health.check_readiness();
     let http_status =

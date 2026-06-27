@@ -21,6 +21,7 @@ impl DraftModelRegistry {
     /// Returns [`DraftRegistryError::AlreadyLoaded`] if an entry with the same
     /// id already exists in either state.
     pub fn register(&self, spec: DraftSpec) -> Result<(), DraftRegistryError> {
+        // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let mut guard = self
             .drafts
             .write()
@@ -46,6 +47,7 @@ impl DraftModelRegistry {
         id: &DraftId,
         backend: Box<dyn ModelBackend>,
     ) -> Result<(), DraftRegistryError> {
+        // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let mut guard = self
             .drafts
             .write()
@@ -88,6 +90,7 @@ impl DraftModelRegistry {
         // lock before doing the budget reservation so we don't hold both
         // locks if budget fails.
         let (kv_blocks, estimated) = {
+            // invariant: lock is only held for synchronous field access; no panic possible while holding.
             let guard = self
                 .drafts
                 .read()
@@ -109,6 +112,7 @@ impl DraftModelRegistry {
             .map_err(DraftRegistryError::MemoryBudgetExceeded)?;
 
         // Stage 3: state transition under write lock.
+        // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let mut guard = self
             .drafts
             .write()

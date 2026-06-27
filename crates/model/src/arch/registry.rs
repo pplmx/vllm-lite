@@ -27,6 +27,7 @@ impl ArchitectureRegistry {
     }
 
     pub fn register(&self, name: &'static str, factory: ArchFactory) {
+        // invariant: lock is only held for synchronous field access; no panic possible while holding.
         self.architectures
             .write()
             .expect("RwLock poisoned - this indicates a bug")
