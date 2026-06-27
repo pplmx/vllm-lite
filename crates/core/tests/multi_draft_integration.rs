@@ -341,6 +341,7 @@ fn test_unload_with_nonzero_refcount_returns_inuse() {
     h.registry.increment_ref(&DraftId("a".into())).unwrap();
     let err = h.registry.unload(&DraftId("a".into())).unwrap_err();
     assert!(matches!(err, DraftRegistryError::InUse(1)));
+    assert!(h.registry.is_loaded(&DraftId("a".into())));
 }
 
 #[test]
