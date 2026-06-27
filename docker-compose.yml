@@ -69,8 +69,12 @@ services:
       - ./monitoring/grafana:/etc/grafana/provisioning:ro
       - grafana-data:/var/lib/grafana
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=vllm-admin
+      # Credentials are read from .env via Compose substitution.
+      # Override GRAFANA_ADMIN_USER / GRAFANA_ADMIN_PASSWORD in your
+      # .env file (which is gitignored). Defaults are present so the
+      # compose file remains self-contained for local development.
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-vllm-admin}
     networks:
       - vllm-network
     profiles:
