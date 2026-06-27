@@ -1,4 +1,4 @@
-use candle_core::{Device, Tensor};
+use candle_core::Device;
 use vllm_model::qwen3::Qwen3Model;
 use vllm_model::qwen3_config::Qwen3Config;
 use vllm_traits::ModelBackend;

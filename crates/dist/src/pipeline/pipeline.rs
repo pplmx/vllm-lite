@@ -148,7 +148,7 @@ mod tests {
         }
 
         fn forward(&self, input: StageInput) -> Result<StageOutput> {
-            let mut count = self.processed_count.lock().unwrap();
+            let mut count = self.processed_count.lock().unwrap_or_else(|e| e.into_inner());
             *count += 1;
 
             Ok(StageOutput {

@@ -15,6 +15,7 @@
 //! cargo run --bin vllm -- model info /models/llama-7b
 //! ```
 
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -54,45 +55,38 @@ enum ModelCommand {
     },
 }
 
-fn main() {
+fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli {
         Cli::Config { command } => match command {
             ConfigCommand::Validate { file } => {
-                if let Err(e) = validate_config(&file) {
-                    eprintln!("Config validation failed: {}", e);
-                    std::process::exit(1);
-                }
+                validate_config(&file).context("validating config")?;
                 println!("Config file is valid: {}", file.display());
             }
         },
         Cli::Model { command } => match command {
             ModelCommand::List { dir } => {
-                if let Err(e) = list_models(&dir) {
-                    eprintln!("Failed to list models: {}", e);
-                    std::process::exit(1);
-                }
+                list_models(&dir).context("listing models")?;
             }
             ModelCommand::Info { path } => {
-                if let Err(e) = show_model_info(&path) {
-                    eprintln!("Failed to get model info: {}", e);
-                    std::process::exit(1);
-                }
+                show_model_info(&path).context("showing model info")?;
             }
         },
     }
+    Ok(())
 }
 
-fn validate_config(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-    let content = std::fs::read_to_string(path)?;
+fn validate_config(path: &PathBuf) -> Result<()> {
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("reading config file {}", path.display()))?;
     let parsed: Value =
-        serde_yaml::from_str(&content).map_err(|e| format!("YAML syntax error: {}", e))?;
+        serde_yaml::from_str(&content).context("parsing config YAML syntax")?;
 
     let required_fields = ["server", "engine"];
     for field in required_fields {
         if parsed.get(field).is_none() {
-            return Err(format!("Missing required field: {}", field).into());
+            anyhow::bail!("missing required field: {}", field);
         }
     }
 
@@ -100,7 +94,7 @@ fn validate_config(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(port) = server.get("port") {
             if let Some(p) = port.as_i64() {
                 if !(1..=65535).contains(&p) {
-                    return Err(format!("Invalid port: {}", p).into());
+                    anyhow::bail!("invalid port: {}", p);
                 }
             }
         }
@@ -110,7 +104,7 @@ fn validate_config(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(kv_blocks) = engine.get("num_kv_blocks") {
             if let Some(n) = kv_blocks.as_i64() {
                 if n < 1 {
-                    return Err(format!("Invalid kv_blocks: {}", n).into());
+                    anyhow::bail!("invalid kv_blocks: {}", n);
                 }
             }
         }
@@ -119,9 +113,9 @@ fn validate_config(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn list_models(dir: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn list_models(dir: &PathBuf) -> Result<()> {
     if !dir.exists() {
-        return Err(format!("Directory does not exist: {}", dir.display()).into());
+        anyhow::bail!("directory does not exist: {}", dir.display());
     }
 
     println!("Available models in {}:", dir.display());
@@ -129,8 +123,8 @@ fn list_models(dir: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     println!("║ Name                          │ Size      │ Type              ║");
     println!("╠══════════════════════════════════════════════════════════════╣");
 
-    for entry in std::fs::read_dir(dir)? {
-        let entry = entry?;
+    for entry in std::fs::read_dir(dir).with_context(|| format!("reading dir {}", dir.display()))? {
+        let entry = entry.context("reading directory entry")?;
         let path = entry.path();
 
         if path.is_dir() {
@@ -148,9 +142,9 @@ fn list_models(dir: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn show_model_info(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn show_model_info(path: &PathBuf) -> Result<()> {
     if !path.exists() {
-        return Err(format!("Path does not exist: {}", path.display()).into());
+        anyhow::bail!("path does not exist: {}", path.display());
     }
 
     let config_path = path.join("config.json");

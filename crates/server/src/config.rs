@@ -1,6 +1,34 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum ConfigValidationError {
+    #[error("server.port must be > 0")]
+    PortZero,
+    #[error("server.log_level must be one of: trace, debug, info, warn, error")]
+    InvalidLogLevel,
+    #[error("engine.max_draft_tokens must be <= 64")]
+    MaxDraftTokensTooLarge,
+    #[error("engine.num_kv_blocks must be > 0")]
+    KvBlocksZero,
+    #[error("engine.num_kv_blocks must be <= 65536")]
+    KvBlocksTooLarge,
+    #[error("engine.max_batch_size must be > 0")]
+    MaxBatchSizeZero,
+    #[error("engine.tensor_parallel_size must be > 0")]
+    TensorParallelSizeZero,
+    #[error("engine.vram_budget_bytes must be > 0 when set")]
+    VramBudgetZero,
+    #[error("engine.draft_specs[].id must not be empty")]
+    EmptyDraftId,
+    #[error("engine.draft_specs[].id duplicate: {0}")]
+    DuplicateDraftId(String),
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("config validation failed: {0:?}")]
+pub struct ConfigValidationErrors(pub Vec<ConfigValidationError>);
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::derivable_impls)]
 pub struct ServerConfig {
@@ -240,60 +268,57 @@ impl AppConfig {
         config
     }
 
-    pub fn validate(&self) -> Result<(), Vec<String>> {
+    pub fn validate(&self) -> Result<(), ConfigValidationErrors> {
         let mut errors = Vec::new();
 
         if self.server.port == 0 {
-            errors.push("server.port must be > 0".to_string());
+            errors.push(ConfigValidationError::PortZero);
         }
 
         let valid_levels = ["trace", "debug", "info", "warn", "error"];
         if !valid_levels.contains(&self.server.log_level.as_str()) {
-            errors.push(format!(
-                "server.log_level must be one of: {:?}",
-                valid_levels
-            ));
+            errors.push(ConfigValidationError::InvalidLogLevel);
         }
 
         if self.engine.max_draft_tokens > 64 {
-            errors.push("engine.max_draft_tokens must be <= 64".to_string());
+            errors.push(ConfigValidationError::MaxDraftTokensTooLarge);
         }
 
         if self.engine.num_kv_blocks == 0 {
-            errors.push("engine.num_kv_blocks must be > 0".to_string());
+            errors.push(ConfigValidationError::KvBlocksZero);
         }
         if self.engine.num_kv_blocks > 65536 {
-            errors.push("engine.num_kv_blocks must be <= 65536".to_string());
+            errors.push(ConfigValidationError::KvBlocksTooLarge);
         }
 
         if self.engine.max_batch_size == 0 {
-            errors.push("engine.max_batch_size must be > 0".to_string());
+            errors.push(ConfigValidationError::MaxBatchSizeZero);
         }
 
         if self.engine.tensor_parallel_size == 0 {
-            errors.push("engine.tensor_parallel_size must be > 0".to_string());
+            errors.push(ConfigValidationError::TensorParallelSizeZero);
         }
 
         // v18.0 validation
         if let Some(b) = self.engine.vram_budget_bytes {
             if b == 0 {
-                errors.push("engine.vram_budget_bytes must be > 0 when set".to_string());
+                errors.push(ConfigValidationError::VramBudgetZero);
             }
         }
         let mut seen_draft_ids = std::collections::HashSet::new();
         for spec in &self.engine.draft_specs {
             if spec.id.is_empty() {
-                errors.push("engine.draft_specs[].id must not be empty".to_string());
+                errors.push(ConfigValidationError::EmptyDraftId);
             }
             if !seen_draft_ids.insert(&spec.id) {
-                errors.push(format!("engine.draft_specs[].id duplicate: {}", spec.id));
+                errors.push(ConfigValidationError::DuplicateDraftId(spec.id.clone()));
             }
         }
 
         if errors.is_empty() {
             Ok(())
         } else {
-            Err(errors)
+            Err(ConfigValidationErrors(errors))
         }
     }
 }
@@ -325,7 +350,7 @@ mod tests {
         let mut config = AppConfig::default();
         config.server.port = 0;
         let errors = config.validate().unwrap_err();
-        assert!(errors.iter().any(|e| e.contains("server.port")));
+        assert!(errors.0.iter().any(|e| matches!(e, ConfigValidationError::PortZero)));
     }
 
     #[test]
@@ -346,7 +371,10 @@ mod tests {
         let mut config = AppConfig::default();
         config.engine.tensor_parallel_size = 0;
         let errors = config.validate().unwrap_err();
-        assert!(errors.iter().any(|e| e.contains("tensor_parallel_size")));
+        assert!(errors
+            .0
+            .iter()
+            .any(|e| matches!(e, ConfigValidationError::TensorParallelSizeZero)));
     }
 
     #[test]
@@ -370,7 +398,10 @@ mod tests {
         let mut config = AppConfig::default();
         config.engine.vram_budget_bytes = Some(0);
         let errors = config.validate().unwrap_err();
-        assert!(errors.iter().any(|e| e.contains("vram_budget_bytes")));
+        assert!(errors
+            .0
+            .iter()
+            .any(|e| matches!(e, ConfigValidationError::VramBudgetZero)));
     }
 
     #[test]
@@ -391,7 +422,10 @@ mod tests {
             architecture: None,
         }];
         let errors = config.validate().unwrap_err();
-        assert!(errors.iter().any(|e| e.contains("must not be empty")));
+        assert!(errors
+            .0
+            .iter()
+            .any(|e| matches!(e, ConfigValidationError::EmptyDraftId)));
     }
 
     #[test]
@@ -414,7 +448,10 @@ mod tests {
             },
         ];
         let errors = config.validate().unwrap_err();
-        assert!(errors.iter().any(|e| e.contains("duplicate")));
+        assert!(errors
+            .0
+            .iter()
+            .any(|e| matches!(e, ConfigValidationError::DuplicateDraftId(_))));
     }
 
     #[test]

@@ -74,7 +74,7 @@ impl BackpressureState {
     }
 
     fn evaluate_state(&self, pending: usize) -> FlowControlState {
-        let mut last = self.last_state.lock().unwrap();
+        let mut last = self.last_state.lock().unwrap_or_else(|e| e.into_inner());
         let new_state = if pending >= self.config.max_buffer_size
             || (pending >= self.config.high_water_mark && matches!(*last, FlowControlState::Normal))
         {
@@ -101,7 +101,7 @@ impl BackpressureState {
 
     pub fn reset(&self) {
         self.pending_tokens.store(0, Ordering::SeqCst);
-        *self.last_state.lock().unwrap() = FlowControlState::Normal;
+        *self.last_state.lock().unwrap_or_else(|e| e.into_inner()) = FlowControlState::Normal;
     }
 }
 

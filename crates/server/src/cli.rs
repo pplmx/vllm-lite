@@ -2,6 +2,18 @@ use crate::config::AppConfig;
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum CliValidationError {
+    #[error("'{0}' is not a valid number")]
+    NotANumber(String),
+    #[error("value must be between {min} and {max}")]
+    OutOfRange { min: usize, max: usize },
+    #[error("'{0}' is not a valid port number")]
+    InvalidPort(String),
+    #[error("port must be between 1 and 65535")]
+    PortOutOfRange,
+}
+
 #[derive(Clone, Debug, ValueEnum, PartialEq)]
 pub enum LogLevel {
     Trace,
@@ -30,45 +42,43 @@ impl std::fmt::Display for LogLevel {
     }
 }
 
-fn parse_usize_in_range(s: &str, min: usize, max: usize) -> Result<usize, String> {
-    let val: usize = s
-        .parse()
-        .map_err(|_| format!("'{}' is not a valid number", s))?;
+fn parse_usize_in_range(s: &str, min: usize, max: usize) -> Result<usize, CliValidationError> {
+    let val: usize = s.parse().map_err(|_| CliValidationError::NotANumber(s.to_string()))?;
     if val < min || val > max {
-        Err(format!("must be between {} and {}", min, max))
+        Err(CliValidationError::OutOfRange { min, max })
     } else {
         Ok(val)
     }
 }
 
-fn validate_port(s: &str) -> Result<u16, String> {
+fn validate_port(s: &str) -> Result<u16, CliValidationError> {
     let val: u16 = s
         .parse()
-        .map_err(|_| format!("'{}' is not a valid port number", s))?;
+        .map_err(|_| CliValidationError::InvalidPort(s.to_string()))?;
     if val == 0 {
-        Err("port must be between 1 and 65535".to_string())
+        Err(CliValidationError::PortOutOfRange)
     } else {
         Ok(val)
     }
 }
 
-fn validate_tensor_parallel_size(s: &str) -> Result<usize, String> {
+fn validate_tensor_parallel_size(s: &str) -> Result<usize, CliValidationError> {
     parse_usize_in_range(s, 1, 64)
 }
 
-fn validate_kv_blocks(s: &str) -> Result<usize, String> {
+fn validate_kv_blocks(s: &str) -> Result<usize, CliValidationError> {
     parse_usize_in_range(s, 1, 65536)
 }
 
-fn validate_max_batch_size(s: &str) -> Result<usize, String> {
+fn validate_max_batch_size(s: &str) -> Result<usize, CliValidationError> {
     parse_usize_in_range(s, 1, 8192)
 }
 
-fn validate_max_waiting_batches(s: &str) -> Result<usize, String> {
+fn validate_max_waiting_batches(s: &str) -> Result<usize, CliValidationError> {
     parse_usize_in_range(s, 1, 100)
 }
 
-fn validate_max_draft_tokens(s: &str) -> Result<usize, String> {
+fn validate_max_draft_tokens(s: &str) -> Result<usize, CliValidationError> {
     parse_usize_in_range(s, 0, 64)
 }
 
