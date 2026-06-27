@@ -281,6 +281,51 @@ pub type Result<T> = std::result::Result<T, EngineError>;
 
 ---
 
+## Lint Policy
+
+Workspace-wide clippy configuration lives in the root `Cargo.toml` under
+`[workspace.lints.clippy]`. Every crate inherits via `[lints] workspace = true`.
+
+### Tiers
+
+| Tier   | Lints                                                          | Effect                              |
+| ------ | -------------------------------------------------------------- | ----------------------------------- |
+| deny   | `correctness`, `suspicious`, `perf`                            | Breaks `just clippy` (CI blocks)    |
+| warn   | `pedantic`, `nursery`, `missing_errors_doc`, `must_use_candidate`, etc. | Visible in `cargo clippy`, not blocking |
+| allow  | `cast_precision_loss`, `too_many_lines`, `too_many_arguments`, etc. | Explicitly silenced with rationale |
+
+### Local commands
+
+```bash
+# Standard CI check (deny-tier only)
+just clippy
+
+# Show pedantic+nursery warnings without breaking
+just clippy-pedantic
+```
+
+### Adding a new lint
+
+1. Identify which tier it belongs to (correctness/suspicious/perf → deny; otherwise → warn first, promote to deny later)
+2. Add to `[workspace.lints.clippy]` in root `Cargo.toml`
+3. Run `just clippy` to verify
+4. If deny-tier and existing code violates it, fix the violations in the same PR
+
+### Rationales for current allow list
+
+| Lint                      | Why allowed                                                                |
+| ------------------------- | -------------------------------------------------------------------------- |
+| `cast_precision_loss`     | Model dim casts (`usize as f32`) are intentional for tensor math          |
+| `cast_possible_truncation`| Same as above                                                              |
+| `cast_possible_wrap`      | Same as above                                                              |
+| `cast_sign_loss`          | Same as above                                                              |
+| `similar_names`           | Tensor-math conventions (`q`, `k`, `v`, `b`, `c`, `h`, `d`)               |
+| `too_many_lines`          | Phase D will refactor oversized files; lint enforced after that           |
+| `too_many_arguments`      | Phase C builder API work will reduce; lint enforced after that            |
+| `multiple_crate_versions` | Dependency cleanup tracked separately                                      |
+
+---
+
 ## API Conventions
 
 These conventions ensure a uniform API surface across all crates. **All new public types and trait extensions must follow them**; existing types that violate them should be migrated opportunistically.
