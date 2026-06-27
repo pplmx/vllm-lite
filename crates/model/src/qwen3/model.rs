@@ -3,7 +3,7 @@
 use crate::causal_lm::CausalLm;
 use crate::components::LnLayerNorm;
 use crate::config::ModelConfig;
-use crate::qwen3_config::Qwen3Config;
+use crate::qwen3::config::Qwen3Config;
 use candle_core::{Device, Result as CandleResult, Tensor};
 use candle_nn::Linear;
 use std::collections::HashMap;

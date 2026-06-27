@@ -1,7 +1,7 @@
 //! Shared hyperparameter accessors for unified and Qwen-specific configs.
 
 use super::ModelConfig;
-use crate::qwen3_config::Qwen3Config;
+use crate::qwen3::config::Qwen3Config;
 
 /// Common model dimensions shared by [`ModelConfig`] and [`Qwen3Config`].
 pub trait ModelHyperparams {

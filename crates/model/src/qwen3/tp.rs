@@ -3,7 +3,7 @@
 use super::block::TransformerBlock;
 use super::model::Qwen3Model;
 use crate::config::ModelConfig;
-use crate::qwen3_config::Qwen3Config;
+use crate::qwen3::config::Qwen3Config;
 use candle_core::{Device, Result as CandleResult};
 use vllm_dist::TensorParallelConfig;
 

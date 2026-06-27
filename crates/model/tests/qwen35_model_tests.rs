@@ -2,9 +2,9 @@ use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
 use vllm_model::components::SwiGLU;
 use vllm_model::components::positional::MRoPE;
+use vllm_model::qwen3::config::Qwen3Config;
 use vllm_model::qwen3_5::Qwen35HybridModel;
 use vllm_model::qwen3_5::attention35::Attention35WithRoPE;
-use vllm_model::qwen3_config::Qwen3Config;
 use vllm_traits::ModelBackend;
 
 #[test]
@@ -52,7 +52,7 @@ fn test_attention35_rope_preserves_head_dim() {
 #[test]
 fn test_qwen35_hybrid_model_kv_cache_init() {
     let config = Qwen3Config {
-        text_config: Some(vllm_model::qwen3_config::TextConfig {
+        text_config: Some(vllm_model::qwen3::config::TextConfig {
             num_hidden_layers: Some(4),
             num_key_value_heads: Some(2),
             ..Default::default()
@@ -70,7 +70,7 @@ fn test_qwen35_hybrid_model_kv_cache_init() {
 #[test]
 fn test_qwen35_hybrid_model_forward_prefill_and_decode() {
     let config = Qwen3Config {
-        text_config: Some(vllm_model::qwen3_config::TextConfig {
+        text_config: Some(vllm_model::qwen3::config::TextConfig {
             num_hidden_layers: Some(2),
             num_attention_heads: Some(2),
             num_key_value_heads: Some(2),
@@ -116,7 +116,7 @@ fn test_qwen35_hybrid_model_forward_prefill_and_decode() {
 #[test]
 fn test_qwen35_hybrid_model_layer_count() {
     let config = Qwen3Config {
-        text_config: Some(vllm_model::qwen3_config::TextConfig {
+        text_config: Some(vllm_model::qwen3::config::TextConfig {
             num_hidden_layers: Some(12),
             layer_types: Some(vec!["linear_attention".to_string(); 12]),
             ..Default::default()

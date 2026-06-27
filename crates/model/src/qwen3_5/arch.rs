@@ -8,7 +8,7 @@ use vllm_traits::ModelBackend;
 use crate::arch::{ArchCapabilities, Architecture};
 use crate::components::TransformerBlock;
 use crate::config::ModelConfig;
-use crate::qwen3_config::Qwen3Config;
+use crate::qwen3::config::Qwen3Config;
 
 use super::model::Qwen35HybridModel;
 

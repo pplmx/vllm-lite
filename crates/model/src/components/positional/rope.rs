@@ -1,6 +1,6 @@
 //! rope: rope.
 
-use crate::qwen3_config::Qwen3Config;
+use crate::qwen3::config::Qwen3Config;
 use candle_core::{Result, Tensor};
 
 /// RoPE: ro pe.

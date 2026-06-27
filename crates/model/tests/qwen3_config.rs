@@ -1,6 +1,6 @@
 //! Qwen3 configuration unit tests (no checkpoint required).
 
-use vllm_model::qwen3_config::Qwen3Config;
+use vllm_model::qwen3::config::Qwen3Config;
 
 #[test]
 fn test_qwen3_config_default() {
@@ -30,7 +30,7 @@ fn test_qwen3_config_builder() {
 
 #[test]
 fn test_qwen3_config_text_config_fallback() {
-    let text_config = vllm_model::qwen3_config::TextConfig {
+    let text_config = vllm_model::qwen3::config::TextConfig {
         vocab_size: Some(5000),
         hidden_size: Some(256),
         num_hidden_layers: Some(4),
