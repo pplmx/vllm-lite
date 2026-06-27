@@ -1,6 +1,6 @@
 //! engine: continuous-batching engine.
 
-mod speculative;
+mod spec_dispatch;
 
 use crate::beam::BeamSequence;
 use crate::error::Result;
