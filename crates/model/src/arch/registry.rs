@@ -1,9 +1,8 @@
 //! Architecture registry for dynamic registration.
 
-use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, LazyLock, RwLock};
 
 use super::{ArchCapabilities, Architecture};
 
@@ -74,7 +73,8 @@ impl ArchitectureRegistry {
 }
 
 /// ARCHITECTURE_REGISTRY: architecture registry static value.
-pub static ARCHITECTURE_REGISTRY: Lazy<ArchitectureRegistry> = Lazy::new(ArchitectureRegistry::new);
+pub static ARCHITECTURE_REGISTRY: LazyLock<ArchitectureRegistry> =
+    LazyLock::new(ArchitectureRegistry::new);
 
 /// Register all known architectures for config detection and model creation.
 ///
