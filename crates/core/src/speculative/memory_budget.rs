@@ -11,7 +11,7 @@
 //! would push the budget over its limit.
 
 use crate::scheduler::memory::allocator::BLOCK_BYTES;
-use crate::speculative::draft_registry::DraftId;
+use crate::speculative::registry::DraftId;
 use std::sync::RwLock;
 
 /// Default bytes per KV block, used for VRAM budget estimation.

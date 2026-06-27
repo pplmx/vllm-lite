@@ -10,7 +10,7 @@
 //! — the resolver itself only deals with load-time decisions.
 
 use crate::metrics::EnhancedMetricsCollector;
-use crate::speculative::draft_registry::{DraftId, DraftModelRegistry, DraftRegistryError};
+use crate::speculative::registry::{DraftId, DraftModelRegistry, DraftRegistryError};
 use std::sync::{Arc, Mutex};
 use vllm_traits::ModelBackend;
 

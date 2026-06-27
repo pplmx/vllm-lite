@@ -7,11 +7,9 @@ use crate::error::Result;
 use crate::metrics::EnhancedMetricsCollector;
 use crate::scheduler::engine::SchedulerEngine;
 use crate::speculative::AdaptiveSpeculativeDecoder;
-use crate::speculative::draft_registry::{
-    DraftId, DraftModelRegistry, DraftRegistryError, DraftSpec,
-};
 use crate::speculative::draft_resolver::{DraftLoader, DraftResolver, NoopLoader};
 use crate::speculative::memory_budget::MemoryBudget;
+use crate::speculative::registry::{DraftId, DraftModelRegistry, DraftRegistryError, DraftSpec};
 use crate::sync::lock_mutex;
 use crate::types::AdaptiveDraftConfig;
 use crate::types::{EngineMessage, Request, SchedulerConfig};
