@@ -212,4 +212,92 @@ See `.planning/v21.0-MILESTONE-AUDIT.md` for full audit trail.
 
 ---
 
+## v22.0 (2026-06-27) — Production Hardening
+
+This release wires previously-stub security middleware, migrates concurrency
+primitives, and adopts modern Rust 1.80+ stdlib features. Most changes are
+internal; downstream consumers may need updates only if they touched the
+specific APIs listed below.
+
+### Security middleware wired (SEC-01..06)
+
+**Before:** JWT tokens were parsed but not signature-verified. `RbacMiddleware`
+was a no-op pass-through. Request body size was unbounded. Audit log was
+silent. TLS had `unwrap()` panics on malformed certificates.
+
+**After:** All five middleware paths enforce their policies. The server returns
+HTTP 401 on invalid JWT signatures (HMAC-SHA256 or RSA/ECDSA), HTTP 403 on
+RBAC denial, HTTP 413 on request body overflow, structured errors on TLS
+handshake failure, and emits audit log entries for every authenticated
+request.
+
+```rust
+// Before (v21.x) — JWT parsed but not verified
+let token = parse_jwt(authorization_header)?;
+
+// After (v22.0+) — full signature verification
+let claims = verify_jwt(authorization_header, &VerificationKey::from_env()?)?;
+// → Returns HTTP 401 on bad signature, expiry, or tampering
+```
+
+No code changes required for consumers of `vllm_server` — the wiring is
+internal. Consumers using `vllm_server::auth::*` types directly should
+re-compile against the v22.0 API.
+
+### `parking_lot::Mutex` migration (RFU-05)
+
+**Before:** Scheduler and engine paths used `std::sync::Mutex` with
+`.lock().unwrap()` poison-check calls (24 sites). Poison errors propagated
+to engine step failure paths.
+
+**After:** All scheduler and engine paths use `parking_lot::Mutex` (which
+does not have a poison concept). The `.lock()` API is unchanged; callers
+that explicitly handled `PoisonError` should remove the `.unwrap()` calls.
+
+```rust
+// Before
+let mut guard = self.scheduler.lock().unwrap();
+
+// After (no change required; just no PoisonError to handle)
+let mut guard = self.scheduler.lock();
+```
+
+### `std::sync::LazyLock` adoption (PERF-03)
+
+**Before:** Lazy initialization used `once_cell::sync::Lazy`. This required
+the `once_cell` crate dependency.
+
+**After:** Lazy initialization uses `std::sync::LazyLock` (Rust 1.80+ stdlib).
+The `once_cell` crate may still be present for other uses, but new code
+should prefer `std::sync::LazyLock`. The migration is mechanical:
+
+```rust
+// Before
+use once_cell::sync::Lazy;
+static REGISTRY: Lazy<RwLock<HashMap<String, ...>>> = Lazy::new(|| ...);
+
+// After
+use std::sync::LazyLock;
+static REGISTRY: LazyLock<RwLock<HashMap<String, ...>>> = LazyLock::new(|| ...);
+```
+
+Rust toolchain requirement remains `stable` (1.85 in practice); no consumer
+toolchain change required.
+
+### Engine signature refactor (ARF-06, ARF-07)
+
+The `Engine` struct was decomposed from a single 1,057-LOC file into focused
+sub-modules. The public API surface is unchanged — `Engine::with_config(...)`,
+`Engine::step()`, `Engine::with_drafts(...)` all retain the same signatures.
+Consumers do not need to update import paths.
+
+### Test count
+
+v22.0 closed with **1179 passing tests** (1146 v21.0 baseline + 33 new).
+The Phase 19 e2e tests in `crates/core/tests/engine_wiring.rs` (formerly
+`engine_v18_wiring.rs`) and `crates/core/tests/draft_resolver_integration.rs`
+that were `#[ignore]`'d for the v18.0 speculative-mode hang now pass.
+
+---
+
 *Last updated: 2026-06-27 — v21.0 P2/P3 Backlog Cleanup milestone*
