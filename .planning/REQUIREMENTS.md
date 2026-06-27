@@ -104,32 +104,37 @@ Explicitly excluded. Documented to prevent scope creep.
 
 ## Traceability
 
-Will be populated by `gsd-roadmapper` after roadmap approval.
-
-| Requirement | Phase | Status  |
-| ----------- | ----- | ------- |
-| MMLT-01     | TBD   | Pending |
-| MMLT-02     | TBD   | Pending |
-| MMLT-03     | TBD   | Pending |
-| LIFE-01     | TBD   | Pending |
-| LIFE-02     | TBD   | Pending |
-| LIFE-03     | TBD   | Pending |
-| MEM-01      | TBD   | Pending |
-| MEM-02      | TBD   | Pending |
-| MEM-03      | TBD   | Pending |
-| RTE-01      | TBD   | Pending |
-| RTE-02      | TBD   | Pending |
-| RTE-03      | TBD   | Pending |
-| FALL-01     | TBD   | Pending |
-| FALL-02     | TBD   | Pending |
+| Requirement | Phase     | Status  |
+| ----------- | --------- | ------- |
+| MMLT-01     | Phase 18.1 | Pending |
+| MMLT-02     | Phase 18.1 | Pending |
+| MMLT-03     | Phase 18.1 | Pending |
+| LIFE-01     | Phase 18.1 | Pending |
+| LIFE-02     | Phase 18.2 | Pending |
+| LIFE-03     | Phase 18.2 | Pending |
+| MEM-01      | Phase 18.2 | Pending |
+| MEM-02      | Phase 18.2 | Pending |
+| MEM-03      | Phase 18.2 | Pending |
+| RTE-01      | Phase 18.3 | Pending |
+| RTE-02      | Phase 18.3 | Pending |
+| RTE-03      | Phase 18.3 | Pending |
+| FALL-01     | Phase 18.3 | Pending |
+| FALL-02     | Phase 18.3 | Pending |
 
 **Coverage:**
 
 - v18.0 requirements: 14 total
-- Mapped to phases: 0 (TBD — pending roadmap creation)
-- Unmapped: 14 ⚠️
+- Mapped to phases: 14 ✓
+- Unmapped: 0
+
+**Phase mapping (v18.0):**
+
+- Phase 18.1 (Draft Registry + External Loading): MMLT-01, MMLT-02, MMLT-03, LIFE-01 (4 reqs)
+- Phase 18.2 (Lifecycle + Memory Budget): LIFE-02, LIFE-03, MEM-01, MEM-02, MEM-03 (5 reqs)
+- Phase 18.3 (Request Routing + Fallback): RTE-01, RTE-02, RTE-03, FALL-01, FALL-02 (5 reqs)
+- Phase 18.4 (Integration Tests + Benchmarks): 0 reqs (validation phase)
 
 ---
 
 *Requirements defined: 2026-05-13*
-*Last updated: 2026-06-27 — v18.0 active milestone; v17.0 requirements moved to Validated*
+*Last updated: 2026-06-27 — v18.0 traceability populated (14/14 mapped)*
