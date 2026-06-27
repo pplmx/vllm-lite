@@ -36,10 +36,11 @@ impl Architecture for MistralArchitecture {
     }
 
     fn detect(&self, config_json: &serde_json::Value) -> bool {
+        // PERF-02: avoid per-load `String` allocation.
         config_json
             .get("model_type")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_lowercase() == "mistral")
+            .map(|s| s.eq_ignore_ascii_case("mistral"))
             .unwrap_or(false)
     }
 
