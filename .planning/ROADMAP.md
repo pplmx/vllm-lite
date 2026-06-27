@@ -30,7 +30,7 @@
 - [x] **Phase 31: Module Layout Reorganization** (v21.1) - draft_registry 拆分 + engine/speculative 子树 + qwen3_config 下沉 + attention/util 提取 + TensorParallelError 迁移 + test_fixtures 重定位
 - [x] **Phase 32: API Consistency** (v21.2) - builder 约定文档化 + #[source] 补 + Box<dyn Error> 替换 + 22 个 builder 引入 + FallbackStrategy sync/async 拆分 + 错误 context 携带
 - [x] **Phase 33: Naming Consistency** (v21.3) - flash_v3 重命名 + NodeInfo 评估 + AGENTS.md 命名约定文档化 + 非 tensor 单字母变量重命名
-- [ ] **Phase 34: External Doc Fixes** (v21.4) - DeepSeek 修正 + vllm-dist ADR + Phase 5 Wave 4 ref + PROJECT.md Key Decisions 交叉链接
+- [x] **Phase 34: External Doc Fixes** (v21.4) - DeepSeek 修正 + vllm-dist ADR + Phase 5 Wave 4 ref + PROJECT.md Key Decisions 交叉链接
 - [ ] **Phase 35: P3 Actionable + Final Verification** (v21.5) - P3 actionable 收尾 + MIGRATING.md + CircuitBreakerError 变体 + FINAL gates
 
 ## Phase Details
@@ -642,7 +642,7 @@ v21.0: 31 → 32 → 33 → 34 → 35 (linear chain; engine splits unblock API r
 | 31 Module Layout Reorganization (v21.1)            | v21.0     | 6/6            | Complete    | 2026-06-27   |
 | 32 API Consistency (v21.2)                         | v21.0     | 7/7            | Complete    | 2026-06-27   |
 | 33 Naming Consistency (v21.3)                      | v21.0     | 3/3            | Complete    | 2026-06-27   |
-| 34 External Doc Fixes (v21.4)                      | v21.0     | 0/4            | Not started | -            |
+| 34 External Doc Fixes (v21.4)                      | v21.0     | 4/4            | Complete    | 2026-06-27   |
 | 35 P3 Actionable + Final Verification (v21.5)      | v21.0     | 0/8            | Not started | -            |
 
 ---
