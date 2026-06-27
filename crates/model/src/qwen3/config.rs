@@ -1,5 +1,6 @@
 //! qwen3_config: qwen3 config.
 
+use crate::config::errors::{ConfigError, ConfigResult};
 use serde::Deserialize;
 
 /// RopeScaling: rope scaling.
@@ -213,8 +214,11 @@ impl TextConfig {
 
 impl Qwen3Config {
     /// from_file: from file.
-    pub fn from_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let content = std::fs::read_to_string(path)?;
+    pub fn from_file(path: &str) -> ConfigResult<Self> {
+        let content = std::fs::read_to_string(path).map_err(|source| ConfigError::Io {
+            path: path.to_string(),
+            source,
+        })?;
         let config: Qwen3Config = serde_json::from_str(&content)?;
         Ok(config)
     }
