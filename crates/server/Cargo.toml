@@ -22,8 +22,9 @@ vllm-traits = { path = "../traits" }
 vllm-model = { path = "../model" }
 candle-core = "0.10.2"
 tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "time", "io-util", "fs", "net", "signal"] }
-axum = { version = "0.7", features = ["tokio"] }
+axum = { version = "0.7", features = ["tokio", "macros"] }
 tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["limit"] }
 futures = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -40,6 +41,7 @@ thiserror = "2"
 anyhow = "1"
 tokio-rustls = "0.26"
 rustls-pemfile = "2"
+jsonwebtoken = "9"
 
 [dev-dependencies]
 axum = { version = "0.7", features = ["tokio", "macros"] }
