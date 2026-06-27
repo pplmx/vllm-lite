@@ -1,4 +1,8 @@
-//! Speculative-decoding parity tests for Qwen3.5 hybrid models (Phase 5 Wave 4).
+//! Speculative-decoding parity tests for Qwen3.5 hybrid models
+//! (v18.4 / Phase 18.4 Multi-Model Speculative Decoding tests).
+//!
+//! Phase 5 Wave 4 was an early-development phase terminology that has been
+//! superseded by the v18.0+ phase numbering scheme.
 
 use candle_core::Device;
 use vllm_model::qwen3::config::{Qwen3Config, TextConfig};
