@@ -1,4 +1,4 @@
-//! flash_v3: flash v3.
+//! flash_attention_v3: flash attention v3.
 
 use candle_core::{Result, Tensor};
 use tracing::trace;

@@ -42,11 +42,11 @@ pub fn temperature_sample(logits: &[f32], temperature: f32) -> TokenId {
     let sum: f32 = exp.iter().sum();
     let probs: Vec<f32> = exp.iter().map(|x| x / sum).collect();
 
-    let r = random_f32();
+    let random_threshold = random_f32();
     let mut cumsum = 0.0;
     for (i, &p) in probs.iter().enumerate() {
         cumsum += p;
-        if r <= cumsum {
+        if random_threshold <= cumsum {
             return i as TokenId;
         }
     }
@@ -85,11 +85,11 @@ pub fn top_p_sample(logits: &[f32], top_p: f32) -> TokenId {
     let total: f32 = probs.iter().sum();
     probs.iter_mut().for_each(|p| *p /= total);
 
-    let r = random_f32();
+    let random_threshold = random_f32();
     let mut cumsum = 0.0;
     for (i, &p) in probs.iter().enumerate() {
         cumsum += p;
-        if r <= cumsum {
+        if random_threshold <= cumsum {
             return indexed[i].0 as TokenId;
         }
     }
@@ -102,15 +102,15 @@ pub fn top_k_sample(logits: &[f32], k: usize) -> TokenId {
         return greedy_sample(logits);
     }
 
-    let k = k.min(logits.len());
+    let top_k_limit = k.min(logits.len());
 
     let mut indexed: Vec<(usize, f32)> = logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
 
-    indexed.select_nth_unstable_by(k - 1, |a, b| {
+    indexed.select_nth_unstable_by(top_k_limit - 1, |a, b| {
         b.1.partial_cmp(&a.1)
             .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
     });
-    let threshold = indexed[k - 1].1;
+    let threshold = indexed[top_k_limit - 1].1;
 
     let masked: Vec<f32> = logits
         .iter()
@@ -146,14 +146,14 @@ pub fn sample_batch(
             }
 
             if top_k > 0 {
-                let k = top_k.min(logits.len());
+                let top_k_limit = top_k.min(logits.len());
                 let mut indexed: Vec<(usize, f32)> =
                     logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
-                indexed.select_nth_unstable_by(k - 1, |a, b| {
+                indexed.select_nth_unstable_by(top_k_limit - 1, |a, b| {
                     b.1.partial_cmp(&a.1)
                         .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
                 });
-                let threshold = indexed[k - 1].1;
+                let threshold = indexed[top_k_limit - 1].1;
                 for l in logits.iter_mut() {
                     if *l < threshold {
                         *l = f32::NEG_INFINITY;
