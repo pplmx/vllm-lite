@@ -7,6 +7,7 @@ This guide documents the three major performance optimizations implemented in vL
 > Actual improvements vary with model size, batch size, sequence length, and
 > hardware. For reproducible numbers, see `docs/benchmark-results/` (latest:
 > v22.0 Production Hardening, 2026-06-27). Per-feature attribution dates:
+>
 > - CUDA Graph: v18.0+ (perf table below — last measured 2026-06-27)
 > - Sequence Packing: v17.0+ (perf table below — last measured 2026-06-27)
 > - Adaptive Speculative: v17.0+ (perf table below — last measured 2026-06-27)

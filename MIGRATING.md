@@ -193,6 +193,7 @@ See commit history and Phase 25-30 SUMMARYs for complete details.
 ## Earlier Versions
 
 Version history prior to v20.0 is available via git history:
+
 ```bash
 git log --oneline --grep="^docs: start milestone"
 ```

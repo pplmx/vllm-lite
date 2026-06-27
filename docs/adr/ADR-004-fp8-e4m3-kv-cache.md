@@ -12,9 +12,9 @@ vllm-lite adopted FP8 quantization of the KV cache in v15.0 to halve cache memor
 
 | Format | Exponent bits | Mantissa bits | Dynamic range | Precision |
 | ------ | :-----------: | :-----------: | :-----------: | :-------: |
-| E4M3   | 4             | 3             | ~448          | High      |
-| E5M2   | 5             | 2             | ~57344        | Lower     |
-| FP16   | 5             | 10            | ~65504        | Highest   |
+| E4M3   |       4       |       3       |     ~448      |   High    |
+| E5M2   |       5       |       2       |    ~57344     |   Lower   |
+| FP16   |       5       |      10       |    ~65504     |  Highest  |
 
 KV cache values cluster in a narrow band near zero (most attention keys/values have small magnitudes after layer norm). E4M3's tighter range but better mantissa precision matches this distribution; E5M2's wider range is wasted on values that never appear, while its 2-bit mantissa causes visible degradation in attention scores that compound across layers.
 

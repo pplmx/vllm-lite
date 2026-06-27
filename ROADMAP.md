@@ -154,16 +154,16 @@
 
 ### 6.1 支持的模型
 
-| 模型                 | 架构                   | 状态 |
-| -------------------- | ---------------------- | ---- |
-| Qwen2.5-0.5B         | GQA + RoPE             | ✅   |
-| Qwen3-0.6B           | GQA + RoPE + QK-Norm   | ✅   |
-| DeepSeek-R1-8B       | GQA + MoE              | ✅   |
+| 模型                 | 架构                   | 状态      |
+| -------------------- | ---------------------- | --------- |
+| Qwen2.5-0.5B         | GQA + RoPE             | ✅        |
+| Qwen3-0.6B           | GQA + RoPE + QK-Norm   | ✅        |
+| DeepSeek-R1-8B       | GQA + MoE              | ✅        |
 | Qwen3.5-0.8B (Mamba) | Mamba SSM + Attention  | ✅ + spec |
-| Llama                | GQA + RMSNorm          | ✅   |
-| Mistral              | Sliding Window + GQA   | ✅   |
-| Gemma4               | Hybrid Attention       | ✅   |
-| Mixtral              | Sparse MoE (8 experts) | ✅   |
+| Llama                | GQA + RMSNorm          | ✅        |
+| Mistral              | Sliding Window + GQA   | ✅        |
+| Gemma4               | Hybrid Attention       | ✅        |
+| Mixtral              | Sparse MoE (8 experts) | ✅        |
 
 > 2026-06-26 更新：Qwen3.5 自 `52f77ce` 起 capability 升 `PRODUCTION_SPECULATIVE`，支持自投机解码。Phase 5 重构已完成（见 `.planning/MODEL-ARCHITECTURE-REFACTOR.md`）。
 

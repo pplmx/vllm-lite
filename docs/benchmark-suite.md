@@ -15,17 +15,17 @@ cargo bench -p vllm-core --bench speculative_vs_baseline -- --quick
 
 ## Suite
 
-| Benchmark | File | Purpose | SPEC |
-|-----------|------|---------|------|
-| `latency_percentiles` | `crates/core/benches/latency_percentiles.rs` | Per-request latency distribution (p50/p95/p99) | SPEC-BENCH-01 |
-| `speculative_vs_baseline` | `crates/core/benches/speculative_vs_baseline.rs` | Baseline vs adaptive speculative throughput | SPEC-BENCH-02 |
-| `throughput` | `crates/core/benches/optimization_benchmarks.rs` | End-to-end throughput with all opts | (ref) |
-| `adaptive_speculative` | `crates/core/benches/optimization_benchmarks.rs` | Adaptive decoder overhead | (ref) |
-| `prefix_cache` | `crates/core/benches/prefix_cache_benchmarks.rs` | Radix tree prefix matching | — |
-| `scheduler` | `crates/core/benches/scheduler.rs` | Scheduler build/add cost | — |
-| `scheduler_benchmarks` | `crates/core/benches/scheduler_benchmarks.rs` | More scheduler benches | — |
-| `radix_cache` | `crates/core/benches/radix_cache.rs` | Pure cache operations | — |
-| `attention_batch` | `crates/model/tests/attention_batch_benchmark.rs` | Attention batch shapes | — |
+| Benchmark                 | File                                              | Purpose                                        | SPEC          |
+| ------------------------- | ------------------------------------------------- | ---------------------------------------------- | ------------- |
+| `latency_percentiles`     | `crates/core/benches/latency_percentiles.rs`      | Per-request latency distribution (p50/p95/p99) | SPEC-BENCH-01 |
+| `speculative_vs_baseline` | `crates/core/benches/speculative_vs_baseline.rs`  | Baseline vs adaptive speculative throughput    | SPEC-BENCH-02 |
+| `throughput`              | `crates/core/benches/optimization_benchmarks.rs`  | End-to-end throughput with all opts            | (ref)         |
+| `adaptive_speculative`    | `crates/core/benches/optimization_benchmarks.rs`  | Adaptive decoder overhead                      | (ref)         |
+| `prefix_cache`            | `crates/core/benches/prefix_cache_benchmarks.rs`  | Radix tree prefix matching                     | —             |
+| `scheduler`               | `crates/core/benches/scheduler.rs`                | Scheduler build/add cost                       | —             |
+| `scheduler_benchmarks`    | `crates/core/benches/scheduler_benchmarks.rs`     | More scheduler benches                         | —             |
+| `radix_cache`             | `crates/core/benches/radix_cache.rs`              | Pure cache operations                          | —             |
+| `attention_batch`         | `crates/model/tests/attention_batch_benchmark.rs` | Attention batch shapes                         | —             |
 
 ## Hardware Notes
 

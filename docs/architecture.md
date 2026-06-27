@@ -145,14 +145,14 @@ For the speculative architecture, see
 
 ## Extending the System
 
-| To add...                | Touch these files                                                |
-|--------------------------|------------------------------------------------------------------|
-| A new model architecture | `crates/model/src/{newarch}/arch.rs`, register in `arch/registry.rs` |
-| A new scheduling policy  | Implement `SchedulingPolicy` in `crates/core/src/scheduler/policy/` |
+| To add...                | Touch these files                                                     |
+| ------------------------ | --------------------------------------------------------------------- |
+| A new model architecture | `crates/model/src/{newarch}/arch.rs`, register in `arch/registry.rs`  |
+| A new scheduling policy  | Implement `SchedulingPolicy` in `crates/core/src/scheduler/policy/`   |
 | A new KV cache eviction  | Implement `EvictionPolicy` in `crates/core/src/scheduler/eviction.rs` |
-| A new error variant      | Add to the relevant `thiserror::Error` enum; add `#[error("...")]` |
-| A new API endpoint       | Add route handler in `crates/server/src/openai/`                 |
-| A new draft model kind   | Implement `Architecture` trait + register                        |
+| A new error variant      | Add to the relevant `thiserror::Error` enum; add `#[error("...")]`    |
+| A new API endpoint       | Add route handler in `crates/server/src/openai/`                      |
+| A new draft model kind   | Implement `Architecture` trait + register                             |
 
 For code conventions, see `CLAUDE.md`. For error type conventions, see the
 "Error Type Conventions" section in `CLAUDE.md` / `AGENTS.md`.
