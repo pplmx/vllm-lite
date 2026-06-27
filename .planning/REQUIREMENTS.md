@@ -114,8 +114,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FINAL-05 | Phase 43 | Pending |
 
 **Coverage:**
-- v23.0 requirements: 28 functional + 5 FINAL = 33 total
-- Mapped to phases: 33
+- v23.0 requirements: 29 functional + 5 FINAL = 34 total
+  - CODE-* (5): Phase 40
+  - DOC-* (8, DOC-02..09): Phase 41
+  - CMT-* (6): Phase 42
+  - ARCH-* (10): Phase 43
+  - FINAL-01: Phase 40-43 (per-phase invariant)
+  - FINAL-02..05: Phase 43
+- Mapped to phases: 34
 - Unmapped: 0 ✓
 
 ---
