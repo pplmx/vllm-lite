@@ -4,8 +4,6 @@
 //! single testable surface. Uses stub backends that record calls and support
 //! deterministic outputs and configurable failure modes.
 
-#![allow(clippy::needless_range_loop)]
-
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
