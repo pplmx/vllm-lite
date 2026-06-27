@@ -20,12 +20,12 @@
 - [x] **Phase 22: Comments + Documentation Audit** - doc 覆盖率 / 模块文档 / 过期注释 / 外部文档 / ADR
 - [x] **Phase 23: API + Error Handling Audit** - API 一致性 / 错误类型 / 错误人体工学 / trait 设计 / 弃用卫生
 - [x] **Phase 24: Synthesis + Remediation Backlog** - 跨维度综合 + P0/P1/P2 优先级清单 + v20.0+ 迁移路线图
-- [ ] **Phase 25 (v20.1): P0 Critical Fixes** - 消除 vllm-model→vllm-dist 依赖 + ModelError enum + 8 个 trait object-safe + CudaGraphError thiserror
-- [ ] **Phase 26 (v20.2): Module Tree Restoration** - orphan 模块挂回 (kv_cache_fp8 + debug) + stage-info 重命名 + 3 个测试文件迁移 + vllm-dist feature-gate
-- [ ] **Phase 27 (v20.3): Error Handling Standardization** - 13 个 error enum 用 thiserror + Result<_,String> 消除 + mutex-poison 修复 + EngineError 4 新变体 + anyhow 边界
-- [ ] **Phase 28 (v20.4): Documentation Coverage Push** - workspace doc 7.6%→≥60% + 776 个 pub item /// + 121 个文件 //! + README 修复
-- [ ] **Phase 29 (v20.5): External Docs + ADRs** - README/AGENTS.md 调和 + 12 个新 ADR
-- [ ] **Phase 30 (v20.6): Naming + Final Polish** - 7 P1 + 19 P2 命名 + #[deprecated] 卫生 + 注释清理 + 最终验证 (test pass + clippy + fmt)
+- [ ] **Phase 25: P0 Critical Fixes** (v20.1) - 消除 vllm-model→vllm-dist 依赖 + ModelError enum + 8 个 trait object-safe + CudaGraphError thiserror
+- [ ] **Phase 26: Module Tree Restoration** (v20.2) - orphan 模块挂回 (kv_cache_fp8 + debug) + stage-info 重命名 + 3 个测试文件迁移 + vllm-dist feature-gate
+- [ ] **Phase 27: Error Handling Standardization** (v20.3) - 13 个 error enum 用 thiserror + Result<_,String> 消除 + mutex-poison 修复 + EngineError 4 新变体 + anyhow 边界
+- [ ] **Phase 28: Documentation Coverage Push** (v20.4) - workspace doc 7.6%→≥60% + 776 个 pub item /// + 121 个文件 //! + README 修复
+- [ ] **Phase 29: External Docs + ADRs** (v20.5) - README/AGENTS.md 调和 + 12 个新 ADR
+- [ ] **Phase 30: Naming + Final Polish** (v20.6) - 7 P1 + 19 P2 命名 + #[deprecated] 卫生 + 注释清理 + 最终验证 (test pass + clippy + fmt)
 
 ## Phase Details
 
@@ -285,7 +285,7 @@ Each remediation phase produces:
 
 **Parallel execution possible:** 25 → (26 ‖ 28) → (27 + 29) → 30.
 
-#### Phase 25 (v20.1): P0 Critical Fixes
+#### Phase 25: P0 Critical Fixes (v20.1)
 
 **Goal**: 消除 5 个 P0 架构 / API / 错误违规 — `vllm-model → vllm-dist` 边、`vllm-core → vllm-model` 边、`ModelError` struct、`CudaGraphError` 手写 impl、8 个 non-object-safe trait
 **Depends on**: v19.0 baseline (Phase 24 shipped)
@@ -316,7 +316,7 @@ Plans:
 - [ ] 25-04: Convert `CudaGraphError` to thiserror + From shim — API-F-03
 - [ ] 25-05: Make 8 traits object-safe (or split + associated types) + add `dyn_safety.rs` — API-F-02
 
-#### Phase 26 (v20.2): Module Tree Restoration + vllm-dist Feature-Gate
+#### Phase 26: Module Tree Restoration + vllm-dist Feature-Gate (v20.2)
 
 **Goal**: 把 2 个 orphan 模块(`kv_cache_fp8.rs` 289 LOC、`debug.rs` 175 LOC)挂回模块树;重命名 stage-info 文件 `engine_v18_wiring.rs`;迁移 3 个 src/ 内的测试文件到 tests/;feature-gate `vllm-dist` (1,600 LOC) 防止默认构建
 **Depends on**: Phase 25 (P0-01 已解决 `vllm-model → vllm-dist` 边,MT-07 的 feature-gate 决策顺承)
@@ -339,7 +339,7 @@ Plans:
 - [ ] 26-03: Migrate 3 src/ test files to tests/ — MT-04, MT-05, MT-06
 - [ ] 26-04: Feature-gate `vllm-dist` behind `--features multi-node` — MT-07
 
-#### Phase 27 (v20.3): Error Handling Standardization
+#### Phase 27: Error Handling Standardization (v20.3)
 
 **Goal**: 制定并实施项目级 error conventions — 13 个 error enum 统一用 thiserror、消除 10 处 `Result<_,String>` 反模式、25+ 处 mutex-poison `.expect()` 替换、4 个 `EngineError` 新变体、anyhow 边界、跨 crate From impl 完整
 **Depends on**: Phase 25 (`ModelError` 必须先 enum 化,否则 new variants 的 From impls 无法建立)
@@ -366,7 +366,7 @@ Plans:
 - [ ] 27-06: Adopt `anyhow` for server boundary error reporting — ERR-06
 - [ ] 27-07: Add `.context()` to error propagation paths — ERR-07
 
-#### Phase 28 (v20.4): Documentation Coverage Push
+#### Phase 28: Documentation Coverage Push (v20.4)
 
 **Goal**: 把 workspace doc 覆盖率从 7.6% 提升到 ≥60%(per-crate 目标 ≥80%);补 776 个 `pub` item 的 `///`;补 121 个文件的 `//!` 模块级文档;修复 README broken example + crate count + architecture 列表
 **Depends on**: v19.0 baseline (与 Phase 25-27 独立,可并行)
@@ -397,7 +397,7 @@ Plans:
 - [ ] 28-09: Fix README code example + architecture list + crate count — DOC-04, DOC-05, DOC-06
 - [ ] 28-10: Reconcile AGENTS.md Architecture section — DOC-07
 
-#### Phase 29 (v20.5): External Documentation + ADRs
+#### Phase 29: External Documentation + ADRs (v20.5)
 
 **Goal**: 调和 README / AGENTS.md / Cargo.toml 的事实性陈述;新建 12 个 ADR 记录 v15.0-v20.0 的 tribal knowledge 决策;验证 `.planning/PROJECT.md` Core Value 是否漂移
 **Depends on**: Phase 28(`///` docs 必须先存在,否则 ADRs 中引用的 type 找不到文档)
@@ -428,7 +428,7 @@ Plans:
 - [ ] 29-03: Create 2+ tribal-knowledge ADRs from v15.0-v18.0 — EXT-11
 - [ ] 29-04: Verify + update `.planning/PROJECT.md` "What This Is" / "Core Value" — EXT-12
 
-#### Phase 30 (v20.6): Naming + Final Polish + Verification
+#### Phase 30: Naming + Final Polish + Verification (v20.6)
 
 **Goal**: 应用 7 P1 + 19 P2 命名修复;为 v20.0 移除的 public API 加 `#[deprecated]` 标记 + 迁移路径;清理 stale comments 与 dead TODOs;运行 FINAL-01..04 全套验证(`cargo test` + `cargo clippy` + `cargo fmt` + 规划文档更新)
 **Depends on**: v19.0 baseline (与 Phase 25-29 独立;按惯例最后跑以汇聚所有先期变更)
