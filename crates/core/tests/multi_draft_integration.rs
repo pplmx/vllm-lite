@@ -240,7 +240,7 @@ fn test_budget_concurrent_n_drafts_within_budget() {
             .insert(DraftId(name.into()), Box::new(StubBackend::new(name)));
         let _ = h.resolver.resolve(Some(&DraftId(name.into())));
     }
-    assert!(h.budget.snapshot().reserved_drafts_bytes > 0);
+    assert_eq!(h.budget.snapshot().reserved_drafts_bytes, 5 * 16 * 1024 * 1024);
     let snap = h.metrics.draft_metrics_snapshot();
     assert_eq!(snap.resolutions_external_total, 5);
     assert_eq!(snap.resolutions_self_spec_total, 0);
