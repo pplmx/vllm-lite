@@ -2,6 +2,7 @@
 
 use vllm_traits::{Batch, BatchPhase, SeqId, TokenId};
 
+/// RequestBuilder: request builder.
 pub struct RequestBuilder {
     seq_id: SeqId,
     tokens: Vec<TokenId>,
@@ -9,6 +10,7 @@ pub struct RequestBuilder {
 }
 
 impl RequestBuilder {
+/// new: new.
     pub fn new(seq_id: SeqId) -> Self {
         Self {
             seq_id,
@@ -17,21 +19,25 @@ impl RequestBuilder {
         }
     }
 
+/// with_prompt: with prompt.
     pub fn with_prompt(mut self, tokens: Vec<TokenId>) -> Self {
         self.tokens = tokens;
         self
     }
 
+/// with_max_tokens: with max tokens.
     pub fn with_max_tokens(mut self, max: usize) -> Self {
         self.max_tokens = max;
         self
     }
 
+/// build: build.
     pub fn build(self) -> (SeqId, Vec<TokenId>, usize) {
         (self.seq_id, self.tokens, self.max_tokens)
     }
 }
 
+/// BatchBuilder: batch builder.
 pub struct BatchBuilder {
     seq_ids: Vec<SeqId>,
     input_tokens: Vec<Vec<TokenId>>,
@@ -42,6 +48,7 @@ pub struct BatchBuilder {
 }
 
 impl BatchBuilder {
+/// new: new.
     pub fn new() -> Self {
         Self {
             seq_ids: vec![],
@@ -53,6 +60,7 @@ impl BatchBuilder {
         }
     }
 
+/// add_sequence: add sequence.
     pub fn add_sequence(mut self, seq_id: SeqId, tokens: Vec<TokenId>, prefill: bool) -> Self {
         let pos = tokens.len();
         self.seq_ids.push(seq_id);
@@ -64,6 +72,7 @@ impl BatchBuilder {
         self
     }
 
+/// build: build.
     pub fn build(self) -> Batch {
         let total_tokens: usize = self.input_tokens.iter().map(|t| t.len()).sum();
         let max_seq_len = self.input_tokens.iter().map(|t| t.len()).max().unwrap_or(0);
