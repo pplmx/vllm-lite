@@ -64,13 +64,14 @@ pub mod slow_model;
 /// utils: utils module.
 pub mod utils;
 
-pub use builders::{BatchBuilder, RequestBuilder};
+// Curated top-level re-exports of the most-used test utilities.
+// Modules remain accessible via direct path (`vllm_testing::builders::*`)
+// for less-common exports that don't warrant top-level ergonomics.
 pub use fixtures::TestFixtures;
 pub use harness::TestHarness;
-pub use mocks::{ConstModel, FakeModel, IncrementModel, NeverProgressModel, StubModel};
+pub use mocks::{ConstModel, FakeModel, IncrementModel, StubModel};
 pub use request_factory::RequestFactory;
 pub use slow_model::SlowModel;
-pub use utils::{assert_batch_consistency, create_simple_batch, generate_random_tokens};
 
 /// prelude: prelude module.
 ///
@@ -78,8 +79,6 @@ pub use utils::{assert_batch_consistency, create_simple_batch, generate_random_t
 /// Excludes `SlowModel` (heavyweight; only needed for #[ignore] benchmark tests).
 pub mod prelude {
     pub use super::{
-        BatchBuilder, ConstModel, FakeModel, IncrementModel, NeverProgressModel, RequestBuilder,
-        RequestFactory, StubModel, TestFixtures, TestHarness, assert_batch_consistency,
-        create_simple_batch, generate_random_tokens,
+        ConstModel, FakeModel, IncrementModel, RequestFactory, StubModel, TestFixtures, TestHarness,
     };
 }
