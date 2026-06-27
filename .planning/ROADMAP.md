@@ -4,15 +4,91 @@
 
 - ✅ **v16.0 Speculative Decoding** — Phases 16.1-16.4 (shipped 2026-04-28)
 - ✅ **v17.0 Production Speculative Decoding** — Phases 17.1-17.4 (shipped 2026-05-13)
+- 📋 **v18.0 Multi-Model Speculative Decoding** — Phases 18.1-18.4 (planned)
 
 ## Phases
 
-- [x] **Phase 17.1: Engine Integration** - Fix and wire `step_speculative()` as the unified entry point for speculative decode
-- [x] **Phase 17.2: Self-Speculation Forward Pass** - Implement real layer-truncated forward pass with KV cache isolation
-- [x] **Phase 17.3: Adaptive Depth & Benchmarks** - Wire adaptive decoder and run comprehensive A/B benchmarks
-- [x] **Phase 17.4: Speculative Warmup & Metrics** - Prefill draft KV cache, wire acceptance/speedup metrics
+- [ ] **Phase 18.1: Draft Registry + External Loading** - 引入 DraftModelRegistry 与外部 draft model 加载
+- [ ] **Phase 18.2: Lifecycle + Memory Budget** - 卸载时回收 KV cache,执行 VRAM 预算
+- [ ] **Phase 18.3: Request Routing + Fallback** - 请求级 draft 路由,失败回退到 self-spec
+- [ ] **Phase 18.4: Integration Tests + Benchmarks** - E2E 验证 + 多 draft 性能基线
 
 ## Phase Details
+
+### 📋 v18.0 Multi-Model Speculative Decoding (Planned)
+
+**Milestone Goal:** 兑现 v17 延期的 MULTI-01/02/03,引入外部 draft model(可与 target 不同架构/尺寸),实现请求级 draft 路由、并发 target + draft 显存预算与运行时回退语义。Self-spec 路径(v17)保持为基线回退。
+
+#### Phase 18.1: Draft Registry + External Loading
+
+**Goal**: Engine 加载并注册与 target 不同架构/尺寸的外部 draft model,weights 懒加载
+**Depends on**: Phase 17.4 (v17.0 baseline shipped)
+**Requirements**: MMLT-01, MMLT-02, MMLT-03, LIFE-01
+**Success Criteria** (what must be TRUE):
+  1. Engine 可通过 DraftModelRegistry 加载与 target 不同架构/尺寸的 draft model 实例
+  2. 每个外部 draft 拥有独立 ModelBackend 实例,KV cache block IDs 与 target 隔离,无状态泄漏
+  3. Draft weights 懒加载 — 首个使用该 draft 的请求触发实际加载,无冷启动惩罚
+  4. Registry 暴露 register / load / unload 运行时操作,可在 Engine 启动后调用
+  5. 异构 draft(target=Llama + draft=Qwen 等)与 target 共存无冲突
+**Plans**: TBD
+
+Plans:
+
+- (to be defined during plan-phase)
+
+#### Phase 18.2: Lifecycle + Memory Budget
+
+**Goal**: Draft model 可安全卸载并触发 KV 回收,VRAM 预算在加载/运行时均受约束
+**Depends on**: Phase 18.1
+**Requirements**: LIFE-02, LIFE-03, MEM-01, MEM-02, MEM-03
+**Success Criteria** (what must be TRUE):
+  1. 卸载 draft model 通过 MemoryManager 释放其 KV cache blocks,无 orphan blocks 残留
+  2. Registry 跟踪每 draft 的引用计数,refcount 归零时自动卸载
+  3. Engine 在加载前计算总 VRAM 预算 = target weights + target KV cache + N concurrent drafts
+  4. 加载时权重尺寸估算来自 model loader metadata,无需触发完整加载
+  5. 运行时 KV cache 增长被追踪,超出预算时引擎拒绝加载并返回结构化错误
+**Plans**: TBD
+
+Plans:
+
+- (to be defined during plan-phase)
+
+#### Phase 18.3: Request Routing + Fallback
+
+**Goal**: 请求按需选择 draft model,draft 失败时优雅降级到 self-spec 或非推测式解码
+**Depends on**: Phase 18.2
+**Requirements**: RTE-01, RTE-02, RTE-03, FALL-01, FALL-02
+**Success Criteria** (what must be TRUE):
+  1. Request 可通过 SamplingParams 或 Request 结构指定 `draft_model_id`
+  2. Scheduler 在 batch 组合时将每个请求路由到正确的 draft model 实例
+  3. 同一 batch 内允许多种 draft 并存(mixed routing)
+  4. 外部 draft 加载失败自动回退到 self-spec 路径(v17 baseline),用户无感知
+  5. 运行时 draft 推理错误对该请求优雅降级为非推测式 decode,不影响其他请求
+**Plans**: TBD
+
+Plans:
+
+- (to be defined during plan-phase)
+
+#### Phase 18.4: Integration Tests + Benchmarks
+
+**Goal**: 多 draft 推测式解码路径的端到端验证与多 draft 性能基线
+**Depends on**: Phase 18.3
+**Requirements**: (无新增 — 验证 Phase 18.1-18.3 实现)
+**Success Criteria** (what must be TRUE):
+  1. 集成测试覆盖完整生命周期: register → lazy load → route → unload
+  2. 显存预算执行测试覆盖 accept / refuse 边界(刚好超预算、远超预算、并发 N draft)
+  3. 多 draft batch routing 测试验证异构请求流(target + draft_A + draft_B 共存)
+  4. Fallback 路径对加载期与运行时失败各有显式测试
+  5. 基准对比 single-target-only 与 target+draft 吞吐,VRAM 预算在指标中可见
+**Plans**: TBD
+
+Plans:
+
+- (to be defined during plan-phase)
+
+<details>
+<summary>✅ v17.0 Production Speculative Decoding (Phases 17.1-17.4) — SHIPPED 2026-05-13</summary>
 
 ### Phase 17.1: Engine Integration
 
@@ -90,17 +166,23 @@ Plans:
 
 - (to be defined during plan-phase)
 
+</details>
+
 ## Progress
 
-**Execution Order:** 17.1 → 17.2 → 17.3 → 17.4
+**Execution Order:** 18.1 → 18.2 → 18.3 → 18.4
 
-| Phase                             | Milestone | Plans Complete | Status      | Completed |
-| --------------------------------- | --------- | -------------- | ----------- | --------- |
-| 17.1 Engine Integration           | v17.0     | 6/6            | Complete    | 2026-05-13 |
-| 17.2 Self-Speculation             | v17.0     | 6/6            | Complete    | 2026-05-13 |
-| 17.3 Adaptive Depth & Benchmarks  | v17.0     | 6/6            | Complete    | 2026-05-13 |
-| 17.4 Speculative Warmup & Metrics | v17.0     | 8/8            | Complete    | 2026-05-13 |
+| Phase                                   | Milestone | Plans Complete | Status      | Completed    |
+| --------------------------------------- | --------- | -------------- | ----------- | ------------ |
+| 17.1 Engine Integration                 | v17.0     | 6/6            | Complete    | 2026-05-13   |
+| 17.2 Self-Speculation                   | v17.0     | 6/6            | Complete    | 2026-05-13   |
+| 17.3 Adaptive Depth & Benchmarks        | v17.0     | 6/6            | Complete    | 2026-05-13   |
+| 17.4 Speculative Warmup & Metrics       | v17.0     | 8/8            | Complete    | 2026-05-13   |
+| 18.1 Draft Registry + External Loading  | v18.0     | 0/TBD          | Not started | —            |
+| 18.2 Lifecycle + Memory Budget          | v18.0     | 0/TBD          | Not started | —            |
+| 18.3 Request Routing + Fallback         | v18.0     | 0/TBD          | Not started | —            |
+| 18.4 Integration Tests + Benchmarks     | v18.0     | 0/TBD          | Not started | —            |
 
 ---
 
-*Roadmap updated: 2026-05-13 — v17.0 phases defined*
+*Roadmap updated: 2026-06-27 — v18.0 phases defined (4 phases, 14/14 requirements mapped)*
