@@ -3,6 +3,7 @@
 //! Provides ModelConfig struct that works across different model architectures.
 
 use super::architecture::{Architecture, LayerType, RoPEConfig};
+use super::errors::ConfigResult;
 use crate::arch::ARCHITECTURE_REGISTRY;
 
 /// ModelConfig: model configuration.
@@ -205,7 +206,7 @@ impl ModelConfig {
     }
 
     /// from_config_json: from config json.
-    pub fn from_config_json(value: &serde_json::Value) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn from_config_json(value: &serde_json::Value) -> ConfigResult<Self> {
         let architecture = ARCHITECTURE_REGISTRY
             .detect(value)
             .and_then(|name| Architecture::from_name(&name))
