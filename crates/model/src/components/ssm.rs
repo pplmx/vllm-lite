@@ -297,6 +297,8 @@ impl MambaBlock {
             .get(&format!("model.layers.{}.mamba.norm.bias", layer_idx))
             .cloned()
             .unwrap_or_else(|| {
+                // invariant: tensor shape is derived from norm_w dimensions; allocation
+                // of a fixed-size zero buffer on the same device as norm_w cannot fail.
                 Tensor::zeros(norm_w.shape().dims()[0], DType::F32, norm_w.device())
                     .expect("Failed to create zero bias")
             });

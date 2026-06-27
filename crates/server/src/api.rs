@@ -49,6 +49,8 @@ pub async fn get_prometheus(State(state): State<ApiState>) -> String {
     let (response_tx, mut response_rx) = mpsc::unbounded_channel();
     state
         .engine_tx
+        // invariant: engine is shutdown only after all senders are dropped; the sender
+        // outlives the receiver for the lifetime of this request handler.
         .send(EngineMessage::GetMetrics { response_tx })
         .expect("Engine channel should be available");
     let m = response_rx.recv().await.unwrap_or(MetricsSnapshot {

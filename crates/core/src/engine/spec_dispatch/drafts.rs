@@ -36,6 +36,8 @@ impl crate::engine::Engine {
         let resolver = self
             .draft_resolver
             .as_ref()
+            // invariant: caller contract — `generate_per_seq_drafts` is only invoked when a
+            // `DraftResolver` has been installed (see `Engine::with_drafts_boxed` initialization).
             .expect("generate_per_seq_drafts called without draft_resolver");
         let n_seq = batch.seq_ids.len();
         let mut draft_outputs: Vec<Vec<TokenId>> = vec![Vec::with_capacity(max_draft); n_seq];

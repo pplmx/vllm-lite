@@ -82,7 +82,10 @@ pub async fn auth_middleware(
 ) -> Response {
     match auth.verify(request.headers()).await {
         Ok(_) => next.run(request).await,
-        Err(status) => Response::builder().status(status).body("".into()).unwrap(),
+        Err(status) => {
+            // invariant: builder pattern with all required fields (status, body) set above.
+            Response::builder().status(status).body("".into()).unwrap()
+        }
     }
 }
 

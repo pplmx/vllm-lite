@@ -155,6 +155,8 @@ impl LinearAttentionBlock {
             .get(&format!("{}.linear_attn.norm.bias", prefix))
             .cloned()
             .unwrap_or_else(|| {
+                // invariant: tensor shape is derived from norm_w dimensions; allocation
+                // of a fixed-size zero buffer on the same device as norm_w cannot fail.
                 Tensor::zeros(
                     norm_w.dim(0).unwrap_or(d_model),
                     DType::F32,

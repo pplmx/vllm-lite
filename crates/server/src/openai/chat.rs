@@ -220,6 +220,8 @@ pub async fn chat_completions(
                             },
                         );
                         let sse_payload =
+                            // invariant: serializing a known-good struct (plain serde_json types);
+                            // to_string cannot fail.
                             serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
                         Some((Ok(Event::default().data(sse_payload)), rx))
                     }
@@ -240,6 +242,8 @@ pub async fn chat_completions(
                             },
                         );
                         let sse_payload =
+                            // invariant: serializing a known-good struct (plain serde_json types);
+                            // to_string cannot fail.
                             serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
                         tracing::info!(
                             request_id = %request_id,

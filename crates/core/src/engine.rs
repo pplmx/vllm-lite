@@ -177,6 +177,8 @@ impl Engine {
             // Duplicate ids in the spec list are a programmer error — surface them.
             engine
                 .draft_registry
+                // invariant: caller (`with_drafts_boxed`) supplies a deduplicated spec list;
+                // duplicates are a programmer error.
                 .register(spec)
                 .expect("with_drafts_boxed: duplicate draft id in spec list");
         }
@@ -228,6 +230,8 @@ impl Engine {
         for spec in draft_specs {
             engine
                 .draft_registry
+                // invariant: caller (`with_budget_boxed`) supplies a deduplicated spec list;
+                // duplicates are a programmer error.
                 .register(spec)
                 .expect("with_budget_boxed: duplicate draft id in spec list");
         }

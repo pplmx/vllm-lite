@@ -2,10 +2,12 @@ use std::env;
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // invariant: CARGO_MANIFEST_DIR is always set by Cargo during build script execution.
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let proto_file = manifest_dir.join("proto/node.proto");
     let proto_include = manifest_dir.join("proto");
 
+    // invariant: OUT_DIR is always set by Cargo during build script execution.
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     tonic_build::configure()

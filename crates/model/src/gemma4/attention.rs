@@ -356,9 +356,7 @@ impl Gemma4Attention {
 
 impl Default for Gemma4Attention {
     fn default() -> Self {
-        // 1x1 F32 CPU tensor allocation cannot realistically fail (4 bytes).
-        // Using `.expect` with a descriptive message instead of `.unwrap()`
-        // to satisfy ERR-03 (documented production .expect() sites).
+        // invariant: 1x1 F32 CPU tensor allocation cannot realistically fail (4 bytes).
         Self {
             q_proj: Linear::new(
                 Tensor::zeros((1, 1), candle_core::DType::F32, &candle_core::Device::Cpu).expect(

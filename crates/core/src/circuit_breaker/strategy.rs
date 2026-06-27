@@ -135,6 +135,8 @@ impl AsyncFallbackStrategy for RetryStrategy {
                 }
             }
         }
+        // invariant: loop populates `last_error` on every iteration that doesn't return Ok;
+        // if the loop exits without setting it, the success path has already returned.
         Err(last_error.unwrap())
     }
 }
