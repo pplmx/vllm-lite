@@ -17,14 +17,10 @@ fn bench_speculative_vs_baseline(c: &mut Criterion) {
             num_requests,
             |b, &num_requests| {
                 let config = SchedulerConfig::default();
-                let mut engine =
-                    TestFixtures::increment_engine_with(config, 4, 1024);
+                let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
                 for i in 0..num_requests {
                     let (tx, _rx) = mpsc::channel(64);
-                    engine.add_request(
-                        Request::new(i as u64, vec![10, 20], 20),
-                        tx,
-                    );
+                    engine.add_request(Request::new(i as u64, vec![10, 20], 20), tx);
                 }
                 b.iter(|| {
                     let mut completed = 0;
@@ -42,18 +38,11 @@ fn bench_speculative_vs_baseline(c: &mut Criterion) {
             num_requests,
             |b, &num_requests| {
                 let config = SchedulerConfig::default();
-                let mut engine = TestFixtures::increment_speculative_engine_with(
-                    config, 4, 1024,
-                );
-                engine.enable_adaptive_speculative(
-                    AdaptiveDraftConfig::default(),
-                );
+                let mut engine = TestFixtures::increment_speculative_engine_with(config, 4, 1024);
+                engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
                 for i in 0..num_requests {
                     let (tx, _rx) = mpsc::channel(64);
-                    engine.add_request(
-                        Request::new(i as u64, vec![10, 20], 20),
-                        tx,
-                    );
+                    engine.add_request(Request::new(i as u64, vec![10, 20], 20), tx);
                 }
                 b.iter(|| {
                     let mut completed = 0;
