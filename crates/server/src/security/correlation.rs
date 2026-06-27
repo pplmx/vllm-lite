@@ -28,6 +28,7 @@ impl CorrelationIdMiddleware {
         *counter += 1;
         format!(
             "{:x}-{:x}",
+            // invariant: monotonic clock is always >= UNIX_EPOCH.
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()

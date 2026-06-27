@@ -62,6 +62,7 @@ impl BatchManager {
         if let Some(job) = jobs.get_mut(job_id) {
             job.status = BatchStatus::Completed;
             job.completed_at = Some(
+                // invariant: monotonic clock is always >= UNIX_EPOCH.
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()

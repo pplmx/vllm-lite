@@ -81,6 +81,8 @@ impl BatchJob {
         max_tokens: Option<i64>,
         temperature: Option<f32>,
     ) -> Self {
+        // invariant: SystemTime::now() is always >= UNIX_EPOCH on any platform with a working clock;
+        // duration_since cannot underflow.
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("Failed to get system time")

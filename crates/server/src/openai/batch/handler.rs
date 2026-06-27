@@ -48,6 +48,8 @@ pub async fn create_batch(
             )),
         )
     })?;
+    // invariant: SystemTime::now() is always >= UNIX_EPOCH on any platform with a working clock;
+    // duration_since cannot underflow.
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -135,6 +137,8 @@ pub async fn get_batch_results(
 
 pub async fn list_batches(State(state): State<ApiState>) -> Json<Vec<BatchResponse>> {
     let jobs = state.batch_manager.get_all_jobs().await;
+    // invariant: SystemTime::now() is always >= UNIX_EPOCH on any platform with a working clock;
+    // duration_since cannot underflow.
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
