@@ -262,6 +262,7 @@ fn test_budget_refuses_n_plus_one_drafts_over_budget() {
     let _ = h.resolver.resolve(Some(&DraftId("a".into()))); // fits
     let r = h.resolver.resolve(Some(&DraftId("b".into()))); // over budget → fallback
     assert!(matches!(r, ResolvedDraft::SelfSpec(_)));
+    assert!(!h.registry.is_loaded(&DraftId("b".into())));
     let snap = h.metrics.draft_metrics_snapshot();
     assert_eq!(snap.resolutions_external_total, 1);
     assert_eq!(snap.resolutions_self_spec_total, 1);
