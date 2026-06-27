@@ -274,6 +274,22 @@ impl AppConfig {
             errors.push("engine.tensor_parallel_size must be > 0".to_string());
         }
 
+        // v18.0 validation
+        if let Some(b) = self.engine.vram_budget_bytes {
+            if b == 0 {
+                errors.push("engine.vram_budget_bytes must be > 0 when set".to_string());
+            }
+        }
+        let mut seen_draft_ids = std::collections::HashSet::new();
+        for spec in &self.engine.draft_specs {
+            if spec.id.is_empty() {
+                errors.push("engine.draft_specs[].id must not be empty".to_string());
+            }
+            if !seen_draft_ids.insert(&spec.id) {
+                errors.push(format!("engine.draft_specs[].id duplicate: {}", spec.id));
+            }
+        }
+
         if errors.is_empty() {
             Ok(())
         } else {
@@ -345,5 +361,81 @@ mod tests {
         config.engine.kv_quantization = true;
         assert!(config.validate().is_ok());
         assert!(config.engine.kv_quantization);
+    }
+
+    // ─────────────────── v18.0 validation tests ───────────────────
+
+    #[test]
+    fn test_validate_vram_budget_zero_fails() {
+        let mut config = AppConfig::default();
+        config.engine.vram_budget_bytes = Some(0);
+        let errors = config.validate().unwrap_err();
+        assert!(errors.iter().any(|e| e.contains("vram_budget_bytes")));
+    }
+
+    #[test]
+    fn test_validate_vram_budget_nonzero_ok() {
+        let mut config = AppConfig::default();
+        config.engine.vram_budget_bytes = Some(1024);
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_draft_spec_empty_id_fails() {
+        let mut config = AppConfig::default();
+        config.engine.draft_specs = vec![DraftSpecConfig {
+            id: String::new(),
+            path: "/nope".into(),
+            num_layers: 4,
+            weight_size_bytes: 0,
+            architecture: None,
+        }];
+        let errors = config.validate().unwrap_err();
+        assert!(errors.iter().any(|e| e.contains("must not be empty")));
+    }
+
+    #[test]
+    fn test_validate_draft_spec_duplicate_id_fails() {
+        let mut config = AppConfig::default();
+        config.engine.draft_specs = vec![
+            DraftSpecConfig {
+                id: "a".into(),
+                path: "/a".into(),
+                num_layers: 4,
+                weight_size_bytes: 0,
+                architecture: None,
+            },
+            DraftSpecConfig {
+                id: "a".into(),
+                path: "/a2".into(),
+                num_layers: 4,
+                weight_size_bytes: 0,
+                architecture: None,
+            },
+        ];
+        let errors = config.validate().unwrap_err();
+        assert!(errors.iter().any(|e| e.contains("duplicate")));
+    }
+
+    #[test]
+    fn test_validate_draft_spec_unique_ids_ok() {
+        let mut config = AppConfig::default();
+        config.engine.draft_specs = vec![
+            DraftSpecConfig {
+                id: "a".into(),
+                path: "/a".into(),
+                num_layers: 4,
+                weight_size_bytes: 0,
+                architecture: None,
+            },
+            DraftSpecConfig {
+                id: "b".into(),
+                path: "/b".into(),
+                num_layers: 4,
+                weight_size_bytes: 0,
+                architecture: None,
+            },
+        ];
+        assert!(config.validate().is_ok());
     }
 }
