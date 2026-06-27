@@ -1,17 +1,13 @@
-//! flash: flash.
-
 use candle_core::{Result, Tensor};
 
 /// FlashAttention: flash attention.
 pub struct FlashAttention;
 
 impl FlashAttention {
-    /// new: new.
     pub fn new(_config: FlashAttentionConfig) -> Self {
         Self
     }
 
-    /// forward: forward.
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor, _causal: bool) -> Result<Tensor> {
         let qk = Tensor::matmul(q, &k.transpose(2, 3)?.contiguous()?)?;
         let attn_weights = candle_nn::ops::softmax(&qk, 3)?.contiguous()?;

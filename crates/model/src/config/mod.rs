@@ -12,13 +12,9 @@
 //! let mistral = ModelConfig::mistral_7b();
 //! ```
 
-/// architecture: architecture module.
 pub mod architecture;
-/// errors: config error types.
 pub mod errors;
-/// hyperparams: hyperparams module.
 pub mod hyperparams;
-/// model_config: model config module.
 pub mod model_config;
 
 pub use architecture::{Architecture, AttentionType, LayerType, MlpType, NormType, RoPEConfig};

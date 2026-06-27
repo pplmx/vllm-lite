@@ -15,7 +15,6 @@ use super::model::LlamaModel;
 pub struct LlamaArchitecture;
 
 impl LlamaArchitecture {
-    /// new: new.
     pub fn new() -> Self {
         Self
     }

@@ -23,7 +23,6 @@ pub struct Llama4Architecture {
 }
 
 impl Llama4Architecture {
-    /// new: new.
     pub fn new() -> Self {
         Self {
             is_moe: false,
@@ -32,7 +31,6 @@ impl Llama4Architecture {
         }
     }
 
-    /// with_moe: with moe.
     pub fn with_moe(num_experts: usize, num_active_experts: usize) -> Self {
         Self {
             is_moe: true,
@@ -59,7 +57,6 @@ pub struct Llama4BlockWrapper {
 }
 
 impl Llama4BlockWrapper {
-    /// new: new.
     pub fn new(config: &ModelConfig, is_moe: bool, num_experts: usize) -> Self {
         Self {
             inner_dim: config.head_dim * config.num_heads,
@@ -181,7 +178,6 @@ pub struct Llama4Model {
 }
 
 impl Llama4Model {
-    /// new: new.
     pub fn new(
         config: ModelConfig,
         device: Device,

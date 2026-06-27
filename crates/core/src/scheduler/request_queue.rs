@@ -1,5 +1,3 @@
-//! request_queue: request queue.
-
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::time::Instant;
 
@@ -45,7 +43,6 @@ pub struct RequestQueue {
 }
 
 impl RequestQueue {
-    /// new: new.
     pub fn new() -> Self {
         Self {
             sequences: HashMap::new(),
@@ -55,7 +52,6 @@ impl RequestQueue {
         }
     }
 
-    /// enqueue: enqueue.
     pub fn enqueue(
         &mut self,
         seq: Sequence,
@@ -90,7 +86,6 @@ impl RequestQueue {
         self.in_queue.insert(seq_id);
     }
 
-    /// dequeue: dequeue.
     pub fn dequeue(&mut self) -> Option<Sequence> {
         while let Some(scheduled) = self.priority_queue.pop() {
             let seq_id = scheduled.seq_id;
@@ -112,7 +107,6 @@ impl RequestQueue {
         self.sequences.get(&seq_id)
     }
 
-    /// get_mut: get mut.
     pub fn get_mut(&mut self, seq_id: SeqId) -> Option<&mut Sequence> {
         self.sequences.get_mut(&seq_id)
     }
@@ -132,7 +126,6 @@ impl RequestQueue {
         }
     }
 
-    /// drain_by_phase: drain by phase.
     pub fn drain_by_phase(&mut self, phase: Phase) -> Vec<Sequence> {
         let ids: Vec<_> = self
             .phase_index
@@ -165,7 +158,6 @@ impl RequestQueue {
         self.sequences.is_empty()
     }
 
-    /// phase_len: phase len.
     pub fn phase_len(&self, phase: Phase) -> usize {
         self.phase_index.get(&phase).map(|s| s.len()).unwrap_or(0)
     }

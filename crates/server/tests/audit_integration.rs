@@ -1,4 +1,3 @@
-//! audit_integration: integration tests for the audit log pipeline.
 //!
 //! Wires a real Axum app with `JwtAuthMiddleware` (validating tokens),
 //! `RbacMiddleware` (enforcing role-based access), and an

@@ -48,7 +48,6 @@ impl ModelConfig {
         }
     }
 
-    /// test_tiny: test tiny.
     pub fn test_tiny() -> Self {
         Self {
             architecture: Architecture::Llama,
@@ -205,7 +204,6 @@ impl ModelConfig {
         }
     }
 
-    /// from_config_json: from config json.
     pub fn from_config_json(value: &serde_json::Value) -> ConfigResult<Self> {
         let architecture = ARCHITECTURE_REGISTRY
             .detect(value)

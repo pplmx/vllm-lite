@@ -17,7 +17,6 @@ pub enum ChatTemplate {
 }
 
 impl ChatTemplate {
-    /// for_architecture: for architecture.
     pub fn for_architecture(arch: Architecture) -> Self {
         match arch {
             Architecture::Qwen3 | Architecture::Qwen35 => Self::ChatMl,
@@ -27,7 +26,6 @@ impl ChatTemplate {
     }
 }
 
-/// build_prompt: build prompt.
 pub fn build_prompt(template: ChatTemplate, messages: &[ChatMessage]) -> String {
     match template {
         ChatTemplate::ChatMl => build_chatml_prompt(messages),

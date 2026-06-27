@@ -1,5 +1,3 @@
-//! hash_router: hash router.
-
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -23,7 +21,6 @@ pub struct HashRouter {
 }
 
 impl HashRouter {
-    /// new: new.
     pub fn new(virtual_nodes: usize) -> Self {
         Self {
             nodes: Arc::new(RwLock::new(Vec::new())),
@@ -31,7 +28,6 @@ impl HashRouter {
         }
     }
 
-    /// add_node: add node.
     pub async fn add_node(&self, node_id: String) {
         let mut nodes = self.nodes.write().await;
 
@@ -44,13 +40,11 @@ impl HashRouter {
         }
     }
 
-    /// remove_node: remove node.
     pub async fn remove_node(&self, node_id: &str) {
         let mut nodes = self.nodes.write().await;
         nodes.retain(|n| n.node_id != node_id);
     }
 
-    /// update_node_load: update node load.
     pub async fn update_node_load(&self, node_id: &str, load: f64) {
         let mut nodes = self.nodes.write().await;
         if let Some(node) = nodes.iter_mut().find(|n| n.node_id == node_id) {
@@ -58,7 +52,6 @@ impl HashRouter {
         }
     }
 
-    /// update_cache_status: update cache status.
     pub async fn update_cache_status(&self, node_id: &str, has_cache: bool) {
         let mut nodes = self.nodes.write().await;
         if let Some(node) = nodes.iter_mut().find(|n| n.node_id == node_id) {
@@ -66,7 +59,6 @@ impl HashRouter {
         }
     }
 
-    /// route: route.
     pub async fn route(&self, key: &str) -> Option<String> {
         let nodes = self.nodes.read().await;
 
@@ -101,7 +93,6 @@ impl HashRouter {
         }
     }
 
-    /// route_by_prompt_hash: route by prompt hash.
     pub async fn route_by_prompt_hash(&self, prompt_hash: u64) -> Option<String> {
         let nodes = self.nodes.read().await;
 
@@ -122,12 +113,10 @@ impl HashRouter {
         hasher.finish()
     }
 
-    /// get_node_count: get node count.
     pub async fn get_node_count(&self) -> usize {
         self.nodes.read().await.len()
     }
 
-    /// get_all_nodes: get all nodes.
     pub async fn get_all_nodes(&self) -> Vec<String> {
         self.nodes
             .read()

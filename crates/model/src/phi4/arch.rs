@@ -16,7 +16,6 @@ use vllm_traits::types::BatchOutput;
 pub struct Phi4Architecture;
 
 impl Phi4Architecture {
-    /// new: new.
     pub fn new() -> Self {
         Self
     }
@@ -35,7 +34,6 @@ pub struct Phi4BlockWrapper {
 }
 
 impl Phi4BlockWrapper {
-    /// new: new.
     pub fn new(config: &ModelConfig) -> Self {
         Self {
             inner_dim: config.head_dim * config.num_heads,
@@ -144,7 +142,6 @@ pub struct Phi4Model {
 }
 
 impl Phi4Model {
-    /// new: new.
     pub fn new(config: ModelConfig, device: Device, num_kv_blocks: usize) -> Result<Self> {
         Ok(Self {
             config,

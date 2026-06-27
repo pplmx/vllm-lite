@@ -1,5 +1,3 @@
-//! recovery: recovery.
-
 // crates/core/src/error/recovery.rs
 //! Error recovery management
 
@@ -17,7 +15,6 @@ pub enum ErrorSeverity {
 }
 
 impl ErrorSeverity {
-    /// from_error: from error.
     pub fn from_error(error: &str) -> Self {
         if error.contains("timeout") {
             ErrorSeverity::Retryable
@@ -68,7 +65,8 @@ impl Default for RecoveryConfig {
 }
 
 impl RecoveryConfig {
-    /// builder: construct via builder for documented field ergonomics.
+    /// Returns a builder for configuring this type with the documented field defaults.
+    /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
     pub fn builder() -> RecoveryConfigBuilder {
         RecoveryConfigBuilder::default()
     }
@@ -81,17 +79,14 @@ pub struct RecoveryConfigBuilder {
 }
 
 impl RecoveryConfigBuilder {
-    /// with_retry_attempts: with retry attempts.
     pub fn with_retry_attempts(mut self, v: usize) -> Self {
         self.inner.retry_attempts = v;
         self
     }
-    /// with_retry_base_delay: with retry base delay.
     pub fn with_retry_base_delay(mut self, v: Duration) -> Self {
         self.inner.retry_base_delay = v;
         self
     }
-    /// with_default_circuit_breaker: with default circuit breaker.
     pub fn with_default_circuit_breaker(mut self, v: CircuitBreakerConfig) -> Self {
         self.inner.default_circuit_breaker = v;
         self
@@ -103,7 +98,6 @@ impl RecoveryConfigBuilder {
 }
 
 impl RecoveryManager {
-    /// new: new.
     pub fn new(config: RecoveryConfig) -> Self {
         Self {
             circuit_breakers: dashmap::DashMap::new(),
@@ -111,7 +105,6 @@ impl RecoveryManager {
         }
     }
 
-    /// get_or_create_circuit_breaker: get or create circuit breaker.
     pub fn get_or_create_circuit_breaker(&self, name: &str) -> CircuitBreaker {
         self.circuit_breakers
             .entry(name.to_string())
@@ -119,7 +112,6 @@ impl RecoveryManager {
             .clone()
     }
 
-    /// determine_action: determine action.
     pub fn determine_action(&self, severity: ErrorSeverity, component: &str) -> RecoveryAction {
         match severity {
             ErrorSeverity::Warning => RecoveryAction::Propagate,

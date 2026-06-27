@@ -1,5 +1,3 @@
-//! predictive_batching: predictive batching.
-
 use parking_lot::Mutex;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -38,7 +36,8 @@ impl Default for PredictiveBatchingConfig {
 }
 
 impl PredictiveBatchingConfig {
-    /// builder: construct via builder for documented field ergonomics.
+    /// Returns a builder for configuring this type with the documented field defaults.
+    /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
     pub fn builder() -> PredictiveBatchingConfigBuilder {
         PredictiveBatchingConfigBuilder::default()
     }
@@ -51,32 +50,26 @@ pub struct PredictiveBatchingConfigBuilder {
 }
 
 impl PredictiveBatchingConfigBuilder {
-    /// with_strategy: with strategy.
     pub fn with_strategy(mut self, v: BatchingStrategy) -> Self {
         self.inner.strategy = v;
         self
     }
-    /// with_target_latency_ms: with target latency ms.
     pub fn with_target_latency_ms(mut self, v: u64) -> Self {
         self.inner.target_latency_ms = v;
         self
     }
-    /// with_min_batch_size: with min batch size.
     pub fn with_min_batch_size(mut self, v: usize) -> Self {
         self.inner.min_batch_size = v;
         self
     }
-    /// with_max_batch_size: with max batch size.
     pub fn with_max_batch_size(mut self, v: usize) -> Self {
         self.inner.max_batch_size = v;
         self
     }
-    /// with_prediction_window_ms: with prediction window ms.
     pub fn with_prediction_window_ms(mut self, v: u64) -> Self {
         self.inner.prediction_window_ms = v;
         self
     }
-    /// with_throughput_weight: with throughput weight.
     pub fn with_throughput_weight(mut self, v: f64) -> Self {
         self.inner.throughput_weight = v;
         self
@@ -136,7 +129,6 @@ pub struct PredictiveBatcher {
 }
 
 impl PredictiveBatcher {
-    /// new: new.
     pub fn new(config: PredictiveBatchingConfig) -> Self {
         Self {
             config,
@@ -149,7 +141,6 @@ impl PredictiveBatcher {
         }
     }
 
-    /// record_request: record request.
     pub fn record_request(&self, prompt_tokens: usize, decode_tokens: usize) {
         let sample = RequestSample {
             timestamp: Instant::now(),
@@ -190,7 +181,6 @@ impl PredictiveBatcher {
         pattern.timestamp = now;
     }
 
-    /// predict_batch_size: predict batch size.
     pub fn predict_batch_size(&self, pending_requests: usize) -> usize {
         match self.config.strategy {
             BatchingStrategy::Static => self.config.max_batch_size.min(pending_requests),
@@ -224,7 +214,6 @@ impl PredictiveBatcher {
         }
     }
 
-    /// should_start_batch: should start batch.
     pub fn should_start_batch(&self, pending_count: usize) -> bool {
         let optimal = self.predict_batch_size(pending_count);
 
@@ -235,7 +224,6 @@ impl PredictiveBatcher {
         pending_count >= optimal.min(self.config.min_batch_size) || elapsed > latency_threshold
     }
 
-    /// on_batch_complete: on batch complete.
     pub fn on_batch_complete(&self, batch_size: usize, tokens_processed: usize) {
         self.batch_counter.fetch_add(1, Ordering::SeqCst);
         self.total_tokens_processed
@@ -251,7 +239,6 @@ impl PredictiveBatcher {
         );
     }
 
-    /// get_metrics: get metrics.
     pub fn get_metrics(&self) -> BatcherMetrics {
         BatcherMetrics {
             batches_created: self.batch_counter.load(Ordering::SeqCst),
@@ -275,7 +262,6 @@ pub struct BatchOptimizer {
 }
 
 impl BatchOptimizer {
-    /// new: new.
     pub fn new(config: PredictiveBatchingConfig) -> Self {
         Self {
             config,
@@ -284,7 +270,6 @@ impl BatchOptimizer {
         }
     }
 
-    /// record_batch_latency: record batch latency.
     pub fn record_batch_latency(&mut self, latency: Duration) {
         let now = Instant::now();
         self.latency_history.push_back((now, latency));
@@ -293,7 +278,6 @@ impl BatchOptimizer {
         }
     }
 
-    /// record_throughput: record throughput.
     pub fn record_throughput(&mut self, throughput: f64) {
         let now = Instant::now();
         self.throughput_history.push_back((now, throughput));
@@ -302,7 +286,6 @@ impl BatchOptimizer {
         }
     }
 
-    /// calculate_optimal_batch_size: calculate optimal batch size.
     pub fn calculate_optimal_batch_size(&self) -> usize {
         let window = Duration::from_secs(10);
         let now = Instant::now();

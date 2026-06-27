@@ -6,9 +6,7 @@
 //! - Sliding Window Attention (SWA)
 //! - RMSNorm
 
-/// arch: arch module.
 pub mod arch;
-/// register: register module.
 pub mod register;
 
 pub use arch::MistralSmallArchitecture;

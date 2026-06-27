@@ -5,7 +5,6 @@
 //!
 //! [`TransformerBlock`]: crate::components::block::TransformerBlock
 
-/// factory: factory module.
 pub mod factory;
 
 use crate::components::LnLayerNorm;
@@ -25,7 +24,6 @@ pub struct RopeGqaDecoderBlock {
 }
 
 impl RopeGqaDecoderBlock {
-    /// new: new.
     pub fn new(
         input_layernorm: LnLayerNorm,
         post_attention_layernorm: LnLayerNorm,
@@ -40,7 +38,6 @@ impl RopeGqaDecoderBlock {
         }
     }
 
-    /// forward: forward.
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let residual = x.clone();
         let x = self.input_layernorm.forward(x)?;
@@ -53,7 +50,6 @@ impl RopeGqaDecoderBlock {
         x.add(&residual)
     }
 
-    /// forward_prefill: forward prefill.
     pub fn forward_prefill(
         &self,
         x: &Tensor,
@@ -75,7 +71,6 @@ impl RopeGqaDecoderBlock {
         x.add(&residual)
     }
 
-    /// forward_decode: forward decode.
     pub fn forward_decode(
         &self,
         x: &Tensor,

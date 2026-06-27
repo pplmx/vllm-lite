@@ -2,14 +2,12 @@
 
 use vllm_traits::{Batch, SeqId, TokenId};
 
-/// generate_random_tokens: generate random tokens.
 pub fn generate_random_tokens(len: usize) -> Vec<TokenId> {
     (0..len)
         .map(|_| rand::random::<TokenId>() % 32000)
         .collect()
 }
 
-/// assert_batch_consistency: assert batch consistency.
 pub fn assert_batch_consistency(batch: &Batch) {
     let n = batch.seq_ids.len();
     assert_eq!(batch.input_tokens.len(), n, "input_tokens length mismatch");
@@ -23,7 +21,6 @@ pub fn assert_batch_consistency(batch: &Batch) {
     assert_eq!(batch.is_prefill.len(), n, "is_prefill length mismatch");
 }
 
-/// create_simple_batch: create simple batch.
 pub fn create_simple_batch(seq_ids: &[SeqId], token: TokenId) -> Batch {
     let total_tokens: usize = seq_ids.len();
     Batch {

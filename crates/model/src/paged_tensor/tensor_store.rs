@@ -1,5 +1,3 @@
-//! tensor_store: tensor store.
-
 use std::collections::HashMap;
 
 use candle_core::{DType, Device, Result, Tensor};
@@ -22,7 +20,6 @@ pub struct PagedKvCache {
 }
 
 impl PagedKvCache {
-    /// new: new.
     pub fn new(
         num_layers: usize,
         num_heads: usize,
@@ -59,7 +56,6 @@ impl PagedKvCache {
         })
     }
 
-    /// num_blocks: num blocks.
     pub fn num_blocks(&self) -> usize {
         self.key_cache
             .first()
@@ -67,12 +63,10 @@ impl PagedKvCache {
             .unwrap_or(0)
     }
 
-    /// num_layers: num layers.
     pub fn num_layers(&self) -> usize {
         self.num_layers
     }
 
-    /// get_scale: get scale.
     pub fn get_scale(&self, layer_idx: usize) -> f32 {
         self.scales.get(layer_idx).copied().unwrap_or(1.0)
     }
@@ -83,12 +77,10 @@ impl PagedKvCache {
         }
     }
 
-    /// block_size: block size.
     pub fn block_size(&self) -> usize {
         self.block_size
     }
 
-    /// compute_block_hash: compute block hash.
     pub fn compute_block_hash(block: &Tensor) -> u64 {
         if let Ok(data) = block.to_vec1::<f32>() {
             let hash: u64 = data
@@ -101,7 +93,6 @@ impl PagedKvCache {
         }
     }
 
-    /// find_matching_blocks: find matching blocks.
     pub fn find_matching_blocks(&self, prompt_hash: u64, layer_idx: usize) -> Vec<usize> {
         let mut matches = Vec::new();
         if let Some(hash_map) = self.block_hashes.get(layer_idx) {
@@ -114,7 +105,6 @@ impl PagedKvCache {
         matches
     }
 
-    /// write_kv_batch: write kv batch.
     pub fn write_kv_batch(
         &mut self,
         layer_idx: usize,
@@ -187,7 +177,6 @@ impl PagedKvCache {
         Ok(())
     }
 
-    /// write_kv: write kv.
     pub fn write_kv(
         &mut self,
         layer_idx: usize,
@@ -341,7 +330,6 @@ impl PagedKvCache {
         Ok(())
     }
 
-    /// read_kv: read kv.
     pub fn read_kv(
         &self,
         layer_idx: usize,
@@ -426,7 +414,6 @@ pub struct KvCachePool {
 }
 
 impl KvCachePool {
-    /// new: new.
     pub fn new(
         _num_layers: usize,
         num_heads: usize,
@@ -457,12 +444,10 @@ impl KvCachePool {
         })
     }
 
-    /// allocate: allocate.
     pub fn allocate(&mut self) -> Option<usize> {
         self.free_list.pop()
     }
 
-    /// deallocate: deallocate.
     pub fn deallocate(&mut self, block_id: usize) {
         if block_id < self.total_blocks {
             self.blocks[block_id].is_free = true;
@@ -470,12 +455,10 @@ impl KvCachePool {
         }
     }
 
-    /// is_available: is available.
     pub fn is_available(&self) -> bool {
         !self.free_list.is_empty()
     }
 
-    /// available_blocks: available blocks.
     pub fn available_blocks(&self) -> usize {
         self.free_list.len()
     }

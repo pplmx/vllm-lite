@@ -1,5 +1,3 @@
-//! kernels: kernels.
-
 use serde::{Deserialize, Serialize};
 
 /// CudaGraphConfig: cuda graph configuration.

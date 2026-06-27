@@ -1,5 +1,3 @@
-//! sjf: sjf.
-
 use super::trait_def::{PriorityScore, SchedulingContext, SchedulingPolicy};
 use crate::types::Sequence;
 
@@ -10,7 +8,6 @@ pub struct SjfPolicy {
 }
 
 impl SjfPolicy {
-    /// new: new.
     pub fn new(sjf_priority_weight: f32, sjf_remaining_work_weight: f32) -> Self {
         Self {
             sjf_priority_weight,

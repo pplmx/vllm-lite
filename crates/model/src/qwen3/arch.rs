@@ -16,7 +16,6 @@ use super::model::Qwen3Model;
 pub struct Qwen3Architecture;
 
 impl Qwen3Architecture {
-    /// new: new.
     pub fn new() -> Self {
         Self
     }

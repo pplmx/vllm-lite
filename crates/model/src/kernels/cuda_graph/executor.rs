@@ -1,5 +1,3 @@
-//! executor: executor.
-
 use super::CudaGraph;
 use super::config::CudaGraphConfig;
 use std::collections::HashMap;
@@ -243,7 +241,6 @@ pub struct GraphStats {
 }
 
 impl GraphStats {
-    /// cache_hit_rate: cache hit rate.
     pub fn cache_hit_rate(&self) -> f64 {
         if self.total_executions == 0 {
             0.0

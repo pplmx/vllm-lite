@@ -1,5 +1,3 @@
-//! types: shared type definitions.
-
 use serde::{Deserialize, Serialize};
 
 /// BLOCK_SIZE: block size constant.

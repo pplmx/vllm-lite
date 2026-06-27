@@ -1,5 +1,3 @@
-//! preemption: preemption.
-
 use crate::types::{SchedulerConfig, Sequence, Status};
 
 /// PreemptionManager: preemption manager.
@@ -16,7 +14,6 @@ impl Default for PreemptionManager {
 }
 
 impl PreemptionManager {
-    /// new: new.
     pub fn new(config: SchedulerConfig) -> Self {
         Self {
             config,
@@ -25,7 +22,6 @@ impl PreemptionManager {
         }
     }
 
-    /// should_preempt: should preempt.
     pub fn should_preempt(
         &self,
         running_len: usize,
@@ -68,7 +64,6 @@ impl PreemptionManager {
         true
     }
 
-    /// select_victim: select victim.
     pub fn select_victim(&self, running: &[Sequence]) -> Option<(usize, Sequence)> {
         tracing::debug!(candidates = running.len(), "Selecting preemption victim");
 
@@ -102,27 +97,22 @@ impl PreemptionManager {
         victim
     }
 
-    /// preempted_count: preempted count.
     pub fn preempted_count(&self) -> u64 {
         self.preempted_count
     }
 
-    /// rejected_count: rejected count.
     pub fn rejected_count(&self) -> u64 {
         self.rejected_count
     }
 
-    /// record_preemption: record preemption.
     pub fn record_preemption(&mut self) {
         self.preempted_count += 1;
     }
 
-    /// record_rejection: record rejection.
     pub fn record_rejection(&mut self) {
         self.rejected_count += 1;
     }
 
-    /// reset_stats: reset stats.
     pub fn reset_stats(&mut self) {
         self.preempted_count = 0;
         self.rejected_count = 0;

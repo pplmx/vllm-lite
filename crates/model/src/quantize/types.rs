@@ -1,5 +1,3 @@
-//! types: shared type definitions.
-
 use candle_core::{DType, Result, Tensor};
 
 /// StorageTensor: storage tensor enumeration.

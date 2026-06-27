@@ -1,10 +1,6 @@
-//! mod: module.
-
 #![allow(clippy::module_inception)]
 
-/// pipeline: pipeline module.
 pub mod pipeline;
-/// stage: stage module.
 pub mod stage;
 
 pub use pipeline::PipelineParallel;

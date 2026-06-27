@@ -1,16 +1,8 @@
-//! mod: module.
-
-/// audit: audit module.
 pub mod audit;
-/// correlation: correlation module.
 pub mod correlation;
-/// jwt: jwt module.
 pub mod jwt;
-/// rbac: rbac module.
 pub mod rbac;
-/// size_limit: request body size limit module.
 pub mod size_limit;
-/// tls: tls module.
 pub mod tls;
 
 pub use audit::AuditLogger;

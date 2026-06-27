@@ -1,5 +1,3 @@
-//! trait_def: trait def.
-
 use crate::types::Sequence;
 use std::time::Instant;
 

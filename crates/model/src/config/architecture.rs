@@ -29,7 +29,6 @@ pub enum Architecture {
 }
 
 impl Architecture {
-    /// from_name: from name.
     pub fn from_name(name: &str) -> Option<Self> {
         match name.to_lowercase().as_str() {
             "llama" => Some(Self::Llama),

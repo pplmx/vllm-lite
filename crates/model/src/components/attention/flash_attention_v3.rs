@@ -24,7 +24,6 @@ pub struct FlashAttentionV3Config {
 }
 
 impl FlashAttentionV3 {
-    /// new: new.
     pub fn new(config: FlashAttentionV3Config) -> Self {
         Self {
             num_heads: config.num_heads,
@@ -35,7 +34,6 @@ impl FlashAttentionV3 {
         }
     }
 
-    /// forward: forward.
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         trace!(
             batch = ?q.dims()[0],
@@ -86,7 +84,6 @@ impl FlashAttentionV3 {
         }
     }
 
-    /// forward_with_swa: forward with swa.
     pub fn forward_with_swa(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         self.forward(q, k, v)
     }
@@ -129,12 +126,10 @@ impl FlashAttentionV3 {
         Tensor::from_slice(&mask, (1, 1, seq_q, seq_k), device)
     }
 
-    /// num_heads: num heads.
     pub fn num_heads(&self) -> usize {
         self.num_heads
     }
 
-    /// head_dim: head dim.
     pub fn head_dim(&self) -> usize {
         self.head_dim
     }
@@ -149,7 +144,6 @@ pub struct MqaFlashAttention {
 }
 
 impl MqaFlashAttention {
-    /// new: new.
     pub fn new(num_heads: usize, num_kv_heads: usize, head_dim: usize, causal: bool) -> Self {
         Self {
             num_heads,
@@ -159,7 +153,6 @@ impl MqaFlashAttention {
         }
     }
 
-    /// forward: forward.
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let (_batch_size, num_heads_q, seq_q, _) = q.dims4()?;
         debug_assert_eq!(num_heads_q, self.num_heads);
@@ -216,7 +209,6 @@ pub struct GqaFlashAttention {
 }
 
 impl GqaFlashAttention {
-    /// new: new.
     pub fn new(num_heads: usize, num_kv_heads: usize, head_dim: usize, causal: bool) -> Self {
         Self {
             num_heads,
@@ -226,7 +218,6 @@ impl GqaFlashAttention {
         }
     }
 
-    /// forward: forward.
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let (_batch_size, num_heads_q, seq_q, _) = q.dims4()?;
         debug_assert_eq!(num_heads_q, self.num_heads);

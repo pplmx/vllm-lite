@@ -1,5 +1,3 @@
-//! stage: stage.
-
 use candle_core::{Device, Result, Tensor};
 
 /// PipelineStageConfig: pipeline stage configuration.
@@ -14,7 +12,6 @@ pub struct PipelineStageConfig {
 }
 
 impl PipelineStageConfig {
-    /// new: new.
     pub fn new(stage_id: usize, num_stages: usize, num_layers: usize, device: Device) -> Self {
         let layers_per_stage = num_layers.div_ceil(num_stages);
         let layer_start = stage_id * layers_per_stage;
@@ -30,17 +27,14 @@ impl PipelineStageConfig {
         }
     }
 
-    /// num_layers_in_stage: num layers in stage.
     pub fn num_layers_in_stage(&self) -> usize {
         self.layer_end - self.layer_start
     }
 
-    /// is_first_stage: is first stage.
     pub fn is_first_stage(&self) -> bool {
         self.stage_id == 0
     }
 
-    /// is_last_stage: is last stage.
     pub fn is_last_stage(&self) -> bool {
         self.stage_id == self.num_stages - 1
     }

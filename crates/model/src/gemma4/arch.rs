@@ -15,7 +15,6 @@ use super::model::Gemma4Model;
 pub struct Gemma4Architecture;
 
 impl Gemma4Architecture {
-    /// new: new.
     pub fn new() -> Self {
         Self
     }

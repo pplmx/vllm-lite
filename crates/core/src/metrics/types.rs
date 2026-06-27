@@ -1,5 +1,3 @@
-//! types: shared type definitions.
-
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Type of metric being recorded
@@ -11,7 +9,6 @@ pub enum MetricType {
 }
 
 impl MetricType {
-    /// name: name.
     pub fn name(&self) -> &str {
         match self {
             MetricType::Counter(name) => name,
@@ -30,24 +27,20 @@ pub enum MetricValue {
 }
 
 impl MetricValue {
-    /// new_counter: new counter.
     pub fn new_counter() -> Self {
         MetricValue::Counter(AtomicU64::new(0))
     }
 
-    /// new_gauge: new gauge.
     pub fn new_gauge() -> Self {
         MetricValue::Gauge(AtomicU64::new(0))
     }
 
-    /// increment: increment.
     pub fn increment(&self, delta: u64) {
         if let MetricValue::Counter(c) = self {
             c.fetch_add(delta, Ordering::Relaxed);
         }
     }
 
-    /// set: set.
     pub fn set(&self, value: u64) {
         if let MetricValue::Gauge(g) = self {
             g.store(value, Ordering::Relaxed);
@@ -71,18 +64,15 @@ pub struct MetricLabels {
 }
 
 impl MetricLabels {
-    /// new: new.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// with: with.
     pub fn with<K: Into<String>, V: Into<String>>(mut self, key: K, value: V) -> Self {
         self.labels.push((key.into(), value.into()));
         self
     }
 
-    /// as_slice: as slice.
     pub fn as_slice(&self) -> &[(String, String)] {
         &self.labels
     }

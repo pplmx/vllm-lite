@@ -1,12 +1,6 @@
-//! mod: module.
-
-/// fcfs: fcfs module.
 pub mod fcfs;
-/// priority: priority module.
 pub mod priority;
-/// sjf: sjf module.
 pub mod sjf;
-/// trait_def: trait def module.
 pub mod trait_def;
 
 pub use fcfs::FcfsPolicy;

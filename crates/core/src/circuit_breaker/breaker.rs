@@ -1,5 +1,3 @@
-//! breaker: breaker.
-
 // crates/core/src/circuit_breaker/breaker.rs
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -34,7 +32,8 @@ impl Default for CircuitBreakerConfig {
 }
 
 impl CircuitBreakerConfig {
-    /// builder: construct via builder for documented field ergonomics.
+    /// Returns a builder for configuring this type with the documented field defaults.
+    /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
     pub fn builder() -> CircuitBreakerConfigBuilder {
         CircuitBreakerConfigBuilder::default()
     }
@@ -47,17 +46,14 @@ pub struct CircuitBreakerConfigBuilder {
 }
 
 impl CircuitBreakerConfigBuilder {
-    /// with_failure_threshold: with failure threshold.
     pub fn with_failure_threshold(mut self, v: usize) -> Self {
         self.inner.failure_threshold = v;
         self
     }
-    /// with_recovery_timeout: with recovery timeout.
     pub fn with_recovery_timeout(mut self, v: Duration) -> Self {
         self.inner.recovery_timeout = v;
         self
     }
-    /// with_half_open_max_calls: with half open max calls.
     pub fn with_half_open_max_calls(mut self, v: usize) -> Self {
         self.inner.half_open_max_calls = v;
         self
@@ -94,7 +90,6 @@ pub struct CircuitBreaker {
 }
 
 impl CircuitBreaker {
-    /// new: new.
     pub fn new(config: CircuitBreakerConfig) -> Self {
         Self {
             config,
@@ -105,7 +100,6 @@ impl CircuitBreaker {
         }
     }
 
-    /// call: call.
     pub async fn call<F, Fut, T, E>(&self, operation: F) -> Result<T, CircuitBreakerError>
     where
         F: FnOnce() -> Fut,
@@ -187,7 +181,6 @@ impl CircuitBreaker {
         }
     }
 
-    /// state: state.
     pub async fn state(&self) -> CircuitState {
         *self.state.read().await
     }

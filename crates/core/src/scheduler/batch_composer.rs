@@ -1,5 +1,3 @@
-//! batch_composer: batch composer.
-
 use crate::types::{Phase, Sequence, SequencePackingConfig};
 use vllm_traits::{Batch, BatchPhase, TokenId};
 
@@ -25,7 +23,8 @@ impl Default for BatchCompositionConfig {
 }
 
 impl BatchCompositionConfig {
-    /// builder: construct via builder for documented field ergonomics.
+    /// Returns a builder for configuring this type with the documented field defaults.
+    /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
     pub fn builder() -> BatchCompositionConfigBuilder {
         BatchCompositionConfigBuilder::default()
     }
@@ -38,17 +37,14 @@ pub struct BatchCompositionConfigBuilder {
 }
 
 impl BatchCompositionConfigBuilder {
-    /// with_max_batch_size: with max batch size.
     pub fn with_max_batch_size(mut self, v: usize) -> Self {
         self.inner.max_batch_size = v;
         self
     }
-    /// with_max_token_budget: with max token budget.
     pub fn with_max_token_budget(mut self, v: usize) -> Self {
         self.inner.max_token_budget = v;
         self
     }
-    /// with_enable_similarity_grouping: with enable similarity grouping.
     pub fn with_enable_similarity_grouping(mut self, v: bool) -> Self {
         self.inner.enable_similarity_grouping = v;
         self
@@ -84,7 +80,8 @@ impl Default for ChunkedPrefillConfig {
 }
 
 impl ChunkedPrefillConfig {
-    /// builder: construct via builder for documented field ergonomics.
+    /// Returns a builder for configuring this type with the documented field defaults.
+    /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
     pub fn builder() -> ChunkedPrefillConfigBuilder {
         ChunkedPrefillConfigBuilder::default()
     }
@@ -97,22 +94,18 @@ pub struct ChunkedPrefillConfigBuilder {
 }
 
 impl ChunkedPrefillConfigBuilder {
-    /// with_enabled: with enabled.
     pub fn with_enabled(mut self, v: bool) -> Self {
         self.inner.enabled = v;
         self
     }
-    /// with_target_chunk_size: with target chunk size.
     pub fn with_target_chunk_size(mut self, v: usize) -> Self {
         self.inner.target_chunk_size = v;
         self
     }
-    /// with_max_chunk_size: with max chunk size.
     pub fn with_max_chunk_size(mut self, v: usize) -> Self {
         self.inner.max_chunk_size = v;
         self
     }
-    /// with_min_chunk_size: with min chunk size.
     pub fn with_min_chunk_size(mut self, v: usize) -> Self {
         self.inner.min_chunk_size = v;
         self

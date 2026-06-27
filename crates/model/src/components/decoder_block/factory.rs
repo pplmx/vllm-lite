@@ -10,7 +10,6 @@ use candle_core::{Result, Tensor};
 
 use super::RopeGqaDecoderBlock;
 
-/// new_block: new block.
 pub fn new_block(config: &ModelConfig, _layer_idx: usize) -> Result<RopeGqaDecoderBlock> {
     let hidden_size = config.hidden_size;
     let num_heads = config.num_heads;
@@ -50,7 +49,6 @@ pub fn new_block(config: &ModelConfig, _layer_idx: usize) -> Result<RopeGqaDecod
     ))
 }
 
-/// block_from_weights: block from weights.
 pub fn block_from_weights(
     config: &ModelConfig,
     layer_idx: usize,

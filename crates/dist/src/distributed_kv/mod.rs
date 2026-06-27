@@ -1,8 +1,4 @@
-//! mod: module.
-
-/// cache: cache module.
 pub mod cache;
-/// protocol: protocol module.
 pub mod protocol;
 
 pub use cache::DistributedKVCache;
@@ -47,7 +43,6 @@ impl Default for CacheConfig {
 }
 
 impl CacheConfig {
-    /// new: new.
     pub fn new(node_id: NodeId, num_nodes: usize) -> Self {
         Self {
             node_id,

@@ -1,5 +1,3 @@
-//! grpc: grpc.
-
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -17,7 +15,6 @@ pub struct GrpcState {
 }
 
 impl GrpcState {
-    /// new: new.
     pub fn new(node_id: String) -> Self {
         Self {
             node_id,
@@ -26,7 +23,6 @@ impl GrpcState {
         }
     }
 
-    /// add_peer: add peer.
     pub async fn add_peer(&self, peer: String) {
         let mut peers = self.peers.write().await;
         if !peers.contains(&peer) {
@@ -35,7 +31,6 @@ impl GrpcState {
         }
     }
 
-    /// remove_peer: remove peer.
     pub async fn remove_peer(&self, peer: &str) {
         let mut peers = self.peers.write().await;
         peers.retain(|p| p != peer);
@@ -50,12 +45,10 @@ pub struct NodeServiceImpl {
 }
 
 impl NodeServiceImpl {
-    /// new: new.
     pub fn new(state: GrpcState) -> Self {
         Self { state }
     }
 
-    /// into_service: into service.
     pub fn into_service(self) -> node_service_server::NodeServiceServer<Self> {
         node_service_server::NodeServiceServer::new(self)
     }
@@ -122,7 +115,6 @@ impl node_service_server::NodeService for NodeServiceImpl {
     }
 }
 
-/// start_grpc_server: start grpc server.
 pub async fn start_grpc_server(
     node_id: String,
     listen_addr: &str,

@@ -1,5 +1,3 @@
-//! priority: priority.
-
 use super::trait_def::{PriorityScore, SchedulingContext, SchedulingPolicy};
 use crate::types::Sequence;
 
@@ -10,7 +8,6 @@ pub struct PriorityPolicy {
 }
 
 impl PriorityPolicy {
-    /// new: new.
     pub fn new(priority_aging_factor: f32, priority_levels: u8) -> Self {
         Self {
             priority_aging_factor,

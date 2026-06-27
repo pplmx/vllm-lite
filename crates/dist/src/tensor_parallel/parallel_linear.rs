@@ -1,5 +1,3 @@
-//! parallel_linear: parallel linear.
-
 use super::all_reduce::{AllReduce, NcclAllReduce, ReduceOp};
 use super::device_mesh::DeviceMesh;
 use std::sync::Arc;
@@ -14,7 +12,6 @@ pub struct ColumnParallelLinear {
 }
 
 impl ColumnParallelLinear {
-    /// new: new.
     pub fn new(
         input_size: usize,
         output_size: usize,
@@ -29,12 +26,10 @@ impl ColumnParallelLinear {
         }
     }
 
-    /// output_size_per_rank: output size per rank.
     pub fn output_size_per_rank(&self) -> usize {
         self.output_size / self.mesh.world_size
     }
 
-    /// forward: forward.
     pub fn forward(&self, input: &[f32]) -> Result<Vec<f32>, TensorParallelError> {
         let local_output_size = self.output_size_per_rank();
         let mut local_output = vec![0.0f32; local_output_size];
@@ -64,7 +59,6 @@ pub struct RowParallelLinear {
 }
 
 impl RowParallelLinear {
-    /// new: new.
     pub fn new(
         input_size: usize,
         output_size: usize,
@@ -79,12 +73,10 @@ impl RowParallelLinear {
         }
     }
 
-    /// input_size_per_rank: input size per rank.
     pub fn input_size_per_rank(&self) -> usize {
         self.input_size / self.mesh.world_size
     }
 
-    /// forward: forward.
     pub fn forward(&self, input: &[f32]) -> Result<Vec<f32>, TensorParallelError> {
         let local_input_size = self.input_size_per_rank();
 
@@ -119,7 +111,6 @@ pub struct TensorParallelManager {
 }
 
 impl TensorParallelManager {
-    /// new: new.
     pub fn new(
         world_size: usize,
         rank: usize,
@@ -131,7 +122,6 @@ impl TensorParallelManager {
         Ok(Self { mesh, all_reduce })
     }
 
-    /// create_column_parallel: create column parallel.
     pub fn create_column_parallel(
         &self,
         input_size: usize,
@@ -145,7 +135,6 @@ impl TensorParallelManager {
         )
     }
 
-    /// create_row_parallel: create row parallel.
     pub fn create_row_parallel(&self, input_size: usize, output_size: usize) -> RowParallelLinear {
         RowParallelLinear::new(
             input_size,
@@ -155,7 +144,6 @@ impl TensorParallelManager {
         )
     }
 
-    /// mesh: mesh.
     pub fn mesh(&self) -> &Arc<DeviceMesh> {
         &self.mesh
     }

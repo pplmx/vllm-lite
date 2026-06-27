@@ -1,4 +1,3 @@
-//! size_limit: configurable request body size limit.
 //!
 //! Wraps `tower_http::limit::RequestBodyLimitLayer` so the limit can be
 //! applied to the protected routes via `axum::Router::layer`. The layer

@@ -61,7 +61,8 @@ impl RetryStrategy {
         }
     }
 
-    /// builder: construct via builder for documented field ergonomics.
+    /// Returns a builder for configuring this type with the documented field defaults.
+    /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
     pub fn builder() -> RetryStrategyBuilder {
         RetryStrategyBuilder::default()
     }
@@ -96,19 +97,16 @@ impl Default for RetryStrategyBuilder {
 }
 
 impl RetryStrategyBuilder {
-    /// with_max_attempts: with max attempts.
     pub fn with_max_attempts(mut self, n: usize) -> Self {
         self.max_attempts = n;
         self
     }
 
-    /// with_base_delay: with base delay.
     pub fn with_base_delay(mut self, d: Duration) -> Self {
         self.base_delay = d;
         self
     }
 
-    /// build: build.
     pub fn build(self) -> RetryStrategy {
         RetryStrategy::new(self.max_attempts, self.base_delay)
     }
@@ -165,7 +163,6 @@ pub struct DegradeStrategy<F> {
 }
 
 impl<F> DegradeStrategy<F> {
-    /// new: new.
     pub fn new<T>(fallback: F) -> Self
     where
         F: Fn() -> T,

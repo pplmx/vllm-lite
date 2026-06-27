@@ -1,5 +1,3 @@
-//! models: models.
-
 use crate::ApiState;
 use axum::{
     Json,
@@ -22,7 +20,6 @@ struct ModelsResponse {
     data: Vec<ModelObject>,
 }
 
-/// models_handler: models handler.
 pub async fn models_handler(State(state): State<ApiState>) -> Response {
     let model_name = state
         .tokenizer

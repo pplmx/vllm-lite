@@ -1,9 +1,7 @@
 //! Quantization utilities for model weights.
 
-/// gguf: gguf module.
 #[cfg(feature = "gguf")]
 pub mod gguf;
-/// types: types module.
 pub mod types;
 pub use types::{QuantizationConfig, QuantizationFormat, QuantizedTensor, StorageTensor};
 
@@ -18,7 +16,6 @@ pub struct Checkpoint {
 }
 
 impl Checkpoint {
-    /// new: new.
     pub fn new(tensors: HashMap<String, Tensor>) -> Self {
         let storage_tensors = tensors
             .into_iter()
@@ -44,7 +41,6 @@ impl Checkpoint {
         Ok(result)
     }
 
-    /// into_raw: into raw.
     pub fn into_raw(self) -> HashMap<String, StorageTensor> {
         self.tensors
     }
