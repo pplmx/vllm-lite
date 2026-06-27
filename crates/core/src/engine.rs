@@ -5,6 +5,9 @@ use crate::error::Result;
 use crate::metrics::EnhancedMetricsCollector;
 use crate::scheduler::engine::SchedulerEngine;
 use crate::speculative::AdaptiveSpeculativeDecoder;
+use crate::speculative::draft_registry::{
+    DraftId, DraftModelRegistry, DraftRegistryError, DraftSpec,
+};
 use crate::sync::lock_mutex;
 use crate::types::AdaptiveDraftConfig;
 use crate::types::{EngineMessage, Request, SchedulerConfig};
@@ -50,6 +53,7 @@ pub struct Engine {
     #[cfg(feature = "cuda-graph")]
     cuda_graph: Option<BatchCudaGraphExecutor>,
     pub adaptive_decoder: Option<AdaptiveSpeculativeDecoder>,
+    pub draft_registry: DraftModelRegistry,
 }
 
 impl Engine {
@@ -106,6 +110,7 @@ impl Engine {
             #[cfg(feature = "cuda-graph")]
             cuda_graph,
             adaptive_decoder: None,
+            draft_registry: DraftModelRegistry::new(),
         }
     }
 
@@ -134,6 +139,83 @@ impl Engine {
             max_draft_tokens,
             num_kv_blocks,
         )
+    }
+
+    /// Construct an Engine pre-loaded with a set of draft specs.
+    ///
+    /// All specs are registered in the [`DraftModelRegistry`] as `Unloaded`.
+    /// They will be loaded lazily on first use (or eagerly via
+    /// [`Self::preload_drafts`]) by the caller — this method does NOT trigger
+    /// any I/O.
+    pub fn with_drafts_boxed(
+        target_model: Box<dyn ModelBackend>,
+        draft_model: Option<Box<dyn ModelBackend>>,
+        draft_specs: Vec<DraftSpec>,
+        config: SchedulerConfig,
+        max_draft_tokens: usize,
+        num_kv_blocks: usize,
+    ) -> Self {
+        let engine = Self::with_config_boxed(
+            target_model,
+            draft_model,
+            config,
+            max_draft_tokens,
+            num_kv_blocks,
+        );
+        for spec in draft_specs {
+            // Duplicate ids in the spec list are a programmer error — surface them.
+            engine
+                .draft_registry
+                .register(spec)
+                .expect("with_drafts_boxed: duplicate draft id in spec list");
+        }
+        engine
+    }
+
+    /// Construct an Engine pre-loaded with a set of draft specs (generic form).
+    pub fn with_drafts<M: ModelBackend + 'static>(
+        target_model: M,
+        draft_model: Option<M>,
+        draft_specs: Vec<DraftSpec>,
+        config: SchedulerConfig,
+        max_draft_tokens: usize,
+        num_kv_blocks: usize,
+    ) -> Self {
+        Self::with_drafts_boxed(
+            Box::new(target_model),
+            draft_model.map(|m| Box::new(m) as Box<dyn ModelBackend>),
+            draft_specs,
+            config,
+            max_draft_tokens,
+            num_kv_blocks,
+        )
+    }
+
+    /// Access the draft registry for read-only inspection.
+    pub fn draft_registry(&self) -> &DraftModelRegistry {
+        &self.draft_registry
+    }
+
+    /// Register a new draft at runtime. Returns `DraftRegistryError::AlreadyLoaded`
+    /// if a draft with the same id already exists.
+    pub fn register_draft(&self, spec: DraftSpec) -> std::result::Result<(), DraftRegistryError> {
+        self.draft_registry.register(spec)
+    }
+
+    /// Attach a loaded backend to a previously-registered draft id, promoting
+    /// it from `Unloaded` to `Loaded`. Used by callers that drive the actual
+    /// `ModelLoader` invocation.
+    pub fn attach_draft(
+        &self,
+        id: &DraftId,
+        backend: Box<dyn ModelBackend>,
+    ) -> std::result::Result<(), DraftRegistryError> {
+        self.draft_registry.attach_loaded(id, backend)
+    }
+
+    /// Unload a draft by id, releasing its backend and KV allocator.
+    pub fn unload_draft(&self, id: &DraftId) -> std::result::Result<(), DraftRegistryError> {
+        self.draft_registry.unload(id)
     }
 
     #[cfg(feature = "cuda-graph")]
@@ -699,5 +781,45 @@ mod tests {
 
         let interval = policy.next_interval(false);
         assert!(interval <= policy.max_interval);
+    }
+
+    #[test]
+    fn test_engine_default_has_empty_draft_registry() {
+        let stub = StubModel::returning(42);
+        let engine = Engine::new(stub, None);
+        assert!(engine.draft_registry().is_empty());
+        assert_eq!(engine.draft_registry().len(), 0);
+    }
+
+    #[test]
+    fn test_engine_with_drafts_registers_all_specs_as_unloaded() {
+        let stub = StubModel::returning(42);
+        let drafts = vec![
+            DraftSpec::new("a", "/tmp/model-a", 64),
+            DraftSpec::new("b", "/tmp/model-b", 32),
+        ];
+        let engine = Engine::with_drafts(stub, None, drafts, SchedulerConfig::default(), 4, 1024);
+        assert_eq!(engine.draft_registry().len(), 2);
+        assert!(engine.draft_registry().contains(&DraftId("a".into())));
+        assert!(engine.draft_registry().contains(&DraftId("b".into())));
+        assert!(!engine.draft_registry().is_loaded(&DraftId("a".into())));
+        assert!(!engine.draft_registry().is_loaded(&DraftId("b".into())));
+    }
+
+    #[test]
+    fn test_engine_runtime_register_unload_draft() {
+        let stub = StubModel::returning(42);
+        let engine = Engine::new(stub, None);
+        engine
+            .register_draft(DraftSpec::new("late", "/tmp/late", 16))
+            .unwrap();
+        assert!(engine.draft_registry().contains(&DraftId("late".into())));
+
+        // Unload on already-unloaded draft is a no-op
+        engine.unload_draft(&DraftId("late".into())).unwrap();
+
+        // Unload of unknown id errors
+        let err = engine.unload_draft(&DraftId("nope".into())).unwrap_err();
+        assert!(matches!(err, DraftRegistryError::UnknownDraftId(_)));
     }
 }
