@@ -8,42 +8,50 @@ A production-ready LLM inference engine in Rust, optimized for single and multi-
 
 Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
 
-## Current Milestone: v22.0 Production Hardening ✅ SHIPPED
+## Current Milestone: v23.0 审计修复 (Audit Remediation)
 
-**Status:** ✅ Complete (2026-06-27)
+**Status:** ◆ Active (planning)
 
-**Goal:** 把 vLLM-lite 推到 production-ready 状态 — 解决 v21.0 延后的 P0/P1 tech debt、安全接线、生产打磨、引擎重构。
+**Goal:** 修复 v22.0 审计发现的 22 项 P0/P1 问题, 覆盖代码缺陷、文档陈旧、占位 doc、dead code 4 类, 不引入新特性
 
-**Target themes:**
+**Target themes (按类别切分 4 phases):**
 
-- 🔴 **关键 bug 修复**: `Engine::step()` speculative-mode hang (pre-existing bug, 实际可用性风险)
-- 🔐 **安全加固**: JWT 签名验证 (目前 broken) + RBAC 接线 (目前 no-op pass-through)
-- 🔧 **生产打磨**: `parking_lot::Mutex` 迁移 (消除 poison 检查) + cargo doc 警告修复 + gguf TODO
-- 🏗️ **引擎重构**: 拆分 `engine.rs` God module (从 v20.0 延后) + 统一 `engine/speculative` 树
+- 🔴 **A. P0 代码缺陷**: TensorParallelError thiserror 化、错误链保留、`Box<dyn Error>` 消除、stub 架构策略
+- 📚 **B. 文档陈旧**: CLAUDE.md / README / CHANGELOG / MIGRATING 同步, 新建 `docs/architecture.md` 总览
+- 🧹 **C. 占位 doc 清理**: 删除 ~85 个模块占位 doc + ~530 个函数占位 doc + 13 处 builder 复制粘贴
+- 🗑️ **D. 架构 dead code**: 删除 ~7 个零调用模块 (~2000 行)、合并 4 stub 架构、修复 core→model 上行依赖、清理未使用依赖
 
-**Phase 编号延续:** v21.0 收尾于 Phase 35 → v22.0 从 Phase 36 开始 → v22.0 收尾于 Phase 39 (4 phases)
+**Phase 编号延续:** v22.0 收尾于 Phase 39 → v23.0 从 Phase 40 开始 → v23.0 收尾于 Phase 43 (4 phases)
 
-**估算:** ~75h (1 working month)
+**估算:** ~50h (按审计报告分类累计)
 
 **Scope 决策 (来自用户输入):**
 
-- **方向**: Production Hardening (而非新特性如 long context / multimodal / multi-node)
-- **Research**: Skip (基于现有 PROJECT.md + CODEBASE 地图直接进入 requirements)
-- **优先级**: P0 bug 修复 + 安全 > 生产打磨 > 引擎重构
+- **方向**: 全面修复审计发现 (A+B+C+D 全量, 而非 P0-only)
+- **Research**: Skip (基于现有 v22.0 审计报告, 已知问题清单, 无新领域需研究)
+- **Phase 粒度**: 标准 ~4 phases (与 v20.0/v21.0/v22.0 一致, 按问题类别切分)
+- **版本号**: v23.0 (跨多个主题, 不属于 v22.x 补丁)
+- **优先级**: P0 代码 > 文档陈旧 > 占位 doc 清理 > dead code 清理
 
-**Out of Scope (v22.0):**
+**Out of Scope (v23.0):**
 
-- New model capabilities (long context, multimodal) — 下一里程碑考虑
-- Multi-node / vllm-dist resurrection — feature-gated, multi-node work future
-- Real-model benchmarks — requires GPU env (still deferred from v18.0)
-- Performance optimization — orthogonal to hardening scope
-- Tree-based speculation — too complex (carried from v18.0)
+- 新特性 (long context / multimodal / tool calling) — v24+ 候选
+- Engine.rs 完全拆分到 sub-modules (1057 LOC → 多文件) — ARF-06 仍 partial
+- Multi-node / vllm-dist resurrection — OPS-05 仍 deferred
+- Real-model benchmark — OPS-04 仍 deferred (无 GPU env)
+- Doc coverage 97.8% → 99%+ (RFU-06) — 不在本期范围
+- Stub 架构完整实现 — 仅做策略统一 (实现 / 拒绝加载), 不实现 forward
+
+## Previous Milestone: v22.0 Production Hardening ✅ SHIPPED
+
+**Status:** ✅ Complete (2026-06-27)
 
 ## Current State
 
-**Current Milestone:** v22.0 Production Hardening ✅ SHIPPED (2026-06-27)
-**Latest Shipped:** v22.0 Production Hardening (2026-06-27, 4/4 phases complete, all FINAL gates green)
-**Status:** v22.0 完成;1179 tests pass (+33 from v21.0),clippy clean,fmt clean,cargo doc clean (0 broken-link warnings),15 ADRs,doc coverage 97.8%
+**Current Milestone:** v23.0 审计修复 (Audit Remediation) — ◆ Planning (2026-06-28)
+**Previous Milestone:** v22.0 Production Hardening ✅ SHIPPED (2026-06-27)
+**Latest Shipped:** v22.0 (4/4 phases complete, all FINAL gates green)
+**Status:** v22.0 完成 (1179 tests pass, clippy/fmt/cargo-doc clean, 15 ADRs, doc coverage 97.8%); v23.0 planning — 4 phases (40-43) addressing 22 audit findings
 
 ### v22.0 Achievements
 
@@ -77,14 +85,23 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 - ✅ **FINAL-04**: 1179 tests total (≥ 1146 v21.0 baseline; +33 net).
 - ✅ **FINAL-05**: PROJECT.md + STATE.md updated with v22.0 outcomes.
 
-**v22.0 deferred items (rolled forward to v23.0 candidates):**
-- Full engine.rs single-responsibility split (ARF-06 partial; current state ~1057 LOC file)
+**v23.0 deferred items (rolled forward to v24.0+ candidates):**
+- Engine.rs 完全拆分到 sub-modules (ARF-06 still partial; current 1057 LOC file)
 - Long context (>32K) — NMC-01
 - Multimodal/Vision — NMC-02
 - Tool calling — NMC-03
 - Doc coverage push to 99%+ — RFU-06
 - Multi-node / vllm-dist resurrection — OPS-05
 - Real-model benchmark — OPS-04
+
+**v22.0 deferred items (now historical — partially addressed in v23.0):**
+- Full engine.rs single-responsibility split — still partial; v23.0 ARCH-* doesn't include God module split
+- Long context (>32K) — NMC-01 (v24+)
+- Multimodal/Vision — NMC-02 (v24+)
+- Tool calling — NMC-03 (v24+)
+- Doc coverage push to 99%+ — RFU-06 (deferred further)
+- Multi-node / vllm-dist resurrection — OPS-05 (v24+)
+- Real-model benchmark — OPS-04 (deferred further)
 
 ### Phase 17 Achievements (v17.0 shipped)
 
@@ -160,6 +177,24 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 - ✓ Fallback semantics — v18.0 (FALL-01 silent fallback, FALL-02 sticky `degraded_draft`)
 - ✓ Phase 19 gap closure — v18.0 (resolver wired into `step_speculative_inner`, HTTP exporter, server config, `ServerDraftLoader`)
 
+<!-- Shipped from v22.0 (Production Hardening) -->
+- ✓ **Engine::step() speculative-mode hang fix — v22.0 (OPS-02)**: DashMap shard re-entry fix; 2 e2e + 7 unit tests unblocked
+- ✓ **Cargo doc broken-link warnings (10) — v22.0 (OPS-03, DOC-01)**: 0 broken links across workspace
+- ✓ **GGUF parser stub documentation — v22.0 (GGUF-01)**: ADR-009 cross-reference added
+- ✓ **JWT signature verification — v22.0 (SEC-01)**: jsonwebtoken v9, 6 algorithms, 12 tests
+- ✓ **RbacMiddleware wired — v22.0 (SEC-02)**: HTTP 403 + structured JSON, 5 RBAC tests
+- ✓ **Request body size limit — v22.0 (SEC-03)**: RequestBodyLimitLayer, 1 MiB default, HTTP 413
+- ✓ **Audit log integration test — v22.0 (SEC-04)**: 4 tests (auth-success, auth-failure, no-events, RBAC-denial)
+- ✓ **Grafana credentials to .env — v22.0 (SEC-05)**: docker-compose substitution + .env.example
+- ✓ **TLS ca_cert_path.unwrap() replaced — v22.0 (SEC-06)**: structured TlsError::InvalidConfig
+- ✓ **parking_lot migration — v22.0 (RFU-05)**: 3 scheduler Mutex + 7 poison checks migrated
+- ✓ **speculative.rs mock fate documented — v22.0 (OPS-01)**: DraftResolver resolves drafts; FALL-01 fallback
+- ✓ **MlaKvCache::write_compressed perf — v22.0 (PERF-01)**: O(num_blocks * block_size * kv_lora_rank) → O(block_size * kv_lora_rank)
+- ✓ **eq_ignore_ascii_case — v22.0 (PERF-02)**: zero per-load String allocations
+- ✓ **once_cell → LazyLock — v22.0 (PERF-03)**: Rust 1.80+ stdlib
+- ✓ **engine/spec_dispatch unification — v22.0 (ARF-07)**: canonical sub-tree post-Phase-31
+- ✓ **All FINAL gates green — v22.0 (FINAL-01..05)**: 1179 tests, clippy/fmt/cargo-doc clean, 15 ADRs, 97.8% doc coverage
+
 <!-- Shipped from v19.0 (Codebase Health Audit) -->
 - ✓ Architecture audit — v19.0 (17 findings; 2 P0 layering violations, 1 P1 God module)
 - ✓ Naming audit — v19.0 (26 findings; 7 P1; orphan modules `kv_cache_fp8.rs`/`debug.rs`; stage-info file `engine_v18_wiring.rs`)
@@ -189,54 +224,73 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 
 ### Active
 
-**v22.0: Production Hardening (CURRENT)**
+**v23.0: 审计修复 (Audit Remediation)** — 4 phases (Phase 40-43), 22 requirements
 
-#### Phase 36 (v22.1): 关键 Bug 修复 (Critical Bug Fixes) — ~25h
+#### Phase 40 (v23.1): P0 代码缺陷修复 (Critical Code Fixes) — ~6h
 
-- [ ] **OPS-02**: Fix `Engine::step()` speculative-mode hang (pre-existing bug from pre-v18.0; blocks 2 Phase 19 e2e tests)
-- [ ] **OPS-03**: Resolve 5 pre-existing cargo doc broken-link warnings (`engine.rs` + `components/mod.rs`)
-- [ ] **GGUF-01**: Resolve actionable TODO in `crates/model/src/quantize/gguf.rs` (gguf parser post-v20.7)
-- [ ] **FINAL-01**: All 1146+ tests remain green post-fix
+- [ ] **CODE-01**: Convert `TensorParallelError` (traits/src/types.rs:87-112) to `#[derive(thiserror::Error)]`
+- [ ] **CODE-02**: Replace `EngineError::ModelError(e.to_string())` at `core/src/engine.rs:677` with `EngineError::from(e)` to preserve source chain
+- [ ] **CODE-03**: Replace `Box<dyn std::error::Error>` in `dist/src/grpc.rs:129` return type with typed `GrpcError` enum
+- [ ] **CODE-04**: Decide stub architecture policy — implement forward passes OR reject `allow_stub` at runtime in non-test builds
+- [ ] **CODE-05**: Implement or remove `SchedulerEngine::prefix_cache_hit_rate()` placeholder (`core/src/scheduler/engine.rs:555-559`)
+- [ ] **FINAL-01**: All 1179 tests pass
 
-#### Phase 37 (v22.2): 安全加固 (Security Hardening) — ~25h
+#### Phase 41 (v23.2): 文档陈旧修复 (Stale Documentation) — ~16h
 
-- [ ] **SEC-01**: Implement JWT cryptographic signature verification (HMAC-SHA256 for `secret`; RSA/ECDSA for `public_key_pem`) — currently parses but never verifies
-- [ ] **SEC-02**: Wire `RbacMiddleware` into request pipeline (currently no-op pass-through at `rbac.rs:82-84`)
-- [ ] **SEC-03**: Add request size limits (`tower_http::limit::RequestBodyLimitLayer`)
-- [ ] **SEC-04**: Audit log integration test (verify `security/audit.rs` emits events for authenticated requests)
-- [ ] **SEC-05**: Move hardcoded Grafana credentials from `docker-compose.yml` to `.env` file
-- [ ] **SEC-06**: TLS hardening — replace `unwrap()` with proper error in `security/tls.rs:63`
-- [ ] **FINAL-01**: All auth/middleware integration tests pass
+- [ ] **DOC-02**: Rewrite CLAUDE.md — fix crate count (6 not 4), Rust version (1.85 not 1.75), Engine signature (non-generic), and remove broken `qwen3/attention.rs` reference
+- [ ] **DOC-03**: Fix README.md:459-473 — correct imports to `vllm_core::scheduler::policy::{FcfsPolicy, SjfPolicy, PriorityPolicy}`
+- [ ] **DOC-04**: Backfill CHANGELOG.md with v19.0, v20.0, v21.0, v22.0 entries synthesized from `.planning/milestones/v{19,20,21,22}.0-*.md`
+- [ ] **DOC-05**: Add MIGRATING.md v22.0 entry covering security middleware, Mutex migration, LazyLock upgrade
+- [ ] **DOC-06**: Create `docs/architecture.md` — unified v23.0 architecture overview (engine orchestration, scheduler split, paged_tensor, KV cache, registry, multi-model spec flow)
+- [ ] **DOC-07**: Update README.md test count badge (1100+ → 1179) and add version pin note
+- [ ] **DOC-08**: Fix `docs/optimization_guide.md:50` outdated `Engine::with_config` API example
+- [ ] **FINAL-01**: All 1179 tests pass
 
-#### Phase 38 (v22.3): 生产打磨 (Production Polish) — ~15h
+#### Phase 42 (v23.3): 占位 doc 清理 (Placeholder Doc Cleanup) — ~6h
 
-- [ ] **RFU-05**: Migrate from `std::sync::Mutex` → `parking_lot::Mutex` (eliminate poison check entirely) in scheduler/engine paths
-- [ ] **OPS-01**: Decide fate of `speculative.rs` mock usage in production paths (real draft loading or document mock-only)
-- [ ] **PERF-01**: `MlaKvCache::write_compressed` — replace full-cache materialization with `slice_assign` if available
-- [ ] **PERF-02**: Replace `model_type.to_lowercase()` in arch detection with `eq_ignore_ascii_case`
-- [ ] **PERF-03**: Replace `once_cell::sync::Lazy` with `std::sync::LazyLock` (Rust 1.80+)
-- [ ] **DOC-01**: Resolve 5 cargo doc broken-link warnings (if not closed in OPS-03)
-- [ ] **FINAL-01**: All 1146+ tests remain green
+- [ ] **CMT-01**: Delete ~85 module-level `<mod>: <mod>.` placeholder docs across `core/`, `model/components/`, `model/paged_tensor/`, `model/kernels/`, etc.
+- [ ] **CMT-02**: Delete ~530 function/struct/method `<name>: <name>.` placeholder docs (auto-generated noise)
+- [ ] **CMT-03**: Replace 13 copies of `/// builder: construct via builder for documented field ergonomics.` with type-specific docs
+- [ ] **CMT-04**: Strip phase/audit IDs (v18.0, Plan 17.x, SEC-06, PERF-01, etc.) from user-visible rustdoc in 70 files — keep only one internal reference doc
+- [ ] **CMT-05**: Fix 4 actively wrong comments: `core/src/lib.rs:7` "in progress", `types.rs:264/273` double-name corruption, `server/src/{lib,health}.rs` triple-header
+- [ ] **CMT-06**: Update `qwen3_config` deprecation shim wording or delete it (`crates/model/src/lib.rs:44-52`)
+- [ ] **FINAL-01**: All 1179 tests pass
 
-#### Phase 39 (v22.4): 引擎重构 (Engine Refactor) + Final Verification — ~10h
+#### Phase 43 (v23.4): 架构 dead code 清理 (Architecture Cleanup) — ~20h
 
-- [ ] **ARF-06**: Split `engine.rs` God module (1,038 LOC) into focused sub-modules (Phase 27 deferred)
-- [ ] **ARF-07**: Unify `engine/spec_dispatch` tree post-ML-02 (collapse duplicate abstractions)
-- [ ] **FINAL-01**: All 1146+ tests remain green post-refactor
+- [ ] **ARCH-01**: Delete `scheduler/batch_planner.rs` (369 LOC) — zero production callers
+- [ ] **ARCH-02**: Delete `scheduler/predictive_batching.rs` (498 LOC) — zero production callers
+- [ ] **ARCH-03**: Delete `core/src/kv_cache/mod.rs` (7 LOC) — pass-through shim for BLOCK_SIZE
+- [ ] **ARCH-04**: Delete or `pub(crate)` `core/src/sync.rs` (12 LOC), `routing/HashRouter` (191 LOC), `ha/{FailoverManager,LeaderElection}` (328 LOC), `circuit_breaker/*` (556 LOC) — no engine seam
+- [ ] **ARCH-05**: Collapse 4 stub architectures (`gemma3/llama4/phi4/mistral_small`, ~1100 LOC) into one parameterized `StubArchitecture`
+- [ ] **ARCH-06**: Fix `core → model` upward dependency — extract CUDA graph types into `vllm-traits` or new `vllm-kernels` crate
+- [ ] **ARCH-07**: Remove unused `reqwest` from `crates/server/Cargo.toml`
+- [ ] **ARCH-08**: Move `rayon` from `[dependencies]` to `[dev-dependencies]` in `crates/model/Cargo.toml`
+- [ ] **ARCH-09**: Unify the 3 `greedy_sample`/`argmax` implementations (core/sampling.rs, model/causal_lm/mod.rs, engine/spec_dispatch/drafts.rs)
+- [ ] **ARCH-10**: Unify the 2 `Architecture` types (`arch::Architecture` trait vs `config::Architecture` enum)
+- [ ] **FINAL-01**: All 1179 tests pass
 - [ ] **FINAL-02**: `cargo clippy --workspace --all-targets --all-features -- -D warnings` clean
 - [ ] **FINAL-03**: `cargo fmt --all --check` clean
-- [ ] **FINAL-04**: `cargo test --workspace --all-features` ≥ 1146 tests pass
-- [ ] **FINAL-05**: `.planning/PROJECT.md` and `.planning/STATE.md` updated with v22.0 outcomes
+- [ ] **FINAL-04**: Test count ≥ 1179 (no regression)
+- [ ] **FINAL-05**: `.planning/PROJECT.md` + `.planning/STATE.md` updated with v23.0 outcomes
 
-### Out of Scope (v22.0)
+### Out of Scope (v23.0)
 
-- New model capabilities (long context >32K, multimodal/vision) — 下一 milestone 候选
-- Multi-node / vllm-dist resurrection — feature-gated; multi-node work future
-- Real-model benchmarks — requires GPU environment (still deferred from v18.0)
-- Performance optimization beyond audit findings — orthogonal to hardening scope
-- Tree-based speculation — too complex (carried from v18.0)
-- New architectures (e.g., Falcon, DeepSeek) — out of scope for hardening milestone
+- New model capabilities (long context >32K, multimodal/vision) — v24+ 候选
+- Multi-node / vllm-dist resurrection — OPS-05 仍 deferred
+- Real-model benchmarks — OPS-04 仍 deferred (无 GPU env)
+- Engine.rs 完全拆分到 sub-modules (1057 LOC → 多文件) — ARF-06 仍 partial
+- Doc coverage 97.8% → 99%+ (RFU-06) — 不在本期范围
+- Stub 架构完整实现 — 仅做策略统一 (实现 / 拒绝加载), 不实现 forward
+- New architectures (e.g., Falcon, DeepSeek) — out of scope for remediation milestone
 - Online fine-tuning, WebAssembly — 长期愿景
+
+### Out of Scope (v22.0 — historical)
+
+- Engine::step() speculative-mode hang fix — **shipped in v22.0 (OPS-02)**
+- Real-model benchmarks — still deferred (no GPU env)
+- Multi-node / vllm-dist resurrection — feature-gated
+- v20.0 carry-over (5 cargo doc warnings, 1 gguf TODO) — **shipped in v22.0 (OPS-03 + GGUF-01)**
 
 ### Out of Scope (v21.0 — historical)
 
@@ -336,17 +390,26 @@ v21.0 build-on:
 - v20.0 architectural improvements preserved
 - **Goal**: 100% backlog closure (all 100 v19 findings addressed)
 
-v22.0 build-on (CURRENT):
+v22.0 build-on (SHIPPED 2026-06-27):
 
 - Production hardening: P0 bug fix (Engine::step hang) + security wiring (JWT/RBAC) + production polish (parking_lot, cargo doc, gguf TODO) + engine refactor (God module split)
 - 4 sub-phases (Phase 36-39), organized by severity (P0 first, P3 last)
 - Backward-compat preserved (no breaking API changes)
 - Test invariants: 1146 tests must remain green; aim for ≥ 1146 post-v22.0 (no growth expected — hardening scope)
 - v21.0 doc coverage + audit findings preserved
-- **Goal**: Production-ready vLLM-lite — no P0/P1 bugs, security wired, no cargo doc warnings, engine.rs manageable
+- **Outcome**: 21/21 requirements covered, 1179 tests pass (+33), 0 cargo doc warnings, 0 clippy, 0 fmt, 15 ADRs
+
+v23.0 build-on (CURRENT — planning 2026-06-28):
+
+- Audit remediation: 22 findings from v22.0 post-ship audit across 4 categories (P0 code / stale docs / placeholder docs / dead code)
+- 4 sub-phases (Phase 40-43), organized by category (CODE → DOC → CMT → ARCH)
+- Backward-compat preserved (no breaking API changes; dead code removal is internal refactor)
+- Test invariants: 1179 tests must remain green; aim for ≥ 1179 post-v23.0 (no growth expected — remediation scope)
+- v22.0 production hardening + doc coverage + FINAL gates preserved
+- **Goal**: Clean v23.0 — audit-remediated codebase, honest rustdoc, no dead code, no P0 violations, structured top-level docs
 
 Tech stack: Rust + Candle, multi-GPU CUDA support, Kubernetes, gRPC.
-Codebase state (v22.0 start): 6 crates; speculative decoding complete (v18.0); draft registry + memory budget live in core; HTTP server with OpenAI-compatible API; 100 v19 audit findings → 100 fixed (v20+v21); v22.0 hardening: 4 remaining tech-debt themes (P0 bug, security wiring, production polish, engine refactor).
+Codebase state (v23.0 start): 6 crates; speculative decoding complete (v18.0); draft registry + memory budget live in core; HTTP server with OpenAI-compatible API; 100 v19 audit findings → 100 fixed (v20+v21); 21 v22.0 hardening findings → 21 fixed; v22.0 post-ship audit found 22 new items across 4 categories (P0 code defects, stale docs, placeholder docs, dead code).
 
 ## Constraints
 
@@ -410,4 +473,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-27 — **v22.0 Production Hardening milestone STARTED** (4 phases planned: Phase 36 Critical Bug Fixes → Phase 37 Security Hardening → Phase 38 Production Polish → Phase 39 Engine Refactor + FINAL gates); v21.0 complete (1146 tests pass, clippy/fmt clean, 15 ADRs, 100% backlog closure); v22.0 focus: P0 bug fix (Engine::step hang) + security wiring (JWT/RBAC) + production polish + engine refactor*
+*Last updated: 2026-06-28 — **v23.0 审计修复 milestone STARTED** (4 phases planned: Phase 40 P0 代码 → Phase 41 文档陈旧 → Phase 42 占位 doc → Phase 43 dead code + FINAL gates); v22.0 complete (1179 tests pass, 21 hardening findings closed, 0 warnings); v23.0 focus: 22 audit findings across 4 categories (P0 code / stale docs / placeholder docs / dead code)*
