@@ -67,6 +67,41 @@ impl Default for RecoveryConfig {
     }
 }
 
+impl RecoveryConfig {
+    /// builder: construct via builder for documented field ergonomics.
+    pub fn builder() -> RecoveryConfigBuilder {
+        RecoveryConfigBuilder::default()
+    }
+}
+
+/// Builder for [`RecoveryConfig`].
+#[derive(Debug, Clone, Default)]
+pub struct RecoveryConfigBuilder {
+    inner: RecoveryConfig,
+}
+
+impl RecoveryConfigBuilder {
+    /// with_retry_attempts: with retry attempts.
+    pub fn with_retry_attempts(mut self, v: usize) -> Self {
+        self.inner.retry_attempts = v;
+        self
+    }
+    /// with_retry_base_delay: with retry base delay.
+    pub fn with_retry_base_delay(mut self, v: Duration) -> Self {
+        self.inner.retry_base_delay = v;
+        self
+    }
+    /// with_default_circuit_breaker: with default circuit breaker.
+    pub fn with_default_circuit_breaker(mut self, v: CircuitBreakerConfig) -> Self {
+        self.inner.default_circuit_breaker = v;
+        self
+    }
+    /// build: build the [`RecoveryConfig`].
+    pub fn build(self) -> RecoveryConfig {
+        self.inner
+    }
+}
+
 impl RecoveryManager {
     /// new: new.
     pub fn new(config: RecoveryConfig) -> Self {
