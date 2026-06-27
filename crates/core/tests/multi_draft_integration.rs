@@ -109,12 +109,14 @@ impl ModelBackend for StubBackend {
 /// `LoadFailed` if the id isn't in the map.
 pub struct MapLoader {
     pub backends: Mutex<HashMap<DraftId, Box<dyn ModelBackend>>>,
+    pub load_count: AtomicU64,
 }
 
 impl MapLoader {
     pub fn new() -> Self {
         Self {
             backends: Mutex::new(HashMap::new()),
+            load_count: AtomicU64::new(0),
         }
     }
 
@@ -131,6 +133,7 @@ impl Default for MapLoader {
 
 impl DraftLoader for MapLoader {
     fn load(&self, id: &DraftId) -> std::result::Result<Box<dyn ModelBackend>, DraftRegistryError> {
+        self.load_count.fetch_add(1, Ordering::Relaxed);
         self.backends
             .lock()
             .unwrap()
@@ -188,11 +191,13 @@ fn test_lifecycle_register_lazy_load_route_unload() {
     let h = harness_unlimited();
     let spec = vllm_core::speculative::DraftSpec::new("a", "/nope", 4).with_weight_size(1024);
     h.registry.register(spec).unwrap();
+    assert_eq!(h.loader.load_count.load(Ordering::Relaxed), 0);
     // Loaded via resolver (lazy)
     h.loader
         .insert(DraftId("a".into()), Box::new(StubBackend::new("a")));
     let resolved = h.resolver.resolve(Some(&DraftId("a".into())));
     assert!(matches!(resolved, ResolvedDraft::External(_)));
+    assert_eq!(h.loader.load_count.load(Ordering::Relaxed), 1);
     // Now unloaded
     h.registry.force_unload(&DraftId("a".into())).unwrap();
     assert!(!h.registry.is_loaded(&DraftId("a".into())));
