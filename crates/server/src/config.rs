@@ -1,6 +1,9 @@
+//! config: configuration types and loaders.
+
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+/// ConfigValidationError: config validation error.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ConfigValidationError {
     #[error("server.port must be > 0")]
@@ -25,10 +28,12 @@ pub enum ConfigValidationError {
     DuplicateDraftId(String),
 }
 
+/// ConfigValidationErrors: config validation errors.
 #[derive(Debug, thiserror::Error)]
 #[error("config validation failed: {0:?}")]
 pub struct ConfigValidationErrors(pub Vec<ConfigValidationError>);
 
+/// ServerConfig: server configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::derivable_impls)]
 pub struct ServerConfig {
@@ -65,6 +70,7 @@ fn default_log_level() -> String {
     "info".to_string()
 }
 
+/// AuthConfig: auth configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthConfig {
     #[serde(default)]
@@ -80,6 +86,7 @@ pub struct AuthConfig {
 }
 
 impl AuthConfig {
+/// resolve_api_keys: resolve api keys.
     pub fn resolve_api_keys(&self) -> Vec<String> {
         let mut keys = self.api_keys.clone();
 
@@ -129,6 +136,7 @@ fn default_rate_limit_window() -> u64 {
     60
 }
 
+/// DraftSpecConfig: draft spec configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DraftSpecConfig {
     pub id: String,
@@ -145,6 +153,7 @@ fn default_draft_layers() -> usize {
     4
 }
 
+/// EngineConfig: engine configuration.
 #[allow(clippy::derivable_impls)]
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct EngineConfig {
@@ -218,6 +227,7 @@ fn default_enable_adaptive_speculative() -> bool {
     true
 }
 
+/// AppConfig: app configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::derivable_impls)]
 pub struct AppConfig {
@@ -241,6 +251,7 @@ impl Default for AppConfig {
 }
 
 impl AppConfig {
+/// load: load.
     pub fn load(path: Option<PathBuf>) -> Self {
         let mut config = Self::default();
 
@@ -268,6 +279,7 @@ impl AppConfig {
         config
     }
 
+/// validate: validate.
     pub fn validate(&self) -> Result<(), ConfigValidationErrors> {
         let mut errors = Vec::new();
 

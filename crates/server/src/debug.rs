@@ -11,6 +11,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use vllm_core::types::EngineMessage;
 
+/// MetricsSnapshotResponse: metrics snapshot response.
 #[derive(Serialize)]
 pub struct MetricsSnapshotResponse {
     pub counters: HashMap<String, u64>,
@@ -20,6 +21,7 @@ pub struct MetricsSnapshotResponse {
     pub cuda_graph_hit_rate: f64,
 }
 
+/// metrics_snapshot: metrics snapshot.
 pub async fn metrics_snapshot(State(state): State<ApiState>) -> Json<MetricsSnapshotResponse> {
     let metrics = state.metrics;
     let counters: HashMap<String, u64> = [
@@ -84,6 +86,7 @@ pub async fn metrics_snapshot(State(state): State<ApiState>) -> Json<MetricsSnap
     })
 }
 
+/// KvCacheDumpResponse: kv cache dump response.
 #[derive(Serialize)]
 pub struct KvCacheDumpResponse {
     pub total_blocks: usize,
@@ -94,6 +97,7 @@ pub struct KvCacheDumpResponse {
     pub prefix_cache_hit_rate: f64,
 }
 
+/// kv_cache_dump: kv cache dump.
 pub async fn kv_cache_dump(State(state): State<ApiState>) -> Json<KvCacheDumpResponse> {
     let (response_tx, mut response_rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -116,6 +120,7 @@ pub async fn kv_cache_dump(State(state): State<ApiState>) -> Json<KvCacheDumpRes
     })
 }
 
+/// TraceStatusResponse: trace status response.
 #[derive(Serialize)]
 pub struct TraceStatusResponse {
     pub tracing_enabled: bool,
@@ -123,6 +128,7 @@ pub struct TraceStatusResponse {
     pub spans_active: usize,
 }
 
+/// trace_status: trace status.
 pub async fn trace_status(State(_state): State<ApiState>) -> Json<TraceStatusResponse> {
     Json(TraceStatusResponse {
         tracing_enabled: true,

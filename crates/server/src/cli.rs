@@ -1,7 +1,10 @@
+//! cli: cli.
+
 use crate::config::AppConfig;
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 
+/// CliValidationError: cli validation error.
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum CliValidationError {
     #[error("'{0}' is not a valid number")]
@@ -14,6 +17,7 @@ pub enum CliValidationError {
     PortOutOfRange,
 }
 
+/// LogLevel: log level enumeration.
 #[derive(Clone, Debug, ValueEnum, PartialEq)]
 pub enum LogLevel {
     Trace,
@@ -82,6 +86,7 @@ fn validate_max_draft_tokens(s: &str) -> Result<usize, CliValidationError> {
     parse_usize_in_range(s, 0, 64)
 }
 
+/// CliArgs: cli args.
 #[derive(Parser, Debug)]
 #[command(name = "vllm-server")]
 #[command(version = "0.1.0")]
@@ -116,6 +121,7 @@ struct ServerArgs {
     pub port: u16,
 }
 
+/// ModelArgs: model args.
 #[derive(clap::Args, Debug, Clone)]
 #[group(id = "model_args", required = true)]
 pub struct ModelArgs {
@@ -180,6 +186,7 @@ struct ConfigArgs {
 }
 
 impl CliArgs {
+/// to_app_config: to app config.
     pub fn to_app_config(&self) -> AppConfig {
         let mut config = AppConfig::load(self.config.config.clone());
 
@@ -211,6 +218,7 @@ impl CliArgs {
         config
     }
 
+/// model_path: model path.
     pub fn model_path(&self) -> &PathBuf {
         &self.model.model
     }

@@ -1,7 +1,10 @@
+//! logging: logging.
+
 use std::path::PathBuf;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
+/// init_logging: init logging.
 pub fn init_logging(log_dir: Option<PathBuf>, log_level: &str) {
     let env_filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));

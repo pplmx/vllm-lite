@@ -1,6 +1,9 @@
+//! rbac: rbac.
+
 use axum::{extract::Request, http::HeaderMap, middleware::Next, response::Response};
 use std::sync::Arc;
 
+/// Role: role enumeration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
     Admin,
@@ -10,6 +13,7 @@ pub enum Role {
 }
 
 impl Role {
+/// from_str: from str.
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
@@ -20,33 +24,40 @@ impl Role {
         }
     }
 
+/// can_read_models: can read models.
     pub fn can_read_models(&self) -> bool {
         !matches!(self, Role::Anonymous)
     }
 
+/// can_write_models: can write models.
     pub fn can_write_models(&self) -> bool {
         matches!(self, Role::Admin)
     }
 
+/// can_manage_users: can manage users.
     pub fn can_manage_users(&self) -> bool {
         matches!(self, Role::Admin)
     }
 
+/// can_view_metrics: can view metrics.
     pub fn can_view_metrics(&self) -> bool {
         matches!(self, Role::Admin | Role::Operator)
     }
 
+/// can_access_admin: can access admin.
     pub fn can_access_admin(&self) -> bool {
         matches!(self, Role::Admin)
     }
 }
 
+/// RbacMiddleware: rbac middleware.
 pub struct RbacMiddleware {
     default_role: Role,
     role_permissions: Arc<Vec<(Role, Vec<&'static str>)>>,
 }
 
 impl RbacMiddleware {
+/// new: new.
     pub fn new(default_role: Role) -> Self {
         let role_permissions = vec![
             (Role::Admin, vec!["*"]),
@@ -61,6 +72,7 @@ impl RbacMiddleware {
         }
     }
 
+/// check_permission: check permission.
     pub fn check_permission(&self, role: Role, action: &str) -> bool {
         for (r, actions) in self.role_permissions.iter() {
             if *r == role {
@@ -70,6 +82,7 @@ impl RbacMiddleware {
         false
     }
 
+/// extract_role_from_headers: extract role from headers.
     pub fn extract_role_from_headers(&self, headers: &HeaderMap) -> Role {
         headers
             .get("X-User-Role")
@@ -79,6 +92,7 @@ impl RbacMiddleware {
     }
 }
 
+/// rbac_middleware: rbac middleware.
 pub async fn rbac_middleware(request: Request, next: Next) -> Response {
     next.run(request).await
 }

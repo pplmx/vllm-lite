@@ -1,3 +1,5 @@
+//! chat: chat.
+
 use axum::{
     Json,
     extract::State,
@@ -22,10 +24,12 @@ fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &st
     tokenizer.clean_special_tokens(text)
 }
 
+/// build_prompt_from_messages: build prompt from messages.
 pub fn build_prompt_from_messages(template: ChatTemplate, messages: &[ChatMessage]) -> String {
     chat_template::build_prompt(template, messages)
 }
 
+/// validate_chat_request: validate chat request.
 pub fn validate_chat_request(
     req: &ChatRequest,
 ) -> Result<(), (axum::http::StatusCode, Json<ErrorResponse>)> {
@@ -142,6 +146,7 @@ async fn handle_chat(
     ))
 }
 
+/// chat_completions: chat completions.
 pub async fn chat_completions(
     State(state): State<ApiState>,
     Json(req): Json<ChatRequest>,
