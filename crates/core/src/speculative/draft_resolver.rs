@@ -57,6 +57,21 @@ pub trait DraftLoader: Send + Sync {
     fn load(&self, id: &DraftId) -> std::result::Result<Box<dyn ModelBackend>, DraftRegistryError>;
 }
 
+/// Loader that always returns `LoadFailed`. Used as a placeholder when an Engine
+/// is constructed with `with_drafts_boxed` / `with_budget_boxed` but the server
+/// hasn't yet wired a real loader. The resolver treats every load failure as
+/// a FALL-01 fallback to self-spec — so this loader effectively keeps all
+/// external drafts at `Unloaded` state and the engine behaves like self-spec.
+pub struct NoopLoader;
+
+impl DraftLoader for NoopLoader {
+    fn load(&self, id: &DraftId) -> std::result::Result<Box<dyn ModelBackend>, DraftRegistryError> {
+        Err(DraftRegistryError::LoadFailed(format!(
+            "NoopLoader: no loader wired for {id}"
+        )))
+    }
+}
+
 /// Per-request draft resolver.
 pub struct DraftResolver {
     registry: Arc<DraftModelRegistry>,
@@ -162,6 +177,19 @@ impl DraftResolver {
     /// Access the underlying registry (for advanced callers).
     pub fn registry(&self) -> &Arc<DraftModelRegistry> {
         &self.registry
+    }
+
+    /// Replace the loader used for lazy draft loading. Preserves the registry
+    /// and self-spec backend. Used by the server after constructing the
+    /// Engine, when the real model loader becomes available.
+    pub fn set_loader(&mut self, loader: Arc<dyn DraftLoader>) {
+        self.loader = loader;
+    }
+
+    /// Access the self-spec backend, if any. Returns the Arc clone so callers
+    /// (e.g., the Engine) can keep a reference after the resolver is rebuilt.
+    pub fn self_spec(&self) -> Option<Arc<Mutex<Box<dyn ModelBackend>>>> {
+        self.self_spec.clone()
     }
 }
 

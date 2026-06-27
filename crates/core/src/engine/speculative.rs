@@ -1,7 +1,9 @@
 #![allow(clippy::type_complexity, clippy::iter_cloned_collect)]
 
 use crate::error::Result;
+use crate::speculative::ResolvedDraft;
 use crate::sync::lock_mutex;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use vllm_traits::{Batch, BatchPhase, SeqId, TokenId};
 
 impl super::Engine {
@@ -50,11 +52,24 @@ impl super::Engine {
             }
         }
 
-        let draft_outputs = match self.generate_batched_drafts(&batch, max_draft) {
-            Ok(drafts) => drafts,
-            Err(e) => {
-                tracing::warn!(error = %e, "Draft generation failed, falling back to non-speculative");
-                return self.step_regular();
+        let draft_outputs = if self.draft_resolver.is_some() {
+            // v18.0 per-request dispatch: resolve each seq's draft via the
+            // resolver, then run draft generation per-seq. Mixed-routing
+            // (RTE-03) and FALL-02 (runtime errors) live here.
+            match self.generate_per_seq_drafts(&batch, max_draft) {
+                Ok(drafts) => drafts,
+                Err(e) => {
+                    tracing::warn!(error = %e, "Per-seq draft generation failed, falling back to non-speculative");
+                    return self.step_regular();
+                }
+            }
+        } else {
+            match self.generate_batched_drafts(&batch, max_draft) {
+                Ok(drafts) => drafts,
+                Err(e) => {
+                    tracing::warn!(error = %e, "Draft generation failed, falling back to non-speculative");
+                    return self.step_regular();
+                }
             }
         };
 
@@ -139,6 +154,116 @@ impl super::Engine {
         }
 
         Ok(results)
+    }
+
+    /// v18.0 per-request draft dispatch via DraftResolver.
+    ///
+    /// For each seq in the batch:
+    /// 1. Skip if `sequence.degraded_draft` (FALL-02 sticky flag) — return
+    ///    empty drafts so the seq falls through to non-spec decode.
+    /// 2. Resolve via `resolver.resolve(seq.draft_model_id)` → picks the
+    ///    named external draft, the self-spec fallback, or None.
+    /// 3. Run the resolved backend's forward per position (up to max_draft).
+    /// 4. Catch per-seq forward errors → set `degraded_draft = true` on that
+    ///    sequence and increment `inc_draft_runtime_error`. Future steps skip
+    ///    this seq's draft.
+    ///
+    /// Returns `Vec<Vec<TokenId>>` in the same shape as `generate_batched_drafts`
+    /// so the downstream verification path is unchanged.
+    fn generate_per_seq_drafts(
+        &mut self,
+        batch: &Batch,
+        max_draft: usize,
+    ) -> Result<Vec<Vec<TokenId>>> {
+        let resolver = self
+            .draft_resolver
+            .as_ref()
+            .expect("generate_per_seq_drafts called without draft_resolver");
+        let n_seq = batch.seq_ids.len();
+        let mut draft_outputs: Vec<Vec<TokenId>> = vec![Vec::with_capacity(max_draft); n_seq];
+
+        for (i, seq_id) in batch.seq_ids.iter().enumerate() {
+            // Look up the sequence to check degraded_draft and read draft_model_id.
+            let seq_state = self.scheduler.get_sequence(*seq_id);
+            let (degraded, draft_model_id): (bool, Option<crate::speculative::DraftId>) =
+                match seq_state {
+                    Some(s) => (s.degraded_draft, s.draft_model_id.clone()),
+                    None => {
+                        // Sequence no longer in scheduler — skip (shouldn't happen
+                        // in normal flow).
+                        continue;
+                    }
+                };
+
+            if degraded {
+                // FALL-02 sticky: this sequence has been degraded. Skip draft
+                // generation entirely; the seq falls through to non-spec
+                // decode in the verifier path.
+                continue;
+            }
+
+            let resolved = resolver.resolve(draft_model_id.as_ref());
+            let backend = match resolved {
+                ResolvedDraft::External(b) | ResolvedDraft::SelfSpec(b) => b,
+                ResolvedDraft::None => continue,
+            };
+
+            // Per-position draft generation for this single sequence.
+            let mut current_tokens: Vec<TokenId> = batch.input_tokens[i].clone();
+            let mut current_positions: Vec<usize> = batch.positions[i].clone();
+            for _pos in 0..max_draft {
+                let result = catch_unwind(AssertUnwindSafe(|| {
+                    let mut guard = backend.lock().expect("draft backend mutex poisoned");
+                    guard.forward(
+                        &[*seq_id],
+                        std::slice::from_ref(&current_tokens),
+                        std::slice::from_ref(&current_positions),
+                        std::slice::from_ref(&batch.kv_block_ids[i]),
+                        std::slice::from_ref(&batch.num_computed_tokens[i]),
+                        std::slice::from_ref(&batch.is_prefill[i]),
+                    )
+                }));
+
+                let forward_result = match result {
+                    Ok(r) => r,
+                    Err(_) => {
+                        // Panic in draft forward — treat as runtime error.
+                        Err(vllm_traits::ModelError::new("draft forward panicked"))
+                    }
+                };
+
+                match forward_result {
+                    Ok(output) => {
+                        if let Some(&token) = output.next_tokens.first() {
+                            draft_outputs[i].push(token);
+                            current_tokens.push(token);
+                            if let Some(&last_pos) = current_positions.last() {
+                                current_positions.push(last_pos + 1);
+                            }
+                        } else {
+                            // Empty output — stop draft generation for this seq.
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        // FALL-02: draft forward error → mark degraded and skip
+                        // future drafts for this seq.
+                        tracing::warn!(
+                            seq_id = %seq_id,
+                            error = %e,
+                            "draft forward failed; marking sequence degraded"
+                        );
+                        self.scheduler.metrics.inc_draft_runtime_error();
+                        if let Some(s) = self.scheduler.get_sequence_mut(*seq_id) {
+                            s.degraded_draft = true;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        Ok(draft_outputs)
     }
 
     /// Batched per-position draft generation (Plan 17.1-B).

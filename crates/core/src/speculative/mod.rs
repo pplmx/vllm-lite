@@ -18,7 +18,7 @@ pub use config::{SpeculationConfig, SpeculationConfigBuilder};
 pub use draft_registry::{
     DraftId, DraftModelRegistry, DraftRegistryError, DraftSpec, DraftState, LoadedDraft,
 };
-pub use draft_resolver::{DraftLoader, DraftResolver, ResolvedDraft};
+pub use draft_resolver::{DraftLoader, DraftResolver, NoopLoader, ResolvedDraft};
 pub use memory_budget::{
     DEFAULT_BLOCK_BYTES, MemoryBudget, MemoryBudgetExceeded, MemoryBudgetSnapshot,
 };
