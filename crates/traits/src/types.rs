@@ -1,8 +1,14 @@
+//! types: shared type definitions.
+
 use serde::{Deserialize, Serialize};
 
+/// BLOCK_SIZE: block size constant.
 pub const BLOCK_SIZE: usize = 16;
+/// BlockId: block id.
 pub type BlockId = usize;
+/// TokenId: token id.
 pub type TokenId = u32;
+/// SeqId: seq id.
 pub type SeqId = u64;
 
 /// Batch phase
@@ -13,6 +19,7 @@ pub enum BatchPhase {
     Mixed,
 }
 
+/// Batch: batch.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Batch {
     pub seq_ids: Vec<SeqId>,
@@ -69,12 +76,14 @@ impl Default for Batch {
     }
 }
 
+/// BatchOutput: batch output.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BatchOutput {
     pub seq_ids: Vec<SeqId>,
     pub next_tokens: Vec<TokenId>,
 }
 
+/// TensorParallelError: tensor parallel error.
 #[derive(Debug, Clone)]
 pub enum TensorParallelError {
     InvalidWorldSize,
