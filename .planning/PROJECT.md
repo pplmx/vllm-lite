@@ -8,23 +8,23 @@ A production-ready LLM inference engine in Rust, optimized for single and multi-
 
 Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
 
-## Current Milestone: v18.0 Multi-Model Speculative Decoding
+## Current Milestone: v19.0 Codebase Health Audit (Analysis-Only)
 
-**Goal:** 兑现 v17 延期的 MULTI-01/02/03 — 引入外部 draft model（不同架构/尺寸），实现请求级 draft 路由，并发 target + draft 显存预算。
+**Goal:** 对 vllm-lite 整个 codebase 做多维度深度审计(架构/命名/注释文档/API+错误处理),产出优先级清单与具体修复建议;**本 milestone 不执行任何修改**,清单用于指导后续 milestone(v20.0+)的重构工作。
 
-**Target features:**
+**Target features (审计产出物):**
 
-- 外部 drafter 模型加载 — Engine 接受独立 draft model（不同架构/size），独立 KV cache
-- Draft model 生命周期管理 — 运行时注册/卸载，KV cache 回收，registry 跟踪活跃 drafts
-- GPU 显存预算 — 加载前估算 + 运行时并发检查，超额拒绝
-- 请求级 draft 路由 — Scheduler 按 request 选择 draft，多 draft 共存 batch
-- Fallback 兼容 — 若外部 draft 加载失败，回退到 self-spec（v17 已有的能力）
+- 架构审计报告 — crate 依赖图、模块边界、循环依赖、分层一致性
+- 命名规范审计 — 文件名/类名/方法名/变量名的一致性 + 语义清晰度
+- 注释 + 文档审计 — /// 文档覆盖度、模块级 README、过期注释、TODO 清理
+- API + 错误处理审计 — 公开 API 一致性、错误类型冗余/缺失、信息完整度
+- 综合优先级清单 — P0/P1/P2 排序,每项标注影响范围、修复成本、建议阶段
 
 ## Current State
 
-**Current Milestone:** v18.0 Multi-Model Speculative Decoding (planning)
-**Latest Shipped:** v17.0 Production Speculative Decoding (2026-06-26, 21/21 SPECs)
-**Status:** v17.0 收官；开始 v18.0 规划
+**Current Milestone:** v19.0 Codebase Health Audit (planning)
+**Latest Shipped:** v18.0 Multi-Model Speculative Decoding (2026-06-27, 14/14 requirements + Phase 19 gap closure)
+**Status:** v18.0 收官;开始 v19.0 审计规划
 
 ### Phase 17 Achievements (v17.0 shipped)
 
@@ -92,6 +92,14 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 - ✓ Acceptance rate monitoring — v17.0 (Prometheus `speculative_adjustments_total`)
 - ✓ Speculative warmup — v17.0 (`Engine::warmup_draft_kv` after prefill)
 
+<!-- Shipped from Phase 18 (v18.0) -->
+- ✓ DraftModelRegistry — v18.0 (runtime registry, lazy weight loading, loader-agnostic)
+- ✓ MemoryBudget — v18.0 (VRAM budget enforcement, atomic `try_reserve_draft`)
+- ✓ Refcount lifecycle — v18.0 (auto-unload on zero refcount; `unload` vs `force_unload`)
+- ✓ Per-request routing — v18.0 (`Request.draft_model_id`, `DraftResolver` for mixed routing)
+- ✓ Fallback semantics — v18.0 (FALL-01 silent fallback, FALL-02 sticky `degraded_draft`)
+- ✓ Phase 19 gap closure — v18.0 (resolver wired into `step_speculative_inner`, HTTP exporter, server config, `ServerDraftLoader`)
+
 <!-- Shipped from Phase 15 -->
 - ✓ FlashAttention V3 — v15.0 (MQA/GQA, sliding window)
 - ✓ KV cache FP8 quantization — v15.0 (50% memory reduction)
@@ -106,24 +114,55 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 
 ### Active
 
-**v18.0: Multi-Model Speculative Decoding**
+**v19.0: Codebase Health Audit (analysis-only, no code changes)**
 
-- [ ] **MMLT-01**: Engine loads separate draft model instance (different architecture/size from target)
-- [ ] **MMLT-02**: Draft model uses own ModelBackend instance with independent KV cache
-- [ ] **MMLT-03**: Draft weights loaded lazily (deferred until first request using it)
-- [ ] **LIFE-01**: DraftModelRegistry registers/loads/unloads draft models at runtime
-- [ ] **LIFE-02**: Unloading a draft model frees its KV cache blocks via MemoryManager
-- [ ] **LIFE-03**: Registry tracks active drafts + reference counts
-- [ ] **MEM-01**: Engine enforces total VRAM budget for target + N concurrent drafts
-- [ ] **MEM-02**: Load-time weight-size estimation; runtime KV-cache growth tracking
-- [ ] **MEM-03**: Engine refuses to load draft if budget would exceed
-- [ ] **RTE-01**: Request can specify `draft_model_id` in SamplingParams or Request
-- [ ] **RTE-02**: Scheduler routes request to correct draft model instance
-- [ ] **RTE-03**: Multiple drafts coexist in same batch (mixed draft routing)
-- [ ] **FALL-01**: External draft load failure → fallback to self-spec (v17 path)
-- [ ] **FALL-02**: Runtime draft error → graceful degradation to non-speculative decode
+#### Architecture audit
 
-### Out of Scope (carried from v17)
+- [ ] **ARCH-01**: Crate dependency graph audited (verify directional flow: traits ← core ← model/server/dist; no upward deps)
+- [ ] **ARCH-02**: Module boundary audit complete (each module has single, clear responsibility; no God modules)
+- [ ] **ARCH-03**: Circular dependency scan complete (cargo metadata + manual review)
+- [ ] **ARCH-04**: Layering consistency audit (e.g., scheduler doesn't import from server; model doesn't import from core)
+- [ ] **ARCH-05**: Test architecture audit (unit/integration/bench separation; shared testing crate hygiene)
+
+#### Naming audit
+
+- [ ] **NAME-01**: File naming audit complete (identify casually-named files like `17_*.rs` stage-info-named files; document each finding)
+- [ ] **NAME-02**: Type/struct/enum naming consistency audit (PascalCase, descriptive, no redundant suffixes)
+- [ ] **NAME-03**: Function/method naming audit (snake_case, action verbs, consistent prefix patterns)
+- [ ] **NAME-04**: Variable naming audit (descriptive, no single-letter except indices; consistent naming for similar concepts)
+- [ ] **NAME-05**: Module name audit (matches file name; consistent depth)
+
+#### Comments + documentation audit
+
+- [ ] **DOCS-01**: Doc-comment coverage measured for public API (target: ≥80% on `pub` items)
+- [ ] **DOCS-02**: Module-level documentation audit (each module has `//!` or top-of-file context)
+- [ ] **DOCS-03**: Stale comment / TODO audit (identify comments referencing old code, dead TODOs, misleading docstrings)
+- [ ] **DOCS-04**: External documentation audit (root README, AGENTS.md, .planning docs accuracy against current codebase)
+- [ ] **DOCS-05**: Architecture-decision records (ADRs) — identify documented rationale vs. tribal knowledge
+
+#### API + error handling audit
+
+- [ ] **API-01**: Public API surface consistency (function signatures, return types, builder patterns)
+- [ ] **API-02**: Error type audit (thiserror usage, error variants coverage, error message quality)
+- [ ] **API-03**: Error ergonomics audit (Result types, error context propagation, `From` conversions)
+- [ ] **API-04**: Trait design audit (object safety, async/sync consistency, default method usage)
+- [ ] **API-05**: Deprecation hygiene (deprecated items properly marked, migration paths documented)
+
+#### Synthesis
+
+- [ ] **SYNTH-01**: Cross-dimensional synthesis report complete (correlates findings across ARCH/NAME/DOCS/API)
+- [ ] **SYNTH-02**: Prioritized remediation backlog produced (P0/P1/P2 with impact, cost, suggested phase)
+- [ ] **SYNTH-03**: Suggested v20.0+ migration roadmap (which findings group into which future phase)
+
+### Out of Scope (v19.0 — analysis only, no code changes)
+
+- Any code modification (renaming, refactoring, re-architecture) — deferred to v20.0+
+- New features — not the goal of an audit milestone
+- Performance optimization — separate audit/optimization cycle
+- Test re-runs or CI changes — no code touched, so existing CI still validates
+- Migration execution — even renaming is deferred to a future milestone
+
+### Out of Scope (carried from earlier milestones)
 
 - Tree-based speculation (draft tree) — sigmoidally complex
 - Medusa-style multiple heads — incompatible with off-the-shelf models
@@ -131,9 +170,9 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 - Dynamic model switching mid-request — complex state management
 - Draft model retraining/fine-tuning — out of engine scope
 
-## v18.0 Replaces (Deferred Then Promoted)
+## v18.0 Replaces (Deferred Then Promoted) — now historical
 
-The following v17 deferred items are now active in v18.0:
+The following v17 deferred items shipped in v18.0:
 
 - ✓ **SPEC-MULTI-01 → MMLT-01..03** (external draft model support)
 - ✓ **SPEC-MULTI-02 → LIFE-01..03** (lifecycle management)
@@ -151,21 +190,24 @@ The following v17 deferred items are now active in v18.0:
 
 ## Context
 
-v17.0 shipped 21/21 SPECs satisfied (Wave 5 benchmark suite closure, 2026-06-26):
+v18.0 shipped 14/14 requirements satisfied (5 phases, 2026-06-27):
 
-- Engine integration, fallback parity, real hardware bench suite
-- Adaptive depth with EWMA + deadband, warmup after prefill
-- Metrics: acceptance rate, Prometheus counters, `/debug/metrics`
-- MULTI-01/02 deferred to v18.0 per original design
+- DraftModelRegistry (loader-agnostic), MemoryBudget, refcount lifecycle
+- Per-request routing, fallback semantics (silent FALL-01, sticky FALL-02)
+- Phase 19 gap closure: resolver wired into step_speculative_inner, HTTP exporter, server config, ServerDraftLoader
+- 287+ tests, 16 commits, audit passed
 
-v18.0 build-on:
+v19.0 build-on:
 
-- Self-speculation path remains baseline fallback (zero extra VRAM, weight sharing)
-- External draft model is opt-in extension; lazy load keeps cold-start fast
-- Request-level draft routing enables heterogeneous deployment (multi-tenant, A/B testing)
+- 7 crates have grown over 18 milestones; accumulated technical debt likely exists in:
+  - File naming (user-reported: some files named with stage info like `17_*.rs`)
+  - Module boundaries (speculative/, scheduler/, kv_cache/, paged_tensor/ all grew organically)
+  - Documentation drift (some doc-comments may reference pre-v15 APIs)
+  - Error handling consistency (each subsystem may have its own error type)
+- Audit is non-destructive: findings become input to v20.0+ refactoring phases
 
 Tech stack: Rust + Candle, multi-GPU CUDA support, Kubernetes, gRPC.
-Codebase: Speculative decoding module (verifier, model, config, strategy, self_spec); draft registry to be added in v18.0.
+Codebase state (v18.0 end): 7 crates; speculative decoding complete; draft registry + memory budget live in core; HTTP server with OpenAI-compatible API + v18.0 metrics exposed.
 
 ## Constraints
 
@@ -187,14 +229,28 @@ Codebase: Speculative decoding module (verifier, model, config, strategy, self_s
 | Speculative strategy      | Self-speculation with 1/8 layer count              | Implemented — v16.0         |
 | Token rejection           | TokenLevel (accept if target_p >= draft_p)         | Implemented — v16.0         |
 | Draft weight sharing      | Zero-copy weight references, no extra GPU memory   | Implemented — v16.0         |
-| Multi-draft routing       | Per-request `draft_model_id` for heterogeneous A/B | Planned — v18.0             |
-| External draft lifecycle  | Runtime registry + refcount + unload frees KV      | Planned — v18.0             |
-| VRAM budget strategy      | Load-time estimate + runtime check; refuse on over | Planned — v18.0             |
+| Multi-draft routing       | Per-request `draft_model_id` for heterogeneous A/B | Implemented — v18.0         |
+| External draft lifecycle  | Runtime registry + refcount + unload frees KV      | Implemented — v18.0         |
+| VRAM budget strategy      | Load-time estimate + runtime check; refuse on over | Implemented — v18.0         |
+| Audit-before-refactor     | Analyze codebase health before non-functional work | Planned — v19.0             |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
 ---
 
-*Last updated: 2026-06-27 — v18.0 milestone started; v17.0 archived (21/21 SPECs shipped)*
+*Last updated: 2026-06-27 — v19.0 audit milestone started; v18.0 archived (14/14 requirements shipped, 5 phases)*
