@@ -8,8 +8,8 @@
 
 /// flash: flash module.
 pub mod flash;
-/// flash_v3: flash v3 module.
-pub mod flash_v3;
+/// flash_attention_v3: flash attention v3 module.
+pub mod flash_attention_v3;
 /// gqa: gqa module.
 pub mod gqa;
 /// mla: mla module.
@@ -21,7 +21,7 @@ pub mod rope_gqa;
 /// util: shared attention utilities (expand_kv, causal_mask, paged/tiled attention).
 pub mod util;
 
-pub use flash_v3::{
+pub use flash_attention_v3::{
     FlashAttentionV3, FlashAttentionV3Config, GqaFlashAttention, MqaFlashAttention,
 };
 pub use gqa::GqaAttention;

@@ -581,7 +581,7 @@ impl Engine {
     }
 
     fn get_top_k(&self, logits: &[f32], k: usize) -> Vec<(TokenId, f32)> {
-        let k = k.min(logits.len());
+        let top_k_limit = k.min(logits.len());
         let mut indexed: Vec<(usize, f32)> =
             logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
         indexed.sort_by(|a, b| {
@@ -590,7 +590,7 @@ impl Engine {
         });
         indexed
             .into_iter()
-            .take(k)
+            .take(top_k_limit)
             .map(|(i, v)| (i as TokenId, v))
             .collect()
     }
