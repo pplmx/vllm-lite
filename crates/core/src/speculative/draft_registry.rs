@@ -32,6 +32,7 @@ use vllm_traits::ModelBackend;
 pub struct DraftId(pub String);
 
 impl DraftId {
+/// as_str: as str.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -77,6 +78,7 @@ pub struct DraftSpec {
 }
 
 impl DraftSpec {
+/// new: new.
     pub fn new(id: impl Into<DraftId>, model_dir: impl Into<PathBuf>, kv_blocks: usize) -> Self {
         Self {
             id: id.into(),
@@ -88,16 +90,19 @@ impl DraftSpec {
         }
     }
 
+/// with_arch_hint: with arch hint.
     pub fn with_arch_hint(mut self, arch: impl Into<String>) -> Self {
         self.arch_hint = Some(arch.into());
         self
     }
 
+/// with_ref_count: with ref count.
     pub fn with_ref_count(mut self, ref_count: usize) -> Self {
         self.ref_count = ref_count;
         self
     }
 
+/// with_weight_size: with weight size.
     pub fn with_weight_size(mut self, bytes: u64) -> Self {
         self.weight_size_estimate_bytes = bytes;
         self
@@ -135,6 +140,7 @@ impl std::fmt::Debug for DraftState {
 }
 
 impl DraftState {
+/// spec: spec.
     pub fn spec(&self) -> &DraftSpec {
         match self {
             DraftState::Unloaded(s) => s,
@@ -142,10 +148,12 @@ impl DraftState {
         }
     }
 
+/// id: id.
     pub fn id(&self) -> &DraftId {
         &self.spec().id
     }
 
+/// is_loaded: is loaded.
     pub fn is_loaded(&self) -> bool {
         matches!(self, DraftState::Loaded(_))
     }
@@ -174,6 +182,7 @@ impl Default for DraftModelRegistry {
 }
 
 impl DraftModelRegistry {
+/// new: new.
     pub fn new() -> Self {
         Self {
             drafts: RwLock::new(HashMap::new()),

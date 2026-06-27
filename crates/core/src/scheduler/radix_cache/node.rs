@@ -1,3 +1,5 @@
+//! node: node.
+
 use std::collections::HashMap;
 use std::sync::Arc;
 use vllm_traits::{BlockId, TokenId};
@@ -15,6 +17,7 @@ pub struct RadixNode {
 }
 
 impl RadixNode {
+/// new: new.
     pub fn new() -> Self {
         Self {
             tokens: Vec::new(),
@@ -24,6 +27,7 @@ impl RadixNode {
         }
     }
 
+/// with_tokens: with tokens.
     pub fn with_tokens(tokens: Vec<TokenId>) -> Self {
         Self {
             tokens,

@@ -1,3 +1,5 @@
+//! types: shared type definitions.
+
 use std::sync::Arc;
 use tokio::sync::mpsc;
 pub use vllm_traits::{Batch, BatchOutput, BlockId, SeqId, TokenId};
@@ -43,9 +45,11 @@ impl Default for AdaptiveDraftConfig {
     }
 }
 
+/// Priority: priority.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Priority(pub u8);
 
+/// Request: request.
 #[derive(Clone, Debug)]
 pub struct Request {
     pub id: SeqId,
@@ -67,6 +71,7 @@ pub struct Request {
 }
 
 impl Request {
+/// new: new.
     pub fn new(id: SeqId, prompt: Vec<TokenId>, max_tokens: usize) -> Self {
         Self {
             id,
@@ -78,6 +83,7 @@ impl Request {
         }
     }
 
+/// with_priority: with priority.
     pub fn with_priority(mut self, priority: Priority) -> Self {
         self.priority = priority;
         self
@@ -91,6 +97,7 @@ impl Request {
     }
 }
 
+/// SamplingParams: sampling params.
 #[derive(Clone, Debug)]
 pub struct SamplingParams {
     pub temperature: f32,
@@ -116,6 +123,7 @@ impl Default for SamplingParams {
     }
 }
 
+/// Sequence: sequence.
 #[derive(Clone, Debug)]
 pub struct Sequence {
     pub id: SeqId,
@@ -138,6 +146,7 @@ pub struct Sequence {
     pub draft_model_id: Option<DraftId>,
 }
 
+/// Status: status status.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Status {
     Waiting,
@@ -146,6 +155,7 @@ pub enum Status {
     Finished,
 }
 
+/// Phase: phase phase.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Phase {
     Prefill,
@@ -236,6 +246,7 @@ pub struct SchedulerConfig {
 }
 
 impl SchedulerConfig {
+/// new: new.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         max_num_seqs: usize,
@@ -308,6 +319,7 @@ impl Default for SchedulerConfig {
 
 use crate::metrics::MetricsSnapshot;
 
+/// EngineMessage: engine message enumeration.
 pub enum EngineMessage {
     AddRequest {
         request: Request,

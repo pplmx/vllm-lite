@@ -98,22 +98,37 @@
 
 // === Module Declarations ===
 
+/// cuda_graph: cuda graph module.
 pub mod cuda_graph;
+/// packing: packing module.
 pub mod packing;
+/// phase_scheduler: phase scheduler module.
 pub mod phase_scheduler;
+/// policy: policy module.
 pub mod policy;
+/// preemption: preemption module.
 pub mod preemption;
+/// radix_cache: radix cache module.
 pub mod radix_cache;
+/// request_queue: request queue module.
 pub mod request_queue;
 
+/// memory: memory module.
 pub mod memory;
 
+/// batch: batch module.
 pub mod batch;
+/// batch_composer: batch composer module.
 pub mod batch_composer;
+/// batch_planner: batch planner module.
 pub mod batch_planner;
+/// engine: engine module.
 pub mod engine;
+/// observer: observer module.
 pub mod observer;
+/// predictive_batching: predictive batching module.
 pub mod predictive_batching;
+/// stats: stats module.
 pub mod stats;
 
 // === Public Re-exports ===

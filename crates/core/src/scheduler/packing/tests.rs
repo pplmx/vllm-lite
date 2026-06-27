@@ -1,3 +1,5 @@
+//! tests: tests.
+
 use super::*;
 use crate::types::{Priority, SamplingParams, Status};
 use std::sync::Arc;

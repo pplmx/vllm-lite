@@ -1,3 +1,5 @@
+//! batch_composer: batch composer.
+
 use crate::types::{Phase, Sequence, SequencePackingConfig};
 use vllm_traits::{Batch, BatchPhase, TokenId};
 

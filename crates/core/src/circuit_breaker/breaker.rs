@@ -1,3 +1,5 @@
+//! breaker: breaker.
+
 // crates/core/src/circuit_breaker/breaker.rs
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -51,6 +53,7 @@ pub struct CircuitBreaker {
 }
 
 impl CircuitBreaker {
+/// new: new.
     pub fn new(config: CircuitBreakerConfig) -> Self {
         Self {
             config,
@@ -61,6 +64,7 @@ impl CircuitBreaker {
         }
     }
 
+/// call: call.
     pub async fn call<F, Fut, T, E>(&self, operation: F) -> Result<T, CircuitBreakerError>
     where
         F: FnOnce() -> Fut,
@@ -142,6 +146,7 @@ impl CircuitBreaker {
         }
     }
 
+/// state: state.
     pub async fn state(&self) -> CircuitState {
         *self.state.read().await
     }

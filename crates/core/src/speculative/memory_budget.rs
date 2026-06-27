@@ -20,6 +20,7 @@ use std::sync::RwLock;
 /// here for callers that don't want to depend on the scheduler module.
 pub const DEFAULT_BLOCK_BYTES: u64 = BLOCK_BYTES as u64;
 
+/// MemoryBudgetSnapshot: memory budget snapshot.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MemoryBudgetSnapshot {
     pub total_bytes: u64,
@@ -33,6 +34,7 @@ pub struct MemoryBudgetSnapshot {
 #[error(
     "memory budget exceeded: requested {requested_bytes} bytes, available {available_bytes} bytes (draft_id={draft_id:?})"
 )]
+/// MemoryBudgetExceeded: memory budget exceeded.
 pub struct MemoryBudgetExceeded {
     pub requested_bytes: u64,
     pub available_bytes: u64,
@@ -47,6 +49,7 @@ struct MemoryBudgetInner {
     used_drafts_bytes: u64,
 }
 
+/// MemoryBudget: memory budget.
 pub struct MemoryBudget {
     inner: RwLock<MemoryBudgetInner>,
 }
@@ -58,10 +61,12 @@ impl Default for MemoryBudget {
 }
 
 impl MemoryBudget {
+/// unlimited: unlimited.
     pub fn unlimited() -> Self {
         Self::new(u64::MAX).expect("u64::MAX always > 0")
     }
 
+/// new: new.
     pub fn new(total_bytes: u64) -> Result<Self, MemoryBudgetExceeded> {
         if total_bytes == 0 {
             return Err(MemoryBudgetExceeded {
@@ -80,6 +85,7 @@ impl MemoryBudget {
         })
     }
 
+/// snapshot: snapshot.
     pub fn snapshot(&self) -> MemoryBudgetSnapshot {
         let inner = self.inner.read().unwrap_or_else(|e| e.into_inner());
         let reserved_total = inner.reserved_target_bytes + inner.reserved_drafts_bytes;
@@ -93,6 +99,7 @@ impl MemoryBudget {
         }
     }
 
+/// reserve_target: reserve target.
     pub fn reserve_target(&self, bytes: u64) -> Result<(), MemoryBudgetExceeded> {
         let mut inner = self.inner.write().unwrap_or_else(|e| e.into_inner());
         let current_reserved = inner.reserved_target_bytes + inner.reserved_drafts_bytes;
@@ -109,11 +116,13 @@ impl MemoryBudget {
         Ok(())
     }
 
+/// release_target: release target.
     pub fn release_target(&self) {
         let mut inner = self.inner.write().unwrap_or_else(|e| e.into_inner());
         inner.reserved_target_bytes = 0;
     }
 
+/// try_reserve_draft: try reserve draft.
     pub fn try_reserve_draft(
         &self,
         bytes: u64,
@@ -134,6 +143,7 @@ impl MemoryBudget {
         Ok(())
     }
 
+/// release_draft: release draft.
     pub fn release_draft(&self, bytes: u64) {
         let mut inner = self.inner.write().unwrap_or_else(|e| e.into_inner());
         inner.reserved_drafts_bytes = inner.reserved_drafts_bytes.saturating_sub(bytes);
@@ -141,6 +151,7 @@ impl MemoryBudget {
         inner.used_drafts_bytes = inner.used_drafts_bytes.saturating_sub(bytes);
     }
 
+/// record_draft_kv_growth: record draft kv growth.
     pub fn record_draft_kv_growth(&self, delta_bytes: i64) {
         let mut inner = self.inner.write().unwrap_or_else(|e| e.into_inner());
         if delta_bytes >= 0 {
@@ -152,6 +163,7 @@ impl MemoryBudget {
         }
     }
 
+/// total_bytes: total bytes.
     pub fn total_bytes(&self) -> u64 {
         let inner = self.inner.read().unwrap_or_else(|e| e.into_inner());
         inner.total_bytes

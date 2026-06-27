@@ -6,6 +6,7 @@
 use crate::types::{Batch, SeqId, TokenId};
 use thiserror::Error;
 
+/// VerifierError: verifier error.
 #[derive(Debug, Error)]
 pub enum VerifierError {
     #[error("draft generation failed: {0}")]
@@ -14,8 +15,10 @@ pub enum VerifierError {
     Verification(String),
 }
 
+/// Result: result.
 pub type Result<T> = std::result::Result<T, VerifierError>;
 
+/// VerificationResult: verification result alias.
 #[derive(Debug, Clone)]
 pub struct VerificationResult {
     pub seq_id: SeqId,
@@ -25,6 +28,7 @@ pub struct VerificationResult {
 }
 
 impl VerificationResult {
+/// new: new.
     pub fn new(seq_id: SeqId, draft_tokens: Vec<TokenId>) -> Self {
         let accepted_count = draft_tokens.len();
         Self {
@@ -35,12 +39,14 @@ impl VerificationResult {
         }
     }
 
+/// with_rejection: with rejection.
     pub fn with_rejection(mut self, rejected_at: usize) -> Self {
         self.rejected_at = Some(rejected_at);
         self.accepted_count = rejected_at;
         self
     }
 
+/// acceptance_rate: acceptance rate.
     pub fn acceptance_rate(&self) -> f32 {
         if self.draft_tokens.is_empty() {
             return 1.0;
@@ -49,6 +55,7 @@ impl VerificationResult {
     }
 }
 
+/// DraftVerifier: draft verifier trait.
 pub trait DraftVerifier: Send + Sync {
     fn generate_draft(
         &mut self,

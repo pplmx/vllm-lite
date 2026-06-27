@@ -1,3 +1,5 @@
+//! collector: collector.
+
 // crates/core/src/metrics/collector.rs
 use super::lock_free::{LockFreeMetrics, MetricsSnapshot};
 use dashmap::DashMap;
@@ -32,6 +34,7 @@ pub struct EnhancedMetricsCollector {
 }
 
 impl EnhancedMetricsCollector {
+/// new: new.
     pub fn new() -> Self {
         Self {
             runtime: LockFreeMetrics::new(),
@@ -64,55 +67,67 @@ impl EnhancedMetricsCollector {
         self.runtime.snapshot()
     }
 
+/// record_tokens: record tokens.
     pub fn record_tokens(&self, count: u64) {
         self.runtime.record_tokens(count);
     }
 
+/// record_batch_size: record batch size.
     pub fn record_batch_size(&self, size: usize) {
         self.runtime.record_batch_size(size);
     }
 
+/// record_latency: record latency.
     pub fn record_latency(&self, ms: f64) {
         self.runtime.record_latency(ms);
     }
 
+/// record_kv_cache_usage: record kv cache usage.
     pub fn record_kv_cache_usage(&self, used: u64, total: u64) {
         self.runtime.record_kv_cache_usage(used, total);
     }
 
+/// record_prefix_cache_hit: record prefix cache hit.
     pub fn record_prefix_cache_hit(&self) {
         self.runtime.record_prefix_cache_hit();
     }
 
+/// record_prefix_cache_request: record prefix cache request.
     pub fn record_prefix_cache_request(&self) {
         self.runtime.record_prefix_cache_request();
     }
 
     // CUDA Graph metrics
+/// record_cuda_graph_hit: record cuda graph hit.
     pub fn record_cuda_graph_hit(&self) {
         self.cuda_graph_hits.fetch_add(1, Ordering::Relaxed);
     }
 
+/// record_cuda_graph_miss: record cuda graph miss.
     pub fn record_cuda_graph_miss(&self) {
         self.cuda_graph_misses.fetch_add(1, Ordering::Relaxed);
     }
 
     // Packing metrics
+/// record_packing_sequence: record packing sequence.
     pub fn record_packing_sequence(&self) {
         self.packing_sequences.fetch_add(1, Ordering::Relaxed);
     }
 
+/// record_packing_efficiency: record packing efficiency.
     pub fn record_packing_efficiency(&self, ratio: f64) {
         let fixed = (ratio * 100000.0) as u64;
         self.packing_efficiency.store(fixed, Ordering::Relaxed);
     }
 
+/// record_packing_waste_ratio: record packing waste ratio.
     pub fn record_packing_waste_ratio(&self, ratio: f64) {
         let fixed = (ratio * 100000.0) as u64;
         self.packing_waste_ratio.store(fixed, Ordering::Relaxed);
     }
 
     // Speculative metrics
+/// record_speculative_acceptance: record speculative acceptance.
     pub fn record_speculative_acceptance(&self, accepted: usize, total: usize) {
         if total > 0 {
             let rate = (accepted as f64 / total as f64 * 100000.0) as u64;
@@ -121,19 +136,23 @@ impl EnhancedMetricsCollector {
         }
     }
 
+/// record_speculative_draft_count: record speculative draft count.
     pub fn record_speculative_draft_count(&self, count: u64) {
         self.speculative_draft_count.store(count, Ordering::Relaxed);
     }
 
+/// record_speculative_adjustment: record speculative adjustment.
     pub fn record_speculative_adjustment(&self) {
         self.speculative_adjustments.fetch_add(1, Ordering::Relaxed);
     }
 
+/// record_speculative_efficiency: record speculative efficiency.
     pub fn record_speculative_efficiency(&self, efficiency: f64) {
         let fixed = (efficiency * 100000.0) as u64;
         self.speculative_efficiency.store(fixed, Ordering::Relaxed);
     }
 
+/// record_throughput_speedup: record throughput speedup.
     pub fn record_throughput_speedup(&self, ratio: f64) {
         let fixed = (ratio * 100000.0) as u64;
         self.throughput_speedup_ratio
@@ -141,6 +160,7 @@ impl EnhancedMetricsCollector {
     }
 
     // Per-request acceptance tracking
+/// record_per_request_acceptance: record per request acceptance.
     pub fn record_per_request_acceptance(&self, seq_id: SeqId, accepted: usize, total: usize) {
         let entry = self
             .per_request_acceptance
@@ -155,6 +175,7 @@ impl EnhancedMetricsCollector {
             .store(self.per_request_acceptance.len() as u64, Ordering::Relaxed);
     }
 
+/// get_per_request_acceptance_rate: get per request acceptance rate.
     pub fn get_per_request_acceptance_rate(&self, seq_id: SeqId) -> f64 {
         self.per_request_acceptance
             .get(&seq_id)
@@ -170,6 +191,7 @@ impl EnhancedMetricsCollector {
             .unwrap_or(0.0)
     }
 
+/// remove_per_request: remove per request.
     pub fn remove_per_request(&self, seq_id: SeqId) {
         self.per_request_acceptance.remove(&seq_id);
         self.speculative_per_request_count
@@ -177,22 +199,27 @@ impl EnhancedMetricsCollector {
     }
 
     // System metrics
+/// record_request: record request.
     pub fn record_request(&self) {
         self.runtime.record_request();
     }
 
+/// record_error: record error.
     pub fn record_error(&self) {
         self.errors_total.fetch_add(1, Ordering::Relaxed);
     }
 
+/// set_queue_depth: set queue depth.
     pub fn set_queue_depth(&self, depth: u64) {
         self.request_queue_depth.store(depth, Ordering::Relaxed);
     }
 
+/// set_active_sequences: set active sequences.
     pub fn set_active_sequences(&self, count: u64) {
         self.active_sequences.store(count, Ordering::Relaxed);
     }
 
+/// record_inference_latency: record inference latency.
     pub fn record_inference_latency(&self, duration_ns: u64) {
         let mut buckets = self
             .inference_latency_ns
@@ -254,6 +281,7 @@ impl EnhancedMetricsCollector {
     }
 
     // Getters for testing and export
+/// get_counter: get counter.
     pub fn get_counter(&self, name: &str) -> u64 {
         match name {
             "cuda_graph_hits_total" => self.cuda_graph_hits.load(Ordering::Relaxed),
@@ -266,6 +294,7 @@ impl EnhancedMetricsCollector {
         }
     }
 
+/// get_gauge: get gauge.
     pub fn get_gauge(&self, name: &str) -> u64 {
         match name {
             "packing_efficiency" => self.packing_efficiency.load(Ordering::Relaxed),

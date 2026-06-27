@@ -1,9 +1,13 @@
+//! fcfs: fcfs.
+
 use super::trait_def::{PriorityScore, SchedulingContext, SchedulingPolicy};
 use crate::types::Sequence;
 
+/// FcfsPolicy: fcfs policy.
 pub struct FcfsPolicy;
 
 impl FcfsPolicy {
+/// new: new.
     pub fn new() -> Self {
         Self
     }

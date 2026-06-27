@@ -1,3 +1,5 @@
+//! tests: tests.
+
 #[cfg(test)]
 mod policy_tests {
     use super::super::*;

@@ -1,5 +1,8 @@
+//! phase_scheduler: phase scheduler.
+
 use crate::types::Phase;
 
+/// PhaseSwitchPolicy: phase switch policy.
 #[derive(Clone, Debug)]
 pub struct PhaseSwitchPolicy {
     pub max_consecutive_decode: u32,
@@ -17,6 +20,7 @@ impl Default for PhaseSwitchPolicy {
     }
 }
 
+/// SchedulerState: scheduler state.
 #[derive(Clone, Debug)]
 pub struct SchedulerState {
     pub waiting_count: usize,
@@ -27,6 +31,7 @@ pub struct SchedulerState {
     pub consecutive_decode_rounds: u32,
 }
 
+/// PhaseScheduler: phase scheduler.
 pub struct PhaseScheduler {
     current_phase: Phase,
     switch_policy: PhaseSwitchPolicy,
@@ -34,6 +39,7 @@ pub struct PhaseScheduler {
 }
 
 impl PhaseScheduler {
+/// new: new.
     pub fn new(switch_policy: PhaseSwitchPolicy) -> Self {
         Self {
             current_phase: Phase::Prefill,
@@ -78,6 +84,7 @@ impl PhaseScheduler {
         self.current_phase
     }
 
+/// reset: reset.
     pub fn reset(&mut self) {
         self.current_phase = Phase::Prefill;
         self.consecutive_decode_rounds = 0;

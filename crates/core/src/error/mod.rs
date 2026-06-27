@@ -1,5 +1,9 @@
+//! mod: module.
+
+/// recovery: recovery module.
 pub mod recovery;
 
+/// EngineError: engine error.
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {
     #[error("sequence {id} not found")]
@@ -64,6 +68,7 @@ impl From<crate::metrics::exporter::MetricsError> for EngineError {
     }
 }
 
+/// Result: result.
 pub type Result<T> = std::result::Result<T, EngineError>;
 
 #[cfg(test)]

@@ -1,3 +1,5 @@
+//! engine: continuous-batching engine.
+
 use std::sync::Arc;
 use std::time::Instant;
 

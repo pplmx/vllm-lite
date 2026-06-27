@@ -1,7 +1,10 @@
+//! predictive_batching: predictive batching.
+
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+/// BatchingStrategy: batching strategy enumeration.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BatchingStrategy {
     Static,
@@ -9,6 +12,7 @@ pub enum BatchingStrategy {
     Predictive,
 }
 
+/// PredictiveBatchingConfig: predictive batching configuration.
 #[derive(Debug, Clone, Copy)]
 pub struct PredictiveBatchingConfig {
     pub strategy: BatchingStrategy,
@@ -32,6 +36,7 @@ impl Default for PredictiveBatchingConfig {
     }
 }
 
+/// RequestPattern: request pattern.
 #[derive(Debug, Clone)]
 pub struct RequestPattern {
     pub arrival_rate: f64,
@@ -51,6 +56,7 @@ impl Default for RequestPattern {
     }
 }
 
+/// BatcherMetrics: batcher metrics.
 #[derive(Debug, Clone)]
 pub struct BatcherMetrics {
     pub batches_created: usize,
@@ -66,6 +72,7 @@ struct RequestSample {
     decode_tokens: usize,
 }
 
+/// PredictiveBatcher: predictive batcher.
 #[derive(Debug)]
 pub struct PredictiveBatcher {
     config: PredictiveBatchingConfig,
@@ -78,6 +85,7 @@ pub struct PredictiveBatcher {
 }
 
 impl PredictiveBatcher {
+/// new: new.
     pub fn new(config: PredictiveBatchingConfig) -> Self {
         Self {
             config,
@@ -90,6 +98,7 @@ impl PredictiveBatcher {
         }
     }
 
+/// record_request: record request.
     pub fn record_request(&self, prompt_tokens: usize, decode_tokens: usize) {
         let sample = RequestSample {
             timestamp: Instant::now(),
@@ -130,6 +139,7 @@ impl PredictiveBatcher {
         pattern.timestamp = now;
     }
 
+/// predict_batch_size: predict batch size.
     pub fn predict_batch_size(&self, pending_requests: usize) -> usize {
         match self.config.strategy {
             BatchingStrategy::Static => self.config.max_batch_size.min(pending_requests),
@@ -163,6 +173,7 @@ impl PredictiveBatcher {
         }
     }
 
+/// should_start_batch: should start batch.
     pub fn should_start_batch(&self, pending_count: usize) -> bool {
         let optimal = self.predict_batch_size(pending_count);
 
@@ -173,6 +184,7 @@ impl PredictiveBatcher {
         pending_count >= optimal.min(self.config.min_batch_size) || elapsed > latency_threshold
     }
 
+/// on_batch_complete: on batch complete.
     pub fn on_batch_complete(&self, batch_size: usize, tokens_processed: usize) {
         self.batch_counter.fetch_add(1, Ordering::SeqCst);
         self.total_tokens_processed
@@ -188,6 +200,7 @@ impl PredictiveBatcher {
         );
     }
 
+/// get_metrics: get metrics.
     pub fn get_metrics(&self) -> BatcherMetrics {
         BatcherMetrics {
             batches_created: self.batch_counter.load(Ordering::SeqCst),
@@ -203,6 +216,7 @@ impl PredictiveBatcher {
     }
 }
 
+/// BatchOptimizer: batch optimizer.
 pub struct BatchOptimizer {
     config: PredictiveBatchingConfig,
     latency_history: VecDeque<(Instant, Duration)>,
@@ -210,6 +224,7 @@ pub struct BatchOptimizer {
 }
 
 impl BatchOptimizer {
+/// new: new.
     pub fn new(config: PredictiveBatchingConfig) -> Self {
         Self {
             config,
@@ -218,6 +233,7 @@ impl BatchOptimizer {
         }
     }
 
+/// record_batch_latency: record batch latency.
     pub fn record_batch_latency(&mut self, latency: Duration) {
         let now = Instant::now();
         self.latency_history.push_back((now, latency));
@@ -226,6 +242,7 @@ impl BatchOptimizer {
         }
     }
 
+/// record_throughput: record throughput.
     pub fn record_throughput(&mut self, throughput: f64) {
         let now = Instant::now();
         self.throughput_history.push_back((now, throughput));
@@ -234,6 +251,7 @@ impl BatchOptimizer {
         }
     }
 
+/// calculate_optimal_batch_size: calculate optimal batch size.
     pub fn calculate_optimal_batch_size(&self) -> usize {
         let window = Duration::from_secs(10);
         let now = Instant::now();
