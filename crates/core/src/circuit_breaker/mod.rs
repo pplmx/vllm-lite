@@ -7,4 +7,7 @@ pub mod breaker;
 /// strategy: strategy module.
 pub mod strategy;
 pub use breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError, CircuitState};
-pub use strategy::{DegradeStrategy, FailFastStrategy, FallbackStrategy, RetryStrategy};
+pub use strategy::{
+    AsyncFallbackStrategy, DegradeStrategy, FailFastStrategy, FallbackStrategy, RetryStrategy,
+    RetryStrategyBuilder,
+};
