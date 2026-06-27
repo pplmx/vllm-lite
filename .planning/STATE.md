@@ -2,35 +2,43 @@
 gsd_state_version: 1.0
 milestone: v19.0
 milestone_name: Codebase Health Audit
-status: planning
-last_updated: "2026-06-27T05:00:00.000Z"
+status: complete
+last_updated: "2026-06-27T13:30:00.000Z"
 last_activity: 2026-06-27
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 5
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 5
+  percent: 100
 ---
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-26)
+See: .planning/PROJECT.md (updated 2026-06-27)
 
 **Core value:** Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
-**Current focus:** v19.0 Codebase Health Audit (analysis-only, no code changes) — roadmap defined (5 phases), execution not started.
+**Current focus:** v19.0 Codebase Health Audit — SHIPPED 2026-06-27 (5 phases, 23/23 requirements, audit passed, 0 source code modified)
 
 ---
 
 ## Current Position
 
-Phase: Phase 20 (Architecture Audit) — planning complete, execution not started
-Plan: —
-Status: Defining roadmap
-Last activity: 2026-06-27 — Milestone v19.0 roadmap created (Phases 20-24)
+Phase: All v19.0 phases complete (20, 21, 22, 23, 24)
+Plan: All 5 plans shipped
+Status: Milestone complete — audit passed, archived to .planning/milestones/v19.0-*
+Last activity: 2026-06-27 — v19.0 archived; next milestone (v20.0+) should consume `.planning/audit/BACKLOG.md`
 
 ## Performance Metrics
+
+**Velocity (v19.0 actual):**
+
+- Total plans completed: 5 (v19.0)
+- Total commits across v19.0: ~18 (context+plan × 5, audit × 5, summary × 5, archive × 1)
+- Audit artifacts produced: 11 markdown files / 3,578 lines
+- Findings consolidated: 100 (5 P0 + 38 P1 + 44 P2 + 13 P3)
+- Source code modified: **0 lines** (analysis-only constraint honored)
 
 **Velocity (v18.0 historical):**
 
@@ -41,12 +49,15 @@ Last activity: 2026-06-27 — Milestone v19.0 roadmap created (Phases 20-24)
 - Total integration test count: 14 → 23 (+9 in engine_v18_wiring.rs)
 - Total bench count: 3 → 4 (+1 bench)
 
-**v19.0 Projection:**
+**By Phase (v19.0):**
 
-- 5 phases, all analysis-only (no code modifications)
-- Each phase produces concrete artifacts in `.planning/audit/`
-- Phase 24 (synthesis) gates on Phase 20-23 outputs
-- No test changes expected (existing 287+ tests still validate code as-is)
+| Phase | Plans | Findings | Artifacts |
+| ----- | ----- | --------:| --------- |
+| 20    | 1     | 17       | REPORT.md (481L) + SUMMARY.md (66L) |
+| 21    | 1     | 26       | REPORT.md (431L) + SUMMARY.md (100L) |
+| 22    | 1     | 24       | REPORT.md (566L) + SUMMARY.md (179L) |
+| 23    | 1     | 33       | REPORT.md (653L) + SUMMARY.md (113L) |
+| 24    | 1     | 100 consolidated | SYNTHESIS.md (391L) + BACKLOG.md (280L) + MIGRATION-ROADMAP.md (318L) |
 
 **By Phase (v18.0 historical):**
 
@@ -60,9 +71,10 @@ Last activity: 2026-06-27 — Milestone v19.0 roadmap created (Phases 20-24)
 
 **Recent Trend:**
 
-- Last 5 commits: feat(18.1) → feat(18.2) → feat(18.3) → test+bench(18.4) → gap-closure(19)
-- Phase 19 closed all 3 audit gaps + 2 cross-phase issues; 9 code-review fixes applied
-- Trend: All phases shipped cleanly, no rollbacks, all clippy/fmt checks passed
+- Last 5 commits: docs(audit) phase 20 → phase 21 → phase 22 → phase 23 → phase 24 (synthesis)
+- v19.0 shipped cleanly: all 5 phases → audit passed → archived
+- No source code modifications across the entire milestone (analysis-only constraint enforced)
+- Trend: Audit-before-refactor pattern validated; produces 100 actionable findings for v20.0+
 
 ---
 
@@ -101,16 +113,16 @@ Last activity: 2026-06-27 — Milestone v19.0 roadmap created (Phases 20-24)
 
 ### Pending Todos
 
-- Phase 20: Architecture Audit — execute subagent to produce `.planning/audit/architecture/{REPORT.md,SUMMARY.md}`
-- Phase 21: Naming Audit — execute subagent after Phase 20
-- Phase 22: Comments + Documentation Audit — execute subagent after Phase 21
-- Phase 23: API + Error Handling Audit — execute subagent after Phase 22
-- Phase 24: Synthesis — execute after all four dimension reports exist; produces SYNTHESIS.md / BACKLOG.md / MIGRATION-ROADMAP.md
+None — v19.0 milestone complete. All audit phases executed; synthesis + backlog + migration roadmap delivered.
 
 ### Blockers/Concerns
 
-- `Engine::step()` in speculative mode hangs — pre-existing bug (not introduced by v18.0). 2 Phase 19 integration tests are `#[ignore]`d awaiting the fix. **Audit does not require code changes**, so this does not block v19.0.
-- Real-model benchmark missing — current bench uses stub backends. Deferred until a small real checkpoint is available. **Out of scope for v19.0.**
+- `Engine::step()` in speculative mode hangs — pre-existing bug (not introduced by v18.0 or v19.0). 2 Phase 19 integration tests are `#[ignore]`d awaiting the fix. Not blocking audit; will be addressed in v20.0+ remediation.
+- Real-model benchmark missing — current bench uses stub backends. Deferred until a small real checkpoint is available. Out of scope for v19.0 audit.
+- v20.0+ decisions needed:
+  - Phase ordering for v20.1 (P0 fixes) vs v20.2 (module tree restoration) — can be parallel?
+  - `vllm-dist` fate: continue / feature-gate / remove (~1,600 LOC unused)
+  - Doc coverage target: accept 60% intermediate or push to 80%?
 
 ---
 
@@ -119,24 +131,27 @@ Last activity: 2026-06-27 — Milestone v19.0 roadmap created (Phases 20-24)
 | Category    | Item                                              | Status            | Deferred At |
 | ----------- | ------------------------------------------------- | ----------------- | ----------- |
 | Multi-Model | External draft model support (MULTI-01, MULTI-02) | Shipped in v18.0  | 2026-05-13   |
-| Multi-Model | Draft hot-swap mid-request (MULTI-04)             | Deferred to v19+  | 2026-06-27   |
+| Multi-Model | Draft hot-swap mid-request (MULTI-04)             | Deferred to v19+ → v20.0+ | 2026-06-27 |
 | Multi-Model | Draft fine-tuning hooks (MULTI-05)                | Out of scope      | 2026-05-13   |
-| Multi-Model | Cross-GPU draft placement (MULTI-06)              | Deferred to v19+  | 2026-06-27   |
+| Multi-Model | Cross-GPU draft placement (MULTI-06)              | Deferred to v19+ → v20.0+ | 2026-06-27 |
 | Engine      | Wire DraftResolver into step_speculative loop     | **Closed by Phase 19** | 2026-06-27 |
 | Engine      | HTTP exporter integration of v18.0 metrics        | **Closed by Phase 19** | 2026-06-27 |
-| Engine      | Real-model benchmark (vs stub backend)            | Deferred to v19+  | 2026-06-27   |
-| Engine      | Fix Engine::step() speculative-mode hang         | Deferred to v19+  | 2026-06-27   |
-| Refactor    | File renaming (`17_*.rs` stage-info cleanup)      | Deferred to v20.0+ (after v19.0 audit) | 2026-06-27 |
-| Refactor    | Module boundary tightening                        | Deferred to v20.0+ (after v19.0 audit) | 2026-06-27 |
-| Refactor    | Doc-comment coverage catch-up to ≥80%              | Deferred to v20.0+ (after v19.0 audit) | 2026-06-27 |
-| Refactor    | Error type unification across crates              | Deferred to v20.0+ (after v19.0 audit) | 2026-06-27 |
+| Engine      | Real-model benchmark (vs stub backend)            | Deferred to v20.0+ | 2026-06-27 |
+| Engine      | Fix Engine::step() speculative-mode hang         | Deferred to v20.0+ | 2026-06-27 |
+| Refactor    | **5 P0 architecture/API violations**              | Deferred to v20.1 (see BACKLOG.md) | 2026-06-27 |
+| Refactor    | **38 P1 issues** (module tree, docs, errors, naming) | Deferred to v20.2-v20.6 (see MIGRATION-ROADMAP.md) | 2026-06-27 |
+| Refactor    | **44 P2 issues** + **13 P3 informational**        | Deferred to v20.x (optional) | 2026-06-27 |
+| Architecture| `vllm-dist` fate decision (continue/gate/remove)  | Deferred to v20.1 (open question) | 2026-06-27 |
+| Documentation | README broken code example fix                   | Deferred to v20.4/20.5 | 2026-06-27 |
+| Documentation | 12+ tribal-knowledge decisions need ADRs          | Deferred to v20.5 | 2026-06-27 |
 
 ## Session Continuity
 
-Last session: 2026-06-27 v18.0 + Phase 19 gap closure complete; v19.0 milestone started
-Stopped at: v19.0 roadmap defined (5 phases, 23/23 requirements mapped)
+Last session: 2026-06-27 v19.0 milestone complete (5/5 phases, audit passed, archived)
+Stopped at: v19.0 archived to `.planning/milestones/v19.0-{ROADMAP,REQUIREMENTS}.md`; backlog ready in `.planning/audit/BACKLOG.md` for v20.0+ consumption
 Resume file: None
+Next command: `/gsd-new-milestone v20.0 Layering Restoration & P0 Fixes` (or similar — see `.planning/audit/MIGRATION-ROADMAP.md` for full proposed v20.x phase breakdown)
 
 ---
 
-*State updated: 2026-06-27 — v19.0 roadmap created (5 audit phases, analysis-only); v18.0 milestone complete (5/5 phases, audit passed, 287+ tests passing)*
+*State updated: 2026-06-27 — v19.0 milestone complete (5/5 phases, audit passed, 100 findings consolidated, archived)*
