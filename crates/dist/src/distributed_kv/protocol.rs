@@ -1,16 +1,22 @@
+//! protocol: protocol.
+
+/// NodeId: node id.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct NodeId(pub usize);
 
 impl NodeId {
+/// new: new.
     pub fn new(id: usize) -> Self {
         Self(id)
     }
 
+/// index: index.
     pub fn index(&self) -> usize {
         self.0
     }
 }
 
+/// CacheOperation: cache operation enumeration.
 #[derive(Debug, Clone)]
 pub enum CacheOperation {
     Read {
@@ -37,6 +43,7 @@ pub enum CacheOperation {
     },
 }
 
+/// CacheMessage: cache message.
 #[derive(Debug, Clone)]
 pub struct CacheMessage {
     pub id: u64,
@@ -47,6 +54,7 @@ pub struct CacheMessage {
 }
 
 impl CacheMessage {
+/// new: new.
     pub fn new(source: NodeId, destination: NodeId, operation: CacheOperation) -> Self {
         static MSG_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
@@ -62,6 +70,7 @@ impl CacheMessage {
         }
     }
 
+/// read_request: read request.
     pub fn read_request(key: u64, from: NodeId, to: NodeId) -> Self {
         Self::new(
             from,
@@ -73,6 +82,7 @@ impl CacheMessage {
         )
     }
 
+/// invalidate: invalidate.
     pub fn invalidate(key: u64, from: NodeId, to: NodeId) -> Self {
         Self::new(
             from,
@@ -84,6 +94,7 @@ impl CacheMessage {
         )
     }
 
+/// update: update.
     pub fn update(key: u64, hash: u64, from: NodeId, to: NodeId) -> Self {
         Self::new(
             from,

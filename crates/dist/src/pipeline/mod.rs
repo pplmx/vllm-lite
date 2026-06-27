@@ -1,6 +1,10 @@
+//! mod: module.
+
 #![allow(clippy::module_inception)]
 
+/// pipeline: pipeline module.
 pub mod pipeline;
+/// stage: stage module.
 pub mod stage;
 
 pub use pipeline::PipelineParallel;
@@ -8,6 +12,7 @@ pub use stage::{PipelineStage, PipelineStageConfig, StageInput, StageOutput};
 
 use thiserror::Error;
 
+/// PipelineError: pipeline error.
 #[derive(Debug, Error)]
 pub enum PipelineError {
     #[error("stage {stage} not ready")]
@@ -26,6 +31,7 @@ pub enum PipelineError {
     DeviceError(String),
 }
 
+/// Result: result.
 pub type Result<T> = std::result::Result<T, PipelineError>;
 
 pub use stage::PipelineStage as PipelineStageTrait;
