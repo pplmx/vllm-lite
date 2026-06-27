@@ -8,7 +8,7 @@ A production-ready LLM inference engine in Rust, optimized for single and multi-
 
 Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
 
-## Current Milestone: v20.0 Codebase Remediation (BACKLOG.md-driven)
+## Current Milestone: v20.0 Codebase Remediation (BACKLOG.md-driven) — SHIPPED 2026-06-27
 
 **Goal:** 执行 v19.0 审计产出的修复 backlog,按 MIGRATION-ROADMAP.md 提议顺序执行 6 个子 phase(v20.1→v20.6),系统化恢复 codebase 健康度;**这是 v19.0 审计清单的修复 milestone**,所有改动基于 `.planning/audit/BACKLOG.md` 的 100 个 finding。
 
