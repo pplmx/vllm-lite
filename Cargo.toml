@@ -38,6 +38,48 @@ tokio-stream = "0.1"
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "trace"] }
 
+# === Workspace lint policy ===
+# Tiers:
+#   deny  - breaks CI (`just clippy`)
+#   warn  - visible in `cargo clippy`, not blocking
+#   allow - explicitly silenced with rationale
+#
+# Phase A scope: deny correctness/suspicious/perf. Pedantic/nursery stay warn
+# so they're visible during local dev but don't break CI. Phase B/C/D fix
+# pedantic warnings opportunistically as they touch files.
+
+[workspace.lints.clippy]
+# deny tier: correctness / obvious bugs / perf footguns
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+perf = { level = "deny", priority = -1 }
+
+# warn tier: documentation, style, ergonomics
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+module_name_repetitions = "warn"
+must_use_candidate = "warn"
+return_self_not_must_use = "warn"
+missing_const_for_fn = "warn"
+uninlined_format_args = "warn"
+
+# allow tier: project-specific rationale
+cast_precision_loss = "allow"          # model dim casts are intentional
+cast_possible_truncation = "allow"     # same as above
+cast_possible_wrap = "allow"           # same as above
+cast_sign_loss = "allow"               # same as above
+similar_names = "allow"                # tensor-math `q/k/v` shadows permitted
+too_many_lines = "allow"               # addressed in Phase D
+too_many_arguments = "allow"           # addressed in Phase C/D
+multiple_crate_versions = "allow"      # tracked separately
+
+[workspace.lints.rust]
+unsafe_code = "warn"
+missing_debug_implementations = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
 [profile.dev]
 opt-level = 0
 debug = true
