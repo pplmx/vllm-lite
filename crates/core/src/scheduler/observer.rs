@@ -1,6 +1,9 @@
+//! observer: observer.
+
 use crate::types::{SeqId, TokenId};
 use std::sync::RwLock;
 
+/// SchedulerObserverError: scheduler observer error.
 #[derive(Debug, thiserror::Error)]
 pub enum SchedulerObserverError {
     #[error("observer mutex poisoned")]
@@ -9,6 +12,7 @@ pub enum SchedulerObserverError {
     MaxObserversReached(usize),
 }
 
+/// SchedulerObserver: scheduler observer trait.
 pub trait SchedulerObserver: Send + Sync {
     fn on_request_arrived(&self, seq_id: SeqId, prompt_len: usize);
     fn on_batch_scheduled(&self, seq_ids: &[SeqId], batch_size: usize);
@@ -18,6 +22,7 @@ pub trait SchedulerObserver: Send + Sync {
     fn on_memory_pressure(&self, available_blocks: usize);
 }
 
+/// ObserverEvent: observer event enumeration.
 #[derive(Clone, Debug)]
 pub enum ObserverEvent {
     RequestArrived {
@@ -45,19 +50,23 @@ pub enum ObserverEvent {
     },
 }
 
+/// SchedulerObservers: scheduler observers.
 pub struct SchedulerObservers {
     observers: RwLock<Vec<Box<dyn SchedulerObserver>>>,
 }
 
 impl SchedulerObservers {
+/// new: new.
     pub fn new() -> Self {
         Self {
             observers: RwLock::new(Vec::new()),
         }
     }
 
+/// MAX_OBSERVERS: max observers constant.
     pub const MAX_OBSERVERS: usize = 16;
 
+/// register: register.
     pub fn register(
         &self,
         observer: Box<dyn SchedulerObserver>,
@@ -73,6 +82,7 @@ impl SchedulerObservers {
         Ok(())
     }
 
+/// dispatch: dispatch.
     pub fn dispatch(&self, event: &ObserverEvent) {
         use std::panic::AssertUnwindSafe;
         if let Ok(observers) = self.observers.read() {

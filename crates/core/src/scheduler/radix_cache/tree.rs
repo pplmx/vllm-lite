@@ -1,3 +1,5 @@
+//! tree: tree.
+
 use super::node::RadixNode;
 use std::sync::Arc;
 use vllm_traits::{BlockId, TokenId};
@@ -16,6 +18,7 @@ pub struct RadixTree {
 }
 
 impl RadixTree {
+/// new: new.
     pub fn new() -> Self {
         Self {
             root: RadixNode::new(),

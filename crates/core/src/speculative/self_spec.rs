@@ -11,6 +11,7 @@ use crate::types::{SeqId, TokenId};
 use std::collections::HashMap;
 use vllm_traits::ModelBackend;
 
+/// SelfSpeculativeModel: self speculative model.
 pub struct SelfSpeculativeModel<M: ModelBackend> {
     model: M,
     draft_layer_count: usize,
@@ -18,6 +19,7 @@ pub struct SelfSpeculativeModel<M: ModelBackend> {
 }
 
 impl<M: ModelBackend> SelfSpeculativeModel<M> {
+/// new: new.
     pub fn new(model: M, config: SpeculationConfig) -> Self {
         let total_layers = model.num_layers();
         let draft_layer_count = config
@@ -30,30 +32,37 @@ impl<M: ModelBackend> SelfSpeculativeModel<M> {
         }
     }
 
+/// model: model.
     pub fn model(&self) -> &M {
         &self.model
     }
 
+/// mut_model: mut model.
     pub fn mut_model(&mut self) -> &mut M {
         &mut self.model
     }
 
+/// draft_layer_count: draft layer count.
     pub fn draft_layer_count(&self) -> usize {
         self.draft_layer_count
     }
 
+/// set_draft_layer_count: set draft layer count.
     pub fn set_draft_layer_count(&mut self, count: usize) {
         self.draft_layer_count = count;
     }
 
+/// draft_kv_block_ids: draft kv block ids.
     pub fn draft_kv_block_ids(&self) -> &HashMap<SeqId, Vec<usize>> {
         &self.draft_kv_block_ids
     }
 
+/// clear_draft_kv: clear draft kv.
     pub fn clear_draft_kv(&mut self) {
         self.draft_kv_block_ids.clear();
     }
 
+/// remove_draft_seq: remove draft seq.
     pub fn remove_draft_seq(&mut self, seq_id: SeqId) {
         self.draft_kv_block_ids.remove(&seq_id);
     }

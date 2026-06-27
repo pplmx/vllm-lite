@@ -1,3 +1,5 @@
+//! recovery: recovery.
+
 // crates/core/src/error/recovery.rs
 //! Error recovery management
 
@@ -15,6 +17,7 @@ pub enum ErrorSeverity {
 }
 
 impl ErrorSeverity {
+/// from_error: from error.
     pub fn from_error(error: &str) -> Self {
         if error.contains("timeout") {
             ErrorSeverity::Retryable
@@ -46,6 +49,7 @@ pub struct RecoveryManager {
     config: RecoveryConfig,
 }
 
+/// RecoveryConfig: recovery configuration.
 #[derive(Debug, Clone)]
 pub struct RecoveryConfig {
     pub retry_attempts: usize,
@@ -64,6 +68,7 @@ impl Default for RecoveryConfig {
 }
 
 impl RecoveryManager {
+/// new: new.
     pub fn new(config: RecoveryConfig) -> Self {
         Self {
             circuit_breakers: dashmap::DashMap::new(),
@@ -71,6 +76,7 @@ impl RecoveryManager {
         }
     }
 
+/// get_or_create_circuit_breaker: get or create circuit breaker.
     pub fn get_or_create_circuit_breaker(&self, name: &str) -> CircuitBreaker {
         self.circuit_breakers
             .entry(name.to_string())
@@ -78,6 +84,7 @@ impl RecoveryManager {
             .clone()
     }
 
+/// determine_action: determine action.
     pub fn determine_action(&self, severity: ErrorSeverity, component: &str) -> RecoveryAction {
         match severity {
             ErrorSeverity::Warning => RecoveryAction::Propagate,

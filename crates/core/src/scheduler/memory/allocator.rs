@@ -1,3 +1,5 @@
+//! allocator: allocator.
+
 use crate::types::BlockId;
 use tracing::warn;
 
@@ -10,6 +12,7 @@ const NULL_BLOCK: BlockId = BlockId::MAX;
 /// should compute their own block size and use the helper APIs.
 pub const BLOCK_BYTES: usize = 16 * 1024 * 1024;
 
+/// BlockAllocatorStats: block allocator statistics.
 #[derive(Clone, Default)]
 pub struct BlockAllocatorStats {
     pub total_blocks: usize,
@@ -18,6 +21,7 @@ pub struct BlockAllocatorStats {
     pub free_count: usize,
 }
 
+/// BlockAllocator: block allocator.
 pub struct BlockAllocator {
     num_blocks: usize,
     next_free: Vec<BlockId>,
@@ -28,6 +32,7 @@ pub struct BlockAllocator {
 }
 
 impl BlockAllocator {
+/// new: new.
     pub fn new(num_blocks: usize) -> Self {
         let mut next_free = vec![0; num_blocks];
         let mut prev_free = vec![0; num_blocks];
@@ -56,6 +61,7 @@ impl BlockAllocator {
         }
     }
 
+/// allocate: allocate.
     pub fn allocate(&mut self, num_blocks: usize) -> Option<Vec<BlockId>> {
         tracing::debug!(
             requested = num_blocks,
@@ -104,6 +110,7 @@ impl BlockAllocator {
         }
     }
 
+/// free: free.
     pub fn free(&mut self, blocks: &[BlockId]) {
         tracing::trace!(
             blocks = ?blocks,
@@ -137,14 +144,17 @@ impl BlockAllocator {
         self.first_free = block;
     }
 
+/// available: available.
     pub fn available(&self) -> usize {
         self.stats.available_blocks
     }
 
+/// total: total.
     pub fn total(&self) -> usize {
         self.num_blocks
     }
 
+/// stats: stats.
     pub fn stats(&self) -> BlockAllocatorStats {
         self.stats.clone()
     }

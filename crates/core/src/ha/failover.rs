@@ -1,3 +1,5 @@
+//! failover: failover.
+
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -6,6 +8,7 @@ use vllm_traits::SeqId;
 
 use super::leader_election::LeaderElection;
 
+/// InFlightRequest: in flight request.
 #[derive(Debug, Clone)]
 pub struct InFlightRequest {
     pub seq_id: SeqId,
@@ -14,6 +17,7 @@ pub struct InFlightRequest {
     pub node_id: String,
 }
 
+/// FailoverManager: failover manager.
 pub struct FailoverManager {
     leader_election: Arc<LeaderElection>,
     inflight_requests: Arc<RwLock<HashMap<SeqId, InFlightRequest>>>,
@@ -21,6 +25,7 @@ pub struct FailoverManager {
 }
 
 impl FailoverManager {
+/// new: new.
     pub fn new(request_timeout: std::time::Duration) -> Self {
         Self {
             leader_election: Arc::new(LeaderElection::new()),
@@ -29,10 +34,12 @@ impl FailoverManager {
         }
     }
 
+/// leader_election: leader election.
     pub fn leader_election(&self) -> Arc<LeaderElection> {
         self.leader_election.clone()
     }
 
+/// track_request: track request.
     pub async fn track_request(&self, seq_id: SeqId, prompt_hash: u64, node_id: String) {
         let request = InFlightRequest {
             seq_id,
@@ -47,6 +54,7 @@ impl FailoverManager {
         info!(seq_id = %seq_id, "Tracking in-flight request");
     }
 
+/// complete_request: complete request.
     pub async fn complete_request(&self, seq_id: SeqId) {
         let mut requests = self.inflight_requests.write().await;
         if requests.remove(&seq_id).is_some() {
@@ -54,6 +62,7 @@ impl FailoverManager {
         }
     }
 
+/// get_stale_requests: get stale requests.
     pub async fn get_stale_requests(&self) -> Vec<SeqId> {
         let mut requests = self.inflight_requests.write().await;
         let now = std::time::Instant::now();
@@ -72,10 +81,12 @@ impl FailoverManager {
         stale
     }
 
+/// get_inflight_count: get inflight count.
     pub async fn get_inflight_count(&self) -> usize {
         self.inflight_requests.read().await.len()
     }
 
+/// migrate_request: migrate request.
     pub async fn migrate_request(&self, seq_id: SeqId, new_node: String) -> bool {
         let mut requests = self.inflight_requests.write().await;
 
@@ -88,6 +99,7 @@ impl FailoverManager {
         false
     }
 
+/// on_node_failure: on node failure.
     pub async fn on_node_failure(&self, failed_node: &str) -> Vec<SeqId> {
         let requests = self.inflight_requests.write().await;
 
@@ -106,6 +118,7 @@ impl FailoverManager {
         to_migrate
     }
 
+/// handle_leader_transfer: handle leader transfer.
     pub async fn handle_leader_transfer(&self, new_leader: String) {
         let is_current_leader = self.leader_election.is_leader().await;
 

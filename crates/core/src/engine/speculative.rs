@@ -1,3 +1,5 @@
+//! speculative: speculative.
+
 #![allow(clippy::type_complexity, clippy::iter_cloned_collect)]
 
 use crate::error::Result;

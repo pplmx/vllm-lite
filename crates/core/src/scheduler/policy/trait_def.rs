@@ -1,6 +1,9 @@
+//! trait_def: trait def.
+
 use crate::types::Sequence;
 use std::time::Instant;
 
+/// SchedulingContext: scheduling context.
 #[derive(Clone, Debug)]
 pub struct SchedulingContext {
     pub current_time: Instant,
@@ -9,10 +12,12 @@ pub struct SchedulingContext {
     pub memory_pressure: f32,
 }
 
+/// PriorityScore: priority score.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[must_use]
 pub struct PriorityScore(pub u64);
 
+/// SchedulingPolicy: scheduling policy trait.
 pub trait SchedulingPolicy: Send + Sync {
     fn compute_priority(&self, seq: &Sequence, context: &SchedulingContext) -> PriorityScore;
     fn name(&self) -> &'static str;

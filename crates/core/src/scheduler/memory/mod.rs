@@ -1,4 +1,8 @@
+//! mod: module.
+
+/// allocator: allocator module.
 pub mod allocator;
+/// eviction: eviction module.
 pub mod eviction;
 
 pub use allocator::{BlockAllocator, BlockAllocatorStats};
@@ -7,6 +11,7 @@ pub use eviction::{EvictionPolicy, EvictionPolicyStats};
 use crate::scheduler::preemption::PreemptionManager;
 use crate::types::{BlockId, SchedulerConfig, Sequence, Status};
 
+/// MemoryManager: memory manager.
 pub struct MemoryManager {
     allocator: BlockAllocator,
     eviction_policy: EvictionPolicy,

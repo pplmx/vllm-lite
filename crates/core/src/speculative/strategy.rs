@@ -3,6 +3,7 @@
 //! Different strategies for determining which draft tokens to accept
 //! based on comparing draft and target model probabilities.
 
+/// RejectionStrategy: rejection strategy enumeration.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub enum RejectionStrategy {
     #[default]
@@ -13,16 +14,19 @@ pub enum RejectionStrategy {
 }
 
 impl RejectionStrategy {
+/// new_token_level: new token level.
     pub fn new_token_level() -> Self {
         RejectionStrategy::TokenLevel
     }
 
+/// new_block_level: new block level.
     pub fn new_block_level(block_size: usize) -> Self {
         RejectionStrategy::BlockLevel {
             block_size: block_size.max(1),
         }
     }
 
+/// should_accept: should accept.
     pub fn should_accept(&self, draft_prob: f32, target_prob: f32) -> bool {
         match self {
             RejectionStrategy::TokenLevel => target_prob >= draft_prob,
@@ -30,6 +34,7 @@ impl RejectionStrategy {
         }
     }
 
+/// acceptance_threshold: acceptance threshold.
     pub fn acceptance_threshold(&self) -> f32 {
         match self {
             RejectionStrategy::TokenLevel => 0.0,

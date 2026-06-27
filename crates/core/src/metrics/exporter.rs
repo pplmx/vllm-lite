@@ -1,3 +1,5 @@
+//! exporter: exporter.
+
 // crates/core/src/metrics/exporter.rs
 use std::sync::Arc;
 
@@ -9,6 +11,7 @@ pub trait MetricsExporter {
     async fn export(&self) -> Result<String, MetricsError>;
 }
 
+/// MetricsError: metrics error.
 #[derive(Debug, thiserror::Error)]
 pub enum MetricsError {
     #[error("export failed: {0}")]
@@ -22,6 +25,7 @@ pub struct PrometheusExporter {
 }
 
 impl PrometheusExporter {
+/// new: new.
     pub fn new(collector: Arc<EnhancedMetricsCollector>, port: u16) -> Self {
         Self { collector, port }
     }
@@ -214,6 +218,7 @@ impl PrometheusExporter {
         output
     }
 
+/// port: port.
     pub fn port(&self) -> u16 {
         self.port
     }

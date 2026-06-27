@@ -36,6 +36,7 @@ impl std::fmt::Debug for ResolvedDraft {
 }
 
 impl ResolvedDraft {
+/// kind: kind.
     pub fn kind(&self) -> &'static str {
         match self {
             ResolvedDraft::External(_) => "external",
@@ -44,6 +45,7 @@ impl ResolvedDraft {
         }
     }
 
+/// is_some: is some.
     pub fn is_some(&self) -> bool {
         !matches!(self, ResolvedDraft::None)
     }
@@ -81,6 +83,7 @@ pub struct DraftResolver {
 }
 
 impl DraftResolver {
+/// new: new.
     pub fn new(
         registry: Arc<DraftModelRegistry>,
         self_spec: Option<Arc<Mutex<Box<dyn ModelBackend>>>>,

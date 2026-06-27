@@ -8,6 +8,7 @@ use super::strategy::RejectionStrategy;
 use super::verifier::DraftVerifier;
 use vllm_traits::ModelBackend;
 
+/// SpeculativeModel: speculative model.
 pub struct SpeculativeModel<M: ModelBackend> {
     target_model: M,
     verifier: Box<dyn DraftVerifier>,
@@ -16,6 +17,7 @@ pub struct SpeculativeModel<M: ModelBackend> {
 }
 
 impl<M: ModelBackend> SpeculativeModel<M> {
+/// new: new.
     pub fn new(
         target_model: M,
         verifier: Box<dyn DraftVerifier>,
@@ -30,34 +32,42 @@ impl<M: ModelBackend> SpeculativeModel<M> {
         }
     }
 
+/// target_model: target model.
     pub fn target_model(&self) -> &M {
         &self.target_model
     }
 
+/// verifier: verifier.
     pub fn verifier(&self) -> &dyn DraftVerifier {
         self.verifier.as_ref()
     }
 
+/// mut_verifier: mut verifier.
     pub fn mut_verifier(&mut self) -> &mut Box<dyn DraftVerifier> {
         &mut self.verifier
     }
 
+/// config: config.
     pub fn config(&self) -> &SpeculationConfig {
         &self.config
     }
 
+/// strategy: strategy.
     pub fn strategy(&self) -> &RejectionStrategy {
         &self.strategy
     }
 
+/// set_strategy: set strategy.
     pub fn set_strategy(&mut self, strategy: RejectionStrategy) {
         self.strategy = strategy;
     }
 
+/// draft_count: draft count.
     pub fn draft_count(&self) -> usize {
         self.config.draft_count
     }
 
+/// max_depth: max depth.
     pub fn max_depth(&self) -> usize {
         self.config.max_depth
     }

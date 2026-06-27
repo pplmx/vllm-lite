@@ -1,6 +1,9 @@
+//! batch_planner: batch planner.
+
 use crate::types::SchedulerConfig;
 use std::time::Instant;
 
+/// BatchSnapshot: batch snapshot.
 #[derive(Clone, Debug)]
 pub struct BatchSnapshot {
     pub timestamp: Instant,
@@ -11,6 +14,7 @@ pub struct BatchSnapshot {
     pub latency_ms: f64,
 }
 
+/// BatchPlan: batch plan.
 #[derive(Clone, Debug)]
 pub struct BatchPlan {
     pub target_batch_size: usize,
@@ -20,6 +24,7 @@ pub struct BatchPlan {
     pub decode_throughput_hint: f64,
 }
 
+/// SchedulerStateView: scheduler state view trait.
 pub trait SchedulerStateView {
     fn waiting_count(&self) -> usize;
     fn running_count(&self) -> usize;
@@ -28,6 +33,7 @@ pub trait SchedulerStateView {
     fn available_memory(&self) -> usize;
 }
 
+/// BatchPlanner: batch planner.
 pub struct BatchPlanner {
     history: Vec<BatchSnapshot>,
     config: SchedulerConfig,
@@ -35,6 +41,7 @@ pub struct BatchPlanner {
 }
 
 impl BatchPlanner {
+/// new: new.
     pub fn new(config: SchedulerConfig) -> Self {
         Self {
             history: Vec::with_capacity(100),
@@ -43,6 +50,7 @@ impl BatchPlanner {
         }
     }
 
+/// plan: plan.
     pub fn plan(&mut self, state: &impl SchedulerStateView) -> BatchPlan {
         let adaptive_ratio = self.compute_adaptive_ratio(state);
         let budget = self.config.max_num_batched_tokens;
@@ -148,6 +156,7 @@ impl BatchPlanner {
         sum / valid.len() as f64
     }
 
+/// record: record.
     pub fn record(&mut self, snapshot: BatchSnapshot) {
         if self.history.len() >= self.max_history_size {
             self.history.remove(0);
@@ -155,6 +164,7 @@ impl BatchPlanner {
         self.history.push(snapshot);
     }
 
+/// get_stats: get stats.
     pub fn get_stats(&self) -> (f64, f64, f64) {
         if self.history.is_empty() {
             return (0.0, 0.0, 0.0);
