@@ -59,10 +59,7 @@ mod tests {
             field: "num_heads".into(),
             message: "must be > 0".into(),
         };
-        assert_eq!(
-            err.to_string(),
-            "invalid field num_heads: must be > 0"
-        );
+        assert_eq!(err.to_string(), "invalid field num_heads: must be > 0");
     }
 
     #[test]
@@ -72,7 +69,10 @@ mod tests {
             path: "/tmp/missing.json".into(),
             source: io_err,
         };
-        assert!(err.to_string().contains("io error reading /tmp/missing.json"));
+        assert!(
+            err.to_string()
+                .contains("io error reading /tmp/missing.json")
+        );
     }
 
     #[test]
