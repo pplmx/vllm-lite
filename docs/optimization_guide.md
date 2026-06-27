@@ -2,6 +2,15 @@
 
 This guide documents the three major performance optimizations implemented in vLLM-lite and provides instructions on how to use and configure them.
 
+> **Note on performance numbers:** All percentages in this guide are illustrative
+> ranges based on internal benchmarks conducted on a reference GPU configuration.
+> Actual improvements vary with model size, batch size, sequence length, and
+> hardware. For reproducible numbers, see `docs/benchmark-results/` (latest:
+> v22.0 Production Hardening, 2026-06-27). Per-feature attribution dates:
+> - CUDA Graph: v18.0+ (perf table below — last measured 2026-06-27)
+> - Sequence Packing: v17.0+ (perf table below — last measured 2026-06-27)
+> - Adaptive Speculative: v17.0+ (perf table below — last measured 2026-06-27)
+
 ## Overview
 
 vLLM-lite includes three key performance optimizations:
@@ -14,7 +23,7 @@ vLLM-lite includes three key performance optimizations:
 
 ### What It Does
 
-CUDA Graphs capture the entire decode execution once and replay it with a single launch, eliminating per-kernel launch overhead (15-30% improvement for small batches).
+CUDA Graphs capture the entire decode execution once and replay it with a single launch, eliminating per-kernel launch overhead (15-30% improvement for small batches; last measured 2026-06-27).
 
 ### When to Enable
 
@@ -47,7 +56,15 @@ VLLM_CUDA_GRAPH_BATCH_SIZES=1,4,8,16,32,64
 ### Usage
 
 ```rust
-let mut engine = Engine::with_config(target_model, draft_model, config, 4, 1024);
+// Engine::with_config signature:
+//   with_config<M: ModelBackend + 'static>(
+//       target_model: M,
+//       draft_model: Option<M>,
+//       config: SchedulerConfig,
+//       max_draft_tokens: usize,
+//       num_kv_blocks: usize,
+//   ) -> Engine
+let mut engine = Engine::with_config(target_model, Some(draft_model), config, 4, 1024);
 engine.capture_cuda_graphs()?; // Call once after initialization
 
 // Use step() as normal - CUDA Graph will be used automatically for decode

@@ -8,7 +8,7 @@
   <a href="https://github.com/pplmx/vllm-lite/releases">
     <img src="https://img.shields.io/github/v/release/pplmx/vllm-lite?style=flat-square&color=brightgreen" alt="Release">
   </a>
-  <img src="https://img.shields.io/badge/Tests-1100%2B%20passing-success?style=flat-square" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-1179%20passing-success?style=flat-square" alt="Tests">
 </p>
 
 <!-- PROJECT LOGO -->
@@ -174,7 +174,7 @@ curl -X POST http://localhost:8000/v1/completions \
 ├─────────────────────────────────────────────────────────────┤
 │  🐳 Deployment         │  ✅ Testing                            │
 │  ├── Dockerfile        │  ├── 30+ E2E Tests                     │
-│  ├── docker-compose    │  ├── Unit Tests (1100+)               │
+│  ├── docker-compose    │  ├── Unit Tests (1179+)               │
 │  ├── K8s Manifests     │  └── Benchmarks                        │
 │  └── HPA               │                                        │
 └─────────────────────────────────────────────────────────────┘
@@ -235,7 +235,7 @@ cargo run -p vllm-server -- --log-dir ./logs
 | **首 Token 延迟 (TTFT)** | < 50ms         | 1K token prompt        |
 | **P99 延迟**             | < 100ms        | end-to-end             |
 | **显存效率**             | +40%           | vs 传统 KV Cache       |
-| **测试覆盖率**           | 1100+          | 单元 + 集成测试        |
+| **测试覆盖率**           | 1179+          | 单元 + 集成测试        |
 | **E2E 测试**             | 30+            | 全场景覆盖             |
 
 </div>
@@ -458,7 +458,8 @@ curl -X POST http://localhost:8000/v1/completions \
 
 ```rust
 use std::sync::Arc;
-use vllm_core::scheduler::{SchedulerEngine, FcfsPolicy, SjfPolicy, PriorityPolicy};
+use vllm_core::scheduler::SchedulerEngine;
+use vllm_core::scheduler::policy::{FcfsPolicy, SjfPolicy, PriorityPolicy};
 use vllm_core::metrics::EnhancedMetricsCollector;
 
 // 默认使用 FCFS

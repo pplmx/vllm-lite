@@ -13,7 +13,11 @@
 
 |     版本     | 日期  | 测试  | 覆盖率 |
 | :----------: | :---: | :---: | :----: |
-| [Unreleased] |   -   | 654+  |  90%+  |
+| [Unreleased] |   -   | 1179+ |  97.8% |
+| [v22.0]      | 2026-06-27 | 1179+ | 97.8% |
+| [v21.0]      | 2026-06-27 | 1146+ | 97.8% |
+| [v20.0]      | 2026-06-27 | 1144+ | 97.8% |
+| [v19.0]      | 2026-06-27 | 1139+ | 97.8% |
 | [v18.0]      | 2026-06-27 | 277 (vllm-core) + 654+ | 90%+ |
 
 ---
@@ -285,11 +289,104 @@ No migration needed - initial release.
 
 ---
 
+## 🚀 [v22.0] — Production Hardening (2026-06-27)
+
+### Added
+
+- **Security middleware wired (SEC-01..06)** — JWT signature verification (HMAC-SHA256 + RSA/ECDSA), `RbacMiddleware` permission enforcement, `RequestBodyLimitLayer` (configurable max body), audit log integration test, Grafana credentials moved to `.env`, structured TLS error replacing `unwrap()` panic
+- **Phase 19 e2e tests un-ignored (OPS-02)** — `Engine::step()` speculative-mode hang fixed (DashMap shard re-entry deadlock in `EnhancedMetricsCollector`); 9 tests across `engine_wiring.rs` and `engine/spec_dispatch/tests.rs` now pass
+- **Production polish (OPS-01, RFU-05, PERF-01..03)** — `parking_lot::Mutex` migration (24 sites in scheduler/engine), `MlaKvCache::write_compressed` incremental `slice_assign`, `eq_ignore_ascii_case` in arch detection, `std::sync::LazyLock` migration
+- **Engine refactor (ARF-06, ARF-07)** — `engine.rs` God module split into focused sub-modules; `engine/spec_dispatch` tree unified post-Phase-31
+
+### Fixed
+
+- 5 cargo doc broken-link warnings resolved (intra-doc-link fixes in `engine.rs`, `components/attention/mod.rs`, `block.rs`, `decoder_block/mod.rs`, `speculative/registry/`)
+- `Engine::step()` speculative-mode determinism bug (was hanging in 9 tests)
+
+### Tech Debt Rolled Forward
+
+- Stub architectures (`gemma3`, `llama4`, `phi4`, `mistral_small`) — policy deferred to v23.0
+- `TensorParallelError` manual impl — deferred to v23.0
+- `Box<dyn Error>` in `dist/src/grpc.rs` — deferred to v23.0
+- Stale `CLAUDE.md`, `README.md`, `CHANGELOG.md`, `MIGRATING.md` — deferred to v23.0
+- Dead code (~2000 LOC across scheduler/, routing/, ha/, circuit_breaker/) — deferred to v23.0
+- `core → model` upward dep via cuda-graph feature — deferred to v23.0
+
+### Stats
+
+- **Phases:** 4 (Phase 36-39)
+- **Test count:** 1179+ (≥ 1146 v21.0 baseline; +33 net)
+- **Coverage:** doc 97.8%, clippy/fmt clean, 0 cargo doc warnings
+- **ADRs:** 15 (no new ADRs in v22.0)
+
+---
+
+## 🚀 [v21.0] — P2/P3 Backlog Cleanup (2026-06-27)
+
+### Added
+
+- **API/error boundary work** (API-04, API-06, API-08, API-10) — Mutex `.expect()` migrations, `From<E>` impls for cross-crate error conversion, `dyn Trait` compile-only tests for object-safe traits (8 tests in `crates/testing/tests/dyn_safety.rs`)
+- **Naming audit compliance** (NAME-F-04) — `qwen3_config` module moved to `qwen3::config`; test files migrated from `src/` to `crates/*/tests/`
+
+### Removed
+
+- **Dead `mod.rs`** in `crates/traits/tests/` (P3-01)
+
+### Tech Debt Rolled Forward
+
+- `mut Prompt::token_ids` non-mutating methods (P2-09) — partial; deferred to v22+
+- Multi-node/vllm-dist resurrection — feature-gated only; OPS-05 still deferred
+- Real-model benchmark — OPS-04 deferred (no GPU env)
+
+### Stats
+
+- **Phases:** 5 (Phase 31-35)
+- **Test count:** 1146+ (1144 baseline + 13 new − 11 dedup)
+- **Coverage:** doc 97.8%
+
+---
+
+## 🚀 [v20.0] — Codebase Remediation (2026-06-27)
+
+### Added
+
+- **48 requirements addressed across 6 phases** (Phase 25-30) — code remediation of v19.0 audit findings (architecture, naming, comments/docs, API/errors, tests, benchmarks)
+- **12 new ADRs** — component sharing, feature flags, self-speculation, FP8, KV cache split, speculative decoding, per-request draft routing, multi-node feature-gating, FP8 quantizer orphan decision, CUDA graph feature-gating, cross-crate error boundaries, continuous batching
+
+### Stats
+
+- **Phases:** 6 (Phase 25-30)
+- **Test count:** 1144+ passed, 0 failed
+- **Coverage:** doc 97.8% / 99.6%
+
+---
+
+## 🚀 [v19.0] — Codebase Health Audit (2026-06-27)
+
+### Added
+
+- **5 analysis-only phases** (Phase 20-24) producing `.planning/audit/` directory:
+  - Architecture audit (crate deps, module boundaries, layering matrix)
+  - Naming audit (NAME-* findings)
+  - Comments/docs audit (placeholder doc survey)
+  - API/error audit (error type hygiene)
+  - Test/benchmark audit
+- **No code changes** — analysis-only milestone; findings drive v20.0-v23.0 remediation
+
+### Stats
+
+- **Phases:** 5 (Phase 20-24)
+- **Output:** 5 audit reports in `.planning/audit/{architecture,naming,docs,api,benchmark}/`
+- **Findings:** 22+ categories, drove 4 remediation milestones (v20.0, v21.0, v22.0, v23.0)
+
+---
+
 ## Known Issues
 
-- Limited model support (Qwen3 only)
-- No multi-GPU support
-- Quantization in progress
+- Long context (>32K) not yet supported (v24+ candidate)
+- Multimodal/Vision not yet supported (v24+ candidate)
+- Tool calling not yet supported (v24+ candidate)
+- Multi-node / vllm-dist resurrection deferred (feature-gated only)
 
 ---
 
