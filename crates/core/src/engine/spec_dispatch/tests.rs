@@ -213,7 +213,6 @@ fn test_warmup_draft_kv_invokes_draft_per_sequence() {
 
 /// Test Plan 17.1-A: Unified step() dispatches correctly
 #[test]
-#[ignore]
 fn test_step_unified_dispatch() {
     let target = FakeModel::new(42);
     let draft = FakeModel::new(42);
@@ -239,7 +238,6 @@ fn test_step_unified_dispatch() {
 
 /// Test Plan 17.1-B: Batched draft generation produces expected output shape
 #[test]
-#[ignore]
 fn test_batched_draft_generation() {
     let target = FakeModel::new(42);
     let draft = FakeModel::new(42);
@@ -255,7 +253,6 @@ fn test_batched_draft_generation() {
 
 /// Test Plan 17.1-C: Greedy-mode exact match via argmax verification
 #[test]
-#[ignore]
 fn test_logit_verification_exact_match() {
     let target = FakeModel::new(42);
     let draft = FakeModel::new(42);
@@ -273,7 +270,6 @@ fn test_logit_verification_exact_match() {
 
 /// Test Plan 17.1-D: KV cache rollback for rejected drafts
 #[test]
-#[ignore]
 fn test_kv_rollback_rejected_drafts() {
     let target = FakeModel::new(42);
     let draft = FakeModel::new(99);
@@ -309,7 +305,6 @@ fn test_scheduler_multi_token_update() {
 
 /// Test Plan 17.1-F: Speculative fallback on draft error
 #[test]
-#[ignore]
 fn test_draft_model_error_fallback() {
     let target = FakeModel::new(42);
     let mut engine = Engine::new_boxed(Box::new(target), None::<Box<dyn ModelBackend>>);
@@ -323,7 +318,6 @@ fn test_draft_model_error_fallback() {
 
 /// Integration test: speculative step produces output
 #[test]
-#[ignore]
 fn test_speculative_step_produces_output() {
     let target = FakeModel::new(42);
     let draft = FakeModel::new(42);
@@ -343,7 +337,6 @@ fn test_speculative_step_produces_output() {
 
 /// Integration test: speculative vs non-speculative equivalence
 #[test]
-#[ignore]
 fn test_speculative_vs_non_speculative_equivalence() {
     let target = FakeModel::new(42);
     let draft = FakeModel::new(42);
