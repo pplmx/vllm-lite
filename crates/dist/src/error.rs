@@ -11,6 +11,7 @@
 //! |------------------------|--------------------------------------------|
 //! | Tensor parallel errors | `vllm_dist::error::TensorParallelError`    |
 //! | Pipeline errors        | `vllm_dist::error::PipelineError`          |
+//! | gRPC server errors     | `vllm_dist::error::GrpcError`              |
 //!
 //! # Why `TensorParallelError` Definition Lives in `vllm-traits`
 //!
@@ -44,3 +45,29 @@
 pub use vllm_traits::TensorParallelError;
 
 pub use crate::pipeline::PipelineError;
+
+/// `GrpcError` — errors emitted by the gRPC server bootstrap path.
+///
+/// Replaces the previous `Box<dyn std::error::Error>` return type of
+/// `start_grpc_server` so callers can match on typed variants instead of
+/// stringifying. `#[source]` chains preserve the underlying cause for
+/// log correlation.
+#[derive(Debug, thiserror::Error)]
+pub enum GrpcError {
+    #[error("failed to bind gRPC listener")]
+    Bind(#[source] std::io::Error),
+    #[error("gRPC transport error")]
+    Transport(#[source] tonic::transport::Error),
+}
+
+impl From<std::io::Error> for GrpcError {
+    fn from(e: std::io::Error) -> Self {
+        Self::Bind(e)
+    }
+}
+
+impl From<tonic::transport::Error> for GrpcError {
+    fn from(e: tonic::transport::Error) -> Self {
+        Self::Transport(e)
+    }
+}

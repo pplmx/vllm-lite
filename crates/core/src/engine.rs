@@ -674,7 +674,7 @@ impl Engine {
             }
             Err(e) => {
                 tracing::error!(error = %e, "Model forward failed");
-                Err(crate::error::EngineError::ModelError(e.to_string()))
+                Err(crate::error::EngineError::from(e))
             }
         }
     }

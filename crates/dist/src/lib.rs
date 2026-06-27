@@ -14,7 +14,7 @@ pub mod tensor_parallel;
 pub mod types;
 
 pub use distributed_kv::{CacheConfig, CacheMessage, DistributedKVCache, NodeId};
-pub use error::{PipelineError, TensorParallelError};
+pub use error::{GrpcError, PipelineError, TensorParallelError};
 pub use grpc::GrpcState;
 pub use pipeline::PipelineStageTrait as PipelineStage;
 pub use pipeline::{PipelineParallel, Result};

@@ -97,6 +97,16 @@ impl EnhancedMetricsCollector {
         self.runtime.record_prefix_cache_request();
     }
 
+    /// prefix_cache_hits: total prefix cache hits observed.
+    pub fn prefix_cache_hits(&self) -> u64 {
+        self.runtime.prefix_cache_hits()
+    }
+
+    /// prefix_cache_requests: total prefix cache lookups observed.
+    pub fn prefix_cache_requests(&self) -> u64 {
+        self.runtime.prefix_cache_requests()
+    }
+
     // CUDA Graph metrics
     /// record_cuda_graph_hit: record cuda graph hit.
     pub fn record_cuda_graph_hit(&self) {

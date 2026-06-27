@@ -126,7 +126,7 @@ impl node_service_server::NodeService for NodeServiceImpl {
 pub async fn start_grpc_server(
     node_id: String,
     listen_addr: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), crate::error::GrpcError> {
     let state = GrpcState::new(node_id);
     let service = NodeServiceImpl::new(state).into_service();
 
