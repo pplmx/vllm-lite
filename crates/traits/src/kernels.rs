@@ -1,5 +1,8 @@
+//! kernels: kernels.
+
 use serde::{Deserialize, Serialize};
 
+/// CudaGraphConfig: cuda graph configuration.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CudaGraphConfig {
     pub enabled: bool,
@@ -19,6 +22,7 @@ impl Default for CudaGraphConfig {
     }
 }
 
+/// ModelGraphConfig: model graph configuration.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModelGraphConfig {
     pub max_seq_len: usize,
@@ -61,6 +65,7 @@ impl CudaGraphConfig {
     }
 }
 
+/// GraphExecutionError: graph execution error.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum GraphExecutionError {
     #[error("graph not found for batch size {0}")]

@@ -1,5 +1,8 @@
+//! model: model.
+
 use crate::types::{BatchOutput, SeqId, TokenId};
 
+/// ModelError: model error.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum ModelError {
@@ -22,11 +25,13 @@ impl ModelError {
     }
 }
 
+/// Result: result.
 pub type Result<T> = std::result::Result<T, ModelError>;
 
 #[cfg(feature = "candle")]
 use candle_core::Tensor;
 
+/// ModelBackend: model backend trait.
 pub trait ModelBackend: Send + Sync {
     fn forward(
         &mut self,
