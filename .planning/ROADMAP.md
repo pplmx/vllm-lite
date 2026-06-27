@@ -6,6 +6,7 @@
 - ✅ **v17.0 Production Speculative Decoding** — Phases 17.1-17.4 (shipped 2026-05-13)
 - ✅ **v18.0 Multi-Model Speculative Decoding** — Phases 18.1-18.4 + Phase 19 gap closure (shipped 2026-06-27)
 - ✅ **v19.0 Codebase Health Audit** — Phases 20-24 (shipped 2026-06-27; analysis-only, no code changes; see `.planning/audit/` for deliverables)
+- 🚧 **v20.0 Codebase Remediation** — Phases 25-30 (in progress; BACKLOG.md-driven; 6 sub-phases v20.1-v20.6)
 
 ## Phases
 
@@ -19,6 +20,12 @@
 - [x] **Phase 22: Comments + Documentation Audit** - doc 覆盖率 / 模块文档 / 过期注释 / 外部文档 / ADR
 - [x] **Phase 23: API + Error Handling Audit** - API 一致性 / 错误类型 / 错误人体工学 / trait 设计 / 弃用卫生
 - [x] **Phase 24: Synthesis + Remediation Backlog** - 跨维度综合 + P0/P1/P2 优先级清单 + v20.0+ 迁移路线图
+- [ ] **Phase 25 (v20.1): P0 Critical Fixes** - 消除 vllm-model→vllm-dist 依赖 + ModelError enum + 8 个 trait object-safe + CudaGraphError thiserror
+- [ ] **Phase 26 (v20.2): Module Tree Restoration** - orphan 模块挂回 (kv_cache_fp8 + debug) + stage-info 重命名 + 3 个测试文件迁移 + vllm-dist feature-gate
+- [ ] **Phase 27 (v20.3): Error Handling Standardization** - 13 个 error enum 用 thiserror + Result<_,String> 消除 + mutex-poison 修复 + EngineError 4 新变体 + anyhow 边界
+- [ ] **Phase 28 (v20.4): Documentation Coverage Push** - workspace doc 7.6%→≥60% + 776 个 pub item /// + 121 个文件 //! + README 修复
+- [ ] **Phase 29 (v20.5): External Docs + ADRs** - README/AGENTS.md 调和 + 12 个新 ADR
+- [ ] **Phase 30 (v20.6): Naming + Final Polish** - 7 P1 + 19 P2 命名 + #[deprecated] 卫生 + 注释清理 + 最终验证 (test pass + clippy + fmt)
 
 ## Phase Details
 
@@ -123,7 +130,7 @@ Plans:
 
 ---
 
-### 📋 v19.0 Codebase Health Audit (Phases 20-24) — PLANNED (analysis-only)
+### ✅ v19.0 Codebase Health Audit (Phases 20-24) — SHIPPED 2026-06-27
 
 **Milestone Goal:** 对 vllm-lite 整个 codebase 做多维度深度审计(架构 / 命名 / 注释文档 / API + 错误处理),产出 P0/P1/P2 优先级清单与具体修复建议。**本 milestone 不执行任何代码修改**,清单用于指导后续 milestone(v20.0+)的重构工作。
 
@@ -158,7 +165,7 @@ Synthesis phase (Phase 24) reads all four dimension reports and produces:
 
 Plans:
 
-- [ ] 20-01: Architecture audit — 1 subagent dispatch producing REPORT.md + SUMMARY.md (no code changes)
+- [x] 20-01: Architecture audit — 1 subagent dispatch producing REPORT.md + SUMMARY.md (no code changes)
 
 #### Phase 21: Naming Audit
 
@@ -177,7 +184,7 @@ Plans:
 
 Plans:
 
-- [ ] 21-01: Naming audit — 1 subagent dispatch producing REPORT.md + SUMMARY.md (no code changes)
+- [x] 21-01: Naming audit — 1 subagent dispatch producing REPORT.md + SUMMARY.md (no code changes)
 
 #### Phase 22: Comments + Documentation Audit
 
@@ -196,7 +203,7 @@ Plans:
 
 Plans:
 
-- [ ] 22-01: Comments + documentation audit — 1 subagent dispatch producing REPORT.md + SUMMARY.md (no code changes)
+- [x] 22-01: Comments + documentation audit — 1 subagent dispatch producing REPORT.md + SUMMARY.md (no code changes)
 
 #### Phase 23: API + Error Handling Audit
 
@@ -215,7 +222,7 @@ Plans:
 
 Plans:
 
-- [ ] 23-01: API + error handling audit — 1 subagent dispatch producing REPORT.md + SUMMARY.md (no code changes)
+- [x] 23-01: API + error handling audit — 1 subagent dispatch producing REPORT.md + SUMMARY.md (no code changes)
 
 #### Phase 24: Synthesis + Remediation Backlog
 
@@ -234,14 +241,232 @@ Plans:
 
 Plans:
 
-- [ ] 24-01: Cross-dimensional synthesis + backlog + v20.0+ migration roadmap — consumes Phases 20-23 outputs, produces SYNTHESIS.md / BACKLOG.md / MIGRATION-ROADMAP.md
+- [x] 24-01: Cross-dimensional synthesis + backlog + v20.0+ migration roadmap — consumes Phases 20-23 outputs, produces SYNTHESIS.md / BACKLOG.md / MIGRATION-ROADMAP.md
+
+---
+
+### 🚧 v20.0 Codebase Remediation (Phases 25-30) — IN PROGRESS
+
+**Milestone Goal:** 执行 v19.0 审计产出的修复 backlog,按 MIGRATION-ROADMAP.md 提议顺序执行 6 个子 phase(v20.1→v20.6),系统化恢复 codebase 健康度。**这是 v19.0 审计清单的修复 milestone**,所有改动基于 `.planning/audit/BACKLOG.md` 的 100 个 finding。
+
+**Remediation Execution Model:**
+
+Each remediation phase produces:
+
+1. Code changes addressing its assigned requirements (P0 fixes, module tree, errors, docs, ADRs, naming)
+2. New unit / integration tests verifying the fix (≥1 test per requirement)
+3. Updated `AGENTS.md` / `Cargo.toml` / `README.md` reflecting any convention or scope changes
+4. Phase summary capturing before/after metrics (test count, doc coverage %, clippy warnings, deprecated markers)
+
+**Constraints (apply to ALL v20.0 phases):**
+
+- All 287+ existing tests must remain green throughout (FINAL-01 invariant)
+- Public API removals require `#[deprecated(since, note)]` markers + migration path (DEP-01/02)
+- `vllm-dist` is feature-gated (not removed) — multi-node work is future (MT-07 + EXT-07 outcome)
+- `cargo clippy --workspace --all-targets -- -D warnings` must remain clean after each phase
+- No new features, no performance optimization, no architectural redesign — strictly backlog execution
+
+**Phase dependency graph:**
+
+```text
+25 (P0 critical fixes)
+   │
+   ├─→ 27 (error handling standardization)
+   │      └─ depends on 25 (ModelError must be enum first; From impls for new variants)
+   │
+   └─→ 26 (module tree + vllm-dist feature-gate)
+          └─ depends on 25 (vllm-dist feature-gate decision from P0-01)
+
+28 (doc coverage) ──→ 29 (external docs + ADRs)
+                          └─ depends on 28 (/// docs must exist before ADRs reference them)
+
+30 (naming + polish) — independent of 25-29; runs last by convention
+```
+
+**Parallel execution possible:** 25 → (26 ‖ 28) → (27 + 29) → 30.
+
+#### Phase 25 (v20.1): P0 Critical Fixes
+
+**Goal**: 消除 5 个 P0 架构 / API / 错误违规 — `vllm-model → vllm-dist` 边、`vllm-core → vllm-model` 边、`ModelError` struct、`CudaGraphError` 手写 impl、8 个 non-object-safe trait
+**Depends on**: v19.0 baseline (Phase 24 shipped)
+**Requirements**: P0-01, P0-02, P0-03, P0-04, P0-05
+**Success Criteria** (what must be TRUE):
+
+  1. `cargo tree -p vllm-model --no-default-features` 不再显示 `vllm-dist` 依赖边;`--features multi-node` 时边重新出现 — 验证 P0-01
+  2. `cargo build -p vllm-core --no-default-features` 不依赖 `vllm-model`;`--features cuda-graph` 时依赖建立 — 验证 P0-02
+  3. `ModelError` 改为 `pub enum`(可通过 `cargo doc --document-private-items | grep "enum ModelError"` 或 rustdoc JSON 验证);所有现有 `match ModelError` 站点迁移到 enum 变体;vllm-testing 新增 compile-fail 测试验证变体穷尽性 — 验证 P0-03
+  4. 8 个之前 non-object-safe 的 trait(`Architecture` × 12 用法、`FlashAttention` × 2、`DraftLoader`、`PipelineStage`、`AllReduce`、`QkRotaryEmb`、`FormatLoader`、`Quantization` 之一)均能 `dyn Trait` 编译;新增 `crates/testing/tests/dyn_safety.rs` 含 ≥8 compile-only 测试 — 验证 P0-04
+  5. `CudaGraphError` 改为 `#[derive(thiserror::Error)]`;手写 `Display`/`Error` impl 删除(~14 LOC);通过 `From<OldStrError>` 保留 semver 兼容 — 验证 P0-05
+  6. 所有 287+ pre-Phase-25 测试继续通过;`cargo clippy --workspace --all-targets -- -D warnings` 清洁
+
+**Rollback criteria** (Phase 25 是高风险架构变更,必须可回滚):
+
+- **Pre-Phase-25 baseline** — 开始前捕获最近 passing 的 commit SHA + `cargo tree -p vllm-model` 输出快照 + `cargo test --workspace` 全绿基线
+- **Failure triggers** — 任一即触发回滚:(a) 集成测试失败, (b) `cargo build --workspace` 默认 features 失败, (c) >2 个 P0 需求测试 regress, (d) `cargo clippy --workspace -- -D warnings` 报错
+- **Rollback action** — `git revert` 所有 Phase 25 提交(单 revert 链);恢复 pre-Phase-25 Cargo.toml 依赖图;通过 `pub type ModelError = OldModelError` 类型别名恢复 `ModelError` struct;所有新公开类型加 `#[deprecated(since = "0.X.0", note = "...")]`
+- **Backward-compat preservation** — Phase 25 中移除的任何 public API 项 MUST 保留 ≥1 个 minor 版本的 `#[deprecated]` 标记或类型别名;新公开类型在首个 stable release 必须标注 deprecated-with-migration-note
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] 25-01: Eliminate `vllm-model → vllm-dist` edge (feature-gate) — ARCH-F-11
+- [ ] 25-02: Feature-gate `vllm-core → vllm-model` (cuda-graph) — ARCH-F-12
+- [ ] 25-03: Convert `ModelError` struct → enum + migrate match sites — API-F-01
+- [ ] 25-04: Convert `CudaGraphError` to thiserror + From shim — API-F-03
+- [ ] 25-05: Make 8 traits object-safe (or split + associated types) + add `dyn_safety.rs` — API-F-02
+
+#### Phase 26 (v20.2): Module Tree Restoration + vllm-dist Feature-Gate
+
+**Goal**: 把 2 个 orphan 模块(`kv_cache_fp8.rs` 289 LOC、`debug.rs` 175 LOC)挂回模块树;重命名 stage-info 文件 `engine_v18_wiring.rs`;迁移 3 个 src/ 内的测试文件到 tests/;feature-gate `vllm-dist` (1,600 LOC) 防止默认构建
+**Depends on**: Phase 25 (P0-01 已解决 `vllm-model → vllm-dist` 边,MT-07 的 feature-gate 决策顺承)
+**Requirements**: MT-01, MT-02, MT-03, MT-04, MT-05, MT-06, MT-07
+**Success Criteria** (what must be TRUE):
+
+  1. `kv_cache_fp8.rs`(289 LOC)在 `crates/model/src/components/mod.rs` 中以 `pub mod kv_cache_fp8;` 声明;`cargo build -p vllm-model` 编译包含之;`cargo doc -p vllm-model` 列出 kv_cache_fp8 符号 — 验证 MT-01
+  2. `debug.rs`(175 LOC)在 `crates/server/src/lib.rs` 中以 `pub mod debug;` 声明;`cargo doc -p vllm-server` 列出 debug 类型 — 验证 MT-02
+  3. `crates/core/tests/engine_v18_wiring.rs` 重命名为 `engine_wiring.rs`;所有 `mod` 声明与 import 站点更新;`git log --follow` 显示 rename history — 验证 MT-03
+  4. 3 个测试文件(`qwen3/model_tests.rs`、`qwen3_5/model_tests.rs`、`qwen3_5/speculative_tests.rs`)从 `src/` 迁至 `crates/model/tests/`;新 test 注册文件按需添加;原有测试计数保留 — 验证 MT-04/05/06
+  5. `vllm-dist` (~1,600 LOC) feature-gated behind `--features multi-node`;`cargo build --workspace`(默认 features)不编译 vllm-dist;`cargo build --workspace --features multi-node` 编译之 — 验证 MT-07
+  6. `cargo test --workspace` 通过,测试数 ≥287(v19.0 基线);orphan 模块挂回可能暴露并修复先前 dead-code 状态隐藏的编译错误(这是 feature,不是 bug)
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] 26-01: Wire `kv_cache_fp8.rs` + `debug.rs` into module trees — MT-01, MT-02
+- [ ] 26-02: Rename `engine_v18_wiring.rs` → `engine_wiring.rs` + update refs — MT-03
+- [ ] 26-03: Migrate 3 src/ test files to tests/ — MT-04, MT-05, MT-06
+- [ ] 26-04: Feature-gate `vllm-dist` behind `--features multi-node` — MT-07
+
+#### Phase 27 (v20.3): Error Handling Standardization
+
+**Goal**: 制定并实施项目级 error conventions — 13 个 error enum 统一用 thiserror、消除 10 处 `Result<_,String>` 反模式、25+ 处 mutex-poison `.expect()` 替换、4 个 `EngineError` 新变体、anyhow 边界、跨 crate From impl 完整
+**Depends on**: Phase 25 (`ModelError` 必须先 enum 化,否则 new variants 的 From impls 无法建立)
+**Requirements**: ERR-01, ERR-02, ERR-03, ERR-04, ERR-05, ERR-06, ERR-07
+**Success Criteria** (what must be TRUE):
+
+  1. 生产代码(测试 fixtures 除外) `Result<_, String>` 出现次数 = 0 — 通过 `rg "Result<.*String>" crates/*/src --type rust | wc -l` 验证返回 0 — 验证 ERR-01
+  2. workspace 内 13 个 error enum 全部 `#[derive(thiserror::Error)]`;手写 `Display`/`Error` impl 仅在 trivial wrapper 中保留,数量 ≤5 — 验证 ERR-02
+  3. 25+ 处 mutex-poison `.expect()` 替换为 `.lock().context("acquiring X mutex")?` 或等价错误传播;生产代码中残留 `.expect()` ≤5 且每处均有 `///` 文档说明为何保留 — 验证 ERR-03
+  4. `EngineError` enum 新增 4 个变体:`Timeout { op: String, ms: u64 }`、`Cancelled { request_id: u64 }`、`ResourceExhausted { resource: String }`、`BackendUnavailable { backend: String }`;每个变体有 enum-variant 编译测试覆盖 — 验证 ERR-05
+  5. 顶层 server binary(`vllm-server`) `main.rs` 与 CLI entry points 使用 `anyhow::Result`;结构化上下文通过 `.context()` / `.with_context()`;`?` 传播在 binary 边界终止 — 验证 ERR-06
+  6. 跨 crate error 路径均有显式 `From` impl;`cargo build --workspace` 不再需要 non-error 模块中的 `Into::<EngineError>` workaround — 验证 ERR-04
+  7. 所有 287+ 测试通过;新增 ≥10 个变体覆盖测试 + ≥5 个 context propagation 测试 — 验证 ERR-07
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] 27-01: Convert 13 error enums to `thiserror::Error` derive — ERR-02
+- [ ] 27-02: Eliminate `Result<_, String>` (10 sites) — ERR-01
+- [ ] 27-03: Replace 25+ mutex `.expect()` with `.context()?` — ERR-03
+- [ ] 27-04: Add 4 `EngineError` variants (`Timeout`/`Cancelled`/`ResourceExhausted`/`BackendUnavailable`) — ERR-05
+- [ ] 27-05: Add cross-crate `From` impls — ERR-04
+- [ ] 27-06: Adopt `anyhow` for server boundary error reporting — ERR-06
+- [ ] 27-07: Add `.context()` to error propagation paths — ERR-07
+
+#### Phase 28 (v20.4): Documentation Coverage Push
+
+**Goal**: 把 workspace doc 覆盖率从 7.6% 提升到 ≥60%(per-crate 目标 ≥80%);补 776 个 `pub` item 的 `///`;补 121 个文件的 `//!` 模块级文档;修复 README broken example + crate count + architecture 列表
+**Depends on**: v19.0 baseline (与 Phase 25-27 独立,可并行)
+**Requirements**: DOC-01, DOC-02, DOC-03, DOC-04, DOC-05, DOC-06, DOC-07
+**Success Criteria** (what must be TRUE):
+
+  1. workspace doc 覆盖率 ≥60%(`pub` item 数 / 有 `///` 的 item 数);提交新覆盖度测量脚本 `scripts/doc_coverage.sh` 输出 per-crate 表 — 验证 DOC-01
+  2. 776 个未文档化 `pub` item 新增 `///` doc comment;per-crate 目标:`traits` 0%→80%、`dist` 2.7%→80%、`server` 4.9%→80%、`model` 8.5%→80%、`core` 9.0%→80%、`testing` 12.9%→80% — 验证 DOC-02
+  3. 121 个 source file 新增 `//!` 模块级文档(232 个 source file 的 52%);剩余文件由首个 `pub` item 的 `///` 作为模块介绍 — 验证 DOC-03
+  4. `README.md` 中 `SchedulerEngine::new(config, 1024)` 错误示例修正为 v19 engine.rs 实际 3-arg 签名;`mdbook` 与 GitHub preview 渲染正常 — 验证 DOC-04
+  5. `README.md` "Supported Architectures" 表列出全部 10 个 registered architectures(Llama / Mistral / Qwen2/3 / Qwen3.5 / Gemma4 / Mixtral / Gemma3 / Phi-4 / Llama 4 / Mistral Small),通过 `rg "register.*Architecture" crates/model/src/ | wc -l` 验证 ≥10 — 验证 DOC-05
+  6. `README.md` crate count 从 "7 crates" 修正为 "6 crates";与 `Cargo.toml [workspace] members` 一致 — 验证 DOC-06
+  7. `AGENTS.md` "Architecture" 章节与当前 crate 结构 reconcile;file:line 引用经验证存在 — 验证 DOC-07
+  8. `cargo doc --workspace --no-deps` 构建无 warning;覆盖度报告附加到 phase summary
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] 28-01: Add coverage measurement script + baseline report — DOC-01 (mechanism)
+- [ ] 28-02: Backfill `///` on `traits` crate (0% → 80%, 14 items) — DOC-02
+- [ ] 28-03: Backfill `///` on `dist` crate (2.7% → 80%, 36 items) — DOC-02
+- [ ] 28-04: Backfill `///` on `server` crate (4.9% → 80%, 65 items) — DOC-02
+- [ ] 28-05: Backfill `///` on `model` crate (8.5% → 80%, 170 items) — DOC-02
+- [ ] 28-06: Backfill `///` on `core` crate (9.0% → 80%, 99 items) — DOC-02
+- [ ] 28-07: Backfill `///` on `testing` crate (12.9% → 80%, 12 items) — DOC-02
+- [ ] 28-08: Add `//!` to 121 source files — DOC-03
+- [ ] 28-09: Fix README code example + architecture list + crate count — DOC-04, DOC-05, DOC-06
+- [ ] 28-10: Reconcile AGENTS.md Architecture section — DOC-07
+
+#### Phase 29 (v20.5): External Documentation + ADRs
+
+**Goal**: 调和 README / AGENTS.md / Cargo.toml 的事实性陈述;新建 12 个 ADR 记录 v15.0-v20.0 的 tribal knowledge 决策;验证 `.planning/PROJECT.md` Core Value 是否漂移
+**Depends on**: Phase 28(`///` docs 必须先存在,否则 ADRs 中引用的 type 找不到文档)
+**Requirements**: EXT-01, EXT-02, EXT-03, EXT-04, EXT-05, EXT-06, EXT-07, EXT-08, EXT-09, EXT-10, EXT-11, EXT-12
+**Success Criteria** (what must be TRUE):
+
+  1. README.md / AGENTS.md / Cargo.toml claims reconciled — 无 crate count / architecture count / feature flag table 矛盾;通过 cross-grep 测试验证 — 验证 EXT-01
+  2. 12 个 ADR 新建于 `docs/adr/`,遵循 ADR-001/002 的 Context / Decision / Rationale / Consequences / Alternatives Considered 模板:
+     - ADR-003: Self-speculation 1/8 layer ratio (v16.0)
+     - ADR-004: FP8 E4M3 format for KV cache (v15.0)
+     - ADR-005: KV cache split across 3 locations (v1.0)
+     - ADR-006: Speculative decoding architecture overview (v16.0)
+     - ADR-007: Per-request draft routing RTE-01..03 (v18.0)
+     - ADR-008: Why `vllm-dist` is feature-gated (v20.1 outcome)
+     - ADR-009: FP8 quantizer orphan module decision (v20.2 outcome)
+     - ADR-010: CUDA graph feature gating strategy (v10.1)
+     - ADR-011: Cross-crate error type boundaries (v20.3 outcome)
+     - ADR-012..014: 2+ ADRs from v15.0-v18.0 tribal knowledge(TLS choice / K8s Lease vs Raft / etc.) — 验证 EXT-02..11
+  3. `.planning/PROJECT.md` "What This Is" + "Core Value" 与当前 codebase 比对;任何漂移记录并修正 — 验证 EXT-12
+  4. `cargo doc --workspace --no-deps` 构建清洁;ADRs 从 `.planning/PROJECT.md` "Key Decisions" 表交叉链接
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] 29-01: Reconcile README.md / AGENTS.md / Cargo.toml claims — EXT-01
+- [ ] 29-02: Create 9 ADR-003..011 (P0-P1 architecture decisions) — EXT-02..10
+- [ ] 29-03: Create 2+ tribal-knowledge ADRs from v15.0-v18.0 — EXT-11
+- [ ] 29-04: Verify + update `.planning/PROJECT.md` "What This Is" / "Core Value" — EXT-12
+
+#### Phase 30 (v20.6): Naming + Final Polish + Verification
+
+**Goal**: 应用 7 P1 + 19 P2 命名修复;为 v20.0 移除的 public API 加 `#[deprecated]` 标记 + 迁移路径;清理 stale comments 与 dead TODOs;运行 FINAL-01..04 全套验证(`cargo test` + `cargo clippy` + `cargo fmt` + 规划文档更新)
+**Depends on**: v19.0 baseline (与 Phase 25-29 独立;按惯例最后跑以汇聚所有先期变更)
+**Requirements**: NAM-01, NAM-02, DEP-01, DEP-02, CMT-01, CMT-02, FINAL-01, FINAL-02, FINAL-03, FINAL-04
+**Success Criteria** (what must be TRUE):
+
+  1. 7 个 P1 命名修复应用(per NAME-F-05..07):`data` 变量重命名(生产代码 31× 处)、`EmbeddingData` → `Embedding` 或文档化 `*Data` 后缀约定、AGENTS.md 正式化 verb policy(`get_`/`load_`/`read_`/`create_`/`build_`) — 验证 NAM-01
+  2. 19 个 P2 命名一致性修复应用 per NAME-F-08..20(文件重命名 `flash_v3.rs` → `flash_attention_v3.rs`、AGENTS.md 补 `*Manager` 后缀文档、builder/build/get/load/create/read verb policy、async/sync split rationale、tensor-math 单字母变量豁免、test-file location 约定) — 验证 NAM-02
+  3. 所有 v20.0 移除的 public API item 标记 `#[deprecated(since = "0.X.0", note = "use NewName instead")]`,带 `since` 与 `note` 字段(DEP-01);v20.0 新增 `#[deprecated]` 标记数 ≥5(终值记录到 phase summary)
+  4. 迁移路径文档化:`MIGRATING.md`(新文件)或每个 deprecated item 的 inline `///` + `#[doc = "..."]` 迁移示例(DEP-02)
+  5. Stale comments 解决:per DOCS-F-12 `quantize/gguf.rs:7` placeholder;per DOCS-F-13 "Phase 18.3 will drive this" 注释在 `draft_registry.rs:434` 与 `engine.rs:327`(CMT-01)
+  6. Dead TODOs/FIXMEs(v19.0 审计发现)解决或标记 stale;终值 TODO/FIXME 计数 ≤3(per 项目优秀卫生基线)(CMT-02)
+  7. **FINAL-01**: 所有 287+ 测试 post-remediation 通过 — `cargo test --workspace --all-features` 返回 0 失败;测试数 ≥287(目标 297+,含 Phase 25 新增 ≥8 个 `dyn_safety` 测试 + Phase 27 新增 ≥15 个 error variant / context 测试)
+  8. **FINAL-02**: `cargo clippy --workspace --all-targets --all-features -- -D warnings` 清洁(FINAL-02)
+  9. **FINAL-03**: `cargo fmt --all --check` 清洁(FINAL-03)
+  10. **FINAL-04**: `.planning/PROJECT.md` 与 `.planning/STATE.md` 更新 v20.0 成果(Phase 25-30 结果、决策日志、未解决项移至 v20.7+ backlog)
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] 30-01: Apply 7 P1 naming fixes — NAM-01
+- [ ] 30-02: Apply 19 P2 naming consistency fixes — NAM-02
+- [ ] 30-03: Add `#[deprecated]` markers + migration paths — DEP-01, DEP-02
+- [ ] 30-04: Resolve stale comments (gguf placeholder + "Phase 18.3" comments) — CMT-01
+- [ ] 30-05: Resolve or mark-stale dead TODOs/FIXMEs — CMT-02
+- [ ] 30-06: FINAL-01 — `cargo test --workspace --all-features` 287+ tests pass
+- [ ] 30-07: FINAL-02 — `cargo clippy --workspace --all-targets --all-features -- -D warnings` clean
+- [ ] 30-08: FINAL-03 — `cargo fmt --all --check` clean
+- [ ] 30-09: FINAL-04 — Update `.planning/PROJECT.md` + `.planning/STATE.md` with v20.0 outcomes
 
 ---
 
 ## Progress
 
-**Execution Order:** 20 → 21 → 22 → 23 → 24
-**Audit Dimension Reports Parallelism:** Phases 20-23 各自独立可并行 dispatch(只读 codebase),但 Phase 24 必须在 20-23 全部完成后执行。
+**Execution Order:**
+v19.0: 20 → 21 → 22 → 23 → 24 (SHIPPED 2026-06-27)
+v20.0: 25 → (26 ‖ 28) → (27 + 29) → 30 (parallel where independent)
 
 | Phase                                              | Milestone | Plans Complete | Status      | Completed    |
 | -------------------------------------------------- | --------- | -------------- | ----------- | ------------ |
@@ -250,12 +475,18 @@ Plans:
 | 18.3 Request Routing + Fallback                    | v18.0     | 1/1            | Complete    | 2026-06-27   |
 | 18.4 Integration Tests + Benchmarks                | v18.0     | 1/1            | Complete    | 2026-06-27   |
 | 19 Wire v18.0 into Engine step loop                | v18.0     | 1/1            | Complete    | 2026-06-27   |
-| 20 Architecture Audit                              | v19.0     | 0/1            | Not started | -            |
-| 21 Naming Audit                                    | v19.0     | 0/1            | Not started | -            |
-| 22 Comments + Documentation Audit                  | v19.0     | 0/1            | Not started | -            |
-| 23 API + Error Handling Audit                      | v19.0     | 0/1            | Not started | -            |
-| 24 Synthesis + Remediation Backlog                 | v19.0     | 0/1            | Not started | -            |
+| 20 Architecture Audit                              | v19.0     | 1/1            | Complete    | 2026-06-27   |
+| 21 Naming Audit                                    | v19.0     | 1/1            | Complete    | 2026-06-27   |
+| 22 Comments + Documentation Audit                  | v19.0     | 1/1            | Complete    | 2026-06-27   |
+| 23 API + Error Handling Audit                      | v19.0     | 1/1            | Complete    | 2026-06-27   |
+| 24 Synthesis + Remediation Backlog                 | v19.0     | 1/1            | Complete    | 2026-06-27   |
+| 25 P0 Critical Fixes (v20.1)                       | v20.0     | 0/5            | Not started | -            |
+| 26 Module Tree Restoration (v20.2)                 | v20.0     | 0/4            | Not started | -            |
+| 27 Error Handling Standardization (v20.3)          | v20.0     | 0/7            | Not started | -            |
+| 28 Documentation Coverage Push (v20.4)             | v20.0     | 0/10           | Not started | -            |
+| 29 External Docs + ADRs (v20.5)                    | v20.0     | 0/4            | Not started | -            |
+| 30 Naming + Final Polish (v20.6)                   | v20.0     | 0/9            | Not started | -            |
 
 ---
 
-*Roadmap updated: 2026-06-27 — v19.0 phases defined (5 phases, 23/23 requirements mapped, analysis-only milestone, Phase 24 explicitly gates on Phases 20-23 outputs)*
+*Roadmap updated: 2026-06-27 — v20.0 phases defined (6 phases, 48/48 requirements mapped, BACKLOG-driven remediation, Phase 25 includes rollback criteria for P0 architectural changes, Phase 30 includes FINAL-01..04 verification gates)*

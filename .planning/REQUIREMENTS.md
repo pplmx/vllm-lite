@@ -163,8 +163,8 @@ Explicitly excluded from v20.0:
 | FINAL-04    | Phase 30 | Pending |
 
 **Coverage:**
-- v20.0 requirements: 46 total
-- Mapped to phases: 46
+- v20.0 requirements: 48 total
+- Mapped to phases: 48
 - Unmapped: 0 ✓
 
 ---
