@@ -1,5 +1,3 @@
-//! tls: tls.
-
 use rustls_pemfile::{certs, private_key};
 use std::fs;
 use std::sync::Arc;
@@ -33,7 +31,6 @@ pub struct TlsConfig {
 }
 
 impl TlsConfig {
-    /// new: new.
     pub fn new(cert_path: impl Into<String>, key_path: impl Into<String>) -> Self {
         Self {
             cert_path: cert_path.into(),
@@ -43,14 +40,12 @@ impl TlsConfig {
         }
     }
 
-    /// with_ca_cert: with ca cert.
     pub fn with_ca_cert(mut self, ca_cert_path: impl Into<String>) -> Self {
         self.ca_cert_path = Some(ca_cert_path.into());
         self.mtls = true;
         self
     }
 
-    /// load: load.
     pub fn load(&self) -> Result<ServerConfig, TlsError> {
         let cert_file = fs::File::open(&self.cert_path)
             .map_err(|e| TlsError::CertificateRead(e.to_string()))?;
@@ -111,7 +106,6 @@ pub struct TlsListener {
 }
 
 impl TlsListener {
-    /// new: new.
     pub fn new(config: TlsConfig) -> Result<Self, TlsError> {
         let server_config = config.load()?;
         Ok(Self {
@@ -119,13 +113,11 @@ impl TlsListener {
         })
     }
 
-    /// bind: bind.
     pub async fn bind(&self, addr: &str) -> Result<TcpListener, std::io::Error> {
         let listener = TcpListener::bind(addr).await?;
         Ok(listener)
     }
 
-    /// acceptor: acceptor.
     pub fn acceptor(&self) -> TlsAcceptor {
         TlsAcceptor::from(self.config.clone())
     }

@@ -15,7 +15,6 @@ use super::model::MixtralModel;
 pub struct MixtralArchitecture;
 
 impl MixtralArchitecture {
-    /// new: new.
     pub fn new() -> Self {
         Self
     }

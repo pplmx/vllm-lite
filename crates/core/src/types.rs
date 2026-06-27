@@ -1,5 +1,3 @@
-//! types: shared type definitions.
-
 use std::sync::Arc;
 use tokio::sync::mpsc;
 pub use vllm_traits::{Batch, BatchOutput, BlockId, SeqId, TokenId};
@@ -46,7 +44,8 @@ impl Default for AdaptiveDraftConfig {
 }
 
 impl AdaptiveDraftConfig {
-    /// builder: construct via builder for documented field ergonomics.
+    /// Returns a builder for configuring this type with the documented field defaults.
+    /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
     pub fn builder() -> AdaptiveDraftConfigBuilder {
         AdaptiveDraftConfigBuilder::default()
     }
@@ -59,42 +58,34 @@ pub struct AdaptiveDraftConfigBuilder {
 }
 
 impl AdaptiveDraftConfigBuilder {
-    /// with_min_draft_tokens: with min draft tokens.
     pub fn with_min_draft_tokens(mut self, v: usize) -> Self {
         self.inner.min_draft_tokens = v;
         self
     }
-    /// with_max_draft_tokens: with max draft tokens.
     pub fn with_max_draft_tokens(mut self, v: usize) -> Self {
         self.inner.max_draft_tokens = v;
         self
     }
-    /// with_target_acceptance_rate: with target acceptance rate.
     pub fn with_target_acceptance_rate(mut self, v: f32) -> Self {
         self.inner.target_acceptance_rate = v;
         self
     }
-    /// with_accuracy_window_size: with accuracy window size.
     pub fn with_accuracy_window_size(mut self, v: usize) -> Self {
         self.inner.accuracy_window_size = v;
         self
     }
-    /// with_adjustment_step: with adjustment step.
     pub fn with_adjustment_step(mut self, v: usize) -> Self {
         self.inner.adjustment_step = v;
         self
     }
-    /// with_cooldown_steps: with cooldown steps.
     pub fn with_cooldown_steps(mut self, v: usize) -> Self {
         self.inner.cooldown_steps = v;
         self
     }
-    /// with_ewma_alpha: with ewma alpha.
     pub fn with_ewma_alpha(mut self, v: f32) -> Self {
         self.inner.ewma_alpha = v;
         self
     }
-    /// with_deadband_threshold: with deadband threshold.
     pub fn with_deadband_threshold(mut self, v: f32) -> Self {
         self.inner.deadband_threshold = v;
         self
@@ -131,7 +122,6 @@ pub struct Request {
 }
 
 impl Request {
-    /// new: new.
     pub fn new(id: SeqId, prompt: Vec<TokenId>, max_tokens: usize) -> Self {
         Self {
             id,
@@ -143,7 +133,6 @@ impl Request {
         }
     }
 
-    /// with_priority: with priority.
     pub fn with_priority(mut self, priority: Priority) -> Self {
         self.priority = priority;
         self
@@ -184,7 +173,8 @@ impl Default for SamplingParams {
 }
 
 impl SamplingParams {
-    /// builder: construct via builder for documented field ergonomics.
+    /// Returns a builder for configuring this type with the documented field defaults.
+    /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
     pub fn builder() -> SamplingParamsBuilder {
         SamplingParamsBuilder::default()
     }
@@ -197,37 +187,30 @@ pub struct SamplingParamsBuilder {
 }
 
 impl SamplingParamsBuilder {
-    /// with_temperature: with temperature.
     pub fn with_temperature(mut self, v: f32) -> Self {
         self.inner.temperature = v;
         self
     }
-    /// with_top_k: with top k.
     pub fn with_top_k(mut self, v: usize) -> Self {
         self.inner.top_k = v;
         self
     }
-    /// with_top_p: with top p.
     pub fn with_top_p(mut self, v: f32) -> Self {
         self.inner.top_p = v;
         self
     }
-    /// with_repeat_penalty: with repeat penalty.
     pub fn with_repeat_penalty(mut self, v: f32) -> Self {
         self.inner.repeat_penalty = v;
         self
     }
-    /// with_beam_width: with beam width.
     pub fn with_beam_width(mut self, v: usize) -> Self {
         self.inner.beam_width = v;
         self
     }
-    /// with_length_penalty: with length penalty.
     pub fn with_length_penalty(mut self, v: f32) -> Self {
         self.inner.length_penalty = v;
         self
     }
-    /// with_max_retries: with max retries.
     pub fn with_max_retries(mut self, v: u32) -> Self {
         self.inner.max_retries = v;
         self
@@ -302,7 +285,8 @@ impl Default for SequencePackingConfig {
 }
 
 impl SequencePackingConfig {
-    /// builder: construct via builder for documented field ergonomics.
+    /// Returns a builder for configuring this type with the documented field defaults.
+    /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
     pub fn builder() -> SequencePackingConfigBuilder {
         SequencePackingConfigBuilder::default()
     }
@@ -315,22 +299,18 @@ pub struct SequencePackingConfigBuilder {
 }
 
 impl SequencePackingConfigBuilder {
-    /// with_enabled: with enabled.
     pub fn with_enabled(mut self, v: bool) -> Self {
         self.inner.enabled = v;
         self
     }
-    /// with_target_batch_size: with target batch size.
     pub fn with_target_batch_size(mut self, v: usize) -> Self {
         self.inner.target_batch_size = v;
         self
     }
-    /// with_max_batch_size: with max batch size.
     pub fn with_max_batch_size(mut self, v: usize) -> Self {
         self.inner.max_batch_size = v;
         self
     }
-    /// with_similarity_threshold: with similarity threshold.
     pub fn with_similarity_threshold(mut self, v: f32) -> Self {
         self.inner.similarity_threshold = v;
         self
@@ -401,7 +381,6 @@ pub struct SchedulerConfig {
 }
 
 impl SchedulerConfig {
-    /// new: new.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         max_num_seqs: usize,
@@ -473,7 +452,8 @@ impl Default for SchedulerConfig {
 }
 
 impl SchedulerConfig {
-    /// builder: construct via builder for documented field ergonomics.
+    /// Returns a builder for configuring this type with the documented field defaults.
+    /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
     pub fn builder() -> SchedulerConfigBuilder {
         SchedulerConfigBuilder::default()
     }
@@ -486,62 +466,50 @@ pub struct SchedulerConfigBuilder {
 }
 
 impl SchedulerConfigBuilder {
-    /// with_max_num_seqs: with max num seqs.
     pub fn with_max_num_seqs(mut self, v: usize) -> Self {
         self.inner.max_num_seqs = v;
         self
     }
-    /// with_max_num_batched_tokens: with max num batched tokens.
     pub fn with_max_num_batched_tokens(mut self, v: usize) -> Self {
         self.inner.max_num_batched_tokens = v;
         self
     }
-    /// with_max_consecutive_decode: with max consecutive decode.
     pub fn with_max_consecutive_decode(mut self, v: u32) -> Self {
         self.inner.max_consecutive_decode = v;
         self
     }
-    /// with_enable_pd_separation: with enable pd separation.
     pub fn with_enable_pd_separation(mut self, v: bool) -> Self {
         self.inner.enable_pd_separation = v;
         self
     }
-    /// with_prefill_chunk_size: with prefill chunk size.
     pub fn with_prefill_chunk_size(mut self, v: usize) -> Self {
         self.inner.prefill_chunk_size = v;
         self
     }
-    /// with_decode_preference_ratio: with decode preference ratio.
     pub fn with_decode_preference_ratio(mut self, v: f32) -> Self {
         self.inner.decode_preference_ratio = v;
         self
     }
-    /// with_enable_priority_scheduling: with enable priority scheduling.
     pub fn with_enable_priority_scheduling(mut self, v: bool) -> Self {
         self.inner.enable_priority_scheduling = v;
         self
     }
-    /// with_enable_dynamic_batching: with enable dynamic batching.
     pub fn with_enable_dynamic_batching(mut self, v: bool) -> Self {
         self.inner.enable_dynamic_batching = v;
         self
     }
-    /// with_min_batch_size: with min batch size.
     pub fn with_min_batch_size(mut self, v: usize) -> Self {
         self.inner.min_batch_size = v;
         self
     }
-    /// with_max_batch_size: with max batch size.
     pub fn with_max_batch_size(mut self, v: usize) -> Self {
         self.inner.max_batch_size = v;
         self
     }
-    /// with_cuda_graph: with cuda graph.
     pub fn with_cuda_graph(mut self, v: SchedulerCudaGraphConfig) -> Self {
         self.inner.cuda_graph = v;
         self
     }
-    /// with_packing: with packing.
     pub fn with_packing(mut self, v: SequencePackingConfig) -> Self {
         self.inner.packing = v;
         self

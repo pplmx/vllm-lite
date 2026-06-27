@@ -1,5 +1,3 @@
-//! leader_election: leader election.
-
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{RwLock, watch};
@@ -23,7 +21,6 @@ pub struct LeaderElection {
 }
 
 impl LeaderElection {
-    /// new: new.
     pub fn new() -> Self {
         Self {
             state: Arc::new(RwLock::new(LeadershipState::Follower)),
@@ -33,7 +30,6 @@ impl LeaderElection {
         }
     }
 
-    /// become_leader: become leader.
     pub async fn become_leader(&self, node_id: String) {
         let mut state = self.state.write().await;
         let mut is_leader = self.is_leader.write().await;
@@ -46,7 +42,6 @@ impl LeaderElection {
         info!(node_id = %node_id, "Became leader");
     }
 
-    /// step_down: step down.
     pub async fn step_down(&self) {
         let mut state = self.state.write().await;
         let mut is_leader = self.is_leader.write().await;
@@ -59,7 +54,6 @@ impl LeaderElection {
         info!("Stepped down from leadership");
     }
 
-    /// on_leader_lost: on leader lost.
     pub async fn on_leader_lost(&self, new_leader: Option<String>) {
         let mut leader_id = self.leader_id.write().await;
 
@@ -79,22 +73,18 @@ impl LeaderElection {
         }
     }
 
-    /// get_state: get state.
     pub async fn get_state(&self) -> LeadershipState {
         *self.state.read().await
     }
 
-    /// is_leader: is leader.
     pub async fn is_leader(&self) -> bool {
         *self.is_leader.read().await
     }
 
-    /// get_leader_id: get leader id.
     pub async fn get_leader_id(&self) -> Option<String> {
         self.leader_id.read().await.clone()
     }
 
-    /// is_leader_or_promote: is leader or promote.
     pub async fn is_leader_or_promote(&self, node_id: String, timeout: Duration) -> bool {
         let start = std::time::Instant::now();
 

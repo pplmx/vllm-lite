@@ -28,7 +28,6 @@ pub trait FormatLoader {
 pub struct SafetensorsLoader;
 
 impl SafetensorsLoader {
-    /// can_load: can load.
     pub fn can_load(path: &Path) -> bool {
         if path.exists() {
             if path.is_file() {

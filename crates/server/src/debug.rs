@@ -21,7 +21,6 @@ pub struct MetricsSnapshotResponse {
     pub cuda_graph_hit_rate: f64,
 }
 
-/// metrics_snapshot: metrics snapshot.
 pub async fn metrics_snapshot(State(state): State<ApiState>) -> Json<MetricsSnapshotResponse> {
     let metrics = state.metrics;
     let counters: HashMap<String, u64> = [
@@ -97,7 +96,6 @@ pub struct KvCacheDumpResponse {
     pub prefix_cache_hit_rate: f64,
 }
 
-/// kv_cache_dump: kv cache dump.
 pub async fn kv_cache_dump(State(state): State<ApiState>) -> Json<KvCacheDumpResponse> {
     let (response_tx, mut response_rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -128,7 +126,6 @@ pub struct TraceStatusResponse {
     pub spans_active: usize,
 }
 
-/// trace_status: trace status.
 pub async fn trace_status(State(_state): State<ApiState>) -> Json<TraceStatusResponse> {
     Json(TraceStatusResponse {
         tracing_enabled: true,

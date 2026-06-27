@@ -1,5 +1,3 @@
-//! auth: auth.
-
 use axum::{
     extract::Request,
     http::{HeaderMap, StatusCode, header::AUTHORIZATION},
@@ -50,7 +48,6 @@ impl RateLimiter {
 }
 
 impl AuthMiddleware {
-    /// new: new.
     pub fn new(api_keys: Vec<String>, max_requests: usize, window_secs: u64) -> Self {
         Self {
             api_keys: Arc::new(api_keys),
@@ -58,7 +55,6 @@ impl AuthMiddleware {
         }
     }
 
-    /// verify: verify.
     pub async fn verify(&self, headers: &HeaderMap) -> Result<String, StatusCode> {
         let auth_header = headers.get(AUTHORIZATION).and_then(|v| v.to_str().ok());
 
@@ -79,7 +75,6 @@ impl AuthMiddleware {
     }
 }
 
-/// auth_middleware: auth middleware.
 pub async fn auth_middleware(
     auth: axum::extract::State<Arc<AuthMiddleware>>,
     request: Request,

@@ -1,5 +1,3 @@
-//! observer: observer.
-
 use crate::types::{SeqId, TokenId};
 use std::sync::RwLock;
 
@@ -56,7 +54,6 @@ pub struct SchedulerObservers {
 }
 
 impl SchedulerObservers {
-    /// new: new.
     pub fn new() -> Self {
         Self {
             observers: RwLock::new(Vec::new()),
@@ -66,7 +63,6 @@ impl SchedulerObservers {
     /// MAX_OBSERVERS: max observers constant.
     pub const MAX_OBSERVERS: usize = 16;
 
-    /// register: register.
     pub fn register(
         &self,
         observer: Box<dyn SchedulerObserver>,
@@ -84,7 +80,6 @@ impl SchedulerObservers {
         Ok(())
     }
 
-    /// dispatch: dispatch.
     pub fn dispatch(&self, event: &ObserverEvent) {
         use std::panic::AssertUnwindSafe;
         if let Ok(observers) = self.observers.read() {

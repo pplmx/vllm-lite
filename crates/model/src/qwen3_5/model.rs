@@ -1,5 +1,3 @@
-//! model: model.
-
 #![allow(non_snake_case, clippy::too_many_arguments)]
 //! Qwen3.5 hybrid causal language model (GDN + full attention).
 
@@ -37,7 +35,6 @@ impl HybridLmConfig for Qwen3Config {
 }
 
 impl Qwen35HybridModel {
-    /// new: new.
     pub fn new(
         config: Qwen3Config,
         device: Device,
@@ -103,7 +100,6 @@ impl Qwen35HybridModel {
         ))
     }
 
-    /// from_weights: from weights.
     pub fn from_weights(
         config: Qwen3Config,
         device: Device,

@@ -1,5 +1,3 @@
-//! full: full.
-
 #![allow(non_snake_case)]
 //! Full (MRoPE + paged GQA) attention block for Qwen3.5 hybrid layers.
 
@@ -22,7 +20,6 @@ pub struct FullAttentionBlock35 {
 }
 
 impl FullAttentionBlock35 {
-    /// new: new.
     pub fn new(
         hidden_size: usize,
         num_heads: usize,
@@ -54,18 +51,15 @@ impl FullAttentionBlock35 {
         })
     }
 
-    /// with_attn_gate: with attn gate.
     pub fn with_attn_gate(mut self, gate: Linear) -> Self {
         self.gate = Some(gate);
         self
     }
 
-    /// forward: forward.
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
         self.forward_with_attn(x, |x| self.self_attn.forward(x))
     }
 
-    /// forward_prefill: forward prefill.
     pub fn forward_prefill(
         &self,
         x: &Tensor,
@@ -80,7 +74,6 @@ impl FullAttentionBlock35 {
         })
     }
 
-    /// forward_decode: forward decode.
     pub fn forward_decode(
         &self,
         x: &Tensor,
@@ -127,7 +120,6 @@ impl FullAttentionBlock35 {
 }
 
 impl FullAttentionBlock35 {
-    /// from_weights: from weights.
     pub fn from_weights(
         prefix: &str,
         weights: &HashMap<String, Tensor>,

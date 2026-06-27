@@ -49,19 +49,12 @@
 //! `.planning/audit/SYNTHESIS.md` (Theme: test architecture),
 //! Phase 31 plan `31-04` for the original evaluation.
 
-/// builders: builders module.
 pub mod builders;
-/// fixtures: fixtures module.
 pub mod fixtures;
-/// harness: harness module.
 pub mod harness;
-/// mocks: mocks module.
 pub mod mocks;
-/// request_factory: request factory module.
 pub mod request_factory;
-/// slow_model: slow model module.
 pub mod slow_model;
-/// utils: utils module.
 pub mod utils;
 
 // Curated top-level re-exports of the most-used test utilities.
@@ -73,7 +66,6 @@ pub use mocks::{ConstModel, FakeModel, IncrementModel, StubModel};
 pub use request_factory::RequestFactory;
 pub use slow_model::SlowModel;
 
-/// prelude: prelude module.
 ///
 /// Re-exports the commonly-used test utilities for `use vllm_testing::prelude::*;`.
 /// Excludes `SlowModel` (heavyweight; only needed for `#[ignore]` benchmark tests).

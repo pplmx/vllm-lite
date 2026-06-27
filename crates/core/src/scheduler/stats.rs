@@ -1,5 +1,3 @@
-//! stats: stats.
-
 use std::time::Instant;
 
 /// SchedulerStats: scheduler statistics.
@@ -23,7 +21,6 @@ impl Default for SchedulerStats {
 }
 
 impl SchedulerStats {
-    /// new: new.
     pub fn new() -> Self {
         Self {
             total_batches: 0,
@@ -38,7 +35,6 @@ impl SchedulerStats {
         }
     }
 
-    /// record_batch: record batch.
     pub fn record_batch(&mut self, batch_size: usize) {
         self.total_batches += 1;
         self.last_batch_size = batch_size;
@@ -47,22 +43,18 @@ impl SchedulerStats {
         self.last_update = Instant::now();
     }
 
-    /// record_prefill: record prefill.
     pub fn record_prefill(&mut self) {
         self.total_prefill_requests += 1;
     }
 
-    /// record_decode: record decode.
     pub fn record_decode(&mut self) {
         self.total_decode_requests += 1;
     }
 
-    /// record_preemption: record preemption.
     pub fn record_preemption(&mut self) {
         self.total_preemptions += 1;
     }
 
-    /// record_eviction: record eviction.
     pub fn record_eviction(&mut self) {
         self.total_evictions += 1;
     }

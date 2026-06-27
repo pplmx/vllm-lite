@@ -10,9 +10,7 @@ use vllm_traits::ModelBackend;
 use crate::components::TransformerBlock;
 use crate::config::ModelConfig;
 
-/// capabilities: capabilities module.
 pub mod capabilities;
-/// registry: registry module.
 pub mod registry;
 
 pub use capabilities::ArchCapabilities;

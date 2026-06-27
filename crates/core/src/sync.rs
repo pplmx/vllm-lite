@@ -1,5 +1,3 @@
-//! sync: sync.
-
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use crate::error::{EngineError, Result};

@@ -1,5 +1,3 @@
-//! mla_attention: mla attention.
-
 use crate::components::AttentionConfig;
 use crate::components::MlaAttention;
 use candle_core::{Result, Tensor};
@@ -10,7 +8,6 @@ pub struct Qwen3MlaAttention {
 }
 
 impl Qwen3MlaAttention {
-    /// new: new.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         hidden_size: usize,
@@ -39,12 +36,10 @@ impl Qwen3MlaAttention {
         Ok(Self { inner })
     }
 
-    /// forward: forward.
     pub fn forward(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
         self.inner.forward(x, positions)
     }
 
-    /// inner: inner.
     pub fn inner(&self) -> &MlaAttention {
         &self.inner
     }

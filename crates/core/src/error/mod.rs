@@ -1,6 +1,3 @@
-//! mod: module.
-
-/// recovery: recovery module.
 pub mod recovery;
 
 /// EngineError: engine error.

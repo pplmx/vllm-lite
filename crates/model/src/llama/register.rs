@@ -6,7 +6,6 @@ use crate::arch::{Architecture, ArchitectureRegistry};
 
 use super::arch::LlamaArchitecture;
 
-/// register: register.
 pub fn register(registry: &ArchitectureRegistry) {
     let factory: Arc<dyn Fn() -> Box<dyn Architecture> + Send + Sync> =
         Arc::new(|| Box::new(LlamaArchitecture::new()));

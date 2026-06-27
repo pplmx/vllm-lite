@@ -1,5 +1,3 @@
-//! sampling: sampling.
-
 #![allow(unused_variables)]
 
 use crate::types::TokenId;
@@ -9,7 +7,6 @@ fn random_f32() -> f32 {
     rand::random::<f32>()
 }
 
-/// greedy_sample: greedy sample.
 pub fn greedy_sample(logits: &[f32]) -> TokenId {
     trace!(vocab_size = logits.len(), "Greedy sampling");
     logits
@@ -25,7 +22,6 @@ pub fn greedy_sample(logits: &[f32]) -> TokenId {
         .0 as TokenId
 }
 
-/// temperature_sample: temperature sample.
 pub fn temperature_sample(logits: &[f32], temperature: f32) -> TokenId {
     trace!(
         vocab_size = logits.len(),
@@ -53,7 +49,6 @@ pub fn temperature_sample(logits: &[f32], temperature: f32) -> TokenId {
     (probs.len() - 1) as TokenId
 }
 
-/// top_p_sample: top p sample.
 pub fn top_p_sample(logits: &[f32], top_p: f32) -> TokenId {
     trace!(vocab_size = logits.len(), top_p = top_p, "Top-p sampling");
     if top_p >= 1.0 || logits.is_empty() {
@@ -96,7 +91,6 @@ pub fn top_p_sample(logits: &[f32], top_p: f32) -> TokenId {
     indexed[probs.len() - 1].0 as TokenId
 }
 
-/// top_k_sample: top k sample.
 pub fn top_k_sample(logits: &[f32], k: usize) -> TokenId {
     if k == 0 || logits.is_empty() {
         return greedy_sample(logits);
@@ -120,7 +114,6 @@ pub fn top_k_sample(logits: &[f32], k: usize) -> TokenId {
     temperature_sample(&masked, 1.0)
 }
 
-/// sample_batch: sample batch.
 pub fn sample_batch(
     logits_list: &[Vec<f32>],
     temperature: f32,
@@ -172,7 +165,6 @@ pub fn sample_batch(
         .collect()
 }
 
-/// apply_repeat_penalty: apply repeat penalty.
 pub fn apply_repeat_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penalty: f32) {
     if penalty == 1.0 || seen_tokens.is_empty() || logits.is_empty() {
         return;

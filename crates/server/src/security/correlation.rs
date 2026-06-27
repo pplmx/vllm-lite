@@ -1,5 +1,3 @@
-//! correlation: correlation.
-
 use axum::{extract::Request, http::HeaderValue, middleware::Next, response::Response};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -19,14 +17,12 @@ pub struct CorrelationIdMiddleware {
 }
 
 impl CorrelationIdMiddleware {
-    /// new: new.
     pub fn new() -> Self {
         Self {
             id_generator: Arc::new(RwLock::new(0)),
         }
     }
 
-    /// generate_id: generate id.
     pub async fn generate_id(&self) -> String {
         let mut counter = self.id_generator.write().await;
         *counter += 1;
@@ -40,7 +36,6 @@ impl CorrelationIdMiddleware {
         )
     }
 
-    /// extract_id: extract id.
     pub fn extract_id(headers: &axum::http::HeaderMap) -> Option<String> {
         headers
             .get(REQUEST_ID_HEADER)
@@ -55,7 +50,6 @@ impl Default for CorrelationIdMiddleware {
     }
 }
 
-/// correlation_id_middleware: correlation id middleware.
 pub async fn correlation_id_middleware(request: Request, next: Next) -> Response {
     let middleware = CorrelationIdMiddleware::new();
 

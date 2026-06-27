@@ -1,5 +1,3 @@
-//! manager: manager.
-
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -13,14 +11,12 @@ pub struct BatchManager {
 }
 
 impl BatchManager {
-    /// new: new.
     pub fn new() -> Self {
         Self {
             jobs: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    /// create_job: create job.
     pub async fn create_job(
         &self,
         endpoint: String,
@@ -42,22 +38,18 @@ impl BatchManager {
         id
     }
 
-    /// get_job: get job.
     pub async fn get_job(&self, id: &str) -> Option<BatchJob> {
         self.jobs.read().await.get(id).cloned()
     }
 
-    /// get_all_jobs: get all jobs.
     pub async fn get_all_jobs(&self) -> Vec<BatchJob> {
         self.jobs.read().await.values().cloned().collect()
     }
 
-    /// update_job: update job.
     pub async fn update_job(&self, job: BatchJob) {
         self.jobs.write().await.insert(job.id.clone(), job);
     }
 
-    /// add_result: add result.
     pub async fn add_result(&self, job_id: &str, result: BatchResultItem) {
         let mut jobs = self.jobs.write().await;
         if let Some(job) = jobs.get_mut(job_id) {
@@ -65,7 +57,6 @@ impl BatchManager {
         }
     }
 
-    /// set_completed: set completed.
     pub async fn set_completed(&self, job_id: &str) {
         let mut jobs = self.jobs.write().await;
         if let Some(job) = jobs.get_mut(job_id) {

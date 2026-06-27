@@ -41,7 +41,6 @@ impl GdnLinearConfig {
         }
     }
 
-    /// from_text_config: from text config.
     pub fn from_text_config(tc: &TextConfig) -> Self {
         Self {
             num_k_heads: tc.linear_num_key_heads(),
@@ -70,7 +69,6 @@ pub enum LayerType {
     FullAttention,
 }
 
-/// parse_layer_types: parse layer types.
 pub fn parse_layer_types(config: &Qwen3Config) -> Vec<LayerType> {
     if let Some(types) = config.layer_types() {
         types

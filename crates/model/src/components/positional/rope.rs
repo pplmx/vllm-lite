@@ -1,5 +1,3 @@
-//! rope: rope.
-
 use crate::qwen3::config::Qwen3Config;
 use candle_core::{Result, Tensor};
 
@@ -15,7 +13,6 @@ pub struct RoPE {
 }
 
 impl RoPE {
-    /// new: new.
     pub fn new(
         head_dim: usize,
         max_position: usize,
@@ -31,7 +28,6 @@ impl RoPE {
         }
     }
 
-    /// new_with_config: new with config.
     pub fn new_with_config(config: &Qwen3Config) -> Self {
         use candle_core::Device;
         let rope_scaling = config.rope_scaling();
@@ -44,17 +40,14 @@ impl RoPE {
         }
     }
 
-    /// scaling_factor: scaling factor.
     pub fn scaling_factor(&self) -> f32 {
         self.scaling_factor
     }
 
-    /// apply: apply.
     pub fn apply(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
         apply_rope(x, positions, self.theta)
     }
 
-    /// forward: forward.
     pub fn forward(&self, q: &Tensor, k: &Tensor, position: i64) -> Result<(Tensor, Tensor)> {
         let positions: Vec<i64> = (0..q.dim(1)? as i64).map(|i| position + i).collect();
         let q_out = apply_rope(q, &positions, self.theta)?;
@@ -63,7 +56,6 @@ impl RoPE {
     }
 }
 
-/// apply_rope: apply rope.
 pub fn apply_rope(query: &Tensor, positions: &[i64], theta: f32) -> Result<Tensor> {
     let (batch, seq_len, num_heads, head_dim) = query.dims4()?;
 
@@ -109,7 +101,6 @@ pub fn apply_rope(query: &Tensor, positions: &[i64], theta: f32) -> Result<Tenso
     result.transpose(1, 2)
 }
 
-/// precompute_rope_cache: precompute rope cache.
 pub fn precompute_rope_cache(seq_len: usize, head_dim: usize, theta: f32) -> Vec<(f32, f32)> {
     let mut cache = Vec::with_capacity(seq_len * head_dim / 2);
     for pos in 0..seq_len {

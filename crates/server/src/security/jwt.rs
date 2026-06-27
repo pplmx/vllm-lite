@@ -1,4 +1,3 @@
-//! jwt: jwt.
 //!
 //! `JwtValidator::validate` parses and verifies a JWT's signature. The
 //! verification algorithm is selected from an allowlist based on the
@@ -71,7 +70,6 @@ pub struct JwtConfig {
 }
 
 impl JwtConfig {
-    /// with_secret: with secret.
     pub fn with_secret(secret: impl Into<String>) -> Self {
         Self {
             secret: Some(secret.into()),
@@ -82,7 +80,6 @@ impl JwtConfig {
         }
     }
 
-    /// with_public_key: with public key.
     pub fn with_public_key(public_key_pem: impl Into<String>) -> Self {
         Self {
             secret: None,
@@ -93,13 +90,11 @@ impl JwtConfig {
         }
     }
 
-    /// with_issuer: with issuer.
     pub fn with_issuer(mut self, issuer: impl Into<String>) -> Self {
         self.issuer = issuer.into();
         self
     }
 
-    /// with_audience: with audience.
     pub fn with_audience(mut self, audience: impl Into<String>) -> Self {
         self.audience = audience.into();
         self
@@ -124,12 +119,10 @@ pub struct JwtValidator {
 }
 
 impl JwtValidator {
-    /// new: new.
     pub fn new(config: JwtConfig) -> Self {
         Self { config }
     }
 
-    /// validate: validate.
     ///
     /// Verifies the JWT's signature, then validates standard claims
     /// (iss, aud, exp). Returns the deserialized `Claims` on success.
@@ -216,7 +209,6 @@ impl JwtValidator {
         }
     }
 
-    /// extract_token: extract token.
     pub fn extract_token(auth_header: &str) -> Option<&str> {
         auth_header.strip_prefix("Bearer ")
     }
@@ -228,14 +220,12 @@ pub struct JwtAuthMiddleware {
 }
 
 impl JwtAuthMiddleware {
-    /// new: new.
     pub fn new(config: JwtConfig) -> Self {
         Self {
             validator: Arc::new(RwLock::new(JwtValidator::new(config))),
         }
     }
 
-    /// validate_request: validate request.
     pub async fn validate_request(&self, auth_header: &str) -> Result<Claims, JwtError> {
         let token = JwtValidator::extract_token(auth_header)
             .ok_or_else(|| JwtError::InvalidFormat("Missing Bearer token".to_string()))?;
@@ -244,7 +234,6 @@ impl JwtAuthMiddleware {
         validator.validate(token)
     }
 
-    /// update_config: update config.
     pub async fn update_config(&self, config: JwtConfig) {
         let mut validator = self.validator.write().await;
         *validator = JwtValidator::new(config);

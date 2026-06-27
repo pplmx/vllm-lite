@@ -15,7 +15,6 @@ use super::model::MistralModel;
 pub struct MistralArchitecture;
 
 impl MistralArchitecture {
-    /// new: new.
     pub fn new() -> Self {
         Self
     }

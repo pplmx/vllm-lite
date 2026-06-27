@@ -1,5 +1,3 @@
-//! phase_scheduler: phase scheduler.
-
 use crate::types::Phase;
 
 /// PhaseSwitchPolicy: phase switch policy.
@@ -21,7 +19,8 @@ impl Default for PhaseSwitchPolicy {
 }
 
 impl PhaseSwitchPolicy {
-    /// builder: construct via builder for documented field ergonomics.
+    /// Returns a builder for configuring this type with the documented field defaults.
+    /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
     pub fn builder() -> PhaseSwitchPolicyBuilder {
         PhaseSwitchPolicyBuilder::default()
     }
@@ -34,17 +33,14 @@ pub struct PhaseSwitchPolicyBuilder {
 }
 
 impl PhaseSwitchPolicyBuilder {
-    /// with_max_consecutive_decode: with max consecutive decode.
     pub fn with_max_consecutive_decode(mut self, v: u32) -> Self {
         self.inner.max_consecutive_decode = v;
         self
     }
-    /// with_prefill_priority_threshold: with prefill priority threshold.
     pub fn with_prefill_priority_threshold(mut self, v: usize) -> Self {
         self.inner.prefill_priority_threshold = v;
         self
     }
-    /// with_min_decode_batch_size: with min decode batch size.
     pub fn with_min_decode_batch_size(mut self, v: usize) -> Self {
         self.inner.min_decode_batch_size = v;
         self
@@ -74,7 +70,6 @@ pub struct PhaseScheduler {
 }
 
 impl PhaseScheduler {
-    /// new: new.
     pub fn new(switch_policy: PhaseSwitchPolicy) -> Self {
         Self {
             current_phase: Phase::Prefill,
@@ -119,7 +114,6 @@ impl PhaseScheduler {
         self.current_phase
     }
 
-    /// reset: reset.
     pub fn reset(&mut self) {
         self.current_phase = Phase::Prefill;
         self.consecutive_decode_rounds = 0;

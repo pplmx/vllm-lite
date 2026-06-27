@@ -1,5 +1,3 @@
-//! batch: batch.
-
 use crate::error::Result;
 use crate::sync::lock_mutex;
 use vllm_traits::{SeqId, TokenId};

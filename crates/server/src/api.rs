@@ -1,5 +1,3 @@
-//! api: api.
-
 use axum::{Json, extract::State};
 use serde::Serialize;
 use tokio::sync::mpsc;
@@ -26,7 +24,6 @@ pub struct HealthDetailResponse {
     pub kv_cache_usage_percent: Option<f32>,
 }
 
-/// health_details: health details.
 pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailResponse> {
     let (response_tx, mut response_rx) = mpsc::unbounded_channel();
     let _ = state
@@ -43,13 +40,11 @@ pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailR
     })
 }
 
-/// shutdown: shutdown.
 pub async fn shutdown(State(state): State<ApiState>) -> &'static str {
     let _ = state.engine_tx.send(EngineMessage::Shutdown);
     "Shutting down"
 }
 
-/// get_prometheus: get prometheus.
 pub async fn get_prometheus(State(state): State<ApiState>) -> String {
     let (response_tx, mut response_rx) = mpsc::unbounded_channel();
     state

@@ -1,8 +1,4 @@
-//! mod: module.
-
-/// allocator: allocator module.
 pub mod allocator;
-/// eviction: eviction module.
 pub mod eviction;
 
 pub use allocator::{BlockAllocator, BlockAllocatorStats};

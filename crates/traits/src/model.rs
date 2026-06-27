@@ -1,5 +1,3 @@
-//! model: model.
-
 use crate::types::{BatchOutput, SeqId, TokenId};
 
 /// ModelError: model error.

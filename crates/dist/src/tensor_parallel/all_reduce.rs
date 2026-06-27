@@ -1,5 +1,3 @@
-//! all_reduce: all reduce.
-
 use super::device_mesh::DeviceMesh;
 use std::sync::Arc;
 use vllm_traits::TensorParallelError;
@@ -28,7 +26,6 @@ pub struct NcclAllReduce {
 }
 
 impl NcclAllReduce {
-    /// new: new.
     pub fn new(mesh: Arc<DeviceMesh>) -> Self {
         Self { mesh }
     }

@@ -1,5 +1,3 @@
-//! tokenizer: tokenizer.
-
 use tokenizers::Tokenizer as HFTokenizer;
 
 /// TokenizerError: tokenizer error.
@@ -22,7 +20,6 @@ pub struct Tokenizer {
 }
 
 impl Tokenizer {
-    /// new: new.
     pub fn new() -> Self {
         Self {
             inner: None,
@@ -36,7 +33,6 @@ impl Tokenizer {
         }
     }
 
-    /// from_file: from file.
     pub fn from_file(path: &str) -> std::result::Result<Self, TokenizerError> {
         let tokenizer = HFTokenizer::from_file(path).map_err(|e| TokenizerError::LoadFailed {
             path: path.to_string(),
@@ -69,7 +65,6 @@ impl Tokenizer {
         })
     }
 
-    /// encode: encode.
     pub fn encode(&self, text: &str) -> Vec<u32> {
         if let Some(ref tokenizer) = self.inner {
             if let Ok(encoding) = tokenizer.encode(text, false) {
@@ -83,7 +78,6 @@ impl Tokenizer {
             .collect()
     }
 
-    /// decode: decode.
     pub fn decode(&self, tokens: &[u32]) -> String {
         if let Some(ref tokenizer) = self.inner {
             if let Ok(text) = tokenizer.decode(tokens, false) {
@@ -94,22 +88,18 @@ impl Tokenizer {
         tokens.iter().map(|t| format!("token_{} ", t)).collect()
     }
 
-    /// vocab_size: vocab size.
     pub fn vocab_size(&self) -> usize {
         self.vocab_size
     }
 
-    /// special_tokens: special tokens.
     pub fn special_tokens(&self) -> &[String] {
         &self.special_tokens
     }
 
-    /// is_special_token: is special token.
     pub fn is_special_token(&self, text: &str) -> bool {
         self.special_tokens.iter().any(|t| t.as_str() == text)
     }
 
-    /// clean_special_tokens: clean special tokens.
     pub fn clean_special_tokens(&self, text: &str) -> String {
         let mut result = text.to_string();
         for token in &self.special_tokens {
@@ -118,7 +108,6 @@ impl Tokenizer {
         result.trim().to_string()
     }
 
-    /// model_name: model name.
     pub fn model_name(&self) -> Option<String> {
         self.model_name.clone()
     }

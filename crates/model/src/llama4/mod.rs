@@ -6,9 +6,7 @@
 //! - SwiGLU MLP
 //! - RMSNorm
 
-/// arch: arch module.
 pub mod arch;
-/// register: register module.
 pub mod register;
 
 pub use arch::Llama4Architecture;

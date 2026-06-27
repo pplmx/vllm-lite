@@ -1,5 +1,3 @@
-//! types: shared type definitions.
-
 use serde::{Deserialize, Serialize};
 
 /// SimpleBatchRequest: simple batch request.
@@ -75,7 +73,6 @@ pub struct BatchJob {
 }
 
 impl BatchJob {
-    /// new: new.
     pub fn new(
         id: String,
         endpoint: String,

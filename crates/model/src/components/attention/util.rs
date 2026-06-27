@@ -16,7 +16,6 @@ pub struct AttentionConfig {
 }
 
 impl AttentionConfig {
-    /// new: new.
     pub fn new(tile_size: Option<usize>, use_fused: bool) -> Self {
         Self {
             tile_size,
@@ -24,7 +23,8 @@ impl AttentionConfig {
         }
     }
 
-    /// builder: construct via builder for documented field ergonomics.
+    /// Returns a builder for configuring this type with the documented field defaults.
+    /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
     pub fn builder() -> AttentionConfigBuilder {
         AttentionConfigBuilder::default()
     }
@@ -37,12 +37,10 @@ pub struct AttentionConfigBuilder {
 }
 
 impl AttentionConfigBuilder {
-    /// with_tile_size: with tile size.
     pub fn with_tile_size(mut self, v: Option<usize>) -> Self {
         self.inner.tile_size = v;
         self
     }
-    /// with_use_fused: with use fused.
     pub fn with_use_fused(mut self, v: bool) -> Self {
         self.inner.use_fused = v;
         self
@@ -53,7 +51,6 @@ impl AttentionConfigBuilder {
     }
 }
 
-/// expand_kv: expand kv.
 pub fn expand_kv(kv: &Tensor, num_q_heads: usize, num_kv_heads: usize) -> Result<Tensor> {
     if num_q_heads == num_kv_heads {
         return Ok(kv.clone());
@@ -89,7 +86,6 @@ pub fn expand_kv(kv: &Tensor, num_q_heads: usize, num_kv_heads: usize) -> Result
     kv.repeat(&[1, 1, repeat_factor, 1])
 }
 
-/// causal_mask: causal mask.
 pub fn causal_mask(seq_len: usize, device: &candle_core::Device) -> Result<Tensor> {
     let row_indices = Tensor::arange(0u32, seq_len as u32, device)?.reshape((1, 1, seq_len, 1))?;
     let col_indices = Tensor::arange(0u32, seq_len as u32, device)?.reshape((1, 1, 1, seq_len))?;
@@ -102,7 +98,6 @@ pub fn causal_mask(seq_len: usize, device: &candle_core::Device) -> Result<Tenso
     Ok(mask)
 }
 
-/// causal_mask_tile: causal mask tile.
 pub fn causal_mask_tile(
     batch_size: usize,
     start: usize,
@@ -125,7 +120,6 @@ pub fn causal_mask_tile(
     Tensor::from_slice(&mask, (batch_size, 1, tile_len, key_len), device)
 }
 
-/// paged_attention: paged attention.
 #[allow(clippy::too_many_arguments)]
 pub fn paged_attention(
     q: &Tensor,
@@ -154,7 +148,6 @@ pub fn paged_attention(
     Ok(attn_output)
 }
 
-/// tiled_attention: tiled attention.
 #[allow(clippy::too_many_arguments)]
 pub fn tiled_attention(
     q: &Tensor,

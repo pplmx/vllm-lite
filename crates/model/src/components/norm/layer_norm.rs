@@ -11,12 +11,10 @@ pub struct LnLayerNorm {
 }
 
 impl LnLayerNorm {
-    /// new: new.
     pub fn new(weight: Tensor, bias: Tensor, eps: f64) -> Self {
         Self { weight, bias, eps }
     }
 
-    /// forward: forward.
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let dims = x.dims();
 
@@ -39,7 +37,6 @@ impl Module for LnLayerNorm {
     }
 }
 
-/// layer_norm: layer norm.
 pub fn layer_norm(x: &Tensor, weight: &Tensor, bias: &Tensor, eps: f64) -> Result<Tensor> {
     let dims = x.dims();
 

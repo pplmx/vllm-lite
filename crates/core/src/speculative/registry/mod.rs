@@ -63,7 +63,6 @@ impl Default for DraftModelRegistry {
 }
 
 impl DraftModelRegistry {
-    /// new: new.
     pub fn new() -> Self {
         Self {
             drafts: RwLock::new(HashMap::new()),

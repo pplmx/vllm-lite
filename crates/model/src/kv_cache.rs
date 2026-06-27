@@ -12,7 +12,6 @@ pub struct MlaKvCache {
 }
 
 impl MlaKvCache {
-    /// new: new.
     pub fn new(
         num_layers: usize,
         kv_lora_rank: usize,
@@ -40,7 +39,6 @@ impl MlaKvCache {
         }
     }
 
-    /// write_compressed: write compressed.
     ///
     /// PERF-01 (v22.0): writes incrementally into the destination layer
     /// using `Tensor::slice_assign` so memory allocation is proportional
@@ -169,7 +167,6 @@ impl MlaKvCache {
         Ok(())
     }
 
-    /// read_compressed: read compressed.
     pub fn read_compressed(
         &self,
         layer: usize,
@@ -207,7 +204,6 @@ impl MlaKvCache {
         Tensor::cat(&parts, 0)?.unsqueeze(0)
     }
 
-    /// block_size: block size.
     pub fn block_size(&self) -> usize {
         self.block_size
     }

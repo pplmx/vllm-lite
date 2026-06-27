@@ -1,5 +1,3 @@
-//! lock_free: lock free.
-
 use crossbeam::channel::{Receiver, Sender, bounded};
 use serde::Serialize;
 use std::sync::Arc;
@@ -46,7 +44,6 @@ pub struct LockFreeMetrics {
 }
 
 impl LockFreeMetrics {
-    /// with_capacity: with capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         let (latency_tx, latency_rx) = bounded(capacity);
         let (batch_tx, batch_rx) = bounded(capacity);
@@ -72,68 +69,55 @@ impl LockFreeMetrics {
         }
     }
 
-    /// record_tokens: record tokens.
     pub fn record_tokens(&self, count: u64) {
         self.tokens_total.fetch_add(count, Ordering::Relaxed);
     }
 
-    /// record_request: record request.
     pub fn record_request(&self) {
         self.requests_total.fetch_add(1, Ordering::Relaxed);
     }
 
-    /// record_latency: record latency.
     pub fn record_latency(&self, ms: f64) {
         let _ = self.latency_sender.try_send(ms);
     }
 
-    /// record_batch_size: record batch size.
     pub fn record_batch_size(&self, size: usize) {
         let _ = self.batch_size_sender.try_send(size);
     }
 
-    /// record_request_start: record request start.
     pub fn record_request_start(&self) {
         self.requests_in_flight.fetch_add(1, Ordering::Relaxed);
     }
 
-    /// record_request_end: record request end.
     pub fn record_request_end(&self) {
         self.requests_in_flight.fetch_sub(1, Ordering::Relaxed);
     }
 
-    /// record_kv_cache_usage: record kv cache usage.
     pub fn record_kv_cache_usage(&self, used: u64, total: u64) {
         self.kv_cache_blocks_used.store(used, Ordering::Relaxed);
         self.kv_cache_blocks_total.store(total, Ordering::Relaxed);
     }
 
-    /// record_prefix_cache_hit: record prefix cache hit.
     pub fn record_prefix_cache_hit(&self) {
         self.prefix_cache_hits.fetch_add(1, Ordering::Relaxed);
     }
 
-    /// record_prefix_cache_request: record prefix cache request.
     pub fn record_prefix_cache_request(&self) {
         self.prefix_cache_requests.fetch_add(1, Ordering::Relaxed);
     }
 
-    /// record_prefill_tokens: record prefill tokens.
     pub fn record_prefill_tokens(&self, count: u64) {
         self.prefill_tokens.fetch_add(count, Ordering::Relaxed);
     }
 
-    /// record_decode_tokens: record decode tokens.
     pub fn record_decode_tokens(&self, count: u64) {
         self.decode_tokens.fetch_add(count, Ordering::Relaxed);
     }
 
-    /// record_scheduler_wait_time: record scheduler wait time.
     pub fn record_scheduler_wait_time(&self, ms: f64) {
         let _ = self.scheduler_wait_sender.try_send(ms);
     }
 
-    /// requests_total: requests total.
     pub fn requests_total(&self) -> u64 {
         self.requests_total.load(Ordering::Relaxed)
     }
@@ -148,7 +132,6 @@ impl LockFreeMetrics {
         self.prefix_cache_requests.load(Ordering::Relaxed)
     }
 
-    /// snapshot: snapshot.
     pub fn snapshot(&self) -> MetricsSnapshot {
         let mut latencies = Vec::new();
         while let Ok(ms) = self.latency_receiver.try_recv() {
@@ -253,7 +236,6 @@ impl LockFreeMetrics {
 }
 
 impl LockFreeMetrics {
-    /// new: new.
     pub fn new() -> Self {
         Self::with_capacity(1024)
     }

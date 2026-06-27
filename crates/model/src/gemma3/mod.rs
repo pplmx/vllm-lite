@@ -6,9 +6,7 @@
 //! - GeGLU activation
 //! - RMSNorm with embedding table sharing
 
-/// arch: arch module.
 pub mod arch;
-/// register: register module.
 pub mod register;
 
 pub use arch::Gemma3Architecture;

@@ -18,7 +18,6 @@ impl Default for StubModel {
 }
 
 impl StubModel {
-    /// fn: fn constant.
     pub const fn returning(token: TokenId) -> Self {
         Self { token }
     }
@@ -164,7 +163,6 @@ pub struct ConstModel {
 }
 
 impl ConstModel {
-    /// new: new.
     pub fn new(return_token: TokenId) -> Self {
         Self { return_token }
     }
@@ -241,7 +239,6 @@ pub struct FakeModel {
 }
 
 impl FakeModel {
-    /// new: new.
     pub fn new(vocab_size: usize) -> Self {
         Self { vocab_size }
     }
@@ -323,7 +320,6 @@ pub struct NeverProgressModel {
 }
 
 impl NeverProgressModel {
-    /// new: new.
     pub fn new(token: TokenId) -> Self {
         Self { token }
     }

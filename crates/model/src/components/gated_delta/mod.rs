@@ -15,22 +15,18 @@ pub struct GatedDeltaConfig {
 }
 
 impl GatedDeltaConfig {
-    /// key_dim: key dim.
     pub fn key_dim(&self) -> usize {
         self.num_k_heads * self.key_head_dim
     }
 
-    /// value_dim: value dim.
     pub fn value_dim(&self) -> usize {
         self.num_v_heads * self.value_head_dim
     }
 
-    /// qkv_proj_dim: qkv proj dim.
     pub fn qkv_proj_dim(&self) -> usize {
         2 * self.key_dim() + self.value_dim()
     }
 
-    /// conv_state_width: conv state width.
     pub fn conv_state_width(&self) -> usize {
         self.conv_kernel_size.saturating_sub(1)
     }
@@ -44,7 +40,6 @@ pub struct GatedDeltaState {
 }
 
 impl GatedDeltaState {
-    /// new: new.
     pub fn new(
         batch: usize,
         config: &GatedDeltaConfig,
@@ -255,7 +250,6 @@ pub fn gated_delta_recurrent(
     gated_delta_recurrent_with_state(q, k, v, g, beta, None)
 }
 
-/// gated_delta_recurrent_with_state: gated delta recurrent with state.
 pub fn gated_delta_recurrent_with_state(
     q: &Tensor,
     k: &Tensor,
@@ -292,7 +286,6 @@ pub fn gated_delta_recurrent_with_state(
 }
 
 impl GatedDeltaNet {
-    /// from_components: from components.
     #[allow(clippy::too_many_arguments)]
     pub fn from_components(
         config: GatedDeltaConfig,
@@ -320,12 +313,10 @@ impl GatedDeltaNet {
         }
     }
 
-    /// forward: forward.
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
         self.forward_prefill(x).map(|(out, _)| out)
     }
 
-    /// forward_prefill: forward prefill.
     pub fn forward_prefill(&self, x: &Tensor) -> CandleResult<(Tensor, GatedDeltaState)> {
         let residual = x.clone();
         let (batch, seq_len, _hidden) = x.dims3()?;
@@ -362,7 +353,6 @@ impl GatedDeltaNet {
         Ok((output, GatedDeltaState { recurrent, conv }))
     }
 
-    /// forward_decode: forward decode.
     pub fn forward_decode(&self, x: &Tensor, state: &mut GatedDeltaState) -> CandleResult<Tensor> {
         let residual = x.clone();
         let (batch, seq_len, _hidden) = x.dims3()?;
@@ -424,12 +414,10 @@ impl GatedDeltaNet {
         self.norm.forward(&output)
     }
 
-    /// a_log: a log.
     pub fn a_log(&self) -> &Tensor {
         &self.a_log
     }
 
-    /// dt_bias: dt bias.
     pub fn dt_bias(&self) -> &Tensor {
         &self.dt_bias
     }

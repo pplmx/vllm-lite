@@ -6,17 +6,12 @@
 //! `paged_attention`, `tiled_attention`, `AttentionConfig`) live in
 //! the `util` module and are re-exported here for convenience.
 
-/// flash: flash module.
 pub mod flash;
 /// flash_attention_v3: flash attention v3 module.
 pub mod flash_attention_v3;
-/// gqa: gqa module.
 pub mod gqa;
-/// mla: mla module.
 pub mod mla;
-/// paged_gqa: paged gqa module.
 pub mod paged_gqa;
-/// rope_gqa: rope gqa module.
 pub mod rope_gqa;
 /// util: shared attention utilities (expand_kv, causal_mask, paged/tiled attention).
 pub mod util;

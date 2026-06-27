@@ -1,10 +1,5 @@
-//! mod: module.
-
-/// cuda_graph: cuda graph module.
 pub mod cuda_graph;
-/// flash_attention: flash attention module.
 pub mod flash_attention;
-/// fused_mlp: fused mlp module.
 pub mod fused_mlp;
 
 pub use cuda_graph::{

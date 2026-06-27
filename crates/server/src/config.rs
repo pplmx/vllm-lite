@@ -1,5 +1,3 @@
-//! config: configuration types and loaders.
-
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -86,7 +84,6 @@ pub struct AuthConfig {
 }
 
 impl AuthConfig {
-    /// resolve_api_keys: resolve api keys.
     pub fn resolve_api_keys(&self) -> Vec<String> {
         let mut keys = self.api_keys.clone();
 
@@ -251,7 +248,6 @@ impl Default for AppConfig {
 }
 
 impl AppConfig {
-    /// load: load.
     pub fn load(path: Option<PathBuf>) -> Self {
         let mut config = Self::default();
 
@@ -279,7 +275,6 @@ impl AppConfig {
         config
     }
 
-    /// validate: validate.
     pub fn validate(&self) -> Result<(), ConfigValidationErrors> {
         let mut errors = Vec::new();
 

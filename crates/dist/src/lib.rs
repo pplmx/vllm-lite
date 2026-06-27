@@ -1,16 +1,8 @@
-//! dist: crate root.
-
-/// distributed_kv: distributed kv module.
 pub mod distributed_kv;
-/// error: error module.
 pub mod error;
-/// grpc: grpc module.
 pub mod grpc;
-/// pipeline: pipeline module.
 pub mod pipeline;
-/// tensor_parallel: tensor parallel module.
 pub mod tensor_parallel;
-/// types: types module.
 pub mod types;
 
 pub use distributed_kv::{CacheConfig, CacheMessage, DistributedKVCache, NodeId};

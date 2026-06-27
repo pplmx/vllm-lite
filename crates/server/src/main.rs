@@ -1,5 +1,3 @@
-//! main: binary entry point.
-
 mod debug;
 
 use axum::{

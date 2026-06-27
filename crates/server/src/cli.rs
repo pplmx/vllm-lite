@@ -1,5 +1,3 @@
-//! cli: cli.
-
 use crate::config::AppConfig;
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
@@ -188,7 +186,6 @@ struct ConfigArgs {
 }
 
 impl CliArgs {
-    /// to_app_config: to app config.
     pub fn to_app_config(&self) -> AppConfig {
         let mut config = AppConfig::load(self.config.config.clone());
 
@@ -220,7 +217,6 @@ impl CliArgs {
         config
     }
 
-    /// model_path: model path.
     pub fn model_path(&self) -> &PathBuf {
         &self.model.model
     }
