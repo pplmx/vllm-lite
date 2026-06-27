@@ -111,12 +111,6 @@ impl DraftLoader for BenchLoader {
     }
 }
 
-impl Default for BenchLoader {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 // ───────────────────────── Harness ────────────────────────────────
 
 struct BenchHarness {
