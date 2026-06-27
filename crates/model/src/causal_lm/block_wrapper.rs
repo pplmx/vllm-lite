@@ -14,7 +14,7 @@ pub struct BlockWrapper<B> {
 }
 
 impl<B> BlockWrapper<B> {
-/// new: new.
+    /// new: new.
     pub fn new(inner: B, config: &ModelConfig) -> Self {
         Self {
             inner_dim: config.head_dim,
@@ -23,7 +23,7 @@ impl<B> BlockWrapper<B> {
         }
     }
 
-/// inner: inner.
+    /// inner: inner.
     pub fn inner(&self) -> &B {
         &self.inner
     }

@@ -40,13 +40,13 @@ pub struct QuantizationConfig {
 }
 
 impl QuantizedTensor {
-/// dequantize_to_f16: dequantize to f16.
+    /// dequantize_to_f16: dequantize to f16.
     pub fn dequantize_to_f16(&self) -> Result<Tensor> {
         let dequantized = self.dequantize_to_f32()?;
         dequantized.to_dtype(DType::F16)
     }
 
-/// dequantize_to_f32: dequantize to f32.
+    /// dequantize_to_f32: dequantize to f32.
     pub fn dequantize_to_f32(&self) -> Result<Tensor> {
         let total_elements: usize = self.shape.iter().product();
         let data: Vec<f32> = vec![0.0; total_elements];

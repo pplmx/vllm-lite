@@ -18,7 +18,7 @@ pub struct Gemma3Architecture {
 }
 
 impl Gemma3Architecture {
-/// new: new.
+    /// new: new.
     pub fn new() -> Self {
         Self {
             sliding_window: 4096,
@@ -39,7 +39,7 @@ pub struct Gemma3BlockWrapper {
 }
 
 impl Gemma3BlockWrapper {
-/// new: new.
+    /// new: new.
     pub fn new(config: &ModelConfig) -> Self {
         Self {
             inner_dim: config.head_dim * config.num_heads,
@@ -153,7 +153,7 @@ pub struct Gemma3Model {
 }
 
 impl Gemma3Model {
-/// new: new.
+    /// new: new.
     pub fn new(
         config: ModelConfig,
         device: Device,

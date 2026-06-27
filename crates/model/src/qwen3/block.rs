@@ -58,7 +58,7 @@ impl PagedDecoderBlock for TransformerBlock {
 }
 
 impl TransformerBlock {
-/// new: new.
+    /// new: new.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         hidden_size: usize,
@@ -107,7 +107,7 @@ impl TransformerBlock {
         )))
     }
 
-/// new_with_tp: new with tp.
+    /// new_with_tp: new with tp.
     #[cfg(feature = "multi-node")]
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_tp(
@@ -155,7 +155,7 @@ impl TransformerBlock {
         )))
     }
 
-/// new_with_weights: new with weights.
+    /// new_with_weights: new with weights.
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_weights(
         hidden_size: usize,
@@ -238,7 +238,7 @@ impl TransformerBlock {
         )))
     }
 
-/// from_weights: from weights.
+    /// from_weights: from weights.
     pub fn from_weights(
         config: &crate::config::ModelConfig,
         layer_idx: usize,

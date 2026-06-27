@@ -21,14 +21,14 @@ impl Default for ArchitectureRegistry {
 }
 
 impl ArchitectureRegistry {
-/// new: new.
+    /// new: new.
     pub fn new() -> Self {
         Self {
             architectures: RwLock::new(HashMap::new()),
         }
     }
 
-/// register: register.
+    /// register: register.
     pub fn register(&self, name: &'static str, factory: ArchFactory) {
         self.architectures
             .write()
@@ -36,7 +36,7 @@ impl ArchitectureRegistry {
             .insert(name.to_string(), factory);
     }
 
-/// get: get.
+    /// get: get.
     pub fn get(&self, name: &str) -> Option<Box<dyn Architecture>> {
         self.architectures
             .read()
@@ -45,7 +45,7 @@ impl ArchitectureRegistry {
             .map(|factory| factory())
     }
 
-/// detect: detect.
+    /// detect: detect.
     pub fn detect(&self, config_json: &Value) -> Option<String> {
         let regs = self.architectures.read().ok()?;
         for (name, factory) in regs.iter() {
@@ -57,7 +57,7 @@ impl ArchitectureRegistry {
         None
     }
 
-/// names: names.
+    /// names: names.
     pub fn names(&self) -> Vec<String> {
         self.architectures
             .read()

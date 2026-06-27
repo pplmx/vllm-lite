@@ -47,13 +47,13 @@ pub struct GraphPreparedBatch {
 }
 
 impl GraphPreparedBatch {
-/// new: new.
+    /// new: new.
     pub fn new(batch: Batch) -> Self {
         let batch_size = batch.seq_ids.len();
         Self { batch, batch_size }
     }
 
-/// into_batch: into batch.
+    /// into_batch: into batch.
     pub fn into_batch(self) -> Batch {
         self.batch
     }

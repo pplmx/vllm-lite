@@ -34,12 +34,12 @@ impl Default for SpeculationConfig {
 }
 
 impl SpeculationConfig {
-/// builder: builder.
+    /// builder: builder.
     pub fn builder() -> SpeculationConfigBuilder {
         SpeculationConfigBuilder::default()
     }
 
-/// from_env: from env.
+    /// from_env: from env.
     pub fn from_env() -> Self {
         Self {
             draft_count: std::env::var("VLLM_SPECULATIVE_DRAFT_COUNT")
@@ -83,55 +83,55 @@ pub struct SpeculationConfigBuilder {
 }
 
 impl SpeculationConfigBuilder {
-/// draft_count: draft count.
+    /// draft_count: draft count.
     pub fn draft_count(mut self, count: usize) -> Self {
         self.config.draft_count = count;
         self
     }
 
-/// max_depth: max depth.
+    /// max_depth: max depth.
     pub fn max_depth(mut self, depth: usize) -> Self {
         self.config.max_depth = depth;
         self
     }
 
-/// temperature: temperature.
+    /// temperature: temperature.
     pub fn temperature(mut self, temp: f32) -> Self {
         self.config.temperature = temp;
         self
     }
 
-/// top_k: top k.
+    /// top_k: top k.
     pub fn top_k(mut self, k: usize) -> Self {
         self.config.top_k = k;
         self
     }
 
-/// top_p: top p.
+    /// top_p: top p.
     pub fn top_p(mut self, p: f32) -> Self {
         self.config.top_p = p;
         self
     }
 
-/// target_model: target model.
+    /// target_model: target model.
     pub fn target_model(mut self, model: String) -> Self {
         self.config.target_model = Arc::new(model);
         self
     }
 
-/// draft_layers: draft layers.
+    /// draft_layers: draft layers.
     pub fn draft_layers(mut self, layers: usize) -> Self {
         self.config.draft_layers = Some(layers);
         self
     }
 
-/// self_speculation: self speculation.
+    /// self_speculation: self speculation.
     pub fn self_speculation(mut self, enabled: bool) -> Self {
         self.config.self_speculation = enabled;
         self
     }
 
-/// build: build.
+    /// build: build.
     pub fn build(self) -> SpeculationConfig {
         self.config
     }

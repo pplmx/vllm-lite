@@ -121,87 +121,87 @@ pub struct Qwen3Config {
 }
 
 impl TextConfig {
-/// vocab_size: vocab size.
+    /// vocab_size: vocab size.
     pub fn vocab_size(&self) -> usize {
         self.vocab_size.unwrap_or(151936)
     }
 
-/// hidden_size: hidden size.
+    /// hidden_size: hidden size.
     pub fn hidden_size(&self) -> usize {
         self.hidden_size.unwrap_or(4096)
     }
 
-/// num_hidden_layers: num hidden layers.
+    /// num_hidden_layers: num hidden layers.
     pub fn num_hidden_layers(&self) -> usize {
         self.num_hidden_layers.unwrap_or(32)
     }
 
-/// num_attention_heads: num attention heads.
+    /// num_attention_heads: num attention heads.
     pub fn num_attention_heads(&self) -> usize {
         self.num_attention_heads.unwrap_or(32)
     }
 
-/// num_key_value_heads: num key value heads.
+    /// num_key_value_heads: num key value heads.
     pub fn num_key_value_heads(&self) -> usize {
         self.num_key_value_heads.unwrap_or(32)
     }
 
-/// intermediate_size: intermediate size.
+    /// intermediate_size: intermediate size.
     pub fn intermediate_size(&self) -> usize {
         self.intermediate_size.unwrap_or(11008)
     }
 
-/// rope_theta: rope theta.
+    /// rope_theta: rope theta.
     pub fn rope_theta(&self) -> f32 {
         self.rope_theta.unwrap_or(10000.0)
     }
 
-/// max_position_embeddings: max position embeddings.
+    /// max_position_embeddings: max position embeddings.
     pub fn max_position_embeddings(&self) -> usize {
         self.max_position_embeddings.unwrap_or(8192)
     }
 
-/// rms_norm_eps: rms norm eps.
+    /// rms_norm_eps: rms norm eps.
     pub fn rms_norm_eps(&self) -> f32 {
         self.rms_norm_eps.unwrap_or(1e-6)
     }
 
-/// layer_types: layer types.
+    /// layer_types: layer types.
     pub fn layer_types(&self) -> Option<&[String]> {
         self.layer_types.as_deref()
     }
 
-/// linear_num_key_heads: linear num key heads.
+    /// linear_num_key_heads: linear num key heads.
     pub fn linear_num_key_heads(&self) -> usize {
         self.linear_num_key_heads.unwrap_or(16)
     }
 
-/// linear_num_value_heads: linear num value heads.
+    /// linear_num_value_heads: linear num value heads.
     pub fn linear_num_value_heads(&self) -> usize {
         self.linear_num_value_heads.unwrap_or(64)
     }
 
-/// linear_key_head_dim: linear key head dim.
+    /// linear_key_head_dim: linear key head dim.
     pub fn linear_key_head_dim(&self) -> usize {
         self.linear_key_head_dim.unwrap_or(128)
     }
 
-/// linear_value_head_dim: linear value head dim.
+    /// linear_value_head_dim: linear value head dim.
     pub fn linear_value_head_dim(&self) -> usize {
         self.linear_value_head_dim.unwrap_or(128)
     }
 
-/// linear_conv_kernel_dim: linear conv kernel dim.
+    /// linear_conv_kernel_dim: linear conv kernel dim.
     pub fn linear_conv_kernel_dim(&self) -> usize {
         self.linear_conv_kernel_dim.unwrap_or(4)
     }
 
-/// full_attention_interval: full attention interval.
+    /// full_attention_interval: full attention interval.
     pub fn full_attention_interval(&self) -> usize {
         self.full_attention_interval.unwrap_or(4).max(1)
     }
 
-/// has_explicit_gdn_config: has explicit gdn config.
+    /// has_explicit_gdn_config: has explicit gdn config.
     pub fn has_explicit_gdn_config(&self) -> bool {
         self.linear_num_key_heads.is_some()
             || self.linear_num_value_heads.is_some()
@@ -212,63 +212,63 @@ impl TextConfig {
 }
 
 impl Qwen3Config {
-/// from_file: from file.
+    /// from_file: from file.
     pub fn from_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path)?;
         let config: Qwen3Config = serde_json::from_str(&content)?;
         Ok(config)
     }
 
-/// vocab_size: vocab size.
+    /// vocab_size: vocab size.
     pub fn vocab_size(&self) -> usize {
         self.vocab_size
             .or(self.text_config.as_ref().map(|c| c.vocab_size()))
             .unwrap_or(151936)
     }
 
-/// hidden_size: hidden size.
+    /// hidden_size: hidden size.
     pub fn hidden_size(&self) -> usize {
         self.hidden_size
             .or(self.text_config.as_ref().map(|c| c.hidden_size()))
             .unwrap_or(4096)
     }
 
-/// num_hidden_layers: num hidden layers.
+    /// num_hidden_layers: num hidden layers.
     pub fn num_hidden_layers(&self) -> usize {
         self.num_hidden_layers
             .or(self.text_config.as_ref().map(|c| c.num_hidden_layers()))
             .unwrap_or(32)
     }
 
-/// num_attention_heads: num attention heads.
+    /// num_attention_heads: num attention heads.
     pub fn num_attention_heads(&self) -> usize {
         self.num_attention_heads
             .or(self.text_config.as_ref().map(|c| c.num_attention_heads()))
             .unwrap_or(32)
     }
 
-/// num_key_value_heads: num key value heads.
+    /// num_key_value_heads: num key value heads.
     pub fn num_key_value_heads(&self) -> usize {
         self.num_key_value_heads
             .or(self.text_config.as_ref().map(|c| c.num_key_value_heads()))
             .unwrap_or(32)
     }
 
-/// intermediate_size: intermediate size.
+    /// intermediate_size: intermediate size.
     pub fn intermediate_size(&self) -> usize {
         self.intermediate_size
             .or(self.text_config.as_ref().map(|c| c.intermediate_size()))
             .unwrap_or(11008)
     }
 
-/// rope_theta: rope theta.
+    /// rope_theta: rope theta.
     pub fn rope_theta(&self) -> f32 {
         self.rope_theta
             .or(self.text_config.as_ref().map(|c| c.rope_theta()))
             .unwrap_or(10000.0)
     }
 
-/// max_position_embeddings: max position embeddings.
+    /// max_position_embeddings: max position embeddings.
     pub fn max_position_embeddings(&self) -> usize {
         self.max_position_embeddings
             .or(self
@@ -278,45 +278,45 @@ impl Qwen3Config {
             .unwrap_or(8192)
     }
 
-/// rms_norm_eps: rms norm eps.
+    /// rms_norm_eps: rms norm eps.
     pub fn rms_norm_eps(&self) -> f64 {
         self.rms_norm_eps
             .or(self.text_config.as_ref().map(|c| c.rms_norm_eps()))
             .unwrap_or(1e-6) as f64
     }
 
-/// tie_word_embeddings: tie word embeddings.
+    /// tie_word_embeddings: tie word embeddings.
     pub fn tie_word_embeddings(&self) -> bool {
         self.tie_word_embeddings.unwrap_or(false)
     }
 
-/// has_qk_norm: has qk norm.
+    /// has_qk_norm: has qk norm.
     pub fn has_qk_norm(&self) -> bool {
         self.has_qk_norm.unwrap_or(false)
     }
 
-/// rope_scaling: rope scaling.
+    /// rope_scaling: rope scaling.
     pub fn rope_scaling(&self) -> Option<&RopeScaling> {
         self.rope_scaling.as_ref()
     }
 
-/// rope_parameters: rope parameters.
+    /// rope_parameters: rope parameters.
     pub fn rope_parameters(&self) -> Option<&RopeParameters> {
         self.rope_parameters.as_ref()
     }
 
-/// head_dim: head dim.
+    /// head_dim: head dim.
     pub fn head_dim(&self) -> usize {
         self.head_dim
             .unwrap_or_else(|| self.hidden_size() / self.num_attention_heads())
     }
 
-/// layer_types: layer types.
+    /// layer_types: layer types.
     pub fn layer_types(&self) -> Option<&[String]> {
         self.text_config.as_ref().and_then(|c| c.layer_types())
     }
 
-/// full_attention_interval: full attention interval.
+    /// full_attention_interval: full attention interval.
     pub fn full_attention_interval(&self) -> usize {
         self.text_config
             .as_ref()
@@ -324,7 +324,7 @@ impl Qwen3Config {
             .unwrap_or(4)
     }
 
-/// attention_type: attention type.
+    /// attention_type: attention type.
     pub fn attention_type(&self) -> AttentionType {
         if self.q_len.is_some() || self.kv_len.is_some() {
             AttentionType::MLA

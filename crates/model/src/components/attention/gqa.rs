@@ -23,7 +23,7 @@ pub struct GqaAttention {
 }
 
 impl GqaAttention {
-/// new: new.
+    /// new: new.
     pub fn new(
         hidden_size: usize,
         num_heads: usize,
@@ -67,7 +67,7 @@ impl GqaAttention {
         })
     }
 
-/// new_with_weights: new with weights.
+    /// new_with_weights: new with weights.
     pub fn new_with_weights(
         _hidden_size: usize,
         num_heads: usize,
@@ -120,7 +120,7 @@ impl GqaAttention {
         })
     }
 
-/// forward: forward.
+    /// forward: forward.
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let batch_size = x.dims()[0];
         let seq_len = x.dims()[1];
@@ -186,7 +186,7 @@ impl GqaAttention {
         Ok(o)
     }
 
-/// expand_kv: expand kv.
+    /// expand_kv: expand kv.
     pub fn expand_kv(
         &self,
         kv: &Tensor,
@@ -196,14 +196,14 @@ impl GqaAttention {
         expand_kv(kv, num_q_heads, num_kv_heads)
     }
 
-/// paged_attention_fn: paged attention fn.
+    /// paged_attention_fn: paged attention fn.
     pub fn paged_attention_fn(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let attn_output = paged_attention(q, k, v, self.num_heads, self.head_dim)?;
         let o = self.o_proj.forward(&attn_output)?;
         Ok(o)
     }
 
-/// tiled_attention_fn: tiled attention fn.
+    /// tiled_attention_fn: tiled attention fn.
     pub fn tiled_attention_fn(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let tile_size = self.config.tile_size.unwrap_or(16);
         let attn_output = tiled_attention(q, k, v, self.num_heads, tile_size)?;
@@ -211,7 +211,7 @@ impl GqaAttention {
         Ok(o)
     }
 
-/// flash_attention_fn: flash attention fn.
+    /// flash_attention_fn: flash attention fn.
     pub fn flash_attention_fn(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let flash = GqaFlashAttention::new(self.num_heads, self.num_kv_heads, self.head_dim, true);
         let attn_output = flash.forward(q, k, v)?;
@@ -264,37 +264,37 @@ impl GqaAttention {
         }
     }
 
-/// num_heads: num heads.
+    /// num_heads: num heads.
     pub fn num_heads(&self) -> usize {
         self.num_heads
     }
 
-/// num_kv_heads: num kv heads.
+    /// num_kv_heads: num kv heads.
     pub fn num_kv_heads(&self) -> usize {
         self.num_kv_heads
     }
 
-/// head_dim: head dim.
+    /// head_dim: head dim.
     pub fn head_dim(&self) -> usize {
         self.head_dim
     }
 
-/// has_q_norm: has q norm.
+    /// has_q_norm: has q norm.
     pub fn has_q_norm(&self) -> bool {
         self.q_norm.is_some()
     }
 
-/// has_k_norm: has k norm.
+    /// has_k_norm: has k norm.
     pub fn has_k_norm(&self) -> bool {
         self.k_norm.is_some()
     }
 
-/// config: config.
+    /// config: config.
     pub fn config(&self) -> &AttentionConfig {
         &self.config
     }
 
-/// project_qkv: project qkv.
+    /// project_qkv: project qkv.
     pub fn project_qkv(&self, x: &Tensor) -> Result<(Tensor, Tensor, Tensor)> {
         let q = self.q_proj.forward(x)?;
         let k = self.k_proj.forward(x)?;
@@ -302,7 +302,7 @@ impl GqaAttention {
         Ok((q, k, v))
     }
 
-/// apply_q_norm_impl: apply q norm impl.
+    /// apply_q_norm_impl: apply q norm impl.
     pub fn apply_q_norm_impl(
         &self,
         q: Tensor,
@@ -321,7 +321,7 @@ impl GqaAttention {
         }
     }
 
-/// apply_k_norm_impl: apply k norm impl.
+    /// apply_k_norm_impl: apply k norm impl.
     pub fn apply_k_norm_impl(
         &self,
         k: Tensor,
@@ -340,7 +340,7 @@ impl GqaAttention {
         }
     }
 
-/// apply_q_norm_impl_flattened: apply q norm impl flattened.
+    /// apply_q_norm_impl_flattened: apply q norm impl flattened.
     pub fn apply_q_norm_impl_flattened(&self, q: Tensor) -> Result<Tensor> {
         if let Some(ref q_norm) = self.q_norm {
             let q = q_norm.forward(&q)?;
@@ -350,7 +350,7 @@ impl GqaAttention {
         }
     }
 
-/// apply_k_norm_impl_flattened: apply k norm impl flattened.
+    /// apply_k_norm_impl_flattened: apply k norm impl flattened.
     pub fn apply_k_norm_impl_flattened(&self, k: Tensor) -> Result<Tensor> {
         if let Some(ref k_norm) = self.k_norm {
             let k = k_norm.forward(&k)?;

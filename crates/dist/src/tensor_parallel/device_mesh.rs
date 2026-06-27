@@ -11,7 +11,7 @@ pub struct DeviceMesh {
 }
 
 impl DeviceMesh {
-/// new: new.
+    /// new: new.
     pub fn new(
         world_size: usize,
         rank: usize,
@@ -34,17 +34,17 @@ impl DeviceMesh {
         })
     }
 
-/// is_first_rank: is first rank.
+    /// is_first_rank: is first rank.
     pub fn is_first_rank(&self) -> bool {
         self.rank == 0
     }
 
-/// is_last_rank: is last rank.
+    /// is_last_rank: is last rank.
     pub fn is_last_rank(&self) -> bool {
         self.rank == self.world_size - 1
     }
 
-/// local_device_id: local device id.
+    /// local_device_id: local device id.
     pub fn local_device_id(&self) -> usize {
         self.device_ids[self.rank]
     }
@@ -62,7 +62,7 @@ pub struct NodeMesh {
 }
 
 impl NodeMesh {
-/// new: new.
+    /// new: new.
     pub fn new(
         num_nodes: usize,
         node_rank: usize,
@@ -99,22 +99,22 @@ impl NodeMesh {
         })
     }
 
-/// is_first_node: is first node.
+    /// is_first_node: is first node.
     pub fn is_first_node(&self) -> bool {
         self.node_rank == 0
     }
 
-/// is_last_node: is last node.
+    /// is_last_node: is last node.
     pub fn is_last_node(&self) -> bool {
         self.node_rank == self.num_nodes - 1
     }
 
-/// local_mesh: local mesh.
+    /// local_mesh: local mesh.
     pub fn local_mesh(&self) -> &DeviceMesh {
         &self.node_mesh[0]
     }
 
-/// peers: peers.
+    /// peers: peers.
     pub fn peers(&self) -> Vec<String> {
         let mut peers = Vec::new();
         for i in 0..self.num_nodes {

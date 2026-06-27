@@ -11,7 +11,7 @@ pub enum KvCacheDtype {
 }
 
 impl KvCacheDtype {
-/// bytes_per_element: bytes per element.
+    /// bytes_per_element: bytes per element.
     pub fn bytes_per_element(&self) -> usize {
         match self {
             KvCacheDtype::Fp16 => 2,
@@ -20,7 +20,7 @@ impl KvCacheDtype {
         }
     }
 
-/// memory_reduction_ratio: memory reduction ratio.
+    /// memory_reduction_ratio: memory reduction ratio.
     pub fn memory_reduction_ratio(&self) -> f32 {
         match self {
             KvCacheDtype::Fp16 => 1.0,
@@ -36,12 +36,12 @@ pub struct Fp8Quantizer {
 }
 
 impl Fp8Quantizer {
-/// new: new.
+    /// new: new.
     pub fn new(dtype: KvCacheDtype) -> Self {
         Self { dtype }
     }
 
-/// quantize: quantize.
+    /// quantize: quantize.
     pub fn quantize(&self, tensor: &Tensor) -> Result<Tensor> {
         match self.dtype {
             KvCacheDtype::Fp16 => Ok(tensor.clone()),
@@ -50,7 +50,7 @@ impl Fp8Quantizer {
         }
     }
 
-/// dequantize: dequantize.
+    /// dequantize: dequantize.
     pub fn dequantize(&self, tensor: &Tensor) -> Result<Tensor> {
         match self.dtype {
             KvCacheDtype::Fp16 => Ok(tensor.clone()),
@@ -75,24 +75,19 @@ impl Fp8Quantizer {
 
         match flat.dtype() {
             DType::F16 => {
-                let data: Vec<f32> = flat.to_vec1::<half::f16>()?
+                let data: Vec<f32> = flat
+                    .to_vec1::<half::f16>()?
                     .into_iter()
                     .map(|h| h.to_f32())
                     .collect();
 
-                let fp8_data: Vec<u8> = data
-                    .iter()
-                    .map(|&f| self.float32_to_fp8_e4m3(f))
-                    .collect();
+                let fp8_data: Vec<u8> = data.iter().map(|&f| self.float32_to_fp8_e4m3(f)).collect();
 
                 Tensor::from_slice(&fp8_data, shape, tensor.device())
             }
             DType::F32 => {
                 let data: Vec<f32> = flat.to_vec1()?;
-                let fp8_data: Vec<u8> = data
-                    .iter()
-                    .map(|&f| self.float32_to_fp8_e4m3(f))
-                    .collect();
+                let fp8_data: Vec<u8> = data.iter().map(|&f| self.float32_to_fp8_e4m3(f)).collect();
 
                 Tensor::from_slice(&fp8_data, shape, tensor.device())
             }
@@ -108,10 +103,8 @@ impl Fp8Quantizer {
         let flat = tensor.flatten_all()?;
 
         let data: Vec<u8> = flat.to_vec1()?;
-        let float_data: Vec<half::f16> = data
-            .iter()
-            .map(|&b| self.fp8_e4m3_to_float16(b))
-            .collect();
+        let float_data: Vec<half::f16> =
+            data.iter().map(|&b| self.fp8_e4m3_to_float16(b)).collect();
 
         let result = Tensor::from_slice(&float_data, shape, tensor.device())?;
         result.to_dtype(DType::F16)
@@ -165,14 +158,12 @@ impl Fp8Quantizer {
 
         let exp = biased_exp as i32 - 7 - 3;
 
-        let bits = (sign << 15)
-            | ((exp + 15) as u16 & 0x7FFF) << 10
-            | (mantissa << 7);
+        let bits = (sign << 15) | ((exp + 15) as u16 & 0x7FFF) << 10 | (mantissa << 7);
 
         half::f16::from_bits(bits)
     }
 
-/// estimate_memory_savings: estimate memory savings.
+    /// estimate_memory_savings: estimate memory savings.
     pub fn estimate_memory_savings(
         num_blocks: usize,
         block_size: usize,
@@ -249,7 +240,9 @@ mod tests {
         let dequantized = quantizer.dequantize(&quantized).unwrap();
 
         let original: Vec<f32> = tensor.to_vec1().unwrap();
-        let recovered: Vec<f32> = dequantized.to_vec1::<half::f16>().unwrap()
+        let recovered: Vec<f32> = dequantized
+            .to_vec1::<half::f16>()
+            .unwrap()
             .iter()
             .map(|h| h.to_f32())
             .collect();

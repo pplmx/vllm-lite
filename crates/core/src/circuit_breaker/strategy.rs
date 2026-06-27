@@ -21,7 +21,7 @@ pub struct RetryStrategy {
 }
 
 impl RetryStrategy {
-/// new: new.
+    /// new: new.
     pub fn new(max_attempts: usize, base_delay: Duration) -> Self {
         Self {
             max_attempts,
@@ -83,7 +83,7 @@ pub struct DegradeStrategy<F> {
 }
 
 impl<F> DegradeStrategy<F> {
-/// new: new.
+    /// new: new.
     pub fn new<T>(fallback: F) -> Self
     where
         F: Fn() -> T,
@@ -91,7 +91,7 @@ impl<F> DegradeStrategy<F> {
         Self { fallback }
     }
 
-/// execute: execute.
+    /// execute: execute.
     pub async fn execute<Op, Fut, T, E>(&self, operation: Op) -> Result<T, E>
     where
         Op: Fn() -> Fut + Send,

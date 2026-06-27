@@ -16,7 +16,7 @@ pub struct VisionConfig {
 }
 
 impl VisionConfig {
-/// new: new.
+    /// new: new.
     pub fn new(image_size: usize, patch_size: usize) -> Self {
         Self {
             image_size,
@@ -26,7 +26,7 @@ impl VisionConfig {
         }
     }
 
-/// num_patches: num patches.
+    /// num_patches: num patches.
     pub fn num_patches(&self) -> usize {
         (self.image_size / self.patch_size).pow(2)
     }
@@ -38,7 +38,7 @@ pub struct PatchEmbed {
 }
 
 impl PatchEmbed {
-/// new: new.
+    /// new: new.
     pub fn new(config: &VisionConfig, vb: VarBuilder) -> CandleResult<Self> {
         let proj = candle_nn::linear(
             config.patch_size * config.patch_size * 3,
@@ -48,7 +48,7 @@ impl PatchEmbed {
         Ok(Self { proj })
     }
 
-/// forward: forward.
+    /// forward: forward.
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
         self.proj.forward(x)
     }
@@ -60,19 +60,19 @@ pub struct VisionEncoder {
 }
 
 impl VisionEncoder {
-/// new: new.
+    /// new: new.
     pub fn new(config: &VisionConfig, _vb: VarBuilder) -> CandleResult<Self> {
         Ok(Self {
             config: config.clone(),
         })
     }
 
-/// config: config.
+    /// config: config.
     pub fn config(&self) -> &VisionConfig {
         &self.config
     }
 
-/// forward: forward.
+    /// forward: forward.
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
         Ok(x.clone())
     }

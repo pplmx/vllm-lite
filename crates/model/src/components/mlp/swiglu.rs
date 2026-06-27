@@ -27,7 +27,7 @@ pub struct SwiGLU {
 }
 
 impl SwiGLU {
-/// new: new.
+    /// new: new.
     pub fn new(
         hidden_size: usize,
         intermediate_size: usize,
@@ -47,7 +47,7 @@ impl SwiGLU {
         })
     }
 
-/// new_with_weights: new with weights.
+    /// new_with_weights: new with weights.
     pub fn new_with_weights(
         _hidden_size: usize,
         _intermediate_size: usize,
@@ -66,7 +66,7 @@ impl SwiGLU {
         })
     }
 
-/// forward: forward.
+    /// forward: forward.
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         swiglu_forward(x, &self.gate_proj, &self.up_proj, &self.down_proj)
     }

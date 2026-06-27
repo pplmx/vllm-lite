@@ -36,7 +36,7 @@ pub struct AttentionConfig {
 }
 
 impl AttentionConfig {
-/// new: new.
+    /// new: new.
     pub fn new(tile_size: Option<usize>, use_fused: bool) -> Self {
         Self {
             tile_size,

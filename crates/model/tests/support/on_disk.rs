@@ -140,7 +140,6 @@ impl OnDiskFixture {
 
     pub fn tokenizer(&self) -> Result<Tokenizer, String> {
         let path = self.require_weights().join("tokenizer.json");
-        Tokenizer::from_file(path.to_str().expect("utf-8 path"))
-            .map_err(|e| e.to_string())
+        Tokenizer::from_file(path.to_str().expect("utf-8 path")).map_err(|e| e.to_string())
     }
 }

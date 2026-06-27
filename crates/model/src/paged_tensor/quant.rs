@@ -15,7 +15,7 @@ pub enum QuantizationType {
 }
 
 impl QuantizationType {
-/// from_str: from str.
+    /// from_str: from str.
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
@@ -30,7 +30,7 @@ impl QuantizationType {
         }
     }
 
-/// bits: bits.
+    /// bits: bits.
     pub fn bits(&self) -> usize {
         match self {
             Self::Fp16 => 16,
@@ -63,7 +63,7 @@ impl Default for QuantizationConfig {
 }
 
 impl QuantizationConfig {
-/// awq: awq.
+    /// awq: awq.
     pub fn awq(bits: usize, group_size: usize) -> Self {
         Self {
             quant_type: QuantizationType::Awq,
@@ -72,7 +72,7 @@ impl QuantizationConfig {
         }
     }
 
-/// gptq: gptq.
+    /// gptq: gptq.
     pub fn gptq(bits: usize, group_size: usize) -> Self {
         Self {
             quant_type: QuantizationType::Gptq,
@@ -102,7 +102,7 @@ pub struct QuantizedWeights {
 }
 
 impl QuantizedWeights {
-/// new: new.
+    /// new: new.
     pub fn new(qweight: Tensor, scales: Tensor) -> Self {
         Self {
             qweight,
@@ -114,13 +114,13 @@ impl QuantizedWeights {
         }
     }
 
-/// with_zeros: with zeros.
+    /// with_zeros: with zeros.
     pub fn with_zeros(mut self, zeros: Tensor) -> Self {
         self.zeros = Some(zeros);
         self
     }
 
-/// with_g_idx: with g idx.
+    /// with_g_idx: with g idx.
     pub fn with_g_idx(mut self, g_idx: Tensor) -> Self {
         self.g_idx = Some(g_idx);
         self
@@ -134,12 +134,12 @@ pub struct AWQQuantization {
 }
 
 impl AWQQuantization {
-/// new: new.
+    /// new: new.
     pub fn new(bits: usize, group_size: usize) -> Self {
         Self { bits, group_size }
     }
 
-/// quantize: quantize.
+    /// quantize: quantize.
     pub fn quantize(
         &self,
         data: &[f32],
@@ -177,7 +177,7 @@ impl AWQQuantization {
         Ok(QuantizedWeights::new(qweight_tensor, scales_tensor))
     }
 
-/// dequantize: dequantize.
+    /// dequantize: dequantize.
     pub fn dequantize(&self, weights: &QuantizedWeights) -> Result<Tensor> {
         let qweight = &weights.qweight;
         let scales = &weights.scales;
@@ -218,12 +218,12 @@ pub struct GPTQQuantization {
 }
 
 impl GPTQQuantization {
-/// new: new.
+    /// new: new.
     pub fn new(bits: usize, group_size: usize) -> Self {
         Self { bits, group_size }
     }
 
-/// quantize: quantize.
+    /// quantize: quantize.
     pub fn quantize(
         &self,
         data: &[f32],
@@ -261,7 +261,7 @@ impl GPTQQuantization {
         Ok(QuantizedWeights::new(qweight_tensor, scales_tensor))
     }
 
-/// dequantize: dequantize.
+    /// dequantize: dequantize.
     pub fn dequantize(&self, weights: &QuantizedWeights) -> Result<Tensor> {
         let qweight = &weights.qweight;
         let scales = &weights.scales;

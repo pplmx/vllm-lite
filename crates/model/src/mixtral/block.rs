@@ -20,7 +20,7 @@ pub struct MixtralBlock {
 }
 
 impl MixtralBlock {
-/// new: new.
+    /// new: new.
     pub fn new(config: &ModelConfig, _layer_idx: usize) -> Result<Self> {
         let hidden_size = config.hidden_size;
         let num_heads = config.num_heads;
@@ -72,7 +72,7 @@ impl MixtralBlock {
         })
     }
 
-/// from_weights: from weights.
+    /// from_weights: from weights.
     pub fn from_weights(
         config: &ModelConfig,
         layer_idx: usize,
@@ -221,7 +221,7 @@ impl MixtralBlock {
         })
     }
 
-/// forward: forward.
+    /// forward: forward.
     pub fn forward(&self, x: &Tensor, _positions: &[usize]) -> Result<Tensor> {
         let residual = x.clone();
         let x = self.input_layernorm.forward(x)?;
@@ -234,7 +234,7 @@ impl MixtralBlock {
         x.add(&residual)
     }
 
-/// forward_prefill: forward prefill.
+    /// forward_prefill: forward prefill.
     pub fn forward_prefill(
         &self,
         x: &Tensor,
@@ -256,7 +256,7 @@ impl MixtralBlock {
         x.add(&residual)
     }
 
-/// forward_decode: forward decode.
+    /// forward_decode: forward decode.
     pub fn forward_decode(
         &self,
         x: &Tensor,

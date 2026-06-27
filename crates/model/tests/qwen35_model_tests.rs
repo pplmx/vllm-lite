@@ -1,10 +1,10 @@
-use vllm_model::components::SwiGLU;
-use vllm_model::components::positional::MRoPE;
-use vllm_model::qwen3_5::attention35::Attention35WithRoPE;
-use vllm_model::qwen3_5::Qwen35HybridModel;
-use vllm_model::qwen3_config::Qwen3Config;
 use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
+use vllm_model::components::SwiGLU;
+use vllm_model::components::positional::MRoPE;
+use vllm_model::qwen3_5::Qwen35HybridModel;
+use vllm_model::qwen3_5::attention35::Attention35WithRoPE;
+use vllm_model::qwen3_config::Qwen3Config;
 use vllm_traits::ModelBackend;
 
 #[test]

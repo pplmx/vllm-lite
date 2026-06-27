@@ -28,7 +28,7 @@ pub struct VerificationResult {
 }
 
 impl VerificationResult {
-/// new: new.
+    /// new: new.
     pub fn new(seq_id: SeqId, draft_tokens: Vec<TokenId>) -> Self {
         let accepted_count = draft_tokens.len();
         Self {
@@ -39,14 +39,14 @@ impl VerificationResult {
         }
     }
 
-/// with_rejection: with rejection.
+    /// with_rejection: with rejection.
     pub fn with_rejection(mut self, rejected_at: usize) -> Self {
         self.rejected_at = Some(rejected_at);
         self.accepted_count = rejected_at;
         self
     }
 
-/// acceptance_rate: acceptance rate.
+    /// acceptance_rate: acceptance rate.
     pub fn acceptance_rate(&self) -> f32 {
         if self.draft_tokens.is_empty() {
             return 1.0;

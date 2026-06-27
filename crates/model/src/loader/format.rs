@@ -28,7 +28,7 @@ pub trait FormatLoader {
 pub struct SafetensorsLoader;
 
 impl SafetensorsLoader {
-/// can_load: can load.
+    /// can_load: can load.
     pub fn can_load(path: &Path) -> bool {
         if path.exists() {
             if path.is_file() {
@@ -66,7 +66,7 @@ mod gguf_loader {
     use super::*;
     use crate::quantize::gguf::load_gguf_tensors;
 
-/// GgufLoader: gguf loader.
+    /// GgufLoader: gguf loader.
     pub struct GgufLoader;
 
     impl FormatLoader for GgufLoader {

@@ -56,17 +56,17 @@ pub struct SchedulerObservers {
 }
 
 impl SchedulerObservers {
-/// new: new.
+    /// new: new.
     pub fn new() -> Self {
         Self {
             observers: RwLock::new(Vec::new()),
         }
     }
 
-/// MAX_OBSERVERS: max observers constant.
+    /// MAX_OBSERVERS: max observers constant.
     pub const MAX_OBSERVERS: usize = 16;
 
-/// register: register.
+    /// register: register.
     pub fn register(
         &self,
         observer: Box<dyn SchedulerObserver>,
@@ -76,13 +76,15 @@ impl SchedulerObservers {
             .write()
             .map_err(|_| SchedulerObserverError::Poisoned)?;
         if guards.len() >= Self::MAX_OBSERVERS {
-            return Err(SchedulerObserverError::MaxObserversReached(Self::MAX_OBSERVERS));
+            return Err(SchedulerObserverError::MaxObserversReached(
+                Self::MAX_OBSERVERS,
+            ));
         }
         guards.push(observer);
         Ok(())
     }
 
-/// dispatch: dispatch.
+    /// dispatch: dispatch.
     pub fn dispatch(&self, event: &ObserverEvent) {
         use std::panic::AssertUnwindSafe;
         if let Ok(observers) = self.observers.read() {

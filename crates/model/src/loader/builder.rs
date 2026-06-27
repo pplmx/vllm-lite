@@ -18,7 +18,7 @@ pub struct ModelLoaderBuilder {
 }
 
 impl ModelLoaderBuilder {
-/// new: new.
+    /// new: new.
     pub fn new(device: Device) -> Self {
         Self {
             device,
@@ -29,19 +29,19 @@ impl ModelLoaderBuilder {
         }
     }
 
-/// with_model_dir: with model dir.
+    /// with_model_dir: with model dir.
     pub fn with_model_dir(mut self, model_dir: String) -> Self {
         self.model_dir = Some(model_dir);
         self
     }
 
-/// with_kv_blocks: with kv blocks.
+    /// with_kv_blocks: with kv blocks.
     pub fn with_kv_blocks(mut self, num_kv_blocks: usize) -> Self {
         self.num_kv_blocks = Some(num_kv_blocks);
         self
     }
 
-/// with_kv_quantization: with kv quantization.
+    /// with_kv_quantization: with kv quantization.
     pub fn with_kv_quantization(mut self, enabled: bool) -> Self {
         self.kv_quantization = Some(enabled);
         self
@@ -53,7 +53,7 @@ impl ModelLoaderBuilder {
         self
     }
 
-/// build: build.
+    /// build: build.
     pub fn build(self) -> Result<ModelLoader> {
         let model_dir = self
             .model_dir
@@ -121,7 +121,7 @@ impl ModelLoaderInner {
 }
 
 impl ModelLoader {
-/// new: new.
+    /// new: new.
     pub fn new(device: Device) -> Self {
         Self {
             inner: Arc::new(ModelLoaderInner {
@@ -135,17 +135,17 @@ impl ModelLoader {
         }
     }
 
-/// builder: builder.
+    /// builder: builder.
     pub fn builder(device: Device) -> ModelLoaderBuilder {
         ModelLoaderBuilder::new(device)
     }
 
-/// device: device.
+    /// device: device.
     pub fn device(&self) -> &Device {
         &self.inner.device
     }
 
-/// architecture: architecture.
+    /// architecture: architecture.
     pub fn architecture(&self) -> ConfigArchitecture {
         ARCHITECTURE_REGISTRY
             .detect(&self.inner.config_json)
@@ -161,7 +161,7 @@ impl ModelLoader {
             .unwrap_or(ConfigArchitecture::Llama)
     }
 
-/// config_json: config json.
+    /// config_json: config json.
     pub fn config_json(&self) -> &serde_json::Value {
         &self.inner.config_json
     }
@@ -181,7 +181,7 @@ impl ModelLoader {
         Ok(arch.capabilities())
     }
 
-/// load_config: load config.
+    /// load_config: load config.
     pub fn load_config<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
         let config_path = Path::new(&self.inner.model_dir).join("config.json");
         let content = std::fs::read_to_string(config_path)
@@ -190,13 +190,13 @@ impl ModelLoader {
             .map_err(|e| candle_core::Error::msg(format!("Failed to parse config: {}", e)))
     }
 
-/// load_weights: load weights.
+    /// load_weights: load weights.
     pub fn load_weights(&self) -> Result<std::collections::HashMap<String, Tensor>> {
         let path = Path::new(&self.inner.model_dir);
         super::checkpoint::load_checkpoint(path, &self.inner.device)
     }
 
-/// load: load.
+    /// load: load.
     pub fn load(&self) -> Result<Box<dyn vllm_traits::ModelBackend>> {
         register_all_archs(&ARCHITECTURE_REGISTRY);
 
@@ -247,12 +247,12 @@ impl ModelLoader {
         )
     }
 
-/// load_model: load model.
+    /// load_model: load model.
     pub fn load_model(&self) -> Result<Box<dyn vllm_traits::ModelBackend>> {
         self.load()
     }
 
-/// print_weight_keys: print weight keys.
+    /// print_weight_keys: print weight keys.
     pub fn print_weight_keys(weights: &std::collections::HashMap<String, Tensor>) {
         let mut keys: Vec<_> = weights.keys().collect();
         keys.sort();

@@ -50,7 +50,7 @@ pub struct SequencePacker {
 }
 
 impl SequencePacker {
-/// new: new.
+    /// new: new.
     pub fn new(config: SequencePackingConfig) -> Self {
         Self { config }
     }

@@ -19,14 +19,14 @@ pub struct CorrelationIdMiddleware {
 }
 
 impl CorrelationIdMiddleware {
-/// new: new.
+    /// new: new.
     pub fn new() -> Self {
         Self {
             id_generator: Arc::new(RwLock::new(0)),
         }
     }
 
-/// generate_id: generate id.
+    /// generate_id: generate id.
     pub async fn generate_id(&self) -> String {
         let mut counter = self.id_generator.write().await;
         *counter += 1;
@@ -40,7 +40,7 @@ impl CorrelationIdMiddleware {
         )
     }
 
-/// extract_id: extract id.
+    /// extract_id: extract id.
     pub fn extract_id(headers: &axum::http::HeaderMap) -> Option<String> {
         headers
             .get(REQUEST_ID_HEADER)

@@ -39,7 +39,7 @@ pub struct PhaseScheduler {
 }
 
 impl PhaseScheduler {
-/// new: new.
+    /// new: new.
     pub fn new(switch_policy: PhaseSwitchPolicy) -> Self {
         Self {
             current_phase: Phase::Prefill,
@@ -84,7 +84,7 @@ impl PhaseScheduler {
         self.current_phase
     }
 
-/// reset: reset.
+    /// reset: reset.
     pub fn reset(&mut self) {
         self.current_phase = Phase::Prefill;
         self.consecutive_decode_rounds = 0;

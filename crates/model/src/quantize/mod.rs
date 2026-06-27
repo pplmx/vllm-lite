@@ -18,7 +18,7 @@ pub struct Checkpoint {
 }
 
 impl Checkpoint {
-/// new: new.
+    /// new: new.
     pub fn new(tensors: HashMap<String, Tensor>) -> Self {
         let storage_tensors = tensors
             .into_iter()
@@ -30,7 +30,7 @@ impl Checkpoint {
         }
     }
 
-/// into_f16: into f16.
+    /// into_f16: into f16.
     pub fn into_f16(self) -> Result<HashMap<String, Tensor>> {
         let mut result = HashMap::new();
         for (name, storage) in self.tensors {
@@ -44,7 +44,7 @@ impl Checkpoint {
         Ok(result)
     }
 
-/// into_raw: into raw.
+    /// into_raw: into raw.
     pub fn into_raw(self) -> HashMap<String, StorageTensor> {
         self.tensors
     }

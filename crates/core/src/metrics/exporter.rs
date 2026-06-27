@@ -25,7 +25,7 @@ pub struct PrometheusExporter {
 }
 
 impl PrometheusExporter {
-/// new: new.
+    /// new: new.
     pub fn new(collector: Arc<EnhancedMetricsCollector>, port: u16) -> Self {
         Self { collector, port }
     }
@@ -218,7 +218,7 @@ impl PrometheusExporter {
         output
     }
 
-/// port: port.
+    /// port: port.
     pub fn port(&self) -> u16 {
         self.port
     }

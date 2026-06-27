@@ -86,7 +86,7 @@ pub struct AuthConfig {
 }
 
 impl AuthConfig {
-/// resolve_api_keys: resolve api keys.
+    /// resolve_api_keys: resolve api keys.
     pub fn resolve_api_keys(&self) -> Vec<String> {
         let mut keys = self.api_keys.clone();
 
@@ -251,7 +251,7 @@ impl Default for AppConfig {
 }
 
 impl AppConfig {
-/// load: load.
+    /// load: load.
     pub fn load(path: Option<PathBuf>) -> Self {
         let mut config = Self::default();
 
@@ -279,7 +279,7 @@ impl AppConfig {
         config
     }
 
-/// validate: validate.
+    /// validate: validate.
     pub fn validate(&self) -> Result<(), ConfigValidationErrors> {
         let mut errors = Vec::new();
 
@@ -362,7 +362,12 @@ mod tests {
         let mut config = AppConfig::default();
         config.server.port = 0;
         let errors = config.validate().unwrap_err();
-        assert!(errors.0.iter().any(|e| matches!(e, ConfigValidationError::PortZero)));
+        assert!(
+            errors
+                .0
+                .iter()
+                .any(|e| matches!(e, ConfigValidationError::PortZero))
+        );
     }
 
     #[test]
@@ -383,10 +388,12 @@ mod tests {
         let mut config = AppConfig::default();
         config.engine.tensor_parallel_size = 0;
         let errors = config.validate().unwrap_err();
-        assert!(errors
-            .0
-            .iter()
-            .any(|e| matches!(e, ConfigValidationError::TensorParallelSizeZero)));
+        assert!(
+            errors
+                .0
+                .iter()
+                .any(|e| matches!(e, ConfigValidationError::TensorParallelSizeZero))
+        );
     }
 
     #[test]
@@ -410,10 +417,12 @@ mod tests {
         let mut config = AppConfig::default();
         config.engine.vram_budget_bytes = Some(0);
         let errors = config.validate().unwrap_err();
-        assert!(errors
-            .0
-            .iter()
-            .any(|e| matches!(e, ConfigValidationError::VramBudgetZero)));
+        assert!(
+            errors
+                .0
+                .iter()
+                .any(|e| matches!(e, ConfigValidationError::VramBudgetZero))
+        );
     }
 
     #[test]
@@ -434,10 +443,12 @@ mod tests {
             architecture: None,
         }];
         let errors = config.validate().unwrap_err();
-        assert!(errors
-            .0
-            .iter()
-            .any(|e| matches!(e, ConfigValidationError::EmptyDraftId)));
+        assert!(
+            errors
+                .0
+                .iter()
+                .any(|e| matches!(e, ConfigValidationError::EmptyDraftId))
+        );
     }
 
     #[test]
@@ -460,10 +471,12 @@ mod tests {
             },
         ];
         let errors = config.validate().unwrap_err();
-        assert!(errors
-            .0
-            .iter()
-            .any(|e| matches!(e, ConfigValidationError::DuplicateDraftId(_))));
+        assert!(
+            errors
+                .0
+                .iter()
+                .any(|e| matches!(e, ConfigValidationError::DuplicateDraftId(_)))
+        );
     }
 
     #[test]

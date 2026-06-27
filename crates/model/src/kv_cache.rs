@@ -12,7 +12,7 @@ pub struct MlaKvCache {
 }
 
 impl MlaKvCache {
-/// new: new.
+    /// new: new.
     pub fn new(
         num_layers: usize,
         kv_lora_rank: usize,
@@ -40,7 +40,7 @@ impl MlaKvCache {
         }
     }
 
-/// write_compressed: write compressed.
+    /// write_compressed: write compressed.
     pub fn write_compressed(
         &mut self,
         layer: usize,
@@ -79,7 +79,7 @@ impl MlaKvCache {
         Ok(())
     }
 
-/// read_compressed: read compressed.
+    /// read_compressed: read compressed.
     pub fn read_compressed(
         &self,
         layer: usize,
@@ -117,7 +117,7 @@ impl MlaKvCache {
         Tensor::cat(&parts, 0)?.unsqueeze(0)
     }
 
-/// block_size: block size.
+    /// block_size: block size.
     pub fn block_size(&self) -> usize {
         self.block_size
     }

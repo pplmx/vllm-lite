@@ -10,7 +10,7 @@ pub struct Qwen3MlaAttention {
 }
 
 impl Qwen3MlaAttention {
-/// new: new.
+    /// new: new.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         hidden_size: usize,
@@ -39,12 +39,12 @@ impl Qwen3MlaAttention {
         Ok(Self { inner })
     }
 
-/// forward: forward.
+    /// forward: forward.
     pub fn forward(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
         self.inner.forward(x, positions)
     }
 
-/// inner: inner.
+    /// inner: inner.
     pub fn inner(&self) -> &MlaAttention {
         &self.inner
     }

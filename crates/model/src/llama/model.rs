@@ -16,12 +16,12 @@ pub type LlamaBlock = RopeGqaDecoderBlock;
 pub type LlamaModel = CausalLm<LlamaBlock, RmsNorm, Linear>;
 
 impl LlamaModel {
-/// new: new.
+    /// new: new.
     pub fn new(config: ModelConfig, device: Device, num_kv_blocks: usize) -> CandleResult<Self> {
         Self::new_rms(config, device, num_kv_blocks, false, new_block)
     }
 
-/// from_weights: from weights.
+    /// from_weights: from weights.
     pub fn from_weights(
         config: ModelConfig,
         device: Device,

@@ -14,7 +14,7 @@ use super::block::{Gemma4Block, block_from_weights, new_block};
 pub type Gemma4Model = CausalLm<Gemma4Block, RmsNorm, Linear>;
 
 impl Gemma4Model {
-/// new: new.
+    /// new: new.
     pub fn new(
         config: ModelConfig,
         device: Device,
@@ -24,7 +24,7 @@ impl Gemma4Model {
         Self::new_rms(config, device, num_kv_blocks, kv_quantization, new_block)
     }
 
-/// from_weights: from weights.
+    /// from_weights: from weights.
     pub fn from_weights(
         config: ModelConfig,
         device: Device,

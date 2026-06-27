@@ -26,7 +26,7 @@ impl Default for EvictionPolicy {
 }
 
 impl EvictionPolicy {
-/// new: new.
+    /// new: new.
     pub fn new() -> Self {
         Self {
             block_access_order: VecDeque::new(),
@@ -36,7 +36,7 @@ impl EvictionPolicy {
         }
     }
 
-/// select_victims: select victims.
+    /// select_victims: select victims.
     pub fn select_victims(
         &mut self,
         running_sequences: &[Sequence],
@@ -124,12 +124,12 @@ impl EvictionPolicy {
         hash
     }
 
-/// invalidate_cache: invalidate cache.
+    /// invalidate_cache: invalidate cache.
     pub fn invalidate_cache(&mut self) {
         self.cached_victims = None;
     }
 
-/// record_blocks: record blocks.
+    /// record_blocks: record blocks.
     pub fn record_blocks(&mut self, blocks: &[BlockId]) {
         for &block in blocks {
             *self.block_ref_count.entry(block).or_insert(0) += 1;
@@ -139,7 +139,7 @@ impl EvictionPolicy {
         self.invalidate_cache();
     }
 
-/// release_blocks: release blocks.
+    /// release_blocks: release blocks.
     pub fn release_blocks(&mut self, blocks: &[BlockId]) {
         for &block in blocks {
             if let Some(count) = self.block_ref_count.get_mut(&block) {
@@ -152,7 +152,7 @@ impl EvictionPolicy {
         self.invalidate_cache();
     }
 
-/// touch_blocks: touch blocks.
+    /// touch_blocks: touch blocks.
     pub fn touch_blocks(&mut self, blocks: &[BlockId]) {
         for &block in blocks {
             self.block_access_order.retain(|&b| b != block);
@@ -160,12 +160,12 @@ impl EvictionPolicy {
         }
     }
 
-/// get_block_ref_count: get block ref count.
+    /// get_block_ref_count: get block ref count.
     pub fn get_block_ref_count(&self, block: BlockId) -> usize {
         *self.block_ref_count.get(&block).unwrap_or(&0)
     }
 
-/// stats: stats.
+    /// stats: stats.
     pub fn stats(&self) -> EvictionPolicyStats {
         self.stats.clone()
     }
