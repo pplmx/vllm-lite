@@ -8,10 +8,10 @@ use std::collections::HashMap;
 use crate::causal_lm::{HybridLm, HybridLmConfig};
 use crate::components::positional::MRoPE;
 use crate::paged_tensor::PagedKvCache;
+use crate::qwen3::config::Qwen3Config;
 use crate::qwen3_5::block::{FullAttentionBlock35, HybridBlock, LinearAttentionBlock};
 use crate::qwen3_5::config::{GdnLinearConfig, LayerType, parse_layer_types};
 use crate::qwen3_5::weights::load_hybrid_weights;
-use crate::qwen3_config::Qwen3Config;
 use candle_core::{DType, Device, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, LayerNorm, VarBuilder};
 

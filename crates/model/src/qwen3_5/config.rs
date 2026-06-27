@@ -1,6 +1,6 @@
 //! Qwen3.5 hybrid layer-type configuration.
 
-use crate::qwen3_config::{Qwen3Config, TextConfig};
+use crate::qwen3::config::{Qwen3Config, TextConfig};
 
 /// GdnLinearConfig: gdn linear configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,7 +99,7 @@ pub fn parse_layer_types(config: &Qwen3Config) -> Vec<LayerType> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::qwen3_config::Qwen3Config;
+    use crate::qwen3::config::Qwen3Config;
 
     #[test]
     fn test_gdn_linear_config_from_hf_fields() {
@@ -156,7 +156,7 @@ mod tests {
     #[test]
     fn test_layer_type_parsing() {
         let config = Qwen3Config {
-            text_config: Some(crate::qwen3_config::TextConfig {
+            text_config: Some(crate::qwen3::config::TextConfig {
                 layer_types: Some(vec![
                     "linear_attention".to_string(),
                     "linear_attention".to_string(),
@@ -177,7 +177,7 @@ mod tests {
     #[test]
     fn test_layer_type_default_pattern() {
         let config = Qwen3Config {
-            text_config: Some(crate::qwen3_config::TextConfig {
+            text_config: Some(crate::qwen3::config::TextConfig {
                 num_hidden_layers: Some(8),
                 ..Default::default()
             }),
@@ -200,7 +200,7 @@ mod tests {
     #[test]
     fn test_layer_type_parsing_mixed() {
         let config = Qwen3Config {
-            text_config: Some(crate::qwen3_config::TextConfig {
+            text_config: Some(crate::qwen3::config::TextConfig {
                 num_hidden_layers: Some(8),
                 layer_types: Some(vec![
                     "linear_attention".to_string(),

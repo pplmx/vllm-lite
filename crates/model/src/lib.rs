@@ -38,10 +38,18 @@ pub mod quantize;
 pub mod qwen3;
 /// qwen3_5: qwen3 5 module.
 pub mod qwen3_5;
-/// qwen3_config: qwen3 config module.
-pub mod qwen3_config;
 /// tokenizer: tokenizer module.
 pub mod tokenizer;
+
+// Deprecated alias: `qwen3_config` module moved to `qwen3::config` in v21.1.
+// Retained for one minor release as a re-export shim for backward compatibility.
+#[deprecated(
+    since = "0.21.0",
+    note = "use `vllm_model::qwen3::config` instead; this module path is preserved as a re-export shim"
+)]
+pub mod qwen3_config {
+    pub use crate::qwen3::config::*;
+}
 
 pub use arch::{ARCHITECTURE_REGISTRY, ArchCapabilities, ArchitectureRegistry, register_all_archs};
 pub use causal_lm::{BlockWrapper, CausalLm};

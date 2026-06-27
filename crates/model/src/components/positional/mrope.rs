@@ -1,6 +1,6 @@
 //! mrope: mrope.
 
-use crate::qwen3_config::Qwen3Config;
+use crate::qwen3::config::Qwen3Config;
 use candle_core::{Device, Result as CandleResult, Tensor};
 
 /// MRoPE: m ro pe.
@@ -130,7 +130,7 @@ impl MRoPE {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::qwen3_config::RopeParameters;
+    use crate::qwen3::config::RopeParameters;
     use candle_core::{DType, Device, Tensor};
 
     #[test]

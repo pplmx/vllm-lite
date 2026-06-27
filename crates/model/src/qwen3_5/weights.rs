@@ -5,9 +5,9 @@ use std::collections::HashMap;
 use crate::causal_lm::HybridLm;
 use crate::causal_lm::weights::{load_final_norm_weight, load_lm_head};
 use crate::components::positional::MRoPE;
+use crate::qwen3::config::Qwen3Config;
 use crate::qwen3_5::block::{FullAttentionBlock35, HybridBlock, LinearAttentionBlock};
 use crate::qwen3_5::config::{LayerType, parse_layer_types};
-use crate::qwen3_config::Qwen3Config;
 use candle_core::{Result as CandleResult, Tensor};
 use candle_nn::{Embedding, LayerNorm};
 

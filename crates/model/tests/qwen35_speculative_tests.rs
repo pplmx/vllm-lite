@@ -1,8 +1,8 @@
 //! Speculative-decoding parity tests for Qwen3.5 hybrid models (Phase 5 Wave 4).
 
 use candle_core::Device;
+use vllm_model::qwen3::config::{Qwen3Config, TextConfig};
 use vllm_model::qwen3_5::Qwen35HybridModel;
-use vllm_model::qwen3_config::{Qwen3Config, TextConfig};
 use vllm_traits::{ModelBackend, TokenId};
 
 fn tiny_text_config(layer_types: Vec<&str>) -> TextConfig {
