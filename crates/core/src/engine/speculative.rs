@@ -239,6 +239,18 @@ impl super::Engine {
             let mut current_tokens: Vec<TokenId> = batch.input_tokens[i].clone();
             let mut current_positions: Vec<usize> = batch.positions[i].clone();
             for _pos in 0..max_draft {
+                // `AssertUnwindSafe` is required because the closure captures
+                // `backend: Arc<Mutex<Box<dyn ModelBackend>>>` along with the
+                // `current_tokens`/`current_positions` buffers. The standard
+                // `UnwindSafe` bound would refuse to compile even though the
+                // catch is a deliberate guard against panics in foreign
+                // backend code. If a panic occurs mid-forward, the backend's
+                // internal state (KV cache, allocator) may be partially
+                // mutated and the Mutex may become poisoned — subsequent
+                // locks will themselves panic and be re-caught here. Note:
+                // `catch_unwind` cannot catch aborts (e.g. double-panic,
+                // `extern "C"` unwinding) — a misbehaving backend could still
+                // crash the engine.
                 let result = catch_unwind(AssertUnwindSafe(|| {
                     let mut guard = backend.lock().expect("draft backend mutex poisoned");
                     guard.forward(
