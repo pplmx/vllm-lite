@@ -239,13 +239,22 @@ async fn main() {
 
     let tokenizer_path = PathBuf::from(&model_path).join("tokenizer.json");
     let tokenizer: Arc<Tokenizer> = if tokenizer_path.exists() {
-        match Tokenizer::from_file(tokenizer_path.to_str().unwrap()) {
-            Ok(t) => {
-                tracing::info!("Tokenizer loaded");
-                Arc::new(t)
-            }
-            Err(e) => {
-                tracing::warn!(error = %e, "Failed to load tokenizer from file, using default");
+        match tokenizer_path.to_str() {
+            Some(path_str) => match Tokenizer::from_file(path_str) {
+                Ok(t) => {
+                    tracing::info!("Tokenizer loaded");
+                    Arc::new(t)
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Failed to load tokenizer from file, using default");
+                    Arc::new(Tokenizer::new())
+                }
+            },
+            None => {
+                tracing::error!(
+                    path = ?tokenizer_path,
+                    "Tokenizer path is not valid UTF-8; falling back to default tokenizer"
+                );
                 Arc::new(Tokenizer::new())
             }
         }
@@ -321,13 +330,19 @@ async fn main() {
     }
 
     let addr = format!("{}:{}", app_config.server.host, app_config.server.port);
-    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(&addr)
+        .await
+        .unwrap_or_else(|e| {
+            panic!("Failed to bind server socket to {addr}: {e}");
+        });
     tracing::info!(address = %addr, "Server listening");
 
     axum::serve(listener, app.into_make_service())
         .with_graceful_shutdown(shutdown_signal())
         .await
-        .unwrap();
+        .unwrap_or_else(|e| {
+            panic!("Server crashed while serving on {addr}: {e}");
+        });
 
     tracing::info!("Shutting down gracefully");
     let _ = engine_shutdown_tx.send(EngineMessage::Shutdown);

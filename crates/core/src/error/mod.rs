@@ -37,6 +37,9 @@ pub enum EngineError {
 
     #[error("backend unavailable: {backend}")]
     BackendUnavailable { backend: String },
+
+    #[error("beam search produced no candidate beams")]
+    EmptyBeamList,
 }
 
 impl From<vllm_traits::ModelError> for EngineError {

@@ -39,7 +39,15 @@ pub async fn create_batch(
         )
         .await;
 
-    let job = state.batch_manager.get_job(&id).await.unwrap();
+    let job = state.batch_manager.get_job(&id).await.ok_or_else(|| {
+        (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse::new(
+                "batch job missing immediately after creation",
+                "internal_error",
+            )),
+        )
+    })?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -235,5 +243,21 @@ mod tests {
         let state = create_test_state();
         let result = list_batches(State(state)).await;
         assert!(result.0.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_create_batch_happy_path_after_unwrap_cleanup() {
+        // Regression test for B-2: the .unwrap() at line 42 (now
+        // .ok_or_else(...)?) must not regress the happy path.
+        let state = create_test_state();
+        let req = SimpleBatchRequest {
+            prompts: vec!["Hello".to_string()],
+            endpoint: "chat".to_string(),
+            model: Some("test-model".to_string()),
+            max_tokens: Some(10),
+            temperature: Some(0.5),
+        };
+        let result = create_batch(State(state), Json(req)).await;
+        assert!(result.is_ok(), "create_batch happy path must succeed");
     }
 }
