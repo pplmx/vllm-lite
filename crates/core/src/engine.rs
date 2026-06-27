@@ -554,7 +554,7 @@ impl Engine {
             beams = all_candidates.into_iter().take(beam_width).collect();
         }
 
-        Ok(beams
+        let best = beams
             .into_iter()
             .max_by(|a, b| {
                 let sa = a.score / (a.tokens.len() as f32).powf(length_penalty);
@@ -562,7 +562,8 @@ impl Engine {
                 sa.partial_cmp(&sb)
                     .unwrap_or_else(|| sa.is_nan().cmp(&sb.is_nan()))
             })
-            .unwrap())
+            .ok_or(crate::error::EngineError::EmptyBeamList)?;
+        Ok(best)
     }
 
     fn get_top_k(&self, logits: &[f32], k: usize) -> Vec<(TokenId, f32)> {
@@ -1035,5 +1036,11 @@ mod tests {
         // force_unload_draft bypasses
         engine.force_unload_draft(&DraftId("a".into())).unwrap();
         assert!(!engine.draft_registry().is_loaded(&DraftId("a".into())));
+    }
+
+    #[test]
+    fn test_empty_beam_list_error_message() {
+        let err = crate::error::EngineError::EmptyBeamList;
+        assert_eq!(err.to_string(), "beam search produced no candidate beams");
     }
 }
