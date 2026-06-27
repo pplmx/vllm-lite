@@ -6,8 +6,12 @@ use std::collections::HashMap;
 use std::path::Path;
 
 /// load_gguf_tensors: load gguf tensors.
+///
+/// TODO(v20.7+): wire to a real GGUF parser. Currently returns an empty map;
+/// the feature-gated `GgufLoader::load` path in `loader::format` calls this
+/// but downstream code falls back to an empty tensor map. Tracked as
+/// post-v20.0 work; see ADR-009 (orphan-module decision) for rationale.
 pub fn load_gguf_tensors(_path: &Path, _device: &Device) -> Result<HashMap<String, StorageTensor>> {
-    // Placeholder: return empty for now
     Ok(HashMap::new())
 }
 

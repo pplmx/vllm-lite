@@ -49,8 +49,8 @@ impl QuantizedTensor {
     /// dequantize_to_f32: dequantize to f32.
     pub fn dequantize_to_f32(&self) -> Result<Tensor> {
         let total_elements: usize = self.shape.iter().product();
-        let data: Vec<f32> = vec![0.0; total_elements];
-        Tensor::from_vec(data, self.shape.clone(), &candle_core::Device::Cpu)
+        let zeros: Vec<f32> = vec![0.0; total_elements];
+        Tensor::from_vec(zeros, self.shape.clone(), &candle_core::Device::Cpu)
     }
 }
 

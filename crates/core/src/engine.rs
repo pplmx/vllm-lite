@@ -329,8 +329,8 @@ impl Engine {
         self.draft_registry.force_unload(id)
     }
 
-    /// Increment the reference count for a draft. Phase 18.3 will drive this
-    /// from routing logic.
+    /// Increment the reference count for a draft. Driven by per-request
+    /// routing logic since v18.3; see ADR-007.
     pub fn increment_draft_ref(&self, id: &DraftId) -> std::result::Result<(), DraftRegistryError> {
         self.draft_registry.increment_ref(id)
     }

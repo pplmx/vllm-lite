@@ -440,8 +440,8 @@ impl DraftModelRegistry {
 
     /// Increment the reference count for a registered draft.
     ///
-    /// Phase 18.3 will drive this from routing logic. Phase 18.1 only stores
-    /// the count for later use.
+    /// Updated in v18.3 — increment is driven by per-request routing logic;
+    /// see ADR-007 for the routing design.
     pub fn increment_ref(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
         let mut guard = self
             .drafts
