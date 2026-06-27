@@ -308,7 +308,7 @@ fn test_fallback_loader_error_returns_self_spec() {
 }
 
 #[test]
-fn test_fallback_runtime_error_marks_sequence_degraded() {
+fn test_stub_backend_fail_next_n() {
     let h = harness_unlimited();
     let spec = vllm_core::speculative::DraftSpec::new("flaky", "/nope", 4);
     h.registry.register(spec).unwrap();
