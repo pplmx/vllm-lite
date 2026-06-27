@@ -54,22 +54,47 @@
 | 16 | `missing_must_use` | 函数级 |
 | 15 | `cast_possible_wrap` / `cast_possible_truncation` (usize→i32) | |
 
-### 2.3 unwrap/expect 分布(Top 10 文件,非测试代码)
+### 2.3 unwrap/expect 分布(实际生产代码,2026-06-28 audit)
 
-| 文件 | 计数 |
-|------|------|
-| `crates/model/src/components/norm/rms_norm.rs` | 57 |
-| `crates/core/src/speculative/registry/mod.rs` | 57 |
-| `crates/model/src/components/attention/mla.rs` | 55 |
-| `crates/model/src/components/attention/gqa.rs` | 47 |
-| `crates/model/src/components/attention/flash_attention_v3.rs` | 44 |
-| `crates/model/src/loader/builder.rs` | 42 |
-| `crates/model/src/components/gated_delta/mod.rs` | 34 |
-| `crates/model/src/components/attention/rope_gqa.rs` | 29 |
-| `crates/core/src/engine.rs` | 28 |
-| `crates/model/src/components/attention/util.rs` | 27 |
+**重要修正**: 最初 spec 文档声称 "非测试 unwrap/expect 总数 787" 是基于 `rg --type rust -g '!**/tests/**'` 的粗略计数,实际包含了 743 处 inline `#[cfg(test)] mod tests` 块。真实生产代码 unwrap/expect 计数为 **60**(其中 3 处是 doc-comment 误报,实际为 **57**)。
 
-总非测试 unwrap/expect **787**(全 workspace 824 - 37 测试模块)。
+完整 audit 见 `/tmp/phase_b_audit/SUMMARY.md`(2026-06-28)。
+
+| 类别 | 计数 | % | 说明 |
+|------|------|---|------|
+| KEEP(test/benches) | 764 | 92.7% | 不需变更 |
+| INVARIANT(生产) | 51 | 6.2% | 需加 `// invariant:` 注释 |
+| CONVERT(生产) | 6 | 0.7% | 需转 typed error |
+| N/A(doc 注释误报) | 3 | 0.4% | |
+| **总计** | **824** | 100% | |
+
+**CONVERT 集群(6 处真实风险)**:
+
+| # | 文件:行 | 代码 | 修复 | 风险 |
+|---|---------|------|------|------|
+| 1 | `crates/model/src/kernels/cuda_graph/executor.rs:222` | `self.graphs.get(&graph_key).unwrap()` | `ok_or(GraphExecutionError::GraphNotFound(graph_key))?` | **真 bug**(race condition) |
+| 2 | `crates/core/src/engine.rs:565` | `beams.into_iter().max_by(...).unwrap()` | `ok_or(EngineError::EmptyBeamList)?` | 低 |
+| 3 | `crates/server/src/main.rs:242` | `tokenizer_path.to_str().unwrap()` | `?` 传播到 from_file | 低 |
+| 4 | `crates/server/src/main.rs:324` | `TcpListener::bind(...).await.unwrap()` | log + exit | 低 |
+| 5 | `crates/server/src/main.rs:330` | `axum::serve(...).await.unwrap()` | log + exit | 低 |
+| 6 | `crates/server/src/openai/batch/handler.rs:42` | `get_job(...).await.unwrap()` | map 到 404 | 中 |
+
+**INVARIANT 集群(51 处需注释,按模式分组)**:
+
+| 模式 | 处数 | 主要文件 |
+|------|------|---------|
+| RwLock/Mutex `.expect("...poisoned")` | 21 | registry/lifecycle.rs(13), registry/loader.rs(4), arch/registry.rs, spec_dispatch/drafts.rs, main.rs |
+| `SystemTime::now().duration_since(UNIX_EPOCH).unwrap()` | 8 | dist/grpc.rs, distributed_kv/cache.rs, distributed_kv/protocol.rs, openai/batch/*, security/correlation.rs |
+| `Tensor::zeros((1,1),...).expect(...)` | 4 | gemma4/attention.rs(已有注释,可作参考) |
+| Tensor 分配(非 1×1) | 3 | kv_cache.rs, qwen3_5/block/linear.rs, components/ssm.rs |
+| Signal handler 安装 | 2 | main.rs |
+| `.expect("duplicate draft id")`(程序错误) | 2 | engine.rs |
+| `.expect("generate_per_seq_drafts called without draft_resolver")` | 1 | spec_dispatch/drafts.rs |
+| `.expect("vram_budget_bytes validated")` | 1 | main.rs |
+| 序列化已知良好结构 | 2 | openai/chat.rs |
+| HashMap insert 后立即访问 | 1 | causal_lm/hybrid_lm.rs |
+| Cargo-provided env vars | 2 | dist/build.rs |
+| 其他单点 invariant | 4 | memory_budget.rs (u64::MAX), auth.rs, api.rs, circuit_breaker/strategy.rs |
 
 ---
 
@@ -155,18 +180,33 @@ cargo clippy --workspace --all-targets --all-features -- -W clippy::pedantic -W 
 
 ## 5. Phase B 详情:Unwrap Cleanup
 
-### 5.1 分类规则
+### 5.1 现状(2026-06-28 audit 修正)
+
+原始 spec 假设 787 生产 unwrap,实际 **60**(其中 3 处为 doc 误报,实为 **57**)。spec 目标 `≤160(-80%)` 已被满足。Phase B 实际工作大幅缩减。
+
+### 5.2 分类规则(已由 audit 完成)
 
 | 类别 | 处理 |
 |------|------|
-| 测试代码(`#[cfg(test)]` / `tests/`) | **保留** unwrap |
+| 测试代码(`#[cfg(test)]` / `tests/` / benches) | **保留** unwrap(764 处,不动) |
 | const / static 初始化 | **保留** + `// const invariant` 注释 |
-| 不变量(`Vec` push 后 `last()`、`HashMap` insert 后 `get()`) | 改 `debug_assert!` 或保留 + `// SAFETY:` 注释 |
-| IO / 解析 / 外部依赖 / 类型转换失败 | **改为 typed error**,加 `#[source]` |
+| 不变量(RwLock/Mutex poisoned、SystemTime::now、Tensor 分配、`HashMap` insert 后 `get()` 等) | 保留 + 加 `// invariant: ...` 注释(51 处) |
+| IO / 解析 / 外部依赖 / 类型转换失败 | **改为 typed error**,加 `#[source]`(6 处) |
 | 数组/Vec 索引 | 优先 `.get(idx)` + typed error;必要时保留 + 注释 |
 | 数学计算中的 `.sqrt()` 等 | 保留(已是精确语义) |
 
-### 5.2 错误规范
+### 5.3 阶段重划(基于 audit)
+
+| 子阶段 | 范围 | 工作量 |
+|--------|------|--------|
+| **B-1** | 修 `cuda_graph/executor.rs:222`(真 bug, race condition) | 1 处,~5 行 |
+| **B-2** | 修剩余 5 处 CONVERT(engine.rs:565, main.rs ×3, handler.rs:42) | 5 处,~30-50 行 |
+| **B-3a** | RwLock/Mutex `.expect("poisoned")` 集群加 `// invariant:` 注释 | 21 处,~25 行 |
+| **B-3b** | `SystemTime::duration_since` 集群加注释 | 8 处,~10 行 |
+| **B-3c** | Tensor/serialize/signal/env/misc 杂项加注释 | 22 处,~30 行 |
+| **B-4** (可选) | 给 test module 加 `#![allow(clippy::unwrap_used)]` | 配置性,~10 行 |
+
+### 5.4 错误规范
 
 按 AGENTS.md 已有的 `Error Type Conventions`:
 - 用 `#[derive(thiserror::Error)]`
@@ -175,7 +215,7 @@ cargo clippy --workspace --all-targets --all-features -- -W clippy::pedantic -W 
 - 跨 crate 转换通过 `From<E>` impl,放在 `error/mod.rs`
 - `Box<dyn Error>` 禁止出现在公开 API
 
-### 5.3 with_request_id 工具
+### 5.5 with_request_id 工具
 
 对有请求上下文的 error enum(参考 `EngineError`)加 helper:
 
@@ -185,22 +225,14 @@ impl EngineError {
 }
 ```
 
-### 5.4 审计 + 修复流程
+### 5.6 完成定义
 
-每文件流程:
-1. 列出所有 `unwrap()/expect()`,标注上下文(行号 + 1 行说明)
-2. 标分类:保留/转换/不变量
-3. 转换的实现新 error variant + `?` 传播
-4. 至少 1 个负向单元测试(每个新 variant)
-5. commit
-
-### 5.5 完成定义
-
-- [ ] 非测试 unwrap/expect 总数 ≤ 160(基线 787,目标 -80%)
-- [ ] 所有保留的 unwrap 有 `// SAFETY:` 或 `// invariant:` 注释
-- [ ] 每个新 error variant 至少 1 个测试
+- [ ] B-1: `cuda_graph/executor.rs:222` 改为 typed error
+- [ ] B-2: 其余 5 处 CONVERT 完成
+- [ ] B-3: 51 处 INVARIANT 全部带 `// invariant:` 注释
+- [ ] 每个新 error variant 至少 1 个负向单元测试
 - [ ] `just ci` 通过
-- [ ] AGENTS.md 增加"错误处理规范"小节(如未覆盖)
+- [ ] AGENTS.md 增加"不变量注释规范"小节(如未覆盖)
 
 ---
 
