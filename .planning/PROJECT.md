@@ -185,7 +185,7 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 - [ ] **DEP-02**: Provide migration paths for all newly-deprecated items
 - [ ] **CMT-01**: Clean up stale comments referencing old code (per DOCS-03 audit)
 - [ ] **CMT-02**: Remove or update dead TODOs / FIXMEs discovered during v19.0 audit
-- [ ] **FINAL-01**: Verify all 287+ tests pass post-remediation
+- [ ] **FINAL-01**: Verify all 1100+ tests pass post-remediation
 - [ ] **FINAL-02**: Verify `cargo clippy --workspace -- -D warnings` clean
 - [ ] **FINAL-03**: Verify `cargo fmt --all --check` clean
 - [ ] **FINAL-04**: Update `.planning/PROJECT.md` and `.planning/STATE.md` with v20.0 outcomes
@@ -258,7 +258,7 @@ v20.0 build-on:
 
 - Direct execution of prioritized audit findings, organized into 6 sub-phases
 - Backward-compat: existing public API must remain stable (with `#[deprecated]` for removed items)
-- All 287+ existing tests must remain green
+- All 1100+ existing tests must remain green
 - v18.0 speculative decoding functionality preserved
 
 Tech stack: Rust + Candle, multi-GPU CUDA support, Kubernetes, gRPC.
