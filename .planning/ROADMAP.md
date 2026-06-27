@@ -6,7 +6,8 @@
 - ✅ **v17.0 Production Speculative Decoding** — Phases 17.1-17.4 (shipped 2026-05-13)
 - ✅ **v18.0 Multi-Model Speculative Decoding** — Phases 18.1-18.4 + Phase 19 gap closure (shipped 2026-06-27)
 - ✅ **v19.0 Codebase Health Audit** — Phases 20-24 (shipped 2026-06-27; analysis-only, no code changes; see `.planning/audit/` for deliverables)
-- ✅ **v20.0 Codebase Remediation** — Phases 25-30 (shipped 2026-06-27; BACKLOG.md-driven; 6 sub-phases v20.1-v20.6; 48/48 requirements; see `.planning/milestones/v20.0-ROADMAP.md`)
+- ✅ **v20.0 Codebase Remediation** — Phases 25-30 (shipped 2026-06-27; BACKLOG.md-driven; 6 sub-phases v20.1-v20.6; 48/48 requirements; 1144 tests pass; clippy/fmt clean; doc coverage 97.8%)
+- 🚧 **v21.0 P2/P3 Backlog Cleanup** — Phases 31-35 (planning complete 2026-06-27; 5 sub-phases v21.1-v21.5; 42 requirements: 9 ML + 11 API + 8 NAM + 4 DOC + 6 P3 + 4 FINAL; ~71h estimated)
 
 ## Phases
 
@@ -23,9 +24,14 @@
 - [x] **Phase 25: P0 Critical Fixes** (v20.1) - 消除 vllm-model→vllm-dist 依赖 + ModelError enum + 8 个 trait object-safe + CudaGraphError thiserror
 - [x] **Phase 26: Module Tree Restoration** (v20.2) - orphan 模块挂回 (kv_cache_fp8 + debug) + stage-info 重命名 + 3 个测试文件迁移 + vllm-dist feature-gate
 - [x] **Phase 27: Error Handling Standardization** (v20.3) - 13 个 error enum 用 thiserror + Result<_,String> 消除 + mutex-poison 修复 + EngineError 4 新变体 + anyhow 边界
-- [ ] **Phase 28: Documentation Coverage Push** (v20.4) - workspace doc 7.6%→≥60% + 776 个 pub item /// + 121 个文件 //! + README 修复
+- [x] **Phase 28: Documentation Coverage Push** (v20.4) - workspace doc 7.6%→≥60% + 776 个 pub item /// + 121 个文件 //! + README 修复
 - [x] **Phase 29: External Docs + ADRs** (v20.5) - README/AGENTS.md 调和 + 12 个新 ADR
 - [x] **Phase 30: Naming + Final Polish** (v20.6) - 7 P1 + 19 P2 命名 + #[deprecated] 卫生 + 注释清理 + 最终验证 (test pass + clippy + fmt)
+- [ ] **Phase 31: Module Layout Reorganization** (v21.1) - draft_registry 拆分 + engine/speculative 子树 + qwen3_config 下沉 + attention/util 提取 + TensorParallelError 迁移 + test_fixtures 重定位
+- [ ] **Phase 32: API Consistency** (v21.2) - builder 约定文档化 + #[source] 补 + Box<dyn Error> 替换 + 22 个 builder 引入 + FallbackStrategy sync/async 拆分 + 错误 context 携带
+- [ ] **Phase 33: Naming Consistency** (v21.3) - flash_v3 重命名 + NodeInfo 评估 + AGENTS.md 命名约定文档化 + 非 tensor 单字母变量重命名
+- [ ] **Phase 34: External Doc Fixes** (v21.4) - DeepSeek 修正 + vllm-dist ADR + Phase 5 Wave 4 ref + PROJECT.md Key Decisions 交叉链接
+- [ ] **Phase 35: P3 Actionable + Final Verification** (v21.5) - P3 actionable 收尾 + MIGRATING.md + CircuitBreakerError 变体 + FINAL gates
 
 ## Phase Details
 
@@ -462,11 +468,158 @@ Plans:
 
 ---
 
+## 🚧 v21.0 P2/P3 Backlog Cleanup (Phases 31-35) — PLANNED 2026-06-27
+
+**Milestone Goal:** Close the remaining 44 P2 + 13 P3 backlog from v19.0 audit (v20.0 already shipped 5 P0 + 38 P1). Target: 100% backlog closure preserving all v20.0 invariants (1144+ tests green, clippy/fmt clean, doc coverage ≥60% baseline). All changes must be backward-compatible via `#[deprecated]` markers for any public API removal; `vllm-dist` remains feature-gated.
+
+**Source:** `.planning/audit/BACKLOG.md` (v19.0 100 findings), `.planning/audit/MIGRATION-ROADMAP.md` (deferred items promoted)
+
+**Effort estimate:** ~71h (~2 working weeks, single engineer)
+
+**Dependency graph:** Phase 31 → Phase 32 → Phase 33 → Phase 34 → Phase 35 (linear chain; engine splits in Phase 31 unblock Phase 32's FallbackStrategy relocation; Phase 32 API surface stabilizes before Phase 33 documents conventions; Phase 33 AGENTS.md updates precede Phase 34 PROJECT.md cross-links; Phase 35 depends on all)
+
+### Phase 31: Module Layout Reorganization (v21.1)
+
+**Goal**: Reorganize oversized God modules into focused sub-trees so contributors can navigate and modify the codebase without cross-cutting concerns; error types live at their semantic boundaries (not in convenient-but-wrong locations)
+
+**Depends on**: Phase 30 (v20.6 baseline — 1144 tests green, clippy/fmt clean)
+
+**Requirements**: ML-01, ML-02, ML-03, ML-04, ML-05, ML-06, ML-07, ML-08, ML-09
+
+**Success Criteria** (what must be TRUE):
+
+  1. `draft_registry.rs` (929 LOC) is decomposed into a `registry/` sub-tree (`loader.rs` + `lifecycle.rs` + thin `mod.rs`); each leaf file <300 LOC and focused on a single concern; all 1144+ tests pass without modification — validates ML-01
+  2. `engine.rs` + `engine/speculative.rs` are unified into a single `engine/speculative/` sub-tree with consistent organization; no duplicate re-exports; engine's speculative path remains the single source of truth for that behavior — validates ML-02
+  3. `qwen3_config.rs` lives at `qwen3/config.rs`; `attention/mod.rs` utilities (180+ LOC) are extracted to `attention/util.rs` leaving `mod.rs` focused on re-exports — validates ML-03, ML-04
+  4. `TensorParallelError` lives in `vllm-dist::error` with a re-export from `vllm-traits`; all callers reference the canonical path (no duplicate definitions); `vllm-dist` remains feature-gated — validates ML-06
+  5. `vllm-testing` is either split into a `vllm-testkit` + `vllm-harness` lemon pair OR documented why the split is infeasible; server tests consume `vllm-testing` exports (no local `test_fixtures.rs`); unused exports verified or removed — validates ML-05, ML-07, ML-08, ML-09
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] 31-01: Split `draft_registry.rs` into `registry/{loader,lifecycle}.rs` + re-export shim — ML-01
+- [ ] 31-02: Collapse `engine.rs` + `engine/speculative.rs` into `engine/speculative/` sub-tree — ML-02
+- [ ] 31-03: Move `qwen3_config.rs` → `qwen3/config.rs`; extract `attention/mod.rs` utilities → `attention/util.rs` — ML-03, ML-04
+- [ ] 31-04: Decide vllm-testing lemon pair (split or document); execute chosen path — ML-05
+- [ ] 31-05: Move `TensorParallelError` to `vllm-dist::error`; re-export from `vllm-traits`; migrate callers — ML-06
+- [ ] 31-06: Move `crates/server/src/test_fixtures.rs` into `vllm-testing`; migrate server tests; verify/remove unused exports — ML-07, ML-08, ML-09
+
+### Phase 32: API Consistency (v21.2)
+
+**Goal**: Make API surface uniform — typed errors throughout, ergonomic builders, structured error context, sync/async trait splits where the runtime requires it; document conventions so future API additions don't regress
+
+**Depends on**: Phase 31 (engine splits relocate `FallbackStrategy` to canonical home)
+
+**Requirements**: API-01, API-02, API-03, API-04, API-05, API-06, API-07, API-08, API-09, API-10, API-11
+
+**Success Criteria** (what must be TRUE):
+
+  1. AGENTS.md documents builder-vs-struct-literal convention and common trait re-export patterns at crate roots (e.g., `vllm_core::prelude`); new contributors have unambiguous guidance for adding APIs — validates API-01, API-07
+  2. Error chains preserved end-to-end: `DraftRegistryError::LoadFailed` carries `#[source]` for the underlying error; `From<candle_core::Error>` for `EngineError` enables `?` propagation from model layer to engine without manual conversion — validates API-02, API-09
+  3. `Box<dyn Error>` is eliminated from `model` lib crate; `predictive_batching.rs` no longer panics on mutex poison (parking_lot or sync helper for all 8 sites) — validates API-03, API-04
+  4. 22 new builders exist where only `Default` previously did; each follows `::builder()` + `with_*` + `build()` pattern; object-safe traits (`DraftVerifier`, `SchedulerObserver`) gain `Default` impls; `dyn Trait` compile-only tests cover every public trait — validates API-05, API-06, API-10
+  5. `FallbackStrategy` is split into sync + async traits so callers pick based on runtime requirements; engine errors carry `request_id` / `seq_id` as structured fields for log correlation — validates API-08, API-11
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] 32-01: Document builder/struct-literal convention + crate-root re-exports in AGENTS.md — API-01, API-07
+- [ ] 32-02: Add `#[source]` to `DraftRegistryError::LoadFailed`; add `From<candle_core::Error>` for `EngineError` — API-02, API-09
+- [ ] 32-03: Replace 2 `Box<dyn Error>` in `model` lib with typed errors — API-03
+- [ ] 32-04: Replace 8 `Mutex::lock().unwrap()` in `predictive_batching.rs` with parking_lot or sync helper — API-04
+- [ ] 32-05: Introduce 22 builders where only `Default` exists; verify pattern across crates — API-05
+- [ ] 32-06: Add `Default` impls for `DraftVerifier`, `SchedulerObserver`; add `dyn Trait` compile-only tests — API-06, API-10
+- [ ] 32-07: Split `FallbackStrategy` into sync + async traits; migrate callers — API-08
+- [ ] 32-08: Carry `request_id`/`seq_id` in error context (structured fields) — API-11
+
+### Phase 33: Naming Consistency (v21.3)
+
+**Goal**: Bring remaining naming drift to the documented standards established in Phase 30 (NAM-02) — single-letter variables confined to tensor-math, suffix conventions enforced, AGENTS.md updated with remaining ambiguities
+
+**Depends on**: Phase 32 (API surface stable so AGENTS.md documentation refers to stable symbols)
+
+**Requirements**: NAM-01, NAM-02, NAM-03, NAM-04, NAM-05, NAM-06, NAM-07, NAM-08
+
+**Success Criteria** (what must be TRUE):
+
+  1. `flash_v3.rs` is renamed `flash_attention_v3.rs` (matches V2 naming pattern); all `use` paths updated; no dangling references — validates NAM-01
+  2. `NodeInfo` is either renamed to `NodeSummary`/`NodeMetadata` with a `#[deprecated]` alias OR a documented rationale exists in AGENTS.md for keeping the current name — validates NAM-03
+  3. Non-tensor single-letter variables in scheduler and sampling code are renamed to descriptive names (e.g., `i` → `priority_a`, `random_threshold`); tensor-math exemption (`q`/`k`/`v`/`o`/`b`/`c`/`h`/`z`/`d`/`x`/`g`/`r`) is preserved and explicitly documented in AGENTS.md — validates NAM-06, NAM-07
+  4. AGENTS.md documents the remaining naming conventions: `*Manager` suffix usage, `create_*` vs `build_*` policy, async/sync split rationale, test-file location convention — validates NAM-02, NAM-04, NAM-05, NAM-08
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] 33-01: Rename `flash_v3.rs` → `flash_attention_v3.rs`; update imports — NAM-01
+- [ ] 33-02: Evaluate `NodeInfo` rename (decide + execute or document rationale) — NAM-03
+- [ ] 33-03: Rename non-tensor single-letter variables in scheduler/sampling code — NAM-07
+- [ ] 33-04: Update AGENTS.md with `*Manager` suffix, `create_*` vs `build_*`, async/sync split, tensor-math exemption, test-file location — NAM-02, NAM-04, NAM-05, NAM-06, NAM-08
+
+### Phase 34: External Doc Fixes (v21.4)
+
+**Goal**: Resolve the remaining external documentation inconsistencies discovered during v19.0 audit — stale phase references, missing ADRs, broken cross-links
+
+**Depends on**: Phase 33 (AGENTS.md must be updated before PROJECT.md cross-links to ADR list)
+
+**Requirements**: DOC-01, DOC-02, DOC-03, DOC-04
+
+**Success Criteria** (what must be TRUE):
+
+  1. `REQUIREMENTS.md:53` no longer references DeepSeek unless `crates/model/src/deepseek/` exists; if removed, the directory must be restored OR the requirement text corrected — validates DOC-01
+  2. A new ADR captures the vllm-dist investment vs deprecation decision rationale (why feature-gated vs removed vs retained), referencing the v20.1 decision and multi-node future — validates DOC-02
+  3. `qwen3_5/speculative_tests.rs:1` no longer references "Phase 5 Wave 4" — uses current phase terminology (e.g., "Phase 18.4 speculative decoding tests" or a neutral phase-agnostic description) — validates DOC-03
+  4. `.planning/PROJECT.md` "Key Decisions" table cross-links to ADRs by ID; navigating from a decision to its rationale works in one click — validates DOC-04
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] 34-01: Reconcile DeepSeek reference in REQUIREMENTS.md (remove or restore directory) — DOC-01
+- [ ] 34-02: Create ADR for vllm-dist investment vs deprecation decision — DOC-02
+- [ ] 34-03: Reframe "Phase 5 Wave 4" reference in `qwen3_5/speculative_tests.rs:1` — DOC-03
+- [ ] 34-04: Cross-link `.planning/PROJECT.md` "Key Decisions" table to ADRs by ID — DOC-04
+
+### Phase 35: P3 Actionable + Final Verification (v21.5)
+
+**Goal**: Resolve remaining actionable P3 findings and verify all v21.0 invariants hold — 100% backlog closure with no test regression, no clippy/fmt regression, and no doc coverage regression
+
+**Depends on**: Phase 31, 32, 33, 34 (all prior phases must be complete before FINAL gates run)
+
+**Requirements**: P3-01, P3-02, P3-03, P3-04, P3-05, P3-06, FINAL-01, FINAL-02, FINAL-03, FINAL-04
+
+**Success Criteria** (what must be TRUE):
+
+  1. All P3 actionable items resolved: dead `crates/traits/tests/mod.rs` removed; `gemma4/attention.rs` non-test `.unwrap()` replaced with graceful error propagation; `CircuitBreakerError::HalfOpenRejected(u32)` variant added; `CudaGraphError::Clone` derive decision verified and documented (keep with rationale or remove) — validates P3-01, P3-02, P3-04, P3-06
+  2. `MIGRATING.md` skeleton exists at repo root with v15.0 → v21.0 versioned changelog (backfill of intermediate versions may be deferred); `model` crate production `unwrap()` count is re-verified post-v21.0 changes (≤baseline from v20.6) — validates P3-03, P3-05
+  3. **FINAL-01**: `cargo test --workspace --all-features` returns ≥1144 tests passing (no regression from v20.6 baseline)
+  4. **FINAL-02**: `cargo clippy --workspace --all-targets --all-features -- -D warnings` clean (no new warnings)
+  5. **FINAL-03**: `cargo fmt --all --check` clean (no formatting drift)
+  6. **FINAL-04**: `.planning/PROJECT.md` "Current Milestone", "What This Is", and "Key Decisions" sections updated with v21.0 outcomes; `.planning/STATE.md` reflects Phase 31-35 completion; v21.0 100% backlog closure status declared
+
+**Plans**: TBD
+
+Plans:
+
+- [ ] 35-01: Remove dead `crates/traits/tests/mod.rs`; fix `gemma4/attention.rs` non-test unwrap — P3-01, P3-02
+- [ ] 35-02: Add `HalfOpenRejected(u32)` variant to `CircuitBreakerError`; verify `CudaGraphError::Clone` derive decision — P3-04, P3-06
+- [ ] 35-03: Create `MIGRATING.md` skeleton with v15.0 → v21.0 versioned changelog — P3-03
+- [ ] 35-04: Re-verify `model` crate production `unwrap()` count post-v21.0; document baseline — P3-05
+- [ ] 35-05: FINAL-01 — `cargo test --workspace --all-features` ≥1144 tests pass
+- [ ] 35-06: FINAL-02 — `cargo clippy --workspace --all-targets --all-features -- -D warnings` clean
+- [ ] 35-07: FINAL-03 — `cargo fmt --all --check` clean
+- [ ] 35-08: FINAL-04 — Update `.planning/PROJECT.md` + `.planning/STATE.md` with v21.0 outcomes (100% backlog closure declared)
+
+---
+
 ## Progress
 
 **Execution Order:**
 v19.0: 20 → 21 → 22 → 23 → 24 (SHIPPED 2026-06-27)
-v20.0: 25 → (26 ‖ 28) → (27 + 29) → 30 (parallel where independent)
+v20.0: 25 → (26 ‖ 28) → (27 + 29) → 30 (parallel where independent; SHIPPED 2026-06-27)
+v21.0: 31 → 32 → 33 → 34 → 35 (linear chain; engine splits unblock API refactor; AGENTS.md updates precede doc cross-links)
 
 | Phase                                              | Milestone | Plans Complete | Status      | Completed    |
 | -------------------------------------------------- | --------- | -------------- | ----------- | ------------ |
@@ -480,13 +633,20 @@ v20.0: 25 → (26 ‖ 28) → (27 + 29) → 30 (parallel where independent)
 | 22 Comments + Documentation Audit                  | v19.0     | 1/1            | Complete    | 2026-06-27   |
 | 23 API + Error Handling Audit                      | v19.0     | 1/1            | Complete    | 2026-06-27   |
 | 24 Synthesis + Remediation Backlog                 | v19.0     | 1/1            | Complete    | 2026-06-27   |
-| 25 P0 Critical Fixes (v20.1)                       | v20.0     | 0/5            | Not started | -            |
-| 26 Module Tree Restoration (v20.2)                 | v20.0     | 0/4            | Not started | -            |
-| 27 Error Handling Standardization (v20.3)          | v20.0     | 0/7            | Not started | -            |
-| 28 Documentation Coverage Push (v20.4)             | v20.0     | 0/10           | Not started | -            |
-| 29 External Docs + ADRs (v20.5)                    | v20.0     | 0/4            | Not started | -            |
-| 30 Naming + Final Polish (v20.6)                   | v20.0     | 0/9            | Not started | -            |
+| 25 P0 Critical Fixes (v20.1)                       | v20.0     | 5/5            | Complete    | 2026-06-27   |
+| 26 Module Tree Restoration (v20.2)                 | v20.0     | 4/4            | Complete    | 2026-06-27   |
+| 27 Error Handling Standardization (v20.3)          | v20.0     | 7/7            | Complete    | 2026-06-27   |
+| 28 Documentation Coverage Push (v20.4)             | v20.0     | 10/10          | Complete    | 2026-06-27   |
+| 29 External Docs + ADRs (v20.5)                    | v20.0     | 4/4            | Complete    | 2026-06-27   |
+| 30 Naming + Final Polish (v20.6)                   | v20.0     | 9/9            | Complete    | 2026-06-27   |
+| 31 Module Layout Reorganization (v21.1)            | v21.0     | 0/6            | Not started | -            |
+| 32 API Consistency (v21.2)                         | v21.0     | 0/8            | Not started | -            |
+| 33 Naming Consistency (v21.3)                      | v21.0     | 0/4            | Not started | -            |
+| 34 External Doc Fixes (v21.4)                      | v21.0     | 0/4            | Not started | -            |
+| 35 P3 Actionable + Final Verification (v21.5)      | v21.0     | 0/8            | Not started | -            |
 
 ---
 
 *Roadmap updated: 2026-06-27 — v20.0 phases defined (6 phases, 48/48 requirements mapped, BACKLOG-driven remediation, Phase 25 includes rollback criteria for P0 architectural changes, Phase 30 includes FINAL-01..04 verification gates)*
+
+*Roadmap updated: 2026-06-27 — v21.0 P2/P3 Backlog Cleanup phases added (5 phases: 31-35; 42 requirements: 9 ML + 11 API + 8 NAM + 4 DOC + 6 P3 + 4 FINAL; 100% requirement coverage; ~71h estimated; linear dependency chain 31→32→33→34→35; preserves v20.0 invariants: 1144+ tests green, clippy/fmt clean, doc coverage ≥60% baseline, #[deprecated] for public API changes, vllm-dist feature-gated)*

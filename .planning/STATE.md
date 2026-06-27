@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v21.0
 milestone_name: P2/P3 Backlog Cleanup
 status: planning
-last_updated: "2026-06-27T11:29:54.848Z"
+last_updated: "2026-06-27T12:00:00.000Z"
 last_activity: 2026-06-27
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
-  total_plans: 0
+  total_plans: 30
   completed_plans: 0
   percent: 0
 ---
@@ -20,16 +20,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-27)
 
 **Core value:** Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
-**Current focus:** v21.0 P2/P3 Backlog Cleanup — PLANNING (defining requirements + roadmap; 5 phases scoped: 31-35)
+**Current focus:** v21.0 P2/P3 Backlog Cleanup — ROADMAP CREATED (5 phases scoped: 31-35; 42 requirements mapped 100%; awaiting `/gsd-discuss-phase 31`)
 
 ---
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Phase 31 (next, not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-27 — Milestone v21.0 started
+Status: Roadmap defined; pending phase discussion / planning
+Last activity: 2026-06-27 — v21.0 roadmap created (ROADMAP.md updated with Phase 31-35; REQUIREMENTS.md traceability complete; STATE.md updated)
 
 ## Performance Metrics
 
@@ -54,10 +54,22 @@ Last activity: 2026-06-27 — Milestone v21.0 started
 | 29    | 4     | 12           | External docs reconciliation + 12 ADRs | ✓ |
 | 30    | 9     | 10           | Naming + deprecation hygiene + final verification | ✓ |
 
+**v21.0 Planned (scope defined 2026-06-27):**
+
+| Phase | Plans | Requirements | Theme | Status |
+| ----- | ----- | ------------:| ----- | :----: |
+| 31    | 6     | 9            | Module Layout Reorganization (ML-01..09) | Pending |
+| 32    | 8     | 11           | API Consistency (API-01..11) | Pending |
+| 33    | 4     | 8            | Naming Consistency (NAM-01..08) | Pending |
+| 34    | 4     | 4            | External Doc Fixes (DOC-01..04) | Pending |
+| 35    | 8     | 10           | P3 Actionable + FINAL gates (P3-01..06 + FINAL-01..04) | Pending |
+| **Total** | **30** | **42** |  |  |
+
 **Recent Trend:**
 
 - Last 5 commits (v20.0): refactor(model) Phase 30 NAM/DEP/CMT, chore(fmt) Phase 28 indent fix, docs(adr) Phase 29, docs(core) Phase 28 DOC-02/03 backfill, docs(AGENTS) Phase 28 DOC-07
-- v20.0 shipped cleanly: all 6 phases delivered, FINAL-01..04 gates green, ready for milestone archive
+- v20.0 shipped cleanly: all 6 phases delivered, FINAL-01..04 gates green, milestone archived
+- v21.0 roadmap created: 5 phases (31-35) covering 44 P2 + 13 P3 backlog items, ~71h estimated
 
 ---
 
@@ -79,7 +91,14 @@ Last activity: 2026-06-27 — Milestone v21.0 started
 - **v20.0 phase dependency graph**: 25 → (26 ‖ 28) → (27 + 29) → 30; 27 depends on 25 (ModelError must be enum first); 29 depends on 28 (/// docs must exist before ADR references); 30 runs last by convention (independent)
 - **v20.0 risk profile**: Phase 25 high-risk architectural changes (layering, ModelError enum, object-safety) — requires explicit rollback criteria and pre-Phase-25 baseline capture
 - **v20.0 constraint preservation**: All 287+ existing tests must remain green throughout (FINAL-01 invariant); public API removals require `#[deprecated]` markers (DEP-01/02); `vllm-dist` is feature-gated (not removed) — MT-07 + EXT-07 outcome
-- **v20.0 counts note**: REQUIREMENTS.md traceability maps 48 requirements (5 P0 + 7 MT + 7 ERR + 7 DOC + 12 EXT + 10 NAM/DEP/CMT/FINAL), though REQUIREMENTS.md preamble says "46 total" — minor source inconsistency (count derived from traceability table is 48, which is used in ROADMAP.md)
+- **v21.0 roadmap decision**: 5 phases (31-35), one per theme (Module Layout / API / Naming / External Docs / P3+FINAL); v20.0 ended at Phase 30, so v21.0 starts at Phase 31
+- **v21.0 phase dependency graph**: 31 → 32 → 33 → 34 → 35 (linear chain); 31 unblocks 32 (engine splits relocate `FallbackStrategy`); 32 unblocks 33 (API surface stable before doc updates); 33 unblocks 34 (AGENTS.md must exist before PROJECT.md cross-links); 35 depends on all (FINAL gates run last)
+- **v21.0 scope decision**: All 44 P2 + selected actionable P3 (vs only high-impact subset); 2 of 44 P2 are zero-effort "no action" findings (NAME-F-13, NAME-F-20) per BACKLOG.md, so effective P2 work = 42 items across 5 phases
+- **v21.0 risk profile**: Phase 31 highest-risk (draft_registry split touches Phase 18 code; engine splits affect speculative step loop); Phase 32 medium-risk (FallbackStrategy split touches trait ecosystem); Phases 33-35 low-risk (documentation + small fixes)
+- **v21.0 constraint preservation**: All 1144+ existing tests must remain green (FINAL-01 invariant); public API removals require `#[deprecated]` markers (DEP-01/02 from v20.6 still applies); `vllm-dist` remains feature-gated (not removed); doc coverage ≥60% baseline must not regress (achieved 97.8%)
+- **v21.0 sub-phase mapping**: 31=v21.1, 32=v21.2, 33=v21.3, 34=v21.4, 35=v21.5 (mirrors v20.0's 25=v20.1, ..., 30=v20.6 convention)
+- **v21.0 P3 selection**: 6 of 13 P3 items actionable (ARCH-F-15, API-F-25, API-F-27, API-F-31, API-F-32, API-F-33); 7 remaining are informational negative findings (NAME-F-12..F-26) deferred per REQUIREMENTS.md RFU-04
+- **v21.0 carry-over from v20.0**: Engine::step() speculative-mode hang + 5 cargo doc warnings + 1 gguf TODO — explicitly out of scope (OPS-02/03 deferred to bug-fix milestone)
 
 ### Architecture Patterns Established (v18.0 — preserved in v20.0)
 
@@ -93,16 +112,22 @@ Last activity: 2026-06-27 — Milestone v21.0 started
 8. **Audit-before-refactor** — Non-functional refactoring work (file renaming, module boundary tightening, error-type unification, doc coverage catch-up) is gated on a structured audit. Audit findings become input to v20.0+ remediation phases, each with measurable acceptance criteria.
 9. **vllm-dist feature-gate (v20.0 decision)** — Keep code, exclude from default build; enable for multi-node work via `--features multi-node`. `TensorParallelConfig` remains public in `vllm-dist`.
 10. **Object-safety co-fix (v20.0 decision)** — Fix `ModelError` + non-object-safe traits together in v20.1 (both P0). Combined into single Phase 25 to avoid regression risk from sequential changes.
+11. **AGENTS.md as living style guide (v20.0 + v21.0 pattern)** — Naming conventions (verb policy, suffix conventions, tensor-math exemption, test-file location) are documented in AGENTS.md rather than enforced mechanically. v21.0 Phases 33-34 extend this with remaining ambiguities (`*Manager` suffix, `create_*` vs `build_*`, async/sync split rationale).
 
 ### Pending Todos
 
-None — v20.0 milestone complete; awaiting `/gsd-complete-milestone` ceremony.
+- [ ] **Phase 31**: Module Layout Reorganization (ML-01..09) — `/gsd-discuss-phase 31` then `/gsd-plan-phase 31`
+- [ ] **Phase 32**: API Consistency (API-01..11)
+- [ ] **Phase 33**: Naming Consistency (NAM-01..08)
+- [ ] **Phase 34**: External Doc Fixes (DOC-01..04)
+- [ ] **Phase 35**: P3 Actionable + FINAL gates (P3-01..06 + FINAL-01..04)
 
 ### Blockers/Concerns
 
-- `Engine::step()` in speculative mode hangs — pre-existing bug (not introduced by v18.0 or v19.0). 2 Phase 19 integration tests are `#[ignore]`d awaiting the fix. NOT blocking v20.0; will be addressed in v20.7+ or later remediation cycle.
-- Real-model benchmark missing — current bench uses stub backends. Out of scope for v20.0 (purely remediation); deferred indefinitely.
-- 44 P2 + 13 P3 audit findings — out of scope for v20.0; deferred to v20.7+ (per REQUIREMENTS.md traceability).
+- `Engine::step()` in speculative mode hangs — pre-existing bug (not introduced by v18.0 or v19.0). 2 Phase 19 integration tests are `#[ignore]`d awaiting the fix. NOT blocking v21.0; explicitly out of scope per PROJECT.md Out of Scope (v21.0).
+- Real-model benchmark missing — current bench uses stub backends. Out of scope for v21.0 (purely backlog closure); deferred indefinitely per OPS-01.
+- 5 pre-existing cargo doc broken-link warnings — deferred per OPS-03; out of scope for v21.0.
+- vllm-testing lemon pair split (ML-05) may be infeasible if cross-crate dependency graph becomes too tangled — fallback is to document why kept (per success criterion).
 
 ---
 
@@ -111,33 +136,37 @@ None — v20.0 milestone complete; awaiting `/gsd-complete-milestone` ceremony.
 | Category    | Item                                              | Status            | Deferred At |
 | ----------- | ------------------------------------------------- | ----------------- | ----------- |
 | Multi-Model | External draft model support (MULTI-01, MULTI-02) | Shipped in v18.0  | 2026-05-13   |
-| Multi-Model | Draft hot-swap mid-request (MULTI-04)             | Deferred to v20.7+ | 2026-06-27 |
+| Multi-Model | Draft hot-swap mid-request (MULTI-04)             | Out of scope (v21.0) | 2026-06-27 |
 | Multi-Model | Draft fine-tuning hooks (MULTI-05)                | Out of scope      | 2026-05-13   |
-| Multi-Model | Cross-GPU draft placement (MULTI-06)              | Deferred to v20.7+ | 2026-06-27 |
-| Engine      | Real-model benchmark (vs stub backend)            | Deferred to v20.7+ | 2026-06-27 |
-| Engine      | Fix Engine::step() speculative-mode hang         | Deferred to v20.7+ | 2026-06-27 |
-| Refactor    | **5 P0 architecture/API violations**              | **Phase 25 (v20.1)** | 2026-06-27 |
-| Refactor    | **Module tree restoration** (orphan files + test migration) | **Phase 26 (v20.2)** | 2026-06-27 |
-| Refactor    | **Error handling standardization** (13 enums + 25+ mutex + 4 variants) | **Phase 27 (v20.3)** | 2026-06-27 |
-| Refactor    | **Doc coverage push 7.6%→≥60%**                   | **Phase 28 (v20.4)** | 2026-06-27 |
-| Refactor    | **External docs + 12 ADRs**                       | **Phase 29 (v20.5)** | 2026-06-27 |
-| Refactor    | **Naming + deprecation hygiene + final verify**   | **Phase 30 (v20.6)** | 2026-06-27 |
-| Refactor    | 44 P2 issues + 13 P3 informational                | Deferred to v20.7+ (not in v20.0 scope) | 2026-06-27 |
-| Architecture| `vllm-dist` resurrection (multi-node work)        | Deferred to v20.7+ (feature-gated in v20.0) | 2026-06-27 |
-| Documentation | RFU-01 doc coverage 60% → 80% (if 60% achieved) | Deferred to v20.7+ (depends on v20.4 outcome) | 2026-06-27 |
-| Documentation | RFU-03 Migrate to parking_lot::Mutex             | Deferred to v20.7+ (optional follow-up) | 2026-06-27 |
-| Architecture| ARF-02 Replace `kv_cache_fp8` with unified FP8    | Deferred to v20.7+ (depends on v20.2 outcome) | 2026-06-27 |
-| Architecture| ARF-03 Split `engine.rs` God module (1,038 LOC)   | Deferred to v20.7+ (only if Phase 27 reveals deeper issues) | 2026-06-27 |
+| Multi-Model | Cross-GPU draft placement (MULTI-06)              | Out of scope (v21.0) | 2026-06-27 |
+| Engine      | Real-model benchmark (vs stub backend)            | Deferred (OPS-01) | 2026-06-27 |
+| Engine      | Fix Engine::step() speculative-mode hang         | Out of scope (v21.0) | 2026-06-27 |
+| Refactor    | **5 P0 architecture/API violations**              | **Shipped in Phase 25 (v20.1)** | 2026-06-27 |
+| Refactor    | **Module tree restoration** (orphan files + test migration) | **Shipped in Phase 26 (v20.2)** | 2026-06-27 |
+| Refactor    | **Error handling standardization** (13 enums + 25+ mutex + 4 variants) | **Shipped in Phase 27 (v20.3)** | 2026-06-27 |
+| Refactor    | **Doc coverage push 7.6%→97.8%**                  | **Shipped in Phase 28 (v20.4)** | 2026-06-27 |
+| Refactor    | **External docs + 12 ADRs**                       | **Shipped in Phase 29 (v20.5)** | 2026-06-27 |
+| Refactor    | **Naming + deprecation hygiene + final verify**   | **Shipped in Phase 30 (v20.6)** | 2026-06-27 |
+| Refactor    | **Module layout reorganization** (draft_registry split, engine/speculative subtree, qwen3_config, attention/util) | **Phase 31 (v21.1)** | 2026-06-27 |
+| Refactor    | **API consistency** (builders, error sources, FallbackStrategy split, error context) | **Phase 32 (v21.2)** | 2026-06-27 |
+| Refactor    | **Naming consistency** (flash_v3 rename, AGENTS.md expansions, non-tensor single-letter rename) | **Phase 33 (v21.3)** | 2026-06-27 |
+| Refactor    | **External doc fixes** (DeepSeek, vllm-dist ADR, Phase 5 ref, PROJECT.md cross-links) | **Phase 34 (v21.4)** | 2026-06-27 |
+| Refactor    | **P3 actionable + FINAL gates** (gemma4 unwrap, MIGRATING.md, CircuitBreakerError variant, CudaGraphError Clone) | **Phase 35 (v21.5)** | 2026-06-27 |
+| Architecture| `vllm-dist` resurrection (multi-node work)        | Deferred to v21.x+ (feature-gated in v20.0; ML-06 in v21.1 relocates the error type but doesn't resurrect multi-node) | 2026-06-27 |
+| Documentation | RFU-03 Migrate to parking_lot::Mutex             | Partially addressed in v21.2 (API-04 covers predictive_batching.rs); broader migration deferred | 2026-06-27 |
+| Architecture| ARF-02 Replace `kv_cache_fp8` with unified FP8    | Deferred to v21.x+ (depends on v21.1 integration revealing design issues) | 2026-06-27 |
+| Architecture| ARF-03 Split `engine.rs` God module (1,038 LOC)   | Partially addressed in v21.1 (ML-02 collapses engine.rs + engine/speculative.rs into sub-tree); deeper split deferred | 2026-06-27 |
+| Refactor    | 7 P3 negative findings (NAME-F-12..F-26)          | Informational only (RFU-04); no action in v21.0 | 2026-06-27 |
 
 ---
 
 ## Session Continuity
 
-Last session: 2026-06-27 v20.0 milestone complete
-Stopped at: v20.0 milestone complete (6/6 phases shipped; FINAL-01..04 all green); PROJECT.md and STATE.md updated
+Last session: 2026-06-27 v21.0 roadmap created
+Stopped at: v21.0 roadmap complete (5 phases 31-35, 42/42 requirements mapped, ROADMAP.md updated, REQUIREMENTS.md traceability complete, STATE.md refreshed); ready for `/gsd-discuss-phase 31`
 Resume file: None
-Next command: `/gsd-complete-milestone v20.0` (milestone archive ceremony)
+Next command: `/gsd-discuss-phase 31` (gather adaptive context before planning Module Layout Reorganization)
 
 ---
 
-*State updated: 2026-06-27 — v20.0 milestone complete (6/6 phases shipped: P0 fixes, module tree, error handling, doc coverage 97.8%, 12 ADRs, naming + final polish; FINAL-01..04 gates all green; 1144 tests pass; clippy/fmt clean)*
+*State updated: 2026-06-27 — v21.0 roadmap created (5 phases: 31-35; 42 requirements mapped 100%; linear dependency chain 31→32→33→34→35; ~71h estimated; preserves v20.0 invariants: 1144 tests pass, clippy/fmt clean, doc coverage 97.8%, #[deprecated] for public API changes, vllm-dist feature-gated)*
