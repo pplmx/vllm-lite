@@ -24,3 +24,6 @@ path = "../traits"
 
 [build-dependencies]
 tonic-build = "0.12"
+
+[lints]
+workspace = true

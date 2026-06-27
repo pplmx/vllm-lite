@@ -33,3 +33,6 @@ cuda = ["candle-core/cuda", "candle-nn/cuda"]
 gguf = ["dep:gguf"]
 multi-node = ["dep:vllm-dist"]
 full = ["cuda", "gguf"]
+
+[lints]
+workspace = true

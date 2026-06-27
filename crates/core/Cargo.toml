@@ -48,3 +48,6 @@ harness = false
 [[bench]]
 name = "multi_draft_speculative"
 harness = false
+
+[lints]
+workspace = true
