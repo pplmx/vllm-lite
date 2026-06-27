@@ -5,7 +5,7 @@
 - ✅ **v16.0 Speculative Decoding** — Phases 16.1-16.4 (shipped 2026-04-28)
 - ✅ **v17.0 Production Speculative Decoding** — Phases 17.1-17.4 (shipped 2026-05-13)
 - ✅ **v18.0 Multi-Model Speculative Decoding** — Phases 18.1-18.4 + Phase 19 gap closure (shipped 2026-06-27)
-- 📋 **v19.0 Codebase Health Audit** — Phases 20-24 (planned; analysis-only, no code changes)
+- ✅ **v19.0 Codebase Health Audit** — Phases 20-24 (shipped 2026-06-27; analysis-only, no code changes; see `.planning/audit/` for deliverables)
 
 ## Phases
 
@@ -14,11 +14,11 @@
 - [x] **Phase 18.3: Request Routing + Fallback** - 请求级 draft 路由,失败回退到 self-spec
 - [x] **Phase 18.4: Integration Tests + Benchmarks** - E2E 验证 + 多 draft 性能基线
 - [x] **Phase 19: Wire v18.0 into Engine step loop** - DraftResolver 接入 + HTTP exporter + ServerDraftLoader
-- [ ] **Phase 20: Architecture Audit** - crate 依赖图 / 模块边界 / 循环依赖 / 分层一致性 / 测试架构
-- [ ] **Phase 21: Naming Audit** - 文件 / 类型 / 方法 / 变量 / 模块命名一致性 + 语义清晰度
-- [ ] **Phase 22: Comments + Documentation Audit** - doc 覆盖率 / 模块文档 / 过期注释 / 外部文档 / ADR
-- [ ] **Phase 23: API + Error Handling Audit** - API 一致性 / 错误类型 / 错误人体工学 / trait 设计 / 弃用卫生
-- [ ] **Phase 24: Synthesis + Remediation Backlog** - 跨维度综合 + P0/P1/P2 优先级清单 + v20.0+ 迁移路线图
+- [x] **Phase 20: Architecture Audit** - crate 依赖图 / 模块边界 / 循环依赖 / 分层一致性 / 测试架构
+- [x] **Phase 21: Naming Audit** - 文件 / 类型 / 方法 / 变量 / 模块命名一致性 + 语义清晰度
+- [x] **Phase 22: Comments + Documentation Audit** - doc 覆盖率 / 模块文档 / 过期注释 / 外部文档 / ADR
+- [x] **Phase 23: API + Error Handling Audit** - API 一致性 / 错误类型 / 错误人体工学 / trait 设计 / 弃用卫生
+- [x] **Phase 24: Synthesis + Remediation Backlog** - 跨维度综合 + P0/P1/P2 优先级清单 + v20.0+ 迁移路线图
 
 ## Phase Details
 
