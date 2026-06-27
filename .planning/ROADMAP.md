@@ -7,7 +7,7 @@
 - ✅ **v18.0 Multi-Model Speculative Decoding** — Phases 18.1-18.4 + Phase 19 gap closure (shipped 2026-06-27)
 - ✅ **v19.0 Codebase Health Audit** — Phases 20-24 (shipped 2026-06-27; analysis-only, no code changes; see `.planning/audit/` for deliverables)
 - ✅ **v20.0 Codebase Remediation** — Phases 25-30 (shipped 2026-06-27; BACKLOG.md-driven; 6 sub-phases v20.1-v20.6; 48/48 requirements; 1144 tests pass; clippy/fmt clean; doc coverage 97.8%)
-- 🚧 **v21.0 P2/P3 Backlog Cleanup** — Phases 31-35 (planning complete 2026-06-27; 5 sub-phases v21.1-v21.5; 42 requirements: 9 ML + 11 API + 8 NAM + 4 DOC + 6 P3 + 4 FINAL; ~71h estimated)
+- 🚧 **v21.0 P2/P3 Backlog Cleanup** — Phases 31-35 (Phase 31 complete 2026-06-27; 4 sub-phases remaining v21.2-v21.5; 42 requirements: 9 ML done + 11 API + 8 NAM + 4 DOC + 6 P3 + 4 FINAL pending; ~71h estimated)
 
 ## Phases
 
@@ -27,7 +27,7 @@
 - [x] **Phase 28: Documentation Coverage Push** (v20.4) - workspace doc 7.6%→≥60% + 776 个 pub item /// + 121 个文件 //! + README 修复
 - [x] **Phase 29: External Docs + ADRs** (v20.5) - README/AGENTS.md 调和 + 12 个新 ADR
 - [x] **Phase 30: Naming + Final Polish** (v20.6) - 7 P1 + 19 P2 命名 + #[deprecated] 卫生 + 注释清理 + 最终验证 (test pass + clippy + fmt)
-- [ ] **Phase 31: Module Layout Reorganization** (v21.1) - draft_registry 拆分 + engine/speculative 子树 + qwen3_config 下沉 + attention/util 提取 + TensorParallelError 迁移 + test_fixtures 重定位
+- [x] **Phase 31: Module Layout Reorganization** (v21.1) - draft_registry 拆分 + engine/speculative 子树 + qwen3_config 下沉 + attention/util 提取 + TensorParallelError 迁移 + test_fixtures 重定位
 - [ ] **Phase 32: API Consistency** (v21.2) - builder 约定文档化 + #[source] 补 + Box<dyn Error> 替换 + 22 个 builder 引入 + FallbackStrategy sync/async 拆分 + 错误 context 携带
 - [ ] **Phase 33: Naming Consistency** (v21.3) - flash_v3 重命名 + NodeInfo 评估 + AGENTS.md 命名约定文档化 + 非 tensor 单字母变量重命名
 - [ ] **Phase 34: External Doc Fixes** (v21.4) - DeepSeek 修正 + vllm-dist ADR + Phase 5 Wave 4 ref + PROJECT.md Key Decisions 交叉链接
@@ -468,7 +468,7 @@ Plans:
 
 ---
 
-## 🚧 v21.0 P2/P3 Backlog Cleanup (Phases 31-35) — PLANNED 2026-06-27
+## 🚧 v21.0 P2/P3 Backlog Cleanup (Phases 31-35) — IN PROGRESS 2026-06-27
 
 **Milestone Goal:** Close the remaining 44 P2 + 13 P3 backlog from v19.0 audit (v20.0 already shipped 5 P0 + 38 P1). Target: 100% backlog closure preserving all v20.0 invariants (1144+ tests green, clippy/fmt clean, doc coverage ≥60% baseline). All changes must be backward-compatible via `#[deprecated]` markers for any public API removal; `vllm-dist` remains feature-gated.
 
@@ -639,7 +639,7 @@ v21.0: 31 → 32 → 33 → 34 → 35 (linear chain; engine splits unblock API r
 | 28 Documentation Coverage Push (v20.4)             | v20.0     | 10/10          | Complete    | 2026-06-27   |
 | 29 External Docs + ADRs (v20.5)                    | v20.0     | 4/4            | Complete    | 2026-06-27   |
 | 30 Naming + Final Polish (v20.6)                   | v20.0     | 9/9            | Complete    | 2026-06-27   |
-| 31 Module Layout Reorganization (v21.1)            | v21.0     | 0/6            | Not started | -            |
+| 31 Module Layout Reorganization (v21.1)            | v21.0     | 6/6            | Complete    | 2026-06-27   |
 | 32 API Consistency (v21.2)                         | v21.0     | 0/8            | Not started | -            |
 | 33 Naming Consistency (v21.3)                      | v21.0     | 0/4            | Not started | -            |
 | 34 External Doc Fixes (v21.4)                      | v21.0     | 0/4            | Not started | -            |
