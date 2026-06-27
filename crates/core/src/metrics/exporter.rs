@@ -75,6 +75,49 @@ impl PrometheusExporter {
             self.collector.get_counter("errors_total")
         ));
 
+        // v18.0 multi-model speculative decoding metrics
+        let draft_snap = self.collector.draft_metrics_snapshot();
+        output.push_str(
+            "# HELP draft_resolutions_external_total Total draft resolutions → external backend\n",
+        );
+        output.push_str("# TYPE draft_resolutions_external_total counter\n");
+        output.push_str(&format!(
+            "draft_resolutions_external_total {}\n",
+            draft_snap.resolutions_external_total
+        ));
+
+        output.push_str("# HELP draft_resolutions_self_spec_total Total draft resolutions → self-spec fallback\n");
+        output.push_str("# TYPE draft_resolutions_self_spec_total counter\n");
+        output.push_str(&format!(
+            "draft_resolutions_self_spec_total {}\n",
+            draft_snap.resolutions_self_spec_total
+        ));
+
+        output.push_str("# HELP draft_resolutions_none_total Total draft resolutions → no draft (pure target decode)\n");
+        output.push_str("# TYPE draft_resolutions_none_total counter\n");
+        output.push_str(&format!(
+            "draft_resolutions_none_total {}\n",
+            draft_snap.resolutions_none_total
+        ));
+
+        output.push_str(
+            "# HELP draft_load_failures_total Total draft load failures (FALL-01 trigger)\n",
+        );
+        output.push_str("# TYPE draft_load_failures_total counter\n");
+        output.push_str(&format!(
+            "draft_load_failures_total {}\n",
+            draft_snap.load_failures_total
+        ));
+
+        output.push_str(
+            "# HELP draft_runtime_errors_total Total draft runtime errors (FALL-02 trigger)\n",
+        );
+        output.push_str("# TYPE draft_runtime_errors_total counter\n");
+        output.push_str(&format!(
+            "draft_runtime_errors_total {}\n",
+            draft_snap.runtime_errors_total
+        ));
+
         // Gauges
         output.push_str("# HELP packing_efficiency Batch efficiency (0-1)\n");
         output.push_str("# TYPE packing_efficiency gauge\n");
