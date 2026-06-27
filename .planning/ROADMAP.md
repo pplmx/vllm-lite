@@ -195,6 +195,17 @@ Plans:
 | 18.3 Request Routing + Fallback         | v18.0     | 1/1            | Complete    | 2026-06-27   |
 | 18.4 Integration Tests + Benchmarks     | v18.0     | 1/1            | Complete    | 2026-06-27   |
 
+### Phase 19: Wire v18.0 into Engine step loop + HTTP exporter
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 18
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 19 to break down)
+
 ---
 
 *Roadmap updated: 2026-06-27 — v18.0 phases defined (4 phases, 14/14 requirements mapped)*
