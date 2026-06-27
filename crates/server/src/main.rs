@@ -190,7 +190,12 @@ async fn main() {
             registered_drafts = draft_loader.len(),
             "Installed ServerDraftLoader (replaces NoopLoader)"
         );
-        engine.set_draft_loader(Arc::new(draft_loader));
+        if !engine.set_draft_loader(Arc::new(draft_loader)) {
+            tracing::warn!(
+                "Engine.set_draft_loader was a no-op: resolver missing. \
+                 Drafts will fall back to self-spec."
+            );
+        }
     }
 
     tracing::debug!(
