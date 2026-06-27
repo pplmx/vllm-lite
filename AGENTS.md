@@ -281,6 +281,119 @@ pub type Result<T> = std::result::Result<T, EngineError>;
 
 ---
 
+## API Conventions
+
+These conventions ensure a uniform API surface across all crates. **All new public types and trait extensions must follow them**; existing types that violate them should be migrated opportunistically.
+
+### Builder vs Struct Literal
+
+For public types with **more than 2 optional fields**, use a builder pattern instead of struct literals. Builders compose cleanly, document fields with `with_*` methods, and support future field additions without breaking changes.
+
+**Use a builder when:**
+
+- The struct has >2 `Option<T>` or `Default`-able fields
+- Fields are commonly set non-default in tests and user code
+- Future field additions are likely (avoid API churn)
+
+**Use a struct literal when:**
+
+- The struct has ≤2 fields with obvious semantics
+- All fields are required (no defaults)
+- The type is a value object with no expected evolution (e.g., coordinate pair)
+
+**Examples (good builders):**
+
+```rust
+// vllm_core::speculative::config::SpeculationConfig
+let cfg = SpeculationConfig::builder()
+    .with_max_draft_tokens(5)
+    .with_acceptance_threshold(0.7)
+    .build();
+
+// vllm_testing::BatchBuilder
+let batch = BatchBuilder::new()
+    .with_seq_id(1)
+    .with_tokens(vec![10, 20, 30])
+    .build();
+
+// vllm_core::speculative::registry::DraftSpec
+let spec = DraftSpec::new("qwen-small", model_dir, 1024)
+    .with_arch_hint("qwen3")
+    .with_weight_size(2_000_000_000);
+```
+
+### Crate-Root Re-exports
+
+Every crate MUST re-export its most-used public types at the crate root, even if they live in submodules. This avoids forcing callers to navigate the module hierarchy for common imports.
+
+**Convention:** `lib.rs` ends with a `pub use` block listing the top-level re-exports. Internal modules use `pub(crate)` for things that should NOT be re-exported.
+
+**Example pattern (vllm-core/src/lib.rs):**
+
+```rust
+pub use crate::error::{EngineError, Result};
+pub use crate::scheduler::{SchedulerEngine, Request, SchedulerConfig};
+pub use crate::speculative::{
+    DraftId, DraftModelRegistry, DraftSpec, DraftState, LoadedDraft,
+};
+```
+
+**Crate-root trait re-exports:** When a trait is fundamental and used across many call sites, re-export it from the consuming crate's root (not just from the implementing module). Example: `pub use vllm_traits::ModelBackend;` if you have a wrapper that adds context.
+
+### Error Type Conventions
+
+All error enums follow these rules (Phase 30 / v20.6 invariants):
+
+- Use `#[derive(thiserror::Error)]` — no hand-written `Display`/`Error` impls
+- Every variant has `#[error("...")]` for user-facing messages
+- When wrapping another error, use `#[source]` to preserve the chain:
+
+```rust
+#[derive(Debug, thiserror::Error)]
+pub enum DraftRegistryError {
+    #[error("draft load failed: {message}")]
+    LoadFailedWithSource {
+        message: String,
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+}
+```
+
+- Provide `From<E>` impls for cross-crate error conversion in `error/mod.rs`
+- Engine-level errors include a `with_request_id(u64) -> Self` helper for attaching log-correlation context post-construction
+- **Never** use `Box<dyn std::error::Error>` in public APIs — always use a typed enum (see Phase 32 / API-03)
+
+### Sync vs Async Trait Splits
+
+Traits that wrap generic operations should be split into sync + async variants when both code paths exist:
+
+```rust
+// Pure-computational fallback — sync only
+pub trait FallbackStrategy {
+    fn execute<T, E>(&self, op: fn() -> Result<T, E>) -> Result<T, E>;
+}
+
+// I/O-bound fallback — async
+#[async_trait::async_trait]
+pub trait AsyncFallbackStrategy {
+    async fn execute<F, Fut, T, E>(&self, op: F) -> Result<T, E>
+    where
+        F: Fn() -> Fut + Send,
+        Fut: std::future::Future<Output = Result<T, E>> + Send;
+}
+```
+
+Callers explicitly pick the trait that matches their runtime. This avoids forcing async onto purely-computational call sites and vice versa.
+
+### Default for Object-Safe Traits
+
+Object-safe traits (no generic methods, no `Self: Sized`) MUST provide `Default` impls when reasonable, so `Arc<dyn Trait>` consumers can construct empty instances. See `DraftVerifier` and `SchedulerObserver` in `vllm-core` for the pattern.
+
+Compile-only `dyn Trait` tests live in `crates/testing/tests/dyn_safety.rs` and verify every public trait compiles as `dyn Trait`.
+
+---
+
 ## Commit Message Format
 
 ```text
