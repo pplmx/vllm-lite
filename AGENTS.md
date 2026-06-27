@@ -54,10 +54,11 @@ just clean
 
 ```text
 vllm-lite/
-├── Cargo.toml              # Workspace root (7 crates: traits, core, model, server, dist, testing, benches)
+├── Cargo.toml              # Workspace root (6 crates: traits, core, model, server, testing, dist)
+│                           # dist is feature-gated behind --features multi-node (Phase 26 MT-07)
 ├── justfile                # Build automation
 ├── crates/
-│   ├── traits/             # Interface definitions (ModelBackend trait)
+│   ├── traits/             # Interface definitions (ModelBackend trait, kernel traits)
 │   ├── core/               # Engine, Scheduler, KV cache, Metrics
 │   │   └── src/
 │   │       ├── scheduler/  # Scheduler modules (queue, preemption, eviction, batch)
@@ -66,11 +67,17 @@ vllm-lite/
 │   │   └── src/
 │   │       ├── kernels/    # GPU kernels (flash_attention, fused_mlp, cuda_graph)
 │   │       ├── paged_tensor/ # Physical KV cache (tensor_store, quantization)
-│   │       └── components/ # Model components (attention, mlp, norm, positional)
-│   ├── dist/               # Tensor Parallel support
-│   └── server/             # HTTP API (OpenAI compatible)
-└── tests/                  # Integration tests
+│   │       ├── components/ # Shared components (attention, mlp, norm, positional)
+│   │       ├── llama/      # Llama architecture
+│   │       ├── qwen3/      # Qwen3 architecture (GQA + MLA)
+│   │       └── qwen3_5/    # Qwen3.5 architecture (Mamba SSM Hybrid)
+│   ├── dist/               # Tensor Parallel support (feature-gated: --features multi-node)
+│   ├── server/             # HTTP API (OpenAI compatible)
+│   └── testing/            # Test harness, factories, slow-model stubs
+└── scripts/                # Utility scripts (doc_coverage.sh, etc.)
 ```
+
+Integration tests live in `crates/*/tests/` (per crate), not in a top-level `tests/` directory.
 
 ---
 
