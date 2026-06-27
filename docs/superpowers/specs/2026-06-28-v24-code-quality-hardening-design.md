@@ -31,7 +31,7 @@
 | 指标 | 命令 | 结果 |
 |------|------|------|
 | 默认 clippy | `cargo clippy --workspace` | 0 警告 |
-| Pedantic clippy | `cargo clippy --workspace -- -W clippy::pedantic` | **2005 警告** |
+| Pedantic clippy | `cargo clippy --workspace --all-targets --all-features -- -W clippy::pedantic` | **2659 警告** |
 | Lint 配置 | 搜索 `#![deny(...)]` / `[lints.clippy]` | **未配置** |
 
 ### 2.2 Pedantic 警告分布(Top 15)
