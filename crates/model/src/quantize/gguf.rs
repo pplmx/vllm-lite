@@ -7,10 +7,13 @@ use std::path::Path;
 
 /// load_gguf_tensors: load gguf tensors.
 ///
-/// TODO(v20.7+): wire to a real GGUF parser. Currently returns an empty map;
-/// the feature-gated `GgufLoader::load` path in `loader::format` calls this
-/// but downstream code falls back to an empty tensor map. Tracked as
-/// post-v20.0 work; see ADR-009 (orphan-module decision) for rationale.
+/// Stub loader — returns an empty tensor map. A full GGUF parser
+/// (Q4_K_M / Q5_K / Q8_0 quantization types, tensor + metadata parsing,
+/// integration with `StorageTensor`) is future work; see the ADR-009
+/// orphan-module decision and the v22.0 GGUF-01 deferred-items entry.
+/// Callers that receive an empty map fall back to an empty tensor set
+/// (no weights), which is the documented "no-op" behavior used by the
+/// feature-gated `GgufLoader::load` path.
 pub fn load_gguf_tensors(_path: &Path, _device: &Device) -> Result<HashMap<String, StorageTensor>> {
     Ok(HashMap::new())
 }
