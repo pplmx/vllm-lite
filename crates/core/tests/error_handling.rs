@@ -41,8 +41,11 @@ fn test_sampling_error() {
 fn test_error_from_trait() {
     let model_err = vllm_traits::ModelError::new("OOM error");
     let engine_err: EngineError = model_err.into();
-    assert!(matches!(engine_err, EngineError::ModelError(_)));
+    // Phase 32: conversion preserves source chain via the typed Model variant.
+    assert!(matches!(engine_err, EngineError::Model(_)));
     assert!(engine_err.to_string().contains("OOM error"));
+    // Verify source chain is reachable via std::error::Error::source().
+    assert!(std::error::Error::source(&engine_err).is_some());
 }
 
 #[test]

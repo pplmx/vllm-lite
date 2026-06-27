@@ -12,8 +12,16 @@ pub enum EngineError {
     #[error("invalid request: {0}")]
     InvalidRequest(String),
 
+    /// Free-form model error (legacy, kept for backward compat).
+    /// New code should construct via the typed variant [`Self::Model`].
     #[error("model forward failed: {0}")]
     ModelError(String),
+
+    /// Typed model error with preserved source chain.
+    /// Use this when wrapping a `vllm_traits::ModelError` to preserve the
+    /// `Error::source()` chain for log correlation.
+    #[error("model error: {0}")]
+    Model(#[source] vllm_traits::ModelError),
 
     #[error("sampling failed: {0}")]
     SamplingError(String),
@@ -36,13 +44,17 @@ pub enum EngineError {
 
 impl From<vllm_traits::ModelError> for EngineError {
     fn from(err: vllm_traits::ModelError) -> Self {
-        EngineError::ModelError(err.to_string())
+        // Use the typed variant to preserve the source chain.
+        EngineError::Model(err)
     }
 }
 
 impl From<crate::speculative::DraftRegistryError> for EngineError {
     fn from(err: crate::speculative::DraftRegistryError) -> Self {
-        EngineError::ModelError(format!("draft registry: {}", err))
+        EngineError::Model(vllm_traits::ModelError::new(format!(
+            "draft registry: {}",
+            err
+        )))
     }
 }
 
@@ -64,12 +76,33 @@ impl From<crate::circuit_breaker::breaker::CircuitBreakerError> for EngineError 
 
 impl From<crate::metrics::exporter::MetricsError> for EngineError {
     fn from(err: crate::metrics::exporter::MetricsError) -> Self {
-        EngineError::ModelError(format!("metrics: {}", err))
+        EngineError::Model(vllm_traits::ModelError::new(format!("metrics: {}", err)))
     }
 }
 
 /// Result: result.
 pub type Result<T> = std::result::Result<T, EngineError>;
+
+impl EngineError {
+    /// Attach a `request_id` to this error for log correlation.
+    ///
+    /// No-op for variants that don't carry per-request context.
+    /// Returns the modified error so callers can chain: `err.with_request_id(id)?`.
+    pub fn with_request_id(self, request_id: u64) -> Self {
+        // Currently, no variant carries optional request_id — this is a no-op
+        // hook for future per-variant additions. Kept as a stable API so
+        // adding structured context later is non-breaking.
+        let _ = request_id;
+        self
+    }
+
+    /// Attach a `seq_id` to this error for log correlation.
+    /// Same semantics as [`Self::with_request_id`].
+    pub fn with_seq_id(self, seq_id: u64) -> Self {
+        let _ = seq_id;
+        self
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -85,6 +118,19 @@ mod tests {
     fn test_model_error_message() {
         let err = EngineError::ModelError("out of memory".to_string());
         assert_eq!(err.to_string(), "model forward failed: out of memory");
+    }
+
+    #[test]
+    fn test_model_typed_preserves_source() {
+        let inner = vllm_traits::ModelError::new("candle backend crashed");
+        let err = EngineError::from(inner);
+        match &err {
+            EngineError::Model(_) => {}
+            other => panic!("expected Model variant, got {other:?}"),
+        }
+        // Source chain must be preserved.
+        let source = std::error::Error::source(&err);
+        assert!(source.is_some(), "source chain must be preserved");
     }
 
     #[test]
@@ -125,5 +171,19 @@ mod tests {
             backend: "cuda".to_string(),
         };
         assert_eq!(err.to_string(), "backend unavailable: cuda");
+    }
+
+    #[test]
+    fn test_with_request_id_returns_self() {
+        let err = EngineError::InvalidRequest("test".into()).with_request_id(42);
+        // No variant carries request_id yet — this is a stable no-op hook.
+        // The test ensures the API exists and doesn't break.
+        let _ = err;
+    }
+
+    #[test]
+    fn test_with_seq_id_returns_self() {
+        let err = EngineError::InvalidRequest("test".into()).with_seq_id(7);
+        let _ = err;
     }
 }
