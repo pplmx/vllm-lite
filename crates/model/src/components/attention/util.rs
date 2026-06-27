@@ -23,6 +23,34 @@ impl AttentionConfig {
             use_fused,
         }
     }
+
+    /// builder: construct via builder for documented field ergonomics.
+    pub fn builder() -> AttentionConfigBuilder {
+        AttentionConfigBuilder::default()
+    }
+}
+
+/// Builder for [`AttentionConfig`].
+#[derive(Debug, Clone, Default)]
+pub struct AttentionConfigBuilder {
+    inner: AttentionConfig,
+}
+
+impl AttentionConfigBuilder {
+    /// with_tile_size: with tile size.
+    pub fn with_tile_size(mut self, v: Option<usize>) -> Self {
+        self.inner.tile_size = v;
+        self
+    }
+    /// with_use_fused: with use fused.
+    pub fn with_use_fused(mut self, v: bool) -> Self {
+        self.inner.use_fused = v;
+        self
+    }
+    /// build: build the [`AttentionConfig`].
+    pub fn build(self) -> AttentionConfig {
+        self.inner
+    }
 }
 
 /// expand_kv: expand kv.

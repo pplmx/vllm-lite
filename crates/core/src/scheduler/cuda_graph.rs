@@ -82,6 +82,34 @@ impl SchedulerCudaGraphConfig {
     pub fn supports_batch_size(&self, batch_size: usize) -> bool {
         self.batch_sizes.contains(&batch_size)
     }
+
+    /// builder: construct via builder for documented field ergonomics.
+    pub fn builder() -> SchedulerCudaGraphConfigBuilder {
+        SchedulerCudaGraphConfigBuilder::default()
+    }
+}
+
+/// Builder for [`SchedulerCudaGraphConfig`].
+#[derive(Debug, Clone, Default)]
+pub struct SchedulerCudaGraphConfigBuilder {
+    inner: SchedulerCudaGraphConfig,
+}
+
+impl SchedulerCudaGraphConfigBuilder {
+    /// with_enabled: with enabled.
+    pub fn with_enabled(mut self, v: bool) -> Self {
+        self.inner.enabled = v;
+        self
+    }
+    /// with_batch_sizes: with batch sizes.
+    pub fn with_batch_sizes(mut self, v: Vec<usize>) -> Self {
+        self.inner.batch_sizes = v;
+        self
+    }
+    /// build: build the [`SchedulerCudaGraphConfig`].
+    pub fn build(self) -> SchedulerCudaGraphConfig {
+        self.inner
+    }
 }
 
 #[cfg(test)]

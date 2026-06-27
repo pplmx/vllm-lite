@@ -20,6 +20,41 @@ impl Default for PhaseSwitchPolicy {
     }
 }
 
+impl PhaseSwitchPolicy {
+    /// builder: construct via builder for documented field ergonomics.
+    pub fn builder() -> PhaseSwitchPolicyBuilder {
+        PhaseSwitchPolicyBuilder::default()
+    }
+}
+
+/// Builder for [`PhaseSwitchPolicy`].
+#[derive(Debug, Clone, Default)]
+pub struct PhaseSwitchPolicyBuilder {
+    inner: PhaseSwitchPolicy,
+}
+
+impl PhaseSwitchPolicyBuilder {
+    /// with_max_consecutive_decode: with max consecutive decode.
+    pub fn with_max_consecutive_decode(mut self, v: u32) -> Self {
+        self.inner.max_consecutive_decode = v;
+        self
+    }
+    /// with_prefill_priority_threshold: with prefill priority threshold.
+    pub fn with_prefill_priority_threshold(mut self, v: usize) -> Self {
+        self.inner.prefill_priority_threshold = v;
+        self
+    }
+    /// with_min_decode_batch_size: with min decode batch size.
+    pub fn with_min_decode_batch_size(mut self, v: usize) -> Self {
+        self.inner.min_decode_batch_size = v;
+        self
+    }
+    /// build: build the [`PhaseSwitchPolicy`].
+    pub fn build(self) -> PhaseSwitchPolicy {
+        self.inner
+    }
+}
+
 /// SchedulerState: scheduler state.
 #[derive(Clone, Debug)]
 pub struct SchedulerState {

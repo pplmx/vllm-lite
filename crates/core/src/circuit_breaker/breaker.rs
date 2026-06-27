@@ -33,6 +33,41 @@ impl Default for CircuitBreakerConfig {
     }
 }
 
+impl CircuitBreakerConfig {
+    /// builder: construct via builder for documented field ergonomics.
+    pub fn builder() -> CircuitBreakerConfigBuilder {
+        CircuitBreakerConfigBuilder::default()
+    }
+}
+
+/// Builder for [`CircuitBreakerConfig`].
+#[derive(Debug, Clone, Default)]
+pub struct CircuitBreakerConfigBuilder {
+    inner: CircuitBreakerConfig,
+}
+
+impl CircuitBreakerConfigBuilder {
+    /// with_failure_threshold: with failure threshold.
+    pub fn with_failure_threshold(mut self, v: usize) -> Self {
+        self.inner.failure_threshold = v;
+        self
+    }
+    /// with_recovery_timeout: with recovery timeout.
+    pub fn with_recovery_timeout(mut self, v: Duration) -> Self {
+        self.inner.recovery_timeout = v;
+        self
+    }
+    /// with_half_open_max_calls: with half open max calls.
+    pub fn with_half_open_max_calls(mut self, v: usize) -> Self {
+        self.inner.half_open_max_calls = v;
+        self
+    }
+    /// build: build the [`CircuitBreakerConfig`].
+    pub fn build(self) -> CircuitBreakerConfig {
+        self.inner
+    }
+}
+
 /// Circuit breaker error
 #[derive(Debug, thiserror::Error, Clone, PartialEq)]
 pub enum CircuitBreakerError {

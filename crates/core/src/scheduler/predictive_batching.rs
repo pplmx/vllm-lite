@@ -36,6 +36,56 @@ impl Default for PredictiveBatchingConfig {
     }
 }
 
+impl PredictiveBatchingConfig {
+    /// builder: construct via builder for documented field ergonomics.
+    pub fn builder() -> PredictiveBatchingConfigBuilder {
+        PredictiveBatchingConfigBuilder::default()
+    }
+}
+
+/// Builder for [`PredictiveBatchingConfig`].
+#[derive(Debug, Clone, Default)]
+pub struct PredictiveBatchingConfigBuilder {
+    inner: PredictiveBatchingConfig,
+}
+
+impl PredictiveBatchingConfigBuilder {
+    /// with_strategy: with strategy.
+    pub fn with_strategy(mut self, v: BatchingStrategy) -> Self {
+        self.inner.strategy = v;
+        self
+    }
+    /// with_target_latency_ms: with target latency ms.
+    pub fn with_target_latency_ms(mut self, v: u64) -> Self {
+        self.inner.target_latency_ms = v;
+        self
+    }
+    /// with_min_batch_size: with min batch size.
+    pub fn with_min_batch_size(mut self, v: usize) -> Self {
+        self.inner.min_batch_size = v;
+        self
+    }
+    /// with_max_batch_size: with max batch size.
+    pub fn with_max_batch_size(mut self, v: usize) -> Self {
+        self.inner.max_batch_size = v;
+        self
+    }
+    /// with_prediction_window_ms: with prediction window ms.
+    pub fn with_prediction_window_ms(mut self, v: u64) -> Self {
+        self.inner.prediction_window_ms = v;
+        self
+    }
+    /// with_throughput_weight: with throughput weight.
+    pub fn with_throughput_weight(mut self, v: f64) -> Self {
+        self.inner.throughput_weight = v;
+        self
+    }
+    /// build: build the [`PredictiveBatchingConfig`].
+    pub fn build(self) -> PredictiveBatchingConfig {
+        self.inner
+    }
+}
+
 /// RequestPattern: request pattern.
 #[derive(Debug, Clone)]
 pub struct RequestPattern {

@@ -24,6 +24,41 @@ impl Default for BatchCompositionConfig {
     }
 }
 
+impl BatchCompositionConfig {
+    /// builder: construct via builder for documented field ergonomics.
+    pub fn builder() -> BatchCompositionConfigBuilder {
+        BatchCompositionConfigBuilder::default()
+    }
+}
+
+/// Builder for [`BatchCompositionConfig`].
+#[derive(Debug, Clone, Default)]
+pub struct BatchCompositionConfigBuilder {
+    inner: BatchCompositionConfig,
+}
+
+impl BatchCompositionConfigBuilder {
+    /// with_max_batch_size: with max batch size.
+    pub fn with_max_batch_size(mut self, v: usize) -> Self {
+        self.inner.max_batch_size = v;
+        self
+    }
+    /// with_max_token_budget: with max token budget.
+    pub fn with_max_token_budget(mut self, v: usize) -> Self {
+        self.inner.max_token_budget = v;
+        self
+    }
+    /// with_enable_similarity_grouping: with enable similarity grouping.
+    pub fn with_enable_similarity_grouping(mut self, v: bool) -> Self {
+        self.inner.enable_similarity_grouping = v;
+        self
+    }
+    /// build: build the [`BatchCompositionConfig`].
+    pub fn build(self) -> BatchCompositionConfig {
+        self.inner
+    }
+}
+
 /// Chunked prefill configuration
 #[derive(Clone, Debug)]
 pub struct ChunkedPrefillConfig {
@@ -45,6 +80,46 @@ impl Default for ChunkedPrefillConfig {
             max_chunk_size: 2048,
             min_chunk_size: 64,
         }
+    }
+}
+
+impl ChunkedPrefillConfig {
+    /// builder: construct via builder for documented field ergonomics.
+    pub fn builder() -> ChunkedPrefillConfigBuilder {
+        ChunkedPrefillConfigBuilder::default()
+    }
+}
+
+/// Builder for [`ChunkedPrefillConfig`].
+#[derive(Debug, Clone, Default)]
+pub struct ChunkedPrefillConfigBuilder {
+    inner: ChunkedPrefillConfig,
+}
+
+impl ChunkedPrefillConfigBuilder {
+    /// with_enabled: with enabled.
+    pub fn with_enabled(mut self, v: bool) -> Self {
+        self.inner.enabled = v;
+        self
+    }
+    /// with_target_chunk_size: with target chunk size.
+    pub fn with_target_chunk_size(mut self, v: usize) -> Self {
+        self.inner.target_chunk_size = v;
+        self
+    }
+    /// with_max_chunk_size: with max chunk size.
+    pub fn with_max_chunk_size(mut self, v: usize) -> Self {
+        self.inner.max_chunk_size = v;
+        self
+    }
+    /// with_min_chunk_size: with min chunk size.
+    pub fn with_min_chunk_size(mut self, v: usize) -> Self {
+        self.inner.min_chunk_size = v;
+        self
+    }
+    /// build: build the [`ChunkedPrefillConfig`].
+    pub fn build(self) -> ChunkedPrefillConfig {
+        self.inner
     }
 }
 
