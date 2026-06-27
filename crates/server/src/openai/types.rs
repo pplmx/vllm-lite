@@ -197,19 +197,23 @@ pub struct EmbeddingsRequest {
     pub input: Vec<String>,
 }
 
-/// EmbeddingData: embedding data.
+/// Embedding: single embedding item in an embeddings response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EmbeddingData {
+pub struct Embedding {
     pub object: String,
     pub embedding: Vec<f32>,
     pub index: i32,
 }
 
+/// Deprecated alias for [`Embedding`].
+#[deprecated(since = "0.20.0", note = "use Embedding instead")]
+pub type EmbeddingData = Embedding;
+
 /// Response from embeddings endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingsResponse {
     pub object: String,
-    pub data: Vec<EmbeddingData>,
+    pub data: Vec<Embedding>,
     pub model: String,
     pub usage: Usage,
 }
@@ -217,21 +221,21 @@ pub struct EmbeddingsResponse {
 impl EmbeddingsResponse {
     /// new: new.
     pub fn new(embeddings: Vec<Vec<f32>>, model: String) -> Self {
-        let data: Vec<EmbeddingData> = embeddings
+        let items: Vec<Embedding> = embeddings
             .into_iter()
             .enumerate()
-            .map(|(i, e)| EmbeddingData {
+            .map(|(i, e)| Embedding {
                 object: "embedding".to_string(),
                 embedding: e,
                 index: i as i32,
             })
             .collect();
 
-        let total_tokens: i64 = data.iter().map(|d| d.embedding.len() as i64).sum();
+        let total_tokens: i64 = items.iter().map(|d| d.embedding.len() as i64).sum();
 
         Self {
             object: "list".to_string(),
-            data,
+            data: items,
             model,
             usage: Usage::new(total_tokens as usize, 0),
         }

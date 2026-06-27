@@ -224,9 +224,9 @@ pub async fn chat_completions(
                                 finish_reason: None,
                             },
                         );
-                        let data =
+                        let sse_payload =
                             serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
-                        Some((Ok(Event::default().data(data)), rx))
+                        Some((Ok(Event::default().data(sse_payload)), rx))
                     }
                     None => {
                         // Channel closed - could be normal completion or client disconnect
@@ -244,14 +244,17 @@ pub async fn chat_completions(
                                 finish_reason: Some("stop".to_string()),
                             },
                         );
-                        let data =
+                        let sse_payload =
                             serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
                         tracing::info!(
                             request_id = %request_id,
                             duration_ms = %start.elapsed().as_millis() as u64,
                             "Streaming request completed"
                         );
-                        Some((Ok(Event::default().data(format!("{data}\n\n[DONE]"))), rx))
+                        Some((
+                            Ok(Event::default().data(format!("{sse_payload}\n\n[DONE]"))),
+                            rx,
+                        ))
                     }
                 }
             }

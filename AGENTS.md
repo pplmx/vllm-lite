@@ -183,6 +183,64 @@ Key optimizations:
 | Modules             | snake_case           | `queue_manager`, `eviction`    |
 | Crate names         | kebab-case           | `vllm-core`                    |
 
+#### Verb Policy (read/load/get/create/build)
+
+Use consistent verb prefixes so readers can predict semantics:
+
+| Prefix        | Use for                                                              | Examples                                  |
+| ------------- | -------------------------------------------------------------------- | ----------------------------------------- |
+| `get_*`       | In-memory accessors (sync, no I/O)                                   | `get_block`, `get_token_id`               |
+| `load_*`      | Resource acquisition (file/IO, deserialization)                      | `load_checkpoint`, `load_gguf_tensors`    |
+| `read_*`      | Streamed/buffered I/O with explicit cursor/position semantics        | `read_kv`, `read_request`, `read_kv_batch`|
+| `set_*`       | Mutator for owned state                                               | `set_running`, `set_priority`             |
+| `write_*`     | Streamed/buffered write-back                                          | `write_kv`, `write_compressed`            |
+| `create_*`    | One-shot resource construction (non-builder)                          | `create_engine`, `create_request`         |
+| `build_*`     | Builder-pattern finalization step                                    | `BatchBuilder::build`, `ConfigBuilder::build` |
+| `add_*`       | Collection append (no key/ID allocation concerns)                    | `add_request`, `add_to_batch`             |
+| `register_*`  | Insert into a registry/lazy initialization map                       | `register_architecture`, `register_kernel`|
+| `forward`     | ML forward pass (no prefix)                                           | `ModelBackend::forward`                   |
+
+If a function does both acquisition and construction, prefer `load_*` over `create_*`.
+
+#### Suffix Conventions
+
+| Suffix        | When required                                                       | Example                      |
+| ------------- | ------------------------------------------------------------------- | ---------------------------- |
+| `*Manager`    | Type owns and coordinates a concrete resource                       | `BatchManager`, `PreemptionManager` |
+| `*Info`       | Type is metadata-only (no behavior); bare name would be ambiguous  | `NodeInfo` (vs graph `Node`) |
+| `*Data`       | Avoid unless matching an external API spec field name               | (avoid; prefer bare names)   |
+| `*Factory`    | Builder-pattern factory that produces one type                      | `RequestFactory`             |
+| `*Config`     | Immutable configuration bundle                                       | `SchedulerConfig`            |
+
+The `*Data` suffix is **discouraged** because output types already imply data.
+Keep it only when matching external API names (e.g., OpenAI's `data` field).
+
+#### Single-letter variables
+
+Single-letter variables are allowed **only** for:
+
+1. Loop indices (`for i in 0..n`).
+2. Tensor-math conventions in attention / SSM / MLP code:
+   - `q`, `k`, `v`, `o` (query/key/value/output projections)
+   - `b`, `c`, `h`, `d`, `x`, `z` (state/batch/head/dimension/SSM variables)
+   - `g`, `r` (gating/routing in MoE / gated nets)
+3. Trigonometric placeholders (`pi`, `e`).
+
+Outside these contexts (scheduler, sampling, server handlers), use descriptive names
+(`priority_a`, `priority_b`, `random_threshold`, etc.). See audit `NAME-F-18` for
+historical exceptions and the rationale for the exemption.
+
+#### Test file location
+
+| Test type           | Location                                              | Discovery         |
+| ------------------- | ----------------------------------------------------- | ----------------- |
+| Unit tests          | `#[cfg(test)] mod tests {}` block in the source file  | `cargo test`      |
+| Integration tests   | `crates/<crate>/tests/<topic>.rs`                     | `cargo test`      |
+| Cross-crate e2e     | `crates/<crate>/tests/integration.rs` or similar      | `cargo test`      |
+
+**Do not** place `.rs` test files in `src/` directories outside `mod tests` blocks.
+They will not be auto-discovered and become dead code (audit `NAME-F-04`).
+
 ### Types
 
 - Use `usize` for sizes/lengths, `u64` for IDs (`SeqId`, `TokenId`)

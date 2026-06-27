@@ -42,16 +42,16 @@ pub(crate) fn load_safetensors(path: &Path, device: &Device) -> Result<HashMap<S
     let mmap_results: Vec<Result<(std::path::PathBuf, Vec<u8>)>> = files
         .par_iter()
         .map(|path| {
-            let data = load_file_mmap_or_read(path)?;
-            Ok((path.clone(), data))
+            let bytes = load_file_mmap_or_read(path)?;
+            Ok((path.clone(), bytes))
         })
         .collect();
 
     let tensor_vec: Vec<Result<Vec<(String, Tensor)>>> = mmap_results
         .into_par_iter()
         .map(|result| {
-            let (_path, data) = result?;
-            let file = safetensors::SafeTensors::deserialize(&data)
+            let (_path, bytes) = result?;
+            let file = safetensors::SafeTensors::deserialize(&bytes)
                 .map_err(|e| candle_core::Error::msg(format!("deserialize failed: {}", e)))?;
             file.tensors()
                 .into_iter()

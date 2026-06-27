@@ -75,19 +75,25 @@ impl Fp8Quantizer {
 
         match flat.dtype() {
             DType::F16 => {
-                let data: Vec<f32> = flat
+                let float_values: Vec<f32> = flat
                     .to_vec1::<half::f16>()?
                     .into_iter()
                     .map(|h| h.to_f32())
                     .collect();
 
-                let fp8_data: Vec<u8> = data.iter().map(|&f| self.float32_to_fp8_e4m3(f)).collect();
+                let fp8_data: Vec<u8> = float_values
+                    .iter()
+                    .map(|&f| self.float32_to_fp8_e4m3(f))
+                    .collect();
 
                 Tensor::from_slice(&fp8_data, shape, tensor.device())
             }
             DType::F32 => {
-                let data: Vec<f32> = flat.to_vec1()?;
-                let fp8_data: Vec<u8> = data.iter().map(|&f| self.float32_to_fp8_e4m3(f)).collect();
+                let float_values: Vec<f32> = flat.to_vec1()?;
+                let fp8_data: Vec<u8> = float_values
+                    .iter()
+                    .map(|&f| self.float32_to_fp8_e4m3(f))
+                    .collect();
 
                 Tensor::from_slice(&fp8_data, shape, tensor.device())
             }
@@ -102,9 +108,11 @@ impl Fp8Quantizer {
         let shape = tensor.dims();
         let flat = tensor.flatten_all()?;
 
-        let data: Vec<u8> = flat.to_vec1()?;
-        let float_data: Vec<half::f16> =
-            data.iter().map(|&b| self.fp8_e4m3_to_float16(b)).collect();
+        let fp8_bytes: Vec<u8> = flat.to_vec1()?;
+        let float_data: Vec<half::f16> = fp8_bytes
+            .iter()
+            .map(|&b| self.fp8_e4m3_to_float16(b))
+            .collect();
 
         let result = Tensor::from_slice(&float_data, shape, tensor.device())?;
         result.to_dtype(DType::F16)
@@ -156,7 +164,7 @@ impl Fp8Quantizer {
             return half::f16::from_bits(sign << 15);
         }
 
-        let exp = biased_exp as i32 - 7 - 3;
+        let exp = biased_exp - 7 - 3;
 
         let bits = (sign << 15) | ((exp + 15) as u16 & 0x7FFF) << 10 | (mantissa << 7);
 
@@ -171,7 +179,7 @@ impl Fp8Quantizer {
         head_dim: usize,
     ) -> f32 {
         let fp16_bytes = num_blocks * block_size * num_heads * head_dim * 2;
-        let fp8_bytes = num_blocks * block_size * num_heads * head_dim * 1;
+        let fp8_bytes = num_blocks * block_size * num_heads * head_dim;
         1.0 - (fp8_bytes as f32 / fp16_bytes as f32)
     }
 }
@@ -189,7 +197,7 @@ fn frexp(value: f32) -> (i32, f32) {
     if exp == 0 {
         let shift = mantissa_bits.leading_zeros() as i32 - 8;
         exp -= shift;
-        mantissa_bits = mantissa_bits << (shift + 1);
+        mantissa_bits <<= shift + 1;
     }
 
     exp -= 127;

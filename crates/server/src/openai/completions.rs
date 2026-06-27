@@ -85,8 +85,8 @@ pub async fn completions(
                                 "index": 0,
                             }]
                         });
-                        let data = chunk.to_string();
-                        Some((Ok(Event::default().data(data)), rx))
+                        let sse_payload = chunk.to_string();
+                        Some((Ok(Event::default().data(sse_payload)), rx))
                     }
                     None => Some((Ok(Event::default().data("[DONE]")), rx)),
                 }
