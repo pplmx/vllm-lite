@@ -8,29 +8,42 @@ A production-ready LLM inference engine in Rust, optimized for single and multi-
 
 Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
 
-## Current Milestone: v21.0 P2/P3 Backlog Cleanup — COMPLETE 2026-06-27
+## Current Milestone: v22.0 Production Hardening
 
-**Status:** ✅ 100% backlog closure achieved (5/5 phases shipped)
+**Status:** 🚧 Planning (2026-06-27)
 
-**Goal:** Close the remaining 44 P2 + 13 P3 backlog from v19.0 audit (v20.0 already shipped 5 P0 + 38 P1).
+**Goal:** 把 vLLM-lite 推到 production-ready 状态 — 解决 v21.0 延后的 P0/P1 tech debt、安全接线、生产打磨、引擎重构。
 
-**Achieved (by theme):**
+**Target themes:**
 
-- **模块布局重组 (9 项, ARCH-F-05..F-19)** — `draft_registry.rs` split into `registry/` (5 files), `engine/speculative.rs` reorganized as `engine/spec_dispatch/` (6 files), `qwen3_config.rs` moved to `qwen3::config`, `attention/util.rs` extracted, `TensorParallelError` canonical home in `vllm-dist::error`, `test_fixtures` migration documented as infeasible
-- **API 一致性 (11 项, API-F-12..F-24)** — AGENTS.md builder/struct-literal convention documented, `Box<dyn Error>` → typed `ConfigError` (2 → 0), `predictive_batching.rs` already had poison-recovery (Phase 27), 12 new builders introduced, `#[source]` added for error chains, `FallbackStrategy` split into sync + async, `request_id`/`seq_id` error context hooks
-- **命名一致性 (8 项, NAME-F-08..F-21)** — `flash_v3.rs` → `flash_attention_v3.rs`, `NodeInfo` kept (documented rationale), AGENTS.md naming conventions documentation verified complete (Phase 30), non-tensor single-letter variables renamed in sampling code
-- **外部 doc 修复 (4 项, DOCS-F-21..F-24)** — DeepSeek stale reference removed from PROJECT.md, ADR-015 vllm-dist investment decision created, "Phase 5 Wave 4" reference reframed to v18.4 terminology, PROJECT.md Key Decisions cross-linked to 15 ADRs
-- **P3 actionable (6 项)** — Dead `crates/traits/tests/mod.rs` removed, `gemma4/attention.rs` `.unwrap()` → `.expect()` with documented messages, MIGRATING.md created at repo root, `CircuitBreakerError::HalfOpenRejected(u32)` variant added, `CudaGraphError::Clone` derive verified kept
+- 🔴 **关键 bug 修复**: `Engine::step()` speculative-mode hang (pre-existing bug, 实际可用性风险)
+- 🔐 **安全加固**: JWT 签名验证 (目前 broken) + RBAC 接线 (目前 no-op pass-through)
+- 🔧 **生产打磨**: `parking_lot::Mutex` 迁移 (消除 poison 检查) + cargo doc 警告修复 + gguf TODO
+- 🏗️ **引擎重构**: 拆分 `engine.rs` God module (从 v20.0 延后) + 统一 `engine/speculative` 树
 
-**估算:** ~75h (~2 working weeks) — actual: completed in single autonomous session
+**Phase 编号延续:** v21.0 收尾于 Phase 35 → v22.0 从 Phase 36 开始 → v22.0 收尾于 Phase 39 (4 phases)
 
-**Phase 编号延续:** v20.0 收尾于 Phase 30 → v21.0 从 Phase 31 开始 → v21.0 收尾于 Phase 35
+**估算:** ~75h (1 working month)
+
+**Scope 决策 (来自用户输入):**
+
+- **方向**: Production Hardening (而非新特性如 long context / multimodal / multi-node)
+- **Research**: Skip (基于现有 PROJECT.md + CODEBASE 地图直接进入 requirements)
+- **优先级**: P0 bug 修复 + 安全 > 生产打磨 > 引擎重构
+
+**Out of Scope (v22.0):**
+
+- New model capabilities (long context, multimodal) — 下一里程碑考虑
+- Multi-node / vllm-dist resurrection — feature-gated, multi-node work future
+- Real-model benchmarks — requires GPU env (still deferred from v18.0)
+- Performance optimization — orthogonal to hardening scope
+- Tree-based speculation — too complex (carried from v18.0)
 
 ## Current State
 
-**Current Milestone:** v21.0 P2/P3 Backlog Cleanup (planning)
-**Latest Shipped:** v20.0 Codebase Remediation (2026-06-27, 6/6 sub-phases complete, all FINAL gates green)
-**Status:** v21.0 启动中;1139+ tests pass,clippy clean,fmt clean,12 new ADRs,doc coverage 19.5% → 97.8%
+**Current Milestone:** v22.0 Production Hardening (planning)
+**Latest Shipped:** v21.0 P2/P3 Backlog Cleanup (2026-06-27, 5/5 phases complete, all FINAL gates green)
+**Status:** v22.0 启动中;1146 tests pass,clippy clean,fmt clean,15 ADRs,doc coverage 97.8%
 
 ### Phase 17 Achievements (v17.0 shipped)
 
@@ -135,149 +148,61 @@ Fast, memory-efficient LLM inference with continuous batching, paged KV cache, a
 
 ### Active
 
-**v20.0: Codebase Remediation (BACKLOG.md-driven)**
+**v22.0: Production Hardening (CURRENT)**
 
-#### Phase 25 (v20.1): P0 关键修复
+#### Phase 36 (v22.1): 关键 Bug 修复 (Critical Bug Fixes) — ~25h
 
-- [ ] **P0-01**: Eliminate `vllm-model → vllm-dist` dependency (feature-gate `vllm-dist`)
-- [ ] **P0-02**: Make `vllm-core → vllm-model` feature-gated
-- [ ] **P0-03**: Convert `ModelError` struct → enum (pattern-matchable)
-- [ ] **P0-04**: Make 8 non-object-safe traits object-safe (add `where Self: Sized` or split traits)
-- [ ] **P0-05**: Refactor `CudaGraphError` to use thiserror (currently hand-rolled Display/Error)
+- [ ] **OPS-02**: Fix `Engine::step()` speculative-mode hang (pre-existing bug from pre-v18.0; blocks 2 Phase 19 e2e tests)
+- [ ] **OPS-03**: Resolve 5 pre-existing cargo doc broken-link warnings (`engine.rs` + `components/mod.rs`)
+- [ ] **GGUF-01**: Resolve actionable TODO in `crates/model/src/quantize/gguf.rs` (gguf parser post-v20.7)
+- [ ] **FINAL-01**: All 1146+ tests remain green post-fix
 
-#### Phase 26 (v20.2): 模块树恢复
+#### Phase 37 (v22.2): 安全加固 (Security Hardening) — ~25h
 
-- [ ] **MT-01**: Wire `kv_cache_fp8.rs` into module tree (currently orphan, 289 LOC unreachable)
-- [ ] **MT-02**: Wire `debug.rs` into module tree (currently orphan, 175 LOC unreachable)
-- [ ] **MT-03**: Rename `engine_v18_wiring.rs` → `engine_wiring.rs` (stage-info file)
-- [ ] **MT-04**: Migrate `qwen3/model_tests.rs` from `src/` → `tests/`
-- [ ] **MT-05**: Migrate `qwen3_5/model_tests.rs` from `src/` → `tests/`
-- [ ] **MT-06**: Migrate `qwen3_5/speculative_tests.rs` from `src/` → `tests/`
-- [ ] **MT-07**: Decide and resolve fate of `vllm-dist` (~1,600 LOC unused) — feature-gate per v20.1
+- [ ] **SEC-01**: Implement JWT cryptographic signature verification (HMAC-SHA256 for `secret`; RSA/ECDSA for `public_key_pem`) — currently parses but never verifies
+- [ ] **SEC-02**: Wire `RbacMiddleware` into request pipeline (currently no-op pass-through at `rbac.rs:82-84`)
+- [ ] **SEC-03**: Add request size limits (`tower_http::limit::RequestBodyLimitLayer`)
+- [ ] **SEC-04**: Audit log integration test (verify `security/audit.rs` emits events for authenticated requests)
+- [ ] **SEC-05**: Move hardcoded Grafana credentials from `docker-compose.yml` to `.env` file
+- [ ] **SEC-06**: TLS hardening — replace `unwrap()` with proper error in `security/tls.rs:63`
+- [ ] **FINAL-01**: All auth/middleware integration tests pass
 
-#### Phase 27 (v20.3): 错误处理标准化
+#### Phase 38 (v22.3): 生产打磨 (Production Polish) — ~15h
 
-- [ ] **ERR-01**: Eliminate 10 `Result<_, String>` anti-patterns (use proper error types)
-- [ ] **ERR-02**: Convert `CudaGraphError` to thiserror enum (P0-05 redux for clarity)
-- [ ] **ERR-03**: Refactor 25+ mutex-poison `.expect()` calls (use `.context()` or convert to Result)
-- [ ] **ERR-04**: Add missing `From` impls for cross-crate error conversion
-- [ ] **ERR-05**: Add `EngineError::Timeout`, `Cancelled`, `ResourceExhausted`, `BackendUnavailable` variants
-- [ ] **ERR-06**: Adopt `anyhow` for top-level server error reporting
-- [ ] **ERR-07**: Add `.context()` to error propagation paths losing information
+- [ ] **RFU-05**: Migrate from `std::sync::Mutex` → `parking_lot::Mutex` (eliminate poison check entirely) in scheduler/engine paths
+- [ ] **OPS-01**: Decide fate of `speculative.rs` mock usage in production paths (real draft loading or document mock-only)
+- [ ] **PERF-01**: `MlaKvCache::write_compressed` — replace full-cache materialization with `slice_assign` if available
+- [ ] **PERF-02**: Replace `model_type.to_lowercase()` in arch detection with `eq_ignore_ascii_case`
+- [ ] **PERF-03**: Replace `once_cell::sync::Lazy` with `std::sync::LazyLock` (Rust 1.80+)
+- [ ] **DOC-01**: Resolve 5 cargo doc broken-link warnings (if not closed in OPS-03)
+- [ ] **FINAL-01**: All 1146+ tests remain green
 
-#### Phase 28 (v20.4): 文档覆盖率提升
+#### Phase 39 (v22.4): 引擎重构 (Engine Refactor) + Final Verification — ~10h
 
-- [ ] **DOC-01**: Raise workspace doc coverage 7.6% → ≥60%
-- [ ] **DOC-02**: Add `///` doc comments to 776 undocumented `pub` items
-- [ ] **DOC-03**: Add `//!` module-level docs to 121 files lacking them
-- [ ] **DOC-04**: Fix README.md broken code example (`SchedulerEngine::new(config, 1024)` → 3-arg form)
-- [ ] **DOC-05**: Update README.md "Supported Architectures" list (currently lists 5-6 vs 10 actually registered)
-- [ ] **DOC-06**: Reconcile crate count in README.md (claims 7, Cargo.toml has 6)
-- [ ] **DOC-07**: Update AGENTS.md "Architecture" section to match current state
-
-#### Phase 29 (v20.5): 外部文档调和 + ADRs
-
-- [ ] **EXT-01**: Reconcile README.md vs AGENTS.md vs Cargo.toml claims
-- [ ] **EXT-02**: Create ADR: "Why self-spec uses 1/8 layer count" (tribal knowledge)
-- [ ] **EXT-03**: Create ADR: "FP8 E4M3 format choice for KV cache"
-- [ ] **EXT-04**: Create ADR: "KV cache split strategy (prefix vs paged)"
-- [ ] **EXT-05**: Create ADR: "Speculative decoding architecture overview"
-- [ ] **EXT-06**: Create ADR: "Per-request draft routing (RTE-01..03)"
-- [ ] **EXT-07**: Create ADR: "Why `vllm-dist` is feature-gated (v20.1 decision)"
-- [ ] **EXT-08**: Create ADR: "FP8 quantizer orphan module decision (v20.2 outcome)"
-- [ ] **EXT-09**: Create ADR: "Cuda graph feature gating strategy"
-- [ ] **EXT-10**: Create ADR: "Cross-crate error type boundaries (v20.3 decision)"
-- [ ] **EXT-11**: Document 2+ additional ADRs from v15.0-v18.0 tribal knowledge
-- [ ] **EXT-12**: Update `.planning/PROJECT.md` Core Value section if drifted
-
-#### Phase 30 (v20.6): 命名 + 收尾 ✅
-
-- [x] **NAM-01**: Apply 7 P1 naming fixes (variable single-letter, redundant suffixes, etc.)
-- [x] **NAM-02**: Apply 19 P2 naming consistency fixes (handled via AGENTS.md documentation updates)
-- [x] **DEP-01**: Add `#[deprecated]` markers to public API items removed or replaced in v20.0
-- [x] **DEP-02**: Provide migration paths for all newly-deprecated items (1 deprecation alias added: `EmbeddingData` → `Embedding`)
-- [x] **CMT-01**: Clean up stale comments referencing old code (3 stale comments resolved: gguf placeholder, draft_registry/engine Phase 18.3 refs)
-- [x] **CMT-02**: Remove or update dead TODOs / FIXMEs discovered during v19.0 audit (0 pre-existing; 1 actionable TODO added for gguf parser post-v20.7)
-- [x] **FINAL-01**: Verify all 1100+ tests pass post-remediation (**1144 passed, 0 failed**)
-- [x] **FINAL-02**: Verify `cargo clippy --workspace -- -D warnings` clean (**0 warnings, 0 errors** — including 3 pre-existing kv_cache_fp8 errors)
-- [x] **FINAL-03**: Verify `cargo fmt --all --check` clean (**clean** — auto-fixed 133 files from Phase 28 doc-backfill indent issue)
-- [x] **FINAL-04**: Update `.planning/PROJECT.md` and `.planning/STATE.md` with v20.0 outcomes
-
-**v21.0: P2/P3 Backlog Cleanup**
-
-#### Phase 31 (v21.1): 模块布局重组 (Module Layout Reorganization) — ~37h
-
-- [ ] **ML-01** (ARCH-F-05): Split `draft_registry.rs` (929 LOC) into `registry/loader.rs`
-- [ ] **ML-02** (ARCH-F-06): Collapse `engine.rs` + `engine/speculative.rs` into `engine/speculative/` sub-tree
-- [ ] **ML-03** (ARCH-F-07/09): Move `qwen3_config.rs` (487 LOC, top-level) into `qwen3/config.rs`
-- [ ] **ML-04** (ARCH-F-08): Move `attention/mod.rs` utilities (180+ LOC) to `attention/util.rs`
-- [ ] **ML-05** (ARCH-F-10): Split `vllm-testing` into `vllm-testkit` + `vllm-harness` (lemon pair)
-- [ ] **ML-06** (ARCH-F-13): Move `TensorParallelError` to `vllm-dist::error`; re-export from `vllm-traits`
-- [ ] **ML-07** (ARCH-F-14): Move `crates/server/src/test_fixtures.rs` into `vllm-testing`
-- [ ] **ML-08** (ARCH-F-16): Migrate server tests to use `vllm-testing` instead of `test_fixtures`
-- [ ] **ML-09** (ARCH-F-19): Verify or remove unused `vllm-testing` exports
-
-#### Phase 32 (v21.2): API 一致性 (API Consistency) — ~21h
-
-- [ ] **API-01** (API-F-12): Document builder vs struct-literal convention in AGENTS.md
-- [ ] **API-02** (API-F-14): Add `#[source]` to `DraftRegistryError::LoadFailed(String)`
-- [ ] **API-03** (API-F-15): Replace 2 `Box<dyn Error>` in `model` lib with typed errors
-- [ ] **API-04** (API-F-16): Replace `Mutex::lock().unwrap()` in `predictive_batching.rs` (8 sites) with parking_lot or sync helper
-- [ ] **API-05** (API-F-17): Introduce 22 builders where only `Default` exists (ergonomics)
-- [ ] **API-06** (API-F-18): Add `dyn Trait` compile-only tests per trait
-- [ ] **API-07** (API-F-19): Add public re-exports of common trait bounds at crate roots
-- [ ] **API-08** (API-F-20): Split `FallbackStrategy` into sync + async traits
-- [ ] **API-09** (API-F-21): Add missing `From<candle_core::Error>` for `EngineError`
-- [ ] **API-10** (API-F-22): Add `Default` impl for object-safe traits (`DraftVerifier`, `SchedulerObserver`)
-- [ ] **API-11** (API-F-24): Carry `request_id`/`seq_id` in error context (structured fields)
-
-#### Phase 33 (v21.3): 命名一致性 (Naming Consistency) — ~5h
-
-- [ ] **NAM-01** (NAME-F-08): Rename `flash_v3.rs` → `flash_attention_v3.rs`
-- [ ] **NAM-02** (NAME-F-10): Document `*Manager` suffix usage in AGENTS.md
-- [ ] **NAM-03** (NAME-F-11): Consider renaming `NodeInfo` → `NodeSummary`/`NodeMetadata` (decide + execute)
-- [ ] **NAM-04** (NAME-F-14): Document `create_*` vs `build_*` policy in AGENTS.md
-- [ ] **NAM-05** (NAME-F-16): Document async/sync split rationale in AGENTS.md
-- [ ] **NAM-06** (NAME-F-17): Add AGENTS.md exemption for tensor-math single-letter variables (`q`/`k`/`v`/`o`/`b`/`c`/`h`/`z`/`d`/`x`)
-- [ ] **NAM-07** (NAME-F-18): Rename non-tensor single-letter variables in scheduler/sampling code
-- [ ] **NAM-08** (NAME-F-19): Document test-file location convention in AGENTS.md
-
-#### Phase 34 (v21.4): 外部 doc 修复 (External Doc Fixes) — ~3.25h
-
-- [ ] **DOC-01** (DOCS-F-21): Remove DeepSeek from `REQUIREMENTS.md:53` or add directory back
-- [ ] **DOC-02** (DOCS-F-22): ADR for vllm-dist investment vs deprecation decision
-- [ ] **DOC-03** (DOCS-F-23): Reframe `qwen3_5/speculative_tests.rs:1` "Phase 5 Wave 4" reference
-- [ ] **DOC-04** (DOCS-F-24): Cross-link `.planning/PROJECT.md` "Key Decisions" to ADRs
-
-#### Phase 35 (v21.5): P3 actionable + Final Verification — ~5h
-
-- [ ] **P3-01** (ARCH-F-15): Clean up dead `crates/traits/tests/mod.rs`
-- [ ] **P3-02** (API-F-25): Fix `gemma4/attention.rs` `Tensor::zeros((1,1), …).unwrap()` non-test
-- [ ] **P3-03** (API-F-27): Create `MIGRATING.md` or versioned changelog
-- [ ] **P3-04** (API-F-31): Add `HalfOpenRejected(u32)` variant to `CircuitBreakerError`
-- [ ] **P3-05** (API-F-32): Re-verify `model` crate production `unwrap()` count after v21.0 changes
-- [ ] **P3-06** (API-F-33): Verify `CudaGraphError` `Clone` derive intent (keep or remove)
-- [ ] **FINAL-01**: All 1100+ tests remain green post-remediation
+- [ ] **ARF-06**: Split `engine.rs` God module (1,038 LOC) into focused sub-modules (Phase 27 deferred)
+- [ ] **ARF-07**: Unify `engine/spec_dispatch` tree post-ML-02 (collapse duplicate abstractions)
+- [ ] **FINAL-01**: All 1146+ tests remain green post-refactor
 - [ ] **FINAL-02**: `cargo clippy --workspace --all-targets --all-features -- -D warnings` clean
 - [ ] **FINAL-03**: `cargo fmt --all --check` clean
-- [ ] **FINAL-04**: `cargo test --workspace --all-features` ≥ 1144 tests pass
+- [ ] **FINAL-04**: `cargo test --workspace --all-features` ≥ 1146 tests pass
+- [ ] **FINAL-05**: `.planning/PROJECT.md` and `.planning/STATE.md` updated with v22.0 outcomes
 
-### Out of Scope (v20.0)
+### Out of Scope (v22.0)
 
-- New features — milestone is purely remediation; no new capabilities
-- Performance optimization — orthogonal to audit findings; separate cycle if needed
-- Real-model benchmarks — already deferred from v18.0
-- New architecture (e.g., adding a new crate) — out of scope; v20.0 only removes/fixes
-- Tree-based speculation — still too complex (carried from v18.0)
-- vllm-dist resurrection — feature-gated but not deleted; multi-node work is future
+- New model capabilities (long context >32K, multimodal/vision) — 下一 milestone 候选
+- Multi-node / vllm-dist resurrection — feature-gated; multi-node work future
+- Real-model benchmarks — requires GPU environment (still deferred from v18.0)
+- Performance optimization beyond audit findings — orthogonal to hardening scope
+- Tree-based speculation — too complex (carried from v18.0)
+- New architectures (e.g., Falcon, DeepSeek) — out of scope for hardening milestone
+- Online fine-tuning, WebAssembly — 长期愿景
 
-### Out of Scope (v21.0)
+### Out of Scope (v21.0 — historical)
 
-- Engine::step() speculative-mode hang fix — pre-existing bug, deferred to bug-fix milestone
-- Real-model benchmarks — out of scope (carried from v18.0)
-- Multi-node / vllm-dist resurrection — feature-gated, not in scope for v21.0
-- New features — milestone is purely backlog closure
-- v20.0 carry-over (5 cargo doc warnings, 1 gguf TODO) — low priority, optional in v21.x
+- Engine::step() speculative-mode hang fix — **moved to v22.0 OPS-02**
+- Real-model benchmarks — still deferred (no GPU env)
+- Multi-node / vllm-dist resurrection — feature-gated
+- v20.0 carry-over (5 cargo doc warnings, 1 gguf TODO) — **moved to v22.0 OPS-03 + GGUF-01**
 
 ### Out of Scope (carried from earlier milestones)
 
@@ -370,8 +295,17 @@ v21.0 build-on:
 - v20.0 architectural improvements preserved
 - **Goal**: 100% backlog closure (all 100 v19 findings addressed)
 
+v22.0 build-on (CURRENT):
+
+- Production hardening: P0 bug fix (Engine::step hang) + security wiring (JWT/RBAC) + production polish (parking_lot, cargo doc, gguf TODO) + engine refactor (God module split)
+- 4 sub-phases (Phase 36-39), organized by severity (P0 first, P3 last)
+- Backward-compat preserved (no breaking API changes)
+- Test invariants: 1146 tests must remain green; aim for ≥ 1146 post-v22.0 (no growth expected — hardening scope)
+- v21.0 doc coverage + audit findings preserved
+- **Goal**: Production-ready vLLM-lite — no P0/P1 bugs, security wired, no cargo doc warnings, engine.rs manageable
+
 Tech stack: Rust + Candle, multi-GPU CUDA support, Kubernetes, gRPC.
-Codebase state (v20.0 end): 6 crates; speculative decoding complete (v18.0); draft registry + memory budget live in core; HTTP server with OpenAI-compatible API; 100 v19 audit findings → 43 fixed (v20.0), 57 deferred (v21.0 scope).
+Codebase state (v22.0 start): 6 crates; speculative decoding complete (v18.0); draft registry + memory budget live in core; HTTP server with OpenAI-compatible API; 100 v19 audit findings → 100 fixed (v20+v21); v22.0 hardening: 4 remaining tech-debt themes (P0 bug, security wiring, production polish, engine refactor).
 
 ## Constraints
 
@@ -435,4 +369,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-27 — **v21.0 P2/P3 Backlog Cleanup milestone COMPLETE** (5/5 phases shipped; Phase 31 Module Layout → Phase 32 API → Phase 33 Naming → Phase 34 External Docs → Phase 35 P3 + FINAL gates); 1146 tests pass (1144 baseline + 13 new - 11 dedup), clippy/fmt clean, 15 ADRs total (12 v20.5 + 3 v21.0 referenced), MIGRATING.md created, 100% backlog closure achieved*
+*Last updated: 2026-06-27 — **v22.0 Production Hardening milestone STARTED** (4 phases planned: Phase 36 Critical Bug Fixes → Phase 37 Security Hardening → Phase 38 Production Polish → Phase 39 Engine Refactor + FINAL gates); v21.0 complete (1146 tests pass, clippy/fmt clean, 15 ADRs, 100% backlog closure); v22.0 focus: P0 bug fix (Engine::step hang) + security wiring (JWT/RBAC) + production polish + engine refactor*
