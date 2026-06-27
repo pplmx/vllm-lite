@@ -7,7 +7,7 @@ use crate::types::Sequence;
 pub struct FcfsPolicy;
 
 impl FcfsPolicy {
-/// new: new.
+    /// new: new.
     pub fn new() -> Self {
         Self
     }

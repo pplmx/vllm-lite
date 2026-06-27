@@ -21,7 +21,7 @@ pub struct MistralSmallArchitecture {
 }
 
 impl MistralSmallArchitecture {
-/// new: new.
+    /// new: new.
     pub fn new() -> Self {
         Self {
             num_experts: 8,
@@ -29,7 +29,7 @@ impl MistralSmallArchitecture {
         }
     }
 
-/// with_experts: with experts.
+    /// with_experts: with experts.
     pub fn with_experts(num_experts: usize, num_active_experts: usize) -> Self {
         Self {
             num_experts,
@@ -55,7 +55,7 @@ pub struct MistralSmallBlockWrapper {
 }
 
 impl MistralSmallBlockWrapper {
-/// new: new.
+    /// new: new.
     pub fn new(config: &ModelConfig, num_experts: usize, num_active_experts: usize) -> Self {
         Self {
             inner_dim: config.head_dim * config.num_heads,
@@ -187,7 +187,7 @@ pub struct MistralSmallModel {
 }
 
 impl MistralSmallModel {
-/// new: new.
+    /// new: new.
     pub fn new(
         config: ModelConfig,
         device: Device,

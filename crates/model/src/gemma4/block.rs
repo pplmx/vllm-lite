@@ -19,7 +19,7 @@ pub struct Gemma4Block {
 }
 
 impl Gemma4Block {
-/// new: new.
+    /// new: new.
     pub fn new(config: &ModelConfig, layer_idx: usize, vb: candle_nn::VarBuilder) -> Result<Self> {
         let hidden_size = config.hidden_size;
         let num_heads = config.num_heads;
@@ -68,7 +68,7 @@ impl Gemma4Block {
         })
     }
 
-/// from_weights: from weights.
+    /// from_weights: from weights.
     pub fn from_weights(
         config: &ModelConfig,
         layer_idx: usize,
@@ -159,7 +159,7 @@ impl Gemma4Block {
         })
     }
 
-/// forward: forward.
+    /// forward: forward.
     pub fn forward(&self, x: &Tensor, positions: &[usize]) -> Result<Tensor> {
         let residual = x.clone();
         let x = self.input_layernorm.forward(x)?;
@@ -172,7 +172,7 @@ impl Gemma4Block {
         x.add(&residual)
     }
 
-/// forward_prefill: forward prefill.
+    /// forward_prefill: forward prefill.
     pub fn forward_prefill(
         &self,
         x: &Tensor,
@@ -194,7 +194,7 @@ impl Gemma4Block {
         x.add(&residual)
     }
 
-/// forward_decode: forward decode.
+    /// forward_decode: forward decode.
     pub fn forward_decode(
         &self,
         x: &Tensor,

@@ -16,12 +16,12 @@ pub type MistralBlock = RopeGqaDecoderBlock;
 pub type MistralModel = CausalLm<MistralBlock, LnLayerNorm, Linear>;
 
 impl MistralModel {
-/// new: new.
+    /// new: new.
     pub fn new(config: ModelConfig, device: Device, num_kv_blocks: usize) -> CandleResult<Self> {
         Self::new_with_block_fn(config, device, num_kv_blocks, false, new_block)
     }
 
-/// from_weights: from weights.
+    /// from_weights: from weights.
     pub fn from_weights(
         config: ModelConfig,
         device: Device,

@@ -25,7 +25,7 @@ pub struct AuditLogger {
 }
 
 impl AuditLogger {
-/// new: new.
+    /// new: new.
     pub fn new(max_events: usize) -> Self {
         Self {
             events: Arc::new(RwLock::new(Vec::new())),
@@ -33,7 +33,7 @@ impl AuditLogger {
         }
     }
 
-/// log: log.
+    /// log: log.
     pub async fn log(&self, event: AuditEvent) {
         let mut events = self.events.write().await;
         events.push(event.clone());
@@ -52,7 +52,7 @@ impl AuditLogger {
         );
     }
 
-/// log_auth_success: log auth success.
+    /// log_auth_success: log auth success.
     pub async fn log_auth_success(&self, user_id: &str, request_id: &str) {
         self.log(AuditEvent {
             timestamp: chrono::Utc::now().to_rfc3339(),
@@ -67,7 +67,7 @@ impl AuditLogger {
         .await;
     }
 
-/// log_auth_failure: log auth failure.
+    /// log_auth_failure: log auth failure.
     pub async fn log_auth_failure(&self, reason: &str, request_id: &str) {
         self.log(AuditEvent {
             timestamp: chrono::Utc::now().to_rfc3339(),
@@ -88,7 +88,7 @@ impl AuditLogger {
         );
     }
 
-/// log_api_request: log api request.
+    /// log_api_request: log api request.
     pub async fn log_api_request(
         &self,
         user_id: Option<&str>,
@@ -110,12 +110,12 @@ impl AuditLogger {
         .await;
     }
 
-/// get_events: get events.
+    /// get_events: get events.
     pub async fn get_events(&self) -> Vec<AuditEvent> {
         self.events.read().await.clone()
     }
 
-/// clear: clear.
+    /// clear: clear.
     pub async fn clear(&self) {
         self.events.write().await.clear();
     }

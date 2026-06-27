@@ -10,7 +10,7 @@ pub struct SjfPolicy {
 }
 
 impl SjfPolicy {
-/// new: new.
+    /// new: new.
     pub fn new(sjf_priority_weight: f32, sjf_remaining_work_weight: f32) -> Self {
         Self {
             sjf_priority_weight,

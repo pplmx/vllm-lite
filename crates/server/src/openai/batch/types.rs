@@ -75,7 +75,7 @@ pub struct BatchJob {
 }
 
 impl BatchJob {
-/// new: new.
+    /// new: new.
     pub fn new(
         id: String,
         endpoint: String,

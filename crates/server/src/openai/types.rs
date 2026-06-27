@@ -11,7 +11,7 @@ pub struct Usage {
 }
 
 impl Usage {
-/// new: new.
+    /// new: new.
     pub fn new(prompt: usize, completion: usize) -> Self {
         let prompt = prompt as i64;
         let completion = completion as i64;
@@ -39,7 +39,7 @@ pub struct ErrorResponse {
 }
 
 impl ErrorResponse {
-/// new: new.
+    /// new: new.
     pub fn new(message: &str, error_type: &str) -> Self {
         Self {
             error: ErrorDetail {
@@ -92,7 +92,7 @@ pub struct ChatResponse {
 }
 
 impl ChatResponse {
-/// new: new.
+    /// new: new.
     pub fn new(id: String, model: String, choices: Vec<ChatChoice>, usage: Usage) -> Self {
         Self {
             id,
@@ -127,7 +127,7 @@ pub struct ChatChunk {
 }
 
 impl ChatChunk {
-/// new: new.
+    /// new: new.
     pub fn new(id: String, model: String, choice: ChatChunkChoice) -> Self {
         Self {
             id,
@@ -174,7 +174,7 @@ pub struct CompletionResponse {
 }
 
 impl CompletionResponse {
-/// new: new.
+    /// new: new.
     pub fn new(id: String, model: String, choices: Vec<CompletionChoice>, usage: Usage) -> Self {
         Self {
             id,
@@ -215,7 +215,7 @@ pub struct EmbeddingsResponse {
 }
 
 impl EmbeddingsResponse {
-/// new: new.
+    /// new: new.
     pub fn new(embeddings: Vec<Vec<f32>>, model: String) -> Self {
         let data: Vec<EmbeddingData> = embeddings
             .into_iter()

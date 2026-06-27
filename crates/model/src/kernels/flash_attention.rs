@@ -24,7 +24,7 @@ pub struct FlashAttentionConfig {
 }
 
 impl FlashAttentionConfig {
-/// new: new.
+    /// new: new.
     pub fn new() -> Self {
         Self {
             variant: AttentionVariant::Standard,
@@ -36,26 +36,26 @@ impl FlashAttentionConfig {
         }
     }
 
-/// with_flash: with flash.
+    /// with_flash: with flash.
     pub fn with_flash(mut self) -> Self {
         self.variant = AttentionVariant::Flash;
         self
     }
 
-/// with_flash_v2: with flash v2.
+    /// with_flash_v2: with flash v2.
     pub fn with_flash_v2(mut self) -> Self {
         self.variant = AttentionVariant::FlashV2;
         self
     }
 
-/// with_tiled: with tiled.
+    /// with_tiled: with tiled.
     pub fn with_tiled(mut self, tile_size: usize) -> Self {
         self.variant = AttentionVariant::Tiled;
         self.flash_block_size = tile_size;
         self
     }
 
-/// with_sliding_window: with sliding window.
+    /// with_sliding_window: with sliding window.
     pub fn with_sliding_window(mut self, size: usize) -> Self {
         self.use_sliding_window = true;
         self.sliding_window_size = size;
@@ -108,13 +108,13 @@ pub struct AttentionStats {
 }
 
 impl AttentionStats {
-/// record_forward: record forward.
+    /// record_forward: record forward.
     pub fn record_forward(&mut self, num_tokens: usize) {
         self.forward_count += 1;
         self.total_tokens += num_tokens as u64;
     }
 
-/// record_tiled: record tiled.
+    /// record_tiled: record tiled.
     pub fn record_tiled(&mut self, num_tokens: usize) {
         self.tiled_forward_count += 1;
         self.total_tokens += num_tokens as u64;
@@ -136,7 +136,7 @@ pub struct FlashAttentionV2 {
 }
 
 impl FlashAttentionV2 {
-/// new: new.
+    /// new: new.
     pub fn new(num_heads: usize, head_dim: usize) -> Self {
         let scale = 1.0 / (head_dim as f32).sqrt();
         Self {
@@ -147,13 +147,13 @@ impl FlashAttentionV2 {
         }
     }
 
-/// with_block_size: with block size.
+    /// with_block_size: with block size.
     pub fn with_block_size(mut self, block_size: usize) -> Self {
         self.block_size = block_size;
         self
     }
 
-/// forward: forward.
+    /// forward: forward.
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let (_batch_size, _num_heads_q, _seq_len_q, _head_dim) = q.dims4()?;
         let (_, _, seq_len_k, _) = k.dims4()?;
@@ -260,7 +260,7 @@ impl FlashAttentionV2 {
         Ok(final_output)
     }
 
-/// forward_with_causal_mask: forward with causal mask.
+    /// forward_with_causal_mask: forward with causal mask.
     pub fn forward_with_causal_mask(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let (_, _, _seq_len_q, _) = q.dims4()?;
         let (_, _, seq_len_k, _) = k.dims4()?;
@@ -415,7 +415,7 @@ impl FlashAttention for FlashAttentionV2 {
 }
 
 impl ScaledDotProductAttention {
-/// new: new.
+    /// new: new.
     pub fn new(head_dim: usize) -> Self {
         let scale = 1.0 / (head_dim as f32).sqrt();
         let optimal_tile = if head_dim <= 64 { 32 } else { 64 };
@@ -425,13 +425,13 @@ impl ScaledDotProductAttention {
         }
     }
 
-/// with_tile_size: with tile size.
+    /// with_tile_size: with tile size.
     pub fn with_tile_size(mut self, tile_size: usize) -> Self {
         self.tile_size = tile_size;
         self
     }
 
-/// compute_tiled: compute tiled.
+    /// compute_tiled: compute tiled.
     pub fn compute_tiled(
         &self,
         q: &Tensor,
@@ -492,7 +492,7 @@ impl ScaledDotProductAttention {
         Ok(result)
     }
 
-/// compute_sliding_window: compute sliding window.
+    /// compute_sliding_window: compute sliding window.
     pub fn compute_sliding_window(
         &self,
         q: &Tensor,
@@ -559,7 +559,7 @@ pub struct FlashAttentionKernel {
 }
 
 impl FlashAttentionKernel {
-/// new: new.
+    /// new: new.
     pub fn new(num_heads: usize, head_dim: usize, config: FlashAttentionConfig) -> Self {
         let attention: Box<dyn FlashAttention> = match config.variant {
             AttentionVariant::Tiled => Box::new(
@@ -576,7 +576,7 @@ impl FlashAttentionKernel {
         Self { attention, config }
     }
 
-/// forward: forward.
+    /// forward: forward.
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         if self.config.variant == AttentionVariant::Tiled {
             return self.forward_tiled(q, k, v);

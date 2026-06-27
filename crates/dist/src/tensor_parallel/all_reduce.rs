@@ -28,7 +28,7 @@ pub struct NcclAllReduce {
 }
 
 impl NcclAllReduce {
-/// new: new.
+    /// new: new.
     pub fn new(mesh: Arc<DeviceMesh>) -> Self {
         Self { mesh }
     }

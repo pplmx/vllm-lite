@@ -71,7 +71,7 @@ pub struct Request {
 }
 
 impl Request {
-/// new: new.
+    /// new: new.
     pub fn new(id: SeqId, prompt: Vec<TokenId>, max_tokens: usize) -> Self {
         Self {
             id,
@@ -83,7 +83,7 @@ impl Request {
         }
     }
 
-/// with_priority: with priority.
+    /// with_priority: with priority.
     pub fn with_priority(mut self, priority: Priority) -> Self {
         self.priority = priority;
         self
@@ -246,7 +246,7 @@ pub struct SchedulerConfig {
 }
 
 impl SchedulerConfig {
-/// new: new.
+    /// new: new.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         max_num_seqs: usize,

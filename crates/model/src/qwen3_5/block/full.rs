@@ -22,7 +22,7 @@ pub struct FullAttentionBlock35 {
 }
 
 impl FullAttentionBlock35 {
-/// new: new.
+    /// new: new.
     pub fn new(
         hidden_size: usize,
         num_heads: usize,
@@ -54,18 +54,18 @@ impl FullAttentionBlock35 {
         })
     }
 
-/// with_attn_gate: with attn gate.
+    /// with_attn_gate: with attn gate.
     pub fn with_attn_gate(mut self, gate: Linear) -> Self {
         self.gate = Some(gate);
         self
     }
 
-/// forward: forward.
+    /// forward: forward.
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
         self.forward_with_attn(x, |x| self.self_attn.forward(x))
     }
 
-/// forward_prefill: forward prefill.
+    /// forward_prefill: forward prefill.
     pub fn forward_prefill(
         &self,
         x: &Tensor,
@@ -80,7 +80,7 @@ impl FullAttentionBlock35 {
         })
     }
 
-/// forward_decode: forward decode.
+    /// forward_decode: forward decode.
     pub fn forward_decode(
         &self,
         x: &Tensor,
@@ -127,7 +127,7 @@ impl FullAttentionBlock35 {
 }
 
 impl FullAttentionBlock35 {
-/// from_weights: from weights.
+    /// from_weights: from weights.
     pub fn from_weights(
         prefix: &str,
         weights: &HashMap<String, Tensor>,

@@ -29,31 +29,31 @@ impl Default for TestHarnessConfig {
 }
 
 impl TestHarnessConfig {
-/// kv_blocks: kv blocks.
+    /// kv_blocks: kv blocks.
     pub fn kv_blocks(mut self, n: usize) -> Self {
         self.kv_blocks = n;
         self
     }
 
-/// max_batch_size: max batch size.
+    /// max_batch_size: max batch size.
     pub fn max_batch_size(mut self, n: usize) -> Self {
         self.max_batch_size = n;
         self
     }
 
-/// enable_prefix_cache: enable prefix cache.
+    /// enable_prefix_cache: enable prefix cache.
     pub fn enable_prefix_cache(mut self, enabled: bool) -> Self {
         self.enable_prefix_cache = enabled;
         self
     }
 
-/// enable_dynamic_batching: enable dynamic batching.
+    /// enable_dynamic_batching: enable dynamic batching.
     pub fn enable_dynamic_batching(mut self, enabled: bool) -> Self {
         self.enable_dynamic_batching = enabled;
         self
     }
 
-/// into_scheduler_config: into scheduler config.
+    /// into_scheduler_config: into scheduler config.
     pub fn into_scheduler_config(self) -> SchedulerConfig {
         SchedulerConfig::new(
             self.max_batch_size,

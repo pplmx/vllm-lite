@@ -11,7 +11,7 @@ pub struct GeGLU {
 }
 
 impl GeGLU {
-/// new: new.
+    /// new: new.
     pub fn new(
         hidden_size: usize,
         intermediate_size: usize,
@@ -28,7 +28,7 @@ impl GeGLU {
         })
     }
 
-/// new_with_weights: new with weights.
+    /// new_with_weights: new with weights.
     pub fn new_with_weights(
         _hidden_size: usize,
         _intermediate_size: usize,
@@ -43,7 +43,7 @@ impl GeGLU {
         })
     }
 
-/// forward: forward.
+    /// forward: forward.
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let gate = self.gate_proj.forward(x)?;
         let up = self.up_proj.forward(x)?;

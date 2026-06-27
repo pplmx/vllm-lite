@@ -28,7 +28,7 @@ pub struct SSMConfig {
 }
 
 impl SSMConfig {
-/// new: new.
+    /// new: new.
     pub fn new(d_model: usize) -> Self {
         Self {
             d_model,
@@ -38,34 +38,34 @@ impl SSMConfig {
         }
     }
 
-/// d_inner: d inner.
+    /// d_inner: d inner.
     pub fn d_inner(&self) -> usize {
         self.expand * self.d_model
     }
 
-/// d_state: d state.
+    /// d_state: d state.
     pub fn d_state(&self) -> usize {
         self.d_state
     }
 
-/// d_conv: d conv.
+    /// d_conv: d conv.
     pub fn d_conv(&self) -> usize {
         self.d_conv
     }
 
-/// with_d_state: with d state.
+    /// with_d_state: with d state.
     pub fn with_d_state(mut self, d_state: usize) -> Self {
         self.d_state = d_state;
         self
     }
 
-/// with_d_conv: with d conv.
+    /// with_d_conv: with d conv.
     pub fn with_d_conv(mut self, d_conv: usize) -> Self {
         self.d_conv = d_conv;
         self
     }
 
-/// with_expand: with expand.
+    /// with_expand: with expand.
     pub fn with_expand(mut self, expand: usize) -> Self {
         self.expand = expand;
         self
@@ -83,7 +83,7 @@ pub struct SSMLayer {
 }
 
 impl SSMLayer {
-/// new: new.
+    /// new: new.
     pub fn new(config: &SSMConfig, vb: VarBuilder) -> CandleResult<Self> {
         let d_inner = config.d_inner();
 
@@ -107,7 +107,7 @@ impl SSMLayer {
         })
     }
 
-/// forward: forward.
+    /// forward: forward.
     pub fn forward(&self, x: &Tensor) -> CandleResult<(Tensor, Tensor, Tensor, Tensor)> {
         let x_conv = x.transpose(1, 2)?;
         let x_conv = self.conv.forward(&x_conv)?;
@@ -126,27 +126,27 @@ impl SSMLayer {
         Ok((delta, b.clone(), c.clone(), x_conv))
     }
 
-/// d_inner: d inner.
+    /// d_inner: d inner.
     pub fn d_inner(&self) -> usize {
         self.d_inner
     }
 
-/// d_state: d state.
+    /// d_state: d state.
     pub fn d_state(&self) -> usize {
         self.d_state
     }
 
-/// a_log: a log.
+    /// a_log: a log.
     pub fn a_log(&self) -> &Linear {
         &self.a_log
     }
 
-/// d_linear: d linear.
+    /// d_linear: d linear.
     pub fn d_linear(&self) -> &Linear {
         &self.d
     }
 
-/// from_weights: from weights.
+    /// from_weights: from weights.
     pub fn from_weights(
         d_inner: usize,
         d_state: usize,
@@ -208,7 +208,7 @@ pub struct MambaBlock {
 }
 
 impl MambaBlock {
-/// new: new.
+    /// new: new.
     pub fn new(d_model: usize, d_state: usize, vb: VarBuilder) -> CandleResult<Self> {
         let config = SSMConfig::new(d_model).with_d_state(d_state);
 
@@ -225,7 +225,7 @@ impl MambaBlock {
         })
     }
 
-/// forward: forward.
+    /// forward: forward.
     pub fn forward(&mut self, x: &Tensor) -> CandleResult<Tensor> {
         let residual = x.clone();
 
@@ -278,7 +278,7 @@ impl MambaBlock {
         self.norm.forward(&output)
     }
 
-/// from_weights: from weights.
+    /// from_weights: from weights.
     pub fn from_weights(
         d_model: usize,
         d_state: usize,
@@ -340,7 +340,7 @@ pub struct SSMHarmonicSSMLayer {
 }
 
 impl SSMHarmonicSSMLayer {
-/// new: new.
+    /// new: new.
     pub fn new(
         d_inner: usize,
         d_state: usize,
@@ -368,7 +368,7 @@ impl SSMHarmonicSSMLayer {
         })
     }
 
-/// forward: forward.
+    /// forward: forward.
     pub fn forward(&self, x: &Tensor) -> CandleResult<(Tensor, Tensor, Tensor, Tensor)> {
         let x_conv = x.transpose(1, 2)?;
         let x_conv = self.conv.forward(&x_conv)?;
@@ -387,7 +387,7 @@ impl SSMHarmonicSSMLayer {
         Ok((delta, b.clone(), c.clone(), x_conv))
     }
 
-/// forward_with_a: forward with a.
+    /// forward_with_a: forward with a.
     pub fn forward_with_a(
         &self,
         x: &Tensor,
@@ -427,27 +427,27 @@ impl SSMHarmonicSSMLayer {
         Ok((delta, b.clone(), c.clone(), x_conv, a_proj_out))
     }
 
-/// d_inner: d inner.
+    /// d_inner: d inner.
     pub fn d_inner(&self) -> usize {
         self.d_inner
     }
 
-/// d_state: d state.
+    /// d_state: d state.
     pub fn d_state(&self) -> usize {
         self.d_state
     }
 
-/// a_log: a log.
+    /// a_log: a log.
     pub fn a_log(&self) -> &Tensor {
         &self.a_log
     }
 
-/// dt_bias: dt bias.
+    /// dt_bias: dt bias.
     pub fn dt_bias(&self) -> &Tensor {
         &self.dt_bias
     }
 
-/// from_weights: from weights.
+    /// from_weights: from weights.
     pub fn from_weights(
         d_inner: usize,
         d_state: usize,

@@ -53,7 +53,7 @@ pub struct CircuitBreaker {
 }
 
 impl CircuitBreaker {
-/// new: new.
+    /// new: new.
     pub fn new(config: CircuitBreakerConfig) -> Self {
         Self {
             config,
@@ -64,7 +64,7 @@ impl CircuitBreaker {
         }
     }
 
-/// call: call.
+    /// call: call.
     pub async fn call<F, Fut, T, E>(&self, operation: F) -> Result<T, CircuitBreakerError>
     where
         F: FnOnce() -> Fut,
@@ -146,7 +146,7 @@ impl CircuitBreaker {
         }
     }
 
-/// state: state.
+    /// state: state.
     pub async fn state(&self) -> CircuitState {
         *self.state.read().await
     }

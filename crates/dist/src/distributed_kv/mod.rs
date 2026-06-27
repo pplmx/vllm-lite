@@ -47,7 +47,7 @@ impl Default for CacheConfig {
 }
 
 impl CacheConfig {
-/// new: new.
+    /// new: new.
     pub fn new(node_id: NodeId, num_nodes: usize) -> Self {
         Self {
             node_id,

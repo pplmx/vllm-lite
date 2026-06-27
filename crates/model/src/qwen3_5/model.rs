@@ -37,7 +37,7 @@ impl HybridLmConfig for Qwen3Config {
 }
 
 impl Qwen35HybridModel {
-/// new: new.
+    /// new: new.
     pub fn new(
         config: Qwen3Config,
         device: Device,
@@ -103,7 +103,7 @@ impl Qwen35HybridModel {
         ))
     }
 
-/// from_weights: from weights.
+    /// from_weights: from weights.
     pub fn from_weights(
         config: Qwen3Config,
         device: Device,

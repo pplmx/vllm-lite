@@ -41,7 +41,7 @@ where
     Norm: Module + Send + Sync,
     C: HybridLmConfig,
 {
-/// from_parts: from parts.
+    /// from_parts: from parts.
     pub fn from_parts(
         config: C,
         embed_tokens: Embedding,
@@ -63,7 +63,7 @@ where
         }
     }
 
-/// forward_with_cache: forward with cache.
+    /// forward_with_cache: forward with cache.
     pub fn forward_with_cache(
         &mut self,
         seq_id: SeqId,

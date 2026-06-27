@@ -18,7 +18,7 @@ pub struct RadixTree {
 }
 
 impl RadixTree {
-/// new: new.
+    /// new: new.
     pub fn new() -> Self {
         Self {
             root: RadixNode::new(),

@@ -9,12 +9,12 @@ pub struct RmsNorm {
 }
 
 impl RmsNorm {
-/// new: new.
+    /// new: new.
     pub fn new(weight: Tensor, eps: f64) -> Self {
         Self { weight, eps }
     }
 
-/// forward: forward.
+    /// forward: forward.
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let dims = x.dims();
 

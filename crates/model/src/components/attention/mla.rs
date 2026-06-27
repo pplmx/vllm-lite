@@ -27,61 +27,61 @@ pub struct MlaAttention {
 }
 
 impl MlaAttention {
-/// num_heads: num heads.
+    /// num_heads: num heads.
     pub fn num_heads(&self) -> usize {
         self.num_heads
     }
 
-/// num_kv_heads: num kv heads.
+    /// num_kv_heads: num kv heads.
     pub fn num_kv_heads(&self) -> usize {
         self.num_kv_heads
     }
 
-/// head_dim: head dim.
+    /// head_dim: head dim.
     pub fn head_dim(&self) -> usize {
         self.head_dim
     }
 
-/// kv_lora_rank: kv lora rank.
+    /// kv_lora_rank: kv lora rank.
     pub fn kv_lora_rank(&self) -> usize {
         self.kv_lora_rank
     }
 
-/// q_lora_rank: q lora rank.
+    /// q_lora_rank: q lora rank.
     pub fn q_lora_rank(&self) -> usize {
         self.q_lora_rank
     }
 
-/// config: config.
+    /// config: config.
     pub fn config(&self) -> &AttentionConfig {
         &self.config
     }
 
-/// q_proj_test: q proj test.
+    /// q_proj_test: q proj test.
     #[cfg(test)]
     pub fn q_proj_test(&self) -> &Linear {
         &self.q_proj
     }
 
-/// kv_proj_test: kv proj test.
+    /// kv_proj_test: kv proj test.
     #[cfg(test)]
     pub fn kv_proj_test(&self) -> &Linear {
         &self.kv_proj
     }
 
-/// k_decompress_test: k decompress test.
+    /// k_decompress_test: k decompress test.
     #[cfg(test)]
     pub fn k_decompress_test(&self) -> &Linear {
         &self.k_decompress
     }
 
-/// v_decompress_test: v decompress test.
+    /// v_decompress_test: v decompress test.
     #[cfg(test)]
     pub fn v_decompress_test(&self) -> &Linear {
         &self.v_decompress
     }
 
-/// split_q: split q.
+    /// split_q: split q.
     pub fn split_q(&self, q_compressed: &Tensor, seq_len: usize) -> Result<(Tensor, Tensor)> {
         let batch_size = q_compressed.dims()[0];
         let q_nope_dim = self.num_heads * self.qk_nope_dim;
@@ -95,7 +95,7 @@ impl MlaAttention {
         Ok((q_nope, q_rope))
     }
 
-/// concat_q_nope_rope: concat q nope rope.
+    /// concat_q_nope_rope: concat q nope rope.
     pub fn concat_q_nope_rope(&self, q_nope: &Tensor, q_rope: &Tensor) -> Result<Tensor> {
         let q = Tensor::cat(&[q_nope, q_rope], 2)?;
         let batch_size = q.dims()[0];
@@ -106,14 +106,14 @@ impl MlaAttention {
         q.contiguous()
     }
 
-/// reshape_k: reshape k.
+    /// reshape_k: reshape k.
     pub fn reshape_k(&self, k_flat: &Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
         let k = k_flat.reshape((batch_size, seq_len, self.num_kv_heads, self.v_head_dim))?;
         let k = k.transpose(1, 2)?;
         k.contiguous()
     }
 
-/// reshape_v: reshape v.
+    /// reshape_v: reshape v.
     pub fn reshape_v(&self, v_flat: &Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
         let v = v_flat.reshape((batch_size, seq_len, self.num_kv_heads, self.v_head_dim))?;
         let v = v.transpose(1, 2)?;
@@ -129,7 +129,7 @@ impl MlaAttention {
         q_rope_flat.reshape((batch_size, seq_len, self.num_heads, self.qk_rope_dim))
     }
 
-/// forward: forward.
+    /// forward: forward.
     pub fn forward(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
         let batch_size = x.dims()[0];
         let seq_len = x.dims()[1];
@@ -197,7 +197,7 @@ impl MlaAttention {
         Ok(attn_output)
     }
 
-/// new: new.
+    /// new: new.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         hidden_size: usize,

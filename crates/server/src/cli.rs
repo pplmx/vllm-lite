@@ -47,7 +47,9 @@ impl std::fmt::Display for LogLevel {
 }
 
 fn parse_usize_in_range(s: &str, min: usize, max: usize) -> Result<usize, CliValidationError> {
-    let val: usize = s.parse().map_err(|_| CliValidationError::NotANumber(s.to_string()))?;
+    let val: usize = s
+        .parse()
+        .map_err(|_| CliValidationError::NotANumber(s.to_string()))?;
     if val < min || val > max {
         Err(CliValidationError::OutOfRange { min, max })
     } else {
@@ -186,7 +188,7 @@ struct ConfigArgs {
 }
 
 impl CliArgs {
-/// to_app_config: to app config.
+    /// to_app_config: to app config.
     pub fn to_app_config(&self) -> AppConfig {
         let mut config = AppConfig::load(self.config.config.clone());
 
@@ -218,7 +220,7 @@ impl CliArgs {
         config
     }
 
-/// model_path: model path.
+    /// model_path: model path.
     pub fn model_path(&self) -> &PathBuf {
         &self.model.model
     }

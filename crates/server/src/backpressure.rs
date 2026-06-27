@@ -22,7 +22,7 @@ impl Default for BackpressureConfig {
 }
 
 impl BackpressureConfig {
-/// new: new.
+    /// new: new.
     pub fn new(max_buffer_size: usize) -> Self {
         let high_water_mark = (max_buffer_size as f64 * 0.75) as usize;
         let resume_threshold = (max_buffer_size as f64 * 0.25) as usize;
@@ -51,7 +51,7 @@ pub struct BackpressureState {
 }
 
 impl BackpressureState {
-/// new: new.
+    /// new: new.
     pub fn new(config: BackpressureConfig) -> Self {
         Self {
             pending_tokens: Arc::new(AtomicUsize::new(0)),
@@ -60,25 +60,25 @@ impl BackpressureState {
         }
     }
 
-/// increment: increment.
+    /// increment: increment.
     pub fn increment(&self) -> FlowControlState {
         let pending = self.pending_tokens.fetch_add(1, Ordering::SeqCst);
         self.evaluate_state(pending + 1)
     }
 
-/// decrement: decrement.
+    /// decrement: decrement.
     pub fn decrement(&self) -> FlowControlState {
         let pending = self.pending_tokens.fetch_sub(1, Ordering::SeqCst);
         self.evaluate_state(pending.saturating_sub(1))
     }
 
-/// batch_increment: batch increment.
+    /// batch_increment: batch increment.
     pub fn batch_increment(&self, count: usize) -> FlowControlState {
         let pending = self.pending_tokens.fetch_add(count, Ordering::SeqCst);
         self.evaluate_state(pending + count)
     }
 
-/// batch_decrement: batch decrement.
+    /// batch_decrement: batch decrement.
     pub fn batch_decrement(&self, count: usize) -> FlowControlState {
         let pending = self.pending_tokens.fetch_sub(count, Ordering::SeqCst);
         self.evaluate_state(pending.saturating_sub(count))
@@ -101,18 +101,18 @@ impl BackpressureState {
         new_state
     }
 
-/// should_throttle: should throttle.
+    /// should_throttle: should throttle.
     pub fn should_throttle(&self) -> bool {
         let pending = self.pending_tokens.load(Ordering::SeqCst);
         pending >= self.config.high_water_mark
     }
 
-/// pending_count: pending count.
+    /// pending_count: pending count.
     pub fn pending_count(&self) -> usize {
         self.pending_tokens.load(Ordering::SeqCst)
     }
 
-/// reset: reset.
+    /// reset: reset.
     pub fn reset(&self) {
         self.pending_tokens.store(0, Ordering::SeqCst);
         *self.last_state.lock().unwrap_or_else(|e| e.into_inner()) = FlowControlState::Normal;
@@ -125,29 +125,29 @@ pub struct StreamingBackpressure {
 }
 
 impl StreamingBackpressure {
-/// new: new.
+    /// new: new.
     pub fn new(config: BackpressureConfig) -> Self {
         Self {
             state: Arc::new(BackpressureState::new(config)),
         }
     }
 
-/// state: state.
+    /// state: state.
     pub fn state(&self) -> &Arc<BackpressureState> {
         &self.state
     }
 
-/// before_send: before send.
+    /// before_send: before send.
     pub fn before_send(&self) -> FlowControlState {
         self.state.increment()
     }
 
-/// after_send: after send.
+    /// after_send: after send.
     pub fn after_send(&self) -> FlowControlState {
         self.state.decrement()
     }
 
-/// can_send: can send.
+    /// can_send: can send.
     pub fn can_send(&self) -> bool {
         !self.state.should_throttle()
     }

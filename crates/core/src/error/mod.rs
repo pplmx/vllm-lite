@@ -99,7 +99,10 @@ mod tests {
             op: "forward".to_string(),
             ms: 1500,
         };
-        assert_eq!(err.to_string(), "operation 'forward' timed out after 1500 ms");
+        assert_eq!(
+            err.to_string(),
+            "operation 'forward' timed out after 1500 ms"
+        );
     }
 
     #[test]

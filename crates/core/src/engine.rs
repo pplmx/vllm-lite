@@ -66,7 +66,7 @@ pub struct Engine {
 }
 
 impl Engine {
-/// new_boxed: new boxed.
+    /// new_boxed: new boxed.
     pub fn new_boxed(
         target_model: Box<dyn ModelBackend>,
         draft_model: Option<Box<dyn ModelBackend>>,
@@ -80,7 +80,7 @@ impl Engine {
         )
     }
 
-/// with_config_boxed: with config boxed.
+    /// with_config_boxed: with config boxed.
     pub fn with_config_boxed(
         target_model: Box<dyn ModelBackend>,
         draft_model: Option<Box<dyn ModelBackend>>,
@@ -137,7 +137,7 @@ impl Engine {
         )
     }
 
-/// with_config: with config.
+    /// with_config: with config.
     pub fn with_config<M: ModelBackend + 'static>(
         target_model: M,
         draft_model: Option<M>,
@@ -344,7 +344,7 @@ impl Engine {
         self.draft_registry.decrement_ref(id)
     }
 
-/// capture_cuda_graphs: capture cuda graphs.
+    /// capture_cuda_graphs: capture cuda graphs.
     #[cfg(feature = "cuda-graph")]
     pub fn capture_cuda_graphs(&mut self) -> crate::error::Result<()> {
         if let Some(ref mut executor) = self.cuda_graph {
@@ -356,26 +356,26 @@ impl Engine {
         Ok(())
     }
 
-/// capture_cuda_graphs: capture cuda graphs.
+    /// capture_cuda_graphs: capture cuda graphs.
     #[cfg(not(feature = "cuda-graph"))]
     pub fn capture_cuda_graphs(&mut self) -> crate::error::Result<()> {
         tracing::warn!("CUDA Graph support not enabled");
         Ok(())
     }
 
-/// cuda_graph_enabled: cuda graph enabled.
+    /// cuda_graph_enabled: cuda graph enabled.
     #[cfg(feature = "cuda-graph")]
     pub fn cuda_graph_enabled(&self) -> bool {
         self.cuda_graph.as_ref().is_some_and(|e| e.is_enabled())
     }
 
-/// cuda_graph_enabled: cuda graph enabled.
+    /// cuda_graph_enabled: cuda graph enabled.
     #[cfg(not(feature = "cuda-graph"))]
     pub fn cuda_graph_enabled(&self) -> bool {
         false
     }
 
-/// enable_speculative: enable speculative.
+    /// enable_speculative: enable speculative.
     pub fn enable_speculative(&mut self) {
         self.speculative_mode = true;
     }
@@ -397,17 +397,17 @@ impl Engine {
         self.adaptive_decoder.is_some()
     }
 
-/// is_healthy: is healthy.
+    /// is_healthy: is healthy.
     pub fn is_healthy(&self) -> bool {
         self.error_count < 10
     }
 
-/// get_last_error: get last error.
+    /// get_last_error: get last error.
     pub fn get_last_error(&self) -> Option<&str> {
         self.last_error.as_deref()
     }
 
-/// cancel_request: cancel request.
+    /// cancel_request: cancel request.
     pub fn cancel_request(&mut self, seq_id: SeqId) -> bool {
         let canceled = self.scheduler.cancel_request(seq_id);
         if canceled {
@@ -417,7 +417,7 @@ impl Engine {
         canceled
     }
 
-/// add_request: add request.
+    /// add_request: add request.
     pub fn add_request(&mut self, req: Request, response_tx: mpsc::Sender<TokenId>) -> SeqId {
         // Validate prompt is not empty
         if req.prompt.is_empty() {
@@ -430,7 +430,7 @@ impl Engine {
         seq_id
     }
 
-/// run: run.
+    /// run: run.
     pub fn run(&mut self, mut msg_rx: mpsc::UnboundedReceiver<EngineMessage>) {
         let mut step_count = 0u64;
         loop {
@@ -491,12 +491,12 @@ impl Engine {
         }
     }
 
-/// has_pending: has pending.
+    /// has_pending: has pending.
     pub fn has_pending(&self) -> bool {
         self.scheduler.has_pending()
     }
 
-/// step_beam: step beam.
+    /// step_beam: step beam.
     pub fn step_beam(
         &mut self,
         beam_width: usize,
@@ -597,7 +597,7 @@ impl Engine {
             .collect()
     }
 
-/// step_with_graph: step with graph.
+    /// step_with_graph: step with graph.
     #[cfg(feature = "cuda-graph")]
     pub fn step_with_graph(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
         let start = std::time::Instant::now();
@@ -633,7 +633,7 @@ impl Engine {
         self.process_output(output, batch, start)
     }
 
-/// step_with_graph: step with graph.
+    /// step_with_graph: step with graph.
     #[cfg(not(feature = "cuda-graph"))]
     pub fn step_with_graph(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
         tracing::warn!("CUDA Graph support not enabled, using regular step");
@@ -755,7 +755,7 @@ impl Default for SleepPolicy {
 }
 
 impl SleepPolicy {
-/// next_interval: next interval.
+    /// next_interval: next interval.
     pub fn next_interval(&mut self, has_work: bool) -> u64 {
         if has_work {
             self.consecutive_idle = 0;

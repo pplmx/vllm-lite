@@ -15,7 +15,7 @@ pub struct RoPE {
 }
 
 impl RoPE {
-/// new: new.
+    /// new: new.
     pub fn new(
         head_dim: usize,
         max_position: usize,
@@ -31,7 +31,7 @@ impl RoPE {
         }
     }
 
-/// new_with_config: new with config.
+    /// new_with_config: new with config.
     pub fn new_with_config(config: &Qwen3Config) -> Self {
         use candle_core::Device;
         let rope_scaling = config.rope_scaling();
@@ -44,17 +44,17 @@ impl RoPE {
         }
     }
 
-/// scaling_factor: scaling factor.
+    /// scaling_factor: scaling factor.
     pub fn scaling_factor(&self) -> f32 {
         self.scaling_factor
     }
 
-/// apply: apply.
+    /// apply: apply.
     pub fn apply(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
         apply_rope(x, positions, self.theta)
     }
 
-/// forward: forward.
+    /// forward: forward.
     pub fn forward(&self, q: &Tensor, k: &Tensor, position: i64) -> Result<(Tensor, Tensor)> {
         let positions: Vec<i64> = (0..q.dim(1)? as i64).map(|i| position + i).collect();
         let q_out = apply_rope(q, &positions, self.theta)?;

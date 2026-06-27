@@ -44,7 +44,7 @@ pub struct CudaGraph {
 unsafe impl Send for CudaGraph {}
 
 impl CudaGraph {
-/// new: new.
+    /// new: new.
     pub fn new() -> Self {
         Self {
             nodes: Vec::new(),
@@ -54,7 +54,7 @@ impl CudaGraph {
         }
     }
 
-/// add_node: add node.
+    /// add_node: add node.
     pub fn add_node(
         &mut self,
         node: Arc<dyn CudaGraphNode>,
@@ -67,13 +67,13 @@ impl CudaGraph {
         self.cached = false;
     }
 
-/// capture: capture.
+    /// capture: capture.
     pub fn capture(&mut self) -> Result<(), CudaGraphError> {
         self.cached = true;
         Ok(())
     }
 
-/// execute: execute.
+    /// execute: execute.
     #[allow(unused_mut)]
     pub fn execute(&self, tensors: &mut [Box<dyn CudaGraphTensor>]) -> Result<(), CudaGraphError> {
         if !self.cached {
@@ -113,7 +113,7 @@ pub struct CudaGraphExecutor {
 }
 
 impl CudaGraphExecutor {
-/// new: new.
+    /// new: new.
     pub fn new(enable_cuda_graph: bool) -> Self {
         Self {
             graphs: HashMap::new(),
@@ -121,12 +121,12 @@ impl CudaGraphExecutor {
         }
     }
 
-/// register_graph: register graph.
+    /// register_graph: register graph.
     pub fn register_graph(&mut self, name: String, graph: CudaGraph) {
         self.graphs.insert(name, graph);
     }
 
-/// execute_graph: execute graph.
+    /// execute_graph: execute graph.
     pub fn execute_graph(
         &self,
         name: &str,
@@ -146,12 +146,12 @@ impl CudaGraphExecutor {
         graph.execute(tensors)
     }
 
-/// is_enabled: is enabled.
+    /// is_enabled: is enabled.
     pub fn is_enabled(&self) -> bool {
         self.enable_cuda_graph
     }
 
-/// has_graph: has graph.
+    /// has_graph: has graph.
     pub fn has_graph(&self, name: &str) -> bool {
         self.graphs.contains_key(name)
     }

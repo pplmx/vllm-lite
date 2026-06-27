@@ -14,7 +14,7 @@ pub struct MRoPE {
 }
 
 impl MRoPE {
-/// new: new.
+    /// new: new.
     pub fn new(dim: usize, theta: f32, sections: Vec<usize>, partial_rotary_factor: f32) -> Self {
         Self {
             dim,
@@ -24,7 +24,7 @@ impl MRoPE {
         }
     }
 
-/// from_config: from config.
+    /// from_config: from config.
     pub fn from_config(config: &Qwen3Config) -> Self {
         let rope_params = config.rope_parameters();
 
@@ -47,7 +47,7 @@ impl MRoPE {
         }
     }
 
-/// apply: apply.
+    /// apply: apply.
     pub fn apply(
         &self,
         q: &Tensor,
