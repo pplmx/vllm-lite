@@ -1,23 +1,24 @@
 use crate::types::{BatchOutput, SeqId, TokenId};
 
 #[derive(Debug, thiserror::Error)]
-#[error("{message}")]
-pub struct ModelError {
-    message: String,
+#[non_exhaustive]
+pub enum ModelError {
+    #[error("{0}")]
+    Message(String),
+    #[error("backend error: {0}")]
+    Backend(String),
+    #[error("configuration error: {0}")]
+    Config(String),
+    #[cfg(feature = "candle")]
+    #[error("candle error: {0}")]
+    Candle(#[from] candle_core::Error),
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 impl ModelError {
     pub fn new(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-        }
-    }
-}
-
-#[cfg(feature = "candle")]
-impl From<candle_core::Error> for ModelError {
-    fn from(e: candle_core::Error) -> Self {
-        ModelError::new(e.to_string())
+        Self::Message(message.into())
     }
 }
 

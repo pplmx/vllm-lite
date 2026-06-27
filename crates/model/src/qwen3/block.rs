@@ -8,6 +8,7 @@ use crate::components::attention::RopeGqaAttention;
 use crate::components::decoder_block::PagedDecoderBlock;
 use candle_core::{Result, Tensor};
 use std::ops::Deref;
+#[cfg(feature = "multi-node")]
 use vllm_dist::TensorParallelConfig;
 
 /// Qwen3 decoder layer wrapping the shared RoPE-GQA block.
@@ -103,6 +104,7 @@ impl TransformerBlock {
         )))
     }
 
+    #[cfg(feature = "multi-node")]
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_tp(
         hidden_size: usize,

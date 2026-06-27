@@ -4102,6 +4102,8 @@ dependencies = [
  "rand 0.10.1",
  "tokio",
  "vllm-core",
+ "vllm-dist",
+ "vllm-model",
  "vllm-traits",
 ]
 

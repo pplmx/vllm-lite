@@ -3,6 +3,8 @@ pub mod block;
 pub mod mla_attention;
 pub mod model;
 pub mod register;
+
+#[cfg(feature = "multi-node")]
 pub mod tp;
 
 pub use arch::Qwen3Architecture;
