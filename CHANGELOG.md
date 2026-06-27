@@ -32,6 +32,18 @@
     - Supports fallback for embed_tokens and lm_head weight names
     - Supports tied embeddings (tie_word_embeddings)
 
+### Changed
+
+- **Workspace Lint Policy (v24.0 Phase A)** — established three-tier clippy lint
+  configuration in root `Cargo.toml` `[workspace.lints.clippy]`:
+    - **deny tier**: `correctness`, `suspicious`, `perf` (breaks CI)
+    - **warn tier**: `pedantic`, `nursery`, `missing_errors_doc`, `must_use_candidate`, etc. (visible but not blocking)
+    - **allow tier**: `cast_precision_loss`, `similar_names`, `too_many_lines`, `too_many_arguments`, etc. (with rationale)
+    - All 6 crates inherit via `[lints] workspace = true`.
+    - `just clippy` switched from `-D warnings` to explicit per-group denies so pedantic stays visible without breaking CI.
+    - New `just clippy-pedantic` recipe for local pedantic+nursery view.
+    - `AGENTS.md` gained a "Lint Policy" section documenting the tier system, local commands, and the rationale for each allow-list entry.
+
 ---
 
 ## 🚀 [v18.0] — Multi-Model Speculative Decoding (2026-06-27)
