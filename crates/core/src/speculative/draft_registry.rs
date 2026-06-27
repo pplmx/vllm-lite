@@ -18,9 +18,10 @@
 //! contexts where the model loader is unavailable (e.g. embedded builds).
 
 use crate::scheduler::memory::BlockAllocator;
+use crate::speculative::memory_budget::{DEFAULT_BLOCK_BYTES, MemoryBudget, MemoryBudgetExceeded};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use vllm_traits::ModelBackend;
 
 /// Opaque, user-supplied identifier for a draft model.
@@ -65,6 +66,13 @@ pub struct DraftSpec {
     pub model_dir: PathBuf,
     pub arch_hint: Option<String>,
     pub kv_blocks: usize,
+    /// Conservative estimate of the draft's parameter footprint, in bytes.
+    ///
+    /// Sourced from `ModelLoader` metadata at registration time (v18.2 MEM-02).
+    /// Used by the [`MemoryBudget`] to decide whether loading this draft
+    /// would exceed VRAM. Set conservatively — over-estimate is safe,
+    /// under-estimate can cause runtime OOM.
+    pub weight_size_estimate_bytes: u64,
     pub ref_count: usize,
 }
 
@@ -75,6 +83,7 @@ impl DraftSpec {
             model_dir: model_dir.into(),
             arch_hint: None,
             kv_blocks,
+            weight_size_estimate_bytes: 0,
             ref_count: 0,
         }
     }
@@ -87,6 +96,18 @@ impl DraftSpec {
     pub fn with_ref_count(mut self, ref_count: usize) -> Self {
         self.ref_count = ref_count;
         self
+    }
+
+    pub fn with_weight_size(mut self, bytes: u64) -> Self {
+        self.weight_size_estimate_bytes = bytes;
+        self
+    }
+
+    /// Estimated total VRAM footprint of this draft if loaded:
+    /// `weight_size_estimate_bytes + kv_blocks * DEFAULT_BLOCK_BYTES`.
+    pub fn estimated_total_bytes(&self) -> u64 {
+        let kv_bytes = (self.kv_blocks as u64).saturating_mul(DEFAULT_BLOCK_BYTES);
+        self.weight_size_estimate_bytes.saturating_add(kv_bytes)
     }
 }
 
@@ -136,8 +157,14 @@ impl DraftState {
 /// to `Loaded`; `unload` reverses the transition. Multiple operations are
 /// serialized via a single `RwLock` for simplicity — the registry is not on
 /// the hot path (lookups during step scheduling are read-locked and cheap).
+///
+/// v18.2 adds a shared [`MemoryBudget`] (optional, defaults to unlimited).
+/// When set, `attach_loaded_budgeted` reserves the draft's estimated footprint
+/// in the budget, and `unload` releases it. `decrement_ref` auto-unloads
+/// loaded drafts when their refcount hits zero.
 pub struct DraftModelRegistry {
     drafts: RwLock<HashMap<DraftId, DraftState>>,
+    budget: Arc<MemoryBudget>,
 }
 
 impl Default for DraftModelRegistry {
@@ -150,7 +177,22 @@ impl DraftModelRegistry {
     pub fn new() -> Self {
         Self {
             drafts: RwLock::new(HashMap::new()),
+            budget: Arc::new(MemoryBudget::unlimited()),
         }
+    }
+
+    /// Construct a registry with a custom memory budget. The budget is shared
+    /// via `Arc` so the Engine can hold a reference too.
+    pub fn with_budget(budget: Arc<MemoryBudget>) -> Self {
+        Self {
+            drafts: RwLock::new(HashMap::new()),
+            budget,
+        }
+    }
+
+    /// Access the shared memory budget.
+    pub fn memory_budget(&self) -> &Arc<MemoryBudget> {
+        &self.budget
     }
 
     /// Register a draft spec. The spec is stored as `Unloaded`; no I/O happens.
@@ -208,11 +250,14 @@ impl DraftModelRegistry {
 
     /// Transition a `Loaded` entry back to `Unloaded`, dropping the backend and
     /// reclaiming the block allocator's state (allocator is dropped here).
+    /// Releases the budget reservation (if any).
     ///
     /// No-op (returns `Ok`) if the entry is already `Unloaded`.
     ///
     /// Errors:
     /// - `UnknownDraftId` if no entry with `id` exists
+    /// - `InUse(refcount)` if the draft is `Loaded` and has refcount > 0.
+    ///   Use `force_unload` to bypass.
     pub fn unload(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
         let mut guard = self
             .drafts
@@ -224,11 +269,113 @@ impl DraftModelRegistry {
         match entry {
             DraftState::Unloaded(_) => Ok(()),
             DraftState::Loaded(loaded) => {
+                if loaded.spec.ref_count > 0 {
+                    return Err(DraftRegistryError::InUse(loaded.spec.ref_count));
+                }
                 let spec = loaded.spec.clone();
+                // Release the budget reservation (if budgeted).
+                self.budget.release_draft(spec.estimated_total_bytes());
                 *entry = DraftState::Unloaded(spec);
                 Ok(())
             }
         }
+    }
+
+    /// Force-unload a draft, ignoring its refcount. Used by admin tooling
+    /// and tests. Logs the bypass at WARN level via `tracing`.
+    ///
+    /// Errors:
+    /// - `UnknownDraftId` if no entry with `id` exists
+    pub fn force_unload(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
+        let mut guard = self
+            .drafts
+            .write()
+            .expect("DraftModelRegistry mutex poisoned");
+        let entry = guard
+            .get_mut(id)
+            .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
+        match entry {
+            DraftState::Unloaded(_) => Ok(()),
+            DraftState::Loaded(loaded) => {
+                let forced_refcount = loaded.spec.ref_count;
+                let spec = loaded.spec.clone();
+                if forced_refcount > 0 {
+                    tracing::warn!(
+                        draft_id = %id,
+                        refcount = forced_refcount,
+                        "force_unload bypassing non-zero refcount"
+                    );
+                }
+                self.budget.release_draft(spec.estimated_total_bytes());
+                *entry = DraftState::Unloaded(spec);
+                Ok(())
+            }
+        }
+    }
+
+    /// Promote an `Unloaded` entry to `Loaded` AND reserve the draft's
+    /// estimated footprint in the shared memory budget.
+    ///
+    /// On budget exhaustion, returns `DraftRegistryError::MemoryBudgetExceeded`
+    /// without changing state.
+    ///
+    /// Errors:
+    /// - `UnknownDraftId` if no entry with `id` exists
+    /// - `AlreadyLoaded` if the entry is already `Loaded`
+    /// - `MemoryBudgetExceeded` if the budget can't accommodate this draft
+    pub fn attach_loaded_budgeted(
+        &self,
+        id: &DraftId,
+        backend: Box<dyn ModelBackend>,
+    ) -> Result<(), DraftRegistryError> {
+        // Stage 1: read-lock to inspect and clone the spec; release the read
+        // lock before doing the budget reservation so we don't hold both
+        // locks if budget fails.
+        let (kv_blocks, estimated) = {
+            let guard = self
+                .drafts
+                .read()
+                .expect("DraftModelRegistry mutex poisoned");
+            let entry = guard
+                .get(id)
+                .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
+            match entry {
+                DraftState::Loaded(_) => {
+                    return Err(DraftRegistryError::AlreadyLoaded(id.clone()));
+                }
+                DraftState::Unloaded(s) => (s.kv_blocks, s.estimated_total_bytes()),
+            }
+        };
+
+        // Stage 2: budget reservation (may fail).
+        self.budget
+            .try_reserve_draft(estimated, Some(id.clone()))
+            .map_err(DraftRegistryError::MemoryBudgetExceeded)?;
+
+        // Stage 3: state transition under write lock.
+        let mut guard = self
+            .drafts
+            .write()
+            .expect("DraftModelRegistry mutex poisoned");
+        let entry = guard
+            .get_mut(id)
+            .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
+        // Re-check state — it may have changed between read and write.
+        let spec = match entry {
+            DraftState::Loaded(_) => {
+                // Roll back the budget reservation we just made.
+                self.budget.release_draft(estimated);
+                return Err(DraftRegistryError::AlreadyLoaded(id.clone()));
+            }
+            DraftState::Unloaded(s) => s.clone(),
+        };
+        let loaded = LoadedDraft {
+            spec,
+            backend,
+            block_allocator: BlockAllocator::new(kv_blocks),
+        };
+        *entry = DraftState::Loaded(loaded);
+        Ok(())
     }
 
     /// Read-only lookup of the current state. Does NOT trigger loading.
@@ -288,7 +435,11 @@ impl DraftModelRegistry {
     }
 
     /// Decrement the reference count. Floors at 0 (no underflow).
-    pub fn decrement_ref(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
+    /// If the new count is zero AND the draft is `Loaded`, auto-unloads it:
+    /// releases the budget reservation and drops the backend.
+    ///
+    /// Returns `true` if auto-unload was triggered by this call.
+    pub fn decrement_ref(&self, id: &DraftId) -> Result<bool, DraftRegistryError> {
         let mut guard = self
             .drafts
             .write()
@@ -299,12 +450,20 @@ impl DraftModelRegistry {
         match entry {
             DraftState::Unloaded(spec) => {
                 spec.ref_count = spec.ref_count.saturating_sub(1);
+                Ok(false)
             }
             DraftState::Loaded(loaded) => {
                 loaded.spec.ref_count = loaded.spec.ref_count.saturating_sub(1);
+                if loaded.spec.ref_count == 0 {
+                    let spec = loaded.spec.clone();
+                    self.budget.release_draft(spec.estimated_total_bytes());
+                    *entry = DraftState::Unloaded(spec);
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
             }
         }
-        Ok(())
     }
 
     /// Snapshot the reference count for a registered draft.
@@ -317,6 +476,39 @@ impl DraftModelRegistry {
             .get(id)
             .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
         Ok(entry.spec().ref_count)
+    }
+
+    /// Number of bytes currently allocated to KV cache blocks for this draft.
+    /// Returns 0 if the draft is `Unloaded`. Used by the Engine for runtime
+    /// KV-cache growth tracking (MEM-02).
+    pub fn draft_allocated_bytes(&self, id: &DraftId) -> Result<u64, DraftRegistryError> {
+        let guard = self
+            .drafts
+            .read()
+            .expect("DraftModelRegistry mutex poisoned");
+        let entry = guard
+            .get(id)
+            .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
+        Ok(match entry {
+            DraftState::Unloaded(_) => 0,
+            DraftState::Loaded(loaded) => loaded.block_allocator.allocated_bytes() as u64,
+        })
+    }
+
+    /// Estimated total VRAM footprint reserved for this draft in the budget.
+    /// Zero for `Unloaded` drafts.
+    pub fn draft_reserved_bytes(&self, id: &DraftId) -> Result<u64, DraftRegistryError> {
+        let guard = self
+            .drafts
+            .read()
+            .expect("DraftModelRegistry mutex poisoned");
+        let entry = guard
+            .get(id)
+            .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
+        Ok(match entry {
+            DraftState::Unloaded(_) => 0,
+            DraftState::Loaded(loaded) => loaded.spec.estimated_total_bytes(),
+        })
     }
 
     /// List all registered draft ids (sorted).
@@ -356,6 +548,8 @@ pub enum DraftRegistryError {
     InUse(usize),
     #[error("draft load failed: {0}")]
     LoadFailed(String),
+    #[error("{0}")]
+    MemoryBudgetExceeded(MemoryBudgetExceeded),
 }
 
 #[cfg(test)]
@@ -538,5 +732,184 @@ mod tests {
 
     fn test_backend() -> Box<dyn ModelBackend> {
         Box::new(FakeBackend)
+    }
+
+    // ───────────────────────── 18.2 lifecycle + budget tests ─────────────────
+
+    fn dummy_spec_with_size(id: &str, kv_blocks: usize, weight_bytes: u64) -> DraftSpec {
+        DraftSpec::new(id, "/nonexistent", kv_blocks).with_weight_size(weight_bytes)
+    }
+
+    #[test]
+    fn test_unload_with_refcount_errors_in_use() {
+        let registry = DraftModelRegistry::new();
+        registry
+            .register(dummy_spec_with_size("a", 8, 1024))
+            .unwrap();
+        registry
+            .attach_loaded(&DraftId("a".into()), test_backend())
+            .unwrap();
+        registry.increment_ref(&DraftId("a".into())).unwrap();
+        let err = registry.unload(&DraftId("a".into())).unwrap_err();
+        assert!(matches!(err, DraftRegistryError::InUse(1)));
+        // State still Loaded
+        assert!(registry.is_loaded(&DraftId("a".into())));
+    }
+
+    #[test]
+    fn test_force_unload_overrides_refcount() {
+        let registry = DraftModelRegistry::new();
+        registry
+            .register(dummy_spec_with_size("a", 8, 1024))
+            .unwrap();
+        registry
+            .attach_loaded(&DraftId("a".into()), test_backend())
+            .unwrap();
+        registry.increment_ref(&DraftId("a".into())).unwrap();
+        registry.increment_ref(&DraftId("a".into())).unwrap();
+        registry.force_unload(&DraftId("a".into())).unwrap();
+        assert!(!registry.is_loaded(&DraftId("a".into())));
+    }
+
+    #[test]
+    fn test_decrement_ref_auto_unloads_at_zero() {
+        let registry = DraftModelRegistry::new();
+        registry
+            .register(dummy_spec_with_size("a", 8, 1024))
+            .unwrap();
+        registry
+            .attach_loaded(&DraftId("a".into()), test_backend())
+            .unwrap();
+        registry.increment_ref(&DraftId("a".into())).unwrap();
+        let auto_unloaded = registry.decrement_ref(&DraftId("a".into())).unwrap();
+        assert!(auto_unloaded);
+        assert!(!registry.is_loaded(&DraftId("a".into())));
+    }
+
+    #[test]
+    fn test_decrement_ref_no_auto_unload_when_already_unloaded() {
+        let registry = DraftModelRegistry::new();
+        registry.register(dummy_spec("a", 8)).unwrap();
+        registry.increment_ref(&DraftId("a".into())).unwrap();
+        let auto_unloaded = registry.decrement_ref(&DraftId("a".into())).unwrap();
+        assert!(!auto_unloaded);
+        // Unloaded drafts stay Unloaded
+        assert!(!registry.is_loaded(&DraftId("a".into())));
+    }
+
+    #[test]
+    fn test_decrement_ref_does_not_auto_unload_above_zero() {
+        let registry = DraftModelRegistry::new();
+        registry
+            .register(dummy_spec_with_size("a", 8, 1024))
+            .unwrap();
+        registry
+            .attach_loaded(&DraftId("a".into()), test_backend())
+            .unwrap();
+        registry.increment_ref(&DraftId("a".into())).unwrap();
+        registry.increment_ref(&DraftId("a".into())).unwrap();
+        let auto_unloaded = registry.decrement_ref(&DraftId("a".into())).unwrap();
+        assert!(!auto_unloaded);
+        assert!(registry.is_loaded(&DraftId("a".into())));
+    }
+
+    #[test]
+    fn test_attach_loaded_budgeted_reserves_budget() {
+        let budget = Arc::new(MemoryBudget::new(100_000_000_000).unwrap()); // 100 GB
+        let registry = DraftModelRegistry::with_budget(budget.clone());
+        let spec = dummy_spec_with_size("a", 4, 1000); // total ≈ 67 MB
+        let estimated = spec.estimated_total_bytes();
+        registry.register(spec).unwrap();
+        registry
+            .attach_loaded_budgeted(&DraftId("a".into()), test_backend())
+            .unwrap();
+        let snap = budget.snapshot();
+        assert_eq!(snap.reserved_drafts_bytes, estimated);
+    }
+
+    #[test]
+    fn test_attach_loaded_budgeted_releases_on_double_attach() {
+        let budget = Arc::new(MemoryBudget::new(100_000_000).unwrap());
+        let registry = DraftModelRegistry::with_budget(budget.clone());
+        let spec = dummy_spec_with_size("a", 1, 1000);
+        registry.register(spec).unwrap();
+        registry
+            .attach_loaded_budgeted(&DraftId("a".into()), test_backend())
+            .unwrap();
+        // Second attach_loaded_budgeted is AlreadyLoaded; ensure budget
+        // reservation from the second attempt was rolled back.
+        let snap_before = budget.snapshot();
+        let _ = registry.attach_loaded_budgeted(&DraftId("a".into()), test_backend());
+        let snap_after = budget.snapshot();
+        assert_eq!(
+            snap_before.reserved_drafts_bytes,
+            snap_after.reserved_drafts_bytes
+        );
+    }
+
+    #[test]
+    fn test_attach_loaded_budgeted_refuses_when_over_budget() {
+        let budget = Arc::new(MemoryBudget::new(100).unwrap()); // tiny budget
+        let registry = DraftModelRegistry::with_budget(budget);
+        let spec = dummy_spec_with_size("huge", 4, 1000); // estimated ≈ 67 MiB
+        registry.register(spec).unwrap();
+        let err = registry
+            .attach_loaded_budgeted(&DraftId("huge".into()), test_backend())
+            .unwrap_err();
+        assert!(matches!(err, DraftRegistryError::MemoryBudgetExceeded(_)));
+        // State stayed Unloaded
+        assert!(!registry.is_loaded(&DraftId("huge".into())));
+    }
+
+    #[test]
+    fn test_unload_releases_budget_reservation() {
+        let budget = Arc::new(MemoryBudget::new(100_000_000).unwrap());
+        let registry = DraftModelRegistry::with_budget(budget.clone());
+        let spec = dummy_spec_with_size("a", 1, 1000);
+        let estimated = spec.estimated_total_bytes();
+        registry.register(spec).unwrap();
+        registry
+            .attach_loaded_budgeted(&DraftId("a".into()), test_backend())
+            .unwrap();
+        assert_eq!(budget.snapshot().reserved_drafts_bytes, estimated);
+        registry.unload(&DraftId("a".into())).unwrap();
+        assert_eq!(budget.snapshot().reserved_drafts_bytes, 0);
+    }
+
+    #[test]
+    fn test_draft_allocated_bytes_zero_when_unloaded() {
+        let registry = DraftModelRegistry::new();
+        registry.register(dummy_spec("a", 4)).unwrap();
+        assert_eq!(
+            registry
+                .draft_allocated_bytes(&DraftId("a".into()))
+                .unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn test_draft_reserved_bytes_zero_when_unloaded() {
+        let registry = DraftModelRegistry::new();
+        registry.register(dummy_spec("a", 4)).unwrap();
+        assert_eq!(
+            registry.draft_reserved_bytes(&DraftId("a".into())).unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn test_memory_budget_accessor_returns_arc() {
+        let budget = Arc::new(MemoryBudget::new(1000).unwrap());
+        let registry = DraftModelRegistry::with_budget(budget.clone());
+        assert_eq!(registry.memory_budget().total_bytes(), 1000);
+    }
+
+    #[test]
+    fn test_draft_spec_estimated_total_bytes() {
+        // 1024 bytes weights + 2 blocks × 16 MiB/block = 1024 + 33554432
+        let spec = DraftSpec::new("x", "/tmp", 2).with_weight_size(1024);
+        let expected = 1024 + 2 * (16 * 1024 * 1024);
+        assert_eq!(spec.estimated_total_bytes(), expected);
     }
 }
