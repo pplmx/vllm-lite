@@ -21,6 +21,8 @@ impl MlaKvCache {
     ) -> Self {
         let cache: Vec<Tensor> = (0..num_layers)
             .map(|_| {
+                // invariant: tensor shape is statically known and finite; CPU/device allocation
+                // of a fixed-size zero buffer cannot fail under normal conditions.
                 Tensor::zeros(
                     (num_blocks, block_size, kv_lora_rank),
                     candle_core::DType::F32,

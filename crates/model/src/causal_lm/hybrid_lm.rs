@@ -178,6 +178,7 @@ where
             self.gdn_states.insert(EMBED_SEQ_ID, vec![None; num_layers]);
             let gdn_states = self
                 .gdn_states
+                // invariant: `EMBED_SEQ_ID` was just inserted above; cannot be missing.
                 .get_mut(&EMBED_SEQ_ID)
                 .expect("embed gdn states");
 

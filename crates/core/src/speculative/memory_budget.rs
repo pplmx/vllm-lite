@@ -62,6 +62,7 @@ impl Default for MemoryBudget {
 
 impl MemoryBudget {
     pub fn unlimited() -> Self {
+        // invariant: `u64::MAX` is a non-zero literal; `MemoryBudget::new` only rejects 0.
         Self::new(u64::MAX).expect("u64::MAX always > 0")
     }
 

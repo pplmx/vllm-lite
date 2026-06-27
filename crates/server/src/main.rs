@@ -141,6 +141,8 @@ async fn main() {
     let mut engine = if let Some(budget_bytes) = app_config.engine.vram_budget_bytes {
         use std::sync::Arc;
         let budget = Arc::new(
+            // invariant: vram_budget_bytes is validated by config deserialization (must be > 0
+            // or None); 0 is rejected upstream before reaching this branch.
             vllm_core::speculative::MemoryBudget::new(budget_bytes)
                 .expect("server config: invalid vram_budget_bytes"),
         );
@@ -352,6 +354,8 @@ async fn main() {
 
 async fn shutdown_signal() {
     let ctrl_c = async {
+        // invariant: signal handler installation only fails if the OS is in an unrecoverable
+        // state; not recoverable from this process anyway.
         signal::ctrl_c()
             .await
             .expect("Failed to install Ctrl+C handler");
@@ -359,6 +363,8 @@ async fn shutdown_signal() {
 
     #[cfg(unix)]
     let terminate = async {
+        // invariant: signal handler installation only fails if the OS is in an unrecoverable
+        // state; not recoverable from this process anyway.
         signal::unix::signal(signal::unix::SignalKind::terminate())
             .expect("Failed to install signal handler")
             .recv()
