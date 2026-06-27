@@ -1,3 +1,5 @@
+//! model: model.
+
 use std::collections::HashMap;
 
 use super::{
@@ -30,11 +32,13 @@ where
     Norm: Module,
     Head: Module,
 {
+/// with_embed_through_layers: with embed through layers.
     pub fn with_embed_through_layers(mut self, enabled: bool) -> Self {
         self.embed_through_layers = enabled;
         self
     }
 
+/// forward_with_cache: forward with cache.
     pub fn forward_with_cache(
         &mut self,
         tokens: &[TokenId],
@@ -64,6 +68,7 @@ impl<B> CausalLm<B, LnLayerNorm, Linear>
 where
     B: PagedDecoderBlock + Send + Sync,
 {
+/// new_with_block_fn: new with block fn.
     pub fn new_with_block_fn<F>(
         config: ModelConfig,
         device: Device,
@@ -115,6 +120,7 @@ where
         })
     }
 
+/// from_hf_weights_ln: from hf weights ln.
     pub fn from_hf_weights_ln<F>(
         config: ModelConfig,
         device: Device,
@@ -182,6 +188,7 @@ impl<B> CausalLm<B, RmsNorm, Linear>
 where
     B: PagedDecoderBlock + Send + Sync,
 {
+/// new_rms: new rms.
     pub fn new_rms<F>(
         config: ModelConfig,
         device: Device,
@@ -232,6 +239,7 @@ where
         })
     }
 
+/// from_hf_weights_rms: from hf weights rms.
     pub fn from_hf_weights_rms<F>(
         config: ModelConfig,
         device: Device,

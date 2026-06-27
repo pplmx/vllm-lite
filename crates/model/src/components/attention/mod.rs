@@ -1,12 +1,20 @@
+//! mod: module.
+
 #![allow(clippy::too_many_arguments)]
 
 use candle_core::{Result, Tensor};
 
+/// flash: flash module.
 pub mod flash;
+/// flash_v3: flash v3 module.
 pub mod flash_v3;
+/// gqa: gqa module.
 pub mod gqa;
+/// mla: mla module.
 pub mod mla;
+/// paged_gqa: paged gqa module.
 pub mod paged_gqa;
+/// rope_gqa: rope gqa module.
 pub mod rope_gqa;
 
 pub use flash_v3::{
@@ -20,6 +28,7 @@ pub use paged_gqa::{
 };
 pub use rope_gqa::RopeGqaAttention;
 
+/// AttentionConfig: attention configuration.
 #[derive(Debug, Clone, Default)]
 pub struct AttentionConfig {
     pub tile_size: Option<usize>,
@@ -27,6 +36,7 @@ pub struct AttentionConfig {
 }
 
 impl AttentionConfig {
+/// new: new.
     pub fn new(tile_size: Option<usize>, use_fused: bool) -> Self {
         Self {
             tile_size,
@@ -35,6 +45,7 @@ impl AttentionConfig {
     }
 }
 
+/// expand_kv: expand kv.
 pub fn expand_kv(kv: &Tensor, num_q_heads: usize, num_kv_heads: usize) -> Result<Tensor> {
     if num_q_heads == num_kv_heads {
         return Ok(kv.clone());
@@ -70,6 +81,7 @@ pub fn expand_kv(kv: &Tensor, num_q_heads: usize, num_kv_heads: usize) -> Result
     kv.repeat(&[1, 1, repeat_factor, 1])
 }
 
+/// causal_mask: causal mask.
 pub fn causal_mask(seq_len: usize, device: &candle_core::Device) -> Result<Tensor> {
     let row_indices = Tensor::arange(0u32, seq_len as u32, device)?.reshape((1, 1, seq_len, 1))?;
     let col_indices = Tensor::arange(0u32, seq_len as u32, device)?.reshape((1, 1, 1, seq_len))?;
@@ -82,6 +94,7 @@ pub fn causal_mask(seq_len: usize, device: &candle_core::Device) -> Result<Tenso
     Ok(mask)
 }
 
+/// causal_mask_tile: causal mask tile.
 pub fn causal_mask_tile(
     batch_size: usize,
     start: usize,
@@ -104,6 +117,7 @@ pub fn causal_mask_tile(
     Tensor::from_slice(&mask, (batch_size, 1, tile_len, key_len), device)
 }
 
+/// paged_attention: paged attention.
 #[allow(clippy::too_many_arguments)]
 pub fn paged_attention(
     q: &Tensor,
@@ -132,6 +146,7 @@ pub fn paged_attention(
     Ok(attn_output)
 }
 
+/// tiled_attention: tiled attention.
 #[allow(clippy::too_many_arguments)]
 pub fn tiled_attention(
     q: &Tensor,

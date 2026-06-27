@@ -1,3 +1,5 @@
+//! linear: linear.
+
 #![allow(non_snake_case)]
 //! GDN-based linear attention block for Qwen3.5 hybrid layers.
 
@@ -8,11 +10,13 @@ use crate::qwen3_5::config::GdnLinearConfig;
 use candle_core::{DType, Result as CandleResult, Tensor};
 use candle_nn::{Conv1d, LayerNorm, Linear, VarBuilder, conv1d};
 
+/// LinearAttentionBlock: linear attention block.
 pub struct LinearAttentionBlock {
     pub(crate) gdn: GatedDeltaNet,
 }
 
 impl LinearAttentionBlock {
+/// new: new.
     pub fn new(d_model: usize, gdn: GdnLinearConfig, vb: VarBuilder) -> CandleResult<Self> {
         let GdnLinearConfig {
             num_k_heads,
@@ -57,20 +61,24 @@ impl LinearAttentionBlock {
         Ok(Self { gdn })
     }
 
+/// forward: forward.
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
         self.gdn.forward(x)
     }
 
+/// forward_prefill: forward prefill.
     pub fn forward_prefill(&self, x: &Tensor) -> CandleResult<(Tensor, GatedDeltaState)> {
         self.gdn.forward_prefill(x)
     }
 
+/// forward_decode: forward decode.
     pub fn forward_decode(&self, x: &Tensor, state: &mut GatedDeltaState) -> CandleResult<Tensor> {
         self.gdn.forward_decode(x, state)
     }
 }
 
 impl LinearAttentionBlock {
+/// from_weights: from weights.
     pub fn from_weights(
         prefix: &str,
         weights: &HashMap<String, Tensor>,

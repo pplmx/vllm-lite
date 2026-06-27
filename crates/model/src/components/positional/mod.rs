@@ -1,4 +1,8 @@
+//! mod: module.
+
+/// mrope: mrope module.
 pub mod mrope;
+/// rope: rope module.
 pub mod rope;
 
 pub use mrope::MRoPE;

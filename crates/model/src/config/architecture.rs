@@ -3,18 +3,21 @@
 //! Defines the Architecture enum and related types for supporting
 //! multiple model architectures.
 
+/// LayerType: layer type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayerType {
     SlidingAttention,
     FullAttention,
 }
 
+/// RoPEConfig: ro pe configuration.
 #[derive(Debug, Clone)]
 pub struct RoPEConfig {
     pub rope_theta: f32,
     pub partial_rotary_factor: f32,
 }
 
+/// Architecture: architecture enumeration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Architecture {
     Qwen3,
@@ -26,6 +29,7 @@ pub enum Architecture {
 }
 
 impl Architecture {
+/// from_name: from name.
     pub fn from_name(name: &str) -> Option<Self> {
         match name.to_lowercase().as_str() {
             "llama" => Some(Self::Llama),
@@ -39,6 +43,7 @@ impl Architecture {
     }
 }
 
+/// AttentionType: attention type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttentionType {
     Mha,
@@ -46,12 +51,14 @@ pub enum AttentionType {
     SlidingWindow,
 }
 
+/// NormType: norm type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NormType {
     RmsNorm,
     LayerNorm,
 }
 
+/// MlpType: mlp type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MlpType {
     SwiGLU,

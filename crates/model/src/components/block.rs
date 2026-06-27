@@ -7,6 +7,7 @@ use crate::components::decoder_block::PagedDecoderBlock;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 
+/// TransformerBlock: transformer block trait.
 pub trait TransformerBlock: PagedDecoderBlock + Send + Sync {
     fn inner_dim(&self) -> usize;
     fn num_kv_heads(&self) -> usize;

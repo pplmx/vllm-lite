@@ -1,6 +1,9 @@
+//! mrope: mrope.
+
 use crate::qwen3_config::Qwen3Config;
 use candle_core::{Device, Result as CandleResult, Tensor};
 
+/// MRoPE: m ro pe.
 #[derive(Clone)]
 #[allow(dead_code)] // audited 2026-06-26 (Wave 1): pub(crate) fields never read externally; callers use struct via from_config or pass through to Attention35WithRoPE
 pub struct MRoPE {
@@ -11,6 +14,7 @@ pub struct MRoPE {
 }
 
 impl MRoPE {
+/// new: new.
     pub fn new(dim: usize, theta: f32, sections: Vec<usize>, partial_rotary_factor: f32) -> Self {
         Self {
             dim,
@@ -20,6 +24,7 @@ impl MRoPE {
         }
     }
 
+/// from_config: from config.
     pub fn from_config(config: &Qwen3Config) -> Self {
         let rope_params = config.rope_parameters();
 
@@ -42,6 +47,7 @@ impl MRoPE {
         }
     }
 
+/// apply: apply.
     pub fn apply(
         &self,
         q: &Tensor,

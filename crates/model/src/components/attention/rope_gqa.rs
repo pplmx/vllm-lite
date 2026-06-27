@@ -1,3 +1,5 @@
+//! rope_gqa: rope gqa.
+
 #![allow(clippy::too_many_arguments)]
 
 pub use crate::components::AttentionConfig;
@@ -7,12 +9,14 @@ use crate::components::positional::apply_rope;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 
+/// RopeGqaAttention: rope gqa attention.
 pub struct RopeGqaAttention {
     inner: SharedGqaAttention,
     theta: f32,
 }
 
 impl RopeGqaAttention {
+/// new: new.
     pub fn new(
         hidden_size: usize,
         num_heads: usize,
@@ -35,6 +39,7 @@ impl RopeGqaAttention {
         Ok(Self { inner, theta })
     }
 
+/// new_with_weights: new with weights.
     pub fn new_with_weights(
         hidden_size: usize,
         num_heads: usize,
@@ -67,6 +72,7 @@ impl RopeGqaAttention {
         Ok(Self { inner, theta })
     }
 
+/// forward: forward.
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         self.inner.forward(x)
     }
@@ -107,6 +113,7 @@ impl RopeGqaAttention {
         Ok((q, k))
     }
 
+/// forward_prefill: forward prefill.
     pub fn forward_prefill(
         &self,
         x: &Tensor,
@@ -152,6 +159,7 @@ impl RopeGqaAttention {
         self.inner.run_attention_fn(&q, &k_expanded, &v_expanded)
     }
 
+/// forward_decode: forward decode.
     pub fn forward_decode(
         &self,
         x: &Tensor,

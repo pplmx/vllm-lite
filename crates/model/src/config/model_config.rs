@@ -5,6 +5,7 @@
 use super::architecture::{Architecture, LayerType, RoPEConfig};
 use crate::arch::ARCHITECTURE_REGISTRY;
 
+/// ModelConfig: model configuration.
 pub struct ModelConfig {
     pub architecture: Architecture,
     pub hidden_size: usize,
@@ -46,6 +47,7 @@ impl ModelConfig {
         }
     }
 
+/// test_tiny: test tiny.
     pub fn test_tiny() -> Self {
         Self {
             architecture: Architecture::Llama,
@@ -124,6 +126,7 @@ impl ModelConfig {
         }
     }
 
+/// llama_7b: llama 7b.
     pub fn llama_7b() -> Self {
         Self {
             architecture: Architecture::Llama,
@@ -149,6 +152,7 @@ impl ModelConfig {
         }
     }
 
+/// mistral_7b: mistral 7b.
     pub fn mistral_7b() -> Self {
         Self {
             architecture: Architecture::Mistral,
@@ -174,6 +178,7 @@ impl ModelConfig {
         }
     }
 
+/// mixtral_8x7b: mixtral 8x7b.
     pub fn mixtral_8x7b() -> Self {
         Self {
             architecture: Architecture::Mixtral,
@@ -199,6 +204,7 @@ impl ModelConfig {
         }
     }
 
+/// from_config_json: from config json.
     pub fn from_config_json(value: &serde_json::Value) -> Result<Self, Box<dyn std::error::Error>> {
         let architecture = ARCHITECTURE_REGISTRY
             .detect(value)

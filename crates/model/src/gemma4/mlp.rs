@@ -1,6 +1,9 @@
+//! mlp: mlp.
+
 use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;
 
+/// GeGLU: ge glu.
 pub struct GeGLU {
     gate_proj: Linear,
     up_proj: Linear,
@@ -8,6 +11,7 @@ pub struct GeGLU {
 }
 
 impl GeGLU {
+/// new: new.
     pub fn new(
         hidden_size: usize,
         intermediate_size: usize,
@@ -24,6 +28,7 @@ impl GeGLU {
         })
     }
 
+/// new_with_weights: new with weights.
     pub fn new_with_weights(
         _hidden_size: usize,
         _intermediate_size: usize,
@@ -38,6 +43,7 @@ impl GeGLU {
         })
     }
 
+/// forward: forward.
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let gate = self.gate_proj.forward(x)?;
         let up = self.up_proj.forward(x)?;

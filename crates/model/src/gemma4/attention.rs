@@ -12,6 +12,7 @@ use candle_core::{Device, Module, Result, Tensor};
 use candle_nn::Linear;
 use tracing::trace;
 
+/// Gemma4Attention: gemma4 attention.
 pub struct Gemma4Attention {
     q_proj: Linear,
     k_proj: Linear,
@@ -26,6 +27,7 @@ pub struct Gemma4Attention {
 }
 
 impl Gemma4Attention {
+/// new: new.
     pub fn new(
         hidden_size: usize,
         num_heads: usize,
@@ -57,6 +59,7 @@ impl Gemma4Attention {
         })
     }
 
+/// new_from_weights: new from weights.
     pub fn new_from_weights(
         _hidden_size: usize,
         num_heads: usize,
@@ -140,6 +143,7 @@ impl Gemma4Attention {
         }
     }
 
+/// forward_prefill: forward prefill.
     pub fn forward_prefill(
         &self,
         x: &Tensor,
@@ -175,6 +179,7 @@ impl Gemma4Attention {
         self.compute_paged_attention(&q, &k_expanded, &v_expanded, positions)
     }
 
+/// forward_decode: forward decode.
     pub fn forward_decode(
         &self,
         x: &Tensor,
@@ -241,6 +246,7 @@ impl Gemma4Attention {
         )
     }
 
+/// forward: forward.
     pub fn forward(&self, x: &Tensor, positions: &[usize]) -> Result<Tensor> {
         let (batch_size, seq_len, _) = x.dims3().unwrap_or((1, 1, 0));
         trace!(

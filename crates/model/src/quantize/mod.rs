@@ -1,13 +1,16 @@
 //! Quantization utilities for model weights.
 
+/// gguf: gguf module.
 #[cfg(feature = "gguf")]
 pub mod gguf;
+/// types: types module.
 pub mod types;
 pub use types::{QuantizationConfig, QuantizationFormat, QuantizedTensor, StorageTensor};
 
 use candle_core::{Result, Tensor};
 use std::collections::HashMap;
 
+/// Checkpoint: checkpoint.
 #[derive(Debug)]
 pub struct Checkpoint {
     pub tensors: HashMap<String, StorageTensor>,
@@ -15,6 +18,7 @@ pub struct Checkpoint {
 }
 
 impl Checkpoint {
+/// new: new.
     pub fn new(tensors: HashMap<String, Tensor>) -> Self {
         let storage_tensors = tensors
             .into_iter()
@@ -26,6 +30,7 @@ impl Checkpoint {
         }
     }
 
+/// into_f16: into f16.
     pub fn into_f16(self) -> Result<HashMap<String, Tensor>> {
         let mut result = HashMap::new();
         for (name, storage) in self.tensors {
@@ -39,6 +44,7 @@ impl Checkpoint {
         Ok(result)
     }
 
+/// into_raw: into raw.
     pub fn into_raw(self) -> HashMap<String, StorageTensor> {
         self.tensors
     }

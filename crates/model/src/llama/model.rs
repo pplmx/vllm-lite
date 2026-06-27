@@ -1,3 +1,5 @@
+//! model: model.
+
 use crate::causal_lm::CausalLm;
 use crate::components::RmsNorm;
 use crate::components::decoder_block::RopeGqaDecoderBlock;
@@ -8,14 +10,18 @@ use std::collections::HashMap;
 
 use super::block::{block_from_weights, new_block};
 
+/// LlamaBlock: llama block.
 pub type LlamaBlock = RopeGqaDecoderBlock;
+/// LlamaModel: llama model.
 pub type LlamaModel = CausalLm<LlamaBlock, RmsNorm, Linear>;
 
 impl LlamaModel {
+/// new: new.
     pub fn new(config: ModelConfig, device: Device, num_kv_blocks: usize) -> CandleResult<Self> {
         Self::new_rms(config, device, num_kv_blocks, false, new_block)
     }
 
+/// from_weights: from weights.
     pub fn from_weights(
         config: ModelConfig,
         device: Device,

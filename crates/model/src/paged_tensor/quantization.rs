@@ -1,9 +1,13 @@
+//! quantization: quantization.
+
+/// QuantizedTensor: quantized tensor.
 #[derive(Debug, Clone)]
 pub struct QuantizedTensor {
     pub data: Vec<f32>,
     pub scale: f32,
 }
 
+/// quantize: quantize.
 pub fn quantize(data: &[f32]) -> QuantizedTensor {
     let max_val = data.iter().map(|v| v.abs()).fold(0.0f32, f32::max);
 
@@ -17,6 +21,7 @@ pub fn quantize(data: &[f32]) -> QuantizedTensor {
     }
 }
 
+/// dequantize: dequantize.
 pub fn dequantize(data: &[f32], scale: f32) -> Vec<f32> {
     data.iter().map(|x| x * scale).collect()
 }

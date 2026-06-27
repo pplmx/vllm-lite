@@ -1,5 +1,8 @@
+//! types: shared type definitions.
+
 use candle_core::{DType, Result, Tensor};
 
+/// StorageTensor: storage tensor enumeration.
 #[derive(Debug, Clone)]
 pub enum StorageTensor {
     Quantized(QuantizedTensor),
@@ -7,6 +10,7 @@ pub enum StorageTensor {
     Fp32(Tensor),
 }
 
+/// QuantizedTensor: quantized tensor.
 #[derive(Debug, Clone)]
 pub struct QuantizedTensor {
     pub data: Vec<u8>,
@@ -16,6 +20,7 @@ pub struct QuantizedTensor {
     pub shape: Vec<usize>,
 }
 
+/// QuantizationFormat: quantization format enumeration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum QuantizationFormat {
@@ -26,6 +31,7 @@ pub enum QuantizationFormat {
     AwqQ4,
 }
 
+/// QuantizationConfig: quantization configuration.
 #[derive(Debug, Clone)]
 pub struct QuantizationConfig {
     pub format: QuantizationFormat,
@@ -34,11 +40,13 @@ pub struct QuantizationConfig {
 }
 
 impl QuantizedTensor {
+/// dequantize_to_f16: dequantize to f16.
     pub fn dequantize_to_f16(&self) -> Result<Tensor> {
         let dequantized = self.dequantize_to_f32()?;
         dequantized.to_dtype(DType::F16)
     }
 
+/// dequantize_to_f32: dequantize to f32.
     pub fn dequantize_to_f32(&self) -> Result<Tensor> {
         let total_elements: usize = self.shape.iter().product();
         let data: Vec<f32> = vec![0.0; total_elements];

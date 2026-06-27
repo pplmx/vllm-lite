@@ -10,9 +10,11 @@ use candle_nn::Linear;
 
 use super::block::MixtralBlock;
 
+/// MixtralModel: mixtral model.
 pub type MixtralModel = CausalLm<MixtralBlock, LnLayerNorm, Linear>;
 
 impl MixtralModel {
+/// new: new.
     pub fn new(
         config: ModelConfig,
         device: Device,
@@ -28,6 +30,7 @@ impl MixtralModel {
         )
     }
 
+/// from_weights: from weights.
     pub fn from_weights(
         config: ModelConfig,
         device: Device,

@@ -6,7 +6,9 @@
 //! - RMSNorm
 //! - No positional embedding (rotary only)
 
+/// arch: arch module.
 pub mod arch;
+/// register: register module.
 pub mod register;
 
 pub use arch::Phi4Architecture;

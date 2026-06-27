@@ -4,4 +4,5 @@
 
 pub use crate::components::ssm::{MambaBlock, SSMConfig, SSMError, SSMLayer};
 
+/// SSMHarmonicSSMLayer: ssm harmonic ssm layer.
 pub type SSMHarmonicSSMLayer = crate::components::ssm::SSMHarmonicSSMLayer;

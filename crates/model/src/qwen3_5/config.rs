@@ -2,6 +2,7 @@
 
 use crate::qwen3_config::{Qwen3Config, TextConfig};
 
+/// GdnLinearConfig: gdn linear configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GdnLinearConfig {
     pub num_k_heads: usize,
@@ -40,6 +41,7 @@ impl GdnLinearConfig {
         }
     }
 
+/// from_text_config: from text config.
     pub fn from_text_config(tc: &TextConfig) -> Self {
         Self {
             num_k_heads: tc.linear_num_key_heads(),
@@ -50,6 +52,7 @@ impl GdnLinearConfig {
         }
     }
 
+/// from_qwen3_config: from qwen3 config.
     pub fn from_qwen3_config(config: &Qwen3Config) -> Self {
         if let Some(tc) = config.text_config.as_ref() {
             if tc.has_explicit_gdn_config() {
@@ -60,12 +63,14 @@ impl GdnLinearConfig {
     }
 }
 
+/// LayerType: layer type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayerType {
     LinearAttention,
     FullAttention,
 }
 
+/// parse_layer_types: parse layer types.
 pub fn parse_layer_types(config: &Qwen3Config) -> Vec<LayerType> {
     if let Some(types) = config.layer_types() {
         types

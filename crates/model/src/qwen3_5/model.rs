@@ -1,3 +1,5 @@
+//! model: model.
+
 #![allow(non_snake_case, clippy::too_many_arguments)]
 //! Qwen3.5 hybrid causal language model (GDN + full attention).
 
@@ -13,6 +15,7 @@ use crate::qwen3_config::Qwen3Config;
 use candle_core::{DType, Device, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, LayerNorm, VarBuilder};
 
+/// Qwen35HybridModel: qwen35 hybrid model.
 pub type Qwen35HybridModel = HybridLm<HybridBlock, LayerNorm, Qwen3Config>;
 
 impl HybridLmConfig for Qwen3Config {
@@ -34,6 +37,7 @@ impl HybridLmConfig for Qwen3Config {
 }
 
 impl Qwen35HybridModel {
+/// new: new.
     pub fn new(
         config: Qwen3Config,
         device: Device,
@@ -99,6 +103,7 @@ impl Qwen35HybridModel {
         ))
     }
 
+/// from_weights: from weights.
     pub fn from_weights(
         config: Qwen3Config,
         device: Device,

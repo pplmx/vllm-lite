@@ -10,12 +10,15 @@ use vllm_traits::ModelBackend;
 use crate::components::TransformerBlock;
 use crate::config::ModelConfig;
 
+/// capabilities: capabilities module.
 pub mod capabilities;
+/// registry: registry module.
 pub mod registry;
 
 pub use capabilities::ArchCapabilities;
 pub use registry::{ARCHITECTURE_REGISTRY, ArchitectureRegistry, register_all_archs};
 
+/// Architecture: architecture trait.
 pub trait Architecture: Send + Sync + 'static {
     fn name(&self) -> &'static str;
 

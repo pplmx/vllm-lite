@@ -1,3 +1,5 @@
+//! block: block.
+
 #![allow(clippy::type_complexity)]
 
 use crate::components::AttentionConfig;
@@ -56,6 +58,7 @@ impl PagedDecoderBlock for TransformerBlock {
 }
 
 impl TransformerBlock {
+/// new: new.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         hidden_size: usize,
@@ -104,6 +107,7 @@ impl TransformerBlock {
         )))
     }
 
+/// new_with_tp: new with tp.
     #[cfg(feature = "multi-node")]
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_tp(
@@ -151,6 +155,7 @@ impl TransformerBlock {
         )))
     }
 
+/// new_with_weights: new with weights.
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_weights(
         hidden_size: usize,
@@ -233,6 +238,7 @@ impl TransformerBlock {
         )))
     }
 
+/// from_weights: from weights.
     pub fn from_weights(
         config: &crate::config::ModelConfig,
         layer_idx: usize,
@@ -322,6 +328,7 @@ impl TransformerBlock {
     }
 }
 
+/// new_block: new block.
 pub fn new_block(
     config: &crate::config::ModelConfig,
     _layer_idx: usize,
@@ -339,6 +346,7 @@ pub fn new_block(
     )
 }
 
+/// block_from_weights: block from weights.
 pub fn block_from_weights(
     config: &crate::config::ModelConfig,
     layer_idx: usize,
