@@ -43,3 +43,7 @@ harness = false
 [[bench]]
 name = "speculative_vs_baseline"
 harness = false
+
+[[bench]]
+name = "multi_draft_speculative"
+harness = false
