@@ -83,6 +83,7 @@ impl crate::engine::Engine {
                 // `extern "C"` unwinding) — a misbehaving backend could still
                 // crash the engine.
                 let result = catch_unwind(AssertUnwindSafe(|| {
+                    // invariant: lock is only held for synchronous field access; no panic possible while holding.
                     let mut guard = backend.lock().expect("draft backend mutex poisoned");
                     guard.forward(
                         &[*seq_id],
