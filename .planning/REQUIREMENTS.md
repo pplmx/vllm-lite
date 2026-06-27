@@ -1,150 +1,123 @@
 # Requirements: vllm-lite
 
-**Defined:** 2026-06-27 (v20.0); 2026-06-27 (v21.0 added); 2026-06-27 (v22.0 added)
-**Milestone:** v22.0 Production Hardening
+**Defined:** 2026-06-28
 **Core Value:** Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
 
-## v22.0 Requirements (CURRENT)
+## v23.0 Requirements (Active)
 
-Closure of remaining tech debt from v18.0-v21.0 — production hardening. Each requirement maps to one sub-phase (v22.1-v22.4). Source: PROJECT.md Active section, CONCERNS.md (2026-05-13 baseline, items still relevant post-v21.0).
+Audit Remediation — 28 requirements across 4 categories. Each maps to one of 4 phases (Phase 40-43).
 
-### Phase 36 (v22.1): Critical Bug Fixes (~25h)
+### Code Defects (CODE)
 
-- [ ] **OPS-02**: Fix `Engine::step()` speculative-mode hang (pre-existing bug; unblocks 2 Phase 19 e2e tests currently `#[ignore]`d)
-- [ ] **OPS-03**: Resolve 5 pre-existing cargo doc broken-link warnings in `engine.rs` + `components/mod.rs`
-- [ ] **GGUF-01**: Resolve actionable TODO in `crates/model/src/quantize/gguf.rs` (gguf parser placeholder from v20.6 CMT-02)
-- [ ] **FINAL-01**: All 1146+ tests remain green post-fix
+- [ ] **CODE-01**: `TensorParallelError` (traits/src/types.rs:87-112) is converted to `#[derive(thiserror::Error)]` matching the project's 19 other error enums
+- [ ] **CODE-02**: `Engine::step()` error chain is preserved — replace `EngineError::ModelError(e.to_string())` at core/src/engine.rs:677 with `EngineError::from(e)` so logs retain the underlying `vllm_traits::ModelError` source
+- [ ] **CODE-03**: `Box<dyn std::error::Error>` in `dist/src/grpc.rs:129` public API is replaced with a typed `GrpcError` enum (thiserror) per AGENTS.md convention
+- [ ] **CODE-04**: Stub architecture policy is enforced — either implement real forward passes for `gemma3`/`llama4`/`phi4`/`mistral_small`, or reject `loader.load()` with stub capability at runtime (in non-test builds)
+- [ ] **CODE-05**: `SchedulerEngine::prefix_cache_hit_rate()` placeholder (core/src/scheduler/engine.rs:555-559) is either implemented against metrics counters or removed from the public API
 
-### Phase 37 (v22.2): Security Hardening (~25h)
+### Stale Documentation (DOC)
 
-- [ ] **SEC-01**: Implement JWT cryptographic signature verification — HMAC-SHA256 for `secret`-based JWTs; RSA/ECDSA for `public_key_pem`-based JWTs
-- [ ] **SEC-02**: Wire `RbacMiddleware` into request pipeline (currently no-op pass-through at `rbac.rs:82-84`)
-- [ ] **SEC-03**: Add request size limits via `tower_http::limit::RequestBodyLimitLayer`
-- [ ] **SEC-04**: Audit log integration test (verify `security/audit.rs` emits events for authenticated requests)
-- [ ] **SEC-05**: Move hardcoded Grafana credentials from `docker-compose.yml` to `.env` file (already gitignored)
-- [ ] **SEC-06**: TLS hardening — replace `unwrap()` with proper error in `security/tls.rs:63`
-- [ ] **FINAL-01**: Auth/middleware integration tests pass; no new security regressions
+- [ ] **DOC-02**: CLAUDE.md is rewritten to reflect v23.0 — crate count (6, not 4), Rust version (1.85, not 1.75), Engine signature (non-generic `Box<dyn ModelBackend>`), correct module references
+- [ ] **DOC-03**: README.md:459-473 Scheduling policy example compiles — imports changed to `vllm_core::scheduler::policy::{FcfsPolicy, SjfPolicy, PriorityPolicy}`
+- [ ] **DOC-04**: CHANGELOG.md backfilled with v19.0, v20.0, v21.0, v22.0 entries (synthesized from `.planning/milestones/v{19,20,21,22}.0-*.md`)
+- [ ] **DOC-05**: MIGRATING.md v22.0 entry added — covers security middleware wiring, parking_lot migration, LazyLock upgrade
+- [ ] **DOC-06**: `docs/architecture.md` created — unified v23.0 architecture overview covering engine orchestration, scheduler split, paged_tensor split, KV cache layer, model registry pattern, multi-model spec flow
+- [ ] **DOC-07**: README.md test count badge updated (1100+ → 1179) and version pin note added
+- [ ] **DOC-08**: `docs/optimization_guide.md:50` outdated `Engine::with_config` API example fixed to match current `Option<M>` signature
+- [ ] **DOC-09**: `docs/optimization_guide.md` performance numbers tagged with date and matched against v22.0 bench results
 
-### Phase 38 (v22.3): Production Polish (~15h)
+### Comment Cleanup (CMT)
 
-- [ ] **RFU-05**: Migrate from `std::sync::Mutex` → `parking_lot::Mutex` in scheduler/engine paths (eliminates poison check; covers 24 mutex `.lock().unwrap()` sites from CONCERNS.md)
-- [ ] **OPS-01**: Decide fate of `speculative.rs` mock usage in production paths (real draft loading or document mock-only status)
-- [ ] **PERF-01**: Replace `MlaKvCache::write_compressed` full-cache materialization with `Tensor::slice_assign` or equivalent
-- [ ] **PERF-02**: Replace `model_type.to_lowercase()` in arch detection with `eq_ignore_ascii_case` (avoid per-load String allocation)
-- [ ] **PERF-03**: Replace `once_cell::sync::Lazy` with `std::sync::LazyLock` in `arch/registry.rs` (Rust 1.80+)
-- [ ] **DOC-01**: Verify cargo doc warnings resolved (carry-over from OPS-03 if any remain)
-- [ ] **FINAL-01**: All 1146+ tests remain green post-polish
+- [ ] **CMT-01**: ~85 module-level `//! <mod>: <mod>.` placeholder docs deleted across `core/`, `model/components/`, `model/paged_tensor/`, `model/kernels/`
+- [ ] **CMT-02**: ~530 function/struct/method `/// <name>: <name>.` placeholder docs deleted (auto-generated noise polluting public API)
+- [ ] **CMT-03**: 13 copies of `/// builder: construct via builder for documented field ergonomics.` replaced with type-specific documentation
+- [ ] **CMT-04**: Phase/audit IDs (v18.0, Plan 17.x, SEC-06, PERF-01, etc.) stripped from user-visible rustdoc in 70 files — consolidated into one internal reference doc per module
+- [ ] **CMT-05**: 4 actively wrong comments fixed — `core/src/lib.rs:7` "in progress" claim, `types.rs:264/273` double-name corruption, `server/src/{lib,health}.rs` triple-header pattern
+- [ ] **CMT-06**: `qwen3_config` deprecation shim (crates/model/src/lib.rs:44-52) updated or deleted — `since = "0.21.0"` references nonexistent version
 
-### Phase 39 (v22.4): Engine Refactor + Final Verification (~10h)
+### Architecture Cleanup (ARCH)
 
-- [ ] **ARF-06**: Split `engine.rs` God module (1,038 LOC) into focused sub-modules (deferred from v20.0 Phase 27)
-- [ ] **ARF-07**: Unify `engine/spec_dispatch` tree post-ML-02 (collapse duplicate abstractions)
-- [ ] **FINAL-01**: All 1146+ tests remain green post-refactor
-- [ ] **FINAL-02**: `cargo clippy --workspace --all-targets --all-features -- -D warnings` clean
-- [ ] **FINAL-03**: `cargo fmt --all --check` clean
-- [ ] **FINAL-04**: `cargo test --workspace --all-features` ≥ 1146 tests pass
-- [ ] **FINAL-05**: `.planning/PROJECT.md` and `.planning/STATE.md` updated with v22.0 outcomes
+- [ ] **ARCH-01**: `scheduler/batch_planner.rs` (369 LOC) deleted — zero production callers (deletion test passes: no callers concentrate)
+- [ ] **ARCH-02**: `scheduler/predictive_batching.rs` (498 LOC) deleted — zero production callers
+- [ ] **ARCH-03**: `core/src/kv_cache/mod.rs` (7 LOC) deleted — pass-through shim for BLOCK_SIZE re-export
+- [ ] **ARCH-04**: Unused internal modules consolidated — `core/src/sync.rs` (12), `routing/HashRouter` (191), `ha/{FailoverManager,LeaderElection}` (328), `circuit_breaker/*` (556) — no engine seam
+- [ ] **ARCH-05**: 4 stub architectures (`gemma3`/`llama4`/`phi4`/`mistral_small`, ~1100 LOC) collapsed into one parameterized `StubArchitecture` struct
+- [ ] **ARCH-06**: `core → model` upward dependency via `cuda-graph` feature fixed — CUDA graph types moved to `vllm-traits` or new `vllm-kernels` crate below both
+- [ ] **ARCH-07**: Unused `reqwest` dependency removed from `crates/server/Cargo.toml`
+- [ ] **ARCH-08**: `rayon` moved from `[dependencies]` to `[dev-dependencies]` in `crates/model/Cargo.toml` (only used in tests)
+- [ ] **ARCH-09**: 3 `greedy_sample`/`argmax` implementations unified — `core/sampling.rs`, `model/causal_lm/mod.rs`, `engine/spec_dispatch/drafts.rs` collapse to one canonical impl
+- [ ] **ARCH-10**: 2 `Architecture` types unified — `arch::Architecture` (trait) and `config::Architecture` (enum) collapse to single concept
 
-## v21.0 Requirements (HISTORICAL — Shipped 2026-06-27)
+### Final Verification (FINAL — per-phase + end-of-milestone)
 
-All 38 of 42 v21.0 requirements satisfied (4 deferred: API-04 already in Phase 27; API-10 traits intentionally not object-safe). See `v21.0-MILESTONE-AUDIT.md` for full verification.
+- [ ] **FINAL-01**: All 1179 tests pass after each phase (Phase 40-43)
+- [ ] **FINAL-02**: `cargo clippy --workspace --all-targets --all-features -- -D warnings` clean (Phase 43)
+- [ ] **FINAL-03**: `cargo fmt --all --check` clean (Phase 43)
+- [ ] **FINAL-04**: Test count ≥ 1179 post-v23.0 (no regression, remediation scope)
+- [ ] **FINAL-05**: `.planning/PROJECT.md` + `.planning/STATE.md` updated with v23.0 outcomes (Phase 43)
 
-## v20.0 Requirements (HISTORICAL — Shipped 2026-06-27)
+## Out of Scope
 
-All 48 requirements satisfied. See `v20.0-MILESTONE-AUDIT.md` for full verification.
-
-## v2 Requirements (deferred)
-
-Tracked but not in v22.0 scope:
-
-### New model capabilities
-
-- **NMC-01**: Long context support (>32K tokens; modern LLMs support 128K-200K)
-- **NMC-02**: Multimodal/Vision encoder (replace placeholder `components/vision.rs` with real implementation)
-- **NMC-03**: Tool calling / Function calling (OpenAI-compatible `tools` array partially supported; full implementation pending)
-
-### Operational
-
-- **OPS-04**: Real-model benchmark (vs stub backend) — deferred from v18.0; requires GPU environment
-- **OPS-05**: Multi-node / vllm-dist resurrection (feature-gated; vllm-dist investment decision in ADR-015)
-
-### Architecture follow-ups
-
-- **ARF-08**: Dynamic KV cache block allocation with memory pressure signals
-- **ARF-09**: Chunked prefill production rollout (deferred from v15.0; chunks interleaved with decode for better batching)
-
-### Refactor follow-ups
-
-- **RFU-06**: Doc coverage push 97.8% → 99%+ (if v22.x doesn't push higher incidentally)
-
-## Out of Scope (v22.0)
-
-Explicitly excluded from v22.0:
+Explicitly excluded. Documented to prevent scope creep.
 
 | Feature | Reason |
 |---------|--------|
-| Long context (>32K) | New capability, deferred to v23.0+ candidate |
-| Multimodal/Vision | New capability, deferred to v23.0+ candidate |
-| Multi-node / vllm-dist resurrection | Feature-gated; multi-node work separate cycle |
-| Real-model benchmarks | Requires GPU environment (no GPU currently) |
-| Performance optimization beyond audit findings | Orthogonal to hardening scope |
-| New architectures (Falcon, DeepSeek, etc.) | Out of scope for hardening |
+| New model capabilities (long context >32K, multimodal/vision) | v24+ candidate; v23.0 is remediation only |
+| Engine.rs full single-responsibility split (1057 LOC → sub-modules) | ARF-06 still partial; ARF-* in v23.0 doesn't include God module split |
+| Multi-node / vllm-dist resurrection | OPS-05 still deferred; feature-gated only |
+| Real-model benchmarks | OPS-04 still deferred (no GPU env) |
+| Doc coverage 97.8% → 99%+ | RFU-06; not in remediation scope |
+| Stub architecture full implementation | CODE-04 only handles policy (implement OR reject), not full forward impl |
+| New architectures (Falcon, DeepSeek, etc.) | Out of remediation scope |
+| Online fine-tuning, WebAssembly | Long-term vision |
 | Tree-based speculation | Too complex (carried from v18.0) |
-| Online fine-tuning | 长期愿景 |
-| WebAssembly support | 长期愿景 |
 
 ## Traceability
 
-### v22.0 Requirements (CURRENT)
+Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OPS-02      | Phase 36 | Pending |
-| OPS-03      | Phase 36 | Pending |
-| GGUF-01     | Phase 36 | Pending |
-| FINAL-01    | Phase 36 | Pending |
-| SEC-01      | Phase 37 | Pending |
-| SEC-02      | Phase 37 | Pending |
-| SEC-03      | Phase 37 | Pending |
-| SEC-04      | Phase 37 | Pending |
-| SEC-05      | Phase 37 | Pending |
-| SEC-06      | Phase 37 | Pending |
-| FINAL-01    | Phase 37 | Pending |
-| RFU-05      | Phase 38 | Pending |
-| OPS-01      | Phase 38 | Pending |
-| PERF-01     | Phase 38 | Pending |
-| PERF-02     | Phase 38 | Pending |
-| PERF-03     | Phase 38 | Pending |
-| DOC-01      | Phase 38 | Pending |
-| FINAL-01    | Phase 38 | Pending |
-| ARF-06      | Phase 39 | Pending |
-| ARF-07      | Phase 39 | Pending |
-| FINAL-01    | Phase 39 | Pending |
-| FINAL-02    | Phase 39 | Pending |
-| FINAL-03    | Phase 39 | Pending |
-| FINAL-04    | Phase 39 | Pending |
-| FINAL-05    | Phase 39 | Pending |
-
-### v21.0 Requirements (HISTORICAL — Shipped 2026-06-27)
-
-38/42 satisfied (4 deferred with rationale). See v21.0 milestone audit for details.
-
-### v20.0 Requirements (HISTORICAL — Shipped 2026-06-27)
-
-48/48 Complete ✅
+| CODE-01 | Phase 40 | Pending |
+| CODE-02 | Phase 40 | Pending |
+| CODE-03 | Phase 40 | Pending |
+| CODE-04 | Phase 40 | Pending |
+| CODE-05 | Phase 40 | Pending |
+| DOC-02 | Phase 41 | Pending |
+| DOC-03 | Phase 41 | Pending |
+| DOC-04 | Phase 41 | Pending |
+| DOC-05 | Phase 41 | Pending |
+| DOC-06 | Phase 41 | Pending |
+| DOC-07 | Phase 41 | Pending |
+| DOC-08 | Phase 41 | Pending |
+| DOC-09 | Phase 41 | Pending |
+| CMT-01 | Phase 42 | Pending |
+| CMT-02 | Phase 42 | Pending |
+| CMT-03 | Phase 42 | Pending |
+| CMT-04 | Phase 42 | Pending |
+| CMT-05 | Phase 42 | Pending |
+| CMT-06 | Phase 42 | Pending |
+| ARCH-01 | Phase 43 | Pending |
+| ARCH-02 | Phase 43 | Pending |
+| ARCH-03 | Phase 43 | Pending |
+| ARCH-04 | Phase 43 | Pending |
+| ARCH-05 | Phase 43 | Pending |
+| ARCH-06 | Phase 43 | Pending |
+| ARCH-07 | Phase 43 | Pending |
+| ARCH-08 | Phase 43 | Pending |
+| ARCH-09 | Phase 43 | Pending |
+| ARCH-10 | Phase 43 | Pending |
+| FINAL-01 | Phase 40-43 | Pending |
+| FINAL-02 | Phase 43 | Pending |
+| FINAL-03 | Phase 43 | Pending |
+| FINAL-04 | Phase 43 | Pending |
+| FINAL-05 | Phase 43 | Pending |
 
 **Coverage:**
-- v22.0 requirements: 25 total across 4 phases
-  - Phase 36 (Critical Bug Fixes): 4 reqs — OPS-02, OPS-03, GGUF-01, FINAL-01
-  - Phase 37 (Security Hardening): 7 reqs — SEC-01..06, FINAL-01
-  - Phase 38 (Production Polish): 7 reqs — RFU-05, OPS-01, PERF-01..03, DOC-01, FINAL-01
-  - Phase 39 (Engine Refactor + FINAL): 7 reqs — ARF-06, ARF-07, FINAL-01..05
-- Mapped to phases: 25/25 ✓
+- v23.0 requirements: 28 functional + 5 FINAL = 33 total
+- Mapped to phases: 33
 - Unmapped: 0 ✓
-- v21.0 historical: 38/42 Complete ✅
-- v20.0 historical: 48/48 Complete ✅
 
 ---
-
-*Requirements defined: 2026-06-27 (v20.0)*
-*Last updated: 2026-06-27 after v22.0 Production Hardening roadmap creation (25 requirements across Phase 36-39, all mapped)*
+*Requirements defined: 2026-06-28*
+*Last updated: 2026-06-28 after v22.0 milestone audit*
