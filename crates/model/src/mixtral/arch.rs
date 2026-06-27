@@ -11,9 +11,11 @@ use vllm_traits::ModelBackend;
 use super::block::MixtralBlock;
 use super::model::MixtralModel;
 
+/// MixtralArchitecture: mixtral architecture.
 pub struct MixtralArchitecture;
 
 impl MixtralArchitecture {
+/// new: new.
     pub fn new() -> Self {
         Self
     }
@@ -25,6 +27,7 @@ impl Default for MixtralArchitecture {
     }
 }
 
+/// MixtralBlockWrapper: mixtral block wrapper.
 pub type MixtralBlockWrapper = BlockWrapper<MixtralBlock>;
 
 impl Architecture for MixtralArchitecture {

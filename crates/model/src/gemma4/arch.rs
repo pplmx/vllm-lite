@@ -11,9 +11,11 @@ use vllm_traits::ModelBackend;
 use super::block::Gemma4Block;
 use super::model::Gemma4Model;
 
+/// Gemma4Architecture: gemma4 architecture.
 pub struct Gemma4Architecture;
 
 impl Gemma4Architecture {
+/// new: new.
     pub fn new() -> Self {
         Self
     }
@@ -25,6 +27,7 @@ impl Default for Gemma4Architecture {
     }
 }
 
+/// Gemma4BlockWrapper: gemma4 block wrapper.
 pub type Gemma4BlockWrapper = BlockWrapper<Gemma4Block>;
 
 impl Architecture for Gemma4Architecture {

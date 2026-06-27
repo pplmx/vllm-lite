@@ -12,11 +12,13 @@ use std::collections::HashMap;
 use vllm_traits::ModelBackend;
 use vllm_traits::types::BatchOutput;
 
+/// Gemma3Architecture: gemma3 architecture.
 pub struct Gemma3Architecture {
     sliding_window: usize,
 }
 
 impl Gemma3Architecture {
+/// new: new.
     pub fn new() -> Self {
         Self {
             sliding_window: 4096,
@@ -30,12 +32,14 @@ impl Default for Gemma3Architecture {
     }
 }
 
+/// Gemma3BlockWrapper: gemma3 block wrapper.
 pub struct Gemma3BlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,
 }
 
 impl Gemma3BlockWrapper {
+/// new: new.
     pub fn new(config: &ModelConfig) -> Self {
         Self {
             inner_dim: config.head_dim * config.num_heads,
@@ -137,6 +141,7 @@ impl Architecture for Gemma3Architecture {
     }
 }
 
+/// Gemma3Model: gemma3 model.
 pub struct Gemma3Model {
     config: ModelConfig,
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
@@ -148,6 +153,7 @@ pub struct Gemma3Model {
 }
 
 impl Gemma3Model {
+/// new: new.
     pub fn new(
         config: ModelConfig,
         device: Device,

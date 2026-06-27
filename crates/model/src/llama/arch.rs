@@ -11,9 +11,11 @@ use vllm_traits::ModelBackend;
 use super::block::{LlamaBlock, block_from_weights};
 use super::model::LlamaModel;
 
+/// LlamaArchitecture: llama architecture.
 pub struct LlamaArchitecture;
 
 impl LlamaArchitecture {
+/// new: new.
     pub fn new() -> Self {
         Self
     }
@@ -25,6 +27,7 @@ impl Default for LlamaArchitecture {
     }
 }
 
+/// LlamaBlockWrapper: llama block wrapper.
 pub type LlamaBlockWrapper = BlockWrapper<LlamaBlock>;
 
 impl Architecture for LlamaArchitecture {

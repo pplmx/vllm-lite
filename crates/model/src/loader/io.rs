@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 const MMAP_THRESHOLD_BYTES: u64 = 100 * 1024 * 1024;
 const MAX_MMAP_SIZE: u64 = 10 * 1024 * 1024 * 1024;
 
+/// load_file_mmap_or_read: load file mmap or read.
 pub fn load_file_mmap_or_read(path: &Path) -> Result<Vec<u8>> {
     let metadata = std::fs::metadata(path)?;
     let file_size = metadata.len();
@@ -28,6 +29,7 @@ fn load_mmap(path: &Path) -> Result<Mmap> {
     unsafe { Mmap::map(&file) }.map_err(|e| candle_core::Error::msg(format!("mmap failed: {}", e)))
 }
 
+/// find_safetensors_files: find safetensors files.
 pub fn find_safetensors_files(model_dir: &Path) -> Result<Vec<PathBuf>> {
     let single = model_dir.join("model.safetensors");
     if single.exists() {
@@ -60,6 +62,7 @@ pub fn find_safetensors_files(model_dir: &Path) -> Result<Vec<PathBuf>> {
     Ok(files)
 }
 
+/// convert_tensor: convert tensor.
 pub fn convert_tensor(view: &safetensors::tensor::TensorView, device: &Device) -> Result<Tensor> {
     use half::{bf16, f16};
     use safetensors::Dtype;

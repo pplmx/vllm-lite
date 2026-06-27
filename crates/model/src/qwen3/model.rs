@@ -1,3 +1,5 @@
+//! model: model.
+
 use crate::causal_lm::CausalLm;
 use crate::components::LnLayerNorm;
 use crate::config::ModelConfig;
@@ -10,9 +12,11 @@ use vllm_dist::TensorParallelConfig;
 
 use super::block::{block_from_weights, new_block};
 
+/// Qwen3Model: qwen3 model.
 pub type Qwen3Model = CausalLm<super::block::TransformerBlock, LnLayerNorm, Linear>;
 
 impl Qwen3Model {
+/// new: new.
     pub fn new(config: Qwen3Config, device: Device, num_kv_blocks: usize) -> CandleResult<Self> {
         let model_config = ModelConfig::from(&config);
         Self::new_with_block_fn(model_config, device, num_kv_blocks, false, |c, idx| {
@@ -21,6 +25,7 @@ impl Qwen3Model {
         .map(|m| m.with_embed_through_layers(true))
     }
 
+/// new_with_tp: new with tp.
     #[cfg(feature = "multi-node")]
     pub fn new_with_tp(
         config: Qwen3Config,
@@ -30,6 +35,7 @@ impl Qwen3Model {
         super::tp::new_with_tp(config, tp_config, num_kv_blocks)
     }
 
+/// from_weights: from weights.
     pub fn from_weights(
         config: Qwen3Config,
         device: Device,

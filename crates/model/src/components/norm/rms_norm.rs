@@ -2,16 +2,19 @@
 
 use candle_core::{Module, Result, Tensor};
 
+/// RmsNorm: rms norm.
 pub struct RmsNorm {
     weight: Tensor,
     eps: f64,
 }
 
 impl RmsNorm {
+/// new: new.
     pub fn new(weight: Tensor, eps: f64) -> Self {
         Self { weight, eps }
     }
 
+/// forward: forward.
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let dims = x.dims();
 
@@ -44,6 +47,7 @@ impl Module for RmsNorm {
     }
 }
 
+/// rms_norm: rms norm.
 pub fn rms_norm(x: &Tensor, weight: &Tensor, eps: f64) -> Result<Tensor> {
     let dims = x.dims();
 

@@ -12,9 +12,11 @@ use std::collections::HashMap;
 use vllm_traits::ModelBackend;
 use vllm_traits::types::BatchOutput;
 
+/// Phi4Architecture: phi4 architecture.
 pub struct Phi4Architecture;
 
 impl Phi4Architecture {
+/// new: new.
     pub fn new() -> Self {
         Self
     }
@@ -26,12 +28,14 @@ impl Default for Phi4Architecture {
     }
 }
 
+/// Phi4BlockWrapper: phi4 block wrapper.
 pub struct Phi4BlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,
 }
 
 impl Phi4BlockWrapper {
+/// new: new.
     pub fn new(config: &ModelConfig) -> Self {
         Self {
             inner_dim: config.head_dim * config.num_heads,
@@ -130,6 +134,7 @@ impl Architecture for Phi4Architecture {
     }
 }
 
+/// Phi4Model: phi4 model.
 pub struct Phi4Model {
     config: ModelConfig,
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
@@ -139,6 +144,7 @@ pub struct Phi4Model {
 }
 
 impl Phi4Model {
+/// new: new.
     pub fn new(config: ModelConfig, device: Device, num_kv_blocks: usize) -> Result<Self> {
         Ok(Self {
             config,

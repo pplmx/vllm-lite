@@ -12,6 +12,7 @@ use crate::components::attention::paged_gqa::{
 use crate::components::positional::MRoPE;
 use crate::paged_tensor::PagedKvCache;
 
+/// Attention35WithRoPE: attention35 with ro pe.
 pub struct Attention35WithRoPE {
     q_proj: Linear,
     k_proj: Linear,
@@ -24,6 +25,7 @@ pub struct Attention35WithRoPE {
 }
 
 impl Attention35WithRoPE {
+/// new: new.
     pub fn new(
         hidden_size: usize,
         num_heads: usize,
@@ -44,6 +46,7 @@ impl Attention35WithRoPE {
         })
     }
 
+/// from_weights: from weights.
     pub fn from_weights(
         prefix: &str,
         weights: &HashMap<String, Tensor>,
@@ -87,6 +90,7 @@ impl Attention35WithRoPE {
         })
     }
 
+/// forward: forward.
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
         let (batch, seq_len, _) = x.dims3()?;
         let positions: Vec<usize> = (0..seq_len).collect();
@@ -95,6 +99,7 @@ impl Attention35WithRoPE {
         self.compute_attention(&q, &k, &v, batch, seq_len, true)
     }
 
+/// forward_prefill: forward prefill.
     pub fn forward_prefill(
         &self,
         x: &Tensor,
@@ -126,6 +131,7 @@ impl Attention35WithRoPE {
         self.compute_paged_attention(&q, &k_expanded, &v_expanded, seq_len)
     }
 
+/// forward_decode: forward decode.
     pub fn forward_decode(
         &self,
         x: &Tensor,

@@ -3,9 +3,13 @@
 //! This module provides the ModelLoader for loading model weights and configurations.
 //! Supports Builder pattern for flexible configuration.
 
+/// builder: builder module.
 pub mod builder;
+/// checkpoint: checkpoint module.
 pub mod checkpoint;
+/// format: format module.
 pub mod format;
+/// io: io module.
 pub mod io;
 
 pub use builder::{ModelLoader, ModelLoaderBuilder};

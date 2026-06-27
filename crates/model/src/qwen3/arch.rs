@@ -12,9 +12,11 @@ use vllm_traits::ModelBackend;
 use super::block::TransformerBlock as Qwen3Block;
 use super::model::Qwen3Model;
 
+/// Qwen3Architecture: qwen3 architecture.
 pub struct Qwen3Architecture;
 
 impl Qwen3Architecture {
+/// new: new.
     pub fn new() -> Self {
         Self
     }
@@ -26,6 +28,7 @@ impl Default for Qwen3Architecture {
     }
 }
 
+/// Qwen3BlockWrapper: qwen3 block wrapper.
 pub type Qwen3BlockWrapper = BlockWrapper<Qwen3Block>;
 
 impl Architecture for Qwen3Architecture {

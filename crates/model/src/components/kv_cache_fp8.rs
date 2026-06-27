@@ -1,5 +1,8 @@
+//! kv_cache_fp8: kv cache fp8.
+
 use candle_core::{DType, Result, Tensor};
 
+/// KvCacheDtype: kv cache dtype enumeration.
 #[derive(Debug, Clone)]
 pub enum KvCacheDtype {
     Fp16,
@@ -8,6 +11,7 @@ pub enum KvCacheDtype {
 }
 
 impl KvCacheDtype {
+/// bytes_per_element: bytes per element.
     pub fn bytes_per_element(&self) -> usize {
         match self {
             KvCacheDtype::Fp16 => 2,
@@ -16,6 +20,7 @@ impl KvCacheDtype {
         }
     }
 
+/// memory_reduction_ratio: memory reduction ratio.
     pub fn memory_reduction_ratio(&self) -> f32 {
         match self {
             KvCacheDtype::Fp16 => 1.0,
@@ -25,15 +30,18 @@ impl KvCacheDtype {
     }
 }
 
+/// Fp8Quantizer: fp8 quantizer.
 pub struct Fp8Quantizer {
     dtype: KvCacheDtype,
 }
 
 impl Fp8Quantizer {
+/// new: new.
     pub fn new(dtype: KvCacheDtype) -> Self {
         Self { dtype }
     }
 
+/// quantize: quantize.
     pub fn quantize(&self, tensor: &Tensor) -> Result<Tensor> {
         match self.dtype {
             KvCacheDtype::Fp16 => Ok(tensor.clone()),
@@ -42,6 +50,7 @@ impl Fp8Quantizer {
         }
     }
 
+/// dequantize: dequantize.
     pub fn dequantize(&self, tensor: &Tensor) -> Result<Tensor> {
         match self.dtype {
             KvCacheDtype::Fp16 => Ok(tensor.clone()),
@@ -163,6 +172,7 @@ impl Fp8Quantizer {
         half::f16::from_bits(bits)
     }
 
+/// estimate_memory_savings: estimate memory savings.
     pub fn estimate_memory_savings(
         num_blocks: usize,
         block_size: usize,

@@ -25,6 +25,7 @@ pub fn map_candle<T>(result: candle_core::Result<T>) -> Result<T> {
     result.map_err(ModelError::from)
 }
 
+/// embed_sequence: embed sequence.
 pub fn embed_sequence(
     embed_tokens: &Embedding,
     tokens: &[TokenId],
@@ -45,6 +46,7 @@ pub fn embed_sequence(
     }
 }
 
+/// greedy_sample_token: greedy sample token.
 pub fn greedy_sample_token(logits: &Tensor, is_prefill: bool) -> Result<TokenId> {
     let logits = if is_prefill {
         let seq_len = logits.dims()[1];
@@ -63,6 +65,7 @@ pub fn greedy_sample_token(logits: &Tensor, is_prefill: bool) -> Result<TokenId>
         .map_err(ModelError::from)
 }
 
+/// logits_to_vector: logits to vector.
 pub fn logits_to_vector(logits: &Tensor, is_prefill: bool) -> Result<Vec<f32>> {
     let logits = if is_prefill {
         let seq_len = logits.dims()[1];
@@ -78,6 +81,7 @@ pub fn logits_to_vector(logits: &Tensor, is_prefill: bool) -> Result<Vec<f32>> {
     map_candle(logits.to_vec1())
 }
 
+/// forward_batch: forward batch.
 pub fn forward_batch<F>(seq_ids: &[SeqId], is_prefill: &[bool], mut step: F) -> Result<BatchOutput>
 where
     F: FnMut(usize, bool) -> Result<TokenId>,
@@ -212,6 +216,7 @@ where
     Ok((logits, 0))
 }
 
+/// mean_pool_embeddings: mean pool embeddings.
 pub fn mean_pool_embeddings(
     embed_tokens: &Embedding,
     tokens: &[TokenId],

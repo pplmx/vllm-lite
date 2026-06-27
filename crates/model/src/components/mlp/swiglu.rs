@@ -1,6 +1,9 @@
+//! swiglu: swiglu.
+
 use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;
 
+/// swiglu_forward: swiglu forward.
 pub fn swiglu_forward(
     x: &Tensor,
     gate_proj: &Linear,
@@ -16,6 +19,7 @@ pub fn swiglu_forward(
     down_proj.forward(&activated)
 }
 
+/// SwiGLU: swi glu.
 pub struct SwiGLU {
     gate_proj: Linear,
     up_proj: Linear,
@@ -23,6 +27,7 @@ pub struct SwiGLU {
 }
 
 impl SwiGLU {
+/// new: new.
     pub fn new(
         hidden_size: usize,
         intermediate_size: usize,
@@ -42,6 +47,7 @@ impl SwiGLU {
         })
     }
 
+/// new_with_weights: new with weights.
     pub fn new_with_weights(
         _hidden_size: usize,
         _intermediate_size: usize,
@@ -60,6 +66,7 @@ impl SwiGLU {
         })
     }
 
+/// forward: forward.
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         swiglu_forward(x, &self.gate_proj, &self.up_proj, &self.down_proj)
     }

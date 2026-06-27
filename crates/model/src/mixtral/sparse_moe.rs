@@ -4,6 +4,7 @@ use candle_core::{D, Module, Result, Tensor};
 use candle_nn::Linear;
 use tracing::trace;
 
+/// MixtralSparseMoe: mixtral sparse moe.
 pub struct MixtralSparseMoe {
     experts: Vec<Expert>,
     gate: Linear,
@@ -73,6 +74,7 @@ fn compute_topk_routing(
 }
 
 impl MixtralSparseMoe {
+/// new: new.
     pub fn new(
         hidden_size: usize,
         num_experts: usize,
@@ -106,6 +108,7 @@ impl MixtralSparseMoe {
         })
     }
 
+/// new_with_weights: new with weights.
     pub fn new_with_weights(
         _hidden_size: usize,
         num_experts: usize,
@@ -144,6 +147,7 @@ impl MixtralSparseMoe {
         })
     }
 
+/// forward: forward.
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let squeeze_seq = x.dims().len() == 2;
         let x = if squeeze_seq {

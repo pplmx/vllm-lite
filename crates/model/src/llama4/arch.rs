@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use vllm_traits::ModelBackend;
 use vllm_traits::types::BatchOutput;
 
+/// Llama4Architecture: llama4 architecture.
 pub struct Llama4Architecture {
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     is_moe: bool,
@@ -22,6 +23,7 @@ pub struct Llama4Architecture {
 }
 
 impl Llama4Architecture {
+/// new: new.
     pub fn new() -> Self {
         Self {
             is_moe: false,
@@ -30,6 +32,7 @@ impl Llama4Architecture {
         }
     }
 
+/// with_moe: with moe.
     pub fn with_moe(num_experts: usize, num_active_experts: usize) -> Self {
         Self {
             is_moe: true,
@@ -45,6 +48,7 @@ impl Default for Llama4Architecture {
     }
 }
 
+/// Llama4BlockWrapper: llama4 block wrapper.
 pub struct Llama4BlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,
@@ -55,6 +59,7 @@ pub struct Llama4BlockWrapper {
 }
 
 impl Llama4BlockWrapper {
+/// new: new.
     pub fn new(config: &ModelConfig, is_moe: bool, num_experts: usize) -> Self {
         Self {
             inner_dim: config.head_dim * config.num_heads,
@@ -162,6 +167,7 @@ impl Architecture for Llama4Architecture {
     }
 }
 
+/// Llama4Model: llama4 model.
 pub struct Llama4Model {
     config: ModelConfig,
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
@@ -175,6 +181,7 @@ pub struct Llama4Model {
 }
 
 impl Llama4Model {
+/// new: new.
     pub fn new(
         config: ModelConfig,
         device: Device,
