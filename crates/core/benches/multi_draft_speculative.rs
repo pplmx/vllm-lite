@@ -168,10 +168,6 @@ fn bench_throughput(c: &mut Criterion) {
 
     for config in ["no_draft", "self_spec", "external_draft"] {
         let h = make_harness(config);
-        // Warmup
-        for _ in 0..5 {
-            run_iteration(&h, config);
-        }
         group.bench_with_input(BenchmarkId::from_parameter(config), config, |b, _cfg| {
             b.iter(|| {
                 let start = Instant::now();
