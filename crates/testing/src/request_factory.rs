@@ -32,26 +32,31 @@ impl Default for RequestConfig {
 }
 
 impl RequestConfig {
+/// min_tokens: min tokens.
     pub fn min_tokens(mut self, n: usize) -> Self {
         self.min_tokens = n;
         self
     }
 
+/// max_tokens: max tokens.
     pub fn max_tokens(mut self, n: usize) -> Self {
         self.max_tokens = n;
         self
     }
 
+/// min_max_tokens: min max tokens.
     pub fn min_max_tokens(mut self, n: usize) -> Self {
         self.min_max_tokens = n;
         self
     }
 
+/// max_max_tokens: max max tokens.
     pub fn max_max_tokens(mut self, n: usize) -> Self {
         self.max_max_tokens = n;
         self
     }
 
+/// temperature: temperature.
     pub fn temperature(mut self, t: f32) -> Self {
         self.temperature = t;
         self

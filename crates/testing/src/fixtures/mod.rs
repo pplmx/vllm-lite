@@ -6,13 +6,16 @@ use vllm_core::types::{SchedulerConfig, SequencePackingConfig};
 
 use crate::mocks::IncrementModel;
 
+/// TestFixtures: test fixtures.
 pub struct TestFixtures;
 
 impl TestFixtures {
+/// default_scheduler_config: default scheduler config.
     pub fn default_scheduler_config() -> SchedulerConfig {
         SchedulerConfig::default()
     }
 
+/// small_batch_config: small batch config.
     pub fn small_batch_config() -> SchedulerConfig {
         SchedulerConfig {
             max_num_seqs: 2,
@@ -30,6 +33,7 @@ impl TestFixtures {
         }
     }
 
+/// chunked_prefill_config: chunked prefill config.
     pub fn chunked_prefill_config() -> SchedulerConfig {
         SchedulerConfig {
             max_num_seqs: 256,
@@ -47,6 +51,7 @@ impl TestFixtures {
         }
     }
 
+/// pd_separation_config: pd separation config.
     pub fn pd_separation_config() -> SchedulerConfig {
         SchedulerConfig {
             enable_pd_separation: true,
@@ -64,6 +69,7 @@ impl TestFixtures {
         }
     }
 
+/// priority_config: priority config.
     pub fn priority_config() -> SchedulerConfig {
         SchedulerConfig {
             enable_priority_scheduling: true,
@@ -72,6 +78,7 @@ impl TestFixtures {
         }
     }
 
+/// oom_scenario_config: oom scenario config.
     pub fn oom_scenario_config() -> SchedulerConfig {
         SchedulerConfig {
             max_num_seqs: 1,
