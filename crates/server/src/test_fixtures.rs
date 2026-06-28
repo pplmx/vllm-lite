@@ -59,7 +59,7 @@ use vllm_model::tokenizer::Tokenizer;
 use crate::ApiState;
 use crate::api::EngineHandle;
 use crate::health::HealthChecker;
-use crate::openai::batch::manager::BatchManager;
+use crate::openai::batch::BatchManager;
 
 /// Build [`ApiState`] with defaults suitable for handler tests.
 pub fn api_state(architecture: Architecture) -> ApiState {

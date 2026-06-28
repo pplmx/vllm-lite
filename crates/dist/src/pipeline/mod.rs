@@ -29,5 +29,3 @@ pub enum PipelineError {
 
 /// Result: result.
 pub type Result<T> = std::result::Result<T, PipelineError>;
-
-pub use stage::PipelineStage as PipelineStageTrait;

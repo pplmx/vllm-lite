@@ -23,10 +23,7 @@ mod memory;
 mod state;
 mod update;
 
-pub use graph::*;
-pub use memory::*;
-pub use state::*;
-pub use update::*;
+pub use state::SchedulerEngine;
 
 #[cfg(test)]
 mod tests {
