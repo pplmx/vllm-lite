@@ -38,6 +38,12 @@ tokio-stream = "0.1"
 tower = "0.5"
 tower-http = { version = "0.7", features = ["cors", "trace"] }
 
+# Profiling (dev-only; v27.0 H-7)
+# Note: pprof 0.15's `criterion` feature pins criterion 0.5, which conflicts
+# with our workspace's criterion 0.8. Use `cargo-flamegraph` for criterion
+# profiling instead, or pprof's ProfilerGuard API for manual integration.
+pprof = { version = "0.15", default-features = false, features = ["flamegraph"] }
+
 # === Workspace lint policy ===
 # Tiers:
 #   deny  - breaks CI (`just clippy`)

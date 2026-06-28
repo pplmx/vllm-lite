@@ -26,6 +26,7 @@ tracing = "0.1"
 tempfile = "3"
 vllm-testing = { path = "../testing" }
 criterion = "0.8"
+pprof = { workspace = true }
 
 [[bench]]
 name = "gqa_forward"
