@@ -7,6 +7,10 @@ use vllm_core::scheduler::SchedulerEngine;
 use vllm_core::types::{AdaptiveDraftConfig, Request, SchedulerConfig};
 use vllm_testing::TestFixtures;
 
+/// Upper bound on engine.step() calls per b.iter() to prevent infinite loops
+/// when step() returns empty results (e.g., engine idle or paused).
+const MAX_STEPS_PER_ITER: usize = 10_000;
+
 /// Benchmark Sequence Packing vs FIFO
 fn bench_sequence_packing(c: &mut Criterion) {
     let mut group = c.benchmark_group("sequence_packing");
@@ -124,10 +128,14 @@ fn bench_throughput(c: &mut Criterion) {
 
                 b.iter(|| {
                     let mut completed = 0;
-                    while completed < num_requests {
+                    for _ in 0..MAX_STEPS_PER_ITER {
                         let results = black_box(engine.step().unwrap());
                         completed += results.len();
+                        if completed >= num_requests {
+                            break;
+                        }
                     }
+                    black_box(completed);
                 });
             },
         );
@@ -148,10 +156,14 @@ fn bench_throughput(c: &mut Criterion) {
 
                 b.iter(|| {
                     let mut completed = 0;
-                    while completed < num_requests {
+                    for _ in 0..MAX_STEPS_PER_ITER {
                         let results = black_box(engine.step().unwrap());
                         completed += results.len();
+                        if completed >= num_requests {
+                            break;
+                        }
                     }
+                    black_box(completed);
                 });
             },
         );

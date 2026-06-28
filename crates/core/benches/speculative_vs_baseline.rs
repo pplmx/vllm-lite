@@ -4,6 +4,10 @@ use tokio::sync::mpsc;
 use vllm_core::types::{AdaptiveDraftConfig, Request, SchedulerConfig};
 use vllm_testing::TestFixtures;
 
+/// Upper bound on engine.step() calls per b.iter() to prevent infinite loops
+/// when step() returns empty results (e.g., engine idle or paused).
+const MAX_STEPS_PER_ITER: usize = 10_000;
+
 /// SPEC-BENCH-02: Baseline comparison vs non-speculative inference.
 /// Reports `baseline` (no spec decode) vs `speculative` (with adaptive spec decode).
 fn bench_speculative_vs_baseline(c: &mut Criterion) {
@@ -24,10 +28,14 @@ fn bench_speculative_vs_baseline(c: &mut Criterion) {
                 }
                 b.iter(|| {
                     let mut completed = 0;
-                    while completed < num_requests {
+                    for _ in 0..MAX_STEPS_PER_ITER {
                         let results = black_box(engine.step().unwrap());
                         completed += results.len();
+                        if completed >= num_requests {
+                            break;
+                        }
                     }
+                    black_box(completed);
                 });
             },
         );
@@ -46,10 +54,14 @@ fn bench_speculative_vs_baseline(c: &mut Criterion) {
                 }
                 b.iter(|| {
                     let mut completed = 0;
-                    while completed < num_requests {
+                    for _ in 0..MAX_STEPS_PER_ITER {
                         let results = black_box(engine.step().unwrap());
                         completed += results.len();
+                        if completed >= num_requests {
+                            break;
+                        }
                     }
+                    black_box(completed);
                 });
             },
         );
