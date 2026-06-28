@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v23.0
-milestone_name: Audit Remediation
-status: shipped
-last_updated: "2026-06-28T01:30:00.000Z"
+milestone: v30.0
+milestone_name: Test Ecosystem & Docs Enhancement
+status: planned
+last_updated: "2026-06-28T22:30:00.000Z"
 last_activity: 2026-06-28
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 10
-  completed_plans: 10
-  percent: 100
+  total_phases: 6
+  completed_phases: 0
+  total_plans: 6
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,14 +20,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-28)
 
 **Core value:** Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
-**Current focus:** v23.0 Audit Remediation — SHIPPED 2026-06-28; v24.0 candidates surfaced
+**Current focus:** v30.0 Test Ecosystem & Docs Enhancement — spec approved 2026-06-28; Phase K ready to execute.
 
 ## Current Position
 
-Phase: v23.0 SHIPPED (all 4 phases complete)
-Plan: —
-Status: 4/4 phases complete; 1162 tests pass; clippy/fmt/doc clean
-Last activity: 2026-06-28 — v23.0 milestone shipped (Phase 40-43)
+Phase: v30.0 Phase K (Mutation Testing) — plan ready, awaiting execution
+Plan: `docs/superpowers/plans/2026-06-28-v30-phase-k-mutation-testing.md`
+Spec: `docs/superpowers/specs/2026-06-28-v30-test-docs-design.md`
+Overview: `docs/superpowers/plans/2026-06-28-v30-overview.md`
+Status: 0/6 phases complete; 1212 tests pass (post v29.0); clippy/fmt/doc clean
+Last activity: 2026-06-28 — v30.0 spec + 6 plan files committed (Phase K detailed, L/M/N/O/P stubbed)
 
 ## Performance Metrics
 
