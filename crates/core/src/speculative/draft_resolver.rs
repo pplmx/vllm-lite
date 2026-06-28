@@ -9,7 +9,7 @@
 //! Runtime draft inference errors are handled at the engine level (FALL-02)
 //! — the resolver itself only deals with load-time decisions.
 
-use crate::metrics::EnhancedMetricsCollector;
+use crate::metrics::{DraftResolutionKind, EnhancedMetricsCollector};
 use crate::speculative::registry::{DraftId, DraftModelRegistry, DraftRegistryError};
 use std::sync::{Arc, Mutex};
 use vllm_traits::ModelBackend;
@@ -101,7 +101,7 @@ impl DraftResolver {
         // Case 1: no external draft requested
         let id = match request_draft_id {
             None => {
-                self.metrics.inc_draft_resolution("none");
+                self.metrics.inc_draft_resolution(DraftResolutionKind::None);
                 return self.fallback_to_self_spec_or_none();
             }
             Some(id) => id,
@@ -109,7 +109,8 @@ impl DraftResolver {
 
         // Case 2: draft is already loaded → external
         if let Some(backend) = self.registry.get_loaded_backend(id) {
-            self.metrics.inc_draft_resolution("external");
+            self.metrics
+                .inc_draft_resolution(DraftResolutionKind::External);
             return ResolvedDraft::External(backend);
         }
 
@@ -122,7 +123,8 @@ impl DraftResolver {
                         Ok(()) => {
                             // Re-fetch from registry (now loaded)
                             if let Some(arc_backend) = self.registry.get_loaded_backend(id) {
-                                self.metrics.inc_draft_resolution("external");
+                                self.metrics
+                                    .inc_draft_resolution(DraftResolutionKind::External);
                                 return ResolvedDraft::External(arc_backend);
                             }
                             // Shouldn't happen — attach succeeded but lookup failed
@@ -164,11 +166,12 @@ impl DraftResolver {
     fn fallback_to_self_spec_or_none(&self) -> ResolvedDraft {
         match &self.self_spec {
             Some(s) => {
-                self.metrics.inc_draft_resolution("self_spec");
+                self.metrics
+                    .inc_draft_resolution(DraftResolutionKind::SelfSpec);
                 ResolvedDraft::SelfSpec(s.clone())
             }
             None => {
-                self.metrics.inc_draft_resolution("none");
+                self.metrics.inc_draft_resolution(DraftResolutionKind::None);
                 ResolvedDraft::None
             }
         }

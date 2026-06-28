@@ -3,7 +3,7 @@ pub mod collector;
 pub mod exporter;
 pub mod types;
 
-pub use collector::EnhancedMetricsCollector;
+pub use collector::{DraftResolutionKind, EnhancedMetricsCollector};
 pub use exporter::{MetricsExporter, PrometheusExporter};
 pub use lock_free::{LockFreeMetrics, MetricsCollector, MetricsSnapshot};
 pub use types::{MetricLabels, MetricType, MetricValue};
