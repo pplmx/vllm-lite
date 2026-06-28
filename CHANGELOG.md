@@ -26,6 +26,21 @@
 
 ### Added
 
+- **Test Coverage Expansion (v30.0 Phase M)** — 4 new fuzz targets + 3 new proptest modules:
+    - Fuzz targets (7 total now, was 3 in v29.0):
+        - `tokenizer_decode`: fuzz `tiktoken::CoreBpe::decode` / `decode_to_string` with arbitrary u32 token IDs (cl100k vocabulary). Validates decoder does not panic on out-of-range IDs.
+        - `gguf_header`: fuzz GGUF magic check + version field read with arbitrary bytes. Catches panics in the header slice/compare path.
+        - `openai_http_request`: fuzz `serde_json::from_slice::<ChatRequest>` with bounded (1MB) arbitrary bytes. Catches deserialization panics in the OpenAI HTTP endpoint.
+        - `batch_json_input`: fuzz `serde_json::from_slice::<SimpleBatchRequest>` with bounded (10MB) arbitrary bytes. Catches deserialization panics in the batch API.
+    - proptest modules (7 total now, was 4 in v28.0):
+        - `SamplingStrategy` (`crates/core/src/sampling.rs::prop_tests`): 4 properties — `sample_batch` length preservation, `greedy_sample` index-in-bounds, `sample_batch` greedy matches per-row `greedy_sample`, `apply_repeat_penalty(1.0)` is a no-op
+        - `EvictionPolicy` (`crates/core/src/scheduler/memory/eviction.rs::prop_tests`): 3 properties — refcount conservation across record/release cycles, `select_victims` length bound + empty-input invariant, cache-hit path on identical inputs
+        - `PriorityPolicy` (`crates/core/src/scheduler/policy/priority.rs::prop_tests`): 3 properties — higher user priority → lower score, aging reduces score for older sequences, PriorityScore is bounded for arbitrary u8/u64 inputs
+    - `fuzz/Cargo.toml` updated with `tiktoken = "3"` dependency for `tokenizer_decode`
+    - All new targets build successfully under nightly + ASAN; all proptests pass at PROPTEST_CASES=100
+    - All 4 new proptests exercise real production code paths (sample_batch, greedy_sample, apply_repeat_penalty, EvictionPolicy::{record_blocks, release_blocks, select_victims, get_block_ref_count, stats}, PriorityPolicy::compute_priority)
+    - Total commits: 8 (M-1.1, M-1.2, M-1.3, M-1.4, M-2.1, M-2.2, M-2.3, M-3.2 this entry)
+
 - **Fuzz CI Integration (v30.0 Phase L)** — fuzz-smoke + nightly long-run workflows:
     - `.github/workflows/fuzz.yml` — PR-triggered, 30s × 3 targets, corpus cached via `actions/cache`, crash artifacts auto-uploaded
     - `.github/workflows/fuzz-nightly.yml` — cron + manual dispatch, 5min × 3 targets, separate corpus cache, grown-corpus artifact upload
