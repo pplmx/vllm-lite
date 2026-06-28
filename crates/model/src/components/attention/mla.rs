@@ -1,4 +1,4 @@
-#![allow(clippy::too_many_arguments)]
+#![allow(clippy::too_many_arguments,clippy::module_name_repetitions)]
 
 use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;

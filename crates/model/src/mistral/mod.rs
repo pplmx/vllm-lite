@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Mistral model architecture implementation.
 //!
 //! This module provides the `MistralModel` and `MistralBlock` structs

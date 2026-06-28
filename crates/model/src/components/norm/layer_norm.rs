@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! `LayerNorm` implementation with weight and bias.
 
 use candle_core::{Module, Result, Tensor};

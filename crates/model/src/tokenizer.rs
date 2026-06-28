@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use tokenizers::Tokenizer as HFTokenizer;
 
 /// `TokenizerError`: tokenizer error.

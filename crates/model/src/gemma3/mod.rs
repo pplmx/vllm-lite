@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Gemma3 model architecture implementation.
 //!
 //! Gemma3 uses:

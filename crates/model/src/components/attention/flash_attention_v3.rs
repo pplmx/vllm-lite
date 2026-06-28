@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! flash_attention_v3: flash attention v3.
 
 use candle_core::{Result, Tensor};

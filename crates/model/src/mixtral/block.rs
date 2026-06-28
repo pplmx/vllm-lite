@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Mixtral block (Transformer layer with `MoE`).
 
 use std::collections::HashMap;

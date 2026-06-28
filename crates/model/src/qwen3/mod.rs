@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! qwen3: qwen3 module.
 
 pub mod arch;

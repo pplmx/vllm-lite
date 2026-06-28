@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use crate::causal_lm::CausalLm;
 use crate::components::LnLayerNorm;
 use crate::config::ModelConfig;

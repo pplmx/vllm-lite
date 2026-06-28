@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! On-disk Qwen3 checkpoint fixtures for integration tests.
 //!
 //! Override the default path with `VLLM_TEST_MODEL_DIR` (must contain `config.json`).

@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Mixtral causal language model with paged KV cache and sparse `MoE`.
 
 use std::collections::HashMap;

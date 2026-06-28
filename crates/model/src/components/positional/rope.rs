@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use crate::qwen3::config::Qwen3Config;
 use candle_core::{Result, Tensor};
 

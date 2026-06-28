@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Generic on-disk checkpoint fixtures for architecture integration tests.
 
 use std::collections::HashMap;

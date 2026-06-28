@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Gated `DeltaNet` (GDN) recurrent linear attention for Qwen3.5 hybrid layers.
 
 mod rule;

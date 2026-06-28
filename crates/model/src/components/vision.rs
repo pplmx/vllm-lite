@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Vision encoder components for Sam/Vision models.
 //!
 //! `VisionEncoder` is a placeholder for future VLM integration. It preserves tensor

@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Mixtral `MoE` model implementation.
 
 pub mod arch;

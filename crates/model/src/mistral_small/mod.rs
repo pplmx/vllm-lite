@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Mistral Small model architecture implementation.
 //!
 //! Mistral Small uses:

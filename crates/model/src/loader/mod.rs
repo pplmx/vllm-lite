@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Model loading utilities.
 //!
 //! This module provides the `ModelLoader` for loading model weights and configurations.

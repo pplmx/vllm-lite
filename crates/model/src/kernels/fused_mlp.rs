@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Fused attention layer kernel.
 
 use candle_core::{Module, Result, Tensor};

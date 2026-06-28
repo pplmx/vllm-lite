@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Error types for the model loader.
 //!
 //! Replaces `candle_core::Error::msg(...)` for typed failure modes like stub

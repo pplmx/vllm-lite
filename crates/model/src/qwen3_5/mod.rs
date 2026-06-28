@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 pub mod arch;
 /// attention35: attention35 module.
 pub mod attention35;

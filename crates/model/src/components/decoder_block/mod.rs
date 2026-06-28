@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Shared pre-norm decoder block: `RMSNorm` → `RoPE` GQA → residual → `RMSNorm` → `SwiGLU` → residual.
 //!
 //! Used by Llama, Mistral, and Qwen3 causal-LM stacks.

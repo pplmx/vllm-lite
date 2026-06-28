@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Architecture registry block trait.
 //!
 //! [`TransformerBlock`] extends [`PagedDecoderBlock`] with layer metadata

@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Hybrid decoder blocks (GDN linear + full attention).
 
 #![allow(clippy::too_many_arguments)]
