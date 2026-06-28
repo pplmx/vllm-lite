@@ -29,6 +29,10 @@ impl crate::engine::Engine {
     #[cfg(not(feature = "cuda-graph"))]
     /// No-op stub for non-`cuda-graph` builds. Always returns `Ok(())` and
     /// logs a warning.
+    ///
+    /// # Errors
+    ///
+    /// Never returns an error; the stub unconditionally succeeds.
     pub fn capture_cuda_graphs(&mut self) -> crate::error::Result<()> {
         tracing::warn!("CUDA Graph support not enabled");
         Ok(())
