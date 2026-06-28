@@ -34,6 +34,20 @@
 
 ### Changed
 
+- **Security & Dependency Updates (v26.0)** — addressed 6 GitHub Dependabot vulnerabilities + fixed CI:
+    - **H-1 `rustls-pemfile` RUSTSEC-2025-0134 (high)** — `tls.rs` migrated to `rustls::pki_types::PemObject` (built-in since rustls 0.23); deprecated crate removed
+    - **M-2 `tower-http` outdated** — workspace-unified to 0.7 (`0.5` dist + `0.6` server → `0.7` all); forced axum 0.8 upgrade as chain reaction
+    - **M-3 `serde_yaml` deprecated** — migrated to maintained fork `serde_norway = 0.9` (recommended by RUSTSEC-2025-0068 as the maintained alternative); 3 call sites updated (`config.rs:260/271`, `bin/vllm.rs:83`); drop-in API compat
+    - **M-4 `tokio-rustls` outdated** — audit assumed 0.27 was available but registry only has 0.26.x; deferred until upstream releases 0.27
+    - **M-5 `aws-lc-rs` outdated** — bumped 1.16.3 → 1.17.0 (transitive via tokio-rustls)
+    - **Patch sweep (F-1)** — `cargo update` minor bumps for 50 deps (most already current from v22/v23); net Cargo.lock change is 56 package re-locks + 16 stale transitive removals
+    - **Minor security bumps (F-2)** — `tiktoken 3.1.4 → 3.5.1` (model crate); `hyper 1.9.0 → 1.10.1` (transitive via tonic)
+    - **CI workflow fix (F-4)** — removed broken `--all-features` from default `cargo clippy` job (no CUDA in default GitHub runners); switched to per-group denies matching local `just clippy`; added follow-up const fix for `Qwen3Fixture::with_kv_blocks` with targeted allow
+    - **Deferred to v27.0+ (F-3d)**: `paste` (RUSTSEC-2024-0436) unmaintained — blocked on `candle-core 0.10.2` lock; candle-core major upgrade requires dedicated spec (1 week effort)
+    - `cargo audit` warnings: 2 → 0
+    - `tower` workspace skew resolved: `0.4` workspace + `0.5` server → `0.5` workspace
+    - All 1191 tests pass (39 skipped, 1 slow)
+
 - **Pedantic Cleanup (v25.0 Phase E-3)** — manual refactors + selective deny promotion:
     - 109 `use_self` candidates: most were already resolved by E-1/E-2; only 1 residual doc-markdown fix in `chat_template.rs`
     - 220 `module_name_repetitions` warnings: 117 files received `#![allow(clippy::module_name_repetitions)]` for legitimate patterns (`KvCache` in `kv_cache`, `MetricsExporter` in `metrics/exporter`, etc.)

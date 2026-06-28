@@ -257,7 +257,7 @@ impl AppConfig {
         if let Some(config_path) = path {
             if config_path.exists() {
                 if let Ok(contents) = std::fs::read_to_string(&config_path) {
-                    if let Ok(loaded) = serde_yml::from_str::<Self>(&contents) {
+                    if let Ok(loaded) = serde_norway::from_str::<Self>(&contents) {
                         config = loaded;
                     }
                 }
@@ -268,7 +268,7 @@ impl AppConfig {
             let env_config_path = PathBuf::from(env_path);
             if env_config_path.exists() {
                 if let Ok(contents) = std::fs::read_to_string(&env_config_path) {
-                    if let Ok(loaded) = serde_yml::from_str::<Self>(&contents) {
+                    if let Ok(loaded) = serde_norway::from_str::<Self>(&contents) {
                         config = loaded;
                     }
                 }
