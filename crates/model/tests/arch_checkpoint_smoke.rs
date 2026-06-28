@@ -62,11 +62,13 @@ fn run_forward_smoke(case: &CheckpointCase) {
 }
 
 #[test]
+#[ignore = "slow: on-disk checkpoint (run: just nextest-checkpoint)"]
 fn test_qwen3_checkpoint_forward_smoke() {
     run_forward_smoke(&cases()[0]);
 }
 
 #[test]
+#[ignore = "slow: on-disk checkpoint (run: just nextest-checkpoint)"]
 fn test_qwen2_checkpoint_forward_smoke() {
     run_forward_smoke(&cases()[1]);
 }
