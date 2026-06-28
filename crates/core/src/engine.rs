@@ -721,6 +721,112 @@ impl Engine {
     }
 }
 
+/// Builder for [`Engine`] with named methods for all optional fields.
+///
+/// # Example
+///
+/// ```ignore
+/// use vllm_core::EngineBuilder;
+/// use vllm_traits::ModelBackend;
+///
+/// let target: Box<dyn ModelBackend> = Box::new(/* ... */);
+/// let engine = EngineBuilder::new(target)
+///     .with_num_kv_blocks(1024)
+///     .with_max_draft_tokens(5)
+///     .build();
+/// ```
+pub struct EngineBuilder {
+    target_model: Box<dyn ModelBackend>,
+    draft_model: Option<Box<dyn ModelBackend>>,
+    config: SchedulerConfig,
+    max_draft_tokens: usize,
+    num_kv_blocks: usize,
+    adaptive_decoder: Option<AdaptiveSpeculativeDecoder>,
+    draft_resolver: Option<Arc<DraftResolver>>,
+    sleep_policy: SleepPolicy,
+}
+
+impl EngineBuilder {
+    /// Create a new builder with a target model. Other fields use defaults:
+    /// - `draft_model = None`
+    /// - `config = SchedulerConfig::default()`
+    /// - `max_draft_tokens = 4`
+    /// - `num_kv_blocks = 1024`
+    /// - `adaptive_decoder = None`
+    /// - `draft_resolver = None`
+    /// - `sleep_policy = SleepPolicy::default()`
+    pub fn new(target_model: Box<dyn ModelBackend>) -> Self {
+        Self {
+            target_model,
+            draft_model: None,
+            config: SchedulerConfig::default(),
+            max_draft_tokens: 4,
+            num_kv_blocks: 1024,
+            adaptive_decoder: None,
+            draft_resolver: None,
+            sleep_policy: SleepPolicy::default(),
+        }
+    }
+
+    /// Set the optional draft model.
+    pub fn with_draft_model(mut self, draft_model: Box<dyn ModelBackend>) -> Self {
+        self.draft_model = Some(draft_model);
+        self
+    }
+
+    /// Override the scheduler config.
+    pub fn with_config(mut self, config: SchedulerConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Override the max draft tokens per step.
+    pub fn with_max_draft_tokens(mut self, n: usize) -> Self {
+        self.max_draft_tokens = n;
+        self
+    }
+
+    /// Override the number of KV-cache blocks.
+    pub fn with_num_kv_blocks(mut self, n: usize) -> Self {
+        self.num_kv_blocks = n;
+        self
+    }
+
+    /// Set an optional adaptive speculative decoder.
+    pub fn with_adaptive_decoder(mut self, decoder: AdaptiveSpeculativeDecoder) -> Self {
+        self.adaptive_decoder = Some(decoder);
+        self
+    }
+
+    /// Set an optional per-request draft resolver (v18+).
+    pub fn with_draft_resolver(mut self, resolver: Arc<DraftResolver>) -> Self {
+        self.draft_resolver = Some(resolver);
+        self
+    }
+
+    /// Override the sleep policy.
+    pub fn with_sleep_policy(mut self, policy: SleepPolicy) -> Self {
+        self.sleep_policy = policy;
+        self
+    }
+
+    /// Build the [`Engine`]. Equivalent to calling `Engine::with_config_boxed(...)`
+    /// then setting the optional fields directly.
+    pub fn build(self) -> Engine {
+        let mut engine = Engine::with_config_boxed(
+            self.target_model,
+            self.draft_model,
+            self.config,
+            self.max_draft_tokens,
+            self.num_kv_blocks,
+        );
+        engine.adaptive_decoder = self.adaptive_decoder;
+        engine.draft_resolver = self.draft_resolver;
+        engine.sleep_policy = self.sleep_policy;
+        engine
+    }
+}
+
 /// SleepPolicy: sleep policy.
 pub struct SleepPolicy {
     pub base_interval: u64,
@@ -1040,5 +1146,54 @@ mod tests {
         // force_unload_draft bypasses
         engine.force_unload_draft(&DraftId("a".into())).unwrap();
         assert!(!engine.draft_registry().is_loaded(&DraftId("a".into())));
+    }
+
+    #[test]
+    fn test_engine_builder_minimal() {
+        let target: Box<dyn ModelBackend> = Box::new(StubModel::default());
+        let engine = EngineBuilder::new(target).build();
+        assert_eq!(engine.max_draft_tokens, 4);
+        assert_eq!(engine.error_count, 0);
+        assert!(engine.draft_model.is_none());
+        assert!(engine.adaptive_decoder.is_none());
+        assert!(engine.draft_resolver.is_none());
+    }
+
+    #[test]
+    fn test_engine_builder_with_all_options() {
+        let target: Box<dyn ModelBackend> = Box::new(StubModel::default());
+        let draft: Box<dyn ModelBackend> = Box::new(StubModel::default());
+        let registry = Arc::new(DraftModelRegistry::new());
+        let loader: Arc<dyn DraftLoader> = Arc::new(NoopLoader);
+        let metrics = Arc::new(EnhancedMetricsCollector::new());
+        let resolver = Arc::new(DraftResolver::new(registry, None, loader, metrics));
+        let decoder = AdaptiveSpeculativeDecoder::new(AdaptiveDraftConfig::default());
+
+        let engine = EngineBuilder::new(target)
+            .with_draft_model(draft)
+            .with_max_draft_tokens(8)
+            .with_num_kv_blocks(2048)
+            .with_adaptive_decoder(decoder)
+            .with_draft_resolver(resolver)
+            .build();
+
+        assert_eq!(engine.max_draft_tokens, 8);
+        assert!(engine.draft_model.is_some());
+        assert!(engine.adaptive_decoder.is_some());
+        assert!(engine.draft_resolver.is_some());
+    }
+
+    #[test]
+    fn test_engine_builder_sleep_policy_override() {
+        let target: Box<dyn ModelBackend> = Box::new(StubModel::default());
+        let policy = SleepPolicy {
+            base_interval: 0,
+            max_interval: 0,
+            backoff_factor: 1.0,
+            consecutive_idle: 0,
+        };
+        let engine = EngineBuilder::new(target).with_sleep_policy(policy).build();
+        assert_eq!(engine.sleep_policy.base_interval, 0);
+        assert_eq!(engine.sleep_policy.max_interval, 0);
     }
 }
