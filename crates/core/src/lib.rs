@@ -26,7 +26,11 @@ pub(crate) mod sync;
 pub mod types;
 
 pub use beam::BeamSequence;
-pub use engine::Engine;
+pub use engine::{Engine, EngineBuilder};
+pub use error::{EngineError, Result};
 pub use metrics::{EnhancedMetricsCollector, MetricsSnapshot};
 pub use scheduler::SchedulerEngine;
-pub use types::Priority;
+pub use speculative::{
+    AdaptiveSpeculativeDecoder, DraftModelRegistry, DraftResolver, DraftSpec,
+};
+pub use types::{Priority, Request, SamplingParams, SchedulerConfig};
