@@ -87,6 +87,16 @@
     - Three `#[cfg(feature = "cuda-graph")]` / `#[cfg(not(feature = "cuda-graph"))]` duplicate method pairs (`capture_cuda_graphs`, `cuda_graph_enabled`, `step_with_graph`) preserved as intentional feature-gated pairs
     - Largest sub-module: `ctor.rs` at 318 LOC (was 866 LOC monolith); all sub-modules < 500 LOC
 
+- **Module Boundaries (v24.0 Phase D-2)** — split `crates/core/src/scheduler/engine.rs` (654 non-test LOC) into 4 focused sub-modules under `scheduler/engine/`:
+    - `mod.rs` — facade: sub-module declarations, `pub use` re-exports, the 8 unit tests (172 LOC)
+    - `state.rs` — `SchedulerEngine` struct + `Default` impl + 17 methods: `new`, `set_policy`, `add_request`, `build_batch`, `schedule`, plus the 10 read-only / minor-mutating accessors (`has_pending`, `running_count`, `waiting_count`, `prefix_cache_hit_rate`, `running`, `get_sequence`, `get_sequence_mut`, `finished_sequences`, `clear_finished`, `register_observer`) (404 LOC)
+    - `graph.rs` — CUDA Graph helpers: `build_batch_with_graph` + 2 private helpers (`get_scheduler_state`, `select_sequences_for_phase`) (81 LOC)
+    - `update.rs` — post-step state update: `update` (121 LOC)
+    - `memory.rs` — preemption + pressure: `execute_preemption`, `get_memory_pressure`, `memory_rollback`, `cancel_request`, `get_kv_cache_usage`, `prefix_cache` (114 LOC)
+    - Public API of `SchedulerEngine` unchanged — single `crate::scheduler::engine::SchedulerEngine` type, all methods accessible via flat namespace
+    - All 1191 tests pass (`cargo test --workspace` clean)
+    - Largest sub-module: `state.rs` at 404 LOC (was 654 LOC monolith); the struct + 6 large lifecycle methods concentrate here. `graph.rs`, `update.rs`, and `memory.rs` are all ≤ 121 LOC.
+
 ---
 
 ## 🚀 [v18.0] — Multi-Model Speculative Decoding (2026-06-27)
