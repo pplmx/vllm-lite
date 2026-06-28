@@ -11,6 +11,7 @@ use vllm_traits::SeqId;
 
 use super::metrics::DraftResolutionKind;
 
+#[derive(Debug)]
 /// Unified metrics collector for scheduler, engine, and HTTP export.
 pub struct EnhancedMetricsCollector {
     runtime: LockFreeMetrics,

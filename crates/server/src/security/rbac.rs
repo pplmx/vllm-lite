@@ -55,6 +55,7 @@ impl Role {
     }
 }
 
+#[derive(Debug)]
 /// `RbacMiddleware`: rbac middleware.
 pub struct RbacMiddleware {
     default_role: Role,

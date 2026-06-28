@@ -2,6 +2,7 @@ use super::{CacheConfig, CacheMessage, NodeId};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+#[derive(Debug)]
 /// `DistributedKVCache`: distributed kv cache.
 pub struct DistributedKVCache {
     config: CacheConfig,

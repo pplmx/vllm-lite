@@ -11,7 +11,7 @@ const NULL_BLOCK: BlockId = BlockId::MAX;
 pub(crate) const BLOCK_BYTES: usize = 16 * 1024 * 1024;
 
 /// `BlockAllocatorStats`: block allocator statistics.
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct BlockAllocatorStats {
     pub total_blocks: usize,
     pub available_blocks: usize,
@@ -19,6 +19,7 @@ pub struct BlockAllocatorStats {
     pub free_count: usize,
 }
 
+#[derive(Debug)]
 /// `BlockAllocator`: block allocator.
 pub struct BlockAllocator {
     num_blocks: usize,

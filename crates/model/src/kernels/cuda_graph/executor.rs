@@ -8,6 +8,7 @@ use vllm_traits::{Batch, BatchOutput};
 /// Executor for managing CUDA Graph capture and execution
 ///
 /// This executor uses `batch_size` (usize) keys and is designed for scheduler integration.
+#[derive(Debug)]
 /// For the string-keyed executor, see the `CudaGraphExecutor` type in the parent module.
 pub struct BatchCudaGraphExecutor {
     /// Map from `batch_size` to captured graph

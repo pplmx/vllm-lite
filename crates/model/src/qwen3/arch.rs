@@ -12,6 +12,7 @@ use vllm_traits::ModelBackend;
 use super::block::TransformerBlock as Qwen3Block;
 use super::model::Qwen3Model;
 
+#[derive(Debug)]
 /// `Qwen3Architecture`: qwen3 architecture.
 pub struct Qwen3Architecture;
 

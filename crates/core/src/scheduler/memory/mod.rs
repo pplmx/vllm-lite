@@ -7,6 +7,7 @@ pub use eviction::{EvictionPolicy, EvictionPolicyStats};
 use crate::scheduler::preemption::PreemptionManager;
 use crate::types::{BlockId, SchedulerConfig, Sequence, Status};
 
+#[derive(Debug)]
 /// `MemoryManager`: memory manager.
 pub struct MemoryManager {
     allocator: BlockAllocator,

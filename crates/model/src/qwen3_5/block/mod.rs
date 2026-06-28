@@ -11,6 +11,7 @@ pub use linear::LinearAttentionBlock;
 use crate::causal_lm::{DecoderLayer, LayerAuxMut, LayerCtx};
 use candle_core::{Result as CandleResult, Tensor};
 
+#[derive(Debug)]
 /// `HybridBlock`: hybrid block enumeration.
 pub enum HybridBlock {
     Linear(LinearAttentionBlock),

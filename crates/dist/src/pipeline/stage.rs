@@ -65,7 +65,7 @@ pub struct StageOutput {
 }
 
 /// `PipelineStage`: pipeline stage trait.
-pub trait PipelineStage: Send + Sync {
+pub trait PipelineStage: Send + Sync + std::fmt::Debug {
     fn config(&self) -> &PipelineStageConfig;
 
     fn forward(&self, input: StageInput) -> Result<StageOutput>;

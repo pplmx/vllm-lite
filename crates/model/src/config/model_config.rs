@@ -6,6 +6,7 @@ use super::architecture::{Architecture, LayerType, RoPEConfig};
 use super::errors::ConfigResult;
 use crate::arch::ARCHITECTURE_REGISTRY;
 
+#[derive(Debug)]
 /// `ModelConfig`: model configuration.
 pub struct ModelConfig {
     pub architecture: Architecture,

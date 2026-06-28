@@ -11,6 +11,7 @@ use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 use candle_nn::VarBuilder;
 
+#[derive(Debug)]
 /// `MixtralBlock`: mixtral block.
 pub struct MixtralBlock {
     attention: RopeGqaAttention,

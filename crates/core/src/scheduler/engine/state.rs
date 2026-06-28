@@ -47,6 +47,24 @@ pub struct SchedulerEngine {
     pub metrics: Arc<EnhancedMetricsCollector>,
 }
 
+impl std::fmt::Debug for SchedulerEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SchedulerEngine")
+            .field("request_queue", &self.request_queue)
+            .field("phase_scheduler", &self.phase_scheduler)
+            .field("batch_composer", &self.batch_composer)
+            .field("memory", &self.memory)
+            .field("prefix_cache", &self.prefix_cache)
+            .field("policy", &"<dyn SchedulingPolicy>")
+            .field("running_count", &self.running.len())
+            .field("finished_count", &self.finished.len())
+            .field("next_seq_id", &self.next_seq_id)
+            .field("observers", &self.observers)
+            .field("cuda_graph", &self.cuda_graph)
+            .finish()
+    }
+}
+
 impl SchedulerEngine {
     /// Create a new `SchedulerEngine` with the given configuration
     ///

@@ -105,6 +105,17 @@ pub struct CudaGraph {
     cached: bool,
 }
 
+impl std::fmt::Debug for CudaGraph {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CudaGraph")
+            .field("node_count", &self.nodes.len())
+            .field("node_inputs", &self.node_inputs)
+            .field("node_outputs", &self.node_outputs)
+            .field("cached", &self.cached)
+            .finish()
+    }
+}
+
 // SAFETY: CudaGraph can be Send because it only contains thread-safe types
 // The Arc<dyn CudaGraphNode> requires CudaGraphNode to be Send + Sync
 unsafe impl Send for CudaGraph {}
@@ -168,6 +179,7 @@ impl Default for CudaGraph {
         Self::new()
     }
 }
+#[derive(Debug)]
 
 /// `CudaGraphExecutor`: cuda graph executor.
 pub struct CudaGraphExecutor {

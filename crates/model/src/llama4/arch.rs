@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use vllm_traits::ModelBackend;
 use vllm_traits::types::BatchOutput;
 
+#[derive(Debug)]
 /// `Llama4Architecture`: llama4 architecture.
 pub struct Llama4Architecture {
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)

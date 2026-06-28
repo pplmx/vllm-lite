@@ -7,6 +7,7 @@ use super::validate::{BatchCompositionConfig, ChunkedPrefillConfig};
 use crate::types::{Phase, Sequence, SequencePackingConfig};
 use vllm_traits::{Batch, BatchPhase, TokenId};
 
+#[derive(Debug)]
 /// Batch composer for building phase-specific batches
 pub struct BatchComposer {
     config: BatchCompositionConfig,

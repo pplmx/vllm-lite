@@ -8,11 +8,13 @@ use vllm_traits::Result as EngineResult;
 
 use super::map_candle;
 
+#[derive(Debug)]
 /// Per-layer auxiliary state passed through the layer loop.
 pub enum LayerAuxMut<'a> {
     /// Gated-delta-net recurrent state for Qwen3.5 linear-attention layers.
     Gdn(&'a mut [Option<GatedDeltaState>]),
 }
+#[derive(Debug)]
 
 /// Context shared across all layers in a single forward pass.
 pub struct LayerCtx<'a> {

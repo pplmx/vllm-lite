@@ -8,6 +8,7 @@ use crate::qwen3_5::config::GdnLinearConfig;
 use candle_core::{DType, Result as CandleResult, Tensor};
 use candle_nn::{Conv1d, LayerNorm, Linear, VarBuilder, conv1d};
 
+#[derive(Debug)]
 /// `LinearAttentionBlock`: linear attention block.
 pub struct LinearAttentionBlock {
     pub(crate) gdn: GatedDeltaNet,

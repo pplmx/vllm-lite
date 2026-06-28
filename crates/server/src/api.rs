@@ -10,13 +10,13 @@ use crate::ApiState;
 pub type EngineHandle = mpsc::UnboundedSender<EngineMessage>;
 
 /// `HealthResponse`: health response.
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct HealthResponse {
     pub status: String,
 }
 
 /// `HealthDetailResponse`: health detail response.
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct HealthDetailResponse {
     pub status: String,
     pub gpu_available: bool,

@@ -109,6 +109,16 @@ pub struct LoadedDraft {
     pub block_allocator: BlockAllocator,
 }
 
+impl std::fmt::Debug for LoadedDraft {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoadedDraft")
+            .field("spec", &self.spec)
+            .field("backend", &"<dyn ModelBackend>")
+            .field("block_allocator", &self.block_allocator)
+            .finish()
+    }
+}
+
 /// State machine for a registered draft.
 #[allow(clippy::large_enum_variant)]
 pub enum DraftState {

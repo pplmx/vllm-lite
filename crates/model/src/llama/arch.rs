@@ -11,6 +11,7 @@ use vllm_traits::ModelBackend;
 use super::block::{LlamaBlock, block_from_weights};
 use super::model::LlamaModel;
 
+#[derive(Debug)]
 /// `LlamaArchitecture`: llama architecture.
 pub struct LlamaArchitecture;
 

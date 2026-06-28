@@ -138,6 +138,7 @@ impl FlashAttentionV3 {
     }
 }
 
+#[derive(Debug)]
 /// `MqaFlashAttention`: mqa flash attention.
 pub struct MqaFlashAttention {
     num_heads: usize,
@@ -203,6 +204,7 @@ impl MqaFlashAttention {
         mask.where_cond(&zero, &neg_inf)
     }
 }
+#[derive(Debug)]
 
 /// `GqaFlashAttention`: gqa flash attention.
 pub struct GqaFlashAttention {

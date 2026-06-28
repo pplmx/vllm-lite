@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use vllm_traits::ModelBackend;
 use vllm_traits::types::BatchOutput;
 
+#[derive(Debug)]
 /// `MistralSmallArchitecture`: mistral small architecture.
 pub struct MistralSmallArchitecture {
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)

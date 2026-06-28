@@ -16,6 +16,7 @@ pub fn softplus(xs: &Tensor) -> CandleResult<Tensor> {
     (exp_x + one)?.log()
 }
 
+#[derive(Debug)]
 /// `SSMLayer`: ssm layer.
 pub struct SSMLayer {
     x_proj: Linear,

@@ -22,6 +22,7 @@ use vllm_model::loader::ModelLoader;
 use crate::config::DraftSpecConfig;
 
 /// Production loader that resolves a `DraftId` to a model directory and
+#[derive(Debug)]
 /// delegates weight loading to `vllm_model::ModelLoader`.
 pub struct ServerDraftLoader {
     device: Device,

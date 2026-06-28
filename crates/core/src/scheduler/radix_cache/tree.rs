@@ -9,6 +9,7 @@ pub struct PrefixMatchResult {
     pub matched_tokens: usize,
 }
 
+#[derive(Debug)]
 /// Radix Tree for prefix caching
 pub struct RadixTree {
     root: RadixNode,

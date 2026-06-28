@@ -6,6 +6,7 @@ use crate::arch::{ARCHITECTURE_REGISTRY, ArchCapabilities, register_all_archs};
 use crate::config::Architecture as ConfigArchitecture;
 use crate::config::ModelConfig;
 
+#[derive(Debug)]
 /// `ModelLoaderBuilder`: model loader builder.
 pub struct ModelLoaderBuilder {
     device: Device,
@@ -72,6 +73,7 @@ impl ModelLoaderBuilder {
 }
 
 /// `ModelLoader`: model loader.
+#[derive(Debug)]
 pub struct ModelLoader {
     inner: Arc<ModelLoaderInner>,
 }
@@ -84,6 +86,7 @@ impl Clone for ModelLoader {
     }
 }
 
+#[derive(Debug)]
 struct ModelLoaderInner {
     device: Device,
     model_dir: String,

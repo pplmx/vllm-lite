@@ -1,6 +1,7 @@
 use crate::types::{SchedulerConfig, Sequence, Status};
 
 /// `PreemptionManager`: preemption manager.
+#[derive(Debug)]
 pub(crate) struct PreemptionManager {
     config: SchedulerConfig,
     preempted_count: u64,

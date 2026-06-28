@@ -6,6 +6,7 @@ use crate::config::ModelConfig;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 
+#[derive(Debug)]
 /// `BlockWrapper`: block wrapper.
 pub struct BlockWrapper<B> {
     inner: B,

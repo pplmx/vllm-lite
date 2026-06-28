@@ -1,5 +1,6 @@
 use candle_core::{Result, Tensor};
 
+#[derive(Debug)]
 /// `FlashAttention`: flash attention.
 pub struct FlashAttention;
 

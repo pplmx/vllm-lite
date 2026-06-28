@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use vllm_traits::ModelBackend;
 use vllm_traits::types::BatchOutput;
 
+#[derive(Debug)]
 /// `Gemma3Architecture`: gemma3 architecture.
 pub struct Gemma3Architecture {
     sliding_window: usize,

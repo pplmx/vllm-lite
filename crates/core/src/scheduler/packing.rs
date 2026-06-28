@@ -44,6 +44,7 @@ impl PackedBatch {
     }
 }
 
+#[derive(Debug)]
 /// Packer using Best-Fit Decreasing algorithm
 pub struct SequencePacker {
     config: SequencePackingConfig,

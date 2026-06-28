@@ -9,6 +9,7 @@ use crate::components::ssm::softplus;
 use candle_core::{DType, Module, Result as CandleResult, Tensor};
 use candle_nn::{Conv1d, LayerNorm, Linear};
 
+#[derive(Debug)]
 /// `GatedDeltaNet`: gated delta net.
 pub struct GatedDeltaNet {
     pub config: GatedDeltaConfig,

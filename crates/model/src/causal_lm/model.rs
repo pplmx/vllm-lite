@@ -12,6 +12,7 @@ use candle_core::{Device, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, Linear, Module, VarBuilder};
 use vllm_traits::{BatchOutput, BlockId, ModelBackend, Result, SeqId, TokenId};
 
+#[derive(Debug)]
 /// Generic decoder-only causal language model shell.
 pub struct CausalLm<B, Norm, Head> {
     config: ModelConfig,

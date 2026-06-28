@@ -11,6 +11,7 @@ use crate::types::{SeqId, TokenId};
 use std::collections::HashMap;
 use vllm_traits::ModelBackend;
 
+#[derive(Debug)]
 /// `SelfSpeculativeModel`: self speculative model.
 pub struct SelfSpeculativeModel<M: ModelBackend> {
     model: M,

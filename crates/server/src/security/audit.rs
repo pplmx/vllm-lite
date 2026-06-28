@@ -16,6 +16,7 @@ pub struct AuditEvent {
     pub user_agent: Option<String>,
 }
 
+#[derive(Debug)]
 /// `AuditLogger`: audit logger.
 pub struct AuditLogger {
     events: Arc<RwLock<Vec<AuditEvent>>>,

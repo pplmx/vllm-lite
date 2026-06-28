@@ -9,6 +9,7 @@ use crate::components::ssm::config::SSMConfig;
 use crate::components::ssm::error::SSMError;
 use crate::components::ssm::layer::SSMLayer;
 
+#[derive(Debug)]
 /// `MambaBlock`: mamba block.
 pub struct MambaBlock {
     input_proj: Linear,

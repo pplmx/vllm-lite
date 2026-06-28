@@ -50,6 +50,7 @@ use std::sync::{Arc, RwLock};
 /// v18.2 adds a shared [`MemoryBudget`] (optional, defaults to unlimited).
 /// When set, `attach_loaded_budgeted` reserves the draft's estimated footprint
 /// in the budget, and `unload` releases it. `decrement_ref` auto-unloads
+#[derive(Debug)]
 /// loaded drafts when their refcount hits zero.
 pub struct DraftModelRegistry {
     pub(super) drafts: RwLock<HashMap<DraftId, DraftState>>,

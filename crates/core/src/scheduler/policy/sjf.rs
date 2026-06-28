@@ -1,6 +1,7 @@
 use super::trait_def::{PriorityScore, SchedulingContext, SchedulingPolicy};
 use crate::types::Sequence;
 
+#[derive(Debug)]
 /// `SjfPolicy`: sjf policy.
 pub struct SjfPolicy {
     sjf_priority_weight: f32,

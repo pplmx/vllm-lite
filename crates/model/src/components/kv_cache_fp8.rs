@@ -30,6 +30,7 @@ impl KvCacheDtype {
     }
 }
 
+#[derive(Debug)]
 /// `Fp8Quantizer`: fp8 quantizer.
 pub struct Fp8Quantizer {
     dtype: KvCacheDtype,

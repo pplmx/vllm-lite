@@ -34,6 +34,7 @@ impl Ord for ScheduledSequence {
     }
 }
 
+#[derive(Debug)]
 /// `RequestQueue`: request queue.
 pub struct RequestQueue {
     sequences: HashMap<SeqId, Sequence>,

@@ -6,6 +6,7 @@ use vllm_core::types::{SchedulerConfig, SequencePackingConfig};
 
 use crate::mocks::IncrementModel;
 
+#[derive(Debug)]
 /// `TestFixtures`: test fixtures.
 pub struct TestFixtures;
 

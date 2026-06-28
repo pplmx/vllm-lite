@@ -3,6 +3,7 @@
 use candle_core::{Module, Result, Tensor};
 use candle_nn::LayerNorm;
 
+#[derive(Debug)]
 /// `LnLayerNorm`: ln layer norm.
 pub struct LnLayerNorm {
     weight: Tensor,

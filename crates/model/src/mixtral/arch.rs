@@ -11,6 +11,7 @@ use vllm_traits::ModelBackend;
 use super::block::MixtralBlock;
 use super::model::MixtralModel;
 
+#[derive(Debug)]
 /// `MixtralArchitecture`: mixtral architecture.
 pub struct MixtralArchitecture;
 

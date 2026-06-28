@@ -1,6 +1,7 @@
 use super::trait_def::{PriorityScore, SchedulingContext, SchedulingPolicy};
 use crate::types::Sequence;
 
+#[derive(Debug)]
 /// `PriorityPolicy`: priority policy.
 pub struct PriorityPolicy {
     priority_aging_factor: f32,

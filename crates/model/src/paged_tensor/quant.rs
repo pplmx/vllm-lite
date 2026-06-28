@@ -125,6 +125,7 @@ impl QuantizedWeights {
     }
 }
 
+#[derive(Debug)]
 /// `AWQQuantization`: awq quantization.
 pub struct AWQQuantization {
     bits: usize,
@@ -205,6 +206,7 @@ impl AWQQuantization {
         Tensor::from_slice(&output, shape, qweight.device())
     }
 }
+#[derive(Debug)]
 
 /// `GPTQQuantization`: gptq quantization.
 pub struct GPTQQuantization {

@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use vllm_traits::ModelBackend;
 use vllm_traits::types::BatchOutput;
 
+#[derive(Debug)]
 /// `Phi4Architecture`: phi4 architecture.
 pub struct Phi4Architecture;
 

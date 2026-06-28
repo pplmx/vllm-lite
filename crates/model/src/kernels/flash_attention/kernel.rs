@@ -9,7 +9,7 @@ use super::util::softmax_last_dim;
 use candle_core::{Result, Tensor};
 
 /// `FlashAttention`: flash attention trait.
-pub trait FlashAttention: Send + Sync {
+pub trait FlashAttention: Send + Sync + std::fmt::Debug {
     fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor>;
     fn forward_with_mask(
         &self,
@@ -22,11 +22,13 @@ pub trait FlashAttention: Send + Sync {
     -> Result<Tensor>;
 }
 
+#[derive(Debug)]
 /// `ScaledDotProductAttention`: scaled dot product attention.
 pub struct ScaledDotProductAttention {
     scale: f32,
     tile_size: usize,
 }
+#[derive(Debug)]
 
 /// `FlashAttentionV2`: flash attention v2.
 pub struct FlashAttentionV2 {
@@ -441,6 +443,7 @@ impl FlashAttention for ScaledDotProductAttention {
 }
 
 /// `FlashAttentionKernel`: flash attention kernel.
+#[derive(Debug)]
 pub struct FlashAttentionKernel {
     attention: Box<dyn FlashAttention>,
     config: FlashAttentionConfig,

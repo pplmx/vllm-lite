@@ -11,7 +11,7 @@ pub enum ReduceOp {
 }
 
 /// `AllReduce`: all reduce trait.
-pub trait AllReduce: Send + Sync {
+pub trait AllReduce: Send + Sync + std::fmt::Debug {
     fn all_reduce(&self, input: &[f32], op: ReduceOp) -> Result<Vec<f32>, TensorParallelError>;
     fn all_reduce_inplace(
         &self,
@@ -20,6 +20,7 @@ pub trait AllReduce: Send + Sync {
     ) -> Result<(), TensorParallelError>;
 }
 
+#[derive(Debug)]
 /// `NcclAllReduce`: nccl all reduce.
 pub struct NcclAllReduce {
     mesh: Arc<DeviceMesh>,

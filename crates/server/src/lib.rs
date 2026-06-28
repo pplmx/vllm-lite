@@ -30,7 +30,7 @@ pub mod security;
 pub mod test_fixtures;
 
 /// Shared state for all API handlers
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ApiState {
     /// Channel to send messages to the inference engine
     pub engine_tx: EngineHandle,

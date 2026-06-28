@@ -67,6 +67,7 @@ pub struct SchedulerState {
     pub consecutive_decode_rounds: u32,
 }
 
+#[derive(Debug)]
 /// `PhaseScheduler`: phase scheduler.
 pub struct PhaseScheduler {
     current_phase: Phase,

@@ -57,7 +57,33 @@ pub struct Engine {
     pub draft_resolver: Option<Arc<DraftResolver>>,
 }
 
+impl std::fmt::Debug for Engine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Engine")
+            .field("scheduler", &self.scheduler)
+            .field("target_model", &"<dyn ModelBackend>")
+            .field(
+                "draft_model",
+                &self.draft_model.as_ref().map(|_| "<dyn ModelBackend>"),
+            )
+            .field("max_draft_tokens", &self.max_draft_tokens)
+            .field("speculative_mode", &self.speculative_mode)
+            .field("error_count", &self.error_count)
+            .field("last_error", &self.last_error)
+            .field("response_txs_count", &self.response_txs.len())
+            .field("sleep_policy", &self.sleep_policy)
+            .field("adaptive_decoder", &self.adaptive_decoder)
+            .field("draft_registry", &self.draft_registry)
+            .field(
+                "draft_resolver",
+                &self.draft_resolver.as_ref().map(Arc::strong_count),
+            )
+            .finish()
+    }
+}
+
 /// `SleepPolicy`: sleep policy.
+#[derive(Debug)]
 pub struct SleepPolicy {
     pub base_interval: u64,
     pub max_interval: u64,

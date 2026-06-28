@@ -4,6 +4,7 @@ use candle_core::{D, Module, Result, Tensor};
 use candle_nn::Linear;
 use tracing::trace;
 
+#[derive(Debug)]
 /// `MixtralSparseMoe`: mixtral sparse moe.
 pub struct MixtralSparseMoe {
     experts: Vec<Expert>,
@@ -12,6 +13,7 @@ pub struct MixtralSparseMoe {
     top_k: usize,
 }
 
+#[derive(Debug)]
 struct Expert {
     gate_proj: Linear,
     up_proj: Linear,

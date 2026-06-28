@@ -22,6 +22,7 @@ pub enum TlsError {
     HandshakeFailed(String),
 }
 
+#[derive(Debug)]
 /// `TlsConfig`: tls configuration.
 pub struct TlsConfig {
     pub cert_path: String,
@@ -99,6 +100,7 @@ impl TlsConfig {
         Ok(config)
     }
 }
+#[derive(Debug)]
 
 /// `TlsListener`: tls listener.
 pub struct TlsListener {

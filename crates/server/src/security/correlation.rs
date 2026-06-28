@@ -11,7 +11,7 @@ pub(crate) const REQUEST_ID_HEADER: &str = "X-Request-ID";
 pub(crate) struct CorrelationId(pub String);
 
 /// `CorrelationIdMiddleware`: correlation id middleware.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct CorrelationIdMiddleware {
     id_generator: Arc<RwLock<u64>>,
 }

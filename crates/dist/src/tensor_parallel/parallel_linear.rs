@@ -3,6 +3,7 @@ use super::device_mesh::DeviceMesh;
 use std::sync::Arc;
 use vllm_traits::TensorParallelError;
 
+#[derive(Debug)]
 /// `ColumnParallelLinear`: column parallel linear.
 pub struct ColumnParallelLinear {
     input_size: usize,
@@ -50,6 +51,7 @@ impl ColumnParallelLinear {
         Ok(local_output)
     }
 }
+#[derive(Debug)]
 
 /// `RowParallelLinear`: row parallel linear.
 pub struct RowParallelLinear {
@@ -107,6 +109,7 @@ impl RowParallelLinear {
 }
 
 /// `TensorParallelManager`: tensor parallel manager.
+#[derive(Debug)]
 pub struct TensorParallelManager {
     mesh: Arc<DeviceMesh>,
     all_reduce: Arc<dyn AllReduce>,

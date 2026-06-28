@@ -113,6 +113,7 @@ const ASYMMETRIC_ALGORITHMS: &[Algorithm] = &[
     Algorithm::ES384,
 ];
 
+#[derive(Debug)]
 /// `JwtValidator`: jwt validator.
 pub struct JwtValidator {
     config: JwtConfig,
@@ -215,6 +216,7 @@ impl JwtValidator {
         auth_header.strip_prefix("Bearer ")
     }
 }
+#[derive(Debug)]
 
 /// `JwtAuthMiddleware`: jwt auth middleware.
 pub struct JwtAuthMiddleware {
