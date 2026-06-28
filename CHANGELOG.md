@@ -162,6 +162,15 @@
     - Conservative scope: items in public method signatures, axum handler parameter/return types, OpenAI DTOs, tonic-generated proto types, and crate-root re-exports remain `pub`
     - All 1191 tests pass (`cargo test --workspace` clean); build and `cargo clippy --workspace --all-features` clean
 
+- **Pedantic Cleanup (v25.0 Phase E-1)** — mechanical fixes:
+    - `cargo clippy --fix` applied (uninlined_format_args, redundant_closure, redundant_pub_crate, redundant_field_names, missing_const_for_fn, etc.) across 261 files
+    - `#[must_use]` added to ~490 candidates (cargo clippy --fix auto-applied all of them)
+    - `#[derive(Debug)]` added to ~124 types — zero `missing_debug_implementations` warnings remain
+    - For types with `dyn Trait` fields (ModelBackend, SchedulingPolicy, etc.), manual `impl Debug` was added that displays a placeholder string instead of attempting to format the trait object
+    - Pedantic warning count: 3605 → 1496 (-59%)
+    - All 1191 tests pass (`just ci` clean)
+    - Top remaining lints: `missing_errors_doc` (249), `module_name_repetitions` (225), `cast_possible_truncation` (128), `cast_precision_loss` (121), `unreadable_literal` (96), `significant_drop_tightening` (61), `float_cmp` (60) — most are in the "manual" or "already-allow" categories from the Phase E audit and are deferred to later sub-phases
+
 ---
 
 ## 🚀 [v18.0] — Multi-Model Speculative Decoding (2026-06-27)
