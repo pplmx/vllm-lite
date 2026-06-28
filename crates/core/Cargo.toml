@@ -49,5 +49,21 @@ harness = false
 name = "multi_draft_speculative"
 harness = false
 
+[[bench]]
+name = "scheduler"
+harness = false
+
+[[bench]]
+name = "scheduler_benchmarks"
+harness = false
+
+[[bench]]
+name = "prefix_cache_benchmarks"
+harness = false
+
+[[bench]]
+name = "optimization_benchmarks"
+harness = false
+
 [lints]
 workspace = true
