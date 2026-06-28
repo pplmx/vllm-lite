@@ -43,7 +43,7 @@
     - **Patch sweep (F-1)** — `cargo update` minor bumps for 50 deps (most already current from v22/v23); net Cargo.lock change is 56 package re-locks + 16 stale transitive removals
     - **Minor security bumps (F-2)** — `tiktoken 3.1.4 → 3.5.1` (model crate); `hyper 1.9.0 → 1.10.1` (transitive via tonic)
     - **CI workflow fix (F-4)** — removed broken `--all-features` from default `cargo clippy` job (no CUDA in default GitHub runners); switched to per-group denies matching local `just clippy`; added follow-up const fix for `Qwen3Fixture::with_kv_blocks` with targeted allow
-    - **Deferred to v27.0+ (F-3d)**: `paste` (RUSTSEC-2024-0436) unmaintained — blocked on `candle-core 0.10.2` lock; candle-core major upgrade requires dedicated spec (1 week effort)
+    - **Deferred to v27.0+ (F-3d)**: `paste` (RUSTSEC-2024-0436) unmaintained — INFO severity only (no vuln, no patch available); verified `candle-core 0.11.0` (latest) still depends on `gemm → paste`, so upgrade does NOT resolve. Disposition: accepted risk; `just audit` uses `--ignore RUSTSEC-2024-0436`, documented in SECURITY.md
     - `cargo audit` warnings: 2 → 0
     - `tower` workspace skew resolved: `0.4` workspace + `0.5` server → `0.5` workspace
     - All 1191 tests pass (39 skipped, 1 slow)
