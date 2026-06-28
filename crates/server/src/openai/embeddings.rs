@@ -4,10 +4,16 @@ use axum::{Json, extract::State, response::IntoResponse};
 use tokio::sync::mpsc;
 use vllm_core::types::EngineMessage;
 
-/// Runs the operation.
+/// OpenAI-compatible `/v1/embeddings` HTTP handler. Encodes each input
+/// string, sends an [`EngineMessage::GetEmbeddings`] to the engine, and
+/// serializes the returned vectors back into an OpenAI-shaped JSON response.
+///
 /// # Errors
 ///
-/// Returns `Err` if the operation fails.
+/// Returns `(StatusCode, ErrorResponse)` when:
+/// - `model` is empty (`BAD_REQUEST`)
+/// - `input` is empty (`BAD_REQUEST`)
+/// - the engine fails to respond (`INTERNAL_SERVER_ERROR`)
 pub async fn embeddings(
     State(state): State<ApiState>,
     Json(req): Json<EmbeddingsRequest>,

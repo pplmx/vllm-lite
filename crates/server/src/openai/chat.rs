@@ -26,6 +26,11 @@ fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &st
     tokenizer.clean_special_tokens(text)
 }
 
+/// Build a model-ready prompt string from a list of chat `messages`, using
+/// the architecture-appropriate [`ChatTemplate`] (ChatML, Llama-2, etc.).
+/// Thin wrapper around [`chat_template::build_prompt`] exposed at the
+/// `openai::chat` module path so handlers can use it without naming the
+/// template submodule.
 #[must_use]
 pub fn build_prompt_from_messages(template: ChatTemplate, messages: &[ChatMessage]) -> String {
     chat_template::build_prompt(template, messages)
@@ -147,13 +152,23 @@ async fn handle_chat(
     ))
 }
 
-/// Runs the operation.
+/// OpenAI-compatible `/v1/chat/completions` HTTP handler.
+///
+/// Dispatches to either the streaming (SSE) or non-streaming path based on
+/// `req.stream`. Both paths:
+///   1. Validate the request (`validate_chat_request`).
+///   2. Render the chat messages into a model-ready prompt using the
+///      architecture's [`ChatTemplate`].
+///   3. Encode, submit to the engine via `engine_tx`, and await tokens.
+///   4. Decode + post-process the tokens back into OpenAI-shaped JSON (or
+///      SSE chunks in the streaming case).
+///
 /// # Errors
 ///
-/// # Panics
-///
-/// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
-/// Returns `Err` if the operation fails.
+/// Returns a `(StatusCode, ErrorResponse)` pair when:
+///   - request validation fails (`BAD_REQUEST`)
+///   - the engine channel is closed (`INTERNAL_SERVER_ERROR`)
+///   - token decoding or response serialization fails
 pub async fn chat_completions(
     State(state): State<ApiState>,
     Json(req): Json<ChatRequest>,

@@ -85,6 +85,13 @@ pub struct AuthConfig {
 }
 
 impl AuthConfig {
+    /// Collect the effective set of API keys from all configured sources:
+    ///   1. `api_keys` (literal list)
+    ///   2. `api_keys_env` (comma-separated env var, parsed lazily)
+    ///   3. `api_keys_file` (one key per line, `#` comments, blanks ignored)
+    ///
+    /// Missing/unreadable sources contribute nothing. Empty entries are
+    /// filtered. Returns a deduplicated list in source order.
     #[must_use]
     pub fn resolve_api_keys(&self) -> Vec<String> {
         let mut keys = self.api_keys.clone();
@@ -250,6 +257,14 @@ impl Default for AppConfig {
 }
 
 impl AppConfig {
+    /// Load an [`AppConfig`] starting from `Self::default()` and layering
+    /// optional overrides:
+    ///   1. YAML file at `path` (if `Some` and the file exists).
+    ///   2. YAML file at `$VLLM_CONFIG_PATH` (if the env var is set and the
+    ///      file exists; takes precedence over `path`).
+    ///
+    /// Missing files and parse errors are silently ignored — defaults win.
+    /// Use [`AppConfig::validate`] after loading to surface invalid configs.
     #[must_use]
     pub fn load(path: Option<PathBuf>) -> Self {
         let mut config = Self::default();
@@ -278,10 +293,24 @@ impl AppConfig {
         config
     }
 
-    /// Runs the operation.
+    /// Check the loaded config against all invariants. Collects every
+    /// violation (rather than failing on the first) and returns them as a
+    /// single [`ConfigValidationErrors`]. Returns `Ok(())` when the config is
+    /// usable.
+    ///
+    /// Invariants enforced:
+    /// - `server.port > 0`
+    /// - `server.log_level ∈ {trace, debug, info, warn, error}`
+    /// - `engine.max_draft_tokens ≤ 64`
+    /// - `0 < engine.num_kv_blocks ≤ 65536`
+    /// - `engine.max_batch_size > 0`
+    /// - `engine.tensor_parallel_size > 0`
+    /// - `engine.vram_budget_bytes` is either `None` or `> 0`
+    /// - every `draft_specs[].id` is non-empty and unique
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
+    /// Returns [`ConfigValidationErrors`] containing every violation found.
     pub fn validate(&self) -> Result<(), ConfigValidationErrors> {
         let mut errors = Vec::new();
 
