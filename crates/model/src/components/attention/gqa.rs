@@ -126,6 +126,18 @@ impl GqaAttention {
     }
 
     /// Runs the operation.
+    /// # Caution: No causal masking
+    ///
+    /// This is a low-level primitive. It does **NOT** apply causal masking.
+    /// Use [`crate::components::attention::RopeGqaAttention::forward_prefill`] or
+    /// [`crate::components::attention::RopeGqaAttention::forward_decode`] (which
+    /// dispatch to `paged_attention_fn`, `tiled_attention_fn`, or
+    /// `flash_attention_fn`, all of which apply causal masking) for
+    /// production inference.
+    ///
+    /// The fused path (`config.use_fused = true`) hardcodes `causal = false`
+    /// because this method is not used in production — see the `// invariant:`
+    /// comment at the branch site.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -156,6 +168,10 @@ impl GqaAttention {
         if self.config.use_fused {
             let k_heads = k.transpose(1, 2)?.contiguous()?;
             let v_heads = v.transpose(1, 2)?.contiguous()?;
+            // invariant: causal is hardcoded to false here because
+            // GqaAttention::forward is a low-level primitive; production code
+            // paths route through RopeGqaAttention::forward_prefill/forward_decode
+            // which use flash_attention_fn(..., causal=true) instead.
             let flash =
                 GqaFlashAttention::new(self.num_heads, self.num_kv_heads, self.head_dim, false);
             let attn_output = flash.forward(&q, &k_heads, &v_heads)?;
@@ -883,6 +899,63 @@ mod tests {
         let k_expanded = expand_kv(&k, 8, 2)?;
 
         assert_eq!(k_expanded.dims(), &[1, seq_len, 8, head_dim]);
+        Ok(())
+    }
+
+    /// Regression: `GqaAttention::forward` is documented to NOT apply causal
+    /// masking (it is a low-level primitive). Production code routes through
+    /// `RopeGqaAttention::forward_prefill/forward_decode` which dispatch to
+    /// causal-aware helpers (`paged_attention_fn`, `tiled_attention_fn`,
+    /// `flash_attention_fn(..., causal=true)`).
+    ///
+    /// If this test ever fails (`forward()` becomes non-deterministic or
+    /// starts applying hidden causal masking), it should be re-documented,
+    /// not "fixed" — the contract is intentional. See
+    /// `docs/perf/v27-correctness-investigation.md` for the full analysis.
+    #[test]
+    fn test_forward_does_not_apply_causal_mask() -> Result<()> {
+        let device = candle_core::Device::Cpu;
+        let num_heads = 4;
+        let num_kv_heads = 2;
+        let head_dim = 16;
+        let hidden_size = num_heads * head_dim;
+        let batch_size = 1;
+        let seq_len = 4;
+
+        let q_w = Tensor::randn(0.0f32, 0.5, (hidden_size, hidden_size), &device)?;
+        let k_w = Tensor::randn(0.0f32, 0.5, (num_kv_heads * head_dim, hidden_size), &device)?;
+        let v_w = Tensor::randn(0.0f32, 0.5, (num_kv_heads * head_dim, hidden_size), &device)?;
+        let o_w = Tensor::randn(0.0f32, 0.5, (hidden_size, hidden_size), &device)?;
+
+        let attn = GqaAttention::new_with_weights(
+            hidden_size,
+            num_heads,
+            num_kv_heads,
+            head_dim,
+            q_w,
+            k_w,
+            v_w,
+            o_w,
+            AttentionConfig::default(),
+            false,
+            None,
+            None,
+        )?;
+
+        let x = Tensor::randn(0.0f32, 1.0, (batch_size, seq_len, hidden_size), &device)?;
+        let y = x.clone();
+
+        let out1 = attn.forward(&x)?;
+        let out2 = attn.forward(&y)?;
+
+        // Determinism: identical inputs must yield identical outputs. Causal
+        // masking would still pass this (causal is also deterministic), but
+        // this assertion catches accidental state-coupling or RNG leakage.
+        let diff = (&out1 - &out2)?.abs()?.sum_all()?.to_scalar::<f32>()?;
+        assert!(
+            diff < 1e-5,
+            "forward() should be deterministic for identical inputs, got diff={diff}"
+        );
         Ok(())
     }
 }
