@@ -66,6 +66,13 @@
     - All conversions provide `parse(&str) -> Option<Self>`, `as_str() -> &'static str`, and `Display` impl
     - Affected call sites updated atomically (13 + 1 + 6 across the three enums)
 
+- **Object-safe Trait Default Constructors (v24.0 Phase C-3)** — added `default_arc()` methods for 11 object-safe public traits:
+    - **4 high-ROI**: `DraftVerifier` (`StubDraftVerifier`), `ModelBackend` (`StubModelBackend`), `SchedulerObserver` (`NoopSchedulerObserver`), `MetricsExporter` (`InMemoryMetricsExporter`)
+    - **7 medium-ROI**: `SchedulingPolicy` (reused `FcfsPolicy`), `DraftLoader` (reused `NoopLoader`), `CudaGraphTensor` (`NullCudaGraphTensor`), `CudaGraphNode` (`NullCudaGraphNode`), `AllReduce` (`NoopAllReduce`), `PipelineStage` (`NoopPipelineStage`), `Architecture` (`UnknownArchitecture`)
+    - Each trait gains `<dyn Trait>::default_arc() -> Arc<Self>` (Rust orphan rule prevents `impl Default for Arc<dyn Trait>`; the inherent-method pattern is the standard workaround)
+    - Callers use `Arc::<dyn Trait>::default_arc()` (via type inference) or explicit `<dyn Trait>::default_arc()`
+    - 6 low-ROI traits deferred (never used as `Arc<dyn Trait>` in current code)
+
 ---
 
 ## 🚀 [v18.0] — Multi-Model Speculative Decoding (2026-06-27)
