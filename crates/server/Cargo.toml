@@ -39,7 +39,6 @@ base64 = "0.22"
 thiserror = "2"
 anyhow = "1"
 tokio-rustls = "0.26"
-rustls-pemfile = "2"
 jsonwebtoken = "9"
 
 [dev-dependencies]

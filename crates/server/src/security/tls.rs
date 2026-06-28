@@ -1,12 +1,12 @@
 #![allow(clippy::module_name_repetitions)]
-use rustls_pemfile::{certs, private_key};
+use rustls::pki_types::pem::PemObject;
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use std::fs;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 use tokio_rustls::rustls::RootCertStore;
-use tokio_rustls::rustls::pki_types::CertificateDer;
 use tokio_rustls::rustls::server::WebPkiClientVerifier;
 use tokio_rustls::rustls::{self, ServerConfig};
 
@@ -54,19 +54,16 @@ impl TlsConfig {
     ///
     /// Returns `Err` if the operation fails.
     pub fn load(&self) -> Result<ServerConfig, TlsError> {
-        let cert_file = fs::File::open(&self.cert_path)
+        let cert_bytes = fs::read(&self.cert_path)
             .map_err(|e| TlsError::CertificateRead(e.to_string()))?;
-        let mut cert_reader = std::io::BufReader::new(cert_file);
-        let cert_chain: Vec<CertificateDer<'static>> = certs(&mut cert_reader)
+        let cert_chain: Vec<CertificateDer<'static>> = CertificateDer::pem_slice_iter(&cert_bytes)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| TlsError::InvalidConfig(format!("Invalid certificate: {e:?}")))?;
 
-        let key_file =
-            fs::File::open(&self.key_path).map_err(|e| TlsError::KeyRead(e.to_string()))?;
-        let mut key_reader = std::io::BufReader::new(key_file);
-        let key = private_key(&mut key_reader)
-            .map_err(|e| TlsError::InvalidConfig(format!("Invalid key: {e:?}")))?
-            .ok_or(TlsError::InvalidConfig("No private key found".to_string()))?;
+        let key_bytes =
+            fs::read(&self.key_path).map_err(|e| TlsError::KeyRead(e.to_string()))?;
+        let key = PrivateKeyDer::from_pem_slice(&key_bytes)
+            .map_err(|e| TlsError::InvalidConfig(format!("Invalid key: {e:?}")))?;
 
         let config = if self.mtls {
             let ca_cert_path = self.ca_cert_path.as_ref().ok_or_else(|| {
@@ -75,12 +72,12 @@ impl TlsConfig {
                         .to_string(),
                 )
             })?;
-            let ca_file = fs::File::open(ca_cert_path)
+            let ca_bytes = fs::read(ca_cert_path)
                 .map_err(|e| TlsError::CertificateRead(e.to_string()))?;
-            let mut ca_reader = std::io::BufReader::new(ca_file);
-            let ca_chain: Vec<CertificateDer<'static>> = certs(&mut ca_reader)
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| TlsError::InvalidConfig(format!("Invalid CA: {e:?}")))?;
+            let ca_chain: Vec<CertificateDer<'static>> =
+                CertificateDer::pem_slice_iter(&ca_bytes)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|e| TlsError::InvalidConfig(format!("Invalid CA: {e:?}")))?;
 
             let mut root_store = RootCertStore::empty();
             for cert in ca_chain {
