@@ -52,6 +52,13 @@
     - New `EngineError::EmptyBeamList` variant added
     - `AGENTS.md` gained an "Invariant comments" section documenting the convention
 
+- **API Ergonomics (v24.0 Phase C-1)** — added builder pattern for `Engine` and crate-root re-exports:
+    - New `vllm_core::EngineBuilder` allows named-method construction of `Engine` with all optional fields (`with_draft_model`, `with_config`, `with_max_draft_tokens`, `with_num_kv_blocks`, `with_adaptive_decoder`, `with_draft_resolver`, `with_sleep_policy`)
+    - Existing `Engine::new_boxed()` and `Engine::with_config_boxed()` remain unchanged (non-breaking)
+    - `vllm-core` re-exports commonly-used types at crate root: `EngineBuilder`, `EngineError`, `Result`, `Request`, `SchedulerConfig`, `AdaptiveSpeculativeDecoder`, `DraftModelRegistry`, `DraftResolver`, `DraftSpec`, `SamplingParams`, etc.
+    - `vllm-model` re-exports: `Architecture`, `ModelConfig`, `ModelLoader`, `ModelLoaderBuilder`, `Tokenizer`
+    - `vllm-server` re-exports: `AuthConfig`, `AuthMiddleware`, `BatchManager`, `BatchResponse`, `AuditEvent`, `HealthChecker`, `HealthStatus` (intentionally excludes OpenAI types to avoid root namespace collision)
+
 ---
 
 ## 🚀 [v18.0] — Multi-Model Speculative Decoding (2026-06-27)
