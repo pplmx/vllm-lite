@@ -4,7 +4,17 @@ use tokio::sync::RwLock;
 use tonic::{Request, Response, Status};
 use tracing::{info, warn};
 
-tonic::include_proto!("vllm.distributed");
+// Lints are disabled for the generated proto module because tonic_build output
+// is not under our control. See crates/dist/proto/node.proto for the source.
+#[allow(
+    clippy::doc_markdown,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc
+)]
+mod generated_proto {
+    tonic::include_proto!("vllm.distributed");
+}
+pub use generated_proto::*;
 
 /// `GrpcState`: grpc state.
 #[derive(Debug, Clone)]
