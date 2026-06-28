@@ -80,7 +80,7 @@ fn main() -> Result<()> {
 fn validate_config(path: &PathBuf) -> Result<()> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("reading config file {}", path.display()))?;
-    let parsed: Value = serde_yaml::from_str(&content).context("parsing config YAML syntax")?;
+    let parsed: Value = serde_yml::from_str(&content).context("parsing config YAML syntax")?;
 
     let required_fields = ["server", "engine"];
     for field in required_fields {
