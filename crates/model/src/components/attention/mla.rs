@@ -213,7 +213,13 @@ impl MlaAttention {
         let scale = 1.0 / (self.v_head_dim as f32).sqrt();
         let qk = qk.affine(scale as f64, 0.0)?;
 
-        let attn_weights = candle_nn::ops::softmax(&qk, 3)?.contiguous()?;
+        // H-12 #3: `candle_nn::ops::softmax` already returns a contiguous tensor
+        // (verified in candle-nn 0.10.2 src/ops.rs:22-29 — final op is
+        // `broadcast_div`, which produces a fresh contiguous tensor). The
+        // explicit `.contiguous()?` is a redundant is_contiguous check. Mirrors
+        // H-11 #3 (GQA). `v.contiguous()?` on the next line is still required:
+        // matmul rejects non-contiguous batch dims per H-11 #3 regression test.
+        let attn_weights = candle_nn::ops::softmax(&qk, 3)?;
 
         let attn_output = attn_weights.matmul(&v.contiguous()?)?;
         let attn_output = attn_output.transpose(1, 2)?;

@@ -190,8 +190,9 @@ matmul kernel that supports implicit GQA broadcasting.
 | 2026-06-28 | H-3  | Baseline (`qk.mul(broadcast(scalar))`) | 43,367 | — |
 | 2026-06-28 | H-9  | Re-measured pre-H-12 baseline | 42,461 | −2.1% (noise; re-measure of same code) |
 | 2026-06-28 | H-12 #1 | `qk.affine(scale, 0.0)` replacing `qk.mul(broadcast(scalar))` at mla.rs:209-211 | 41,424 | −2.4% (p<0.05) |
+| 2026-06-28 | H-12 #3 | Removed `.contiguous()?` after softmax at mla.rs:213 (already contiguous from `candle_nn::ops::softmax`'s final `broadcast_div`); `v.contiguous()?` on l.215 kept — required by candle CPU matmul batch-dim constraint. Mirrors H-11 #3 (GQA). | 41,434 | within noise (consistent with H-11 #3) |
 
-Mirrors H-11 #2 (GQA/util) — same root cause as H-9 MLA hotspot #1 (HIGH).
+Mirrors H-11 #2 (GQA/util) and H-11 #3 (GQA) — same root cause as H-9 MLA hotspot #1 (HIGH) and hotspot #2 sub-item (LOW).
 
 **Note:** This is a smoke test, not a perf baseline. Real GPU numbers will be recorded when a GPU runner is available.
 
