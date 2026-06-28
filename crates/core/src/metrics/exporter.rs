@@ -21,6 +21,9 @@ pub struct InMemoryMetricsExporter {
 }
 
 impl InMemoryMetricsExporter {
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// Records a single metric value, overwriting any prior entry for `name`.
     pub fn record(&self, name: impl Into<String>, value: f64) {
         self.values
@@ -29,6 +32,9 @@ impl InMemoryMetricsExporter {
             .insert(name.into(), value);
     }
 
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// Returns the recorded values, in unspecified order.
     #[must_use]
     pub fn snapshot(&self) -> Vec<(String, f64)> {

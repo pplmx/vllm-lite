@@ -149,6 +149,9 @@ async fn handle_chat(
 /// Runs the operation.
 /// # Errors
 ///
+/// # Panics
+///
+/// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
 /// Returns `Err` if the operation fails.
 pub async fn chat_completions(
     State(state): State<ApiState>,

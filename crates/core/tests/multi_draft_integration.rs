@@ -132,6 +132,10 @@ impl MapLoader {
         }
     }
 
+    /// Runs the operation.
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     pub fn insert(&self, id: DraftId, backend: Box<dyn ModelBackend>) {
         self.backends.lock().unwrap().insert(id, backend);
     }
@@ -187,6 +191,10 @@ pub fn harness_unlimited() -> Harness {
 }
 
 #[must_use]
+/// Runs the operation.
+/// # Panics
+///
+/// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
 pub fn harness_with_budget(total_bytes: u64) -> Harness {
     let budget = Arc::new(MemoryBudget::new(total_bytes).unwrap());
     let registry = Arc::new(DraftModelRegistry::with_budget(budget.clone()));

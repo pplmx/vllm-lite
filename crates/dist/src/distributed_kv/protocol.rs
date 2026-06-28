@@ -52,6 +52,10 @@ pub struct CacheMessage {
 }
 
 impl CacheMessage {
+    /// Runs the operation.
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     pub fn new(source: NodeId, destination: NodeId, operation: CacheOperation) -> Self {
         static MSG_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
