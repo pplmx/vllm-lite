@@ -122,7 +122,7 @@ empty-result signal, or rewrite the bench with a timeout / step cap). They are
 
 | Bench path | seq_len | ns/iter (median) |
 |------------|---------|------------------|
-| gqa_forward_smoke/cpu_smoke | 16 | 37,942 ns (H-11 #2 affine, −3.0% vs 39,117 ns pre-H-11) |
+| gqa_forward_smoke/cpu_smoke | 16 | 37,583 ns (H-11 #2 + #3 cumulative, −3.9% vs 39,117 ns pre-H-11) |
 
 #### H-11 optimization history (gqa_forward_smoke/cpu_smoke @ seq_len=16)
 
@@ -132,6 +132,31 @@ empty-result signal, or rewrite the bench with a timeout / step cap). They are
 | 2026-06-28 | H-8  | Re-measured pre-H-11 baseline | 39,117 | +1.7% (noise) |
 | 2026-06-28 | H-11 #2 | `qk.affine(scale, 0.0)` replacing `qk.mul(broadcast(scalar))` at gqa.rs:195-196, util.rs:155, util.rs:203, flash_attention_v3.rs:57/183/262, mla.rs:210, paged_gqa.rs:120 | 37,942 | −3.0% (p<0.05) |
 | 2026-06-28 | H-11 #3 | Removed `.contiguous()?` after softmax (already contiguous from `broadcast_div`); added regression test pinning candle CPU matmul's non-contiguous-batch-dim rejection. Other contiguous calls (q, k_heads, v_heads, k_t, v) kept — required by candle matmul kernel. | 37,985 | +0.1% (noise; p=0.17) |
+| 2026-06-28 | H-11 #1 (DEFERRED) | Tried reshape trick: `(B, H_q, S_q, D)` → `(B, H_kv, repeat, S_q, D)` view + matmul vs `(B, H_kv, 1, D, S_k)` to skip `expand_kv` materialization. Failed: candle `Tensor::matmul` requires equal batch-product LHS=RHS (16 vs 8 in the standard 8/4 test). `broadcast_matmul` handles it but forces `.contiguous()?` on the broadcast side, which would materialize `repeat × original_k_t` — defeating the optimization. Code reverted; documented trade-off. | 37,583 | — (reverted) |
+
+### H-11 #1 deferral rationale
+
+Tried skipping `expand_kv` materialization (~12× K/V memory traffic savings on
+qwen3-7B with repeat=7) using a reshape trick. Failed because candle's CPU matmul
+kernel (`cpu_backend/mod.rs:1329-1351` `ab_skip` function) requires the batch-dim
+product to match between LHS and RHS — `(B, H_kv, repeat)` on q_r vs
+`(B, H_kv, 1)` on k_t gives `B*H_kv*repeat` vs `B*H_kv*1`, which matmul rejects
+with "shape mismatch in matmul". `Tensor::broadcast_matmul` would handle the
+broadcast but forces `.contiguous()?` on the broadcast side, materializing
+`(B, H_kv, repeat, D, S_k)` = `repeat × original_k_t` size — defeating the
+optimization entirely.
+
+Alternative approaches considered and rejected:
+
+| Approach | Why rejected |
+|----------|--------------|
+| `cat([K, V], 2)` then `expand_kv` once | Adds 2 × `B*S*H_kv*D` cat overhead; net ~14% worse than separate expand for repeat=7 |
+| Custom repeat→(B,H_q,S,D) layout directly | Would still need contiguous on V for downstream matmul; same allocation count |
+| `Tensor::broadcast_matmul` | Forces `.contiguous()?` on broadcast side; defeats savings |
+| Custom fused matmul kernel | Out of H-11 scope; deferred to H-12+ or a separate kernel PR |
+
+The expected savings do not justify the refactor risk without a custom fused
+matmul kernel that supports implicit GQA broadcasting.
 
 **Note:** This is a smoke test, not a perf baseline. Real GPU numbers will be recorded when a GPU runner is available.
 

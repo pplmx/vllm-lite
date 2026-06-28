@@ -193,6 +193,24 @@ impl GqaAttention {
             return Ok(o);
         }
 
+        // H-11 #1 (attempted, reverted): tried to skip `expand_kv` materialization
+        // by reshaping q from `(B, H_q, S_q, D)` to `(B, H_kv, repeat, S_q, D)`
+        // and using `Tensor::matmul` against `k_t = (B, H_kv, D, S_k)`.
+        //
+        // FAILED because candle's `Tensor::matmul` (cpu_backend/mod.rs:1329-1351)
+        // requires the batch-dim product to match between LHS and RHS — the
+        // `(B, H_kv, repeat)` on q_r vs `(B, H_kv, 1)` on k_t (after unsqueeze)
+        // gives products `B*H_kv*repeat` vs `B*H_kv*1` (e.g. 16 vs 8 for the
+        // standard 8/4 test case), and matmul rejects with
+        // "shape mismatch in matmul". `Tensor::broadcast_matmul` would handle
+        // it but forces `.contiguous()?` on the broadcast side, which would
+        // materialize `(B, H_kv, repeat, D, S_k)` — i.e. `repeat` × the original
+        // k_t size, defeating the optimization entirely.
+        //
+        // The expected savings (`~12×` less K/V memory traffic on qwen3-7B
+        // with repeat=7) do not justify the refactor risk without a custom
+        // fused matmul kernel that supports implicit GQA broadcasting.
+        // Deferred to follow-up work (H-12+ or a custom kernel PR).
         let k = self.expand_kv(&k, self.num_heads, self.num_kv_heads)?;
         let v = self.expand_kv(&v, self.num_heads, self.num_kv_heads)?;
 
@@ -989,8 +1007,7 @@ mod tests {
     fn test_matmul_rejects_non_contiguous_batch_dims() -> Result<()> {
         let device = candle_core::Device::Cpu;
         // (B=2, H=4, S=10, D=32) — strided from transpose(1,2)
-        let q_strided =
-            Tensor::randn(0.0f32, 1.0, (2, 10, 4, 32), &device)?.transpose(1, 2)?;
+        let q_strided = Tensor::randn(0.0f32, 1.0, (2, 10, 4, 32), &device)?.transpose(1, 2)?;
         // (B=2, H=4, D=32, S=10) — contiguous
         let k_cont = Tensor::randn(0.0f32, 1.0, (2, 4, 32, 10), &device)?;
 
