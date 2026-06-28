@@ -125,7 +125,7 @@ impl MRoPE {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::qwen3::config::RopeParameters;
+    use crate::qwen3::config::{RopeParameters, RopeType};
     use candle_core::{DType, Device, Tensor};
 
     #[test]
@@ -134,7 +134,7 @@ mod tests {
             rope_theta: Some(10000000.0),
             head_dim: Some(256),
             rope_parameters: Some(RopeParameters {
-                rope_type: Some("default".to_string()),
+                rope_type: Some(RopeType::Default),
                 rope_theta: Some(10000000.0),
                 partial_rotary_factor: Some(0.5),
                 mrope_section: Some(vec![85, 85, 86]),

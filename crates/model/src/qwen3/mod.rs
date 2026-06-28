@@ -11,6 +11,6 @@ pub mod register;
 pub mod tp;
 
 pub use arch::Qwen3Architecture;
-pub use config::{Qwen3Config, RopeParameters, RopeScaling, TextConfig};
+pub use config::{Qwen3Config, RopeParameters, RopeScaling, RopeType, TextConfig};
 pub use mla_attention::Qwen3MlaAttention;
 pub use model::Qwen3Model;
