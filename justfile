@@ -133,6 +133,12 @@ fuzz TARGET:
 fuzz-list:
     cargo +nightly fuzz list --fuzz-dir fuzz
 
+# Re-run a fuzz target with a specific crash artifact for debugging.
+# Usage: `just fuzz-repro TARGET CRASH_FILE`
+# Example: `just fuzz-repro app_config_yaml fuzz/artifacts/app_config_yaml/crash-deadbeef`
+fuzz-repro TARGET CRASH:
+    cargo +nightly fuzz run {{TARGET}} --fuzz-dir fuzz {{CRASH}}
+
 # === Mutation testing (v30.0 Phase K) ===
 # Generate baseline mutation scan for an entire module under vllm-core.
 # Usage: `just mutants MODULE` where MODULE is a path relative to
