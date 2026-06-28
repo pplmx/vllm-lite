@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// BackpressureConfig: backpressure configuration.
 #[derive(Debug, Clone)]
-pub struct BackpressureConfig {
+pub(crate) struct BackpressureConfig {
     pub max_buffer_size: usize,
     pub high_water_mark: usize,
     pub resume_threshold: usize,
@@ -33,7 +33,7 @@ impl BackpressureConfig {
 
 /// FlowControlState: flow control state enumeration.
 #[derive(Debug, Clone)]
-pub enum FlowControlState {
+pub(crate) enum FlowControlState {
     Normal,
     Throttled,
     Resumed,
@@ -41,7 +41,7 @@ pub enum FlowControlState {
 
 /// BackpressureState: backpressure state.
 #[derive(Debug)]
-pub struct BackpressureState {
+pub(crate) struct BackpressureState {
     pending_tokens: Arc<AtomicUsize>,
     config: BackpressureConfig,
     last_state: std::sync::Mutex<FlowControlState>,
@@ -109,7 +109,7 @@ impl BackpressureState {
 }
 
 /// StreamingBackpressure: streaming backpressure.
-pub struct StreamingBackpressure {
+pub(crate) struct StreamingBackpressure {
     state: Arc<BackpressureState>,
 }
 

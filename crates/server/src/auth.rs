@@ -16,7 +16,7 @@ pub struct AuthMiddleware {
 }
 
 /// RateLimiter: rate limiter.
-pub struct RateLimiter {
+pub(crate) struct RateLimiter {
     requests: HashMap<String, Vec<Instant>>,
     max_requests: usize,
     window_secs: u64,
