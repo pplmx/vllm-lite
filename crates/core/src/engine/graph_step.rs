@@ -17,10 +17,21 @@ use vllm_traits::{BatchOutput, BatchPhase};
 
 impl Engine {
     #[cfg(feature = "cuda-graph")]
-    /// Runs the operation.
+    /// Run a single scheduling + model-forward step using a captured CUDA
+    /// Graph when one is available for the current batch size; falls back to
+    /// the regular forward path otherwise. The decision is made by
+    /// [`crate::scheduler::engine::SchedulerEngine::build_batch_with_graph`],
+    /// which produces either a `Graph(prepared)` variant or a `Regular(batch)`
+    /// variant — this method just dispatches.
+    ///
+    /// Returns the list of `(seq_id, token_id)` pairs produced this step.
+    /// An empty vector means there was no pending work.
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
+    /// Propagates any error from the underlying forward pass or graph
+    /// executor (after first attempting the regular-step fallback when
+    /// graph execution fails).
     pub fn step_with_graph(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
         let start = std::time::Instant::now();
         let graph_batch = self.scheduler.build_batch_with_graph();
@@ -58,6 +69,9 @@ impl Engine {
     }
 
     #[cfg(not(feature = "cuda-graph"))]
+    /// Fallback for non-`cuda-graph` builds: delegates straight to
+    /// [`Engine::step`]. Always available so call sites compile unchanged
+    /// regardless of feature flags.
     pub fn step_with_graph(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
         tracing::warn!("CUDA Graph support not enabled, using regular step");
         self.step()

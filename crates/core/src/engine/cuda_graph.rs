@@ -7,10 +7,15 @@
 
 impl crate::engine::Engine {
     #[cfg(feature = "cuda-graph")]
-    /// Runs the operation.
+    /// Capture CUDA Graphs for every configured batch size on the underlying
+    /// [`BatchCudaGraphExecutor`]. Should be called once after model load and
+    /// before serving traffic; subsequent calls are no-ops.
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
+    /// Returns an [`EngineError::ModelError`] if graph capture fails on any of
+    /// the configured batch sizes. Capture failure aborts the call early;
+    /// later sizes are not attempted.
     pub fn capture_cuda_graphs(&mut self) -> crate::error::Result<()> {
         if let Some(ref mut executor) = self.cuda_graph {
             executor
@@ -22,12 +27,18 @@ impl crate::engine::Engine {
     }
 
     #[cfg(not(feature = "cuda-graph"))]
+    /// No-op stub for non-`cuda-graph` builds. Always returns `Ok(())` and
+    /// logs a warning.
     pub fn capture_cuda_graphs(&mut self) -> crate::error::Result<()> {
         tracing::warn!("CUDA Graph support not enabled");
         Ok(())
     }
 
     #[cfg(feature = "cuda-graph")]
+    /// Returns `true` when CUDA Graph capture has completed and the executor
+    /// is ready to serve captured graphs. The main run loop checks this on
+    /// every step to decide between the fast-path (`step_with_graph`) and the
+    /// regular `step`.
     pub fn cuda_graph_enabled(&self) -> bool {
         self.cuda_graph
             .as_ref()
@@ -35,6 +46,7 @@ impl crate::engine::Engine {
     }
 
     #[cfg(not(feature = "cuda-graph"))]
+    /// Returns `false` on non-`cuda-graph` builds.
     pub fn cuda_graph_enabled(&self) -> bool {
         false
     }

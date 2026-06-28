@@ -115,6 +115,22 @@ pub fn top_k_sample(logits: &[f32], k: usize) -> TokenId {
     temperature_sample(&masked, 1.0)
 }
 
+/// Sample one token per row from a batch of per-sequence logits.
+///
+/// For each row the following pipeline is applied (short-circuiting where a
+/// parameter makes later steps a no-op):
+/// 1. **Repeat penalty** — divide logits at positions present in `seen_tokens`
+///    by `repeat_penalty` (skipped when `repeat_penalty == 1.0` or `seen` is
+///    empty).
+/// 2. **Temperature** — divide logits by `temperature` when it differs from 1.0.
+/// 3. **Top-K truncation** — zero out (set to `-inf`) all logits below the
+///    `k`-th largest, when `top_k > 0`.
+/// 4. **Top-P / temperature / greedy** — choose the final sampler based on the
+///    remaining parameters: `top_p < 1.0` ⇒ nucleus, `temperature > 0.0`
+///    ⇒ temperature sampling, otherwise greedy argmax.
+///
+/// `logits_list` and `seen_tokens` must have the same length. Returned vector
+/// has length `logits_list.len()`.
 #[must_use]
 pub fn sample_batch(
     logits_list: &[Vec<f32>],
@@ -167,6 +183,15 @@ pub fn sample_batch(
         .collect()
 }
 
+/// Divide the logit at each id present in `seen_tokens` by `penalty`.
+///
+/// This is the standard "repeat penalty" trick used by llama.cpp, HuggingFace
+/// `transformers`, and most open-source inference engines: tokens that have
+/// already appeared are made less likely on subsequent steps. No-op when
+/// `penalty == 1.0`, `seen_tokens` is empty, or `logits` is empty.
+///
+/// Out-of-range token ids are silently ignored. Duplicate entries in
+/// `seen_tokens` are deduped via an internal `HashSet`.
 pub fn apply_repeat_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penalty: f32) {
     if penalty == 1.0 || seen_tokens.is_empty() || logits.is_empty() {
         return;
