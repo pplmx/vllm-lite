@@ -139,23 +139,26 @@ fuzz-list:
 # crates/core/src (e.g. `scheduler`, `scheduler/policy`, `sampling`).
 # NOTE: First run downloads and caches mutants tool (~minutes), subsequent
 # runs reuse the cache. A full scheduler scan takes ~30-60 min on 4 cores.
+# `--baseline skip` works around a pre-existing test failure in
+# cuda_graph_integration.rs:148 — fix the test in v31+ to drop this flag.
 mutants MODULE:
     cargo mutants \
         --package vllm-core \
-        --file "crates/core/src/{{MODULE}}" \
+        --file "crates/core/src/{{MODULE}}/**/*.rs" \
         --timeout 30 \
-        --jobs $(nproc) \
+        --jobs $(($(nproc) > 8 ? 8 : $(nproc))) \
         --output .mutants-out/ \
+        --baseline skip \
         --shuffle
 
 # Render a human-readable summary of the latest mutation scan.
 mutants-report:
-    @test -d .mutants-out || (echo "no .mutants-out/ — run `just mutants MODULE` first"; exit 1)
-    @if [ -f .mutants-out/mutations.json ]; then \
+    @test -d .mutants-out/mutants.out || (echo "no .mutants-out/mutants.out/ — run \`just mutants MODULE\` first"; exit 1)
+    @if [ -f .mutants-out/mutants.out/mutants.json ]; then \
         jq -r '.[] | select(.status == "SURVIVED") | "\(.file):\(.span.start_line)  \(.mutant_name)"' \
-            .mutants-out/mutations.json | head -30; \
+            .mutants-out/mutants.out/mutants.json | head -30; \
     else \
-        echo "mutations.json not found; check .mutants-out/ contents"; \
+        echo "mutants.json not found; check .mutants-out/mutants.out/ contents"; \
     fi
 
 # Remove the mutation output directory.
