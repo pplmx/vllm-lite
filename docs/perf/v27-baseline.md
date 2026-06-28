@@ -158,3 +158,25 @@ empty-result signal, or rewrite the bench with a timeout / step cap). They are
 | mla_forward | 128 | TBD |
 | mla_forward | 512 | TBD |
 | mla_forward | 2048 | TBD |
+
+## Model benches — Flash Attention (H-4 added 2026-06-28)
+
+**Strategy:** Runtime CUDA detection (same as H-2/H-3).
+- **GPU:** qwen3-7B-class FlashV2 (num_heads=14, head_dim=64). Standard configs: (batch=1, seq=512), (1, 2048), (4, 512).
+- **CPU:** smoke test (batch=1, heads=2, seq=16, head_dim=32) + eprintln warning. Uses `FlashAttentionConfig::new().with_flash_v2()`; internally takes the standard path for seq_len≤128.
+
+**Note:** Flash attention speedups are primarily a GPU optimization (memory bandwidth wins from tile-based kernel fusion). The CPU smoke test only verifies correctness; real perf validation requires a GPU runner.
+
+### CPU-only environment (current dev/CI)
+
+| Bench path | Config | ns/iter (median) |
+|------------|--------|------------------|
+| flash_attention_smoke/cpu_smoke | b1_h2_s16_d32 | 11,285 ns |
+
+### Standard dimensions (recorded when GPU available)
+
+| Bench path | Config | ns/iter (median) |
+|------------|--------|------------------|
+| flash_attention/standard | b1_h14_s512_d64 | TBD |
+| flash_attention/standard | b1_h14_s2048_d64 | TBD |
+| flash_attention/standard | b4_h14_s512_d64 | TBD |

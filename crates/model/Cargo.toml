@@ -35,6 +35,10 @@ harness = false
 name = "mla_forward"
 harness = false
 
+[[bench]]
+name = "flash_attention"
+harness = false
+
 [features]
 default = []
 cuda = ["candle-core/cuda", "candle-nn/cuda"]
