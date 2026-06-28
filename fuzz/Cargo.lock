@@ -2860,7 +2860,9 @@ dependencies = [
  "safetensors",
  "serde",
  "serde-saphyr",
+ "serde_json",
  "vllm-core",
+ "vllm-model",
  "vllm-server",
 ]
 
