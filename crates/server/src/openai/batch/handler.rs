@@ -7,6 +7,9 @@ use crate::openai::types::ErrorResponse;
 /// Runs the operation.
 /// # Errors
 ///
+/// # Panics
+///
+/// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
 /// Returns `Err` if the operation fails.
 pub async fn create_batch(
     State(state): State<ApiState>,
@@ -137,6 +140,10 @@ pub async fn get_batch_results(
     }))
 }
 
+/// Runs the operation.
+/// # Panics
+///
+/// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
 pub async fn list_batches(State(state): State<ApiState>) -> Json<Vec<BatchResponse>> {
     let jobs = state.batch_manager.get_all_jobs().await;
     // invariant: SystemTime::now() is always >= UNIX_EPOCH on any platform with a working clock;

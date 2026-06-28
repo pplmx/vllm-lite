@@ -24,6 +24,10 @@ impl CorrelationIdMiddleware {
         }
     }
 
+    /// Runs the operation.
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     pub async fn generate_id(&self) -> String {
         let mut counter = self.id_generator.write().await;
         *counter += 1;

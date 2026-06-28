@@ -37,6 +37,10 @@ pub struct SchedulerConfig {
 impl SchedulerConfig {
     #[allow(clippy::too_many_arguments)]
     #[must_use]
+    /// Runs the operation.
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     pub fn new(
         max_num_seqs: usize,
         max_num_batched_tokens: usize,

@@ -45,6 +45,10 @@ pub async fn shutdown(State(state): State<ApiState>) -> &'static str {
     "Shutting down"
 }
 
+/// Runs the operation.
+/// # Panics
+///
+/// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
 pub async fn get_prometheus(State(state): State<ApiState>) -> String {
     let (response_tx, mut response_rx) = mpsc::unbounded_channel();
     state

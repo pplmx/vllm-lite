@@ -63,6 +63,10 @@ impl Default for MemoryBudget {
 
 impl MemoryBudget {
     #[must_use]
+    /// Runs the operation.
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     pub fn unlimited() -> Self {
         // invariant: `u64::MAX` is a non-zero literal; `MemoryBudget::new` only rejects 0.
         Self::new(u64::MAX).expect("u64::MAX always > 0")

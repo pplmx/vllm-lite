@@ -82,6 +82,10 @@ impl AuthMiddleware {
     }
 }
 
+/// Runs the operation.
+/// # Panics
+///
+/// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
 pub async fn auth_middleware(
     auth: axum::extract::State<Arc<AuthMiddleware>>,
     request: Request,

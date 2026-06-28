@@ -88,6 +88,10 @@ impl LinearAttentionBlock {
     /// Runs the operation.
     /// # Errors
     ///
+    ///
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// Returns `Err` if reading or parsing the source fails.
     pub fn from_weights(
         prefix: &str,

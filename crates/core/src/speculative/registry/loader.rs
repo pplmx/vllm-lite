@@ -23,6 +23,10 @@ impl DraftModelRegistry {
     /// # Errors
     ///
     /// Returns `Err` if registration fails (e.g. duplicate name or invalid input).
+    ///
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// id already exists in either state.
     pub fn register(&self, spec: DraftSpec) -> Result<(), DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -49,6 +53,10 @@ impl DraftModelRegistry {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// - `AlreadyLoaded` if the entry is already in `Loaded` state
     pub fn attach_loaded(
         &self,
@@ -92,6 +100,10 @@ impl DraftModelRegistry {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// - `MemoryBudgetExceeded` if the budget can't accommodate this draft
     pub fn attach_loaded_budgeted(
         &self,

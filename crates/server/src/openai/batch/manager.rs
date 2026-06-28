@@ -59,6 +59,10 @@ impl BatchManager {
         }
     }
 
+    /// Runs the operation.
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     pub async fn set_completed(&self, job_id: &str) {
         let mut jobs = self.jobs.write().await;
         if let Some(job) = jobs.get_mut(job_id) {

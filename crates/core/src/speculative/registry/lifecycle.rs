@@ -30,6 +30,10 @@ impl DraftModelRegistry {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     ///   Use `force_unload` to bypass.
     pub fn unload(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -63,6 +67,10 @@ impl DraftModelRegistry {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// - `UnknownDraftId` if no entry with `id` exists
     pub fn force_unload(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -99,6 +107,10 @@ impl DraftModelRegistry {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// see ADR-007 for the routing design.
     pub fn increment_ref(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -124,6 +136,10 @@ impl DraftModelRegistry {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// Returns `true` if auto-unload was triggered by this call.
     pub fn decrement_ref(&self, id: &DraftId) -> Result<bool, DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -156,6 +172,10 @@ impl DraftModelRegistry {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// Snapshot the reference count for a registered draft.
     pub fn ref_count(&self, id: &DraftId) -> Result<usize, DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -171,6 +191,10 @@ impl DraftModelRegistry {
 
     /// Get a clone of the `Arc<Mutex<Box<dyn ModelBackend>>>` for a loaded draft.
     /// Returns None if the draft is unloaded or unknown. Used by
+    ///
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// `DraftResolver` to hand the backend to the engine.
     pub fn get_loaded_backend(&self, id: &DraftId) -> Option<Arc<Mutex<Box<dyn ModelBackend>>>> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -186,6 +210,10 @@ impl DraftModelRegistry {
 
     /// Read-only lookup of the current state. Does NOT trigger loading.
     ///
+    ///
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// Returns `None` if no entry with `id` is registered.
     pub fn lookup(&self, id: &DraftId) -> Option<DraftState> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -204,6 +232,9 @@ impl DraftModelRegistry {
         })
     }
 
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// Check whether a draft is registered (either state).
     pub fn contains(&self, id: &DraftId) -> bool {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -214,6 +245,9 @@ impl DraftModelRegistry {
         guard.contains_key(id)
     }
 
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// Check whether a draft is currently loaded.
     pub fn is_loaded(&self, id: &DraftId) -> bool {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -230,6 +264,10 @@ impl DraftModelRegistry {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// KV-cache growth tracking (MEM-02).
     pub fn draft_allocated_bytes(&self, id: &DraftId) -> Result<u64, DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -251,6 +289,10 @@ impl DraftModelRegistry {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// Zero for `Unloaded` drafts.
     pub fn draft_reserved_bytes(&self, id: &DraftId) -> Result<u64, DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -267,6 +309,9 @@ impl DraftModelRegistry {
         })
     }
 
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// List all registered draft ids (sorted).
     pub fn ids(&self) -> Vec<DraftId> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -279,6 +324,9 @@ impl DraftModelRegistry {
         ids
     }
 
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// Count of registered drafts (both states).
     pub fn len(&self) -> usize {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
