@@ -6,7 +6,7 @@ use vllm_model::config::Architecture;
 /// Prompt formatting strategy selected from the loaded model architecture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChatTemplate {
-    /// ChatML (`<|im_start|>` / `<|im_end|>`) used by Qwen models.
+    /// `ChatML` (`<|im_start|>` / `<|im_end|>`) used by Qwen models.
     ChatMl,
     /// Llama 3 header tokens.
     Llama3,
