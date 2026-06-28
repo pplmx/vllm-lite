@@ -206,9 +206,12 @@ impl MlaAttention {
         let k_t = k.transpose(2, 3)?.contiguous()?;
         let qk = q.matmul(&k_t)?;
 
+        // H-12 #1: replaced `qk.mul(broadcast(scalar_tensor))` with `qk.affine(scale, 0.0)`.
+        // Per H-9 profile (HIGH #1): `Tensor::new(&[scale], device)` was allocated and
+        // broadcast to O(B*H*S*S) every forward; `affine` fuses the scaling into the
+        // kernel without materializing a broadcast tensor.
         let scale = 1.0 / (self.v_head_dim as f32).sqrt();
-        let scale_tensor = Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?;
-        let qk = qk.mul(&scale_tensor)?;
+        let qk = qk.affine(scale as f64, 0.0)?;
 
         let attn_weights = candle_nn::ops::softmax(&qk, 3)?.contiguous()?;
 
