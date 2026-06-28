@@ -13,7 +13,7 @@
 
 |     版本     |    日期    |          测试          | 覆盖率 |
 | :----------: | :--------: | :--------------------: | :----: |
-| [Unreleased] |     -      |         1179+          | 97.8%  |
+| [Unreleased] |     -      |         1191+          | 97.8%  |
 |   [v22.0]    | 2026-06-27 |         1179+          | 97.8%  |
 |   [v21.0]    | 2026-06-27 |         1146+          | 97.8%  |
 |   [v20.0]    | 2026-06-27 |         1144+          | 97.8%  |
@@ -33,6 +33,16 @@
     - Supports tied embeddings (tie_word_embeddings)
 
 ### Changed
+
+- **Pedantic Cleanup (v25.0 Phase E-3)** — manual refactors + selective deny promotion:
+    - 109 `use_self` candidates: most were already resolved by E-1/E-2; only 1 residual doc-markdown fix in `chat_template.rs`
+    - 220 `module_name_repetitions` warnings: 117 files received `#![allow(clippy::module_name_repetitions)]` for legitimate patterns (`KvCache` in `kv_cache`, `MetricsExporter` in `metrics/exporter`, etc.)
+    - 7 `return_self_not_must_use` builders tagged `#[must_use]`: `MetricsSnapshot::with`, `DraftSpec::with_arch_hint`, `Request::with_draft_model`, `CausalLM::with_embed_through_layers`, `JwtConfig::with_issuer`/`with_audience`, `TlsConfig::with_ca_cert`
+    - 2 `missing_const_for_fn` warnings in tonic-generated gRPC code suppressed via `mod generated_proto` allow list in `crates/dist/src/grpc.rs`
+    - Promoted 7 lints from `warn` → `deny` in `[workspace.lints.clippy]`: `module_name_repetitions`, `missing_errors_doc`, `missing_panics_doc`, `uninlined_format_args`, `must_use_candidate`, `return_self_not_must_use`, `missing_const_for_fn`
+    - Wholesale `pedantic`/`nursery` promotion deferred: ~500 pedantic/nursery warnings remain (mostly `float_cmp` in tests, `unreadable_literal` for tokenizer vocab IDs, `significant_drop_tightening`) and would require per-file allows to deny-enforce
+    - Pedantic warning count: 1210 → 982 (`-W pedantic`); default `just clippy` warning count: 509 → 500
+    - `just ci` passes (1191 tests, 0 failures)
 
 - **Workspace Lint Policy (v24.0 Phase A)** — established three-tier clippy lint
   configuration in root `Cargo.toml` `[workspace.lints.clippy]`:
