@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //!
 //! Wraps `tower_http::limit::RequestBodyLimitLayer` so the limit can be
 //! applied to the protected routes via `axum::Router::layer`. The layer

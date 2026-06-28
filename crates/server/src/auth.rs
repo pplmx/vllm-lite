@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use axum::{
     extract::Request,
     http::{HeaderMap, StatusCode, header::AUTHORIZATION},

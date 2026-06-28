@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use rustls_pemfile::{certs, private_key};
 use std::fs;
 use std::sync::Arc;

@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use std::path::PathBuf;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};

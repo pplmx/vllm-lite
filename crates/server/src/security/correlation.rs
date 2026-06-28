@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use axum::{extract::Request, http::HeaderValue, middleware::Next, response::Response};
 use std::sync::Arc;
 use tokio::sync::RwLock;

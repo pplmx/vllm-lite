@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Health check endpoints
 
 /// Health status returned by checks
