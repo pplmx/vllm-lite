@@ -4,7 +4,7 @@ use crate::qwen3::config::{Qwen3Config, TextConfig};
 
 /// GdnLinearConfig: gdn linear configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GdnLinearConfig {
+pub(crate) struct GdnLinearConfig {
     pub num_k_heads: usize,
     pub num_v_heads: usize,
     pub key_head_dim: usize,

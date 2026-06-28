@@ -207,7 +207,7 @@ impl BatchCudaGraphExecutor {
     }
 
     /// Get execution statistics
-    pub fn stats(&self) -> GraphStats {
+    pub(crate) fn stats(&self) -> GraphStats {
         GraphStats {
             total_executions: self.total_executions.load(Ordering::Relaxed),
             cache_hits: self.cache_hits.load(Ordering::Relaxed),
@@ -255,7 +255,7 @@ impl BatchCudaGraphExecutor {
 
 /// GraphStats: graph statistics.
 #[derive(Debug, Clone)]
-pub struct GraphStats {
+pub(crate) struct GraphStats {
     pub total_executions: u64,
     pub cache_hits: u64,
     pub cached_graphs: usize,

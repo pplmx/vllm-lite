@@ -25,14 +25,14 @@ impl AttentionConfig {
 
     /// Returns a builder for configuring this type with the documented field defaults.
     /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
-    pub fn builder() -> AttentionConfigBuilder {
+    pub(crate) fn builder() -> AttentionConfigBuilder {
         AttentionConfigBuilder::default()
     }
 }
 
 /// Builder for [`AttentionConfig`].
 #[derive(Debug, Clone, Default)]
-pub struct AttentionConfigBuilder {
+pub(crate) struct AttentionConfigBuilder {
     inner: AttentionConfig,
 }
 
