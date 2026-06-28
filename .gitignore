@@ -34,3 +34,11 @@ core.*
 
 # cargo-mutants output (v30.0 Phase K)
 .mutants-out/
+
+# proptest regression seeds (v28.0+) — TRACK these, do NOT ignore.
+# proptest auto-creates them on test failure at
+# <CARGO_MANIFEST_DIR>/proptest-regressions/<source-relative-path>.txt
+# and re-runs those seeds before generating new random inputs.
+# Canonical example: crates/core/proptest-regressions/scheduler/batch_composer/compose.txt
+# (3 seeds from the v28.0 'compose_decode_batch empty-tokens underflow' bug fix).
+# See: https://proptest-rs.github.io/proptest/proptest/tutorial.html
