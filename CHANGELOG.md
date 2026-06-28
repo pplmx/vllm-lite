@@ -97,6 +97,27 @@
     - All 1191 tests pass (`cargo test --workspace` clean)
     - Largest sub-module: `state.rs` at 404 LOC (was 654 LOC monolith); the struct + 6 large lifecycle methods concentrate here. `graph.rs`, `update.rs`, and `memory.rs` are all ≤ 121 LOC.
 
+- **Module Boundaries (v24.0 Phase D-3a)** — split the two remaining hard-target files > 500 LOC:
+    - `crates/core/src/types.rs` (538 non-test LOC) → 7 sub-modules under `types/`:
+        - `mod.rs` — facade: re-exports `vllm_traits::{Batch, BatchOutput, BlockId, SeqId, TokenId}` and `DraftId` (21 LOC)
+        - `adaptive_draft.rs` — `AdaptiveDraftConfig` + `AdaptiveDraftConfigBuilder` (90 LOC)
+        - `request.rs` — `Priority` + `Request` (55 LOC)
+        - `sampling.rs` — `SamplingParams` + `SamplingParamsBuilder` (76 LOC)
+        - `sequence.rs` — `Sequence` + `Status` + `Phase` (47 LOC)
+        - `sequence_packing.rs` — `SequencePackingConfig` + builder + `from_env` (90 LOC)
+        - `scheduler_config.rs` — `SchedulerConfig` + `SchedulerConfigBuilder` (175 LOC)
+        - `messages.rs` — `EngineMessage` enum (23 LOC)
+    - `crates/model/src/components/ssm.rs` (568 LOC) → 5 sub-modules under `components/ssm/`:
+        - `mod.rs` — facade: re-exports + 7 unit tests (82 LOC)
+        - `config.rs` — `SSMConfig` (48 LOC)
+        - `layer.rs` — `softplus` helper + `SSMLayer` (137 LOC)
+        - `mamba.rs` — `MambaBlock` (138 LOC)
+        - `harmonic.rs` — `SSMHarmonicSSMLayer` (185 LOC)
+        - `error.rs` — `SSMError` + `From<Infallible>` impl (16 LOC)
+    - Public APIs unchanged: `crate::types::{Priority, Request, SamplingParams, SchedulerConfig, ...}` and `crate::components::ssm::{SSMConfig, SSMLayer, MambaBlock, SSMHarmonicSSMLayer, SSMError, softplus, ...}` still work via flat re-exports
+    - All 1191 tests pass (`cargo test --workspace` clean)
+    - Largest sub-module: `ssm/harmonic.rs` at 185 LOC (was 568 LOC monolith); all sub-modules ≤ 185 LOC
+
 ---
 
 ## 🚀 [v18.0] — Multi-Model Speculative Decoding (2026-06-27)
