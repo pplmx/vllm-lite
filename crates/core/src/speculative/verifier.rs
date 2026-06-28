@@ -59,12 +59,20 @@ impl VerificationResult {
 
 /// `DraftVerifier`: draft verifier trait.
 pub trait DraftVerifier: Send + Sync {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     fn generate_draft(
         &mut self,
         batch: &Batch,
         num_tokens: usize,
     ) -> Result<Vec<(SeqId, Vec<TokenId>)>>;
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     fn verify(
         &self,
         seq_id: SeqId,

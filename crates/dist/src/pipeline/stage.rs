@@ -68,8 +68,16 @@ pub struct StageOutput {
 pub trait PipelineStage: Send + Sync + std::fmt::Debug {
     fn config(&self) -> &PipelineStageConfig;
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     fn forward(&self, input: StageInput) -> Result<StageOutput>;
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     fn forward_microbatches(&self, inputs: Vec<StageInput>) -> Result<Vec<StageOutput>> {
         let mut outputs = Vec::with_capacity(inputs.len());
         for input in inputs {

@@ -26,6 +26,10 @@ impl DraftModelRegistry {
     /// Errors:
     /// - `UnknownDraftId` if no entry with `id` exists
     /// - `InUse(refcount)` if the draft is `Loaded` and has refcount > 0.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     ///   Use `force_unload` to bypass.
     pub fn unload(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -55,6 +59,10 @@ impl DraftModelRegistry {
     /// and tests. Logs the bypass at WARN level via `tracing`.
     ///
     /// Errors:
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// - `UnknownDraftId` if no entry with `id` exists
     pub fn force_unload(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -87,6 +95,10 @@ impl DraftModelRegistry {
     /// Increment the reference count for a registered draft.
     ///
     /// Updated in v18.3 — increment is driven by per-request routing logic;
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// see ADR-007 for the routing design.
     pub fn increment_ref(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -108,6 +120,10 @@ impl DraftModelRegistry {
     /// If the new count is zero AND the draft is `Loaded`, auto-unloads it:
     /// releases the budget reservation and drops the backend.
     ///
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// Returns `true` if auto-unload was triggered by this call.
     pub fn decrement_ref(&self, id: &DraftId) -> Result<bool, DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -137,6 +153,9 @@ impl DraftModelRegistry {
         }
     }
 
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// Snapshot the reference count for a registered draft.
     pub fn ref_count(&self, id: &DraftId) -> Result<usize, DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -207,6 +226,10 @@ impl DraftModelRegistry {
 
     /// Number of bytes currently allocated to KV cache blocks for this draft.
     /// Returns 0 if the draft is `Unloaded`. Used by the Engine for runtime
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// KV-cache growth tracking (MEM-02).
     pub fn draft_allocated_bytes(&self, id: &DraftId) -> Result<u64, DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -224,6 +247,10 @@ impl DraftModelRegistry {
     }
 
     /// Estimated total VRAM footprint reserved for this draft in the budget.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// Zero for `Unloaded` drafts.
     pub fn draft_reserved_bytes(&self, id: &DraftId) -> Result<u64, DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.

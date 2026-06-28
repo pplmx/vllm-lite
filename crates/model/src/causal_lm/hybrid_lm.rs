@@ -63,6 +63,10 @@ where
         }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_with_cache(
         &mut self,
         seq_id: SeqId,

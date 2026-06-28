@@ -47,10 +47,18 @@ impl RoPE {
         self.scaling_factor
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn apply(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
         apply_rope(x, positions, self.theta)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, q: &Tensor, k: &Tensor, position: i64) -> Result<(Tensor, Tensor)> {
         let positions: Vec<i64> = (0..q.dim(1)? as i64).map(|i| position + i).collect();
         let q_out = apply_rope(q, &positions, self.theta)?;
@@ -59,6 +67,10 @@ impl RoPE {
     }
 }
 
+/// Runs the operation.
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 pub fn apply_rope(query: &Tensor, positions: &[i64], theta: f32) -> Result<Tensor> {
     let (batch, seq_len, num_heads, head_dim) = query.dims4()?;
 

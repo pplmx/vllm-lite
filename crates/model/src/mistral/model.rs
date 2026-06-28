@@ -14,10 +14,18 @@ pub type MistralBlock = RopeGqaDecoderBlock;
 pub type MistralModel = CausalLm<MistralBlock, LnLayerNorm, Linear>;
 
 impl MistralModel {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(config: ModelConfig, device: Device, num_kv_blocks: usize) -> CandleResult<Self> {
         Self::new_with_block_fn(config, device, num_kv_blocks, false, new_block)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn from_weights(
         config: ModelConfig,
         device: Device,

@@ -21,6 +21,10 @@ pub struct FullAttentionBlock35 {
 }
 
 impl FullAttentionBlock35 {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         hidden_size: usize,
         num_heads: usize,
@@ -58,10 +62,18 @@ impl FullAttentionBlock35 {
         self
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
         self.forward_with_attn(x, |x| self.self_attn.forward(x))
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_prefill(
         &self,
         x: &Tensor,
@@ -76,6 +88,10 @@ impl FullAttentionBlock35 {
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_decode(
         &self,
         x: &Tensor,
@@ -122,6 +138,10 @@ impl FullAttentionBlock35 {
 }
 
 impl FullAttentionBlock35 {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn from_weights(
         prefix: &str,
         weights: &HashMap<String, Tensor>,

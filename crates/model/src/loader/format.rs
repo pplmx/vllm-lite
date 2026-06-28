@@ -18,6 +18,9 @@ pub trait FormatLoader {
     where
         Self: Sized;
 
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// Load weights from the given path.
     fn load(path: &Path, device: &Device) -> Result<HashMap<String, Tensor>>
     where

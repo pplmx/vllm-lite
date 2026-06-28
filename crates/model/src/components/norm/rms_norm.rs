@@ -15,6 +15,10 @@ impl RmsNorm {
         Self { weight, eps }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let dims = x.dims();
 
@@ -47,6 +51,10 @@ impl Module for RmsNorm {
     }
 }
 
+/// Runs the operation.
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 pub fn rms_norm(x: &Tensor, weight: &Tensor, eps: f64) -> Result<Tensor> {
     let dims = x.dims();
 

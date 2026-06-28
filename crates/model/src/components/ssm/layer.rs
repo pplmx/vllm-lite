@@ -8,6 +8,9 @@ use candle_nn::{Conv1d, Linear, VarBuilder, conv1d};
 use crate::components::ssm::config::SSMConfig;
 use crate::components::ssm::error::SSMError;
 
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 /// Numerically stable softplus: log(1 + exp(x)).
 pub fn softplus(xs: &Tensor) -> CandleResult<Tensor> {
     let exp_x = xs.exp()?;
@@ -28,6 +31,10 @@ pub struct SSMLayer {
 }
 
 impl SSMLayer {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(config: &SSMConfig, vb: VarBuilder) -> CandleResult<Self> {
         let d_inner = config.d_inner();
 
@@ -51,6 +58,10 @@ impl SSMLayer {
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor) -> CandleResult<(Tensor, Tensor, Tensor, Tensor)> {
         let x_conv = x.transpose(1, 2)?;
         let x_conv = self.conv.forward(&x_conv)?;
@@ -89,6 +100,10 @@ impl SSMLayer {
         &self.d
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn from_weights(
         d_inner: usize,
         d_state: usize,

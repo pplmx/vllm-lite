@@ -26,6 +26,9 @@ pub struct BatchCudaGraphExecutor {
 }
 
 impl BatchCudaGraphExecutor {
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     /// Create new executor (does not capture graphs yet)
     pub fn new(config: CudaGraphConfig) -> Result<Self, GraphExecutionError> {
         let enable_graph_pooling = config.enable_graph_pooling.unwrap_or(true);
@@ -150,6 +153,9 @@ impl BatchCudaGraphExecutor {
         sizes
     }
 
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// Capture graphs for all configured batch sizes
     pub fn capture_all_graphs(&mut self) -> Result<(), GraphExecutionError> {
         if !self.enabled {
@@ -186,6 +192,9 @@ impl BatchCudaGraphExecutor {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// Warm up graph cache with common batch sizes
     pub fn warmup(&mut self, common_batch_sizes: &[usize]) -> Result<(), GraphExecutionError> {
         if !self.enabled {
@@ -223,6 +232,9 @@ impl BatchCudaGraphExecutor {
         tracing::info!("Cleared {} cached graphs", count);
     }
 
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// Execute graph for batch
     pub fn execute(&self, batch: &Batch) -> Result<BatchOutput, GraphExecutionError> {
         self.total_executions.fetch_add(1, Ordering::Relaxed);

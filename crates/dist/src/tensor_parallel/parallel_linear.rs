@@ -32,6 +32,10 @@ impl ColumnParallelLinear {
         self.output_size / self.mesh.world_size
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, input: &[f32]) -> Result<Vec<f32>, TensorParallelError> {
         let local_output_size = self.output_size_per_rank();
         let mut local_output = vec![0.0f32; local_output_size];
@@ -81,6 +85,10 @@ impl RowParallelLinear {
         self.input_size / self.mesh.world_size
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, input: &[f32]) -> Result<Vec<f32>, TensorParallelError> {
         let local_input_size = self.input_size_per_rank();
 
@@ -116,6 +124,10 @@ pub struct TensorParallelManager {
 }
 
 impl TensorParallelManager {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         world_size: usize,
         rank: usize,

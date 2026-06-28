@@ -28,6 +28,10 @@ pub struct LayerCtx<'a> {
 
 /// Production decoder layer: paged-KV prefill/decode with optional aux state.
 pub trait DecoderLayer {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     fn forward_prefill(
         &self,
         x: &Tensor,
@@ -35,6 +39,10 @@ pub trait DecoderLayer {
         layer_idx: usize,
     ) -> Result<Tensor>;
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     fn forward_decode(
         &self,
         x: &Tensor,
@@ -71,6 +79,9 @@ impl<L: PagedDecoderBlock> DecoderLayer for L {
     }
 }
 
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 /// Run all decoder layers (prefill or single-token decode).
 pub fn run_layers<L: DecoderLayer>(
     layers: &[L],
@@ -80,6 +91,9 @@ pub fn run_layers<L: DecoderLayer>(
     run_layers_upto(layers, hidden, ctx, layers.len())
 }
 
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 /// Run decoder layers up to (but not including) `upto_layer`.
 pub fn run_layers_upto<L: DecoderLayer>(
     layers: &[L],

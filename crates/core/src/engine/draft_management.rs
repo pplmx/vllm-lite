@@ -44,6 +44,10 @@ impl Engine {
     }
 
     /// Register a new draft at runtime. Returns `DraftRegistryError::AlreadyLoaded`
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if registration fails (e.g. duplicate name or invalid input).
     /// if a draft with the same id already exists.
     pub fn register_draft(&self, spec: DraftSpec) -> std::result::Result<(), DraftRegistryError> {
         self.draft_registry.register(spec)
@@ -53,6 +57,10 @@ impl Engine {
     /// it from `Unloaded` to `Loaded`. Used by callers that drive the actual
     /// `ModelLoader` invocation. Does NOT reserve memory budget — use
     /// [`Self::attach_draft_budgeted`] when the registry was constructed with
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// a budget and you want VRAM enforcement.
     pub fn attach_draft(
         &self,
@@ -64,6 +72,10 @@ impl Engine {
 
     /// Attach a loaded backend AND reserve the draft's estimated footprint in
     /// the memory budget. Returns `MemoryBudgetExceeded` if the load would
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// exceed the configured budget.
     pub fn attach_draft_budgeted(
         &self,
@@ -75,24 +87,40 @@ impl Engine {
 
     /// Unload a draft by id, releasing its backend and KV allocator.
     /// Returns `InUse(refcount)` if the draft is still referenced; use
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// [`Self::force_unload_draft`] to bypass.
     pub fn unload_draft(&self, id: &DraftId) -> std::result::Result<(), DraftRegistryError> {
         self.draft_registry.unload(id)
     }
 
     /// Force-unload a draft, bypassing refcount checks. Used by admin tooling
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// and tests.
     pub fn force_unload_draft(&self, id: &DraftId) -> std::result::Result<(), DraftRegistryError> {
         self.draft_registry.force_unload(id)
     }
 
     /// Increment the reference count for a draft. Driven by per-request
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// routing logic since v18.3; see ADR-007.
     pub fn increment_draft_ref(&self, id: &DraftId) -> std::result::Result<(), DraftRegistryError> {
         self.draft_registry.increment_ref(id)
     }
 
     /// Decrement the reference count for a draft. Auto-unloads when count
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// reaches zero. Returns `true` if auto-unload was triggered.
     pub fn decrement_draft_ref(
         &self,

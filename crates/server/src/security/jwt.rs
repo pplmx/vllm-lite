@@ -127,6 +127,10 @@ impl JwtValidator {
 
     ///
     /// Verifies the JWT's signature, then validates standard claims
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// (iss, aud, exp). Returns the deserialized `Claims` on success.
     pub fn validate(&self, token: &str) -> Result<Claims, JwtError> {
         // Structural sanity check (3 parts) before delegating to
@@ -231,6 +235,10 @@ impl JwtAuthMiddleware {
         }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub async fn validate_request(&self, auth_header: &str) -> Result<Claims, JwtError> {
         let token = JwtValidator::extract_token(auth_header)
             .ok_or_else(|| JwtError::InvalidFormat("Missing Bearer token".to_string()))?;

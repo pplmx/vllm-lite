@@ -21,6 +21,10 @@ pub struct MixtralBlock {
 }
 
 impl MixtralBlock {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(config: &ModelConfig, _layer_idx: usize) -> Result<Self> {
         let hidden_size = config.hidden_size;
         let num_heads = config.num_heads;
@@ -72,6 +76,10 @@ impl MixtralBlock {
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn from_weights(
         config: &ModelConfig,
         layer_idx: usize,
@@ -200,6 +208,10 @@ impl MixtralBlock {
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor, _positions: &[usize]) -> Result<Tensor> {
         let residual = x.clone();
         let x = self.input_layernorm.forward(x)?;
@@ -212,6 +224,10 @@ impl MixtralBlock {
         x.add(&residual)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_prefill(
         &self,
         x: &Tensor,
@@ -233,6 +249,10 @@ impl MixtralBlock {
         x.add(&residual)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_decode(
         &self,
         x: &Tensor,

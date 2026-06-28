@@ -25,6 +25,10 @@ impl AttentionStats {
     }
 }
 
+/// Runs the operation.
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 pub fn softmax_last_dim(t: &Tensor) -> Result<Tensor> {
     let shape = t.dims();
     let max_vals = t.max_keepdim(shape.len() - 1)?;

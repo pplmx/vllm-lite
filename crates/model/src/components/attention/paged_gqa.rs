@@ -10,6 +10,9 @@ use crate::paged_tensor::PagedKvCache;
 
 /// Write expanded K/V tensors to the paged KV cache during prefill.
 ///
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 /// `k` and `v` must be `[batch, num_heads, seq_len, head_dim]`.
 pub fn write_prefill_kv(
     kv_cache: &mut PagedKvCache,
@@ -45,6 +48,9 @@ pub fn write_prefill_kv(
 
 /// Read cached KV, append the current token, and write the new token into the cache.
 ///
+/// # Errors
+///
+/// Returns `Err` if reading or parsing the source fails.
 /// Returns full K/V in `[batch, num_heads, kv_seq, head_dim]` layout.
 pub fn read_decode_kv(
     kv_cache: &mut PagedKvCache,
@@ -81,6 +87,9 @@ pub fn read_decode_kv(
     Ok((full_k, full_v))
 }
 
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 /// Causal mask for square prefill (`q_seq == kv_seq > 1`); none for decode or non-square paths.
 pub fn prefill_causal_mask(q_seq: usize, kv_seq: usize, device: &Device) -> Result<Option<Tensor>> {
     if q_seq == kv_seq && q_seq > 1 {
@@ -92,6 +101,9 @@ pub fn prefill_causal_mask(q_seq: usize, kv_seq: usize, device: &Device) -> Resu
 
 /// Scaled dot-product GQA attention with optional broadcast mask.
 ///
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 /// `q`, `k`, `v` are `[batch, num_heads, seq, head_dim]`.
 pub fn compute_gqa_attention(
     q: &Tensor,
@@ -110,6 +122,9 @@ pub fn compute_gqa_attention(
     Tensor::matmul(&attn_weights, v)
 }
 
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 /// Reshape head-first attention output and apply the output projection.
 pub fn project_attention_output(
     attn_output: &Tensor,
@@ -126,6 +141,10 @@ pub fn project_attention_output(
 
 /// Plugin for applying rotary embeddings to Q/K before paged KV write.
 pub trait QkRotaryEmb: Send + Sync {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     fn apply_qk(&self, q: &Tensor, k: &Tensor, positions: &[usize]) -> Result<(Tensor, Tensor)>;
 }
 

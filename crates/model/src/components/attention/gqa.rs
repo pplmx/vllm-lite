@@ -22,6 +22,10 @@ pub struct GqaAttention {
 }
 
 impl GqaAttention {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         hidden_size: usize,
         num_heads: usize,
@@ -65,6 +69,10 @@ impl GqaAttention {
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new_with_weights(
         _hidden_size: usize,
         num_heads: usize,
@@ -117,6 +125,10 @@ impl GqaAttention {
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let batch_size = x.dims()[0];
         let seq_len = x.dims()[1];
@@ -182,6 +194,10 @@ impl GqaAttention {
         Ok(o)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn expand_kv(
         &self,
         kv: &Tensor,
@@ -191,12 +207,20 @@ impl GqaAttention {
         expand_kv(kv, num_q_heads, num_kv_heads)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn paged_attention_fn(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let attn_output = paged_attention(q, k, v, self.num_heads, self.head_dim)?;
         let o = self.o_proj.forward(&attn_output)?;
         Ok(o)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn tiled_attention_fn(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let tile_size = self.config.tile_size.unwrap_or(16);
         let attn_output = tiled_attention(q, k, v, self.num_heads, tile_size)?;
@@ -204,6 +228,10 @@ impl GqaAttention {
         Ok(o)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn flash_attention_fn(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let flash = GqaFlashAttention::new(self.num_heads, self.num_kv_heads, self.head_dim, true);
         let attn_output = flash.forward(q, k, v)?;
@@ -215,6 +243,9 @@ impl GqaAttention {
         self.o_proj.forward(&attn_output)
     }
 
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// Prefill/decode attention: flash when `use_fused`, else tiled or paged matmul.
     pub fn run_attention_fn(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         if self.config.use_fused {
@@ -286,6 +317,10 @@ impl GqaAttention {
         &self.config
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn project_qkv(&self, x: &Tensor) -> Result<(Tensor, Tensor, Tensor)> {
         let q = self.q_proj.forward(x)?;
         let k = self.k_proj.forward(x)?;
@@ -293,6 +328,10 @@ impl GqaAttention {
         Ok((q, k, v))
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn apply_q_norm_impl(
         &self,
         q: Tensor,
@@ -311,6 +350,10 @@ impl GqaAttention {
         }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn apply_k_norm_impl(
         &self,
         k: Tensor,
@@ -329,6 +372,10 @@ impl GqaAttention {
         }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn apply_q_norm_impl_flattened(&self, q: Tensor) -> Result<Tensor> {
         if let Some(ref q_norm) = self.q_norm {
             let q = q_norm.forward(&q)?;
@@ -338,6 +385,10 @@ impl GqaAttention {
         }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn apply_k_norm_impl_flattened(&self, k: Tensor) -> Result<Tensor> {
         if let Some(ref k_norm) = self.k_norm {
             let k = k_norm.forward(&k)?;

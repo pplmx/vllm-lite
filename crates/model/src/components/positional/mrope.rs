@@ -50,6 +50,10 @@ impl MRoPE {
         }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn apply(
         &self,
         q: &Tensor,

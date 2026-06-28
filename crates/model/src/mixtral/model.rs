@@ -14,6 +14,10 @@ use super::block::MixtralBlock;
 pub type MixtralModel = CausalLm<MixtralBlock, LnLayerNorm, Linear>;
 
 impl MixtralModel {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         config: ModelConfig,
         device: Device,
@@ -29,6 +33,10 @@ impl MixtralModel {
         )
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn from_weights(
         config: ModelConfig,
         device: Device,

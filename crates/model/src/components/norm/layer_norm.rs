@@ -17,6 +17,10 @@ impl LnLayerNorm {
         Self { weight, bias, eps }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let dims = x.dims();
 
@@ -39,6 +43,10 @@ impl Module for LnLayerNorm {
     }
 }
 
+/// Runs the operation.
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 pub fn layer_norm(x: &Tensor, weight: &Tensor, bias: &Tensor, eps: f64) -> Result<Tensor> {
     let dims = x.dims();
 

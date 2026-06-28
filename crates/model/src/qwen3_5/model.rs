@@ -35,6 +35,10 @@ impl HybridLmConfig for Qwen3Config {
 }
 
 impl Qwen35HybridModel {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         config: Qwen3Config,
         device: Device,
@@ -100,6 +104,10 @@ impl Qwen35HybridModel {
         ))
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn from_weights(
         config: Qwen3Config,
         device: Device,

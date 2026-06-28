@@ -154,6 +154,9 @@ fn compute_decay(g_alpha: &Tensor, a_log: &Tensor, dt_bias: &Tensor) -> CandleRe
     alpha.exp()
 }
 
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 /// Single recurrent GDN step. `q/k/v/g/beta` are `(batch, num_heads, ...)`.
 pub fn gated_delta_step(
     q_t: &Tensor,
@@ -184,6 +187,9 @@ pub fn gated_delta_step(
     Ok((out_t, next_state))
 }
 
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 /// Recurrent gated delta rule over a sequence (prefill-style sequential scan).
 pub fn gated_delta_recurrent(
     q: &Tensor,
@@ -195,6 +201,10 @@ pub fn gated_delta_recurrent(
     gated_delta_recurrent_with_state(q, k, v, g, beta, None)
 }
 
+/// Runs the operation.
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 pub fn gated_delta_recurrent_with_state(
     q: &Tensor,
     k: &Tensor,
@@ -259,10 +269,18 @@ impl GatedDeltaNet {
         }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
         self.forward_prefill(x).map(|(out, _)| out)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_prefill(
         &self,
         x: &Tensor,
@@ -302,6 +320,10 @@ impl GatedDeltaNet {
         Ok((output, super::state::GatedDeltaState { recurrent, conv }))
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_decode(
         &self,
         x: &Tensor,

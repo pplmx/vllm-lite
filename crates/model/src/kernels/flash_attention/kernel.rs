@@ -10,7 +10,15 @@ use candle_core::{Result, Tensor};
 
 /// `FlashAttention`: flash attention trait.
 pub trait FlashAttention: Send + Sync + std::fmt::Debug {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor>;
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     fn forward_with_mask(
         &self,
         q: &Tensor,
@@ -18,6 +26,10 @@ pub trait FlashAttention: Send + Sync + std::fmt::Debug {
         v: &Tensor,
         mask: &Tensor,
     ) -> Result<Tensor>;
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     fn forward_tiled(&self, q: &Tensor, k: &Tensor, v: &Tensor, tile_size: usize)
     -> Result<Tensor>;
 }
@@ -56,6 +68,10 @@ impl FlashAttentionV2 {
         self
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let (_batch_size, _num_heads_q, _seq_len_q, _head_dim) = q.dims4()?;
         let (_, _, seq_len_k, _) = k.dims4()?;
@@ -162,6 +178,10 @@ impl FlashAttentionV2 {
         Ok(final_output)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_with_causal_mask(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let (_, _, _seq_len_q, _) = q.dims4()?;
         let (_, _, seq_len_k, _) = k.dims4()?;
@@ -332,6 +352,10 @@ impl ScaledDotProductAttention {
         self
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn compute_tiled(
         &self,
         q: &Tensor,
@@ -392,6 +416,10 @@ impl ScaledDotProductAttention {
         Ok(result)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn compute_sliding_window(
         &self,
         q: &Tensor,
@@ -467,6 +495,10 @@ impl FlashAttentionKernel {
         Self { attention, config }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         if self.config.variant == AttentionVariant::Tiled {
             return self.forward_tiled(q, k, v);

@@ -56,6 +56,10 @@ impl ResolvedDraft {
 /// Implemented by the server (which has access to `vllm_model::loader`) or
 /// by tests with stub loaders.
 pub trait DraftLoader: Send + Sync {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     fn load(&self, id: &DraftId) -> std::result::Result<Box<dyn ModelBackend>, DraftRegistryError>;
 }
 

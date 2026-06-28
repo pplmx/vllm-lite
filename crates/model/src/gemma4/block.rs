@@ -20,6 +20,10 @@ pub struct Gemma4Block {
 }
 
 impl Gemma4Block {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(config: &ModelConfig, layer_idx: usize, vb: candle_nn::VarBuilder) -> Result<Self> {
         let hidden_size = config.hidden_size;
         let num_heads = config.num_heads;
@@ -68,6 +72,10 @@ impl Gemma4Block {
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn from_weights(
         config: &ModelConfig,
         layer_idx: usize,
@@ -158,6 +166,10 @@ impl Gemma4Block {
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor, positions: &[usize]) -> Result<Tensor> {
         let residual = x.clone();
         let x = self.input_layernorm.forward(x)?;
@@ -170,6 +182,10 @@ impl Gemma4Block {
         x.add(&residual)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_prefill(
         &self,
         x: &Tensor,
@@ -191,6 +207,10 @@ impl Gemma4Block {
         x.add(&residual)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_decode(
         &self,
         x: &Tensor,
@@ -256,6 +276,9 @@ impl PagedDecoderBlock for Gemma4Block {
     }
 }
 
+/// # Errors
+///
+/// Returns `Err` if any required tensor allocation or weight loading fails.
 /// Build a zero-initialized Gemma4 block for `CausalLm::new_rms`.
 pub fn new_block(config: &ModelConfig, layer_idx: usize) -> Result<Gemma4Block> {
     let vb = candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu);

@@ -83,6 +83,10 @@ impl QuantizationConfig {
 /// Quantization: quantization trait.
 pub trait Quantization: Send + Sync {
     fn quantize(&self, data: &[f32]) -> QuantizedWeights;
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     fn dequantize(&self, weights: &QuantizedWeights) -> Result<Tensor>;
     fn bits(&self) -> usize;
     fn quant_type(&self) -> QuantizationType;
@@ -138,6 +142,10 @@ impl AWQQuantization {
         Self { bits, group_size }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn quantize(
         &self,
         data: &[f32],
@@ -175,6 +183,10 @@ impl AWQQuantization {
         Ok(QuantizedWeights::new(qweight_tensor, scales_tensor))
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn dequantize(&self, weights: &QuantizedWeights) -> Result<Tensor> {
         let qweight = &weights.qweight;
         let scales = &weights.scales;
@@ -220,6 +232,10 @@ impl GPTQQuantization {
         Self { bits, group_size }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn quantize(
         &self,
         data: &[f32],
@@ -257,6 +273,10 @@ impl GPTQQuantization {
         Ok(QuantizedWeights::new(qweight_tensor, scales_tensor))
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn dequantize(&self, weights: &QuantizedWeights) -> Result<Tensor> {
         let qweight = &weights.qweight;
         let scales = &weights.scales;

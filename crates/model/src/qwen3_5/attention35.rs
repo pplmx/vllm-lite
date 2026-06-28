@@ -26,6 +26,10 @@ pub struct Attention35WithRoPE {
 }
 
 impl Attention35WithRoPE {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         hidden_size: usize,
         num_heads: usize,
@@ -46,6 +50,10 @@ impl Attention35WithRoPE {
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn from_weights(
         prefix: &str,
         weights: &HashMap<String, Tensor>,
@@ -89,6 +97,10 @@ impl Attention35WithRoPE {
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
         let (batch, seq_len, _) = x.dims3()?;
         let positions: Vec<usize> = (0..seq_len).collect();
@@ -97,6 +109,10 @@ impl Attention35WithRoPE {
         self.compute_attention(&q, &k, &v, batch, seq_len, true)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_prefill(
         &self,
         x: &Tensor,
@@ -128,6 +144,10 @@ impl Attention35WithRoPE {
         self.compute_paged_attention(&q, &k_expanded, &v_expanded, seq_len)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_decode(
         &self,
         x: &Tensor,

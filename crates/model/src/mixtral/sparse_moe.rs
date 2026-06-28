@@ -76,6 +76,10 @@ fn compute_topk_routing(
 }
 
 impl MixtralSparseMoe {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         hidden_size: usize,
         num_experts: usize,
@@ -109,6 +113,10 @@ impl MixtralSparseMoe {
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new_with_weights(
         _hidden_size: usize,
         num_experts: usize,
@@ -147,6 +155,10 @@ impl MixtralSparseMoe {
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let squeeze_seq = x.dims().len() == 2;
         let x = if squeeze_seq {

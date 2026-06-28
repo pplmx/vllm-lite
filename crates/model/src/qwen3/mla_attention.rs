@@ -10,6 +10,10 @@ pub struct Qwen3MlaAttention {
 
 impl Qwen3MlaAttention {
     #[allow(clippy::too_many_arguments)]
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         hidden_size: usize,
         num_heads: usize,
@@ -37,6 +41,10 @@ impl Qwen3MlaAttention {
         Ok(Self { inner })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
         self.inner.forward(x, positions)
     }

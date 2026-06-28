@@ -15,6 +15,10 @@ pub struct RopeGqaAttention {
 }
 
 impl RopeGqaAttention {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         hidden_size: usize,
         num_heads: usize,
@@ -37,6 +41,10 @@ impl RopeGqaAttention {
         Ok(Self { inner, theta })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new_with_weights(
         hidden_size: usize,
         num_heads: usize,
@@ -69,6 +77,10 @@ impl RopeGqaAttention {
         Ok(Self { inner, theta })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         self.inner.forward(x)
     }
@@ -109,6 +121,10 @@ impl RopeGqaAttention {
         Ok((q, k))
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_prefill(
         &self,
         x: &Tensor,
@@ -154,6 +170,10 @@ impl RopeGqaAttention {
         self.inner.run_attention_fn(&q, &k_expanded, &v_expanded)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_decode(
         &self,
         x: &Tensor,

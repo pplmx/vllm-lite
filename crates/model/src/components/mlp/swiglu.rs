@@ -1,6 +1,10 @@
 use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;
 
+/// Runs the operation.
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 pub fn swiglu_forward(
     x: &Tensor,
     gate_proj: &Linear,
@@ -25,6 +29,10 @@ pub struct SwiGLU {
 }
 
 impl SwiGLU {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         hidden_size: usize,
         intermediate_size: usize,
@@ -44,6 +52,10 @@ impl SwiGLU {
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new_with_weights(
         _hidden_size: usize,
         _intermediate_size: usize,
@@ -62,6 +74,10 @@ impl SwiGLU {
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         swiglu_forward(x, &self.gate_proj, &self.up_proj, &self.down_proj)
     }
