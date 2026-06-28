@@ -91,11 +91,13 @@ impl JwtConfig {
         }
     }
 
+    #[must_use]
     pub fn with_issuer(mut self, issuer: impl Into<String>) -> Self {
         self.issuer = issuer.into();
         self
     }
 
+    #[must_use]
     pub fn with_audience(mut self, audience: impl Into<String>) -> Self {
         self.audience = audience.into();
         self

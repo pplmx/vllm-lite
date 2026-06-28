@@ -50,6 +50,7 @@ impl Request {
 
     /// Bind this request to a specific external draft model. The engine will
     /// resolve `id` against the registry at step time.
+    #[must_use]
     pub fn with_draft_model(mut self, id: impl Into<DraftId>) -> Self {
         self.draft_model_id = Some(id.into());
         self
