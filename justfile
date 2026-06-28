@@ -179,3 +179,16 @@ mutants-report:
 # Remove the mutation output directory.
 mutants-clean:
     rm -rf .mutants-out
+
+# Print mutation score: caught / (caught + missed) as a percentage.
+mutants-score:
+    @test -f .mutants-out/mutants.out/mutants.json || (echo "no scan yet — run \`just mutants MODULE\` first"; exit 1)
+    @./scripts/check_mutation_score.sh .mutants-out/mutants.out 0 | head -1
+
+# Run mutation scan with baseline regression check (used in CI / pre-merge).
+# Usage: `just mutants-ci MODULE BASELINE_PCT`
+# Example: `just mutants-ci scheduler 99.5`
+# Exit code 0 if score >= BASELINE_PCT, non-zero otherwise.
+mutants-ci MODULE BASELINE:
+    just mutants {{MODULE}}
+    @./scripts/check_mutation_score.sh .mutants-out/mutants.out {{BASELINE}}
