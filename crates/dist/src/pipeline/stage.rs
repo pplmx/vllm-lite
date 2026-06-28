@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use candle_core::{Device, Result, Tensor};
 use std::sync::Arc;
 

@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use super::{CacheConfig, CacheMessage, NodeId};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Error types for the `vllm-dist` crate.
 //!
 //! This module serves as the **canonical home** for error types emitted by
