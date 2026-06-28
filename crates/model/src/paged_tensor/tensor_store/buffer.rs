@@ -1,110 +1,13 @@
-use std::collections::HashMap;
+// crates/model/src/paged_tensor/tensor_store/buffer.rs
+//
+// PagedKvCache write/read operations on the K/V buffer:
+// `write_kv`, `write_kv_batch`, `read_kv`.
 
-use candle_core::{DType, Device, Result, Tensor};
-pub use vllm_traits::BLOCK_SIZE;
-
-use super::quantization::dequantize;
-
-/// PagedKvCache: paged kv cache.
-pub struct PagedKvCache {
-    key_cache: Vec<Tensor>,
-    value_cache: Vec<Tensor>,
-    num_layers: usize,
-    num_heads: usize,
-    head_dim: usize,
-    block_size: usize,
-    device: Device,
-    pub quantized: bool,
-    pub scales: Vec<f32>,
-    pub block_hashes: Vec<HashMap<u64, usize>>,
-}
+use super::{PagedKvCache, BLOCK_SIZE};
+use super::super::quantization::dequantize;
+use candle_core::{DType, Result, Tensor};
 
 impl PagedKvCache {
-    pub fn new(
-        num_layers: usize,
-        num_heads: usize,
-        head_dim: usize,
-        num_blocks: usize,
-        device: Device,
-        quantized: bool,
-    ) -> Result<Self> {
-        let mut key_cache = Vec::with_capacity(num_layers);
-        let mut value_cache = Vec::with_capacity(num_layers);
-
-        for _ in 0..num_layers {
-            let shape = (num_blocks, num_heads, BLOCK_SIZE, head_dim);
-            let key = Tensor::zeros(shape, DType::F32, &device)?;
-            let value = Tensor::zeros(shape, DType::F32, &device)?;
-            key_cache.push(key);
-            value_cache.push(value);
-        }
-
-        let scales = vec![1.0f32; num_layers];
-        let block_hashes = vec![HashMap::new(); num_layers];
-
-        Ok(Self {
-            key_cache,
-            value_cache,
-            num_layers,
-            num_heads,
-            head_dim,
-            block_size: BLOCK_SIZE,
-            device,
-            quantized,
-            scales,
-            block_hashes,
-        })
-    }
-
-    pub fn num_blocks(&self) -> usize {
-        self.key_cache
-            .first()
-            .map(|t| t.shape().dims()[0])
-            .unwrap_or(0)
-    }
-
-    pub fn num_layers(&self) -> usize {
-        self.num_layers
-    }
-
-    pub fn get_scale(&self, layer_idx: usize) -> f32 {
-        self.scales.get(layer_idx).copied().unwrap_or(1.0)
-    }
-
-    fn update_scale(&mut self, layer_idx: usize, new_scale: f32) {
-        if layer_idx < self.scales.len() {
-            self.scales[layer_idx] = new_scale;
-        }
-    }
-
-    pub fn block_size(&self) -> usize {
-        self.block_size
-    }
-
-    pub fn compute_block_hash(block: &Tensor) -> u64 {
-        if let Ok(data) = block.to_vec1::<f32>() {
-            let hash: u64 = data
-                .iter()
-                .map(|&x| (x.abs() * 1000.0) as u64)
-                .fold(0u64, |acc, x| acc.wrapping_mul(31).wrapping_add(x));
-            hash
-        } else {
-            0
-        }
-    }
-
-    pub fn find_matching_blocks(&self, prompt_hash: u64, layer_idx: usize) -> Vec<usize> {
-        let mut matches = Vec::new();
-        if let Some(hash_map) = self.block_hashes.get(layer_idx) {
-            for (&hash, &block_id) in hash_map.iter() {
-                if prompt_hash == hash {
-                    matches.push(block_id);
-                }
-            }
-        }
-        matches
-    }
-
     pub fn write_kv_batch(
         &mut self,
         layer_idx: usize,
@@ -398,75 +301,10 @@ impl PagedKvCache {
     }
 }
 
-/// CacheBlock: cache block.
-pub struct CacheBlock {
-    pub key: Tensor,
-    pub value: Tensor,
-    pub is_free: bool,
-    pub layer_idx: usize,
-}
-
-/// KvCachePool: kv cache pool.
-pub struct KvCachePool {
-    blocks: Vec<CacheBlock>,
-    free_list: Vec<usize>,
-    total_blocks: usize,
-}
-
-impl KvCachePool {
-    pub fn new(
-        _num_layers: usize,
-        num_heads: usize,
-        head_dim: usize,
-        block_size: usize,
-        device: Device,
-    ) -> Result<Self> {
-        let mut blocks = Vec::new();
-        let mut free_list = Vec::new();
-
-        for block_id in 0..1000 {
-            let key = Tensor::zeros((1, num_heads, block_size, head_dim), DType::F32, &device)?;
-            let value = Tensor::zeros((1, num_heads, block_size, head_dim), DType::F32, &device)?;
-
-            blocks.push(CacheBlock {
-                key,
-                value,
-                is_free: true,
-                layer_idx: 0,
-            });
-            free_list.push(block_id);
-        }
-
-        Ok(Self {
-            blocks,
-            free_list,
-            total_blocks: 1000,
-        })
-    }
-
-    pub fn allocate(&mut self) -> Option<usize> {
-        self.free_list.pop()
-    }
-
-    pub fn deallocate(&mut self, block_id: usize) {
-        if block_id < self.total_blocks {
-            self.blocks[block_id].is_free = true;
-            self.free_list.push(block_id);
-        }
-    }
-
-    pub fn is_available(&self) -> bool {
-        !self.free_list.is_empty()
-    }
-
-    pub fn available_blocks(&self) -> usize {
-        self.free_list.len()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use candle_core::Device;
 
     #[test]
     fn test_paged_kv_cache_creation() -> Result<()> {
