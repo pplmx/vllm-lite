@@ -26,6 +26,14 @@
 
 ### Added
 
+- **Fuzz CI Integration (v30.0 Phase L)** — fuzz-smoke + nightly long-run workflows:
+    - `.github/workflows/fuzz.yml` — PR-triggered, 30s × 3 targets, corpus cached via `actions/cache`, crash artifacts auto-uploaded
+    - `.github/workflows/fuzz-nightly.yml` — cron + manual dispatch, 5min × 3 targets, separate corpus cache, grown-corpus artifact upload
+    - `just fuzz-repro TARGET CRASH` — local crash artifact replay
+    - `docs/fuzz.md` — methodology + CI workflow + corpus management + crash handling
+    - CI budget: PR workflow ~3-5 min/target, nightly ~15 min total — within GitHub free tier
+    - Total commits: 6 (L-1.1, L-1.2, L-2.1, L-2.2, L-3.1, L-3.2)
+
 - **Mutation Testing (v30.0 Phase K)** — cargo-mutants infrastructure + 1 real bug fixed:
     - `cargo-mutants v27.1.0` installed as standalone tool
     - justfile targets: `mutants MODULE`, `mutants-report`, `mutants-clean`, `mutants-score`, `mutants-ci MODULE BASELINE`
