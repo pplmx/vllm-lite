@@ -31,3 +31,6 @@ coverage/
 .worktrees/
 .claude/
 core.*
+
+# cargo-mutants output (v30.0 Phase K)
+.mutants-out/
