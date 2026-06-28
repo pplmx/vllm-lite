@@ -11,11 +11,11 @@ use vllm_traits::ModelBackend;
 use super::block::Gemma4Block;
 use super::model::Gemma4Model;
 
-/// Gemma4Architecture: gemma4 architecture.
+/// `Gemma4Architecture`: gemma4 architecture.
 pub(crate) struct Gemma4Architecture;
 
 impl Gemma4Architecture {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
@@ -26,7 +26,7 @@ impl Default for Gemma4Architecture {
     }
 }
 
-/// Gemma4BlockWrapper: gemma4 block wrapper.
+/// `Gemma4BlockWrapper`: gemma4 block wrapper.
 pub(crate) type Gemma4BlockWrapper = BlockWrapper<Gemma4Block>;
 
 impl Architecture for Gemma4Architecture {
@@ -87,8 +87,7 @@ mod tests {
             let config = json!({"model_type": model_type});
             assert!(
                 arch.detect(&config),
-                "Failed to detect model_type: {}",
-                model_type
+                "Failed to detect model_type: {model_type}"
             );
         }
     }
@@ -100,8 +99,7 @@ mod tests {
             let config = json!({"model_type": model_type});
             assert!(
                 arch.detect(&config),
-                "Failed to detect case-insensitive model_type: {}",
-                model_type
+                "Failed to detect case-insensitive model_type: {model_type}"
             );
         }
     }
@@ -113,8 +111,7 @@ mod tests {
             let config = json!({"model_type": model_type});
             assert!(
                 !arch.detect(&config),
-                "Should not detect model_type: {}",
-                model_type
+                "Should not detect model_type: {model_type}"
             );
         }
     }

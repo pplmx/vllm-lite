@@ -66,47 +66,47 @@ impl ModelHyperparams for ModelConfig {
 
 impl ModelHyperparams for Qwen3Config {
     fn vocab_size(&self) -> usize {
-        Qwen3Config::vocab_size(self)
+        Self::vocab_size(self)
     }
 
     fn hidden_size(&self) -> usize {
-        Qwen3Config::hidden_size(self)
+        Self::hidden_size(self)
     }
 
     fn num_layers(&self) -> usize {
-        Qwen3Config::num_hidden_layers(self)
+        Self::num_hidden_layers(self)
     }
 
     fn num_heads(&self) -> usize {
-        Qwen3Config::num_attention_heads(self)
+        Self::num_attention_heads(self)
     }
 
     fn num_kv_heads(&self) -> usize {
-        Qwen3Config::num_key_value_heads(self)
+        Self::num_key_value_heads(self)
     }
 
     fn head_dim(&self) -> usize {
-        Qwen3Config::head_dim(self)
+        Self::head_dim(self)
     }
 
     fn intermediate_size(&self) -> usize {
-        Qwen3Config::intermediate_size(self)
+        Self::intermediate_size(self)
     }
 
     fn rope_theta(&self) -> f32 {
-        Qwen3Config::rope_theta(self)
+        Self::rope_theta(self)
     }
 
     fn rms_norm_eps(&self) -> f64 {
-        Qwen3Config::rms_norm_eps(self)
+        Self::rms_norm_eps(self)
     }
 
     fn tie_word_embeddings(&self) -> bool {
-        Qwen3Config::tie_word_embeddings(self)
+        Self::tie_word_embeddings(self)
     }
 
     fn max_position_embeddings(&self) -> usize {
-        Qwen3Config::max_position_embeddings(self)
+        Self::max_position_embeddings(self)
     }
 }
 
@@ -159,7 +159,7 @@ impl From<&Qwen3Config> for ModelConfig {
 
 impl From<ModelConfig> for Qwen3Config {
     fn from(config: ModelConfig) -> Self {
-        Qwen3Config::from(&config)
+        Self::from(&config)
     }
 }
 

@@ -7,7 +7,7 @@ use super::rope::{RopeParameters, RopeScaling};
 use crate::config::errors::{ConfigError, ConfigResult};
 use serde::Deserialize;
 
-/// TextConfig: text configuration.
+/// `TextConfig`: text configuration.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct TextConfig {
     #[serde(default)]
@@ -32,7 +32,7 @@ pub struct TextConfig {
     pub rms_norm_eps: Option<f32>,
     #[serde(default)]
     pub layer_types: Option<Vec<String>>,
-    /// Gated DeltaNet (linear attention) head counts — HF `text_config` fields.
+    /// Gated `DeltaNet` (linear attention) head counts — HF `text_config` fields.
     #[serde(default)]
     pub linear_num_key_heads: Option<usize>,
     #[serde(default)]
@@ -48,7 +48,7 @@ pub struct TextConfig {
     pub full_attention_interval: Option<usize>,
 }
 
-/// Qwen3Config: qwen3 configuration.
+/// `Qwen3Config`: qwen3 configuration.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Qwen3Config {
     #[serde(default)]
@@ -93,7 +93,7 @@ pub struct Qwen3Config {
     pub head_dim: Option<usize>,
 }
 
-/// AttentionType: attention type.
+/// `AttentionType`: attention type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttentionType {
     MHA,
@@ -103,71 +103,88 @@ pub enum AttentionType {
 }
 
 impl TextConfig {
+    #[must_use]
     pub fn vocab_size(&self) -> usize {
         self.vocab_size.unwrap_or(151936)
     }
 
+    #[must_use]
     pub fn hidden_size(&self) -> usize {
         self.hidden_size.unwrap_or(4096)
     }
 
+    #[must_use]
     pub fn num_hidden_layers(&self) -> usize {
         self.num_hidden_layers.unwrap_or(32)
     }
 
+    #[must_use]
     pub fn num_attention_heads(&self) -> usize {
         self.num_attention_heads.unwrap_or(32)
     }
 
+    #[must_use]
     pub fn num_key_value_heads(&self) -> usize {
         self.num_key_value_heads.unwrap_or(32)
     }
 
+    #[must_use]
     pub fn intermediate_size(&self) -> usize {
         self.intermediate_size.unwrap_or(11008)
     }
 
+    #[must_use]
     pub fn rope_theta(&self) -> f32 {
         self.rope_theta.unwrap_or(10000.0)
     }
 
+    #[must_use]
     pub fn max_position_embeddings(&self) -> usize {
         self.max_position_embeddings.unwrap_or(8192)
     }
 
+    #[must_use]
     pub fn rms_norm_eps(&self) -> f32 {
         self.rms_norm_eps.unwrap_or(1e-6)
     }
 
+    #[must_use]
     pub fn layer_types(&self) -> Option<&[String]> {
         self.layer_types.as_deref()
     }
 
+    #[must_use]
     pub fn linear_num_key_heads(&self) -> usize {
         self.linear_num_key_heads.unwrap_or(16)
     }
 
+    #[must_use]
     pub fn linear_num_value_heads(&self) -> usize {
         self.linear_num_value_heads.unwrap_or(64)
     }
 
+    #[must_use]
     pub fn linear_key_head_dim(&self) -> usize {
         self.linear_key_head_dim.unwrap_or(128)
     }
 
+    #[must_use]
     pub fn linear_value_head_dim(&self) -> usize {
         self.linear_value_head_dim.unwrap_or(128)
     }
 
+    #[must_use]
     pub fn linear_conv_kernel_dim(&self) -> usize {
         self.linear_conv_kernel_dim.unwrap_or(4)
     }
 
+    #[must_use]
     pub fn full_attention_interval(&self) -> usize {
         self.full_attention_interval.unwrap_or(4).max(1)
     }
 
-    pub fn has_explicit_gdn_config(&self) -> bool {
+    #[must_use]
+    pub const fn has_explicit_gdn_config(&self) -> bool {
         self.linear_num_key_heads.is_some()
             || self.linear_num_value_heads.is_some()
             || self.linear_key_head_dim.is_some()
@@ -182,99 +199,123 @@ impl Qwen3Config {
             path: path.to_string(),
             source,
         })?;
-        let config: Qwen3Config = serde_json::from_str(&content)?;
+        let config: Self = serde_json::from_str(&content)?;
         Ok(config)
     }
 
+    #[must_use]
     pub fn vocab_size(&self) -> usize {
         self.vocab_size
-            .or(self.text_config.as_ref().map(|c| c.vocab_size()))
+            .or(self.text_config.as_ref().map(TextConfig::vocab_size))
             .unwrap_or(151936)
     }
 
+    #[must_use]
     pub fn hidden_size(&self) -> usize {
         self.hidden_size
-            .or(self.text_config.as_ref().map(|c| c.hidden_size()))
+            .or(self.text_config.as_ref().map(TextConfig::hidden_size))
             .unwrap_or(4096)
     }
 
+    #[must_use]
     pub fn num_hidden_layers(&self) -> usize {
         self.num_hidden_layers
-            .or(self.text_config.as_ref().map(|c| c.num_hidden_layers()))
+            .or(self.text_config.as_ref().map(TextConfig::num_hidden_layers))
             .unwrap_or(32)
     }
 
+    #[must_use]
     pub fn num_attention_heads(&self) -> usize {
         self.num_attention_heads
-            .or(self.text_config.as_ref().map(|c| c.num_attention_heads()))
+            .or(self
+                .text_config
+                .as_ref()
+                .map(TextConfig::num_attention_heads))
             .unwrap_or(32)
     }
 
+    #[must_use]
     pub fn num_key_value_heads(&self) -> usize {
         self.num_key_value_heads
-            .or(self.text_config.as_ref().map(|c| c.num_key_value_heads()))
+            .or(self
+                .text_config
+                .as_ref()
+                .map(TextConfig::num_key_value_heads))
             .unwrap_or(32)
     }
 
+    #[must_use]
     pub fn intermediate_size(&self) -> usize {
         self.intermediate_size
-            .or(self.text_config.as_ref().map(|c| c.intermediate_size()))
+            .or(self.text_config.as_ref().map(TextConfig::intermediate_size))
             .unwrap_or(11008)
     }
 
+    #[must_use]
     pub fn rope_theta(&self) -> f32 {
         self.rope_theta
-            .or(self.text_config.as_ref().map(|c| c.rope_theta()))
+            .or(self.text_config.as_ref().map(TextConfig::rope_theta))
             .unwrap_or(10000.0)
     }
 
+    #[must_use]
     pub fn max_position_embeddings(&self) -> usize {
         self.max_position_embeddings
             .or(self
                 .text_config
                 .as_ref()
-                .map(|c| c.max_position_embeddings()))
+                .map(TextConfig::max_position_embeddings))
             .unwrap_or(8192)
     }
 
+    #[must_use]
     pub fn rms_norm_eps(&self) -> f64 {
-        self.rms_norm_eps
-            .or(self.text_config.as_ref().map(|c| c.rms_norm_eps()))
-            .unwrap_or(1e-6) as f64
+        f64::from(
+            self.rms_norm_eps
+                .or(self.text_config.as_ref().map(TextConfig::rms_norm_eps))
+                .unwrap_or(1e-6),
+        )
     }
 
+    #[must_use]
     pub fn tie_word_embeddings(&self) -> bool {
         self.tie_word_embeddings.unwrap_or(false)
     }
 
+    #[must_use]
     pub fn has_qk_norm(&self) -> bool {
         self.has_qk_norm.unwrap_or(false)
     }
 
-    pub fn rope_scaling(&self) -> Option<&RopeScaling> {
+    #[must_use]
+    pub const fn rope_scaling(&self) -> Option<&RopeScaling> {
         self.rope_scaling.as_ref()
     }
 
-    pub fn rope_parameters(&self) -> Option<&RopeParameters> {
+    #[must_use]
+    pub const fn rope_parameters(&self) -> Option<&RopeParameters> {
         self.rope_parameters.as_ref()
     }
 
+    #[must_use]
     pub fn head_dim(&self) -> usize {
         self.head_dim
             .unwrap_or_else(|| self.hidden_size() / self.num_attention_heads())
     }
 
+    #[must_use]
     pub fn layer_types(&self) -> Option<&[String]> {
         self.text_config.as_ref().and_then(|c| c.layer_types())
     }
 
+    #[must_use]
     pub fn full_attention_interval(&self) -> usize {
         self.text_config
             .as_ref()
-            .map(|c| c.full_attention_interval())
-            .unwrap_or(4)
+            .map_or(4, TextConfig::full_attention_interval)
     }
 
+    #[must_use]
     pub fn attention_type(&self) -> AttentionType {
         if self.q_len.is_some() || self.kv_len.is_some() {
             AttentionType::MLA

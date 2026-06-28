@@ -3,7 +3,7 @@
 use candle_core::{Result, Tensor};
 use tracing::trace;
 
-/// FlashAttentionV3: flash attention v3.
+/// `FlashAttentionV3`: flash attention v3.
 #[derive(Debug, Clone)]
 pub struct FlashAttentionV3 {
     num_heads: usize,
@@ -13,7 +13,7 @@ pub struct FlashAttentionV3 {
     window_size: Option<(i32, i32)>,
 }
 
-/// FlashAttentionV3Config: flash attention v3 configuration.
+/// `FlashAttentionV3Config`: flash attention v3 configuration.
 #[derive(Debug, Clone, Default)]
 pub struct FlashAttentionV3Config {
     pub num_heads: usize,
@@ -24,7 +24,8 @@ pub struct FlashAttentionV3Config {
 }
 
 impl FlashAttentionV3 {
-    pub fn new(config: FlashAttentionV3Config) -> Self {
+    #[must_use]
+    pub const fn new(config: FlashAttentionV3Config) -> Self {
         Self {
             num_heads: config.num_heads,
             head_dim: config.head_dim,
@@ -75,12 +76,12 @@ impl FlashAttentionV3 {
         };
 
         let output = Tensor::matmul(&attn_weights, v)?;
-        if dropout_scale != 1.0 {
+        if dropout_scale == 1.0 {
+            Ok(output)
+        } else {
             let scale_tensor =
                 Tensor::new(&[dropout_scale], q.device())?.broadcast_as(output.dims())?;
             output.mul(&scale_tensor)
-        } else {
-            Ok(output)
         }
     }
 
@@ -126,16 +127,18 @@ impl FlashAttentionV3 {
         Tensor::from_slice(&mask, (1, 1, seq_q, seq_k), device)
     }
 
-    pub fn num_heads(&self) -> usize {
+    #[must_use]
+    pub const fn num_heads(&self) -> usize {
         self.num_heads
     }
 
-    pub fn head_dim(&self) -> usize {
+    #[must_use]
+    pub const fn head_dim(&self) -> usize {
         self.head_dim
     }
 }
 
-/// MqaFlashAttention: mqa flash attention.
+/// `MqaFlashAttention`: mqa flash attention.
 pub struct MqaFlashAttention {
     num_heads: usize,
     num_kv_heads: usize,
@@ -144,7 +147,8 @@ pub struct MqaFlashAttention {
 }
 
 impl MqaFlashAttention {
-    pub fn new(num_heads: usize, num_kv_heads: usize, head_dim: usize, causal: bool) -> Self {
+    #[must_use]
+    pub const fn new(num_heads: usize, num_kv_heads: usize, head_dim: usize, causal: bool) -> Self {
         Self {
             num_heads,
             num_kv_heads,
@@ -200,7 +204,7 @@ impl MqaFlashAttention {
     }
 }
 
-/// GqaFlashAttention: gqa flash attention.
+/// `GqaFlashAttention`: gqa flash attention.
 pub struct GqaFlashAttention {
     num_heads: usize,
     num_kv_heads: usize,
@@ -209,7 +213,8 @@ pub struct GqaFlashAttention {
 }
 
 impl GqaFlashAttention {
-    pub fn new(num_heads: usize, num_kv_heads: usize, head_dim: usize, causal: bool) -> Self {
+    #[must_use]
+    pub const fn new(num_heads: usize, num_kv_heads: usize, head_dim: usize, causal: bool) -> Self {
         Self {
             num_heads,
             num_kv_heads,
@@ -645,8 +650,8 @@ mod tests {
             .to_vec1()
             .unwrap()
             .iter()
-            .cloned()
-            .fold(0.0f32, |a, b| a.max(b));
+            .copied()
+            .fold(0.0f32, f32::max);
         assert!(max_diff < 1e-6);
     }
 }

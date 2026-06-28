@@ -30,8 +30,7 @@ fn test_speculative_memory_overhead_bounded() {
     let num_kv_blocks = 1024;
 
     // Create engine with speculative mode
-    let mut spec_engine =
-        TestFixtures::increment_speculative_engine_with(config.clone(), 4, num_kv_blocks);
+    let mut spec_engine = TestFixtures::increment_speculative_engine_with(config, 4, num_kv_blocks);
 
     spec_engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
 
@@ -47,16 +46,13 @@ fn test_speculative_memory_overhead_bounded() {
     // KV blocks should be allocated after prefill
     assert!(
         used_after_prefill > 0,
-        "KV blocks should be allocated after prefill (got {})",
-        used_after_prefill
+        "KV blocks should be allocated after prefill (got {used_after_prefill})"
     );
 
     // Should not exceed total available
     assert!(
         used_after_prefill <= total,
-        "Used blocks should not exceed total: {} > {}",
-        used_after_prefill,
-        total
+        "Used blocks should not exceed total: {used_after_prefill} > {total}"
     );
 
     // Run to completion
@@ -92,8 +88,7 @@ fn test_speculative_memory_overhead_vs_standard() {
     }
 
     // Speculative engine
-    let mut spec_engine =
-        TestFixtures::increment_speculative_engine_with(config.clone(), 4, num_kv_blocks);
+    let mut spec_engine = TestFixtures::increment_speculative_engine_with(config, 4, num_kv_blocks);
 
     spec_engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
 
@@ -116,13 +111,11 @@ fn test_speculative_memory_overhead_vs_standard() {
     // the same weights. At the same request state (after prefill), KV usage should be comparable.
     assert!(
         spec_used <= std_used || (spec_used as f64 / std_used as f64) <= 1.5,
-        "Speculative KV block overhead should be < 50% (was spec={}, std={})",
-        spec_used,
-        std_used
+        "Speculative KV block overhead should be < 50% (was spec={spec_used}, std={std_used})"
     );
 }
 
-/// SPEC-04.3: Verify that the SelfSpeculativeModel shares weights (zero-copy memory)
+/// SPEC-04.3: Verify that the `SelfSpeculativeModel` shares weights (zero-copy memory)
 /// by checking that it wraps the same model without allocating additional model parameters.
 #[test]
 #[ignore]
@@ -149,7 +142,7 @@ fn test_self_speculative_weight_sharing() {
 }
 
 /// SPEC-04.3: Verify that with self-speculation, the KV cache usage can be bounded
-/// by limiting draft tokens. The overhead is proportional to draft_count.
+/// by limiting draft tokens. The overhead is proportional to `draft_count`.
 #[test]
 #[ignore]
 fn test_speculative_memory_overhead_scales_with_draft_count() {
@@ -177,7 +170,7 @@ fn test_speculative_memory_overhead_scales_with_draft_count() {
 
     // High draft count
     let mut high_draft_engine =
-        TestFixtures::increment_speculative_engine_with(config.clone(), 8, num_kv_blocks);
+        TestFixtures::increment_speculative_engine_with(config, 8, num_kv_blocks);
     high_draft_engine.enable_adaptive_speculative(AdaptiveDraftConfig {
         min_draft_tokens: 4,
         max_draft_tokens: 8,
@@ -196,26 +189,20 @@ fn test_speculative_memory_overhead_scales_with_draft_count() {
     // Both should have allocated blocks after prefill
     assert!(
         low_used > 0,
-        "Low draft engine should allocate KV blocks (got {})",
-        low_used
+        "Low draft engine should allocate KV blocks (got {low_used})"
     );
     assert!(
         high_used > 0,
-        "High draft engine should allocate KV blocks (got {})",
-        high_used
+        "High draft engine should allocate KV blocks (got {high_used})"
     );
 
     // With same input, both should complete and not exceed the block pool
     assert!(
         low_used <= num_kv_blocks as u64,
-        "Low draft engine should not exceed pool: {} vs {}",
-        low_used,
-        num_kv_blocks
+        "Low draft engine should not exceed pool: {low_used} vs {num_kv_blocks}"
     );
     assert!(
         high_used <= num_kv_blocks as u64,
-        "High draft engine should not exceed pool: {} vs {}",
-        high_used,
-        num_kv_blocks
+        "High draft engine should not exceed pool: {high_used} vs {num_kv_blocks}"
     );
 }

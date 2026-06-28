@@ -30,6 +30,7 @@ impl InMemoryMetricsExporter {
     }
 
     /// Returns the recorded values, in unspecified order.
+    #[must_use]
     pub fn snapshot(&self) -> Vec<(String, f64)> {
         self.values
             .lock()
@@ -62,12 +63,13 @@ impl dyn MetricsExporter {
     /// Rust's orphan rule prevents a direct `impl Default for Arc<dyn ...>`
     /// because `Arc` is foreign and there is no local type appearing before
     /// the uncovered trait-object parameter.
+    #[must_use]
     pub fn default_arc() -> Arc<Self> {
         Arc::new(InMemoryMetricsExporter::default())
     }
 }
 
-/// MetricsError: metrics error.
+/// `MetricsError`: metrics error.
 #[derive(Debug, thiserror::Error)]
 pub enum MetricsError {
     #[error("export failed: {0}")]
@@ -81,7 +83,7 @@ pub struct PrometheusExporter {
 }
 
 impl PrometheusExporter {
-    pub fn new(collector: Arc<EnhancedMetricsCollector>, port: u16) -> Self {
+    pub const fn new(collector: Arc<EnhancedMetricsCollector>, port: u16) -> Self {
         Self { collector, port }
     }
 
@@ -181,17 +183,17 @@ impl PrometheusExporter {
         output.push_str("# HELP packing_efficiency Batch efficiency (0-1)\n");
         output.push_str("# TYPE packing_efficiency gauge\n");
         let eff = self.collector.get_gauge("packing_efficiency") as f64 / 100000.0;
-        output.push_str(&format!("packing_efficiency {:.3}\n", eff));
+        output.push_str(&format!("packing_efficiency {eff:.3}\n"));
 
         output.push_str("# HELP packing_waste_ratio Waste ratio (0-1)\n");
         output.push_str("# TYPE packing_waste_ratio gauge\n");
         let waste = self.collector.get_gauge("packing_waste_ratio") as f64 / 100000.0;
-        output.push_str(&format!("packing_waste_ratio {:.3}\n", waste));
+        output.push_str(&format!("packing_waste_ratio {waste:.3}\n"));
 
         output.push_str("# HELP speculative_acceptance_rate Token acceptance rate (0-1)\n");
         output.push_str("# TYPE speculative_acceptance_rate gauge\n");
         let rate = self.collector.get_gauge("speculative_acceptance_rate") as f64 / 100000.0;
-        output.push_str(&format!("speculative_acceptance_rate {:.3}\n", rate));
+        output.push_str(&format!("speculative_acceptance_rate {rate:.3}\n"));
 
         output.push_str("# HELP speculative_draft_count Current draft tokens\n");
         output.push_str("# TYPE speculative_draft_count gauge\n");
@@ -203,14 +205,14 @@ impl PrometheusExporter {
         output.push_str("# HELP speculative_efficiency Draft token efficiency ratio (0-1)\n");
         output.push_str("# TYPE speculative_efficiency gauge\n");
         let eff = self.collector.get_gauge("speculative_efficiency") as f64 / 100000.0;
-        output.push_str(&format!("speculative_efficiency {:.3}\n", eff));
+        output.push_str(&format!("speculative_efficiency {eff:.3}\n"));
 
         output.push_str(
             "# HELP throughput_speedup_ratio Speculative speedup vs baseline (1.0 = same)\n",
         );
         output.push_str("# TYPE throughput_speedup_ratio gauge\n");
         let speedup = self.collector.get_gauge("throughput_speedup_ratio") as f64 / 100000.0;
-        output.push_str(&format!("throughput_speedup_ratio {:.3}\n", speedup));
+        output.push_str(&format!("throughput_speedup_ratio {speedup:.3}\n"));
 
         output.push_str(
             "# HELP speculative_per_request_count Number of tracked per-request acceptance rates\n",
@@ -273,7 +275,8 @@ impl PrometheusExporter {
         output
     }
 
-    pub fn port(&self) -> u16 {
+    #[must_use]
+    pub const fn port(&self) -> u16 {
         self.port
     }
 }
@@ -296,7 +299,7 @@ mod tests {
         let exporter = PrometheusExporter::new(collector, 9090);
         let output = exporter.export_to_string().await;
         assert!(output.contains("cuda_graph_hits_total"));
-        assert!(output.contains("1"));
+        assert!(output.contains('1'));
     }
 
     #[tokio::test]

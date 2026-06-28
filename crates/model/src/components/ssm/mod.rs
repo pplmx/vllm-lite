@@ -1,8 +1,8 @@
 //! SSM components — see sub-modules for specific implementations.
 //!
 //! This module provides the core SSM layers used by Mamba-style models:
-//! - SSMLayer / MambaBlock: Standard Mamba for Qwen3.5 Mamba-only models
-//! - SSMHarmonicSSMLayer: Hybrid variant for Qwen3.5 attention+SSM models
+//! - `SSMLayer` / `MambaBlock`: Standard Mamba for Qwen3.5 Mamba-only models
+//! - `SSMHarmonicSSMLayer`: Hybrid variant for Qwen3.5 attention+SSM models
 
 mod config;
 mod error;

@@ -7,10 +7,10 @@ use vllm_traits::{Batch, BatchOutput};
 
 /// Executor for managing CUDA Graph capture and execution
 ///
-/// This executor uses batch_size (usize) keys and is designed for scheduler integration.
+/// This executor uses `batch_size` (usize) keys and is designed for scheduler integration.
 /// For the string-keyed executor, see the `CudaGraphExecutor` type in the parent module.
 pub struct BatchCudaGraphExecutor {
-    /// Map from batch_size to captured graph
+    /// Map from `batch_size` to captured graph
     graphs: HashMap<usize, CudaGraph>,
     /// Configuration
     config: CudaGraphConfig,
@@ -86,12 +86,12 @@ impl BatchCudaGraphExecutor {
     }
 
     /// Configuration used when capturing graphs.
-    pub fn config(&self) -> &CudaGraphConfig {
+    pub const fn config(&self) -> &CudaGraphConfig {
         &self.config
     }
 
     /// Check if CUDA Graph is enabled
-    pub fn is_enabled(&self) -> bool {
+    pub const fn is_enabled(&self) -> bool {
         self.enabled
     }
 
@@ -145,7 +145,7 @@ impl BatchCudaGraphExecutor {
     /// Get list of available batch sizes
     pub fn available_batch_sizes(&self) -> Vec<usize> {
         let mut sizes: Vec<_> = self.graphs.keys().copied().collect();
-        sizes.sort();
+        sizes.sort_unstable();
         sizes
     }
 
@@ -253,7 +253,7 @@ impl BatchCudaGraphExecutor {
     }
 }
 
-/// GraphStats: graph statistics.
+/// `GraphStats`: graph statistics.
 #[derive(Debug, Clone)]
 pub(crate) struct GraphStats {
     pub total_executions: u64,

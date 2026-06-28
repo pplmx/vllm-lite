@@ -102,6 +102,7 @@ impl dyn Architecture {
     /// a direct `impl Default for Arc<dyn ...>` because `Arc` is foreign and
     /// there is no local type appearing before the uncovered trait-object
     /// parameter.
+    #[must_use]
     pub fn default_arc() -> Arc<Self> {
         Arc::new(UnknownArchitecture)
     }

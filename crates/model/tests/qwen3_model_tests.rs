@@ -425,8 +425,7 @@ fn test_qwen3_decode_sequential_generation() {
         assert_eq!(
             logits.dims(),
             &[1, 1, 500],
-            "Step {}: logits shape mismatch",
-            step
+            "Step {step}: logits shape mismatch"
         );
 
         let next_token: u32 = logits
@@ -440,9 +439,7 @@ fn test_qwen3_decode_sequential_generation() {
             .unwrap();
         assert!(
             next_token < 500,
-            "Step {}: next token {} out of range",
-            step,
-            next_token
+            "Step {step}: next token {next_token} out of range"
         );
     }
 }

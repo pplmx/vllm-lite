@@ -49,14 +49,14 @@ pub trait AsyncFallbackStrategy {
 // ─────────────────────── RetryStrategy (async, with sleep) ──────────────────
 
 /// Retry strategy with exponential backoff. Async (uses `tokio::time::sleep`).
-pub(crate) struct RetryStrategy {
+pub struct RetryStrategy {
     pub(crate) max_attempts: usize,
     pub(crate) base_delay: Duration,
 }
 
 impl RetryStrategy {
     /// new: construct with explicit max attempts and base delay.
-    pub fn new(max_attempts: usize, base_delay: Duration) -> Self {
+    pub const fn new(max_attempts: usize, base_delay: Duration) -> Self {
         Self {
             max_attempts,
             base_delay,
@@ -84,7 +84,7 @@ impl Default for RetryStrategy {
 
 /// Builder for [`RetryStrategy`].
 #[derive(Debug, Clone)]
-pub(crate) struct RetryStrategyBuilder {
+pub struct RetryStrategyBuilder {
     max_attempts: usize,
     base_delay: Duration,
 }
@@ -99,17 +99,17 @@ impl Default for RetryStrategyBuilder {
 }
 
 impl RetryStrategyBuilder {
-    pub fn with_max_attempts(mut self, n: usize) -> Self {
+    pub const fn with_max_attempts(mut self, n: usize) -> Self {
         self.max_attempts = n;
         self
     }
 
-    pub fn with_base_delay(mut self, d: Duration) -> Self {
+    pub const fn with_base_delay(mut self, d: Duration) -> Self {
         self.base_delay = d;
         self
     }
 
-    pub fn build(self) -> RetryStrategy {
+    pub const fn build(self) -> RetryStrategy {
         RetryStrategy::new(self.max_attempts, self.base_delay)
     }
 }
@@ -147,7 +147,7 @@ impl AsyncFallbackStrategy for RetryStrategy {
 ///
 /// Implements the sync trait because there's no I/O involved.
 #[derive(Debug, Clone, Copy, Default)]
-pub(crate) struct FailFastStrategy;
+pub struct FailFastStrategy;
 
 impl FallbackStrategy for FailFastStrategy {
     fn execute<T, E>(&self, op: fn() -> Result<T, E>) -> Result<T, E> {
@@ -162,12 +162,12 @@ impl FallbackStrategy for FailFastStrategy {
 /// Not a `FallbackStrategy` impl in the original trait because it changes
 /// the output type. Re-introduced here as a sync helper that takes both
 /// the primary op (sync) and a fallback closure (sync, infallible).
-pub(crate) struct DegradeStrategy<F> {
+pub struct DegradeStrategy<F> {
     fallback: F,
 }
 
 impl<F> DegradeStrategy<F> {
-    pub fn new<T>(fallback: F) -> Self
+    pub const fn new<T>(fallback: F) -> Self
     where
         F: Fn() -> T,
     {

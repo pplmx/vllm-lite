@@ -20,6 +20,7 @@ pub struct DraftAccuracyTracker {
 
 impl DraftAccuracyTracker {
     /// Create a new accuracy tracker with the given window size
+    #[must_use]
     pub fn new(window_size: usize) -> Self {
         Self {
             history: VecDeque::with_capacity(window_size),
@@ -30,6 +31,7 @@ impl DraftAccuracyTracker {
     }
 
     /// Create a new accuracy tracker with configurable EWMA alpha
+    #[must_use]
     pub fn with_alpha(window_size: usize, ewma_alpha: f32) -> Self {
         Self {
             history: VecDeque::with_capacity(window_size),
@@ -50,11 +52,14 @@ impl DraftAccuracyTracker {
         let current_rate = self.acceptance_rate();
         self.smoothed_rate = Some(match self.smoothed_rate {
             None => current_rate,
-            Some(prev) => self.ewma_alpha * current_rate + (1.0 - self.ewma_alpha) * prev,
+            Some(prev) => self
+                .ewma_alpha
+                .mul_add(current_rate, (1.0 - self.ewma_alpha) * prev),
         });
     }
 
     /// Calculate current acceptance rate (sliding window, for debugging)
+    #[must_use]
     pub fn acceptance_rate(&self) -> f32 {
         if self.history.is_empty() {
             return 0.0;
@@ -64,6 +69,7 @@ impl DraftAccuracyTracker {
     }
 
     /// Get the EWMA-smoothed acceptance rate
+    #[must_use]
     pub fn acceptance_rate_ewma(&self) -> f32 {
         self.smoothed_rate.unwrap_or(0.0)
     }
@@ -75,11 +81,13 @@ impl DraftAccuracyTracker {
     }
 
     /// Get number of tracked results
+    #[must_use]
     pub fn len(&self) -> usize {
         self.history.len()
     }
 
     /// Check if tracker is empty
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.history.is_empty()
     }
@@ -99,12 +107,13 @@ pub struct AdaptiveSpeculativeDecoder {
 
 impl AdaptiveSpeculativeDecoder {
     /// Create a new adaptive speculative decoder
+    #[must_use]
     pub fn new(config: AdaptiveDraftConfig) -> Self {
         let window_size = config.accuracy_window_size;
         let initial_max = config.max_draft_tokens;
         let tracker = DraftAccuracyTracker::with_alpha(window_size, config.ewma_alpha);
         Self {
-            config: config.clone(),
+            config,
             current_max_draft_tokens: initial_max,
             accuracy_tracker: tracker,
             steps_since_adjustment: 0,
@@ -112,12 +121,14 @@ impl AdaptiveSpeculativeDecoder {
     }
 
     /// Get current max draft tokens
-    pub fn current_max_draft_tokens(&self) -> usize {
+    #[must_use]
+    pub const fn current_max_draft_tokens(&self) -> usize {
         self.current_max_draft_tokens
     }
 
     /// Get accuracy tracker (for testing)
-    pub fn accuracy_tracker(&self) -> &DraftAccuracyTracker {
+    #[must_use]
+    pub const fn accuracy_tracker(&self) -> &DraftAccuracyTracker {
         &self.accuracy_tracker
     }
 
@@ -166,7 +177,10 @@ impl AdaptiveSpeculativeDecoder {
                 self.config.max_draft_tokens as i32,
             ) as usize;
 
-            if new_max != self.current_max_draft_tokens {
+            if new_max == self.current_max_draft_tokens {
+                // Clamped to bound: adjustment would not change value
+                false
+            } else {
                 tracing::info!(
                     "Adjusted max_draft_tokens: {} -> {} (rate: {:.3}, target: {:.2}, threshold: {:.2})",
                     self.current_max_draft_tokens,
@@ -178,9 +192,6 @@ impl AdaptiveSpeculativeDecoder {
                 self.current_max_draft_tokens = new_max;
                 self.steps_since_adjustment = 0;
                 true
-            } else {
-                // Clamped to bound: adjustment would not change value
-                false
             }
         } else {
             // Within deadband: reset cooldown to prevent stale accumulation
@@ -270,7 +281,7 @@ mod tests {
         }
         let ewma = tracker.acceptance_rate_ewma();
         // Should have converged close to 0.8
-        assert!((ewma - 0.8).abs() < 0.05, "EWMA {} should ≈ 0.8", ewma);
+        assert!((ewma - 0.8).abs() < 0.05, "EWMA {ewma} should ≈ 0.8");
     }
 
     #[test]
@@ -292,7 +303,7 @@ mod tests {
         // Sliding window on 10 entries with 50% rate
         assert!((sliding - 0.5).abs() < 0.01);
         // EWMA should also be around 0.5 (smoothed)
-        assert!((ewma - 0.5).abs() < 0.1, "EWMA {} should ≈ 0.5", ewma);
+        assert!((ewma - 0.5).abs() < 0.1, "EWMA {ewma} should ≈ 0.5");
     }
 
     #[test]
@@ -321,8 +332,7 @@ mod tests {
         let change = (first_ewma - second_ewma).abs();
         assert!(
             change < 0.1,
-            "Heavy smoothing should dampen change, got {}",
-            change
+            "Heavy smoothing should dampen change, got {change}"
         );
     }
 
@@ -580,8 +590,7 @@ mod tests {
         let after_low = decoder.current_max_draft_tokens();
         assert!(
             after_low < 5,
-            "Should decrease after low acceptance, got {}",
-            after_low
+            "Should decrease after low acceptance, got {after_low}"
         );
 
         // Phase 2: High acceptance → increase
@@ -591,9 +600,7 @@ mod tests {
         let after_high = decoder.current_max_draft_tokens();
         assert!(
             after_high > after_low,
-            "Should increase after high acceptance, got {} > {}",
-            after_high,
-            after_low
+            "Should increase after high acceptance, got {after_high} > {after_low}"
         );
     }
 

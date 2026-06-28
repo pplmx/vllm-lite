@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// OpenAI Batch API endpoint kind.
+/// `OpenAI` Batch API endpoint kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BatchEndpoint {
     /// `/v1/chat/completions` (chat completions).
@@ -11,7 +11,8 @@ pub enum BatchEndpoint {
 
 impl BatchEndpoint {
     /// Parse from string. Accepts both short names ("chat", "completions")
-    /// and full OpenAI paths ("/v1/chat/completions", "/v1/completions") for flexibility.
+    /// and full `OpenAI` paths ("/v1/chat/completions", "/v1/completions") for flexibility.
+    #[must_use]
     pub fn parse(s: &str) -> Option<Self> {
         match s {
             "chat" | "/v1/chat/completions" => Some(Self::Chat),
@@ -21,7 +22,8 @@ impl BatchEndpoint {
     }
 
     /// Canonical short string representation.
-    pub fn as_str(&self) -> &'static str {
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
         match self {
             Self::Chat => "chat",
             Self::Completion => "completion",
@@ -51,7 +53,7 @@ where
     ser.serialize_str(value.as_str())
 }
 
-/// SimpleBatchRequest: simple batch request.
+/// `SimpleBatchRequest`: simple batch request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimpleBatchRequest {
     pub prompts: Vec<String>,
@@ -65,7 +67,7 @@ pub struct SimpleBatchRequest {
     pub temperature: Option<f32>,
 }
 
-/// BatchResponse: batch response.
+/// `BatchResponse`: batch response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchResponse {
     pub id: String,
@@ -82,7 +84,7 @@ pub struct BatchResponse {
     pub request_counts: Option<RequestCounts>,
 }
 
-/// RequestCounts: request counts.
+/// `RequestCounts`: request counts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestCounts {
     pub total: i32,
@@ -90,7 +92,7 @@ pub struct RequestCounts {
     pub failed: i32,
 }
 
-/// BatchResults: batch results.
+/// `BatchResults`: batch results.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchResults {
     pub batch_id: String,
@@ -98,7 +100,7 @@ pub struct BatchResults {
     pub results: Vec<BatchResultItem>,
 }
 
-/// BatchResultItem: batch result item.
+/// `BatchResultItem`: batch result item.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchResultItem {
     pub index: usize,
@@ -107,7 +109,7 @@ pub struct BatchResultItem {
     pub error: Option<String>,
 }
 
-/// BatchStatus: batch status.
+/// `BatchStatus`: batch status.
 #[derive(Debug, Clone)]
 pub enum BatchStatus {
     Pending,
@@ -116,7 +118,7 @@ pub enum BatchStatus {
     Failed,
 }
 
-/// BatchJob: batch job.
+/// `BatchJob`: batch job.
 #[derive(Clone)]
 pub struct BatchJob {
     pub id: String,
@@ -132,6 +134,7 @@ pub struct BatchJob {
 }
 
 impl BatchJob {
+    #[must_use]
     pub fn new(
         id: String,
         endpoint: BatchEndpoint,

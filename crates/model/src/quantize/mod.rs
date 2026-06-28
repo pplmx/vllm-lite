@@ -27,7 +27,7 @@ impl Checkpoint {
         }
     }
 
-    /// into_f16: into f16.
+    /// `into_f16`: into f16.
     pub fn into_f16(self) -> Result<HashMap<String, Tensor>> {
         let mut result = HashMap::new();
         for (name, storage) in self.tensors {

@@ -16,7 +16,7 @@ pub fn swiglu_forward(
     down_proj.forward(&activated)
 }
 
-/// SwiGLU: swi glu.
+/// `SwiGLU`: swi glu.
 pub struct SwiGLU {
     gate_proj: Linear,
     up_proj: Linear,

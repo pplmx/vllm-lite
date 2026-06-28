@@ -2,7 +2,7 @@
 
 use vllm_traits::{Batch, BatchPhase, SeqId, TokenId};
 
-/// RequestBuilder: request builder.
+/// `RequestBuilder`: request builder.
 pub struct RequestBuilder {
     seq_id: SeqId,
     tokens: Vec<TokenId>,
@@ -10,7 +10,8 @@ pub struct RequestBuilder {
 }
 
 impl RequestBuilder {
-    pub fn new(seq_id: SeqId) -> Self {
+    #[must_use]
+    pub const fn new(seq_id: SeqId) -> Self {
         Self {
             seq_id,
             tokens: vec![],
@@ -18,22 +19,25 @@ impl RequestBuilder {
         }
     }
 
+    #[must_use]
     pub fn with_prompt(mut self, tokens: Vec<TokenId>) -> Self {
         self.tokens = tokens;
         self
     }
 
-    pub fn with_max_tokens(mut self, max: usize) -> Self {
+    #[must_use]
+    pub const fn with_max_tokens(mut self, max: usize) -> Self {
         self.max_tokens = max;
         self
     }
 
+    #[must_use]
     pub fn build(self) -> (SeqId, Vec<TokenId>, usize) {
         (self.seq_id, self.tokens, self.max_tokens)
     }
 }
 
-/// BatchBuilder: batch builder.
+/// `BatchBuilder`: batch builder.
 pub struct BatchBuilder {
     seq_ids: Vec<SeqId>,
     input_tokens: Vec<Vec<TokenId>>,
@@ -44,7 +48,8 @@ pub struct BatchBuilder {
 }
 
 impl BatchBuilder {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             seq_ids: vec![],
             input_tokens: vec![],
@@ -55,6 +60,7 @@ impl BatchBuilder {
         }
     }
 
+    #[must_use]
     pub fn add_sequence(mut self, seq_id: SeqId, tokens: Vec<TokenId>, prefill: bool) -> Self {
         let pos = tokens.len();
         self.seq_ids.push(seq_id);
@@ -66,9 +72,15 @@ impl BatchBuilder {
         self
     }
 
+    #[must_use]
     pub fn build(self) -> Batch {
-        let total_tokens: usize = self.input_tokens.iter().map(|t| t.len()).sum();
-        let max_seq_len = self.input_tokens.iter().map(|t| t.len()).max().unwrap_or(0);
+        let total_tokens: usize = self.input_tokens.iter().map(std::vec::Vec::len).sum();
+        let max_seq_len = self
+            .input_tokens
+            .iter()
+            .map(std::vec::Vec::len)
+            .max()
+            .unwrap_or(0);
 
         // Determine phase based on is_prefill
         let phase = if self.is_prefill.iter().all(|&p| p) {

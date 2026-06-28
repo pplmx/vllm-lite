@@ -1,6 +1,6 @@
 //! Draft verification trait for speculative decoding
 //!
-//! The DraftVerifier trait abstracts the draft generation and verification
+//! The `DraftVerifier` trait abstracts the draft generation and verification
 //! logic, allowing different implementations (self-speculation, small draft model, etc.)
 
 use std::sync::Arc;
@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::types::{Batch, SeqId, TokenId};
 use thiserror::Error;
 
-/// VerifierError: verifier error.
+/// `VerifierError`: verifier error.
 #[derive(Debug, Error)]
 pub enum VerifierError {
     #[error("draft generation failed: {0}")]
@@ -20,7 +20,7 @@ pub enum VerifierError {
 /// Result: result.
 pub type Result<T> = std::result::Result<T, VerifierError>;
 
-/// VerificationResult: verification result alias.
+/// `VerificationResult`: verification result alias.
 #[derive(Debug, Clone)]
 pub struct VerificationResult {
     pub seq_id: SeqId,
@@ -30,6 +30,7 @@ pub struct VerificationResult {
 }
 
 impl VerificationResult {
+    #[must_use]
     pub fn new(seq_id: SeqId, draft_tokens: Vec<TokenId>) -> Self {
         let accepted_count = draft_tokens.len();
         Self {
@@ -40,12 +41,14 @@ impl VerificationResult {
         }
     }
 
-    pub fn with_rejection(mut self, rejected_at: usize) -> Self {
+    #[must_use]
+    pub const fn with_rejection(mut self, rejected_at: usize) -> Self {
         self.rejected_at = Some(rejected_at);
         self.accepted_count = rejected_at;
         self
     }
 
+    #[must_use]
     pub fn acceptance_rate(&self) -> f32 {
         if self.draft_tokens.is_empty() {
             return 1.0;
@@ -54,7 +57,7 @@ impl VerificationResult {
     }
 }
 
-/// DraftVerifier: draft verifier trait.
+/// `DraftVerifier`: draft verifier trait.
 pub trait DraftVerifier: Send + Sync {
     fn generate_draft(
         &mut self,
@@ -107,6 +110,7 @@ impl dyn DraftVerifier {
     /// Rust's orphan rule prevents a direct `impl Default for Arc<dyn ...>`
     /// because `Arc` is foreign and there is no local type appearing before
     /// the uncovered trait-object parameter.
+    #[must_use]
     pub fn default_arc() -> Arc<Self> {
         Arc::new(StubDraftVerifier)
     }

@@ -1,14 +1,15 @@
 use super::trait_def::{PriorityScore, SchedulingContext, SchedulingPolicy};
 use crate::types::Sequence;
 
-/// SjfPolicy: sjf policy.
+/// `SjfPolicy`: sjf policy.
 pub struct SjfPolicy {
     sjf_priority_weight: f32,
     sjf_remaining_work_weight: f32,
 }
 
 impl SjfPolicy {
-    pub fn new(sjf_priority_weight: f32, sjf_remaining_work_weight: f32) -> Self {
+    #[must_use]
+    pub const fn new(sjf_priority_weight: f32, sjf_remaining_work_weight: f32) -> Self {
         Self {
             sjf_priority_weight,
             sjf_remaining_work_weight,
@@ -25,9 +26,11 @@ impl Default for SjfPolicy {
 impl SchedulingPolicy for SjfPolicy {
     fn compute_priority(&self, seq: &Sequence, _ctx: &SchedulingContext) -> PriorityScore {
         let remaining_tokens = seq.max_tokens.saturating_sub(seq.tokens.len());
-        let user_priority = seq.priority.0 as u64;
-        let score = (self.sjf_priority_weight * user_priority as f32
-            + self.sjf_remaining_work_weight * remaining_tokens as f32) as u64;
+        let user_priority = u64::from(seq.priority.0);
+        let score = self.sjf_priority_weight.mul_add(
+            user_priority as f32,
+            self.sjf_remaining_work_weight * remaining_tokens as f32,
+        ) as u64;
         PriorityScore(score)
     }
 

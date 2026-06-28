@@ -16,7 +16,7 @@ use vllm_traits::{BatchOutput, ModelBackend, ModelError, Result as ModelResult, 
 
 // ─────────────────────────── Stub Backend ────────────────────────────
 
-/// Configurable stub backend. Tracks forward() call count + last input,
+/// Configurable stub backend. Tracks `forward()` call count + last input,
 /// supports per-instance "fail next N calls" for runtime-error testing.
 pub struct StubBackend {
     pub id: String,
@@ -62,7 +62,7 @@ impl ModelBackend for StubBackend {
             )));
         }
         // Deterministic output: one token per seq, value = self.id hash.
-        let token: u32 = self.id.bytes().map(|b| b as u32).sum();
+        let token: u32 = self.id.bytes().map(|b| u32::from(b)).sum();
         let next_tokens = seq_ids.iter().map(|_| token).collect();
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
@@ -113,6 +113,7 @@ pub struct MapLoader {
 }
 
 impl MapLoader {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             backends: Mutex::new(HashMap::new()),
@@ -151,15 +152,17 @@ pub struct Harness {
     pub resolver: Arc<DraftResolver>,
     pub metrics: Arc<EnhancedMetricsCollector>,
     /// The loader used by the resolver. Tests must use this one to populate
-    /// backends, not a separate MapLoader instance.
+    /// backends, not a separate `MapLoader` instance.
     pub loader: Arc<MapLoader>,
     pub self_spec: Arc<Mutex<Box<dyn ModelBackend>>>,
 }
 
+#[must_use]
 pub fn harness_unlimited() -> Harness {
     harness_with_budget(u64::MAX)
 }
 
+#[must_use]
 pub fn harness_with_budget(total_bytes: u64) -> Harness {
     let budget = Arc::new(MemoryBudget::new(total_bytes).unwrap());
     let registry = Arc::new(DraftModelRegistry::with_budget(budget.clone()));

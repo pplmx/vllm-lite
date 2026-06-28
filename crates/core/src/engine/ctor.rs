@@ -21,6 +21,7 @@ use vllm_model::kernels::BatchCudaGraphExecutor;
 use vllm_traits::kernels::CudaGraphConfig;
 
 impl Engine {
+    #[must_use]
     pub fn new_boxed(
         target_model: Box<dyn ModelBackend>,
         draft_model: Option<Box<dyn ModelBackend>>,
@@ -115,6 +116,7 @@ impl Engine {
     /// any attempt to lazy-load falls back to self-spec via FALL-01. The
     /// server should construct a real `DraftLoader` via
     /// [`Self::set_draft_loader`] before serving requests that name drafts.
+    #[must_use]
     pub fn with_drafts_boxed(
         target_model: Box<dyn ModelBackend>,
         draft_model: Option<Box<dyn ModelBackend>>,
@@ -183,7 +185,7 @@ impl Engine {
         );
         // Replace the default unlimited-budget registry with one bound to the
         // caller's budget.
-        engine.draft_registry = Arc::new(DraftModelRegistry::with_budget(budget.clone()));
+        engine.draft_registry = Arc::new(DraftModelRegistry::with_budget(budget));
         for spec in draft_specs {
             engine
                 .draft_registry
@@ -245,6 +247,7 @@ impl EngineBuilder {
     /// - `adaptive_decoder = None`
     /// - `draft_resolver = None`
     /// - `sleep_policy = SleepPolicy::default()`
+    #[must_use]
     pub fn new(target_model: Box<dyn ModelBackend>) -> Self {
         Self {
             target_model,
@@ -259,49 +262,57 @@ impl EngineBuilder {
     }
 
     /// Set the optional draft model.
+    #[must_use]
     pub fn with_draft_model(mut self, draft_model: Box<dyn ModelBackend>) -> Self {
         self.draft_model = Some(draft_model);
         self
     }
 
     /// Override the scheduler config.
+    #[must_use]
     pub fn with_config(mut self, config: SchedulerConfig) -> Self {
         self.config = config;
         self
     }
 
     /// Override the max draft tokens per step.
-    pub fn with_max_draft_tokens(mut self, n: usize) -> Self {
+    #[must_use]
+    pub const fn with_max_draft_tokens(mut self, n: usize) -> Self {
         self.max_draft_tokens = n;
         self
     }
 
     /// Override the number of KV-cache blocks.
-    pub fn with_num_kv_blocks(mut self, n: usize) -> Self {
+    #[must_use]
+    pub const fn with_num_kv_blocks(mut self, n: usize) -> Self {
         self.num_kv_blocks = n;
         self
     }
 
     /// Set an optional adaptive speculative decoder.
+    #[must_use]
     pub fn with_adaptive_decoder(mut self, decoder: AdaptiveSpeculativeDecoder) -> Self {
         self.adaptive_decoder = Some(decoder);
         self
     }
 
     /// Set an optional per-request draft resolver (v18+).
+    #[must_use]
     pub fn with_draft_resolver(mut self, resolver: Arc<DraftResolver>) -> Self {
         self.draft_resolver = Some(resolver);
         self
     }
 
     /// Override the sleep policy.
-    pub fn with_sleep_policy(mut self, policy: SleepPolicy) -> Self {
+    #[must_use]
+    pub const fn with_sleep_policy(mut self, policy: SleepPolicy) -> Self {
         self.sleep_policy = policy;
         self
     }
 
     /// Build the [`Engine`]. Equivalent to calling `Engine::with_config_boxed(...)`
     /// then setting the optional fields directly.
+    #[must_use]
     pub fn build(self) -> Engine {
         let mut engine = Engine::with_config_boxed(
             self.target_model,

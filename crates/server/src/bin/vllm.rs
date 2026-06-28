@@ -85,7 +85,7 @@ fn validate_config(path: &PathBuf) -> Result<()> {
     let required_fields = ["server", "engine"];
     for field in required_fields {
         if parsed.get(field).is_none() {
-            anyhow::bail!("missing required field: {}", field);
+            anyhow::bail!("missing required field: {field}");
         }
     }
 
@@ -93,7 +93,7 @@ fn validate_config(path: &PathBuf) -> Result<()> {
         if let Some(port) = server.get("port") {
             if let Some(p) = port.as_i64() {
                 if !(1..=65535).contains(&p) {
-                    anyhow::bail!("invalid port: {}", p);
+                    anyhow::bail!("invalid port: {p}");
                 }
             }
         }
@@ -103,7 +103,7 @@ fn validate_config(path: &PathBuf) -> Result<()> {
         if let Some(kv_blocks) = engine.get("num_kv_blocks") {
             if let Some(n) = kv_blocks.as_i64() {
                 if n < 1 {
-                    anyhow::bail!("invalid kv_blocks: {}", n);
+                    anyhow::bail!("invalid kv_blocks: {n}");
                 }
             }
         }
@@ -132,7 +132,7 @@ fn list_models(dir: &PathBuf) -> Result<()> {
                 let size_str = format_size(size);
                 let model_type = detect_model_type(&path);
 
-                println!("║ {:<29} │ {:>9} │ {:<17} ║", name, size_str, model_type);
+                println!("║ {name:<29} │ {size_str:>9} │ {model_type:<17} ║");
             }
         }
     }
@@ -193,7 +193,7 @@ fn show_model_info(path: &PathBuf) -> Result<()> {
     );
     println!("═══════════════════════════════════════════════════");
     for (key, value) in &info {
-        println!("{:>15}: {}", key, value);
+        println!("{key:>15}: {value}");
     }
 
     Ok(())
@@ -227,7 +227,7 @@ fn format_size(bytes: u64) -> String {
     } else if bytes >= KB {
         format!("{:.1} KB", bytes as f64 / KB as f64)
     } else {
-        format!("{} B", bytes)
+        format!("{bytes} B")
     }
 }
 

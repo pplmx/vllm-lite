@@ -1,4 +1,4 @@
-//! MemoryBudget — VRAM budget enforcement for target + concurrent drafts
+//! `MemoryBudget` — VRAM budget enforcement for target + concurrent drafts
 //!
 //! v18.0 Multi-Model Speculative Decoding phase 2 (LIFE-02/03, MEM-01..03).
 //!
@@ -20,7 +20,7 @@ use std::sync::RwLock;
 /// here for callers that don't want to depend on the scheduler module.
 pub const DEFAULT_BLOCK_BYTES: u64 = BLOCK_BYTES as u64;
 
-/// MemoryBudgetSnapshot: memory budget snapshot.
+/// `MemoryBudgetSnapshot`: memory budget snapshot.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MemoryBudgetSnapshot {
     pub total_bytes: u64,
@@ -34,7 +34,7 @@ pub struct MemoryBudgetSnapshot {
 #[error(
     "memory budget exceeded: requested {requested_bytes} bytes, available {available_bytes} bytes (draft_id={draft_id:?})"
 )]
-/// MemoryBudgetExceeded: memory budget exceeded.
+/// `MemoryBudgetExceeded`: memory budget exceeded.
 pub struct MemoryBudgetExceeded {
     pub requested_bytes: u64,
     pub available_bytes: u64,
@@ -49,7 +49,7 @@ struct MemoryBudgetInner {
     used_drafts_bytes: u64,
 }
 
-/// MemoryBudget: memory budget.
+/// `MemoryBudget`: memory budget.
 pub struct MemoryBudget {
     inner: RwLock<MemoryBudgetInner>,
 }
@@ -61,12 +61,13 @@ impl Default for MemoryBudget {
 }
 
 impl MemoryBudget {
+    #[must_use]
     pub fn unlimited() -> Self {
         // invariant: `u64::MAX` is a non-zero literal; `MemoryBudget::new` only rejects 0.
         Self::new(u64::MAX).expect("u64::MAX always > 0")
     }
 
-    pub fn new(total_bytes: u64) -> Result<Self, MemoryBudgetExceeded> {
+    pub const fn new(total_bytes: u64) -> Result<Self, MemoryBudgetExceeded> {
         if total_bytes == 0 {
             return Err(MemoryBudgetExceeded {
                 requested_bytes: 0,
@@ -85,7 +86,10 @@ impl MemoryBudget {
     }
 
     pub fn snapshot(&self) -> MemoryBudgetSnapshot {
-        let inner = self.inner.read().unwrap_or_else(|e| e.into_inner());
+        let inner = self
+            .inner
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let reserved_total = inner.reserved_target_bytes + inner.reserved_drafts_bytes;
         let available = inner.total_bytes.saturating_sub(reserved_total);
         MemoryBudgetSnapshot {
@@ -98,7 +102,10 @@ impl MemoryBudget {
     }
 
     pub fn reserve_target(&self, bytes: u64) -> Result<(), MemoryBudgetExceeded> {
-        let mut inner = self.inner.write().unwrap_or_else(|e| e.into_inner());
+        let mut inner = self
+            .inner
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let current_reserved = inner.reserved_target_bytes + inner.reserved_drafts_bytes;
         let new_reserved = current_reserved.saturating_add(bytes);
         if new_reserved > inner.total_bytes {
@@ -114,7 +121,10 @@ impl MemoryBudget {
     }
 
     pub fn release_target(&self) {
-        let mut inner = self.inner.write().unwrap_or_else(|e| e.into_inner());
+        let mut inner = self
+            .inner
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         inner.reserved_target_bytes = 0;
     }
 
@@ -123,7 +133,10 @@ impl MemoryBudget {
         bytes: u64,
         draft_id: Option<DraftId>,
     ) -> Result<(), MemoryBudgetExceeded> {
-        let mut inner = self.inner.write().unwrap_or_else(|e| e.into_inner());
+        let mut inner = self
+            .inner
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let current_reserved = inner.reserved_target_bytes + inner.reserved_drafts_bytes;
         let new_reserved = current_reserved.saturating_add(bytes);
         if new_reserved > inner.total_bytes {
@@ -139,14 +152,20 @@ impl MemoryBudget {
     }
 
     pub fn release_draft(&self, bytes: u64) {
-        let mut inner = self.inner.write().unwrap_or_else(|e| e.into_inner());
+        let mut inner = self
+            .inner
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         inner.reserved_drafts_bytes = inner.reserved_drafts_bytes.saturating_sub(bytes);
         // Also bring used back down if a draft was previously marked used.
         inner.used_drafts_bytes = inner.used_drafts_bytes.saturating_sub(bytes);
     }
 
     pub fn record_draft_kv_growth(&self, delta_bytes: i64) {
-        let mut inner = self.inner.write().unwrap_or_else(|e| e.into_inner());
+        let mut inner = self
+            .inner
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if delta_bytes >= 0 {
             inner.used_drafts_bytes = inner.used_drafts_bytes.saturating_add(delta_bytes as u64);
         } else {
@@ -157,7 +176,10 @@ impl MemoryBudget {
     }
 
     pub fn total_bytes(&self) -> u64 {
-        let inner = self.inner.read().unwrap_or_else(|e| e.into_inner());
+        let inner = self
+            .inner
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         inner.total_bytes
     }
 }

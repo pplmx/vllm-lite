@@ -2,13 +2,13 @@ use super::stage::{PipelineStage, StageInput, StageOutput};
 use candle_core::Result;
 use std::sync::Arc;
 
-/// PipelineParallel: pipeline parallel.
+/// `PipelineParallel`: pipeline parallel.
 pub struct PipelineParallel {
     stages: Vec<Arc<dyn PipelineStage>>,
     config: PipelineParallelConfig,
 }
 
-/// PipelineParallelConfig: pipeline parallel configuration.
+/// `PipelineParallelConfig`: pipeline parallel configuration.
 #[derive(Debug, Clone)]
 pub struct PipelineParallelConfig {
     pub num_stages: usize,
@@ -29,6 +29,7 @@ impl Default for PipelineParallelConfig {
 }
 
 impl PipelineParallel {
+    #[must_use]
     pub fn new(config: PipelineParallelConfig) -> Self {
         Self {
             stages: Vec::new(),
@@ -40,14 +41,17 @@ impl PipelineParallel {
         self.stages.push(stage);
     }
 
+    #[must_use]
     pub fn num_stages(&self) -> usize {
         self.stages.len()
     }
 
-    pub fn config(&self) -> &PipelineParallelConfig {
+    #[must_use]
+    pub const fn config(&self) -> &PipelineParallelConfig {
         &self.config
     }
 
+    #[must_use]
     pub fn is_pipeline_parallel(&self) -> bool {
         self.stages.len() > 1
     }
@@ -153,7 +157,7 @@ mod tests {
             let mut count = self
                 .processed_count
                 .lock()
-                .unwrap_or_else(|e| e.into_inner());
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             *count += 1;
 
             Ok(StageOutput {

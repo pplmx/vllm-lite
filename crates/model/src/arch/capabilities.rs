@@ -47,12 +47,14 @@ impl ArchCapabilities {
     };
 
     /// Returns true when the architecture is a stub (no real inference).
-    pub fn is_stub(self) -> bool {
+    #[must_use]
+    pub const fn is_stub(self) -> bool {
         !self.inference
     }
 
     /// Human-readable maturity tier for logging.
-    pub fn tier(self) -> &'static str {
+    #[must_use]
+    pub const fn tier(self) -> &'static str {
         if self.is_stub() {
             "stub"
         } else if self.speculative {

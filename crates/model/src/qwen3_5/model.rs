@@ -13,24 +13,24 @@ use crate::qwen3_5::weights::load_hybrid_weights;
 use candle_core::{DType, Device, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, LayerNorm, VarBuilder};
 
-/// Qwen35HybridModel: qwen35 hybrid model.
+/// `Qwen35HybridModel`: qwen35 hybrid model.
 pub type Qwen35HybridModel = HybridLm<HybridBlock, LayerNorm, Qwen3Config>;
 
 impl HybridLmConfig for Qwen3Config {
     fn vocab_size(&self) -> usize {
-        Qwen3Config::vocab_size(self)
+        Self::vocab_size(self)
     }
 
     fn hidden_size(&self) -> usize {
-        Qwen3Config::hidden_size(self)
+        Self::hidden_size(self)
     }
 
     fn num_layers(&self) -> usize {
-        Qwen3Config::num_hidden_layers(self)
+        Self::num_hidden_layers(self)
     }
 
     fn num_kv_heads(&self) -> usize {
-        Qwen3Config::num_key_value_heads(self)
+        Self::num_key_value_heads(self)
     }
 }
 
@@ -89,7 +89,7 @@ impl Qwen35HybridModel {
             kv_quantization,
         )?;
 
-        Ok(HybridLm::from_parts(
+        Ok(Self::from_parts(
             config,
             embed_tokens,
             layers,
@@ -107,12 +107,7 @@ impl Qwen35HybridModel {
         num_kv_blocks: usize,
         kv_quantization: bool,
     ) -> CandleResult<Self> {
-        let mut model = Self::new(
-            config.clone(),
-            device.clone(),
-            num_kv_blocks,
-            kv_quantization,
-        )?;
+        let mut model = Self::new(config.clone(), device, num_kv_blocks, kv_quantization)?;
         load_hybrid_weights(&mut model, &config, &weights)?;
         Ok(model)
     }

@@ -6,7 +6,7 @@ use crate::metrics::MetricsSnapshot;
 use crate::types::request::Request;
 use vllm_traits::TokenId;
 
-/// EngineMessage: engine message enumeration.
+/// `EngineMessage`: engine message enumeration.
 pub enum EngineMessage {
     AddRequest {
         request: Request,

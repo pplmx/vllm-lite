@@ -30,6 +30,7 @@ pub struct Request {
 }
 
 impl Request {
+    #[must_use]
     pub fn new(id: SeqId, prompt: Vec<TokenId>, max_tokens: usize) -> Self {
         Self {
             id,
@@ -41,7 +42,8 @@ impl Request {
         }
     }
 
-    pub fn with_priority(mut self, priority: Priority) -> Self {
+    #[must_use]
+    pub const fn with_priority(mut self, priority: Priority) -> Self {
         self.priority = priority;
         self
     }

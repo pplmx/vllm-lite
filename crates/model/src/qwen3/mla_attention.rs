@@ -2,7 +2,7 @@ use crate::components::AttentionConfig;
 use crate::components::MlaAttention;
 use candle_core::{Result, Tensor};
 
-/// Qwen3MlaAttention: qwen3 mla attention.
+/// `Qwen3MlaAttention`: qwen3 mla attention.
 pub struct Qwen3MlaAttention {
     inner: MlaAttention,
 }
@@ -40,7 +40,8 @@ impl Qwen3MlaAttention {
         self.inner.forward(x, positions)
     }
 
-    pub fn inner(&self) -> &MlaAttention {
+    #[must_use]
+    pub const fn inner(&self) -> &MlaAttention {
         &self.inner
     }
 }

@@ -16,7 +16,7 @@ fn bench_latency_percentiles(c: &mut Criterion) {
     let mut group = c.benchmark_group("latency_percentiles");
     group.sample_size(20);
 
-    for num_requests in [10, 50].iter() {
+    for num_requests in &[10, 50] {
         group.bench_with_input(
             BenchmarkId::from_parameter(num_requests),
             num_requests,

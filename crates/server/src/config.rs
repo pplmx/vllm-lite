@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-/// ConfigValidationError: config validation error.
+/// `ConfigValidationError`: config validation error.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ConfigValidationError {
     #[error("server.port must be > 0")]
@@ -26,12 +26,12 @@ pub enum ConfigValidationError {
     DuplicateDraftId(String),
 }
 
-/// ConfigValidationErrors: config validation errors.
+/// `ConfigValidationErrors`: config validation errors.
 #[derive(Debug, thiserror::Error)]
 #[error("config validation failed: {0:?}")]
 pub struct ConfigValidationErrors(pub Vec<ConfigValidationError>);
 
-/// ServerConfig: server configuration.
+/// `ServerConfig`: server configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::derivable_impls)]
 pub struct ServerConfig {
@@ -60,7 +60,7 @@ fn default_host() -> String {
     "0.0.0.0".to_string()
 }
 
-fn default_port() -> u16 {
+const fn default_port() -> u16 {
     8000
 }
 
@@ -68,7 +68,7 @@ fn default_log_level() -> String {
     "info".to_string()
 }
 
-/// AuthConfig: auth configuration.
+/// `AuthConfig`: auth configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthConfig {
     #[serde(default)]
@@ -84,6 +84,7 @@ pub struct AuthConfig {
 }
 
 impl AuthConfig {
+    #[must_use]
     pub fn resolve_api_keys(&self) -> Vec<String> {
         let mut keys = self.api_keys.clone();
 
@@ -125,15 +126,15 @@ impl Default for AuthConfig {
     }
 }
 
-fn default_rate_limit_requests() -> usize {
+const fn default_rate_limit_requests() -> usize {
     100
 }
 
-fn default_rate_limit_window() -> u64 {
+const fn default_rate_limit_window() -> u64 {
     60
 }
 
-/// DraftSpecConfig: draft spec configuration.
+/// `DraftSpecConfig`: draft spec configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DraftSpecConfig {
     pub id: String,
@@ -146,11 +147,11 @@ pub struct DraftSpecConfig {
     pub architecture: Option<String>,
 }
 
-fn default_draft_layers() -> usize {
+const fn default_draft_layers() -> usize {
     4
 }
 
-/// EngineConfig: engine configuration.
+/// `EngineConfig`: engine configuration.
 #[allow(clippy::derivable_impls)]
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct EngineConfig {
@@ -196,35 +197,35 @@ impl Default for EngineConfig {
     }
 }
 
-fn default_max_draft_tokens() -> usize {
+const fn default_max_draft_tokens() -> usize {
     8
 }
 
-fn default_num_kv_blocks() -> usize {
+const fn default_num_kv_blocks() -> usize {
     1024
 }
 
-fn default_max_batch_size() -> usize {
+const fn default_max_batch_size() -> usize {
     256
 }
 
-fn default_max_waiting_batches() -> usize {
+const fn default_max_waiting_batches() -> usize {
     10
 }
 
-fn default_tensor_parallel_size() -> usize {
+const fn default_tensor_parallel_size() -> usize {
     1
 }
 
-fn default_kv_quantization() -> bool {
+const fn default_kv_quantization() -> bool {
     false
 }
 
-fn default_enable_adaptive_speculative() -> bool {
+const fn default_enable_adaptive_speculative() -> bool {
     true
 }
 
-/// AppConfig: app configuration.
+/// `AppConfig`: app configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::derivable_impls)]
 pub struct AppConfig {
@@ -248,13 +249,14 @@ impl Default for AppConfig {
 }
 
 impl AppConfig {
+    #[must_use]
     pub fn load(path: Option<PathBuf>) -> Self {
         let mut config = Self::default();
 
         if let Some(config_path) = path {
             if config_path.exists() {
                 if let Ok(contents) = std::fs::read_to_string(&config_path) {
-                    if let Ok(loaded) = serde_yaml::from_str::<AppConfig>(&contents) {
+                    if let Ok(loaded) = serde_yaml::from_str::<Self>(&contents) {
                         config = loaded;
                     }
                 }
@@ -265,7 +267,7 @@ impl AppConfig {
             let env_config_path = PathBuf::from(env_path);
             if env_config_path.exists() {
                 if let Ok(contents) = std::fs::read_to_string(&env_config_path) {
-                    if let Ok(loaded) = serde_yaml::from_str::<AppConfig>(&contents) {
+                    if let Ok(loaded) = serde_yaml::from_str::<Self>(&contents) {
                         config = loaded;
                     }
                 }

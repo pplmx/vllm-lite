@@ -8,17 +8,17 @@ use vllm_traits::SeqId;
 
 use super::leader_election::LeaderElection;
 
-/// InFlightRequest: in flight request.
+/// `InFlightRequest`: in flight request.
 #[derive(Debug, Clone)]
-pub(crate) struct InFlightRequest {
+pub struct InFlightRequest {
     pub seq_id: SeqId,
     pub prompt_hash: u64,
     pub created_at: std::time::Instant,
     pub node_id: String,
 }
 
-/// FailoverManager: failover manager.
-pub(crate) struct FailoverManager {
+/// `FailoverManager`: failover manager.
+pub struct FailoverManager {
     leader_election: Arc<LeaderElection>,
     inflight_requests: Arc<RwLock<HashMap<SeqId, InFlightRequest>>>,
     request_timeout: std::time::Duration,

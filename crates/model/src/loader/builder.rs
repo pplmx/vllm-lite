@@ -6,7 +6,7 @@ use crate::arch::{ARCHITECTURE_REGISTRY, ArchCapabilities, register_all_archs};
 use crate::config::Architecture as ConfigArchitecture;
 use crate::config::ModelConfig;
 
-/// ModelLoaderBuilder: model loader builder.
+/// `ModelLoaderBuilder`: model loader builder.
 pub struct ModelLoaderBuilder {
     device: Device,
     model_dir: Option<String>,
@@ -16,7 +16,8 @@ pub struct ModelLoaderBuilder {
 }
 
 impl ModelLoaderBuilder {
-    pub fn new(device: Device) -> Self {
+    #[must_use]
+    pub const fn new(device: Device) -> Self {
         Self {
             device,
             model_dir: None,
@@ -26,23 +27,27 @@ impl ModelLoaderBuilder {
         }
     }
 
+    #[must_use]
     pub fn with_model_dir(mut self, model_dir: String) -> Self {
         self.model_dir = Some(model_dir);
         self
     }
 
-    pub fn with_kv_blocks(mut self, num_kv_blocks: usize) -> Self {
+    #[must_use]
+    pub const fn with_kv_blocks(mut self, num_kv_blocks: usize) -> Self {
         self.num_kv_blocks = Some(num_kv_blocks);
         self
     }
 
-    pub fn with_kv_quantization(mut self, enabled: bool) -> Self {
+    #[must_use]
+    pub const fn with_kv_quantization(mut self, enabled: bool) -> Self {
         self.kv_quantization = Some(enabled);
         self
     }
 
     /// Allow loading stub architectures (Gemma3, Llama4, Phi4, …) that do not perform real inference.
-    pub fn with_allow_stub(mut self, allow: bool) -> Self {
+    #[must_use]
+    pub const fn with_allow_stub(mut self, allow: bool) -> Self {
         self.allow_stub = allow;
         self
     }
@@ -66,7 +71,7 @@ impl ModelLoaderBuilder {
     }
 }
 
-/// ModelLoader: model loader.
+/// `ModelLoader`: model loader.
 pub struct ModelLoader {
     inner: Arc<ModelLoaderInner>,
 }
@@ -98,9 +103,9 @@ impl ModelLoaderInner {
     ) -> Result<Self> {
         let config_path = Path::new(&model_dir).join("config.json");
         let content = std::fs::read_to_string(&config_path)
-            .map_err(|e| candle_core::Error::msg(format!("Failed to read config: {}", e)))?;
+            .map_err(|e| candle_core::Error::msg(format!("Failed to read config: {e}")))?;
         let config_json: serde_json::Value = serde_json::from_str(&content)
-            .map_err(|e| candle_core::Error::msg(format!("Failed to parse config: {}", e)))?;
+            .map_err(|e| candle_core::Error::msg(format!("Failed to parse config: {e}")))?;
 
         Ok(Self {
             device,
@@ -114,6 +119,7 @@ impl ModelLoaderInner {
 }
 
 impl ModelLoader {
+    #[must_use]
     pub fn new(device: Device) -> Self {
         Self {
             inner: Arc::new(ModelLoaderInner {
@@ -127,10 +133,12 @@ impl ModelLoader {
         }
     }
 
-    pub fn builder(device: Device) -> ModelLoaderBuilder {
+    #[must_use]
+    pub const fn builder(device: Device) -> ModelLoaderBuilder {
         ModelLoaderBuilder::new(device)
     }
 
+    #[must_use]
     pub fn device(&self) -> &Device {
         &self.inner.device
     }
@@ -138,7 +146,7 @@ impl ModelLoader {
     pub fn architecture(&self) -> ConfigArchitecture {
         ARCHITECTURE_REGISTRY
             .detect(&self.inner.config_json)
-            .map(|name| match name.as_str() {
+            .map_or(ConfigArchitecture::Llama, |name| match name.as_str() {
                 "llama" => ConfigArchitecture::Llama,
                 "mistral" => ConfigArchitecture::Mistral,
                 "qwen3" | "qwen2" => ConfigArchitecture::Qwen3,
@@ -147,9 +155,9 @@ impl ModelLoader {
                 "mixtral" => ConfigArchitecture::Mixtral,
                 _ => ConfigArchitecture::Llama,
             })
-            .unwrap_or(ConfigArchitecture::Llama)
     }
 
+    #[must_use]
     pub fn config_json(&self) -> &serde_json::Value {
         &self.inner.config_json
     }
@@ -172,9 +180,9 @@ impl ModelLoader {
     pub fn load_config<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
         let config_path = Path::new(&self.inner.model_dir).join("config.json");
         let content = std::fs::read_to_string(config_path)
-            .map_err(|e| candle_core::Error::msg(format!("Failed to read config: {}", e)))?;
+            .map_err(|e| candle_core::Error::msg(format!("Failed to read config: {e}")))?;
         serde_json::from_str(&content)
-            .map_err(|e| candle_core::Error::msg(format!("Failed to parse config: {}", e)))
+            .map_err(|e| candle_core::Error::msg(format!("Failed to parse config: {e}")))
     }
 
     pub fn load_weights(&self) -> Result<std::collections::HashMap<String, Tensor>> {
@@ -221,7 +229,7 @@ impl ModelLoader {
         }
 
         let config = ModelConfig::from_config_json(&self.inner.config_json)
-            .map_err(|e| candle_core::Error::msg(format!("Failed to parse model config: {}", e)))?;
+            .map_err(|e| candle_core::Error::msg(format!("Failed to parse model config: {e}")))?;
         let weights = self.load_weights()?;
         let weights = arch.remap_weights(weights);
 
@@ -242,10 +250,10 @@ impl ModelLoader {
         let mut keys: Vec<_> = weights.keys().collect();
         keys.sort();
         println!("Loaded weight keys ({} total):", keys.len());
-        for key in keys.iter() {
+        for key in &keys {
             if let Some(t) = weights.get(*key) {
                 let dims: Vec<usize> = (0..t.dims().len()).map(|i| t.dims()[i]).collect();
-                println!("  {}: {:?}", key, dims);
+                println!("  {key}: {dims:?}");
             }
         }
     }

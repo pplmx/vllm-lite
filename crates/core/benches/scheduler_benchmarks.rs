@@ -9,7 +9,7 @@ use vllm_core::scheduler::{
 };
 use vllm_core::types::{Priority, Request, SchedulerConfig, Sequence, Status};
 
-/// Benchmark RequestQueue O(1) operations vs O(n)
+/// Benchmark `RequestQueue` O(1) operations vs O(n)
 fn bench_request_queue_operations(c: &mut Criterion) {
     let mut group = c.benchmark_group("request_queue");
     // Setup: Create queue with 1000 sequences
@@ -40,7 +40,7 @@ fn bench_request_queue_operations(c: &mut Criterion) {
             };
             queue.enqueue(seq, &policy, &ctx);
         }
-        b.iter(|| black_box(queue.get(black_box(500))))
+        b.iter(|| black_box(queue.get(black_box(500))));
     });
 
     group.bench_function("remove_o1", |b| {
@@ -68,7 +68,7 @@ fn bench_request_queue_operations(c: &mut Criterion) {
                 q
             },
             |mut q| black_box(q.remove(black_box(50))),
-        )
+        );
     });
     group.finish();
 }
@@ -99,12 +99,12 @@ fn bench_scheduling_policies(c: &mut Criterion) {
 
     group.bench_function("fcfs", |b| {
         let policy = FcfsPolicy::new();
-        b.iter(|| black_box(policy.compute_priority(&seq, &ctx)))
+        b.iter(|| black_box(policy.compute_priority(&seq, &ctx)));
     });
 
     group.bench_function("sjf", |b| {
         let policy = SjfPolicy::default();
-        b.iter(|| black_box(policy.compute_priority(&seq, &ctx)))
+        b.iter(|| black_box(policy.compute_priority(&seq, &ctx)));
     });
     group.finish();
 }
@@ -125,7 +125,7 @@ fn bench_batch_building(c: &mut Criterion) {
                 engine
             },
             |mut engine| black_box(engine.build_batch()),
-        )
+        );
     });
 
     group.bench_function("build_batch_100", |b| {
@@ -138,12 +138,12 @@ fn bench_batch_building(c: &mut Criterion) {
                 engine
             },
             |mut engine| black_box(engine.build_batch()),
-        )
+        );
     });
     group.finish();
 }
 
-/// Benchmark PhaseScheduler
+/// Benchmark `PhaseScheduler`
 fn bench_phase_scheduler(c: &mut Criterion) {
     let mut group = c.benchmark_group("phase_scheduler");
     let switch_policy = PhaseSwitchPolicy::default();
@@ -158,7 +158,7 @@ fn bench_phase_scheduler(c: &mut Criterion) {
     };
 
     group.bench_function("select_phase", |b| {
-        b.iter(|| black_box(scheduler.select_phase(&state)))
+        b.iter(|| black_box(scheduler.select_phase(&state)));
     });
     group.finish();
 }

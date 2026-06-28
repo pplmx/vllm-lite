@@ -1,4 +1,4 @@
-//! SchedulerEngine struct definition, constructor, and state accessors.
+//! `SchedulerEngine` struct definition, constructor, and state accessors.
 //!
 //! This module owns the `SchedulerEngine` data layout and the lifecycle
 //! methods that touch overall engine state (`new`, `add_request`,
@@ -22,14 +22,14 @@ use crate::scheduler::{
 };
 use crate::types::{Phase, Request, SchedulerConfig, Sequence, Status};
 
-/// SchedulerEngine - Componentized scheduler architecture
+/// `SchedulerEngine` - Componentized scheduler architecture
 ///
 /// This engine combines multiple specialized components:
-/// - RequestQueue: O(1) lookup and removal with phase-aware indexing
-/// - PhaseScheduler: Strict prefill/decode separation with configurable policies
-/// - BatchComposer: Phase-specific batch construction
-/// - MemoryManager: Block allocation and eviction
-/// - RadixTree: Prefix caching for prompt reuse
+/// - `RequestQueue`: O(1) lookup and removal with phase-aware indexing
+/// - `PhaseScheduler`: Strict prefill/decode separation with configurable policies
+/// - `BatchComposer`: Phase-specific batch construction
+/// - `MemoryManager`: Block allocation and eviction
+/// - `RadixTree`: Prefix caching for prompt reuse
 pub struct SchedulerEngine {
     pub(super) request_queue: RequestQueue,
     pub(super) phase_scheduler: PhaseScheduler,
@@ -48,7 +48,7 @@ pub struct SchedulerEngine {
 }
 
 impl SchedulerEngine {
-    /// Create a new SchedulerEngine with the given configuration
+    /// Create a new `SchedulerEngine` with the given configuration
     ///
     /// # Arguments
     /// * `config` - Scheduler configuration
@@ -85,7 +85,7 @@ impl SchedulerEngine {
             request_queue: RequestQueue::new(),
             phase_scheduler: PhaseScheduler::new(phase_switch_policy),
             batch_composer: BatchComposer::with_packing(batch_config, config.packing.clone()),
-            memory: MemoryManager::new(config.clone(), num_kv_blocks),
+            memory: MemoryManager::new(config, num_kv_blocks),
             prefix_cache: RadixTree::new(),
             policy: Box::new(FcfsPolicy::new()),
             running: Vec::new(),
@@ -167,8 +167,7 @@ impl SchedulerEngine {
             memory_pressure: self.get_memory_pressure(),
         };
 
-        self.request_queue
-            .enqueue(seq.clone(), self.policy.as_ref(), &ctx);
+        self.request_queue.enqueue(seq, self.policy.as_ref(), &ctx);
 
         // Update metrics: queue depth
         self.metrics

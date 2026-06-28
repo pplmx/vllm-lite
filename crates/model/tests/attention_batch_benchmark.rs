@@ -14,7 +14,7 @@ fn test_forward_prefill_batch_performance() -> Result<()> {
         tile_size: Some(256),
         use_fused: true,
     };
-    let attn = RopeGqaAttention::new(896, 8, 2, 112, THETA, None, config.clone(), false)?;
+    let attn = RopeGqaAttention::new(896, 8, 2, 112, THETA, None, config, false)?;
 
     let mut kv_cache = PagedKvCache::new(28, 8, 112, 1024, device.clone(), false)?;
 
@@ -27,7 +27,7 @@ fn test_forward_prefill_batch_performance() -> Result<()> {
     let _output = attn.forward_prefill(&x, &mut kv_cache, 0, &block_ids, &positions)?;
     let elapsed = start.elapsed();
 
-    println!("forward_prefill for 256 tokens took: {:?}", elapsed);
+    println!("forward_prefill for 256 tokens took: {elapsed:?}");
 
     // Verify KV cache was correctly written
     let (k_read, _v_read) = kv_cache.read_kv(0, &(0..16).collect::<Vec<_>>(), 256)?;

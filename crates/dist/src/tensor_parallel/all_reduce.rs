@@ -2,7 +2,7 @@ use super::device_mesh::DeviceMesh;
 use std::sync::Arc;
 use vllm_traits::TensorParallelError;
 
-/// ReduceOp: reduce op enumeration.
+/// `ReduceOp`: reduce op enumeration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReduceOp {
     Sum,
@@ -10,7 +10,7 @@ pub enum ReduceOp {
     Max,
 }
 
-/// AllReduce: all reduce trait.
+/// `AllReduce`: all reduce trait.
 pub trait AllReduce: Send + Sync {
     fn all_reduce(&self, input: &[f32], op: ReduceOp) -> Result<Vec<f32>, TensorParallelError>;
     fn all_reduce_inplace(
@@ -20,13 +20,14 @@ pub trait AllReduce: Send + Sync {
     ) -> Result<(), TensorParallelError>;
 }
 
-/// NcclAllReduce: nccl all reduce.
+/// `NcclAllReduce`: nccl all reduce.
 pub struct NcclAllReduce {
     mesh: Arc<DeviceMesh>,
 }
 
 impl NcclAllReduce {
-    pub fn new(mesh: Arc<DeviceMesh>) -> Self {
+    #[must_use]
+    pub const fn new(mesh: Arc<DeviceMesh>) -> Self {
         Self { mesh }
     }
 }
@@ -60,7 +61,7 @@ impl AllReduce for NcclAllReduce {
                 }
             }
             ReduceOp::Max => {
-                let max_val = input.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+                let max_val = input.iter().copied().fold(f32::NEG_INFINITY, f32::max);
                 for v in input.iter_mut() {
                     *v = max_val;
                 }
@@ -100,6 +101,7 @@ impl dyn AllReduce {
     /// a direct `impl Default for Arc<dyn ...>` because `Arc` is foreign and
     /// there is no local type appearing before the uncovered trait-object
     /// parameter.
+    #[must_use]
     pub fn default_arc() -> Arc<Self> {
         Arc::new(NoopAllReduce)
     }
@@ -118,7 +120,7 @@ mod tests {
         let result = all_reduce.all_reduce(&input, ReduceOp::Sum)?;
 
         let expected: f32 = input.iter().sum();
-        for v in result.iter() {
+        for v in &result {
             assert_eq!(*v, expected);
         }
         Ok(())
@@ -133,7 +135,7 @@ mod tests {
         let result = all_reduce.all_reduce(&input, ReduceOp::Avg)?;
 
         let expected: f32 = input.iter().sum::<f32>() / 2.0;
-        for v in result.iter() {
+        for v in &result {
             assert_eq!(*v, expected);
         }
         Ok(())
@@ -151,7 +153,7 @@ mod tests {
             .iter()
             .max_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap();
-        for v in result.iter() {
+        for v in &result {
             assert_eq!(*v, expected);
         }
         Ok(())
@@ -166,7 +168,7 @@ mod tests {
         all_reduce.all_reduce_inplace(&mut input, ReduceOp::Sum)?;
 
         let sum: f32 = 6.0;
-        for v in input.iter() {
+        for v in &input {
             assert_eq!(*v, sum);
         }
         Ok(())
@@ -184,7 +186,7 @@ mod tests {
             let result = all_reduce.all_reduce(&input, ReduceOp::Sum)?;
 
             let expected: f32 = input.iter().sum();
-            for v in result.iter() {
+            for v in &result {
                 assert_eq!(*v, expected);
             }
         }

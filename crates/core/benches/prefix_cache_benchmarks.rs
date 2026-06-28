@@ -3,7 +3,7 @@ use std::hint::black_box;
 use vllm_core::scheduler::RadixTree;
 use vllm_traits::TokenId;
 
-/// Benchmark RadixTree prefix matching
+/// Benchmark `RadixTree` prefix matching
 fn bench_radix_tree(c: &mut Criterion) {
     let mut group = c.benchmark_group("radix_tree");
     // Setup: Create tree with various prefix patterns
@@ -21,12 +21,12 @@ fn bench_radix_tree(c: &mut Criterion) {
     // Benchmark longest prefix match
     group.bench_function("longest_prefix_match_hit", |b| {
         let query = vec![5, 3, 7, 8, 9];
-        b.iter(|| black_box(tree.longest_prefix_match(&query)))
+        b.iter(|| black_box(tree.longest_prefix_match(&query)));
     });
 
     group.bench_function("longest_prefix_match_miss", |b| {
         let query = vec![99, 99, 99];
-        b.iter(|| black_box(tree.longest_prefix_match(&query)))
+        b.iter(|| black_box(tree.longest_prefix_match(&query)));
     });
 
     // Benchmark insert
@@ -35,7 +35,7 @@ fn bench_radix_tree(c: &mut Criterion) {
         let tokens: Vec<TokenId> = vec![1, 2, 3, 4, 5];
         b.iter(|| {
             t.insert(&tokens, vec![100]);
-        })
+        });
     });
     group.finish();
 }

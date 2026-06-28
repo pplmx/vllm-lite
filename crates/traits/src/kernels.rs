@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// CudaGraphConfig: cuda graph configuration.
+/// `CudaGraphConfig`: cuda graph configuration.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CudaGraphConfig {
     pub enabled: bool,
@@ -20,7 +20,7 @@ impl Default for CudaGraphConfig {
     }
 }
 
-/// ModelGraphConfig: model graph configuration.
+/// `ModelGraphConfig`: model graph configuration.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModelGraphConfig {
     pub max_seq_len: usize,
@@ -39,6 +39,7 @@ impl Default for ModelGraphConfig {
 }
 
 impl CudaGraphConfig {
+    #[must_use]
     pub fn from_env() -> Self {
         let enabled = std::env::var("VLLM_CUDA_GRAPH_ENABLED")
             .ok()
@@ -47,8 +48,10 @@ impl CudaGraphConfig {
 
         let batch_sizes = std::env::var("VLLM_CUDA_GRAPH_BATCH_SIZES")
             .ok()
-            .map(|v| v.split(',').filter_map(|s| s.trim().parse().ok()).collect())
-            .unwrap_or_else(|| vec![1, 4, 8, 16, 32, 64]);
+            .map_or_else(
+                || vec![1, 4, 8, 16, 32, 64],
+                |v| v.split(',').filter_map(|s| s.trim().parse().ok()).collect(),
+            );
 
         let enable_graph_pooling = std::env::var("VLLM_CUDA_GRAPH_POOLING")
             .ok()
@@ -63,7 +66,7 @@ impl CudaGraphConfig {
     }
 }
 
-/// GraphExecutionError: graph execution error.
+/// `GraphExecutionError`: graph execution error.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum GraphExecutionError {
     #[error("graph not found for batch size {0}")]

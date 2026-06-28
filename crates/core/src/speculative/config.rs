@@ -1,11 +1,11 @@
 //! Configuration for speculative decoding
 //!
-//! SpeculationConfig controls how speculative decoding operates,
+//! `SpeculationConfig` controls how speculative decoding operates,
 //! including draft token count, depth limits, and sampling parameters.
 
 use std::sync::Arc;
 
-/// SpeculationConfig: speculation configuration.
+/// `SpeculationConfig`: speculation configuration.
 #[derive(Clone, Debug)]
 pub struct SpeculationConfig {
     pub draft_count: usize,
@@ -34,10 +34,12 @@ impl Default for SpeculationConfig {
 }
 
 impl SpeculationConfig {
+    #[must_use]
     pub fn builder() -> SpeculationConfigBuilder {
         SpeculationConfigBuilder::default()
     }
 
+    #[must_use]
     pub fn from_env() -> Self {
         Self {
             draft_count: std::env::var("VLLM_SPECULATIVE_DRAFT_COUNT")
@@ -68,59 +70,67 @@ impl SpeculationConfig {
                 .and_then(|v| v.parse().ok()),
             self_speculation: std::env::var("VLLM_SPECULATIVE_SELF")
                 .ok()
-                .map(|v| v != "false")
-                .unwrap_or(true),
+                .is_none_or(|v| v != "false"),
         }
     }
 }
 
-/// SpeculationConfigBuilder: speculation config builder.
+/// `SpeculationConfigBuilder`: speculation config builder.
 #[derive(Default)]
 pub struct SpeculationConfigBuilder {
     config: SpeculationConfig,
 }
 
 impl SpeculationConfigBuilder {
-    pub fn draft_count(mut self, count: usize) -> Self {
+    #[must_use]
+    pub const fn draft_count(mut self, count: usize) -> Self {
         self.config.draft_count = count;
         self
     }
 
-    pub fn max_depth(mut self, depth: usize) -> Self {
+    #[must_use]
+    pub const fn max_depth(mut self, depth: usize) -> Self {
         self.config.max_depth = depth;
         self
     }
 
-    pub fn temperature(mut self, temp: f32) -> Self {
+    #[must_use]
+    pub const fn temperature(mut self, temp: f32) -> Self {
         self.config.temperature = temp;
         self
     }
 
-    pub fn top_k(mut self, k: usize) -> Self {
+    #[must_use]
+    pub const fn top_k(mut self, k: usize) -> Self {
         self.config.top_k = k;
         self
     }
 
-    pub fn top_p(mut self, p: f32) -> Self {
+    #[must_use]
+    pub const fn top_p(mut self, p: f32) -> Self {
         self.config.top_p = p;
         self
     }
 
+    #[must_use]
     pub fn target_model(mut self, model: String) -> Self {
         self.config.target_model = Arc::new(model);
         self
     }
 
-    pub fn draft_layers(mut self, layers: usize) -> Self {
+    #[must_use]
+    pub const fn draft_layers(mut self, layers: usize) -> Self {
         self.config.draft_layers = Some(layers);
         self
     }
 
-    pub fn self_speculation(mut self, enabled: bool) -> Self {
+    #[must_use]
+    pub const fn self_speculation(mut self, enabled: bool) -> Self {
         self.config.self_speculation = enabled;
         self
     }
 
+    #[must_use]
     pub fn build(self) -> SpeculationConfig {
         self.config
     }

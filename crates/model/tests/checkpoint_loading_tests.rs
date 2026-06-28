@@ -79,14 +79,14 @@ mod tests {
             .keys()
             .filter(|k| k.contains("embed") || k.contains("token") || k.contains("embedding"))
             .collect();
-        println!("Embedding keys: {:?}", embed_keys);
+        println!("Embedding keys: {embed_keys:?}");
 
         let lm_keys: Vec<_> = weights
             .keys()
             .filter(|k| k.contains("language_model") || k.contains("model."))
             .take(10)
             .collect();
-        println!("Model keys sample: {:?}", lm_keys);
+        println!("Model keys sample: {lm_keys:?}");
     }
 
     #[test]
@@ -136,10 +136,10 @@ mod tests {
         let remapped = remap_qwen35_weight_keys(weights);
 
         let embed_keys: Vec<_> = remapped.keys().filter(|k| k.contains("embed")).collect();
-        println!("\nRemapped Embedding keys: {:?}", embed_keys);
+        println!("\nRemapped Embedding keys: {embed_keys:?}");
 
         let first_20: Vec<_> = remapped.keys().take(20).collect();
-        println!("First 20 remapped keys: {:?}", first_20);
+        println!("First 20 remapped keys: {first_20:?}");
 
         let layer0_keys: Vec<_> = remapped
             .keys()
@@ -179,9 +179,9 @@ mod tests {
         for input in &test_inputs {
             let tokens = tokenizer.encode(input);
             let decoded = tokenizer.decode(&tokens);
-            println!("\n=== Input: '{}' ===", input);
-            println!("Tokens: {:?}", tokens);
-            println!("Decoded: '{}'", decoded);
+            println!("\n=== Input: '{input}' ===");
+            println!("Tokens: {tokens:?}");
+            println!("Decoded: '{decoded}'");
         }
     }
 
@@ -198,13 +198,13 @@ mod tests {
         let block_ids: Vec<usize> = vec![0, 0, 0];
 
         println!("\n=== Testing Prefill ===");
-        println!("Input tokens: {:?}", tokens);
+        println!("Input tokens: {tokens:?}");
 
         let output = model
             .forward(&[1], &[tokens], &[positions], &[block_ids], &[0], &[true])
             .expect("Prefill forward failed");
 
-        println!("Output: {:?}", output);
+        println!("Output: {output:?}");
     }
 
     #[test]
@@ -227,7 +227,7 @@ mod tests {
                     .expect("abs failed")
                     .mean_all()
                     .expect("Failed to compute abs mean");
-                println!("\n=== {} ===", key);
+                println!("\n=== {key} ===");
                 println!("Shape: {:?}", w.dims());
                 println!(
                     "Mean: {:.6}, Abs Mean: {:.6}",
@@ -250,7 +250,7 @@ mod tests {
                     .expect("abs failed")
                     .mean_all()
                     .expect("Failed to compute abs mean");
-                println!("\n=== {} ===", key);
+                println!("\n=== {key} ===");
                 println!("Shape: {:?}", w.dims());
                 println!(
                     "Mean: {:.6}, Abs Mean: {:.6}",
@@ -269,8 +269,8 @@ mod tests {
             .expect("Failed to load weights");
 
         for layer_idx in 0..3 {
-            let q_norm_key = format!("model.layers.{}.self_attn.q_norm.weight", layer_idx);
-            let k_norm_key = format!("model.layers.{}.self_attn.k_norm.weight", layer_idx);
+            let q_norm_key = format!("model.layers.{layer_idx}.self_attn.q_norm.weight");
+            let k_norm_key = format!("model.layers.{layer_idx}.self_attn.k_norm.weight");
             for key in &[&q_norm_key, &k_norm_key] {
                 if let Some(w) = weights.get(key.as_str()) {
                     let mean = w.mean_all().expect("Failed to compute mean");
@@ -279,7 +279,7 @@ mod tests {
                         .expect("abs failed")
                         .mean_all()
                         .expect("Failed to compute abs mean");
-                    println!("\n=== {} ===", key);
+                    println!("\n=== {key} ===");
                     println!("Shape: {:?}", w.dims());
                     println!(
                         "Mean: {:.6}, Abs Mean: {:.6}",
@@ -308,7 +308,7 @@ mod tests {
             let device = Device::Cpu;
             match load_checkpoint(path, &device) {
                 Ok(weights) => println!("{}: Loaded {} weights", name, weights.len()),
-                Err(e) => println!("{}: FAILED - {}", name, e),
+                Err(e) => println!("{name}: FAILED - {e}"),
             }
         }
     }

@@ -1,7 +1,7 @@
 use crate::types::{BlockId, Sequence, Status};
 use std::collections::{HashMap, VecDeque};
 
-/// EvictionPolicyStats: eviction policy statistics.
+/// `EvictionPolicyStats`: eviction policy statistics.
 #[derive(Clone, Default)]
 pub struct EvictionPolicyStats {
     pub total_evictions: usize,
@@ -9,7 +9,7 @@ pub struct EvictionPolicyStats {
     pub cache_hits: usize,
 }
 
-/// EvictionPolicy: eviction policy.
+/// `EvictionPolicy`: eviction policy.
 pub struct EvictionPolicy {
     block_access_order: VecDeque<BlockId>,
     block_ref_count: HashMap<BlockId, usize>,
@@ -24,6 +24,7 @@ impl Default for EvictionPolicy {
 }
 
 impl EvictionPolicy {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             block_access_order: VecDeque::new(),
@@ -61,7 +62,7 @@ impl EvictionPolicy {
             for &block_id in seq.kv_blocks.as_ref() {
                 let priority = self.compute_priority(seq);
                 block_usage.entry(block_id).or_insert((seq, priority)).1 =
-                    priority.min(block_usage.get(&block_id).map(|(_, p)| *p).unwrap_or(0));
+                    priority.min(block_usage.get(&block_id).map_or(0, |(_, p)| *p));
             }
         }
 
@@ -96,7 +97,7 @@ impl EvictionPolicy {
         victims
     }
 
-    fn compute_priority(&self, seq: &Sequence) -> usize {
+    const fn compute_priority(&self, seq: &Sequence) -> usize {
         match seq.status {
             Status::Prefilling => 2,
             Status::Decoding => {
@@ -152,10 +153,12 @@ impl EvictionPolicy {
         }
     }
 
+    #[must_use]
     pub fn get_block_ref_count(&self, block: BlockId) -> usize {
         *self.block_ref_count.get(&block).unwrap_or(&0)
     }
 
+    #[must_use]
     pub fn stats(&self) -> EvictionPolicyStats {
         self.stats.clone()
     }

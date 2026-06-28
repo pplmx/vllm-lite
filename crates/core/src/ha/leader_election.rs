@@ -5,16 +5,16 @@ use std::time::Duration;
 use tokio::sync::{RwLock, watch};
 use tracing::{info, warn};
 
-/// LeadershipState: leadership state enumeration.
+/// `LeadershipState`: leadership state enumeration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum LeadershipState {
+pub enum LeadershipState {
     Leader,
     Follower,
     Candidate,
 }
 
-/// LeaderElection: leader election.
-pub(crate) struct LeaderElection {
+/// `LeaderElection`: leader election.
+pub struct LeaderElection {
     state: Arc<RwLock<LeadershipState>>,
     is_leader: Arc<RwLock<bool>>,
     leader_id: Arc<RwLock<Option<String>>>,
@@ -59,19 +59,16 @@ impl LeaderElection {
     pub async fn on_leader_lost(&self, new_leader: Option<String>) {
         let mut leader_id = self.leader_id.write().await;
 
-        match new_leader {
-            Some(id) => {
-                let mut is_leader = self.is_leader.write().await;
-                *is_leader = false;
-                *leader_id = Some(id.clone());
-                warn!(new_leader = %id, "Leadership transferred");
-            }
-            None => {
-                let mut is_leader = self.is_leader.write().await;
-                *is_leader = false;
-                *leader_id = None;
-                warn!("Leader lost, no new leader elected yet");
-            }
+        if let Some(id) = new_leader {
+            let mut is_leader = self.is_leader.write().await;
+            *is_leader = false;
+            *leader_id = Some(id.clone());
+            warn!(new_leader = %id, "Leadership transferred");
+        } else {
+            let mut is_leader = self.is_leader.write().await;
+            *is_leader = false;
+            *leader_id = None;
+            warn!("Leader lost, no new leader elected yet");
         }
     }
 

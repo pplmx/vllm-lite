@@ -6,7 +6,7 @@ use crate::config::ModelConfig;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 
-/// BlockWrapper: block wrapper.
+/// `BlockWrapper`: block wrapper.
 pub struct BlockWrapper<B> {
     inner: B,
     inner_dim: usize,
@@ -14,7 +14,7 @@ pub struct BlockWrapper<B> {
 }
 
 impl<B> BlockWrapper<B> {
-    pub fn new(inner: B, config: &ModelConfig) -> Self {
+    pub const fn new(inner: B, config: &ModelConfig) -> Self {
         Self {
             inner_dim: config.head_dim,
             num_kv_heads: config.num_kv_heads,
@@ -22,7 +22,7 @@ impl<B> BlockWrapper<B> {
         }
     }
 
-    pub fn inner(&self) -> &B {
+    pub const fn inner(&self) -> &B {
         &self.inner
     }
 }

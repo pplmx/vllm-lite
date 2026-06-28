@@ -88,7 +88,7 @@ fn test_chunked_prefill_integration() {
     }
 
     // Should have done more than just prefill
-    assert!(steps > 1, "should have multiple steps, got {}", steps);
+    assert!(steps > 1, "should have multiple steps, got {steps}");
 }
 
 #[test]
@@ -123,9 +123,10 @@ fn test_max_tokens_includes_prompt() {
     while engine.has_pending() {
         engine.step().unwrap();
         steps += 1;
-        if steps > 10 {
-            panic!("Too many steps - max_tokens might not include prompt");
-        }
+        assert!(
+            steps <= 10,
+            "Too many steps - max_tokens might not include prompt"
+        )
     }
 
     // Should finish in exactly 3 steps:
@@ -133,8 +134,7 @@ fn test_max_tokens_includes_prompt() {
     // Actually: prompt processing + decoding until 5 total tokens
     assert!(
         steps <= 5,
-        "should finish within expected steps, got {}",
-        steps
+        "should finish within expected steps, got {steps}"
     );
 }
 
@@ -235,7 +235,7 @@ fn test_batch_full_new_request_waits() {
     engine.scheduler.update(
         &batch1.seq_ids,
         &[99],
-        &[batch1.input_tokens.iter().map(|v| v.len()).sum()],
+        &[batch1.input_tokens.iter().map(std::vec::Vec::len).sum()],
     );
 
     engine.add_request(Request::new(2, vec![20], 5), tx2);
@@ -335,7 +335,7 @@ fn test_prefill_priority_under_decode_limit() {
     engine.scheduler.update(
         &batch1.seq_ids,
         &[99],
-        &[batch1.input_tokens.iter().map(|v| v.len()).sum()],
+        &[batch1.input_tokens.iter().map(std::vec::Vec::len).sum()],
     );
 
     engine.add_request(Request::new(2, vec![20, 30], 5), tx2);
@@ -406,7 +406,7 @@ fn test_sequence_state_transitions() {
     engine.scheduler.update(
         &batch1.seq_ids,
         &[99],
-        &[batch1.input_tokens.iter().map(|v| v.len()).sum()],
+        &[batch1.input_tokens.iter().map(std::vec::Vec::len).sum()],
     );
 
     let running = engine.scheduler.running();
@@ -687,7 +687,7 @@ fn test_engine_health_tracking() {
 fn test_engine_with_const_model() {
     let config = SchedulerConfig::default();
     let const_model = ConstModel::new(42);
-    let mut engine = Engine::with_config(const_model.clone(), None, config, 4, 1024);
+    let mut engine = Engine::with_config(const_model, None, config, 4, 1024);
 
     let (tx, _rx) = mpsc::channel(64);
     engine.add_request(Request::new(1, vec![1, 2, 3], 5), tx);
@@ -720,7 +720,7 @@ fn test_engine_large_batch_handling() {
 
     for i in 0..10 {
         let (tx, _rx) = mpsc::channel(64);
-        engine.add_request(Request::new(i as u64, vec![i; 3], 5), tx);
+        engine.add_request(Request::new(u64::from(i), vec![i; 3], 5), tx);
     }
 
     let steps = 5;

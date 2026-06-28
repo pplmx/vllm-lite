@@ -331,14 +331,13 @@ fn test_multiple_cancellations() {
     // At least some should be canceled (those that were running or waiting)
     assert!(
         canceled_count > 0,
-        "Should cancel at least some requests, canceled {}",
-        canceled_count
+        "Should cancel at least some requests, canceled {canceled_count}"
     );
 
     // Verify canceled requests are not running
     for seq_id in &seq_ids {
         let still_running = engine.scheduler.running().iter().any(|s| s.id == *seq_id);
-        assert!(!still_running, "Request {} should not be running", seq_id);
+        assert!(!still_running, "Request {seq_id} should not be running");
     }
 }
 

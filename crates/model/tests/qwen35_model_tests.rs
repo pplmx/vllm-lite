@@ -62,7 +62,7 @@ fn test_qwen35_hybrid_model_kv_cache_init() {
     };
 
     let device = Device::Cpu;
-    let model = Qwen35HybridModel::new(config.clone(), device, 16, false).unwrap();
+    let model = Qwen35HybridModel::new(config, device, 16, false).unwrap();
 
     assert_eq!(model.num_layers(), 4);
 }
@@ -125,7 +125,7 @@ fn test_qwen35_hybrid_model_layer_count() {
     };
 
     let device = Device::Cpu;
-    let model = Qwen35HybridModel::new(config.clone(), device, 8, false).unwrap();
+    let model = Qwen35HybridModel::new(config, device, 8, false).unwrap();
 
     assert_eq!(model.num_layers(), 12);
 }

@@ -28,21 +28,18 @@ pub trait FormatLoader {
 pub struct SafetensorsLoader;
 
 impl SafetensorsLoader {
+    #[must_use]
     pub fn can_load(path: &Path) -> bool {
         if path.exists() {
             if path.is_file() {
-                path.extension()
-                    .map(|ext| ext == "safetensors")
-                    .unwrap_or(false)
+                path.extension().is_some_and(|ext| ext == "safetensors")
             } else if path.is_dir() {
                 find_safetensors_files(path).is_ok()
             } else {
                 false
             }
         } else {
-            path.extension()
-                .map(|ext| ext == "safetensors")
-                .unwrap_or(false)
+            path.extension().is_some_and(|ext| ext == "safetensors")
         }
     }
 }
@@ -62,10 +59,10 @@ impl FormatLoader for SafetensorsLoader {
 
 #[cfg(feature = "gguf")]
 mod gguf_loader {
-    use super::*;
+    use super::{Device, FormatLoader, HashMap, Path, Result, Tensor};
     use crate::quantize::gguf::load_gguf_tensors;
 
-    /// GgufLoader: gguf loader.
+    /// `GgufLoader`: gguf loader.
     pub struct GgufLoader;
 
     impl FormatLoader for GgufLoader {
@@ -73,7 +70,7 @@ mod gguf_loader {
         where
             Self: Sized,
         {
-            path.extension().map(|ext| ext == "gguf").unwrap_or(false)
+            path.extension().is_some_and(|ext| ext == "gguf")
         }
 
         fn load(path: &Path, device: &Device) -> Result<HashMap<String, Tensor>>

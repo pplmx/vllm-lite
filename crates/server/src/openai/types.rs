@@ -9,7 +9,8 @@ pub struct Usage {
 }
 
 impl Usage {
-    pub fn new(prompt: usize, completion: usize) -> Self {
+    #[must_use]
+    pub const fn new(prompt: usize, completion: usize) -> Self {
         let prompt = prompt as i64;
         let completion = completion as i64;
         Self {
@@ -20,7 +21,7 @@ impl Usage {
     }
 }
 
-/// Error details following OpenAI API error format.
+/// Error details following `OpenAI` API error format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorDetail {
     pub message: String,
@@ -29,13 +30,14 @@ pub struct ErrorDetail {
     pub code: Option<String>,
 }
 
-/// Error response wrapper following OpenAI API format.
+/// Error response wrapper following `OpenAI` API format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorResponse {
     pub error: ErrorDetail,
 }
 
 impl ErrorResponse {
+    #[must_use]
     pub fn new(message: &str, error_type: &str) -> Self {
         Self {
             error: ErrorDetail {
@@ -88,6 +90,7 @@ pub struct ChatResponse {
 }
 
 impl ChatResponse {
+    #[must_use]
     pub fn new(id: String, model: String, choices: Vec<ChatChoice>, usage: Usage) -> Self {
         Self {
             id,
@@ -103,7 +106,7 @@ impl ChatResponse {
     }
 }
 
-/// ChatChunkChoice: chat chunk choice.
+/// `ChatChunkChoice`: chat chunk choice.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChunkChoice {
     pub index: i32,
@@ -111,7 +114,7 @@ pub struct ChatChunkChoice {
     pub finish_reason: Option<String>,
 }
 
-/// ChatChunk: chat chunk.
+/// `ChatChunk`: chat chunk.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChunk {
     pub id: String,
@@ -122,6 +125,7 @@ pub struct ChatChunk {
 }
 
 impl ChatChunk {
+    #[must_use]
     pub fn new(id: String, model: String, choice: ChatChunkChoice) -> Self {
         Self {
             id,
@@ -148,7 +152,7 @@ pub struct CompletionRequest {
     pub stop: Option<Vec<String>>,
 }
 
-/// CompletionChoice: completion choice.
+/// `CompletionChoice`: completion choice.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompletionChoice {
     pub text: String,
@@ -168,6 +172,7 @@ pub struct CompletionResponse {
 }
 
 impl CompletionResponse {
+    #[must_use]
     pub fn new(id: String, model: String, choices: Vec<CompletionChoice>, usage: Usage) -> Self {
         Self {
             id,
@@ -212,6 +217,7 @@ pub struct EmbeddingsResponse {
 }
 
 impl EmbeddingsResponse {
+    #[must_use]
     pub fn new(embeddings: Vec<Vec<f32>>, model: String) -> Self {
         let items: Vec<Embedding> = embeddings
             .into_iter()

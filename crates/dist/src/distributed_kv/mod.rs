@@ -4,7 +4,7 @@ pub mod protocol;
 pub use cache::DistributedKVCache;
 pub use protocol::{CacheMessage, CacheOperation, NodeId};
 
-/// CacheConfig: cache configuration.
+/// `CacheConfig`: cache configuration.
 #[derive(Debug, Clone)]
 pub struct CacheConfig {
     pub node_id: NodeId,
@@ -14,7 +14,7 @@ pub struct CacheConfig {
     pub coherence_protocol: CoherenceProtocol,
 }
 
-/// InvalidationStrategy: invalidation strategy enumeration.
+/// `InvalidationStrategy`: invalidation strategy enumeration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InvalidationStrategy {
     WriteInvalidate,
@@ -22,7 +22,7 @@ pub enum InvalidationStrategy {
     NoInvalidation,
 }
 
-/// CoherenceProtocol: coherence protocol enumeration.
+/// `CoherenceProtocol`: coherence protocol enumeration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoherenceProtocol {
     None,
@@ -43,6 +43,7 @@ impl Default for CacheConfig {
 }
 
 impl CacheConfig {
+    #[must_use]
     pub fn new(node_id: NodeId, num_nodes: usize) -> Self {
         Self {
             node_id,

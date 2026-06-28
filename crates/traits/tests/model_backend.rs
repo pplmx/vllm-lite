@@ -152,6 +152,6 @@ fn test_model_error_creation() {
 #[test]
 fn test_model_error_display() {
     let err = ModelError::new("connection failed");
-    let formatted = format!("{}", err);
+    let formatted = format!("{err}");
     assert!(formatted.contains("connection failed"));
 }

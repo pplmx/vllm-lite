@@ -3,7 +3,7 @@
 use crate::config::architecture::RoPEConfig;
 use candle_core::{DType, Result, Tensor};
 
-/// Gemma4RoPE: gemma4 ro pe.
+/// `Gemma4RoPE`: gemma4 ro pe.
 pub(crate) struct Gemma4RoPE {
     rope_theta: f32,
     partial_rotary_factor: f32,
@@ -11,7 +11,7 @@ pub(crate) struct Gemma4RoPE {
 }
 
 impl Gemma4RoPE {
-    pub fn new(rope_config: &RoPEConfig, head_dim: usize) -> Self {
+    pub const fn new(rope_config: &RoPEConfig, head_dim: usize) -> Self {
         Self {
             rope_theta: rope_config.rope_theta,
             partial_rotary_factor: rope_config.partial_rotary_factor,

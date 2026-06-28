@@ -1,4 +1,4 @@
-//! qwen3_config: qwen3 config.
+//! `qwen3_config`: qwen3 config.
 
 mod model;
 mod rope;

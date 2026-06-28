@@ -1,6 +1,6 @@
 //! Unified mock implementations for testing.
 //!
-//! This module consolidates all mock ModelBackend implementations
+//! This module consolidates all mock `ModelBackend` implementations
 //! previously scattered across the codebase.
 
 use vllm_traits::{BatchOutput, ModelBackend, Result, SeqId, TokenId};
@@ -18,6 +18,7 @@ impl Default for StubModel {
 }
 
 impl StubModel {
+    #[must_use]
     pub const fn returning(token: TokenId) -> Self {
         Self { token }
     }
@@ -87,7 +88,7 @@ impl ModelBackend for StubModel {
     }
 }
 
-/// Model that returns seq_id + 1 as next token.
+/// Model that returns `seq_id` + 1 as next token.
 /// Used in: integration tests.
 pub struct IncrementModel;
 
@@ -163,7 +164,8 @@ pub struct ConstModel {
 }
 
 impl ConstModel {
-    pub fn new(return_token: TokenId) -> Self {
+    #[must_use]
+    pub const fn new(return_token: TokenId) -> Self {
         Self { return_token }
     }
 }
@@ -232,14 +234,15 @@ impl ModelBackend for ConstModel {
     }
 }
 
-/// Model that returns seq_id % vocab_size as next token.
+/// Model that returns `seq_id` % `vocab_size` as next token.
 /// Used in: model tests.
 pub struct FakeModel {
     vocab_size: usize,
 }
 
 impl FakeModel {
-    pub fn new(vocab_size: usize) -> Self {
+    #[must_use]
+    pub const fn new(vocab_size: usize) -> Self {
         Self { vocab_size }
     }
 }
@@ -320,7 +323,7 @@ pub(crate) struct NeverProgressModel {
 }
 
 impl NeverProgressModel {
-    pub fn new(token: TokenId) -> Self {
+    pub const fn new(token: TokenId) -> Self {
         Self { token }
     }
 }

@@ -1,4 +1,4 @@
-//! RoPE unit tests (pure tensor math, no checkpoint).
+//! `RoPE` unit tests (pure tensor math, no checkpoint).
 
 #[test]
 fn test_qwen3_rope_position_encoding() {

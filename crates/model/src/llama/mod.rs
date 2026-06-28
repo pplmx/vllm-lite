@@ -1,11 +1,11 @@
 //! Llama model architecture implementation.
 //!
-//! This module provides the LlamaModel and LlamaBlock structs
-//! that implement the ModelBackend trait for Llama-style transformers.
+//! This module provides the `LlamaModel` and `LlamaBlock` structs
+//! that implement the `ModelBackend` trait for Llama-style transformers.
 //!
 //! # Architecture
-//! - Uses RMSNorm (instead of LayerNorm)
-//! - Uses SwiGLU MLP
+//! - Uses `RMSNorm` (instead of `LayerNorm`)
+//! - Uses `SwiGLU` MLP
 //! - Supports Grouped-Query Attention (GQA)
 //!
 //! # Example

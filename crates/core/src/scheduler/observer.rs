@@ -1,7 +1,7 @@
 use crate::types::{SeqId, TokenId};
 use std::sync::{Arc, RwLock};
 
-/// SchedulerObserverError: scheduler observer error.
+/// `SchedulerObserverError`: scheduler observer error.
 #[derive(Debug, thiserror::Error)]
 pub enum SchedulerObserverError {
     #[error("observer mutex poisoned")]
@@ -10,7 +10,7 @@ pub enum SchedulerObserverError {
     MaxObserversReached(usize),
 }
 
-/// SchedulerObserver: scheduler observer trait.
+/// `SchedulerObserver`: scheduler observer trait.
 pub trait SchedulerObserver: Send + Sync {
     fn on_request_arrived(&self, seq_id: SeqId, prompt_len: usize);
     fn on_batch_scheduled(&self, seq_ids: &[SeqId], batch_size: usize);
@@ -44,12 +44,13 @@ impl dyn SchedulerObserver {
     /// a direct `impl Default for Arc<dyn ...>` because `Arc` is foreign and
     /// there is no local type appearing before the uncovered trait-object
     /// parameter.
+    #[must_use]
     pub fn default_arc() -> Arc<Self> {
         Arc::new(NoopSchedulerObserver)
     }
 }
 
-/// ObserverEvent: observer event enumeration.
+/// `ObserverEvent`: observer event enumeration.
 #[derive(Clone, Debug)]
 pub enum ObserverEvent {
     RequestArrived {
@@ -77,19 +78,20 @@ pub enum ObserverEvent {
     },
 }
 
-/// SchedulerObservers: scheduler observers.
+/// `SchedulerObservers`: scheduler observers.
 pub struct SchedulerObservers {
     observers: RwLock<Vec<Box<dyn SchedulerObserver>>>,
 }
 
 impl SchedulerObservers {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             observers: RwLock::new(Vec::new()),
         }
     }
 
-    /// MAX_OBSERVERS: max observers constant.
+    /// `MAX_OBSERVERS`: max observers constant.
     pub const MAX_OBSERVERS: usize = 16;
 
     pub fn register(
@@ -114,7 +116,7 @@ impl SchedulerObservers {
         if let Ok(observers) = self.observers.read() {
             for observer in observers.iter() {
                 let _ = std::panic::catch_unwind(AssertUnwindSafe(|| {
-                    self.notify_one(observer.as_ref(), event)
+                    self.notify_one(observer.as_ref(), event);
                 }));
             }
         }

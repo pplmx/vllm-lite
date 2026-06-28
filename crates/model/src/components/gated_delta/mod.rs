@@ -1,4 +1,4 @@
-//! Gated DeltaNet (GDN) recurrent linear attention for Qwen3.5 hybrid layers.
+//! Gated `DeltaNet` (GDN) recurrent linear attention for Qwen3.5 hybrid layers.
 
 mod rule;
 mod state;

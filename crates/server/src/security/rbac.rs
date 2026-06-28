@@ -19,43 +19,50 @@ pub enum Role {
 
 impl Role {
     #[allow(clippy::should_implement_trait)]
+    #[must_use]
     pub fn from_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
-            "admin" => Role::Admin,
-            "operator" => Role::Operator,
-            "user" => Role::User,
-            _ => Role::Anonymous,
+            "admin" => Self::Admin,
+            "operator" => Self::Operator,
+            "user" => Self::User,
+            _ => Self::Anonymous,
         }
     }
 
-    pub fn can_read_models(&self) -> bool {
-        !matches!(self, Role::Anonymous)
+    #[must_use]
+    pub const fn can_read_models(&self) -> bool {
+        !matches!(self, Self::Anonymous)
     }
 
-    pub fn can_write_models(&self) -> bool {
-        matches!(self, Role::Admin)
+    #[must_use]
+    pub const fn can_write_models(&self) -> bool {
+        matches!(self, Self::Admin)
     }
 
-    pub fn can_manage_users(&self) -> bool {
-        matches!(self, Role::Admin)
+    #[must_use]
+    pub const fn can_manage_users(&self) -> bool {
+        matches!(self, Self::Admin)
     }
 
-    pub fn can_view_metrics(&self) -> bool {
-        matches!(self, Role::Admin | Role::Operator)
+    #[must_use]
+    pub const fn can_view_metrics(&self) -> bool {
+        matches!(self, Self::Admin | Self::Operator)
     }
 
-    pub fn can_access_admin(&self) -> bool {
-        matches!(self, Role::Admin)
+    #[must_use]
+    pub const fn can_access_admin(&self) -> bool {
+        matches!(self, Self::Admin)
     }
 }
 
-/// RbacMiddleware: rbac middleware.
+/// `RbacMiddleware`: rbac middleware.
 pub struct RbacMiddleware {
     default_role: Role,
     role_permissions: Arc<Vec<(Role, Vec<&'static str>)>>,
 }
 
 impl RbacMiddleware {
+    #[must_use]
     pub fn new(default_role: Role) -> Self {
         let role_permissions = vec![
             (Role::Admin, vec!["*"]),
@@ -70,6 +77,7 @@ impl RbacMiddleware {
         }
     }
 
+    #[must_use]
     pub fn check_permission(&self, role: Role, action: &str) -> bool {
         for (r, actions) in self.role_permissions.iter() {
             if *r == role {
@@ -83,8 +91,7 @@ impl RbacMiddleware {
         headers
             .get("X-User-Role")
             .and_then(|v| v.to_str().ok())
-            .map(Role::from_str)
-            .unwrap_or(self.default_role)
+            .map_or(self.default_role, Role::from_str)
     }
 
     ///
@@ -92,6 +99,7 @@ impl RbacMiddleware {
     /// decide whether the requesting role has the required permission.
     /// Returns `None` for paths that have no RBAC requirement (i.e.
     /// public endpoints like `/health`).
+    #[must_use]
     pub fn required_action_for_path(path: &str) -> Option<&'static str> {
         // Strip trailing slash for matching.
         let p = path.trim_end_matches('/');

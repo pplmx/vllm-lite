@@ -1,4 +1,4 @@
-//! Mixtral architecture implementation (Sparse MoE).
+//! Mixtral architecture implementation (Sparse `MoE`).
 
 use crate::arch::{ArchCapabilities, Architecture};
 use crate::causal_lm::BlockWrapper;
@@ -11,11 +11,12 @@ use vllm_traits::ModelBackend;
 use super::block::MixtralBlock;
 use super::model::MixtralModel;
 
-/// MixtralArchitecture: mixtral architecture.
+/// `MixtralArchitecture`: mixtral architecture.
 pub struct MixtralArchitecture;
 
 impl MixtralArchitecture {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 }
@@ -26,7 +27,7 @@ impl Default for MixtralArchitecture {
     }
 }
 
-/// MixtralBlockWrapper: mixtral block wrapper.
+/// `MixtralBlockWrapper`: mixtral block wrapper.
 pub(crate) type MixtralBlockWrapper = BlockWrapper<MixtralBlock>;
 
 impl Architecture for MixtralArchitecture {
@@ -39,8 +40,7 @@ impl Architecture for MixtralArchitecture {
         config_json
             .get("model_type")
             .and_then(|v| v.as_str())
-            .map(|s| s.eq_ignore_ascii_case("mixtral"))
-            .unwrap_or(false)
+            .is_some_and(|s| s.eq_ignore_ascii_case("mixtral"))
     }
 
     fn capabilities(&self) -> ArchCapabilities {
@@ -96,7 +96,7 @@ mod tests {
         let arch = MixtralArchitecture::new();
         for model_type in ["llama", "mistral", "qwen3", "gpt2"] {
             let config = json!({"model_type": model_type});
-            assert!(!arch.detect(&config), "Should not detect {}", model_type);
+            assert!(!arch.detect(&config), "Should not detect {model_type}");
         }
     }
 

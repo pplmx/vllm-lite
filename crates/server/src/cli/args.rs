@@ -2,7 +2,7 @@ use crate::config::AppConfig;
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 
-/// CliValidationError: cli validation error.
+/// `CliValidationError`: cli validation error.
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum CliValidationError {
     #[error("'{0}' is not a valid number")]
@@ -15,8 +15,8 @@ pub enum CliValidationError {
     PortOutOfRange,
 }
 
-/// LogLevel: log level enumeration.
-#[derive(Clone, Debug, ValueEnum, PartialEq)]
+/// `LogLevel`: log level enumeration.
+#[derive(Clone, Debug, ValueEnum, PartialEq, Eq)]
 pub enum LogLevel {
     Trace,
     Debug,
@@ -28,18 +28,18 @@ pub enum LogLevel {
 #[allow(clippy::derivable_impls)]
 impl Default for LogLevel {
     fn default() -> Self {
-        LogLevel::Info
+        Self::Info
     }
 }
 
 impl std::fmt::Display for LogLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LogLevel::Trace => write!(f, "trace"),
-            LogLevel::Debug => write!(f, "debug"),
-            LogLevel::Info => write!(f, "info"),
-            LogLevel::Warn => write!(f, "warn"),
-            LogLevel::Error => write!(f, "error"),
+            Self::Trace => write!(f, "trace"),
+            Self::Debug => write!(f, "debug"),
+            Self::Info => write!(f, "info"),
+            Self::Warn => write!(f, "warn"),
+            Self::Error => write!(f, "error"),
         }
     }
 }
@@ -86,7 +86,7 @@ fn validate_max_draft_tokens(s: &str) -> Result<usize, CliValidationError> {
     parse_usize_in_range(s, 0, 64)
 }
 
-/// CliArgs: cli args.
+/// `CliArgs`: cli args.
 #[derive(Parser, Debug)]
 #[command(name = "vllm-server")]
 #[command(version = "0.1.0")]
@@ -121,7 +121,7 @@ struct ServerArgs {
     pub port: u16,
 }
 
-/// ModelArgs: model args.
+/// `ModelArgs`: model args.
 #[derive(clap::Args, Debug, Clone)]
 #[group(id = "model_args", required = true)]
 pub struct ModelArgs {
@@ -186,6 +186,7 @@ struct ConfigArgs {
 }
 
 impl CliArgs {
+    #[must_use]
     pub fn to_app_config(&self) -> AppConfig {
         let mut config = AppConfig::load(self.config.config.clone());
 
@@ -217,7 +218,8 @@ impl CliArgs {
         config
     }
 
-    pub fn model_path(&self) -> &PathBuf {
+    #[must_use]
+    pub const fn model_path(&self) -> &PathBuf {
         &self.model.model
     }
 }

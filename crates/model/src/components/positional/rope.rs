@@ -1,7 +1,7 @@
 use crate::qwen3::config::Qwen3Config;
 use candle_core::{Result, Tensor};
 
-/// RoPE: ro pe.
+/// `RoPE`: ro pe.
 #[derive(Clone)]
 #[allow(dead_code)] // audited 2026-06-26 (Wave 1): pub(crate) fields never read externally; struct only used in self-tests
 pub struct RoPE {
@@ -13,6 +13,7 @@ pub struct RoPE {
 }
 
 impl RoPE {
+    #[must_use]
     pub fn new(
         head_dim: usize,
         max_position: usize,
@@ -28,6 +29,7 @@ impl RoPE {
         }
     }
 
+    #[must_use]
     pub fn new_with_config(config: &Qwen3Config) -> Self {
         use candle_core::Device;
         let rope_scaling = config.rope_scaling();
@@ -40,7 +42,8 @@ impl RoPE {
         }
     }
 
-    pub fn scaling_factor(&self) -> f32 {
+    #[must_use]
+    pub const fn scaling_factor(&self) -> f32 {
         self.scaling_factor
     }
 
@@ -101,6 +104,7 @@ pub fn apply_rope(query: &Tensor, positions: &[i64], theta: f32) -> Result<Tenso
     result.transpose(1, 2)
 }
 
+#[must_use]
 pub fn precompute_rope_cache(seq_len: usize, head_dim: usize, theta: f32) -> Vec<(f32, f32)> {
     let mut cache = Vec::with_capacity(seq_len * head_dim / 2);
     for pos in 0..seq_len {
@@ -275,12 +279,7 @@ mod tests {
         let flat = q_out.flatten_all()?;
         for i in 0..flat.elem_count() {
             let val: f32 = flat.get(i)?.to_scalar()?;
-            assert!(
-                val.is_finite(),
-                "Value at index {} is not finite: {}",
-                i,
-                val
-            );
+            assert!(val.is_finite(), "Value at index {i} is not finite: {val}");
         }
         Ok(())
     }

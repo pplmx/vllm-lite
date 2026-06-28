@@ -27,7 +27,8 @@ impl Engine {
         let (output, batch) = match graph_batch {
             crate::scheduler::GraphBatch::Graph(prepared) => {
                 let batch = prepared.batch;
-                let input_counts: Vec<usize> = batch.input_tokens.iter().map(|v| v.len()).collect();
+                let input_counts: Vec<usize> =
+                    batch.input_tokens.iter().map(std::vec::Vec::len).collect();
                 let output = if let Some(ref executor) = self.cuda_graph {
                     match executor.execute(&batch) {
                         Ok(output) => output,
@@ -42,7 +43,8 @@ impl Engine {
                 (output, input_counts)
             }
             crate::scheduler::GraphBatch::Regular(batch) => {
-                let input_counts: Vec<usize> = batch.input_tokens.iter().map(|v| v.len()).collect();
+                let input_counts: Vec<usize> =
+                    batch.input_tokens.iter().map(std::vec::Vec::len).collect();
                 let output = self.execute_regular(&batch)?;
                 (output, input_counts)
             }
@@ -62,7 +64,7 @@ impl Engine {
     fn execute_regular(&mut self, batch: &vllm_traits::Batch) -> Result<BatchOutput> {
         use crate::sync::lock_mutex;
 
-        let total_tokens: usize = batch.input_tokens.iter().map(|t| t.len()).sum();
+        let total_tokens: usize = batch.input_tokens.iter().map(std::vec::Vec::len).sum();
         tracing::debug!(
             batch_size = batch.seq_ids.len(),
             total_tokens = total_tokens,

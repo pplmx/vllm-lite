@@ -12,13 +12,14 @@ use std::collections::HashMap;
 use vllm_traits::ModelBackend;
 use vllm_traits::types::BatchOutput;
 
-/// Gemma3Architecture: gemma3 architecture.
+/// `Gemma3Architecture`: gemma3 architecture.
 pub struct Gemma3Architecture {
     sliding_window: usize,
 }
 
 impl Gemma3Architecture {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             sliding_window: 4096,
         }
@@ -31,14 +32,14 @@ impl Default for Gemma3Architecture {
     }
 }
 
-/// Gemma3BlockWrapper: gemma3 block wrapper.
+/// `Gemma3BlockWrapper`: gemma3 block wrapper.
 pub(crate) struct Gemma3BlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,
 }
 
 impl Gemma3BlockWrapper {
-    pub fn new(config: &ModelConfig) -> Self {
+    pub const fn new(config: &ModelConfig) -> Self {
         Self {
             inner_dim: config.head_dim * config.num_heads,
             num_kv_heads: config.num_kv_heads,
@@ -101,7 +102,7 @@ impl Architecture for Gemma3Architecture {
 
         let hidden_size = config_json
             .get("hidden_size")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .unwrap_or(0);
 
         let is_gemma = matches!(
@@ -139,7 +140,7 @@ impl Architecture for Gemma3Architecture {
     }
 }
 
-/// Gemma3Model: gemma3 model.
+/// `Gemma3Model`: gemma3 model.
 pub(crate) struct Gemma3Model {
     config: ModelConfig,
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
@@ -151,7 +152,7 @@ pub(crate) struct Gemma3Model {
 }
 
 impl Gemma3Model {
-    pub fn new(
+    pub const fn new(
         config: ModelConfig,
         device: Device,
         num_kv_blocks: usize,
@@ -234,8 +235,7 @@ mod tests {
             });
             assert!(
                 arch.detect(&config),
-                "Failed to detect model_type: {}",
-                model_type
+                "Failed to detect model_type: {model_type}"
             );
         }
     }
@@ -250,8 +250,7 @@ mod tests {
             });
             assert!(
                 !arch.detect(&config),
-                "Should not detect model_type: {}",
-                model_type
+                "Should not detect model_type: {model_type}"
             );
         }
     }

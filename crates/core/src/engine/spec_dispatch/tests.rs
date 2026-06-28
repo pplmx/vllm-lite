@@ -5,7 +5,7 @@ use crate::types::{Request, SchedulerConfig};
 use tokio::sync::mpsc as tokio_mpsc;
 use vllm_traits::{BatchOutput, ModelBackend, Result as ModelResult, SeqId, TokenId};
 
-/// A fake model that returns fixed tokens for both forward and forward_logits.
+/// A fake model that returns fixed tokens for both forward and `forward_logits`.
 #[derive(Clone)]
 struct FakeModel {
     token_to_return: TokenId,
@@ -89,8 +89,8 @@ impl ModelBackend for FakeModel {
     }
 }
 
-/// Wrapper around FakeModel that counts forward/forward_logits invocations.
-/// Used to verify warmup_draft_kv calls draft model per sequence.
+/// Wrapper around `FakeModel` that counts `forward/forward_logits` invocations.
+/// Used to verify `warmup_draft_kv` calls draft model per sequence.
 /// `Arc<AtomicUsize>` + Clone enable inspecting call count after the model
 /// has been moved into the engine (the engine clones the Arc internally).
 #[derive(Clone)]
@@ -176,9 +176,9 @@ impl ModelBackend for CounterModel {
     }
 }
 
-/// Test Plan 17.4-A: warmup_draft_kv invokes draft model once per sequence.
+/// Test Plan 17.4-A: `warmup_draft_kv` invokes draft model once per sequence.
 /// Fast unit test (no #[ignore]): directly constructs a Prefill batch and
-/// calls warmup_draft_kv to verify the contract independently of step().
+/// calls `warmup_draft_kv` to verify the contract independently of `step()`.
 #[test]
 fn test_warmup_draft_kv_invokes_draft_per_sequence() {
     let target = FakeModel::new(42);
@@ -206,12 +206,11 @@ fn test_warmup_draft_kv_invokes_draft_per_sequence() {
     let calls = draft.forward_count() - draft_count_before;
     assert_eq!(
         calls, 3,
-        "warmup_draft_kv should invoke draft.forward() exactly once per seq_id (got {})",
-        calls
+        "warmup_draft_kv should invoke draft.forward() exactly once per seq_id (got {calls})"
     );
 }
 
-/// Test Plan 17.1-A: Unified step() dispatches correctly
+/// Test Plan 17.1-A: Unified `step()` dispatches correctly
 #[test]
 fn test_step_unified_dispatch() {
     let target = FakeModel::new(42);
@@ -284,7 +283,7 @@ fn test_kv_rollback_rejected_drafts() {
     assert_eq!(result[0].1, 42);
 }
 
-/// Test Plan 17.1-E: Multi-token input_count is accepted by scheduler
+/// Test Plan 17.1-E: Multi-token `input_count` is accepted by scheduler
 #[test]
 fn test_scheduler_multi_token_update() {
     use std::sync::Arc;

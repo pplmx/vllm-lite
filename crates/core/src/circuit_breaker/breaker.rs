@@ -9,7 +9,7 @@ use tracing::{debug, trace, warn};
 
 /// Circuit breaker state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CircuitState {
+pub enum CircuitState {
     Closed,   // Normal operation
     Open,     // Failing, reject calls
     HalfOpen, // Testing recovery
@@ -17,7 +17,7 @@ pub(crate) enum CircuitState {
 
 /// Circuit breaker configuration
 #[derive(Debug, Clone)]
-pub(crate) struct CircuitBreakerConfig {
+pub struct CircuitBreakerConfig {
     pub failure_threshold: usize,
     pub recovery_timeout: Duration,
     pub half_open_max_calls: usize,
@@ -43,32 +43,32 @@ impl CircuitBreakerConfig {
 
 /// Builder for [`CircuitBreakerConfig`].
 #[derive(Debug, Clone, Default)]
-pub(crate) struct CircuitBreakerConfigBuilder {
+pub struct CircuitBreakerConfigBuilder {
     inner: CircuitBreakerConfig,
 }
 
 impl CircuitBreakerConfigBuilder {
-    pub fn with_failure_threshold(mut self, v: usize) -> Self {
+    pub const fn with_failure_threshold(mut self, v: usize) -> Self {
         self.inner.failure_threshold = v;
         self
     }
-    pub fn with_recovery_timeout(mut self, v: Duration) -> Self {
+    pub const fn with_recovery_timeout(mut self, v: Duration) -> Self {
         self.inner.recovery_timeout = v;
         self
     }
-    pub fn with_half_open_max_calls(mut self, v: usize) -> Self {
+    pub const fn with_half_open_max_calls(mut self, v: usize) -> Self {
         self.inner.half_open_max_calls = v;
         self
     }
     /// build: build the [`CircuitBreakerConfig`].
-    pub fn build(self) -> CircuitBreakerConfig {
+    pub const fn build(self) -> CircuitBreakerConfig {
         self.inner
     }
 }
 
 /// Circuit breaker error
-#[derive(Debug, thiserror::Error, Clone, PartialEq)]
-pub(crate) enum CircuitBreakerError {
+#[derive(Debug, thiserror::Error, Clone, PartialEq, Eq)]
+pub enum CircuitBreakerError {
     #[error("circuit breaker is open")]
     Open,
     #[error("operation failed: {0}")]
@@ -83,7 +83,7 @@ pub(crate) enum CircuitBreakerError {
 
 /// Circuit breaker implementation
 #[derive(Clone)]
-pub(crate) struct CircuitBreaker {
+pub struct CircuitBreaker {
     config: CircuitBreakerConfig,
     state: Arc<RwLock<CircuitState>>,
     failure_count: Arc<AtomicU64>,

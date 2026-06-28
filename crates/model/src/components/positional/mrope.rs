@@ -1,7 +1,7 @@
 use crate::qwen3::config::Qwen3Config;
 use candle_core::{Device, Result as CandleResult, Tensor};
 
-/// MRoPE: m ro pe.
+/// `MRoPE`: m ro pe.
 #[derive(Clone)]
 #[allow(dead_code)] // audited 2026-06-26 (Wave 1): pub(crate) fields never read externally; callers use struct via from_config or pass through to Attention35WithRoPE
 pub struct MRoPE {
@@ -12,7 +12,13 @@ pub struct MRoPE {
 }
 
 impl MRoPE {
-    pub fn new(dim: usize, theta: f32, sections: Vec<usize>, partial_rotary_factor: f32) -> Self {
+    #[must_use]
+    pub const fn new(
+        dim: usize,
+        theta: f32,
+        sections: Vec<usize>,
+        partial_rotary_factor: f32,
+    ) -> Self {
         Self {
             dim,
             theta,
@@ -21,6 +27,7 @@ impl MRoPE {
         }
     }
 
+    #[must_use]
     pub fn from_config(config: &Qwen3Config) -> Self {
         let rope_params = config.rope_parameters();
 
@@ -196,8 +203,7 @@ mod tests {
             .unwrap();
         assert!(
             diff > 1e-3,
-            "RoPE should produce different outputs for different positions, got diff={}",
-            diff
+            "RoPE should produce different outputs for different positions, got diff={diff}"
         );
     }
 

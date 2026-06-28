@@ -1,6 +1,6 @@
 use tokenizers::Tokenizer as HFTokenizer;
 
-/// TokenizerError: tokenizer error.
+/// `TokenizerError`: tokenizer error.
 #[derive(Debug, thiserror::Error)]
 pub enum TokenizerError {
     #[error("failed to load tokenizer from {path}: {source}")]
@@ -20,6 +20,7 @@ pub struct Tokenizer {
 }
 
 impl Tokenizer {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             inner: None,
@@ -65,6 +66,7 @@ impl Tokenizer {
         })
     }
 
+    #[must_use]
     pub fn encode(&self, text: &str) -> Vec<u32> {
         if let Some(ref tokenizer) = self.inner {
             if let Ok(encoding) = tokenizer.encode(text, false) {
@@ -78,6 +80,7 @@ impl Tokenizer {
             .collect()
     }
 
+    #[must_use]
     pub fn decode(&self, tokens: &[u32]) -> String {
         if let Some(ref tokenizer) = self.inner {
             if let Ok(text) = tokenizer.decode(tokens, false) {
@@ -85,21 +88,25 @@ impl Tokenizer {
             }
         }
 
-        tokens.iter().map(|t| format!("token_{} ", t)).collect()
+        tokens.iter().map(|t| format!("token_{t} ")).collect()
     }
 
-    pub fn vocab_size(&self) -> usize {
+    #[must_use]
+    pub const fn vocab_size(&self) -> usize {
         self.vocab_size
     }
 
+    #[must_use]
     pub fn special_tokens(&self) -> &[String] {
         &self.special_tokens
     }
 
+    #[must_use]
     pub fn is_special_token(&self, text: &str) -> bool {
         self.special_tokens.iter().any(|t| t.as_str() == text)
     }
 
+    #[must_use]
     pub fn clean_special_tokens(&self, text: &str) -> String {
         let mut result = text.to_string();
         for token in &self.special_tokens {
@@ -108,6 +115,7 @@ impl Tokenizer {
         result.trim().to_string()
     }
 
+    #[must_use]
     pub fn model_name(&self) -> Option<String> {
         self.model_name.clone()
     }

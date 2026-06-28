@@ -107,8 +107,8 @@ impl SchedulerEngine {
         (used, total)
     }
 
-    /// Get access to the prefix cache (RadixTree)
-    pub fn prefix_cache(&self) -> &RadixTree {
+    /// Get access to the prefix cache (`RadixTree`)
+    pub const fn prefix_cache(&self) -> &RadixTree {
         &self.prefix_cache
     }
 }

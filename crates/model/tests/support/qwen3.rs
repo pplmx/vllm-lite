@@ -15,7 +15,7 @@ pub const DEFAULT_DIR: &str = "/models/Qwen3-0.6B";
 pub const VOCAB_SIZE: usize = 151_936;
 pub const HIDDEN_SIZE: usize = 1024;
 
-fn base_fixture() -> OnDiskFixture {
+const fn base_fixture() -> OnDiskFixture {
     OnDiskFixture::new(ENV_VAR, DEFAULT_DIR)
 }
 
@@ -24,7 +24,7 @@ fn base_fixture() -> OnDiskFixture {
 pub struct Qwen3Fixture(OnDiskFixture);
 
 impl Qwen3Fixture {
-    pub fn cpu() -> Self {
+    pub const fn cpu() -> Self {
         Self(base_fixture())
     }
 

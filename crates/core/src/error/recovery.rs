@@ -17,15 +17,15 @@ pub(crate) enum ErrorSeverity {
 impl ErrorSeverity {
     pub fn from_error(error: &str) -> Self {
         if error.contains("timeout") {
-            ErrorSeverity::Retryable
+            Self::Retryable
         } else if error.contains("graph") {
-            ErrorSeverity::Degradable
+            Self::Degradable
         } else if error.contains("crash") {
-            ErrorSeverity::CircuitBreaker
+            Self::CircuitBreaker
         } else if error.contains("oom") || error.contains("memory") {
-            ErrorSeverity::Fatal
+            Self::Fatal
         } else {
-            ErrorSeverity::Warning
+            Self::Warning
         }
     }
 }
@@ -46,7 +46,7 @@ pub(crate) struct RecoveryManager {
     config: RecoveryConfig,
 }
 
-/// RecoveryConfig: recovery configuration.
+/// `RecoveryConfig`: recovery configuration.
 #[derive(Debug, Clone)]
 pub(crate) struct RecoveryConfig {
     pub retry_attempts: usize,
@@ -79,20 +79,20 @@ pub(crate) struct RecoveryConfigBuilder {
 }
 
 impl RecoveryConfigBuilder {
-    pub fn with_retry_attempts(mut self, v: usize) -> Self {
+    pub const fn with_retry_attempts(mut self, v: usize) -> Self {
         self.inner.retry_attempts = v;
         self
     }
-    pub fn with_retry_base_delay(mut self, v: Duration) -> Self {
+    pub const fn with_retry_base_delay(mut self, v: Duration) -> Self {
         self.inner.retry_base_delay = v;
         self
     }
-    pub fn with_default_circuit_breaker(mut self, v: CircuitBreakerConfig) -> Self {
+    pub const fn with_default_circuit_breaker(mut self, v: CircuitBreakerConfig) -> Self {
         self.inner.default_circuit_breaker = v;
         self
     }
     /// build: build the [`RecoveryConfig`].
-    pub fn build(self) -> RecoveryConfig {
+    pub const fn build(self) -> RecoveryConfig {
         self.inner
     }
 }

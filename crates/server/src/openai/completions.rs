@@ -10,7 +10,7 @@ use futures::stream;
 use std::convert::Infallible;
 use tokio::sync::mpsc;
 
-use super::types::*;
+use super::types::{CompletionChoice, CompletionRequest, CompletionResponse, ErrorResponse, Usage};
 use crate::ApiState;
 
 fn should_skip_token_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &str) -> bool {
@@ -130,7 +130,7 @@ mod tests {
         let state = create_test_state();
         let req = CompletionRequest {
             model: None,
-            prompt: "".to_string(),
+            prompt: String::new(),
             temperature: None,
             max_tokens: Some(100),
             stream: None,

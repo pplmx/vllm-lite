@@ -12,7 +12,7 @@ impl crate::engine::Engine {
         }
 
         let batch_size = batch.seq_ids.len();
-        let total_tokens: usize = batch.input_tokens.iter().map(|t| t.len()).sum();
+        let total_tokens: usize = batch.input_tokens.iter().map(std::vec::Vec::len).sum();
 
         tracing::debug!(
             batch_size = batch_size,
@@ -43,7 +43,7 @@ impl crate::engine::Engine {
             "Engine step: output tokens"
         );
 
-        let input_counts: Vec<usize> = batch.input_tokens.iter().map(|v| v.len()).collect();
+        let input_counts: Vec<usize> = batch.input_tokens.iter().map(std::vec::Vec::len).collect();
 
         self.scheduler
             .update(&batch.seq_ids, &output.next_tokens, &input_counts);
@@ -87,8 +87,7 @@ impl crate::engine::Engine {
             let max_draft = self
                 .adaptive_decoder
                 .as_ref()
-                .map(|d| d.current_max_draft_tokens())
-                .unwrap_or(self.max_draft_tokens);
+                .map_or(self.max_draft_tokens, super::super::speculative::adaptive::AdaptiveSpeculativeDecoder::current_max_draft_tokens);
             self.step_speculative_inner(max_draft)
         } else {
             self.step_regular()

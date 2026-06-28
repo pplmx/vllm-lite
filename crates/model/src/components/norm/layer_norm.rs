@@ -1,9 +1,9 @@
-//! LayerNorm implementation with weight and bias.
+//! `LayerNorm` implementation with weight and bias.
 
 use candle_core::{Module, Result, Tensor};
 use candle_nn::LayerNorm;
 
-/// LnLayerNorm: ln layer norm.
+/// `LnLayerNorm`: ln layer norm.
 pub struct LnLayerNorm {
     weight: Tensor,
     bias: Tensor,
@@ -11,7 +11,8 @@ pub struct LnLayerNorm {
 }
 
 impl LnLayerNorm {
-    pub fn new(weight: Tensor, bias: Tensor, eps: f64) -> Self {
+    #[must_use]
+    pub const fn new(weight: Tensor, bias: Tensor, eps: f64) -> Self {
         Self { weight, bias, eps }
     }
 
@@ -33,7 +34,7 @@ impl LnLayerNorm {
 
 impl Module for LnLayerNorm {
     fn forward(&self, xs: &Tensor) -> Result<Tensor> {
-        LnLayerNorm::forward(self, xs)
+        Self::forward(self, xs)
     }
 }
 

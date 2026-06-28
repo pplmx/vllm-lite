@@ -4,16 +4,16 @@
 
 use candle_core::{DType, Device, Result, Tensor};
 
-/// CacheBlock: cache block.
-pub(crate) struct CacheBlock {
+/// `CacheBlock`: cache block.
+pub struct CacheBlock {
     pub key: Tensor,
     pub value: Tensor,
     pub is_free: bool,
     pub layer_idx: usize,
 }
 
-/// KvCachePool: kv cache pool.
-pub(crate) struct KvCachePool {
+/// `KvCachePool`: kv cache pool.
+pub struct KvCachePool {
     blocks: Vec<CacheBlock>,
     free_list: Vec<usize>,
     total_blocks: usize,

@@ -11,7 +11,10 @@ use std::convert::Infallible;
 use tokio::sync::mpsc;
 
 use super::chat_template::{self, ChatTemplate};
-use super::types::*;
+use super::types::{
+    ChatChoice, ChatChunk, ChatChunkChoice, ChatMessage, ChatRequest, ChatResponse, ErrorResponse,
+    Usage,
+};
 use crate::ApiState;
 
 fn should_skip_token_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &str) -> bool {
@@ -22,6 +25,7 @@ fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &st
     tokenizer.clean_special_tokens(text)
 }
 
+#[must_use]
 pub fn build_prompt_from_messages(template: ChatTemplate, messages: &[ChatMessage]) -> String {
     chat_template::build_prompt(template, messages)
 }
@@ -200,61 +204,58 @@ pub async fn chat_completions(
             let request_id = request_id.clone();
             let start = start;
             async move {
-                match rx.recv().await {
-                    Some(token) => {
-                        let text = tokenizer.decode(&[token]);
-                        if should_skip_token_text(&tokenizer, &text) {
-                            return Some((Ok::<Event, Infallible>(Event::default().data("")), rx));
-                        }
-                        let chunk = ChatChunk::new(
-                            "chatcmpl-stream".to_string(),
-                            model.clone(),
-                            ChatChunkChoice {
-                                index: 0,
-                                delta: ChatMessage {
-                                    role: "assistant".to_string(),
-                                    content: text,
-                                    name: None,
-                                },
-                                finish_reason: None,
-                            },
-                        );
-                        let sse_payload =
-                            // invariant: serializing a known-good struct (plain serde_json types);
-                            // to_string cannot fail.
-                            serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
-                        Some((Ok(Event::default().data(sse_payload)), rx))
+                if let Some(token) = rx.recv().await {
+                    let text = tokenizer.decode(&[token]);
+                    if should_skip_token_text(&tokenizer, &text) {
+                        return Some((Ok::<Event, Infallible>(Event::default().data("")), rx));
                     }
-                    None => {
-                        // Channel closed - could be normal completion or client disconnect
-                        // With bounded channel, if send fails due to backpressure, we log it
-                        let chunk = ChatChunk::new(
-                            "chatcmpl-stream".to_string(),
-                            model.clone(),
-                            ChatChunkChoice {
-                                index: 0,
-                                delta: ChatMessage {
-                                    role: "assistant".to_string(),
-                                    content: String::new(),
-                                    name: None,
-                                },
-                                finish_reason: Some("stop".to_string()),
+                    let chunk = ChatChunk::new(
+                        "chatcmpl-stream".to_string(),
+                        model.clone(),
+                        ChatChunkChoice {
+                            index: 0,
+                            delta: ChatMessage {
+                                role: "assistant".to_string(),
+                                content: text,
+                                name: None,
                             },
-                        );
-                        let sse_payload =
-                            // invariant: serializing a known-good struct (plain serde_json types);
-                            // to_string cannot fail.
-                            serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
-                        tracing::info!(
-                            request_id = %request_id,
-                            duration_ms = %start.elapsed().as_millis() as u64,
-                            "Streaming request completed"
-                        );
-                        Some((
-                            Ok(Event::default().data(format!("{sse_payload}\n\n[DONE]"))),
-                            rx,
-                        ))
-                    }
+                            finish_reason: None,
+                        },
+                    );
+                    let sse_payload =
+                        // invariant: serializing a known-good struct (plain serde_json types);
+                        // to_string cannot fail.
+                        serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
+                    Some((Ok(Event::default().data(sse_payload)), rx))
+                } else {
+                    // Channel closed - could be normal completion or client disconnect
+                    // With bounded channel, if send fails due to backpressure, we log it
+                    let chunk = ChatChunk::new(
+                        "chatcmpl-stream".to_string(),
+                        model.clone(),
+                        ChatChunkChoice {
+                            index: 0,
+                            delta: ChatMessage {
+                                role: "assistant".to_string(),
+                                content: String::new(),
+                                name: None,
+                            },
+                            finish_reason: Some("stop".to_string()),
+                        },
+                    );
+                    let sse_payload =
+                        // invariant: serializing a known-good struct (plain serde_json types);
+                        // to_string cannot fail.
+                        serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
+                    tracing::info!(
+                        request_id = %request_id,
+                        duration_ms = %start.elapsed().as_millis() as u64,
+                        "Streaming request completed"
+                    );
+                    Some((
+                        Ok(Event::default().data(format!("{sse_payload}\n\n[DONE]"))),
+                        rx,
+                    ))
                 }
             }
         });

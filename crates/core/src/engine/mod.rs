@@ -14,7 +14,6 @@ pub use ctor::EngineBuilder;
 use crate::scheduler::engine::SchedulerEngine;
 use crate::speculative::AdaptiveSpeculativeDecoder;
 use crate::speculative::draft_resolver::DraftResolver;
-use crate::speculative::memory_budget::MemoryBudget;
 use crate::speculative::registry::DraftModelRegistry;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -58,7 +57,7 @@ pub struct Engine {
     pub draft_resolver: Option<Arc<DraftResolver>>,
 }
 
-/// SleepPolicy: sleep policy.
+/// `SleepPolicy`: sleep policy.
 pub struct SleepPolicy {
     pub base_interval: u64,
     pub max_interval: u64,
@@ -314,7 +313,7 @@ mod tests {
             Box::new(stub),
             None,
             vec![DraftSpec::new("a", "/tmp", 0).with_weight_size(100)],
-            budget.clone(),
+            budget,
             SchedulerConfig::default(),
             4,
             1024,

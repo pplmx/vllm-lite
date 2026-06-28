@@ -14,14 +14,14 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use vllm_traits::{Batch, TokenId};
 
 impl crate::engine::Engine {
-    /// v18.0 per-request draft dispatch via DraftResolver.
+    /// v18.0 per-request draft dispatch via `DraftResolver`.
     ///
     /// For each seq in the batch:
     /// 1. Skip if `sequence.degraded_draft` (FALL-02 sticky flag) — return
     ///    empty drafts so the seq falls through to non-spec decode.
     /// 2. Resolve via `resolver.resolve(seq.draft_model_id)` → picks the
     ///    named external draft, the self-spec fallback, or None.
-    /// 3. Run the resolved backend's forward per position (up to max_draft).
+    /// 3. Run the resolved backend's forward per position (up to `max_draft`).
     /// 4. Catch per-seq forward errors → set `degraded_draft = true` on that
     ///    sequence and increment `inc_draft_runtime_error`. Future steps skip
     ///    this seq's draft.
@@ -150,12 +150,11 @@ impl crate::engine::Engine {
         let n_seq = batch.seq_ids.len();
         let mut draft_outputs: Vec<Vec<TokenId>> = vec![Vec::with_capacity(max_draft); n_seq];
 
-        let draft_model = match &self.draft_model {
-            Some(dm) => dm.clone(),
-            None => {
-                tracing::warn!("No draft model set, returning empty drafts");
-                return Ok(draft_outputs);
-            }
+        let draft_model = if let Some(dm) = &self.draft_model {
+            dm.clone()
+        } else {
+            tracing::warn!("No draft model set, returning empty drafts");
+            return Ok(draft_outputs);
         };
 
         // Per-sequence state tracking: current input tokens and positions
@@ -224,11 +223,10 @@ impl crate::engine::Engine {
 }
 
 /// argmax: argmax helper used by the verifier path.
-pub(crate) fn argmax(logits: &[f32]) -> TokenId {
+pub fn argmax(logits: &[f32]) -> TokenId {
     logits
         .iter()
         .enumerate()
         .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-        .map(|(i, _)| i as TokenId)
-        .unwrap_or(0)
+        .map_or(0, |(i, _)| i as TokenId)
 }

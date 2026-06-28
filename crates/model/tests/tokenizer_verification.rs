@@ -16,27 +16,21 @@ mod tests {
         for token in &model_output_tokens {
             let decoded = tokenizer.decode(&[(*token)]);
 
-            println!("Token {} decodes to: {:?}", token, decoded);
+            println!("Token {token} decodes to: {decoded:?}");
 
             assert!(
                 !decoded.contains('\u{FFFD}'),
-                "Token {} should not decode to replacement char, got: {:?}",
-                token,
-                decoded
+                "Token {token} should not decode to replacement char, got: {decoded:?}"
             );
 
             assert!(
                 support::tokenizer::is_printable_text(&decoded),
-                "Token {} should decode to printable text, got: {:?}",
-                token,
-                decoded
+                "Token {token} should decode to printable text, got: {decoded:?}"
             );
 
             assert!(
                 !decoded.trim().is_empty(),
-                "Token {} decoded to empty/whitespace: {:?}",
-                token,
-                decoded
+                "Token {token} decoded to empty/whitespace: {decoded:?}"
             );
         }
     }
@@ -121,7 +115,7 @@ mod tests {
         if !failed.is_empty() {
             println!("Roundtrip failures:");
             for (orig, tokens, decoded) in &failed {
-                println!("  '{}' -> {:?} -> '{}'", orig, tokens, decoded);
+                println!("  '{orig}' -> {tokens:?} -> '{decoded}'");
             }
         }
 
@@ -143,10 +137,10 @@ mod tests {
         let bos_token = 151645u32;
 
         let eos_decoded = tokenizer.decode(&[eos_token]);
-        println!("EOS token {} decodes to: {:?}", eos_token, eos_decoded);
+        println!("EOS token {eos_token} decodes to: {eos_decoded:?}");
 
         let bos_decoded = tokenizer.decode(&[bos_token]);
-        println!("BOS token {} decodes to: {:?}", bos_token, bos_decoded);
+        println!("BOS token {bos_token} decodes to: {bos_decoded:?}");
 
         assert!(
             !eos_decoded.is_empty(),
@@ -182,7 +176,7 @@ mod tests {
         let mut replacement_char_count = 0;
         for token in &out_of_range_tokens {
             let decoded = tokenizer.decode(&[*token]);
-            println!("Out-of-range token {} decodes to: {:?}", token, decoded);
+            println!("Out-of-range token {token} decodes to: {decoded:?}");
             if decoded.contains('\u{FFFD}') {
                 replacement_char_count += 1;
             }

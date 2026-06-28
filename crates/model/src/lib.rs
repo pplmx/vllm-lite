@@ -21,7 +21,7 @@ pub mod phi4;
 pub mod quantize;
 /// qwen3: qwen3 module.
 pub mod qwen3;
-/// qwen3_5: qwen3 5 module.
+/// `qwen3_5`: qwen3 5 module.
 pub mod qwen3_5;
 pub mod tokenizer;
 

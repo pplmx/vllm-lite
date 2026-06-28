@@ -1,5 +1,5 @@
 #![allow(non_snake_case)]
-//! Full (MRoPE + paged GQA) attention block for Qwen3.5 hybrid layers.
+//! Full (`MRoPE` + paged GQA) attention block for Qwen3.5 hybrid layers.
 
 use std::collections::HashMap;
 
@@ -10,7 +10,7 @@ use crate::qwen3_5::attention35::Attention35WithRoPE;
 use candle_core::{Module, Result as CandleResult, Tensor};
 use candle_nn::{LayerNorm, Linear, VarBuilder};
 
-/// FullAttentionBlock35: full attention block35.
+/// `FullAttentionBlock35`: full attention block35.
 pub struct FullAttentionBlock35 {
     input_ln: LayerNorm,
     self_attn: Attention35WithRoPE,
@@ -51,6 +51,7 @@ impl FullAttentionBlock35 {
         })
     }
 
+    #[must_use]
     pub fn with_attn_gate(mut self, gate: Linear) -> Self {
         self.gate = Some(gate);
         self
@@ -131,11 +132,11 @@ impl FullAttentionBlock35 {
         eps: f64,
         rope: MRoPE,
     ) -> CandleResult<Self> {
-        let input_ln_key = format!("{}.input_layernorm.weight", prefix);
+        let input_ln_key = format!("{prefix}.input_layernorm.weight");
         let input_ln_w = weights
             .get(&input_ln_key)
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", input_ln_key)))?;
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {input_ln_key}")))?;
         let input_ln_bias = Tensor::zeros(
             input_ln_w.dim(0).unwrap_or(hidden_size),
             input_ln_w.dtype(),
@@ -153,22 +154,22 @@ impl FullAttentionBlock35 {
             rope,
         )?;
 
-        let gate_proj_key = format!("{}.mlp.gate_proj.weight", prefix);
-        let up_proj_key = format!("{}.mlp.up_proj.weight", prefix);
-        let down_proj_key = format!("{}.mlp.down_proj.weight", prefix);
+        let gate_proj_key = format!("{prefix}.mlp.gate_proj.weight");
+        let up_proj_key = format!("{prefix}.mlp.up_proj.weight");
+        let down_proj_key = format!("{prefix}.mlp.down_proj.weight");
 
         let gate_proj_w = weights
             .get(&gate_proj_key)
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", gate_proj_key)))?;
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {gate_proj_key}")))?;
         let up_proj_w = weights
             .get(&up_proj_key)
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", up_proj_key)))?;
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {up_proj_key}")))?;
         let down_proj_w = weights
             .get(&down_proj_key)
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", down_proj_key)))?;
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {down_proj_key}")))?;
 
         let mlp = SwiGLU::new_with_weights(
             hidden_size,
@@ -178,11 +179,11 @@ impl FullAttentionBlock35 {
             down_proj_w,
         )?;
 
-        let post_ln_key = format!("{}.post_attention_layernorm.weight", prefix);
+        let post_ln_key = format!("{prefix}.post_attention_layernorm.weight");
         let post_ln_w = weights
             .get(&post_ln_key)
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", post_ln_key)))?;
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {post_ln_key}")))?;
         let post_ln_bias = Tensor::zeros(
             post_ln_w.dim(0).unwrap_or(hidden_size),
             post_ln_w.dtype(),

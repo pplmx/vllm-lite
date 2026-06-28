@@ -15,7 +15,7 @@ async fn test_models_handler_returns_list() {
     let bytes = axum::body::to_bytes(body, 1024 * 1024).await.unwrap();
     let json_str = String::from_utf8(bytes.to_vec()).unwrap();
 
-    println!("Response: {}", json_str);
+    println!("Response: {json_str}");
     assert!(json_str.contains("\"object\":\"list\""));
     assert!(json_str.contains("\"model\""));
 }

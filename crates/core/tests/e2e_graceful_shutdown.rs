@@ -154,8 +154,7 @@ async fn test_shutdown_completes_within_timeout() {
     );
     assert!(
         elapsed < Duration::from_secs(5),
-        "Shutdown took {:?}, expected under 5s",
-        elapsed
+        "Shutdown took {elapsed:?}, expected under 5s"
     );
 }
 
@@ -227,8 +226,7 @@ async fn test_shutdown_no_pending_requests() {
     );
     assert!(
         elapsed < Duration::from_secs(3),
-        "Shutdown without requests took {:?}, expected under 3s",
-        elapsed
+        "Shutdown without requests took {elapsed:?}, expected under 3s"
     );
 }
 

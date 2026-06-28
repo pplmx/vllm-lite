@@ -107,15 +107,14 @@ async fn test_concurrent_requests() {
     for (i, handle) in handles.into_iter().enumerate() {
         match handle.await {
             Ok(Ok(())) => success_count += 1,
-            Ok(Err(e)) => errors.push(format!("Task {} failed: {}", i, e)),
-            Err(e) => errors.push(format!("Task {} panicked: {}", i, e)),
+            Ok(Err(e)) => errors.push(format!("Task {i} failed: {e}")),
+            Err(e) => errors.push(format!("Task {i} panicked: {e}")),
         }
     }
 
     assert_eq!(
         success_count, concurrency,
-        "Expected all {} requests to succeed, but {} succeeded. Errors: {:?}",
-        concurrency, success_count, errors
+        "Expected all {concurrency} requests to succeed, but {success_count} succeeded. Errors: {errors:?}"
     );
 }
 
@@ -145,12 +144,12 @@ async fn test_mixed_workload() {
     for (i, handle) in handles.into_iter().enumerate() {
         match handle.await {
             Ok(Ok(())) => success_count += 1,
-            Ok(Err(e)) => errors.push(format!("Task {}: {}", i, e)),
-            Err(e) => errors.push(format!("Task {} panicked: {}", i, e)),
+            Ok(Err(e)) => errors.push(format!("Task {i}: {e}")),
+            Err(e) => errors.push(format!("Task {i} panicked: {e}")),
         }
     }
 
-    let success_rate = success_count as f64 / count as f64;
+    let success_rate = f64::from(success_count) / f64::from(count);
     assert!(
         success_rate >= 0.9,
         "Expected at least 90% success rate, got {:.1}% ({} of {}). Errors: {:?}",
@@ -183,7 +182,7 @@ async fn test_staggered_requests() {
 
     let mut success_count = 0;
     for handle in handles {
-        if let Ok(Ok(())) = handle.await {
+        if matches!(handle.await, Ok(Ok(()))) {
             success_count += 1;
         }
     }
@@ -224,8 +223,6 @@ fn test_batch_processing() {
 
     assert!(
         total_tokens >= num_requests as usize * 5, // 5 tokens each
-        "Should process tokens for all {} requests, got {}",
-        num_requests,
-        total_tokens
+        "Should process tokens for all {num_requests} requests, got {total_tokens}"
     );
 }

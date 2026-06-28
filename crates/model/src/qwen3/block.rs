@@ -257,24 +257,24 @@ impl TransformerBlock {
         };
 
         let q_key = get_weight(&[
-            &format!("model.layers.{}.self_attn.q_proj.weight", layer_idx),
-            &format!("model.layers.{}.attn.q_proj.weight", layer_idx),
+            &format!("model.layers.{layer_idx}.self_attn.q_proj.weight"),
+            &format!("model.layers.{layer_idx}.attn.q_proj.weight"),
         ]);
         let k_key = get_weight(&[
-            &format!("model.layers.{}.self_attn.k_proj.weight", layer_idx),
-            &format!("model.layers.{}.attn.k_proj.weight", layer_idx),
+            &format!("model.layers.{layer_idx}.self_attn.k_proj.weight"),
+            &format!("model.layers.{layer_idx}.attn.k_proj.weight"),
         ]);
         let v_key = get_weight(&[
-            &format!("model.layers.{}.self_attn.v_proj.weight", layer_idx),
-            &format!("model.layers.{}.attn.v_proj.weight", layer_idx),
+            &format!("model.layers.{layer_idx}.self_attn.v_proj.weight"),
+            &format!("model.layers.{layer_idx}.attn.v_proj.weight"),
         ]);
         let o_key = get_weight(&[
-            &format!("model.layers.{}.self_attn.o_proj.weight", layer_idx),
-            &format!("model.layers.{}.attn.o_proj.weight", layer_idx),
+            &format!("model.layers.{layer_idx}.self_attn.o_proj.weight"),
+            &format!("model.layers.{layer_idx}.attn.o_proj.weight"),
         ]);
 
-        let q_norm_key = format!("model.layers.{}.self_attn.q_norm.weight", layer_idx);
-        let k_norm_key = format!("model.layers.{}.self_attn.k_norm.weight", layer_idx);
+        let q_norm_key = format!("model.layers.{layer_idx}.self_attn.q_norm.weight");
+        let k_norm_key = format!("model.layers.{layer_idx}.self_attn.k_norm.weight");
         let q_norm_weight = weights.get(&q_norm_key).cloned();
         let k_norm_weight = weights.get(&k_norm_key).cloned();
 
@@ -284,24 +284,20 @@ impl TransformerBlock {
             v_key.cloned(),
             o_key.cloned(),
             weights
-                .get(&format!("model.layers.{}.mlp.gate_proj.weight", layer_idx))
+                .get(&format!("model.layers.{layer_idx}.mlp.gate_proj.weight"))
                 .cloned(),
             weights
-                .get(&format!("model.layers.{}.mlp.up_proj.weight", layer_idx))
+                .get(&format!("model.layers.{layer_idx}.mlp.up_proj.weight"))
                 .cloned(),
             weights
-                .get(&format!("model.layers.{}.mlp.down_proj.weight", layer_idx))
+                .get(&format!("model.layers.{layer_idx}.mlp.down_proj.weight"))
                 .cloned(),
             weights
-                .get(&format!(
-                    "model.layers.{}.input_layernorm.weight",
-                    layer_idx
-                ))
+                .get(&format!("model.layers.{layer_idx}.input_layernorm.weight"))
                 .cloned(),
             weights
                 .get(&format!(
-                    "model.layers.{}.post_attention_layernorm.weight",
-                    layer_idx
+                    "model.layers.{layer_idx}.post_attention_layernorm.weight"
                 ))
                 .cloned(),
             q_norm_weight,
@@ -534,8 +530,7 @@ mod tests {
             assert_eq!(
                 output.dims(),
                 &[1, hidden_size],
-                "Step {} output shape mismatch",
-                step
+                "Step {step} output shape mismatch"
             );
         }
 
@@ -583,8 +578,7 @@ mod tests {
             assert_eq!(
                 output.dims(),
                 &[1, hidden_size],
-                "Step {} output shape mismatch",
-                step
+                "Step {step} output shape mismatch"
             );
         }
 

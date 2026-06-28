@@ -1,4 +1,4 @@
-//! SchedulerEngine — continuous-batching engine.
+//! `SchedulerEngine` — continuous-batching engine.
 //!
 //! This module is split into four focused sub-modules that share a
 //! single `SchedulerEngine` struct (defined in [`state`]):
@@ -126,7 +126,7 @@ mod tests {
 
         // Add first request
         let prompt = vec![1, 2, 3, 4, 5];
-        let id1 = engine.add_request(Request::new(0, prompt.clone(), 5));
+        let id1 = engine.add_request(Request::new(0, prompt, 5));
 
         // Build batch and process
         let _batch = engine.build_batch();

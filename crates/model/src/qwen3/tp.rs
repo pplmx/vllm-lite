@@ -14,8 +14,7 @@ pub(crate) fn new_with_tp(
 ) -> CandleResult<Qwen3Model> {
     let device = tp_config
         .as_ref()
-        .map(|tp| tp.local_device())
-        .unwrap_or(Device::Cpu);
+        .map_or(Device::Cpu, vllm_dist::TensorParallelConfig::local_device);
     let model_config = ModelConfig::from(&config);
     let tp = tp_config;
     let has_qk_norm = model_config.has_qk_norm;

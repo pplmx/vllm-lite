@@ -12,11 +12,12 @@ use std::collections::HashMap;
 use vllm_traits::ModelBackend;
 use vllm_traits::types::BatchOutput;
 
-/// Phi4Architecture: phi4 architecture.
+/// `Phi4Architecture`: phi4 architecture.
 pub struct Phi4Architecture;
 
 impl Phi4Architecture {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 }
@@ -27,14 +28,14 @@ impl Default for Phi4Architecture {
     }
 }
 
-/// Phi4BlockWrapper: phi4 block wrapper.
+/// `Phi4BlockWrapper`: phi4 block wrapper.
 pub(crate) struct Phi4BlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,
 }
 
 impl Phi4BlockWrapper {
-    pub fn new(config: &ModelConfig) -> Self {
+    pub const fn new(config: &ModelConfig) -> Self {
         Self {
             inner_dim: config.head_dim * config.num_heads,
             num_kv_heads: config.num_kv_heads,
@@ -97,7 +98,7 @@ impl Architecture for Phi4Architecture {
 
         let hidden_size = config_json
             .get("hidden_size")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .unwrap_or(0);
 
         let is_phi = model_type.to_lowercase().starts_with("phi");
@@ -132,7 +133,7 @@ impl Architecture for Phi4Architecture {
     }
 }
 
-/// Phi4Model: phi4 model.
+/// `Phi4Model`: phi4 model.
 pub(crate) struct Phi4Model {
     config: ModelConfig,
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
@@ -142,7 +143,7 @@ pub(crate) struct Phi4Model {
 }
 
 impl Phi4Model {
-    pub fn new(config: ModelConfig, device: Device, num_kv_blocks: usize) -> Result<Self> {
+    pub const fn new(config: ModelConfig, device: Device, num_kv_blocks: usize) -> Result<Self> {
         Ok(Self {
             config,
             device,
@@ -219,8 +220,7 @@ mod tests {
             });
             assert!(
                 arch.detect(&config),
-                "Failed to detect model_type: {}",
-                model_type
+                "Failed to detect model_type: {model_type}"
             );
         }
     }
@@ -235,8 +235,7 @@ mod tests {
             });
             assert!(
                 !arch.detect(&config),
-                "Should not detect model_type: {}",
-                model_type
+                "Should not detect model_type: {model_type}"
             );
         }
     }

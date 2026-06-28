@@ -6,16 +6,16 @@ use vllm_core::types::EngineMessage;
 
 use crate::ApiState;
 
-/// EngineHandle: engine handle.
+/// `EngineHandle`: engine handle.
 pub type EngineHandle = mpsc::UnboundedSender<EngineMessage>;
 
-/// HealthResponse: health response.
+/// `HealthResponse`: health response.
 #[derive(Serialize)]
 pub struct HealthResponse {
     pub status: String,
 }
 
-/// HealthDetailResponse: health detail response.
+/// `HealthDetailResponse`: health detail response.
 #[derive(Serialize)]
 pub struct HealthDetailResponse {
     pub status: String,

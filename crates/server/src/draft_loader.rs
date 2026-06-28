@@ -35,6 +35,7 @@ impl ServerDraftLoader {
     /// Build a loader from the server's `draft_specs` config. Each spec's
     /// `id` is the lookup key; `path` is the model directory passed to
     /// `ModelLoader`.
+    #[must_use]
     pub fn new(device: Device, specs: &[DraftSpecConfig]) -> Self {
         Self {
             device,
@@ -50,29 +51,34 @@ impl ServerDraftLoader {
 
     /// Override the KV block count used when constructing each `ModelLoader`.
     /// Defaults to `0` (which `ModelLoader::build` will resolve to 1024).
-    pub fn with_kv_blocks(mut self, num_kv_blocks: usize) -> Self {
+    #[must_use]
+    pub const fn with_kv_blocks(mut self, num_kv_blocks: usize) -> Self {
         self.num_kv_blocks = num_kv_blocks;
         self
     }
 
     /// Override the KV quantization flag.
-    pub fn with_kv_quantization(mut self, enabled: bool) -> Self {
+    #[must_use]
+    pub const fn with_kv_quantization(mut self, enabled: bool) -> Self {
         self.kv_quantization = enabled;
         self
     }
 
     /// Allow loading stub architectures (Gemma3, Llama4, Phi4, …).
-    pub fn with_allow_stub(mut self, allow: bool) -> Self {
+    #[must_use]
+    pub const fn with_allow_stub(mut self, allow: bool) -> Self {
         self.allow_stub = allow;
         self
     }
 
     /// Number of registered draft ids.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.paths.len()
     }
 
     /// True if no drafts are registered.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.paths.is_empty()
     }

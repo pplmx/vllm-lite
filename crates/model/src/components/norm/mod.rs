@@ -1,6 +1,6 @@
 //! Normalization utilities.
 //!
-//! Provides unified RMSNorm and LayerNorm implementations.
+//! Provides unified `RMSNorm` and `LayerNorm` implementations.
 
 pub mod layer_norm;
 pub mod rms_norm;

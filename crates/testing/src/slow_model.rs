@@ -1,4 +1,4 @@
-//! SlowModel - Mock model with configurable delay
+//! `SlowModel` - Mock model with configurable delay
 //!
 //! Useful for testing timeout behavior, backpressure, and scheduling.
 
@@ -28,16 +28,18 @@ pub struct SlowModel {
 }
 
 impl SlowModel {
-    /// Create a new SlowModel with the specified delay
-    pub fn new(delay: Duration) -> Self {
+    /// Create a new `SlowModel` with the specified delay
+    #[must_use]
+    pub const fn new(delay: Duration) -> Self {
         Self {
             delay,
             return_token: 1,
         }
     }
 
-    /// Create a new SlowModel with delay and custom return token
-    pub fn with_token(delay: Duration, return_token: TokenId) -> Self {
+    /// Create a new `SlowModel` with delay and custom return token
+    #[must_use]
+    pub const fn with_token(delay: Duration, return_token: TokenId) -> Self {
         Self {
             delay,
             return_token,
@@ -45,13 +47,15 @@ impl SlowModel {
     }
 
     /// Set the delay duration
-    pub fn delay(mut self, delay: Duration) -> Self {
+    #[must_use]
+    pub const fn delay(mut self, delay: Duration) -> Self {
         self.delay = delay;
         self
     }
 
     /// Set the return token
-    pub fn return_token(mut self, token: TokenId) -> Self {
+    #[must_use]
+    pub const fn return_token(mut self, token: TokenId) -> Self {
         self.return_token = token;
         self
     }

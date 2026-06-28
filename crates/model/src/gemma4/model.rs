@@ -10,7 +10,7 @@ use candle_nn::Linear;
 
 use super::block::{Gemma4Block, block_from_weights, new_block};
 
-/// Gemma4Model: gemma4 model.
+/// `Gemma4Model`: gemma4 model.
 pub type Gemma4Model = CausalLm<Gemma4Block, RmsNorm, Linear>;
 
 impl Gemma4Model {

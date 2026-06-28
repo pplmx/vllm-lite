@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
-/// AuditEvent: audit event.
+/// `AuditEvent`: audit event.
 #[derive(Debug, Clone, Serialize)]
 pub struct AuditEvent {
     pub timestamp: String,
@@ -16,13 +16,14 @@ pub struct AuditEvent {
     pub user_agent: Option<String>,
 }
 
-/// AuditLogger: audit logger.
+/// `AuditLogger`: audit logger.
 pub struct AuditLogger {
     events: Arc<RwLock<Vec<AuditEvent>>>,
     max_events: usize,
 }
 
 impl AuditLogger {
+    #[must_use]
     pub fn new(max_events: usize) -> Self {
         Self {
             events: Arc::new(RwLock::new(Vec::new())),
@@ -68,7 +69,7 @@ impl AuditLogger {
             user_id: None,
             action: "authenticate".to_string(),
             resource: "api".to_string(),
-            result: format!("failure: {}", reason),
+            result: format!("failure: {reason}"),
             request_id: request_id.to_string(),
             ip_address: None,
             user_agent: None,
@@ -92,7 +93,7 @@ impl AuditLogger {
     ) {
         self.log(AuditEvent {
             timestamp: chrono::Utc::now().to_rfc3339(),
-            user_id: user_id.map(|s| s.to_string()),
+            user_id: user_id.map(std::string::ToString::to_string),
             action: action.to_string(),
             resource: resource.to_string(),
             result: result.to_string(),
@@ -143,10 +144,10 @@ mod tests {
                 .log(AuditEvent {
                     timestamp: chrono::Utc::now().to_rfc3339(),
                     user_id: None,
-                    action: format!("action-{}", i),
+                    action: format!("action-{i}"),
                     resource: "test".to_string(),
                     result: "success".to_string(),
-                    request_id: format!("req-{}", i),
+                    request_id: format!("req-{i}"),
                     ip_address: None,
                     user_agent: None,
                 })

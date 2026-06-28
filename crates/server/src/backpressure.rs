@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-/// BackpressureConfig: backpressure configuration.
+/// `BackpressureConfig`: backpressure configuration.
 #[derive(Debug, Clone)]
 pub(crate) struct BackpressureConfig {
     pub max_buffer_size: usize,
@@ -31,7 +31,7 @@ impl BackpressureConfig {
     }
 }
 
-/// FlowControlState: flow control state enumeration.
+/// `FlowControlState`: flow control state enumeration.
 #[derive(Debug, Clone)]
 pub(crate) enum FlowControlState {
     Normal,
@@ -39,7 +39,7 @@ pub(crate) enum FlowControlState {
     Resumed,
 }
 
-/// BackpressureState: backpressure state.
+/// `BackpressureState`: backpressure state.
 #[derive(Debug)]
 pub(crate) struct BackpressureState {
     pending_tokens: Arc<AtomicUsize>,
@@ -77,7 +77,10 @@ impl BackpressureState {
     }
 
     fn evaluate_state(&self, pending: usize) -> FlowControlState {
-        let mut last = self.last_state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut last = self
+            .last_state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let new_state = if pending >= self.config.max_buffer_size
             || (pending >= self.config.high_water_mark && matches!(*last, FlowControlState::Normal))
         {
@@ -104,11 +107,14 @@ impl BackpressureState {
 
     pub fn reset(&self) {
         self.pending_tokens.store(0, Ordering::SeqCst);
-        *self.last_state.lock().unwrap_or_else(|e| e.into_inner()) = FlowControlState::Normal;
+        *self
+            .last_state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = FlowControlState::Normal;
     }
 }
 
-/// StreamingBackpressure: streaming backpressure.
+/// `StreamingBackpressure`: streaming backpressure.
 pub(crate) struct StreamingBackpressure {
     state: Arc<BackpressureState>,
 }
@@ -120,7 +126,7 @@ impl StreamingBackpressure {
         }
     }
 
-    pub fn state(&self) -> &Arc<BackpressureState> {
+    pub const fn state(&self) -> &Arc<BackpressureState> {
         &self.state
     }
 

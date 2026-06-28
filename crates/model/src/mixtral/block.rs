@@ -1,4 +1,4 @@
-//! Mixtral block (Transformer layer with MoE).
+//! Mixtral block (Transformer layer with `MoE`).
 
 use std::collections::HashMap;
 
@@ -11,7 +11,7 @@ use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 use candle_nn::VarBuilder;
 
-/// MixtralBlock: mixtral block.
+/// `MixtralBlock`: mixtral block.
 pub struct MixtralBlock {
     attention: RopeGqaAttention,
     mlp: MixtralSparseMoe,
@@ -89,44 +89,28 @@ impl MixtralBlock {
         let top_k = config.top_k_experts.unwrap_or(2);
 
         let q_w = weights
-            .get(&format!(
-                "model.layers.{}.self_attn.q_proj.weight",
-                layer_idx
-            ))
+            .get(&format!("model.layers.{layer_idx}.self_attn.q_proj.weight"))
             .cloned()
             .ok_or_else(|| candle_core::Error::msg("Missing q_proj weight"))?;
         let k_w = weights
-            .get(&format!(
-                "model.layers.{}.self_attn.k_proj.weight",
-                layer_idx
-            ))
+            .get(&format!("model.layers.{layer_idx}.self_attn.k_proj.weight"))
             .cloned()
             .ok_or_else(|| candle_core::Error::msg("Missing k_proj weight"))?;
         let v_w = weights
-            .get(&format!(
-                "model.layers.{}.self_attn.v_proj.weight",
-                layer_idx
-            ))
+            .get(&format!("model.layers.{layer_idx}.self_attn.v_proj.weight"))
             .cloned()
             .ok_or_else(|| candle_core::Error::msg("Missing v_proj weight"))?;
         let o_w = weights
-            .get(&format!(
-                "model.layers.{}.self_attn.o_proj.weight",
-                layer_idx
-            ))
+            .get(&format!("model.layers.{layer_idx}.self_attn.o_proj.weight"))
             .cloned()
             .ok_or_else(|| candle_core::Error::msg("Missing o_proj weight"))?;
         let input_ln_w = weights
-            .get(&format!(
-                "model.layers.{}.input_layernorm.weight",
-                layer_idx
-            ))
+            .get(&format!("model.layers.{layer_idx}.input_layernorm.weight"))
             .cloned()
             .ok_or_else(|| candle_core::Error::msg("Missing input_layernorm weight"))?;
         let post_attn_ln_w = weights
             .get(&format!(
-                "model.layers.{}.post_attention_layernorm.weight",
-                layer_idx
+                "model.layers.{layer_idx}.post_attention_layernorm.weight"
             ))
             .cloned()
             .ok_or_else(|| candle_core::Error::msg("Missing post_attention_layernorm weight"))?;
@@ -166,38 +150,34 @@ impl MixtralBlock {
         for i in 0..num_experts {
             let gate_w = weights
                 .get(&format!(
-                    "model.layers.{}.block_sparse_moe.experts.{}.gate_proj.weight",
-                    layer_idx, i
+                    "model.layers.{layer_idx}.block_sparse_moe.experts.{i}.gate_proj.weight"
                 ))
                 .cloned()
                 .ok_or_else(|| {
-                    candle_core::Error::msg(format!("Missing expert {}.gate_proj weight", i))
+                    candle_core::Error::msg(format!("Missing expert {i}.gate_proj weight"))
                 })?;
             let up_w = weights
                 .get(&format!(
-                    "model.layers.{}.block_sparse_moe.experts.{}.up_proj.weight",
-                    layer_idx, i
+                    "model.layers.{layer_idx}.block_sparse_moe.experts.{i}.up_proj.weight"
                 ))
                 .cloned()
                 .ok_or_else(|| {
-                    candle_core::Error::msg(format!("Missing expert {}.up_proj weight", i))
+                    candle_core::Error::msg(format!("Missing expert {i}.up_proj weight"))
                 })?;
             let down_w = weights
                 .get(&format!(
-                    "model.layers.{}.block_sparse_moe.experts.{}.down_proj.weight",
-                    layer_idx, i
+                    "model.layers.{layer_idx}.block_sparse_moe.experts.{i}.down_proj.weight"
                 ))
                 .cloned()
                 .ok_or_else(|| {
-                    candle_core::Error::msg(format!("Missing expert {}.down_proj weight", i))
+                    candle_core::Error::msg(format!("Missing expert {i}.down_proj weight"))
                 })?;
             expert_weights.push((gate_w, up_w, down_w));
         }
 
         let gate_w = weights
             .get(&format!(
-                "model.layers.{}.block_sparse_moe.gate.weight",
-                layer_idx
+                "model.layers.{layer_idx}.block_sparse_moe.gate.weight"
             ))
             .cloned()
             .ok_or_else(|| candle_core::Error::msg("Missing gate weight"))?;
@@ -293,7 +273,7 @@ impl PagedDecoderBlock for MixtralBlock {
         block_ids: &[usize],
         positions: &[usize],
     ) -> Result<Tensor> {
-        MixtralBlock::forward_prefill(self, x, kv_cache, layer_idx, block_ids, positions)
+        Self::forward_prefill(self, x, kv_cache, layer_idx, block_ids, positions)
     }
 
     fn forward_decode(
@@ -305,7 +285,7 @@ impl PagedDecoderBlock for MixtralBlock {
         num_computed_tokens: usize,
         positions: &[usize],
     ) -> Result<Tensor> {
-        MixtralBlock::forward_decode(
+        Self::forward_decode(
             self,
             x,
             kv_cache,

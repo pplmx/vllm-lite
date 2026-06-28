@@ -1,4 +1,4 @@
-//! DraftResolver — per-request draft selection with fallback semantics
+//! `DraftResolver` — per-request draft selection with fallback semantics
 //!
 //! v18.0 Multi-Model Speculative Decoding phase 3 (RTE-01..03, FALL-01/02).
 //!
@@ -28,24 +28,26 @@ pub enum ResolvedDraft {
 impl std::fmt::Debug for ResolvedDraft {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ResolvedDraft::External(_) => f.debug_tuple("External").field(&"<backend>").finish(),
-            ResolvedDraft::SelfSpec(_) => f.debug_tuple("SelfSpec").field(&"<backend>").finish(),
-            ResolvedDraft::None => f.debug_tuple("None").finish(),
+            Self::External(_) => f.debug_tuple("External").field(&"<backend>").finish(),
+            Self::SelfSpec(_) => f.debug_tuple("SelfSpec").field(&"<backend>").finish(),
+            Self::None => f.debug_tuple("None").finish(),
         }
     }
 }
 
 impl ResolvedDraft {
-    pub fn kind(&self) -> &'static str {
+    #[must_use]
+    pub const fn kind(&self) -> &'static str {
         match self {
-            ResolvedDraft::External(_) => "external",
-            ResolvedDraft::SelfSpec(_) => "self_spec",
-            ResolvedDraft::None => "none",
+            Self::External(_) => "external",
+            Self::SelfSpec(_) => "self_spec",
+            Self::None => "none",
         }
     }
 
-    pub fn is_some(&self) -> bool {
-        !matches!(self, ResolvedDraft::None)
+    #[must_use]
+    pub const fn is_some(&self) -> bool {
+        !matches!(self, Self::None)
     }
 }
 
@@ -81,6 +83,7 @@ impl dyn DraftLoader {
     /// a direct `impl Default for Arc<dyn ...>` because `Arc` is foreign and
     /// there is no local type appearing before the uncovered trait-object
     /// parameter.
+    #[must_use]
     pub fn default_arc() -> Arc<Self> {
         Arc::new(NoopLoader)
     }
@@ -178,26 +181,25 @@ impl DraftResolver {
     }
 
     fn fallback_to_self_spec_or_none(&self) -> ResolvedDraft {
-        match &self.self_spec {
-            Some(s) => {
-                self.metrics
-                    .inc_draft_resolution(DraftResolutionKind::SelfSpec);
-                ResolvedDraft::SelfSpec(s.clone())
-            }
-            None => {
-                self.metrics.inc_draft_resolution(DraftResolutionKind::None);
-                ResolvedDraft::None
-            }
+        if let Some(s) = &self.self_spec {
+            self.metrics
+                .inc_draft_resolution(DraftResolutionKind::SelfSpec);
+            ResolvedDraft::SelfSpec(s.clone())
+        } else {
+            self.metrics.inc_draft_resolution(DraftResolutionKind::None);
+            ResolvedDraft::None
         }
     }
 
     /// Access the underlying registry (for advanced callers).
-    pub fn registry(&self) -> &Arc<DraftModelRegistry> {
+    #[must_use]
+    pub const fn registry(&self) -> &Arc<DraftModelRegistry> {
         &self.registry
     }
 
     /// Access the self-spec backend, if any. Returns the Arc clone so callers
     /// (e.g., the Engine) can keep a reference after the resolver is rebuilt.
+    #[must_use]
     pub fn self_spec(&self) -> Option<Arc<Mutex<Box<dyn ModelBackend>>>> {
         self.self_spec.clone()
     }

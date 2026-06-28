@@ -83,8 +83,7 @@ fn test_observer_max_limit() {
         let observer = Box::new(TrackingObserver::new());
         assert!(
             observers.register(observer).is_ok(),
-            "Failed to register observer {}",
-            i
+            "Failed to register observer {i}"
         );
     }
     let observer = Box::new(TrackingObserver::new());

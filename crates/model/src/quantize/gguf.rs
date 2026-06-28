@@ -5,7 +5,7 @@ use std::path::Path;
 
 ///
 /// Stub loader — returns an empty tensor map. A full GGUF parser
-/// (Q4_K_M / Q5_K / Q8_0 quantization types, tensor + metadata parsing,
+/// (`Q4_K_M` / `Q5_K` / `Q8_0` quantization types, tensor + metadata parsing,
 /// integration with `StorageTensor`) is future work; see the ADR-009
 /// orphan-module decision and the v22.0 GGUF-01 deferred-items entry.
 /// Callers that receive an empty map fall back to an empty tensor set
@@ -19,7 +19,7 @@ pub(crate) fn load_gguf_tensors(
 }
 
 pub(crate) fn is_gguf_file(path: &Path) -> bool {
-    path.extension().map(|ext| ext == "gguf").unwrap_or(false)
+    path.extension().is_some_and(|ext| ext == "gguf")
 }
 
 #[cfg(test)]

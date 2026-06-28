@@ -1,6 +1,6 @@
 use crate::types::Phase;
 
-/// PhaseSwitchPolicy: phase switch policy.
+/// `PhaseSwitchPolicy`: phase switch policy.
 #[derive(Clone, Debug)]
 pub struct PhaseSwitchPolicy {
     pub max_consecutive_decode: u32,
@@ -21,6 +21,7 @@ impl Default for PhaseSwitchPolicy {
 impl PhaseSwitchPolicy {
     /// Returns a builder for configuring this type with the documented field defaults.
     /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
+    #[must_use]
     pub fn builder() -> PhaseSwitchPolicyBuilder {
         PhaseSwitchPolicyBuilder::default()
     }
@@ -33,25 +34,29 @@ pub struct PhaseSwitchPolicyBuilder {
 }
 
 impl PhaseSwitchPolicyBuilder {
-    pub fn with_max_consecutive_decode(mut self, v: u32) -> Self {
+    #[must_use]
+    pub const fn with_max_consecutive_decode(mut self, v: u32) -> Self {
         self.inner.max_consecutive_decode = v;
         self
     }
-    pub fn with_prefill_priority_threshold(mut self, v: usize) -> Self {
+    #[must_use]
+    pub const fn with_prefill_priority_threshold(mut self, v: usize) -> Self {
         self.inner.prefill_priority_threshold = v;
         self
     }
-    pub fn with_min_decode_batch_size(mut self, v: usize) -> Self {
+    #[must_use]
+    pub const fn with_min_decode_batch_size(mut self, v: usize) -> Self {
         self.inner.min_decode_batch_size = v;
         self
     }
     /// build: build the [`PhaseSwitchPolicy`].
-    pub fn build(self) -> PhaseSwitchPolicy {
+    #[must_use]
+    pub const fn build(self) -> PhaseSwitchPolicy {
         self.inner
     }
 }
 
-/// SchedulerState: scheduler state.
+/// `SchedulerState`: scheduler state.
 #[derive(Clone, Debug)]
 pub struct SchedulerState {
     pub waiting_count: usize,
@@ -62,7 +67,7 @@ pub struct SchedulerState {
     pub consecutive_decode_rounds: u32,
 }
 
-/// PhaseScheduler: phase scheduler.
+/// `PhaseScheduler`: phase scheduler.
 pub struct PhaseScheduler {
     current_phase: Phase,
     switch_policy: PhaseSwitchPolicy,
@@ -70,7 +75,8 @@ pub struct PhaseScheduler {
 }
 
 impl PhaseScheduler {
-    pub fn new(switch_policy: PhaseSwitchPolicy) -> Self {
+    #[must_use]
+    pub const fn new(switch_policy: PhaseSwitchPolicy) -> Self {
         Self {
             current_phase: Phase::Prefill,
             switch_policy,
@@ -110,16 +116,16 @@ impl PhaseScheduler {
 
     /// Get the current phase.
     #[must_use]
-    pub fn current_phase(&self) -> Phase {
+    pub const fn current_phase(&self) -> Phase {
         self.current_phase
     }
 
-    pub fn reset(&mut self) {
+    pub const fn reset(&mut self) {
         self.current_phase = Phase::Prefill;
         self.consecutive_decode_rounds = 0;
     }
 
-    fn should_switch_to_prefill(&self, state: &SchedulerState) -> bool {
+    const fn should_switch_to_prefill(&self, state: &SchedulerState) -> bool {
         if self.consecutive_decode_rounds >= self.switch_policy.max_consecutive_decode {
             return true;
         }
@@ -132,7 +138,7 @@ impl PhaseScheduler {
         false
     }
 
-    fn prefill_complete(&self, state: &SchedulerState) -> bool {
+    const fn prefill_complete(&self, state: &SchedulerState) -> bool {
         state.prefill_queue_len == 0
     }
 }

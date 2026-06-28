@@ -1,6 +1,6 @@
 use candle_core::{Device, Result, Tensor};
 
-/// QuantizationType: quantization type.
+/// `QuantizationType`: quantization type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuantizationType {
     Fp16,
@@ -14,6 +14,7 @@ pub enum QuantizationType {
 
 impl QuantizationType {
     #[allow(clippy::should_implement_trait)]
+    #[must_use]
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "fp16" | "float16" => Some(Self::Fp16),
@@ -27,7 +28,8 @@ impl QuantizationType {
         }
     }
 
-    pub fn bits(&self) -> usize {
+    #[must_use]
+    pub const fn bits(&self) -> usize {
         match self {
             Self::Fp16 => 16,
             Self::Fp32 => 32,
@@ -40,7 +42,7 @@ impl QuantizationType {
     }
 }
 
-/// QuantizationConfig: quantization configuration.
+/// `QuantizationConfig`: quantization configuration.
 #[derive(Debug, Clone)]
 pub struct QuantizationConfig {
     pub quant_type: QuantizationType,
@@ -59,7 +61,8 @@ impl Default for QuantizationConfig {
 }
 
 impl QuantizationConfig {
-    pub fn awq(bits: usize, group_size: usize) -> Self {
+    #[must_use]
+    pub const fn awq(bits: usize, group_size: usize) -> Self {
         Self {
             quant_type: QuantizationType::Awq,
             group_size: Some(group_size),
@@ -67,7 +70,8 @@ impl QuantizationConfig {
         }
     }
 
-    pub fn gptq(bits: usize, group_size: usize) -> Self {
+    #[must_use]
+    pub const fn gptq(bits: usize, group_size: usize) -> Self {
         Self {
             quant_type: QuantizationType::Gptq,
             group_size: Some(group_size),
@@ -84,7 +88,7 @@ pub trait Quantization: Send + Sync {
     fn quant_type(&self) -> QuantizationType;
 }
 
-/// QuantizedWeights: quantized weights.
+/// `QuantizedWeights`: quantized weights.
 #[derive(Debug, Clone)]
 pub struct QuantizedWeights {
     pub qweight: Tensor,
@@ -96,7 +100,8 @@ pub struct QuantizedWeights {
 }
 
 impl QuantizedWeights {
-    pub fn new(qweight: Tensor, scales: Tensor) -> Self {
+    #[must_use]
+    pub const fn new(qweight: Tensor, scales: Tensor) -> Self {
         Self {
             qweight,
             scales,
@@ -107,25 +112,28 @@ impl QuantizedWeights {
         }
     }
 
+    #[must_use]
     pub fn with_zeros(mut self, zeros: Tensor) -> Self {
         self.zeros = Some(zeros);
         self
     }
 
+    #[must_use]
     pub fn with_g_idx(mut self, g_idx: Tensor) -> Self {
         self.g_idx = Some(g_idx);
         self
     }
 }
 
-/// AWQQuantization: awq quantization.
+/// `AWQQuantization`: awq quantization.
 pub struct AWQQuantization {
     bits: usize,
     group_size: usize,
 }
 
 impl AWQQuantization {
-    pub fn new(bits: usize, group_size: usize) -> Self {
+    #[must_use]
+    pub const fn new(bits: usize, group_size: usize) -> Self {
         Self { bits, group_size }
     }
 
@@ -172,15 +180,14 @@ impl AWQQuantization {
 
         let q_data: Vec<u8> = qweight.to_vec1()?;
         let scales_data: Vec<f32> = scales.to_vec1()?;
-        let g_idx_data = weights
-            .g_idx
-            .as_ref()
-            .map(|t| t.to_vec1::<u32>().unwrap_or_default())
-            .unwrap_or_else(|| {
+        let g_idx_data = weights.g_idx.as_ref().map_or_else(
+            || {
                 (0..q_data.len())
                     .map(|i| i as u32 / self.group_size as u32)
                     .collect()
-            });
+            },
+            |t| t.to_vec1::<u32>().unwrap_or_default(),
+        );
 
         let mut output = Vec::with_capacity(q_data.len());
 
@@ -190,7 +197,7 @@ impl AWQQuantization {
                 .copied()
                 .unwrap_or(i as u32 / self.group_size as u32) as usize;
             let scale = scales_data.get(g_idx).copied().unwrap_or(1.0);
-            let w = q as f32 * scale;
+            let w = f32::from(q) * scale;
             output.push(w);
         }
 
@@ -199,14 +206,15 @@ impl AWQQuantization {
     }
 }
 
-/// GPTQQuantization: gptq quantization.
+/// `GPTQQuantization`: gptq quantization.
 pub struct GPTQQuantization {
     bits: usize,
     group_size: usize,
 }
 
 impl GPTQQuantization {
-    pub fn new(bits: usize, group_size: usize) -> Self {
+    #[must_use]
+    pub const fn new(bits: usize, group_size: usize) -> Self {
         Self { bits, group_size }
     }
 
@@ -259,7 +267,7 @@ impl GPTQQuantization {
         for (i, &q) in q_data.iter().enumerate() {
             let g_idx = i / self.group_size;
             let scale = scales_data.get(g_idx).copied().unwrap_or(1.0);
-            let w = q as f32 * scale;
+            let w = f32::from(q) * scale;
             output.push(w);
         }
 
@@ -289,8 +297,7 @@ mod tests {
 
         assert!(
             max_diff < 10.0,
-            "Dequantization error too large: {}",
-            max_diff
+            "Dequantization error too large: {max_diff}"
         );
     }
 

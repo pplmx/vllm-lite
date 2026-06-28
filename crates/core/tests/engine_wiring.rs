@@ -3,7 +3,7 @@
 //! Closes the audit gaps:
 //! - RTE-02: Scheduler routes request to correct draft instance
 //! - RTE-03: Multiple drafts in same batch
-//! - FALL-02: Runtime error → degraded_draft → non-spec decode
+//! - FALL-02: Runtime error → `degraded_draft` → non-spec decode
 //!
 //! Exercises the actual `Engine::step` path (not just `DraftResolver` in
 //! isolation) to verify that the production request flow honours per-request
@@ -44,7 +44,7 @@ impl ModelBackend for StubBackend {
         _num_computed_tokens: &[usize],
         _is_prefill: &[bool],
     ) -> ModelResult<BatchOutput> {
-        let token: u32 = self.id.bytes().map(|b| b as u32).sum::<u32>() % 32000;
+        let token: u32 = self.id.bytes().map(|b| u32::from(b)).sum::<u32>() % 32000;
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
             next_tokens: seq_ids.iter().map(|_| token).collect(),
@@ -415,7 +415,7 @@ fn test_per_request_routing_different_draft_ids_yield_different_resolution_paths
     use vllm_core::scheduler::engine::SchedulerEngine;
 
     let metrics = Arc::new(EnhancedMetricsCollector::new());
-    let mut scheduler = SchedulerEngine::new(SchedulerConfig::default(), 64, metrics.clone());
+    let mut scheduler = SchedulerEngine::new(SchedulerConfig::default(), 64, metrics);
 
     let id_a = DraftId("a".into());
     let id_b = DraftId("b".into());
@@ -435,12 +435,12 @@ fn test_per_request_routing_different_draft_ids_yield_different_resolution_paths
 // ─────────────────── WR-01: FALL-02 end-to-end via step() ──────────────
 
 /// FALL-02 end-to-end: build a real Engine, attach a draft whose backend
-/// forward() returns Err, call engine.step(), and verify:
-///   (a) runtime_errors_total == 1
-///   (b) seq.degraded_draft == true on a subsequent get_sequence_mut
+/// `forward()` returns Err, call `engine.step()`, and verify:
+///   (a) `runtime_errors_total` == 1
+///   (b) `seq.degraded_draft` == true on a subsequent `get_sequence_mut`
 ///   (c) no panic escaped
 ///
-/// Root cause of the previously-`#[ignore]`d hang was a DashMap shard
+/// Root cause of the previously-`#[ignore]`d hang was a `DashMap` shard
 /// re-entry in `record_per_request_acceptance` (entry guard held across a
 /// `len()` call). Fixed in v22.0 (OPS-02).
 #[test]
@@ -498,10 +498,10 @@ fn test_fall02_engine_step_catches_runtime_error() {
 // ─────────────────── WR-02: RTE-03 end-to-end via step() ───────────────
 
 /// RTE-03 end-to-end: 2 requests with different draft ids flow through
-/// Engine::step() and each resolves to its own backend. Verified via
-/// forward() call counts on the per-id CountingBackend instances.
+/// `Engine::step()` and each resolves to its own backend. Verified via
+/// `forward()` call counts on the per-id `CountingBackend` instances.
 ///
-/// Root cause of the previously-`#[ignore]`d hang was a DashMap shard
+/// Root cause of the previously-`#[ignore]`d hang was a `DashMap` shard
 /// re-entry in `record_per_request_acceptance` (entry guard held across a
 /// `len()` call). Fixed in v22.0 (OPS-02).
 #[test]

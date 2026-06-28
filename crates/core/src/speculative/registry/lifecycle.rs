@@ -268,7 +268,7 @@ impl DraftModelRegistry {
     }
 
     /// Access the shared memory budget.
-    pub fn memory_budget(&self) -> &Arc<crate::speculative::memory_budget::MemoryBudget> {
+    pub const fn memory_budget(&self) -> &Arc<crate::speculative::memory_budget::MemoryBudget> {
         &self.budget
     }
 }

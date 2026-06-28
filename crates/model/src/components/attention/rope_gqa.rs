@@ -7,7 +7,7 @@ use crate::components::positional::apply_rope;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 
-/// RopeGqaAttention: rope gqa attention.
+/// `RopeGqaAttention`: rope gqa attention.
 pub struct RopeGqaAttention {
     inner: SharedGqaAttention,
     theta: f32,
@@ -281,15 +281,9 @@ mod tests {
         .unwrap();
 
         let x = Tensor::ones((1, hidden_size), candle_core::DType::F32, &device).unwrap();
-        let mut kv_cache = crate::paged_tensor::PagedKvCache::new(
-            1,
-            num_heads,
-            head_dim,
-            8,
-            device.clone(),
-            false,
-        )
-        .unwrap();
+        let mut kv_cache =
+            crate::paged_tensor::PagedKvCache::new(1, num_heads, head_dim, 8, device, false)
+                .unwrap();
 
         let block_ids: Vec<usize> = vec![0];
         let positions = vec![0];
@@ -341,7 +335,7 @@ mod tests {
                 .forward_decode(&x, &mut kv_cache, 0, &block_ids, step, &positions)
                 .unwrap();
 
-            assert_eq!(result.dims(), &[1, 1, hidden_size], "step={}", step);
+            assert_eq!(result.dims(), &[1, 1, hidden_size], "step={step}");
         }
     }
 

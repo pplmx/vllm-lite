@@ -1,6 +1,6 @@
-//! SpeculativeModel wrapper for speculative decoding
+//! `SpeculativeModel` wrapper for speculative decoding
 //!
-//! Wraps a ModelBackend with speculative execution logic,
+//! Wraps a `ModelBackend` with speculative execution logic,
 //! managing the draft-verify-accept cycle.
 
 use super::config::SpeculationConfig;
@@ -8,7 +8,7 @@ use super::strategy::RejectionStrategy;
 use super::verifier::DraftVerifier;
 use vllm_traits::ModelBackend;
 
-/// SpeculativeModel: speculative model.
+/// `SpeculativeModel`: speculative model.
 pub struct SpeculativeModel<M: ModelBackend> {
     target_model: M,
     verifier: Box<dyn DraftVerifier>,
@@ -31,7 +31,7 @@ impl<M: ModelBackend> SpeculativeModel<M> {
         }
     }
 
-    pub fn target_model(&self) -> &M {
+    pub const fn target_model(&self) -> &M {
         &self.target_model
     }
 
@@ -43,23 +43,23 @@ impl<M: ModelBackend> SpeculativeModel<M> {
         &mut self.verifier
     }
 
-    pub fn config(&self) -> &SpeculationConfig {
+    pub const fn config(&self) -> &SpeculationConfig {
         &self.config
     }
 
-    pub fn strategy(&self) -> &RejectionStrategy {
+    pub const fn strategy(&self) -> &RejectionStrategy {
         &self.strategy
     }
 
-    pub fn set_strategy(&mut self, strategy: RejectionStrategy) {
+    pub const fn set_strategy(&mut self, strategy: RejectionStrategy) {
         self.strategy = strategy;
     }
 
-    pub fn draft_count(&self) -> usize {
+    pub const fn draft_count(&self) -> usize {
         self.config.draft_count
     }
 
-    pub fn max_depth(&self) -> usize {
+    pub const fn max_depth(&self) -> usize {
         self.config.max_depth
     }
 }

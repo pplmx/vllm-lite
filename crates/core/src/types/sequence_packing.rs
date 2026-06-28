@@ -27,6 +27,7 @@ impl Default for SequencePackingConfig {
 impl SequencePackingConfig {
     /// Returns a builder for configuring this type with the documented field defaults.
     /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
+    #[must_use]
     pub fn builder() -> SequencePackingConfigBuilder {
         SequencePackingConfigBuilder::default()
     }
@@ -39,30 +40,36 @@ pub struct SequencePackingConfigBuilder {
 }
 
 impl SequencePackingConfigBuilder {
-    pub fn with_enabled(mut self, v: bool) -> Self {
+    #[must_use]
+    pub const fn with_enabled(mut self, v: bool) -> Self {
         self.inner.enabled = v;
         self
     }
-    pub fn with_target_batch_size(mut self, v: usize) -> Self {
+    #[must_use]
+    pub const fn with_target_batch_size(mut self, v: usize) -> Self {
         self.inner.target_batch_size = v;
         self
     }
-    pub fn with_max_batch_size(mut self, v: usize) -> Self {
+    #[must_use]
+    pub const fn with_max_batch_size(mut self, v: usize) -> Self {
         self.inner.max_batch_size = v;
         self
     }
-    pub fn with_similarity_threshold(mut self, v: f32) -> Self {
+    #[must_use]
+    pub const fn with_similarity_threshold(mut self, v: f32) -> Self {
         self.inner.similarity_threshold = v;
         self
     }
     /// build: build the [`SequencePackingConfig`].
-    pub fn build(self) -> SequencePackingConfig {
+    #[must_use]
+    pub const fn build(self) -> SequencePackingConfig {
         self.inner
     }
 }
 
 impl SequencePackingConfig {
     /// Create config from environment variables
+    #[must_use]
     pub fn from_env() -> Self {
         let enabled = std::env::var("VLLM_SEQ_PACKING_ENABLED")
             .ok()

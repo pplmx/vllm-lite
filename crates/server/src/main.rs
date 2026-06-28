@@ -93,11 +93,11 @@ async fn main() {
         .with_kv_quantization(app_config.engine.kv_quantization)
         .with_allow_stub(cli.model.allow_stub)
         .build()
-        .unwrap_or_else(|e| panic!("Failed to create loader: {}", e));
+        .unwrap_or_else(|e| panic!("Failed to create loader: {e}"));
 
     let model = loader
         .load_model()
-        .unwrap_or_else(|e| panic!("Failed to load model: {}", e));
+        .unwrap_or_else(|e| panic!("Failed to load model: {e}"));
 
     tracing::info!(
         model_path = %model_path,
@@ -111,7 +111,7 @@ async fn main() {
         Some(
             loader
                 .load_model()
-                .unwrap_or_else(|e| panic!("Failed to load draft model: {}", e)),
+                .unwrap_or_else(|e| panic!("Failed to load draft model: {e}")),
         )
     } else {
         tracing::info!("Skipping draft model (speculative decoding disabled)");
@@ -243,8 +243,8 @@ async fn main() {
 
     let tokenizer_path = PathBuf::from(&model_path).join("tokenizer.json");
     let tokenizer: Arc<Tokenizer> = if tokenizer_path.exists() {
-        match tokenizer_path.to_str() {
-            Some(path_str) => match Tokenizer::from_file(path_str) {
+        if let Some(path_str) = tokenizer_path.to_str() {
+            match Tokenizer::from_file(path_str) {
                 Ok(t) => {
                     tracing::info!("Tokenizer loaded");
                     Arc::new(t)
@@ -253,14 +253,13 @@ async fn main() {
                     tracing::warn!(error = %e, "Failed to load tokenizer from file, using default");
                     Arc::new(Tokenizer::new())
                 }
-            },
-            None => {
-                tracing::error!(
-                    path = ?tokenizer_path,
-                    "Tokenizer path is not valid UTF-8; falling back to default tokenizer"
-                );
-                Arc::new(Tokenizer::new())
             }
+        } else {
+            tracing::error!(
+                path = ?tokenizer_path,
+                "Tokenizer path is not valid UTF-8; falling back to default tokenizer"
+            );
+            Arc::new(Tokenizer::new())
         }
     } else {
         tracing::warn!("No tokenizer.json found in model directory, using default tokenizer");
@@ -268,14 +267,14 @@ async fn main() {
     };
     let batch_manager = Arc::new(BatchManager::new());
 
-    let auth_middleware = if !app_config.auth.api_keys.is_empty() {
+    let auth_middleware = if app_config.auth.api_keys.is_empty() {
+        None
+    } else {
         Some(Arc::new(AuthMiddleware::new(
             app_config.auth.api_keys.clone(),
             app_config.auth.rate_limit_requests,
             app_config.auth.rate_limit_window_secs,
         )))
-    } else {
-        None
     };
 
     // Initialize health checker and metrics collector
@@ -375,8 +374,8 @@ async fn shutdown_signal() {
     let terminate = std::future::pending::<()>();
 
     tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
+        () = ctrl_c => {},
+        () = terminate => {},
     }
 
     tracing::info!("Shutdown signal received");

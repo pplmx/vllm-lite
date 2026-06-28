@@ -27,6 +27,7 @@ pub enum DraftResolutionKind {
 impl DraftResolutionKind {
     /// Parse from a string. Accepts canonical names and common aliases
     /// (case-insensitive).
+    #[must_use]
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_ascii_lowercase().as_str() {
             "external" => Some(Self::External),
@@ -37,7 +38,8 @@ impl DraftResolutionKind {
     }
 
     /// Canonical string representation (matches the historical wire values).
-    pub fn as_str(&self) -> &'static str {
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
         match self {
             Self::External => "external",
             Self::SelfSpec => "self_spec",

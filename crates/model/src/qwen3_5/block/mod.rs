@@ -11,7 +11,7 @@ pub use linear::LinearAttentionBlock;
 use crate::causal_lm::{DecoderLayer, LayerAuxMut, LayerCtx};
 use candle_core::{Result as CandleResult, Tensor};
 
-/// HybridBlock: hybrid block enumeration.
+/// `HybridBlock`: hybrid block enumeration.
 pub enum HybridBlock {
     Linear(LinearAttentionBlock),
     Full(FullAttentionBlock35),
@@ -40,12 +40,12 @@ impl DecoderLayer for HybridBlock {
             }
         };
         match self {
-            HybridBlock::Linear(b) => {
+            Self::Linear(b) => {
                 let (out, state) = b.forward_prefill(x)?;
                 *gdn_state = Some(state);
                 Ok(out)
             }
-            HybridBlock::Full(b) => b.forward_prefill(x, kv_cache, layer_idx, block_ids, positions),
+            Self::Full(b) => b.forward_prefill(x, kv_cache, layer_idx, block_ids, positions),
         }
     }
 
@@ -73,7 +73,7 @@ impl DecoderLayer for HybridBlock {
         };
         let decode_pos = [positions[0]];
         match self {
-            HybridBlock::Linear(b) => {
+            Self::Linear(b) => {
                 let state = gdn_state.as_mut().ok_or_else(|| {
                     candle_core::Error::msg(format!(
                         "missing GDN state for linear layer {layer_idx}"
@@ -81,7 +81,7 @@ impl DecoderLayer for HybridBlock {
                 })?;
                 b.forward_decode(x, state)
             }
-            HybridBlock::Full(b) => b.forward_decode(
+            Self::Full(b) => b.forward_decode(
                 x,
                 kv_cache,
                 layer_idx,

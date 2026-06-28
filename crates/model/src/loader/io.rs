@@ -19,13 +19,13 @@ pub(crate) fn load_file_mmap_or_read(path: &Path) -> Result<Vec<u8>> {
         }
     }
 
-    std::fs::read(path).map_err(|e| candle_core::Error::msg(format!("read failed: {}", e)))
+    std::fs::read(path).map_err(|e| candle_core::Error::msg(format!("read failed: {e}")))
 }
 
 fn load_mmap(path: &Path) -> Result<Mmap> {
     let file = std::fs::File::open(path)
-        .map_err(|e| candle_core::Error::msg(format!("open failed: {}", e)))?;
-    unsafe { Mmap::map(&file) }.map_err(|e| candle_core::Error::msg(format!("mmap failed: {}", e)))
+        .map_err(|e| candle_core::Error::msg(format!("open failed: {e}")))?;
+    unsafe { Mmap::map(&file) }.map_err(|e| candle_core::Error::msg(format!("mmap failed: {e}")))
 }
 
 pub(crate) fn find_safetensors_files(model_dir: &Path) -> Result<Vec<PathBuf>> {
@@ -36,7 +36,7 @@ pub(crate) fn find_safetensors_files(model_dir: &Path) -> Result<Vec<PathBuf>> {
 
     let mut files = Vec::new();
     let entries = std::fs::read_dir(model_dir)
-        .map_err(|e| candle_core::Error::msg(format!("Failed to read model directory: {}", e)))?;
+        .map_err(|e| candle_core::Error::msg(format!("Failed to read model directory: {e}")))?;
 
     for entry in entries.flatten() {
         let path = entry.path();
@@ -75,7 +75,7 @@ pub(crate) fn convert_tensor(
         Dtype::BF16 => {
             let n = tensor_data.len() / 2;
             let data_bf16: &[u16] =
-                unsafe { std::slice::from_raw_parts(tensor_data.as_ptr() as *const u16, n) };
+                unsafe { std::slice::from_raw_parts(tensor_data.as_ptr().cast::<u16>(), n) };
             let data_f32: Vec<f32> = data_bf16
                 .iter()
                 .map(|&bits| bf16::from_bits(bits).to_f32())
@@ -85,7 +85,7 @@ pub(crate) fn convert_tensor(
         Dtype::F16 => {
             let n = tensor_data.len() / 2;
             let data_f16: &[u16] =
-                unsafe { std::slice::from_raw_parts(tensor_data.as_ptr() as *const u16, n) };
+                unsafe { std::slice::from_raw_parts(tensor_data.as_ptr().cast::<u16>(), n) };
             let data_f32: Vec<f32> = data_f16
                 .iter()
                 .map(|&bits| f16::from_bits(bits).to_f32())
@@ -95,15 +95,14 @@ pub(crate) fn convert_tensor(
         Dtype::F32 => {
             let n = tensor_data.len() / 4;
             let data_f32: &[f32] =
-                unsafe { std::slice::from_raw_parts(tensor_data.as_ptr() as *const f32, n) };
+                unsafe { std::slice::from_raw_parts(tensor_data.as_ptr().cast::<f32>(), n) };
             candle_core::Tensor::from_slice(data_f32, shape, device)
         }
         _ => Err(candle_core::Error::msg(format!(
-            "Unsupported dtype {:?}",
-            dtype
+            "Unsupported dtype {dtype:?}"
         ))),
     }
-    .map_err(|e| candle_core::Error::msg(format!("Failed to create tensor: {}", e)))
+    .map_err(|e| candle_core::Error::msg(format!("Failed to create tensor: {e}")))
 }
 
 #[cfg(test)]

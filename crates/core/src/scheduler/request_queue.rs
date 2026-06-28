@@ -34,7 +34,7 @@ impl Ord for ScheduledSequence {
     }
 }
 
-/// RequestQueue: request queue.
+/// `RequestQueue`: request queue.
 pub struct RequestQueue {
     sequences: HashMap<SeqId, Sequence>,
     priority_queue: BinaryHeap<ScheduledSequence>,
@@ -43,6 +43,7 @@ pub struct RequestQueue {
 }
 
 impl RequestQueue {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             sequences: HashMap::new(),
@@ -158,11 +159,14 @@ impl RequestQueue {
         self.sequences.is_empty()
     }
 
+    #[must_use]
     pub fn phase_len(&self, phase: Phase) -> usize {
-        self.phase_index.get(&phase).map(|s| s.len()).unwrap_or(0)
+        self.phase_index
+            .get(&phase)
+            .map_or(0, std::collections::HashSet::len)
     }
 
-    fn determine_phase(&self, seq: &Sequence) -> Phase {
+    const fn determine_phase(&self, seq: &Sequence) -> Phase {
         match seq.status {
             Status::Waiting | Status::Prefilling => Phase::Prefill,
             Status::Decoding => Phase::Decode,
@@ -226,8 +230,8 @@ mod tests {
         let seq1 = make_sequence(1, Status::Waiting);
         let seq2 = make_sequence(2, Status::Waiting);
 
-        queue.enqueue(seq1.clone(), &policy, &ctx);
-        queue.enqueue(seq2.clone(), &policy, &ctx);
+        queue.enqueue(seq1, &policy, &ctx);
+        queue.enqueue(seq2, &policy, &ctx);
 
         assert_eq!(queue.len(), 2);
 
@@ -250,7 +254,7 @@ mod tests {
         };
 
         let seq = make_sequence(42, Status::Waiting);
-        queue.enqueue(seq.clone(), &policy, &ctx);
+        queue.enqueue(seq, &policy, &ctx);
 
         let retrieved = queue.get(42);
         assert!(retrieved.is_some());
@@ -269,7 +273,7 @@ mod tests {
         };
 
         let seq = make_sequence(42, Status::Waiting);
-        queue.enqueue(seq.clone(), &policy, &ctx);
+        queue.enqueue(seq, &policy, &ctx);
 
         let removed = queue.remove(42);
         assert!(removed.is_some());

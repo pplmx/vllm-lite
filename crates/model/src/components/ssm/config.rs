@@ -1,6 +1,6 @@
 //! SSM configuration types.
 
-/// SSMConfig: ssm configuration.
+/// `SSMConfig`: ssm configuration.
 #[derive(Clone, Debug)]
 pub struct SSMConfig {
     pub d_model: usize,
@@ -10,7 +10,8 @@ pub struct SSMConfig {
 }
 
 impl SSMConfig {
-    pub fn new(d_model: usize) -> Self {
+    #[must_use]
+    pub const fn new(d_model: usize) -> Self {
         Self {
             d_model,
             d_state: 16,
@@ -19,29 +20,35 @@ impl SSMConfig {
         }
     }
 
-    pub fn d_inner(&self) -> usize {
+    #[must_use]
+    pub const fn d_inner(&self) -> usize {
         self.expand * self.d_model
     }
 
-    pub fn d_state(&self) -> usize {
+    #[must_use]
+    pub const fn d_state(&self) -> usize {
         self.d_state
     }
 
-    pub fn d_conv(&self) -> usize {
+    #[must_use]
+    pub const fn d_conv(&self) -> usize {
         self.d_conv
     }
 
-    pub fn with_d_state(mut self, d_state: usize) -> Self {
+    #[must_use]
+    pub const fn with_d_state(mut self, d_state: usize) -> Self {
         self.d_state = d_state;
         self
     }
 
-    pub fn with_d_conv(mut self, d_conv: usize) -> Self {
+    #[must_use]
+    pub const fn with_d_conv(mut self, d_conv: usize) -> Self {
         self.d_conv = d_conv;
         self
     }
 
-    pub fn with_expand(mut self, expand: usize) -> Self {
+    #[must_use]
+    pub const fn with_expand(mut self, expand: usize) -> Self {
         self.expand = expand;
         self
     }

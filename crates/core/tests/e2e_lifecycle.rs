@@ -97,13 +97,11 @@ fn test_request_with_different_token_counts() {
 
         assert!(
             !output.tokens.is_empty(),
-            "Failed for {} tokens - no output",
-            token_count
+            "Failed for {token_count} tokens - no output"
         );
         assert!(
             output.finish_reason.is_some(),
-            "Failed for {} tokens - not finished",
-            token_count
+            "Failed for {token_count} tokens - not finished"
         );
     }
 }
@@ -200,8 +198,7 @@ fn test_streaming_tokens() {
 
     assert!(
         received_tokens > 0,
-        "Should receive streaming tokens, got {}",
-        received_tokens
+        "Should receive streaming tokens, got {received_tokens}"
     );
 }
 
@@ -288,7 +285,7 @@ fn test_step_latency_slo() {
         latencies.push(start.elapsed().as_millis());
     }
 
-    latencies.sort();
+    latencies.sort_unstable();
     let p99 = latencies[(latencies.len() as f64 * 0.99) as usize];
 
     assert!(p99 < 1000, "P99 step latency {p99}ms exceeds 1000ms SLO");

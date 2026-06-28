@@ -8,7 +8,7 @@ use super::{ArchCapabilities, Architecture};
 
 type ArchFactory = Arc<dyn Fn() -> Box<dyn Architecture> + Send + Sync>;
 
-/// ArchitectureRegistry: architecture registry.
+/// `ArchitectureRegistry`: architecture registry.
 pub struct ArchitectureRegistry {
     architectures: RwLock<HashMap<String, ArchFactory>>,
 }
@@ -20,6 +20,7 @@ impl Default for ArchitectureRegistry {
 }
 
 impl ArchitectureRegistry {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             architectures: RwLock::new(HashMap::new()),
@@ -68,13 +69,13 @@ impl ArchitectureRegistry {
     }
 }
 
-/// ARCHITECTURE_REGISTRY: architecture registry static value.
+/// `ARCHITECTURE_REGISTRY`: architecture registry static value.
 pub static ARCHITECTURE_REGISTRY: LazyLock<ArchitectureRegistry> =
     LazyLock::new(ArchitectureRegistry::new);
 
 /// Register all known architectures for config detection and model creation.
 ///
-/// Stub architectures (Gemma3, Llama4, Phi4, MistralSmall) remain registered so
+/// Stub architectures (Gemma3, Llama4, Phi4, `MistralSmall`) remain registered so
 /// `detect()` works, but `ModelLoader` rejects them unless `--allow-stub` is set
 /// (see Phase 4.4 Option C in `.planning/MODEL-ARCHITECTURE-REFACTOR.md`).
 pub fn register_all_archs(registry: &ArchitectureRegistry) {
@@ -102,7 +103,7 @@ mod tests {
         fn detect(&self, config: &serde_json::Value) -> bool {
             config
                 .get("test")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false)
         }
         fn capabilities(&self) -> ArchCapabilities {

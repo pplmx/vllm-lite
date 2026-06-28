@@ -1,4 +1,4 @@
-//! Mixtral causal language model with paged KV cache and sparse MoE.
+//! Mixtral causal language model with paged KV cache and sparse `MoE`.
 
 use std::collections::HashMap;
 
@@ -10,7 +10,7 @@ use candle_nn::Linear;
 
 use super::block::MixtralBlock;
 
-/// MixtralModel: mixtral model.
+/// `MixtralModel`: mixtral model.
 pub type MixtralModel = CausalLm<MixtralBlock, LnLayerNorm, Linear>;
 
 impl MixtralModel {

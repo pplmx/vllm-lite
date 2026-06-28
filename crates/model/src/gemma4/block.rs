@@ -10,7 +10,7 @@ use crate::gemma4::mlp::GeGLU;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 
-/// Gemma4Block: gemma4 block.
+/// `Gemma4Block`: gemma4 block.
 pub struct Gemma4Block {
     attention: Gemma4Attention,
     mlp: GeGLU,
@@ -94,41 +94,41 @@ impl Gemma4Block {
                 partial_rotary_factor: 1.0,
             });
 
-        let prefix = format!("model.layers.{}", layer_idx);
+        let prefix = format!("model.layers.{layer_idx}");
         let q_w = weights
-            .get(&format!("{}.self_attn.q_proj.weight", prefix))
+            .get(&format!("{prefix}.self_attn.q_proj.weight"))
             .cloned()
             .ok_or_else(|| candle_core::Error::msg("Missing q_proj weight"))?;
         let k_w = weights
-            .get(&format!("{}.self_attn.k_proj.weight", prefix))
+            .get(&format!("{prefix}.self_attn.k_proj.weight"))
             .cloned()
             .ok_or_else(|| candle_core::Error::msg("Missing k_proj weight"))?;
         let v_w = weights
-            .get(&format!("{}.self_attn.v_proj.weight", prefix))
+            .get(&format!("{prefix}.self_attn.v_proj.weight"))
             .cloned()
             .ok_or_else(|| candle_core::Error::msg("Missing v_proj weight"))?;
         let o_w = weights
-            .get(&format!("{}.self_attn.o_proj.weight", prefix))
+            .get(&format!("{prefix}.self_attn.o_proj.weight"))
             .cloned()
             .ok_or_else(|| candle_core::Error::msg("Missing o_proj weight"))?;
         let gate_w = weights
-            .get(&format!("{}.mlp.gate_proj.weight", prefix))
+            .get(&format!("{prefix}.mlp.gate_proj.weight"))
             .cloned()
             .ok_or_else(|| candle_core::Error::msg("Missing gate_proj weight"))?;
         let up_w = weights
-            .get(&format!("{}.mlp.up_proj.weight", prefix))
+            .get(&format!("{prefix}.mlp.up_proj.weight"))
             .cloned()
             .ok_or_else(|| candle_core::Error::msg("Missing up_proj weight"))?;
         let down_w = weights
-            .get(&format!("{}.mlp.down_proj.weight", prefix))
+            .get(&format!("{prefix}.mlp.down_proj.weight"))
             .cloned()
             .ok_or_else(|| candle_core::Error::msg("Missing down_proj weight"))?;
         let input_ln_w = weights
-            .get(&format!("{}.input_layernorm.weight", prefix))
+            .get(&format!("{prefix}.input_layernorm.weight"))
             .cloned()
             .ok_or_else(|| candle_core::Error::msg("Missing input_layernorm weight"))?;
         let post_ln_w = weights
-            .get(&format!("{}.post_attention_layernorm.weight", prefix))
+            .get(&format!("{prefix}.post_attention_layernorm.weight"))
             .cloned()
             .ok_or_else(|| candle_core::Error::msg("Missing post_attention_layernorm weight"))?;
 
@@ -231,7 +231,7 @@ impl PagedDecoderBlock for Gemma4Block {
         block_ids: &[usize],
         positions: &[usize],
     ) -> Result<Tensor> {
-        Gemma4Block::forward_prefill(self, x, kv_cache, layer_idx, block_ids, positions)
+        Self::forward_prefill(self, x, kv_cache, layer_idx, block_ids, positions)
     }
 
     fn forward_decode(
@@ -243,7 +243,7 @@ impl PagedDecoderBlock for Gemma4Block {
         num_computed_tokens: usize,
         positions: &[usize],
     ) -> Result<Tensor> {
-        Gemma4Block::forward_decode(
+        Self::forward_decode(
             self,
             x,
             kv_cache,

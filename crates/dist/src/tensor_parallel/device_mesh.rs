@@ -1,6 +1,6 @@
 use vllm_traits::TensorParallelError;
 
-/// DeviceMesh: device mesh.
+/// `DeviceMesh`: device mesh.
 #[derive(Debug, Clone)]
 pub struct DeviceMesh {
     pub world_size: usize,
@@ -31,20 +31,23 @@ impl DeviceMesh {
         })
     }
 
-    pub fn is_first_rank(&self) -> bool {
+    #[must_use]
+    pub const fn is_first_rank(&self) -> bool {
         self.rank == 0
     }
 
-    pub fn is_last_rank(&self) -> bool {
+    #[must_use]
+    pub const fn is_last_rank(&self) -> bool {
         self.rank == self.world_size - 1
     }
 
+    #[must_use]
     pub fn local_device_id(&self) -> usize {
         self.device_ids[self.rank]
     }
 }
 
-/// NodeMesh: node mesh.
+/// `NodeMesh`: node mesh.
 #[derive(Debug, Clone)]
 pub struct NodeMesh {
     pub node_mesh: Vec<DeviceMesh>,
@@ -92,25 +95,28 @@ impl NodeMesh {
         })
     }
 
-    pub fn is_first_node(&self) -> bool {
+    #[must_use]
+    pub const fn is_first_node(&self) -> bool {
         self.node_rank == 0
     }
 
-    pub fn is_last_node(&self) -> bool {
+    #[must_use]
+    pub const fn is_last_node(&self) -> bool {
         self.node_rank == self.num_nodes - 1
     }
 
+    #[must_use]
     pub fn local_mesh(&self) -> &DeviceMesh {
         &self.node_mesh[0]
     }
 
+    #[must_use]
     pub fn peers(&self) -> Vec<String> {
         let mut peers = Vec::new();
         for i in 0..self.num_nodes {
             if i != self.node_rank {
                 peers.push(format!(
-                    "vllm-lite-peer-{}.vllm-lite.svc.cluster.local:50051",
-                    i
+                    "vllm-lite-peer-{i}.vllm-lite.svc.cluster.local:50051"
                 ));
             }
         }

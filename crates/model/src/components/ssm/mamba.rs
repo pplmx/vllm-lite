@@ -1,4 +1,4 @@
-//! Mamba block (input/SSM/output projections + residual LayerNorm).
+//! Mamba block (input/SSM/output projections + residual `LayerNorm`).
 
 use std::collections::HashMap;
 
@@ -9,7 +9,7 @@ use crate::components::ssm::config::SSMConfig;
 use crate::components::ssm::error::SSMError;
 use crate::components::ssm::layer::SSMLayer;
 
-/// MambaBlock: mamba block.
+/// `MambaBlock`: mamba block.
 pub struct MambaBlock {
     input_proj: Linear,
     ssm: SSMLayer,
@@ -96,29 +96,29 @@ impl MambaBlock {
         let d_inner = config.d_inner();
 
         let in_proj_w = weights
-            .get(&format!("model.layers.{}.mamba.in_proj.weight", layer_idx))
+            .get(&format!("model.layers.{layer_idx}.mamba.in_proj.weight"))
             .cloned()
             .ok_or_else(|| {
-                SSMError::Msg(format!("Missing in_proj weight for layer {}", layer_idx))
+                SSMError::Msg(format!("Missing in_proj weight for layer {layer_idx}"))
             })?;
         let input_proj = candle_nn::Linear::new(in_proj_w, None);
 
         let ssm = SSMLayer::from_weights(d_inner, d_state, layer_idx, weights)?;
 
         let out_proj_w = weights
-            .get(&format!("model.layers.{}.mamba.out_proj.weight", layer_idx))
+            .get(&format!("model.layers.{layer_idx}.mamba.out_proj.weight"))
             .cloned()
             .ok_or_else(|| {
-                SSMError::Msg(format!("Missing out_proj weight for layer {}", layer_idx))
+                SSMError::Msg(format!("Missing out_proj weight for layer {layer_idx}"))
             })?;
         let output_proj = candle_nn::Linear::new(out_proj_w, None);
 
         let norm_w = weights
-            .get(&format!("model.layers.{}.mamba.norm.weight", layer_idx))
+            .get(&format!("model.layers.{layer_idx}.mamba.norm.weight"))
             .cloned()
-            .ok_or_else(|| SSMError::Msg(format!("Missing norm weight for layer {}", layer_idx)))?;
+            .ok_or_else(|| SSMError::Msg(format!("Missing norm weight for layer {layer_idx}")))?;
         let norm_b = weights
-            .get(&format!("model.layers.{}.mamba.norm.bias", layer_idx))
+            .get(&format!("model.layers.{layer_idx}.mamba.norm.bias"))
             .cloned()
             .unwrap_or_else(|| {
                 // invariant: tensor shape is derived from norm_w dimensions; allocation
