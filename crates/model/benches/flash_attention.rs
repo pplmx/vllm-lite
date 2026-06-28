@@ -26,20 +26,14 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 
-use candle_core::{utils::cuda_is_available, Device, Tensor};
-use vllm_model::kernels::flash_attention::{
-    FlashAttentionConfig, FlashAttentionKernel,
-};
+use candle_core::{Device, Tensor, utils::cuda_is_available};
+use vllm_model::kernels::flash_attention::{FlashAttentionConfig, FlashAttentionKernel};
 
 // --- Standard (production-like) dimensions ---
 // (batch, heads, seq, head_dim)
 const STD_NUM_HEADS: usize = 14;
 const STD_HEAD_DIM: usize = 64;
-const STD_CONFIGS: &[(usize, usize, usize)] = &[
-    (1, 512, 64),
-    (1, 2048, 64),
-    (4, 512, 64),
-];
+const STD_CONFIGS: &[(usize, usize, usize)] = &[(1, 512, 64), (1, 2048, 64), (4, 512, 64)];
 
 // --- Smoke dimensions (CPU-only fallback) ---
 const SMOKE_BATCH: usize = 1;
@@ -98,9 +92,8 @@ fn bench_flash_attention(c: &mut Criterion) {
         );
 
         let device = Device::Cpu;
-        let (q, k, v) =
-            make_qkv(SMOKE_BATCH, SMOKE_HEADS, SMOKE_SEQ, SMOKE_HEAD_DIM, &device)
-                .expect("smoke qkv init");
+        let (q, k, v) = make_qkv(SMOKE_BATCH, SMOKE_HEADS, SMOKE_SEQ, SMOKE_HEAD_DIM, &device)
+            .expect("smoke qkv init");
         let kernel = std_kernel(SMOKE_HEADS, SMOKE_HEAD_DIM);
 
         let _ = kernel.forward(&q, &k, &v).expect("smoke forward");
