@@ -132,3 +132,32 @@ fuzz TARGET:
 # List available fuzz targets.
 fuzz-list:
     cargo +nightly fuzz list --fuzz-dir fuzz
+
+# === Mutation testing (v30.0 Phase K) ===
+# Generate baseline mutation scan for an entire module under vllm-core.
+# Usage: `just mutants MODULE` where MODULE is a path relative to
+# crates/core/src (e.g. `scheduler`, `scheduler/policy`, `sampling`).
+# NOTE: First run downloads and caches mutants tool (~minutes), subsequent
+# runs reuse the cache. A full scheduler scan takes ~30-60 min on 4 cores.
+mutants MODULE:
+    cargo mutants \
+        --package vllm-core \
+        --file "crates/core/src/{{MODULE}}" \
+        --timeout 30 \
+        --jobs $(nproc) \
+        --output .mutants-out/ \
+        --shuffle
+
+# Render a human-readable summary of the latest mutation scan.
+mutants-report:
+    @test -d .mutants-out || (echo "no .mutants-out/ — run `just mutants MODULE` first"; exit 1)
+    @if [ -f .mutants-out/mutations.json ]; then \
+        jq -r '.[] | select(.status == "SURVIVED") | "\(.file):\(.span.start_line)  \(.mutant_name)"' \
+            .mutants-out/mutations.json | head -30; \
+    else \
+        echo "mutations.json not found; check .mutants-out/ contents"; \
+    fi
+
+# Remove the mutation output directory.
+mutants-clean:
+    rm -rf .mutants-out
