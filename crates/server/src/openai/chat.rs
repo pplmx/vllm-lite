@@ -26,7 +26,7 @@ pub fn build_prompt_from_messages(template: ChatTemplate, messages: &[ChatMessag
     chat_template::build_prompt(template, messages)
 }
 
-pub fn validate_chat_request(
+pub(crate) fn validate_chat_request(
     req: &ChatRequest,
 ) -> Result<(), (axum::http::StatusCode, Json<ErrorResponse>)> {
     if req.model.is_empty() {
