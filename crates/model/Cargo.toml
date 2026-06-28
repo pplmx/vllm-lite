@@ -39,6 +39,10 @@ harness = false
 name = "flash_attention"
 harness = false
 
+[[bench]]
+name = "paged_kv_cache"
+harness = false
+
 [features]
 default = []
 cuda = ["candle-core/cuda", "candle-nn/cuda"]
