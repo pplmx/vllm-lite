@@ -1,6 +1,6 @@
 use axum::{Json, extract::State};
 
-use super::types::{BatchEndpoint, BatchResponse, BatchResults, BatchStatus, RequestCounts, SimpleBatchRequest};
+use super::types::{BatchResponse, BatchResults, BatchStatus, RequestCounts, SimpleBatchRequest};
 use crate::ApiState;
 use crate::openai::types::ErrorResponse;
 
@@ -169,6 +169,7 @@ pub async fn list_batches(State(state): State<ApiState>) -> Json<Vec<BatchRespon
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::openai::batch::types::BatchEndpoint;
 
     fn create_test_state() -> crate::ApiState {
         crate::test_fixtures::api_state(vllm_model::config::Architecture::Qwen3)
