@@ -37,7 +37,7 @@
 - **Security & Dependency Updates (v26.0)** — addressed 6 GitHub Dependabot vulnerabilities + fixed CI:
     - **H-1 `rustls-pemfile` RUSTSEC-2025-0134 (high)** — `tls.rs` migrated to `rustls::pki_types::PemObject` (built-in since rustls 0.23); deprecated crate removed
     - **M-2 `tower-http` outdated** — workspace-unified to 0.7 (`0.5` dist + `0.6` server → `0.7` all); forced axum 0.8 upgrade as chain reaction
-    - **M-3 `serde_yaml` deprecated** — migrated to maintained fork `serde_norway = 0.9` (recommended by RUSTSEC-2025-0068 as the maintained alternative); 3 call sites updated (`config.rs:260/271`, `bin/vllm.rs:83`); drop-in API compat
+    - **M-3 `serde_yaml` deprecated** — migrated to pure-Rust `serde-saphyr = 0.0.27` (panic-free, Miri-tested, no `unsafe` code, no libyaml C dependency); 3 call sites updated (`config.rs:260/271`, `bin/vllm.rs:83`); supersedes the `serde_norway` choice (which still uses libyaml via `unsafe-libyaml-norway`); drop-in API compat with `serde_yaml::from_str`
     - **M-4 `tokio-rustls` outdated** — audit assumed 0.27 was available but registry only has 0.26.x; deferred until upstream releases 0.27
     - **M-5 `aws-lc-rs` outdated** — bumped 1.16.3 → 1.17.0 (transitive via tokio-rustls)
     - **Patch sweep (F-1)** — `cargo update` minor bumps for 50 deps (most already current from v22/v23); net Cargo.lock change is 56 package re-locks + 16 stale transitive removals

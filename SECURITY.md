@@ -58,7 +58,7 @@ Dependabot alerts: 6 (1 high, 5 moderate).
 | ---------------- | -------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `rustls-pemfile` | 2.2.0    | RUSTSEC-2025-0134 (unmaintained, **high**)            | ✅ Migrated `tls.rs` to `rustls::pki_types::PemObject`; crate removed from deps                                       |
 | `tower-http`     | 0.5/0.6  | Dependabot outdated (moderate)                        | ✅ Bumped to 0.7 (workspace-unified)                                                                                  |
-| `serde_yaml`     | 0.9.34+deprecated | Dependabot deprecated (moderate)              | ✅ Migrated to maintained fork `serde_norway 0.9` (per RUSTSEC-2025-0068 recommendation)                              |
+| `serde_yaml`     | 0.9.34+deprecated | Dependabot deprecated (moderate)              | ✅ Migrated to pure-Rust `serde-saphyr 0.0.27` (panic-free, no libyaml C dep, no `unsafe`)                             |
 | `tokio-rustls`   | 0.26.4   | Dependabot outdated (moderate)                        | ⚠️ Deferred — audit assumed 0.27 available, but registry only has 0.26.x. Will revisit when 0.27 ships upstream.       |
 | `aws-lc-rs`      | 1.16.3   | Dependabot outdated (moderate)                        | ✅ Bumped to 1.17.0                                                                                                   |
 | `tiktoken`       | 3.1.4    | (Dependabot; minor)                                   | ✅ Bumped to 3.5.1                                                                                                    |
