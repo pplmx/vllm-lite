@@ -53,7 +53,7 @@ pub trait Architecture: Send + Sync + 'static {
 /// and `create_model` always error. Used as a placeholder when no real
 /// architecture is registered for a checkpoint.
 #[derive(Debug, Default, Clone, Copy)]
-pub struct UnknownArchitecture;
+pub(crate) struct UnknownArchitecture;
 
 impl Architecture for UnknownArchitecture {
     fn name(&self) -> &'static str {

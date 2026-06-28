@@ -21,11 +21,11 @@ use candle_nn::Embedding;
 use vllm_traits::{BatchOutput, ModelError, Result, SeqId, TokenId};
 
 /// Map candle errors into [`ModelError`] via `?`.
-pub fn map_candle<T>(result: candle_core::Result<T>) -> Result<T> {
+pub(crate) fn map_candle<T>(result: candle_core::Result<T>) -> Result<T> {
     result.map_err(ModelError::from)
 }
 
-pub fn embed_sequence(
+pub(crate) fn embed_sequence(
     embed_tokens: &Embedding,
     tokens: &[TokenId],
     device: &Device,
@@ -45,7 +45,7 @@ pub fn embed_sequence(
     }
 }
 
-pub fn greedy_sample_token(logits: &Tensor, is_prefill: bool) -> Result<TokenId> {
+pub(crate) fn greedy_sample_token(logits: &Tensor, is_prefill: bool) -> Result<TokenId> {
     let logits = if is_prefill {
         let seq_len = logits.dims()[1];
         map_candle(logits.narrow(1, seq_len - 1, 1))?
@@ -63,7 +63,7 @@ pub fn greedy_sample_token(logits: &Tensor, is_prefill: bool) -> Result<TokenId>
         .map_err(ModelError::from)
 }
 
-pub fn logits_to_vector(logits: &Tensor, is_prefill: bool) -> Result<Vec<f32>> {
+pub(crate) fn logits_to_vector(logits: &Tensor, is_prefill: bool) -> Result<Vec<f32>> {
     let logits = if is_prefill {
         let seq_len = logits.dims()[1];
         map_candle(logits.narrow(1, seq_len - 1, 1))?
@@ -78,7 +78,7 @@ pub fn logits_to_vector(logits: &Tensor, is_prefill: bool) -> Result<Vec<f32>> {
     map_candle(logits.to_vec1())
 }
 
-pub fn forward_batch<F>(seq_ids: &[SeqId], is_prefill: &[bool], mut step: F) -> Result<BatchOutput>
+pub(crate) fn forward_batch<F>(seq_ids: &[SeqId], is_prefill: &[bool], mut step: F) -> Result<BatchOutput>
 where
     F: FnMut(usize, bool) -> Result<TokenId>,
 {
@@ -101,7 +101,7 @@ where
 }
 
 /// Run all decoder layers with paged KV cache (prefill or single-token decode).
-pub fn run_decoder_layers<L: PagedDecoderBlock>(
+pub(crate) fn run_decoder_layers<L: PagedDecoderBlock>(
     layers: &[L],
     hidden: Tensor,
     kv_cache: &mut PagedKvCache,
@@ -123,7 +123,7 @@ pub fn run_decoder_layers<L: PagedDecoderBlock>(
 
 /// Mean-pool hidden states after a full prefill pass through decoder layers.
 #[allow(clippy::too_many_arguments)]
-pub fn embed_with_paged_layers<B: DecoderLayer>(
+pub(crate) fn embed_with_paged_layers<B: DecoderLayer>(
     embed_tokens: &Embedding,
     layers: &[B],
     norm: &impl Module,
@@ -169,7 +169,7 @@ pub fn embed_with_paged_layers<B: DecoderLayer>(
 
 /// Full causal-LM forward with embedding, decoder stack, final norm, and LM head.
 #[allow(clippy::too_many_arguments)]
-pub fn forward_with_paged_kv<L, Norm, Head>(
+pub(crate) fn forward_with_paged_kv<L, Norm, Head>(
     embed_tokens: &Embedding,
     layers: &[L],
     norm: &Norm,
@@ -212,7 +212,7 @@ where
     Ok((logits, 0))
 }
 
-pub fn mean_pool_embeddings(
+pub(crate) fn mean_pool_embeddings(
     embed_tokens: &Embedding,
     tokens: &[TokenId],
     device: &Device,

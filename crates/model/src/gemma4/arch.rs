@@ -12,7 +12,7 @@ use super::block::Gemma4Block;
 use super::model::Gemma4Model;
 
 /// Gemma4Architecture: gemma4 architecture.
-pub struct Gemma4Architecture;
+pub(crate) struct Gemma4Architecture;
 
 impl Gemma4Architecture {
     pub fn new() -> Self {
@@ -27,7 +27,7 @@ impl Default for Gemma4Architecture {
 }
 
 /// Gemma4BlockWrapper: gemma4 block wrapper.
-pub type Gemma4BlockWrapper = BlockWrapper<Gemma4Block>;
+pub(crate) type Gemma4BlockWrapper = BlockWrapper<Gemma4Block>;
 
 impl Architecture for Gemma4Architecture {
     fn name(&self) -> &'static str {

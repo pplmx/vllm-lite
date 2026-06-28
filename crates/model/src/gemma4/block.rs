@@ -262,7 +262,7 @@ pub fn new_block(config: &ModelConfig, layer_idx: usize) -> Result<Gemma4Block> 
 }
 
 /// Load a Gemma4 block from HuggingFace-style weight keys.
-pub fn block_from_weights(
+pub(crate) fn block_from_weights(
     config: &ModelConfig,
     layer_idx: usize,
     weights: &HashMap<String, Tensor>,

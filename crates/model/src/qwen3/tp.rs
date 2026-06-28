@@ -7,7 +7,7 @@ use crate::qwen3::config::Qwen3Config;
 use candle_core::{Device, Result as CandleResult};
 use vllm_dist::TensorParallelConfig;
 
-pub fn new_with_tp(
+pub(crate) fn new_with_tp(
     config: Qwen3Config,
     tp_config: Option<TensorParallelConfig>,
     num_kv_blocks: usize,

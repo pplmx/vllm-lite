@@ -11,7 +11,7 @@ use crate::qwen3_5::config::{LayerType, parse_layer_types};
 use candle_core::{Result as CandleResult, Tensor};
 use candle_nn::{Embedding, LayerNorm};
 
-pub fn load_hybrid_weights(
+pub(crate) fn load_hybrid_weights(
     model: &mut HybridLm<HybridBlock, LayerNorm, Qwen3Config>,
     config: &Qwen3Config,
     weights: &HashMap<String, Tensor>,

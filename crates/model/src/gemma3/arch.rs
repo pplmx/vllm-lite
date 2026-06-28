@@ -32,7 +32,7 @@ impl Default for Gemma3Architecture {
 }
 
 /// Gemma3BlockWrapper: gemma3 block wrapper.
-pub struct Gemma3BlockWrapper {
+pub(crate) struct Gemma3BlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,
 }
@@ -140,7 +140,7 @@ impl Architecture for Gemma3Architecture {
 }
 
 /// Gemma3Model: gemma3 model.
-pub struct Gemma3Model {
+pub(crate) struct Gemma3Model {
     config: ModelConfig,
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     device: Device,

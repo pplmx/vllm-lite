@@ -27,7 +27,7 @@ impl Default for MixtralArchitecture {
 }
 
 /// MixtralBlockWrapper: mixtral block wrapper.
-pub type MixtralBlockWrapper = BlockWrapper<MixtralBlock>;
+pub(crate) type MixtralBlockWrapper = BlockWrapper<MixtralBlock>;
 
 impl Architecture for MixtralArchitecture {
     fn name(&self) -> &'static str {

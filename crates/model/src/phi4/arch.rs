@@ -28,7 +28,7 @@ impl Default for Phi4Architecture {
 }
 
 /// Phi4BlockWrapper: phi4 block wrapper.
-pub struct Phi4BlockWrapper {
+pub(crate) struct Phi4BlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,
 }
@@ -133,7 +133,7 @@ impl Architecture for Phi4Architecture {
 }
 
 /// Phi4Model: phi4 model.
-pub struct Phi4Model {
+pub(crate) struct Phi4Model {
     config: ModelConfig,
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     device: Device,

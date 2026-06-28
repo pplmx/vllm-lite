@@ -45,7 +45,7 @@ pub fn remap_qwen35_weight_keys(weights: HashMap<String, Tensor>) -> HashMap<Str
 }
 
 /// Qwen35Architecture: qwen35 architecture.
-pub struct Qwen35Architecture;
+pub(crate) struct Qwen35Architecture;
 
 impl Qwen35Architecture {
     pub fn new() -> Self {

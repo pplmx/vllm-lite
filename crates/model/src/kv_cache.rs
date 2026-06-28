@@ -3,7 +3,7 @@
 use candle_core::{Device, Result, Tensor};
 
 /// MlaKvCache: mla kv cache.
-pub struct MlaKvCache {
+pub(crate) struct MlaKvCache {
     kv_lora_rank: usize,
     block_size: usize,
     num_blocks: usize,
