@@ -1,4 +1,8 @@
-#![allow(non_snake_case, clippy::too_many_arguments,clippy::module_name_repetitions)]
+#![allow(
+    non_snake_case,
+    clippy::too_many_arguments,
+    clippy::module_name_repetitions
+)]
 //! Qwen3.5 hybrid causal language model (GDN + full attention).
 
 use std::collections::HashMap;

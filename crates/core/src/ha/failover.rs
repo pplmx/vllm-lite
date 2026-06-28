@@ -1,4 +1,4 @@
-#![allow(dead_code,clippy::module_name_repetitions)]
+#![allow(dead_code, clippy::module_name_repetitions)]
 
 use std::collections::HashMap;
 use std::sync::Arc;
