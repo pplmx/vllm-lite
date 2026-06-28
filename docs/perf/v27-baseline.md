@@ -110,30 +110,29 @@ empty-result signal, or rewrite the bench with a timeout / step cap). They are
 - Plan reference: `docs/superpowers/plans/2026-06-28-v27-performance.md`
 - Audit context: `/tmp/phase_g_audit/SUMMARY.md`
 
-## Model benches (H-2 added 2026-06-28)
+## Model benches (H-2 added 2026-06-28, restructured 2026-06-28)
 
-**Dimensions:** HIDDEN_SIZE=128, NUM_HEADS=4, NUM_KV_HEADS=2, HEAD_DIM=32 (CPU-only)
-**Hardware:** 128-core x86_64 (AMD EPYC 7742 64-Core Processor; Linux product-1-23 5.15.0-179-generic)
-**Sample size:** 10 (preliminary baseline; full 100 in CI)
-**Source:** `/tmp/v27_h2_gqa.txt` — `cargo bench -p vllm-model --bench gqa_forward -- --sample-size 10 --warm-up-time 1 --measurement-time 2`
-**Wall time:** ~24 s for all 6 configs.
+**Strategy:** Runtime CUDA detection (per user direction).
+- **GPU runners:** standard qwen3-7B dims (hidden_size=896, num_heads=14, num_kv_heads=2, head_dim=64, seq_len=[128,512,2048])
+- **CPU-only runners (default):** minimal smoke test (hidden_size=64, num_heads=2, head_dim=32, seq_len=16); prints eprintln warning
 
-| Bench path          | seq_len | ns/iter (median) |
-| ------------------- | ------- | ---------------- |
-| `gqa_forward/standard` | 64      | 1,965,400 ns     |
-| `gqa_forward/standard` | 128     | 3,273,600 ns     |
-| `gqa_forward/standard` | 256     | 11,028,000 ns    |
-| `gqa_forward/fused`    | 64      | 1,513,700 ns     |
-| `gqa_forward/fused`    | 128     | 3,405,300 ns     |
-| `gqa_forward/fused`    | 256     | 11,088,000 ns    |
+**Rationale:** Standard implementation should look like production code. CPU-only environments cannot measure realistic perf for qwen3-7B dims. Smoke test verifies the code path executes; perf validation requires GPU runner.
 
-**Note:** fused-vs-standard delta isolates attention kernel cost.
-Optimizations targeting kernel fusion should target this delta.
+### CPU-only environment (current dev/CI)
 
-**Why reduced dimensions:** full qwen3-7B dims (hidden_size=896,
-num_heads=14, seq_len=2048) take minutes per forward on CPU. Reduced
-dims (128/4/2/32, seq_len∈[64,128,256]) run in ~24 s end-to-end and
-still exercise the same op-level patterns (softmax, attention scores,
-matmul, KV expansion). Optimizations targeting model-scale-only
-behavior (kernel fusion, large-tensor SIMD) must be validated manually
-against real dimensions before claiming end-to-end improvement.
+| Bench path | seq_len | ns/iter (median) |
+|------------|---------|------------------|
+| gqa_forward_smoke/cpu_smoke | 16 | 38,445 ns |
+
+**Note:** This is a smoke test, not a perf baseline. Real GPU numbers will be recorded when a GPU runner is available.
+
+### Standard dimensions (recorded when GPU available)
+
+| Bench path | seq_len | ns/iter (median) |
+|------------|---------|------------------|
+| gqa_forward/standard | 128 | TBD |
+| gqa_forward/standard | 512 | TBD |
+| gqa_forward/standard | 2048 | TBD |
+| gqa_forward/fused | 128 | TBD |
+| gqa_forward/fused | 512 | TBD |
+| gqa_forward/fused | 2048 | TBD |
