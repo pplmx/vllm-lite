@@ -34,6 +34,21 @@
 
 ### Changed
 
+- **Performance Optimization (v27.0)** — profile-driven speedups across attention + cache + scheduler:
+    - **Measurement infrastructure**: 4 new model-layer criterion benches (GQA, MLA, FlashAttn, PagedKV); runtime CUDA detection so benches run real qwen3-7B dimensions on GPU and tiny smoke test on CPU + eprintln warning. `just bench-model` / `just bench-model-one BENCH` for invocation.
+    - **Profiling**: pprof dev-dep + profiling guide; static analysis reports for 6 components identifying 39 hotspots total.
+    - **H-11 GQA**: affine scale tensor (-2.5% CPU), redundant `.contiguous()` after softmax removal; `expand_kv` materialization skip deferred (requires custom fused GQA matmul kernel).
+    - **H-12 FlashAttn + MLA**: affine scale in 5 FlashAttn sites + 1 MLA site (-3 to -7.5% CPU); redundant `.contiguous()` after MLA softmax.
+    - **H-13 PagedKV + BatchComposer**: Tensor::cat → slice_assign for layer-rebuild (+17.8% CPU expected; GPU should win from eliminating 1024 kernel launches); BatchComposer prefill Vec::with_capacity, sort_unstable_by_key (-16% scheduler_build_batch); bug fix: chunked_prefill `num_computed_tokens` was non-`mut`.
+    - **Correctness hardening**: GQA + MLA forward() `# Caution: No causal masking` doc blocks (forward() is intentionally unmasked low-level primitive; production routes through forward_prefill/forward_decode which apply causal). Regression test for determinism.
+    - **Bug fix**: `engine.step()` infinite loop in `speculative_vs_baseline` + `optimization_benchmarks/throughput` — added step cap (MAX_STEPS_PER_ITER = 10_000).
+    - **Bench infrastructure fixes**: 4 previously-orphaned core benches (`scheduler`, `scheduler_benchmarks`, `prefix_cache_benchmarks`, `optimization_benchmarks`) wired into Cargo.toml with `harness = false`.
+    - **Deferred**: paste RUSTSEC-2024-0436 accepted (candle-core 0.11.0 still depends on `gemm → paste`; INFO severity; suppressed via `just audit` `--ignore`).
+    - **GPU baseline captured**: `gqa_forward/standard/512` 937µs, `mla_forward/512` 1ms, `flash_attention/b1_h14_s2048_d64` 29.7ms, `paged_kv_cache/blocks1024` 1.8ms. Future A/B comparison possible.
+    - **Test count**: 1194 passed (was 1189 before H-13 bug fix); 41 skipped (was 39); 0 failed; `just ci` clean.
+    - Total commits: 16 (H-1 through H-15 + correctness investigation + doc hardening)
+    - **Deferred optimizations** (separate specs needed): expand_kv fused kernel, FlashAttn tiled output buffer, BatchComposer kv_blocks Arc clone (cross-crate API), PagedKV host round-trip elimination.
+
 - **Security & Dependency Updates (v26.0)** — addressed 6 GitHub Dependabot vulnerabilities + fixed CI:
     - **H-1 `rustls-pemfile` RUSTSEC-2025-0134 (high)** — `tls.rs` migrated to `rustls::pki_types::PemObject` (built-in since rustls 0.23); deprecated crate removed
     - **M-2 `tower-http` outdated** — workspace-unified to 0.7 (`0.5` dist + `0.6` server → `0.7` all); forced axum 0.8 upgrade as chain reaction
