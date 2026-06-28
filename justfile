@@ -136,15 +136,30 @@ fuzz-list:
 # === Mutation testing (v30.0 Phase K) ===
 # Generate baseline mutation scan for an entire module under vllm-core.
 # Usage: `just mutants MODULE` where MODULE is a path relative to
-# crates/core/src (e.g. `scheduler`, `scheduler/policy`, `sampling`).
+# crates/core/src (e.g. `scheduler`, `scheduler/policy`, `sampling.rs`).
+# - For directories: pass `scheduler` or `scheduler/policy`
+# - For single files: pass `sampling.rs` (include the extension)
 # NOTE: First run downloads and caches mutants tool (~minutes), subsequent
 # runs reuse the cache. A full scheduler scan takes ~30-60 min on 4 cores.
 # `--baseline skip` works around a pre-existing test failure in
 # cuda_graph_integration.rs:148 — fix the test in v31+ to drop this flag.
 mutants MODULE:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TARGET="crates/core/src/{{MODULE}}"
+    if [ -d "$TARGET" ]; then
+        FILE_ARGS=$(find "$TARGET" -name '*.rs' -type f -printf '--file=%p\n')
+    elif [ -f "$TARGET" ]; then
+        FILE_ARGS="--file=$TARGET"
+    elif [ -f "${TARGET}.rs" ]; then
+        FILE_ARGS="--file=${TARGET}.rs"
+    else
+        echo "Path not found: $TARGET (or ${TARGET}.rs)" >&2
+        exit 1
+    fi
     cargo mutants \
         --package vllm-core \
-        --file "crates/core/src/{{MODULE}}/**/*.rs" \
+        $FILE_ARGS \
         --timeout 30 \
         --jobs $(($(nproc) > 8 ? 8 : $(nproc))) \
         --output .mutants-out/ \
