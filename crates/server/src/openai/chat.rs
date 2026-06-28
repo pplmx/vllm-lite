@@ -169,6 +169,11 @@ async fn handle_chat(
 ///   - request validation fails (`BAD_REQUEST`)
 ///   - the engine channel is closed (`INTERNAL_SERVER_ERROR`)
 ///   - token decoding or response serialization fails
+///
+/// # Panics
+///
+/// Panics only if SSE chunk serialization fails (it cannot, given the
+/// payload types are plain `serde_json`-derived structs).
 pub async fn chat_completions(
     State(state): State<ApiState>,
     Json(req): Json<ChatRequest>,

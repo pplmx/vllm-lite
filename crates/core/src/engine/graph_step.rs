@@ -72,6 +72,10 @@ impl Engine {
     /// Fallback for non-`cuda-graph` builds: delegates straight to
     /// [`Engine::step`]. Always available so call sites compile unchanged
     /// regardless of feature flags.
+    ///
+    /// # Errors
+    ///
+    /// Propagates any error from the underlying [`Engine::step`] call.
     pub fn step_with_graph(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
         tracing::warn!("CUDA Graph support not enabled, using regular step");
         self.step()
