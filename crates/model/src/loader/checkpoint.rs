@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Unified checkpoint loading.
 //!
 //! This module provides a single entry point for loading model weights

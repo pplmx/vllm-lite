@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Sparse `MoE` layer for Mixtral.
 
 use candle_core::{D, Module, Result, Tensor};

@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Gemma4 Transformer Block implementation.
 
 use std::collections::HashMap;

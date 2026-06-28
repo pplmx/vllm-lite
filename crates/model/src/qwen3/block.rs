@@ -1,4 +1,4 @@
-#![allow(clippy::type_complexity)]
+#![allow(clippy::type_complexity,clippy::module_name_repetitions)]
 
 use crate::components::AttentionConfig;
 use crate::components::LnLayerNorm;

@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Architecture capability flags for production vs stub models.
 
 /// Capability flags describing what an architecture can do at load/inference time.

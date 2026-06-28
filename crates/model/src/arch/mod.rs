@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Architecture abstraction for model loading.
 //!
 //! This module provides the Architecture trait for defining model architectures

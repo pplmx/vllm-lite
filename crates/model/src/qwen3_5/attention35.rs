@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Qwen3.5 full-attention layer with MRoPE and paged KV cache.
 
 use candle_core::{Module, Result as CandleResult, Tensor};

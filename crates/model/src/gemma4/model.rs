@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Gemma4 causal language model with paged KV cache inference.
 
 use std::collections::HashMap;

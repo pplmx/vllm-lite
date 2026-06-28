@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use super::CudaGraph;
 use super::config::CudaGraphConfig;
 use std::collections::HashMap;

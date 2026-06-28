@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Architecture registry for dynamic registration.
 
 use serde_json::Value;

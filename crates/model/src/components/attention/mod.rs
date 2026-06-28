@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Attention: submodules for grouped-query, multi-head latent, and
 //! paged/tiled attention primitives, plus shared utilities.
 //!

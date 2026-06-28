@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! `qwen3_config`: qwen3 config.
 
 mod model;

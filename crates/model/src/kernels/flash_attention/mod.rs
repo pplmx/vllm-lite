@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 // crates/model/src/kernels/flash_attention/mod.rs
 //
 // Facade for the flash attention subsystem. Sub-modules:

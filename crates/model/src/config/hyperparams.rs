@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Shared hyperparameter accessors for unified and Qwen-specific configs.
 
 use super::ModelConfig;

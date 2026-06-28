@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Normalization utilities.
 //!
 //! Provides unified `RMSNorm` and `LayerNorm` implementations.

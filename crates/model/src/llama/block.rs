@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Llama decoder block — shared RoPE-GQA factory.
 
 pub use crate::components::decoder_block::{

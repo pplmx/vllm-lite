@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Phi-4 model architecture implementation.
 //!
 //! Phi-4 uses:

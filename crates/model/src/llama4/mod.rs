@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Llama 4 model architecture implementation.
 //!
 //! Llama 4 uses:

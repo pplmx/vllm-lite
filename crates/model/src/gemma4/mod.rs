@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Gemma 4 model architecture implementation.
 //!
 //! This module provides the Gemma4Model and Gemma4Block structs

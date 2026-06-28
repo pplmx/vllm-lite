@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Tokenizer helpers for on-disk Qwen3 integration tests.
 
 use vllm_model::tokenizer::Tokenizer;

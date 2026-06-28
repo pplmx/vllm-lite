@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Llama model architecture implementation.
 //!
 //! This module provides the `LlamaModel` and `LlamaBlock` structs

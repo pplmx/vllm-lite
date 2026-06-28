@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Format loader trait and implementations for checkpoint loading.
 //!
 //! Provides a pluggable architecture for loading model weights from different formats.
