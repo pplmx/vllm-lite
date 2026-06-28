@@ -181,7 +181,17 @@ matmul kernel that supports implicit GQA broadcasting.
 
 | Bench path | seq_len | ns/iter (median) |
 |------------|---------|------------------|
-| mla_forward_smoke/cpu_smoke | 16 | 43,367 ns |
+| mla_forward_smoke/cpu_smoke | 16 | 41,424 ns (H-12 #1 applied, −2.4% vs 42,461 ns pre-H-12) |
+
+#### H-12 #1 optimization history (mla_forward_smoke/cpu_smoke @ seq_len=16)
+
+| Date       | Step | Change | Median (ns) | Δ vs prior |
+|------------|------|--------|-------------|-----------|
+| 2026-06-28 | H-3  | Baseline (`qk.mul(broadcast(scalar))`) | 43,367 | — |
+| 2026-06-28 | H-9  | Re-measured pre-H-12 baseline | 42,461 | −2.1% (noise; re-measure of same code) |
+| 2026-06-28 | H-12 #1 | `qk.affine(scale, 0.0)` replacing `qk.mul(broadcast(scalar))` at mla.rs:209-211 | 41,424 | −2.4% (p<0.05) |
+
+Mirrors H-11 #2 (GQA/util) — same root cause as H-9 MLA hotspot #1 (HIGH).
 
 **Note:** This is a smoke test, not a perf baseline. Real GPU numbers will be recorded when a GPU runner is available.
 
@@ -205,7 +215,20 @@ matmul kernel that supports implicit GQA broadcasting.
 
 | Bench path | Config | ns/iter (median) |
 |------------|--------|------------------|
-| flash_attention_smoke/cpu_smoke | b1_h2_s16_d32 | 11,285 ns |
+| flash_attention_smoke/cpu_smoke | b1_h2_s16_d32 | 10,326 ns (H-12 #2 applied, −4.3% vs 10,787 ns pre-H-12) |
+
+#### H-12 #2 optimization history (flash_attention_smoke/cpu_smoke @ b1_h2_s16_d32)
+
+| Date       | Step | Change | Median (ns) | Δ vs prior |
+|------------|------|--------|-------------|-----------|
+| 2026-06-28 | H-4  | Baseline (`qk.broadcast_mul(scale_tensor)` with 0-D Tensor::new) | 11,285 | — |
+| 2026-06-28 | H-9  | Re-measured pre-H-12 baseline | 10,787 | −4.4% (noise; re-measure of same code) |
+| 2026-06-28 | H-12 #2 | `qk.affine(scale, 0.0)` replacing `qk.broadcast_mul(scale_tensor)` at kernel.rs:88, 131, 232, 376, 446 | 10,326 | −4.3% (p<0.05) |
+
+Mirrors H-11 #2 (GQA/util) and H-12 #1 (MLA) — same root cause as H-9 Flash
+hotspot #5 (MED): per-call `Tensor::new(self.scale, device)` for a 0-D
+scalar tensor that `broadcast_mul` consumed. `affine` fuses the scaling
+into the next op without materializing a scalar tensor.
 
 ### Standard dimensions (recorded when GPU available)
 

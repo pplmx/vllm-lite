@@ -85,8 +85,11 @@ impl FlashAttentionV2 {
 
     fn forward_standard(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let qk = q.matmul(&k.t()?)?;
-        let scale_tensor = Tensor::new(self.scale, q.device())?;
-        let qk_scaled = qk.broadcast_mul(&scale_tensor)?;
+        // H-12 #2: replaced `qk.broadcast_mul(scale_tensor)` with `qk.affine(scale, 0.0)`.
+        // Per H-9 profile (MED #5): eliminates per-call 0-D `Tensor::new(scale, device)`
+        // allocation. `affine` fuses the scaling into a single kernel without materializing
+        // a scalar tensor. Same fix as H-11 #2 (GQA/util) and H-12 #1 (MLA).
+        let qk_scaled = qk.affine(self.scale as f64, 0.0)?;
         let attn = softmax_last_dim(&qk_scaled)?;
         attn.matmul(v)
     }
@@ -128,7 +131,9 @@ impl FlashAttentionV2 {
         let num_blocks = seq_len_k.div_ceil(block_size);
         let seq_len_q = q.dims()[0];
 
-        let scale_tensor = Tensor::new(self.scale, q.device())?;
+        // H-12 #2: removed `let scale_tensor = Tensor::new(self.scale, q.device())?;`.
+        // Replaced per-block `broadcast_mul(&scale_tensor)` with `affine(self.scale, 0.0)`
+        // to eliminate the 0-D scalar tensor allocation that was repeated per-block.
         let mut final_output = Tensor::zeros(
             (seq_len_q, self.head_dim),
             candle_core::DType::F32,
@@ -147,7 +152,7 @@ impl FlashAttentionV2 {
             let v_block = v.narrow(0, start_k, actual_block_size)?;
 
             let qk_block = q.matmul(&k_block.t()?)?;
-            let qk_scaled = qk_block.broadcast_mul(&scale_tensor)?;
+            let qk_scaled = qk_block.affine(self.scale as f64, 0.0)?;
 
             let block_m = qk_scaled.max_keepdim(1)?;
             let block_p = qk_scaled.broadcast_sub(&block_m)?.exp()?;
@@ -229,7 +234,8 @@ impl FlashAttentionV2 {
 
         let num_blocks = seq_len_k.div_ceil(block_size);
 
-        let scale_tensor = Tensor::new(self.scale, q.device())?;
+        // H-12 #2: removed `let scale_tensor = Tensor::new(self.scale, q.device())?;`.
+        // Replaced per-block `broadcast_mul(&scale_tensor)` with `affine(self.scale, 0.0)`.
         let mut final_output = Tensor::zeros(
             (seq_len_q, self.head_dim),
             candle_core::DType::F32,
@@ -247,7 +253,7 @@ impl FlashAttentionV2 {
             let v_block = v.narrow(0, start_k, actual_block_size)?;
 
             let qk_block = q.matmul(&k_block.t()?)?;
-            let qk_scaled = qk_block.broadcast_mul(&scale_tensor)?;
+            let qk_scaled = qk_block.affine(self.scale as f64, 0.0)?;
 
             let causal_mask =
                 self.create_causal_mask(&[seq_len_q, actual_block_size], start_k, q.device())?;
@@ -373,7 +379,9 @@ impl ScaledDotProductAttention {
             return self.forward(q, k, v);
         }
 
-        let scale_tensor = Tensor::new(self.scale, q.device())?;
+        // H-12 #2: removed `let scale_tensor = Tensor::new(self.scale, q.device())?;`.
+        // Per-tile savings compound: tiled forward at seq_len=2048 / tile_size=64
+        // saves ~32 per-tile `broadcast_mul` calls (per head, per batch).
         let mut all_outputs: Vec<Tensor> = Vec::with_capacity(batch_size);
 
         for _b in 0..batch_size {
@@ -397,7 +405,7 @@ impl ScaledDotProductAttention {
                     let v_tile = v_bh.narrow(1, k_start, k_len)?;
 
                     let qk = q_tile.matmul(&k_tile.t()?)?;
-                    let qk_scaled = qk.broadcast_mul(&scale_tensor)?;
+                    let qk_scaled = qk.affine(self.scale as f64, 0.0)?;
                     let attn = softmax_last_dim(&qk_scaled)?;
                     let out_tile = attn.matmul(&v_tile)?;
 
@@ -443,8 +451,8 @@ impl ScaledDotProductAttention {
 impl FlashAttention for ScaledDotProductAttention {
     fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let qk = q.matmul(&k.t()?)?;
-        let scale_tensor = Tensor::new(self.scale, q.device())?;
-        let qk_scaled = qk.broadcast_mul(&scale_tensor)?;
+        // H-12 #2: replaced `qk.broadcast_mul(scale_tensor)` with `qk.affine(scale, 0.0)`.
+        let qk_scaled = qk.affine(self.scale as f64, 0.0)?;
         let attn = softmax_last_dim(&qk_scaled)?;
         attn.matmul(v)
     }
