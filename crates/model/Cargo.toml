@@ -27,6 +27,10 @@ tempfile = "3"
 vllm-testing = { path = "../testing" }
 criterion = "0.8"
 
+[[bench]]
+name = "gqa_forward"
+harness = false
+
 [features]
 default = []
 cuda = ["candle-core/cuda", "candle-nn/cuda"]
