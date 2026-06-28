@@ -261,7 +261,10 @@ impl GatedDeltaNet {
         self.forward_prefill(x).map(|(out, _)| out)
     }
 
-    pub fn forward_prefill(&self, x: &Tensor) -> CandleResult<(Tensor, super::state::GatedDeltaState)> {
+    pub fn forward_prefill(
+        &self,
+        x: &Tensor,
+    ) -> CandleResult<(Tensor, super::state::GatedDeltaState)> {
         let residual = x.clone();
         let (batch, seq_len, _hidden) = x.dims3()?;
 

@@ -3,5 +3,7 @@
 mod rule;
 mod state;
 
-pub use rule::{gated_delta_recurrent, gated_delta_recurrent_with_state, gated_delta_step, GatedDeltaNet};
+pub use rule::{
+    GatedDeltaNet, gated_delta_recurrent, gated_delta_recurrent_with_state, gated_delta_step,
+};
 pub use state::{GatedDeltaConfig, GatedDeltaState};

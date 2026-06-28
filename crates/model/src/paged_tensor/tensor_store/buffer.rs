@@ -3,8 +3,8 @@
 // PagedKvCache write/read operations on the K/V buffer:
 // `write_kv`, `write_kv_batch`, `read_kv`.
 
-use super::{PagedKvCache, BLOCK_SIZE};
 use super::super::quantization::dequantize;
+use super::{BLOCK_SIZE, PagedKvCache};
 use candle_core::{DType, Result, Tensor};
 
 impl PagedKvCache {

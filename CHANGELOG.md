@@ -118,6 +118,40 @@
     - All 1191 tests pass (`cargo test --workspace` clean)
     - Largest sub-module: `ssm/harmonic.rs` at 185 LOC (was 568 LOC monolith); all sub-modules ≤ 185 LOC
 
+- **Module Boundaries (v24.0 Phase D-3b)** — split 7 soft-target files (224-907 LOC band) into focused sub-modules:
+    - `crates/server/src/cli.rs` (548 LOC) → 2 sub-modules under `cli/`:
+        - `mod.rs` — facade with re-exports (3 LOC)
+        - `args.rs` — `CliArgs`, `ModelArgs`, validation helpers, `LogLevel` (548 LOC)
+    - `crates/core/src/metrics/collector.rs` (521 LOC) → 3 sub-modules under `metrics/collector/`:
+        - `mod.rs` — facade (11 LOC)
+        - `metrics.rs` — `DraftResolutionKind`, `DraftMetricsSnapshot` (74 LOC)
+        - `sampler.rs` — `EnhancedMetricsCollector` struct + impl + tests (470 LOC)
+    - `crates/model/src/components/gated_delta/mod.rs` (581 LOC) → 3 sub-modules under `components/gated_delta/`:
+        - `mod.rs` — facade (7 LOC)
+        - `state.rs` — `GatedDeltaConfig` + `GatedDeltaState` (67 LOC)
+        - `rule.rs` — `GatedDeltaNet` + helpers + tests (529 LOC)
+    - `crates/model/src/qwen3/config.rs` (631 LOC) → 3 sub-modules under `qwen3/config/`:
+        - `mod.rs` — facade (7 LOC)
+        - `rope.rs` — `RopeType` + `RopeScaling` + `RopeParameters` (176 LOC)
+        - `model.rs` — `TextConfig` + `Qwen3Config` + `AttentionType` (470 LOC)
+    - `crates/core/src/scheduler/batch_composer.rs` (672 LOC) → 3 sub-modules under `scheduler/batch_composer/`:
+        - `mod.rs` — facade (14 LOC)
+        - `validate.rs` — `BatchCompositionConfig` + `ChunkedPrefillConfig` + builders (150 LOC)
+        - `compose.rs` — `BatchComposer` + impl + tests (532 LOC)
+    - `crates/model/src/paged_tensor/tensor_store.rs` (828 LOC) → 4 sub-modules under `paged_tensor/tensor_store/`:
+        - `mod.rs` — facade with `PagedKvCache` struct + `new()` (68 LOC)
+        - `buffer.rs` — `write_kv` / `read_kv` / `write_kv_batch` + tests (666 LOC)
+        - `layout.rs` — hash + scale + `block_size` accessors (58 LOC)
+        - `pool.rs` — `CacheBlock` + `KvCachePool` (71 LOC)
+    - `crates/model/src/kernels/flash_attention.rs` (907 LOC) → 4 sub-modules under `kernels/flash_attention/`:
+        - `mod.rs` — facade (15 LOC)
+        - `config.rs` — `AttentionVariant` + `FlashAttentionConfig` + tile-size helpers (81 LOC)
+        - `util.rs` — `AttentionStats` + `softmax_last_dim` (35 LOC)
+        - `kernel.rs` — `FlashAttention` trait + `ScaledDotProductAttention` + `FlashAttentionV2` + `FlashAttentionKernel` + tests (809 LOC)
+    - Public APIs unchanged across all 7 splits: external callers continue to import via flat namespace (e.g. `crate::cli::CliArgs`, `crate::components::gated_delta::GatedDeltaNet`, `crate::paged_tensor::tensor_store::PagedKvCache`)
+    - All 1191 tests pass (`cargo test --workspace` clean)
+    - Largest remaining sub-module: `flash_attention/kernel.rs` at 809 LOC (was 907 LOC monolith); all other sub-modules ≤ 666 LOC. The `kernel.rs` file is large because the `FlashAttentionV2` causal-mask + standard forward paths and the SDPA tiled/sliding-window paths are all in one place; further decomposition would require trait extraction beyond the scope of this phase.
+
 ---
 
 ## 🚀 [v18.0] — Multi-Model Speculative Decoding (2026-06-27)

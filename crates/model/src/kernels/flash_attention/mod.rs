@@ -10,6 +10,8 @@ mod config;
 mod kernel;
 mod util;
 
-pub use config::{select_tile_size, should_use_tiled, AttentionVariant, FlashAttentionConfig};
-pub use kernel::{FlashAttention, FlashAttentionKernel, FlashAttentionV2, ScaledDotProductAttention};
-pub use util::{softmax_last_dim, AttentionStats};
+pub use config::{AttentionVariant, FlashAttentionConfig, select_tile_size, should_use_tiled};
+pub use kernel::{
+    FlashAttention, FlashAttentionKernel, FlashAttentionV2, ScaledDotProductAttention,
+};
+pub use util::{AttentionStats, softmax_last_dim};
