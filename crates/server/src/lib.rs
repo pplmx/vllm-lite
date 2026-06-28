@@ -3,11 +3,16 @@
 use std::sync::Arc;
 
 use crate::api::EngineHandle;
-use crate::auth::AuthMiddleware;
-use crate::openai::batch::manager::BatchManager;
 use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_model::config::Architecture;
 use vllm_model::tokenizer::Tokenizer;
+
+pub use crate::auth::AuthMiddleware;
+pub use crate::openai::batch::manager::BatchManager;
+pub use config::AuthConfig;
+pub use health::{HealthChecker, HealthStatus};
+pub use openai::batch::types::BatchResponse;
+pub use security::audit::AuditEvent;
 
 pub mod api;
 pub mod auth;
@@ -24,8 +29,6 @@ pub mod security;
 /// Hidden test helpers for unit/integration tests.
 #[doc(hidden)]
 pub mod test_fixtures;
-
-pub use health::{HealthChecker, HealthStatus};
 
 /// Shared state for all API handlers
 #[derive(Clone)]
