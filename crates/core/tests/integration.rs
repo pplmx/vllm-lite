@@ -126,7 +126,7 @@ fn test_max_tokens_includes_prompt() {
         assert!(
             steps <= 10,
             "Too many steps - max_tokens might not include prompt"
-        )
+        );
     }
 
     // Should finish in exactly 3 steps:

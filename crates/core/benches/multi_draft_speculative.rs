@@ -51,7 +51,7 @@ impl ModelBackend for BenchBackend {
         let n = self.counter.fetch_add(1, Ordering::Relaxed);
         // Mix backend id into the token so different backends produce
         // distinguishable outputs (closer to real behavior).
-        let id_bias: u32 = self.id.bytes().map(|b| u32::from(b)).sum();
+        let id_bias: u32 = self.id.bytes().map(u32::from).sum();
         let token: TokenId = id_bias.wrapping_add(n as u32) % 32000;
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),

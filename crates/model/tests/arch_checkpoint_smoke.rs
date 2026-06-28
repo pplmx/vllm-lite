@@ -12,7 +12,7 @@ struct CheckpointCase {
     required_in_ci: bool,
 }
 
-fn cases() -> [CheckpointCase; 4] {
+const fn cases() -> [CheckpointCase; 4] {
     [
         CheckpointCase {
             name: "qwen3",

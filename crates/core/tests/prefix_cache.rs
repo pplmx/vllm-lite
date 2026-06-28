@@ -291,7 +291,7 @@ fn test_prefix_cache_high_volume() {
     while engine.has_pending() {
         engine.step().unwrap();
         steps += 1;
-        assert!(steps <= 10000, "Too many steps - possible infinite loop")
+        assert!(steps <= 10000, "Too many steps - possible infinite loop");
     }
 
     // All 50 requests should have completed
@@ -343,7 +343,7 @@ fn test_prefix_cache_many_sequences_same_prefix() {
     while engine.has_pending() {
         engine.step().unwrap();
         steps += 1;
-        assert!(steps <= 10000, "Too many steps - possible infinite loop")
+        assert!(steps <= 10000, "Too many steps - possible infinite loop");
     }
 
     // Cache should have entries from the common prefix

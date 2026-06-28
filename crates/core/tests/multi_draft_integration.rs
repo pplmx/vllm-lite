@@ -62,7 +62,7 @@ impl ModelBackend for StubBackend {
             )));
         }
         // Deterministic output: one token per seq, value = self.id hash.
-        let token: u32 = self.id.bytes().map(|b| u32::from(b)).sum();
+        let token: u32 = self.id.bytes().map(u32::from).sum();
         let next_tokens = seq_ids.iter().map(|_| token).collect();
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
