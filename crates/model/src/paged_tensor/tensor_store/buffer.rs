@@ -197,42 +197,35 @@ impl PagedKvCache {
 
         let updated_key_block = Tensor::from_slice(
             &k_final,
-            (self.num_heads, self.block_size, self.head_dim),
+            (1, self.num_heads, self.block_size, self.head_dim),
             &self.device,
         )?;
         let updated_value_block = Tensor::from_slice(
             &v_final,
-            (self.num_heads, self.block_size, self.head_dim),
+            (1, self.num_heads, self.block_size, self.head_dim),
             &self.device,
         )?;
 
-        let mut key_parts = Vec::new();
-        let mut value_parts = Vec::new();
-        for b in 0..num_blocks {
-            if b == block_id {
-                key_parts.push(updated_key_block.unsqueeze(0)?);
-                value_parts.push(updated_value_block.unsqueeze(0)?);
-            } else {
-                let kb = self.key_cache[layer_idx]
-                    .narrow(0, b, 1)?
-                    .squeeze(0)?
-                    .unsqueeze(0)?;
-                let vb = self.value_cache[layer_idx]
-                    .narrow(0, b, 1)?
-                    .squeeze(0)?
-                    .unsqueeze(0)?;
-                key_parts.push(kb);
-                value_parts.push(vb);
-            }
-        }
+        self.key_cache[layer_idx] = self.key_cache[layer_idx].slice_assign(
+            &[
+                block_id..block_id + 1,
+                0..self.num_heads,
+                0..self.block_size,
+                0..self.head_dim,
+            ],
+            &updated_key_block,
+        )?;
+        self.value_cache[layer_idx] = self.value_cache[layer_idx].slice_assign(
+            &[
+                block_id..block_id + 1,
+                0..self.num_heads,
+                0..self.block_size,
+                0..self.head_dim,
+            ],
+            &updated_value_block,
+        )?;
 
-        self.key_cache[layer_idx] = Tensor::cat(&key_parts, 0)?;
-        self.value_cache[layer_idx] = Tensor::cat(&value_parts, 0)?;
-
-        let key_block = self.key_cache[layer_idx]
-            .narrow(0, block_id, 1)?
-            .squeeze(0)?;
-        let hash = Self::compute_block_hash(&key_block);
+        let hash = Self::compute_block_hash_from_slice(&k_final);
         self.block_hashes[layer_idx].insert(hash, block_id);
 
         Ok(())
@@ -669,6 +662,130 @@ mod tests {
         let cache = PagedKvCache::new(1, 4, 16, 10, device, false)?;
 
         assert_eq!(cache.block_size(), 16);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_kv_at_large_num_blocks_slice_assign() -> Result<()> {
+        // H-13 (PERF-01): regression test for the Tensor::cat →
+        // Tensor::slice_assign rewrite. Verifies that writes at a
+        // production-like num_blocks (64) correctly update the targeted
+        // block without disturbing other blocks, and that reads see the
+        // correct data.
+        let device = Device::Cpu;
+        let num_blocks = 64;
+        let num_heads = 2;
+        let head_dim = 64;
+        let block_size = 16;
+        let mut cache =
+            PagedKvCache::new(1, num_heads, head_dim, num_blocks, device.clone(), false)?;
+
+        // Seed block 5 with a unique value.
+        let seed_block_id = 5usize;
+        let seed_token_offset = 3usize;
+        let seed_k = Tensor::full(7.5f32, (1, num_heads, head_dim), &device)?;
+        let seed_v = Tensor::full(11.25f32, (1, num_heads, head_dim), &device)?;
+        cache.write_kv(0, seed_block_id, seed_token_offset, &seed_k, &seed_v)?;
+
+        // Seed block 7 with a different unique value.
+        let other_block_id = 7usize;
+        let other_token_offset = 0usize;
+        let other_k = Tensor::full(-3.0f32, (1, num_heads, head_dim), &device)?;
+        let other_v = Tensor::full(2.5f32, (1, num_heads, head_dim), &device)?;
+        cache.write_kv(0, other_block_id, other_token_offset, &other_k, &other_v)?;
+
+        // Read back block 5 only — must see the seeded value at the
+        // written offset and zeros at the other offsets in that block.
+        let (k_block5, v_block5) = cache.read_kv(0, &[seed_block_id], block_size)?;
+        assert_eq!(k_block5.dims(), &[block_size, num_heads, head_dim]);
+        let k_data: Vec<f32> = k_block5.flatten_all()?.to_vec1()?;
+        let v_data: Vec<f32> = v_block5.flatten_all()?.to_vec1()?;
+        let stride = num_heads * head_dim;
+        for token in 0..block_size {
+            for h in 0..num_heads {
+                for d in 0..head_dim {
+                    let idx = token * stride + h * head_dim + d;
+                    let expected_k = if token == seed_token_offset { 7.5 } else { 0.0 };
+                    let expected_v = if token == seed_token_offset {
+                        11.25
+                    } else {
+                        0.0
+                    };
+                    assert!(
+                        (k_data[idx] - expected_k).abs() < 1e-5,
+                        "block 5 k mismatch at token={token} h={h} d={d}: got {}, expected {}",
+                        k_data[idx],
+                        expected_k
+                    );
+                    assert!(
+                        (v_data[idx] - expected_v).abs() < 1e-5,
+                        "block 5 v mismatch at token={token} h={h} d={d}: got {}, expected {}",
+                        v_data[idx],
+                        expected_v
+                    );
+                }
+            }
+        }
+
+        // Read back block 7 separately to verify cross-block isolation.
+        let (k_block7, _) = cache.read_kv(0, &[other_block_id], block_size)?;
+        let k7_data: Vec<f32> = k_block7.flatten_all()?.to_vec1()?;
+        let idx0 = other_token_offset * stride + 0 * head_dim + 0;
+        assert!(
+            (k7_data[idx0] - -3.0).abs() < 1e-5,
+            "block 7 slot must be -3.0, got {}",
+            k7_data[idx0]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_kv_overwrite_preserves_other_tokens_in_block() -> Result<()> {
+        // H-13 (PERF-01): regression test ensuring that two writes to
+        // the SAME block at different token offsets do not clobber each
+        // other (the slice_assign path writes just the targeted slot).
+        let device = Device::Cpu;
+        let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone(), false)?;
+
+        let k_a = Tensor::full(1.0f32, (1, 2, 4), &device)?;
+        let v_a = Tensor::full(2.0f32, (1, 2, 4), &device)?;
+        cache.write_kv(0, 0, 0, &k_a, &v_a)?;
+
+        let k_b = Tensor::full(3.0f32, (1, 2, 4), &device)?;
+        let v_b = Tensor::full(4.0f32, (1, 2, 4), &device)?;
+        cache.write_kv(0, 0, 5, &k_b, &v_b)?;
+
+        let (k_out, v_out) = cache.read_kv(0, &[0], 16)?;
+        let k_data: Vec<f32> = k_out.flatten_all()?.to_vec1()?;
+        let v_data: Vec<f32> = v_out.flatten_all()?.to_vec1()?;
+        let stride = 2 * 4;
+        for d in 0..stride {
+            assert!(
+                (k_data[d] - 1.0).abs() < 1e-5,
+                "slot 0 clobbered: {}",
+                k_data[d]
+            );
+            assert!(
+                (v_data[d] - 2.0).abs() < 1e-5,
+                "slot 0 v clobbered: {}",
+                v_data[d]
+            );
+        }
+        let off5 = 5 * stride;
+        for d in 0..stride {
+            assert!(
+                (k_data[off5 + d] - 3.0).abs() < 1e-5,
+                "slot 5 k wrong: {}",
+                k_data[off5 + d]
+            );
+            assert!(
+                (v_data[off5 + d] - 4.0).abs() < 1e-5,
+                "slot 5 v wrong: {}",
+                v_data[off5 + d]
+            );
+        }
 
         Ok(())
     }

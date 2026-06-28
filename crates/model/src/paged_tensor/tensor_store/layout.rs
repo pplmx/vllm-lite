@@ -35,15 +35,22 @@ impl PagedKvCache {
 
     #[must_use]
     pub fn compute_block_hash(block: &Tensor) -> u64 {
-        if let Ok(data) = block.to_vec1::<f32>() {
-            let hash: u64 = data
-                .iter()
-                .map(|&x| (x.abs() * 1000.0) as u64)
-                .fold(0u64, |acc, x| acc.wrapping_mul(31).wrapping_add(x));
-            hash
-        } else {
-            0
-        }
+        block
+            .to_vec1::<f32>()
+            .map_or(0, |data| Self::compute_block_hash_from_slice(&data))
+    }
+
+    /// Compute block hash directly from a host-side `&[f32]` buffer.
+    ///
+    /// H-13 (PERF-02): avoids the redundant device round-trip in
+    /// `write_kv` when the host-side data is already available. The
+    /// `Tensor`-based overload is preserved for external callers and
+    /// for callers that do not have a host-side copy.
+    #[must_use]
+    pub fn compute_block_hash_from_slice(data: &[f32]) -> u64 {
+        data.iter()
+            .map(|&x| (x.abs() * 1000.0) as u64)
+            .fold(0u64, |acc, x| acc.wrapping_mul(31).wrapping_add(x))
     }
 
     #[must_use]
