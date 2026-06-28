@@ -238,41 +238,34 @@ impl EngineError {
 
 ## 6. Phase C 详情:API Ergonomics
 
-### 6.1 审计清单
+### 6.1 现状(2026-06-28 audit 修正)
 
-每 crate 公开 API 过一遍:
+原始 spec 假设 Phase C 可一刀切完成 6 个 API ergonomics 维度。audit 显示 **3/6 维度已 100% 合规**(来自 Phase B / v20.6 / Phase 32 先前工作):
 
-- [ ] **Builder 化**:struct 有 >2 个 `Option<T>` 字段 → 改为 builder(参考 `SpeculationConfig`、`BatchBuilder`、`ModelLoader`)
-- [ ] **Stringly-typed**:用 `String` 表示枚举/分类 → 改为 typed enum 或 `&'static str`(仅配置字段允许)
-- [ ] **Error 规范**:所有公开 error enum 都 `#[derive(thiserror::Error)]` + 每 variant 有 `#[error(...)]` + 必要时 `#[source]`
-- [ ] **Crate-root re-export**:每个 crate `lib.rs` 末尾有 `pub use` 块(参考 AGENTS.md 已有约定)
-- [ ] **禁止 `Box<dyn Error>`**:搜遍公开 API 签名,确保无
-- [ ] **Object-safe trait `Default` impl**:trait object-safe 且常用于 `Arc<dyn Trait>` 时,提供 `Default`
+| 维度 | 状态 | 说明 |
+|------|------|------|
+| Builder 化 | **小** | 仅 `Engine` 1 个真候选;其余 >2 Option 字段的是 serde-deserialized(不能改) |
+| Stringly-typed | **小** | 3 个强候选(DraftResolutionKind, RopeType, BatchEndpoint) |
+| Error 规范 | **已完成** | 21/21 enums 合规 |
+| Crate-root re-export | **小** | 3 crate 需要小补 |
+| `Box<dyn Error>` | **已完成** | 仅 1 处,是有意为之的 source-chain 包装 |
+| Object-safe trait `Default` | **中** | 17 trait 缺 Default(4 high + 7 medium + 6 low) |
 
-### 6.2 Builder 化模式
+### 6.2 子阶段(基于 audit)
 
-```rust
-// 之前
-let cfg = SomeConfig { max_tokens: Some(100), top_p: Some(0.9), temperature: Some(0.7), stop: None };
-
-// 之后
-let cfg = SomeConfig::builder()
-    .with_max_tokens(100)
-    .with_top_p(0.9)
-    .with_temperature(0.7)
-    .build();
-```
-
-约定:
-- `Config::builder()` / `ConfigBuilder::new()`
-- `with_<field>(value)` 设值,无 `with_<field>_opt`(必要时提供)
-- `build() -> Result<Config, ConfigError>` 或 `build() -> Config`(若 infallible)
+| 子阶段 | 范围 | 工作量 |
+|--------|------|--------|
+| **C-1** | `Engine` builder + 3 crate re-export 增补 | ~165 LOC |
+| **C-2** | Stringly-typed → enums (3 个) | ~110 LOC |
+| **C-3** | Object-safe trait `Default` impls (11 个 high+medium) | ~260 LOC |
+| **C-4** (可选) | Polish (`AuditEvent` builder, 6 low-ROI traits) | ~50-100 LOC |
 
 ### 6.3 完成定义
 
-- [ ] 公开 struct 中 >2 optional 字段的 100% builder 化
-- [ ] 无 `Box<dyn Error>` 出现在公开 API
-- [ ] 每个 crate `lib.rs` 有 crate-root re-export 块
+- [ ] **C-1**: `EngineBuilder` 可用,3 crate 有 flat re-exports
+- [ ] **C-2**: 3 个 stringly-typed API 转为 typed enum
+- [ ] **C-3**: 11 个 object-safe trait 有 `Default` impl
+- [ ] 每个新类型/方法至少 1 个测试
 - [ ] `just ci` 通过
 - [ ] AGENTS.md "API Conventions" 小节如有偏差则更新
 
