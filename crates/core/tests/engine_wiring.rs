@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use vllm_core::speculative::{DraftId, DraftLoader, DraftRegistryError, DraftSpec};
 use vllm_core::types::{Request, SchedulerConfig};
-use vllm_core::{Engine, EnhancedMetricsCollector};
+use vllm_core::{DraftResolutionKind, Engine, EnhancedMetricsCollector};
 use vllm_traits::{BatchOutput, ModelBackend, ModelError, Result as ModelResult, SeqId, TokenId};
 
 // ───────────────────────── Stub Backend ───────────────────────────
@@ -300,9 +300,9 @@ fn test_engine_with_budget_has_resolver_wired() {
 #[test]
 fn test_engine_draft_metrics_exposed_via_snapshot() {
     let collector = EnhancedMetricsCollector::new();
-    collector.inc_draft_resolution("external");
-    collector.inc_draft_resolution("external");
-    collector.inc_draft_resolution("self_spec");
+    collector.inc_draft_resolution(DraftResolutionKind::External);
+    collector.inc_draft_resolution(DraftResolutionKind::External);
+    collector.inc_draft_resolution(DraftResolutionKind::SelfSpec);
     collector.inc_draft_load_failure();
     collector.inc_draft_runtime_error();
     let snap = collector.draft_metrics_snapshot();
@@ -317,7 +317,7 @@ async fn test_engine_prometheus_exporter_includes_v18_counters() {
     use vllm_core::metrics::PrometheusExporter;
 
     let collector = Arc::new(EnhancedMetricsCollector::new());
-    collector.inc_draft_resolution("external");
+    collector.inc_draft_resolution(DraftResolutionKind::External);
     collector.inc_draft_load_failure();
     collector.inc_draft_runtime_error();
 

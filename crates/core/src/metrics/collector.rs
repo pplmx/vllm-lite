@@ -1,8 +1,56 @@
 // crates/core/src/metrics/collector.rs
 use super::lock_free::{LockFreeMetrics, MetricsSnapshot};
 use dashmap::DashMap;
+use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use vllm_traits::SeqId;
+
+/// Kind of draft resolution outcome recorded by the metrics collector.
+///
+/// Each variant corresponds to a discrete counter:
+/// - [`Self::External`] → `draft_resolutions_external_total`
+///   (request had a `draft_model_id` that resolved to a loaded draft backend).
+/// - [`Self::SelfSpec`] → `draft_resolutions_self_spec_total`
+///   (fallback to the self-speculative path).
+/// - [`Self::None`] → `draft_resolutions_none_total`
+///   (no draft at all — pure target decode).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DraftResolutionKind {
+    /// Draft resolved from the registry (external model).
+    External,
+    /// Fallback to self-speculative decoding.
+    SelfSpec,
+    /// No speculative decoding — pure target decode.
+    None,
+}
+
+impl DraftResolutionKind {
+    /// Parse from a string. Accepts canonical names and common aliases
+    /// (case-insensitive).
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "external" => Some(Self::External),
+            "self_spec" | "self-spec" | "selfspec" => Some(Self::SelfSpec),
+            "none" => Some(Self::None),
+            _ => None,
+        }
+    }
+
+    /// Canonical string representation (matches the historical wire values).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::External => "external",
+            Self::SelfSpec => "self_spec",
+            Self::None => "none",
+        }
+    }
+}
+
+impl fmt::Display for DraftResolutionKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
 
 /// Unified metrics collector for scheduler, engine, and HTTP export.
 pub struct EnhancedMetricsCollector {
@@ -227,22 +275,20 @@ impl EnhancedMetricsCollector {
     // ───────────────────── v18.0 multi-model spec metrics ─────────────────────
 
     /// Increment the draft-resolution counter for the given result kind.
-    /// `kind` is one of "external", "self_spec", "none".
-    pub fn inc_draft_resolution(&self, kind: &str) {
+    pub fn inc_draft_resolution(&self, kind: DraftResolutionKind) {
         match kind {
-            "external" => {
+            DraftResolutionKind::External => {
                 self.draft_resolutions_external_total
                     .fetch_add(1, Ordering::Relaxed);
             }
-            "self_spec" => {
+            DraftResolutionKind::SelfSpec => {
                 self.draft_resolutions_self_spec_total
                     .fetch_add(1, Ordering::Relaxed);
             }
-            "none" => {
+            DraftResolutionKind::None => {
                 self.draft_resolutions_none_total
                     .fetch_add(1, Ordering::Relaxed);
             }
-            _ => {}
         }
     }
 
@@ -392,14 +438,64 @@ mod tests {
     #[test]
     fn test_collector_records_draft_resolution_metrics() {
         let collector = EnhancedMetricsCollector::new();
-        collector.inc_draft_resolution("external");
-        collector.inc_draft_resolution("external");
-        collector.inc_draft_resolution("self_spec");
-        collector.inc_draft_resolution("none");
+        collector.inc_draft_resolution(DraftResolutionKind::External);
+        collector.inc_draft_resolution(DraftResolutionKind::External);
+        collector.inc_draft_resolution(DraftResolutionKind::SelfSpec);
+        collector.inc_draft_resolution(DraftResolutionKind::None);
         let snap = collector.draft_metrics_snapshot();
         assert_eq!(snap.resolutions_external_total, 2);
         assert_eq!(snap.resolutions_self_spec_total, 1);
         assert_eq!(snap.resolutions_none_total, 1);
+    }
+
+    #[test]
+    fn draft_resolution_kind_parse_roundtrip() {
+        for kind in [
+            DraftResolutionKind::External,
+            DraftResolutionKind::SelfSpec,
+            DraftResolutionKind::None,
+        ] {
+            assert_eq!(DraftResolutionKind::parse(kind.as_str()), Some(kind));
+        }
+    }
+
+    #[test]
+    fn draft_resolution_kind_parse_aliases() {
+        assert_eq!(
+            DraftResolutionKind::parse("self-spec"),
+            Some(DraftResolutionKind::SelfSpec)
+        );
+        assert_eq!(
+            DraftResolutionKind::parse("selfspec"),
+            Some(DraftResolutionKind::SelfSpec)
+        );
+        assert_eq!(
+            DraftResolutionKind::parse("SELF_SPEC"),
+            Some(DraftResolutionKind::SelfSpec)
+        );
+        assert_eq!(
+            DraftResolutionKind::parse("External"),
+            Some(DraftResolutionKind::External)
+        );
+        assert_eq!(
+            DraftResolutionKind::parse("NONE"),
+            Some(DraftResolutionKind::None)
+        );
+    }
+
+    #[test]
+    fn draft_resolution_kind_parse_invalid() {
+        assert_eq!(DraftResolutionKind::parse("invalid"), None);
+        assert_eq!(DraftResolutionKind::parse(""), None);
+        assert_eq!(DraftResolutionKind::parse("shared"), None);
+        assert_eq!(DraftResolutionKind::parse("per_request"), None);
+    }
+
+    #[test]
+    fn draft_resolution_kind_display() {
+        assert_eq!(DraftResolutionKind::External.to_string(), "external");
+        assert_eq!(DraftResolutionKind::SelfSpec.to_string(), "self_spec");
+        assert_eq!(DraftResolutionKind::None.to_string(), "none");
     }
 
     #[test]

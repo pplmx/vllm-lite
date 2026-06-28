@@ -28,7 +28,7 @@ pub mod types;
 pub use beam::BeamSequence;
 pub use engine::{Engine, EngineBuilder};
 pub use error::{EngineError, Result};
-pub use metrics::{EnhancedMetricsCollector, MetricsSnapshot};
+pub use metrics::{DraftResolutionKind, EnhancedMetricsCollector, MetricsSnapshot};
 pub use scheduler::SchedulerEngine;
 pub use speculative::{AdaptiveSpeculativeDecoder, DraftModelRegistry, DraftResolver, DraftSpec};
 pub use types::{Priority, Request, SamplingParams, SchedulerConfig};
