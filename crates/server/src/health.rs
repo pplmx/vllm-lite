@@ -24,6 +24,9 @@ impl HealthStatus {
         }
     }
 
+    /// Map a [`HealthStatus`] to its HTTP status code: `200` for `Ok`, `503`
+    /// for both `NotReady` and `Unhealthy` (the orchestrator should treat 503
+    /// as "drain this pod").
     #[must_use]
     pub const fn http_status(&self) -> u16 {
         match self {

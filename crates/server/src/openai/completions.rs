@@ -21,10 +21,17 @@ fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &st
     tokenizer.clean_special_tokens(text)
 }
 
-/// Runs the operation.
+/// OpenAI-compatible `/v1/completions` HTTP handler. Dispatches to streaming
+/// (SSE) or non-streaming based on `req.stream`. Validates that `prompt` is
+/// non-empty and forwards an [`EngineMessage::AddRequest`] to the engine for
+/// each call.
+///
 /// # Errors
 ///
-/// Returns `Err` if the operation fails.
+/// Returns `(StatusCode, ErrorResponse)` when:
+/// - prompt is empty (`BAD_REQUEST`)
+/// - the engine channel is closed (`INTERNAL_SERVER_ERROR`)
+/// - token decoding or SSE serialization fails
 pub async fn completions(
     State(state): State<ApiState>,
     Json(req): Json<CompletionRequest>,

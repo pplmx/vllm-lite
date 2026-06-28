@@ -6,7 +6,10 @@ use vllm_core::types::EngineMessage;
 
 use crate::ApiState;
 
-/// `EngineHandle`: engine handle.
+/// Sender side of the engine mailbox. Each handler holds a clone of this
+/// `UnboundedSender`; sending an [`EngineMessage`] enqueues work for the
+/// engine's run loop. Backpressure is intentionally not applied here — the
+/// engine drains every message each loop iteration.
 pub type EngineHandle = mpsc::UnboundedSender<EngineMessage>;
 
 /// `HealthResponse`: health response.
@@ -24,6 +27,9 @@ pub struct HealthDetailResponse {
     pub kv_cache_usage_percent: Option<f32>,
 }
 
+/// `/health/details` handler. Returns a richer status payload including
+/// live metrics from the engine (prefill throughput, KV-cache utilization).
+/// Used by ops dashboards that need more than the liveness/readiness probe.
 pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailResponse> {
     let (response_tx, mut response_rx) = mpsc::unbounded_channel();
     let _ = state
@@ -40,15 +46,23 @@ pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailR
     })
 }
 
+/// `/shutdown` handler. Sends [`EngineMessage::Shutdown`] to the engine and
+/// returns immediately; the HTTP server keeps serving until the process
+/// exits. Useful for graceful drain during orchestrator rolling updates.
 pub async fn shutdown(State(state): State<ApiState>) -> &'static str {
     let _ = state.engine_tx.send(EngineMessage::Shutdown);
     "Shutting down"
 }
 
-/// Runs the operation.
+/// `/metrics` Prometheus exposition handler. Returns a text/plain payload in
+/// the Prometheus 0.0.4 format containing the engine's current
+/// [`MetricsSnapshot`].
+///
 /// # Panics
 ///
-/// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
+/// Panics only if the engine channel is closed before this handler runs
+/// (programmer error — the API state holds a sender cloned from the same
+/// channel the engine reads from).
 pub async fn get_prometheus(State(state): State<ApiState>) -> String {
     let (response_tx, mut response_rx) = mpsc::unbounded_channel();
     state
