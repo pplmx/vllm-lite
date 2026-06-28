@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 pub mod all_reduce;
 pub mod device_mesh;
 pub mod parallel_linear;

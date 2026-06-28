@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Test fixtures for common scenarios.
 
 use vllm_core::engine::Engine;

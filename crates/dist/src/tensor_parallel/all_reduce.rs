@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use super::device_mesh::DeviceMesh;
 use std::sync::Arc;
 use vllm_traits::TensorParallelError;

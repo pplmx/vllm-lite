@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! `TestHarness` - Common test environment setup
 //!
 //! Provides a unified interface for initializing test environments
