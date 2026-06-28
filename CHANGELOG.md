@@ -152,6 +152,15 @@
     - All 1191 tests pass (`cargo test --workspace` clean)
     - Largest remaining sub-module: `flash_attention/kernel.rs` at 809 LOC (was 907 LOC monolith); all other sub-modules ≤ 666 LOC. The `kernel.rs` file is large because the `FlashAttentionV2` causal-mask + standard forward paths and the SDPA tiled/sliding-window paths are all in one place; further decomposition would require trait extraction beyond the scope of this phase.
 
+- **Module Boundaries (v24.0 Phase D-3c)** — visibility tightening and re-export cleanup:
+    - ~97 `pub` items → `pub(crate)` across crates (model: ~55, core: ~25, server: ~13, testing/dist: ~4)
+    - 6 `pub mod` → `pub(crate) mod` (architecture modules in `model/` only consumed via the `Architecture` trait: `gemma3`, `gemma4`, `llama4`, `mistral_small`, `phi4`, `mixtral`). The other 4 architecture modules (`llama`, `mistral`, `qwen3`, `qwen3_5`) remain `pub` because integration tests use direct path access
+    - 5 deep re-export chains flattened (added flat re-exports in intermediate modules; collapsed 2 thin re-export shims in `qwen3_5`)
+    - 7 glob re-exports → explicit lists (`model/components/mod`, `model/components/ssm/mod`, `core/types/mod`, `core/scheduler/engine/mod`, `core/speculative/draft_registry`, plus consolidated `dist/lib.rs` `tensor_parallel` group)
+    - 2 duplicate re-exports deleted (redundant `qwen3_5::hybrid` shim; `PipelineStageTrait` alias)
+    - Conservative scope: items in public method signatures, axum handler parameter/return types, OpenAI DTOs, tonic-generated proto types, and crate-root re-exports remain `pub`
+    - All 1191 tests pass (`cargo test --workspace` clean); build and `cargo clippy --workspace --all-features` clean
+
 ---
 
 ## 🚀 [v18.0] — Multi-Model Speculative Decoding (2026-06-27)
