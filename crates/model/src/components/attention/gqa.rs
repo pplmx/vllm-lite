@@ -192,8 +192,11 @@ impl GqaAttention {
         let k_t = k.transpose(2, 3)?.contiguous()?;
         let qk = Tensor::matmul(&q, &k_t)?;
 
+        // H-11 #2: replaced `qk.mul(broadcast(scalar_tensor))` with `qk.affine(scale, 0.0)`.
+        // The scalar tensor was re-allocated and broadcast to O(B*H*S*S) every forward;
+        // `affine` fuses the scaling into the kernel without materializing a broadcast tensor.
         let scale = 1.0 / (self.head_dim as f32).sqrt();
-        let qk = qk.mul(&Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?)?;
+        let qk = qk.affine(scale as f64, 0.0)?;
         let attn_weights = candle_nn::ops::softmax(&qk, 3)?.contiguous()?;
 
         let attn_output = Tensor::matmul(&attn_weights, &v.contiguous()?)?;
