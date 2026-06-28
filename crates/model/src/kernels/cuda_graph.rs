@@ -28,7 +28,7 @@ impl CudaGraphNode for NullCudaGraphNode {
 }
 
 impl dyn CudaGraphTensor {
-    /// Returns an `Arc<Self>` wrapping the null [`NullCudaGraphTensor`].
+    /// Returns an `Arc<Self>` wrapping the null `NullCudaGraphTensor`.
     ///
     /// This is the closest equivalent to
     /// `Arc::<dyn CudaGraphTensor>::default()`; Rust's orphan rule prevents
@@ -41,7 +41,7 @@ impl dyn CudaGraphTensor {
 }
 
 impl dyn CudaGraphNode {
-    /// Returns an `Arc<Self>` wrapping the null [`NullCudaGraphNode`].
+    /// Returns an `Arc<Self>` wrapping the null `NullCudaGraphNode`.
     ///
     /// This is the closest equivalent to
     /// `Arc::<dyn CudaGraphNode>::default()`; Rust's orphan rule prevents

@@ -18,10 +18,10 @@
 //! All `impl SchedulerEngine` blocks across the sub-modules contribute
 //! methods to the same type, so callers see a single flat API.
 
-mod graph;
-mod memory;
-mod state;
-mod update;
+pub mod graph;
+pub mod memory;
+pub mod state;
+pub mod update;
 
 pub use state::SchedulerEngine;
 

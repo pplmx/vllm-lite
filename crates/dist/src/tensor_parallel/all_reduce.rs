@@ -93,7 +93,7 @@ impl AllReduce for NoopAllReduce {
 }
 
 impl dyn AllReduce {
-    /// Returns an `Arc<Self>` wrapping the single-node [`NoopAllReduce`].
+    /// Returns an `Arc<Self>` wrapping the single-node `NoopAllReduce`.
     ///
     /// This is the closest equivalent to
     /// `Arc::<dyn AllReduce>::default()`; Rust's orphan rule prevents
