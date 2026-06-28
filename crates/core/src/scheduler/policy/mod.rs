@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 pub mod fcfs;
 pub mod priority;
 pub mod sjf;

@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Speculative decoding implementations
 //!
 //! This module provides infrastructure for speculative decoding,

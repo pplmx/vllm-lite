@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Rejection strategies for speculative decoding
 //!
 //! Different strategies for determining which draft tokens to accept

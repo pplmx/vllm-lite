@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use crate::types::{SeqId, TokenId};
 use std::sync::{Arc, RwLock};
 

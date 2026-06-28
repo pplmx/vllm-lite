@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Adaptive Speculative Decoding
 //!
 //! Implements dynamic draft token count adjustment based on acceptance rate tracking.

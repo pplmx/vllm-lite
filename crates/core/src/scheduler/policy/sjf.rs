@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use super::trait_def::{PriorityScore, SchedulingContext, SchedulingPolicy};
 use crate::types::Sequence;
 

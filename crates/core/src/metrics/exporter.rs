@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 // crates/core/src/metrics/exporter.rs
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

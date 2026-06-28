@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code,clippy::module_name_repetitions)]
 
 // crates/core/src/circuit_breaker/breaker.rs
 use std::sync::Arc;

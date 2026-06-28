@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use super::node::RadixNode;
 use std::sync::Arc;
 use vllm_traits::{BlockId, TokenId};

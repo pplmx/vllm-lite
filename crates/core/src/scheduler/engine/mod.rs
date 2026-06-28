@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! `SchedulerEngine` — continuous-batching engine.
 //!
 //! This module is split into four focused sub-modules that share a
