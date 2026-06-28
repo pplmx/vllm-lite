@@ -141,6 +141,15 @@ impl MlaAttention {
     }
 
     /// Runs the operation.
+    /// # Caution: No causal masking
+    ///
+    /// This is a low-level primitive. It does **NOT** apply causal masking.
+    /// Currently no production model architecture uses `MlaAttention`
+    /// directly; the path is exposed for experimentation and benchmarking.
+    /// When MLA is wired into a production decoder, callers must apply
+    /// causal masking themselves (mirroring how `GqaAttention::forward`
+    /// defers to `RopeGqaAttention::forward_prefill/forward_decode`).
+    /// See [`crate::components::attention::util`] for causal-aware helpers.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
