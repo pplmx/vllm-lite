@@ -22,6 +22,8 @@ impl Default for SchedulerStats {
 }
 
 impl SchedulerStats {
+    /// Construct a fresh stats record with all counters at zero and
+    /// `last_update` set to the current instant.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -37,6 +39,9 @@ impl SchedulerStats {
         }
     }
 
+    /// Record a completed batch of `batch_size` sequences. Updates
+    /// `total_batches`, `last_batch_size`, and `avg_batch_size` (running
+    /// average). Also stamps `last_update` to "now".
     pub fn record_batch(&mut self, batch_size: usize) {
         self.total_batches += 1;
         self.last_batch_size = batch_size;
@@ -45,18 +50,22 @@ impl SchedulerStats {
         self.last_update = Instant::now();
     }
 
+    /// Increment the lifetime prefill counter.
     pub const fn record_prefill(&mut self) {
         self.total_prefill_requests += 1;
     }
 
+    /// Increment the lifetime decode counter.
     pub const fn record_decode(&mut self) {
         self.total_decode_requests += 1;
     }
 
+    /// Increment the lifetime preemption counter.
     pub const fn record_preemption(&mut self) {
         self.total_preemptions += 1;
     }
 
+    /// Increment the lifetime eviction counter.
     pub const fn record_eviction(&mut self) {
         self.total_evictions += 1;
     }

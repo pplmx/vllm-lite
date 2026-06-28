@@ -34,22 +34,25 @@ pub struct PhaseSwitchPolicyBuilder {
 }
 
 impl PhaseSwitchPolicyBuilder {
+    /// Set [`PhaseSwitchPolicy::max_consecutive_decode`].
     #[must_use]
     pub const fn with_max_consecutive_decode(mut self, v: u32) -> Self {
         self.inner.max_consecutive_decode = v;
         self
     }
+    /// Set [`PhaseSwitchPolicy::prefill_priority_threshold`].
     #[must_use]
     pub const fn with_prefill_priority_threshold(mut self, v: usize) -> Self {
         self.inner.prefill_priority_threshold = v;
         self
     }
+    /// Set [`PhaseSwitchPolicy::min_decode_batch_size`].
     #[must_use]
     pub const fn with_min_decode_batch_size(mut self, v: usize) -> Self {
         self.inner.min_decode_batch_size = v;
         self
     }
-    /// build: build the [`PhaseSwitchPolicy`].
+    /// Finalize the builder into a [`PhaseSwitchPolicy`].
     #[must_use]
     pub const fn build(self) -> PhaseSwitchPolicy {
         self.inner
@@ -76,6 +79,7 @@ pub struct PhaseScheduler {
 }
 
 impl PhaseScheduler {
+    /// Construct a phase scheduler starting in [`Phase::Prefill`].
     #[must_use]
     pub const fn new(switch_policy: PhaseSwitchPolicy) -> Self {
         Self {
@@ -121,6 +125,7 @@ impl PhaseScheduler {
         self.current_phase
     }
 
+    /// Reset the scheduler to its initial state (Prefill, zero decode rounds).
     pub const fn reset(&mut self) {
         self.current_phase = Phase::Prefill;
         self.consecutive_decode_rounds = 0;
