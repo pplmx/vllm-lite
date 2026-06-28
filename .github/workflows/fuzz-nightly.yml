@@ -1,0 +1,74 @@
+name: Fuzz Nightly
+
+# Long-run fuzz (5min × N targets) on a nightly cron.
+# Corpus is shared with the PR workflow via the same cache key.
+
+on:
+  schedule:
+    # Daily at 04:00 UTC (low-traffic window)
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  fuzz-long:
+    name: Fuzz long (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [app_config_yaml, qwen3_config_json, safetensors_header]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-fuzz-nightly-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-fuzz-nightly-cargo-
+
+      - name: Cache fuzz corpus
+        uses: actions/cache@v4
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-nightly-${{ matrix.target }}-${{ github.sha }}
+          restore-keys: |
+            fuzz-corpus-nightly-${{ matrix.target }}-
+
+      - name: Build fuzz targets
+        run: just fuzz-build
+
+      - name: Fuzz ${{ matrix.target }} (5 min)
+        run: cargo +nightly fuzz run ${{ matrix.target }} --fuzz-dir fuzz -- -max_total_time=300
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-nightly-crash-${{ matrix.target }}
+          path: |
+            fuzz/artifacts/
+            fuzz/corpus/${{ matrix.target }}/
+          if-no-files-found: ignore
+
+      - name: Upload grown corpus
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          path: fuzz/corpus/${{ matrix.target }}/
+          if-no-files-found: ignore
