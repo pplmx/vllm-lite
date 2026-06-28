@@ -731,7 +731,7 @@ mod tests {
         // Read back block 7 separately to verify cross-block isolation.
         let (k_block7, _) = cache.read_kv(0, &[other_block_id], block_size)?;
         let k7_data: Vec<f32> = k_block7.flatten_all()?.to_vec1()?;
-        let idx0 = other_token_offset * stride + 0 * head_dim + 0;
+        let idx0 = other_token_offset * stride;
         assert!(
             (k7_data[idx0] - -3.0).abs() < 1e-5,
             "block 7 slot must be -3.0, got {}",
