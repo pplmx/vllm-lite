@@ -95,7 +95,7 @@ impl Architecture for UnknownArchitecture {
 }
 
 impl dyn Architecture {
-    /// Returns an `Arc<Self>` wrapping the unknown [`UnknownArchitecture`].
+    /// Returns an `Arc<Self>` wrapping the unknown `UnknownArchitecture`.
     ///
     /// This is the closest equivalent to
     /// `Arc::<dyn Architecture>::default()`; Rust's orphan rule prevents

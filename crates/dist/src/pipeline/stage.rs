@@ -106,7 +106,7 @@ impl PipelineStage for NoopPipelineStage {
 }
 
 impl dyn PipelineStage {
-    /// Returns an `Arc<Self>` wrapping the no-op [`NoopPipelineStage`].
+    /// Returns an `Arc<Self>` wrapping the no-op `NoopPipelineStage`.
     ///
     /// This is the closest equivalent to
     /// `Arc::<dyn PipelineStage>::default()`; Rust's orphan rule prevents
