@@ -37,10 +37,22 @@ pub struct SchedulerConfig {
 impl SchedulerConfig {
     #[allow(clippy::too_many_arguments)]
     #[must_use]
-    /// Runs the operation.
+    /// Construct a `SchedulerConfig` from explicit parameters, validating the
+    /// cross-field invariants in one place. Prefer this over the literal
+    /// struct expression when you want panicking validation; prefer
+    /// [`SchedulerConfig::builder`] when you want to override only a few
+    /// fields of the default.
+    ///
     /// # Panics
     ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
+    /// Panics if any of the following invariants is violated:
+    /// - `max_num_seqs > 0`
+    /// - `max_num_batched_tokens > 0`
+    /// - `prefill_chunk_size > 0`
+    /// - `0.0 <= decode_preference_ratio <= 1.0`
+    /// - `min_batch_size > 0`
+    /// - `max_batch_size >= min_batch_size`
+    /// - `max_num_batched_tokens >= max_batch_size`
     pub fn new(
         max_num_seqs: usize,
         max_num_batched_tokens: usize,
@@ -126,67 +138,81 @@ pub struct SchedulerConfigBuilder {
 }
 
 impl SchedulerConfigBuilder {
+    /// Set the maximum number of sequences per batch.
     #[must_use]
     pub const fn with_max_num_seqs(mut self, v: usize) -> Self {
         self.inner.max_num_seqs = v;
         self
     }
+    /// Set the maximum number of tokens (prompt + generated) per batch.
     #[must_use]
     pub const fn with_max_num_batched_tokens(mut self, v: usize) -> Self {
         self.inner.max_num_batched_tokens = v;
         self
     }
+    /// Set the maximum consecutive decode iterations before forcing a prefill.
     #[must_use]
     pub const fn with_max_consecutive_decode(mut self, v: u32) -> Self {
         self.inner.max_consecutive_decode = v;
         self
     }
+    /// Toggle prefill/decode batch separation.
     #[must_use]
     pub const fn with_enable_pd_separation(mut self, v: bool) -> Self {
         self.inner.enable_pd_separation = v;
         self
     }
+    /// Set the prefill chunk size — the maximum prompt tokens processed in a
+    /// single prefill step.
     #[must_use]
     pub const fn with_prefill_chunk_size(mut self, v: usize) -> Self {
         self.inner.prefill_chunk_size = v;
         self
     }
+    /// Set the decode-vs-prefill preference ratio (0.0–1.0). Higher values
+    /// weight decode latency more heavily when assembling mixed-phase batches.
     #[must_use]
     pub const fn with_decode_preference_ratio(mut self, v: f32) -> Self {
         self.inner.decode_preference_ratio = v;
         self
     }
+    /// Toggle priority-based scheduling.
     #[must_use]
     pub const fn with_enable_priority_scheduling(mut self, v: bool) -> Self {
         self.inner.enable_priority_scheduling = v;
         self
     }
+    /// Toggle dynamic batching (group similar requests automatically).
     #[must_use]
     pub const fn with_enable_dynamic_batching(mut self, v: bool) -> Self {
         self.inner.enable_dynamic_batching = v;
         self
     }
+    /// Set the minimum batch size for dynamic batching.
     #[must_use]
     pub const fn with_min_batch_size(mut self, v: usize) -> Self {
         self.inner.min_batch_size = v;
         self
     }
+    /// Set the maximum batch size for dynamic batching.
     #[must_use]
     pub const fn with_max_batch_size(mut self, v: usize) -> Self {
         self.inner.max_batch_size = v;
         self
     }
+    /// Override the CUDA Graph sub-config.
     #[must_use]
     pub fn with_cuda_graph(mut self, v: SchedulerCudaGraphConfig) -> Self {
         self.inner.cuda_graph = v;
         self
     }
+    /// Override the sequence-packing sub-config.
     #[must_use]
     pub const fn with_packing(mut self, v: SequencePackingConfig) -> Self {
         self.inner.packing = v;
         self
     }
-    /// build: build the [`SchedulerConfig`].
+    /// Finalize the builder into a [`SchedulerConfig`].
     #[must_use]
     pub fn build(self) -> SchedulerConfig {
         self.inner

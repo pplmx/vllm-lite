@@ -129,6 +129,9 @@ impl Engine {
         self.draft_registry.decrement_ref(id)
     }
 
+    /// Switch the engine into speculative-decoding mode using the legacy
+    /// single-`draft_model` path. Use [`Engine::enable_adaptive_speculative`]
+    /// instead when you need per-request draft routing or adaptive acceptance.
     pub const fn enable_speculative(&mut self) {
         self.speculative_mode = true;
     }

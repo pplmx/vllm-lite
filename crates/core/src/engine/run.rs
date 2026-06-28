@@ -8,6 +8,18 @@ use tokio::sync::mpsc;
 use tracing::error;
 
 impl Engine {
+    /// Run the engine's main loop, draining `msg_rx` and stepping the
+    /// scheduler until a `Shutdown` message is received.
+    ///
+    /// The loop is single-threaded and non-async: incoming messages are
+    /// drained with `try_recv`, then one model step is executed if any
+    /// sequence is pending, then the thread sleeps for the duration
+    /// produced by the current [`SleepPolicy`]. This pattern gives
+    /// back-pressure-friendly batching without an async runtime.
+    ///
+    /// This call blocks the current thread and never returns except on
+    /// `EngineMessage::Shutdown`. Spawn it on a dedicated worker thread
+    /// (the `vllm-server` crate does this for you).
     pub fn run(&mut self, mut msg_rx: mpsc::UnboundedReceiver<EngineMessage>) {
         let mut step_count = 0u64;
         loop {
@@ -68,6 +80,9 @@ impl Engine {
         }
     }
 
+    /// Returns `true` if the scheduler currently has at least one waiting or
+    /// running sequence. Useful for tests and external monitors that want to
+    /// know whether calling [`Engine::step`] would do meaningful work.
     pub fn has_pending(&self) -> bool {
         self.scheduler.has_pending()
     }

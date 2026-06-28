@@ -21,6 +21,13 @@ use vllm_model::kernels::BatchCudaGraphExecutor;
 use vllm_traits::kernels::CudaGraphConfig;
 
 impl Engine {
+    /// Construct an Engine with default scheduler configuration and a fixed
+    /// `max_draft_tokens=4` and `num_kv_blocks=1024`.
+    ///
+    /// Use [`Engine::with_config_boxed`] when you need to tune those values.
+    /// The `boxed` suffix means the caller supplies trait-object models
+    /// (already boxed); the generic [`Engine::new`] is the more ergonomic
+    /// entry point for statically-known model types.
     #[must_use]
     pub fn new_boxed(
         target_model: Box<dyn ModelBackend>,
@@ -35,6 +42,14 @@ impl Engine {
         )
     }
 
+    /// Construct an Engine with full control over scheduler and speculative
+    /// parameters.
+    ///
+    /// - `config` — batch sizing, block size, preemption/eviction policies, etc.
+    /// - `max_draft_tokens` — upper bound on draft length per speculative step.
+    /// - `num_kv_blocks` — total number of paged KV-cache blocks the allocator
+    ///   may hand out across all live sequences.
+    #[must_use]
     pub fn with_config_boxed(
         target_model: Box<dyn ModelBackend>,
         draft_model: Option<Box<dyn ModelBackend>>,
@@ -81,6 +96,9 @@ impl Engine {
     }
 
     /// Creates a new Engine with default configuration.
+    ///
+    /// Equivalent to `Engine::with_config(target, draft, SchedulerConfig::default(), 4, 1024)`.
+    /// See [`Engine::with_config`] for parameter descriptions.
     pub fn new<M: ModelBackend + 'static>(target_model: M, draft_model: Option<M>) -> Self {
         Self::with_config(
             target_model,
@@ -91,6 +109,10 @@ impl Engine {
         )
     }
 
+    /// Generic constructor that boxes the model arguments and delegates to
+    /// [`Engine::with_config_boxed`]. Prefer this over `with_config_boxed` when
+    /// the concrete model type is known at the call site (it avoids one
+    /// `Box::new` round-trip in user code).
     pub fn with_config<M: ModelBackend + 'static>(
         target_model: M,
         draft_model: Option<M>,

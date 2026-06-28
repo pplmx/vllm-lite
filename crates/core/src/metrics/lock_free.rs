@@ -45,6 +45,10 @@ pub struct LockFreeMetrics {
 }
 
 impl LockFreeMetrics {
+    /// Construct a `LockFreeMetrics` whose bounded ring channels hold up to
+    /// `capacity` samples each for latency, batch size, and scheduler-wait
+    /// time. Once full, additional samples are dropped (via `try_send`),
+    /// keeping the hot path lock-free.
     #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
         let (latency_tx, latency_rx) = bounded(capacity);
@@ -71,26 +75,37 @@ impl LockFreeMetrics {
         }
     }
 
+    /// Add `count` to the lifetime token counter. Hot-path: uses a single
+    /// relaxed atomic increment.
     pub fn record_tokens(&self, count: u64) {
         self.tokens_total.fetch_add(count, Ordering::Relaxed);
     }
 
+    /// Increment the lifetime request counter by one.
     pub fn record_request(&self) {
         self.requests_total.fetch_add(1, Ordering::Relaxed);
     }
 
+    /// Record a per-step latency sample in milliseconds. Sample is pushed to
+    /// the bounded latency channel; if the channel is full it is silently
+    /// dropped.
     pub fn record_latency(&self, ms: f64) {
         let _ = self.latency_sender.try_send(ms);
     }
 
+    /// Record a per-step batch-size sample. Dropped if the channel is full.
     pub fn record_batch_size(&self, size: usize) {
         let _ = self.batch_size_sender.try_send(size);
     }
 
+    /// Mark the start of a request: increment the in-flight counter so health
+    /// probes can see concurrent load.
     pub fn record_request_start(&self) {
         self.requests_in_flight.fetch_add(1, Ordering::Relaxed);
     }
 
+    /// Mark the end of a request: decrement the in-flight counter. Must be
+    /// paired with every `record_request_start` call.
     pub fn record_request_end(&self) {
         self.requests_in_flight.fetch_sub(1, Ordering::Relaxed);
     }
