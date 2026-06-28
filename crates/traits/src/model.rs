@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 use std::sync::Arc;
 
 use crate::types::{BatchOutput, SeqId, TokenId};
