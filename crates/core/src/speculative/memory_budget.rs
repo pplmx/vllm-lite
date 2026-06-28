@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! `MemoryBudget` — VRAM budget enforcement for target + concurrent drafts
 //!
 //! v18.0 Multi-Model Speculative Decoding phase 2 (LIFE-02/03, MEM-01..03).

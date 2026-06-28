@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 // crates/core/src/metrics/collector/mod.rs
 //
 // Facade for the metrics collector subsystem. Sub-modules:

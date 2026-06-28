@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use std::time::Instant;
 
 /// `SchedulerStats`: scheduler statistics.

@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use crate::types::{BlockId, Sequence, Status};
 use std::collections::{HashMap, VecDeque};
 

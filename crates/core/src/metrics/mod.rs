@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Metrics collection and export
 pub mod collector;
 pub mod exporter;

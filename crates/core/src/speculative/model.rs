@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! `SpeculativeModel` wrapper for speculative decoding
 //!
 //! Wraps a `ModelBackend` with speculative execution logic,

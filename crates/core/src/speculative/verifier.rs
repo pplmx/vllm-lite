@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Draft verification trait for speculative decoding
 //!
 //! The `DraftVerifier` trait abstracts the draft generation and verification

@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Configuration for speculative decoding
 //!
 //! `SpeculationConfig` controls how speculative decoding operates,

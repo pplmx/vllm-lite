@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Draft registry — heterogeneous draft model management.
 //!
 //! v18.0 Multi-Model Speculative Decoding phase 1.
