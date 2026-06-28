@@ -107,7 +107,9 @@ pub struct AdaptiveSpeculativeDecoder {
 }
 
 impl AdaptiveSpeculativeDecoder {
-    /// Create a new adaptive speculative decoder
+    /// Create a new adaptive speculative decoder. Starts with
+    /// `current_max_draft_tokens = config.max_draft_tokens` and seeds the
+    /// accuracy tracker with the configured window and EWMA alpha.
     #[must_use]
     pub fn new(config: AdaptiveDraftConfig) -> Self {
         let window_size = config.accuracy_window_size;
