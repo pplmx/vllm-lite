@@ -20,6 +20,12 @@ path = "../crates/core"
 [dependencies.vllm-server]
 path = "../crates/server"
 
+[dependencies.vllm-model]
+path = "../crates/model"
+
+[dependencies.serde_json]
+version = "1"
+
 [[bin]]
 name = "fuzz_target_1"
 path = "fuzz_targets/fuzz_target_1.rs"
@@ -37,6 +43,13 @@ bench = false
 [[bin]]
 name = "safetensors_header"
 path = "fuzz_targets/safetensors_header.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "qwen3_config_json"
+path = "fuzz_targets/qwen3_config_json.rs"
 test = false
 doc = false
 bench = false
