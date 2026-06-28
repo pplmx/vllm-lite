@@ -57,7 +57,7 @@
 
 ## Task H-1: Establish Baseline (0.5 day, Low risk)
 
-- [ ] **Step 1: Run existing core benches**
+- [x] **Step 1: Run existing core benches**
 
 ```bash
 cd /workspace/vllm-lite
@@ -66,7 +66,7 @@ just bench-quick 2>&1 | tee /tmp/v27_h1_baseline_quick.txt
 
 Expected: ~30s-2min for radix cache bench.
 
-- [ ] **Step 2: Run full core bench suite**
+- [x] **Step 2: Run full core bench suite**
 
 ```bash
 just bench 2>&1 | tee /tmp/v27_h1_baseline_full.txt
@@ -74,7 +74,7 @@ just bench 2>&1 | tee /tmp/v27_h1_baseline_full.txt
 
 Expected: 5-10 min. Records numbers for all 8 core benches.
 
-- [ ] **Step 3: Document baseline**
+- [x] **Step 3: Document baseline**
 
 Create `docs/perf/v27-baseline.md`:
 
@@ -99,7 +99,7 @@ Create `docs/perf/v27-baseline.md`:
 (To be added in subsequent sub-phases)
 ```
 
-- [ ] **Step 4: Commit docs**
+- [x] **Step 4: Commit docs**
 
 ```bash
 git add docs/perf/
@@ -114,7 +114,7 @@ git commit -m "perf(v27.0): record baseline benchmark numbers (H-1)"
 - NEW: `/workspace/vllm-lite/crates/model/benches/gqa_forward.rs`
 - MODIFY: `/workspace/vllm-lite/crates/model/Cargo.toml`
 
-- [ ] **Step 1: Create bench file**
+- [x] **Step 1: Create bench file**
 
 ```rust
 //! GQA forward-pass benchmark.
@@ -155,7 +155,7 @@ criterion_main!(benches);
 
 (Adjust based on actual `GqaAttention::new` signature — audit if needed.)
 
-- [ ] **Step 2: Add `[[bench]]` entry to `crates/model/Cargo.toml`**
+- [x] **Step 2: Add `[[bench]]` entry to `crates/model/Cargo.toml`**
 
 ```toml
 [[bench]]
@@ -163,7 +163,7 @@ name = "gqa_forward"
 harness = false
 ```
 
-- [ ] **Step 3: Verify it runs**
+- [x] **Step 3: Verify it runs**
 
 ```bash
 cargo bench -p vllm-model --bench gqa_forward -- --sample-size 10
@@ -171,9 +171,9 @@ cargo bench -p vllm-model --bench gqa_forward -- --sample-size 10
 
 Expected: completes in 1-5 min; outputs throughput numbers.
 
-- [ ] **Step 4: Record numbers in `docs/perf/v27-baseline.md`**
+- [x] **Step 4: Record numbers in `docs/perf/v27-baseline.md`**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/model/benches/gqa_forward.rs crates/model/Cargo.toml docs/perf/
@@ -190,7 +190,7 @@ Same pattern as H-2 but for MLA:
 - NEW: `/workspace/vllm-lite/crates/model/benches/mla_forward.rs`
 - MODIFY: `/workspace/vllm-lite/crates/model/Cargo.toml`
 
-- [ ] **Step 1: Create bench file** (analogous to H-2)
+- [x] **Step 1: Create bench file** (analogous to H-2)
 
 ```rust
 //! MLA forward-pass benchmark.
@@ -228,7 +228,7 @@ criterion_main!(benches);
 
 (Adjust based on actual `MlaAttention::new` signature.)
 
-- [ ] **Step 2~5**: Analogous to H-2.
+- [x] **Step 2~5**: Analogous to H-2.
 
 Commit: `perf(model): add MLA forward criterion bench (H-3)`
 
@@ -240,7 +240,7 @@ Commit: `perf(model): add MLA forward criterion bench (H-3)`
 - NEW: `/workspace/vllm-lite/crates/model/benches/flash_attention.rs`
 - MODIFY: `/workspace/vllm-lite/crates/model/Cargo.toml`
 
-- [ ] **Step 1: Create bench file**
+- [x] **Step 1: Create bench file**
 
 ```rust
 //! Flash attention kernel benchmark.
@@ -272,7 +272,7 @@ criterion_main!(benches);
 
 (Adjust to actual `flash_attention` function signature.)
 
-- [ ] **Step 2~5**: Analogous to H-2.
+- [x] **Step 2~5**: Analogous to H-2.
 
 Commit: `perf(model): add flash attention criterion bench (H-4)`
 
@@ -284,7 +284,7 @@ Commit: `perf(model): add flash attention criterion bench (H-4)`
 - NEW: `/workspace/vllm-lite/crates/model/benches/paged_kv_cache.rs`
 - MODIFY: `/workspace/vllm-lite/crates/model/Cargo.toml`
 
-- [ ] **Step 1: Create bench file**
+- [x] **Step 1: Create bench file**
 
 ```rust
 //! Paged KV cache read/write benchmark.
@@ -327,7 +327,7 @@ criterion_main!(benches);
 
 (Adjust to actual `PagedKvCache` API.)
 
-- [ ] **Step 2~5**: Analogous to H-2.
+- [x] **Step 2~5**: Analogous to H-2.
 
 Commit: `perf(model): add paged KV cache criterion bench (H-5)`
 
@@ -338,7 +338,7 @@ Commit: `perf(model): add paged KV cache criterion bench (H-5)`
 **Files:**
 - MODIFY: `/workspace/vllm-lite/justfile`
 
-- [ ] **Step 1: Add new bench targets**
+- [x] **Step 1: Add new bench targets**
 
 ```justfile
 # Run model-layer benchmarks (CPU; ~10-20 min)
@@ -353,13 +353,13 @@ bench-model-one BENCH:
 bench-all: bench bench-model
 ```
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 ```bash
 just bench-model-one gqa_forward 2>&1 | tail -5
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add justfile
@@ -373,7 +373,7 @@ git commit -m "build(perf): add model-layer bench justfile targets (H-6)"
 **Files:**
 - MODIFY: `/workspace/vllm-lite/Cargo.toml` (root; dev-deps)
 
-- [ ] **Step 1: Add `pprof` dev-dep**
+- [x] **Step 1: Add `pprof` dev-dep**
 
 In root `[workspace.dependencies]`:
 
@@ -387,7 +387,7 @@ In root `[dev-dependencies]`:
 pprof.workspace = true
 ```
 
-- [ ] **Step 2: Add a profiling bench harness (optional)**
+- [x] **Step 2: Add a profiling bench harness (optional)**
 
 ```rust
 // crates/core/benches/profile_helpers.rs (NEW)
@@ -396,7 +396,7 @@ pprof.workspace = true
 
 (Skip if pprof integration is non-trivial; defer to H-8.)
 
-- [ ] **Step 3: Document `cargo-flamegraph` install path**
+- [x] **Step 3: Document `cargo-flamegraph` install path**
 
 In `docs/perf/v27-profiling.md`:
 
@@ -426,7 +426,7 @@ For our model crate, look for:
 - Cache-unfriendly patterns (random access, large struct copies)
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add Cargo.toml docs/perf/
@@ -440,14 +440,14 @@ git commit -m "build(perf): add pprof dev-dep + profiling guide (H-7)"
 **Files:**
 - CREATE: `/workspace/vllm-lite/docs/perf/v27-profile-gqa.md`
 
-- [ ] **Step 1: Generate flamegraph**
+- [x] **Step 1: Generate flamegraph**
 
 ```bash
 cd /workspace/vllm-lite/crates/model
 cargo flamegraph --bench gqa_forward -- --sample-size 50 --seq-len 2048
 ```
 
-- [ ] **Step 2: Analyze top-5 functions**
+- [x] **Step 2: Analyze top-5 functions**
 
 Identify:
 - Which Tensor ops dominate
@@ -455,7 +455,7 @@ Identify:
 - Whether matmul is hot
 - Allocation patterns
 
-- [ ] **Step 3: Write profile report**
+- [x] **Step 3: Write profile report**
 
 ```markdown
 # GQA Profile (v27.0)
@@ -478,7 +478,7 @@ Identify:
 - H-11 will optimize hotspot #1
 ```
 
-- [ ] **Step 4: Commit report**
+- [x] **Step 4: Commit report**
 
 ```bash
 git add docs/perf/v27-profile-gqa.md
@@ -491,7 +491,7 @@ git commit -m "docs(perf): GQA profile report (H-8)"
 
 Same pattern as H-8, but for MLA and flash attention.
 
-- [ ] **Step 1~4**: analogous to H-8.
+- [x] **Step 1~4**: analogous to H-8.
 - Commit: `docs(perf): MLA + flash attention profile reports (H-9)`
 
 ---
@@ -500,7 +500,7 @@ Same pattern as H-8, but for MLA and flash attention.
 
 Same pattern as H-8, but for paged KV cache and scheduler batch_composer.
 
-- [ ] **Step 1~4**: analogous to H-8.
+- [x] **Step 1~4**: analogous to H-8.
 - Commit: `docs(perf): paged KV + batch composer profile reports (H-10)`
 
 ---
@@ -520,23 +520,23 @@ Common optimizations for attention:
 - Re-bench after change; verify improvement
 - Document inline why the optimization is correct
 
-- [ ] **Step 1: Identify the specific hotspot**
+- [x] **Step 1: Identify the specific hotspot**
 
 From H-8 report, pick the highest-leverage target.
 
-- [ ] **Step 2: Implement optimization**
+- [x] **Step 2: Implement optimization**
 
 TBD based on Step 1. Likely modifications in:
 - `crates/model/src/components/attention/gqa.rs`
 - or `crates/model/src/components/attention/mla.rs`
 
-- [ ] **Step 3: Verify tests pass**
+- [x] **Step 3: Verify tests pass**
 
 ```bash
 just nextest 2>&1 | tail -3
 ```
 
-- [ ] **Step 4: Re-bench**
+- [x] **Step 4: Re-bench**
 
 ```bash
 just bench-model-one gqa_forward 2>&1 | tail -10
@@ -544,7 +544,7 @@ just bench-model-one gqa_forward 2>&1 | tail -10
 
 Compare to baseline (H-2).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/model/...
@@ -572,19 +572,19 @@ Same pattern as H-11, gated by H-10 profile. Likely target: paged KV cache or ba
 
 ## Task H-14: Validation (1 day, Low risk)
 
-- [ ] **Step 1: Re-run all benches**
+- [x] **Step 1: Re-run all benches**
 
 ```bash
 just bench-all 2>&1 | tee /tmp/v27_h14_after.txt
 ```
 
-- [ ] **Step 2: Verify all tests pass**
+- [x] **Step 2: Verify all tests pass**
 
 ```bash
 just ci 2>&1 | tail -10
 ```
 
-- [ ] **Step 3: Compute deltas vs H-1 baseline**
+- [x] **Step 3: Compute deltas vs H-1 baseline**
 
 Update `docs/perf/v27-baseline.md`:
 
@@ -600,7 +600,7 @@ Update `docs/perf/v27-baseline.md`:
 | Radix cache (existing) | X ns | Y ns | ±Z% |
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/perf/v27-baseline.md
@@ -614,7 +614,7 @@ git commit -m "docs(perf): v27.0 before/after comparison (H-14)"
 **Files:**
 - MODIFY: `/workspace/vllm-lite/CHANGELOG.md`
 
-- [ ] **Step 1: Add v27.0 entry to CHANGELOG**
+- [x] **Step 1: Add v27.0 entry to CHANGELOG**
 
 Under `[Unreleased]` → `### Changed`:
 
@@ -631,7 +631,7 @@ Under `[Unreleased]` → `### Changed`:
     - `cargo audit` accepts RUSTSEC-2024-0436 (paste, INFO severity) — see SECURITY.md
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add CHANGELOG.md
@@ -652,9 +652,21 @@ git commit -m "docs(changelog): record v27.0 performance optimization milestone"
 
 ## Handoff
 
-After all tasks complete, Phase H (v27.0) is done. Expected: ~15 atomic commits covering benchmarks + profiling + 3 optimizations + docs.
+**Status (2026-06-28):** v27.0 COMPLETE.
 
-**After v27.0**: vllm-lite has measurable perf wins + benchmark infrastructure for future regression detection. Next milestone candidates:
-- v28.0: Test coverage expansion (property tests, fuzz, integration tests)
-- v29.0: New features (depending on user demand)
-- v30.0: Documentation site / API guide rewrite
+All H-1 through H-15 sub-phases landed. See `docs/perf/v27-after.md` for
+the after-optimization results and before/after comparison.
+
+**Net result**: 11 optimizations applied + 1 bug fixed. CPU gains on
+attention (-2.5 to -7.5%) and scheduler (-16%). PagedKV CPU regression
+expected to flip to a GPU win (eliminating 1024 kernel launches).
+
+**GPU validation**: standard qwen3-7B dimension numbers captured for the
+first time; provides a baseline for future A/B comparison.
+
+**Deferred items**: tracked for v28.0+ consideration.
+- expand_kv fused GQA matmul kernel (could yield 7-12x K/V memory traffic reduction)
+- FlashAttn tiled output-buffer pre-allocation (CPU unmeasurable; GPU unknown)
+- BatchComposer `kv_blocks` Arc clone (cross-crate trait API change)
+- PagedKV `write_kv` host round-trip elimination (needs `index_add`/`scatter`)
+- candle-core upgrade (would NOT clear paste; deferred from v26.0)
