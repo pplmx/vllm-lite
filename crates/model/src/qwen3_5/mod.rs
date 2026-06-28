@@ -7,8 +7,8 @@ pub mod model;
 pub mod register;
 pub mod weights;
 
-pub use attention35::Attention35WithRoPE;
 pub use crate::components::gated_delta::{GatedDeltaConfig, GatedDeltaNet, GatedDeltaState};
 pub use crate::components::ssm::{MambaBlock, SSMConfig, SSMError, SSMLayer};
+pub use attention35::Attention35WithRoPE;
 pub use config::{LayerType, parse_layer_types};
 pub use model::Qwen35HybridModel;

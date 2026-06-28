@@ -78,7 +78,11 @@ pub(crate) fn logits_to_vector(logits: &Tensor, is_prefill: bool) -> Result<Vec<
     map_candle(logits.to_vec1())
 }
 
-pub(crate) fn forward_batch<F>(seq_ids: &[SeqId], is_prefill: &[bool], mut step: F) -> Result<BatchOutput>
+pub(crate) fn forward_batch<F>(
+    seq_ids: &[SeqId],
+    is_prefill: &[bool],
+    mut step: F,
+) -> Result<BatchOutput>
 where
     F: FnMut(usize, bool) -> Result<TokenId>,
 {

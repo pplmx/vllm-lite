@@ -60,7 +60,10 @@ pub(crate) fn find_safetensors_files(model_dir: &Path) -> Result<Vec<PathBuf>> {
     Ok(files)
 }
 
-pub(crate) fn convert_tensor(view: &safetensors::tensor::TensorView, device: &Device) -> Result<Tensor> {
+pub(crate) fn convert_tensor(
+    view: &safetensors::tensor::TensorView,
+    device: &Device,
+) -> Result<Tensor> {
     use half::{bf16, f16};
     use safetensors::Dtype;
 

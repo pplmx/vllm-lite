@@ -30,7 +30,11 @@ impl TensorParallelConfig {
     }
 }
 
-pub(crate) fn compute_vocab_shard(vocab_size: usize, world_size: usize, rank: usize) -> (usize, usize) {
+pub(crate) fn compute_vocab_shard(
+    vocab_size: usize,
+    world_size: usize,
+    rank: usize,
+) -> (usize, usize) {
     let vocab_per_rank = vocab_size / world_size;
     let remainder = vocab_size % world_size;
 
