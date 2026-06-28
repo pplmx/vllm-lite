@@ -8,7 +8,7 @@ const NULL_BLOCK: BlockId = BlockId::MAX;
 /// This is a default sizing — it does NOT track per-token KV cache size
 /// or model-specific head dimensions. Callers needing exact VRAM accounting
 /// should compute their own block size and use the helper APIs.
-pub const BLOCK_BYTES: usize = 16 * 1024 * 1024;
+pub(crate) const BLOCK_BYTES: usize = 16 * 1024 * 1024;
 
 /// BlockAllocatorStats: block allocator statistics.
 #[derive(Clone, Default)]

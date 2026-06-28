@@ -10,7 +10,7 @@ use super::leader_election::LeaderElection;
 
 /// InFlightRequest: in flight request.
 #[derive(Debug, Clone)]
-pub struct InFlightRequest {
+pub(crate) struct InFlightRequest {
     pub seq_id: SeqId,
     pub prompt_hash: u64,
     pub created_at: std::time::Instant,
@@ -18,7 +18,7 @@ pub struct InFlightRequest {
 }
 
 /// FailoverManager: failover manager.
-pub struct FailoverManager {
+pub(crate) struct FailoverManager {
     leader_election: Arc<LeaderElection>,
     inflight_requests: Arc<RwLock<HashMap<SeqId, InFlightRequest>>>,
     request_timeout: std::time::Duration,

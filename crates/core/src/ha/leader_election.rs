@@ -7,14 +7,14 @@ use tracing::{info, warn};
 
 /// LeadershipState: leadership state enumeration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LeadershipState {
+pub(crate) enum LeadershipState {
     Leader,
     Follower,
     Candidate,
 }
 
 /// LeaderElection: leader election.
-pub struct LeaderElection {
+pub(crate) struct LeaderElection {
     state: Arc<RwLock<LeadershipState>>,
     is_leader: Arc<RwLock<bool>>,
     leader_id: Arc<RwLock<Option<String>>>,

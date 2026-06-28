@@ -49,7 +49,7 @@ pub trait AsyncFallbackStrategy {
 // ─────────────────────── RetryStrategy (async, with sleep) ──────────────────
 
 /// Retry strategy with exponential backoff. Async (uses `tokio::time::sleep`).
-pub struct RetryStrategy {
+pub(crate) struct RetryStrategy {
     pub(crate) max_attempts: usize,
     pub(crate) base_delay: Duration,
 }
@@ -84,7 +84,7 @@ impl Default for RetryStrategy {
 
 /// Builder for [`RetryStrategy`].
 #[derive(Debug, Clone)]
-pub struct RetryStrategyBuilder {
+pub(crate) struct RetryStrategyBuilder {
     max_attempts: usize,
     base_delay: Duration,
 }
@@ -147,7 +147,7 @@ impl AsyncFallbackStrategy for RetryStrategy {
 ///
 /// Implements the sync trait because there's no I/O involved.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct FailFastStrategy;
+pub(crate) struct FailFastStrategy;
 
 impl FallbackStrategy for FailFastStrategy {
     fn execute<T, E>(&self, op: fn() -> Result<T, E>) -> Result<T, E> {
@@ -162,7 +162,7 @@ impl FallbackStrategy for FailFastStrategy {
 /// Not a `FallbackStrategy` impl in the original trait because it changes
 /// the output type. Re-introduced here as a sync helper that takes both
 /// the primary op (sync) and a fallback closure (sync, infallible).
-pub struct DegradeStrategy<F> {
+pub(crate) struct DegradeStrategy<F> {
     fallback: F,
 }
 
