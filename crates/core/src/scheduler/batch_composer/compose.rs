@@ -85,12 +85,21 @@ impl BatchComposer {
     }
 
     fn compose_chunked_prefill(&self, sequences: Vec<Sequence>, available_memory: usize) -> Batch {
-        let mut seq_ids = Vec::new();
-        let mut input_tokens = Vec::new();
-        let mut positions = Vec::new();
-        let mut kv_block_ids = Vec::new();
-        let num_computed_tokens = Vec::new();
-        let mut is_prefill = Vec::new();
+        // H-13 (PERF-03 + CORRECTNESS-FIX): pre-size output vecs to
+        // `max_batch_size` (matches the decode/prefill patterns), and
+        // declare `num_computed_tokens` as `mut` so we can push the
+        // start offset per sequence (matches `compose_prefill_batch`).
+        // Previously `num_computed_tokens` was declared non-`mut` and
+        // left empty — any downstream consumer indexing
+        // `batch.num_computed_tokens[i]` for a chunked-prefill batch
+        // would have panicked.
+        let capacity = self.config.max_batch_size;
+        let mut seq_ids = Vec::with_capacity(capacity);
+        let mut input_tokens = Vec::with_capacity(capacity);
+        let mut positions = Vec::with_capacity(capacity);
+        let mut kv_block_ids = Vec::with_capacity(capacity);
+        let mut num_computed_tokens = Vec::with_capacity(capacity);
+        let mut is_prefill = Vec::with_capacity(capacity);
         let mut total_tokens = 0usize;
         let mut max_seq_len = 0usize;
 
@@ -125,6 +134,7 @@ impl BatchComposer {
             input_tokens.push(tokens);
 
             kv_block_ids.push(seq.kv_blocks.as_ref().clone());
+            num_computed_tokens.push(start);
             // Only treat as prefill if this is the first chunk
             // Subsequent chunks use is_prefill=false to continue prefill
             is_prefill.push(start == 0);
@@ -173,14 +183,22 @@ impl BatchComposer {
     /// Compose a prefill batch
     fn compose_prefill_batch(&self, mut sequences: Vec<Sequence>) -> Batch {
         // Sort by remaining token count (shorter first for better packing)
-        sequences.sort_by_key(|s| s.tokens.len().saturating_sub(s.num_computed_tokens));
+        // H-13 (PERF-04): `sort_unstable_by_key` drops the stability
+        // guarantee that `sort_by_key` provides. Stable ordering is not
+        // relied on by downstream consumers of the prefill batch.
+        sequences.sort_unstable_by_key(|s| s.tokens.len().saturating_sub(s.num_computed_tokens));
 
-        let mut seq_ids = Vec::new();
-        let mut input_tokens = Vec::new();
-        let mut positions = Vec::new();
-        let mut kv_block_ids = Vec::new();
-        let mut num_computed_tokens = Vec::new();
-        let mut is_prefill = Vec::new();
+        // H-13 (PERF-03): pre-size the output vecs to `max_batch_size`
+        // so the first `max_batch_size` pushes do not trigger
+        // reallocation. Matches the decode-path pattern at lines
+        // 265-270.
+        let capacity = self.config.max_batch_size;
+        let mut seq_ids = Vec::with_capacity(capacity);
+        let mut input_tokens = Vec::with_capacity(capacity);
+        let mut positions = Vec::with_capacity(capacity);
+        let mut kv_block_ids = Vec::with_capacity(capacity);
+        let mut num_computed_tokens = Vec::with_capacity(capacity);
+        let mut is_prefill = Vec::with_capacity(capacity);
         let mut total_tokens = 0usize;
         let mut max_seq_len = 0usize;
 
@@ -534,5 +552,31 @@ mod tests {
         // Very long sequence should be limited
         let chunk = config.calculate_chunk_size(10000, 10000);
         assert!(chunk <= 1024, "Should respect max chunk size");
+    }
+
+    #[test]
+    fn test_chunked_prefill_populates_num_computed_tokens() {
+        // H-13 (CORRECTNESS-FIX): previously `compose_chunked_prefill`
+        // declared `num_computed_tokens` as non-`mut` and left the Vec
+        // empty. Any downstream consumer indexing
+        // `batch.num_computed_tokens[i]` for a chunked-prefill batch
+        // would have panicked. After the fix, the field is populated
+        // with the sequence's `num_computed_tokens` (the chunk start).
+        let chunk_config = ChunkedPrefillConfig {
+            enabled: true,
+            target_chunk_size: 10,
+            max_chunk_size: 20,
+            min_chunk_size: 5,
+        };
+        let composer =
+            BatchComposer::with_chunked_prefill(BatchCompositionConfig::default(), chunk_config);
+
+        let mut seq = make_sequence(1, (0..50u32).collect(), Status::Waiting);
+        // Simulate a previously partially-prefilled sequence.
+        seq.num_computed_tokens = 30;
+        let batch = composer.compose_with_chunking(vec![seq], Phase::Prefill, 10000);
+
+        assert_eq!(batch.num_computed_tokens.len(), batch.seq_ids.len());
+        assert_eq!(batch.num_computed_tokens[0], 30);
     }
 }
