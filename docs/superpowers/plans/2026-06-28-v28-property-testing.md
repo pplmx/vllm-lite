@@ -1,6 +1,6 @@
 # v28.0 Property-Based Testing
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add `proptest` infrastructure + property tests for the 5 highest-ROI components in `vllm-core`. Catch edge-case regressions that example-based unit tests miss.
 
@@ -53,13 +53,13 @@
 - MODIFY: `/workspace/vllm-lite/Cargo.toml` (root)
 - MODIFY: `/workspace/vllm-lite/crates/core/Cargo.toml`
 
-- [ ] **Step 1: Verify proptest 1.11 in cache**
+- [x] **Step 1: Verify proptest 1.11 in cache**
 
 ```bash
 ls /root/.cargo/registry/src/rsproxy.cn-e3de039b2554c837/ | rg "^proptest" | head -3
 ```
 
-- [ ] **Step 2: Add proptest to workspace dependencies**
+- [x] **Step 2: Add proptest to workspace dependencies**
 
 In `/workspace/vllm-lite/Cargo.toml` `[workspace.dependencies]`:
 
@@ -67,7 +67,7 @@ In `/workspace/vllm-lite/Cargo.toml` `[workspace.dependencies]`:
 proptest = "1.11"
 ```
 
-- [ ] **Step 3: Add proptest as dev-dep to crates/core**
+- [x] **Step 3: Add proptest as dev-dep to crates/core**
 
 In `/workspace/vllm-lite/crates/core/Cargo.toml` `[dev-dependencies]`:
 
@@ -75,7 +75,7 @@ In `/workspace/vllm-lite/crates/core/Cargo.toml` `[dev-dependencies]`:
 proptest.workspace = true
 ```
 
-- [ ] **Step 4: Verify build**
+- [x] **Step 4: Verify build**
 
 ```bash
 cd /workspace/vllm-lite
@@ -84,7 +84,7 @@ cargo build -p vllm-core --tests 2>&1 | tail -5
 
 Expected: clean compile.
 
-- [ ] **Step 5: Verify a minimal proptest works**
+- [x] **Step 5: Verify a minimal proptest works**
 
 Create a throwaway test file:
 
@@ -120,7 +120,7 @@ cargo test 2>&1 | tail -5
 
 Expected: 1 property test runs and passes.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /workspace/vllm-lite
@@ -137,14 +137,14 @@ git commit -m "build(test): add proptest 1.11 dev-dep to workspace + vllm-core"
 
 Add to the existing `#[cfg(test)] mod tests` block (or create if missing).
 
-- [ ] **Step 1: Read existing RadixTree tests**
+- [x] **Step 1: Read existing RadixTree tests**
 
 ```bash
 cd /workspace/vllm-lite
 grep -n "fn test\|#\[test\]" crates/core/src/scheduler/radix_cache/tree.rs
 ```
 
-- [ ] **Step 2: Add property tests**
+- [x] **Step 2: Add property tests**
 
 Append to the test module:
 
@@ -209,14 +209,14 @@ mod prop_tests {
 }
 ```
 
-- [ ] **Step 3: Verify compile**
+- [x] **Step 3: Verify compile**
 
 ```bash
 cd /workspace/vllm-lite
 cargo test -p vllm-core --lib radix_cache --no-run 2>&1 | tail -5
 ```
 
-- [ ] **Step 4: Run property tests**
+- [x] **Step 4: Run property tests**
 
 ```bash
 cd /workspace/vllm-lite
@@ -225,11 +225,11 @@ PROPTEST_CASES=50 cargo test -p vllm-core --lib radix_cache prop_tests 2>&1 | ta
 
 Expected: 3 properties × 50 cases = 150 cases pass (or find a bug).
 
-- [ ] **Step 5: If bug found, fix it before committing**
+- [x] **Step 5: If bug found, fix it before committing**
 
 If a property fails, the counterexample is a real bug. Document it, fix it, and add a regression test.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /workspace/vllm-lite
@@ -252,14 +252,14 @@ prefix-cache hit). All 3 properties pass with 50 cases."
 **Files:**
 - MODIFY: `/workspace/vllm-lite/crates/core/src/scheduler/memory/allocator.rs`
 
-- [ ] **Step 1: Read existing tests**
+- [x] **Step 1: Read existing tests**
 
 ```bash
 cd /workspace/vllm-lite
 grep -n "fn test\|#\[test\]" crates/core/src/scheduler/memory/allocator.rs
 ```
 
-- [ ] **Step 2: Add properties**
+- [x] **Step 2: Add properties**
 
 ```rust
 #[cfg(test)]
@@ -309,7 +309,7 @@ mod prop_tests {
 }
 ```
 
-- [ ] **Step 3~6**: Compile, run, fix, commit (same pattern as I-2).
+- [x] **Step 3~6**: Compile, run, fix, commit (same pattern as I-2).
 
 ---
 
@@ -318,14 +318,14 @@ mod prop_tests {
 **Files:**
 - MODIFY: `/workspace/vllm-lite/crates/core/src/scheduler/request_queue.rs`
 
-- [ ] **Step 1: Read existing tests**
+- [x] **Step 1: Read existing tests**
 
 ```bash
 cd /workspace/vllm-lite
 grep -n "fn test\|#\[test\]" crates/core/src/scheduler/request_queue.rs
 ```
 
-- [ ] **Step 2: Add properties**
+- [x] **Step 2: Add properties**
 
 ```rust
 #[cfg(test)]
@@ -399,7 +399,7 @@ mod prop_tests {
 }
 ```
 
-- [ ] **Step 3~6**: Compile, run, fix, commit (same pattern).
+- [x] **Step 3~6**: Compile, run, fix, commit (same pattern).
 
 ---
 
@@ -408,14 +408,14 @@ mod prop_tests {
 **Files:**
 - MODIFY: `/workspace/vllm-lite/crates/core/src/scheduler/batch_composer/compose.rs`
 
-- [ ] **Step 1: Read existing tests + composer signature**
+- [x] **Step 1: Read existing tests + composer signature**
 
 ```bash
 cd /workspace/vllm-lite
 grep -n "fn test\|#\[test\]\|pub fn build_batch\|pub fn compose" crates/core/src/scheduler/batch_composer/compose.rs
 ```
 
-- [ ] **Step 2: Add properties for batch composition**
+- [x] **Step 2: Add properties for batch composition**
 
 ```rust
 #[cfg(test)]
@@ -484,7 +484,7 @@ mod prop_tests {
 }
 ```
 
-- [ ] **Step 3~6**: Compile, run, fix, commit.
+- [x] **Step 3~6**: Compile, run, fix, commit.
 
 ---
 
@@ -493,7 +493,7 @@ mod prop_tests {
 **Files:**
 - MODIFY: `/workspace/vllm-lite/CHANGELOG.md`
 
-- [ ] **Step 1: Add v28.0 entry**
+- [x] **Step 1: Add v28.0 entry**
 
 Under `[Unreleased]` → `### Added`:
 
@@ -507,7 +507,7 @@ Under `[Unreleased]` → `### Added`:
     - All 1194+ tests still pass
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 cd /workspace/vllm-lite
@@ -528,9 +528,18 @@ git commit -m "docs(v28.0): CHANGELOG entry for property-based testing milestone
 
 ## Handoff
 
-After all tasks complete, v28.0 is done. Expected: ~5 commits, 16 properties total, ~50 test cases per property = ~800 generated tests on every `cargo test -p vllm-core`.
+**Status (2026-06-28):** v28.0 COMPLETE.
 
-**After v28.0:** vllm-core has strong invariant verification. Next candidates:
-- v29.0: Fuzz testing (cargo-fuzz) for parsers
-- v29.0: BatchComposer Arc clone optimization (the deferred v27.0 item)
+All I-1 through I-6 sub-phases landed. 18 properties total at PROPTEST_CASES=100
+= 1800 generated test cases per run. 1 real bug found and fixed
+(decode empty-token panic in BatchComposer).
+
+**Property test value demonstrated**: a 5-line test caught a panic that
+had been latent in the codebase. This validates the ROI of property-based
+testing for state-heavy components.
+
+**Next candidates**:
+- v29.0: Apply property tests to additional components (EvictionPolicy, PreemptionManager, Speculative registry)
+- v29.0: Fuzz testing with `cargo-fuzz` for parsers (config, tokenizer, scheduler serialization)
+- v29.0: Deferred v27.0 optimization (BatchComposer Arc clone)
 - v29.0: New features

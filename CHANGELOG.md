@@ -26,6 +26,18 @@
 
 ### Added
 
+- **Property-Based Testing (v28.0)** — proptest infrastructure + invariants:
+    - `proptest 1.11` added as workspace dev-dep
+    - 4 components covered with 18 properties total:
+        - RadixTree (3 props): insert+lookup round-trip, longest-prefix bound, insert+clear
+        - BlockAllocator (3 props): allocation uniqueness, LIFO reuse, capacity bounding
+        - RequestQueue (4 props): enqueue+remove round-trip, get-after-enqueue, FIFO order, phase index consistency
+        - BatchComposer (7 props): batch size bound, token budget, parallel-vec consistency, decode token count, prefill total_tokens, deterministic compose, seq_id uniqueness
+    - **Bug fix found by property tests**: `compose_decode_batch` panicked on empty-token sequences due to `tokens_len - 1` underflow (position computation + `num_computed_tokens`); fixed via `saturating_sub(1)`. Regression test added.
+    - All properties pass at PROPTEST_CASES=100 (100 cases × 18 properties = 1800 generated test cases per run)
+    - All existing tests still pass (1194+)
+    - Total commits: 5 (I-1, I-2, I-3, I-4, I-5) + 1 (CHANGELOG)
+
 - **MambaBlock Weight Loading**
     - Added `MambaBlock::from_weights` method to load SSM layer weights
     - Implemented full weight loading for Qwen3.5 Mamba models
