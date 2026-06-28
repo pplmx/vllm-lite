@@ -100,7 +100,7 @@ impl SchedulerEngine {
     }
 
     /// Get KV cache usage statistics
-    pub fn get_kv_cache_usage(&self) -> (u64, u64) {
+    pub const fn get_kv_cache_usage(&self) -> (u64, u64) {
         let total = self.memory.total_blocks() as u64;
         let available = self.memory.available_blocks() as u64;
         let used = total.saturating_sub(available);

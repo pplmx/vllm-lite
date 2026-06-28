@@ -44,7 +44,7 @@ impl ModelBackend for StubBackend {
         _num_computed_tokens: &[usize],
         _is_prefill: &[bool],
     ) -> ModelResult<BatchOutput> {
-        let token: u32 = self.id.bytes().map(|b| u32::from(b)).sum::<u32>() % 32000;
+        let token: u32 = self.id.bytes().map(u32::from).sum::<u32>() % 32000;
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
             next_tokens: seq_ids.iter().map(|_| token).collect(),

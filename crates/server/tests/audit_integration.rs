@@ -93,10 +93,7 @@ fn build_app(audit: Arc<AuditLogger>, jwt: Arc<JwtAuthMiddleware>) -> Router {
         "ok"
     }
 
-    let state = AuditState {
-        jwt: jwt,
-        audit: audit,
-    };
+    let state = AuditState { jwt, audit };
 
     let protected = Router::new()
         .route("/v1/models", get(models))
