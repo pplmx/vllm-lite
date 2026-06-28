@@ -39,7 +39,7 @@ base64 = "0.22"
 thiserror = "2"
 anyhow = "1"
 tokio-rustls = "0.26"
-jsonwebtoken = "9"
+jsonwebtoken = "10"
 
 [dev-dependencies]
 axum = { version = "0.8", features = ["tokio", "macros"] }
