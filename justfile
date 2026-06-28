@@ -113,3 +113,22 @@ audit:
 # Run cargo audit (strict; will report the paste INFO warning)
 audit-strict:
     cargo audit
+
+# Build fuzz binaries (debug). Requires nightly for sanitizer coverage.
+# Use `just fuzz-build` before `just fuzz-smoke` / `just fuzz TARGET` so the
+# release artifact is cached.
+fuzz-build:
+    cargo +nightly fuzz build --fuzz-dir fuzz
+
+# Run a short fuzzing smoke test against every target (~10s each).
+# Iterates over all targets because `cargo fuzz run` requires a target name.
+fuzz-smoke:
+    sh -c 'set -e; for t in $(cargo +nightly fuzz list --fuzz-dir fuzz); do echo "==> Fuzzing $t (10s)"; cargo +nightly fuzz run "$t" --fuzz-dir fuzz -- -max_total_time=10; done'
+
+# Run a specific fuzz target for ~60s.
+fuzz TARGET:
+    cargo +nightly fuzz run {{TARGET}} --fuzz-dir fuzz -- -max_total_time=60
+
+# List available fuzz targets.
+fuzz-list:
+    cargo +nightly fuzz list --fuzz-dir fuzz
