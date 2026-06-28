@@ -73,6 +73,20 @@
     - Callers use `Arc::<dyn Trait>::default_arc()` (via type inference) or explicit `<dyn Trait>::default_arc()`
     - 6 low-ROI traits deferred (never used as `Arc<dyn Trait>` in current code)
 
+- **Module Boundaries (v24.0 Phase D-1)** — split `crates/core/src/engine.rs` (866 non-test LOC) into 7 focused sub-modules under `engine/`:
+    - `mod.rs` — facade: `Engine` struct, `SleepPolicy`, tests (437 LOC)
+    - `ctor.rs` — constructors (`new_boxed`, `with_config_boxed`, `with_drafts_*`, `with_budget_boxed`) + `EngineBuilder` (318 LOC)
+    - `draft_management.rs` — draft registry, resolver, speculative-mode toggles (124 LOC)
+    - `cuda_graph.rs` — `capture_cuda_graphs` + `cuda_graph_enabled` (cfg-gated pairs) (35 LOC)
+    - `lifecycle.rs` — `is_healthy`, `get_last_error`, `cancel_request`, `add_request` (38 LOC)
+    - `run.rs` — `run` main loop + `has_pending` (74 LOC)
+    - `beam.rs` — `step_beam` + `beam_search` + `get_top_k` (111 LOC)
+    - `graph_step.rs` — `step_with_graph` (cfg-gated pair) + `execute_regular` + `process_output` (155 LOC)
+    - Public API of `Engine` unchanged — single `crate::engine::Engine` type, all methods accessible
+    - All 1191 tests pass (`just ci` clean)
+    - Three `#[cfg(feature = "cuda-graph")]` / `#[cfg(not(feature = "cuda-graph"))]` duplicate method pairs (`capture_cuda_graphs`, `cuda_graph_enabled`, `step_with_graph`) preserved as intentional feature-gated pairs
+    - Largest sub-module: `ctor.rs` at 318 LOC (was 866 LOC monolith); all sub-modules < 500 LOC
+
 ---
 
 ## 🚀 [v18.0] — Multi-Model Speculative Decoding (2026-06-27)
