@@ -28,7 +28,7 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 
-use candle_core::{utils::cuda_is_available, Device, Tensor};
+use candle_core::{Device, Tensor, utils::cuda_is_available};
 use vllm_model::paged_tensor::PagedKvCache;
 
 // `BLOCK_SIZE` is a hardcoded constant from `vllm_traits` (= 16) and is
@@ -38,8 +38,8 @@ use vllm_model::paged_tensor::PagedKvCache;
 // (num_blocks, num_heads, head_dim) — qwen3-7B-class GQA.
 const STD_NUM_LAYERS: usize = 1;
 const STD_CONFIGS: &[(usize, usize, usize)] = &[
-    (64, 2, 64), // small cache
-    (256, 2, 64), // medium cache
+    (64, 2, 64),   // small cache
+    (256, 2, 64),  // medium cache
     (1024, 2, 64), // large cache
 ];
 
@@ -73,9 +73,8 @@ fn bench_paged_kv_cache(c: &mut Criterion) {
         let mut group = c.benchmark_group("paged_kv_cache");
 
         for &(num_blocks, num_heads, head_dim) in STD_CONFIGS.iter() {
-            let mut cache =
-                make_cache(STD_NUM_LAYERS, num_blocks, num_heads, head_dim, &device)
-                    .expect("std paged kv cache init");
+            let mut cache = make_cache(STD_NUM_LAYERS, num_blocks, num_heads, head_dim, &device)
+                .expect("std paged kv cache init");
             let layer_idx = 0;
             let block_id = 0;
             let token_offset = 0;
@@ -85,28 +84,24 @@ fn bench_paged_kv_cache(c: &mut Criterion) {
             let seq_len = 1;
             let label = format!("blocks{num_blocks}_h{num_heads}_d{head_dim}");
 
-            group.bench_with_input(
-                BenchmarkId::new("read_write", &label),
-                &(),
-                |b, _| {
-                    b.iter(|| {
+            group.bench_with_input(BenchmarkId::new("read_write", &label), &(), |b, _| {
+                b.iter(|| {
+                    cache
+                        .write_kv(
+                            layer_idx,
+                            block_id,
+                            token_offset,
+                            black_box(&k),
+                            black_box(&v),
+                        )
+                        .expect("std write");
+                    let _ = black_box(
                         cache
-                            .write_kv(
-                                layer_idx,
-                                block_id,
-                                token_offset,
-                                black_box(&k),
-                                black_box(&v),
-                            )
-                            .expect("std write");
-                        let _ = black_box(
-                            cache
-                                .read_kv(layer_idx, &block_ids, seq_len)
-                                .expect("std read"),
-                        );
-                    });
-                },
-            );
+                            .read_kv(layer_idx, &block_ids, seq_len)
+                            .expect("std read"),
+                    );
+                });
+            });
         }
 
         group.finish();
@@ -156,11 +151,7 @@ fn bench_paged_kv_cache(c: &mut Criterion) {
                         black_box(&v),
                     )
                     .expect("write");
-                let _ = black_box(
-                    cache
-                        .read_kv(layer_idx, &block_ids, seq_len)
-                        .expect("read"),
-                );
+                let _ = black_box(cache.read_kv(layer_idx, &block_ids, seq_len).expect("read"));
             });
         });
         group.finish();

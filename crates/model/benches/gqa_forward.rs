@@ -24,7 +24,7 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 
-use candle_core::{utils::cuda_is_available, DType, Device, Tensor};
+use candle_core::{DType, Device, Tensor, utils::cuda_is_available};
 use vllm_model::components::attention::gqa::GqaAttention;
 use vllm_model::components::attention::util::AttentionConfig;
 
@@ -100,27 +100,19 @@ fn bench_gqa_forward(c: &mut Criterion) {
         for seq_len in STD_SEQ_LENS.iter() {
             let x = std_input(*seq_len, &device).expect("input tensor init");
 
-            group.bench_with_input(
-                BenchmarkId::new("standard", seq_len),
-                seq_len,
-                |b, _| {
-                    b.iter(|| {
-                        black_box(
-                            attn_standard
-                                .forward(black_box(&x))
-                                .expect("standard forward"),
-                        );
-                    });
-                },
-            );
+            group.bench_with_input(BenchmarkId::new("standard", seq_len), seq_len, |b, _| {
+                b.iter(|| {
+                    black_box(
+                        attn_standard
+                            .forward(black_box(&x))
+                            .expect("standard forward"),
+                    );
+                });
+            });
 
             group.bench_with_input(BenchmarkId::new("fused", seq_len), seq_len, |b, _| {
                 b.iter(|| {
-                    black_box(
-                        attn_fused
-                            .forward(black_box(&x))
-                            .expect("fused forward"),
-                    );
+                    black_box(attn_fused.forward(black_box(&x)).expect("fused forward"));
                 });
             });
         }
