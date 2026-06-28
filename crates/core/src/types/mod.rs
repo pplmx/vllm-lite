@@ -12,10 +12,10 @@ pub use vllm_traits::{Batch, BatchOutput, BlockId, SeqId, TokenId};
 
 pub use crate::speculative::DraftId;
 
-pub use adaptive_draft::*;
-pub use messages::*;
-pub use request::*;
-pub use sampling::*;
-pub use scheduler_config::*;
-pub use sequence::*;
-pub use sequence_packing::*;
+pub use adaptive_draft::{AdaptiveDraftConfig, AdaptiveDraftConfigBuilder};
+pub use messages::EngineMessage;
+pub use request::{Priority, Request};
+pub use sampling::{SamplingParams, SamplingParamsBuilder};
+pub use scheduler_config::{SchedulerConfig, SchedulerConfigBuilder};
+pub use sequence::{Phase, Sequence, Status};
+pub use sequence_packing::{SequencePackingConfig, SequencePackingConfigBuilder};

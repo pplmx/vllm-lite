@@ -21,8 +21,9 @@ pub use block::TransformerBlock;
 pub use decoder_block::{PagedDecoderBlock, RopeGqaDecoderBlock};
 pub use gated_delta::{GatedDeltaConfig, GatedDeltaNet, GatedDeltaState};
 pub use kv_cache_fp8::{Fp8Quantizer, KvCacheDtype};
-pub use mlp::*;
+pub use mlp::{SwiGLU, swiglu_forward};
 pub use norm::{LnLayerNorm, RmsNorm, layer_norm, rms_norm};
-pub use positional::*;
-pub use ssm::*;
-pub use vision::*;
+pub use ssm::{
+    MambaBlock, SSMConfig, SSMError, SSMHarmonicSSMLayer, SSMLayer, softplus,
+};
+pub use vision::{PatchEmbed, VisionConfig, VisionEncoder};

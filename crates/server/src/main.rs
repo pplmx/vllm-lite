@@ -18,7 +18,7 @@ use vllm_core::types::SchedulerConfig;
 use vllm_model::loader::ModelLoader;
 use vllm_model::tokenizer::Tokenizer;
 use vllm_server::auth::AuthMiddleware;
-use vllm_server::openai::batch::manager::BatchManager;
+use vllm_server::openai::batch::BatchManager;
 use vllm_server::{ApiState, api, auth, cli, health::HealthChecker, logging, openai};
 
 /// Health check endpoint - liveness probe

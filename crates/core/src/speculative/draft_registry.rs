@@ -16,4 +16,6 @@
     since = "0.21.0",
     note = "use `crate::speculative::registry` instead; this module is preserved as a re-export shim for one minor release"
 )]
-pub use crate::speculative::registry::*;
+pub use crate::speculative::registry::{
+    DraftId, DraftModelRegistry, DraftRegistryError, DraftSpec, DraftState, LoadedDraft,
+};

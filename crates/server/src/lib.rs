@@ -8,10 +8,9 @@ use vllm_model::config::Architecture;
 use vllm_model::tokenizer::Tokenizer;
 
 pub use crate::auth::AuthMiddleware;
-pub use crate::openai::batch::manager::BatchManager;
 pub use config::AuthConfig;
 pub use health::{HealthChecker, HealthStatus};
-pub use openai::batch::types::{BatchEndpoint, BatchResponse};
+pub use openai::batch::{BatchEndpoint, BatchManager, BatchResponse};
 pub use security::audit::AuditEvent;
 
 pub mod api;

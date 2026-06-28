@@ -4,4 +4,4 @@ pub mod parallel_linear;
 
 pub use all_reduce::{AllReduce, NcclAllReduce, ReduceOp};
 pub use device_mesh::{DeviceMesh, NodeMesh};
-pub use parallel_linear::{ColumnParallelLinear, RowParallelLinear};
+pub use parallel_linear::{ColumnParallelLinear, RowParallelLinear, TensorParallelManager};

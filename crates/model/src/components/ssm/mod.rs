@@ -10,11 +10,11 @@ mod harmonic;
 mod layer;
 mod mamba;
 
-pub use config::*;
-pub use error::*;
-pub use harmonic::*;
-pub use layer::*;
-pub use mamba::*;
+pub use config::SSMConfig;
+pub use error::SSMError;
+pub use harmonic::SSMHarmonicSSMLayer;
+pub use layer::{SSMLayer, softplus};
+pub use mamba::MambaBlock;
 
 #[cfg(test)]
 mod tests {
