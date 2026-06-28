@@ -7,7 +7,7 @@ use tokio::sync::mpsc;
 use vllm_traits::{SeqId, TokenId};
 
 impl Engine {
-    pub fn is_healthy(&self) -> bool {
+    pub const fn is_healthy(&self) -> bool {
         self.error_count < 10
     }
 

@@ -12,7 +12,7 @@ fn bench_sequence_packing(c: &mut Criterion) {
     let mut group = c.benchmark_group("sequence_packing");
     let metrics = Arc::new(EnhancedMetricsCollector::new());
 
-    for batch_size in [4, 8, 16].iter() {
+    for batch_size in &[4, 8, 16] {
         // FIFO baseline
         group.bench_with_input(
             BenchmarkId::new("fifo", batch_size),
@@ -102,7 +102,7 @@ fn bench_throughput(c: &mut Criterion) {
     let mut group = c.benchmark_group("throughput");
     group.sample_size(10);
 
-    for num_requests in [10, 50, 100].iter() {
+    for num_requests in &[10, 50, 100] {
         // Baseline: No optimizations
         group.bench_with_input(
             BenchmarkId::new("baseline", num_requests),

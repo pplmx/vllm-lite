@@ -16,7 +16,7 @@ pub fn softplus(xs: &Tensor) -> CandleResult<Tensor> {
     (exp_x + one)?.log()
 }
 
-/// SSMLayer: ssm layer.
+/// `SSMLayer`: ssm layer.
 pub struct SSMLayer {
     x_proj: Linear,
     a_log: Linear,
@@ -68,19 +68,23 @@ impl SSMLayer {
         Ok((delta, b.clone(), c.clone(), x_conv))
     }
 
-    pub fn d_inner(&self) -> usize {
+    #[must_use]
+    pub const fn d_inner(&self) -> usize {
         self.d_inner
     }
 
-    pub fn d_state(&self) -> usize {
+    #[must_use]
+    pub const fn d_state(&self) -> usize {
         self.d_state
     }
 
-    pub fn a_log(&self) -> &Linear {
+    #[must_use]
+    pub const fn a_log(&self) -> &Linear {
         &self.a_log
     }
 
-    pub fn d_linear(&self) -> &Linear {
+    #[must_use]
+    pub const fn d_linear(&self) -> &Linear {
         &self.d
     }
 
@@ -91,33 +95,27 @@ impl SSMLayer {
         weights: &HashMap<String, Tensor>,
     ) -> Result<Self, SSMError> {
         let x_proj_w = weights
-            .get(&format!("model.layers.{}.mamba.x_proj.weight", layer_idx))
+            .get(&format!("model.layers.{layer_idx}.mamba.x_proj.weight"))
             .cloned()
-            .ok_or_else(|| {
-                SSMError::Msg(format!("Missing x_proj weight for layer {}", layer_idx))
-            })?;
+            .ok_or_else(|| SSMError::Msg(format!("Missing x_proj weight for layer {layer_idx}")))?;
         let x_proj = candle_nn::Linear::new(x_proj_w, None);
 
         let a_log_w = weights
-            .get(&format!("model.layers.{}.mamba.A_log.weight", layer_idx))
+            .get(&format!("model.layers.{layer_idx}.mamba.A_log.weight"))
             .cloned()
-            .ok_or_else(|| {
-                SSMError::Msg(format!("Missing A_log weight for layer {}", layer_idx))
-            })?;
+            .ok_or_else(|| SSMError::Msg(format!("Missing A_log weight for layer {layer_idx}")))?;
         let a_log = candle_nn::Linear::new(a_log_w, None);
 
         let d_w = weights
-            .get(&format!("model.layers.{}.mamba.D.weight", layer_idx))
+            .get(&format!("model.layers.{layer_idx}.mamba.D.weight"))
             .cloned()
-            .ok_or_else(|| SSMError::Msg(format!("Missing D weight for layer {}", layer_idx)))?;
+            .ok_or_else(|| SSMError::Msg(format!("Missing D weight for layer {layer_idx}")))?;
         let d = candle_nn::Linear::new(d_w, None);
 
         let conv_w = weights
-            .get(&format!("model.layers.{}.mamba.conv1d.weight", layer_idx))
+            .get(&format!("model.layers.{layer_idx}.mamba.conv1d.weight"))
             .cloned()
-            .ok_or_else(|| {
-                SSMError::Msg(format!("Missing conv1d weight for layer {}", layer_idx))
-            })?;
+            .ok_or_else(|| SSMError::Msg(format!("Missing conv1d weight for layer {layer_idx}")))?;
         let d_conv = 4;
         let conv_cfg = candle_nn::Conv1dConfig {
             padding: d_conv - 1,

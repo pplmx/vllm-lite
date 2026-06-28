@@ -39,13 +39,12 @@ fn cases() -> [CheckpointCase; 4] {
 
 fn run_forward_smoke(case: &CheckpointCase) {
     if !case.fixture.weights_available() {
-        if case.required_in_ci {
-            panic!(
-                "{} checkpoint missing at {} (set env or install weights)",
-                case.name,
-                case.fixture.model_dir().display()
-            );
-        }
+        assert!(
+            !case.required_in_ci,
+            "{} checkpoint missing at {} (set env or install weights)",
+            case.name,
+            case.fixture.model_dir().display()
+        );
         eprintln!(
             "skip {}: no weights at {}",
             case.name,

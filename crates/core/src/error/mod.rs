@@ -1,6 +1,6 @@
 pub mod recovery;
 
-/// EngineError: engine error.
+/// `EngineError`: engine error.
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {
     #[error("sequence {id} not found")]
@@ -45,38 +45,37 @@ pub enum EngineError {
 impl From<vllm_traits::ModelError> for EngineError {
     fn from(err: vllm_traits::ModelError) -> Self {
         // Use the typed variant to preserve the source chain.
-        EngineError::Model(err)
+        Self::Model(err)
     }
 }
 
 impl From<crate::speculative::DraftRegistryError> for EngineError {
     fn from(err: crate::speculative::DraftRegistryError) -> Self {
-        EngineError::Model(vllm_traits::ModelError::new(format!(
-            "draft registry: {}",
-            err
+        Self::Model(vllm_traits::ModelError::new(format!(
+            "draft registry: {err}"
         )))
     }
 }
 
 impl From<crate::speculative::memory_budget::MemoryBudgetExceeded> for EngineError {
     fn from(err: crate::speculative::memory_budget::MemoryBudgetExceeded) -> Self {
-        EngineError::ResourceExhausted {
-            resource: format!("memory_budget: {}", err),
+        Self::ResourceExhausted {
+            resource: format!("memory_budget: {err}"),
         }
     }
 }
 
 impl From<crate::circuit_breaker::breaker::CircuitBreakerError> for EngineError {
     fn from(err: crate::circuit_breaker::breaker::CircuitBreakerError) -> Self {
-        EngineError::BackendUnavailable {
-            backend: format!("circuit_breaker: {}", err),
+        Self::BackendUnavailable {
+            backend: format!("circuit_breaker: {err}"),
         }
     }
 }
 
 impl From<crate::metrics::exporter::MetricsError> for EngineError {
     fn from(err: crate::metrics::exporter::MetricsError) -> Self {
-        EngineError::Model(vllm_traits::ModelError::new(format!("metrics: {}", err)))
+        Self::Model(vllm_traits::ModelError::new(format!("metrics: {err}")))
     }
 }
 
@@ -88,7 +87,8 @@ impl EngineError {
     ///
     /// No-op for variants that don't carry per-request context.
     /// Returns the modified error so callers can chain: `err.with_request_id(id)?`.
-    pub fn with_request_id(self, request_id: u64) -> Self {
+    #[must_use]
+    pub const fn with_request_id(self, request_id: u64) -> Self {
         // Currently, no variant carries optional request_id — this is a no-op
         // hook for future per-variant additions. Kept as a stable API so
         // adding structured context later is non-breaking.
@@ -98,7 +98,8 @@ impl EngineError {
 
     /// Attach a `seq_id` to this error for log correlation.
     /// Same semantics as [`Self::with_request_id`].
-    pub fn with_seq_id(self, seq_id: u64) -> Self {
+    #[must_use]
+    pub const fn with_seq_id(self, seq_id: u64) -> Self {
         let _ = seq_id;
         self
     }

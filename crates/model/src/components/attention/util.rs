@@ -8,7 +8,7 @@
 
 use candle_core::{Result, Tensor};
 
-/// AttentionConfig: attention configuration.
+/// `AttentionConfig`: attention configuration.
 #[derive(Debug, Clone, Default)]
 pub struct AttentionConfig {
     pub tile_size: Option<usize>,
@@ -16,7 +16,8 @@ pub struct AttentionConfig {
 }
 
 impl AttentionConfig {
-    pub fn new(tile_size: Option<usize>, use_fused: bool) -> Self {
+    #[must_use]
+    pub const fn new(tile_size: Option<usize>, use_fused: bool) -> Self {
         Self {
             tile_size,
             use_fused,
@@ -37,16 +38,16 @@ pub(crate) struct AttentionConfigBuilder {
 }
 
 impl AttentionConfigBuilder {
-    pub fn with_tile_size(mut self, v: Option<usize>) -> Self {
+    pub const fn with_tile_size(mut self, v: Option<usize>) -> Self {
         self.inner.tile_size = v;
         self
     }
-    pub fn with_use_fused(mut self, v: bool) -> Self {
+    pub const fn with_use_fused(mut self, v: bool) -> Self {
         self.inner.use_fused = v;
         self
     }
     /// build: build the [`AttentionConfig`].
-    pub fn build(self) -> AttentionConfig {
+    pub const fn build(self) -> AttentionConfig {
         self.inner
     }
 }
@@ -59,8 +60,7 @@ pub fn expand_kv(kv: &Tensor, num_q_heads: usize, num_kv_heads: usize) -> Result
     let dims = kv.dims();
     if dims.len() != 4 {
         return Err(candle_core::Error::msg(format!(
-            "KV tensor must have exactly 4 dimensions [batch, seq, heads, dim], got {:?}",
-            dims
+            "KV tensor must have exactly 4 dimensions [batch, seq, heads, dim], got {dims:?}"
         )));
     }
 
@@ -71,8 +71,7 @@ pub fn expand_kv(kv: &Tensor, num_q_heads: usize, num_kv_heads: usize) -> Result
 
     if heads != num_kv_heads {
         return Err(candle_core::Error::msg(format!(
-            "KV tensor has {} heads but expected {}",
-            heads, num_kv_heads
+            "KV tensor has {heads} heads but expected {num_kv_heads}"
         )));
     }
 
@@ -396,14 +395,12 @@ mod tests {
             for j in 0..seq_len {
                 let idx = i * seq_len + j;
                 if j <= i {
-                    assert_eq!(mask_data[idx], 0.0, "Position ({}, {}) should be 0", i, j);
+                    assert_eq!(mask_data[idx], 0.0, "Position ({i}, {j}) should be 0");
                 } else {
                     assert_eq!(
                         mask_data[idx],
                         f32::NEG_INFINITY,
-                        "Position ({}, {}) should be -inf",
-                        i,
-                        j
+                        "Position ({i}, {j}) should be -inf"
                     );
                 }
             }

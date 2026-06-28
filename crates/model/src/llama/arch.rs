@@ -11,11 +11,12 @@ use vllm_traits::ModelBackend;
 use super::block::{LlamaBlock, block_from_weights};
 use super::model::LlamaModel;
 
-/// LlamaArchitecture: llama architecture.
+/// `LlamaArchitecture`: llama architecture.
 pub struct LlamaArchitecture;
 
 impl LlamaArchitecture {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 }
@@ -26,7 +27,7 @@ impl Default for LlamaArchitecture {
     }
 }
 
-/// LlamaBlockWrapper: llama block wrapper.
+/// `LlamaBlockWrapper`: llama block wrapper.
 pub(crate) type LlamaBlockWrapper = BlockWrapper<LlamaBlock>;
 
 impl Architecture for LlamaArchitecture {
@@ -87,8 +88,7 @@ mod tests {
             let config = json!({"model_type": model_type});
             assert!(
                 arch.detect(&config),
-                "Failed to detect model_type: {}",
-                model_type
+                "Failed to detect model_type: {model_type}"
             );
         }
     }
@@ -100,8 +100,7 @@ mod tests {
             let config = json!({"model_type": model_type});
             assert!(
                 !arch.detect(&config),
-                "Should not detect model_type: {}",
-                model_type
+                "Should not detect model_type: {model_type}"
             );
         }
     }

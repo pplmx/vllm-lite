@@ -10,7 +10,7 @@ fn bench_speculative_vs_baseline(c: &mut Criterion) {
     let mut group = c.benchmark_group("speculative_vs_baseline");
     group.sample_size(10);
 
-    for num_requests in [10, 50, 100].iter() {
+    for num_requests in &[10, 50, 100] {
         // Baseline: regular engine (no speculative)
         group.bench_with_input(
             BenchmarkId::new("baseline", num_requests),

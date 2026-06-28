@@ -1,14 +1,15 @@
 use super::trait_def::{PriorityScore, SchedulingContext, SchedulingPolicy};
 use crate::types::Sequence;
 
-/// PriorityPolicy: priority policy.
+/// `PriorityPolicy`: priority policy.
 pub struct PriorityPolicy {
     priority_aging_factor: f32,
     _priority_levels: u8,
 }
 
 impl PriorityPolicy {
-    pub fn new(priority_aging_factor: f32, priority_levels: u8) -> Self {
+    #[must_use]
+    pub const fn new(priority_aging_factor: f32, priority_levels: u8) -> Self {
         Self {
             priority_aging_factor,
             _priority_levels: priority_levels,
@@ -26,7 +27,7 @@ impl SchedulingPolicy for PriorityPolicy {
     fn compute_priority(&self, seq: &Sequence, _ctx: &SchedulingContext) -> PriorityScore {
         let wait_factor = seq.id.saturating_sub(1) as f32;
         let aging_bonus = (wait_factor * self.priority_aging_factor) as u64;
-        let base_priority = seq.priority.0 as u64;
+        let base_priority = u64::from(seq.priority.0);
         let effective_priority = base_priority.saturating_sub(aging_bonus);
         PriorityScore(effective_priority)
     }

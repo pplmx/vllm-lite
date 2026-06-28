@@ -36,7 +36,7 @@ pub(crate) fn load_hybrid_weights(
     let layer_types = parse_layer_types(config);
 
     for (i, layer_type) in layer_types.iter().enumerate().take(num_layers) {
-        let prefix = format!("model.layers.{}", i);
+        let prefix = format!("model.layers.{i}");
 
         let layer = match layer_type {
             LayerType::LinearAttention => {

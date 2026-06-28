@@ -39,6 +39,7 @@ impl Default for AdaptiveDraftConfig {
 impl AdaptiveDraftConfig {
     /// Returns a builder for configuring this type with the documented field defaults.
     /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
+    #[must_use]
     pub fn builder() -> AdaptiveDraftConfigBuilder {
         AdaptiveDraftConfigBuilder::default()
     }
@@ -51,40 +52,49 @@ pub struct AdaptiveDraftConfigBuilder {
 }
 
 impl AdaptiveDraftConfigBuilder {
-    pub fn with_min_draft_tokens(mut self, v: usize) -> Self {
+    #[must_use]
+    pub const fn with_min_draft_tokens(mut self, v: usize) -> Self {
         self.inner.min_draft_tokens = v;
         self
     }
-    pub fn with_max_draft_tokens(mut self, v: usize) -> Self {
+    #[must_use]
+    pub const fn with_max_draft_tokens(mut self, v: usize) -> Self {
         self.inner.max_draft_tokens = v;
         self
     }
-    pub fn with_target_acceptance_rate(mut self, v: f32) -> Self {
+    #[must_use]
+    pub const fn with_target_acceptance_rate(mut self, v: f32) -> Self {
         self.inner.target_acceptance_rate = v;
         self
     }
-    pub fn with_accuracy_window_size(mut self, v: usize) -> Self {
+    #[must_use]
+    pub const fn with_accuracy_window_size(mut self, v: usize) -> Self {
         self.inner.accuracy_window_size = v;
         self
     }
-    pub fn with_adjustment_step(mut self, v: usize) -> Self {
+    #[must_use]
+    pub const fn with_adjustment_step(mut self, v: usize) -> Self {
         self.inner.adjustment_step = v;
         self
     }
-    pub fn with_cooldown_steps(mut self, v: usize) -> Self {
+    #[must_use]
+    pub const fn with_cooldown_steps(mut self, v: usize) -> Self {
         self.inner.cooldown_steps = v;
         self
     }
-    pub fn with_ewma_alpha(mut self, v: f32) -> Self {
+    #[must_use]
+    pub const fn with_ewma_alpha(mut self, v: f32) -> Self {
         self.inner.ewma_alpha = v;
         self
     }
-    pub fn with_deadband_threshold(mut self, v: f32) -> Self {
+    #[must_use]
+    pub const fn with_deadband_threshold(mut self, v: f32) -> Self {
         self.inner.deadband_threshold = v;
         self
     }
     /// build: build the [`AdaptiveDraftConfig`].
-    pub fn build(self) -> AdaptiveDraftConfig {
+    #[must_use]
+    pub const fn build(self) -> AdaptiveDraftConfig {
         self.inner
     }
 }

@@ -4,20 +4,20 @@
 // quantization scale tracking, and block-size accessor.
 
 use super::PagedKvCache;
-use candle_core::{DType, Result, Tensor};
+use candle_core::Tensor;
 
 impl PagedKvCache {
+    #[must_use]
     pub fn num_blocks(&self) -> usize {
-        self.key_cache
-            .first()
-            .map(|t| t.shape().dims()[0])
-            .unwrap_or(0)
+        self.key_cache.first().map_or(0, |t| t.shape().dims()[0])
     }
 
-    pub fn num_layers(&self) -> usize {
+    #[must_use]
+    pub const fn num_layers(&self) -> usize {
         self.num_layers
     }
 
+    #[must_use]
     pub fn get_scale(&self, layer_idx: usize) -> f32 {
         self.scales.get(layer_idx).copied().unwrap_or(1.0)
     }
@@ -28,10 +28,12 @@ impl PagedKvCache {
         }
     }
 
-    pub fn block_size(&self) -> usize {
+    #[must_use]
+    pub const fn block_size(&self) -> usize {
         self.block_size
     }
 
+    #[must_use]
     pub fn compute_block_hash(block: &Tensor) -> u64 {
         if let Ok(data) = block.to_vec1::<f32>() {
             let hash: u64 = data
@@ -44,10 +46,11 @@ impl PagedKvCache {
         }
     }
 
+    #[must_use]
     pub fn find_matching_blocks(&self, prompt_hash: u64, layer_idx: usize) -> Vec<usize> {
         let mut matches = Vec::new();
         if let Some(hash_map) = self.block_hashes.get(layer_idx) {
-            for (&hash, &block_id) in hash_map.iter() {
+            for (&hash, &block_id) in hash_map {
                 if prompt_hash == hash {
                     matches.push(block_id);
                 }

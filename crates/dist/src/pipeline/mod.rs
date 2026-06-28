@@ -8,7 +8,7 @@ pub use stage::{PipelineStage, PipelineStageConfig, StageInput, StageOutput};
 
 use thiserror::Error;
 
-/// PipelineError: pipeline error.
+/// `PipelineError`: pipeline error.
 #[derive(Debug, Error)]
 pub enum PipelineError {
     #[error("stage {stage} not ready")]

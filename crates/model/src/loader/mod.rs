@@ -1,6 +1,6 @@
 //! Model loading utilities.
 //!
-//! This module provides the ModelLoader for loading model weights and configurations.
+//! This module provides the `ModelLoader` for loading model weights and configurations.
 //! Supports Builder pattern for flexible configuration.
 
 pub mod builder;

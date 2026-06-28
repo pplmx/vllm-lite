@@ -18,7 +18,7 @@ pub struct ArchSmokeCase {
     pub architecture: Architecture,
 }
 
-pub fn arch_smoke_cases() -> [ArchSmokeCase; 2] {
+pub const fn arch_smoke_cases() -> [ArchSmokeCase; 2] {
     [
         ArchSmokeCase {
             name: "llama",
@@ -41,7 +41,7 @@ pub fn ensure_arch_registry() {
     register_all_archs(&ARCHITECTURE_REGISTRY);
 }
 
-pub fn cpu_device() -> Device {
+pub const fn cpu_device() -> Device {
     Device::Cpu
 }
 

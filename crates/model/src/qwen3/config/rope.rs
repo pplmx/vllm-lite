@@ -5,9 +5,9 @@
 
 use serde::Deserialize;
 
-/// RoPE scaling type (HuggingFace-compatible).
+/// `RoPE` scaling type (HuggingFace-compatible).
 ///
-/// Maps the `rope_type` string field found in HuggingFace
+/// Maps the `rope_type` string field found in `HuggingFace`
 /// `RopeScaling` and `RopeParameters` JSON blobs to a typed enum.
 /// Unknown values deserialize to [`RopeType::Other`] for graceful
 /// forward compatibility with new HF rope types.
@@ -16,16 +16,16 @@ use serde::Deserialize;
 )]
 #[serde(rename_all = "lowercase")]
 pub enum RopeType {
-    /// Default standard RoPE without scaling (Qwen3 baseline).
+    /// Default standard `RoPE` without scaling (Qwen3 baseline).
     #[default]
     Default,
     /// Linear position interpolation.
     Linear,
     /// Dynamic NTK-aware scaling.
     Dynamic,
-    /// YaRN (Yet another RoPE extensioN).
+    /// `YaRN` (Yet another `RoPE` extensioN).
     Yarn,
-    /// Su RoPE (RoPE in any precision).
+    /// Su `RoPE` (`RoPE` in any precision).
     Su,
     /// Other / unknown rope type (serde fallback for forward compat).
     #[serde(other)]
@@ -34,7 +34,8 @@ pub enum RopeType {
 
 impl RopeType {
     /// Canonical string representation (matches the HF wire value).
-    pub fn as_str(&self) -> &'static str {
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
         match self {
             Self::Default => "default",
             Self::Linear => "linear",
@@ -48,6 +49,7 @@ impl RopeType {
     /// Parse from a string (case-insensitive). Unknown values map to
     /// [`RopeType::Other`] rather than `None`, so callers can
     /// distinguish "missing" from "unknown".
+    #[must_use]
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_ascii_lowercase().as_str() {
             "default" => Some(Self::Default),
@@ -66,7 +68,7 @@ impl std::fmt::Display for RopeType {
     }
 }
 
-/// RopeScaling: rope scaling.
+/// `RopeScaling`: rope scaling.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct RopeScaling {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -83,7 +85,7 @@ pub struct RopeScaling {
     pub mrope_section: Option<Vec<usize>>,
 }
 
-/// RopeParameters: rope parameters.
+/// `RopeParameters`: rope parameters.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct RopeParameters {
     #[serde(default, skip_serializing_if = "Option::is_none")]

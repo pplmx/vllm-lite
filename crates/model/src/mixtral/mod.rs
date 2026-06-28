@@ -1,4 +1,4 @@
-//! Mixtral MoE model implementation.
+//! Mixtral `MoE` model implementation.
 
 pub mod arch;
 pub mod block;

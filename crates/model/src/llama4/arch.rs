@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use vllm_traits::ModelBackend;
 use vllm_traits::types::BatchOutput;
 
-/// Llama4Architecture: llama4 architecture.
+/// `Llama4Architecture`: llama4 architecture.
 pub struct Llama4Architecture {
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     is_moe: bool,
@@ -23,7 +23,8 @@ pub struct Llama4Architecture {
 }
 
 impl Llama4Architecture {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             is_moe: false,
             num_experts: 8,
@@ -31,7 +32,8 @@ impl Llama4Architecture {
         }
     }
 
-    pub fn with_moe(num_experts: usize, num_active_experts: usize) -> Self {
+    #[must_use]
+    pub const fn with_moe(num_experts: usize, num_active_experts: usize) -> Self {
         Self {
             is_moe: true,
             num_experts,
@@ -46,7 +48,7 @@ impl Default for Llama4Architecture {
     }
 }
 
-/// Llama4BlockWrapper: llama4 block wrapper.
+/// `Llama4BlockWrapper`: llama4 block wrapper.
 pub(crate) struct Llama4BlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,
@@ -57,7 +59,7 @@ pub(crate) struct Llama4BlockWrapper {
 }
 
 impl Llama4BlockWrapper {
-    pub fn new(config: &ModelConfig, is_moe: bool, num_experts: usize) -> Self {
+    pub const fn new(config: &ModelConfig, is_moe: bool, num_experts: usize) -> Self {
         Self {
             inner_dim: config.head_dim * config.num_heads,
             num_kv_heads: config.num_kv_heads,
@@ -122,7 +124,7 @@ impl Architecture for Llama4Architecture {
 
         let hidden_size = config_json
             .get("hidden_size")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .unwrap_or(0);
 
         let is_llama4 = matches!(
@@ -164,7 +166,7 @@ impl Architecture for Llama4Architecture {
     }
 }
 
-/// Llama4Model: llama4 model.
+/// `Llama4Model`: llama4 model.
 pub(crate) struct Llama4Model {
     config: ModelConfig,
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
@@ -178,7 +180,7 @@ pub(crate) struct Llama4Model {
 }
 
 impl Llama4Model {
-    pub fn new(
+    pub const fn new(
         config: ModelConfig,
         device: Device,
         num_kv_blocks: usize,
@@ -264,8 +266,7 @@ mod tests {
             });
             assert!(
                 arch.detect(&config),
-                "Failed to detect model_type: {}",
-                model_type
+                "Failed to detect model_type: {model_type}"
             );
         }
     }
@@ -280,8 +281,7 @@ mod tests {
             });
             assert!(
                 !arch.detect(&config),
-                "Should not detect model_type: {}",
-                model_type
+                "Should not detect model_type: {model_type}"
             );
         }
     }

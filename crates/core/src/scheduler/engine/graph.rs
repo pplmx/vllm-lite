@@ -31,7 +31,7 @@ impl SchedulerEngine {
             sequences_count = sequences.len(),
             batch_seq_ids = ?batch.seq_ids,
             batch_input_tokens_count = batch.input_tokens.len(),
-            batch_total_tokens = batch.input_tokens.iter().map(|t| t.len()).sum::<usize>(),
+            batch_total_tokens = batch.input_tokens.iter().map(std::vec::Vec::len).sum::<usize>(),
             "build_batch_with_graph: built batch"
         );
 

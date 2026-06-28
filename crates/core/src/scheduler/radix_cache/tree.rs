@@ -16,6 +16,7 @@ pub struct RadixTree {
 }
 
 impl RadixTree {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             root: RadixNode::new(),
@@ -69,13 +70,13 @@ impl RadixTree {
 
     /// Get entry count.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.entry_count
     }
 
     /// Check if tree is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.entry_count == 0
     }
 

@@ -1,7 +1,7 @@
 //! Unified checkpoint loading.
 //!
 //! This module provides a single entry point for loading model weights
-//! from various formats using the FormatLoader trait.
+//! from various formats using the `FormatLoader` trait.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -51,7 +51,7 @@ pub(crate) fn load_safetensors(path: &Path, device: &Device) -> Result<HashMap<S
         .map(|result| {
             let (_path, bytes) = result?;
             let file = safetensors::SafeTensors::deserialize(&bytes)
-                .map_err(|e| candle_core::Error::msg(format!("deserialize failed: {}", e)))?;
+                .map_err(|e| candle_core::Error::msg(format!("deserialize failed: {e}")))?;
             file.tensors()
                 .into_iter()
                 .filter(|(name, _)| {
@@ -72,8 +72,7 @@ pub(crate) fn load_safetensors(path: &Path, device: &Device) -> Result<HashMap<S
         for (name, tensor) in tensors {
             if weights.insert(name.clone(), tensor).is_some() {
                 return Err(candle_core::Error::msg(format!(
-                    "Duplicate weight '{}'",
-                    name
+                    "Duplicate weight '{name}'"
                 )));
             }
         }

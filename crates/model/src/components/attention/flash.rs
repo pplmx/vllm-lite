@@ -1,10 +1,11 @@
 use candle_core::{Result, Tensor};
 
-/// FlashAttention: flash attention.
+/// `FlashAttention`: flash attention.
 pub struct FlashAttention;
 
 impl FlashAttention {
-    pub fn new(_config: FlashAttentionConfig) -> Self {
+    #[must_use]
+    pub const fn new(_config: FlashAttentionConfig) -> Self {
         Self
     }
 
@@ -16,7 +17,7 @@ impl FlashAttention {
     }
 }
 
-/// FlashAttentionConfig: flash attention configuration.
+/// `FlashAttentionConfig`: flash attention configuration.
 #[derive(Debug, Clone, Default)]
 pub struct FlashAttentionConfig {
     pub num_heads: usize,

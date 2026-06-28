@@ -1,4 +1,4 @@
-use super::types::*;
+use super::types::{EmbeddingsRequest, EmbeddingsResponse, ErrorResponse};
 use crate::ApiState;
 use axum::{Json, extract::State, response::IntoResponse};
 use tokio::sync::mpsc;

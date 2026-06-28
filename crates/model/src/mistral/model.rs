@@ -8,9 +8,9 @@ use std::collections::HashMap;
 
 use super::block::{block_from_weights, new_block};
 
-/// MistralBlock: mistral block.
+/// `MistralBlock`: mistral block.
 pub type MistralBlock = RopeGqaDecoderBlock;
-/// MistralModel: mistral model.
+/// `MistralModel`: mistral model.
 pub type MistralModel = CausalLm<MistralBlock, LnLayerNorm, Linear>;
 
 impl MistralModel {

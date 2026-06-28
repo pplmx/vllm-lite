@@ -3,7 +3,7 @@ use serde::Serialize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// MetricsSnapshot: metrics snapshot.
+/// `MetricsSnapshot`: metrics snapshot.
 #[derive(Clone, Serialize, Default)]
 pub struct MetricsSnapshot {
     pub tokens_total: u64,
@@ -22,7 +22,7 @@ pub struct MetricsSnapshot {
     pub avg_scheduler_wait_time_ms: f64,
 }
 
-/// LockFreeMetrics: lock free metrics.
+/// `LockFreeMetrics`: lock free metrics.
 pub struct LockFreeMetrics {
     tokens_total: Arc<AtomicU64>,
     requests_total: Arc<AtomicU64>,
@@ -44,6 +44,7 @@ pub struct LockFreeMetrics {
 }
 
 impl LockFreeMetrics {
+    #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
         let (latency_tx, latency_rx) = bounded(capacity);
         let (batch_tx, batch_rx) = bounded(capacity);
@@ -118,20 +119,24 @@ impl LockFreeMetrics {
         let _ = self.scheduler_wait_sender.try_send(ms);
     }
 
+    #[must_use]
     pub fn requests_total(&self) -> u64 {
         self.requests_total.load(Ordering::Relaxed)
     }
 
-    /// prefix_cache_hits: total prefix cache hits since start.
+    /// `prefix_cache_hits`: total prefix cache hits since start.
+    #[must_use]
     pub fn prefix_cache_hits(&self) -> u64 {
         self.prefix_cache_hits.load(Ordering::Relaxed)
     }
 
-    /// prefix_cache_requests: total prefix cache lookups since start.
+    /// `prefix_cache_requests`: total prefix cache lookups since start.
+    #[must_use]
     pub fn prefix_cache_requests(&self) -> u64 {
         self.prefix_cache_requests.load(Ordering::Relaxed)
     }
 
+    #[must_use]
     pub fn snapshot(&self) -> MetricsSnapshot {
         let mut latencies = Vec::new();
         while let Ok(ms) = self.latency_receiver.try_recv() {
@@ -236,6 +241,7 @@ impl LockFreeMetrics {
 }
 
 impl LockFreeMetrics {
+    #[must_use]
     pub fn new() -> Self {
         Self::with_capacity(1024)
     }
@@ -247,7 +253,7 @@ impl Default for LockFreeMetrics {
     }
 }
 
-/// MetricsCollector: metrics collector.
+/// `MetricsCollector`: metrics collector.
 pub type MetricsCollector = LockFreeMetrics;
 
 #[cfg(test)]
@@ -305,7 +311,7 @@ mod tests {
         let collector = LockFreeMetrics::with_capacity(1024);
 
         for i in 1..=100 {
-            collector.record_latency(i as f64);
+            collector.record_latency(f64::from(i));
         }
 
         let snapshot = collector.snapshot();
@@ -318,7 +324,7 @@ mod tests {
         let collector = LockFreeMetrics::with_capacity(10);
 
         for i in 0..100 {
-            collector.record_latency(i as f64);
+            collector.record_latency(f64::from(i));
         }
 
         let snapshot = collector.snapshot();

@@ -1,4 +1,4 @@
-//! RequestFactory - Test request generator
+//! `RequestFactory` - Test request generator
 //!
 //! Provides a configurable factory for creating test requests
 //! with various token patterns and sampling settings.
@@ -32,27 +32,32 @@ impl Default for RequestConfig {
 }
 
 impl RequestConfig {
-    pub fn min_tokens(mut self, n: usize) -> Self {
+    #[must_use]
+    pub const fn min_tokens(mut self, n: usize) -> Self {
         self.min_tokens = n;
         self
     }
 
-    pub fn max_tokens(mut self, n: usize) -> Self {
+    #[must_use]
+    pub const fn max_tokens(mut self, n: usize) -> Self {
         self.max_tokens = n;
         self
     }
 
-    pub fn min_max_tokens(mut self, n: usize) -> Self {
+    #[must_use]
+    pub const fn min_max_tokens(mut self, n: usize) -> Self {
         self.min_max_tokens = n;
         self
     }
 
-    pub fn max_max_tokens(mut self, n: usize) -> Self {
+    #[must_use]
+    pub const fn max_max_tokens(mut self, n: usize) -> Self {
         self.max_max_tokens = n;
         self
     }
 
-    pub fn temperature(mut self, t: f32) -> Self {
+    #[must_use]
+    pub const fn temperature(mut self, t: f32) -> Self {
         self.temperature = t;
         self
     }
@@ -86,7 +91,8 @@ pub struct RequestFactory {
 }
 
 impl RequestFactory {
-    /// Create a new RequestFactory with default configuration
+    /// Create a new `RequestFactory` with default configuration
+    #[must_use]
     pub fn new() -> Self {
         Self {
             config: RequestConfig::default(),
@@ -94,37 +100,43 @@ impl RequestFactory {
         }
     }
 
-    /// Create a RequestFactory from a custom configuration
-    pub fn from_config(config: RequestConfig) -> Self {
+    /// Create a `RequestFactory` from a custom configuration
+    #[must_use]
+    pub const fn from_config(config: RequestConfig) -> Self {
         Self { config, counter: 1 }
     }
 
     /// Set the minimum prompt token count
-    pub fn min_tokens(mut self, n: usize) -> Self {
+    #[must_use]
+    pub const fn min_tokens(mut self, n: usize) -> Self {
         self.config.min_tokens = n;
         self
     }
 
     /// Set the maximum prompt token count
-    pub fn max_tokens(mut self, n: usize) -> Self {
+    #[must_use]
+    pub const fn max_tokens(mut self, n: usize) -> Self {
         self.config.max_tokens = n;
         self
     }
 
-    /// Set the minimum max_tokens for generation
-    pub fn min_max_tokens(mut self, n: usize) -> Self {
+    /// Set the minimum `max_tokens` for generation
+    #[must_use]
+    pub const fn min_max_tokens(mut self, n: usize) -> Self {
         self.config.min_max_tokens = n;
         self
     }
 
-    /// Set the maximum max_tokens for generation
-    pub fn max_max_tokens(mut self, n: usize) -> Self {
+    /// Set the maximum `max_tokens` for generation
+    #[must_use]
+    pub const fn max_max_tokens(mut self, n: usize) -> Self {
         self.config.max_max_tokens = n;
         self
     }
 
     /// Set the temperature for sampling
-    pub fn temperature(mut self, t: f32) -> Self {
+    #[must_use]
+    pub const fn temperature(mut self, t: f32) -> Self {
         self.config.temperature = t;
         self
     }
@@ -188,7 +200,7 @@ impl RequestFactory {
     }
 
     /// Reset the internal counter
-    pub fn reset_counter(&mut self) {
+    pub const fn reset_counter(&mut self) {
         self.counter = 1;
     }
 }

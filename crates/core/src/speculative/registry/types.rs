@@ -19,6 +19,7 @@ use vllm_traits::ModelBackend;
 pub struct DraftId(pub String);
 
 impl DraftId {
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -32,13 +33,13 @@ impl std::fmt::Display for DraftId {
 
 impl From<&str> for DraftId {
     fn from(s: &str) -> Self {
-        DraftId(s.to_string())
+        Self(s.to_string())
     }
 }
 
 impl From<String> for DraftId {
     fn from(s: String) -> Self {
-        DraftId(s)
+        Self(s)
     }
 }
 
@@ -80,19 +81,22 @@ impl DraftSpec {
         self
     }
 
-    pub fn with_ref_count(mut self, ref_count: usize) -> Self {
+    #[must_use]
+    pub const fn with_ref_count(mut self, ref_count: usize) -> Self {
         self.ref_count = ref_count;
         self
     }
 
-    pub fn with_weight_size(mut self, bytes: u64) -> Self {
+    #[must_use]
+    pub const fn with_weight_size(mut self, bytes: u64) -> Self {
         self.weight_size_estimate_bytes = bytes;
         self
     }
 
     /// Estimated total VRAM footprint of this draft if loaded:
     /// `weight_size_estimate_bytes + kv_blocks * DEFAULT_BLOCK_BYTES`.
-    pub fn estimated_total_bytes(&self) -> u64 {
+    #[must_use]
+    pub const fn estimated_total_bytes(&self) -> u64 {
         let kv_bytes = (self.kv_blocks as u64).saturating_mul(DEFAULT_BLOCK_BYTES);
         self.weight_size_estimate_bytes.saturating_add(kv_bytes)
     }
@@ -115,25 +119,28 @@ pub enum DraftState {
 impl std::fmt::Debug for DraftState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DraftState::Unloaded(s) => f.debug_tuple("Unloaded").field(s).finish(),
-            DraftState::Loaded(_) => f.debug_tuple("Loaded").field(&"<backend>").finish(),
+            Self::Unloaded(s) => f.debug_tuple("Unloaded").field(s).finish(),
+            Self::Loaded(_) => f.debug_tuple("Loaded").field(&"<backend>").finish(),
         }
     }
 }
 
 impl DraftState {
-    pub fn spec(&self) -> &DraftSpec {
+    #[must_use]
+    pub const fn spec(&self) -> &DraftSpec {
         match self {
-            DraftState::Unloaded(s) => s,
-            DraftState::Loaded(l) => &l.spec,
+            Self::Unloaded(s) => s,
+            Self::Loaded(l) => &l.spec,
         }
     }
 
-    pub fn id(&self) -> &DraftId {
+    #[must_use]
+    pub const fn id(&self) -> &DraftId {
         &self.spec().id
     }
 
-    pub fn is_loaded(&self) -> bool {
-        matches!(self, DraftState::Loaded(_))
+    #[must_use]
+    pub const fn is_loaded(&self) -> bool {
+        matches!(self, Self::Loaded(_))
     }
 }

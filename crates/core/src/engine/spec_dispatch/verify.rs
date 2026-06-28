@@ -60,7 +60,7 @@ impl crate::engine::Engine {
                 std::slice::from_ref(&batch.is_prefill[i]),
             )?;
 
-            let logits: &[f32] = logits.first().map(|v| v.as_slice()).unwrap_or(&[]);
+            let logits: &[f32] = logits.first().map_or(&[], std::vec::Vec::as_slice);
             let vocab_size = lock_mutex(&self.target_model)?.vocab_size();
 
             let mut accepted = 0usize;

@@ -15,12 +15,13 @@ use super::model::Qwen35HybridModel;
 /// Normalize Qwen3.5 / Qwen3-VL hybrid checkpoint keys to the loader layout.
 ///
 /// HF checkpoints may nest the language model under `model.language_model.*` and use
-/// alternate final-norm / lm_head prefixes. After remapping, `load_hybrid_weights` expects:
+/// alternate final-norm / `lm_head` prefixes. After remapping, `load_hybrid_weights` expects:
 ///
 /// - Embeddings: `model.embed_tokens.weight` (or pre-remap `model.language_model.embed_tokens.weight`)
 /// - Per-layer blocks: `model.layers.{i}.*` with `linear_attn.*` (GDN) or `self_attn.*` (full)
 /// - Final norm: `model.final_layernorm.weight` (from `model.norm.weight` in VL checkpoints)
 /// - LM head: `model.lm_head.weight` (from top-level `lm_head.weight`)
+#[must_use]
 pub fn remap_qwen35_weight_keys(weights: HashMap<String, Tensor>) -> HashMap<String, Tensor> {
     let mut remapped = HashMap::new();
 
@@ -44,11 +45,11 @@ pub fn remap_qwen35_weight_keys(weights: HashMap<String, Tensor>) -> HashMap<Str
     remapped
 }
 
-/// Qwen35Architecture: qwen35 architecture.
+/// `Qwen35Architecture`: qwen35 architecture.
 pub(crate) struct Qwen35Architecture;
 
 impl Qwen35Architecture {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
@@ -147,7 +148,7 @@ mod tests {
             t.clone(),
         );
         weights.insert("lm_head.weight".to_string(), t.clone());
-        weights.insert("model.norm.weight".to_string(), t.clone());
+        weights.insert("model.norm.weight".to_string(), t);
 
         let remapped = remap_qwen35_weight_keys(weights);
         assert!(remapped.contains_key("model.embed_tokens.weight"));
@@ -162,8 +163,7 @@ mod tests {
             let config = json!({"model_type": model_type});
             assert!(
                 arch.detect(&config),
-                "Failed to detect model_type: {}",
-                model_type
+                "Failed to detect model_type: {model_type}"
             );
         }
     }
@@ -175,8 +175,7 @@ mod tests {
             let config = json!({"model_type": model_type});
             assert!(
                 arch.detect(&config),
-                "Failed to detect case-insensitive model_type: {}",
-                model_type
+                "Failed to detect case-insensitive model_type: {model_type}"
             );
         }
     }
@@ -188,8 +187,7 @@ mod tests {
             let config = json!({"model_type": model_type});
             assert!(
                 !arch.detect(&config),
-                "Should not detect model_type: {}",
-                model_type
+                "Should not detect model_type: {model_type}"
             );
         }
     }

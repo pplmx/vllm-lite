@@ -7,7 +7,7 @@ pub use eviction::{EvictionPolicy, EvictionPolicyStats};
 use crate::scheduler::preemption::PreemptionManager;
 use crate::types::{BlockId, SchedulerConfig, Sequence, Status};
 
-/// MemoryManager: memory manager.
+/// `MemoryManager`: memory manager.
 pub struct MemoryManager {
     allocator: BlockAllocator,
     eviction_policy: EvictionPolicy,
@@ -21,7 +21,8 @@ impl Default for MemoryManager {
 }
 
 impl MemoryManager {
-    /// Creates a new MemoryManager with the given scheduler configuration and number of blocks.
+    /// Creates a new `MemoryManager` with the given scheduler configuration and number of blocks.
+    #[must_use]
     pub fn new(config: SchedulerConfig, num_blocks: usize) -> Self {
         Self {
             allocator: BlockAllocator::new(num_blocks),
@@ -37,7 +38,7 @@ impl MemoryManager {
     }
 
     /// Frees the given blocks without updating eviction policy.
-    /// Use release_blocks if you want to also update reference counts.
+    /// Use `release_blocks` if you want to also update reference counts.
     pub fn free(&mut self, blocks: &[BlockId]) {
         self.allocator.free(blocks);
     }
@@ -49,6 +50,7 @@ impl MemoryManager {
     }
 
     /// Selects victim blocks from running sequences to free up the requested number of blocks.
+    #[must_use]
     pub fn select_victims(
         &self,
         running_sequences: &[Sequence],
@@ -80,21 +82,25 @@ impl MemoryManager {
     }
 
     /// Returns the number of currently available (free) blocks.
-    pub fn available_blocks(&self) -> usize {
+    #[must_use]
+    pub const fn available_blocks(&self) -> usize {
         self.allocator.available()
     }
 
-    /// Returns the total number of blocks managed by this MemoryManager.
-    pub fn total_blocks(&self) -> usize {
+    /// Returns the total number of blocks managed by this `MemoryManager`.
+    #[must_use]
+    pub const fn total_blocks(&self) -> usize {
         self.allocator.total()
     }
 
     /// Returns statistics about the block allocator.
+    #[must_use]
     pub fn allocator_stats(&self) -> BlockAllocatorStats {
         self.allocator.stats()
     }
 
     /// Determines whether preemption should be triggered based on current system state.
+    #[must_use]
     pub fn should_preempt(
         &self,
         running_len: usize,
@@ -134,7 +140,7 @@ impl MemoryManager {
         let mut preempted = Vec::new();
         let mut preempted_indices: Vec<usize> = Vec::new();
 
-        for &idx in preemptable_indices.iter() {
+        for &idx in &preemptable_indices {
             if blocks_freed >= blocks_needed {
                 break;
             }
@@ -187,8 +193,9 @@ impl MemoryManager {
         seq.num_computed_tokens = tokens_after_rollback;
     }
 
-    /// Returns preemption statistics: (preempted_count, rejected_count).
-    pub fn preemption_stats(&self) -> (u64, u64) {
+    /// Returns preemption statistics: (`preempted_count`, `rejected_count`).
+    #[must_use]
+    pub const fn preemption_stats(&self) -> (u64, u64) {
         (
             self.preemption_manager.preempted_count(),
             self.preemption_manager.rejected_count(),

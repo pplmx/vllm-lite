@@ -1,4 +1,4 @@
-//! Architecture-specific chat prompt formatting for the OpenAI chat API.
+//! Architecture-specific chat prompt formatting for the `OpenAI` chat API.
 
 use super::types::ChatMessage;
 use vllm_model::config::Architecture;
@@ -17,7 +17,8 @@ pub enum ChatTemplate {
 }
 
 impl ChatTemplate {
-    pub fn for_architecture(arch: Architecture) -> Self {
+    #[must_use]
+    pub const fn for_architecture(arch: Architecture) -> Self {
         match arch {
             Architecture::Qwen3 | Architecture::Qwen35 => Self::ChatMl,
             Architecture::Llama | Architecture::Gemma4 | Architecture::Mixtral => Self::Llama3,

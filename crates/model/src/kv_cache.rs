@@ -2,7 +2,7 @@
 
 use candle_core::{Device, Result, Tensor};
 
-/// MlaKvCache: mla kv cache.
+/// `MlaKvCache`: mla kv cache.
 pub(crate) struct MlaKvCache {
     kv_lora_rank: usize,
     block_size: usize,
@@ -206,7 +206,7 @@ impl MlaKvCache {
         Tensor::cat(&parts, 0)?.unsqueeze(0)
     }
 
-    pub fn block_size(&self) -> usize {
+    pub const fn block_size(&self) -> usize {
         self.block_size
     }
 }

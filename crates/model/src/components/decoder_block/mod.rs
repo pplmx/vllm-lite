@@ -1,4 +1,4 @@
-//! Shared pre-norm decoder block: RMSNorm → RoPE GQA → residual → RMSNorm → SwiGLU → residual.
+//! Shared pre-norm decoder block: `RMSNorm` → `RoPE` GQA → residual → `RMSNorm` → `SwiGLU` → residual.
 //!
 //! Used by Llama, Mistral, and Qwen3 causal-LM stacks.
 //! Registry blocks implement this trait via [`TransformerBlock`].
@@ -15,7 +15,7 @@ use candle_core::{Result, Tensor};
 
 pub use factory::{block_from_weights, new_block};
 
-/// Standard decoder layer with RoPE group-query attention and SwiGLU FFN.
+/// Standard decoder layer with `RoPE` group-query attention and `SwiGLU` FFN.
 pub struct RopeGqaDecoderBlock {
     input_layernorm: LnLayerNorm,
     post_attention_layernorm: LnLayerNorm,
@@ -24,7 +24,8 @@ pub struct RopeGqaDecoderBlock {
 }
 
 impl RopeGqaDecoderBlock {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         input_layernorm: LnLayerNorm,
         post_attention_layernorm: LnLayerNorm,
         attention: RopeGqaAttention,
@@ -136,7 +137,7 @@ impl PagedDecoderBlock for RopeGqaDecoderBlock {
         block_ids: &[usize],
         positions: &[usize],
     ) -> Result<Tensor> {
-        RopeGqaDecoderBlock::forward_prefill(self, x, kv_cache, layer_idx, block_ids, positions)
+        Self::forward_prefill(self, x, kv_cache, layer_idx, block_ids, positions)
     }
 
     fn forward_decode(
@@ -148,7 +149,7 @@ impl PagedDecoderBlock for RopeGqaDecoderBlock {
         num_computed_tokens: usize,
         positions: &[usize],
     ) -> Result<Tensor> {
-        RopeGqaDecoderBlock::forward_decode(
+        Self::forward_decode(
             self,
             x,
             kv_cache,

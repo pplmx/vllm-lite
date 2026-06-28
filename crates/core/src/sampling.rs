@@ -33,7 +33,7 @@ pub(crate) fn temperature_sample(logits: &[f32], temperature: f32) -> TokenId {
     }
 
     let scaled: Vec<f32> = logits.iter().map(|x| x / temperature).collect();
-    let max_val = scaled.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+    let max_val = scaled.iter().copied().fold(f32::NEG_INFINITY, f32::max);
     let exp: Vec<f32> = scaled.iter().map(|x| (x - max_val).exp()).collect();
     let sum: f32 = exp.iter().sum();
     let probs: Vec<f32> = exp.iter().map(|x| x / sum).collect();
@@ -91,6 +91,7 @@ pub(crate) fn top_p_sample(logits: &[f32], top_p: f32) -> TokenId {
     indexed[probs.len() - 1].0 as TokenId
 }
 
+#[must_use]
 pub fn top_k_sample(logits: &[f32], k: usize) -> TokenId {
     if k == 0 || logits.is_empty() {
         return greedy_sample(logits);
@@ -114,6 +115,7 @@ pub fn top_k_sample(logits: &[f32], k: usize) -> TokenId {
     temperature_sample(&masked, 1.0)
 }
 
+#[must_use]
 pub fn sample_batch(
     logits_list: &[Vec<f32>],
     temperature: f32,
@@ -133,7 +135,7 @@ pub fn sample_batch(
             }
 
             if temperature > 0.0 && temperature != 1.0 {
-                for l in logits.iter_mut() {
+                for l in &mut logits {
                     *l /= temperature;
                 }
             }
@@ -147,7 +149,7 @@ pub fn sample_batch(
                         .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
                 });
                 let threshold = indexed[top_k_limit - 1].1;
-                for l in logits.iter_mut() {
+                for l in &mut logits {
                     if *l < threshold {
                         *l = f32::NEG_INFINITY;
                     }

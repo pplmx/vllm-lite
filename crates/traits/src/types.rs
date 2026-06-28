@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-/// BLOCK_SIZE: block size constant.
+/// `BLOCK_SIZE`: block size constant.
 pub const BLOCK_SIZE: usize = 16;
-/// BlockId: block id.
+/// `BlockId`: block id.
 pub type BlockId = usize;
-/// TokenId: token id.
+/// `TokenId`: token id.
 pub type TokenId = u32;
-/// SeqId: seq id.
+/// `SeqId`: seq id.
 pub type SeqId = u64;
 
 /// Batch phase
@@ -35,7 +35,8 @@ pub struct Batch {
 
 impl Batch {
     /// Create an empty batch
-    pub fn empty() -> Self {
+    #[must_use]
+    pub const fn empty() -> Self {
         Self {
             seq_ids: Vec::new(),
             input_tokens: Vec::new(),
@@ -50,19 +51,23 @@ impl Batch {
     }
 
     /// Check if batch is empty
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.seq_ids.is_empty()
     }
 
     /// Get batch length
+    #[must_use]
     pub fn len(&self) -> usize {
         self.seq_ids.len()
     }
 
+    #[must_use]
     pub fn has_prefill(&self) -> bool {
         self.is_prefill.iter().any(|&p| p)
     }
 
+    #[must_use]
     pub fn has_decode(&self) -> bool {
         self.is_prefill.iter().any(|&p| !p)
     }
@@ -74,14 +79,14 @@ impl Default for Batch {
     }
 }
 
-/// BatchOutput: batch output.
+/// `BatchOutput`: batch output.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BatchOutput {
     pub seq_ids: Vec<SeqId>,
     pub next_tokens: Vec<TokenId>,
 }
 
-/// TensorParallelError: tensor parallel error.
+/// `TensorParallelError`: tensor parallel error.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum TensorParallelError {
     #[error("World size must be > 0")]

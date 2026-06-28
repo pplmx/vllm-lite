@@ -2,7 +2,7 @@ use super::{CacheConfig, CacheMessage, NodeId};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-/// DistributedKVCache: distributed kv cache.
+/// `DistributedKVCache`: distributed kv cache.
 pub struct DistributedKVCache {
     config: CacheConfig,
     local_cache: Arc<RwLock<HashMap<u64, CacheEntry>>>,
@@ -26,7 +26,7 @@ enum CacheState {
     Invalid,
 }
 
-/// CacheStats: cache statistics.
+/// `CacheStats`: cache statistics.
 #[derive(Debug, Default, Clone)]
 pub struct CacheStats {
     pub hits: u64,
@@ -36,6 +36,7 @@ pub struct CacheStats {
 }
 
 impl DistributedKVCache {
+    #[must_use]
     pub fn new(config: CacheConfig) -> Self {
         Self {
             config,

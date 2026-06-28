@@ -6,7 +6,7 @@ use tracing::trace;
 
 use super::{AttentionConfig, GqaFlashAttention, expand_kv, paged_attention, tiled_attention};
 
-/// GqaAttention: gqa attention.
+/// `GqaAttention`: gqa attention.
 pub struct GqaAttention {
     q_proj: Linear,
     k_proj: Linear,
@@ -255,27 +255,33 @@ impl GqaAttention {
         }
     }
 
-    pub fn num_heads(&self) -> usize {
+    #[must_use]
+    pub const fn num_heads(&self) -> usize {
         self.num_heads
     }
 
-    pub fn num_kv_heads(&self) -> usize {
+    #[must_use]
+    pub const fn num_kv_heads(&self) -> usize {
         self.num_kv_heads
     }
 
-    pub fn head_dim(&self) -> usize {
+    #[must_use]
+    pub const fn head_dim(&self) -> usize {
         self.head_dim
     }
 
-    pub fn has_q_norm(&self) -> bool {
+    #[must_use]
+    pub const fn has_q_norm(&self) -> bool {
         self.q_norm.is_some()
     }
 
-    pub fn has_k_norm(&self) -> bool {
+    #[must_use]
+    pub const fn has_k_norm(&self) -> bool {
         self.k_norm.is_some()
     }
 
-    pub fn config(&self) -> &AttentionConfig {
+    #[must_use]
+    pub const fn config(&self) -> &AttentionConfig {
         &self.config
     }
 
@@ -806,8 +812,8 @@ mod tests {
             .flatten_all()?
             .to_vec1()?
             .iter()
-            .cloned()
-            .fold(0.0f32, |a, b| a.max(b));
+            .copied()
+            .fold(0.0f32, f32::max);
         assert!(max_diff < 1e-5);
         Ok(())
     }

@@ -22,7 +22,7 @@ use tokio::sync::RwLock;
 #[cfg(test)]
 use base64::Engine;
 
-/// JwtError: jwt error.
+/// `JwtError`: jwt error.
 #[derive(Debug, Error)]
 pub enum JwtError {
     #[error("Invalid token format: {0}")]
@@ -59,7 +59,7 @@ pub struct Claims {
     pub extra: HashMap<String, serde_json::Value>,
 }
 
-/// JwtConfig: jwt configuration.
+/// `JwtConfig`: jwt configuration.
 #[derive(Debug, Clone)]
 pub struct JwtConfig {
     pub secret: Option<String>,
@@ -113,13 +113,14 @@ const ASYMMETRIC_ALGORITHMS: &[Algorithm] = &[
     Algorithm::ES384,
 ];
 
-/// JwtValidator: jwt validator.
+/// `JwtValidator`: jwt validator.
 pub struct JwtValidator {
     config: JwtConfig,
 }
 
 impl JwtValidator {
-    pub fn new(config: JwtConfig) -> Self {
+    #[must_use]
+    pub const fn new(config: JwtConfig) -> Self {
         Self { config }
     }
 
@@ -209,17 +210,19 @@ impl JwtValidator {
         }
     }
 
+    #[must_use]
     pub fn extract_token(auth_header: &str) -> Option<&str> {
         auth_header.strip_prefix("Bearer ")
     }
 }
 
-/// JwtAuthMiddleware: jwt auth middleware.
+/// `JwtAuthMiddleware`: jwt auth middleware.
 pub struct JwtAuthMiddleware {
     validator: Arc<RwLock<JwtValidator>>,
 }
 
 impl JwtAuthMiddleware {
+    #[must_use]
     pub fn new(config: JwtConfig) -> Self {
         Self {
             validator: Arc::new(RwLock::new(JwtValidator::new(config))),

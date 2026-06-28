@@ -62,6 +62,7 @@ use crate::health::HealthChecker;
 use crate::openai::batch::BatchManager;
 
 /// Build [`ApiState`] with defaults suitable for handler tests.
+#[must_use]
 pub fn api_state(architecture: Architecture) -> ApiState {
     let (engine_tx, _engine_rx) = mpsc::unbounded_channel();
     ApiState {
@@ -76,6 +77,7 @@ pub fn api_state(architecture: Architecture) -> ApiState {
 }
 
 /// Mock engine that replies with the given token stream for each chat request.
+#[must_use]
 pub fn spawn_mock_engine(reply_tokens: Vec<TokenId>) -> (EngineHandle, JoinHandle<()>) {
     let (engine_tx, mut engine_rx) = mpsc::unbounded_channel();
     let handle = tokio::spawn(async move {
@@ -93,6 +95,7 @@ pub fn spawn_mock_engine(reply_tokens: Vec<TokenId>) -> (EngineHandle, JoinHandl
 }
 
 /// [`ApiState`] wired to a mock engine that emits `reply_tokens`.
+#[must_use]
 pub fn api_state_with_mock_engine(
     architecture: Architecture,
     reply_tokens: Vec<TokenId>,

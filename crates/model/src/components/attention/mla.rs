@@ -6,7 +6,7 @@ use candle_nn::Linear;
 use super::AttentionConfig;
 use crate::components::positional::rope::apply_rope;
 
-/// MlaAttention: mla attention.
+/// `MlaAttention`: mla attention.
 pub struct MlaAttention {
     q_proj: Linear,
     kv_proj: Linear,
@@ -25,47 +25,57 @@ pub struct MlaAttention {
 }
 
 impl MlaAttention {
-    pub fn num_heads(&self) -> usize {
+    #[must_use]
+    pub const fn num_heads(&self) -> usize {
         self.num_heads
     }
 
-    pub fn num_kv_heads(&self) -> usize {
+    #[must_use]
+    pub const fn num_kv_heads(&self) -> usize {
         self.num_kv_heads
     }
 
-    pub fn head_dim(&self) -> usize {
+    #[must_use]
+    pub const fn head_dim(&self) -> usize {
         self.head_dim
     }
 
-    pub fn kv_lora_rank(&self) -> usize {
+    #[must_use]
+    pub const fn kv_lora_rank(&self) -> usize {
         self.kv_lora_rank
     }
 
-    pub fn q_lora_rank(&self) -> usize {
+    #[must_use]
+    pub const fn q_lora_rank(&self) -> usize {
         self.q_lora_rank
     }
 
-    pub fn config(&self) -> &AttentionConfig {
+    #[must_use]
+    pub const fn config(&self) -> &AttentionConfig {
         &self.config
     }
 
     #[cfg(test)]
-    pub fn q_proj_test(&self) -> &Linear {
+    #[must_use]
+    pub const fn q_proj_test(&self) -> &Linear {
         &self.q_proj
     }
 
     #[cfg(test)]
-    pub fn kv_proj_test(&self) -> &Linear {
+    #[must_use]
+    pub const fn kv_proj_test(&self) -> &Linear {
         &self.kv_proj
     }
 
     #[cfg(test)]
-    pub fn k_decompress_test(&self) -> &Linear {
+    #[must_use]
+    pub const fn k_decompress_test(&self) -> &Linear {
         &self.k_decompress
     }
 
     #[cfg(test)]
-    pub fn v_decompress_test(&self) -> &Linear {
+    #[must_use]
+    pub const fn v_decompress_test(&self) -> &Linear {
         &self.v_decompress
     }
 
@@ -619,8 +629,8 @@ mod tests {
             .to_vec1()
             .unwrap()
             .iter()
-            .cloned()
-            .fold(0.0f32, |a, b| a.max(b));
+            .copied()
+            .fold(0.0f32, f32::max);
         assert!(max_diff < 1e-5);
     }
 

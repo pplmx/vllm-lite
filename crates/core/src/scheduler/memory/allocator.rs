@@ -10,7 +10,7 @@ const NULL_BLOCK: BlockId = BlockId::MAX;
 /// should compute their own block size and use the helper APIs.
 pub(crate) const BLOCK_BYTES: usize = 16 * 1024 * 1024;
 
-/// BlockAllocatorStats: block allocator statistics.
+/// `BlockAllocatorStats`: block allocator statistics.
 #[derive(Clone, Default)]
 pub struct BlockAllocatorStats {
     pub total_blocks: usize,
@@ -19,7 +19,7 @@ pub struct BlockAllocatorStats {
     pub free_count: usize,
 }
 
-/// BlockAllocator: block allocator.
+/// `BlockAllocator`: block allocator.
 pub struct BlockAllocator {
     num_blocks: usize,
     next_free: Vec<BlockId>,
@@ -30,6 +30,7 @@ pub struct BlockAllocator {
 }
 
 impl BlockAllocator {
+    #[must_use]
     pub fn new(num_blocks: usize) -> Self {
         let mut next_free = vec![0; num_blocks];
         let mut prev_free = vec![0; num_blocks];
@@ -95,10 +96,10 @@ impl BlockAllocator {
         let next = self.next_free[block];
         let prev = self.prev_free[block];
 
-        if prev != NULL_BLOCK {
-            self.next_free[prev] = next;
-        } else {
+        if prev == NULL_BLOCK {
             self.first_free = next;
+        } else {
+            self.next_free[prev] = next;
         }
 
         if next != NULL_BLOCK {
@@ -139,27 +140,32 @@ impl BlockAllocator {
         self.first_free = block;
     }
 
-    pub fn available(&self) -> usize {
+    #[must_use]
+    pub const fn available(&self) -> usize {
         self.stats.available_blocks
     }
 
-    pub fn total(&self) -> usize {
+    #[must_use]
+    pub const fn total(&self) -> usize {
         self.num_blocks
     }
 
+    #[must_use]
     pub fn stats(&self) -> BlockAllocatorStats {
         self.stats.clone()
     }
 
     /// Bytes per KV block. Static — same constant for all allocators in the
     /// process. Used for VRAM budget accounting.
-    pub fn bytes_per_block() -> usize {
+    #[must_use]
+    pub const fn bytes_per_block() -> usize {
         BLOCK_BYTES
     }
 
     /// Number of bytes currently allocated (in use) by this allocator.
     /// Computed as `(total_blocks - available_blocks) * BLOCK_BYTES`.
-    pub fn allocated_bytes(&self) -> usize {
+    #[must_use]
+    pub const fn allocated_bytes(&self) -> usize {
         let allocated_blocks = self.num_blocks.saturating_sub(self.stats.available_blocks);
         allocated_blocks.saturating_mul(BLOCK_BYTES)
     }

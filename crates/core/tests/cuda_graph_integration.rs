@@ -59,7 +59,7 @@ fn test_scheduler_cuda_graph_config_supports_batch_size() {
     assert!(!config.supports_batch_size(5));
 }
 
-/// Test GraphBatch conversion
+/// Test `GraphBatch` conversion
 #[test]
 fn test_graph_batch_conversion() {
     use vllm_traits::{Batch, BatchPhase};
@@ -74,7 +74,7 @@ fn test_graph_batch_conversion() {
         total_tokens: 3,
         max_seq_len: 1,
     };
-    let graph_batch = GraphBatch::Regular(batch.clone());
+    let graph_batch = GraphBatch::Regular(batch);
     assert_eq!(graph_batch.batch_size(), 3);
     let converted = graph_batch.into_regular();
     assert_eq!(converted.seq_ids, vec![1, 2, 3]);

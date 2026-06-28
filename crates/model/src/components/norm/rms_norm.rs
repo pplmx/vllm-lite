@@ -1,15 +1,16 @@
-//! RMSNorm (Root Mean Square Layer Normalization) implementation.
+//! `RMSNorm` (Root Mean Square Layer Normalization) implementation.
 
 use candle_core::{Module, Result, Tensor};
 
-/// RmsNorm: rms norm.
+/// `RmsNorm`: rms norm.
 pub struct RmsNorm {
     weight: Tensor,
     eps: f64,
 }
 
 impl RmsNorm {
-    pub fn new(weight: Tensor, eps: f64) -> Self {
+    #[must_use]
+    pub const fn new(weight: Tensor, eps: f64) -> Self {
         Self { weight, eps }
     }
 
@@ -41,7 +42,7 @@ impl RmsNorm {
 
 impl Module for RmsNorm {
     fn forward(&self, xs: &Tensor) -> Result<Tensor> {
-        RmsNorm::forward(self, xs)
+        Self::forward(self, xs)
     }
 }
 

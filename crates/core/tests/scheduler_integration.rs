@@ -25,7 +25,7 @@ fn test_scheduler_basic_flow() {
     assert_eq!(batch.seq_ids.len(), 1);
 
     // Simulate model forward
-    let input_counts: Vec<usize> = batch.input_tokens.iter().map(|t| t.len()).collect();
+    let input_counts: Vec<usize> = batch.input_tokens.iter().map(std::vec::Vec::len).collect();
     engine.update(&batch.seq_ids, &[99], &input_counts);
 
     // Verify
@@ -62,7 +62,7 @@ fn test_scheduler_prefill_decode_separation() {
     assert_eq!(batch1.phase, BatchPhase::Prefill);
 
     // Complete prefill
-    let input_counts: Vec<usize> = batch1.input_tokens.iter().map(|t| t.len()).collect();
+    let input_counts: Vec<usize> = batch1.input_tokens.iter().map(std::vec::Vec::len).collect();
     engine.update(&batch1.seq_ids, &[99], &input_counts);
 
     // Next batch should be decode (if we have running sequences)
@@ -111,7 +111,7 @@ fn test_scheduler_prefix_cache() {
     // Add first request - complete it to add to prefix cache
     let id1 = engine.add_request(Request::new(0, vec![1, 2, 3], 10));
     let batch1 = engine.build_batch();
-    let input_counts: Vec<usize> = batch1.input_tokens.iter().map(|t| t.len()).collect();
+    let input_counts: Vec<usize> = batch1.input_tokens.iter().map(std::vec::Vec::len).collect();
     engine.update(&batch1.seq_ids, &[99], &input_counts);
 
     // Continue until finished
@@ -163,7 +163,8 @@ fn test_scheduler_concurrent_requests() {
         if engine.has_pending() {
             let batch = engine.build_batch();
             if !batch.is_empty() {
-                let input_counts: Vec<usize> = batch.input_tokens.iter().map(|t| t.len()).collect();
+                let input_counts: Vec<usize> =
+                    batch.input_tokens.iter().map(std::vec::Vec::len).collect();
                 let next_tokens: Vec<u32> = batch.seq_ids.iter().map(|_| 99).collect();
                 engine.update(&batch.seq_ids, &next_tokens, &input_counts);
             }

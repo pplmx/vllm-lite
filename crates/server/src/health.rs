@@ -9,23 +9,26 @@ pub enum HealthStatus {
 }
 
 impl HealthStatus {
-    pub fn is_ok(&self) -> bool {
-        matches!(self, HealthStatus::Ok)
+    #[must_use]
+    pub const fn is_ok(&self) -> bool {
+        matches!(self, Self::Ok)
     }
 
-    pub fn as_str(&self) -> &'static str {
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
         match self {
-            HealthStatus::Ok => "ok",
-            HealthStatus::NotReady => "not_ready",
-            HealthStatus::Unhealthy => "unhealthy",
+            Self::Ok => "ok",
+            Self::NotReady => "not_ready",
+            Self::Unhealthy => "unhealthy",
         }
     }
 
-    pub fn http_status(&self) -> u16 {
+    #[must_use]
+    pub const fn http_status(&self) -> u16 {
         match self {
-            HealthStatus::Ok => 200,
-            HealthStatus::NotReady => 503,
-            HealthStatus::Unhealthy => 503,
+            Self::Ok => 200,
+            Self::NotReady => 503,
+            Self::Unhealthy => 503,
         }
     }
 }
@@ -37,12 +40,14 @@ pub struct HealthChecker {
 }
 
 impl HealthChecker {
-    pub fn new(alive: bool, ready: bool) -> Self {
+    #[must_use]
+    pub const fn new(alive: bool, ready: bool) -> Self {
         Self { alive, ready }
     }
 
     /// Liveness probe - is the process running?
-    pub fn check_liveness(&self) -> HealthStatus {
+    #[must_use]
+    pub const fn check_liveness(&self) -> HealthStatus {
         if self.alive {
             HealthStatus::Ok
         } else {
@@ -51,7 +56,8 @@ impl HealthChecker {
     }
 
     /// Readiness probe - is the service ready to accept requests?
-    pub fn check_readiness(&self) -> HealthStatus {
+    #[must_use]
+    pub const fn check_readiness(&self) -> HealthStatus {
         if !self.alive {
             return HealthStatus::Unhealthy;
         }

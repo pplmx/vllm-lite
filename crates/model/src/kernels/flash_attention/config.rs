@@ -3,7 +3,7 @@
 // Flash attention configuration: `AttentionVariant`, `FlashAttentionConfig`,
 // and the configuration helpers (`select_tile_size`, `should_use_tiled`).
 
-/// AttentionVariant: attention variant enumeration.
+/// `AttentionVariant`: attention variant enumeration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AttentionVariant {
     #[default]
@@ -13,7 +13,7 @@ pub enum AttentionVariant {
     FlashV2,
 }
 
-/// FlashAttentionConfig: flash attention configuration.
+/// `FlashAttentionConfig`: flash attention configuration.
 #[derive(Debug, Clone, Default)]
 pub struct FlashAttentionConfig {
     pub variant: AttentionVariant,
@@ -25,6 +25,7 @@ pub struct FlashAttentionConfig {
 }
 
 impl FlashAttentionConfig {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             variant: AttentionVariant::Standard,
@@ -36,30 +37,35 @@ impl FlashAttentionConfig {
         }
     }
 
-    pub fn with_flash(mut self) -> Self {
+    #[must_use]
+    pub const fn with_flash(mut self) -> Self {
         self.variant = AttentionVariant::Flash;
         self
     }
 
-    /// with_flash_v2: with flash v2.
-    pub fn with_flash_v2(mut self) -> Self {
+    /// `with_flash_v2`: with flash v2.
+    #[must_use]
+    pub const fn with_flash_v2(mut self) -> Self {
         self.variant = AttentionVariant::FlashV2;
         self
     }
 
-    pub fn with_tiled(mut self, tile_size: usize) -> Self {
+    #[must_use]
+    pub const fn with_tiled(mut self, tile_size: usize) -> Self {
         self.variant = AttentionVariant::Tiled;
         self.flash_block_size = tile_size;
         self
     }
 
-    pub fn with_sliding_window(mut self, size: usize) -> Self {
+    #[must_use]
+    pub const fn with_sliding_window(mut self, size: usize) -> Self {
         self.use_sliding_window = true;
         self.sliding_window_size = size;
         self
     }
 }
 
+#[must_use]
 pub fn select_tile_size(seq_len: usize, config: &FlashAttentionConfig) -> usize {
     if seq_len <= 32 {
         32
@@ -74,7 +80,8 @@ pub fn select_tile_size(seq_len: usize, config: &FlashAttentionConfig) -> usize 
     }
 }
 
-pub fn should_use_tiled(seq_len: usize, head_dim: usize) -> bool {
+#[must_use]
+pub const fn should_use_tiled(seq_len: usize, head_dim: usize) -> bool {
     let memory_standard = seq_len * seq_len * head_dim;
     let memory_tiled = seq_len * 128 * head_dim * 2;
     memory_standard > memory_tiled * 2

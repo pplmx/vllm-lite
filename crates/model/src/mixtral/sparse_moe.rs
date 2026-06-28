@@ -1,10 +1,10 @@
-//! Sparse MoE layer for Mixtral.
+//! Sparse `MoE` layer for Mixtral.
 
 use candle_core::{D, Module, Result, Tensor};
 use candle_nn::Linear;
 use tracing::trace;
 
-/// MixtralSparseMoe: mixtral sparse moe.
+/// `MixtralSparseMoe`: mixtral sparse moe.
 pub struct MixtralSparseMoe {
     experts: Vec<Expert>,
     gate: Linear,
@@ -83,7 +83,7 @@ impl MixtralSparseMoe {
     ) -> Result<Self> {
         let mut experts = Vec::new();
         for i in 0..num_experts {
-            let vb = vb.pp(format!("expert_{}", i));
+            let vb = vb.pp(format!("expert_{i}"));
             let gate_proj =
                 candle_nn::linear(hidden_size, expert_intermediate_size, vb.pp("gate_proj"))?;
             let up_proj =

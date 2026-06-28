@@ -9,11 +9,12 @@ pub enum MetricType {
 }
 
 impl MetricType {
+    #[must_use]
     pub fn name(&self) -> &str {
         match self {
-            MetricType::Counter(name) => name,
-            MetricType::Gauge(name) => name,
-            MetricType::Histogram(name) => name,
+            Self::Counter(name) => name,
+            Self::Gauge(name) => name,
+            Self::Histogram(name) => name,
         }
     }
 }
@@ -27,32 +28,34 @@ pub enum MetricValue {
 }
 
 impl MetricValue {
-    pub fn new_counter() -> Self {
-        MetricValue::Counter(AtomicU64::new(0))
+    #[must_use]
+    pub const fn new_counter() -> Self {
+        Self::Counter(AtomicU64::new(0))
     }
 
-    pub fn new_gauge() -> Self {
-        MetricValue::Gauge(AtomicU64::new(0))
+    #[must_use]
+    pub const fn new_gauge() -> Self {
+        Self::Gauge(AtomicU64::new(0))
     }
 
     pub fn increment(&self, delta: u64) {
-        if let MetricValue::Counter(c) = self {
+        if let Self::Counter(c) = self {
             c.fetch_add(delta, Ordering::Relaxed);
         }
     }
 
     pub fn set(&self, value: u64) {
-        if let MetricValue::Gauge(g) = self {
+        if let Self::Gauge(g) = self {
             g.store(value, Ordering::Relaxed);
         }
     }
 
-    /// as_u64: as u64.
+    /// `as_u64`: as u64.
     pub fn as_u64(&self) -> u64 {
         match self {
-            MetricValue::Counter(c) => c.load(Ordering::Relaxed),
-            MetricValue::Gauge(g) => g.load(Ordering::Relaxed),
-            MetricValue::Histogram(_) => 0,
+            Self::Counter(c) => c.load(Ordering::Relaxed),
+            Self::Gauge(g) => g.load(Ordering::Relaxed),
+            Self::Histogram(_) => 0,
         }
     }
 }
@@ -64,6 +67,7 @@ pub struct MetricLabels {
 }
 
 impl MetricLabels {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -73,6 +77,7 @@ impl MetricLabels {
         self
     }
 
+    #[must_use]
     pub fn as_slice(&self) -> &[(String, String)] {
         &self.labels
     }

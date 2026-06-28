@@ -1,6 +1,6 @@
 //! Token sampling parameters and builder.
 
-/// SamplingParams: sampling params.
+/// `SamplingParams`: sampling params.
 #[derive(Clone, Debug)]
 pub struct SamplingParams {
     pub temperature: f32,
@@ -29,6 +29,7 @@ impl Default for SamplingParams {
 impl SamplingParams {
     /// Returns a builder for configuring this type with the documented field defaults.
     /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
+    #[must_use]
     pub fn builder() -> SamplingParamsBuilder {
         SamplingParamsBuilder::default()
     }
@@ -41,36 +42,44 @@ pub struct SamplingParamsBuilder {
 }
 
 impl SamplingParamsBuilder {
-    pub fn with_temperature(mut self, v: f32) -> Self {
+    #[must_use]
+    pub const fn with_temperature(mut self, v: f32) -> Self {
         self.inner.temperature = v;
         self
     }
-    pub fn with_top_k(mut self, v: usize) -> Self {
+    #[must_use]
+    pub const fn with_top_k(mut self, v: usize) -> Self {
         self.inner.top_k = v;
         self
     }
-    pub fn with_top_p(mut self, v: f32) -> Self {
+    #[must_use]
+    pub const fn with_top_p(mut self, v: f32) -> Self {
         self.inner.top_p = v;
         self
     }
-    pub fn with_repeat_penalty(mut self, v: f32) -> Self {
+    #[must_use]
+    pub const fn with_repeat_penalty(mut self, v: f32) -> Self {
         self.inner.repeat_penalty = v;
         self
     }
-    pub fn with_beam_width(mut self, v: usize) -> Self {
+    #[must_use]
+    pub const fn with_beam_width(mut self, v: usize) -> Self {
         self.inner.beam_width = v;
         self
     }
-    pub fn with_length_penalty(mut self, v: f32) -> Self {
+    #[must_use]
+    pub const fn with_length_penalty(mut self, v: f32) -> Self {
         self.inner.length_penalty = v;
         self
     }
-    pub fn with_max_retries(mut self, v: u32) -> Self {
+    #[must_use]
+    pub const fn with_max_retries(mut self, v: u32) -> Self {
         self.inner.max_retries = v;
         self
     }
     /// build: build the [`SamplingParams`].
-    pub fn build(self) -> SamplingParams {
+    #[must_use]
+    pub const fn build(self) -> SamplingParams {
         self.inner
     }
 }

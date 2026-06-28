@@ -1,12 +1,12 @@
 //! Vision encoder components for Sam/Vision models.
 //!
 //! `VisionEncoder` is a placeholder for future VLM integration. It preserves tensor
-//! shapes today and does not run a real ViT stack yet.
+//! shapes today and does not run a real `ViT` stack yet.
 
 use candle_core::{Module, Result as CandleResult, Tensor};
 use candle_nn::{Linear, VarBuilder};
 
-/// VisionConfig: vision configuration.
+/// `VisionConfig`: vision configuration.
 #[derive(Clone, Debug)]
 pub struct VisionConfig {
     pub image_size: usize,
@@ -16,7 +16,8 @@ pub struct VisionConfig {
 }
 
 impl VisionConfig {
-    pub fn new(image_size: usize, patch_size: usize) -> Self {
+    #[must_use]
+    pub const fn new(image_size: usize, patch_size: usize) -> Self {
         Self {
             image_size,
             patch_size,
@@ -25,12 +26,13 @@ impl VisionConfig {
         }
     }
 
-    pub fn num_patches(&self) -> usize {
+    #[must_use]
+    pub const fn num_patches(&self) -> usize {
         (self.image_size / self.patch_size).pow(2)
     }
 }
 
-/// PatchEmbed: patch embed.
+/// `PatchEmbed`: patch embed.
 pub struct PatchEmbed {
     proj: Linear,
 }
@@ -62,7 +64,8 @@ impl VisionEncoder {
         })
     }
 
-    pub fn config(&self) -> &VisionConfig {
+    #[must_use]
+    pub const fn config(&self) -> &VisionConfig {
         &self.config
     }
 

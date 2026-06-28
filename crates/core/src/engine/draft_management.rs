@@ -101,7 +101,7 @@ impl Engine {
         self.draft_registry.decrement_ref(id)
     }
 
-    pub fn enable_speculative(&mut self) {
+    pub const fn enable_speculative(&mut self) {
         self.speculative_mode = true;
     }
 
@@ -118,7 +118,7 @@ impl Engine {
     }
 
     /// Check if adaptive speculative is enabled
-    pub fn is_adaptive_speculative_enabled(&self) -> bool {
+    pub const fn is_adaptive_speculative_enabled(&self) -> bool {
         self.adaptive_decoder.is_some()
     }
 }

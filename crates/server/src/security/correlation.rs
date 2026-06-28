@@ -3,20 +3,21 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;
 
-/// REQUEST_ID_HEADER: request id header constant.
+/// `REQUEST_ID_HEADER`: request id header constant.
 pub(crate) const REQUEST_ID_HEADER: &str = "X-Request-ID";
 
-/// CorrelationId: correlation id.
+/// `CorrelationId`: correlation id.
 #[derive(Debug, Clone)]
 pub(crate) struct CorrelationId(pub String);
 
-/// CorrelationIdMiddleware: correlation id middleware.
+/// `CorrelationIdMiddleware`: correlation id middleware.
 #[derive(Clone)]
 pub struct CorrelationIdMiddleware {
     id_generator: Arc<RwLock<u64>>,
 }
 
 impl CorrelationIdMiddleware {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             id_generator: Arc::new(RwLock::new(0)),
@@ -37,11 +38,12 @@ impl CorrelationIdMiddleware {
         )
     }
 
+    #[must_use]
     pub fn extract_id(headers: &axum::http::HeaderMap) -> Option<String> {
         headers
             .get(REQUEST_ID_HEADER)
             .and_then(|v| v.to_str().ok())
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
     }
 }
 

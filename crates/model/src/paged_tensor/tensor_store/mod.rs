@@ -15,7 +15,7 @@ use std::collections::HashMap;
 
 use candle_core::{DType, Device, Result, Tensor};
 
-/// PagedKvCache: paged kv cache.
+/// `PagedKvCache`: paged kv cache.
 pub struct PagedKvCache {
     key_cache: Vec<Tensor>,
     value_cache: Vec<Tensor>,

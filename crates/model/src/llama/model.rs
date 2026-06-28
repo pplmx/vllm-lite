@@ -8,9 +8,9 @@ use std::collections::HashMap;
 
 use super::block::{block_from_weights, new_block};
 
-/// LlamaBlock: llama block.
+/// `LlamaBlock`: llama block.
 pub type LlamaBlock = RopeGqaDecoderBlock;
-/// LlamaModel: llama model.
+/// `LlamaModel`: llama model.
 pub type LlamaModel = CausalLm<LlamaBlock, RmsNorm, Linear>;
 
 impl LlamaModel {

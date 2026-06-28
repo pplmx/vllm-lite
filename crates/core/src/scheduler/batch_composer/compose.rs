@@ -16,6 +16,7 @@ pub struct BatchComposer {
 
 impl BatchComposer {
     /// Create a new batch composer with the given configuration
+    #[must_use]
     pub fn new(config: BatchCompositionConfig) -> Self {
         Self {
             config,
@@ -25,6 +26,7 @@ impl BatchComposer {
     }
 
     /// Create a new batch composer with custom packing configuration
+    #[must_use]
     pub fn with_packing(
         config: BatchCompositionConfig,
         packing_config: SequencePackingConfig,
@@ -37,6 +39,7 @@ impl BatchComposer {
     }
 
     /// Create a new batch composer with chunked prefill configuration
+    #[must_use]
     pub fn with_chunked_prefill(
         config: BatchCompositionConfig,
         chunked_prefill: ChunkedPrefillConfig,
@@ -49,6 +52,7 @@ impl BatchComposer {
     }
 
     /// Compose batch with optional sequence packing for prefill
+    #[must_use]
     pub fn compose(&self, sequences: Vec<Sequence>, phase: Phase) -> Batch {
         match phase {
             Phase::Prefill if self.packing_config.enabled && sequences.len() > 1 => {
@@ -60,6 +64,7 @@ impl BatchComposer {
 
     /// Compose batch with chunked prefill support
     /// Returns a batch that respects memory constraints by splitting long sequences
+    #[must_use]
     pub fn compose_with_chunking(
         &self,
         sequences: Vec<Sequence>,
@@ -439,7 +444,7 @@ mod tests {
 
         let batch = composer.compose(seqs, Phase::Prefill);
 
-        let total_tokens: usize = batch.input_tokens.iter().map(|t| t.len()).sum();
+        let total_tokens: usize = batch.input_tokens.iter().map(std::vec::Vec::len).sum();
         assert!(total_tokens <= 5, "Should respect token budget");
     }
 

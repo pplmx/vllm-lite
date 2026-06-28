@@ -1,4 +1,4 @@
-//! TestHarness - Common test environment setup
+//! `TestHarness` - Common test environment setup
 //!
 //! Provides a unified interface for initializing test environments
 //! with common utilities and configurations.
@@ -29,26 +29,31 @@ impl Default for TestHarnessConfig {
 }
 
 impl TestHarnessConfig {
-    pub fn kv_blocks(mut self, n: usize) -> Self {
+    #[must_use]
+    pub const fn kv_blocks(mut self, n: usize) -> Self {
         self.kv_blocks = n;
         self
     }
 
-    pub fn max_batch_size(mut self, n: usize) -> Self {
+    #[must_use]
+    pub const fn max_batch_size(mut self, n: usize) -> Self {
         self.max_batch_size = n;
         self
     }
 
-    pub fn enable_prefix_cache(mut self, enabled: bool) -> Self {
+    #[must_use]
+    pub const fn enable_prefix_cache(mut self, enabled: bool) -> Self {
         self.enable_prefix_cache = enabled;
         self
     }
 
-    pub fn enable_dynamic_batching(mut self, enabled: bool) -> Self {
+    #[must_use]
+    pub const fn enable_dynamic_batching(mut self, enabled: bool) -> Self {
         self.enable_dynamic_batching = enabled;
         self
     }
 
+    #[must_use]
     pub fn into_scheduler_config(self) -> SchedulerConfig {
         SchedulerConfig::new(
             self.max_batch_size,
@@ -69,7 +74,7 @@ impl TestHarnessConfig {
 /// Test harness for vllm-lite integration tests
 ///
 /// Provides a unified setup for tests with common utilities:
-/// - SchedulerEngine with configurable settings
+/// - `SchedulerEngine` with configurable settings
 /// - Metrics collector for tracking
 /// - Mock model support
 ///
@@ -93,12 +98,14 @@ pub struct TestHarness {
 }
 
 impl TestHarness {
-    /// Create a new TestHarness with default configuration
+    /// Create a new `TestHarness` with default configuration
+    #[must_use]
     pub fn new() -> Self {
         Self::from_config(TestHarnessConfig::default())
     }
 
-    /// Create a TestHarness from a custom configuration
+    /// Create a `TestHarness` from a custom configuration
+    #[must_use]
     pub fn from_config(config: TestHarnessConfig) -> Self {
         let metrics = Arc::new(EnhancedMetricsCollector::new());
         let scheduler_config = config.clone().into_scheduler_config();
@@ -113,17 +120,17 @@ impl TestHarness {
     }
 
     /// Get a reference to the scheduler engine
-    pub fn scheduler(&self) -> &SchedulerEngine {
+    pub const fn scheduler(&self) -> &SchedulerEngine {
         &self.scheduler
     }
 
     /// Get a mutable reference to the scheduler engine
-    pub fn scheduler_mut(&mut self) -> &mut SchedulerEngine {
+    pub const fn scheduler_mut(&mut self) -> &mut SchedulerEngine {
         &mut self.scheduler
     }
 
     /// Get a reference to the metrics collector
-    pub fn metrics(&self) -> &Arc<EnhancedMetricsCollector> {
+    pub const fn metrics(&self) -> &Arc<EnhancedMetricsCollector> {
         &self.metrics
     }
 

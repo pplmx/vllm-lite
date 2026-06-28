@@ -1,4 +1,4 @@
-/// QuantizedTensor: quantized tensor.
+/// `QuantizedTensor`: quantized tensor.
 #[derive(Debug, Clone)]
 pub struct QuantizedTensor {
     pub data: Vec<f32>,
@@ -18,6 +18,7 @@ pub fn quantize(data: &[f32]) -> QuantizedTensor {
     }
 }
 
+#[must_use]
 pub fn dequantize(data: &[f32], scale: f32) -> Vec<f32> {
     data.iter().map(|x| x * scale).collect()
 }

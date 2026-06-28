@@ -6,7 +6,7 @@ use candle_core::{Result as CandleResult, Tensor};
 use candle_nn::Linear;
 
 /// Resolve the final decoder norm weight from common HF key layouts.
-pub(crate) fn load_final_norm_weight(weights: &HashMap<String, Tensor>) -> Option<Tensor> {
+pub fn load_final_norm_weight(weights: &HashMap<String, Tensor>) -> Option<Tensor> {
     const KEYS: &[&str] = &[
         "model.norm.weight",
         "model.language_model.norm.weight",
@@ -16,7 +16,7 @@ pub(crate) fn load_final_norm_weight(weights: &HashMap<String, Tensor>) -> Optio
 }
 
 /// Load `lm_head` with tied-embedding and alternate HF key fallbacks.
-pub(crate) fn load_lm_head(
+pub fn load_lm_head(
     weights: &HashMap<String, Tensor>,
     embed_weight: Tensor,
     tie_word_embeddings: bool,

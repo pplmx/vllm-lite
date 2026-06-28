@@ -11,11 +11,11 @@ use vllm_traits::ModelBackend;
 use super::block::{MistralBlock, block_from_weights};
 use super::model::MistralModel;
 
-/// MistralArchitecture: mistral architecture.
+/// `MistralArchitecture`: mistral architecture.
 pub(crate) struct MistralArchitecture;
 
 impl MistralArchitecture {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
@@ -26,7 +26,7 @@ impl Default for MistralArchitecture {
     }
 }
 
-/// MistralBlockWrapper: mistral block wrapper.
+/// `MistralBlockWrapper`: mistral block wrapper.
 pub(crate) type MistralBlockWrapper = BlockWrapper<MistralBlock>;
 
 impl Architecture for MistralArchitecture {
@@ -39,8 +39,7 @@ impl Architecture for MistralArchitecture {
         config_json
             .get("model_type")
             .and_then(|v| v.as_str())
-            .map(|s| s.eq_ignore_ascii_case("mistral"))
-            .unwrap_or(false)
+            .is_some_and(|s| s.eq_ignore_ascii_case("mistral"))
     }
 
     fn capabilities(&self) -> ArchCapabilities {

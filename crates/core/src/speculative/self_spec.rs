@@ -11,7 +11,7 @@ use crate::types::{SeqId, TokenId};
 use std::collections::HashMap;
 use vllm_traits::ModelBackend;
 
-/// SelfSpeculativeModel: self speculative model.
+/// `SelfSpeculativeModel`: self speculative model.
 pub struct SelfSpeculativeModel<M: ModelBackend> {
     model: M,
     draft_layer_count: usize,
@@ -31,23 +31,23 @@ impl<M: ModelBackend> SelfSpeculativeModel<M> {
         }
     }
 
-    pub fn model(&self) -> &M {
+    pub const fn model(&self) -> &M {
         &self.model
     }
 
-    pub fn mut_model(&mut self) -> &mut M {
+    pub const fn mut_model(&mut self) -> &mut M {
         &mut self.model
     }
 
-    pub fn draft_layer_count(&self) -> usize {
+    pub const fn draft_layer_count(&self) -> usize {
         self.draft_layer_count
     }
 
-    pub fn set_draft_layer_count(&mut self, count: usize) {
+    pub const fn set_draft_layer_count(&mut self, count: usize) {
         self.draft_layer_count = count;
     }
 
-    pub fn draft_kv_block_ids(&self) -> &HashMap<SeqId, Vec<usize>> {
+    pub const fn draft_kv_block_ids(&self) -> &HashMap<SeqId, Vec<usize>> {
         &self.draft_kv_block_ids
     }
 
@@ -82,7 +82,7 @@ impl<M: ModelBackend> DraftVerifier for SelfSpeculativeModel<M> {
                 .entry(seq_id)
                 .or_insert_with(|| batch.kv_block_ids[batch_idx].clone());
 
-            let mut current_tokens: Vec<TokenId> = input_tokens.to_vec();
+            let mut current_tokens: Vec<TokenId> = input_tokens.clone();
             let mut draft_tokens: Vec<TokenId> = Vec::with_capacity(num_tokens);
 
             // Use position tracking to compute positions for each draft step
@@ -119,7 +119,7 @@ impl<M: ModelBackend> DraftVerifier for SelfSpeculativeModel<M> {
 
     /// Verification is performed by `Engine::verify_draft_tokens_logits()`
     /// using `forward_logits()` with argmax comparison. This trait method is
-    /// a stub — the engine bypasses the DraftVerifier trait for verification
+    /// a stub — the engine bypasses the `DraftVerifier` trait for verification
     /// and implements its own logit-based path.
     fn verify(
         &self,

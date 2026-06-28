@@ -8,7 +8,7 @@ use crate::qwen3_5::config::GdnLinearConfig;
 use candle_core::{DType, Result as CandleResult, Tensor};
 use candle_nn::{Conv1d, LayerNorm, Linear, VarBuilder, conv1d};
 
-/// LinearAttentionBlock: linear attention block.
+/// `LinearAttentionBlock`: linear attention block.
 pub struct LinearAttentionBlock {
     pub(crate) gdn: GatedDeltaNet,
 }
@@ -77,52 +77,52 @@ impl LinearAttentionBlock {
         weights: &HashMap<String, Tensor>,
         d_model: usize,
     ) -> CandleResult<Self> {
-        let in_proj_qkv_key = format!("{}.linear_attn.in_proj_qkv.weight", prefix);
-        let in_proj_z_key = format!("{}.linear_attn.in_proj_z.weight", prefix);
-        let in_proj_a_key = format!("{}.linear_attn.in_proj_a.weight", prefix);
-        let in_proj_b_key = format!("{}.linear_attn.in_proj_b.weight", prefix);
-        let a_log_key = format!("{}.linear_attn.A_log", prefix);
-        let dt_bias_key = format!("{}.linear_attn.dt_bias", prefix);
-        let conv_key = format!("{}.linear_attn.conv1d.weight", prefix);
-        let out_proj_key = format!("{}.linear_attn.out_proj.weight", prefix);
-        let norm_key = format!("{}.linear_attn.norm.weight", prefix);
+        let in_proj_qkv_key = format!("{prefix}.linear_attn.in_proj_qkv.weight");
+        let in_proj_z_key = format!("{prefix}.linear_attn.in_proj_z.weight");
+        let in_proj_a_key = format!("{prefix}.linear_attn.in_proj_a.weight");
+        let in_proj_b_key = format!("{prefix}.linear_attn.in_proj_b.weight");
+        let a_log_key = format!("{prefix}.linear_attn.A_log");
+        let dt_bias_key = format!("{prefix}.linear_attn.dt_bias");
+        let conv_key = format!("{prefix}.linear_attn.conv1d.weight");
+        let out_proj_key = format!("{prefix}.linear_attn.out_proj.weight");
+        let norm_key = format!("{prefix}.linear_attn.norm.weight");
 
         let in_proj_qkv_w = weights
             .get(&in_proj_qkv_key)
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", in_proj_qkv_key)))?;
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {in_proj_qkv_key}")))?;
         let in_proj_z_w = weights
             .get(&in_proj_z_key)
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", in_proj_z_key)))?;
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {in_proj_z_key}")))?;
         let in_proj_a_w = weights
             .get(&in_proj_a_key)
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", in_proj_a_key)))?;
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {in_proj_a_key}")))?;
         let in_proj_b_w = weights
             .get(&in_proj_b_key)
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", in_proj_b_key)))?;
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {in_proj_b_key}")))?;
         let a_log_w = weights
             .get(&a_log_key)
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", a_log_key)))?;
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {a_log_key}")))?;
         let dt_bias_w = weights
             .get(&dt_bias_key)
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", dt_bias_key)))?;
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {dt_bias_key}")))?;
         let conv_w = weights
             .get(&conv_key)
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", conv_key)))?;
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {conv_key}")))?;
         let out_proj_w = weights
             .get(&out_proj_key)
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", out_proj_key)))?;
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {out_proj_key}")))?;
         let norm_w = weights
             .get(&norm_key)
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", norm_key)))?;
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {norm_key}")))?;
 
         let num_v_heads = a_log_w.dims()[0];
         let value_dim = in_proj_z_w.dim(0).unwrap_or(d_model);
@@ -152,7 +152,7 @@ impl LinearAttentionBlock {
         let conv = Conv1d::new(conv_w, None, conv_cfg);
 
         let norm_b = weights
-            .get(&format!("{}.linear_attn.norm.bias", prefix))
+            .get(&format!("{prefix}.linear_attn.norm.bias"))
             .cloned()
             .unwrap_or_else(|| {
                 // invariant: tensor shape is derived from norm_w dimensions; allocation

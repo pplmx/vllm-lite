@@ -63,6 +63,7 @@ impl Default for DraftModelRegistry {
 }
 
 impl DraftModelRegistry {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             drafts: RwLock::new(HashMap::new()),
@@ -418,7 +419,7 @@ mod tests {
     #[test]
     fn test_memory_budget_accessor_returns_arc() {
         let budget = Arc::new(MemoryBudget::new(1000).unwrap());
-        let registry = DraftModelRegistry::with_budget(budget.clone());
+        let registry = DraftModelRegistry::with_budget(budget);
         assert_eq!(registry.memory_budget().total_bytes(), 1000);
     }
 

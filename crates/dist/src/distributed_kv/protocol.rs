@@ -1,18 +1,20 @@
-/// NodeId: node id.
+/// `NodeId`: node id.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct NodeId(pub usize);
 
 impl NodeId {
-    pub fn new(id: usize) -> Self {
+    #[must_use]
+    pub const fn new(id: usize) -> Self {
         Self(id)
     }
 
-    pub fn index(&self) -> usize {
+    #[must_use]
+    pub const fn index(&self) -> usize {
         self.0
     }
 }
 
-/// CacheOperation: cache operation enumeration.
+/// `CacheOperation`: cache operation enumeration.
 #[derive(Debug, Clone)]
 pub enum CacheOperation {
     Read {
@@ -39,7 +41,7 @@ pub enum CacheOperation {
     },
 }
 
-/// CacheMessage: cache message.
+/// `CacheMessage`: cache message.
 #[derive(Debug, Clone)]
 pub struct CacheMessage {
     pub id: u64,
@@ -66,6 +68,7 @@ impl CacheMessage {
         }
     }
 
+    #[must_use]
     pub fn read_request(key: u64, from: NodeId, to: NodeId) -> Self {
         Self::new(
             from,
@@ -77,6 +80,7 @@ impl CacheMessage {
         )
     }
 
+    #[must_use]
     pub fn invalidate(key: u64, from: NodeId, to: NodeId) -> Self {
         Self::new(
             from,
@@ -88,6 +92,7 @@ impl CacheMessage {
         )
     }
 
+    #[must_use]
     pub fn update(key: u64, hash: u64, from: NodeId, to: NodeId) -> Self {
         Self::new(
             from,

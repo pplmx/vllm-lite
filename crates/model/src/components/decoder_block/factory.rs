@@ -62,56 +62,40 @@ pub fn block_from_weights(
     let rms_norm_eps = config.rms_norm_eps;
 
     let q_w = weights
-        .get(&format!(
-            "model.layers.{}.self_attn.q_proj.weight",
-            layer_idx
-        ))
+        .get(&format!("model.layers.{layer_idx}.self_attn.q_proj.weight"))
         .cloned()
         .ok_or_else(|| candle_core::Error::msg("Missing q_proj weight"))?;
     let k_w = weights
-        .get(&format!(
-            "model.layers.{}.self_attn.k_proj.weight",
-            layer_idx
-        ))
+        .get(&format!("model.layers.{layer_idx}.self_attn.k_proj.weight"))
         .cloned()
         .ok_or_else(|| candle_core::Error::msg("Missing k_proj weight"))?;
     let v_w = weights
-        .get(&format!(
-            "model.layers.{}.self_attn.v_proj.weight",
-            layer_idx
-        ))
+        .get(&format!("model.layers.{layer_idx}.self_attn.v_proj.weight"))
         .cloned()
         .ok_or_else(|| candle_core::Error::msg("Missing v_proj weight"))?;
     let o_w = weights
-        .get(&format!(
-            "model.layers.{}.self_attn.o_proj.weight",
-            layer_idx
-        ))
+        .get(&format!("model.layers.{layer_idx}.self_attn.o_proj.weight"))
         .cloned()
         .ok_or_else(|| candle_core::Error::msg("Missing o_proj weight"))?;
     let gate_w = weights
-        .get(&format!("model.layers.{}.mlp.gate_proj.weight", layer_idx))
+        .get(&format!("model.layers.{layer_idx}.mlp.gate_proj.weight"))
         .cloned()
         .ok_or_else(|| candle_core::Error::msg("Missing gate_proj weight"))?;
     let up_w = weights
-        .get(&format!("model.layers.{}.mlp.up_proj.weight", layer_idx))
+        .get(&format!("model.layers.{layer_idx}.mlp.up_proj.weight"))
         .cloned()
         .ok_or_else(|| candle_core::Error::msg("Missing up_proj weight"))?;
     let down_w = weights
-        .get(&format!("model.layers.{}.mlp.down_proj.weight", layer_idx))
+        .get(&format!("model.layers.{layer_idx}.mlp.down_proj.weight"))
         .cloned()
         .ok_or_else(|| candle_core::Error::msg("Missing down_proj weight"))?;
     let input_ln_w = weights
-        .get(&format!(
-            "model.layers.{}.input_layernorm.weight",
-            layer_idx
-        ))
+        .get(&format!("model.layers.{layer_idx}.input_layernorm.weight"))
         .cloned()
         .ok_or_else(|| candle_core::Error::msg("Missing input_layernorm weight"))?;
     let post_attn_ln_w = weights
         .get(&format!(
-            "model.layers.{}.post_attention_layernorm.weight",
-            layer_idx
+            "model.layers.{layer_idx}.post_attention_layernorm.weight"
         ))
         .cloned()
         .ok_or_else(|| candle_core::Error::msg("Missing post_attention_layernorm weight"))?;

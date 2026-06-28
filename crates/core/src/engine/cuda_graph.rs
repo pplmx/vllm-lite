@@ -25,7 +25,9 @@ impl crate::engine::Engine {
 
     #[cfg(feature = "cuda-graph")]
     pub fn cuda_graph_enabled(&self) -> bool {
-        self.cuda_graph.as_ref().is_some_and(|e| e.is_enabled())
+        self.cuda_graph
+            .as_ref()
+            .is_some_and(vllm_model::kernels::BatchCudaGraphExecutor::is_enabled)
     }
 
     #[cfg(not(feature = "cuda-graph"))]

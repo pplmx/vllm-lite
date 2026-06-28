@@ -13,13 +13,12 @@ use support::qwen3::{HIDDEN_SIZE, VOCAB_SIZE};
 
 fn require_model() -> support::on_disk::CachedModel {
     let fixture = support::qwen3::Qwen3Fixture::cpu();
-    if !fixture.weights_available() {
-        panic!(
-            "Qwen3 checkpoint missing at {} (set {} or run on a machine with weights)",
-            fixture.model_dir().display(),
-            support::qwen3::ENV_VAR
-        );
-    }
+    assert!(
+        fixture.weights_available(),
+        "Qwen3 checkpoint missing at {} (set {} or run on a machine with weights)",
+        fixture.model_dir().display(),
+        support::qwen3::ENV_VAR
+    );
     fixture.load_model().expect("load Qwen3 checkpoint")
 }
 

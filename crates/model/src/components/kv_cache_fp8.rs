@@ -2,7 +2,7 @@
 
 use candle_core::{DType, Result, Tensor};
 
-/// KvCacheDtype: kv cache dtype enumeration.
+/// `KvCacheDtype`: kv cache dtype enumeration.
 #[derive(Debug, Clone)]
 pub enum KvCacheDtype {
     Fp16,
@@ -11,30 +11,33 @@ pub enum KvCacheDtype {
 }
 
 impl KvCacheDtype {
-    pub fn bytes_per_element(&self) -> usize {
+    #[must_use]
+    pub const fn bytes_per_element(&self) -> usize {
         match self {
-            KvCacheDtype::Fp16 => 2,
-            KvCacheDtype::Fp32 => 4,
-            KvCacheDtype::Fp8E4m3 => 1,
+            Self::Fp16 => 2,
+            Self::Fp32 => 4,
+            Self::Fp8E4m3 => 1,
         }
     }
 
-    pub fn memory_reduction_ratio(&self) -> f32 {
+    #[must_use]
+    pub const fn memory_reduction_ratio(&self) -> f32 {
         match self {
-            KvCacheDtype::Fp16 => 1.0,
-            KvCacheDtype::Fp32 => 0.5,
-            KvCacheDtype::Fp8E4m3 => 2.0,
+            Self::Fp16 => 1.0,
+            Self::Fp32 => 0.5,
+            Self::Fp8E4m3 => 2.0,
         }
     }
 }
 
-/// Fp8Quantizer: fp8 quantizer.
+/// `Fp8Quantizer`: fp8 quantizer.
 pub struct Fp8Quantizer {
     dtype: KvCacheDtype,
 }
 
 impl Fp8Quantizer {
-    pub fn new(dtype: KvCacheDtype) -> Self {
+    #[must_use]
+    pub const fn new(dtype: KvCacheDtype) -> Self {
         Self { dtype }
     }
 
@@ -73,7 +76,7 @@ impl Fp8Quantizer {
                 let float_values: Vec<f32> = flat
                     .to_vec1::<half::f16>()?
                     .into_iter()
-                    .map(|h| h.to_f32())
+                    .map(half::f16::to_f32)
                     .collect();
 
                 let fp8_data: Vec<u8> = float_values
@@ -124,7 +127,7 @@ impl Fp8Quantizer {
             return 0u8;
         }
 
-        let sign = if value.is_sign_negative() { 1u8 } else { 0u8 };
+        let sign = u8::from(value.is_sign_negative());
         let abs = value.abs();
 
         let (exp, mantissa) = frexp(abs);
@@ -151,9 +154,9 @@ impl Fp8Quantizer {
             return half::f16::NEG_INFINITY;
         }
 
-        let sign = ((value >> 7) & 0x01) as u16;
-        let biased_exp = ((value >> 3) & 0x0F) as i32;
-        let mantissa = (value & 0x07) as u16;
+        let sign = u16::from((value >> 7) & 0x01);
+        let biased_exp = i32::from((value >> 3) & 0x0F);
+        let mantissa = u16::from(value & 0x07);
 
         if biased_exp == 0 && mantissa == 0 {
             return half::f16::from_bits(sign << 15);
@@ -166,6 +169,7 @@ impl Fp8Quantizer {
         half::f16::from_bits(bits)
     }
 
+    #[must_use]
     pub fn estimate_memory_savings(
         num_blocks: usize,
         block_size: usize,
@@ -253,10 +257,7 @@ mod tests {
             let diff = (o - r).abs();
             assert!(
                 diff < 0.05 || o.abs() <= 0.001,
-                "Values should be approximately preserved (o={}, r={}, diff={})",
-                o,
-                r,
-                diff
+                "Values should be approximately preserved (o={o}, r={r}, diff={diff})"
             );
         }
     }

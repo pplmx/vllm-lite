@@ -142,7 +142,7 @@ fn test_build_decode_batch_budget() {
     let batch2 = sched.build_batch();
 
     // Should respect budget
-    let total_tokens: usize = batch2.input_tokens.iter().map(|t| t.len()).sum();
+    let total_tokens: usize = batch2.input_tokens.iter().map(std::vec::Vec::len).sum();
     assert!(total_tokens <= 3, "Should respect budget of 3 tokens");
 }
 
@@ -171,7 +171,7 @@ fn test_token_budget_boundary_zero() {
 
     let batch = sched.build_batch();
     // With zero budget, should not add any tokens but may still have sequences
-    let total_tokens: usize = batch.input_tokens.iter().map(|t| t.len()).sum();
+    let total_tokens: usize = batch.input_tokens.iter().map(std::vec::Vec::len).sum();
     assert_eq!(total_tokens, 0, "Zero budget should result in zero tokens");
 }
 
@@ -199,7 +199,7 @@ fn test_token_budget_boundary_one() {
     }
 
     let batch = sched.build_batch();
-    let total_tokens: usize = batch.input_tokens.iter().map(|t| t.len()).sum();
+    let total_tokens: usize = batch.input_tokens.iter().map(std::vec::Vec::len).sum();
     assert!(
         total_tokens <= 1,
         "Single token budget should allow max 1 token"

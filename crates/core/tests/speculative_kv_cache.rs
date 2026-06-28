@@ -34,7 +34,7 @@ fn make_seq(id: u64, tokens: Vec<u32>, status: Status, kv_blocks: Vec<usize>) ->
 /// SPEC-03.4: Verify that the verification pass builds a batch that includes
 /// draft tokens in the input (i.e., the KV cache inputs are extended to include
 /// draft positions). This checks that logit-based verification in
-/// engine/speculative.rs extends input_tokens with draft tokens.
+/// engine/speculative.rs extends `input_tokens` with draft tokens.
 #[test]
 #[ignore]
 fn test_speculative_kv_append_draft_tokens_to_input() {
@@ -199,8 +199,8 @@ fn test_speculative_kv_block_ids_during_verification() {
 }
 
 /// SPEC-01.5: Verify that the verification batch properly tracks computed tokens
-/// for KV cache reuse. The input_tokens should include all tokens (original + draft)
-/// while num_computed_tokens reflects the already-computed prefix, ensuring the
+/// for KV cache reuse. The `input_tokens` should include all tokens (original + draft)
+/// while `num_computed_tokens` reflects the already-computed prefix, ensuring the
 /// KV cache for original (accepted) tokens isn't recomputed.
 #[test]
 #[ignore]
@@ -246,7 +246,7 @@ fn test_speculative_kv_and_standard_produce_same_output_count() {
     }
 
     // Speculative decoding
-    let mut spec_engine = TestFixtures::increment_speculative_engine_with(config.clone(), 4, 1024);
+    let mut spec_engine = TestFixtures::increment_speculative_engine_with(config, 4, 1024);
     spec_engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
 
     let (tx_spec, _rx_spec) = mpsc::channel(64);

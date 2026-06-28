@@ -5,12 +5,13 @@ use uuid::Uuid;
 
 use super::types::{BatchEndpoint, BatchJob, BatchResultItem, BatchStatus};
 
-/// BatchManager: batch manager.
+/// `BatchManager`: batch manager.
 pub struct BatchManager {
     jobs: Arc<RwLock<HashMap<String, BatchJob>>>,
 }
 
 impl BatchManager {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             jobs: Arc::new(RwLock::new(HashMap::new())),

@@ -1,6 +1,6 @@
 //! CUDA Graph integration for the scheduler
 //!
-//! This module provides integration between the PhaseScheduler and CUDA Graph
+//! This module provides integration between the `PhaseScheduler` and CUDA Graph
 //! execution, routing decode batches through captured graphs when available.
 
 use vllm_traits::Batch;
@@ -16,23 +16,26 @@ pub enum GraphBatch {
 
 impl GraphBatch {
     /// Convert to regular batch
+    #[must_use]
     pub fn into_regular(self) -> Batch {
         match self {
-            GraphBatch::Graph(prepared) => prepared.into_batch(),
-            GraphBatch::Regular(batch) => batch,
+            Self::Graph(prepared) => prepared.into_batch(),
+            Self::Regular(batch) => batch,
         }
     }
 
     /// Check if this is a graph batch
-    pub fn is_graph(&self) -> bool {
-        matches!(self, GraphBatch::Graph(_))
+    #[must_use]
+    pub const fn is_graph(&self) -> bool {
+        matches!(self, Self::Graph(_))
     }
 
     /// Get batch size
+    #[must_use]
     pub fn batch_size(&self) -> usize {
         match self {
-            GraphBatch::Graph(prepared) => prepared.batch_size,
-            GraphBatch::Regular(batch) => batch.seq_ids.len(),
+            Self::Graph(prepared) => prepared.batch_size,
+            Self::Regular(batch) => batch.seq_ids.len(),
         }
     }
 }
@@ -47,11 +50,13 @@ pub struct GraphPreparedBatch {
 }
 
 impl GraphPreparedBatch {
+    #[must_use]
     pub fn new(batch: Batch) -> Self {
         let batch_size = batch.seq_ids.len();
         Self { batch, batch_size }
     }
 
+    #[must_use]
     pub fn into_batch(self) -> Batch {
         self.batch
     }
@@ -62,7 +67,7 @@ impl GraphPreparedBatch {
 pub struct SchedulerCudaGraphConfig {
     /// Enable CUDA Graph for decode
     pub enabled: bool,
-    /// Batch sizes to capture (must match CudaGraphExecutor)
+    /// Batch sizes to capture (must match `CudaGraphExecutor`)
     pub batch_sizes: Vec<usize>,
 }
 
@@ -77,12 +82,14 @@ impl Default for SchedulerCudaGraphConfig {
 
 impl SchedulerCudaGraphConfig {
     /// Check if batch size is supported
+    #[must_use]
     pub fn supports_batch_size(&self, batch_size: usize) -> bool {
         self.batch_sizes.contains(&batch_size)
     }
 
     /// Returns a builder for configuring this type with the documented field defaults.
     /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
+    #[must_use]
     pub fn builder() -> SchedulerCudaGraphConfigBuilder {
         SchedulerCudaGraphConfigBuilder::default()
     }
@@ -95,15 +102,18 @@ pub struct SchedulerCudaGraphConfigBuilder {
 }
 
 impl SchedulerCudaGraphConfigBuilder {
-    pub fn with_enabled(mut self, v: bool) -> Self {
+    #[must_use]
+    pub const fn with_enabled(mut self, v: bool) -> Self {
         self.inner.enabled = v;
         self
     }
+    #[must_use]
     pub fn with_batch_sizes(mut self, v: Vec<usize>) -> Self {
         self.inner.batch_sizes = v;
         self
     }
     /// build: build the [`SchedulerCudaGraphConfig`].
+    #[must_use]
     pub fn build(self) -> SchedulerCudaGraphConfig {
         self.inner
     }

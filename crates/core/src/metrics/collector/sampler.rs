@@ -39,6 +39,7 @@ pub struct EnhancedMetricsCollector {
 }
 
 impl EnhancedMetricsCollector {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             runtime: LockFreeMetrics::new(),
@@ -185,7 +186,7 @@ impl EnhancedMetricsCollector {
     pub fn get_per_request_acceptance_rate(&self, seq_id: SeqId) -> f64 {
         self.per_request_acceptance
             .get(&seq_id)
-            .map(|entry| {
+            .map_or(0.0, |entry| {
                 let accepted = entry.0.load(Ordering::Relaxed);
                 let total = entry.1.load(Ordering::Relaxed);
                 if total == 0 {
@@ -194,7 +195,6 @@ impl EnhancedMetricsCollector {
                     accepted as f64 / total as f64
                 }
             })
-            .unwrap_or(0.0)
     }
 
     pub fn remove_per_request(&self, seq_id: SeqId) {

@@ -95,13 +95,13 @@ mod tests {
         );
 
         println!("\n=== Conclusion ===");
-        println!("Full prefill gives: {}", next1);
-        println!("Two-step gives: first={}, second={}", next_c1, next_c2);
+        println!("Full prefill gives: {next1}");
+        println!("Two-step gives: first={next_c1}, second={next_c2}");
 
         // The issue is that partial prefill doesn't give the same result
         // as full prefill because of KV cache/state issues
         let outputs_differ = next1 != next_c2;
-        println!("Outputs differ: {}", outputs_differ);
+        println!("Outputs differ: {outputs_differ}");
 
         if outputs_differ {
             println!("\n*** BUG: Partial prefill produces different output! ***");
@@ -207,8 +207,7 @@ mod tests {
         // Compare - all should produce the same token for the same input
         assert_eq!(
             next_full, 29054,
-            "Full prefill should produce 29054, got {}",
-            next_full
+            "Full prefill should produce 29054, got {next_full}"
         );
     }
 
@@ -277,8 +276,7 @@ mod tests {
         // Compare - they should be the same for the same input
         assert_eq!(
             next_token, 29054,
-            "Server prompt should produce token 29054 (from test), got {}",
-            next_token
+            "Server prompt should produce token 29054 (from test), got {next_token}"
         );
     }
 
@@ -298,7 +296,7 @@ mod tests {
 
         println!("=== Prefill Phase ===");
         let prompt_decoded = tokenizer.decode(&prompt_tokens);
-        println!("Prompt: {:?}", prompt_decoded);
+        println!("Prompt: {prompt_decoded:?}");
 
         let (prefill_logits, _) = model
             .forward_with_cache(&prompt_tokens, 0, &[0], &positions, true)
@@ -319,10 +317,7 @@ mod tests {
             .unwrap();
 
         let first_decoded = tokenizer.decode(&[first_token]);
-        println!(
-            "First token after prefill: {} -> '{}'",
-            first_token, first_decoded
-        );
+        println!("First token after prefill: {first_token} -> '{first_decoded}'");
 
         // Simulate first decode step
         let mut all_tokens = prompt_tokens.clone();
@@ -361,7 +356,7 @@ mod tests {
         }
 
         let final_text = tokenizer.decode(&all_tokens[prompt_tokens.len()..]);
-        println!("\nFinal generated text: {:?}", final_text);
+        println!("\nFinal generated text: {final_text:?}");
 
         // Verify no garbage
         assert!(
@@ -380,9 +375,9 @@ mod tests {
 
         let prompt = "hi";
         let prompt_tokens: Vec<u32> = tokenizer.encode(prompt);
-        println!("Prompt '{}' tokens: {:?}", prompt, prompt_tokens);
+        println!("Prompt '{prompt}' tokens: {prompt_tokens:?}");
 
-        let mut all_tokens = prompt_tokens.clone();
+        let mut all_tokens = prompt_tokens;
         let mut generated_tokens = Vec::new();
 
         for step in 0..3 {
@@ -434,19 +429,15 @@ mod tests {
                 .iter()
                 .enumerate()
                 .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-                .map(|(i, _)| i)
-                .unwrap_or(0);
+                .map_or(0, |(i, _)| i);
 
             let top_token = top_idx as u32;
 
             if top_token >= vocab_size as u32 {
-                println!(
-                    "  WARNING: top_token {} >= vocab_size {}",
-                    top_token, vocab_size
-                );
+                println!("  WARNING: top_token {top_token} >= vocab_size {vocab_size}");
             } else {
                 let decoded = tokenizer.decode(&[top_token]);
-                println!("  top_token {} -> {:?}", top_token, decoded);
+                println!("  top_token {top_token} -> {decoded:?}");
                 generated_tokens.push((top_token, decoded.clone()));
 
                 if decoded.contains('\u{FFFD}') {
@@ -459,7 +450,7 @@ mod tests {
 
         let final_decode =
             tokenizer.decode(&generated_tokens.iter().map(|(t, _)| *t).collect::<Vec<_>>());
-        println!("Full generated text: {:?}", final_decode);
+        println!("Full generated text: {final_decode:?}");
 
         assert!(
             !final_decode.contains('\u{FFFD}'),
@@ -482,7 +473,7 @@ mod tests {
         let mut streamed_chunks = Vec::new();
         for token in &server_output_tokens {
             let text = tokenizer.decode(&[*token]);
-            println!("Token {} -> {:?}", token, text);
+            println!("Token {token} -> {text:?}");
 
             if text.is_empty() {
                 println!("  -> Skipped (empty)");
@@ -490,22 +481,22 @@ mod tests {
             }
 
             streamed_chunks.push(text.clone());
-            println!("  -> Streamed: '{}'", text);
+            println!("  -> Streamed: '{text}'");
         }
 
-        let combined: String = streamed_chunks.iter().map(|s| s.as_str()).collect();
-        println!("\nCombined streaming output: {:?}", combined);
+        let combined: String = streamed_chunks
+            .iter()
+            .map(std::string::String::as_str)
+            .collect();
+        println!("\nCombined streaming output: {combined:?}");
 
         let batch_decode = tokenizer.decode(&server_output_tokens);
-        println!("Batch decode: {:?}", batch_decode);
+        println!("Batch decode: {batch_decode:?}");
 
         println!("\n=== Testing with <|im_end|> in output ===");
         let tokens_with_im_end = vec![6023u32, 6024u32, im_end_token, 6025u32, 6026u32];
         let decoded_with_im_end = tokenizer.decode(&tokens_with_im_end);
-        println!(
-            "Tokens {:?} -> {:?}",
-            tokens_with_im_end, decoded_with_im_end
-        );
+        println!("Tokens {tokens_with_im_end:?} -> {decoded_with_im_end:?}");
 
         if decoded_with_im_end.contains("<|im_end|>") {
             println!("WARNING: <|im_end|> appears in decoded output!");
@@ -556,7 +547,7 @@ mod tests {
             .unwrap();
 
         let decoded = tokenizer.decode(&[next_token]);
-        println!("First generated token: {} -> '{}'", next_token, decoded);
+        println!("First generated token: {next_token} -> '{decoded}'");
 
         assert!(next_token < 151936, "Token should be in vocab range");
     }
@@ -575,12 +566,12 @@ mod tests {
         println!("=== Decoding server token stream ===");
         for token in &server_tokens {
             let decoded = tokenizer.decode(&[*token]);
-            println!("Token {} -> '{}'", token, decoded);
+            println!("Token {token} -> '{decoded}'");
         }
 
         // Batch decode
         let batch = tokenizer.decode(&server_tokens);
-        println!("\nBatch decode: '{}'", batch);
+        println!("\nBatch decode: '{batch}'");
     }
 
     #[test]
@@ -594,7 +585,7 @@ mod tests {
         println!("=== Testing server problematic tokens ===");
         for &token in &server_problematic {
             let decoded = tokenizer.decode(&[token]);
-            println!("Token {} -> '{}'", token, decoded);
+            println!("Token {token} -> '{decoded}'");
 
             // Check if it contains replacement char
             if decoded.contains('\u{FFFD}') {
@@ -612,7 +603,7 @@ mod tests {
 
         // Check batch decode
         let batch = tokenizer.decode(&server_problematic);
-        println!("\nBatch decode: '{}'", batch);
+        println!("\nBatch decode: '{batch}'");
 
         if batch.contains('\u{FFFD}') {
             println!("WARNING: Batch contains replacement character!");
@@ -637,7 +628,7 @@ mod tests {
         println!("=== Special token values ===");
         for (name, token) in &special_tokens {
             let decoded = tokenizer.decode(&[*token]);
-            println!("{} ({}): {:?}", name, token, decoded);
+            println!("{name} ({token}): {decoded:?}");
         }
 
         println!("\n=== Filter test ===");
@@ -652,11 +643,8 @@ mod tests {
         let unfiltered_decoded = tokenizer.decode(&tokens_with_special);
         let filtered_decoded = tokenizer.decode(&filtered);
 
-        println!(
-            "Unfiltered: {:?} -> {:?}",
-            tokens_with_special, unfiltered_decoded
-        );
-        println!("Filtered: {:?} -> {:?}", filtered, filtered_decoded);
+        println!("Unfiltered: {tokens_with_special:?} -> {unfiltered_decoded:?}");
+        println!("Filtered: {filtered:?} -> {filtered_decoded:?}");
 
         if unfiltered_decoded.contains("<|") {
             println!("\nWARNING: Special tokens in output will be visible to users!");
@@ -688,28 +676,26 @@ mod tests {
             .to_vec0()
             .unwrap();
 
-        println!("Top token: {}", top_token);
+        println!("Top token: {top_token}");
 
         let text = tokenizer.decode(&[top_token]);
-        println!("Decoded text: {:?}", text);
+        println!("Decoded text: {text:?}");
 
         assert!(!text.is_empty(), "Decoded text should not be empty");
 
         assert!(
             !text.contains('\u{FFFD}'),
-            "Decoded text contains replacement char: {:?}",
-            text
+            "Decoded text contains replacement char: {text:?}"
         );
 
         let meaningful_chars: usize = text.chars().filter(|c| c.is_alphabetic()).count();
 
         assert!(
             meaningful_chars > 0,
-            "Decoded text should contain some letters, got: {:?}",
-            text
+            "Decoded text should contain some letters, got: {text:?}"
         );
 
-        println!("Model output '{}' decodes to '{}'", top_token, text);
+        println!("Model output '{top_token}' decodes to '{text}'");
     }
 
     #[test]
@@ -727,11 +713,11 @@ mod tests {
         let _prompt_len = prompt_tokens.len();
 
         println!("=== SERVER ENGINE LOOP SIMULATION ===");
-        println!("Prompt tokens: {:?}", prompt_tokens);
+        println!("Prompt tokens: {prompt_tokens:?}");
         println!("Prompt decoded: {:?}", tokenizer.decode(&prompt_tokens));
 
         // Simulate server engine state
-        let mut all_tokens = prompt_tokens.clone();
+        let mut all_tokens = prompt_tokens;
         let mut num_computed = 0;
         let mut is_first_step = true;
         let mut generated_tokens = Vec::new();
@@ -751,9 +737,9 @@ mod tests {
                 positions = (num_computed..tokens_len).collect();
                 is_prefill = true;
                 println!("\n--- Step {} (PREILL) ---", step + 1);
-                println!("  input_tokens: {:?}", input_tokens);
-                println!("  positions: {:?}", positions);
-                println!("  num_computed: {}", num_computed);
+                println!("  input_tokens: {input_tokens:?}");
+                println!("  positions: {positions:?}");
+                println!("  num_computed: {num_computed}");
                 is_first_step = false;
             } else {
                 // Decode phase - only last token
@@ -762,9 +748,9 @@ mod tests {
                 positions = vec![tokens_len - 1]; // position is 0-indexed
                 is_prefill = false;
                 println!("\n--- Step {} (DECODE) ---", step + 1);
-                println!("  input_tokens: {:?}", input_tokens);
-                println!("  positions: {:?}", positions);
-                println!("  num_computed: {}", num_computed);
+                println!("  input_tokens: {input_tokens:?}");
+                println!("  positions: {positions:?}");
+                println!("  num_computed: {num_computed}");
             }
 
             // Call model forward
@@ -803,7 +789,7 @@ mod tests {
             };
 
             let decoded = tokenizer.decode(&[next_token]);
-            println!("  next_token: {} -> '{}'", next_token, decoded);
+            println!("  next_token: {next_token} -> '{decoded}'");
 
             // Update state
             all_tokens.push(next_token);
@@ -829,7 +815,7 @@ mod tests {
             generated_tokens
         );
         let generated_text = tokenizer.decode(&generated_tokens);
-        println!("Generated text: '{}'", generated_text);
+        println!("Generated text: '{generated_text}'");
 
         // First token should be 29054 (ationally)
         if !generated_tokens.is_empty() {
@@ -855,7 +841,7 @@ mod tests {
         let prompt_len = prompt_tokens.len();
 
         println!("=== COMPARING WORKING TEST vs SERVER LOOP ===");
-        println!("Prompt: '{}', tokens: {:?}", prompt, prompt_tokens);
+        println!("Prompt: '{prompt}', tokens: {prompt_tokens:?}");
 
         // Method 1: Working unit test (test_qwen3_multi_step_generation)
         // This passes in unit tests
@@ -894,8 +880,7 @@ mod tests {
                 .iter()
                 .enumerate()
                 .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-                .map(|(i, _)| i)
-                .unwrap_or(0);
+                .map_or(0, |(i, _)| i);
 
             let top_token = top_idx as u32;
             let decoded = tokenizer.decode(&[top_token]);
@@ -909,7 +894,7 @@ mod tests {
         }
 
         // Method 2: Server loop (prefill then decode)
-        let mut all_tokens_v2 = prompt_tokens.clone();
+        let mut all_tokens_v2 = prompt_tokens;
         let mut num_computed = 0;
 
         // Step 1: Prefill
@@ -934,10 +919,7 @@ mod tests {
             .unwrap();
 
         let decoded_1 = tokenizer.decode(&[first_token]);
-        println!(
-            "Method 2 (server loop) - step 1 (prefill): {} -> '{}'",
-            first_token, decoded_1
-        );
+        println!("Method 2 (server loop) - step 1 (prefill): {first_token} -> '{decoded_1}'");
         all_tokens_v2.push(first_token);
         num_computed = all_tokens_v2.len();
 
@@ -959,22 +941,18 @@ mod tests {
             .unwrap();
 
         let decoded_2 = tokenizer.decode(&[second_token]);
-        println!(
-            "Method 2 (server loop) - step 2 (decode): {} -> '{}'",
-            second_token, decoded_2
-        );
+        println!("Method 2 (server loop) - step 2 (decode): {second_token} -> '{decoded_2}'");
 
         // Both should produce same first token
         // Get the first token from method 1
         let first_from_v1 = all_tokens_v1[prompt_len];
         println!(
-            "\n=== COMPARISON ===\nMethod 1 first token: {}\nMethod 2 first token: {}",
-            first_from_v1, first_token
+            "\n=== COMPARISON ===\nMethod 1 first token: {first_from_v1}\nMethod 2 first token: {first_token}"
         );
 
         // They should be the same
         let tokens_match = first_from_v1 == first_token;
-        println!("Match: {}", tokens_match);
+        println!("Match: {tokens_match}");
 
         if !tokens_match {
             println!("\n*** BUG FOUND: Unit test and server produce different outputs! ***");
@@ -1009,9 +987,9 @@ mod tests {
         let im_end_decoded = tokenizer.decode(&[im_end_token]);
         let im_start_decoded = tokenizer.decode(&[im_start_token]);
 
-        println!("EOS decoded: {:?}", eos_decoded);
-        println!("IM_END decoded: {:?}", im_end_decoded);
-        println!("IM_START decoded: {:?}", im_start_decoded);
+        println!("EOS decoded: {eos_decoded:?}");
+        println!("IM_END decoded: {im_end_decoded:?}");
+        println!("IM_START decoded: {im_start_decoded:?}");
 
         assert!(
             should_skip_token_text(&eos_decoded),
@@ -1035,10 +1013,10 @@ mod tests {
         );
 
         // Test: clean_completion_text removes special tokens
-        let mixed = format!("Hello{}World{}End", eos_decoded, im_end_decoded);
+        let mixed = format!("Hello{eos_decoded}World{im_end_decoded}End");
         let cleaned = clean_completion_text(&mixed);
-        println!("Mixed: {:?}", mixed);
-        println!("Cleaned: {:?}", cleaned);
+        println!("Mixed: {mixed:?}");
+        println!("Cleaned: {cleaned:?}");
         assert!(
             !cleaned.contains("<|"),
             "Cleaned text should not contain special tokens"
@@ -1073,7 +1051,7 @@ mod tests {
         let mut streamed = Vec::new();
         for token in &server_tokens {
             let text = tokenizer.decode(&[*token]);
-            println!("Token {} -> decoded: {:?}", token, text);
+            println!("Token {token} -> decoded: {text:?}");
             if should_skip_token_text(&text) {
                 println!("  -> SKIPPED");
                 continue;
@@ -1082,8 +1060,8 @@ mod tests {
             println!("  -> Streamed");
         }
 
-        let combined: String = streamed.iter().map(|s| s.as_str()).collect();
-        println!("\nStreamed output: {:?}", combined);
+        let combined: String = streamed.iter().map(std::string::String::as_str).collect();
+        println!("\nStreamed output: {combined:?}");
 
         // Should not contain special tokens
         assert!(
@@ -1124,8 +1102,8 @@ mod tests {
         // But num_computed should be: len - 1 = 0 (before processing)
 
         println!("=== DECODE POSITION TEST ===");
-        println!("Prompt tokens: {:?}", prompt_tokens);
-        println!("Prompt len: {}", prompt_len);
+        println!("Prompt tokens: {prompt_tokens:?}");
+        println!("Prompt len: {prompt_len}");
 
         // Prefill first
         let all_tokens_prefill = prompt_tokens.clone();
@@ -1158,7 +1136,7 @@ mod tests {
         );
 
         // Now simulate decode
-        let mut all_tokens = prompt_tokens.clone();
+        let mut all_tokens = prompt_tokens;
         all_tokens.push(next_after_prefill);
 
         // tokens_len = 2, position = 1, num_computed = 1
@@ -1169,11 +1147,11 @@ mod tests {
         let num_computed_for_decode = tokens_len - 1; // This is what batch_composer does
 
         println!("\nDecode params:");
-        println!("  tokens: {:?}", all_tokens);
-        println!("  tokens_len: {}", tokens_len);
-        println!("  last_token: {}", last_token);
-        println!("  position (for forward): {}", position);
-        println!("  num_computed (for forward): {}", num_computed_for_decode);
+        println!("  tokens: {all_tokens:?}");
+        println!("  tokens_len: {tokens_len}");
+        println!("  last_token: {last_token}");
+        println!("  position (for forward): {position}");
+        println!("  num_computed (for forward): {num_computed_for_decode}");
 
         // Test decode with position=1
         let (logits_pos1, _) = model

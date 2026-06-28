@@ -12,11 +12,12 @@ use vllm_traits::ModelBackend;
 use super::block::TransformerBlock as Qwen3Block;
 use super::model::Qwen3Model;
 
-/// Qwen3Architecture: qwen3 architecture.
+/// `Qwen3Architecture`: qwen3 architecture.
 pub struct Qwen3Architecture;
 
 impl Qwen3Architecture {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 }
@@ -27,7 +28,7 @@ impl Default for Qwen3Architecture {
     }
 }
 
-/// Qwen3BlockWrapper: qwen3 block wrapper.
+/// `Qwen3BlockWrapper`: qwen3 block wrapper.
 pub(crate) type Qwen3BlockWrapper = BlockWrapper<Qwen3Block>;
 
 impl Architecture for Qwen3Architecture {
@@ -89,8 +90,7 @@ mod tests {
             let config = json!({"model_type": model_type});
             assert!(
                 arch.detect(&config),
-                "Failed to detect model_type: {}",
-                model_type
+                "Failed to detect model_type: {model_type}"
             );
         }
     }
@@ -102,8 +102,7 @@ mod tests {
             let config = json!({"model_type": model_type});
             assert!(
                 arch.detect(&config),
-                "Failed to detect case-insensitive model_type: {}",
-                model_type
+                "Failed to detect case-insensitive model_type: {model_type}"
             );
         }
     }
@@ -115,8 +114,7 @@ mod tests {
             let config = json!({"model_type": model_type});
             assert!(
                 !arch.detect(&config),
-                "Should not detect model_type: {}",
-                model_type
+                "Should not detect model_type: {model_type}"
             );
         }
     }

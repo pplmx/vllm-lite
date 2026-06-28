@@ -12,7 +12,7 @@ struct TracingModel {
 }
 
 impl TracingModel {
-    fn new(tokens: Vec<TokenId>) -> Self {
+    const fn new(tokens: Vec<TokenId>) -> Self {
         Self {
             sequence_to_return: tokens,
             current_idx: 0,
@@ -32,15 +32,18 @@ impl ModelBackend for TracingModel {
     ) -> vllm_traits::Result<BatchOutput> {
         eprintln!(
             "MODEL forward: input_tokens.len()={:?}, input_tokens={:?}, positions.len()={:?}, positions={:?}, is_prefill={:?}",
-            input_tokens.iter().map(|t| t.len()).collect::<Vec<_>>(),
+            input_tokens
+                .iter()
+                .map(std::vec::Vec::len)
+                .collect::<Vec<_>>(),
             input_tokens,
-            positions.iter().map(|p| p.len()).collect::<Vec<_>>(),
+            positions.iter().map(std::vec::Vec::len).collect::<Vec<_>>(),
             positions,
             is_prefill
         );
 
         let mut next_tokens = Vec::new();
-        for seq_id in _seq_ids.iter() {
+        for seq_id in _seq_ids {
             let token = if self.current_idx < self.sequence_to_return.len() {
                 let t = self.sequence_to_return[self.current_idx];
                 self.current_idx += 1;
@@ -49,7 +52,7 @@ impl ModelBackend for TracingModel {
                 151643 // EOS
             };
             next_tokens.push(token);
-            eprintln!("  seq {} -> token {}", seq_id, token);
+            eprintln!("  seq {seq_id} -> token {token}");
         }
 
         Ok(BatchOutput {
@@ -123,7 +126,7 @@ fn test_engine_step_trace_prefill_then_decode() {
                     all_tokens.push(token);
                     // Try to receive from channel
                     while let Ok(t) = rx.try_recv() {
-                        eprintln!("Channel received token: {}", t);
+                        eprintln!("Channel received token: {t}");
                     }
                 }
             }
@@ -136,7 +139,7 @@ fn test_engine_step_trace_prefill_then_decode() {
     }
 
     eprintln!("\n=== FINAL RESULT ===");
-    eprintln!("Total tokens: {:?}", all_tokens);
+    eprintln!("Total tokens: {all_tokens:?}");
     eprintln!("Expected: [29054, 110934, 99601, 151643, ...]");
 
     // The model should return these tokens in order
@@ -176,7 +179,7 @@ fn test_scheduler_batch_trace() {
     let input_counts = batch1
         .input_tokens
         .iter()
-        .map(|t| t.len())
+        .map(std::vec::Vec::len)
         .collect::<Vec<_>>();
     scheduler.update(&batch1.seq_ids, &[generated_token], &input_counts);
 
@@ -202,7 +205,9 @@ fn test_scheduler_batch_trace() {
     eprintln!("  phase: {:?}", batch2.phase);
 
     // Check that decode batch only has the last token
-    if !batch2.input_tokens.is_empty() {
+    if batch2.input_tokens.is_empty() {
+        eprintln!("\n*** WARNING: Batch 2 is empty! This is the bug! ***");
+    } else {
         assert_eq!(
             batch2.input_tokens[0].len(),
             1,
@@ -213,8 +218,6 @@ fn test_scheduler_batch_trace() {
             batch2.input_tokens[0][0], generated_token,
             "Decode batch should have generated token"
         );
-    } else {
-        eprintln!("\n*** WARNING: Batch 2 is empty! This is the bug! ***");
     }
 }
 
@@ -247,7 +250,7 @@ fn test_scheduler_decode_position_trace() {
     let batch = composer.compose(vec![seq], Phase::Decode);
 
     eprintln!("\n=== DECODE BATCH TRACE ===");
-    eprintln!("tokens: {:?}", tokens);
+    eprintln!("tokens: {tokens:?}");
     eprintln!("tokens.len(): {}", tokens.len());
     eprintln!("input_tokens: {:?}", batch.input_tokens);
     eprintln!("positions: {:?}", batch.positions);

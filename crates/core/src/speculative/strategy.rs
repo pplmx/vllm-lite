@@ -3,8 +3,8 @@
 //! Different strategies for determining which draft tokens to accept
 //! based on comparing draft and target model probabilities.
 
-/// RejectionStrategy: rejection strategy enumeration.
-#[derive(Clone, Debug, PartialEq, Default)]
+/// `RejectionStrategy`: rejection strategy enumeration.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum RejectionStrategy {
     #[default]
     TokenLevel,
@@ -14,27 +14,31 @@ pub enum RejectionStrategy {
 }
 
 impl RejectionStrategy {
-    pub fn new_token_level() -> Self {
-        RejectionStrategy::TokenLevel
+    #[must_use]
+    pub const fn new_token_level() -> Self {
+        Self::TokenLevel
     }
 
+    #[must_use]
     pub fn new_block_level(block_size: usize) -> Self {
-        RejectionStrategy::BlockLevel {
+        Self::BlockLevel {
             block_size: block_size.max(1),
         }
     }
 
+    #[must_use]
     pub fn should_accept(&self, draft_prob: f32, target_prob: f32) -> bool {
         match self {
-            RejectionStrategy::TokenLevel => target_prob >= draft_prob,
-            RejectionStrategy::BlockLevel { .. } => target_prob > draft_prob,
+            Self::TokenLevel => target_prob >= draft_prob,
+            Self::BlockLevel { .. } => target_prob > draft_prob,
         }
     }
 
-    pub fn acceptance_threshold(&self) -> f32 {
+    #[must_use]
+    pub const fn acceptance_threshold(&self) -> f32 {
         match self {
-            RejectionStrategy::TokenLevel => 0.0,
-            RejectionStrategy::BlockLevel { .. } => 1e-6,
+            Self::TokenLevel => 0.0,
+            Self::BlockLevel { .. } => 1e-6,
         }
     }
 }

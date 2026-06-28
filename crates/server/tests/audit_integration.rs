@@ -59,7 +59,7 @@ async fn audit_middleware(
         .headers()
         .get("authorization")
         .and_then(|h| h.to_str().ok())
-        .map(|s| s.to_string());
+        .map(std::string::ToString::to_string);
     if let Some(h) = auth_header {
         match state.jwt.validate_request(&h).await {
             Ok(claims) => {
@@ -94,8 +94,8 @@ fn build_app(audit: Arc<AuditLogger>, jwt: Arc<JwtAuthMiddleware>) -> Router {
     }
 
     let state = AuditState {
-        jwt: jwt.clone(),
-        audit: audit.clone(),
+        jwt: jwt,
+        audit: audit,
     };
 
     let protected = Router::new()

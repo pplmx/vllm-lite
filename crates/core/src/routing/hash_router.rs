@@ -6,16 +6,16 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::debug;
 
-/// NodeInfo: node info.
+/// `NodeInfo`: node info.
 #[derive(Debug, Clone)]
-pub(crate) struct NodeInfo {
+pub struct NodeInfo {
     pub node_id: String,
     pub load: f64,
     pub has_cache: bool,
 }
 
-/// HashRouter: hash router.
-pub(crate) struct HashRouter {
+/// `HashRouter`: hash router.
+pub struct HashRouter {
     nodes: Arc<RwLock<Vec<NodeInfo>>>,
     #[allow(dead_code)]
     // audited 2026-06-26 (Wave 1): consistent-hashing virtual-nodes placeholder; current route() uses nodes.len() modulo

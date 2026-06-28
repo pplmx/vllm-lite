@@ -11,7 +11,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use vllm_core::types::EngineMessage;
 
-/// MetricsSnapshotResponse: metrics snapshot response.
+/// `MetricsSnapshotResponse`: metrics snapshot response.
 #[derive(Serialize)]
 pub struct MetricsSnapshotResponse {
     pub counters: HashMap<String, u64>,
@@ -85,7 +85,7 @@ pub async fn metrics_snapshot(State(state): State<ApiState>) -> Json<MetricsSnap
     })
 }
 
-/// KvCacheDumpResponse: kv cache dump response.
+/// `KvCacheDumpResponse`: kv cache dump response.
 #[derive(Serialize)]
 pub struct KvCacheDumpResponse {
     pub total_blocks: usize,
@@ -118,7 +118,7 @@ pub async fn kv_cache_dump(State(state): State<ApiState>) -> Json<KvCacheDumpRes
     })
 }
 
-/// TraceStatusResponse: trace status response.
+/// `TraceStatusResponse`: trace status response.
 #[derive(Serialize)]
 pub struct TraceStatusResponse {
     pub tracing_enabled: bool,

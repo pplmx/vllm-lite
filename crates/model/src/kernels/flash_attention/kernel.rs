@@ -8,7 +8,7 @@ use super::config::{AttentionVariant, FlashAttentionConfig, select_tile_size};
 use super::util::softmax_last_dim;
 use candle_core::{Result, Tensor};
 
-/// FlashAttention: flash attention trait.
+/// `FlashAttention`: flash attention trait.
 pub trait FlashAttention: Send + Sync {
     fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor>;
     fn forward_with_mask(
@@ -22,13 +22,13 @@ pub trait FlashAttention: Send + Sync {
     -> Result<Tensor>;
 }
 
-/// ScaledDotProductAttention: scaled dot product attention.
+/// `ScaledDotProductAttention`: scaled dot product attention.
 pub struct ScaledDotProductAttention {
     scale: f32,
     tile_size: usize,
 }
 
-/// FlashAttentionV2: flash attention v2.
+/// `FlashAttentionV2`: flash attention v2.
 pub struct FlashAttentionV2 {
     scale: f32,
     block_size: usize,
@@ -37,6 +37,7 @@ pub struct FlashAttentionV2 {
 }
 
 impl FlashAttentionV2 {
+    #[must_use]
     pub fn new(num_heads: usize, head_dim: usize) -> Self {
         let scale = 1.0 / (head_dim as f32).sqrt();
         Self {
@@ -47,7 +48,8 @@ impl FlashAttentionV2 {
         }
     }
 
-    pub fn with_block_size(mut self, block_size: usize) -> Self {
+    #[must_use]
+    pub const fn with_block_size(mut self, block_size: usize) -> Self {
         self.block_size = block_size;
         self
     }
@@ -286,7 +288,7 @@ impl FlashAttentionV2 {
 
 impl FlashAttention for FlashAttentionV2 {
     fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
-        FlashAttentionV2::forward(self, q, k, v)
+        Self::forward(self, q, k, v)
     }
 
     fn forward_with_mask(
@@ -312,6 +314,7 @@ impl FlashAttention for FlashAttentionV2 {
 }
 
 impl ScaledDotProductAttention {
+    #[must_use]
     pub fn new(head_dim: usize) -> Self {
         let scale = 1.0 / (head_dim as f32).sqrt();
         let optimal_tile = if head_dim <= 64 { 32 } else { 64 };
@@ -321,7 +324,8 @@ impl ScaledDotProductAttention {
         }
     }
 
-    pub fn with_tile_size(mut self, tile_size: usize) -> Self {
+    #[must_use]
+    pub const fn with_tile_size(mut self, tile_size: usize) -> Self {
         self.tile_size = tile_size;
         self
     }
@@ -436,13 +440,14 @@ impl FlashAttention for ScaledDotProductAttention {
     }
 }
 
-/// FlashAttentionKernel: flash attention kernel.
+/// `FlashAttentionKernel`: flash attention kernel.
 pub struct FlashAttentionKernel {
     attention: Box<dyn FlashAttention>,
     config: FlashAttentionConfig,
 }
 
 impl FlashAttentionKernel {
+    #[must_use]
     pub fn new(num_heads: usize, head_dim: usize, config: FlashAttentionConfig) -> Self {
         let attention: Box<dyn FlashAttention> = match config.variant {
             AttentionVariant::Tiled => Box::new(
@@ -690,8 +695,8 @@ mod tests {
         let output = fa_v2.forward(&q, &k, &v)?;
         let output_data: Vec<f32> = output.flatten_all()?.to_vec1()?;
 
-        for val in output_data.iter() {
-            assert!(val.is_finite(), "Output should be finite: {}", val);
+        for val in &output_data {
+            assert!(val.is_finite(), "Output should be finite: {val}");
         }
 
         Ok(())
@@ -717,12 +722,11 @@ mod tests {
             .iter()
             .zip(fa_v2_data.iter())
             .map(|(a, b)| (a - b).abs())
-            .fold(0.0f32, |a, b| a.max(b));
+            .fold(0.0f32, f32::max);
 
         assert!(
             max_diff < 1e-2,
-            "FlashAttentionV2 should be close to SDPA, max diff: {}",
-            max_diff
+            "FlashAttentionV2 should be close to SDPA, max diff: {max_diff}"
         );
 
         Ok(())
@@ -791,17 +795,9 @@ mod tests {
 
         let output_data: Vec<f32> = output.flatten_all()?.to_vec1()?;
 
-        for val in output_data.iter() {
-            assert!(
-                *val >= 0.0,
-                "Softmax output should be non-negative: {}",
-                val
-            );
-            assert!(
-                *val <= 100.0,
-                "Softmax output should be reasonable: {}",
-                val
-            );
+        for val in &output_data {
+            assert!(*val >= 0.0, "Softmax output should be non-negative: {val}");
+            assert!(*val <= 100.0, "Softmax output should be reasonable: {val}");
         }
 
         Ok(())

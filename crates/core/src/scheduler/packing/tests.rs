@@ -38,11 +38,7 @@ fn test_packer_reduces_padding_waste() {
 
     // FIFO would have waste = (1000-10)+(1000-100)+(1000-95)+(1000-200) = 3495
     // BFD should have significantly less waste
-    assert!(
-        total_waste < 500,
-        "Expected waste < 500, got {}",
-        total_waste
-    );
+    assert!(total_waste < 500, "Expected waste < 500, got {total_waste}");
 }
 
 #[test]

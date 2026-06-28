@@ -79,7 +79,7 @@ impl crate::engine::Engine {
 
         // Track accuracy in adaptive decoder and record adjustment events
         if let Some(ref mut decoder) = self.adaptive_decoder {
-            let total_draft: usize = draft_outputs.iter().map(|d| d.len()).sum();
+            let total_draft: usize = draft_outputs.iter().map(std::vec::Vec::len).sum();
             let total_accepted: usize = accepted_counts.iter().sum();
             if decoder.record_verification(total_draft, total_accepted) {
                 self.scheduler.metrics.record_speculative_adjustment();
@@ -87,7 +87,7 @@ impl crate::engine::Engine {
         }
 
         // Record speculative efficiency metric (Plan 17.4-F / MTRC-02)
-        let total_draft: usize = draft_outputs.iter().map(|d| d.len()).sum();
+        let total_draft: usize = draft_outputs.iter().map(std::vec::Vec::len).sum();
         let total_accepted: usize = accepted_counts.iter().sum();
         let total_tokens_step = total_draft + total_accepted;
         if total_tokens_step > 0 {
@@ -114,7 +114,7 @@ impl crate::engine::Engine {
         self.scheduler.clear_finished();
 
         if !batch.seq_ids.is_empty() {
-            let total_tokens: usize = batch.input_tokens.iter().map(|t| t.len()).sum();
+            let total_tokens: usize = batch.input_tokens.iter().map(std::vec::Vec::len).sum();
             self.scheduler.metrics.record_tokens(total_tokens as u64);
             self.scheduler
                 .metrics

@@ -5,7 +5,7 @@
 
 use candle_core::{DType, Result as CandleResult, Tensor};
 
-/// GatedDeltaConfig: gated delta configuration.
+/// `GatedDeltaConfig`: gated delta configuration.
 #[derive(Debug, Clone, Copy)]
 pub struct GatedDeltaConfig {
     pub num_k_heads: usize,
@@ -16,19 +16,23 @@ pub struct GatedDeltaConfig {
 }
 
 impl GatedDeltaConfig {
-    pub fn key_dim(&self) -> usize {
+    #[must_use]
+    pub const fn key_dim(&self) -> usize {
         self.num_k_heads * self.key_head_dim
     }
 
-    pub fn value_dim(&self) -> usize {
+    #[must_use]
+    pub const fn value_dim(&self) -> usize {
         self.num_v_heads * self.value_head_dim
     }
 
-    pub fn qkv_proj_dim(&self) -> usize {
+    #[must_use]
+    pub const fn qkv_proj_dim(&self) -> usize {
         2 * self.key_dim() + self.value_dim()
     }
 
-    pub fn conv_state_width(&self) -> usize {
+    #[must_use]
+    pub const fn conv_state_width(&self) -> usize {
         self.conv_kernel_size.saturating_sub(1)
     }
 }

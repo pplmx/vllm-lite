@@ -2,7 +2,7 @@
 //!
 //! A lightweight LLM inference engine implementing vLLM innovations:
 //! - Continuous batching
-//! - PagedAttention KV cache management
+//! - `PagedAttention` KV cache management
 //! - Prefix caching
 //! - Speculative decoding (production-ready since v18.0)
 //!

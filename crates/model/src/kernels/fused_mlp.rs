@@ -56,7 +56,7 @@ pub fn fused_attention_layer(
     o_proj.forward(&out)
 }
 
-/// Fused MLP layer: layernorm + gate_proj + up_proj + down_proj + residual
+/// Fused MLP layer: layernorm + `gate_proj` + `up_proj` + `down_proj` + residual
 pub fn fused_mlp_layer(
     x: &Tensor,
     layernorm_weight: &Tensor,

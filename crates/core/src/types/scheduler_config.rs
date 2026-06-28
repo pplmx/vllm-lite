@@ -36,6 +36,7 @@ pub struct SchedulerConfig {
 
 impl SchedulerConfig {
     #[allow(clippy::too_many_arguments)]
+    #[must_use]
     pub fn new(
         max_num_seqs: usize,
         max_num_batched_tokens: usize,
@@ -108,6 +109,7 @@ impl Default for SchedulerConfig {
 impl SchedulerConfig {
     /// Returns a builder for configuring this type with the documented field defaults.
     /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
+    #[must_use]
     pub fn builder() -> SchedulerConfigBuilder {
         SchedulerConfigBuilder::default()
     }
@@ -120,55 +122,68 @@ pub struct SchedulerConfigBuilder {
 }
 
 impl SchedulerConfigBuilder {
-    pub fn with_max_num_seqs(mut self, v: usize) -> Self {
+    #[must_use]
+    pub const fn with_max_num_seqs(mut self, v: usize) -> Self {
         self.inner.max_num_seqs = v;
         self
     }
-    pub fn with_max_num_batched_tokens(mut self, v: usize) -> Self {
+    #[must_use]
+    pub const fn with_max_num_batched_tokens(mut self, v: usize) -> Self {
         self.inner.max_num_batched_tokens = v;
         self
     }
-    pub fn with_max_consecutive_decode(mut self, v: u32) -> Self {
+    #[must_use]
+    pub const fn with_max_consecutive_decode(mut self, v: u32) -> Self {
         self.inner.max_consecutive_decode = v;
         self
     }
-    pub fn with_enable_pd_separation(mut self, v: bool) -> Self {
+    #[must_use]
+    pub const fn with_enable_pd_separation(mut self, v: bool) -> Self {
         self.inner.enable_pd_separation = v;
         self
     }
-    pub fn with_prefill_chunk_size(mut self, v: usize) -> Self {
+    #[must_use]
+    pub const fn with_prefill_chunk_size(mut self, v: usize) -> Self {
         self.inner.prefill_chunk_size = v;
         self
     }
-    pub fn with_decode_preference_ratio(mut self, v: f32) -> Self {
+    #[must_use]
+    pub const fn with_decode_preference_ratio(mut self, v: f32) -> Self {
         self.inner.decode_preference_ratio = v;
         self
     }
-    pub fn with_enable_priority_scheduling(mut self, v: bool) -> Self {
+    #[must_use]
+    pub const fn with_enable_priority_scheduling(mut self, v: bool) -> Self {
         self.inner.enable_priority_scheduling = v;
         self
     }
-    pub fn with_enable_dynamic_batching(mut self, v: bool) -> Self {
+    #[must_use]
+    pub const fn with_enable_dynamic_batching(mut self, v: bool) -> Self {
         self.inner.enable_dynamic_batching = v;
         self
     }
-    pub fn with_min_batch_size(mut self, v: usize) -> Self {
+    #[must_use]
+    pub const fn with_min_batch_size(mut self, v: usize) -> Self {
         self.inner.min_batch_size = v;
         self
     }
-    pub fn with_max_batch_size(mut self, v: usize) -> Self {
+    #[must_use]
+    pub const fn with_max_batch_size(mut self, v: usize) -> Self {
         self.inner.max_batch_size = v;
         self
     }
+    #[must_use]
     pub fn with_cuda_graph(mut self, v: SchedulerCudaGraphConfig) -> Self {
         self.inner.cuda_graph = v;
         self
     }
-    pub fn with_packing(mut self, v: SequencePackingConfig) -> Self {
+    #[must_use]
+    pub const fn with_packing(mut self, v: SequencePackingConfig) -> Self {
         self.inner.packing = v;
         self
     }
     /// build: build the [`SchedulerConfig`].
+    #[must_use]
     pub fn build(self) -> SchedulerConfig {
         self.inner
     }

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::types::{BatchOutput, SeqId, TokenId};
 
-/// ModelError: model error.
+/// `ModelError`: model error.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum ModelError {
@@ -31,7 +31,7 @@ pub type Result<T> = std::result::Result<T, ModelError>;
 #[cfg(feature = "candle")]
 use candle_core::Tensor;
 
-/// ModelBackend: model backend trait.
+/// `ModelBackend`: model backend trait.
 pub trait ModelBackend: Send + Sync {
     fn forward(
         &mut self,
@@ -187,6 +187,7 @@ impl dyn ModelBackend {
     /// Rust's orphan rule prevents a direct `impl Default for Arc<dyn ...>`
     /// because `Arc` is foreign and there is no local type appearing before
     /// the uncovered trait-object parameter.
+    #[must_use]
     pub fn default_arc() -> Arc<Self> {
         Arc::new(StubModelBackend)
     }

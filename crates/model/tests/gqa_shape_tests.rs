@@ -1,10 +1,10 @@
 //! Tests for GQA tensor shape handling
 //!
-//! These tests verify that expand_kv correctly handles GQA head count mismatches.
+//! These tests verify that `expand_kv` correctly handles GQA head count mismatches.
 
 use candle_core::{Device, Tensor};
 
-/// Helper function to test expand_kv
+/// Helper function to test `expand_kv`
 fn test_expand_kv(
     kv: &Tensor,
     num_q_heads: usize,
@@ -55,8 +55,7 @@ fn test_expand_kv_gqa_qwen25_config() {
     assert_eq!(
         dims,
         &[1, 10, 14, 64],
-        "Expected shape [1, 10, 14, 64], got {:?}",
-        dims
+        "Expected shape [1, 10, 14, 64], got {dims:?}"
     );
 }
 
@@ -83,8 +82,7 @@ fn test_expand_kv_gqa_qwen3_config() {
     assert_eq!(
         dims,
         &[1, 10, 16, 64],
-        "Expected shape [1, 10, 16, 64], got {:?}",
-        dims
+        "Expected shape [1, 10, 16, 64], got {dims:?}"
     );
 }
 

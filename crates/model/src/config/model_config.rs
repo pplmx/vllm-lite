@@ -1,12 +1,12 @@
 //! Unified model configuration.
 //!
-//! Provides ModelConfig struct that works across different model architectures.
+//! Provides `ModelConfig` struct that works across different model architectures.
 
 use super::architecture::{Architecture, LayerType, RoPEConfig};
 use super::errors::ConfigResult;
 use crate::arch::ARCHITECTURE_REGISTRY;
 
-/// ModelConfig: model configuration.
+/// `ModelConfig`: model configuration.
 pub struct ModelConfig {
     pub architecture: Architecture,
     pub hidden_size: usize,
@@ -27,7 +27,7 @@ pub struct ModelConfig {
     pub num_experts: Option<usize>,
     pub top_k_experts: Option<usize>,
     pub expert_intermediate_size: Option<usize>,
-    /// Qwen3-style Q/K RMSNorm before RoPE (default false for other architectures).
+    /// Qwen3-style Q/K `RMSNorm` before `RoPE` (default false for other architectures).
     pub has_qk_norm: bool,
 }
 
@@ -35,6 +35,7 @@ impl ModelConfig {
     /// Tiny configuration for fast unit tests
     /// Hidden size: 128, Heads: 4, Head dim: 32
     /// Tiny config for a specific architecture (fast CPU smoke tests).
+    #[must_use]
     pub fn test_tiny_for(architecture: Architecture) -> Self {
         let sliding_window = if architecture == Architecture::Mistral {
             Some(4096)
@@ -48,7 +49,8 @@ impl ModelConfig {
         }
     }
 
-    pub fn test_tiny() -> Self {
+    #[must_use]
+    pub const fn test_tiny() -> Self {
         Self {
             architecture: Architecture::Llama,
             hidden_size: 128,
@@ -75,7 +77,8 @@ impl ModelConfig {
 
     /// Small configuration for faster integration tests
     /// Hidden size: 256, Heads: 4, Head dim: 64
-    pub fn test_small() -> Self {
+    #[must_use]
+    pub const fn test_small() -> Self {
         Self {
             architecture: Architecture::Llama,
             hidden_size: 256,
@@ -101,7 +104,8 @@ impl ModelConfig {
     }
 
     /// Medium configuration for more realistic tests
-    pub fn test_medium() -> Self {
+    #[must_use]
+    pub const fn test_medium() -> Self {
         Self {
             architecture: Architecture::Llama,
             hidden_size: 512,
@@ -126,8 +130,9 @@ impl ModelConfig {
         }
     }
 
-    /// llama_7b: llama 7b.
-    pub fn llama_7b() -> Self {
+    /// `llama_7b`: llama 7b.
+    #[must_use]
+    pub const fn llama_7b() -> Self {
         Self {
             architecture: Architecture::Llama,
             hidden_size: 4096,
@@ -152,8 +157,9 @@ impl ModelConfig {
         }
     }
 
-    /// mistral_7b: mistral 7b.
-    pub fn mistral_7b() -> Self {
+    /// `mistral_7b`: mistral 7b.
+    #[must_use]
+    pub const fn mistral_7b() -> Self {
         Self {
             architecture: Architecture::Mistral,
             hidden_size: 4096,
@@ -178,8 +184,9 @@ impl ModelConfig {
         }
     }
 
-    /// mixtral_8x7b: mixtral 8x7b.
-    pub fn mixtral_8x7b() -> Self {
+    /// `mixtral_8x7b`: mixtral 8x7b.
+    #[must_use]
+    pub const fn mixtral_8x7b() -> Self {
         Self {
             architecture: Architecture::Mixtral,
             hidden_size: 4096,
@@ -212,71 +219,71 @@ impl ModelConfig {
 
         let hidden_size = value
             .get("hidden_size")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .unwrap_or(4096) as usize;
         let num_layers = value
             .get("num_hidden_layers")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .unwrap_or(32) as usize;
         let num_heads = value
             .get("num_attention_heads")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .unwrap_or(32) as usize;
         let num_kv_heads = value
             .get("num_key_value_heads")
             .or_else(|| value.get("num_local_heads"))
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .unwrap_or(num_heads as u64) as usize;
         let head_dim = value
             .get("head_dim")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .unwrap_or((hidden_size / num_heads) as u64) as usize;
         let vocab_size = value
             .get("vocab_size")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .unwrap_or(32000) as usize;
         let intermediate_size = value
             .get("intermediate_size")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .unwrap_or(11008) as usize;
         let rope_theta = value
             .get("rope_theta")
             .or_else(|| value.get("rotary_base"))
-            .and_then(|v| v.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .unwrap_or(10000.0) as f32;
         let rms_norm_eps = value
             .get("rms_norm_eps")
             .or_else(|| value.get("layer_norm_eps"))
-            .and_then(|v| v.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .unwrap_or(1e-5);
         let sliding_window = value
             .get("sliding_window")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .map(|v| v as usize);
         let tie_word_embeddings = value
             .get("tie_word_embeddings")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
         let max_position_embeddings = value
             .get("max_position_embeddings")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .unwrap_or(2048) as usize;
         let num_experts = value
             .get("num_local_experts")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .map(|v| v as usize);
         let top_k_experts = value
             .get("num_experts_per_tok")
             .or_else(|| value.get("top_k_experts"))
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .map(|v| v as usize);
         let expert_intermediate_size = value
             .get("expert_intermediate_size")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .map(|v| v as usize);
         let has_qk_norm = value
             .get("has_qk_norm")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
 
         Ok(Self {

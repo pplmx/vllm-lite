@@ -9,7 +9,7 @@ use crate::components::ssm::softplus;
 use candle_core::{DType, Module, Result as CandleResult, Tensor};
 use candle_nn::{Conv1d, LayerNorm, Linear};
 
-/// GatedDeltaNet: gated delta net.
+/// `GatedDeltaNet`: gated delta net.
 pub struct GatedDeltaNet {
     pub config: GatedDeltaConfig,
     in_proj_qkv: Linear,
@@ -23,8 +23,8 @@ pub struct GatedDeltaNet {
     norm: LayerNorm,
 }
 
-/// l2_normalize: l2 normalize.
-pub(crate) fn l2_normalize(xs: &Tensor, eps: f32) -> CandleResult<Tensor> {
+/// `l2_normalize`: l2 normalize.
+pub fn l2_normalize(xs: &Tensor, eps: f32) -> CandleResult<Tensor> {
     let last = xs.dims().len().saturating_sub(1);
     let sq = xs.sqr()?;
     let norm = sq.sum_keepdim(last)?;
@@ -231,7 +231,8 @@ pub fn gated_delta_recurrent_with_state(
 
 impl GatedDeltaNet {
     #[allow(clippy::too_many_arguments)]
-    pub fn from_components(
+    #[must_use]
+    pub const fn from_components(
         config: GatedDeltaConfig,
         in_proj_qkv: Linear,
         in_proj_z: Linear,
@@ -365,11 +366,13 @@ impl GatedDeltaNet {
         self.norm.forward(&output)
     }
 
-    pub fn a_log(&self) -> &Tensor {
+    #[must_use]
+    pub const fn a_log(&self) -> &Tensor {
         &self.a_log
     }
 
-    pub fn dt_bias(&self) -> &Tensor {
+    #[must_use]
+    pub const fn dt_bias(&self) -> &Tensor {
         &self.dt_bias
     }
 }

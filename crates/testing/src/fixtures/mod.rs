@@ -6,14 +6,16 @@ use vllm_core::types::{SchedulerConfig, SequencePackingConfig};
 
 use crate::mocks::IncrementModel;
 
-/// TestFixtures: test fixtures.
+/// `TestFixtures`: test fixtures.
 pub struct TestFixtures;
 
 impl TestFixtures {
+    #[must_use]
     pub fn default_scheduler_config() -> SchedulerConfig {
         SchedulerConfig::default()
     }
 
+    #[must_use]
     pub fn small_batch_config() -> SchedulerConfig {
         SchedulerConfig {
             max_num_seqs: 2,
@@ -31,6 +33,7 @@ impl TestFixtures {
         }
     }
 
+    #[must_use]
     pub fn chunked_prefill_config() -> SchedulerConfig {
         SchedulerConfig {
             max_num_seqs: 256,
@@ -48,6 +51,7 @@ impl TestFixtures {
         }
     }
 
+    #[must_use]
     pub fn pd_separation_config() -> SchedulerConfig {
         SchedulerConfig {
             enable_pd_separation: true,
@@ -65,6 +69,7 @@ impl TestFixtures {
         }
     }
 
+    #[must_use]
     pub fn priority_config() -> SchedulerConfig {
         SchedulerConfig {
             enable_priority_scheduling: true,
@@ -73,6 +78,7 @@ impl TestFixtures {
         }
     }
 
+    #[must_use]
     pub fn oom_scenario_config() -> SchedulerConfig {
         SchedulerConfig {
             max_num_seqs: 1,
@@ -91,11 +97,13 @@ impl TestFixtures {
     }
 
     /// Engine backed by [`IncrementModel`] with the default scheduler config.
+    #[must_use]
     pub fn increment_engine(kv_blocks: usize) -> Engine {
         Self::increment_engine_with(Self::default_scheduler_config(), 4, kv_blocks)
     }
 
     /// Engine backed by [`IncrementModel`] with a custom scheduler config.
+    #[must_use]
     pub fn increment_engine_with(
         config: SchedulerConfig,
         max_draft_tokens: usize,
@@ -105,11 +113,13 @@ impl TestFixtures {
     }
 
     /// Target + draft engine for speculative-decoding E2E tests.
+    #[must_use]
     pub fn increment_speculative_engine(kv_blocks: usize) -> Engine {
         Self::increment_speculative_engine_with(Self::default_scheduler_config(), 4, kv_blocks)
     }
 
     /// Speculative engine with a custom scheduler config.
+    #[must_use]
     pub fn increment_speculative_engine_with(
         config: SchedulerConfig,
         max_draft_tokens: usize,

@@ -5,7 +5,7 @@
 //! 2. Self-spec draft (v17 baseline)
 //! 3. External draft (v18.0 new path)
 //!
-//! Uses stub backends and the in-memory DraftModelRegistry. Real models and
+//! Uses stub backends and the in-memory `DraftModelRegistry`. Real models and
 //! tokenizers are not involved — the goal is to validate the orchestration
 //! overhead, not the inference speed.
 
@@ -51,7 +51,7 @@ impl ModelBackend for BenchBackend {
         let n = self.counter.fetch_add(1, Ordering::Relaxed);
         // Mix backend id into the token so different backends produce
         // distinguishable outputs (closer to real behavior).
-        let id_bias: u32 = self.id.bytes().map(|b| b as u32).sum();
+        let id_bias: u32 = self.id.bytes().map(|b| u32::from(b)).sum();
         let token: TokenId = id_bias.wrapping_add(n as u32) % 32000;
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
@@ -173,7 +173,7 @@ fn bench_throughput(c: &mut Criterion) {
                 let start = Instant::now();
                 run_iteration(&h, config);
                 start.elapsed()
-            })
+            });
         });
     }
 

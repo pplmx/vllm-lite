@@ -6,7 +6,7 @@ use tracing::{info, warn};
 
 tonic::include_proto!("vllm.distributed");
 
-/// GrpcState: grpc state.
+/// `GrpcState`: grpc state.
 #[derive(Debug, Clone)]
 pub struct GrpcState {
     pub node_id: String,
@@ -15,6 +15,7 @@ pub struct GrpcState {
 }
 
 impl GrpcState {
+    #[must_use]
     pub fn new(node_id: String) -> Self {
         Self {
             node_id,
@@ -38,14 +39,14 @@ impl GrpcState {
     }
 }
 
-/// NodeServiceImpl: node service impl.
+/// `NodeServiceImpl`: node service impl.
 #[derive(Debug)]
 pub(crate) struct NodeServiceImpl {
     state: GrpcState,
 }
 
 impl NodeServiceImpl {
-    pub fn new(state: GrpcState) -> Self {
+    pub const fn new(state: GrpcState) -> Self {
         Self { state }
     }
 

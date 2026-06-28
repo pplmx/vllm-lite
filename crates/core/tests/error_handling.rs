@@ -64,7 +64,7 @@ fn test_error_result_type() {
 #[test]
 fn test_error_debug_format() {
     let err = EngineError::ModelError("test".to_string());
-    let debug = format!("{:?}", err);
+    let debug = format!("{err:?}");
     assert!(debug.contains("ModelError"));
 }
 

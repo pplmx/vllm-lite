@@ -10,7 +10,7 @@ use vllm_dist::TensorParallelConfig;
 
 use super::block::{block_from_weights, new_block};
 
-/// Qwen3Model: qwen3 model.
+/// `Qwen3Model`: qwen3 model.
 pub type Qwen3Model = CausalLm<super::block::TransformerBlock, LnLayerNorm, Linear>;
 
 impl Qwen3Model {

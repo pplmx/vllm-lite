@@ -4,7 +4,7 @@
 // `write_kv`, `write_kv_batch`, `read_kv`.
 
 use super::super::quantization::dequantize;
-use super::{BLOCK_SIZE, PagedKvCache};
+use super::PagedKvCache;
 use candle_core::{DType, Result, Tensor};
 
 impl PagedKvCache {
@@ -32,8 +32,7 @@ impl PagedKvCache {
 
         if k_dims != v_dims {
             return Err(candle_core::Error::msg(format!(
-                "k_batch and v_batch must have same dimensions, got {:?} vs {:?}",
-                k_dims, v_dims
+                "k_batch and v_batch must have same dimensions, got {k_dims:?} vs {v_dims:?}"
             )));
         }
 
@@ -55,8 +54,7 @@ impl PagedKvCache {
         let max_possible_tokens = (num_blocks - block_id) * self.block_size;
         if token_offset + num_tokens > max_possible_tokens {
             return Err(candle_core::Error::msg(format!(
-                "Token offset {} + num_tokens {} exceeds available space {}",
-                token_offset, num_tokens, max_possible_tokens
+                "Token offset {token_offset} + num_tokens {num_tokens} exceeds available space {max_possible_tokens}"
             )));
         }
 
@@ -105,8 +103,7 @@ impl PagedKvCache {
         let num_blocks = self.num_blocks();
         if block_id >= num_blocks {
             return Err(candle_core::Error::msg(format!(
-                "block_id {} out of bounds for {} blocks",
-                block_id, num_blocks
+                "block_id {block_id} out of bounds for {num_blocks} blocks"
             )));
         }
 
@@ -482,11 +479,11 @@ mod tests {
         let k_out_data: Vec<f32> = k_out.flatten_all()?.to_vec1()?;
         let v_out_data: Vec<f32> = v_out.flatten_all()?.to_vec1()?;
 
-        for val in k_out_data.iter() {
-            assert!((val - 10.0).abs() < 0.1, "Expected ~10.0, got {}", val);
+        for val in &k_out_data {
+            assert!((val - 10.0).abs() < 0.1, "Expected ~10.0, got {val}");
         }
-        for val in v_out_data.iter() {
-            assert!((val - 20.0).abs() < 0.1, "Expected ~20.0, got {}", val);
+        for val in &v_out_data {
+            assert!((val - 20.0).abs() < 0.1, "Expected ~20.0, got {val}");
         }
 
         Ok(())
@@ -505,7 +502,7 @@ mod tests {
         cache_no_quant.write_kv(0, 0, 0, &k, &v)?;
         let (k_no_q, _v_no_q) = cache_no_quant.read_kv(0, &[0], 1)?;
 
-        let mut cache_quant = PagedKvCache::new(1, 2, 4, 4, device.clone(), true)?;
+        let mut cache_quant = PagedKvCache::new(1, 2, 4, 4, device, true)?;
         cache_quant.write_kv(0, 0, 0, &k, &v)?;
         let (k_q, _v_q) = cache_quant.read_kv(0, &[0], 1)?;
 
@@ -657,7 +654,7 @@ mod tests {
     #[test]
     fn test_block_size_getter() -> Result<()> {
         let device = Device::Cpu;
-        let cache = PagedKvCache::new(1, 4, 16, 10, device.clone(), false)?;
+        let cache = PagedKvCache::new(1, 4, 16, 10, device, false)?;
 
         assert_eq!(cache.block_size(), 16);
 

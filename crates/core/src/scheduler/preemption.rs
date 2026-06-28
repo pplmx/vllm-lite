@@ -1,6 +1,6 @@
 use crate::types::{SchedulerConfig, Sequence, Status};
 
-/// PreemptionManager: preemption manager.
+/// `PreemptionManager`: preemption manager.
 pub(crate) struct PreemptionManager {
     config: SchedulerConfig,
     preempted_count: u64,
@@ -14,7 +14,7 @@ impl Default for PreemptionManager {
 }
 
 impl PreemptionManager {
-    pub fn new(config: SchedulerConfig) -> Self {
+    pub const fn new(config: SchedulerConfig) -> Self {
         Self {
             config,
             preempted_count: 0,
@@ -54,8 +54,10 @@ impl PreemptionManager {
         }
 
         // Scale aggressiveness with configured batch pressure.
-        let shortage_threshold = 1.0
-            + (self.config.max_num_seqs as f32 / self.config.max_batch_size as f32).min(2.0) * 0.1;
+        let shortage_threshold = (self.config.max_num_seqs as f32
+            / self.config.max_batch_size as f32)
+            .min(2.0)
+            .mul_add(0.1, 1.0);
         let memory_shortage_ratio = blocks_needed as f32 / (blocks_available - 1) as f32;
         if memory_shortage_ratio < shortage_threshold {
             return false;
@@ -97,23 +99,23 @@ impl PreemptionManager {
         victim
     }
 
-    pub fn preempted_count(&self) -> u64 {
+    pub const fn preempted_count(&self) -> u64 {
         self.preempted_count
     }
 
-    pub fn rejected_count(&self) -> u64 {
+    pub const fn rejected_count(&self) -> u64 {
         self.rejected_count
     }
 
-    pub fn record_preemption(&mut self) {
+    pub const fn record_preemption(&mut self) {
         self.preempted_count += 1;
     }
 
-    pub fn record_rejection(&mut self) {
+    pub const fn record_rejection(&mut self) {
         self.rejected_count += 1;
     }
 
-    pub fn reset_stats(&mut self) {
+    pub const fn reset_stats(&mut self) {
         self.preempted_count = 0;
         self.rejected_count = 0;
     }

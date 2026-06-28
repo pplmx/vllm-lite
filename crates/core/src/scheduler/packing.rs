@@ -14,7 +14,7 @@ pub struct PackedBatch {
 }
 
 impl PackedBatch {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             sequences: Vec::new(),
             batch_size: 0,
@@ -50,11 +50,13 @@ pub struct SequencePacker {
 }
 
 impl SequencePacker {
-    pub fn new(config: SequencePackingConfig) -> Self {
+    #[must_use]
+    pub const fn new(config: SequencePackingConfig) -> Self {
         Self { config }
     }
 
     /// Pack sequences using Best-Fit Decreasing algorithm
+    #[must_use]
     pub fn pack_sequences(&self, sequences: Vec<Sequence>) -> Vec<PackedBatch> {
         if sequences.is_empty() {
             return vec![];

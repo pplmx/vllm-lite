@@ -11,5 +11,5 @@ pub fn qwen3_tokenizer() -> Tokenizer {
 pub fn is_printable_text(text: &str) -> bool {
     !text.is_empty()
         && !text.chars().any(|c| c == '\u{FFFD}')
-        && text.chars().any(|c| c.is_alphabetic())
+        && text.chars().any(char::is_alphabetic)
 }

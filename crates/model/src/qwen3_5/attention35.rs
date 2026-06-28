@@ -12,7 +12,7 @@ use crate::components::attention::paged_gqa::{
 use crate::components::positional::MRoPE;
 use crate::paged_tensor::PagedKvCache;
 
-/// Attention35WithRoPE: attention35 with ro pe.
+/// `Attention35WithRoPE`: attention35 with ro pe.
 pub struct Attention35WithRoPE {
     q_proj: Linear,
     k_proj: Linear,
@@ -54,27 +54,27 @@ impl Attention35WithRoPE {
         head_dim: usize,
         rope: MRoPE,
     ) -> CandleResult<Self> {
-        let q_proj_key = format!("{}.self_attn.q_proj.weight", prefix);
-        let k_proj_key = format!("{}.self_attn.k_proj.weight", prefix);
-        let v_proj_key = format!("{}.self_attn.v_proj.weight", prefix);
-        let o_proj_key = format!("{}.self_attn.o_proj.weight", prefix);
+        let q_proj_key = format!("{prefix}.self_attn.q_proj.weight");
+        let k_proj_key = format!("{prefix}.self_attn.k_proj.weight");
+        let v_proj_key = format!("{prefix}.self_attn.v_proj.weight");
+        let o_proj_key = format!("{prefix}.self_attn.o_proj.weight");
 
         let q_w = weights
             .get(&q_proj_key)
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", q_proj_key)))?;
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {q_proj_key}")))?;
         let k_w = weights
             .get(&k_proj_key)
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", k_proj_key)))?;
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {k_proj_key}")))?;
         let v_w = weights
             .get(&v_proj_key)
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", v_proj_key)))?;
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {v_proj_key}")))?;
         let o_w = weights
             .get(&o_proj_key)
             .cloned()
-            .ok_or_else(|| candle_core::Error::msg(format!("Missing {}", o_proj_key)))?;
+            .ok_or_else(|| candle_core::Error::msg(format!("Missing {o_proj_key}")))?;
 
         Ok(Self {
             q_proj: Linear::new(q_w, None),

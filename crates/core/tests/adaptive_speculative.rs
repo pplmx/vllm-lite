@@ -96,7 +96,7 @@ fn test_adaptive_speculative_with_same_model_for_draft() {
     let mut decode_iterations = 0;
     while engine.has_pending() && decode_iterations < 50 {
         let result = engine.step();
-        assert!(result.is_ok(), "engine step failed: {:?}", result);
+        assert!(result.is_ok(), "engine step failed: {result:?}");
         decode_iterations += 1;
     }
 
@@ -152,7 +152,7 @@ fn test_adaptive_speculative_max_draft_tokens() {
     let max = engine
         .adaptive_decoder
         .as_ref()
-        .map(|d| d.current_max_draft_tokens());
+        .map(vllm_core::AdaptiveSpeculativeDecoder::current_max_draft_tokens);
     assert_eq!(max, Some(5));
 }
 

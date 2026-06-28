@@ -7,7 +7,7 @@ use candle_nn::{Conv1d, Linear, VarBuilder, conv1d};
 
 use crate::components::ssm::error::SSMError;
 
-/// SSMHarmonicSSMLayer: ssm harmonic ssm layer.
+/// `SSMHarmonicSSMLayer`: ssm harmonic ssm layer.
 pub struct SSMHarmonicSSMLayer {
     x_proj: Linear,
     in_proj_a: Linear,
@@ -103,19 +103,23 @@ impl SSMHarmonicSSMLayer {
         Ok((delta, b.clone(), c.clone(), x_conv, a_proj_out))
     }
 
-    pub fn d_inner(&self) -> usize {
+    #[must_use]
+    pub const fn d_inner(&self) -> usize {
         self.d_inner
     }
 
-    pub fn d_state(&self) -> usize {
+    #[must_use]
+    pub const fn d_state(&self) -> usize {
         self.d_state
     }
 
-    pub fn a_log(&self) -> &Tensor {
+    #[must_use]
+    pub const fn a_log(&self) -> &Tensor {
         &self.a_log
     }
 
-    pub fn dt_bias(&self) -> &Tensor {
+    #[must_use]
+    pub const fn dt_bias(&self) -> &Tensor {
         &self.dt_bias
     }
 
@@ -127,44 +131,37 @@ impl SSMHarmonicSSMLayer {
     ) -> Result<Self, SSMError> {
         let x_proj_w = weights
             .get(&format!(
-                "model.layers.{}.linear_attn.x_proj.weight",
-                layer_idx
+                "model.layers.{layer_idx}.linear_attn.x_proj.weight"
             ))
             .cloned()
-            .ok_or_else(|| {
-                SSMError::Msg(format!("Missing x_proj weight for layer {}", layer_idx))
-            })?;
+            .ok_or_else(|| SSMError::Msg(format!("Missing x_proj weight for layer {layer_idx}")))?;
         let x_proj = candle_nn::Linear::new(x_proj_w, None);
 
         let in_proj_a_w = weights
             .get(&format!(
-                "model.layers.{}.linear_attn.in_proj_a.weight",
-                layer_idx
+                "model.layers.{layer_idx}.linear_attn.in_proj_a.weight"
             ))
             .cloned()
             .ok_or_else(|| {
-                SSMError::Msg(format!("Missing in_proj_a weight for layer {}", layer_idx))
+                SSMError::Msg(format!("Missing in_proj_a weight for layer {layer_idx}"))
             })?;
         let in_proj_a = candle_nn::Linear::new(in_proj_a_w, None);
 
         let a_log_w = weights
-            .get(&format!("model.layers.{}.linear_attn.A_log", layer_idx))
+            .get(&format!("model.layers.{layer_idx}.linear_attn.A_log"))
             .cloned()
-            .ok_or_else(|| SSMError::Msg(format!("Missing A_log for layer {}", layer_idx)))?;
+            .ok_or_else(|| SSMError::Msg(format!("Missing A_log for layer {layer_idx}")))?;
         let dt_bias_w = weights
-            .get(&format!("model.layers.{}.linear_attn.dt_bias", layer_idx))
+            .get(&format!("model.layers.{layer_idx}.linear_attn.dt_bias"))
             .cloned()
-            .ok_or_else(|| SSMError::Msg(format!("Missing dt_bias for layer {}", layer_idx)))?;
+            .ok_or_else(|| SSMError::Msg(format!("Missing dt_bias for layer {layer_idx}")))?;
 
         let conv_w = weights
             .get(&format!(
-                "model.layers.{}.linear_attn.conv1d.weight",
-                layer_idx
+                "model.layers.{layer_idx}.linear_attn.conv1d.weight"
             ))
             .cloned()
-            .ok_or_else(|| {
-                SSMError::Msg(format!("Missing conv1d weight for layer {}", layer_idx))
-            })?;
+            .ok_or_else(|| SSMError::Msg(format!("Missing conv1d weight for layer {layer_idx}")))?;
         let d_conv = 4;
         let conv_cfg = candle_nn::Conv1dConfig {
             padding: d_conv - 1,

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// CudaGraphNode: cuda graph node trait.
+/// `CudaGraphNode`: cuda graph node trait.
 pub trait CudaGraphNode: Send + Sync {
     fn execute(
         &self,
@@ -35,6 +35,7 @@ impl dyn CudaGraphTensor {
     /// a direct `impl Default for Arc<dyn ...>` because `Arc` is foreign and
     /// there is no local type appearing before the uncovered trait-object
     /// parameter.
+    #[must_use]
     pub fn default_arc() -> Arc<Self> {
         Arc::new(NullCudaGraphTensor)
     }
@@ -48,12 +49,13 @@ impl dyn CudaGraphNode {
     /// a direct `impl Default for Arc<dyn ...>` because `Arc` is foreign and
     /// there is no local type appearing before the uncovered trait-object
     /// parameter.
+    #[must_use]
     pub fn default_arc() -> Arc<Self> {
         Arc::new(NullCudaGraphNode)
     }
 }
 
-/// CudaGraphTensor: cuda graph tensor trait.
+/// `CudaGraphTensor`: cuda graph tensor trait.
 pub trait CudaGraphTensor: Send + Sync {
     fn as_ptr(&self) -> *const std::ffi::c_void;
     fn shape(&self) -> &[usize];
@@ -77,12 +79,12 @@ impl CudaGraphTensor for NullCudaGraphTensor {
         &[]
     }
 
-    fn dtype(&self) -> &str {
+    fn dtype(&self) -> &'static str {
         "f32"
     }
 }
 
-/// CudaGraphError: cuda graph error.
+/// `CudaGraphError`: cuda graph error.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum CudaGraphError {
     #[error("capture failed: {0}")]
@@ -95,7 +97,7 @@ pub enum CudaGraphError {
     Unsupported(String),
 }
 
-/// CudaGraph: cuda graph.
+/// `CudaGraph`: cuda graph.
 pub struct CudaGraph {
     nodes: Vec<Arc<dyn CudaGraphNode>>,
     node_inputs: Vec<Vec<usize>>,
@@ -108,6 +110,7 @@ pub struct CudaGraph {
 unsafe impl Send for CudaGraph {}
 
 impl CudaGraph {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             nodes: Vec::new(),
@@ -129,7 +132,7 @@ impl CudaGraph {
         self.cached = false;
     }
 
-    pub fn capture(&mut self) -> Result<(), CudaGraphError> {
+    pub const fn capture(&mut self) -> Result<(), CudaGraphError> {
         self.cached = true;
         Ok(())
     }
@@ -166,13 +169,14 @@ impl Default for CudaGraph {
     }
 }
 
-/// CudaGraphExecutor: cuda graph executor.
+/// `CudaGraphExecutor`: cuda graph executor.
 pub struct CudaGraphExecutor {
     graphs: HashMap<String, CudaGraph>,
     enable_cuda_graph: bool,
 }
 
 impl CudaGraphExecutor {
+    #[must_use]
     pub fn new(enable_cuda_graph: bool) -> Self {
         Self {
             graphs: HashMap::new(),
@@ -198,15 +202,17 @@ impl CudaGraphExecutor {
         let graph = self
             .graphs
             .get(name)
-            .ok_or_else(|| CudaGraphError::InvalidNode(format!("Graph '{}' not found", name)))?;
+            .ok_or_else(|| CudaGraphError::InvalidNode(format!("Graph '{name}' not found")))?;
 
         graph.execute(tensors)
     }
 
-    pub fn is_enabled(&self) -> bool {
+    #[must_use]
+    pub const fn is_enabled(&self) -> bool {
         self.enable_cuda_graph
     }
 
+    #[must_use]
     pub fn has_graph(&self, name: &str) -> bool {
         self.graphs.contains_key(name)
     }
@@ -229,14 +235,14 @@ mod tests {
 
     impl CudaGraphTensor for MockTensor {
         fn as_ptr(&self) -> *const std::ffi::c_void {
-            self.data.as_ptr() as *const std::ffi::c_void
+            self.data.as_ptr().cast::<std::ffi::c_void>()
         }
 
         fn shape(&self) -> &[usize] {
             &self.shape
         }
 
-        fn dtype(&self) -> &str {
+        fn dtype(&self) -> &'static str {
             "f32"
         }
     }

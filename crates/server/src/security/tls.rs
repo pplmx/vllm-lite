@@ -9,7 +9,7 @@ use tokio_rustls::rustls::pki_types::CertificateDer;
 use tokio_rustls::rustls::server::WebPkiClientVerifier;
 use tokio_rustls::rustls::{self, ServerConfig};
 
-/// TlsError: tls error.
+/// `TlsError`: tls error.
 #[derive(Debug, Error)]
 pub enum TlsError {
     #[error("Failed to read certificate: {0}")]
@@ -22,7 +22,7 @@ pub enum TlsError {
     HandshakeFailed(String),
 }
 
-/// TlsConfig: tls configuration.
+/// `TlsConfig`: tls configuration.
 pub struct TlsConfig {
     pub cert_path: String,
     pub key_path: String,
@@ -52,13 +52,13 @@ impl TlsConfig {
         let mut cert_reader = std::io::BufReader::new(cert_file);
         let cert_chain: Vec<CertificateDer<'static>> = certs(&mut cert_reader)
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| TlsError::InvalidConfig(format!("Invalid certificate: {:?}", e)))?;
+            .map_err(|e| TlsError::InvalidConfig(format!("Invalid certificate: {e:?}")))?;
 
         let key_file =
             fs::File::open(&self.key_path).map_err(|e| TlsError::KeyRead(e.to_string()))?;
         let mut key_reader = std::io::BufReader::new(key_file);
         let key = private_key(&mut key_reader)
-            .map_err(|e| TlsError::InvalidConfig(format!("Invalid key: {:?}", e)))?
+            .map_err(|e| TlsError::InvalidConfig(format!("Invalid key: {e:?}")))?
             .ok_or(TlsError::InvalidConfig("No private key found".to_string()))?;
 
         let config = if self.mtls {
@@ -73,13 +73,13 @@ impl TlsConfig {
             let mut ca_reader = std::io::BufReader::new(ca_file);
             let ca_chain: Vec<CertificateDer<'static>> = certs(&mut ca_reader)
                 .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| TlsError::InvalidConfig(format!("Invalid CA: {:?}", e)))?;
+                .map_err(|e| TlsError::InvalidConfig(format!("Invalid CA: {e:?}")))?;
 
             let mut root_store = RootCertStore::empty();
             for cert in ca_chain {
                 root_store
                     .add(cert)
-                    .map_err(|e| TlsError::InvalidConfig(format!("Invalid CA cert: {:?}", e)))?;
+                    .map_err(|e| TlsError::InvalidConfig(format!("Invalid CA cert: {e:?}")))?;
             }
             let verifier = WebPkiClientVerifier::builder(Arc::new(root_store))
                 .build()
@@ -100,7 +100,7 @@ impl TlsConfig {
     }
 }
 
-/// TlsListener: tls listener.
+/// `TlsListener`: tls listener.
 pub struct TlsListener {
     config: Arc<ServerConfig>,
 }
@@ -118,6 +118,7 @@ impl TlsListener {
         Ok(listener)
     }
 
+    #[must_use]
     pub fn acceptor(&self) -> TlsAcceptor {
         TlsAcceptor::from(self.config.clone())
     }

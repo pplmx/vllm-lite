@@ -2,7 +2,7 @@
 
 use crate::qwen3::config::{Qwen3Config, TextConfig};
 
-/// GdnLinearConfig: gdn linear configuration.
+/// `GdnLinearConfig`: gdn linear configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct GdnLinearConfig {
     pub num_k_heads: usize,
@@ -14,7 +14,7 @@ pub(crate) struct GdnLinearConfig {
 
 impl GdnLinearConfig {
     /// HF Qwen3.5 production defaults (e.g. Qwen3.5-397B-A17B `text_config`).
-    pub fn production_defaults() -> Self {
+    pub const fn production_defaults() -> Self {
         Self {
             num_k_heads: 16,
             num_v_heads: 64,
@@ -51,7 +51,7 @@ impl GdnLinearConfig {
         }
     }
 
-    /// from_qwen3_config: from qwen3 config.
+    /// `from_qwen3_config`: from qwen3 config.
     pub fn from_qwen3_config(config: &Qwen3Config) -> Self {
         if let Some(tc) = config.text_config.as_ref() {
             if tc.has_explicit_gdn_config() {
@@ -62,13 +62,14 @@ impl GdnLinearConfig {
     }
 }
 
-/// LayerType: layer type.
+/// `LayerType`: layer type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayerType {
     LinearAttention,
     FullAttention,
 }
 
+#[must_use]
 pub fn parse_layer_types(config: &Qwen3Config) -> Vec<LayerType> {
     if let Some(types) = config.layer_types() {
         types
@@ -191,7 +192,7 @@ mod tests {
             } else {
                 LayerType::LinearAttention
             };
-            assert_eq!(*lt, expected, "Layer {} type mismatch", i);
+            assert_eq!(*lt, expected, "Layer {i} type mismatch");
         }
     }
 

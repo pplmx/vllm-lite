@@ -4,5 +4,5 @@
 pub mod failover;
 pub mod leader_election;
 
-pub(crate) use failover::FailoverManager;
-pub(crate) use leader_election::{LeaderElection, LeadershipState};
+pub use failover::FailoverManager;
+pub use leader_election::{LeaderElection, LeadershipState};
