@@ -31,6 +31,7 @@ where
     Norm: Module,
     Head: Module,
 {
+    #[must_use]
     pub const fn with_embed_through_layers(mut self, enabled: bool) -> Self {
         self.embed_through_layers = enabled;
         self

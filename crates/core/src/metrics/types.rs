@@ -72,6 +72,7 @@ impl MetricLabels {
         Self::default()
     }
 
+    #[must_use]
     pub fn with<K: Into<String>, V: Into<String>>(mut self, key: K, value: V) -> Self {
         self.labels.push((key.into(), value.into()));
         self

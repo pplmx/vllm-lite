@@ -42,6 +42,7 @@ impl TlsConfig {
         }
     }
 
+    #[must_use]
     pub fn with_ca_cert(mut self, ca_cert_path: impl Into<String>) -> Self {
         self.ca_cert_path = Some(ca_cert_path.into());
         self.mtls = true;

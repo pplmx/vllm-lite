@@ -76,6 +76,7 @@ impl DraftSpec {
         }
     }
 
+    #[must_use]
     pub fn with_arch_hint(mut self, arch: impl Into<String>) -> Self {
         self.arch_hint = Some(arch.into());
         self

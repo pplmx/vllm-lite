@@ -9,6 +9,7 @@ use tracing::{info, warn};
 // is not under our control. See crates/dist/proto/node.proto for the source.
 #[allow(
     clippy::doc_markdown,
+    clippy::missing_const_for_fn,
     clippy::missing_errors_doc,
     clippy::missing_panics_doc
 )]
