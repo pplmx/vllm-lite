@@ -46,4 +46,10 @@ mod policy_tests {
         let policy = FcfsPolicy::new();
         assert_eq!(policy.name(), "FCFS");
     }
+
+    #[test]
+    fn scheduling_policy_default_arc_is_fcfs() {
+        let policy: Arc<dyn SchedulingPolicy> = <dyn SchedulingPolicy>::default_arc();
+        assert_eq!(policy.name(), "FCFS");
+    }
 }

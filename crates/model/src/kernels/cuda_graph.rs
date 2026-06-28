@@ -9,11 +9,77 @@ pub trait CudaGraphNode: Send + Sync {
     ) -> Result<Vec<Box<dyn CudaGraphTensor>>, CudaGraphError>;
 }
 
+/// Default null `CudaGraphNode`.
+///
+/// `execute` always returns [`CudaGraphError::Unsupported`] — used as a
+/// placeholder when CUDA Graph capture is disabled.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NullCudaGraphNode;
+
+impl CudaGraphNode for NullCudaGraphNode {
+    fn execute(
+        &self,
+        _inputs: &[&dyn CudaGraphTensor],
+    ) -> Result<Vec<Box<dyn CudaGraphTensor>>, CudaGraphError> {
+        Err(CudaGraphError::Unsupported(
+            "NullCudaGraphNode: no graph acceleration available".to_string(),
+        ))
+    }
+}
+
+impl dyn CudaGraphTensor {
+    /// Returns an `Arc<Self>` wrapping the null [`NullCudaGraphTensor`].
+    ///
+    /// This is the closest equivalent to
+    /// `Arc::<dyn CudaGraphTensor>::default()`; Rust's orphan rule prevents
+    /// a direct `impl Default for Arc<dyn ...>` because `Arc` is foreign and
+    /// there is no local type appearing before the uncovered trait-object
+    /// parameter.
+    pub fn default_arc() -> Arc<Self> {
+        Arc::new(NullCudaGraphTensor)
+    }
+}
+
+impl dyn CudaGraphNode {
+    /// Returns an `Arc<Self>` wrapping the null [`NullCudaGraphNode`].
+    ///
+    /// This is the closest equivalent to
+    /// `Arc::<dyn CudaGraphNode>::default()`; Rust's orphan rule prevents
+    /// a direct `impl Default for Arc<dyn ...>` because `Arc` is foreign and
+    /// there is no local type appearing before the uncovered trait-object
+    /// parameter.
+    pub fn default_arc() -> Arc<Self> {
+        Arc::new(NullCudaGraphNode)
+    }
+}
+
 /// CudaGraphTensor: cuda graph tensor trait.
 pub trait CudaGraphTensor: Send + Sync {
     fn as_ptr(&self) -> *const std::ffi::c_void;
     fn shape(&self) -> &[usize];
     fn dtype(&self) -> &str;
+}
+
+/// Default null `CudaGraphTensor`.
+///
+/// Returns a null pointer, empty shape, and `f32` dtype. Represents "no
+/// CUDA graph acceleration available" — the executor treats this as a
+/// no-op tensor in graph captures.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NullCudaGraphTensor;
+
+impl CudaGraphTensor for NullCudaGraphTensor {
+    fn as_ptr(&self) -> *const std::ffi::c_void {
+        std::ptr::null()
+    }
+
+    fn shape(&self) -> &[usize] {
+        &[]
+    }
+
+    fn dtype(&self) -> &str {
+        "f32"
+    }
 }
 
 /// CudaGraphError: cuda graph error.
@@ -321,6 +387,22 @@ mod tests {
         let graph = CudaGraph::new();
 
         let result = graph.execute(&mut []);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn cuda_graph_tensor_default_arc_is_null() {
+        let tensor: Arc<dyn CudaGraphTensor> = <dyn CudaGraphTensor>::default_arc();
+        assert!(tensor.as_ptr().is_null());
+        assert!(tensor.shape().is_empty());
+        assert_eq!(tensor.dtype(), "f32");
+    }
+
+    #[test]
+    fn cuda_graph_node_default_arc_errors() {
+        let node: Arc<dyn CudaGraphNode> = <dyn CudaGraphNode>::default_arc();
+        let inputs: [&dyn CudaGraphTensor; 0] = [];
+        let result = node.execute(&inputs);
         assert!(result.is_err());
     }
 }

@@ -1,4 +1,5 @@
 use candle_core::{Device, Result, Tensor};
+use std::sync::Arc;
 
 /// PipelineStageConfig: pipeline stage configuration.
 #[derive(Debug, Clone)]
@@ -74,6 +75,49 @@ pub trait PipelineStage: Send + Sync {
     }
 }
 
+/// Default no-op `PipelineStage`.
+///
+/// Wraps a single-stage CPU config. `forward` always errors — the stage
+/// holds no weights and cannot produce real outputs. Useful as a placeholder
+/// when pipeline parallelism is disabled.
+#[derive(Debug)]
+pub struct NoopPipelineStage {
+    config: PipelineStageConfig,
+}
+
+impl Default for NoopPipelineStage {
+    fn default() -> Self {
+        Self {
+            config: PipelineStageConfig::new(0, 1, 1, Device::Cpu),
+        }
+    }
+}
+
+impl PipelineStage for NoopPipelineStage {
+    fn config(&self) -> &PipelineStageConfig {
+        &self.config
+    }
+
+    fn forward(&self, _input: StageInput) -> Result<StageOutput> {
+        Err(candle_core::Error::msg(
+            "NoopPipelineStage: no pipeline parallelism configured",
+        ))
+    }
+}
+
+impl dyn PipelineStage {
+    /// Returns an `Arc<Self>` wrapping the no-op [`NoopPipelineStage`].
+    ///
+    /// This is the closest equivalent to
+    /// `Arc::<dyn PipelineStage>::default()`; Rust's orphan rule prevents
+    /// a direct `impl Default for Arc<dyn ...>` because `Arc` is foreign and
+    /// there is no local type appearing before the uncovered trait-object
+    /// parameter.
+    pub fn default_arc() -> Arc<Self> {
+        Arc::new(NoopPipelineStage::default())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -113,5 +157,12 @@ mod tests {
 
         assert!(!last.is_first_stage());
         assert!(last.is_last_stage());
+    }
+
+    #[test]
+    fn pipeline_stage_default_arc_is_noop() {
+        let stage: Arc<dyn PipelineStage> = <dyn PipelineStage>::default_arc();
+        assert_eq!(stage.config().stage_id, 0);
+        assert_eq!(stage.config().num_stages, 1);
     }
 }

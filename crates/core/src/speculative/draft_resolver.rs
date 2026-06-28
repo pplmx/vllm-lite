@@ -72,6 +72,20 @@ impl DraftLoader for NoopLoader {
     }
 }
 
+impl dyn DraftLoader {
+    /// Returns an `Arc<Self>` wrapping the default [`NoopLoader`] (always
+    /// returns `LoadFailed` so the resolver falls back to self-spec).
+    ///
+    /// This is the closest equivalent to
+    /// `Arc::<dyn DraftLoader>::default()`; Rust's orphan rule prevents
+    /// a direct `impl Default for Arc<dyn ...>` because `Arc` is foreign and
+    /// there is no local type appearing before the uncovered trait-object
+    /// parameter.
+    pub fn default_arc() -> Arc<Self> {
+        Arc::new(NoopLoader)
+    }
+}
+
 /// Per-request draft resolver.
 pub struct DraftResolver {
     registry: Arc<DraftModelRegistry>,
@@ -396,5 +410,13 @@ mod tests {
                 || snap.resolutions_external_total > 0
                 || snap.resolutions_none_total > 0
         );
+    }
+
+    #[test]
+    fn draft_loader_default_arc_is_noop() {
+        let loader: Arc<dyn DraftLoader> = <dyn DraftLoader>::default_arc();
+        let id = DraftId("any".into());
+        let result = loader.load(&id);
+        assert!(result.is_err(), "NoopLoader must always error");
     }
 }

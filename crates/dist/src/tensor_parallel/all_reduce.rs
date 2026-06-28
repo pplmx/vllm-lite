@@ -71,6 +71,40 @@ impl AllReduce for NcclAllReduce {
     }
 }
 
+/// Default single-node `AllReduce`.
+///
+/// Passes inputs through unchanged. Used in single-node deployments where
+/// there is nothing to reduce across ranks.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NoopAllReduce;
+
+impl AllReduce for NoopAllReduce {
+    fn all_reduce(&self, input: &[f32], _op: ReduceOp) -> Result<Vec<f32>, TensorParallelError> {
+        Ok(input.to_vec())
+    }
+
+    fn all_reduce_inplace(
+        &self,
+        _input: &mut [f32],
+        _op: ReduceOp,
+    ) -> Result<(), TensorParallelError> {
+        Ok(())
+    }
+}
+
+impl dyn AllReduce {
+    /// Returns an `Arc<Self>` wrapping the single-node [`NoopAllReduce`].
+    ///
+    /// This is the closest equivalent to
+    /// `Arc::<dyn AllReduce>::default()`; Rust's orphan rule prevents
+    /// a direct `impl Default for Arc<dyn ...>` because `Arc` is foreign and
+    /// there is no local type appearing before the uncovered trait-object
+    /// parameter.
+    pub fn default_arc() -> Arc<Self> {
+        Arc::new(NoopAllReduce)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,6 +188,15 @@ mod tests {
                 assert_eq!(*v, expected);
             }
         }
+        Ok(())
+    }
+
+    #[test]
+    fn all_reduce_default_arc_is_noop() -> Result<(), TensorParallelError> {
+        let ar: Arc<dyn AllReduce> = <dyn AllReduce>::default_arc();
+        let input = vec![1.0, 2.0, 3.0];
+        let result = ar.all_reduce(&input, ReduceOp::Sum)?;
+        assert_eq!(result, input);
         Ok(())
     }
 }
