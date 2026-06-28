@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 pub mod handler;
 pub mod manager;
 pub mod types;

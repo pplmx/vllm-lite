@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use serde::Serialize;
 use std::sync::Arc;
 use tokio::sync::RwLock;

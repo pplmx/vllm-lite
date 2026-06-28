@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //! Production `DraftLoader` implementation backed by `vllm_model::ModelLoader`.
 //!
 //! Phase 19 wiring: the server constructs a `ServerDraftLoader` after the

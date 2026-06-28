@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 //!
 //! `JwtValidator::validate` parses and verifies a JWT's signature. The
 //! verification algorithm is selected from an allowlist based on the
