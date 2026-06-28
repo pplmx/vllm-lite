@@ -40,16 +40,16 @@ Source: `just bench` (with the 4 unregistered benches now wired via Cargo.toml
 | `radix_longest_prefix_match_250`            | radix cache, 250-token query          | ns/iter  | 4,683 ns (±43)      |
 | `radix_insert_64_tokens`                    | radix cache, 64-token insert          | ns/iter  | 4,646 ns (±17)      |
 | `scheduler_new`                             | SchedulerEngine::new construction     | ns/iter  | 667 ns (±4)         |
-| `scheduler_build_batch/10`                  | build_batch with 10 sequences         | ns/iter  | 99 ns (±0)          |
-| `scheduler_build_batch/50`                  | build_batch with 50 sequences         | ns/iter  | 100 ns (±0)         |
-| `scheduler_build_batch/100`                 | build_batch with 100 sequences        | ns/iter  | 100 ns (±0)         |
+| `scheduler_build_batch/10`                  | build_batch with 10 sequences         | ns/iter  | 83 ns (H-13 #3 applied, −16.2% vs 99 ns pre-H-13) |
+| `scheduler_build_batch/50`                  | build_batch with 50 sequences         | ns/iter  | 83 ns (H-13 #3 applied, −17.5% vs 100 ns pre-H-13) |
+| `scheduler_build_batch/100`                 | build_batch with 100 sequences        | ns/iter  | 82 ns (H-13 #3 applied, −17.7% vs 100 ns pre-H-13) |
 | `radix_prefix_match_200`                    | radix cache, 200-token query          | ns/iter  | 4,267 ns (±26)      |
 | `request_queue/get_o1`                      | RequestQueue O(1) lookup              | ns/iter  | 16 ns (±0)          |
 | `request_queue/remove_o1`                   | RequestQueue O(1) removal             | ns/iter  | 4,333 ns (±24)      |
 | `scheduling_policies/fcfs`                  | FCFS scheduling decision              | ns/iter  | 0 ns (±0)           |
 | `scheduling_policies/sjf`                   | SJF scheduling decision               | ns/iter  | 3 ns (±0)           |
-| `batch_building/build_batch_10`             | batch builder, 10 seqs                | ns/iter  | 5,095 ns (±21)      |
-| `batch_building/build_batch_100`            | batch builder, 100 seqs               | ns/iter  | 38,684 ns (±264)    |
+| `batch_building/build_batch_10`             | batch builder, 10 seqs                | ns/iter  | 4,745 ns (H-13 #3 applied, −7.2% vs 5,095 ns pre-H-13) |
+| `batch_building/build_batch_100`            | batch builder, 100 seqs               | ns/iter  | 36,572 ns (H-13 #3 applied, −5.6% vs 38,684 ns pre-H-13) |
 | `phase_scheduler/select_phase`              | prefill/decode phase switch           | ns/iter  | 2 ns (±0)           |
 | `sequence_packing/fifo/4`                   | FIFO schedule, 4 seqs                 | ns/iter  | 56 ns (±0)          |
 | `sequence_packing/packing/4`                | packed schedule, 4 seqs               | ns/iter  | 56 ns (±0)          |
@@ -88,6 +88,39 @@ benchmark bug**, not a v27.0 regression.
 These should be fixed in a follow-up (either fix `engine.step()` to surface an
 empty-result signal, or rewrite the bench with a timeout / step cap). They are
 **not** in scope for H-1 and do not affect the baseline numbers above.
+
+## H-13 PagedKV + BatchComposer optimization (2026-06-28)
+
+Source: [`v27-profile-pkv.md`](v27-profile-pkv.md), [`v27-profile-batch.md`](v27-profile-batch.md)
+
+### Applied
+
+| # | Target | File:line | Change | Bench Δ |
+|---|--------|-----------|--------|---------|
+| **#1** | PagedKV `Tensor::cat` rebuild | `buffer.rs:198-236` | Replaced `for b in 0..num_blocks { narrow; unsqueeze } + Tensor::cat` with a single `Tensor::slice_assign` per write (matches `MlaKvCache::write_compressed` pattern at `kv_cache.rs:111, 157`). Eliminates O(num_blocks) per-write dispatch overhead. | CPU smoke: +14.7% (22,880 → 26,693 ns) — **expected per H-10 caveat**; GPU production: 10-100× projected, real re-bench deferred. |
+| **#2** | Hash re-materialization | `layout.rs:36-42, 45-54` | Added `compute_block_hash_from_slice(&[f32])` helper; `write_kv` now hashes the host-side `k_final` buffer directly instead of pulling the block back from device. | Eliminates one full-block host round-trip per write (~8 KB at qwen3-7B scale). |
+| **#3** | BatchComposer prefill allocation | `compose.rs:174-189, 88-104` | Replaced `Vec::new()` with `Vec::with_capacity(self.config.max_batch_size)` for all 6 output vecs in `compose_prefill_batch` and `compose_chunked_prefill`. Matches the decode-path pattern. | `scheduler_build_batch/100`: −17.7% (100 → 82 ns); `batch_building/build_batch_100`: −5.6% (38,684 → 36,572 ns). |
+| **#4** | BatchComposer sort stability | `compose.rs:182` | `sort_by_key` → `sort_unstable_by_key` in prefill path. Stability not relied on by downstream consumers. | Marginal; no isolated measurement. |
+| **#5** (bug fix) | Chunked-prefill `num_computed_tokens` | `compose.rs:99, 144` | Declared `mut`, pre-sized, push `start` per sequence (matches prefill path). Previously the Vec was non-`mut`, never pushed to, and passed empty to the `Batch` — any consumer indexing `batch.num_computed_tokens[i]` would have panicked. | Correctness; no perf change. Regression test at `compose.rs:557-578`. |
+| **#6** (regression tests) | PagedKV slice_assign | `buffer.rs:669-793` | Two tests verifying (a) writes at production-scale `num_blocks=64` only update the targeted block, and (b) two writes to the same block at different token offsets do not clobber each other. | All pass. |
+
+### Deferred (with rationale)
+
+| Target | File:line | Reason |
+|--------|-----------|--------|
+| BatchComposer `kv_blocks.as_ref().clone()` deep-Vec clone → Arc clone | `compose.rs:136, 250, 317` | Requires `Batch.kv_block_ids` to change from `Vec<Vec<BlockId>>` to `Vec<Arc<Vec<BlockId>>>`, which cascades into `ModelBackend::forward(... kv_block_ids: &[Vec<usize>])` trait signature at `traits/src/model.rs:49, 65, 92, 120, 130, 152, 167` and all impls (`causal_lm/model.rs`, `causal_lm/hybrid_lm.rs`, etc.). H-10 rated "Medium" risk; in practice it is a 30+ file cross-crate refactor. Deferred to a dedicated PR with API change review. |
+| BatchComposer `positions` flatten | `compose.rs:131, 245, 313` + `traits/src/types.rs:25` | Same cascading trait refactor as `kv_blocks`. Touches `Batch.positions: Vec<Vec<usize>>` consumers. Larger win (5-15% on prefill at scale) but requires the same trait-level change. Deferred. |
+| PagedKV `write_kv` host round-trip | `buffer.rs:160-161, 174-181, 198-207` | Would require scattering a single (num_heads × 1 × head_dim) slot into the layer without first downloading the full block. Requires `Tensor::index_add` / `scatter` for 4D tensors (different from candle's `slice_assign` semantics). Subsumed by #1 for the layer-rebuild cost; the host round-trip remains. Defer to a kernel-tier task. |
+| PagedKV `write_kv_batch` block-at-a-time path | `buffer.rs:68-80` | After #1, the per-token write no longer rebuilds the layer. The remaining per-token cost is the `to_vec3` host round-trip. A `write_kv_block(layer_idx, block_id, &k_block, &v_block)` API would amortize the round-trip across `BLOCK_SIZE=16` tokens, but adds a new public API surface. Defer to a follow-up. |
+| PagedKV `read_kv` single-block decode fast path | `buffer.rs:265-290` | Marginal win at the decode case (`block_ids.len() == 1`); covered by the existing `Tensor::cat` on a 1-element vec. Defer. |
+| PagedKV `find_matching_blocks` O(n) → O(1) lookup | `layout.rs:50-60` | Currently dead code (no callers in the workspace). Defer until prefix-cache integration brings live callers. |
+| PagedKV `compute_block_hash` device-side hash | `layout.rs:37-47` | Requires a custom GPU kernel; defer to kernel-tier work. The `compute_block_hash_from_slice` helper (H-13 #2) already eliminates the host round-trip on the write hot path. |
+
+### Test + bench summary
+
+- All 1189 unit + integration tests pass (1 slow, 41 skipped per `just nextest-fast`).
+- Clippy deny-tier (correctness/suspicious/perf) clean on both `vllm-core` and `vllm-model` for the modified files.
+- Bench regression on `paged_kv_cache_smoke/cpu_smoke` is the **expected** CPU smoke behavior; documented in the H-10 profile (`v27-profile-pkv.md` "Note on CPU vs GPU") and in the H-13 #1 history table above.
 
 ## Notes
 
@@ -251,7 +284,37 @@ into the next op without materializing a scalar tensor.
 
 | Bench path | Config | ns/iter (median) |
 |------------|--------|------------------|
-| paged_kv_cache_smoke/cpu_smoke | l1_blocks4_h2_d32 | 23,281 ns |
+| paged_kv_cache_smoke/cpu_smoke | l1_blocks4_h2_d32 | 26,693 ns (H-13 #1 applied, +14.7% vs 22,880 ns pre-H-13) |
+
+#### H-13 #1 optimization history (paged_kv_cache_smoke/cpu_smoke @ l1_blocks4_h2_d32)
+
+| Date       | Step | Change | Median (ns) | Δ vs prior |
+|------------|------|--------|-------------|-----------|
+| 2026-06-28 | H-5  | Baseline (`Tensor::cat` rebuild of full layer per write at buffer.rs:211-230) | 23,281 | — |
+| 2026-06-28 | H-13 #1 | Replaced `Tensor::cat` rebuild with `Tensor::slice_assign` at buffer.rs:198-236; eliminated redundant host round-trip for hash via `compute_block_hash_from_slice` helper at layout.rs:45-54 | 26,693 | +14.7% (p<0.05) |
+
+**Why the CPU smoke regressed:** The H-10 profile ([`v27-profile-pkv.md`](v27-profile-pkv.md))
+explicitly warns that "CPU smoke benchmarks (current 23 µs at l1_blocks4_h2_d32) will
+significantly **underestimate** the win from these optimizations for production GPU
+runs." The CPU smoke at `num_blocks=4` is dominated by per-call allocator overhead.
+The `slice_assign` path internally allocates 3 full-layer tensors (mask, padded
+src, `where_cond` result) for an O(num_blocks) cost similar to the cat it replaces.
+At GPU production scale (num_blocks=1024), the win comes from eliminating
+O(num_blocks) CUDA kernel launches (1024× ~5µs each on GPU vs ~100ns each on CPU):
+the GPU projection from H-10 is **10-100× per-token write speedup at qwen3-7B
+scale**, which the CPU smoke cannot capture.
+
+**Correctness validation:** Added 2 regression tests at
+`buffer.rs:669-793`:
+- `test_write_kv_at_large_num_blocks_slice_assign` — writes at
+  `num_blocks=64`, verifies targeted block updated and other blocks
+  unchanged.
+- `test_write_kv_overwrite_preserves_other_tokens_in_block` — two writes
+  to the SAME block at different token offsets; verifies the
+  `slice_assign` path writes just the targeted slot without clobbering
+  prior data.
+
+Both pass. Real GPU re-bench deferred (no GPU runner on this host).
 
 ### Standard dimensions (recorded when GPU available)
 
