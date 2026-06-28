@@ -15,6 +15,7 @@ use candle_core::{Result, Tensor};
 
 pub use factory::{block_from_weights, new_block};
 
+#[derive(Debug)]
 /// Standard decoder layer with `RoPE` group-query attention and `SwiGLU` FFN.
 pub struct RopeGqaDecoderBlock {
     input_layernorm: LnLayerNorm,

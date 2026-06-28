@@ -83,6 +83,15 @@ pub struct SchedulerObservers {
     observers: RwLock<Vec<Box<dyn SchedulerObserver>>>,
 }
 
+impl std::fmt::Debug for SchedulerObservers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let count = self.observers.read().map(|v| v.len()).unwrap_or(0);
+        f.debug_struct("SchedulerObservers")
+            .field("observer_count", &count)
+            .finish()
+    }
+}
+
 impl SchedulerObservers {
     #[must_use]
     pub fn new() -> Self {

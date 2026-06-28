@@ -24,6 +24,7 @@ pub trait FormatLoader {
         Self: Sized;
 }
 
+#[derive(Debug)]
 /// Loader for Safetensors format files.
 pub struct SafetensorsLoader;
 
@@ -61,6 +62,7 @@ impl FormatLoader for SafetensorsLoader {
 mod gguf_loader {
     use super::{Device, FormatLoader, HashMap, Path, Result, Tensor};
     use crate::quantize::gguf::load_gguf_tensors;
+    #[derive(Debug)]
 
     /// `GgufLoader`: gguf loader.
     pub struct GgufLoader;

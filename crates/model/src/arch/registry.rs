@@ -13,6 +13,15 @@ pub struct ArchitectureRegistry {
     architectures: RwLock<HashMap<String, ArchFactory>>,
 }
 
+impl std::fmt::Debug for ArchitectureRegistry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let count = self.architectures.read().map(|m| m.len()).unwrap_or(0);
+        f.debug_struct("ArchitectureRegistry")
+            .field("architectures_count", &count)
+            .finish()
+    }
+}
+
 impl Default for ArchitectureRegistry {
     fn default() -> Self {
         Self::new()

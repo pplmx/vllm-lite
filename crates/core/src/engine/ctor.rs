@@ -238,6 +238,27 @@ pub struct EngineBuilder {
     sleep_policy: SleepPolicy,
 }
 
+impl std::fmt::Debug for EngineBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EngineBuilder")
+            .field("target_model", &"<dyn ModelBackend>")
+            .field(
+                "draft_model",
+                &self.draft_model.as_ref().map(|_| "<dyn ModelBackend>"),
+            )
+            .field("config", &self.config)
+            .field("max_draft_tokens", &self.max_draft_tokens)
+            .field("num_kv_blocks", &self.num_kv_blocks)
+            .field("adaptive_decoder", &self.adaptive_decoder)
+            .field(
+                "draft_resolver",
+                &self.draft_resolver.as_ref().map(Arc::strong_count),
+            )
+            .field("sleep_policy", &self.sleep_policy)
+            .finish()
+    }
+}
+
 impl EngineBuilder {
     /// Create a new builder with a target model. Other fields use defaults:
     /// - `draft_model = None`

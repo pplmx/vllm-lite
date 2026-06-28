@@ -63,6 +63,7 @@ pub trait DraftLoader: Send + Sync {
 /// is constructed with `with_drafts_boxed` / `with_budget_boxed` but the server
 /// hasn't yet wired a real loader. The resolver treats every load failure as
 /// a FALL-01 fallback to self-spec — so this loader effectively keeps all
+#[derive(Debug)]
 /// external drafts at `Unloaded` state and the engine behaves like self-spec.
 pub struct NoopLoader;
 
@@ -88,13 +89,26 @@ impl dyn DraftLoader {
         Arc::new(NoopLoader)
     }
 }
-
 /// Per-request draft resolver.
 pub struct DraftResolver {
     registry: Arc<DraftModelRegistry>,
     self_spec: Option<Arc<Mutex<Box<dyn ModelBackend>>>>,
     loader: Arc<dyn DraftLoader>,
     metrics: Arc<EnhancedMetricsCollector>,
+}
+
+impl std::fmt::Debug for DraftResolver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DraftResolver")
+            .field("registry", &self.registry)
+            .field(
+                "self_spec",
+                &self.self_spec.as_ref().map(|_| "<dyn ModelBackend>"),
+            )
+            .field("loader", &"<dyn DraftLoader>")
+            .field("metrics", &self.metrics)
+            .finish()
+    }
 }
 
 impl DraftResolver {

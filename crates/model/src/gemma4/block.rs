@@ -10,6 +10,7 @@ use crate::gemma4::mlp::GeGLU;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 
+#[derive(Debug)]
 /// `Gemma4Block`: gemma4 block.
 pub struct Gemma4Block {
     attention: Gemma4Attention,

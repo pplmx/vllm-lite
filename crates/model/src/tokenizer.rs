@@ -11,6 +11,7 @@ pub enum TokenizerError {
     },
 }
 
+#[derive(Debug)]
 /// Tokenizer: tokenizer.
 pub struct Tokenizer {
     inner: Option<Box<HFTokenizer>>,

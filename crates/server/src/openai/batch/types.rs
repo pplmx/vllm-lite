@@ -119,7 +119,7 @@ pub enum BatchStatus {
 }
 
 /// `BatchJob`: batch job.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct BatchJob {
     pub id: String,
     pub endpoint: BatchEndpoint,

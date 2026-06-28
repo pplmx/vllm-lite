@@ -1,6 +1,7 @@
 use super::trait_def::{PriorityScore, SchedulingContext, SchedulingPolicy};
 use crate::types::Sequence;
 
+#[derive(Debug)]
 /// `FcfsPolicy`: fcfs policy.
 pub struct FcfsPolicy;
 

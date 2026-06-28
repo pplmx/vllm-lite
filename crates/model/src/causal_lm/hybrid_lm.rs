@@ -23,6 +23,7 @@ pub trait HybridLmConfig: Clone {
     fn num_kv_heads(&self) -> usize;
 }
 
+#[derive(Debug)]
 /// `HybridLm`: hybrid lm.
 pub struct HybridLm<B, Norm, C> {
     config: C,

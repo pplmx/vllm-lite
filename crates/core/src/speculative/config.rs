@@ -76,7 +76,7 @@ impl SpeculationConfig {
 }
 
 /// `SpeculationConfigBuilder`: speculation config builder.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct SpeculationConfigBuilder {
     config: SpeculationConfig,
 }

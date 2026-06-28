@@ -2,6 +2,7 @@
 
 use vllm_traits::{Batch, BatchPhase, SeqId, TokenId};
 
+#[derive(Debug)]
 /// `RequestBuilder`: request builder.
 pub struct RequestBuilder {
     seq_id: SeqId,
@@ -36,6 +37,7 @@ impl RequestBuilder {
         (self.seq_id, self.tokens, self.max_tokens)
     }
 }
+#[derive(Debug)]
 
 /// `BatchBuilder`: batch builder.
 pub struct BatchBuilder {

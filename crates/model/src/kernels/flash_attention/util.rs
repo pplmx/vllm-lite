@@ -6,7 +6,7 @@
 use candle_core::{Result, Tensor};
 
 /// `AttentionStats`: attention statistics.
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct AttentionStats {
     pub forward_count: u64,
     pub tiled_forward_count: u64,

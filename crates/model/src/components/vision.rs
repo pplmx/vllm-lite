@@ -32,6 +32,7 @@ impl VisionConfig {
     }
 }
 
+#[derive(Debug)]
 /// `PatchEmbed`: patch embed.
 pub struct PatchEmbed {
     proj: Linear,
@@ -51,6 +52,7 @@ impl PatchEmbed {
         self.proj.forward(x)
     }
 }
+#[derive(Debug)]
 
 /// Placeholder vision tower until a vision-language architecture is wired in.
 pub struct VisionEncoder {

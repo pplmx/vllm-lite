@@ -2,6 +2,7 @@ use crate::components::AttentionConfig;
 use crate::components::MlaAttention;
 use candle_core::{Result, Tensor};
 
+#[derive(Debug)]
 /// `Qwen3MlaAttention`: qwen3 mla attention.
 pub struct Qwen3MlaAttention {
     inner: MlaAttention,

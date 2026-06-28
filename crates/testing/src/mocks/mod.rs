@@ -89,6 +89,7 @@ impl ModelBackend for StubModel {
 }
 
 /// Model that returns `seq_id` + 1 as next token.
+#[derive(Debug)]
 /// Used in: integration tests.
 pub struct IncrementModel;
 
@@ -157,6 +158,7 @@ impl ModelBackend for IncrementModel {
 }
 
 /// Model that always returns a constant token.
+#[derive(Debug)]
 /// Used in: integration tests.
 #[derive(Clone)]
 pub struct ConstModel {
@@ -233,6 +235,7 @@ impl ModelBackend for ConstModel {
         32
     }
 }
+#[derive(Debug)]
 
 /// Model that returns `seq_id` % `vocab_size` as next token.
 /// Used in: model tests.

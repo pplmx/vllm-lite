@@ -17,6 +17,7 @@ use vllm_traits::{BatchOutput, ModelBackend, ModelError, Result as ModelResult, 
 // ─────────────────────────── Stub Backend ────────────────────────────
 
 /// Configurable stub backend. Tracks `forward()` call count + last input,
+#[derive(Debug)]
 /// supports per-instance "fail next N calls" for runtime-error testing.
 pub struct StubBackend {
     pub id: String,
@@ -112,6 +113,16 @@ pub struct MapLoader {
     pub load_count: AtomicU64,
 }
 
+impl std::fmt::Debug for MapLoader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let count = self.backends.lock().map(|m| m.len()).unwrap_or(0);
+        f.debug_struct("MapLoader")
+            .field("backends_count", &count)
+            .field("load_count", &self.load_count)
+            .finish()
+    }
+}
+
 impl MapLoader {
     #[must_use]
     pub fn new() -> Self {
@@ -155,6 +166,19 @@ pub struct Harness {
     /// backends, not a separate `MapLoader` instance.
     pub loader: Arc<MapLoader>,
     pub self_spec: Arc<Mutex<Box<dyn ModelBackend>>>,
+}
+
+impl std::fmt::Debug for Harness {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Harness")
+            .field("registry", &self.registry)
+            .field("budget", &self.budget)
+            .field("resolver", &self.resolver)
+            .field("metrics", &self.metrics)
+            .field("loader", &self.loader)
+            .field("self_spec", &"<dyn ModelBackend>")
+            .finish()
+    }
 }
 
 #[must_use]

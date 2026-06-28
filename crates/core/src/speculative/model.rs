@@ -16,6 +16,17 @@ pub struct SpeculativeModel<M: ModelBackend> {
     strategy: RejectionStrategy,
 }
 
+impl<M: ModelBackend + std::fmt::Debug> std::fmt::Debug for SpeculativeModel<M> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SpeculativeModel")
+            .field("target_model", &self.target_model)
+            .field("verifier", &"<dyn DraftVerifier>")
+            .field("config", &self.config)
+            .field("strategy", &self.strategy)
+            .finish()
+    }
+}
+
 impl<M: ModelBackend> SpeculativeModel<M> {
     pub fn new(
         target_model: M,

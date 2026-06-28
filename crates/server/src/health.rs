@@ -33,6 +33,7 @@ impl HealthStatus {
     }
 }
 
+#[derive(Debug)]
 /// Health checker for liveness and readiness probes
 pub struct HealthChecker {
     alive: bool,

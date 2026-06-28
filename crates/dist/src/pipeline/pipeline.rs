@@ -2,6 +2,7 @@ use super::stage::{PipelineStage, StageInput, StageOutput};
 use candle_core::Result;
 use std::sync::Arc;
 
+#[derive(Debug)]
 /// `PipelineParallel`: pipeline parallel.
 pub struct PipelineParallel {
     stages: Vec<Arc<dyn PipelineStage>>,
@@ -134,6 +135,7 @@ mod tests {
     use candle_core::{Device, Tensor};
     use std::sync::Mutex;
 
+    #[derive(Debug)]
     struct MockStage {
         config: PipelineStageConfig,
         processed_count: Mutex<usize>,

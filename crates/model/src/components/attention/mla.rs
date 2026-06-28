@@ -6,6 +6,7 @@ use candle_nn::Linear;
 use super::AttentionConfig;
 use crate::components::positional::rope::apply_rope;
 
+#[derive(Debug)]
 /// `MlaAttention`: mla attention.
 pub struct MlaAttention {
     q_proj: Linear,

@@ -7,6 +7,7 @@ use crate::components::positional::apply_rope;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 
+#[derive(Debug)]
 /// `RopeGqaAttention`: rope gqa attention.
 pub struct RopeGqaAttention {
     inner: SharedGqaAttention,

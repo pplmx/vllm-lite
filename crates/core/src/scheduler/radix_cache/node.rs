@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use vllm_traits::{BlockId, TokenId};
 
+#[derive(Debug)]
 /// Radix Tree node
 pub struct RadixNode {
     /// Token sequence for this node

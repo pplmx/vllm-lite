@@ -13,6 +13,7 @@ use candle_nn::Linear;
 use tracing::trace;
 
 /// `Gemma4Attention`: gemma4 attention.
+#[derive(Debug)]
 pub(crate) struct Gemma4Attention {
     q_proj: Linear,
     k_proj: Linear,

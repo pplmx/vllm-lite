@@ -90,6 +90,7 @@ impl TestHarnessConfig {
 ///
 /// let mut scheduler = harness.scheduler();
 /// let seq_id = scheduler.add_request(Request::new(0, vec![1, 2, 3], 10));
+#[derive(Debug)]
 /// ```
 pub struct TestHarness {
     pub config: TestHarnessConfig,

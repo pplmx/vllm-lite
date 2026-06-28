@@ -76,6 +76,7 @@ pub enum MetricsError {
     ExportFailed(String),
 }
 
+#[derive(Debug)]
 /// Prometheus metrics exporter
 pub struct PrometheusExporter {
     collector: Arc<EnhancedMetricsCollector>,

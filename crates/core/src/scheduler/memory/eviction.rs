@@ -2,13 +2,14 @@ use crate::types::{BlockId, Sequence, Status};
 use std::collections::{HashMap, VecDeque};
 
 /// `EvictionPolicyStats`: eviction policy statistics.
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct EvictionPolicyStats {
     pub total_evictions: usize,
     pub total_selections: usize,
     pub cache_hits: usize,
 }
 
+#[derive(Debug)]
 /// `EvictionPolicy`: eviction policy.
 pub struct EvictionPolicy {
     block_access_order: VecDeque<BlockId>,

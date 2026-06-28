@@ -6,6 +6,7 @@ use tracing::trace;
 
 use super::{AttentionConfig, GqaFlashAttention, expand_kv, paged_attention, tiled_attention};
 
+#[derive(Debug)]
 /// `GqaAttention`: gqa attention.
 pub struct GqaAttention {
     q_proj: Linear,

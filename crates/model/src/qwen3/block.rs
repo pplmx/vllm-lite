@@ -11,6 +11,7 @@ use std::ops::Deref;
 #[cfg(feature = "multi-node")]
 use vllm_dist::TensorParallelConfig;
 
+#[derive(Debug)]
 /// Qwen3 decoder layer wrapping the shared RoPE-GQA block.
 pub struct TransformerBlock(RopeGqaDecoderBlock);
 

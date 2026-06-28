@@ -12,6 +12,7 @@ use crate::components::attention::paged_gqa::{
 use crate::components::positional::MRoPE;
 use crate::paged_tensor::PagedKvCache;
 
+#[derive(Debug)]
 /// `Attention35WithRoPE`: attention35 with ro pe.
 pub struct Attention35WithRoPE {
     q_proj: Linear,

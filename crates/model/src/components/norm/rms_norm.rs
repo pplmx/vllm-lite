@@ -2,6 +2,7 @@
 
 use candle_core::{Module, Result, Tensor};
 
+#[derive(Debug)]
 /// `RmsNorm`: rms norm.
 pub struct RmsNorm {
     weight: Tensor,

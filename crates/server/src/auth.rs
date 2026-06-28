@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
+#[derive(Debug)]
 /// `AuthMiddleware`: auth middleware.
 pub struct AuthMiddleware {
     api_keys: Arc<Vec<String>>,
@@ -16,6 +17,7 @@ pub struct AuthMiddleware {
 }
 
 /// `RateLimiter`: rate limiter.
+#[derive(Debug)]
 pub(crate) struct RateLimiter {
     requests: HashMap<String, Vec<Instant>>,
     max_requests: usize,

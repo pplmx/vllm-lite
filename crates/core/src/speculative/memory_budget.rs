@@ -49,6 +49,7 @@ struct MemoryBudgetInner {
     used_drafts_bytes: u64,
 }
 
+#[derive(Debug)]
 /// `MemoryBudget`: memory budget.
 pub struct MemoryBudget {
     inner: RwLock<MemoryBudgetInner>,

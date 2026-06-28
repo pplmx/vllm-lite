@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// `MetricsSnapshot`: metrics snapshot.
-#[derive(Clone, Serialize, Default)]
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct MetricsSnapshot {
     pub tokens_total: u64,
     pub requests_total: u64,
@@ -22,6 +22,7 @@ pub struct MetricsSnapshot {
     pub avg_scheduler_wait_time_ms: f64,
 }
 
+#[derive(Debug)]
 /// `LockFreeMetrics`: lock free metrics.
 pub struct LockFreeMetrics {
     tokens_total: Arc<AtomicU64>,

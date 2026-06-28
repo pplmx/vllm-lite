@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 /// `SchedulerStats`: scheduler statistics.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct SchedulerStats {
     pub total_batches: usize,
     pub total_prefill_requests: usize,

@@ -10,6 +10,7 @@ use crate::qwen3_5::attention35::Attention35WithRoPE;
 use candle_core::{Module, Result as CandleResult, Tensor};
 use candle_nn::{LayerNorm, Linear, VarBuilder};
 
+#[derive(Debug)]
 /// `FullAttentionBlock35`: full attention block35.
 pub struct FullAttentionBlock35 {
     input_ln: LayerNorm,

@@ -2,6 +2,7 @@ use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;
 
 /// `GeGLU`: ge glu.
+#[derive(Debug)]
 pub(crate) struct GeGLU {
     gate_proj: Linear,
     up_proj: Linear,

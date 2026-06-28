@@ -7,6 +7,7 @@ use candle_nn::{Conv1d, Linear, VarBuilder, conv1d};
 
 use crate::components::ssm::error::SSMError;
 
+#[derive(Debug)]
 /// `SSMHarmonicSSMLayer`: ssm harmonic ssm layer.
 pub struct SSMHarmonicSSMLayer {
     x_proj: Linear,
