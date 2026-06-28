@@ -32,6 +32,7 @@ optional = true
 [dev-dependencies]
 criterion = "0.8"
 pprof = { workspace = true }
+proptest = { workspace = true }
 vllm-testing = { path = "../testing" }
 
 [[bench]]

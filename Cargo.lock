@@ -4107,6 +4107,7 @@ dependencies = [
  "opentelemetry",
  "parking_lot",
  "pprof",
+ "proptest",
  "rand 0.10.1",
  "serde",
  "thiserror 2.0.18",
