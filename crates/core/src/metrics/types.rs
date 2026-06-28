@@ -28,29 +28,36 @@ pub enum MetricValue {
 }
 
 impl MetricValue {
+    /// Construct a zero-initialized counter.
     #[must_use]
     pub const fn new_counter() -> Self {
         Self::Counter(AtomicU64::new(0))
     }
 
+    /// Construct a zero-initialized gauge.
     #[must_use]
     pub const fn new_gauge() -> Self {
         Self::Gauge(AtomicU64::new(0))
     }
 
+    /// Add `delta` to the value. No-op when this is a Gauge or Histogram —
+    /// use [`Self::set`] for gauges instead.
     pub fn increment(&self, delta: u64) {
         if let Self::Counter(c) = self {
             c.fetch_add(delta, Ordering::Relaxed);
         }
     }
 
+    /// Overwrite the value. No-op when this is a Counter or Histogram —
+    /// use [`Self::increment`] for counters instead.
     pub fn set(&self, value: u64) {
         if let Self::Gauge(g) = self {
             g.store(value, Ordering::Relaxed);
         }
     }
 
-    /// `as_u64`: as u64.
+    /// Read the current value as a `u64`. Returns 0 for Histogram variants
+    /// (use dedicated histogram accessors for those).
     pub fn as_u64(&self) -> u64 {
         match self {
             Self::Counter(c) => c.load(Ordering::Relaxed),

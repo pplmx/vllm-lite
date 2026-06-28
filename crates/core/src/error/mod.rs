@@ -1,4 +1,11 @@
 #![allow(clippy::module_name_repetitions)]
+//! Engine-level error types and inter-crate `From` conversions.
+//!
+//! Every fallible operation in `vllm-core` returns [`Result<T, EngineError>`]
+//! (alias [`Result`]). Variants cover the four major failure modes:
+//! request validation, model forward errors, scheduler timeouts, and
+//! resource exhaustion (e.g. KV-cache blocks, draft memory budget).
+
 pub mod recovery;
 
 /// `EngineError`: engine error.
