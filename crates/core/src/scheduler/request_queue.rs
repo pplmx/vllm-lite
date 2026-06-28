@@ -44,6 +44,7 @@ pub struct RequestQueue {
 }
 
 impl RequestQueue {
+    /// Construct an empty queue.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -54,6 +55,9 @@ impl RequestQueue {
         }
     }
 
+    /// Insert `seq` into the queue. Computes its [`PriorityScore`] using
+    /// `policy` and records its current phase. If the sequence is already
+    /// queued (same `seq.id`), the call is a no-op.
     pub fn enqueue(
         &mut self,
         seq: Sequence,
@@ -88,6 +92,8 @@ impl RequestQueue {
         self.in_queue.insert(seq_id);
     }
 
+    /// Pop the highest-priority sequence from the queue and return it.
+    /// Stale heap entries (sequences removed out-of-band) are skipped.
     pub fn dequeue(&mut self) -> Option<Sequence> {
         while let Some(scheduled) = self.priority_queue.pop() {
             let seq_id = scheduled.seq_id;
@@ -109,6 +115,7 @@ impl RequestQueue {
         self.sequences.get(&seq_id)
     }
 
+    /// O(1) mutable lookup by sequence ID.
     pub fn get_mut(&mut self, seq_id: SeqId) -> Option<&mut Sequence> {
         self.sequences.get_mut(&seq_id)
     }
@@ -128,6 +135,9 @@ impl RequestQueue {
         }
     }
 
+    /// Remove and return every sequence currently in `phase`, in arbitrary
+    /// order. Lazy-cleans the priority heap afterwards to reclaim stale
+    /// entries.
     pub fn drain_by_phase(&mut self, phase: Phase) -> Vec<Sequence> {
         let ids: Vec<_> = self
             .phase_index
@@ -160,6 +170,7 @@ impl RequestQueue {
         self.sequences.is_empty()
     }
 
+    /// Number of sequences currently classified as `phase`.
     #[must_use]
     pub fn phase_len(&self, phase: Phase) -> usize {
         self.phase_index

@@ -50,12 +50,15 @@ pub struct GraphPreparedBatch {
 }
 
 impl GraphPreparedBatch {
+    /// Wrap a `Batch` for graph execution, caching its size to avoid
+    /// recomputing it on every dispatch.
     #[must_use]
     pub fn new(batch: Batch) -> Self {
         let batch_size = batch.seq_ids.len();
         Self { batch, batch_size }
     }
 
+    /// Unwrap back into the underlying [`Batch`].
     #[must_use]
     pub fn into_batch(self) -> Batch {
         self.batch
@@ -102,17 +105,19 @@ pub struct SchedulerCudaGraphConfigBuilder {
 }
 
 impl SchedulerCudaGraphConfigBuilder {
+    /// Set [`SchedulerCudaGraphConfig::enabled`].
     #[must_use]
     pub const fn with_enabled(mut self, v: bool) -> Self {
         self.inner.enabled = v;
         self
     }
+    /// Override [`SchedulerCudaGraphConfig::batch_sizes`].
     #[must_use]
     pub fn with_batch_sizes(mut self, v: Vec<usize>) -> Self {
         self.inner.batch_sizes = v;
         self
     }
-    /// build: build the [`SchedulerCudaGraphConfig`].
+    /// Finalize the builder into a [`SchedulerCudaGraphConfig`].
     #[must_use]
     pub fn build(self) -> SchedulerCudaGraphConfig {
         self.inner
