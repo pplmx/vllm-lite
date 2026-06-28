@@ -54,14 +54,13 @@ impl TlsConfig {
     ///
     /// Returns `Err` if the operation fails.
     pub fn load(&self) -> Result<ServerConfig, TlsError> {
-        let cert_bytes = fs::read(&self.cert_path)
-            .map_err(|e| TlsError::CertificateRead(e.to_string()))?;
+        let cert_bytes =
+            fs::read(&self.cert_path).map_err(|e| TlsError::CertificateRead(e.to_string()))?;
         let cert_chain: Vec<CertificateDer<'static>> = CertificateDer::pem_slice_iter(&cert_bytes)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| TlsError::InvalidConfig(format!("Invalid certificate: {e:?}")))?;
 
-        let key_bytes =
-            fs::read(&self.key_path).map_err(|e| TlsError::KeyRead(e.to_string()))?;
+        let key_bytes = fs::read(&self.key_path).map_err(|e| TlsError::KeyRead(e.to_string()))?;
         let key = PrivateKeyDer::from_pem_slice(&key_bytes)
             .map_err(|e| TlsError::InvalidConfig(format!("Invalid key: {e:?}")))?;
 
@@ -72,12 +71,11 @@ impl TlsConfig {
                         .to_string(),
                 )
             })?;
-            let ca_bytes = fs::read(ca_cert_path)
-                .map_err(|e| TlsError::CertificateRead(e.to_string()))?;
-            let ca_chain: Vec<CertificateDer<'static>> =
-                CertificateDer::pem_slice_iter(&ca_bytes)
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|e| TlsError::InvalidConfig(format!("Invalid CA: {e:?}")))?;
+            let ca_bytes =
+                fs::read(ca_cert_path).map_err(|e| TlsError::CertificateRead(e.to_string()))?;
+            let ca_chain: Vec<CertificateDer<'static>> = CertificateDer::pem_slice_iter(&ca_bytes)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| TlsError::InvalidConfig(format!("Invalid CA: {e:?}")))?;
 
             let mut root_store = RootCertStore::empty();
             for cert in ca_chain {
