@@ -3,13 +3,12 @@ pub mod arch;
 pub mod attention35;
 pub mod block;
 pub mod config;
-pub mod gated_delta;
 pub mod model;
 pub mod register;
-pub mod ssm;
 pub mod weights;
 
 pub use attention35::Attention35WithRoPE;
+pub use crate::components::gated_delta::{GatedDeltaConfig, GatedDeltaNet, GatedDeltaState};
+pub use crate::components::ssm::{MambaBlock, SSMConfig, SSMError, SSMLayer};
 pub use config::{LayerType, parse_layer_types};
-pub use gated_delta::{GatedDeltaNet, GatedDeltaState};
 pub use model::Qwen35HybridModel;
