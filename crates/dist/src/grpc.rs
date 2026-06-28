@@ -40,7 +40,7 @@ impl GrpcState {
 
 /// NodeServiceImpl: node service impl.
 #[derive(Debug)]
-pub struct NodeServiceImpl {
+pub(crate) struct NodeServiceImpl {
     state: GrpcState,
 }
 

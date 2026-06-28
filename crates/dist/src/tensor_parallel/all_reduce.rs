@@ -76,7 +76,7 @@ impl AllReduce for NcclAllReduce {
 /// Passes inputs through unchanged. Used in single-node deployments where
 /// there is nothing to reduce across ranks.
 #[derive(Debug, Default, Clone, Copy)]
-pub struct NoopAllReduce;
+pub(crate) struct NoopAllReduce;
 
 impl AllReduce for NoopAllReduce {
     fn all_reduce(&self, input: &[f32], _op: ReduceOp) -> Result<Vec<f32>, TensorParallelError> {
