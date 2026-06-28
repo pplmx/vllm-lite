@@ -15,17 +15,19 @@
 > **Note on `--baseline skip`:** The `just mutants` recipe uses
 > `--baseline skip` as a documented workaround for a pre-existing
 > baseline-test failure at `crates/core/tests/cuda_graph_integration.rs:148`
-> (`assert!(engine.cuda_graph_enabled())`). Without that flag, the
-> unmutated build itself fails its own test suite. This is why the
-> single missed mutation in `cuda_graph.rs:39` cannot be caught by the
-> current test set (see "Missed Mutations" below).
+> (`assert!(engine.cuda_graph_enabled())`) in
+> `test_end_to_end_engine_with_cuda_graph_config`. Without that flag,
+> the unmutated build itself fails its own test suite. The K-2.3 fix
+> closes the mutation gap (see "Resolution (K-2.3)") but does not
+> remove the underlying baseline failure, so `--baseline skip` is
+> still required.
 
 ## Summary
 
 | Status              | Count |
 |---------------------|-------|
-| Caught              | 140   |
-| Missed (survived)   | 1     |
+| Caught              | 141   |
+| Missed (survived)   | 0     |
 | Timeout             | 0     |
 | Unviable            | 16    |
 | **Total**           | **157** |
@@ -34,15 +36,14 @@
 
 Strict score (caught / (caught + missed)):
 
-**Score = 140 / (140 + 1) = 99.29%**
+**Score = 141 / (141 + 0) = 100.00%**
 
 Conservative score (counting timeouts as missed):
 
-**Score = 140 / (140 + 1 + 0) = 99.29%**
+**Score = 141 / (141 + 0 + 0) = 100.00%**
 
-The `engine` module is at **99.29% strict mutation score**. The single
-missed mutation is **unreachable via the current test set** because the
-test that would catch it is excluded by `--baseline skip`. See below.
+The `engine` module is at **100% strict mutation score** as of K-2.3.
+See "Resolution (K-2.3)" below for the fix that closed the prior gap.
 
 ## Per-File Breakdown
 
@@ -53,14 +54,14 @@ test that would catch it is excluded by `--baseline skip`. See below.
 | `crates/core/src/engine/graph_step.rs`            |    12 |     12 |      0 |        0 | 100%  |
 | `crates/core/src/engine/draft_management.rs`      |    17 |     17 |      0 |        0 | 100%  |
 | `crates/core/src/engine/beam.rs`                  |    17 |     15 |      0 |        2 | 100%  |
-| `crates/core/src/engine/cuda_graph.rs`            |     5 |      4 |      1 |        0 |  80%  |
+| `crates/core/src/engine/cuda_graph.rs`            |     5 |      5 |      0 |        0 | 100%  |
 | `crates/core/src/engine/lifecycle.rs`             |    11 |     11 |      0 |        0 | 100%  |
 | `crates/core/src/engine/run.rs`                   |     9 |      9 |      0 |        0 | 100%  |
 | `crates/core/src/engine/spec_dispatch/dispatch.rs`|    20 |     20 |      0 |        0 | 100%  |
 | `crates/core/src/engine/spec_dispatch/drafts.rs`  |    10 |     10 |      0 |        0 | 100%  |
 | `crates/core/src/engine/spec_dispatch/verify.rs`  |    26 |     26 |      0 |        0 | 100%  |
 | `crates/core/src/engine/spec_dispatch/warmup.rs`  |     2 |      2 |      0 |        0 | 100%  |
-| **Total**                                         | **157** | **140** | **1** | **16** | **99.29%** |
+| **Total**                                         | **157** | **141** | **0** | **16** | **100.00%** |
 
 (`ctor.rs` and `beam.rs` carry a high unviable count because their
 mutations often produce bodies that won't compile against the trait
@@ -69,13 +70,15 @@ contracts they implement — e.g. replacing a function body with
 
 ## Missed Mutations
 
-**1 mutation survived:**
+**0 mutations survived** as of K-2.3.
 
-| Location                                | Mutation                                                                                          |
-|-----------------------------------------|---------------------------------------------------------------------------------------------------|
-| `crates/core/src/engine/cuda_graph.rs:39:9` | replace `Engine::cuda_graph_enabled -> bool` (non-cuda-graph cfg variant) with `true`           |
+## Resolution (K-2.3)
 
-### Root cause
+The previously-missed mutation
+`replace Engine::cuda_graph_enabled -> bool with true` at
+`crates/core/src/engine/cuda_graph.rs:39:9` is now caught.
+
+### Root cause (pre-K-2.3)
 
 The mutation targets the `#[cfg(not(feature = "cuda-graph"))]` branch of
 `Engine::cuda_graph_enabled`, which returns the constant `false`:
@@ -90,54 +93,52 @@ pub fn cuda_graph_enabled(&self) -> bool {
 }
 
 #[cfg(not(feature = "cuda-graph"))]
-pub fn cuda_graph_enabled(&self) -> bool {     // <-- mutated at line 39
+pub fn cuda_graph_enabled(&self) -> bool {     // <-- was mutated at line 39
     false
 }
 ```
 
 Replacing `false` with `true` would change behaviour in any test that
-runs without the `cuda-graph` feature. There is exactly one such
-assertion — `crates/core/tests/cuda_graph_integration.rs:148`:
+runs without the `cuda-graph` feature. The only such assertion,
+`crates/core/tests/cuda_graph_integration.rs:148`, expected the
+*opposite* — it asserted `engine.cuda_graph_enabled()` is `true` while
+constructing an Engine under the non-cuda-graph feature. That
+assertion therefore failed on the baseline (the unmutated, non-cuda-graph
+build always returns `false`). The `just mutants` recipe passes
+`--baseline skip` so cargo-mutants doesn't bail out before scanning;
+as a side effect, the failing baseline test was ignored by mutation
+detection, leaving the mutation un-caught.
+
+### Fix
+
+Added `test_cuda_graph_disabled_when_feature_off` to
+`crates/core/tests/cuda_graph_integration.rs`, gated with
+`#[cfg(not(feature = "cuda-graph"))]`. It constructs an `Engine` with
+default `SchedulerConfig` and asserts `!engine.cuda_graph_enabled()`.
 
 ```rust
-let engine = Engine::with_config(target_model, None, config, 4, 1024);
-assert!(engine.cuda_graph_enabled());   // expects `true`
+#[test]
+#[cfg(not(feature = "cuda-graph"))]
+fn test_cuda_graph_disabled_when_feature_off() {
+    // ...
+    let engine = Engine::with_config(target_model, None, config, 4, 1024);
+    assert!(!engine.cuda_graph_enabled());
+}
 ```
 
-This assertion **fails on the baseline** (the unmutated, non-cuda-graph
-build always returns `false`). The `just mutants` recipe therefore
-passes `--baseline skip` so cargo-mutants doesn't bail out before
-scanning. As a side effect, the suite that would catch the `false→true`
-flip at `cuda_graph.rs:39` is the very suite being skipped.
+This test:
+- Passes on the unmutated baseline (because `cuda_graph_enabled()` does
+  return `false` without the feature), so it does NOT contribute to the
+  pre-existing baseline-failure that requires `--baseline skip`.
+- Catches the `false → true` mutation at `cuda_graph.rs:39` because
+  the mutated function would return `true` and the assertion fails.
 
-### Why this mutation is unrecoverable inside K-2.x
+### Followup (not done in K-2.3)
 
-The test at `cuda_graph_integration.rs:148` is the only assertion that
-distinguishes a `false` return from a `true` return in the non-cuda-graph
-build. That test is **incompatible with the no-cuda-graph build** (it
-asserts the opposite of the default behaviour). It can only pass when
-the `cuda-graph` feature is enabled — but in that build, `cuda_graph.rs`
-line 39 isn't even compiled (the cfg-gated branch at line 30 is), so
-the mutation isn't generated there either.
-
-### Resolution (deferred to v31+)
-
-Two paths exist; both require fixing the test, not the production code:
-
-1. **Make the test cfg-aware.** Gate `cuda_graph_integration.rs:148`
-   (or the whole file) with `#[cfg(feature = "cuda-graph")]`. Drop
-   `--baseline skip` from `just mutants`. The mutation will then be
-   exercised under the feature build (where it currently isn't
-   generated) and remain untested in the default build.
-
-2. **Add a symmetric no-feature assertion** — a new test that
-   constructs an `Engine` and asserts `!engine.cuda_graph_enabled()` in
-   a default-features build. That test catches the mutation AND fixes
-   the baseline failure (since `!false` holds). Drop `--baseline skip`.
-
-Either fix is out of scope for K-2.2/K-2.3 (both target mutation
-triages, not test-suite infrastructure work). The justfile comment
-already records this as a v31+ task.
+The pre-existing `test_end_to_end_engine_with_cuda_graph_config`
+(at `cuda_graph_integration.rs:148`) still fails on the no-cuda-graph
+baseline and continues to require `--baseline skip`. Fixing it is
+tracked separately.
 
 ## Timeout Mutants
 
@@ -162,17 +163,20 @@ require no test-side remediation.
 
 ## Next Actions
 
-- **K-2.2 (triage) — NOT NEEDED.** The single missed mutation has a
-  well-understood, already-documented root cause (baseline test
-  incompatibility + `--baseline skip`). No triage work to perform.
-- **K-2.3 (add tests) — DEFERRED.** Writing a test that catches the
-  missed mutation requires first fixing
-  `cuda_graph_integration.rs:148` (option 1 or 2 above) and removing
-  `--baseline skip` from `just mutants`. That is a test-infrastructure
-  change, not a mutation-driven test addition, and is already tracked
-  as a v31+ follow-up in the justfile comment.
-- The engine module's production mutation coverage is effectively
-  complete: 140/140 of every compilable mutation was caught.
+- **K-2.2 (triage) — DONE.** Root cause of the previously-missed
+  mutation documented under "Resolution (K-2.3)".
+- **K-2.3 (add tests) — DONE.** Added
+  `test_cuda_graph_disabled_when_feature_off`; re-scan shows
+  141 / (141 + 0) = 100% strict mutation score.
+- The engine module's production mutation coverage is complete:
+  141 / 141 of every compilable mutation was caught.
+- The pre-existing baseline-failure at
+  `cuda_graph_integration.rs:148`
+  (`test_end_to_end_engine_with_cuda_graph_config` asserts the
+  cuda-graph feature is on while running in a default-features build)
+  remains and still requires `--baseline skip`. This is unrelated to
+  mutation score and is tracked as a separate test-infrastructure
+  cleanup task.
 
 ## Reproducing
 
@@ -189,7 +193,7 @@ The `just mutants` recipe handles the directory-vs-file glob, applies
 Artifacts:
 - `.mutants-out/mutants.out/mutants.json` — full mutation definitions
 - `.mutants-out/mutants.out/outcomes.json` — per-mutant run summary
-- `.mutants-out/mutants.out/caught.txt` — 140 caught mutations
-- `.mutants-out/mutants.out/missed.txt` — 1 missed mutation
+- `.mutants-out/mutants.out/caught.txt` — 141 caught mutations
+- `.mutants-out/mutants.out/missed.txt` — 0 missed mutations
 - `.mutants-out/mutants.out/timeout.txt` — 0 timeouts
 - `.mutants-out/mutants.out/unviable.txt` — 16 unviable mutations
