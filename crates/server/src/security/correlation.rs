@@ -4,11 +4,11 @@ use tokio::sync::RwLock;
 use tracing::info;
 
 /// REQUEST_ID_HEADER: request id header constant.
-pub const REQUEST_ID_HEADER: &str = "X-Request-ID";
+pub(crate) const REQUEST_ID_HEADER: &str = "X-Request-ID";
 
 /// CorrelationId: correlation id.
 #[derive(Debug, Clone)]
-pub struct CorrelationId(pub String);
+pub(crate) struct CorrelationId(pub String);
 
 /// CorrelationIdMiddleware: correlation id middleware.
 #[derive(Clone)]

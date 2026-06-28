@@ -26,7 +26,7 @@ impl ChatTemplate {
     }
 }
 
-pub fn build_prompt(template: ChatTemplate, messages: &[ChatMessage]) -> String {
+pub(crate) fn build_prompt(template: ChatTemplate, messages: &[ChatMessage]) -> String {
     match template {
         ChatTemplate::ChatMl => build_chatml_prompt(messages),
         ChatTemplate::Llama3 => build_llama3_prompt(messages),
