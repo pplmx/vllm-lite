@@ -1,81 +1,12 @@
+// crates/model/src/kernels/flash_attention/kernel.rs
+//
+// Flash attention kernel implementations:
+// `FlashAttention` trait, `ScaledDotProductAttention`, `FlashAttentionV2`,
+// and the high-level `FlashAttentionKernel` dispatcher.
+
+use super::config::{select_tile_size, AttentionVariant, FlashAttentionConfig};
+use super::util::softmax_last_dim;
 use candle_core::{Result, Tensor};
-
-/// AttentionVariant: attention variant enumeration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum AttentionVariant {
-    #[default]
-    Standard,
-    Tiled,
-    Flash,
-    FlashV2,
-}
-
-/// FlashAttentionConfig: flash attention configuration.
-#[derive(Debug, Clone, Default)]
-pub struct FlashAttentionConfig {
-    pub variant: AttentionVariant,
-    pub flash_block_size: usize,
-    pub use_sliding_window: bool,
-    pub sliding_window_size: usize,
-    pub tile_sizes: Vec<usize>,
-    pub use_fused: bool,
-}
-
-impl FlashAttentionConfig {
-    pub fn new() -> Self {
-        Self {
-            variant: AttentionVariant::Standard,
-            flash_block_size: 128,
-            use_sliding_window: false,
-            sliding_window_size: 512,
-            tile_sizes: vec![64, 128, 256],
-            use_fused: true,
-        }
-    }
-
-    pub fn with_flash(mut self) -> Self {
-        self.variant = AttentionVariant::Flash;
-        self
-    }
-
-    /// with_flash_v2: with flash v2.
-    pub fn with_flash_v2(mut self) -> Self {
-        self.variant = AttentionVariant::FlashV2;
-        self
-    }
-
-    pub fn with_tiled(mut self, tile_size: usize) -> Self {
-        self.variant = AttentionVariant::Tiled;
-        self.flash_block_size = tile_size;
-        self
-    }
-
-    pub fn with_sliding_window(mut self, size: usize) -> Self {
-        self.use_sliding_window = true;
-        self.sliding_window_size = size;
-        self
-    }
-}
-
-pub fn select_tile_size(seq_len: usize, config: &FlashAttentionConfig) -> usize {
-    if seq_len <= 32 {
-        32
-    } else if seq_len <= 128 {
-        64
-    } else if seq_len <= 512 {
-        128
-    } else if seq_len <= 2048 {
-        256
-    } else {
-        config.tile_sizes.last().copied().unwrap_or(256)
-    }
-}
-
-pub fn should_use_tiled(seq_len: usize, head_dim: usize) -> bool {
-    let memory_standard = seq_len * seq_len * head_dim;
-    let memory_tiled = seq_len * 128 * head_dim * 2;
-    memory_standard > memory_tiled * 2
-}
 
 /// FlashAttention: flash attention trait.
 pub trait FlashAttention: Send + Sync {
@@ -89,26 +20,6 @@ pub trait FlashAttention: Send + Sync {
     ) -> Result<Tensor>;
     fn forward_tiled(&self, q: &Tensor, k: &Tensor, v: &Tensor, tile_size: usize)
     -> Result<Tensor>;
-}
-
-/// AttentionStats: attention statistics.
-#[derive(Clone, Default)]
-pub struct AttentionStats {
-    pub forward_count: u64,
-    pub tiled_forward_count: u64,
-    pub total_tokens: u64,
-}
-
-impl AttentionStats {
-    pub fn record_forward(&mut self, num_tokens: usize) {
-        self.forward_count += 1;
-        self.total_tokens += num_tokens as u64;
-    }
-
-    pub fn record_tiled(&mut self, num_tokens: usize) {
-        self.tiled_forward_count += 1;
-        self.total_tokens += num_tokens as u64;
-    }
 }
 
 /// ScaledDotProductAttention: scaled dot product attention.
@@ -493,15 +404,6 @@ impl ScaledDotProductAttention {
 
         self.forward(q, &k_window, &v_window)
     }
-}
-
-fn softmax_last_dim(t: &Tensor) -> Result<Tensor> {
-    let shape = t.dims();
-    let max_vals = t.max_keepdim(shape.len() - 1)?;
-    let t_shifted = t.broadcast_sub(&max_vals)?;
-    let exp = t_shifted.exp()?;
-    let sum = exp.sum_keepdim(shape.len() - 1)?;
-    exp.broadcast_div(&sum)
 }
 
 impl FlashAttention for ScaledDotProductAttention {
