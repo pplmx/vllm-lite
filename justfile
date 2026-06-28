@@ -92,3 +92,11 @@ bench:
 # Run quick benchmarks (core radix cache only)
 bench-quick:
     cargo bench -p vllm-core --bench radix_cache -- --sample-size 10
+
+# Run cargo audit (ignores RUSTSEC-2024-0436 paste unmaintained — see SECURITY.md)
+audit:
+    cargo audit --ignore RUSTSEC-2024-0436 --deny warnings
+
+# Run cargo audit (strict; will report the paste INFO warning)
+audit-strict:
+    cargo audit
