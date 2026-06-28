@@ -26,6 +26,17 @@
 
 ### Added
 
+- **Mutation Testing (v30.0 Phase K)** — cargo-mutants infrastructure + 1 real bug fixed:
+    - `cargo-mutants v27.1.0` installed as standalone tool
+    - justfile targets: `mutants MODULE`, `mutants-report`, `mutants-clean`, `mutants-score`, `mutants-ci MODULE BASELINE`
+    - `scripts/check_mutation_score.sh` regression checker
+    - Baseline scans across 4 modules: 907 mutants total, 100% mutation score strict, 0 missed
+    - **Real bug found & fixed**: `Engine::cuda_graph_enabled` mutation not caught in non-cuda-graph build → added cfg-gated test `test_cuda_graph_disabled_when_feature_off`
+    - Baseline reports: `docs/testing/mutation-{scheduler,sampling,speculative,engine}-baseline.md`
+    - Methodology: `docs/testing/mutation-testing.md`
+    - CI integration deferred to v31 (scan time + `--baseline skip` workaround)
+    - Total commits: 9 (K-1.1 through K-3.2)
+
 - **Fuzz Testing (v29.0)** — cargo-fuzz infrastructure + 3 fuzz targets:
     - `cargo-fuzz 0.13.2` scaffolded at `fuzz/` directory; nightly Rust toolchain required for sanitizer flags
     - `app_config_yaml`: fuzz `serde_saphyr::from_str::<AppConfig>` with arbitrary UTF-8 bytes
