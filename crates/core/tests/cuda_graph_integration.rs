@@ -147,3 +147,70 @@ fn test_end_to_end_engine_with_cuda_graph_config() {
     // Verify CUDA Graph is configured
     assert!(engine.cuda_graph_enabled());
 }
+
+/// Test that `cuda_graph_enabled()` returns `false` when the `cuda-graph`
+/// feature is NOT enabled. This catches the mutation
+/// `replace Engine::cuda_graph_enabled -> bool with true`
+/// (in the `#[cfg(not(feature = "cuda-graph"))]` branch of cuda_graph.rs:39).
+#[test]
+#[cfg(not(feature = "cuda-graph"))]
+fn test_cuda_graph_disabled_when_feature_off() {
+    #[derive(Clone)]
+    struct MockModel;
+
+    impl ModelBackend for MockModel {
+        fn forward(
+            &mut self,
+            seq_ids: &[u64],
+            _input_tokens: &[Vec<u32>],
+            _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
+        ) -> Result<BatchOutput, ModelError> {
+            Ok(BatchOutput {
+                seq_ids: seq_ids.to_vec(),
+                next_tokens: seq_ids.iter().map(|_| 42u32).collect(),
+            })
+        }
+
+        fn forward_logits(
+            &mut self,
+            _seq_ids: &[u64],
+            _input_tokens: &[Vec<u32>],
+            _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
+        ) -> Result<Vec<Vec<f32>>, ModelError> {
+            Ok(vec![])
+        }
+
+        fn embed(
+            &mut self,
+            _input_tokens: &[Vec<u32>],
+            _positions: &[Vec<usize>],
+        ) -> Result<Vec<Vec<f32>>, ModelError> {
+            Ok(vec![])
+        }
+
+        fn vocab_size(&self) -> usize {
+            151936
+        }
+
+        fn num_layers(&self) -> usize {
+            32
+        }
+
+        fn num_heads(&self) -> usize {
+            32
+        }
+    }
+
+    let config = SchedulerConfig::default();
+    let target_model = MockModel;
+    let engine = Engine::with_config(target_model, None, config, 4, 1024);
+    // Without the cuda-graph feature, this MUST return false.
+    // If a mutation changes it to return true, this assertion fails.
+    assert!(!engine.cuda_graph_enabled());
+}
