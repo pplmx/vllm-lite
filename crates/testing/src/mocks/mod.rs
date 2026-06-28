@@ -315,7 +315,7 @@ impl ModelBackend for FakeModel {
 
 /// Model that never progresses (always returns same token).
 /// Useful for testing timeouts and preemption.
-pub struct NeverProgressModel {
+pub(crate) struct NeverProgressModel {
     token: TokenId,
 }
 

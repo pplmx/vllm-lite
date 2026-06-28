@@ -81,7 +81,7 @@ pub trait PipelineStage: Send + Sync {
 /// holds no weights and cannot produce real outputs. Useful as a placeholder
 /// when pipeline parallelism is disabled.
 #[derive(Debug)]
-pub struct NoopPipelineStage {
+pub(crate) struct NoopPipelineStage {
     config: PipelineStageConfig,
 }
 
