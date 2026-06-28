@@ -93,6 +93,19 @@ bench:
 bench-quick:
     cargo bench -p vllm-core --bench radix_cache -- --sample-size 10
 
+# Run a single model-layer bench by name (H-2 to H-5)
+# On CPU-only environments these run a tiny smoke test + eprintln warning;
+# on GPU runners they exercise full standard qwen3-class dimensions.
+bench-model-one BENCH:
+    cargo bench -p vllm-model --bench {{BENCH}} -- --sample-size 10
+
+# Run all model-layer benches (CPU smoke only; ~1 min total on CPU)
+bench-model:
+    cargo bench -p vllm-model --no-fail-fast -- --sample-size 10
+
+# Run all benchmarks (core + model benches)
+bench-all: bench bench-model
+
 # Run cargo audit (ignores RUSTSEC-2024-0436 paste unmaintained — see SECURITY.md)
 audit:
     cargo audit --ignore RUSTSEC-2024-0436 --deny warnings
