@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v30.0
 milestone_name: Test Ecosystem & Docs Enhancement
-status: planned
-last_updated: "2026-06-28T22:30:00.000Z"
-last_activity: 2026-06-28
+status: in_progress
+last_updated: "2026-06-29T00:30:00.000Z"
+last_activity: 2026-06-29
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 6
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 17
 ---
 
 # Project State
@@ -24,14 +24,27 @@ See: .planning/PROJECT.md (updated 2026-06-28)
 
 ## Current Position
 
-Phase: v30.0 Phase K (Mutation Testing) — plan ready, awaiting execution
+Phase: v30.0 Phase K (Mutation Testing) — SHIPPED
 Plan: `docs/superpowers/plans/2026-06-28-v30-phase-k-mutation-testing.md`
 Spec: `docs/superpowers/specs/2026-06-28-v30-test-docs-design.md`
 Overview: `docs/superpowers/plans/2026-06-28-v30-overview.md`
-Status: 0/6 phases complete; 1212 tests pass (post v29.0); clippy/fmt/doc clean
-Last activity: 2026-06-28 — v30.0 spec + 6 plan files committed (Phase K detailed, L/M/N/O/P stubbed)
+Status: 1/6 phases complete; Phase K shipped (907 mutants, 100% strict score, 1 real test gap fixed)
+Next: Phase L (Fuzz CI) — see `docs/superpowers/plans/2026-06-28-v30-phase-l-fuzz-ci.md`
+Last activity: 2026-06-29 — Phase K complete; CHANGELOG + STATE updated
 
 ## Performance Metrics
+
+**v30.0 Phase K Outcomes:**
+
+- cargo-mutants v27.1.0 installed and configured
+- 4 modules scanned (scheduler/, sampling.rs, speculative/, engine/): 907 mutants, 100% strict mutation score
+- Real bug fixed: Engine::cuda_graph_enabled mutation now caught
+- justfile targets: 5 (mutants, mutants-report, mutants-clean, mutants-score, mutants-ci)
+- scripts/check_mutation_score.sh regression checker
+- 4 baseline reports committed
+- 1 methodology doc committed
+- CI integration deferred to v31 (scan time + --baseline skip workaround)
+- Total commits: 9
 
 **Velocity (v23.0 actual — MILESTONE COMPLETE):**
 
