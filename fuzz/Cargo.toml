@@ -12,6 +12,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 serde-saphyr = "0.0.27"
 serde = { version = "1", features = ["derive"] }
+safetensors = "0.7.0"
 
 [dependencies.vllm-core]
 path = "../crates/core"
@@ -29,6 +30,13 @@ bench = false
 [[bin]]
 name = "app_config_yaml"
 path = "fuzz_targets/app_config_yaml.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "safetensors_header"
+path = "fuzz_targets/safetensors_header.rs"
 test = false
 doc = false
 bench = false
