@@ -6,7 +6,7 @@ use std::time::Duration;
 
 /// Severity level for errors
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ErrorSeverity {
+pub(crate) enum ErrorSeverity {
     Warning,        // Log and continue
     Retryable,      // Attempt retry with backoff
     Degradable,     // Switch to fallback mode
@@ -32,7 +32,7 @@ impl ErrorSeverity {
 
 /// Recovery action to take
 #[derive(Debug, Clone)]
-pub enum RecoveryAction {
+pub(crate) enum RecoveryAction {
     Retry { max_attempts: usize },
     Degrade { component: String },
     OpenCircuit { component: String },
@@ -41,14 +41,14 @@ pub enum RecoveryAction {
 }
 
 /// Manager for error recovery
-pub struct RecoveryManager {
+pub(crate) struct RecoveryManager {
     circuit_breakers: dashmap::DashMap<String, CircuitBreaker>,
     config: RecoveryConfig,
 }
 
 /// RecoveryConfig: recovery configuration.
 #[derive(Debug, Clone)]
-pub struct RecoveryConfig {
+pub(crate) struct RecoveryConfig {
     pub retry_attempts: usize,
     pub retry_base_delay: Duration,
     pub default_circuit_breaker: CircuitBreakerConfig,
@@ -74,7 +74,7 @@ impl RecoveryConfig {
 
 /// Builder for [`RecoveryConfig`].
 #[derive(Debug, Clone, Default)]
-pub struct RecoveryConfigBuilder {
+pub(crate) struct RecoveryConfigBuilder {
     inner: RecoveryConfig,
 }
 

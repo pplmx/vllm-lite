@@ -9,7 +9,7 @@ use tracing::{debug, trace, warn};
 
 /// Circuit breaker state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CircuitState {
+pub(crate) enum CircuitState {
     Closed,   // Normal operation
     Open,     // Failing, reject calls
     HalfOpen, // Testing recovery
@@ -17,7 +17,7 @@ pub enum CircuitState {
 
 /// Circuit breaker configuration
 #[derive(Debug, Clone)]
-pub struct CircuitBreakerConfig {
+pub(crate) struct CircuitBreakerConfig {
     pub failure_threshold: usize,
     pub recovery_timeout: Duration,
     pub half_open_max_calls: usize,
@@ -43,7 +43,7 @@ impl CircuitBreakerConfig {
 
 /// Builder for [`CircuitBreakerConfig`].
 #[derive(Debug, Clone, Default)]
-pub struct CircuitBreakerConfigBuilder {
+pub(crate) struct CircuitBreakerConfigBuilder {
     inner: CircuitBreakerConfig,
 }
 
@@ -68,7 +68,7 @@ impl CircuitBreakerConfigBuilder {
 
 /// Circuit breaker error
 #[derive(Debug, thiserror::Error, Clone, PartialEq)]
-pub enum CircuitBreakerError {
+pub(crate) enum CircuitBreakerError {
     #[error("circuit breaker is open")]
     Open,
     #[error("operation failed: {0}")]
@@ -83,7 +83,7 @@ pub enum CircuitBreakerError {
 
 /// Circuit breaker implementation
 #[derive(Clone)]
-pub struct CircuitBreaker {
+pub(crate) struct CircuitBreaker {
     config: CircuitBreakerConfig,
     state: Arc<RwLock<CircuitState>>,
     failure_count: Arc<AtomicU64>,
