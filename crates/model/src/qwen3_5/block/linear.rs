@@ -14,7 +14,7 @@ pub struct LinearAttentionBlock {
 }
 
 impl LinearAttentionBlock {
-    pub fn new(d_model: usize, gdn: GdnLinearConfig, vb: VarBuilder) -> CandleResult<Self> {
+    pub(crate) fn new(d_model: usize, gdn: GdnLinearConfig, vb: VarBuilder) -> CandleResult<Self> {
         let GdnLinearConfig {
             num_k_heads,
             num_v_heads,
