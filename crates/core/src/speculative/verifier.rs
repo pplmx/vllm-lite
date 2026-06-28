@@ -3,6 +3,8 @@
 //! The DraftVerifier trait abstracts the draft generation and verification
 //! logic, allowing different implementations (self-speculation, small draft model, etc.)
 
+use std::sync::Arc;
+
 use crate::types::{Batch, SeqId, TokenId};
 use thiserror::Error;
 
@@ -70,6 +72,46 @@ pub trait DraftVerifier: Send + Sync {
     fn accept(&mut self, seq_id: SeqId, accepted_count: usize);
 }
 
+/// Default stub `DraftVerifier`: accepts all draft tokens, generates no drafts.
+///
+/// Used by [`dyn DraftVerifier::default_arc`] to construct an `Arc<Self>`
+/// default instance.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct StubDraftVerifier;
+
+impl DraftVerifier for StubDraftVerifier {
+    fn generate_draft(
+        &mut self,
+        batch: &Batch,
+        _num_tokens: usize,
+    ) -> Result<Vec<(SeqId, Vec<TokenId>)>> {
+        Ok(batch.seq_ids.iter().map(|&id| (id, Vec::new())).collect())
+    }
+
+    fn verify(
+        &self,
+        seq_id: SeqId,
+        draft_tokens: &[TokenId],
+        _target_logits: &[f32],
+    ) -> Result<VerificationResult> {
+        Ok(VerificationResult::new(seq_id, draft_tokens.to_vec()))
+    }
+
+    fn accept(&mut self, _seq_id: SeqId, _accepted_count: usize) {}
+}
+
+impl dyn DraftVerifier {
+    /// Returns an `Arc<Self>` containing the no-op [`StubDraftVerifier`] stub.
+    ///
+    /// This is the closest equivalent to `Arc::<dyn DraftVerifier>::default()`;
+    /// Rust's orphan rule prevents a direct `impl Default for Arc<dyn ...>`
+    /// because `Arc` is foreign and there is no local type appearing before
+    /// the uncovered trait-object parameter.
+    pub fn default_arc() -> Arc<Self> {
+        Arc::new(StubDraftVerifier)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -97,5 +139,16 @@ mod tests {
         let result = VerificationResult::new(0, vec![]);
         assert_eq!(result.accepted_count, 0);
         assert_eq!(result.acceptance_rate(), 1.0);
+    }
+
+    #[test]
+    fn draft_verifier_default_arc_accepts_all() {
+        let verifier: Arc<dyn DraftVerifier> = <dyn DraftVerifier>::default_arc();
+        let result = verifier
+            .verify(42, &[10, 20, 30], &[0.0; 100])
+            .expect("stub verify should succeed");
+        assert_eq!(result.accepted_count, 3);
+        assert_eq!(result.acceptance_rate(), 1.0);
+        assert!(result.rejected_at.is_none());
     }
 }

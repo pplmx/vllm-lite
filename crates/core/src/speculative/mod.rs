@@ -26,4 +26,4 @@ pub use registry::{
 };
 pub use self_spec::SelfSpeculativeModel;
 pub use strategy::RejectionStrategy;
-pub use verifier::{DraftVerifier, VerificationResult, VerifierError};
+pub use verifier::{DraftVerifier, StubDraftVerifier, VerificationResult, VerifierError};
