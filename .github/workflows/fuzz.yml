@@ -1,0 +1,58 @@
+name: Fuzz Smoke
+
+# Run a short fuzz-smoke against every fuzz target on every PR.
+# Wall-clock budget: ~3-5 min total (4 targets × 10s + setup + build).
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  fuzz-smoke:
+    name: Fuzz smoke (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [app_config_yaml, qwen3_config_json, safetensors_header]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-fuzz-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-fuzz-cargo-
+
+      - name: Build fuzz targets
+        run: just fuzz-build
+
+      - name: Fuzz ${{ matrix.target }} (30s)
+        run: cargo +nightly fuzz run ${{ matrix.target }} --fuzz-dir fuzz -- -max_total_time=30
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crash-${{ matrix.target }}
+          path: |
+            fuzz/artifacts/
+            fuzz/corpus/${{ matrix.target }}/
+          if-no-files-found: ignore
