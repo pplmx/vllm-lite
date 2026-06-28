@@ -29,7 +29,7 @@ impl Qwen3Fixture {
         Self(base_fixture())
     }
 
-    pub fn with_kv_blocks(self, kv_blocks: usize) -> Self {
+    pub const fn with_kv_blocks(self, kv_blocks: usize) -> Self {
         Self(self.0.with_kv_blocks(kv_blocks))
     }
 
