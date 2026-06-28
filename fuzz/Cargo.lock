@@ -2857,6 +2857,7 @@ name = "vllm-fuzz"
 version = "0.1.0"
 dependencies = [
  "libfuzzer-sys",
+ "safetensors",
  "serde",
  "serde-saphyr",
  "vllm-core",
