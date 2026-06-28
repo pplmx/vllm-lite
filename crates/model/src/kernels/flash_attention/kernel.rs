@@ -4,7 +4,7 @@
 // `FlashAttention` trait, `ScaledDotProductAttention`, `FlashAttentionV2`,
 // and the high-level `FlashAttentionKernel` dispatcher.
 
-use super::config::{select_tile_size, AttentionVariant, FlashAttentionConfig};
+use super::config::{AttentionVariant, FlashAttentionConfig, select_tile_size};
 use super::util::softmax_last_dim;
 use candle_core::{Result, Tensor};
 
