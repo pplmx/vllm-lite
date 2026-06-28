@@ -65,6 +65,9 @@ pub struct DraftSpec {
 }
 
 impl DraftSpec {
+    /// Construct a minimal `DraftSpec` with `weight_size_estimate_bytes = 0`
+    /// and `ref_count = 0`. Use the `with_*` builder methods to fill in the
+    /// remaining fields.
     pub fn new(id: impl Into<DraftId>, model_dir: impl Into<PathBuf>, kv_blocks: usize) -> Self {
         Self {
             id: id.into(),
@@ -76,18 +79,25 @@ impl DraftSpec {
         }
     }
 
+    /// Set the architecture hint (e.g. `"qwen3"`, `"llama"`). Used by the
+    /// loader when the model directory's config is ambiguous.
     #[must_use]
     pub fn with_arch_hint(mut self, arch: impl Into<String>) -> Self {
         self.arch_hint = Some(arch.into());
         self
     }
 
+    /// Set the initial reference count (number of requests expected to use
+    /// this draft concurrently). The registry tracks the live ref-count
+    /// separately; this is the seed value at registration time.
     #[must_use]
     pub const fn with_ref_count(mut self, ref_count: usize) -> Self {
         self.ref_count = ref_count;
         self
     }
 
+    /// Set the conservative weight-size estimate in bytes. Over-estimate to
+    /// stay safe; under-estimate risks OOM at load time.
     #[must_use]
     pub const fn with_weight_size(mut self, bytes: u64) -> Self {
         self.weight_size_estimate_bytes = bytes;

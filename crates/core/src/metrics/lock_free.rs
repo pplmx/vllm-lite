@@ -110,31 +110,42 @@ impl LockFreeMetrics {
         self.requests_in_flight.fetch_sub(1, Ordering::Relaxed);
     }
 
+    /// Snapshot the absolute KV-cache utilization. Both values are stored as
+    /// separate atomics; the percentage is computed at `snapshot()` time.
     pub fn record_kv_cache_usage(&self, used: u64, total: u64) {
         self.kv_cache_blocks_used.store(used, Ordering::Relaxed);
         self.kv_cache_blocks_total.store(total, Ordering::Relaxed);
     }
 
+    /// Increment the prefix-cache hit counter. Pair each call with a
+    /// `record_prefix_cache_request` to compute a hit-rate.
     pub fn record_prefix_cache_hit(&self) {
         self.prefix_cache_hits.fetch_add(1, Ordering::Relaxed);
     }
 
+    /// Increment the prefix-cache lookup counter (called for every prompt,
+    /// regardless of hit/miss).
     pub fn record_prefix_cache_request(&self) {
         self.prefix_cache_requests.fetch_add(1, Ordering::Relaxed);
     }
 
+    /// Add `count` to the lifetime prefill-tokens counter.
     pub fn record_prefill_tokens(&self, count: u64) {
         self.prefill_tokens.fetch_add(count, Ordering::Relaxed);
     }
 
+    /// Add `count` to the lifetime decode-tokens counter.
     pub fn record_decode_tokens(&self, count: u64) {
         self.decode_tokens.fetch_add(count, Ordering::Relaxed);
     }
 
+    /// Record a scheduler-wait-time sample in milliseconds. Dropped if the
+    /// channel is full.
     pub fn record_scheduler_wait_time(&self, ms: f64) {
         let _ = self.scheduler_wait_sender.try_send(ms);
     }
 
+    /// Total number of requests served since start.
     #[must_use]
     pub fn requests_total(&self) -> u64 {
         self.requests_total.load(Ordering::Relaxed)
@@ -152,6 +163,10 @@ impl LockFreeMetrics {
         self.prefix_cache_requests.load(Ordering::Relaxed)
     }
 
+    /// Drain all ring channels and atomics into a [`MetricsSnapshot`].
+    /// After this call, the latency / batch-size / wait-time samples are
+    /// reset (only the unconsumed ring entries are flushed — lifetime
+    /// atomic counters are not touched).
     #[must_use]
     pub fn snapshot(&self) -> MetricsSnapshot {
         let mut latencies = Vec::new();
