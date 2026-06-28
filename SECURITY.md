@@ -63,9 +63,9 @@ Dependabot alerts: 6 (1 high, 5 moderate).
 | `aws-lc-rs`      | 1.16.3   | Dependabot outdated (moderate)                        | ✅ Bumped to 1.17.0                                                                                                   |
 | `tiktoken`       | 3.1.4    | (Dependabot; minor)                                   | ✅ Bumped to 3.5.1                                                                                                    |
 | `hyper`          | 1.9.0    | (Dependabot; minor)                                   | ✅ Bumped to 1.10.1                                                                                                   |
-| `paste`          | 1.0.15   | RUSTSEC-2024-0436 (unmaintained, moderate)            | ⚠️ Deferred — deep transitive via `gemm` → `candle-core 0.10.2` lock. Tracked in v27.0 spec.                          |
+| `paste`          | 1.0.15   | RUSTSEC-2024-0436 (unmaintained, INFO)                | ⚠️ **Accepted** — INFO severity (no vuln, no patch available); deep transitive via `gemm` → `candle-core`. Verified `candle-core 0.11.0` (latest, 2026-06-26) still depends on `gemm ^0.19` → `paste ^1.0`, so upgrade does not resolve. Suppressed in `just audit` via `--ignore RUSTSEC-2024-0436`. `cargo audit --strict` will still report it. |
 
-Post-remediation audit: 0 warnings remaining.
+Post-remediation audit: 1 INFO warning remaining (paste — accepted risk, see above).
 
 CI workflow fix: removed broken `--all-features` from default GitHub Actions
 `cargo clippy` job (no CUDA in default runners); switched to per-group denies
@@ -75,6 +75,21 @@ type has a non-trivial Drop, making const-ineligibility structural).
 
 Refs: `docs/superpowers/specs/2026-06-28-v24-code-quality-hardening-design.md`,
 `/tmp/phase_f_audit/SUMMARY.md`
+
+### 2026-06-28 (v27.0 — paste disposition)
+
+**Audit source:** `/tmp/phase_g_audit/SUMMARY.md` (390 lines)
+
+v26.0 plan deferred `paste` RUSTSEC-2024-0436 to "v27.0 candle-core upgrade" on the assumption that bumping candle would resolve the advisory. **Verified false**: `candle-core 0.11.0` (latest stable, released 2026-06-26) still depends on `gemm ^0.19.0` which still depends on `paste ^1.0`. No version of candle-core removes the `paste` transitive dependency.
+
+**Disposition:** Accepted risk (informational-only advisory). `paste!` macro is tiny (~150 LoC), stable, used only by `gemm` for SIMD intrinsic codegen. RUSTSEC-2024-0436 is INFO severity (unmaintained, no patch, no exploitable vulnerability).
+
+**Action:** suppress in `just audit` (local CI) via `--ignore RUSTSEC-2024-0436`; `just audit-strict` still reports it for awareness. No code change; no dependency change.
+
+**Alternatives considered:**
+- `pastey` (maintained fork): tested in audit — requires `[patch.crates-io]` override of `gemm`'s `paste` dep. Risk: gemm's FFI surface may break; cargo audit shows gemm internal type changes when `paste` semantics shift. Cost: 1-2 days. Not worth the risk for an INFO-severity advisory.
+- candle-core upgrade: dead-end (still depends on paste).
+- Drop `gemm` entirely: would require reimplementing BLAS integration for candle. Out of scope.
 
 ### 2026-06-26 (Wave 3)
 
