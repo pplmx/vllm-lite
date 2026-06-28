@@ -131,6 +131,7 @@ empty-result signal, or rewrite the bench with a timeout / step cap). They are
 | 2026-06-28 | H-2  | Baseline (`mul(broadcast(scale))`) | 38,445 | — |
 | 2026-06-28 | H-8  | Re-measured pre-H-11 baseline | 39,117 | +1.7% (noise) |
 | 2026-06-28 | H-11 #2 | `qk.affine(scale, 0.0)` replacing `qk.mul(broadcast(scalar))` at gqa.rs:195-196, util.rs:155, util.rs:203, flash_attention_v3.rs:57/183/262, mla.rs:210, paged_gqa.rs:120 | 37,942 | −3.0% (p<0.05) |
+| 2026-06-28 | H-11 #3 | Removed `.contiguous()?` after softmax (already contiguous from `broadcast_div`); added regression test pinning candle CPU matmul's non-contiguous-batch-dim rejection. Other contiguous calls (q, k_heads, v_heads, k_t, v) kept — required by candle matmul kernel. | 37,985 | +0.1% (noise; p=0.17) |
 
 **Note:** This is a smoke test, not a perf baseline. Real GPU numbers will be recorded when a GPU runner is available.
 
