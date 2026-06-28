@@ -144,3 +144,70 @@ mod tests {
         assert_eq!(result.unwrap().matched_tokens, 2);
     }
 }
+
+#[cfg(test)]
+mod prop_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    /// Generate random token sequences (length 1..16).
+    fn tokens_strategy() -> impl Strategy<Value = Vec<TokenId>> {
+        proptest::collection::vec(any::<TokenId>(), 1..16)
+    }
+
+    /// Generate random block-id sequences (length 1..8).
+    fn blocks_strategy() -> impl Strategy<Value = Vec<BlockId>> {
+        proptest::collection::vec(any::<BlockId>(), 1..8)
+    }
+
+    proptest! {
+        /// Insert + exact-match returns the inserted blocks.
+        #[test]
+        fn prop_radix_insert_then_match(
+            key in tokens_strategy(),
+            blocks in blocks_strategy(),
+        ) {
+            let mut tree = RadixTree::new();
+            tree.insert(&key, blocks.clone());
+            let result = tree.longest_prefix_match(&key);
+            prop_assert!(result.is_some(), "exact-match lookup returned None after insert");
+            let result = result.unwrap();
+            prop_assert_eq!(result.matched_tokens, key.len());
+            prop_assert_eq!(result.blocks.as_ref(), &blocks);
+        }
+
+        /// Longest-prefix-match never claims more tokens than the query has.
+        #[test]
+        fn prop_longest_prefix_bounded(
+            keys in proptest::collection::vec(tokens_strategy(), 0..4),
+            query in tokens_strategy(),
+        ) {
+            let mut tree = RadixTree::new();
+            for key in &keys {
+                tree.insert(key, vec![1]);
+            }
+            if let Some(result) = tree.longest_prefix_match(&query) {
+                prop_assert!(
+                    result.matched_tokens <= query.len(),
+                    "matched_tokens {} exceeds query length {}",
+                    result.matched_tokens,
+                    query.len()
+                );
+            }
+        }
+
+        /// Insert + clear + lookup returns None for any key.
+        #[test]
+        fn prop_insert_clear_returns_none(
+            key in tokens_strategy(),
+            blocks in blocks_strategy(),
+        ) {
+            let mut tree = RadixTree::new();
+            tree.insert(&key, blocks);
+            prop_assert!(!tree.is_empty());
+            tree.clear();
+            prop_assert!(tree.is_empty());
+            prop_assert!(tree.longest_prefix_match(&key).is_none());
+        }
+    }
+}
