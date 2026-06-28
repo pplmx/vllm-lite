@@ -163,9 +163,19 @@ impl GqaAttention {
         let q = self.apply_q_norm(q, batch_size, seq_len)?;
         let k = self.apply_k_norm(k, batch_size, seq_len)?;
 
+        // H-11 #3 (attempted, reverted): removing `.contiguous()?` here broke
+        // `Tensor::matmul(&q, &k_t)` downstream — candle's CPU matmul kernel
+        // rejects non-contiguous LHS (`MatMulUnexpectedStriding` error). Keep
+        // the contiguous call; the cost is one copy of Q at (B, H, S, D).
         let q = q.transpose(1, 2)?.contiguous()?;
 
         if self.config.use_fused {
+            // H-11 #3 (attempted, reverted): removing `.contiguous()?` here broke
+            // `Tensor::matmul(&attn_weights, &v_expanded)` inside `flash.forward`.
+            // Even though flash internally calls `.transpose(2, 3)?.contiguous()?`
+            // for the k path, the v path (`Tensor::matmul(attn, v_expanded)`) has
+            // no such copy — v_expanded is strided from k_heads.transpose(1, 2).
+            // Same `MatMulUnexpectedStriding` failure mode as q/v on the standard path.
             let k_heads = k.transpose(1, 2)?.contiguous()?;
             let v_heads = v.transpose(1, 2)?.contiguous()?;
             // invariant: causal is hardcoded to false here because
@@ -194,11 +204,19 @@ impl GqaAttention {
 
         // H-11 #2: replaced `qk.mul(broadcast(scalar_tensor))` with `qk.affine(scale, 0.0)`.
         // The scalar tensor was re-allocated and broadcast to O(B*H*S*S) every forward;
-        // `affine` fuses the scaling into the kernel without materializing a broadcast tensor.
+        // `affine` fuses the scaling into the existing kernel without materializing a broadcast tensor.
         let scale = 1.0 / (self.head_dim as f32).sqrt();
         let qk = qk.affine(scale as f64, 0.0)?;
-        let attn_weights = candle_nn::ops::softmax(&qk, 3)?.contiguous()?;
+        // H-11 #3: `candle_nn::ops::softmax` already returns a contiguous tensor
+        // (verified in candle-nn 0.10.2 src/ops.rs:22-29 — final op is
+        // `broadcast_div`, which produces a fresh contiguous tensor). The
+        // explicit `.contiguous()?` is a redundant is_contiguous check + clone.
+        let attn_weights = candle_nn::ops::softmax(&qk, 3)?;
 
+        // H-11 #3 (attempted, reverted): removing `.contiguous()?` on v broke
+        // `Tensor::matmul(&attn_weights, &v)` — candle's CPU matmul kernel
+        // rejects non-contiguous batch dimensions in the RHS
+        // (`MatMulUnexpectedStriding`). Same constraint as q.contiguous() above.
         let attn_output = Tensor::matmul(&attn_weights, &v.contiguous()?)?;
 
         let attn_output = attn_output.transpose(1, 2)?;
@@ -958,6 +976,33 @@ mod tests {
         assert!(
             diff < 1e-5,
             "forward() should be deterministic for identical inputs, got diff={diff}"
+        );
+        Ok(())
+    }
+
+    /// H-11 #3 regression: candle's CPU matmul kernel rejects non-contiguous
+    /// batch dimensions on either LHS or RHS with `MatMulUnexpectedStriding`.
+    /// This test pins that behavior so future "remove contiguous" attempts
+    /// fail at this test rather than in downstream integration tests where
+    /// the failure is harder to diagnose.
+    #[test]
+    fn test_matmul_rejects_non_contiguous_batch_dims() -> Result<()> {
+        let device = candle_core::Device::Cpu;
+        // (B=2, H=4, S=10, D=32) — strided from transpose(1,2)
+        let q_strided =
+            Tensor::randn(0.0f32, 1.0, (2, 10, 4, 32), &device)?.transpose(1, 2)?;
+        // (B=2, H=4, D=32, S=10) — contiguous
+        let k_cont = Tensor::randn(0.0f32, 1.0, (2, 4, 32, 10), &device)?;
+
+        let result = Tensor::matmul(&q_strided, &k_cont);
+        assert!(
+            result.is_err(),
+            "Tensor::matmul should reject non-contiguous LHS batch dims"
+        );
+        let err = format!("{}", result.unwrap_err());
+        assert!(
+            err.contains("non-contiguous") || err.contains("Striding"),
+            "expected striding error, got: {err}"
         );
         Ok(())
     }
