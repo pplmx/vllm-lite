@@ -136,3 +136,25 @@ empty-result signal, or rewrite the bench with a timeout / step cap). They are
 | gqa_forward/fused | 128 | TBD |
 | gqa_forward/fused | 512 | TBD |
 | gqa_forward/fused | 2048 | TBD |
+
+## Model benches — MLA (H-3 added 2026-06-28)
+
+**Strategy:** Runtime CUDA detection (same as H-2).
+- **GPU:** qwen3-7B class MLA (hidden_size=896, num_heads=14, kv_lora_rank=64, head_dim=64, seq_len=[128,512,2048])
+- **CPU:** smoke test (hidden_size=64, num_heads=2, kv_lora_rank=16, head_dim=16, seq_len=16) + eprintln warning
+
+### CPU-only environment (current dev/CI)
+
+| Bench path | seq_len | ns/iter (median) |
+|------------|---------|------------------|
+| mla_forward_smoke/cpu_smoke | 16 | 43,367 ns |
+
+**Note:** This is a smoke test, not a perf baseline. Real GPU numbers will be recorded when a GPU runner is available.
+
+### Standard dimensions (recorded when GPU available)
+
+| Bench path | seq_len | ns/iter (median) |
+|------------|---------|------------------|
+| mla_forward | 128 | TBD |
+| mla_forward | 512 | TBD |
+| mla_forward | 2048 | TBD |

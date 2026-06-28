@@ -31,6 +31,10 @@ criterion = "0.8"
 name = "gqa_forward"
 harness = false
 
+[[bench]]
+name = "mla_forward"
+harness = false
+
 [features]
 default = []
 cuda = ["candle-core/cuda", "candle-nn/cuda"]
