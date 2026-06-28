@@ -273,34 +273,44 @@ impl EngineError {
 
 ## 7. Phase D 详情:Module Boundaries
 
-### 7.1 触发条件
+### 7.1 现状(2026-06-28 audit)
 
-- 文件 > 500 行(剔除 `mod tests` 与 `#[cfg(test)]`)
-- 模块 `pub` 项目过多(>5 个 `pub fn`/`pub struct` 未被 crate 外使用)
-- 跨 crate 出现循环或反向依赖
+| 维度 | 状态 | 数据 |
+|------|------|------|
+| 大文件(>500 LOC) | **5 个** | engine.rs (866), scheduler/engine.rs (654), types.rs (538), ssm.rs (505), flash_attention.rs (591) |
+| 软目标(300-500 LOC) | **7 个** | tensor_store.rs (466), batch_composer.rs (469), qwen3/config.rs (379), gated_delta/mod.rs (425), cli.rs (224), metrics/collector.rs (360) |
+| `pub(crate)` 候选 | **~208 项** | 76% 的 unexported `pub` 项 |
+| `pub mod` → `pub(crate) mod` | **~14 个** | 13 个 architecture 模块 + 1 个其他 |
+| 深度 re-export 链(>2 层) | **7 处** | 含唯一 4 层链 (`openai::batch::manager::BatchManager`) |
+| Glob re-export | **5 处** | 待替换为显式列表 |
+| 重复 re-export | **5 处** | 含 `Qwen35HybridModel` 双重导出 |
 
-### 7.2 重构动作
+### 7.2 子阶段(基于 audit)
 
-1. **拆分大文件**:把内聚子逻辑提到 `xxx/inner.rs` 或 `xxx/detail.rs`,主文件保留 facade
-2. **收紧可见性**:`pub` → `pub(crate)` 除非确实对外
-3. **集中 re-export**:`pub use` 在 `lib.rs` 集中,移除散落的 `pub mod foo`
-4. **trait 抽象**:出现 ≥2 处相似实现时提取 trait
-5. **新文件行数上限**:单文件新建时 ≤ 500 行(由 lint 检查或 code review 把关)
+| 子阶段 | 范围 | 工作量 |
+|--------|------|--------|
+| **D-1** | 拆 `engine.rs` (866 LOC, 含 3 dup method 对审计) | ~2-3 天 |
+| **D-2** | 拆 `scheduler/engine.rs` (654 LOC) | ~1-2 天 |
+| **D-3a** | 拆 `types.rs` (538) + `ssm.rs` (505) | ~1-2 天 |
+| **D-3b** | 7 个软目标拆文件 | ~1-2 天 |
+| **D-3c** | `pub(crate)` 收紧 + re-export 清理 (~270 项) | ~4-5 天 |
 
-### 7.3 预期热点文件
+总计约 **9-14 天**。
 
-待 Phase A/B/C 完成后实测,初步判断:
-- `crates/model/src/components/attention/mla.rs`
-- `crates/core/src/engine.rs`
-- `crates/core/src/scheduler/engine.rs`
-- `crates/server/src/openai/chat.rs`
-- `crates/model/src/loader/builder.rs`
+### 7.3 风险点
+
+1. **`engine.rs` 3 个 dup method 对** (`capture_cuda_graphs`, `cuda_graph_enabled`, `step_with_graph`) — 极可能是 `#[cfg(feature="cuda-graph")]` 但**必须验证后才能删**
+2. **`mod spec_dispatch;` 存在但未使用** — D-1 拆分应将方法移入 `spec_dispatch/{drafts,dispatch,verify,warmup}.rs` 而非创建并行子模块
+3. **OpenAI DTO 在 axum 签名中** — handler 需要 `pub` DTO;或将 handler 移到 `openai::chat` 内
+4. **公开 API 中的 trait object** (`Arc<dyn DraftLoader>` 等) — trait 必须保持 `pub` 即使具体实现收紧
+5. **`dist` 中生成的 proto 类型** — tonic 生成的 `PingRequest` 等必须保持 `pub`
 
 ### 7.4 完成定义
 
 - [ ] 所有 `.rs` 文件(剔除 tests) ≤ 500 行
 - [ ] 每个 crate `lib.rs` 集中 re-export
 - [ ] 无 `pub use crate::foo::bar::baz` 深度链(≤ 2 层)
+- [ ] `pub(crate)` 收紧候选 ≥ 80% 已转化
 - [ ] `just ci` 通过
 
 ---
