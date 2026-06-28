@@ -122,7 +122,15 @@ empty-result signal, or rewrite the bench with a timeout / step cap). They are
 
 | Bench path | seq_len | ns/iter (median) |
 |------------|---------|------------------|
-| gqa_forward_smoke/cpu_smoke | 16 | 38,445 ns |
+| gqa_forward_smoke/cpu_smoke | 16 | 37,942 ns (H-11 #2 affine, −3.0% vs 39,117 ns pre-H-11) |
+
+#### H-11 optimization history (gqa_forward_smoke/cpu_smoke @ seq_len=16)
+
+| Date       | Step | Change | Median (ns) | Δ vs prior |
+|------------|------|--------|-------------|-----------|
+| 2026-06-28 | H-2  | Baseline (`mul(broadcast(scale))`) | 38,445 | — |
+| 2026-06-28 | H-8  | Re-measured pre-H-11 baseline | 39,117 | +1.7% (noise) |
+| 2026-06-28 | H-11 #2 | `qk.affine(scale, 0.0)` replacing `qk.mul(broadcast(scalar))` at gqa.rs:195-196, util.rs:155, util.rs:203, flash_attention_v3.rs:57/183/262, mla.rs:210, paged_gqa.rs:120 | 37,942 | −3.0% (p<0.05) |
 
 **Note:** This is a smoke test, not a perf baseline. Real GPU numbers will be recorded when a GPU runner is available.
 

@@ -151,9 +151,10 @@ pub fn paged_attention(
     let mask = mask.broadcast_as(qk.dims())?;
     let qk = (&qk + &mask)?;
 
+    // H-11 #2: replaced `qk.mul(broadcast(scalar_tensor))` with `qk.affine(scale, 0.0)`.
+    // Eliminates per-call scalar allocation and O(B*H*S*S) broadcast materialization.
     let scale = 1.0 / (head_dim as f32).sqrt();
-    let scale_tensor = Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?;
-    let qk = qk.mul(&scale_tensor)?;
+    let qk = qk.affine(scale as f64, 0.0)?;
     let attn_weights = candle_nn::ops::softmax(&qk, 3)?.contiguous()?;
 
     let attn_output = Tensor::matmul(&attn_weights, v)?;
@@ -199,9 +200,11 @@ pub fn tiled_attention(
         let mask = mask.broadcast_as(qk.dims())?;
         let qk = (&qk + &mask)?;
 
+        // H-11 #2: replaced `qk.mul(broadcast(scalar_tensor))` with `qk.affine(scale, 0.0)`.
+        // Per-tile savings compound: tiled forward at seq_len=2048 / tile_size=16
+        // saves ~128 O(B*H*T*T) broadcast materializations.
         let scale = 1.0 / (q.dims()[3] as f32).sqrt();
-        let scale_tensor = Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?;
-        let qk = qk.mul(&scale_tensor)?;
+        let qk = qk.affine(scale as f64, 0.0)?;
         let attn = candle_nn::ops::softmax(&qk, 3)?.contiguous()?;
 
         let out = Tensor::matmul(&attn, &v_tile)?;
