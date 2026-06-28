@@ -11,13 +11,13 @@
 
 ## 📊 Release Statistics
 
-|     版本     |    日期    |          测试          | 覆盖率 |
-| :----------: | :--------: | :--------------------: | :----: |
-| [Unreleased] |     -      |         1191+          | 97.8%  |
-|   [v22.0]    | 2026-06-27 |         1179+          | 97.8%  |
-|   [v21.0]    | 2026-06-27 |         1146+          | 97.8%  |
-|   [v20.0]    | 2026-06-27 |         1144+          | 97.8%  |
-|   [v19.0]    | 2026-06-27 |         1139+          | 97.8%  |
+|     版本     |    日期    |          测试          | 覆盖率 (raw / real) |
+| :----------: | :--------: | :--------------------: | :-----------------: |
+| [Unreleased] |     -      |         1191+          | 55.0% / 49.9% (Phase N baseline, `--real` excludes test/hidden/derive) |
+|   [v22.0]    | 2026-06-27 |         1179+          | ~50% real (97.8% figure was placeholder-based) |
+|   [v21.0]    | 2026-06-27 |         1146+          | ~50% real |
+|   [v20.0]    | 2026-06-27 |         1144+          | ~50% real |
+|   [v19.0]    | 2026-06-27 |         1139+          | ~50% real |
 |   [v18.0]    | 2026-06-27 | 277 (vllm-core) + 654+ |  90%+  |
 
 ---
@@ -25,6 +25,48 @@
 ## 🚀 [Unreleased]
 
 ### Added
+
+- **Doc Coverage Push (v30.0 Phase N)** — partial progress with honest baseline:
+    - `scripts/doc_coverage.sh --real` flag added (backward compatible)
+        - New columns `RealTot`, `RealDoc`, `Real%` exclude `#[cfg(test)]` mod
+          blocks, `#[doc(hidden)]` items, and `#[derive(...)]`-generated items
+          from both the total and the documented count
+        - Implementation: `scripts/_blank_for_real.py` (Python helper that
+          preserves line numbers so file:line attribution is retained)
+        - Default (raw) mode unchanged
+    - `///` docs added to ~88 high-value pub items across `vllm-core` and
+      `vllm-traits` (prioritized user-facing API):
+        - Engine lifecycle (`is_healthy`, `get_last_error`, `cancel_request`,
+          `add_request`, `run`, `has_pending`)
+        - Engine construction (`new`, `new_boxed`, `with_config`, `EngineBuilder`)
+        - Engine CUDA Graph paths (`capture_cuda_graphs`, `cuda_graph_enabled`,
+          `step_with_graph`)
+        - Sampling (`top_k_sample`, `sample_batch`, `apply_repeat_penalty`,
+          full `SamplingParams` + `SamplingParamsBuilder` + `Request` API)
+        - Beam search (`BeamSequence`, `SchedulerConfig` builder)
+        - Scheduler (`RequestQueue`, `SchedulerStats`, `PhaseScheduler`,
+          `GraphPreparedBatch`, builders for `PhaseSwitchPolicy` and
+          `SchedulerCudaGraphConfig`)
+        - Metrics (`LockFreeMetrics` record_* methods + snapshot, `MetricValue`)
+        - Speculative (`DraftSpec` builder methods, `AdaptiveSpeculativeDecoder`)
+        - Server (`chat_completions`, `completions`, `embeddings` handlers,
+          `health_details`, `shutdown`, `get_prometheus`, `HealthStatus::http_status`,
+          `AppConfig::load`/`validate`, `AuthConfig::resolve_api_keys`)
+        - Types (`EngineMessage` variants, `Priority`, error module-level docs)
+    - **Coverage numbers (before → after)**:
+        - Raw: 49.8% → 55.0% (+89 items documented, 1708 → 939 undocumented)
+        - Real (`--real`): 44.0% → 49.9% (+88 items, after filtering)
+        - Module docs: 54.0% → 54.7%
+    - **Honest historical context**: the v23.0 audit CHANGELOG entry claimed
+      "97.8% doc coverage", but this was based on placeholder `/// Doc.`
+      comments that were counted as documented. v23.0 Phase 42 removed 1062
+      of those placeholders, dropping real coverage dramatically. The 99%
+      target in the Phase N plan was based on the stale 97.8% metric and is
+      not achievable in one session — reaching 90%+ requires documenting
+      hundreds of additional items across `vllm-model`, `vllm-dist`, and the
+      remaining `vllm-core`/`vllm-server` surface.
+    - Total commits: 6 (N-1 metric, N-2..N-5 docs across 4 batches,
+      N-6 CHANGELOG)
 
 - **Test Coverage Expansion (v30.0 Phase M)** — 4 new fuzz targets + 3 new proptest modules:
     - Fuzz targets (7 total now, was 3 in v29.0):
