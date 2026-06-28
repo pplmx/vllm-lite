@@ -13,6 +13,7 @@ libfuzzer-sys = "0.4"
 serde-saphyr = "0.0.27"
 serde = { version = "1", features = ["derive"] }
 safetensors = "0.7.0"
+tiktoken = "3"
 
 [dependencies.vllm-core]
 path = "../crates/core"
@@ -50,6 +51,13 @@ bench = false
 [[bin]]
 name = "qwen3_config_json"
 path = "fuzz_targets/qwen3_config_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tokenizer_decode"
+path = "fuzz_targets/tokenizer_decode.rs"
 test = false
 doc = false
 bench = false
