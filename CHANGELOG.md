@@ -59,6 +59,13 @@
     - `vllm-model` re-exports: `Architecture`, `ModelConfig`, `ModelLoader`, `ModelLoaderBuilder`, `Tokenizer`
     - `vllm-server` re-exports: `AuthConfig`, `AuthMiddleware`, `BatchManager`, `BatchResponse`, `AuditEvent`, `HealthChecker`, `HealthStatus` (intentionally excludes OpenAI types to avoid root namespace collision)
 
+- **Stringly-typed Enums (v24.0 Phase C-2)** — replaced 3 string-typed public APIs with typed enums:
+    - `DraftResolutionKind` enum (`External`, `SelfSpec`, `None`) replaces `&str` in `EnhancedMetricsCollector::inc_draft_resolution` (actual values: `"external"`, `"self_spec"`, `"none"`)
+    - `RopeType` enum (`Default`, `Linear`, `Dynamic`, `Yarn`, `Su`, `Other` — serde `lowercase`) replaces `Option<String>` in `RopeScaling::rope_type` and `RopeParameters::rope_type`
+    - `BatchEndpoint` enum (`Chat`, `Completion`) replaces `String` in batch request/response/job endpoint fields, with custom serde serializer/deserializer to preserve JSON wire compatibility
+    - All conversions provide `parse(&str) -> Option<Self>`, `as_str() -> &'static str`, and `Display` impl
+    - Affected call sites updated atomically (13 + 1 + 6 across the three enums)
+
 ---
 
 ## 🚀 [v18.0] — Multi-Model Speculative Decoding (2026-06-27)
