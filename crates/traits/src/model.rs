@@ -33,6 +33,12 @@ use candle_core::Tensor;
 
 /// `ModelBackend`: model backend trait.
 pub trait ModelBackend: Send + Sync {
+    /// Run a forward pass producing next-token logits for each sequence.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the underlying backend fails (e.g. tensor allocation,
+    /// shape mismatch, I/O, or backend-specific runtime errors).
     fn forward(
         &mut self,
         seq_ids: &[SeqId],
@@ -43,6 +49,12 @@ pub trait ModelBackend: Send + Sync {
         is_prefill: &[bool],
     ) -> Result<BatchOutput>;
 
+    /// Run a forward pass returning raw per-token logits for each sequence.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the underlying backend fails (e.g. tensor allocation,
+    /// shape mismatch, I/O, or backend-specific runtime errors).
     fn forward_logits(
         &mut self,
         seq_ids: &[SeqId],
@@ -53,6 +65,11 @@ pub trait ModelBackend: Send + Sync {
         is_prefill: &[bool],
     ) -> Result<Vec<Vec<f32>>>;
 
+    /// Compute embeddings for the given input tokens without sampling.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the underlying backend fails to produce embeddings.
     fn embed(
         &mut self,
         input_tokens: &[Vec<TokenId>],
@@ -60,6 +77,12 @@ pub trait ModelBackend: Send + Sync {
     ) -> Result<Vec<Vec<f32>>>;
 
     #[cfg(feature = "candle")]
+    /// Run a candle-only forward pass using the model's paged KV cache.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the candle backend fails to allocate tensors or
+    /// perform the forward pass.
     fn forward_with_cache(
         &mut self,
         _input_tokens: &[TokenId],
@@ -82,6 +105,10 @@ pub trait ModelBackend: Send + Sync {
 
     /// Forward pass stopped after `upto_layer` layers.
     /// Default impl ignores `upto_layer` and calls `self.forward()`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the underlying forward pass fails.
     #[allow(clippy::too_many_arguments)]
     fn forward_to_layer(
         &mut self,
