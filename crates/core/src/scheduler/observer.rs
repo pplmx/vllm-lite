@@ -1,5 +1,5 @@
 use crate::types::{SeqId, TokenId};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 /// SchedulerObserverError: scheduler observer error.
 #[derive(Debug, thiserror::Error)]
@@ -18,6 +18,35 @@ pub trait SchedulerObserver: Send + Sync {
     fn on_sequence_finished(&self, seq_id: SeqId, total_tokens: usize);
     fn on_preemption(&self, seq_id: SeqId, reason: &str);
     fn on_memory_pressure(&self, available_blocks: usize);
+}
+
+/// Default no-op `SchedulerObserver`.
+///
+/// All callbacks are silent. Used by [`dyn SchedulerObserver::default_arc`]
+/// to construct an `Arc<Self>` default instance.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NoopSchedulerObserver;
+
+impl SchedulerObserver for NoopSchedulerObserver {
+    fn on_request_arrived(&self, _seq_id: SeqId, _prompt_len: usize) {}
+    fn on_batch_scheduled(&self, _seq_ids: &[SeqId], _batch_size: usize) {}
+    fn on_decoding(&self, _seq_id: SeqId, _token: TokenId) {}
+    fn on_sequence_finished(&self, _seq_id: SeqId, _total_tokens: usize) {}
+    fn on_preemption(&self, _seq_id: SeqId, _reason: &str) {}
+    fn on_memory_pressure(&self, _available_blocks: usize) {}
+}
+
+impl dyn SchedulerObserver {
+    /// Returns an `Arc<Self>` containing the no-op [`NoopSchedulerObserver`].
+    ///
+    /// This is the closest equivalent to
+    /// `Arc::<dyn SchedulerObserver>::default()`; Rust's orphan rule prevents
+    /// a direct `impl Default for Arc<dyn ...>` because `Arc` is foreign and
+    /// there is no local type appearing before the uncovered trait-object
+    /// parameter.
+    pub fn default_arc() -> Arc<Self> {
+        Arc::new(NoopSchedulerObserver)
+    }
 }
 
 /// ObserverEvent: observer event enumeration.
@@ -124,5 +153,21 @@ impl SchedulerObservers {
 impl Default for SchedulerObservers {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scheduler_observer_default_arc_is_noop() {
+        let observer: Arc<dyn SchedulerObserver> = <dyn SchedulerObserver>::default_arc();
+        observer.on_request_arrived(1, 16);
+        observer.on_batch_scheduled(&[1, 2, 3], 3);
+        observer.on_decoding(1, 42);
+        observer.on_sequence_finished(1, 100);
+        observer.on_preemption(1, "memory");
+        observer.on_memory_pressure(512);
     }
 }

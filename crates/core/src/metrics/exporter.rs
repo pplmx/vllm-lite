@@ -1,5 +1,6 @@
 // crates/core/src/metrics/exporter.rs
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use crate::metrics::EnhancedMetricsCollector;
 
@@ -7,6 +8,63 @@ use crate::metrics::EnhancedMetricsCollector;
 #[async_trait::async_trait]
 pub trait MetricsExporter {
     async fn export(&self) -> Result<String, MetricsError>;
+}
+
+/// Default in-memory `MetricsExporter`.
+///
+/// `export()` returns the snapshot as a simple "name=value" text format. Useful
+/// as the `Arc<dyn MetricsExporter>` default instance and for tests that only
+/// care that `export()` succeeds.
+#[derive(Debug, Default, Clone)]
+pub struct InMemoryMetricsExporter {
+    values: Arc<Mutex<HashMap<String, f64>>>,
+}
+
+impl InMemoryMetricsExporter {
+    /// Records a single metric value, overwriting any prior entry for `name`.
+    pub fn record(&self, name: impl Into<String>, value: f64) {
+        self.values
+            .lock()
+            .expect("metrics exporter mutex poisoned")
+            .insert(name.into(), value);
+    }
+
+    /// Returns the recorded values, in unspecified order.
+    pub fn snapshot(&self) -> Vec<(String, f64)> {
+        self.values
+            .lock()
+            .expect("metrics exporter mutex poisoned")
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect()
+    }
+}
+
+#[async_trait::async_trait]
+impl MetricsExporter for InMemoryMetricsExporter {
+    async fn export(&self) -> Result<String, MetricsError> {
+        let values = self.values.lock().expect("metrics exporter mutex poisoned");
+        let mut out = String::new();
+        for (name, value) in values.iter() {
+            out.push_str(name);
+            out.push(' ');
+            out.push_str(&value.to_string());
+            out.push('\n');
+        }
+        Ok(out)
+    }
+}
+
+impl dyn MetricsExporter {
+    /// Returns an `Arc<Self>` containing a fresh [`InMemoryMetricsExporter`].
+    ///
+    /// This is the closest equivalent to `Arc::<dyn MetricsExporter>::default()`;
+    /// Rust's orphan rule prevents a direct `impl Default for Arc<dyn ...>`
+    /// because `Arc` is foreign and there is no local type appearing before
+    /// the uncovered trait-object parameter.
+    pub fn default_arc() -> Arc<Self> {
+        Arc::new(InMemoryMetricsExporter::default())
+    }
 }
 
 /// MetricsError: metrics error.
@@ -248,5 +306,12 @@ mod tests {
         let exporter = PrometheusExporter::new(collector, 9090);
         let output = exporter.export_to_string().await;
         assert!(output.contains("packing_efficiency 0.850"));
+    }
+
+    #[tokio::test]
+    async fn metrics_exporter_default_arc_returns_empty() {
+        let exporter: Arc<dyn MetricsExporter> = <dyn MetricsExporter>::default_arc();
+        let output = exporter.export().await.expect("default export succeeds");
+        assert!(output.is_empty());
     }
 }
