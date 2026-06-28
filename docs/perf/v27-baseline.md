@@ -180,3 +180,25 @@ empty-result signal, or rewrite the bench with a timeout / step cap). They are
 | flash_attention/standard | b1_h14_s512_d64 | TBD |
 | flash_attention/standard | b1_h14_s2048_d64 | TBD |
 | flash_attention/standard | b4_h14_s512_d64 | TBD |
+
+## Model benches — Paged KV Cache (H-5 added 2026-06-28)
+
+**Strategy:** Runtime CUDA detection (same as H-2/H-3/H-4).
+- **GPU:** qwen3-7B-class GQA (num_kv_heads=2, head_dim=64, BLOCK_SIZE=16 constant). Standard configs: (num_blocks=64), (256), (1024).
+- **CPU:** smoke test (num_layers=1, num_blocks=4, num_heads=2, head_dim=32) + eprintln warning. Bench covers one `write_kv` + one `read_kv` per iteration.
+
+**Note:** Paged KV cache is mostly scatter/gather on block tables (`write_kv` copies a block out, mutates one slot, concats back). CPU benches are reasonable proxies — more so than flash attention — but don't capture GPU memory-bandwidth wins for batched scatter.
+
+### CPU-only environment (current dev/CI)
+
+| Bench path | Config | ns/iter (median) |
+|------------|--------|------------------|
+| paged_kv_cache_smoke/cpu_smoke | l1_blocks4_h2_d32 | 23,281 ns |
+
+### Standard dimensions (recorded when GPU available)
+
+| Bench path | Config | ns/iter (median) |
+|------------|--------|------------------|
+| paged_kv_cache/read_write | blocks64_h2_d64 | TBD |
+| paged_kv_cache/read_write | blocks256_h2_d64 | TBD |
+| paged_kv_cache/read_write | blocks1024_h2_d64 | TBD |
