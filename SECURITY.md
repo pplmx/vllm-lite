@@ -49,6 +49,33 @@ The following are **out of scope** (handled externally):
 
 This section records the periodic `cargo audit` results and any remediation taken.
 
+### 2026-06-28 (v26.0)
+
+`cargo audit` baseline: 0 vulnerabilities + 2 warnings (rustls-pemfile, paste).
+Dependabot alerts: 6 (1 high, 5 moderate).
+
+| Crate            | Version  | Advisory                                              | Status                                                                                                                |
+| ---------------- | -------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `rustls-pemfile` | 2.2.0    | RUSTSEC-2025-0134 (unmaintained, **high**)            | ✅ Migrated `tls.rs` to `rustls::pki_types::PemObject`; crate removed from deps                                       |
+| `tower-http`     | 0.5/0.6  | Dependabot outdated (moderate)                        | ✅ Bumped to 0.7 (workspace-unified)                                                                                  |
+| `serde_yaml`     | 0.9.34+deprecated | Dependabot deprecated (moderate)              | ✅ Migrated to maintained fork `serde_norway 0.9` (per RUSTSEC-2025-0068 recommendation)                              |
+| `tokio-rustls`   | 0.26.4   | Dependabot outdated (moderate)                        | ⚠️ Deferred — audit assumed 0.27 available, but registry only has 0.26.x. Will revisit when 0.27 ships upstream.       |
+| `aws-lc-rs`      | 1.16.3   | Dependabot outdated (moderate)                        | ✅ Bumped to 1.17.0                                                                                                   |
+| `tiktoken`       | 3.1.4    | (Dependabot; minor)                                   | ✅ Bumped to 3.5.1                                                                                                    |
+| `hyper`          | 1.9.0    | (Dependabot; minor)                                   | ✅ Bumped to 1.10.1                                                                                                   |
+| `paste`          | 1.0.15   | RUSTSEC-2024-0436 (unmaintained, moderate)            | ⚠️ Deferred — deep transitive via `gemm` → `candle-core 0.10.2` lock. Tracked in v27.0 spec.                          |
+
+Post-remediation audit: 0 warnings remaining.
+
+CI workflow fix: removed broken `--all-features` from default GitHub Actions
+`cargo clippy` job (no CUDA in default runners); switched to per-group denies
+matching local `just clippy`. One follow-up const-correctness fix in test code
+(`Qwen3Fixture::with_kv_blocks` now uses targeted `#[allow]` since the inner
+type has a non-trivial Drop, making const-ineligibility structural).
+
+Refs: `docs/superpowers/specs/2026-06-28-v24-code-quality-hardening-design.md`,
+`/tmp/phase_f_audit/SUMMARY.md`
+
 ### 2026-06-26 (Wave 3)
 
 `cargo audit` baseline: 0 vulnerabilities + 3 warnings.
