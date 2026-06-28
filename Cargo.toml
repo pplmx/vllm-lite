@@ -54,16 +54,20 @@ correctness = { level = "deny", priority = -1 }
 suspicious = { level = "deny", priority = -1 }
 perf = { level = "deny", priority = -1 }
 
-# warn tier: documentation, style, ergonomics
+# deny tier: lints cleaned to zero by v25.0 Phase E-3
+module_name_repetitions = "deny"       # 220 -> 0 (allowed in 117 files for legitimate patterns)
+missing_errors_doc = "deny"            # 249 -> 0 (cleaned in E-2)
+missing_panics_doc = "deny"            # 36 -> 0 (cleaned in E-2)
+uninlined_format_args = "deny"         # 322 -> 0 (cleaned in E-1)
+must_use_candidate = "deny"            # 490 -> 0 (cleaned in E-1)
+return_self_not_must_use = "deny"      # 109 -> 0 (7 builder methods tagged)
+missing_const_for_fn = "deny"          # 341 -> 0 (tonic-generated allow'd in grpc.rs)
+
+# warn tier: pedantic/nursery have ~500 warnings remaining after E-3
+# Wholesale deny deferred to a follow-up phase that adds per-file allows
+# for legitimate test patterns (float_cmp, unreadable_literal, etc.).
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
-missing_errors_doc = "warn"
-missing_panics_doc = "warn"
-module_name_repetitions = "warn"
-must_use_candidate = "warn"
-return_self_not_must_use = "warn"
-missing_const_for_fn = "warn"
-uninlined_format_args = "warn"
 
 # allow tier: project-specific rationale
 cast_precision_loss = "allow"          # model dim casts are intentional
