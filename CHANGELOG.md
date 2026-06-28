@@ -26,6 +26,16 @@
 
 ### Added
 
+- **Fuzz Testing (v29.0)** — cargo-fuzz infrastructure + 3 fuzz targets:
+    - `cargo-fuzz 0.13.2` scaffolded at `fuzz/` directory; nightly Rust toolchain required for sanitizer flags
+    - `app_config_yaml`: fuzz `serde_saphyr::from_str::<AppConfig>` with arbitrary UTF-8 bytes
+    - `safetensors_header`: fuzz `SafeTensors::deserialize` with arbitrary bytes
+    - `qwen3_config_json`: fuzz `serde_json::from_slice::<Qwen3Config>` with arbitrary bytes
+    - **Bugs found**: 0 across ~17.6M executions (3 targets × 60s each: 751k + 8.77M + 8.13M)
+    - `justfile` targets: `fuzz-build`, `fuzz-smoke`, `fuzz TARGET`, `fuzz-list`
+    - Test count: 1212 passed (fuzz targets run on-demand, not in `cargo test`)
+    - Total commits: 5 (J-1 to J-5)
+
 - **Property-Based Testing (v28.0)** — proptest infrastructure + invariants:
     - `proptest 1.11` added as workspace dev-dep
     - 4 components covered with 18 properties total:

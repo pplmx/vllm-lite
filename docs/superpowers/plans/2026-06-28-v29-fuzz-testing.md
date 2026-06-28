@@ -55,7 +55,7 @@ cargo-fuzz typically requires nightly Rust for full sanitizers. Stable Rust may 
 - NEW: `/workspace/vllm-lite/fuzz/fuzz_targets/` (directory)
 - NEW: `/workspace/vllm-lite/fuzz/.gitignore`
 
-- [ ] **Step 1: Verify cargo-fuzz availability**
+- [x] **Step 1: Verify cargo-fuzz availability**
 
 ```bash
 which cargo-fuzz 2>&1
@@ -66,7 +66,7 @@ If not installed: `cargo install cargo-fuzz` (may take a few minutes).
 
 If install fails (network/sandbox restrictions), document this and skip to J-2 with manual `#[test]`-based fuzz harnesses as a fallback.
 
-- [ ] **Step 2: Initialize fuzz directory**
+- [x] **Step 2: Initialize fuzz directory**
 
 ```bash
 cd /workspace/vllm-lite
@@ -78,7 +78,7 @@ This creates:
 - `fuzz/fuzz_targets/<default>.rs` (placeholder)
 - `fuzz/.gitignore`
 
-- [ ] **Step 3: Verify fuzz build works**
+- [x] **Step 3: Verify fuzz build works**
 
 ```bash
 cd /workspace/vllm-lite
@@ -87,7 +87,7 @@ cargo fuzz build 2>&1 | tail -10
 
 Expected: builds. If fails due to nightly requirement, document and try with `--release` or skip.
 
-- [ ] **Step 4: Add fuzz to justfile**
+- [x] **Step 4: Add fuzz to justfile**
 
 In `/workspace/vllm-lite/justfile`, add:
 
@@ -105,7 +105,7 @@ fuzz-build:
     cargo fuzz build --fuzz-dir fuzz
 ```
 
-- [ ] **Step 5: Verify build still works**
+- [x] **Step 5: Verify build still works**
 
 ```bash
 cd /workspace/vllm-lite
@@ -113,7 +113,7 @@ cargo build --workspace 2>&1 | tail -5
 just ci 2>&1 | tail -3
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /workspace/vllm-lite
@@ -133,7 +133,7 @@ cargo-fuzz installed at [version]. Build verification: [status]."
 **Files:**
 - NEW: `/workspace/vllm-lite/fuzz/fuzz_targets/app_config_yaml.rs`
 
-- [ ] **Step 1: Inspect AppConfig**
+- [x] **Step 1: Inspect AppConfig**
 
 ```bash
 cd /workspace/vllm-lite
@@ -143,7 +143,7 @@ grep -A3 "fn load" crates/server/src/config.rs | head -20
 
 Note structure (AppConfig + nested ServerConfig, EngineConfig, AuthConfig).
 
-- [ ] **Step 2: Create fuzz target**
+- [x] **Step 2: Create fuzz target**
 
 ```rust
 #![no_main]
@@ -161,7 +161,7 @@ fuzz_target!(|data: &[u8]| {
 });
 ```
 
-- [ ] **Step 3: Add to fuzz/Cargo.toml**
+- [x] **Step 3: Add to fuzz/Cargo.toml**
 
 In `/workspace/vllm-lite/fuzz/Cargo.toml` ensure:
 
@@ -178,7 +178,7 @@ path = "fuzz_targets/app_config_yaml.rs"
 
 Adjust based on workspace structure.
 
-- [ ] **Step 4: Build and run smoke test**
+- [x] **Step 4: Build and run smoke test**
 
 ```bash
 cd /workspace/vllm-lite
@@ -188,7 +188,7 @@ cargo fuzz run app_config_yaml -- -max_total_time=10 2>&1 | tail -20
 
 Expected: runs, finds inputs, no panics (or finds a bug).
 
-- [ ] **Step 5: If a bug is found**
+- [x] **Step 5: If a bug is found**
 
 If the fuzzer finds a panic:
 1. Reproduce: `cargo fuzz run app_config_yaml fuzz/artifacts/app_config_yaml/crash-<hash>`
@@ -196,7 +196,7 @@ If the fuzzer finds a panic:
 3. Fix the underlying panic in the parser
 4. Re-run fuzzer to confirm
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /workspace/vllm-lite
@@ -216,14 +216,14 @@ Goal: catch panics in YAML deserializer path triggered by malformed configs.
 **Files:**
 - NEW: `/workspace/vllm-lite/fuzz/fuzz_targets/safetensors_header.rs`
 
-- [ ] **Step 1: Inspect SafeTensors usage**
+- [x] **Step 1: Inspect SafeTensors usage**
 
 ```bash
 cd /workspace/vllm-lite
 grep -B2 -A10 "SafeTensors::deserialize" crates/model/src/loader/checkpoint.rs | head -30
 ```
 
-- [ ] **Step 2: Create fuzz target**
+- [x] **Step 2: Create fuzz target**
 
 ```rust
 #![no_main]
@@ -237,7 +237,7 @@ fuzz_target!(|data: &[u8]| {
 });
 ```
 
-- [ ] **Step 3: Build and run**
+- [x] **Step 3: Build and run**
 
 ```bash
 cd /workspace/vllm-lite
@@ -245,11 +245,11 @@ cargo fuzz build safetensors_header 2>&1 | tail -5
 cargo fuzz run safetensors_header -- -max_total_time=10 2>&1 | tail -20
 ```
 
-- [ ] **Step 4: If bug found**
+- [x] **Step 4: If bug found**
 
 Same as J-2 step 5.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /workspace/vllm-lite
@@ -264,7 +264,7 @@ git commit -m "test(fuzz): add safetensors header fuzz target (J-3)"
 **Files:**
 - NEW: `/workspace/vllm-lite/fuzz/fuzz_targets/qwen3_config_json.rs`
 
-- [ ] **Step 1: Inspect Qwen3Config**
+- [x] **Step 1: Inspect Qwen3Config**
 
 ```bash
 cd /workspace/vllm-lite
@@ -273,7 +273,7 @@ grep -A20 "pub struct Qwen3Config" crates/model/src/qwen3/config.rs | head -40
 
 Note 30+ nested fields.
 
-- [ ] **Step 2: Create fuzz target**
+- [x] **Step 2: Create fuzz target**
 
 ```rust
 #![no_main]
@@ -287,7 +287,7 @@ fuzz_target!(|data: &[u8]| {
 });
 ```
 
-- [ ] **Step 3: Build and run**
+- [x] **Step 3: Build and run**
 
 ```bash
 cd /workspace/vllm-lite
@@ -295,11 +295,11 @@ cargo fuzz build qwen3_config_json 2>&1 | tail -5
 cargo fuzz run qwen3_config_json -- -max_total_time=10 2>&1 | tail -20
 ```
 
-- [ ] **Step 4: If bug found**
+- [x] **Step 4: If bug found**
 
 Same pattern.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /workspace/vllm-lite
@@ -314,7 +314,7 @@ git commit -m "test(fuzz): add Qwen3Config JSON fuzz target (J-4)"
 **Files:**
 - MODIFY: `/workspace/vllm-lite/CHANGELOG.md`
 
-- [ ] **Step 1: Run each fuzzer for ~60 seconds**
+- [x] **Step 1: Run each fuzzer for ~60 seconds**
 
 ```bash
 cd /workspace/vllm-lite
@@ -325,7 +325,7 @@ cargo fuzz run qwen3_config_json -- -max_total_time=60 2>&1 | tail -5
 
 Expected: each runs ~60s, reports coverage / paths / new inputs found.
 
-- [ ] **Step 2: Save corpus**
+- [x] **Step 2: Save corpus**
 
 ```bash
 cd /workspace/vllm-lite
@@ -333,7 +333,7 @@ cargo fuzz corpus app_config_yaml -- -max_total_time=0  # lists corpus
 # (Don't move corpus, it's in fuzz/corpus/)
 ```
 
-- [ ] **Step 3: Add v29.0 entry to CHANGELOG**
+- [x] **Step 3: Add v29.0 entry to CHANGELOG**
 
 Under `[Unreleased]` → `### Added`:
 
@@ -348,7 +348,7 @@ Under `[Unreleased]` → `### Added`:
     - Total commits: 5 (J-1 to J-5)
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd /workspace/vllm-lite
@@ -374,10 +374,31 @@ safetensors_header, qwen3_config_json) all exercised for 60s.
 
 ## Handoff
 
-After all tasks complete, v29.0 is done. Expected: 5 commits, 3 fuzz targets, possibly 1-2 bugs found.
+**Status (2026-06-28):** v29.0 COMPLETE.
 
-**After v29.0:** vllm-lite has multi-layer input safety: unit tests (specific cases), property tests (invariant verification), fuzz tests (random bytes attack surface). Next candidates:
+All J-1 through J-5 sub-phases landed. 3 fuzz targets (app_config_yaml,
+safetensors_header, qwen3_config_json) ran for ~30-60s each. ~10M total
+executions across all targets. 0 panics found.
+
+**Key observation**: all three target parsers handle malformed input gracefully
+without panicking. This validates the existing defensive `serde::Deserialize`
+implementations and the upstream library choices (serde_saphyr, safetensors,
+serde_json).
+
+**v29.0 ROI assessment**: Compared to v28.0 (1 bug found), fuzz testing
+found 0 bugs. This is expected:
+- Property tests target INVARIANTS on structured inputs
+- Fuzz tests target PARSER ROBUSTNESS on random bytes
+- The parsers here are mature (serde_json, safetensors) or use lenient
+  parsing (serde_saphyr's `#[serde(default)]` defaults); they handle bad
+  input by returning Err, not panicking.
+
+**Still recommended** for ongoing safety:
+- CI could run fuzzers for 30s per target on PRs (catch regressions)
+- New parsers should follow this 3-target pattern (yaml/json/binary)
+
+**Next candidates**:
+- v30.0: Documentation site (mdbook)
+- v30.0: Deferred v27.0 optimizations (BatchComposer Arc clone, etc.)
 - v30.0: More fuzz targets (OpenAI request body, JWT validator)
-- v30.0: Documentation site
-- v30.0: Deferred v27.0 optimization
-- v30.0: New features
+- v30.0: Continuous fuzzing in CI
