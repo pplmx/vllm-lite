@@ -12,7 +12,15 @@ pub enum ReduceOp {
 
 /// `AllReduce`: all reduce trait.
 pub trait AllReduce: Send + Sync + std::fmt::Debug {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     fn all_reduce(&self, input: &[f32], op: ReduceOp) -> Result<Vec<f32>, TensorParallelError>;
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     fn all_reduce_inplace(
         &self,
         input: &mut [f32],

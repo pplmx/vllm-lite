@@ -8,6 +8,10 @@ use crate::sync::lock_mutex;
 use vllm_traits::TokenId;
 
 impl Engine {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn step_beam(
         &mut self,
         beam_width: usize,

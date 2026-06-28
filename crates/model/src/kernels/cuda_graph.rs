@@ -3,6 +3,10 @@ use std::sync::Arc;
 
 /// `CudaGraphNode`: cuda graph node trait.
 pub trait CudaGraphNode: Send + Sync {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     fn execute(
         &self,
         inputs: &[&dyn CudaGraphTensor],
@@ -143,12 +147,20 @@ impl CudaGraph {
         self.cached = false;
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub const fn capture(&mut self) -> Result<(), CudaGraphError> {
         self.cached = true;
         Ok(())
     }
 
     #[allow(unused_mut)]
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn execute(&self, tensors: &mut [Box<dyn CudaGraphTensor>]) -> Result<(), CudaGraphError> {
         if !self.cached {
             return Err(CudaGraphError::CaptureFailed(
@@ -200,6 +212,10 @@ impl CudaGraphExecutor {
         self.graphs.insert(name, graph);
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn execute_graph(
         &self,
         name: &str,

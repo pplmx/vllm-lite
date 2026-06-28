@@ -47,6 +47,10 @@ impl TlsConfig {
         self
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn load(&self) -> Result<ServerConfig, TlsError> {
         let cert_file = fs::File::open(&self.cert_path)
             .map_err(|e| TlsError::CertificateRead(e.to_string()))?;
@@ -108,6 +112,10 @@ pub struct TlsListener {
 }
 
 impl TlsListener {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(config: TlsConfig) -> Result<Self, TlsError> {
         let server_config = config.load()?;
         Ok(Self {
@@ -115,6 +123,10 @@ impl TlsListener {
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub async fn bind(&self, addr: &str) -> Result<TcpListener, std::io::Error> {
         let listener = TcpListener::bind(addr).await?;
         Ok(listener)

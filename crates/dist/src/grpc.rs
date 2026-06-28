@@ -127,6 +127,10 @@ impl node_service_server::NodeService for NodeServiceImpl {
     }
 }
 
+/// Runs the operation.
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 pub async fn start_grpc_server(
     node_id: String,
     listen_addr: &str,

@@ -17,6 +17,10 @@ use vllm_traits::{BatchOutput, BatchPhase};
 
 impl Engine {
     #[cfg(feature = "cuda-graph")]
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn step_with_graph(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
         let start = std::time::Instant::now();
         let graph_batch = self.scheduler.build_batch_with_graph();

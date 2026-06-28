@@ -40,6 +40,10 @@ impl RopeGqaDecoderBlock {
         }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let residual = x.clone();
         let x = self.input_layernorm.forward(x)?;
@@ -52,6 +56,10 @@ impl RopeGqaDecoderBlock {
         x.add(&residual)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_prefill(
         &self,
         x: &Tensor,
@@ -73,6 +81,10 @@ impl RopeGqaDecoderBlock {
         x.add(&residual)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_decode(
         &self,
         x: &Tensor,
@@ -109,6 +121,10 @@ impl RopeGqaDecoderBlock {
 
 /// Paged-KV decoder layer: prefill and single-token decode with block table.
 pub trait PagedDecoderBlock {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     fn forward_prefill(
         &self,
         x: &Tensor,
@@ -118,6 +134,10 @@ pub trait PagedDecoderBlock {
         positions: &[usize],
     ) -> Result<Tensor>;
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     fn forward_decode(
         &self,
         x: &Tensor,

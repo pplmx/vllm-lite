@@ -212,6 +212,10 @@ impl ModelConfig {
         }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn from_config_json(value: &serde_json::Value) -> ConfigResult<Self> {
         let architecture = ARCHITECTURE_REGISTRY
             .detect(value)

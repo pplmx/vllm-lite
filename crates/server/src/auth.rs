@@ -58,6 +58,10 @@ impl AuthMiddleware {
         }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub async fn verify(&self, headers: &HeaderMap) -> Result<String, StatusCode> {
         let auth_header = headers.get(AUTHORIZATION).and_then(|v| v.to_str().ok());
 

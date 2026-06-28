@@ -9,6 +9,10 @@ pub struct DeviceMesh {
 }
 
 impl DeviceMesh {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         world_size: usize,
         rank: usize,
@@ -59,6 +63,10 @@ pub struct NodeMesh {
 }
 
 impl NodeMesh {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         num_nodes: usize,
         node_rank: usize,

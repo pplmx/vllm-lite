@@ -8,6 +8,10 @@ use super::PagedKvCache;
 use candle_core::{DType, Result, Tensor};
 
 impl PagedKvCache {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn write_kv_batch(
         &mut self,
         layer_idx: usize,
@@ -78,6 +82,10 @@ impl PagedKvCache {
         Ok(())
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn write_kv(
         &mut self,
         layer_idx: usize,
@@ -230,6 +238,10 @@ impl PagedKvCache {
         Ok(())
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn read_kv(
         &self,
         layer_idx: usize,

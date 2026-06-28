@@ -57,6 +57,10 @@ impl PipelineParallel {
         self.stages.len() > 1
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, input: StageInput) -> Result<StageOutput> {
         if !self.is_pipeline_parallel() {
             if let Some(stage) = self.stages.first() {
@@ -85,6 +89,10 @@ impl PipelineParallel {
         Result::Err(candle_core::Error::msg("No output generated"))
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_microbatches(&self, inputs: Vec<StageInput>) -> Result<Vec<StageOutput>> {
         if !self.is_pipeline_parallel() {
             if let Some(stage) = self.stages.first() {
@@ -106,6 +114,10 @@ impl PipelineParallel {
         Ok(all_outputs)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_with_schedule(&self, inputs: Vec<StageInput>) -> Result<Vec<StageOutput>> {
         if !self.is_pipeline_parallel() {
             return self.forward_microbatches(inputs);

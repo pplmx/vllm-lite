@@ -401,6 +401,9 @@ impl SchedulerEngine {
         self.finished.clear();
     }
 
+    /// # Errors
+    ///
+    /// Returns `Err` if registration fails (e.g. duplicate name or invalid input).
     /// Register an observer
     pub fn register_observer(
         &mut self,

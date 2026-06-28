@@ -36,6 +36,10 @@ where
         self
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_with_cache(
         &mut self,
         tokens: &[TokenId],
@@ -65,6 +69,10 @@ impl<B> CausalLm<B, LnLayerNorm, Linear>
 where
     B: PagedDecoderBlock + Send + Sync,
 {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new_with_block_fn<F>(
         config: ModelConfig,
         device: Device,
@@ -116,6 +124,10 @@ where
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn from_hf_weights_ln<F>(
         config: ModelConfig,
         device: Device,
@@ -183,6 +195,10 @@ impl<B> CausalLm<B, RmsNorm, Linear>
 where
     B: PagedDecoderBlock + Send + Sync,
 {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new_rms<F>(
         config: ModelConfig,
         device: Device,
@@ -233,6 +249,10 @@ where
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn from_hf_weights_rms<F>(
         config: ModelConfig,
         device: Device,

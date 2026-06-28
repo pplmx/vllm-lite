@@ -52,6 +52,10 @@ impl AttentionConfigBuilder {
     }
 }
 
+/// Runs the operation.
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 pub fn expand_kv(kv: &Tensor, num_q_heads: usize, num_kv_heads: usize) -> Result<Tensor> {
     if num_q_heads == num_kv_heads {
         return Ok(kv.clone());
@@ -85,6 +89,10 @@ pub fn expand_kv(kv: &Tensor, num_q_heads: usize, num_kv_heads: usize) -> Result
     kv.repeat(&[1, 1, repeat_factor, 1])
 }
 
+/// Runs the operation.
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 pub fn causal_mask(seq_len: usize, device: &candle_core::Device) -> Result<Tensor> {
     let row_indices = Tensor::arange(0u32, seq_len as u32, device)?.reshape((1, 1, seq_len, 1))?;
     let col_indices = Tensor::arange(0u32, seq_len as u32, device)?.reshape((1, 1, 1, seq_len))?;
@@ -97,6 +105,10 @@ pub fn causal_mask(seq_len: usize, device: &candle_core::Device) -> Result<Tenso
     Ok(mask)
 }
 
+/// Runs the operation.
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 pub fn causal_mask_tile(
     batch_size: usize,
     start: usize,
@@ -120,6 +132,10 @@ pub fn causal_mask_tile(
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Runs the operation.
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 pub fn paged_attention(
     q: &Tensor,
     k: &Tensor,
@@ -148,6 +164,10 @@ pub fn paged_attention(
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Runs the operation.
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 pub fn tiled_attention(
     q: &Tensor,
     k: &Tensor,

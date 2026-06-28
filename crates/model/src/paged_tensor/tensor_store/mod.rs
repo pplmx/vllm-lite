@@ -31,6 +31,10 @@ pub struct PagedKvCache {
 }
 
 impl PagedKvCache {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         num_layers: usize,
         num_heads: usize,

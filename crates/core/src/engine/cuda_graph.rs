@@ -7,6 +7,10 @@
 
 impl crate::engine::Engine {
     #[cfg(feature = "cuda-graph")]
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn capture_cuda_graphs(&mut self) -> crate::error::Result<()> {
         if let Some(ref mut executor) = self.cuda_graph {
             executor

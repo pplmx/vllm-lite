@@ -14,6 +14,10 @@ use super::block::{Gemma4Block, block_from_weights, new_block};
 pub type Gemma4Model = CausalLm<Gemma4Block, RmsNorm, Linear>;
 
 impl Gemma4Model {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         config: ModelConfig,
         device: Device,
@@ -23,6 +27,10 @@ impl Gemma4Model {
         Self::new_rms(config, device, num_kv_blocks, kv_quantization, new_block)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn from_weights(
         config: ModelConfig,
         device: Device,

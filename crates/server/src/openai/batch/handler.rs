@@ -4,6 +4,10 @@ use super::types::{BatchResponse, BatchResults, BatchStatus, RequestCounts, Simp
 use crate::ApiState;
 use crate::openai::types::ErrorResponse;
 
+/// Runs the operation.
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 pub async fn create_batch(
     State(state): State<ApiState>,
     Json(req): Json<SimpleBatchRequest>,
@@ -61,6 +65,10 @@ pub async fn create_batch(
     }))
 }
 
+/// Runs the operation.
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 pub async fn get_batch(
     State(state): State<ApiState>,
     axum::extract::Path(id): axum::extract::Path<String>,
@@ -99,6 +107,10 @@ pub async fn get_batch(
     }))
 }
 
+/// Runs the operation.
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 pub async fn get_batch_results(
     State(state): State<ApiState>,
     axum::extract::Path(id): axum::extract::Path<String>,

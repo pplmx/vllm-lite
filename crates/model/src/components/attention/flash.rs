@@ -10,6 +10,10 @@ impl FlashAttention {
         Self
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor, _causal: bool) -> Result<Tensor> {
         let qk = Tensor::matmul(q, &k.transpose(2, 3)?.contiguous()?)?;
         let attn_weights = candle_nn::ops::softmax(&qk, 3)?.contiguous()?;

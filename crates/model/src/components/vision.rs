@@ -39,6 +39,10 @@ pub struct PatchEmbed {
 }
 
 impl PatchEmbed {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(config: &VisionConfig, vb: VarBuilder) -> CandleResult<Self> {
         let proj = candle_nn::linear(
             config.patch_size * config.patch_size * 3,
@@ -48,6 +52,10 @@ impl PatchEmbed {
         Ok(Self { proj })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
         self.proj.forward(x)
     }
@@ -60,6 +68,10 @@ pub struct VisionEncoder {
 }
 
 impl VisionEncoder {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(config: &VisionConfig, _vb: VarBuilder) -> CandleResult<Self> {
         Ok(Self {
             config: config.clone(),
@@ -71,6 +83,10 @@ impl VisionEncoder {
         &self.config
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
         Ok(x.clone())
     }

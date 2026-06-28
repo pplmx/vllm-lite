@@ -4,6 +4,10 @@ use axum::{Json, extract::State, response::IntoResponse};
 use tokio::sync::mpsc;
 use vllm_core::types::EngineMessage;
 
+/// Runs the operation.
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 pub async fn embeddings(
     State(state): State<ApiState>,
     Json(req): Json<EmbeddingsRequest>,

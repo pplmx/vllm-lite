@@ -35,6 +35,10 @@ impl Tokenizer {
         }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn from_file(path: &str) -> std::result::Result<Self, TokenizerError> {
         let tokenizer = HFTokenizer::from_file(path).map_err(|e| TokenizerError::LoadFailed {
             path: path.to_string(),

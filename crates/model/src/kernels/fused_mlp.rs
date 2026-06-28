@@ -3,6 +3,9 @@
 use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;
 
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 /// Fused attention layer: layernorm + attention + residual
 #[allow(clippy::too_many_arguments)]
 pub fn fused_attention_layer(
@@ -56,6 +59,9 @@ pub fn fused_attention_layer(
     o_proj.forward(&out)
 }
 
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
 /// Fused MLP layer: layernorm + `gate_proj` + `up_proj` + `down_proj` + residual
 pub fn fused_mlp_layer(
     x: &Tensor,

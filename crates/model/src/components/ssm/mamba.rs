@@ -19,6 +19,10 @@ pub struct MambaBlock {
 }
 
 impl MambaBlock {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(d_model: usize, d_state: usize, vb: VarBuilder) -> CandleResult<Self> {
         let config = SSMConfig::new(d_model).with_d_state(d_state);
 
@@ -35,6 +39,10 @@ impl MambaBlock {
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&mut self, x: &Tensor) -> CandleResult<Tensor> {
         let residual = x.clone();
 
@@ -87,6 +95,10 @@ impl MambaBlock {
         self.norm.forward(&output)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn from_weights(
         d_model: usize,
         d_state: usize,

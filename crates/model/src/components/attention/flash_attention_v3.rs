@@ -35,6 +35,10 @@ impl FlashAttentionV3 {
         }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         trace!(
             batch = ?q.dims()[0],
@@ -85,6 +89,10 @@ impl FlashAttentionV3 {
         }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_with_swa(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         self.forward(q, k, v)
     }
@@ -158,6 +166,10 @@ impl MqaFlashAttention {
         }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let (_batch_size, num_heads_q, seq_q, _) = q.dims4()?;
         debug_assert_eq!(num_heads_q, self.num_heads);
@@ -225,6 +237,10 @@ impl GqaFlashAttention {
         }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let (_batch_size, num_heads_q, seq_q, _) = q.dims4()?;
         debug_assert_eq!(num_heads_q, self.num_heads);

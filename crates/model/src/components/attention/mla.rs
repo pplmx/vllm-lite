@@ -80,6 +80,10 @@ impl MlaAttention {
         &self.v_decompress
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn split_q(&self, q_compressed: &Tensor, seq_len: usize) -> Result<(Tensor, Tensor)> {
         let batch_size = q_compressed.dims()[0];
         let q_nope_dim = self.num_heads * self.qk_nope_dim;
@@ -93,6 +97,10 @@ impl MlaAttention {
         Ok((q_nope, q_rope))
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn concat_q_nope_rope(&self, q_nope: &Tensor, q_rope: &Tensor) -> Result<Tensor> {
         let q = Tensor::cat(&[q_nope, q_rope], 2)?;
         let batch_size = q.dims()[0];
@@ -103,12 +111,20 @@ impl MlaAttention {
         q.contiguous()
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn reshape_k(&self, k_flat: &Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
         let k = k_flat.reshape((batch_size, seq_len, self.num_kv_heads, self.v_head_dim))?;
         let k = k.transpose(1, 2)?;
         k.contiguous()
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn reshape_v(&self, v_flat: &Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
         let v = v_flat.reshape((batch_size, seq_len, self.num_kv_heads, self.v_head_dim))?;
         let v = v.transpose(1, 2)?;
@@ -124,6 +140,10 @@ impl MlaAttention {
         q_rope_flat.reshape((batch_size, seq_len, self.num_heads, self.qk_rope_dim))
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
         let batch_size = x.dims()[0];
         let seq_len = x.dims()[1];
@@ -192,6 +212,10 @@ impl MlaAttention {
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         hidden_size: usize,
         num_heads: usize,

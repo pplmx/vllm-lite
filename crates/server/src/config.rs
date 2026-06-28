@@ -277,6 +277,10 @@ impl AppConfig {
         config
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn validate(&self) -> Result<(), ConfigValidationErrors> {
         let mut errors = Vec::new();
 

@@ -11,6 +11,10 @@ use candle_core::{Device, Result, Tensor};
 use super::format::SafetensorsLoader;
 use super::io::{convert_tensor, find_safetensors_files, load_file_mmap_or_read};
 
+/// Runs the operation.
+/// # Errors
+///
+/// Returns `Err` if reading or parsing the source fails.
 pub fn load_checkpoint(path: &Path, device: &Device) -> Result<HashMap<String, Tensor>> {
     if SafetensorsLoader::can_load(path) {
         return load_safetensors(path, device);

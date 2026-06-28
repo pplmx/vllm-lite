@@ -14,6 +14,10 @@ use super::block::{block_from_weights, new_block};
 pub type Qwen3Model = CausalLm<super::block::TransformerBlock, LnLayerNorm, Linear>;
 
 impl Qwen3Model {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(config: Qwen3Config, device: Device, num_kv_blocks: usize) -> CandleResult<Self> {
         let model_config = ModelConfig::from(&config);
         Self::new_with_block_fn(model_config, device, num_kv_blocks, false, |c, idx| {
@@ -23,6 +27,10 @@ impl Qwen3Model {
     }
 
     #[cfg(feature = "multi-node")]
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new_with_tp(
         config: Qwen3Config,
         tp_config: Option<TensorParallelConfig>,
@@ -31,6 +39,10 @@ impl Qwen3Model {
         super::tp::new_with_tp(config, tp_config, num_kv_blocks)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn from_weights(
         config: Qwen3Config,
         device: Device,

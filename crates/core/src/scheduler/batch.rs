@@ -81,6 +81,9 @@ impl crate::engine::Engine {
         Ok(results)
     }
 
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// Run one scheduling step (regular or speculative depending on engine configuration).
     pub fn step(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
         if self.speculative_mode && self.draft_model.is_some() {

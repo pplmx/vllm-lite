@@ -20,6 +20,10 @@ pub struct SSMHarmonicSSMLayer {
 }
 
 impl SSMHarmonicSSMLayer {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         d_inner: usize,
         d_state: usize,
@@ -47,6 +51,10 @@ impl SSMHarmonicSSMLayer {
         })
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor) -> CandleResult<(Tensor, Tensor, Tensor, Tensor)> {
         let x_conv = x.transpose(1, 2)?;
         let x_conv = self.conv.forward(&x_conv)?;
@@ -65,6 +73,10 @@ impl SSMHarmonicSSMLayer {
         Ok((delta, b.clone(), c.clone(), x_conv))
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn forward_with_a(
         &self,
         x: &Tensor,
@@ -124,6 +136,10 @@ impl SSMHarmonicSSMLayer {
         &self.dt_bias
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn from_weights(
         d_inner: usize,
         d_state: usize,

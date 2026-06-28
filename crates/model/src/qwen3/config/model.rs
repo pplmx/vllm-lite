@@ -194,6 +194,10 @@ impl TextConfig {
 }
 
 impl Qwen3Config {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn from_file(path: &str) -> ConfigResult<Self> {
         let content = std::fs::read_to_string(path).map_err(|source| ConfigError::Io {
             path: path.to_string(),

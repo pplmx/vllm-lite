@@ -58,6 +58,10 @@ impl PagedDecoderBlock for TransformerBlock {
 
 impl TransformerBlock {
     #[allow(clippy::too_many_arguments)]
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         hidden_size: usize,
         num_heads: usize,
@@ -107,6 +111,10 @@ impl TransformerBlock {
 
     #[cfg(feature = "multi-node")]
     #[allow(clippy::too_many_arguments)]
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new_with_tp(
         hidden_size: usize,
         num_heads: usize,
@@ -153,6 +161,10 @@ impl TransformerBlock {
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new_with_weights(
         hidden_size: usize,
         num_heads: usize,
@@ -234,6 +246,10 @@ impl TransformerBlock {
         )))
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn from_weights(
         config: &crate::config::ModelConfig,
         layer_idx: usize,
@@ -319,6 +335,10 @@ impl TransformerBlock {
     }
 }
 
+/// Runs the operation.
+/// # Errors
+///
+/// Returns `Err` if any required tensor allocation or weight loading fails.
 pub fn new_block(
     config: &crate::config::ModelConfig,
     _layer_idx: usize,

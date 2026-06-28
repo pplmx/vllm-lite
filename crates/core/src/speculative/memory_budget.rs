@@ -68,6 +68,10 @@ impl MemoryBudget {
         Self::new(u64::MAX).expect("u64::MAX always > 0")
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub const fn new(total_bytes: u64) -> Result<Self, MemoryBudgetExceeded> {
         if total_bytes == 0 {
             return Err(MemoryBudgetExceeded {
@@ -102,6 +106,10 @@ impl MemoryBudget {
         }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn reserve_target(&self, bytes: u64) -> Result<(), MemoryBudgetExceeded> {
         let mut inner = self
             .inner
@@ -129,6 +137,10 @@ impl MemoryBudget {
         inner.reserved_target_bytes = 0;
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn try_reserve_draft(
         &self,
         bytes: u64,

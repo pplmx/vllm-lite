@@ -19,6 +19,10 @@ impl DraftModelRegistry {
     /// Register a draft spec. The spec is stored as `Unloaded`; no I/O happens.
     ///
     /// Returns [`DraftRegistryError::AlreadyLoaded`] if an entry with the same
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if registration fails (e.g. duplicate name or invalid input).
     /// id already exists in either state.
     pub fn register(&self, spec: DraftSpec) -> Result<(), DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
@@ -41,6 +45,10 @@ impl DraftModelRegistry {
     ///
     /// Errors:
     /// - `UnknownDraftId` if no entry with `id` exists
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// - `AlreadyLoaded` if the entry is already in `Loaded` state
     pub fn attach_loaded(
         &self,
@@ -80,6 +88,10 @@ impl DraftModelRegistry {
     /// Errors:
     /// - `UnknownDraftId` if no entry with `id` exists
     /// - `AlreadyLoaded` if the entry is already `Loaded`
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// - `MemoryBudgetExceeded` if the budget can't accommodate this draft
     pub fn attach_loaded_budgeted(
         &self,

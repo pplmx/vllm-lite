@@ -103,6 +103,10 @@ impl SchedulerObservers {
     /// `MAX_OBSERVERS`: max observers constant.
     pub const MAX_OBSERVERS: usize = 16;
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if registration fails (e.g. duplicate name or invalid input).
     pub fn register(
         &self,
         observer: Box<dyn SchedulerObserver>,

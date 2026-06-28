@@ -53,6 +53,10 @@ impl ModelLoaderBuilder {
         self
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required validation or resource acquisition fails.
     pub fn build(self) -> Result<ModelLoader> {
         let model_dir = self
             .model_dir
@@ -165,6 +169,9 @@ impl ModelLoader {
         &self.inner.config_json
     }
 
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     /// Returns capability flags for the architecture detected from the model config.
     pub fn detected_capabilities(&self) -> Result<ArchCapabilities> {
         register_all_archs(&ARCHITECTURE_REGISTRY);
@@ -180,6 +187,10 @@ impl ModelLoader {
         Ok(arch.capabilities())
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn load_config<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
         let config_path = Path::new(&self.inner.model_dir).join("config.json");
         let content = std::fs::read_to_string(config_path)
@@ -188,11 +199,19 @@ impl ModelLoader {
             .map_err(|e| candle_core::Error::msg(format!("Failed to parse config: {e}")))
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn load_weights(&self) -> Result<std::collections::HashMap<String, Tensor>> {
         let path = Path::new(&self.inner.model_dir);
         super::checkpoint::load_checkpoint(path, &self.inner.device)
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn load(&self) -> Result<Box<dyn vllm_traits::ModelBackend>> {
         register_all_archs(&ARCHITECTURE_REGISTRY);
 
@@ -245,6 +264,10 @@ impl ModelLoader {
         )
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if reading or parsing the source fails.
     pub fn load_model(&self) -> Result<Box<dyn vllm_traits::ModelBackend>> {
         self.load()
     }

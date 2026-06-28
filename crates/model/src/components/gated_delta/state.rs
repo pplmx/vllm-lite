@@ -45,6 +45,10 @@ pub struct GatedDeltaState {
 }
 
 impl GatedDeltaState {
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         batch: usize,
         config: &GatedDeltaConfig,

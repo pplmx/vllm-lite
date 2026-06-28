@@ -42,6 +42,10 @@ impl Fp8Quantizer {
         Self { dtype }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn quantize(&self, tensor: &Tensor) -> Result<Tensor> {
         match self.dtype {
             KvCacheDtype::Fp16 => Ok(tensor.clone()),
@@ -50,6 +54,10 @@ impl Fp8Quantizer {
         }
     }
 
+    /// Runs the operation.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
     pub fn dequantize(&self, tensor: &Tensor) -> Result<Tensor> {
         match self.dtype {
             KvCacheDtype::Fp16 => Ok(tensor.clone()),
