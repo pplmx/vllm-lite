@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use super::types::{BatchJob, BatchResultItem, BatchStatus};
+use super::types::{BatchEndpoint, BatchJob, BatchResultItem, BatchStatus};
 
 /// BatchManager: batch manager.
 pub struct BatchManager {
@@ -19,7 +19,7 @@ impl BatchManager {
 
     pub async fn create_job(
         &self,
-        endpoint: String,
+        endpoint: BatchEndpoint,
         prompts: Vec<String>,
         model: Option<String>,
         max_tokens: Option<i64>,

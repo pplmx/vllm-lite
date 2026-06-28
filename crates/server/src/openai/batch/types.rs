@@ -1,10 +1,65 @@
 use serde::{Deserialize, Serialize};
 
+/// OpenAI Batch API endpoint kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BatchEndpoint {
+    /// `/v1/chat/completions` (chat completions).
+    Chat,
+    /// `/v1/completions` (legacy text completions).
+    Completion,
+}
+
+impl BatchEndpoint {
+    /// Parse from string. Accepts both short names ("chat", "completions")
+    /// and full OpenAI paths ("/v1/chat/completions", "/v1/completions") for flexibility.
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "chat" | "/v1/chat/completions" => Some(Self::Chat),
+            "completion" | "completions" | "/v1/completions" => Some(Self::Completion),
+            _ => None,
+        }
+    }
+
+    /// Canonical short string representation.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Chat => "chat",
+            Self::Completion => "completion",
+        }
+    }
+}
+
+impl std::fmt::Display for BatchEndpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+fn deserialize_batch_endpoint<'de, D>(de: D) -> Result<BatchEndpoint, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(de)?;
+    BatchEndpoint::parse(&s)
+        .ok_or_else(|| serde::de::Error::custom(format!("unknown batch endpoint: {s}")))
+}
+
+fn serialize_batch_endpoint<S>(value: &BatchEndpoint, ser: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    ser.serialize_str(value.as_str())
+}
+
 /// SimpleBatchRequest: simple batch request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimpleBatchRequest {
     pub prompts: Vec<String>,
-    pub endpoint: String, // "chat" 或 "completions"
+    #[serde(
+        serialize_with = "serialize_batch_endpoint",
+        deserialize_with = "deserialize_batch_endpoint"
+    )]
+    pub endpoint: BatchEndpoint,
     pub model: Option<String>,
     pub max_tokens: Option<i64>,
     pub temperature: Option<f32>,
@@ -15,7 +70,11 @@ pub struct SimpleBatchRequest {
 pub struct BatchResponse {
     pub id: String,
     pub object: String,
-    pub endpoint: String,
+    #[serde(
+        serialize_with = "serialize_batch_endpoint",
+        deserialize_with = "deserialize_batch_endpoint"
+    )]
+    pub endpoint: BatchEndpoint,
     pub status: String,
     pub created_at: i64,
     pub expires_at: i64,
@@ -61,7 +120,7 @@ pub enum BatchStatus {
 #[derive(Clone)]
 pub struct BatchJob {
     pub id: String,
-    pub endpoint: String,
+    pub endpoint: BatchEndpoint,
     pub prompts: Vec<String>,
     pub model: Option<String>,
     pub max_tokens: Option<i64>,
@@ -75,7 +134,7 @@ pub struct BatchJob {
 impl BatchJob {
     pub fn new(
         id: String,
-        endpoint: String,
+        endpoint: BatchEndpoint,
         prompts: Vec<String>,
         model: Option<String>,
         max_tokens: Option<i64>,
@@ -110,7 +169,7 @@ mod tests {
     fn test_simple_batch_request_serialization() {
         let req = SimpleBatchRequest {
             prompts: vec!["Hello".to_string(), "World".to_string()],
-            endpoint: "chat".to_string(),
+            endpoint: BatchEndpoint::Chat,
             model: Some("qwen".to_string()),
             max_tokens: Some(100),
             temperature: Some(0.7),
@@ -126,7 +185,7 @@ mod tests {
         let req: SimpleBatchRequest =
             serde_json::from_str(json).expect("Failed to deserialize batch request");
         assert_eq!(req.prompts.len(), 1);
-        assert_eq!(req.endpoint, "completions");
+        assert_eq!(req.endpoint, BatchEndpoint::Completion);
     }
 
     #[test]
@@ -134,7 +193,7 @@ mod tests {
         let resp = BatchResponse {
             id: "batch_123".to_string(),
             object: "batch".to_string(),
-            endpoint: "chat".to_string(),
+            endpoint: BatchEndpoint::Chat,
             status: "pending".to_string(),
             created_at: 1000,
             expires_at: 2000,
@@ -148,20 +207,21 @@ mod tests {
         let json = serde_json::to_string(&resp).expect("Failed to serialize batch response");
         assert!(json.contains("\"id\":\"batch_123\""));
         assert!(json.contains("\"status\":\"pending\""));
+        assert!(json.contains("\"endpoint\":\"chat\""));
     }
 
     #[test]
     fn test_batch_job_creation() {
         let job = BatchJob::new(
             "batch_test".to_string(),
-            "chat".to_string(),
+            BatchEndpoint::Chat,
             vec!["prompt1".to_string()],
             Some("qwen".to_string()),
             Some(100),
             Some(0.5),
         );
         assert_eq!(job.id, "batch_test");
-        assert_eq!(job.endpoint, "chat");
+        assert_eq!(job.endpoint, BatchEndpoint::Chat);
         assert_eq!(job.prompts.len(), 1);
         assert!(matches!(job.status, BatchStatus::Pending));
     }
@@ -170,7 +230,7 @@ mod tests {
     fn test_batch_status_default() {
         let job = BatchJob::new(
             "batch_default".to_string(),
-            "completions".to_string(),
+            BatchEndpoint::Completion,
             vec![],
             None,
             None,
@@ -178,5 +238,60 @@ mod tests {
         );
         assert!(matches!(job.status, BatchStatus::Pending));
         assert!(job.completed_at.is_none());
+    }
+
+    #[test]
+    fn batch_endpoint_parse_all_variants() {
+        assert_eq!(BatchEndpoint::parse("chat"), Some(BatchEndpoint::Chat));
+        assert_eq!(
+            BatchEndpoint::parse("/v1/chat/completions"),
+            Some(BatchEndpoint::Chat)
+        );
+        assert_eq!(
+            BatchEndpoint::parse("completion"),
+            Some(BatchEndpoint::Completion)
+        );
+        assert_eq!(
+            BatchEndpoint::parse("completions"),
+            Some(BatchEndpoint::Completion)
+        );
+        assert_eq!(
+            BatchEndpoint::parse("/v1/completions"),
+            Some(BatchEndpoint::Completion)
+        );
+        assert_eq!(BatchEndpoint::parse("embeddings"), None);
+        assert_eq!(BatchEndpoint::parse("unknown"), None);
+        assert_eq!(BatchEndpoint::parse(""), None);
+    }
+
+    #[test]
+    fn batch_endpoint_display() {
+        assert_eq!(BatchEndpoint::Chat.to_string(), "chat");
+        assert_eq!(BatchEndpoint::Completion.to_string(), "completion");
+        assert_eq!(BatchEndpoint::Chat.as_str(), "chat");
+        assert_eq!(BatchEndpoint::Completion.as_str(), "completion");
+    }
+
+    #[test]
+    fn batch_endpoint_serde_json_wire_compat() {
+        // Existing JSON wire format must still deserialize.
+        let json = r#"{"prompts":["test"],"endpoint":"chat","model":"qwen"}"#;
+        let req: SimpleBatchRequest = serde_json::from_str(json).expect("should parse");
+        assert_eq!(req.endpoint, BatchEndpoint::Chat);
+
+        // Legacy "completions" alias must still work.
+        let json = r#"{"prompts":["test"],"endpoint":"completions"}"#;
+        let req: SimpleBatchRequest = serde_json::from_str(json).expect("should parse");
+        assert_eq!(req.endpoint, BatchEndpoint::Completion);
+
+        // Full OpenAI path must still work.
+        let json = r#"{"prompts":["test"],"endpoint":"/v1/chat/completions"}"#;
+        let req: SimpleBatchRequest = serde_json::from_str(json).expect("should parse");
+        assert_eq!(req.endpoint, BatchEndpoint::Chat);
+
+        // Unknown endpoint must fail loudly.
+        let json = r#"{"prompts":["test"],"endpoint":"bogus"}"#;
+        let result: Result<SimpleBatchRequest, _> = serde_json::from_str(json);
+        assert!(result.is_err(), "unknown endpoint should be rejected");
     }
 }

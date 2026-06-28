@@ -18,20 +18,10 @@ pub async fn create_batch(
         ));
     }
 
-    if req.endpoint != "chat" && req.endpoint != "completions" {
-        return Err((
-            axum::http::StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new(
-                "endpoint must be 'chat' or 'completions'",
-                "invalid_request_error",
-            )),
-        ));
-    }
-
     let id = state
         .batch_manager
         .create_job(
-            req.endpoint.clone(),
+            req.endpoint,
             req.prompts,
             req.model,
             req.max_tokens,
@@ -189,24 +179,7 @@ mod tests {
         let state = create_test_state();
         let req = SimpleBatchRequest {
             prompts: vec![],
-            endpoint: "chat".to_string(),
-            model: Some("test-model".to_string()),
-            max_tokens: Some(100),
-            temperature: Some(0.7),
-        };
-
-        let result = create_batch(State(state), Json(req)).await;
-        assert!(result.is_err());
-        let (status, _) = result.unwrap_err();
-        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
-    }
-
-    #[tokio::test]
-    async fn test_create_batch_invalid_endpoint() {
-        let state = create_test_state();
-        let req = SimpleBatchRequest {
-            prompts: vec!["Hello".to_string()],
-            endpoint: "invalid".to_string(),
+            endpoint: BatchEndpoint::Chat,
             model: Some("test-model".to_string()),
             max_tokens: Some(100),
             temperature: Some(0.7),
@@ -223,7 +196,7 @@ mod tests {
         let state = create_test_state();
         let req = SimpleBatchRequest {
             prompts: vec!["Hello".to_string(), "World".to_string()],
-            endpoint: "completions".to_string(),
+            endpoint: BatchEndpoint::Completion,
             model: Some("test-model".to_string()),
             max_tokens: Some(50),
             temperature: Some(0.5),
