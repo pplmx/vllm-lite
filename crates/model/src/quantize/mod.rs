@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 /// Checkpoint: checkpoint.
 #[derive(Debug)]
-pub struct Checkpoint {
+pub(crate) struct Checkpoint {
     pub tensors: HashMap<String, StorageTensor>,
     pub quantization_config: Option<QuantizationConfig>,
 }

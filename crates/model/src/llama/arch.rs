@@ -27,7 +27,7 @@ impl Default for LlamaArchitecture {
 }
 
 /// LlamaBlockWrapper: llama block wrapper.
-pub type LlamaBlockWrapper = BlockWrapper<LlamaBlock>;
+pub(crate) type LlamaBlockWrapper = BlockWrapper<LlamaBlock>;
 
 impl Architecture for LlamaArchitecture {
     fn name(&self) -> &'static str {

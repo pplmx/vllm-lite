@@ -339,7 +339,7 @@ pub fn new_block(
     )
 }
 
-pub fn block_from_weights(
+pub(crate) fn block_from_weights(
     config: &crate::config::ModelConfig,
     layer_idx: usize,
     weights: &std::collections::HashMap<String, Tensor>,

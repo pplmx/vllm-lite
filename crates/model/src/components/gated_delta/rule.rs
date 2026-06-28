@@ -24,7 +24,7 @@ pub struct GatedDeltaNet {
 }
 
 /// l2_normalize: l2 normalize.
-pub fn l2_normalize(xs: &Tensor, eps: f32) -> CandleResult<Tensor> {
+pub(crate) fn l2_normalize(xs: &Tensor, eps: f32) -> CandleResult<Tensor> {
     let last = xs.dims().len().saturating_sub(1);
     let sq = xs.sqr()?;
     let norm = sq.sum_keepdim(last)?;

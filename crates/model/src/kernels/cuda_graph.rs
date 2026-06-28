@@ -14,7 +14,7 @@ pub trait CudaGraphNode: Send + Sync {
 /// `execute` always returns [`CudaGraphError::Unsupported`] — used as a
 /// placeholder when CUDA Graph capture is disabled.
 #[derive(Debug, Default, Clone, Copy)]
-pub struct NullCudaGraphNode;
+pub(crate) struct NullCudaGraphNode;
 
 impl CudaGraphNode for NullCudaGraphNode {
     fn execute(
@@ -66,7 +66,7 @@ pub trait CudaGraphTensor: Send + Sync {
 /// CUDA graph acceleration available" — the executor treats this as a
 /// no-op tensor in graph captures.
 #[derive(Debug, Default, Clone, Copy)]
-pub struct NullCudaGraphTensor;
+pub(crate) struct NullCudaGraphTensor;
 
 impl CudaGraphTensor for NullCudaGraphTensor {
     fn as_ptr(&self) -> *const std::ffi::c_void {

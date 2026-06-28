@@ -28,7 +28,7 @@ impl Default for Qwen3Architecture {
 }
 
 /// Qwen3BlockWrapper: qwen3 block wrapper.
-pub type Qwen3BlockWrapper = BlockWrapper<Qwen3Block>;
+pub(crate) type Qwen3BlockWrapper = BlockWrapper<Qwen3Block>;
 
 impl Architecture for Qwen3Architecture {
     fn name(&self) -> &'static str {

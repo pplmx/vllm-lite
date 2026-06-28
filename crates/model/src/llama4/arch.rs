@@ -47,7 +47,7 @@ impl Default for Llama4Architecture {
 }
 
 /// Llama4BlockWrapper: llama4 block wrapper.
-pub struct Llama4BlockWrapper {
+pub(crate) struct Llama4BlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
@@ -165,7 +165,7 @@ impl Architecture for Llama4Architecture {
 }
 
 /// Llama4Model: llama4 model.
-pub struct Llama4Model {
+pub(crate) struct Llama4Model {
     config: ModelConfig,
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     device: Device,

@@ -11,11 +11,11 @@ use std::path::Path;
 /// Callers that receive an empty map fall back to an empty tensor set
 /// (no weights), which is the documented "no-op" behavior used by the
 /// feature-gated `GgufLoader::load` path.
-pub fn load_gguf_tensors(_path: &Path, _device: &Device) -> Result<HashMap<String, StorageTensor>> {
+pub(crate) fn load_gguf_tensors(_path: &Path, _device: &Device) -> Result<HashMap<String, StorageTensor>> {
     Ok(HashMap::new())
 }
 
-pub fn is_gguf_file(path: &Path) -> bool {
+pub(crate) fn is_gguf_file(path: &Path) -> bool {
     path.extension().map(|ext| ext == "gguf").unwrap_or(false)
 }
 

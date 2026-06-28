@@ -12,7 +12,7 @@ use super::block::{MistralBlock, block_from_weights};
 use super::model::MistralModel;
 
 /// MistralArchitecture: mistral architecture.
-pub struct MistralArchitecture;
+pub(crate) struct MistralArchitecture;
 
 impl MistralArchitecture {
     pub fn new() -> Self {
@@ -27,7 +27,7 @@ impl Default for MistralArchitecture {
 }
 
 /// MistralBlockWrapper: mistral block wrapper.
-pub type MistralBlockWrapper = BlockWrapper<MistralBlock>;
+pub(crate) type MistralBlockWrapper = BlockWrapper<MistralBlock>;
 
 impl Architecture for MistralArchitecture {
     fn name(&self) -> &'static str {

@@ -43,7 +43,7 @@ impl Default for MistralSmallArchitecture {
 }
 
 /// MistralSmallBlockWrapper: mistral small block wrapper.
-pub struct MistralSmallBlockWrapper {
+pub(crate) struct MistralSmallBlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
@@ -171,7 +171,7 @@ impl Architecture for MistralSmallArchitecture {
 }
 
 /// MistralSmallModel: mistral small model.
-pub struct MistralSmallModel {
+pub(crate) struct MistralSmallModel {
     config: ModelConfig,
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     device: Device,
