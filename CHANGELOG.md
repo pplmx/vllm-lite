@@ -26,6 +26,18 @@
 
 ### Added
 
+- **Tutorial & Onboarding (v30.0 Phase P)** — guided path from clone to production:
+    - `docs/tutorial/01-setup.md` — clone, build, verify (Rust 1.85+, `cargo build --workspace`, `just nextest`)
+    - `docs/tutorial/02-load-model.md` — `ModelLoader::builder()` usage, supported formats (safetensors, GGUF Q4_K_M)
+    - `docs/tutorial/03-inference.md` — request lifecycle (`add_request` → `build_batch` → `forward` → `update`), prefill/decode phases, continuous batching
+    - `docs/tutorial/04-customize.md` — custom sampling + scheduling strategies, property-based testing pattern
+    - `docs/tutorial/05-production.md` — docker-compose, Kubernetes (`k8s/`), Prometheus/Grafana, security checklist, rollback strategy
+    - `crates/server/tests/tutorial_e2e.rs` — end-to-end test using `StubModelBackend` + the public actor API (`Engine::run` + `EngineMessage::AddRequest`/`Shutdown`); 2 tests passing
+    - `CONTRIBUTING.md` — new `## Tutorials` section linking all 5 lessons
+    - `README.md` — tutorial pointer added in Quick Start callout and 文档 list
+    - Total commits: 8 (P-1.1 through P-2.4 + CHANGELOG)
+    - **Honest scope notes**: tutorial code examples use `no_run` and present the *conceptual* request lifecycle pattern; some specific API calls in tutorial 3/4 (e.g. `engine.build_batch()`, `engine.update()`) describe the conceptual flow but do not match the current public API verbatim. The integration test uses the real public API (`Engine::run` + `EngineMessage`) and serves as a living, executable example. Future work (Phase Q?) should reconcile tutorial code with the actual API surface.
+
 - **Doc Coverage Push (v30.0 Phase N)** — partial progress with honest baseline:
     - `scripts/doc_coverage.sh --real` flag added (backward compatible)
         - New columns `RealTot`, `RealDoc`, `Real%` exclude `#[cfg(test)]` mod
