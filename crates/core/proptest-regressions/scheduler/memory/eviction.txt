@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc eabd537cdfcd23e1787f171cabf9fe6ceca13feb09baca3dc4486c119e538289 # shrinks to seq = Sequence { id: 1, tokens: [], kv_blocks: [0], num_computed_tokens: 0, prompt_len: 0, status: Waiting, max_tokens: 10, sampling_params: SamplingParams { temperature: 0.0, top_k: 0, top_p: 1.0, repeat_penalty: 1.0, beam_width: 1, length_penalty: 0.6, max_retries: 0 }, consecutive_decode_rounds: 0, priority: Priority(0), degraded_draft: false, draft_model_id: None }, num_blocks = 1
+cc 321672f7a3ed5b62c06c04325469447e070346c343b334c609aa1948dbc61b25 # shrinks to blocks = [27, 27]
