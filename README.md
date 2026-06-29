@@ -136,6 +136,8 @@ curl -X POST http://localhost:8000/v1/completions \
 
 > 💡 **提示**: 默认使用 Qwen2.5-0.5B-Instruct 模型，首次运行会自动下载
 
+> 📘 **新手教程**: 第一次接触 vllm-lite？请按顺序阅读 [教程 1: 环境搭建与构建](./docs/tutorial/01-setup.md) 到 [教程 5: 生产部署](./docs/tutorial/05-production.md)。
+
 ---
 
 <a name="特性"></a>
@@ -548,6 +550,7 @@ Note: Tokenizer (tiktoken, tokenizers) is always enabled - required for model in
 - [ROADMAP.md](./ROADMAP.md) - 开发路线图
 - [CHANGELOG.md](./CHANGELOG.md) - 版本历史
 - [CONTRIBUTING.md](./CONTRIBUTING.md) - 贡献指南
+- [Tutorials](./docs/tutorial/01-setup.md) - 新贡献者教程（从 clone 到 serving）
 
 ---
 

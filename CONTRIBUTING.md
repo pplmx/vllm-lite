@@ -132,6 +132,20 @@ cargo test --workspace -- --nocapture
 just nextest
 ```
 
+## Tutorials
+
+A guided, step-by-step path for new contributors lives in
+[`docs/tutorial/`](docs/tutorial/):
+
+1. [Setup & Build](docs/tutorial/01-setup.md) — clone, build, verify
+2. [Load a Model](docs/tutorial/02-load-model.md) — `ModelLoader` usage
+3. [Run Inference](docs/tutorial/03-inference.md) — request lifecycle
+4. [Customize the Engine](docs/tutorial/04-customize.md) — custom strategies
+5. [Production Deployment](docs/tutorial/05-production.md) — deploy + observability
+
+If you're new to vllm-lite, start with Tutorial 1 and work through them in
+order. The tutorials assume no prior knowledge of the codebase.
+
 ## Getting Help
 
 - **Issues**: Open a GitHub issue for bugs or feature requests
