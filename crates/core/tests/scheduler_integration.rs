@@ -39,7 +39,11 @@ fn test_scheduler_multiple_requests() {
 
     // Add multiple requests
     for i in 1..=5 {
-        engine.add_request(Request::new(0, vec![i as u32], 10));
+        engine.add_request(Request::new(
+            0,
+            vec![u32::try_from(i).expect("bounded test id")],
+            10,
+        ));
     }
 
     // Build batch
@@ -119,7 +123,8 @@ fn test_scheduler_prefix_cache() {
         if engine.running_count() == 0 {
             break;
         }
-        engine.update(&[id1], &[100 + i as u32], &[0]);
+        let next = u32::try_from(100 + i).expect("bounded test token");
+        engine.update(&[id1], &[next], &[0]);
     }
 
     // Add second request with overlapping prefix - different suffix
@@ -139,7 +144,9 @@ fn test_scheduler_memory_preemption() {
 
     // Add multiple large requests
     for i in 1..=5 {
-        let prompt: Vec<u32> = (1..=100).map(|j| (i * 100 + j) as u32).collect();
+        let prompt: Vec<u32> = (1..=100)
+            .map(|j| u32::try_from(i * 100 + j).expect("bounded test token"))
+            .collect();
         engine.add_request(Request::new(0, prompt, 200));
     }
 
@@ -155,7 +162,11 @@ fn test_scheduler_concurrent_requests() {
 
     // Add concurrent requests
     for i in 1..=10 {
-        engine.add_request(Request::new(0, vec![i as u32; 10], 20));
+        engine.add_request(Request::new(
+            0,
+            vec![u32::try_from(i).expect("bounded test id"); 10],
+            20,
+        ));
     }
 
     // Multiple batch cycles

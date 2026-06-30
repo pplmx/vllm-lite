@@ -27,8 +27,9 @@ fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &st
 }
 
 /// Build a model-ready prompt string from a list of chat `messages`, using
-/// the architecture-appropriate [`ChatTemplate`] (ChatML, Llama-2, etc.).
-/// Thin wrapper around [`chat_template::build_prompt`] exposed at the
+/// the architecture-appropriate [`ChatTemplate`] (`ChatML`, Llama-2, etc.).
+///
+/// Thin wrapper around `super::chat_template::build_prompt` exposed at the
 /// `openai::chat` module path so handlers can use it without naming the
 /// template submodule.
 #[must_use]
@@ -90,7 +91,7 @@ async fn handle_chat(
         prompt_tokens = prompt_tokens_len,
         "Request started"
     );
-    let max_tokens = req.max_tokens.unwrap_or(100) as usize;
+    let max_tokens = usize::try_from(req.max_tokens.unwrap_or(100)).unwrap_or(100);
     let total_max = prompt_tokens_len + max_tokens;
 
     let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
@@ -123,7 +124,7 @@ async fn handle_chat(
 
     let completion_text = clean_completion_text(&state.tokenizer, &raw_decode);
 
-    let duration_ms = start.elapsed().as_millis() as u64;
+    let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
     let output_tokens_len = tokens.len();
 
     tracing::info!(
@@ -199,7 +200,7 @@ pub async fn chat_completions(
             "Streaming request started"
         );
 
-        let max_tokens = req.max_tokens.unwrap_or(100) as usize;
+        let max_tokens = usize::try_from(req.max_tokens.unwrap_or(100)).unwrap_or(100);
         let total_max = prompt_tokens.len() + max_tokens;
 
         let model = req.model.clone();
@@ -277,7 +278,7 @@ pub async fn chat_completions(
                         serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
                     tracing::info!(
                         request_id = %request_id,
-                        duration_ms = %start.elapsed().as_millis() as u64,
+                        duration_ms = %u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
                         "Streaming request completed"
                     );
                     Some((

@@ -1,5 +1,9 @@
 //! `RMSNorm` (Root Mean Square Layer Normalization) implementation.
 
+// invariant: tensor-dimension casts (element_count -> f32) are bounded by the
+// model hidden_dim, well within f32 precision.
+#![allow(clippy::cast_precision_loss)]
+
 use candle_core::{Module, Result, Tensor};
 
 #[derive(Debug)]

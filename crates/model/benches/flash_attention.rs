@@ -2,13 +2,13 @@
 //!
 //! ## Strategy
 //!
-//! Uses realistic qwen3-7B-class dimensions (heads=14, head_dim=64) with
-//! the FlashV2 variant as the standard benchmark, matching production
+//! Uses realistic qwen3-7B-class dimensions (heads=14, `head_dim=64`) with
+//! the `FlashV2` variant as the standard benchmark, matching production
 //! workload. At bench runtime:
 //!
 //! - **CUDA available** (GPU runners): runs full standard benchmark with
-//!   realistic (batch, heads, seq_len) = (1, 14, 512), (1, 14, 2048),
-//!   (4, 14, 512) at head_dim=64.
+//!   realistic (batch, heads, `seq_len`) = (1, 14, 512), (1, 14, 2048),
+//!   (4, 14, 512) at `head_dim=64`.
 //!
 //! - **CPU-only** (default CI runners): runs a minimal smoke test that
 //!   verifies the kernel path compiles and executes, but does NOT measure
@@ -65,13 +65,13 @@ fn bench_flash_attention(c: &mut Criterion) {
 
         let mut group = c.benchmark_group("flash_attention");
 
-        for &(batch, seq, _) in STD_CONFIGS.iter() {
+        for &(batch, seq, _) in STD_CONFIGS {
             let (q, k, v) =
                 make_qkv(batch, STD_NUM_HEADS, seq, STD_HEAD_DIM, &device).expect("std qkv init");
             let kernel = std_kernel(STD_NUM_HEADS, STD_HEAD_DIM);
             let label = format!("b{batch}_h{STD_NUM_HEADS}_s{seq}_d{STD_HEAD_DIM}");
 
-            group.bench_with_input(BenchmarkId::new("standard", &label), &(), |b, _| {
+            group.bench_with_input(BenchmarkId::new("standard", &label), &(), |b, ()| {
                 b.iter(|| {
                     black_box(
                         kernel

@@ -22,6 +22,7 @@ impl ConcurrentEngine {
         }
     }
 
+    #[allow(clippy::unused_async)]
     async fn start_background_stepper(&self) {
         let inner = self.inner.clone();
 
@@ -44,8 +45,11 @@ impl ConcurrentEngine {
     async fn add_request(&self, max_tokens: usize) -> Result<u64, String> {
         let prompt: Vec<u32> = (1..=10).collect();
         let (tx, _rx) = mpsc::channel(64);
-        let mut engine = self.inner.lock().await;
-        let seq_id = engine.add_request(Request::new(0, prompt, max_tokens), tx);
+        let seq_id = self
+            .inner
+            .lock()
+            .await
+            .add_request(Request::new(0, prompt, max_tokens), tx);
         if seq_id > 0 {
             Ok(seq_id)
         } else {
@@ -197,13 +201,11 @@ fn test_batch_processing() {
 
     // Add multiple requests with total tokens = prompt + max_tokens
     let num_requests = 10;
-    let mut receivers = Vec::new();
 
     for i in 0..num_requests {
-        let (tx, rx) = mpsc::channel(64);
+        let (tx, _rx) = mpsc::channel(64);
         let seq_id = engine.add_request(Request::new(i, vec![10, 20], 15), tx); // total = 2 + 15 = 17
         assert!(seq_id > 0);
-        receivers.push(rx);
     }
 
     // Process all in batch
@@ -222,7 +224,7 @@ fn test_batch_processing() {
     }
 
     assert!(
-        total_tokens >= num_requests as usize * 5, // 5 tokens each
+        total_tokens >= usize::try_from(num_requests).expect("bounded test count") * 5, // 5 tokens each
         "Should process tokens for all {num_requests} requests, got {total_tokens}"
     );
 }

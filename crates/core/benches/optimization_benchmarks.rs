@@ -7,8 +7,8 @@ use vllm_core::scheduler::SchedulerEngine;
 use vllm_core::types::{AdaptiveDraftConfig, Request, SchedulerConfig};
 use vllm_testing::TestFixtures;
 
-/// Upper bound on engine.step() calls per b.iter() to prevent infinite loops
-/// when step() returns empty results (e.g., engine idle or paused).
+/// Upper bound on `engine.step()` calls per `b.iter()` to prevent infinite loops
+/// when `step()` returns empty results (e.g., engine idle or paused).
 const MAX_STEPS_PER_ITER: usize = 10_000;
 
 /// Benchmark Sequence Packing vs FIFO
@@ -34,7 +34,11 @@ fn bench_sequence_packing(c: &mut Criterion) {
                 // Add requests with varying lengths
                 for i in 0..batch_size {
                     let len = 100 + (i * 50); // 100, 150, 200, ...
-                    scheduler.add_request(Request::new(i as u64, vec![1; len], 10));
+                    scheduler.add_request(Request::new(
+                        u64::try_from(i).expect("bounded bench index"),
+                        vec![1; len],
+                        10,
+                    ));
                 }
 
                 b.iter(|| {
@@ -54,7 +58,11 @@ fn bench_sequence_packing(c: &mut Criterion) {
                 // Add requests with varying lengths
                 for i in 0..batch_size {
                     let len = 100 + (i * 50);
-                    scheduler.add_request(Request::new(i as u64, vec![1; len], 10));
+                    scheduler.add_request(Request::new(
+                        u64::try_from(i).expect("bounded bench index"),
+                        vec![1; len],
+                        10,
+                    ));
                 }
 
                 b.iter(|| {
@@ -123,7 +131,14 @@ fn bench_throughput(c: &mut Criterion) {
 
                 for i in 0..num_requests {
                     let (tx, _rx) = mpsc::channel(64);
-                    engine.add_request(Request::new(i as u64, vec![10, 20], 20), tx);
+                    engine.add_request(
+                        Request::new(
+                            u64::try_from(i).expect("bounded bench index"),
+                            vec![10, 20],
+                            20,
+                        ),
+                        tx,
+                    );
                 }
 
                 b.iter(|| {
@@ -151,7 +166,14 @@ fn bench_throughput(c: &mut Criterion) {
 
                 for i in 0..num_requests {
                     let (tx, _rx) = mpsc::channel(64);
-                    engine.add_request(Request::new(i as u64, vec![10, 20], 20), tx);
+                    engine.add_request(
+                        Request::new(
+                            u64::try_from(i).expect("bounded bench index"),
+                            vec![10, 20],
+                            20,
+                        ),
+                        tx,
+                    );
                 }
 
                 b.iter(|| {

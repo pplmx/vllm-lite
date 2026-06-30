@@ -1,4 +1,4 @@
-#![allow(non_snake_case)]
+#![allow(non_snake_case, clippy::similar_names)]
 //! GDN-based linear attention block for Qwen3.5 hybrid layers.
 
 use std::collections::HashMap;
@@ -15,7 +15,12 @@ pub struct LinearAttentionBlock {
 }
 
 impl LinearAttentionBlock {
-    pub(crate) fn new(d_model: usize, gdn: GdnLinearConfig, vb: VarBuilder) -> CandleResult<Self> {
+    #[allow(clippy::needless_pass_by_value)]
+    pub(crate) fn new(
+        d_model: usize,
+        gdn: GdnLinearConfig,
+        vb: VarBuilder<'_>,
+    ) -> CandleResult<Self> {
         let GdnLinearConfig {
             num_k_heads,
             num_v_heads,
@@ -162,7 +167,7 @@ impl LinearAttentionBlock {
             conv_kernel_size,
         };
 
-        let conv_in = conv_w.dim(1).unwrap_or(config.qkv_proj_dim());
+        let conv_in = conv_w.dim(1).unwrap_or_else(|_| config.qkv_proj_dim());
         let conv_cfg = candle_nn::Conv1dConfig {
             padding: 3,
             stride: 1,

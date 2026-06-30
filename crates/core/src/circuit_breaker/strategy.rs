@@ -70,6 +70,9 @@ impl RetryStrategy {
     }
 
     fn calculate_delay(&self, attempt: usize) -> Duration {
+        // invariant: attempt is bounded by max_attempts (small integer), so the
+        // cast to u32 is safe.
+        #[allow(clippy::cast_possible_truncation)]
         let multiplier = 2_u32.pow(attempt as u32);
         self.base_delay * multiplier
     }
@@ -179,10 +182,7 @@ impl<F> DegradeStrategy<F> {
     where
         F: Fn() -> T,
     {
-        match op() {
-            Ok(result) => Ok(result),
-            Err(_) => Ok((self.fallback)()),
-        }
+        op().map_or_else(|_| Ok((self.fallback)()), |result| Ok(result))
     }
 }
 

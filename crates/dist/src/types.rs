@@ -33,6 +33,7 @@ impl TensorParallelConfig {
     }
 }
 
+#[allow(dead_code)] // used by unit tests below
 pub(crate) const fn compute_vocab_shard(
     vocab_size: usize,
     world_size: usize,

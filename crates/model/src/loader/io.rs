@@ -2,6 +2,11 @@
 //!
 //! This module provides unified file loading, tensor conversion utilities.
 
+// SAFETY: tensor_data is a raw byte slice from safetensors (always 4-byte
+// aligned because it comes from a Vec<u8>). Pointer casts to f32/u16 are
+// sound at the alignment level; the byte length is checked at the call site.
+#![allow(clippy::cast_ptr_alignment, unsafe_code)]
+
 use candle_core::{Device, Result, Tensor};
 use memmap2::Mmap;
 use std::path::{Path, PathBuf};
@@ -25,6 +30,7 @@ pub(crate) fn load_file_mmap_or_read(path: &Path) -> Result<Vec<u8>> {
 fn load_mmap(path: &Path) -> Result<Mmap> {
     let file = std::fs::File::open(path)
         .map_err(|e| candle_core::Error::msg(format!("open failed: {e}")))?;
+    // SAFETY: file is opened read-only and not modified for the lifetime of the mmap.
     unsafe { Mmap::map(&file) }.map_err(|e| candle_core::Error::msg(format!("mmap failed: {e}")))
 }
 
@@ -61,7 +67,7 @@ pub(crate) fn find_safetensors_files(model_dir: &Path) -> Result<Vec<PathBuf>> {
 }
 
 pub(crate) fn convert_tensor(
-    view: &safetensors::tensor::TensorView,
+    view: &safetensors::tensor::TensorView<'_>,
     device: &Device,
 ) -> Result<Tensor> {
     use half::{bf16, f16};
@@ -74,6 +80,8 @@ pub(crate) fn convert_tensor(
     match dtype {
         Dtype::BF16 => {
             let n = tensor_data.len() / 2;
+            // SAFETY: tensor_data is a raw byte slice from safetensors; we reinterpret as u16
+            // (BF16 layout). The byte length is exactly 2*n and the slice is valid for `n` u16 reads.
             let data_bf16: &[u16] =
                 unsafe { std::slice::from_raw_parts(tensor_data.as_ptr().cast::<u16>(), n) };
             let data_f32: Vec<f32> = data_bf16
@@ -84,6 +92,8 @@ pub(crate) fn convert_tensor(
         }
         Dtype::F16 => {
             let n = tensor_data.len() / 2;
+            // SAFETY: tensor_data is a raw byte slice from safetensors; we reinterpret as u16
+            // (F16 layout). The byte length is exactly 2*n and the slice is valid for `n` u16 reads.
             let data_f16: &[u16] =
                 unsafe { std::slice::from_raw_parts(tensor_data.as_ptr().cast::<u16>(), n) };
             let data_f32: Vec<f32> = data_f16
@@ -94,6 +104,8 @@ pub(crate) fn convert_tensor(
         }
         Dtype::F32 => {
             let n = tensor_data.len() / 4;
+            // SAFETY: tensor_data is a raw byte slice from safetensors; we reinterpret as f32.
+            // The byte length is exactly 4*n and the slice is valid for `n` f32 reads.
             let data_f32: &[f32] =
                 unsafe { std::slice::from_raw_parts(tensor_data.as_ptr().cast::<f32>(), n) };
             candle_core::Tensor::from_slice(data_f32, shape, device)

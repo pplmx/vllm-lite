@@ -20,8 +20,8 @@ fn test_repeat_penalty_basic() {
     let seen = vec![1];
     apply_repeat_penalty(&mut logits, &seen, 2.0);
     assert!(logits[1] < 0.5);
-    assert_eq!(logits[0], 0.5);
-    assert_eq!(logits[2], 0.5);
+    assert!((logits[0] - 0.5).abs() < 1e-6);
+    assert!((logits[2] - 0.5).abs() < 1e-6);
 }
 
 #[test]
@@ -29,8 +29,8 @@ fn test_repeat_penalty_no_effect_at_one() {
     let mut logits = vec![0.5, 0.5];
     let seen = vec![0];
     apply_repeat_penalty(&mut logits, &seen, 1.0);
-    assert_eq!(logits[0], 0.5);
-    assert_eq!(logits[1], 0.5);
+    assert!((logits[0] - 0.5).abs() < 1e-6);
+    assert!((logits[1] - 0.5).abs() < 1e-6);
 }
 
 #[test]

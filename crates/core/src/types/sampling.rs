@@ -1,8 +1,10 @@
 //! Token sampling parameters and builder.
 
-/// Per-request sampling configuration. Defaults are tuned for deterministic
-/// greedy decoding (`temperature = 0`, `top_p = 1`, `repeat_penalty = 1`,
-/// `beam_width = 1`); raise `temperature`, lower `top_p`, etc. for sampling.
+/// Per-request sampling configuration.
+///
+/// Defaults are tuned for deterministic greedy decoding
+/// (`temperature = 0`, `top_p = 1`, `repeat_penalty = 1`, `beam_width = 1`);
+/// raise `temperature`, lower `top_p`, etc. for sampling.
 #[derive(Clone, Debug)]
 pub struct SamplingParams {
     /// Sampling temperature. `0.0` selects greedy argmax; `1.0` is the

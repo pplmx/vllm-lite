@@ -1,9 +1,10 @@
 #![allow(clippy::module_name_repetitions)]
 //!
 //! Wraps `tower_http::limit::RequestBodyLimitLayer` so the limit can be
-//! applied to the protected routes via `axum::Router::layer`. The layer
-//! rejects requests whose body exceeds the configured byte count with
-//! HTTP 413 Payload Too Large.
+//! applied to the protected routes via `axum::Router::layer`.
+//!
+//! The layer rejects requests whose body exceeds the configured byte
+//! count with HTTP 413 Payload Too Large.
 
 use axum::Router;
 use tower_http::limit::RequestBodyLimitLayer;

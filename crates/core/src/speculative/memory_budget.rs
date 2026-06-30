@@ -44,10 +44,10 @@ pub struct MemoryBudgetExceeded {
 
 #[derive(Debug)]
 struct MemoryBudgetInner {
-    total_bytes: u64,
-    reserved_target_bytes: u64,
-    reserved_drafts_bytes: u64,
-    used_drafts_bytes: u64,
+    total: u64,
+    reserved_target: u64,
+    reserved_drafts: u64,
+    used_drafts: u64,
 }
 
 #[derive(Debug)]
@@ -87,10 +87,10 @@ impl MemoryBudget {
         }
         Ok(Self {
             inner: RwLock::new(MemoryBudgetInner {
-                total_bytes,
-                reserved_target_bytes: 0,
-                reserved_drafts_bytes: 0,
-                used_drafts_bytes: 0,
+                total: total_bytes,
+                reserved_target: 0,
+                reserved_drafts: 0,
+                used_drafts: 0,
             }),
         })
     }
@@ -100,13 +100,13 @@ impl MemoryBudget {
             .inner
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let reserved_total = inner.reserved_target_bytes + inner.reserved_drafts_bytes;
-        let available = inner.total_bytes.saturating_sub(reserved_total);
+        let reserved_total = inner.reserved_target + inner.reserved_drafts;
+        let available = inner.total.saturating_sub(reserved_total);
         MemoryBudgetSnapshot {
-            total_bytes: inner.total_bytes,
-            reserved_target_bytes: inner.reserved_target_bytes,
-            reserved_drafts_bytes: inner.reserved_drafts_bytes,
-            used_drafts_bytes: inner.used_drafts_bytes,
+            total_bytes: inner.total,
+            reserved_target_bytes: inner.reserved_target,
+            reserved_drafts_bytes: inner.reserved_drafts,
+            used_drafts_bytes: inner.used_drafts,
             available_bytes: available,
         }
     }
@@ -120,17 +120,18 @@ impl MemoryBudget {
             .inner
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let current_reserved = inner.reserved_target_bytes + inner.reserved_drafts_bytes;
+        let current_reserved = inner.reserved_target + inner.reserved_drafts;
         let new_reserved = current_reserved.saturating_add(bytes);
-        if new_reserved > inner.total_bytes {
-            let available = inner.total_bytes.saturating_sub(current_reserved);
+        if new_reserved > inner.total {
+            let available = inner.total.saturating_sub(current_reserved);
             return Err(MemoryBudgetExceeded {
                 requested_bytes: bytes,
                 available_bytes: available,
                 draft_id: None,
             });
         }
-        inner.reserved_target_bytes = inner.reserved_target_bytes.saturating_add(bytes);
+        inner.reserved_target = inner.reserved_target.saturating_add(bytes);
+        drop(inner);
         Ok(())
     }
 
@@ -139,7 +140,7 @@ impl MemoryBudget {
             .inner
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        inner.reserved_target_bytes = 0;
+        inner.reserved_target = 0;
     }
 
     /// Runs the operation.
@@ -155,17 +156,18 @@ impl MemoryBudget {
             .inner
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let current_reserved = inner.reserved_target_bytes + inner.reserved_drafts_bytes;
+        let current_reserved = inner.reserved_target + inner.reserved_drafts;
         let new_reserved = current_reserved.saturating_add(bytes);
-        if new_reserved > inner.total_bytes {
-            let available = inner.total_bytes.saturating_sub(current_reserved);
+        if new_reserved > inner.total {
+            let available = inner.total.saturating_sub(current_reserved);
             return Err(MemoryBudgetExceeded {
                 requested_bytes: bytes,
                 available_bytes: available,
                 draft_id,
             });
         }
-        inner.reserved_drafts_bytes = inner.reserved_drafts_bytes.saturating_add(bytes);
+        inner.reserved_drafts = inner.reserved_drafts.saturating_add(bytes);
+        drop(inner);
         Ok(())
     }
 
@@ -174,9 +176,9 @@ impl MemoryBudget {
             .inner
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        inner.reserved_drafts_bytes = inner.reserved_drafts_bytes.saturating_sub(bytes);
+        inner.reserved_drafts = inner.reserved_drafts.saturating_sub(bytes);
         // Also bring used back down if a draft was previously marked used.
-        inner.used_drafts_bytes = inner.used_drafts_bytes.saturating_sub(bytes);
+        inner.used_drafts = inner.used_drafts.saturating_sub(bytes);
     }
 
     pub fn record_draft_kv_growth(&self, delta_bytes: i64) {
@@ -185,11 +187,17 @@ impl MemoryBudget {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if delta_bytes >= 0 {
-            inner.used_drafts_bytes = inner.used_drafts_bytes.saturating_add(delta_bytes as u64);
+            // invariant: delta_bytes >= 0 in this branch, so the i64 -> u64
+            // cast is sign-safe (saturating_add handles any residual bound).
+            #[allow(clippy::cast_sign_loss)]
+            let delta = u64::try_from(delta_bytes).unwrap_or(u64::MAX);
+            inner.used_drafts = inner.used_drafts.saturating_add(delta);
         } else {
-            inner.used_drafts_bytes = inner
-                .used_drafts_bytes
-                .saturating_sub((-delta_bytes) as u64);
+            // invariant: -delta_bytes > 0 in this branch, so the negation is
+            // positive and sign-safe for u64.
+            #[allow(clippy::cast_sign_loss)]
+            let delta = u64::try_from(-delta_bytes).unwrap_or(u64::MAX);
+            inner.used_drafts = inner.used_drafts.saturating_sub(delta);
         }
     }
 
@@ -198,7 +206,7 @@ impl MemoryBudget {
             .inner
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        inner.total_bytes
+        inner.total
     }
 }
 

@@ -81,7 +81,7 @@ mod tests {
             RejectionStrategy::BlockLevel { block_size } => {
                 assert_eq!(block_size, 1);
             }
-            _ => panic!("Expected BlockLevel variant"),
+            RejectionStrategy::TokenLevel => panic!("Expected BlockLevel variant"),
         }
     }
 }

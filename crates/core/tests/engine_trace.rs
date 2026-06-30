@@ -23,7 +23,7 @@ impl TracingModel {
 impl ModelBackend for TracingModel {
     fn forward(
         &mut self,
-        _seq_ids: &[SeqId],
+        seq_ids: &[SeqId],
         input_tokens: &[Vec<TokenId>],
         positions: &[Vec<usize>],
         _kv_block_ids: &[Vec<usize>],
@@ -43,20 +43,20 @@ impl ModelBackend for TracingModel {
         );
 
         let mut next_tokens = Vec::new();
-        for seq_id in _seq_ids {
+        for seq_id in seq_ids {
             let token = if self.current_idx < self.sequence_to_return.len() {
                 let t = self.sequence_to_return[self.current_idx];
                 self.current_idx += 1;
                 t
             } else {
-                151643 // EOS
+                151_643 // EOS
             };
             next_tokens.push(token);
             eprintln!("  seq {seq_id} -> token {token}");
         }
 
         Ok(BatchOutput {
-            seq_ids: _seq_ids.to_vec(),
+            seq_ids: seq_ids.to_vec(),
             next_tokens,
         })
     }
@@ -82,7 +82,7 @@ impl ModelBackend for TracingModel {
     }
 
     fn vocab_size(&self) -> usize {
-        151936
+        151_936
     }
 
     fn num_layers(&self) -> usize {
@@ -96,7 +96,7 @@ impl ModelBackend for TracingModel {
 
 #[test]
 fn test_engine_step_trace_prefill_then_decode() {
-    let model = TracingModel::new(vec![29054, 110934, 99601]); // Expected sequence
+    let model = TracingModel::new(vec![29054, 110_934, 99601]); // Expected sequence
     let _config = SchedulerConfig::default();
     let mut engine = Engine::new(model, None);
     let (tx, mut rx) = mpsc::channel(64);
@@ -105,7 +105,7 @@ fn test_engine_step_trace_prefill_then_decode() {
     let request = Request::new(
         1,
         vec![
-            151643, 151644, 872, 198, 6023, 151645, 198, 151644, 77091, 198,
+            151_643, 151_644, 872, 198, 6023, 151_645, 198, 151_644, 77091, 198,
         ],
         20,
     );
@@ -156,7 +156,7 @@ fn test_scheduler_batch_trace() {
     let mut scheduler = SchedulerEngine::new(config, 1024, metrics);
 
     // Add request with larger max_tokens to continue after prefill
-    let request = Request::new(1, vec![151643, 151644, 872, 198, 6023], 10);
+    let request = Request::new(1, vec![151_643, 151_644, 872, 198, 6023], 10);
     scheduler.add_request(request);
 
     eprintln!("\n=== SCHEDULER BATCH TRACE ===\n");

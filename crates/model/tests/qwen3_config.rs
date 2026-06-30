@@ -5,7 +5,7 @@ use vllm_model::qwen3::config::Qwen3Config;
 #[test]
 fn test_qwen3_config_default() {
     let config = Qwen3Config::default();
-    assert_eq!(config.vocab_size(), 151936);
+    assert_eq!(config.vocab_size(), 151_936);
     assert_eq!(config.hidden_size(), 4096);
     assert_eq!(config.num_hidden_layers(), 32);
 }

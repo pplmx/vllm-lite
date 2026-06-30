@@ -57,6 +57,7 @@ pub fn new_block(config: &ModelConfig, _layer_idx: usize) -> Result<RopeGqaDecod
 /// # Errors
 ///
 /// Returns `Err` if the operation fails.
+#[allow(clippy::implicit_hasher)]
 pub fn block_from_weights(
     config: &ModelConfig,
     layer_idx: usize,

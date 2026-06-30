@@ -244,7 +244,7 @@ fn test_prefix_hit_partial_prefill() {
 fn test_radix_repeated_prefix_lookup_is_fast() {
     let mut tree = RadixTree::new();
     for i in 0usize..500 {
-        let tokens: Vec<u32> = (0u32..=(i as u32)).collect();
+        let tokens: Vec<u32> = (0u32..=u32::try_from(i).expect("bounded test index")).collect();
         tree.insert(&tokens, vec![i]);
     }
 
@@ -282,8 +282,11 @@ fn test_prefix_cache_high_volume() {
 
     // Add 50 different requests with different tokens
     for i in 0..50 {
-        let tokens: Vec<TokenId> = (0..10).map(|j| (i * 100 + j) as TokenId).collect();
-        engine.add_request(Request::new(i as SeqId, tokens, 3), mpsc::channel(64).0);
+        let tokens: Vec<TokenId> = (0..10)
+            .map(|j| TokenId::try_from(i * 100 + j).expect("bounded test token"))
+            .collect();
+        let id = SeqId::try_from(i).expect("bounded test seq id");
+        engine.add_request(Request::new(id, tokens, 3), mpsc::channel(64).0);
     }
 
     // Process all to completion
@@ -333,9 +336,10 @@ fn test_prefix_cache_many_sequences_same_prefix() {
     // Add 10 requests with same prefix but different completions
     for i in 1..=10 {
         let mut tokens = common_prefix.clone();
-        tokens.push(i as TokenId);
-        tokens.push((i + 100) as TokenId);
-        engine.add_request(Request::new(i as SeqId, tokens, 3), mpsc::channel(64).0);
+        tokens.push(TokenId::try_from(i).expect("bounded test token"));
+        tokens.push(TokenId::try_from(i + 100).expect("bounded test token"));
+        let id = SeqId::try_from(i).expect("bounded test seq id");
+        engine.add_request(Request::new(id, tokens, 3), mpsc::channel(64).0);
     }
 
     // Process all to completion

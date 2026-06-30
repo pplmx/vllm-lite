@@ -24,7 +24,7 @@ use vllm_traits::ModelBackend;
 /// from the draft model's KV cache (proportional to draft tokens). This test checks
 /// that the total allocated KV blocks is reasonable for both standard and speculative modes.
 #[test]
-#[ignore]
+#[ignore = "requires speculative model setup"]
 fn test_speculative_memory_overhead_bounded() {
     let config = SchedulerConfig::default();
     let num_kv_blocks = 1024;
@@ -65,7 +65,7 @@ fn test_speculative_memory_overhead_bounded() {
 /// to standard decoding for the same workload, since self-speculation shares weights
 /// and KV cache.
 #[test]
-#[ignore]
+#[ignore = "requires speculative model setup"]
 fn test_speculative_memory_overhead_vs_standard() {
     let config = SchedulerConfig::default();
     let num_kv_blocks = 1024;
@@ -109,8 +109,12 @@ fn test_speculative_memory_overhead_vs_standard() {
     // Speculative decoding should NOT use significantly more KV blocks than standard.
     // For self-speculation, the KV cache overhead is minimal since both models share
     // the same weights. At the same request state (after prefill), KV usage should be comparable.
+    // invariant: KV block counts are bounded by available memory (<< 2^52);
+    // u64 -> f64 precision loss is acceptable for the overhead ratio check.
+    #[allow(clippy::cast_precision_loss)]
+    let ratio = spec_used as f64 / std_used as f64;
     assert!(
-        spec_used <= std_used || (spec_used as f64 / std_used as f64) <= 1.5,
+        spec_used <= std_used || ratio <= 1.5,
         "Speculative KV block overhead should be < 50% (was spec={spec_used}, std={std_used})"
     );
 }
@@ -118,7 +122,7 @@ fn test_speculative_memory_overhead_vs_standard() {
 /// SPEC-04.3: Verify that the `SelfSpeculativeModel` shares weights (zero-copy memory)
 /// by checking that it wraps the same model without allocating additional model parameters.
 #[test]
-#[ignore]
+#[ignore = "requires speculative model setup"]
 fn test_self_speculative_weight_sharing() {
     // SelfSpeculativeModel wraps the same IncrementModel without allocating
     // additional weight storage. The draft_layer_count specifies how many
@@ -144,7 +148,7 @@ fn test_self_speculative_weight_sharing() {
 /// SPEC-04.3: Verify that with self-speculation, the KV cache usage can be bounded
 /// by limiting draft tokens. The overhead is proportional to `draft_count`.
 #[test]
-#[ignore]
+#[ignore = "requires speculative model setup"]
 fn test_speculative_memory_overhead_scales_with_draft_count() {
     let config = SchedulerConfig::default();
     let num_kv_blocks = 1024;

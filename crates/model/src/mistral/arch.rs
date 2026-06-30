@@ -8,7 +8,7 @@ use candle_core::{Device, Result, Tensor};
 use std::collections::HashMap;
 use vllm_traits::ModelBackend;
 
-use super::block::{MistralBlock, block_from_weights};
+use super::block::block_from_weights;
 use super::model::MistralModel;
 
 /// `MistralArchitecture`: mistral architecture.
@@ -25,9 +25,6 @@ impl Default for MistralArchitecture {
         Self::new()
     }
 }
-
-/// `MistralBlockWrapper`: mistral block wrapper.
-pub(crate) type MistralBlockWrapper = BlockWrapper<MistralBlock>;
 
 impl Architecture for MistralArchitecture {
     fn name(&self) -> &'static str {

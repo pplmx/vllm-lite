@@ -1,6 +1,14 @@
 //! Gemma4 Attention implementation.
 
 #![allow(clippy::too_many_arguments)]
+// invariant: tensor-dimension casts (position/seq_len -> f32) are bounded by
+// sequence length and head_dim, both small model-architecture constants;
+// precision loss / truncation is intentional.
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
 
 use crate::components::attention::paged_gqa::{
     compute_gqa_attention, project_attention_output, read_decode_kv, write_prefill_kv,
@@ -28,6 +36,7 @@ pub(crate) struct Gemma4Attention {
 }
 
 impl Gemma4Attention {
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new(
         hidden_size: usize,
         num_heads: usize,
@@ -36,7 +45,7 @@ impl Gemma4Attention {
         sliding_window: usize,
         layer_type: LayerType,
         rope_config: &RoPEConfig,
-        vb: candle_nn::VarBuilder,
+        vb: candle_nn::VarBuilder<'_>,
     ) -> Result<Self> {
         let q_proj = candle_nn::linear(hidden_size, num_heads * head_dim, vb.pp("q_proj"))?;
         let k_proj = candle_nn::linear(hidden_size, num_kv_heads * head_dim, vb.pp("k_proj"))?;
@@ -71,9 +80,9 @@ impl Gemma4Attention {
         k_w: Tensor,
         v_w: Tensor,
         o_w: Tensor,
-    ) -> Result<Self> {
+    ) -> Self {
         let rope = Gemma4RoPE::new(rope_config, head_dim);
-        Ok(Self {
+        Self {
             q_proj: Linear::new(q_w, None),
             k_proj: Linear::new(k_w, None),
             v_proj: Linear::new(v_w, None),
@@ -84,16 +93,10 @@ impl Gemma4Attention {
             sliding_window,
             layer_type,
             rope: Some(rope),
-        })
+        }
     }
 
-    fn key_position(
-        &self,
-        key_idx: usize,
-        kv_seq: usize,
-        q_seq: usize,
-        positions: &[usize],
-    ) -> usize {
+    fn key_position(key_idx: usize, kv_seq: usize, q_seq: usize, positions: &[usize]) -> usize {
         if kv_seq == q_seq {
             positions.get(key_idx).copied().unwrap_or(key_idx)
         } else {
@@ -112,7 +115,7 @@ impl Gemma4Attention {
         for qi in 0..q_seq {
             let q_pos = query_positions.get(qi).copied().unwrap_or(qi);
             for kj in 0..kv_seq {
-                let k_pos = self.key_position(kj, kv_seq, q_seq, query_positions);
+                let k_pos = Self::key_position(kj, kv_seq, q_seq, query_positions);
                 let in_window = q_pos.saturating_sub(k_pos) < self.sliding_window;
                 let causal = k_pos <= q_pos;
                 if !(causal && in_window) {
@@ -187,7 +190,7 @@ impl Gemma4Attention {
         positions: &[usize],
     ) -> Result<Tensor> {
         let batch_size = x.dims()[0];
-        let _seq_len = num_computed_tokens + 1;
+        let _ = num_computed_tokens + 1;
 
         let (q, k, v) = self.project_qkv(x)?;
         let q = q.reshape((batch_size, 1, self.num_heads, self.head_dim))?;
@@ -440,7 +443,10 @@ mod tests {
 
         // Query at position 3 should attend to key at position 2 (distance 1 <= window 2).
         let idx = 3 * seq_len + 2;
-        assert_eq!(data[idx], 0.0, "in-window causal pair should be unmasked");
+        assert!(
+            data[idx].abs() < 1e-6,
+            "in-window causal pair should be unmasked"
+        );
         Ok(())
     }
 

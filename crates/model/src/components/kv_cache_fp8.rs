@@ -1,5 +1,15 @@
 //! kv_cache_fp8: kv cache fp8.
 
+// invariant: quantization scalar math operates on bounded values within fp8
+// range; precision loss / truncation / wrap is intentional in the quantization
+// rounding math.
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+
 use candle_core::{DType, Result, Tensor};
 
 /// `KvCacheDtype`: kv cache dtype enumeration.
@@ -49,8 +59,8 @@ impl Fp8Quantizer {
     pub fn quantize(&self, tensor: &Tensor) -> Result<Tensor> {
         match self.dtype {
             KvCacheDtype::Fp16 => Ok(tensor.clone()),
-            KvCacheDtype::Fp32 => self.quantize_to_fp32(tensor),
-            KvCacheDtype::Fp8E4m3 => self.quantize_to_fp8(tensor),
+            KvCacheDtype::Fp32 => Self::quantize_to_fp32(tensor),
+            KvCacheDtype::Fp8E4m3 => Self::quantize_to_fp8(tensor),
         }
     }
 
@@ -68,15 +78,15 @@ impl Fp8Quantizer {
                     tensor.to_dtype(DType::F32)
                 }
             }
-            KvCacheDtype::Fp8E4m3 => self.dequantize_from_fp8(tensor),
+            KvCacheDtype::Fp8E4m3 => Self::dequantize_from_fp8(tensor),
         }
     }
 
-    fn quantize_to_fp32(&self, tensor: &Tensor) -> Result<Tensor> {
+    fn quantize_to_fp32(tensor: &Tensor) -> Result<Tensor> {
         tensor.to_dtype(DType::F32)
     }
 
-    fn quantize_to_fp8(&self, tensor: &Tensor) -> Result<Tensor> {
+    fn quantize_to_fp8(tensor: &Tensor) -> Result<Tensor> {
         let shape = tensor.dims();
         let flat = tensor.flatten_all()?;
 
@@ -90,7 +100,7 @@ impl Fp8Quantizer {
 
                 let fp8_data: Vec<u8> = float_values
                     .iter()
-                    .map(|&f| self.float32_to_fp8_e4m3(f))
+                    .map(|&f| Self::float32_to_fp8_e4m3(f))
                     .collect();
 
                 Tensor::from_slice(&fp8_data, shape, tensor.device())
@@ -99,7 +109,7 @@ impl Fp8Quantizer {
                 let float_values: Vec<f32> = flat.to_vec1()?;
                 let fp8_data: Vec<u8> = float_values
                     .iter()
-                    .map(|&f| self.float32_to_fp8_e4m3(f))
+                    .map(|&f| Self::float32_to_fp8_e4m3(f))
                     .collect();
 
                 Tensor::from_slice(&fp8_data, shape, tensor.device())
@@ -111,28 +121,28 @@ impl Fp8Quantizer {
         }
     }
 
-    fn dequantize_from_fp8(&self, tensor: &Tensor) -> Result<Tensor> {
+    fn dequantize_from_fp8(tensor: &Tensor) -> Result<Tensor> {
         let shape = tensor.dims();
         let flat = tensor.flatten_all()?;
 
         let fp8_bytes: Vec<u8> = flat.to_vec1()?;
         let float_data: Vec<half::f16> = fp8_bytes
             .iter()
-            .map(|&b| self.fp8_e4m3_to_float16(b))
+            .map(|&b| Self::fp8_e4m3_to_float16(b))
             .collect();
 
         let result = Tensor::from_slice(&float_data, shape, tensor.device())?;
         result.to_dtype(DType::F16)
     }
 
-    fn float32_to_fp8_e4m3(&self, value: f32) -> u8 {
+    fn float32_to_fp8_e4m3(value: f32) -> u8 {
         if value.is_nan() {
             return 0x80;
         }
         if value.is_infinite() {
             return if value.is_sign_positive() { 0x7C } else { 0xFC };
         }
-        if value.abs() < 0.000732 {
+        if value.abs() < 0.000_732 {
             return 0u8;
         }
 
@@ -152,7 +162,7 @@ impl Fp8Quantizer {
         ((sign & 0x01) << 7) | (biased_exp & 0x0F) << 3 | (int_mantissa & 0x07)
     }
 
-    fn fp8_e4m3_to_float16(&self, value: u8) -> half::f16 {
+    fn fp8_e4m3_to_float16(value: u8) -> half::f16 {
         if value == 0x80 {
             return half::f16::from_f32(f32::NAN);
         }
@@ -197,9 +207,9 @@ fn frexp(value: f32) -> (i32, f32) {
     }
 
     let bits = value.to_bits();
-    let _sign = bits >> 31;
+    let _ = bits >> 31;
     let mut exp = ((bits >> 23) & 0xFF) as i32;
-    let mut mantissa_bits = bits & 0x007FFFFF;
+    let mut mantissa_bits = bits & 0x007F_FFFF;
 
     if exp == 0 {
         let shift = mantissa_bits.leading_zeros() as i32 - 8;
@@ -229,11 +239,12 @@ mod tests {
         let fp16 = KvCacheDtype::Fp16;
         let fp8 = KvCacheDtype::Fp8E4m3;
 
-        assert_eq!(fp16.memory_reduction_ratio(), 1.0);
-        assert_eq!(fp8.memory_reduction_ratio(), 2.0);
+        assert!((fp16.memory_reduction_ratio() - 1.0).abs() < 1e-6);
+        assert!((fp8.memory_reduction_ratio() - 2.0).abs() < 1e-6);
     }
 
     #[test]
+    #[allow(clippy::similar_names)]
     fn test_fp8_roundtrip_quantization() {
         let device = candle_core::Device::Cpu;
         let tensor = Tensor::randn(-1.0f32, 1.0, (2, 4, 8), &device).unwrap();
@@ -246,6 +257,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::similar_names)]
     fn test_fp8_preserves_small_values() {
         let device = candle_core::Device::Cpu;
         let tensor = Tensor::new(&[0.0001f32, 0.0005f32, 0.001f32], &device).unwrap();
@@ -283,12 +295,10 @@ mod tests {
 
     #[test]
     fn test_fp8_special_values() {
-        let quantizer = Fp8Quantizer::new(KvCacheDtype::Fp8E4m3);
-
-        let zero = quantizer.float32_to_fp8_e4m3(0.0);
+        let zero = Fp8Quantizer::float32_to_fp8_e4m3(0.0);
         assert_eq!(zero, 0);
 
-        let one = quantizer.float32_to_fp8_e4m3(1.0);
+        let one = Fp8Quantizer::float32_to_fp8_e4m3(1.0);
         assert_ne!(one, 0);
     }
 

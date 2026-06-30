@@ -154,16 +154,19 @@ fn show_model_info(path: &PathBuf) -> Result<()> {
         let config: Value = serde_json::from_str(&content)?;
 
         if let Some(obj) = config.as_object() {
-            if let Some(model_type) = obj.get("model_type").or(obj.get("architectures")) {
+            if let Some(model_type) = obj.get("model_type").or_else(|| obj.get("architectures")) {
                 info.insert("architecture".to_string(), model_type.clone());
             }
             if let Some(hidden_size) = obj.get("hidden_size") {
                 info.insert("hidden_size".to_string(), hidden_size.clone());
             }
-            if let Some(num_layers) = obj.get("num_hidden_layers").or(obj.get("n_layers")) {
+            if let Some(num_layers) = obj.get("num_hidden_layers").or_else(|| obj.get("n_layers")) {
                 info.insert("num_layers".to_string(), num_layers.clone());
             }
-            if let Some(num_heads) = obj.get("num_attention_heads").or(obj.get("n_heads")) {
+            if let Some(num_heads) = obj
+                .get("num_attention_heads")
+                .or_else(|| obj.get("n_heads"))
+            {
                 info.insert("num_heads".to_string(), num_heads.clone());
             }
             if let Some(vocab_size) = obj.get("vocab_size") {
@@ -175,7 +178,7 @@ fn show_model_info(path: &PathBuf) -> Result<()> {
     let model_files = find_model_files(path);
     let total_size: u64 = model_files
         .iter()
-        .map(|(p, _)| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0))
+        .map(|(p, _)| std::fs::metadata(p).map_or(0, |m| m.len()))
         .sum();
 
     info.insert(
@@ -220,12 +223,20 @@ fn format_size(bytes: u64) -> String {
     const MB: u64 = KB * 1024;
     const GB: u64 = MB * 1024;
 
+    // invariant: byte counts are bounded by available memory (<< 2^52 bytes),
+    // so the u64 -> f64 conversion is lossless for display purposes.
     if bytes >= GB {
-        format!("{:.1} GB", bytes as f64 / GB as f64)
+        #[allow(clippy::cast_precision_loss)]
+        let value = bytes as f64 / GB as f64;
+        format!("{value:.1} GB")
     } else if bytes >= MB {
-        format!("{:.1} MB", bytes as f64 / MB as f64)
+        #[allow(clippy::cast_precision_loss)]
+        let value = bytes as f64 / MB as f64;
+        format!("{value:.1} MB")
     } else if bytes >= KB {
-        format!("{:.1} KB", bytes as f64 / KB as f64)
+        #[allow(clippy::cast_precision_loss)]
+        let value = bytes as f64 / KB as f64;
+        format!("{value:.1} KB")
     } else {
         format!("{bytes} B")
     }

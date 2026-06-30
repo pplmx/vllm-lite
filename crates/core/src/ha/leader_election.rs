@@ -42,6 +42,9 @@ impl LeaderElection {
         *leader_id = Some(node_id.clone());
 
         info!(node_id = %node_id, "Became leader");
+        drop(state);
+        drop(is_leader);
+        drop(leader_id);
     }
 
     pub async fn step_down(&self) {
@@ -54,6 +57,9 @@ impl LeaderElection {
         *leader_id = None;
 
         info!("Stepped down from leadership");
+        drop(state);
+        drop(is_leader);
+        drop(leader_id);
     }
 
     pub async fn on_leader_lost(&self, new_leader: Option<String>) {
@@ -64,12 +70,15 @@ impl LeaderElection {
             *is_leader = false;
             *leader_id = Some(id.clone());
             warn!(new_leader = %id, "Leadership transferred");
+            drop(is_leader);
         } else {
             let mut is_leader = self.is_leader.write().await;
             *is_leader = false;
             *leader_id = None;
             warn!("Leader lost, no new leader elected yet");
+            drop(is_leader);
         }
+        drop(leader_id);
     }
 
     pub async fn get_state(&self) -> LeadershipState {

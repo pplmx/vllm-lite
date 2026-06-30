@@ -222,70 +222,33 @@ impl ModelConfig {
             .and_then(|name| Architecture::from_name(&name))
             .unwrap_or(Architecture::Llama);
 
-        let hidden_size = value
-            .get("hidden_size")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(4096) as usize;
-        let num_layers = value
-            .get("num_hidden_layers")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(32) as usize;
-        let num_heads = value
-            .get("num_attention_heads")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(32) as usize;
-        let num_kv_heads = value
-            .get("num_key_value_heads")
-            .or_else(|| value.get("num_local_heads"))
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(num_heads as u64) as usize;
-        let head_dim = value
-            .get("head_dim")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or((hidden_size / num_heads) as u64) as usize;
-        let vocab_size = value
-            .get("vocab_size")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(32000) as usize;
-        let intermediate_size = value
-            .get("intermediate_size")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(11008) as usize;
-        let rope_theta = value
-            .get("rope_theta")
-            .or_else(|| value.get("rotary_base"))
-            .and_then(serde_json::Value::as_f64)
-            .unwrap_or(10000.0) as f32;
+        let hidden_size = read_usize(value, "hidden_size", 4096);
+        let num_layers = read_usize(value, "num_hidden_layers", 32);
+        let num_heads = read_usize(value, "num_attention_heads", 32);
+        let num_kv_heads = read_usize_with_alt(
+            value,
+            &["num_key_value_heads", "num_local_heads"],
+            num_heads as u64,
+        );
+        let head_dim = read_usize_with_alt(value, &["head_dim"], (hidden_size / num_heads) as u64);
+        let vocab_size = read_usize(value, "vocab_size", 32_000);
+        let intermediate_size = read_usize(value, "intermediate_size", 11_008);
+        let rope_theta = read_f32_with_alt(value, &["rope_theta", "rotary_base"], 10_000.0);
         let rms_norm_eps = value
             .get("rms_norm_eps")
             .or_else(|| value.get("layer_norm_eps"))
             .and_then(serde_json::Value::as_f64)
             .unwrap_or(1e-5);
-        let sliding_window = value
-            .get("sliding_window")
-            .and_then(serde_json::Value::as_u64)
-            .map(|v| v as usize);
+        let sliding_window = read_optional_usize(value, "sliding_window");
         let tie_word_embeddings = value
             .get("tie_word_embeddings")
             .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
-        let max_position_embeddings = value
-            .get("max_position_embeddings")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(2048) as usize;
-        let num_experts = value
-            .get("num_local_experts")
-            .and_then(serde_json::Value::as_u64)
-            .map(|v| v as usize);
-        let top_k_experts = value
-            .get("num_experts_per_tok")
-            .or_else(|| value.get("top_k_experts"))
-            .and_then(serde_json::Value::as_u64)
-            .map(|v| v as usize);
-        let expert_intermediate_size = value
-            .get("expert_intermediate_size")
-            .and_then(serde_json::Value::as_u64)
-            .map(|v| v as usize);
+        let max_position_embeddings = read_usize(value, "max_position_embeddings", 2048);
+        let num_experts = read_optional_usize(value, "num_local_experts");
+        let top_k_experts =
+            read_optional_usize_with_alt(value, &["num_experts_per_tok", "top_k_experts"]);
+        let expert_intermediate_size = read_optional_usize(value, "expert_intermediate_size");
         let has_qk_norm = value
             .get("has_qk_norm")
             .and_then(serde_json::Value::as_bool)
@@ -314,4 +277,58 @@ impl ModelConfig {
             has_qk_norm,
         })
     }
+}
+
+/// Read a required JSON field as `usize`, falling back to `default` when missing.
+fn read_usize(value: &serde_json::Value, field: &str, default: usize) -> usize {
+    // invariant: model config dimensions come from JSON and are always small
+    // (architectural constants); u64 -> usize truncation is not reachable in practice.
+    value
+        .get(field)
+        .and_then(serde_json::Value::as_u64)
+        .map_or(default, |v| usize::try_from(v).unwrap_or(default))
+}
+
+/// Read a JSON field as `usize` from the first key present, falling back to `default`.
+fn read_usize_with_alt(value: &serde_json::Value, fields: &[&str], default: u64) -> usize {
+    // invariant: model config dimensions come from JSON and are always small
+    // (architectural constants); u64 -> usize truncation is not reachable in practice.
+    for field in fields {
+        if let Some(v) = value.get(field).and_then(serde_json::Value::as_u64) {
+            return usize::try_from(v).unwrap_or(0);
+        }
+    }
+    usize::try_from(default).unwrap_or(0)
+}
+
+/// Read an optional JSON field as `Option<usize>`.
+fn read_optional_usize(value: &serde_json::Value, field: &str) -> Option<usize> {
+    // invariant: model config dimensions come from JSON and are always small.
+    value
+        .get(field)
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|v| usize::try_from(v).ok())
+}
+
+/// Read an optional JSON field as `Option<usize>` from the first key present.
+fn read_optional_usize_with_alt(value: &serde_json::Value, fields: &[&str]) -> Option<usize> {
+    // invariant: model config dimensions come from JSON and are always small.
+    for field in fields {
+        if let Some(v) = value.get(field).and_then(serde_json::Value::as_u64) {
+            return usize::try_from(v).ok();
+        }
+    }
+    None
+}
+
+/// Read a JSON field as `f32` from the first key present, falling back to `default`.
+// invariant: f64 -> f32 truncation is acceptable for model config floats.
+#[allow(clippy::cast_possible_truncation)]
+fn read_f32_with_alt(value: &serde_json::Value, fields: &[&str], default: f64) -> f32 {
+    for field in fields {
+        if let Some(v) = value.get(field).and_then(serde_json::Value::as_f64) {
+            return v as f32;
+        }
+    }
+    default as f32
 }

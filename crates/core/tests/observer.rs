@@ -201,11 +201,11 @@ fn test_sequence_finished_event() {
 #[test]
 fn test_multiple_observers() {
     let observers = SchedulerObservers::new();
-    let observer1 = Box::new(TrackingObserver::new());
-    let observer2 = Box::new(TrackingObserver::new());
+    let first_observer = Box::new(TrackingObserver::new());
+    let second_observer = Box::new(TrackingObserver::new());
 
-    observers.register(observer1).unwrap();
-    observers.register(observer2).unwrap();
+    observers.register(first_observer).unwrap();
+    observers.register(second_observer).unwrap();
 
     observers.dispatch(&ObserverEvent::RequestArrived {
         seq_id: 1,

@@ -168,6 +168,9 @@ impl LockFreeMetrics {
     /// reset (only the unconsumed ring entries are flushed — lifetime
     /// atomic counters are not touched).
     #[must_use]
+    // invariant: counters are bounded by uptime; u64/usize -> f64 precision
+    // loss is acceptable for snapshot metrics (p50/p90/p99/throughput).
+    #[allow(clippy::cast_precision_loss)]
     pub fn snapshot(&self) -> MetricsSnapshot {
         let mut latencies = Vec::new();
         while let Ok(ms) = self.latency_receiver.try_recv() {
@@ -194,6 +197,9 @@ impl LockFreeMetrics {
             sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
             let get_p = |xs: &[f64], p: f64| -> f64 {
+                // invariant: p in 0..=1 and xs non-empty, so the floor result is
+                // in 0..xs.len(); truncation/saturation is bounded.
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                 let idx = ((p * (xs.len() as f64 - 1.0)).floor() as usize).min(xs.len() - 1);
                 xs[idx]
             };
@@ -317,7 +323,7 @@ mod tests {
         collector.record_kv_cache_usage(10, 0);
 
         let snapshot = collector.snapshot();
-        assert_eq!(snapshot.kv_cache_usage_percent, 0.0);
+        assert!(snapshot.kv_cache_usage_percent.abs() < 1e-6);
     }
 
     #[test]
@@ -325,7 +331,7 @@ mod tests {
         let collector = MetricsCollector::new();
 
         let snapshot = collector.snapshot();
-        assert_eq!(snapshot.prefix_cache_hit_rate, 0.0);
+        assert!(snapshot.prefix_cache_hit_rate.abs() < 1e-6);
     }
 
     #[test]

@@ -197,8 +197,8 @@ fn test_attention_output_is_different_from_input() {
     let x_sum = x.sum_all().unwrap().to_scalar::<f32>().unwrap();
     let output_sum = output.sum_all().unwrap().to_scalar::<f32>().unwrap();
 
-    assert_ne!(
-        x_sum, output_sum,
+    assert!(
+        (x_sum - output_sum).abs() > 1e-6,
         "attention output should be different from input"
     );
 }

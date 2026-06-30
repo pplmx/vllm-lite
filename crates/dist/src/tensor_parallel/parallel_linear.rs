@@ -45,7 +45,10 @@ impl ColumnParallelLinear {
             let mut sum = 0.0f32;
             for (j, &inp) in input.iter().enumerate() {
                 let weight_idx = i * self.input_size + j;
-                sum += inp * (weight_idx as f32 * 0.1);
+                // invariant: weight_idx is a small tensor index (bounded by
+                // local_output_size * input_size); f32 precision is acceptable
+                // for this stub reduction.
+                sum = mul_add_weight(inp, weight_idx, sum);
             }
             *out = sum;
         }
@@ -103,7 +106,10 @@ impl RowParallelLinear {
             let mut sum = 0.0f32;
             for (j, &inp) in input.iter().enumerate() {
                 let weight_idx = i * local_input_size + j;
-                sum += inp * (weight_idx as f32 * 0.1);
+                // invariant: weight_idx is a small tensor index (bounded by
+                // output_size * local_input_size); f32 precision is acceptable
+                // for this stub reduction.
+                sum = mul_add_weight(inp, weight_idx, sum);
             }
             *out = sum;
         }
@@ -168,6 +174,13 @@ impl TensorParallelManager {
     pub const fn mesh(&self) -> &Arc<DeviceMesh> {
         &self.mesh
     }
+}
+
+// invariant: weight_idx is a small tensor index (bounded by tensor dim);
+// f32 precision is acceptable for this stub reduction helper.
+#[allow(clippy::cast_precision_loss)]
+fn mul_add_weight(input: f32, weight_idx: usize, sum: f32) -> f32 {
+    input.mul_add(weight_idx as f32 * 0.1, sum)
 }
 
 #[cfg(test)]

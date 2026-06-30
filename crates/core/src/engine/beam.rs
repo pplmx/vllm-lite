@@ -59,7 +59,7 @@ impl Engine {
                     &[false],
                 )?;
 
-                let top_k = self.get_top_k(&logits[0], beam_width);
+                let top_k = Self::get_top_k(&logits[0], beam_width);
 
                 for (token, log_prob) in top_k {
                     let mut new_tokens = beam.tokens.clone();
@@ -76,9 +76,14 @@ impl Engine {
                 break;
             }
 
+            // invariant: beam tokens are bounded by max_tokens; f32 precision
+            // loss is acceptable for length-penalty normalization.
             all_candidates.sort_by(|a, b| {
-                let sa = a.score / (a.tokens.len() as f32).powf(length_penalty);
-                let sb = b.score / (b.tokens.len() as f32).powf(length_penalty);
+                #[allow(clippy::cast_precision_loss)]
+                let (sa, sb) = (
+                    a.score / (a.tokens.len() as f32).powf(length_penalty),
+                    b.score / (b.tokens.len() as f32).powf(length_penalty),
+                );
                 sb.partial_cmp(&sa)
                     .unwrap_or_else(|| sa.is_nan().cmp(&sb.is_nan()))
             });
@@ -89,8 +94,11 @@ impl Engine {
         let best = beams
             .into_iter()
             .max_by(|a, b| {
-                let sa = a.score / (a.tokens.len() as f32).powf(length_penalty);
-                let sb = b.score / (b.tokens.len() as f32).powf(length_penalty);
+                #[allow(clippy::cast_precision_loss)]
+                let (sa, sb) = (
+                    a.score / (a.tokens.len() as f32).powf(length_penalty),
+                    b.score / (b.tokens.len() as f32).powf(length_penalty),
+                );
                 sa.partial_cmp(&sb)
                     .unwrap_or_else(|| sa.is_nan().cmp(&sb.is_nan()))
             })
@@ -98,7 +106,7 @@ impl Engine {
         Ok(best)
     }
 
-    fn get_top_k(&self, logits: &[f32], k: usize) -> Vec<(TokenId, f32)> {
+    fn get_top_k(logits: &[f32], k: usize) -> Vec<(TokenId, f32)> {
         let top_k_limit = k.min(logits.len());
         let mut indexed: Vec<(usize, f32)> =
             logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
@@ -109,7 +117,7 @@ impl Engine {
         indexed
             .into_iter()
             .take(top_k_limit)
-            .map(|(i, v)| (i as TokenId, v))
+            .map(|(i, v)| (TokenId::try_from(i).unwrap_or(0), v))
             .collect()
     }
 }

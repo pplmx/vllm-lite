@@ -48,7 +48,7 @@ impl EvictionPolicy {
         self.stats.total_selections += 1;
 
         if let Some((ref cached, seq_hash)) = self.cached_victims {
-            if seq_hash == self.compute_seq_hash(running_sequences) && cached.len() >= num_blocks {
+            if seq_hash == Self::compute_seq_hash(running_sequences) && cached.len() >= num_blocks {
                 self.stats.cache_hits += 1;
                 return cached.iter().take(num_blocks).copied().collect();
             }
@@ -62,7 +62,7 @@ impl EvictionPolicy {
             }
 
             for &block_id in seq.kv_blocks.as_ref() {
-                let priority = self.compute_priority(seq);
+                let priority = Self::compute_priority(seq);
                 block_usage.entry(block_id).or_insert((seq, priority)).1 =
                     priority.min(block_usage.get(&block_id).map_or(0, |(_, p)| *p));
             }
@@ -95,11 +95,11 @@ impl EvictionPolicy {
             .map(|(block_id, _, _)| block_id)
             .collect();
 
-        self.cached_victims = Some((victims.clone(), self.compute_seq_hash(running_sequences)));
+        self.cached_victims = Some((victims.clone(), Self::compute_seq_hash(running_sequences)));
         victims
     }
 
-    const fn compute_priority(&self, seq: &Sequence) -> usize {
+    const fn compute_priority(seq: &Sequence) -> usize {
         match seq.status {
             Status::Prefilling => 2,
             Status::Decoding => {
@@ -113,11 +113,17 @@ impl EvictionPolicy {
         }
     }
 
-    fn compute_seq_hash(&self, sequences: &[Sequence]) -> usize {
+    fn compute_seq_hash(sequences: &[Sequence]) -> usize {
         let mut hash = 0usize;
         for seq in sequences {
-            hash = hash.wrapping_mul(31).wrapping_add(seq.id as usize);
-            hash = hash.wrapping_mul(31).wrapping_add(seq.status as usize);
+            // invariant: hash values are bounded by usize; u64 -> usize truncation
+            // is acceptable in this hash function (wrapping handles it).
+            #[allow(clippy::cast_possible_truncation)]
+            let id_hash = seq.id as usize;
+            #[allow(clippy::cast_possible_truncation)]
+            let status_hash = seq.status as usize;
+            hash = hash.wrapping_mul(31).wrapping_add(id_hash);
+            hash = hash.wrapping_mul(31).wrapping_add(status_hash);
             hash = hash.wrapping_mul(31).wrapping_add(seq.kv_blocks.len());
         }
         hash
@@ -169,7 +175,7 @@ impl EvictionPolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::Priority;
+    use crate::types::{Priority, SamplingParams};
     use std::sync::Arc;
 
     fn create_test_sequence(id: u64, blocks: Vec<BlockId>, status: Status) -> Sequence {
@@ -181,7 +187,7 @@ mod tests {
             prompt_len: 0,
             status,
             max_tokens: 10,
-            sampling_params: Default::default(),
+            sampling_params: SamplingParams::default(),
             consecutive_decode_rounds: 0,
             priority: Priority::default(),
             degraded_draft: false,
@@ -315,11 +321,16 @@ mod tests {
 #[cfg(test)]
 mod prop_tests {
     use super::*;
-    use crate::types::Priority;
+    use crate::types::{Priority, SamplingParams};
     use proptest::prelude::*;
     use std::sync::Arc;
 
-    fn make_sequence(id: u64, blocks: Vec<BlockId>, status: Status, decode_rounds: u32) -> Sequence {
+    fn make_sequence(
+        id: u64,
+        blocks: Vec<BlockId>,
+        status: Status,
+        decode_rounds: u32,
+    ) -> Sequence {
         Sequence {
             id,
             tokens: vec![],
@@ -328,7 +339,7 @@ mod prop_tests {
             prompt_len: 0,
             status,
             max_tokens: 10,
-            sampling_params: Default::default(),
+            sampling_params: SamplingParams::default(),
             consecutive_decode_rounds: decode_rounds,
             priority: Priority::default(),
             degraded_draft: false,
@@ -336,17 +347,25 @@ mod prop_tests {
         }
     }
 
+    #[allow(dead_code)] // proptest helpers referenced indirectly via proptest! macro
     fn arb_status() -> impl Strategy<Value = Status> {
-        prop_oneof![Just(Status::Waiting), Just(Status::Prefilling), Just(Status::Decoding)]
+        prop_oneof![
+            Just(Status::Waiting),
+            Just(Status::Prefilling),
+            Just(Status::Decoding)
+        ]
     }
 
+    #[allow(dead_code)] // proptest helpers referenced indirectly via proptest! macro
     fn arb_sequence(id: u64) -> impl Strategy<Value = Sequence> {
         (
             proptest::collection::vec(0usize..32, 1..8),
             arb_status(),
             0u32..10,
         )
-            .prop_map(move |(blocks, status, decode_rounds)| make_sequence(id, blocks, status, decode_rounds))
+            .prop_map(move |(blocks, status, decode_rounds)| {
+                make_sequence(id, blocks, status, decode_rounds)
+            })
     }
 
     // Invariant 1: record_blocks / release_blocks refcount conservation —
@@ -413,7 +432,7 @@ mod prop_tests {
             for &block in &blocks {
                 policy.record_blocks(&[block]);
             }
-            let seq = make_sequence(1, blocks.clone(), Status::Decoding, 0);
+            let seq = make_sequence(1, blocks, Status::Decoding, 0);
 
             let _ = policy.select_victims(std::slice::from_ref(&seq), 1);
             let after_first = policy.stats();

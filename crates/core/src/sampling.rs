@@ -9,7 +9,7 @@ fn random_f32() -> f32 {
 
 pub(crate) fn greedy_sample(logits: &[f32]) -> TokenId {
     trace!(vocab_size = logits.len(), "Greedy sampling");
-    logits
+    let idx = logits
         .iter()
         .enumerate()
         .fold((0, f32::NEG_INFINITY), |(max_idx, max_val), (i, &val)| {
@@ -19,7 +19,9 @@ pub(crate) fn greedy_sample(logits: &[f32]) -> TokenId {
                 (max_idx, max_val)
             }
         })
-        .0 as TokenId
+        .0;
+    // invariant: vocab indices are bounded by the model vocabulary size, well within u32 range.
+    TokenId::try_from(idx).unwrap_or(0)
 }
 
 pub(crate) fn temperature_sample(logits: &[f32], temperature: f32) -> TokenId {
@@ -43,10 +45,10 @@ pub(crate) fn temperature_sample(logits: &[f32], temperature: f32) -> TokenId {
     for (i, &p) in probs.iter().enumerate() {
         cumsum += p;
         if random_threshold <= cumsum {
-            return i as TokenId;
+            return TokenId::try_from(i).unwrap_or(0);
         }
     }
-    (probs.len() - 1) as TokenId
+    TokenId::try_from(probs.len() - 1).unwrap_or(0)
 }
 
 pub(crate) fn top_p_sample(logits: &[f32], top_p: f32) -> TokenId {
@@ -78,17 +80,19 @@ pub(crate) fn top_p_sample(logits: &[f32], top_p: f32) -> TokenId {
 
     probs.truncate(cutoff);
     let total: f32 = probs.iter().sum();
-    probs.iter_mut().for_each(|p| *p /= total);
+    for p in &mut probs {
+        *p /= total;
+    }
 
     let random_threshold = random_f32();
     let mut cumsum = 0.0;
     for (i, &p) in probs.iter().enumerate() {
         cumsum += p;
         if random_threshold <= cumsum {
-            return indexed[i].0 as TokenId;
+            return TokenId::try_from(indexed[i].0).unwrap_or(0);
         }
     }
-    indexed[probs.len() - 1].0 as TokenId
+    TokenId::try_from(indexed[probs.len() - 1].0).unwrap_or(0)
 }
 
 #[must_use]
@@ -146,11 +150,11 @@ pub fn sample_batch(
         .map(|(logits, seen)| {
             let mut logits = logits.clone();
 
-            if repeat_penalty != 1.0 && !seen.is_empty() {
+            if (repeat_penalty - 1.0).abs() > f32::EPSILON && !seen.is_empty() {
                 apply_repeat_penalty(&mut logits, seen, repeat_penalty);
             }
 
-            if temperature > 0.0 && temperature != 1.0 {
+            if temperature > 0.0 && (temperature - 1.0).abs() > f32::EPSILON {
                 for l in &mut logits {
                     *l /= temperature;
                 }
@@ -185,7 +189,7 @@ pub fn sample_batch(
 
 /// Divide the logit at each id present in `seen_tokens` by `penalty`.
 ///
-/// This is the standard "repeat penalty" trick used by llama.cpp, HuggingFace
+/// This is the standard "repeat penalty" trick used by llama.cpp, `HuggingFace`
 /// `transformers`, and most open-source inference engines: tokens that have
 /// already appeared are made less likely on subsequent steps. No-op when
 /// `penalty == 1.0`, `seen_tokens` is empty, or `logits` is empty.
@@ -193,14 +197,16 @@ pub fn sample_batch(
 /// Out-of-range token ids are silently ignored. Duplicate entries in
 /// `seen_tokens` are deduped via an internal `HashSet`.
 pub fn apply_repeat_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penalty: f32) {
-    if penalty == 1.0 || seen_tokens.is_empty() || logits.is_empty() {
+    if (penalty - 1.0).abs() < f32::EPSILON || seen_tokens.is_empty() || logits.is_empty() {
         return;
     }
 
     let mut seen = std::collections::HashSet::new();
     for &token in seen_tokens {
-        let idx = token as usize;
-        if idx < logits.len() && seen.insert(token) {
+        if let Ok(idx) = usize::try_from(token)
+            && idx < logits.len()
+            && seen.insert(token)
+        {
             logits[idx] /= penalty;
         }
     }
@@ -339,8 +345,8 @@ mod tests {
         let seen = vec![1];
         apply_repeat_penalty(&mut logits, &seen, 2.0);
         assert!(logits[1] < 0.5);
-        assert_eq!(logits[0], 0.5);
-        assert_eq!(logits[2], 0.5);
+        assert!((logits[0] - 0.5).abs() < 1e-6);
+        assert!((logits[2] - 0.5).abs() < 1e-6);
     }
 
     #[test]
@@ -348,8 +354,8 @@ mod tests {
         let mut logits = vec![0.5, 0.5];
         let seen = vec![0];
         apply_repeat_penalty(&mut logits, &seen, 1.0);
-        assert_eq!(logits[0], 0.5);
-        assert_eq!(logits[1], 0.5);
+        assert!((logits[0] - 0.5).abs() < 1e-6);
+        assert!((logits[1] - 0.5).abs() < 1e-6);
     }
 
     #[test]
@@ -405,7 +411,7 @@ mod prop_tests {
         ) {
             let result = greedy_sample(&logits);
             prop_assert!(
-                (result as usize) < logits.len(),
+                usize::try_from(result).is_ok_and(|r| r < logits.len()),
                 "greedy_sample returned {} for vocab size {}",
                 result,
                 logits.len(),

@@ -15,7 +15,11 @@ fn test_scheduler_batch_builder_extract() {
 
     // Add 5 requests
     for i in 1..=5 {
-        sched.add_request(Request::new(i, vec![i as u32], 3));
+        sched.add_request(Request::new(
+            i,
+            vec![u32::try_from(i).expect("bounded test id")],
+            3,
+        ));
     }
 
     let batch = sched.build_batch();
@@ -136,7 +140,11 @@ fn test_build_decode_batch_budget() {
 
     // Add more requests while budget is limited
     for i in 2..=5 {
-        sched.add_request(Request::new(i, vec![i as u32], 3));
+        sched.add_request(Request::new(
+            i,
+            vec![u32::try_from(i).expect("bounded test id")],
+            3,
+        ));
     }
 
     let batch2 = sched.build_batch();
@@ -166,7 +174,11 @@ fn test_token_budget_boundary_zero() {
 
     // Add some requests
     for i in 1..=5 {
-        sched.add_request(Request::new(i, vec![i as u32; 3], 5));
+        sched.add_request(Request::new(
+            i,
+            vec![u32::try_from(i).expect("bounded test id"); 3],
+            5,
+        ));
     }
 
     let batch = sched.build_batch();
@@ -195,7 +207,11 @@ fn test_token_budget_boundary_one() {
 
     // Add decode requests (1 token each)
     for i in 1..=3 {
-        sched.add_request(Request::new(i, vec![i as u32], 5));
+        sched.add_request(Request::new(
+            i,
+            vec![u32::try_from(i).expect("bounded test id")],
+            5,
+        ));
     }
 
     let batch = sched.build_batch();
@@ -231,7 +247,11 @@ fn test_prefill_and_decode_separation() {
 
     // Add decode requests
     for i in 4..=6 {
-        sched.add_request(Request::new(i, vec![i as u32], 10));
+        sched.add_request(Request::new(
+            i,
+            vec![u32::try_from(i).expect("bounded test id")],
+            10,
+        ));
     }
 
     let batch = sched.build_batch();
@@ -299,7 +319,11 @@ fn test_consecutive_decode_limit() {
 
     // Add requests and simulate multiple decode rounds
     for i in 1..=3 {
-        sched.add_request(Request::new(i, vec![i as u32], 10));
+        sched.add_request(Request::new(
+            i,
+            vec![u32::try_from(i).expect("bounded test id")],
+            10,
+        ));
     }
 
     // First batch
@@ -371,7 +395,11 @@ fn test_max_batch_size() {
 
     // Add many requests
     for i in 1..=20 {
-        sched.add_request(Request::new(i, vec![i as u32], 5));
+        sched.add_request(Request::new(
+            i,
+            vec![u32::try_from(i).expect("bounded test id")],
+            5,
+        ));
     }
 
     let batch = sched.build_batch();
@@ -501,7 +529,11 @@ fn test_preemption_execution() {
 
     // Add multiple requests
     for i in 1..=5 {
-        sched.add_request(Request::new(i, vec![i as u32], 10));
+        sched.add_request(Request::new(
+            i,
+            vec![u32::try_from(i).expect("bounded test id")],
+            10,
+        ));
     }
 
     // Build batch - some should be in decoding state

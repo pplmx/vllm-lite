@@ -37,6 +37,7 @@ impl ShutdownEngine {
         }
     }
 
+    #[allow(clippy::unused_async)]
     async fn add_request(&self, max_tokens: usize) -> Result<u64, String> {
         let (tx, _rx) = mpsc::channel(64);
         let request = Request::new(1, vec![10, 20, 30], max_tokens);
@@ -52,6 +53,7 @@ impl ShutdownEngine {
         Ok(1)
     }
 
+    #[allow(clippy::unused_async)]
     async fn shutdown(&self) -> Result<(), String> {
         self.msg_tx
             .send(EngineMessage::Shutdown)

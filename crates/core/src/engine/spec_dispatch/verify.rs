@@ -13,7 +13,7 @@ use vllm_traits::{Batch, SeqId, TokenId};
 impl crate::engine::Engine {
     /// Returns `(accepted_tokens, accepted_counts_per_sequence)`.
     pub(crate) fn verify_draft_tokens_logits(
-        &mut self,
+        &self,
         batch: &Batch,
         draft_outputs: &[Vec<TokenId>],
     ) -> Result<(Vec<(SeqId, TokenId)>, Vec<usize>)> {
@@ -32,11 +32,7 @@ impl crate::engine::Engine {
                     std::slice::from_ref(&batch.num_computed_tokens[i]),
                     std::slice::from_ref(&batch.is_prefill[i]),
                 )?;
-                let token = if let Some(pos_logits) = logits.first() {
-                    argmax(pos_logits)
-                } else {
-                    0
-                };
+                let token = logits.first().map_or(0, |pos_logits| argmax(pos_logits));
                 results.push((*seq_id, token));
                 accepted_counts.push(0);
                 continue;

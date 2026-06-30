@@ -14,7 +14,7 @@ impl Engine {
     /// The loop is single-threaded and non-async: incoming messages are
     /// drained with `try_recv`, then one model step is executed if any
     /// sequence is pending, then the thread sleeps for the duration
-    /// produced by the current [`SleepPolicy`]. This pattern gives
+    /// produced by the current [`crate::engine::SleepPolicy`]. This pattern gives
     /// back-pressure-friendly batching without an async runtime.
     ///
     /// This call blocks the current thread and never returns except on

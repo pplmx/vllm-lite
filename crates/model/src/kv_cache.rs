@@ -1,5 +1,7 @@
 //! MLA-specific compressed KV cache (separate from paged tensor store).
 
+#![allow(dead_code)]
+
 use candle_core::{Device, Result, Tensor};
 
 /// `MlaKvCache`: mla kv cache.

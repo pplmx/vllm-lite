@@ -20,8 +20,17 @@ pub struct SelfSpeculativeModel<M: ModelBackend> {
 }
 
 impl<M: ModelBackend> SelfSpeculativeModel<M> {
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new(model: M, config: SpeculationConfig) -> Self {
         let total_layers = model.num_layers();
+        // invariant: total_layers is a small model-architecture constant; the
+        // `.max(1.0)` ensures the result is non-negative, so the f32 -> usize
+        // cast is sign-safe.
+        #[allow(
+            clippy::cast_precision_loss,
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss
+        )]
         let draft_layer_count = config
             .draft_layers
             .unwrap_or_else(|| (total_layers as f32 * 0.125).max(1.0) as usize);
@@ -87,9 +96,7 @@ impl<M: ModelBackend> DraftVerifier for SelfSpeculativeModel<M> {
             let mut draft_tokens: Vec<TokenId> = Vec::with_capacity(num_tokens);
 
             // Use position tracking to compute positions for each draft step
-            let mut current_num_computed = num_computed;
-
-            for _step in 0..num_tokens {
+            for current_num_computed in (num_computed..).take(num_tokens) {
                 let last_token = vec![*current_tokens.last().unwrap_or(&0)];
                 let step_position = vec![current_num_computed];
 
@@ -109,7 +116,6 @@ impl<M: ModelBackend> DraftVerifier for SelfSpeculativeModel<M> {
                 let next_token = output.next_tokens.first().copied().unwrap_or(0);
                 draft_tokens.push(next_token);
                 current_tokens.push(next_token);
-                current_num_computed += 1;
             }
 
             drafts.push((seq_id, draft_tokens));
@@ -124,11 +130,11 @@ impl<M: ModelBackend> DraftVerifier for SelfSpeculativeModel<M> {
     /// and implements its own logit-based path.
     fn verify(
         &self,
-        _seq_id: SeqId,
-        _draft_tokens: &[TokenId],
+        seq_id: SeqId,
+        draft_tokens: &[TokenId],
         _target_logits: &[f32],
     ) -> VerifierResult<VerificationResult> {
-        Ok(VerificationResult::new(_seq_id, _draft_tokens.to_vec()))
+        Ok(VerificationResult::new(seq_id, draft_tokens.to_vec()))
     }
 
     fn accept(&mut self, _seq_id: SeqId, _accepted_count: usize) {}
@@ -273,7 +279,10 @@ mod tests {
         ) -> vllm_traits::Result<BatchOutput> {
             Ok(BatchOutput {
                 seq_ids: seq_ids.to_vec(),
-                next_tokens: seq_ids.iter().map(|&id| (id * 10 + 1) as TokenId).collect(),
+                next_tokens: seq_ids
+                    .iter()
+                    .map(|&id| TokenId::try_from(id * 10 + 1).unwrap_or(0))
+                    .collect(),
             })
         }
 

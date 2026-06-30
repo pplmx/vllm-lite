@@ -425,11 +425,11 @@ fn test_per_request_routing_different_draft_ids_yield_different_resolution_paths
         scheduler.add_request(Request::new(22, vec![3, 4], 3).with_draft_model(id_b.clone()));
     let _batch = scheduler.build_batch();
 
-    let seq_a_state = scheduler.get_sequence(seq_a).expect("exists");
-    let seq_b_state = scheduler.get_sequence(seq_b).expect("exists");
-    assert_eq!(seq_a_state.draft_model_id.as_ref(), Some(&id_a));
-    assert_eq!(seq_b_state.draft_model_id.as_ref(), Some(&id_b));
-    assert_ne!(seq_a_state.draft_model_id, seq_b_state.draft_model_id);
+    let seq_alpha = scheduler.get_sequence(seq_a).expect("exists");
+    let seq_beta = scheduler.get_sequence(seq_b).expect("exists");
+    assert_eq!(seq_alpha.draft_model_id.as_ref(), Some(&id_a));
+    assert_eq!(seq_beta.draft_model_id.as_ref(), Some(&id_b));
+    assert_ne!(seq_alpha.draft_model_id, seq_beta.draft_model_id);
 }
 
 // ─────────────────── WR-01: FALL-02 end-to-end via step() ──────────────
@@ -609,12 +609,14 @@ fn test_engine_resolver_routes_to_distinct_backends_per_id() {
             // The same Arc<Mutex<...>> handles from the loader are stored in
             // the registry after resolve(). Their forward() must reach the
             // matching CountingBackend.
-            let mut guard_a = arc_a.lock().unwrap();
-            guard_a
+            arc_a
+                .lock()
+                .unwrap()
                 .forward(&[101], &[vec![1]], &[vec![0]], &[vec![0]], &[0], &[false])
                 .expect("a forward");
-            let mut guard_b = arc_b.lock().unwrap();
-            guard_b
+            arc_b
+                .lock()
+                .unwrap()
                 .forward(&[202], &[vec![3]], &[vec![0]], &[vec![0]], &[0], &[false])
                 .expect("b forward");
         }

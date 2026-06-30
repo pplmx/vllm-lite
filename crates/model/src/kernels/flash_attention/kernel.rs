@@ -4,6 +4,15 @@
 // `FlashAttention` trait, `ScaledDotProductAttention`, `FlashAttentionV2`,
 // and the high-level `FlashAttentionKernel` dispatcher.
 
+// invariant: tensor-dimension casts (head_dim/block_idx -> f32) are bounded by
+// model architecture constants; precision loss / truncation is intentional.
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+
 use super::config::{AttentionVariant, FlashAttentionConfig, select_tile_size};
 use super::util::softmax_last_dim;
 use candle_core::{Result, Tensor};
@@ -89,7 +98,7 @@ impl FlashAttentionV2 {
         // Per H-9 profile (MED #5): eliminates per-call 0-D `Tensor::new(scale, device)`
         // allocation. `affine` fuses the scaling into a single kernel without materializing
         // a scalar tensor. Same fix as H-11 #2 (GQA/util) and H-12 #1 (MLA).
-        let qk_scaled = qk.affine(self.scale as f64, 0.0)?;
+        let qk_scaled = qk.affine(f64::from(self.scale), 0.0)?;
         let attn = softmax_last_dim(&qk_scaled)?;
         attn.matmul(v)
     }
@@ -152,7 +161,7 @@ impl FlashAttentionV2 {
             let v_block = v.narrow(0, start_k, actual_block_size)?;
 
             let qk_block = q.matmul(&k_block.t()?)?;
-            let qk_scaled = qk_block.affine(self.scale as f64, 0.0)?;
+            let qk_scaled = qk_block.affine(f64::from(self.scale), 0.0)?;
 
             let block_m = qk_scaled.max_keepdim(1)?;
             let block_p = qk_scaled.broadcast_sub(&block_m)?.exp()?;
@@ -253,10 +262,10 @@ impl FlashAttentionV2 {
             let v_block = v.narrow(0, start_k, actual_block_size)?;
 
             let qk_block = q.matmul(&k_block.t()?)?;
-            let qk_scaled = qk_block.affine(self.scale as f64, 0.0)?;
+            let qk_scaled = qk_block.affine(f64::from(self.scale), 0.0)?;
 
             let causal_mask =
-                self.create_causal_mask(&[seq_len_q, actual_block_size], start_k, q.device())?;
+                Self::create_causal_mask(&[seq_len_q, actual_block_size], start_k, q.device())?;
             let qk_masked = qk_scaled.broadcast_add(&causal_mask)?;
 
             let block_m = qk_masked.max_keepdim(1)?;
@@ -289,7 +298,6 @@ impl FlashAttentionV2 {
     }
 
     fn create_causal_mask(
-        &self,
         dims: &[usize],
         start_k: usize,
         device: &candle_core::Device,
@@ -373,7 +381,7 @@ impl ScaledDotProductAttention {
         let batch_size = q_shape[0];
         let num_heads = q_shape[1];
         let seq_len = q_shape[2];
-        let _head_dim = q_shape[3];
+        let _ = q_shape[3];
 
         if seq_len <= 32 {
             return self.forward(q, k, v);
@@ -405,7 +413,7 @@ impl ScaledDotProductAttention {
                     let v_tile = v_bh.narrow(1, k_start, k_len)?;
 
                     let qk = q_tile.matmul(&k_tile.t()?)?;
-                    let qk_scaled = qk.affine(self.scale as f64, 0.0)?;
+                    let qk_scaled = qk.affine(f64::from(self.scale), 0.0)?;
                     let attn = softmax_last_dim(&qk_scaled)?;
                     let out_tile = attn.matmul(&v_tile)?;
 
@@ -452,7 +460,7 @@ impl FlashAttention for ScaledDotProductAttention {
     fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         let qk = q.matmul(&k.t()?)?;
         // H-12 #2: replaced `qk.broadcast_mul(scale_tensor)` with `qk.affine(scale, 0.0)`.
-        let qk_scaled = qk.affine(self.scale as f64, 0.0)?;
+        let qk_scaled = qk.affine(f64::from(self.scale), 0.0)?;
         let attn = softmax_last_dim(&qk_scaled)?;
         attn.matmul(v)
     }
@@ -750,9 +758,15 @@ mod tests {
         let sdpa = ScaledDotProductAttention::new(64);
         let fa_v2 = FlashAttentionV2::new(2, 64).with_block_size(64);
 
-        let seed = 42;
+        // invariant: small integer test seeds (42..=44) used only to seed the
+        // RNG; precision loss is acceptable for the test fixture.
+        #[allow(clippy::cast_precision_loss)]
+        let seed: i32 = 42;
+        #[allow(clippy::cast_precision_loss)]
         let q = Tensor::randn(seed as f32, 0.1, (1, 2, 32, 64), &Device::Cpu)?;
+        #[allow(clippy::cast_precision_loss)]
         let k = Tensor::randn((seed + 1) as f32, 0.1, (1, 2, 32, 64), &Device::Cpu)?;
+        #[allow(clippy::cast_precision_loss)]
         let v = Tensor::randn((seed + 2) as f32, 0.1, (1, 2, 32, 64), &Device::Cpu)?;
 
         let sdpa_out = sdpa.forward(&q, &k, &v)?;

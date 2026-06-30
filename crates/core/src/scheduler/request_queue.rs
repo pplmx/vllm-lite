@@ -77,7 +77,7 @@ impl RequestQueue {
         }
 
         let seq_id = seq.id;
-        let phase = self.determine_phase(&seq);
+        let phase = Self::determine_phase(&seq);
         let priority = policy.compute_priority(&seq, ctx);
 
         let scheduled = ScheduledSequence {
@@ -98,7 +98,7 @@ impl RequestQueue {
         while let Some(scheduled) = self.priority_queue.pop() {
             let seq_id = scheduled.seq_id;
             if let Some(seq) = self.sequences.remove(&seq_id) {
-                let phase = self.determine_phase(&seq);
+                let phase = Self::determine_phase(&seq);
                 if let Some(set) = self.phase_index.get_mut(&phase) {
                     set.remove(&seq_id);
                 }
@@ -124,7 +124,7 @@ impl RequestQueue {
     #[must_use]
     pub fn remove(&mut self, seq_id: SeqId) -> Option<Sequence> {
         if let Some(seq) = self.sequences.remove(&seq_id) {
-            let phase = self.determine_phase(&seq);
+            let phase = Self::determine_phase(&seq);
             if let Some(set) = self.phase_index.get_mut(&phase) {
                 set.remove(&seq_id);
             }
@@ -178,11 +178,12 @@ impl RequestQueue {
             .map_or(0, std::collections::HashSet::len)
     }
 
-    const fn determine_phase(&self, seq: &Sequence) -> Phase {
+    const fn determine_phase(seq: &Sequence) -> Phase {
+        #[allow(clippy::match_same_arms)]
         match seq.status {
             Status::Waiting | Status::Prefilling => Phase::Prefill,
             Status::Decoding => Phase::Decode,
-            _ => Phase::Prefill,
+            Status::Finished => Phase::Prefill,
         }
     }
 

@@ -1,4 +1,13 @@
 #![allow(clippy::module_name_repetitions)]
+// invariant: rope positional-index casts (position/seq_len -> f32) are bounded
+// by sequence length and head_dim, both small model-architecture constants;
+// precision loss / truncation is intentional.
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+
 use crate::qwen3::config::Qwen3Config;
 use candle_core::{Result, Tensor};
 
@@ -176,9 +185,8 @@ mod tests {
         let out2 = apply_rope(&query, &positions, 10000.0)?;
 
         let diff = (out1 - out2)?.abs()?.sum_all()?;
-        assert_eq!(
-            diff.to_scalar::<f32>()?,
-            0.0,
+        assert!(
+            diff.to_scalar::<f32>()?.abs() < 1e-6,
             "RoPE should be deterministic"
         );
 
@@ -207,9 +215,9 @@ mod tests {
     fn test_rope_creation() {
         let device = Device::Cpu;
         let rope = RoPE::new(128, 2048, 10000.0, &device);
-        assert_eq!(rope.theta, 10000.0);
+        assert!((rope.theta - 10_000.0).abs() < 1e-6);
         assert_eq!(rope.head_dim, 128);
-        assert_eq!(rope.scaling_factor, 1.0);
+        assert!((rope.scaling_factor - 1.0).abs() < 1e-6);
     }
 
     #[test]

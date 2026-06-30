@@ -80,7 +80,7 @@ impl BatchComposer {
                     self.compose_standard(sequences, phase)
                 }
             }
-            _ => self.compose_standard(sequences, phase),
+            Phase::Decode => self.compose_standard(sequences, phase),
         }
     }
 
@@ -365,7 +365,7 @@ mod tests {
         Sequence {
             id,
             tokens,
-            kv_blocks: Arc::new(vec![id as usize]),
+            kv_blocks: Arc::new(vec![usize::try_from(id).expect("bounded test seq id")]),
             num_computed_tokens: 0,
             prompt_len: 3,
             status,
@@ -444,7 +444,10 @@ mod tests {
         let composer = BatchComposer::new(config);
 
         let seqs: Vec<_> = (1..=5)
-            .map(|i| make_sequence(i, vec![i as u32], Status::Decoding))
+            .map(|i| {
+                let token = u32::try_from(i).expect("bounded test id");
+                make_sequence(i, vec![token], Status::Decoding)
+            })
             .collect();
 
         let batch = composer.compose(seqs, Phase::Decode);
@@ -462,7 +465,10 @@ mod tests {
         let composer = BatchComposer::new(config);
 
         let seqs: Vec<_> = (1..=10)
-            .map(|i| make_sequence(i, vec![i as u32; 10], Status::Waiting))
+            .map(|i| {
+                let token = u32::try_from(i).expect("bounded test id");
+                make_sequence(i, vec![token; 10], Status::Waiting)
+            })
             .collect();
 
         let batch = composer.compose(seqs, Phase::Prefill);
@@ -617,7 +623,7 @@ mod prop_tests {
         Sequence {
             id,
             tokens,
-            kv_blocks: Arc::new(vec![id as usize]),
+            kv_blocks: Arc::new(vec![usize::try_from(id).expect("bounded test seq id")]),
             num_computed_tokens: 0,
             prompt_len: 3,
             status,

@@ -34,6 +34,7 @@ impl RateLimiter {
         }
     }
 
+    #[allow(clippy::unused_async)]
     async fn check_rate_limit(&mut self, key: &str) -> bool {
         let now = Instant::now();
         let window = Duration::from_secs(self.window_secs);
@@ -78,6 +79,7 @@ impl AuthMiddleware {
         if !limiter.check_rate_limit(api_key).await {
             return Err(StatusCode::TOO_MANY_REQUESTS);
         }
+        drop(limiter);
 
         Ok(api_key.to_string())
     }

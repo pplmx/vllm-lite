@@ -8,10 +8,13 @@ use tracing::{info, warn};
 // Lints are disabled for the generated proto module because tonic_build output
 // is not under our control. See crates/dist/proto/node.proto for the source.
 #[allow(
+    clippy::derive_partial_eq_without_eq,
     clippy::doc_markdown,
     clippy::missing_const_for_fn,
     clippy::missing_errors_doc,
-    clippy::missing_panics_doc
+    clippy::missing_panics_doc,
+    clippy::default_trait_access,
+    clippy::too_many_lines
 )]
 mod generated_proto {
     tonic::include_proto!("vllm.distributed");
@@ -42,12 +45,14 @@ impl GrpcState {
             peers.push(peer);
             info!("Added peer to cluster");
         }
+        drop(peers);
     }
 
     pub async fn remove_peer(&self, peer: &str) {
         let mut peers = self.peers.write().await;
         peers.retain(|p| p != peer);
         info!(peer = %peer, "Removed peer from cluster");
+        drop(peers);
     }
 }
 
@@ -103,6 +108,7 @@ impl node_service_server::NodeService for NodeServiceImpl {
         let req = request.into_inner();
         let cache = self.state.kv_cache.read().await;
 
+        #[allow(clippy::option_if_let_else)]
         if let Some(data) = cache.get(&req.block_hash) {
             Ok(Response::new(GetKvCacheResponse {
                 found: true,
@@ -163,6 +169,7 @@ mod tests {
         let peers = state.peers.read().await;
         assert_eq!(peers.len(), 1);
         assert_eq!(peers[0], "node-1:50051");
+        drop(peers);
     }
 
     #[tokio::test]
@@ -176,5 +183,6 @@ mod tests {
         let peers = state.peers.read().await;
         assert_eq!(peers.len(), 1);
         assert_eq!(peers[0], "node-2:50051");
+        drop(peers);
     }
 }

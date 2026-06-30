@@ -2,6 +2,7 @@
 //! Architecture capability flags for production vs stub models.
 
 /// Capability flags describing what an architecture can do at load/inference time.
+#[allow(clippy::struct_excessive_bools)] // intentional feature flags, not a state machine
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ArchCapabilities {
     /// Real token generation (not stub / passthrough).

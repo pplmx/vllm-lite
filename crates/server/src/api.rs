@@ -8,8 +8,10 @@ use crate::ApiState;
 
 /// Sender side of the engine mailbox. Each handler holds a clone of this
 /// `UnboundedSender`; sending an [`EngineMessage`] enqueues work for the
-/// engine's run loop. Backpressure is intentionally not applied here — the
-/// engine drains every message each loop iteration.
+/// engine's run loop.
+///
+/// Backpressure is intentionally not applied here — the engine drains every
+/// message each loop iteration.
 pub type EngineHandle = mpsc::UnboundedSender<EngineMessage>;
 
 /// `HealthResponse`: health response.
@@ -29,7 +31,11 @@ pub struct HealthDetailResponse {
 
 /// `/health/details` handler. Returns a richer status payload including
 /// live metrics from the engine (prefill throughput, KV-cache utilization).
+///
 /// Used by ops dashboards that need more than the liveness/readiness probe.
+// invariant: throughput/percent values are bounded metrics; f64 -> f32
+// precision loss / truncation is acceptable for the public health snapshot.
+#[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
 pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailResponse> {
     let (response_tx, mut response_rx) = mpsc::unbounded_channel();
     let _ = state
@@ -38,17 +44,22 @@ pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailR
 
     let metrics = response_rx.recv().await.unwrap_or_default();
 
+    let gpu_utilization = metrics.prefill_throughput as f32;
+    let kv_cache_usage_percent = metrics.kv_cache_usage_percent as f32;
     Json(HealthDetailResponse {
         status: "ok".to_string(),
         gpu_available: true,
-        gpu_utilization: Some(metrics.prefill_throughput as f32),
-        kv_cache_usage_percent: Some(metrics.kv_cache_usage_percent as f32),
+        gpu_utilization: Some(gpu_utilization),
+        kv_cache_usage_percent: Some(kv_cache_usage_percent),
     })
 }
 
 /// `/shutdown` handler. Sends [`EngineMessage::Shutdown`] to the engine and
 /// returns immediately; the HTTP server keeps serving until the process
-/// exits. Useful for graceful drain during orchestrator rolling updates.
+/// exits.
+///
+/// Useful for graceful drain during orchestrator rolling updates.
+#[allow(clippy::unused_async)]
 pub async fn shutdown(State(state): State<ApiState>) -> &'static str {
     let _ = state.engine_tx.send(EngineMessage::Shutdown);
     "Shutting down"

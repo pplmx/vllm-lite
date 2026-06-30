@@ -1,5 +1,14 @@
 //! Shared paged KV cache operations and GQA attention matmul for production architectures.
 
+// invariant: tensor-dimension casts (head_dim/token_idx -> f32/u32) are
+// bounded by model architecture constants; precision loss / truncation is
+// intentional.
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+
 use std::collections::BTreeMap;
 
 use candle_core::{Device, Module, Result, Tensor};

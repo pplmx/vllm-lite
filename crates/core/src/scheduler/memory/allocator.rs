@@ -292,7 +292,7 @@ mod prop_tests {
                 let fresh = seen.insert(id);
                 prop_assert!(fresh, "duplicate allocation: {id}");
                 prop_assert!(
-                    (id as usize) < capacity,
+                    id < capacity,
                     "id {id} out of range [0, {capacity})"
                 );
             }

@@ -64,7 +64,7 @@ impl SequencePacker {
         }
 
         if !self.config.enabled {
-            return vec![self.create_single_batch(sequences)];
+            return vec![Self::create_single_batch(sequences)];
         }
 
         // Sort by length descending (Decreasing)
@@ -106,6 +106,9 @@ impl SequencePacker {
                     .unwrap_or(seq_len);
                 let max_len = b.max_seq_len.max(seq_len);
                 let min_len = batch_min_len.min(seq_len);
+                // invariant: sequence lengths are bounded by max_seq_len; f32
+                // precision loss is acceptable for the length-similarity ratio.
+                #[allow(clippy::cast_precision_loss)]
                 let diff = (max_len - min_len) as f32 / max_len as f32;
                 diff <= self.config.similarity_threshold
             })
@@ -118,7 +121,7 @@ impl SequencePacker {
             .map(|(idx, _)| idx)
     }
 
-    fn create_single_batch(&self, sequences: Vec<Sequence>) -> PackedBatch {
+    fn create_single_batch(sequences: Vec<Sequence>) -> PackedBatch {
         let mut batch = PackedBatch::new();
         for seq in sequences {
             batch.add_sequence(seq);

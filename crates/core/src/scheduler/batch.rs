@@ -67,12 +67,16 @@ impl crate::engine::Engine {
         self.scheduler.clear_finished();
 
         if !batch.seq_ids.is_empty() {
-            self.scheduler.metrics.record_tokens(total_tokens as u64);
+            self.scheduler
+                .metrics
+                .record_tokens(u64::try_from(total_tokens).unwrap_or(0));
             self.scheduler
                 .metrics
                 .record_batch_size(batch.seq_ids.len());
         }
 
+        // invariant: elapsed millis fits in f64 mantissa (< 2^52 ms ≈ 142 years).
+        #[allow(clippy::cast_precision_loss)]
         let elapsed = start.elapsed().as_millis() as f64;
         if elapsed > 0.0 {
             self.scheduler.metrics.record_latency(elapsed);

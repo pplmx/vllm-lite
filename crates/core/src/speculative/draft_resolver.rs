@@ -65,10 +65,12 @@ pub trait DraftLoader: Send + Sync {
 
 /// Loader that always returns `LoadFailed`. Used as a placeholder when an Engine
 /// is constructed with `with_drafts_boxed` / `with_budget_boxed` but the server
-/// hasn't yet wired a real loader. The resolver treats every load failure as
-/// a FALL-01 fallback to self-spec — so this loader effectively keeps all
+/// hasn't yet wired a real loader.
+///
+/// The resolver treats every load failure as a FALL-01 fallback to self-spec —
+/// so this loader effectively keeps all external drafts at `Unloaded` state and
+/// the engine behaves like self-spec.
 #[derive(Debug)]
-/// external drafts at `Unloaded` state and the engine behaves like self-spec.
 pub struct NoopLoader;
 
 impl DraftLoader for NoopLoader {
@@ -134,12 +136,9 @@ impl DraftResolver {
     /// (FALL-01 path). Records metrics for every call.
     pub fn resolve(&self, request_draft_id: Option<&DraftId>) -> ResolvedDraft {
         // Case 1: no external draft requested
-        let id = match request_draft_id {
-            None => {
-                self.metrics.inc_draft_resolution(DraftResolutionKind::None);
-                return self.fallback_to_self_spec_or_none();
-            }
-            Some(id) => id,
+        let Some(id) = request_draft_id else {
+            self.metrics.inc_draft_resolution(DraftResolutionKind::None);
+            return self.fallback_to_self_spec_or_none();
         };
 
         // Case 2: draft is already loaded → external
@@ -199,14 +198,17 @@ impl DraftResolver {
     }
 
     fn fallback_to_self_spec_or_none(&self) -> ResolvedDraft {
-        if let Some(s) = &self.self_spec {
-            self.metrics
-                .inc_draft_resolution(DraftResolutionKind::SelfSpec);
-            ResolvedDraft::SelfSpec(s.clone())
-        } else {
-            self.metrics.inc_draft_resolution(DraftResolutionKind::None);
-            ResolvedDraft::None
-        }
+        self.self_spec.as_ref().map_or_else(
+            || {
+                self.metrics.inc_draft_resolution(DraftResolutionKind::None);
+                ResolvedDraft::None
+            },
+            |s| {
+                self.metrics
+                    .inc_draft_resolution(DraftResolutionKind::SelfSpec);
+                ResolvedDraft::SelfSpec(s.clone())
+            },
+        )
     }
 
     /// Access the underlying registry (for advanced callers).
@@ -289,7 +291,7 @@ mod tests {
 
     fn make_resolver(
         specs: Vec<DraftSpec>,
-        loaded: Vec<DraftId>,
+        loaded: &[DraftId],
         self_spec: Option<Arc<Mutex<Box<dyn ModelBackend>>>>,
         loader_failures: Vec<DraftId>,
     ) -> (Arc<DraftResolver>, Arc<EnhancedMetricsCollector>) {
@@ -297,17 +299,17 @@ mod tests {
         for spec in specs {
             registry.register(spec).unwrap();
         }
-        for id in &loaded {
+        for id in loaded {
             registry.attach_loaded(id, Box::new(StubBackend)).unwrap();
         }
-        let loader: Arc<dyn DraftLoader> = Arc::new(StubLoader {
+        let stub_loader: Arc<dyn DraftLoader> = Arc::new(StubLoader {
             fail_on: loader_failures,
         });
         let metrics = Arc::new(EnhancedMetricsCollector::new());
         let resolver = Arc::new(DraftResolver::new(
             registry,
             self_spec,
-            loader,
+            stub_loader,
             metrics.clone(),
         ));
         (resolver, metrics)
@@ -317,7 +319,7 @@ mod tests {
     fn test_resolve_none_returns_self_spec_when_available() {
         let self_spec: Arc<Mutex<Box<dyn ModelBackend>>> =
             Arc::new(Mutex::new(Box::new(StubBackend)));
-        let (resolver, _) = make_resolver(vec![], vec![], Some(self_spec.clone()), vec![]);
+        let (resolver, _) = make_resolver(vec![], &[], Some(self_spec.clone()), vec![]);
         match resolver.resolve(None) {
             ResolvedDraft::SelfSpec(_) => {}
             other => panic!("expected SelfSpec, got {other:?}"),
@@ -326,7 +328,7 @@ mod tests {
 
     #[test]
     fn test_resolve_none_returns_none_when_no_self_spec() {
-        let (resolver, _) = make_resolver(vec![], vec![], None, vec![]);
+        let (resolver, _) = make_resolver(vec![], &[], None, vec![]);
         match resolver.resolve(None) {
             ResolvedDraft::None => {}
             other => panic!("expected None, got {other:?}"),
@@ -345,12 +347,8 @@ mod tests {
         };
         let self_spec: Arc<Mutex<Box<dyn ModelBackend>>> =
             Arc::new(Mutex::new(Box::new(StubBackend)));
-        let (resolver, _) = make_resolver(
-            vec![spec],
-            vec![DraftId("a".into())],
-            Some(self_spec),
-            vec![],
-        );
+        let (resolver, _) =
+            make_resolver(vec![spec], &[DraftId("a".into())], Some(self_spec), vec![]);
         match resolver.resolve(Some(&DraftId("a".into()))) {
             ResolvedDraft::External(_) => {}
             other => panic!("expected External, got {other:?}"),
@@ -371,7 +369,7 @@ mod tests {
             Arc::new(Mutex::new(Box::new(StubBackend)));
         let (resolver, _) = make_resolver(
             vec![spec],
-            vec![], // not pre-loaded
+            &[], // not pre-loaded
             Some(self_spec),
             vec![], // loader succeeds
         );
@@ -395,7 +393,7 @@ mod tests {
             Arc::new(Mutex::new(Box::new(StubBackend)));
         let (resolver, _) = make_resolver(
             vec![spec],
-            vec![],
+            &[],
             Some(self_spec),
             vec![DraftId("bad".into())], // loader fails
         );
@@ -409,7 +407,7 @@ mod tests {
     fn test_resolve_unknown_id_with_no_loader_falls_back() {
         let self_spec: Arc<Mutex<Box<dyn ModelBackend>>> =
             Arc::new(Mutex::new(Box::new(StubBackend)));
-        let (resolver, _) = make_resolver(vec![], vec![], Some(self_spec), vec![]);
+        let (resolver, _) = make_resolver(vec![], &[], Some(self_spec), vec![]);
         // "ghost" was never registered
         match resolver.resolve(Some(&DraftId("ghost".into()))) {
             ResolvedDraft::SelfSpec(_) => {}
@@ -421,7 +419,7 @@ mod tests {
     fn test_resolve_records_metrics() {
         let self_spec: Arc<Mutex<Box<dyn ModelBackend>>> =
             Arc::new(Mutex::new(Box::new(StubBackend)));
-        let (resolver, metrics) = make_resolver(vec![], vec![], Some(self_spec), vec![]);
+        let (resolver, metrics) = make_resolver(vec![], &[], Some(self_spec), vec![]);
         resolver.resolve(None);
         resolver.resolve(Some(&DraftId("nope".into())));
         let snap = metrics.draft_metrics_snapshot();

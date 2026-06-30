@@ -61,6 +61,7 @@ impl DistributedKVCache {
             }
         }
 
+        drop(cache);
         if let Ok(mut stats) = self.stats.write() {
             stats.misses += 1;
         }
@@ -134,11 +135,8 @@ impl DistributedKVCache {
             }
             super::protocol::CacheOperation::Update {
                 key, value_hash, ..
-            } => {
-                self.put(*key, *value_hash);
-                None
             }
-            super::protocol::CacheOperation::Write {
+            | super::protocol::CacheOperation::Write {
                 key, value_hash, ..
             } => {
                 self.put(*key, *value_hash);
@@ -154,6 +152,9 @@ impl DistributedKVCache {
 
     fn compute_owner_nodes(&self, key: u64) -> Vec<NodeId> {
         let mut nodes = Vec::with_capacity(self.config.replication_factor);
+        // invariant: key % num_nodes fits in usize on all targets since the
+        // modulus is bounded by num_nodes.
+        #[allow(clippy::cast_possible_truncation)]
         let base = (key as usize) % self.config.num_nodes;
 
         for i in 0..self.config.replication_factor {
@@ -165,24 +166,26 @@ impl DistributedKVCache {
     }
 
     pub fn memory_usage(&self) -> usize {
-        if let Ok(cache) = self.local_cache.read() {
+        self.local_cache.read().map_or(0, |cache| {
             cache
                 .values()
                 .filter(|entry| entry.owner_nodes.contains(&self.config.node_id))
                 .count()
                 * std::mem::size_of::<CacheEntry>()
-        } else {
-            0
-        }
+        })
     }
 }
 
 fn current_timestamp() -> u64 {
-    // invariant: monotonic clock is always >= UNIX_EPOCH.
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as u64
+    // invariant: monotonic clock is always >= UNIX_EPOCH; saturating u64
+    // conversion is safe for any realistic timestamp.
+    u64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis(),
+    )
+    .unwrap_or(u64::MAX)
 }
 
 #[cfg(test)]

@@ -31,8 +31,7 @@ impl HealthStatus {
     pub const fn http_status(&self) -> u16 {
         match self {
             Self::Ok => 200,
-            Self::NotReady => 503,
-            Self::Unhealthy => 503,
+            Self::NotReady | Self::Unhealthy => 503,
         }
     }
 }

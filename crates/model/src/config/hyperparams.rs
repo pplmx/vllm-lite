@@ -112,7 +112,11 @@ impl ModelHyperparams for Qwen3Config {
 }
 
 impl From<&ModelConfig> for Qwen3Config {
+    // invariant: rms_norm_eps is a small f64 config value (~1e-5); f32
+    // precision loss and f64 -> f32 truncation are acceptable for the downstream usage.
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
     fn from(config: &ModelConfig) -> Self {
+        let rms_norm_eps = config.rms_norm_eps as f32;
         Self {
             vocab_size: Some(config.vocab_size),
             hidden_size: Some(config.hidden_size),
@@ -123,7 +127,7 @@ impl From<&ModelConfig> for Qwen3Config {
             intermediate_size: Some(config.intermediate_size),
             rope_theta: Some(config.rope_theta),
             max_position_embeddings: Some(config.max_position_embeddings),
-            rms_norm_eps: Some(config.rms_norm_eps as f32),
+            rms_norm_eps: Some(rms_norm_eps),
             tie_word_embeddings: Some(config.tie_word_embeddings),
             has_qk_norm: Some(config.has_qk_norm),
             ..Default::default()

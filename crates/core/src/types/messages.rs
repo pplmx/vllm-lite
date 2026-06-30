@@ -6,9 +6,10 @@ use crate::metrics::MetricsSnapshot;
 use crate::types::request::Request;
 use vllm_traits::TokenId;
 
-/// Messages the server sends to the engine over the [`crate::EngineHandle`]
-/// mailbox. The engine's [`crate::engine::Engine::run`] loop drains these
-/// each iteration before stepping.
+/// Messages the server sends to the engine over the
+/// [`crate::engine::Engine`] mailbox. The engine's
+/// [`crate::engine::Engine::run`] loop drains these each iteration before
+/// stepping.
 #[derive(Debug)]
 pub enum EngineMessage {
     /// Submit a new generation `request`. Tokens are streamed back to

@@ -113,6 +113,7 @@ impl TlsListener {
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new(config: TlsConfig) -> Result<Self, TlsError> {
         let server_config = config.load()?;
         Ok(Self {
@@ -179,7 +180,14 @@ mod tests {
         match result {
             Ok(Err(_)) => { /* structured error — pass */ }
             Ok(Ok(_)) => panic!("load() succeeded with invalid config"),
-            Err(_) => panic!("load() panicked — SEC-06 regression"),
+            Err(panic_payload) => {
+                // invariant: the panic payload type is determined by the code
+                // path that panicked; in this test, only `load()` can panic
+                // and it is an `String`/`&str` message — treat any panic as a
+                // SEC-06 regression. Re-raise with the original payload so
+                // the failure message is preserved.
+                std::panic::resume_unwind(panic_payload);
+            }
         }
     }
 }

@@ -81,6 +81,7 @@ impl MixtralBlock {
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.
+    #[allow(clippy::too_many_lines)] // weight-loader linear sequence; splitting would obscure the per-tensor lookups
     pub fn from_weights(
         config: &ModelConfig,
         layer_idx: usize,

@@ -119,20 +119,27 @@ impl EnhancedMetricsCollector {
         self.packing_sequences.fetch_add(1, Ordering::Relaxed);
     }
 
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn record_packing_efficiency(&self, ratio: f64) {
-        let fixed = (ratio * 100000.0) as u64;
+        let fixed = (ratio * 100_000.0) as u64;
         self.packing_efficiency.store(fixed, Ordering::Relaxed);
     }
 
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn record_packing_waste_ratio(&self, ratio: f64) {
-        let fixed = (ratio * 100000.0) as u64;
+        let fixed = (ratio * 100_000.0) as u64;
         self.packing_waste_ratio.store(fixed, Ordering::Relaxed);
     }
 
     // Speculative metrics
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
     pub fn record_speculative_acceptance(&self, accepted: usize, total: usize) {
         if total > 0 {
-            let rate = (accepted as f64 / total as f64 * 100000.0) as u64;
+            let rate = (accepted as f64 / total as f64 * 100_000.0) as u64;
             self.speculative_acceptance_rate
                 .store(rate, Ordering::Relaxed);
         }
@@ -146,13 +153,15 @@ impl EnhancedMetricsCollector {
         self.speculative_adjustments.fetch_add(1, Ordering::Relaxed);
     }
 
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn record_speculative_efficiency(&self, efficiency: f64) {
-        let fixed = (efficiency * 100000.0) as u64;
+        let fixed = (efficiency * 100_000.0) as u64;
         self.speculative_efficiency.store(fixed, Ordering::Relaxed);
     }
 
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn record_throughput_speedup(&self, ratio: f64) {
-        let fixed = (ratio * 100000.0) as u64;
+        let fixed = (ratio * 100_000.0) as u64;
         self.throughput_speedup_ratio
             .store(fixed, Ordering::Relaxed);
     }
@@ -184,6 +193,9 @@ impl EnhancedMetricsCollector {
             .store(len as u64, Ordering::Relaxed);
     }
 
+    // invariant: per-request accepted/total are small counters; u64 -> f64
+    // precision loss is acceptable for the acceptance-rate metric.
+    #[allow(clippy::cast_precision_loss)]
     pub fn get_per_request_acceptance_rate(&self, seq_id: SeqId) -> f64 {
         self.per_request_acceptance
             .get(&seq_id)
@@ -351,8 +363,14 @@ mod tests {
         let collector = EnhancedMetricsCollector::new();
         collector.record_inference_latency(1_000_000);
         collector.record_inference_latency(2_000_000);
-        let buckets = collector.inference_latency_ns.get("inference").unwrap();
-        assert_eq!(buckets.len(), 2);
+        assert_eq!(
+            collector
+                .inference_latency_ns
+                .get("inference")
+                .unwrap()
+                .len(),
+            2
+        );
     }
 
     // ---- Plan 17.4-H: Metrics Tests ----
@@ -377,7 +395,7 @@ mod tests {
         let collector = EnhancedMetricsCollector::new();
         collector.record_throughput_speedup(1.5);
         let gauge = collector.get_gauge("throughput_speedup_ratio");
-        assert_eq!(gauge, 150000);
+        assert_eq!(gauge, 150_000);
     }
 
     #[test]

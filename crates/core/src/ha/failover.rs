@@ -49,6 +49,7 @@ impl FailoverManager {
         requests.insert(seq_id, request);
 
         info!(seq_id = %seq_id, "Tracking in-flight request");
+        drop(requests);
     }
 
     pub async fn complete_request(&self, seq_id: SeqId) {
@@ -56,6 +57,7 @@ impl FailoverManager {
         if requests.remove(&seq_id).is_some() {
             info!(seq_id = %seq_id, "Request completed, removed from tracking");
         }
+        drop(requests);
     }
 
     pub async fn get_stale_requests(&self) -> Vec<SeqId> {
@@ -86,9 +88,11 @@ impl FailoverManager {
         if let Some(request) = requests.get_mut(&seq_id) {
             info!(seq_id = %seq_id, new_node = %new_node, "Migrating request to new node");
             request.node_id = new_node;
+            drop(requests);
             return true;
         }
 
+        drop(requests);
         false
     }
 
@@ -107,6 +111,7 @@ impl FailoverManager {
             "Node failed, identified requests to migrate"
         );
 
+        drop(requests);
         to_migrate
     }
 

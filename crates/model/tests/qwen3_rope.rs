@@ -44,6 +44,9 @@ fn test_qwen3_rope_position_encoding() {
         .to_vec1::<f32>()
         .unwrap();
 
+    // invariant: num_heads * head_dim is bounded by the small test tensor
+    // dimensions; f32 precision loss is acceptable for the test mean diff.
+    #[allow(clippy::cast_precision_loss)]
     let diff_pos: f32 = rot_data_5
         .iter()
         .zip(rot_data_10.iter())
@@ -86,6 +89,9 @@ fn test_qwen3_rope_consistency_and_norm() {
         .to_vec1::<f32>()
         .unwrap();
 
+    // invariant: 2 * head_dim is bounded by the small test tensor dimensions;
+    // f32 precision loss is acceptable for the determinism check.
+    #[allow(clippy::cast_precision_loss)]
     let diff: f32 = rot_data1
         .iter()
         .zip(rot_data2.iter())

@@ -50,6 +50,9 @@ impl VerificationResult {
     }
 
     #[must_use]
+    // invariant: accepted_count and draft_tokens.len() are bounded; f32 precision
+    // loss is acceptable for the acceptance-rate metric.
+    #[allow(clippy::cast_precision_loss)]
     pub fn acceptance_rate(&self) -> f32 {
         if self.draft_tokens.is_empty() {
             return 1.0;
@@ -134,7 +137,7 @@ mod tests {
         let tokens = vec![1, 2, 3, 4, 5];
         let result = VerificationResult::new(0, tokens);
         assert_eq!(result.accepted_count, 5);
-        assert_eq!(result.acceptance_rate(), 1.0);
+        assert!((result.acceptance_rate() - 1.0).abs() < 1e-6);
         assert!(result.rejected_at.is_none());
     }
 
@@ -143,7 +146,7 @@ mod tests {
         let tokens = vec![1, 2, 3, 4, 5];
         let result = VerificationResult::new(0, tokens).with_rejection(3);
         assert_eq!(result.accepted_count, 3);
-        assert_eq!(result.acceptance_rate(), 0.6);
+        assert!((result.acceptance_rate() - 0.6).abs() < 1e-6);
         assert_eq!(result.rejected_at, Some(3));
     }
 
@@ -151,7 +154,7 @@ mod tests {
     fn test_verification_result_empty() {
         let result = VerificationResult::new(0, vec![]);
         assert_eq!(result.accepted_count, 0);
-        assert_eq!(result.acceptance_rate(), 1.0);
+        assert!((result.acceptance_rate() - 1.0).abs() < 1e-6);
     }
 
     #[test]
@@ -161,7 +164,7 @@ mod tests {
             .verify(42, &[10, 20, 30], &[0.0; 100])
             .expect("stub verify should succeed");
         assert_eq!(result.accepted_count, 3);
-        assert_eq!(result.acceptance_rate(), 1.0);
+        assert!((result.acceptance_rate() - 1.0).abs() < 1e-6);
         assert!(result.rejected_at.is_none());
     }
 }

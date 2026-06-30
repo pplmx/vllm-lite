@@ -1,4 +1,8 @@
 #![allow(clippy::module_name_repetitions)]
+// `stats`, `GraphStats`, and `cache_hit_rate` are public API on the
+// executor; downstream callers and tests consume them. They appear unused
+// in this crate alone but are intended for external observability.
+#![allow(dead_code)]
 use super::CudaGraph;
 use super::config::CudaGraphConfig;
 use std::collections::HashMap;
@@ -276,6 +280,9 @@ pub(crate) struct GraphStats {
 }
 
 impl GraphStats {
+    // invariant: cache_hits/total_executions are bounded counters; u64 -> f64
+    // precision loss is acceptable for the hit-rate metric.
+    #[allow(clippy::cast_precision_loss)]
     pub fn cache_hit_rate(&self) -> f64 {
         if self.total_executions == 0 {
             0.0
@@ -425,7 +432,7 @@ mod tests {
         assert_eq!(stats.total_executions, 0);
         assert_eq!(stats.cache_hits, 0);
         assert_eq!(stats.cached_graphs, 0);
-        assert_eq!(stats.cache_hit_rate(), 0.0);
+        assert!(stats.cache_hit_rate().abs() < 1e-6);
     }
 
     #[test]

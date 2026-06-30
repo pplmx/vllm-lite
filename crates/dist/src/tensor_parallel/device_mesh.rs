@@ -85,9 +85,7 @@ impl NodeMesh {
         }
 
         let local_rank = global_rank % gpus_per_node;
-        let device_ids: Vec<usize> = (0..gpus_per_node).collect();
-        let local_device_ids: Vec<usize> = device_ids
-            .into_iter()
+        let local_device_ids: Vec<usize> = (0..gpus_per_node)
             .map(|i| i + node_rank * gpus_per_node)
             .collect();
 

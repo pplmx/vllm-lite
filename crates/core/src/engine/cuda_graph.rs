@@ -8,12 +8,12 @@
 impl crate::engine::Engine {
     #[cfg(feature = "cuda-graph")]
     /// Capture CUDA Graphs for every configured batch size on the underlying
-    /// [`BatchCudaGraphExecutor`]. Should be called once after model load and
+    /// [`vllm_model::kernels::BatchCudaGraphExecutor`]. Should be called once after model load and
     /// before serving traffic; subsequent calls are no-ops.
     ///
     /// # Errors
     ///
-    /// Returns an [`EngineError::ModelError`] if graph capture fails on any of
+    /// Returns an [`crate::error::EngineError::ModelError`] if graph capture fails on any of
     /// the configured batch sizes. Capture failure aborts the call early;
     /// later sizes are not attempted.
     pub fn capture_cuda_graphs(&mut self) -> crate::error::Result<()> {

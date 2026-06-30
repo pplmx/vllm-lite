@@ -41,22 +41,26 @@ impl DraftModelRegistry {
             .drafts
             .write()
             .expect("DraftModelRegistry mutex poisoned");
-        let entry = guard
-            .get_mut(id)
-            .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
-        match entry {
-            DraftState::Unloaded(_) => Ok(()),
-            DraftState::Loaded(loaded) => {
-                if loaded.spec.ref_count > 0 {
-                    return Err(DraftRegistryError::InUse(loaded.spec.ref_count));
+        let result = {
+            let entry = guard
+                .get_mut(id)
+                .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
+            match entry {
+                DraftState::Unloaded(_) => Ok(()),
+                DraftState::Loaded(loaded) => {
+                    if loaded.spec.ref_count > 0 {
+                        return Err(DraftRegistryError::InUse(loaded.spec.ref_count));
+                    }
+                    let spec = loaded.spec.clone();
+                    // Release the budget reservation (if budgeted).
+                    self.budget.release_draft(spec.estimated_total_bytes());
+                    *entry = DraftState::Unloaded(spec);
+                    Ok(())
                 }
-                let spec = loaded.spec.clone();
-                // Release the budget reservation (if budgeted).
-                self.budget.release_draft(spec.estimated_total_bytes());
-                *entry = DraftState::Unloaded(spec);
-                Ok(())
             }
-        }
+        };
+        drop(guard);
+        result
     }
 
     /// Force-unload a draft, ignoring its refcount. Used by admin tooling
@@ -78,26 +82,30 @@ impl DraftModelRegistry {
             .drafts
             .write()
             .expect("DraftModelRegistry mutex poisoned");
-        let entry = guard
-            .get_mut(id)
-            .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
-        match entry {
-            DraftState::Unloaded(_) => Ok(()),
-            DraftState::Loaded(loaded) => {
-                let forced_refcount = loaded.spec.ref_count;
-                let spec = loaded.spec.clone();
-                if forced_refcount > 0 {
-                    tracing::warn!(
-                        draft_id = %id,
-                        refcount = forced_refcount,
-                        "force_unload bypassing non-zero refcount"
-                    );
+        let result = {
+            let entry = guard
+                .get_mut(id)
+                .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
+            match entry {
+                DraftState::Unloaded(_) => Ok(()),
+                DraftState::Loaded(loaded) => {
+                    let forced_refcount = loaded.spec.ref_count;
+                    let spec = loaded.spec.clone();
+                    if forced_refcount > 0 {
+                        tracing::warn!(
+                            draft_id = %id,
+                            refcount = forced_refcount,
+                            "force_unload bypassing non-zero refcount"
+                        );
+                    }
+                    self.budget.release_draft(spec.estimated_total_bytes());
+                    *entry = DraftState::Unloaded(spec);
+                    Ok(())
                 }
-                self.budget.release_draft(spec.estimated_total_bytes());
-                *entry = DraftState::Unloaded(spec);
-                Ok(())
             }
-        }
+        };
+        drop(guard);
+        result
     }
 
     /// Increment the reference count for a registered draft.
@@ -118,14 +126,18 @@ impl DraftModelRegistry {
             .drafts
             .write()
             .expect("DraftModelRegistry mutex poisoned");
-        let entry = guard
-            .get_mut(id)
-            .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
-        match entry {
-            DraftState::Unloaded(spec) => spec.ref_count += 1,
-            DraftState::Loaded(loaded) => loaded.spec.ref_count += 1,
-        }
-        Ok(())
+        let result = {
+            let entry = guard
+                .get_mut(id)
+                .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
+            match entry {
+                DraftState::Unloaded(spec) => spec.ref_count += 1,
+                DraftState::Loaded(loaded) => loaded.spec.ref_count += 1,
+            }
+            Ok(())
+        };
+        drop(guard);
+        result
     }
 
     /// Decrement the reference count. Floors at 0 (no underflow).
@@ -147,26 +159,30 @@ impl DraftModelRegistry {
             .drafts
             .write()
             .expect("DraftModelRegistry mutex poisoned");
-        let entry = guard
-            .get_mut(id)
-            .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
-        match entry {
-            DraftState::Unloaded(spec) => {
-                spec.ref_count = spec.ref_count.saturating_sub(1);
-                Ok(false)
-            }
-            DraftState::Loaded(loaded) => {
-                loaded.spec.ref_count = loaded.spec.ref_count.saturating_sub(1);
-                if loaded.spec.ref_count == 0 {
-                    let spec = loaded.spec.clone();
-                    self.budget.release_draft(spec.estimated_total_bytes());
-                    *entry = DraftState::Unloaded(spec);
-                    Ok(true)
-                } else {
+        let result = {
+            let entry = guard
+                .get_mut(id)
+                .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
+            match entry {
+                DraftState::Unloaded(spec) => {
+                    spec.ref_count = spec.ref_count.saturating_sub(1);
                     Ok(false)
                 }
+                DraftState::Loaded(loaded) => {
+                    loaded.spec.ref_count = loaded.spec.ref_count.saturating_sub(1);
+                    if loaded.spec.ref_count == 0 {
+                        let spec = loaded.spec.clone();
+                        self.budget.release_draft(spec.estimated_total_bytes());
+                        *entry = DraftState::Unloaded(spec);
+                        Ok(true)
+                    } else {
+                        Ok(false)
+                    }
+                }
             }
-        }
+        };
+        drop(guard);
+        result
     }
 
     /// # Errors
@@ -183,10 +199,13 @@ impl DraftModelRegistry {
             .drafts
             .read()
             .expect("DraftModelRegistry mutex poisoned");
-        let entry = guard
+        let ref_count = guard
             .get(id)
-            .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
-        Ok(entry.spec().ref_count)
+            .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?
+            .spec()
+            .ref_count;
+        drop(guard);
+        Ok(ref_count)
     }
 
     /// Get a clone of the `Arc<Mutex<Box<dyn ModelBackend>>>` for a loaded draft.
@@ -202,10 +221,12 @@ impl DraftModelRegistry {
             .drafts
             .read()
             .expect("DraftModelRegistry mutex poisoned");
-        match guard.get(id) {
+        let result = match guard.get(id) {
             Some(DraftState::Loaded(loaded)) => Some(loaded.backend.clone()),
             _ => None,
-        }
+        };
+        drop(guard);
+        result
     }
 
     /// Read-only lookup of the current state. Does NOT trigger loading.
@@ -221,7 +242,7 @@ impl DraftModelRegistry {
             .drafts
             .read()
             .expect("DraftModelRegistry mutex poisoned");
-        guard.get(id).map(|s| match s {
+        let result = guard.get(id).map(|s| match s {
             DraftState::Unloaded(s) => DraftState::Unloaded(s.clone()),
             DraftState::Loaded(l) => {
                 // We cannot clone `LoadedDraft` because `Box<dyn ModelBackend>`
@@ -229,7 +250,9 @@ impl DraftModelRegistry {
                 // use `get` for in-place access.
                 DraftState::Unloaded(l.spec.clone())
             }
-        })
+        });
+        drop(guard);
+        result
     }
 
     /// # Panics
@@ -238,11 +261,10 @@ impl DraftModelRegistry {
     /// Check whether a draft is registered (either state).
     pub fn contains(&self, id: &DraftId) -> bool {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
-        let guard = self
-            .drafts
+        self.drafts
             .read()
-            .expect("DraftModelRegistry mutex poisoned");
-        guard.contains_key(id)
+            .expect("DraftModelRegistry mutex poisoned")
+            .contains_key(id)
     }
 
     /// # Panics
@@ -251,11 +273,13 @@ impl DraftModelRegistry {
     /// Check whether a draft is currently loaded.
     pub fn is_loaded(&self, id: &DraftId) -> bool {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
-        let guard = self
-            .drafts
-            .read()
-            .expect("DraftModelRegistry mutex poisoned");
-        matches!(guard.get(id), Some(DraftState::Loaded(_)))
+        matches!(
+            self.drafts
+                .read()
+                .expect("DraftModelRegistry mutex poisoned")
+                .get(id),
+            Some(DraftState::Loaded(_))
+        )
     }
 
     /// Number of bytes currently allocated to KV cache blocks for this draft.
@@ -275,13 +299,13 @@ impl DraftModelRegistry {
             .drafts
             .read()
             .expect("DraftModelRegistry mutex poisoned");
-        let entry = guard
-            .get(id)
-            .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
-        Ok(match entry {
-            DraftState::Unloaded(_) => 0,
-            DraftState::Loaded(loaded) => loaded.block_allocator.allocated_bytes() as u64,
-        })
+        let bytes = match guard.get(id) {
+            None => return Err(DraftRegistryError::UnknownDraftId(id.clone())),
+            Some(DraftState::Unloaded(_)) => 0,
+            Some(DraftState::Loaded(loaded)) => loaded.block_allocator.allocated_bytes() as u64,
+        };
+        drop(guard);
+        Ok(bytes)
     }
 
     /// Estimated total VRAM footprint reserved for this draft in the budget.
@@ -300,13 +324,13 @@ impl DraftModelRegistry {
             .drafts
             .read()
             .expect("DraftModelRegistry mutex poisoned");
-        let entry = guard
-            .get(id)
-            .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
-        Ok(match entry {
-            DraftState::Unloaded(_) => 0,
-            DraftState::Loaded(loaded) => loaded.spec.estimated_total_bytes(),
-        })
+        let bytes = match guard.get(id) {
+            None => return Err(DraftRegistryError::UnknownDraftId(id.clone())),
+            Some(DraftState::Unloaded(_)) => 0,
+            Some(DraftState::Loaded(loaded)) => loaded.spec.estimated_total_bytes(),
+        };
+        drop(guard);
+        Ok(bytes)
     }
 
     /// # Panics
@@ -321,6 +345,7 @@ impl DraftModelRegistry {
             .expect("DraftModelRegistry mutex poisoned");
         let mut ids: Vec<DraftId> = guard.keys().cloned().collect();
         ids.sort();
+        drop(guard);
         ids
     }
 
@@ -330,11 +355,10 @@ impl DraftModelRegistry {
     /// Count of registered drafts (both states).
     pub fn len(&self) -> usize {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
-        let guard = self
-            .drafts
+        self.drafts
             .read()
-            .expect("DraftModelRegistry mutex poisoned");
-        guard.len()
+            .expect("DraftModelRegistry mutex poisoned")
+            .len()
     }
 
     /// Whether the registry has no registered drafts.

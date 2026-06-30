@@ -5,7 +5,7 @@ use vllm_core::scheduler::RadixTree;
 fn bench_radix_longest_prefix_match(c: &mut Criterion) {
     let mut tree = RadixTree::new();
     for i in 0..500usize {
-        let tokens: Vec<u32> = (0..=(i as u32)).collect();
+        let tokens: Vec<u32> = (0..=u32::try_from(i).expect("bounded bench index")).collect();
         tree.insert(&tokens, vec![i]);
     }
     let search: Vec<u32> = (0..250).collect();

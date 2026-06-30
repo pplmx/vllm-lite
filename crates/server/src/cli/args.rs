@@ -190,7 +190,7 @@ impl CliArgs {
     pub fn to_app_config(&self) -> AppConfig {
         let mut config = AppConfig::load(self.config.config.clone());
 
-        config.server.host = self.server.host.clone();
+        config.server.host.clone_from(&self.server.host);
         config.server.port = self.server.port;
 
         config.engine.tensor_parallel_size = self.engine.tensor_parallel_size;
@@ -202,7 +202,7 @@ impl CliArgs {
         config.engine.enable_adaptive_speculative = self.engine.enable_adaptive_speculative;
 
         if !self.auth.api_key.is_empty() {
-            config.auth.api_keys = self.auth.api_key.clone();
+            config.auth.api_keys.clone_from(&self.auth.api_key);
         }
         if let Some(ref path) = self.auth.api_key_file {
             config.auth.api_keys_file = Some(path.to_string_lossy().to_string());

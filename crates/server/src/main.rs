@@ -19,13 +19,19 @@ use vllm_model::loader::ModelLoader;
 use vllm_model::tokenizer::Tokenizer;
 use vllm_server::auth::AuthMiddleware;
 use vllm_server::openai::batch::BatchManager;
-use vllm_server::{ApiState, api, auth, cli, health::HealthChecker, logging, openai};
+use vllm_server::openai::batch::handler::{
+    create_batch, get_batch, get_batch_results, list_batches,
+};
+use vllm_server::openai::chat::chat_completions;
+use vllm_server::openai::completions::completions as openai_completions;
+use vllm_server::openai::embeddings::embeddings;
+use vllm_server::openai::models::models_handler;
+use vllm_server::{ApiState, api, auth, cli, health::HealthChecker, logging};
 
 /// Health check endpoint - liveness probe
 async fn health_handler(State(state): State<ApiState>) -> Response {
     // invariant: lock is only held for synchronous field access; no panic possible while holding.
-    let health = state.health.read().unwrap();
-    let status = health.check_liveness();
+    let status = state.health.read().unwrap().check_liveness();
     let http_status = StatusCode::from_u16(status.http_status()).unwrap_or(StatusCode::OK);
 
     let body = json!({ "status": status.as_str() });
@@ -39,8 +45,7 @@ async fn health_handler(State(state): State<ApiState>) -> Response {
 /// Readiness check endpoint
 async fn ready_handler(State(state): State<ApiState>) -> Response {
     // invariant: lock is only held for synchronous field access; no panic possible while holding.
-    let health = state.health.read().unwrap();
-    let status = health.check_readiness();
+    let status = state.health.read().unwrap().check_readiness();
     let http_status =
         StatusCode::from_u16(status.http_status()).unwrap_or(StatusCode::SERVICE_UNAVAILABLE);
 
@@ -65,6 +70,7 @@ async fn metrics_handler(State(state): State<ApiState>) -> Response {
 }
 
 #[tokio::main]
+#[allow(clippy::too_many_lines)] // server bootstrap: linear startup sequence with no natural decomposition
 async fn main() {
     let cli = cli::CliArgs::parse();
     let app_config = cli.to_app_config();
@@ -243,8 +249,15 @@ async fn main() {
 
     let tokenizer_path = PathBuf::from(&model_path).join("tokenizer.json");
     let tokenizer: Arc<Tokenizer> = if tokenizer_path.exists() {
-        if let Some(path_str) = tokenizer_path.to_str() {
-            match Tokenizer::from_file(path_str) {
+        tokenizer_path.to_str().map_or_else(
+            || {
+                tracing::error!(
+                    path = ?tokenizer_path,
+                    "Tokenizer path is not valid UTF-8; falling back to default tokenizer"
+                );
+                Arc::new(Tokenizer::new())
+            },
+            |path_str| match Tokenizer::from_file(path_str) {
                 Ok(t) => {
                     tracing::info!("Tokenizer loaded");
                     Arc::new(t)
@@ -253,14 +266,8 @@ async fn main() {
                     tracing::warn!(error = %e, "Failed to load tokenizer from file, using default");
                     Arc::new(Tokenizer::new())
                 }
-            }
-        } else {
-            tracing::error!(
-                path = ?tokenizer_path,
-                "Tokenizer path is not valid UTF-8; falling back to default tokenizer"
-            );
-            Arc::new(Tokenizer::new())
-        }
+            },
+        )
     } else {
         tracing::warn!("No tokenizer.json found in model directory, using default tokenizer");
         Arc::new(Tokenizer::new())
@@ -292,12 +299,6 @@ async fn main() {
         health: health_checker,
         metrics: metrics_collector,
     };
-
-    use openai::batch::handler::{create_batch, get_batch, get_batch_results, list_batches};
-    use openai::chat::chat_completions;
-    use openai::completions::completions as openai_completions;
-    use openai::embeddings::embeddings;
-    use openai::models::models_handler;
 
     let mut app: axum::Router<()> = Router::new()
         // OpenAI API

@@ -44,7 +44,8 @@ impl PatchEmbed {
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
-    pub fn new(config: &VisionConfig, vb: VarBuilder) -> CandleResult<Self> {
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn new(config: &VisionConfig, vb: VarBuilder<'_>) -> CandleResult<Self> {
         let proj = candle_nn::linear(
             config.patch_size * config.patch_size * 3,
             config.embed_dim,
@@ -73,7 +74,7 @@ impl VisionEncoder {
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
-    pub fn new(config: &VisionConfig, _vb: VarBuilder) -> CandleResult<Self> {
+    pub fn new(config: &VisionConfig, _vb: VarBuilder<'_>) -> CandleResult<Self> {
         Ok(Self {
             config: config.clone(),
         })

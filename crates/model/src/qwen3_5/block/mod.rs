@@ -114,7 +114,7 @@ mod tests {
         let linear_block = HybridBlock::Linear(linear);
         match linear_block {
             HybridBlock::Linear(_) => {}
-            _ => panic!("Expected Linear variant"),
+            HybridBlock::Full(_) => panic!("Expected Linear variant"),
         }
     }
 }

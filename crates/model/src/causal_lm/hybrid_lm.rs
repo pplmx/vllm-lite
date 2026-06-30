@@ -99,7 +99,7 @@ where
         };
         let hidden = run_layers(&self.layers, hidden, &mut ctx)?;
         let hidden = map_candle(self.norm.forward(&hidden))?;
-        let logits = forward_lm_head(&self.embed_tokens, &self.lm_head, &hidden)?;
+        let logits = forward_lm_head(&self.embed_tokens, self.lm_head.as_ref(), &hidden)?;
         Ok((logits, 0))
     }
 }
@@ -249,7 +249,7 @@ where
             };
             let hidden = run_layers_upto(&self.layers, hidden, &mut ctx, upto_layer)?;
             let hidden = map_candle(self.norm.forward(&hidden))?;
-            let logits = forward_lm_head(&self.embed_tokens, &self.lm_head, &hidden)?;
+            let logits = forward_lm_head(&self.embed_tokens, self.lm_head.as_ref(), &hidden)?;
             greedy_sample_token(&logits, prefill)
         })
     }
@@ -257,13 +257,14 @@ where
 
 fn forward_lm_head(
     embed_tokens: &Embedding,
-    lm_head: &Option<Linear>,
+    lm_head: Option<&Linear>,
     hidden: &Tensor,
 ) -> Result<Tensor> {
-    if let Some(head) = lm_head {
-        map_candle(head.forward(hidden))
-    } else {
-        let embed_w = embed_tokens.embeddings().clone();
-        map_candle(Linear::new(embed_w, None).forward(hidden))
-    }
+    lm_head.map_or_else(
+        || {
+            let embed_w = embed_tokens.embeddings().clone();
+            map_candle(Linear::new(embed_w, None).forward(hidden))
+        },
+        |head| map_candle(head.forward(hidden)),
+    )
 }

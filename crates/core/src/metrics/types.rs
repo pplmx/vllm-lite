@@ -12,9 +12,7 @@ impl MetricType {
     #[must_use]
     pub fn name(&self) -> &str {
         match self {
-            Self::Counter(name) => name,
-            Self::Gauge(name) => name,
-            Self::Histogram(name) => name,
+            Self::Counter(name) | Self::Gauge(name) | Self::Histogram(name) => name,
         }
     }
 }

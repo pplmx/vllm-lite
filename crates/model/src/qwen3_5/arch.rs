@@ -22,6 +22,7 @@ use super::model::Qwen35HybridModel;
 /// - Final norm: `model.final_layernorm.weight` (from `model.norm.weight` in VL checkpoints)
 /// - LM head: `model.lm_head.weight` (from top-level `lm_head.weight`)
 #[must_use]
+#[allow(clippy::implicit_hasher)]
 pub fn remap_qwen35_weight_keys(weights: HashMap<String, Tensor>) -> HashMap<String, Tensor> {
     let mut remapped = HashMap::new();
 

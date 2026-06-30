@@ -1,5 +1,11 @@
 //! Quantization utilities for model weights.
 
+// `Checkpoint` and its conversion helpers are reserved for the in-flight
+// Q4_K_M / Q5_K / Q8_0 GGUF integration. External callers reach the
+// quantization surface via the `gguf` module; the wrapper struct is kept
+// for the planned unified-checkpoint API.
+#![allow(dead_code)]
+
 #[cfg(feature = "gguf")]
 pub mod gguf;
 pub mod types;

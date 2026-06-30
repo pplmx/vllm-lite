@@ -112,6 +112,7 @@ impl Qwen35HybridModel {
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn from_weights(
         config: Qwen3Config,
         device: Device,

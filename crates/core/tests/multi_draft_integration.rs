@@ -115,7 +115,7 @@ pub struct MapLoader {
 
 impl std::fmt::Debug for MapLoader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let count = self.backends.lock().map(|m| m.len()).unwrap_or(0);
+        let count = self.backends.lock().map_or(0, |m| m.len());
         f.debug_struct("MapLoader")
             .field("backends_count", &count)
             .field("load_count", &self.load_count)
@@ -355,9 +355,8 @@ fn test_stub_backend_fail_next_n() {
     backend.fail_next(1);
     h.loader.insert(DraftId("flaky".into()), Box::new(backend));
     let r = h.resolver.resolve(Some(&DraftId("flaky".into())));
-    let backend = match r {
-        ResolvedDraft::External(b) => b,
-        _ => panic!("expected External after resolve"),
+    let ResolvedDraft::External(backend) = r else {
+        panic!("expected External after resolve");
     };
     // First forward() should error → engine marks degraded_draft=true
     // (simulated here; in real engine, the step loop catches and sets the flag)
@@ -367,6 +366,7 @@ fn test_stub_backend_fail_next_n() {
     // Subsequent calls succeed
     let result = guard.forward(&[1], &[vec![10]], &[vec![0]], &[vec![0]], &[0], &[false]);
     assert!(result.is_ok(), "subsequent calls should succeed");
+    drop(guard);
 }
 
 #[test]

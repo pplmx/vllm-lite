@@ -86,7 +86,7 @@ pub struct SchedulerObservers {
 
 impl std::fmt::Debug for SchedulerObservers {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let count = self.observers.read().map(|v| v.len()).unwrap_or(0);
+        let count = self.observers.read().map_or(0, |v| v.len());
         f.debug_struct("SchedulerObservers")
             .field("observer_count", &count)
             .finish()
@@ -122,6 +122,7 @@ impl SchedulerObservers {
             ));
         }
         guards.push(observer);
+        drop(guards);
         Ok(())
     }
 
@@ -130,13 +131,13 @@ impl SchedulerObservers {
         if let Ok(observers) = self.observers.read() {
             for observer in observers.iter() {
                 let _ = std::panic::catch_unwind(AssertUnwindSafe(|| {
-                    self.notify_one(observer.as_ref(), event);
+                    Self::notify_one(observer.as_ref(), event);
                 }));
             }
         }
     }
 
-    fn notify_one(&self, observer: &dyn SchedulerObserver, event: &ObserverEvent) {
+    fn notify_one(observer: &dyn SchedulerObserver, event: &ObserverEvent) {
         match event {
             ObserverEvent::RequestArrived { seq_id, prompt_len } => {
                 observer.on_request_arrived(*seq_id, *prompt_len);

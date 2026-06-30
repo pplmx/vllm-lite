@@ -32,7 +32,7 @@ impl crate::engine::Engine {
         &mut self,
         batch: &Batch,
         max_draft: usize,
-    ) -> Result<Vec<Vec<TokenId>>> {
+    ) -> Vec<Vec<TokenId>> {
         let resolver = self
             .draft_resolver
             .as_ref()
@@ -62,8 +62,8 @@ impl crate::engine::Engine {
                 continue;
             }
 
-            let resolved = resolver.resolve(draft_model_id.as_ref());
-            let backend = match resolved {
+            let resolution = resolver.resolve(draft_model_id.as_ref());
+            let backend = match resolution {
                 ResolvedDraft::External(b) | ResolvedDraft::SelfSpec(b) => b,
                 ResolvedDraft::None => continue,
             };
@@ -97,6 +97,7 @@ impl crate::engine::Engine {
                     )
                 }));
 
+                #[allow(clippy::option_if_let_else)]
                 let forward_result = match result {
                     Ok(r) => r,
                     Err(_) => {
@@ -136,14 +137,14 @@ impl crate::engine::Engine {
             }
         }
 
-        Ok(draft_outputs)
+        draft_outputs
     }
 
     /// Batched per-position draft generation (Plan 17.1-B).
     ///
     /// All sequences generate draft position k before advancing to k+1.
     pub(crate) fn generate_batched_drafts(
-        &mut self,
+        &self,
         batch: &Batch,
         max_draft: usize,
     ) -> Result<Vec<Vec<TokenId>>> {
@@ -161,7 +162,7 @@ impl crate::engine::Engine {
         let mut current_tokens: Vec<Vec<TokenId>> = batch.input_tokens.iter().cloned().collect();
         let mut current_positions: Vec<Vec<usize>> = batch.positions.iter().cloned().collect();
 
-        for _pos in 0..max_draft {
+        for pos in 0..max_draft {
             // Build per-position batch
             let mut pos_seq_ids = Vec::with_capacity(n_seq);
             let mut pos_input_tokens = Vec::with_capacity(n_seq);
@@ -180,7 +181,7 @@ impl crate::engine::Engine {
                 pos_positions.push(current_positions[i].clone());
                 pos_kv_block_ids.push(batch.kv_block_ids[i].clone());
                 pos_num_computed.push(batch.num_computed_tokens[i]);
-                pos_is_prefill.push(if _pos == 0 {
+                pos_is_prefill.push(if pos == 0 {
                     batch.is_prefill[i]
                 } else {
                     false // subsequent draft steps are decode
@@ -193,17 +194,18 @@ impl crate::engine::Engine {
             }
 
             // Single forward pass per position across all active sequences
-            let output = match lock_mutex(&draft_model)?.forward(
+            let result = lock_mutex(&draft_model)?.forward(
                 &pos_seq_ids,
                 &pos_input_tokens,
                 &pos_positions,
                 &pos_kv_block_ids,
                 &pos_num_computed,
                 &pos_is_prefill,
-            ) {
+            );
+            let output = match result {
                 Ok(o) => o,
                 Err(e) => {
-                    tracing::warn!(error = %e, pos = _pos, "Draft model forward failed at position");
+                    tracing::warn!(error = %e, pos = pos, "Draft model forward failed at position");
                     break;
                 }
             };
@@ -228,5 +230,5 @@ pub fn argmax(logits: &[f32]) -> TokenId {
         .iter()
         .enumerate()
         .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-        .map_or(0, |(i, _)| i as TokenId)
+        .map_or(0, |(i, _)| TokenId::try_from(i).unwrap_or(0))
 }

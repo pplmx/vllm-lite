@@ -1,3 +1,9 @@
+// `select_victim`, `record_preemption`, `record_rejection`, and
+// `reset_stats` are public API surface on `PreemptionManager`. The
+// scheduler engine wires them when it adopts the preemption-driven
+// admission path; current uses bypass them.
+#![allow(dead_code)]
+
 use crate::types::{SchedulerConfig, Sequence, Status};
 
 /// `PreemptionManager`: preemption manager.
@@ -55,10 +61,15 @@ impl PreemptionManager {
         }
 
         // Scale aggressiveness with configured batch pressure.
+        // invariant: max_num_seqs/max_batch_size are bounded config values; f32
+        // precision loss is acceptable for the pressure ratio.
+        #[allow(clippy::cast_precision_loss)]
         let shortage_threshold = (self.config.max_num_seqs as f32
             / self.config.max_batch_size as f32)
             .min(2.0)
             .mul_add(0.1, 1.0);
+        // invariant: block counts are bounded by available memory, far below 2^24.
+        #[allow(clippy::cast_precision_loss)]
         let memory_shortage_ratio = blocks_needed as f32 / (blocks_available - 1) as f32;
         if memory_shortage_ratio < shortage_threshold {
             return false;
@@ -125,7 +136,7 @@ impl PreemptionManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Priority, Status};
+    use crate::types::{Priority, SamplingParams, Status};
 
     fn make_sequence(id: u64, decode_rounds: u32) -> Sequence {
         Sequence {
@@ -136,7 +147,7 @@ mod tests {
             prompt_len: 3,
             status: Status::Decoding,
             max_tokens: 100,
-            sampling_params: Default::default(),
+            sampling_params: SamplingParams::default(),
             consecutive_decode_rounds: decode_rounds,
             priority: Priority::default(),
             degraded_draft: false,

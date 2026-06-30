@@ -1,5 +1,9 @@
 //! Unified mock implementations for testing.
 //!
+//! `NeverProgressModel` is the timeout/preemption test fixture; it
+//! is constructed by integration tests via `NeverProgressModel::new`.
+#![allow(dead_code)]
+//!
 //! This module consolidates all mock `ModelBackend` implementations
 //! previously scattered across the codebase.
 
@@ -76,7 +80,7 @@ impl ModelBackend for StubModel {
     }
 
     fn vocab_size(&self) -> usize {
-        151936
+        151_936
     }
 
     fn num_layers(&self) -> usize {
@@ -103,9 +107,13 @@ impl ModelBackend for IncrementModel {
         _num_computed_tokens: &[usize],
         _is_prefill: &[bool],
     ) -> Result<BatchOutput> {
+        // invariant: stub test seq IDs are small (test fixture); truncation
+        // is not reachable in practice.
+        #[allow(clippy::cast_possible_truncation)]
+        let tokens: Vec<TokenId> = seq_ids.iter().map(|id| *id as TokenId).collect();
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
-            next_tokens: seq_ids.iter().map(|id| *id as TokenId).collect(),
+            next_tokens: tokens,
         })
     }
 
@@ -145,7 +153,7 @@ impl ModelBackend for IncrementModel {
     }
 
     fn vocab_size(&self) -> usize {
-        151936
+        151_936
     }
 
     fn num_layers(&self) -> usize {
@@ -224,7 +232,7 @@ impl ModelBackend for ConstModel {
     }
 
     fn vocab_size(&self) -> usize {
-        151936
+        151_936
     }
 
     fn num_layers(&self) -> usize {
@@ -260,6 +268,9 @@ impl ModelBackend for FakeModel {
         _num_computed_tokens: &[usize],
         _is_prefill: &[bool],
     ) -> Result<BatchOutput> {
+        // invariant: stub test seq IDs are small; usize and u32 truncation are
+        // bounded by vocab_size (a real tokenizer vocab size).
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
         let next_tokens: Vec<TokenId> = seq_ids
             .iter()
             .map(|&id| ((id as usize) % self.vocab_size) as TokenId)
@@ -321,6 +332,7 @@ impl ModelBackend for FakeModel {
 
 /// Model that never progresses (always returns same token).
 /// Useful for testing timeouts and preemption.
+#[allow(dead_code)]
 pub(crate) struct NeverProgressModel {
     token: TokenId,
 }
@@ -383,7 +395,7 @@ impl ModelBackend for NeverProgressModel {
     }
 
     fn vocab_size(&self) -> usize {
-        151936
+        151_936
     }
 
     fn num_layers(&self) -> usize {

@@ -68,9 +68,12 @@ impl HashRouter {
             return None;
         }
 
-        let hash = self.hash_key(key);
+        let hash = Self::hash_key(key);
 
         for _i in 0..nodes.len() {
+            // invariant: hash % nodes.len() fits in usize on all targets since
+            // the modulus is bounded by the node count.
+            #[allow(clippy::cast_possible_truncation)]
             let idx = (hash % nodes.len() as u64) as usize;
             let node = &nodes[idx];
 
@@ -86,13 +89,12 @@ impl HashRouter {
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
 
-        match least_loaded {
-            Some(node) => {
-                debug!(key = %key, node = %node.node_id, load = node.load, "Routing to least loaded node");
-                Some(node.node_id.clone())
-            }
-            None => None,
-        }
+        let result = least_loaded.map(|node| {
+            debug!(key = %key, node = %node.node_id, load = node.load, "Routing to least loaded node");
+            node.node_id.clone()
+        });
+        drop(nodes);
+        result
     }
 
     pub async fn route_by_prompt_hash(&self, prompt_hash: u64) -> Option<String> {
@@ -102,14 +104,19 @@ impl HashRouter {
             return None;
         }
 
+        // invariant: prompt_hash % nodes.len() fits in usize on all targets
+        // since the modulus is bounded by the node count.
+        #[allow(clippy::cast_possible_truncation)]
         let idx = (prompt_hash % nodes.len() as u64) as usize;
         let node = &nodes[idx];
 
         debug!(prompt_hash = prompt_hash, node = %node.node_id, "Routing by prompt hash");
-        Some(node.node_id.clone())
+        let result = Some(node.node_id.clone());
+        drop(nodes);
+        result
     }
 
-    fn hash_key(&self, key: &str) -> u64 {
+    fn hash_key(key: &str) -> u64 {
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
         hasher.finish()
@@ -161,10 +168,10 @@ mod tests {
         router.add_node("node-2".to_string()).await;
 
         let key = "test-prompt-hash-12345";
-        let route1 = router.route(key).await;
-        let route2 = router.route(key).await;
+        let first_route = router.route(key).await;
+        let second_route = router.route(key).await;
 
-        assert_eq!(route1, route2);
+        assert_eq!(first_route, second_route);
     }
 
     #[tokio::test]

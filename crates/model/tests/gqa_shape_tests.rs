@@ -14,10 +14,10 @@ fn test_expand_kv(
         return Ok(kv.clone());
     }
 
-    let _dims = kv.dims();
-    let _batch_size = _dims[0];
-    let _seq_len = _dims[1];
-    let _head_dim = _dims[3];
+    let dims = kv.dims();
+    let _ = dims[0];
+    let _ = dims[1];
+    let _ = dims[3];
 
     // Check if num_q_heads is divisible by num_kv_heads
     if num_q_heads % num_kv_heads != 0 {

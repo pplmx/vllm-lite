@@ -146,7 +146,7 @@ mod tests {
         let config = SpeculationConfig::default();
         assert_eq!(config.draft_count, 4);
         assert_eq!(config.max_depth, 8);
-        assert_eq!(config.temperature, 0.0);
+        assert!(config.temperature.abs() < 1e-6);
         assert!(config.self_speculation);
     }
 
@@ -159,7 +159,7 @@ mod tests {
             .build();
         assert_eq!(config.draft_count, 6);
         assert_eq!(config.max_depth, 10);
-        assert_eq!(config.temperature, 0.5);
+        assert!((config.temperature - 0.5).abs() < 1e-6);
     }
 
     #[test]

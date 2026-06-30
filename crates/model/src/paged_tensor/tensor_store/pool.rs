@@ -1,6 +1,11 @@
 // crates/model/src/paged_tensor/tensor_store/pool.rs
 //
 // Block-allocator types: `CacheBlock` and `KvCachePool`.
+//
+// Reserved for the legacy block-allocator interface; the production path
+// uses `BlockAllocator` from `paged_tensor/block_allocator.rs`. Kept
+// available for tests and future re-integration.
+#![allow(dead_code)]
 
 use candle_core::{DType, Device, Result, Tensor};
 
@@ -20,6 +25,7 @@ pub struct KvCachePool {
 }
 
 impl KvCachePool {
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new(
         _num_layers: usize,
         num_heads: usize,

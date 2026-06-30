@@ -86,6 +86,7 @@ impl PagedKvCache {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
+    #[allow(clippy::too_many_lines)] // KV-cache write path: bound checks + reshape + slice_assign in one linear sequence
     pub fn write_kv(
         &mut self,
         layer_idx: usize,
@@ -640,7 +641,7 @@ mod tests {
     fn test_gqa_expanded_heads_cache() -> Result<()> {
         let device = Device::Cpu;
         let num_heads = 14;
-        let _num_kv_heads = 2;
+        let _ = 2;
         let head_dim = 64;
 
         let mut cache = PagedKvCache::new(1, num_heads, head_dim, 4, device.clone(), false)?;
@@ -730,12 +731,12 @@ mod tests {
 
         // Read back block 7 separately to verify cross-block isolation.
         let (k_block7, _) = cache.read_kv(0, &[other_block_id], block_size)?;
-        let k7_data: Vec<f32> = k_block7.flatten_all()?.to_vec1()?;
+        let k_block7_data: Vec<f32> = k_block7.flatten_all()?.to_vec1()?;
         let idx0 = other_token_offset * stride;
         assert!(
-            (k7_data[idx0] - -3.0).abs() < 1e-5,
+            (k_block7_data[idx0] - -3.0).abs() < 1e-5,
             "block 7 slot must be -3.0, got {}",
-            k7_data[idx0]
+            k_block7_data[idx0]
         );
 
         Ok(())

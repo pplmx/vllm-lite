@@ -79,7 +79,7 @@ impl std::fmt::Debug for Engine {
                 "draft_resolver",
                 &self.draft_resolver.as_ref().map(Arc::strong_count),
             )
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -104,6 +104,12 @@ impl Default for SleepPolicy {
 }
 
 impl SleepPolicy {
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_wrap
+    )]
     pub fn next_interval(&mut self, has_work: bool) -> u64 {
         if has_work {
             self.consecutive_idle = 0;

@@ -136,7 +136,7 @@ impl Architecture for Gemma3Architecture {
         num_kv_blocks: usize,
         _kv_quantization: bool,
     ) -> Result<Box<dyn ModelBackend>> {
-        let model = Gemma3Model::new(config, device, num_kv_blocks, self.sliding_window)?;
+        let model = Gemma3Model::new(config, device, num_kv_blocks, self.sliding_window);
         Ok(Box::new(model))
     }
 }
@@ -158,13 +158,13 @@ impl Gemma3Model {
         device: Device,
         num_kv_blocks: usize,
         sliding_window: usize,
-    ) -> Result<Self> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             config,
             device,
             num_kv_blocks,
             sliding_window,
-        })
+        }
     }
 }
 

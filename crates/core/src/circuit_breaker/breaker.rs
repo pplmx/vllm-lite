@@ -102,6 +102,7 @@ impl CircuitBreaker {
         }
     }
 
+    #[allow(clippy::future_not_send)]
     pub async fn call<F, Fut, T, E>(&self, operation: F) -> Result<T, CircuitBreakerError>
     where
         F: FnOnce() -> Fut,
@@ -141,9 +142,11 @@ impl CircuitBreaker {
     }
 
     async fn check_and_transition(&self) {
+        let current_state = *self.state.read().await;
+        let failure_count = self.failure_count.load(Ordering::Relaxed);
         debug!(
-            current_state = ?*self.state.read().await,
-            failure_count = self.failure_count.load(Ordering::Relaxed),
+            current_state = ?current_state,
+            failure_count = failure_count,
             "Circuit breaker check"
         );
         let mut state = self.state.write().await;
@@ -159,6 +162,7 @@ impl CircuitBreaker {
                 self.half_open_calls.store(0, Ordering::Relaxed);
             }
         }
+        drop(state);
     }
 
     async fn on_success(&self) {
@@ -168,14 +172,16 @@ impl CircuitBreaker {
             *state = CircuitState::Closed;
             self.failure_count.store(0, Ordering::Relaxed);
         }
+        drop(state);
     }
 
     async fn on_failure(&self) {
         let count = self.failure_count.fetch_add(1, Ordering::Relaxed);
         *self.last_failure_time.write().await = Some(Instant::now());
         if count + 1 >= self.config.failure_threshold as u64 {
+            let last_failure = *self.last_failure_time.read().await;
             warn!(
-                last_failure = ?*self.last_failure_time.read().await,
+                last_failure = ?last_failure,
                 "Circuit breaker: entering Open state"
             );
             let mut state = self.state.write().await;

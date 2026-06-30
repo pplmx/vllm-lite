@@ -33,7 +33,7 @@ impl FullAttentionBlock35 {
         intermediate_size: usize,
         eps: f64,
         rope: MRoPE,
-        vb: VarBuilder,
+        vb: VarBuilder<'_>,
     ) -> CandleResult<Self> {
         let input_ln = candle_nn::layer_norm(hidden_size, eps, vb.clone())?;
         let self_attn = Attention35WithRoPE::new(

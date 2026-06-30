@@ -25,7 +25,12 @@ impl Gemma4Block {
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
-    pub fn new(config: &ModelConfig, layer_idx: usize, vb: candle_nn::VarBuilder) -> Result<Self> {
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn new(
+        config: &ModelConfig,
+        layer_idx: usize,
+        vb: candle_nn::VarBuilder<'_>,
+    ) -> Result<Self> {
         let hidden_size = config.hidden_size;
         let num_heads = config.num_heads;
         let num_kv_heads = config.num_kv_heads;
@@ -154,8 +159,8 @@ impl Gemma4Block {
             k_w,
             v_w,
             o_w,
-        )?;
-        let mlp = GeGLU::new_with_weights(hidden_size, intermediate_size, gate_w, up_w, down_w)?;
+        );
+        let mlp = GeGLU::new_with_weights(hidden_size, intermediate_size, gate_w, up_w, down_w);
         let input_layernorm = RmsNorm::new(input_ln_w, config.rms_norm_eps);
         let post_attention_layernorm = RmsNorm::new(post_ln_w, config.rms_norm_eps);
 

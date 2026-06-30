@@ -64,11 +64,15 @@ impl CacheMessage {
             source,
             destination,
             operation,
-            // invariant: monotonic clock is always >= UNIX_EPOCH.
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64,
+            // invariant: monotonic clock is always >= UNIX_EPOCH; saturating
+            // u64 conversion is safe for any realistic timestamp.
+            timestamp: u64::try_from(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis(),
+            )
+            .unwrap_or(u64::MAX),
         }
     }
 

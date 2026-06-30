@@ -1,4 +1,7 @@
 #![allow(clippy::too_many_arguments, clippy::module_name_repetitions)]
+// invariant: tensor-dimension casts (head_dim/seq_len -> f32) are bounded by
+// model architecture constants; precision loss is intentional.
+#![allow(clippy::cast_precision_loss)]
 
 use candle_core::{Module, Result, Tensor};
 use candle_nn::{LayerNorm, Linear};
@@ -31,7 +34,7 @@ impl GqaAttention {
         num_heads: usize,
         num_kv_heads: usize,
         head_dim: usize,
-        vb: Option<candle_nn::VarBuilder>,
+        vb: Option<candle_nn::VarBuilder<'_>>,
         config: AttentionConfig,
         has_qk_norm: bool,
     ) -> Result<Self> {
@@ -141,6 +144,7 @@ impl GqaAttention {
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
+    #[allow(clippy::many_single_char_names)]
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let batch_size = x.dims()[0];
         let seq_len = x.dims()[1];
@@ -224,7 +228,7 @@ impl GqaAttention {
         // The scalar tensor was re-allocated and broadcast to O(B*H*S*S) every forward;
         // `affine` fuses the scaling into the existing kernel without materializing a broadcast tensor.
         let scale = 1.0 / (self.head_dim as f32).sqrt();
-        let qk = qk.affine(scale as f64, 0.0)?;
+        let qk = qk.affine(f64::from(scale), 0.0)?;
         // H-11 #3: `candle_nn::ops::softmax` already returns a contiguous tensor
         // (verified in candle-nn 0.10.2 src/ops.rs:22-29 — final op is
         // `broadcast_div`, which produces a fresh contiguous tensor). The
