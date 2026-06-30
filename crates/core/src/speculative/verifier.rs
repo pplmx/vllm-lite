@@ -32,7 +32,7 @@ pub struct VerificationResult {
 
 impl VerificationResult {
     #[must_use]
-    pub fn new(seq_id: SeqId, draft_tokens: Vec<TokenId>) -> Self {
+    pub const fn new(seq_id: SeqId, draft_tokens: Vec<TokenId>) -> Self {
         let accepted_count = draft_tokens.len();
         Self {
             seq_id,

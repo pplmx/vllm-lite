@@ -350,7 +350,7 @@ impl SchedulerEngine {
 
     /// Get the number of running sequences
     #[must_use]
-    pub fn running_count(&self) -> usize {
+    pub const fn running_count(&self) -> usize {
         self.running.len()
     }
 

@@ -163,7 +163,7 @@ impl TestHarness {
     }
 
     /// Get the number of running requests
-    pub fn running_count(&self) -> usize {
+    pub const fn running_count(&self) -> usize {
         self.scheduler.running_count()
     }
 }

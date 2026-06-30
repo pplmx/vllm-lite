@@ -52,13 +52,13 @@ impl Batch {
 
     /// Check if batch is empty
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.seq_ids.is_empty()
     }
 
     /// Get batch length
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.seq_ids.len()
     }
 

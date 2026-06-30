@@ -20,7 +20,7 @@ path = "src/bin/vllm.rs"
 vllm-core = { path = "../core", features = ["cuda-graph"] }
 vllm-traits = { path = "../traits" }
 vllm-model = { path = "../model" }
-candle-core = "0.10.2"
+candle-core = "0.11.0"
 tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "time", "io-util", "fs", "net", "signal"] }
 axum = { version = "0.8", features = ["tokio", "macros"] }
 tower = { version = "0.5", features = ["util"] }
@@ -28,7 +28,7 @@ tower-http = { version = "0.7", features = ["limit"] }
 futures = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serde-saphyr = "0.0.27"
+serde-saphyr = "0.0.28"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 tracing-appender = "0.2"
@@ -39,7 +39,7 @@ base64 = "0.22"
 thiserror = "2"
 anyhow = "1"
 tokio-rustls = "0.26"
-jsonwebtoken = "9"
+jsonwebtoken = { version = "10", features = ["rust_crypto"] }
 
 [dev-dependencies]
 axum = { version = "0.8", features = ["tokio", "macros"] }
