@@ -61,7 +61,7 @@ impl std::fmt::Debug for SchedulerEngine {
             .field("next_seq_id", &self.next_seq_id)
             .field("observers", &self.observers)
             .field("cuda_graph", &self.cuda_graph)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -310,7 +310,7 @@ impl SchedulerEngine {
         // Record batch scheduling latency
         let duration = start_time.elapsed();
         self.metrics
-            .record_inference_latency(duration.as_nanos() as u64);
+            .record_inference_latency(u64::try_from(duration.as_nanos()).unwrap_or(u64::MAX));
 
         let prefill_count = batch.is_prefill.iter().filter(|&&x| x).count();
         tracing::debug!(
@@ -361,6 +361,9 @@ impl SchedulerEngine {
     }
 
     /// Get prefix cache hit rate (hits / requests); returns 0.0 when no requests.
+    // invariant: hits/requests are bounded counters; u64 -> f64 precision loss
+    // is acceptable for the hit-rate metric.
+    #[allow(clippy::cast_precision_loss)]
     pub fn prefix_cache_hit_rate(&self) -> f64 {
         let hits = self.metrics.prefix_cache_hits();
         let requests = self.metrics.prefix_cache_requests();

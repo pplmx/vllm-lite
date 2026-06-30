@@ -41,7 +41,7 @@ impl crate::engine::Engine {
             // are caught internally and degrade the affected sequence. If
             // a future batch-wide failure mode is added, restore the Err
             // arm here to fall back to non-speculative decode.
-            self.generate_per_seq_drafts(&batch, max_draft)?
+            self.generate_per_seq_drafts(&batch, max_draft)
         } else {
             self.generate_batched_drafts(&batch, max_draft)?
         };
@@ -91,6 +91,9 @@ impl crate::engine::Engine {
         let total_accepted: usize = accepted_counts.iter().sum();
         let total_tokens_step = total_draft + total_accepted;
         if total_tokens_step > 0 {
+            // invariant: draft/accepted counts are bounded per-step; precision loss
+            // is acceptable for the efficiency ratio metric.
+            #[allow(clippy::cast_precision_loss)]
             let efficiency = total_draft as f64 / total_tokens_step as f64;
             self.scheduler
                 .metrics
@@ -115,12 +118,16 @@ impl crate::engine::Engine {
 
         if !batch.seq_ids.is_empty() {
             let total_tokens: usize = batch.input_tokens.iter().map(std::vec::Vec::len).sum();
-            self.scheduler.metrics.record_tokens(total_tokens as u64);
+            self.scheduler
+                .metrics
+                .record_tokens(u64::try_from(total_tokens).unwrap_or(0));
             self.scheduler
                 .metrics
                 .record_batch_size(batch.seq_ids.len());
         }
 
+        // invariant: elapsed millis fits in f64 mantissa (< 2^52 ms ≈ 142 years).
+        #[allow(clippy::cast_precision_loss)]
         let elapsed = start.elapsed().as_millis() as f64;
         if elapsed > 0.0 {
             self.scheduler.metrics.record_latency(elapsed);

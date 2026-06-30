@@ -1,4 +1,11 @@
-#![allow(clippy::too_many_arguments, clippy::module_name_repetitions)]
+#![allow(
+    clippy::too_many_arguments,
+    clippy::module_name_repetitions,
+    clippy::similar_names
+)]
+// invariant: tensor-dimension casts (head_dim/seq_len -> f32) are bounded by
+// model architecture constants; precision loss is intentional.
+#![allow(clippy::cast_precision_loss)]
 
 use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;
@@ -211,7 +218,7 @@ impl MlaAttention {
         // broadcast to O(B*H*S*S) every forward; `affine` fuses the scaling into the
         // kernel without materializing a broadcast tensor.
         let scale = 1.0 / (self.v_head_dim as f32).sqrt();
-        let qk = qk.affine(scale as f64, 0.0)?;
+        let qk = qk.affine(f64::from(scale), 0.0)?;
 
         // H-12 #3: `candle_nn::ops::softmax` already returns a contiguous tensor
         // (verified in candle-nn 0.10.2 src/ops.rs:22-29 — final op is
@@ -243,7 +250,7 @@ impl MlaAttention {
         qk_nope_dim: usize,
         qk_rope_dim: usize,
         v_head_dim: usize,
-        vb: Option<candle_nn::VarBuilder>,
+        vb: Option<candle_nn::VarBuilder<'_>>,
         config: AttentionConfig,
     ) -> Result<Self> {
         let vb = vb.unwrap_or_else(|| {

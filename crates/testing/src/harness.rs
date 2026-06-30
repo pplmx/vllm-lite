@@ -7,7 +7,7 @@
 use std::sync::Arc;
 use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_core::scheduler::SchedulerEngine;
-use vllm_core::types::{Request, SchedulerConfig};
+use vllm_core::types::{Request, SchedulerConfig, SequencePackingConfig};
 
 /// Test harness configuration
 #[derive(Debug, Clone)]
@@ -67,7 +67,7 @@ impl TestHarnessConfig {
             self.enable_dynamic_batching,
             1,
             self.max_batch_size,
-            Default::default(),
+            SequencePackingConfig::default(),
         )
     }
 }

@@ -1,4 +1,5 @@
 #![allow(clippy::module_name_repetitions)]
+use std::fmt::Write;
 use tokenizers::Tokenizer as HFTokenizer;
 
 /// `TokenizerError`: tokenizer error.
@@ -26,7 +27,7 @@ impl Tokenizer {
     pub fn new() -> Self {
         Self {
             inner: None,
-            vocab_size: 151936,
+            vocab_size: 151_936,
             special_tokens: vec![
                 "<|endoftext|>".to_string(),
                 "<|im_end|>".to_string(),
@@ -82,7 +83,7 @@ impl Tokenizer {
 
         text.split_whitespace()
             .enumerate()
-            .map(|(i, _)| (i + 1) as u32)
+            .map(|(i, _)| u32::try_from(i + 1).unwrap_or(u32::MAX))
             .collect()
     }
 
@@ -94,7 +95,10 @@ impl Tokenizer {
             }
         }
 
-        tokens.iter().map(|t| format!("token_{t} ")).collect()
+        tokens.iter().fold(String::new(), |mut acc, t| {
+            let _ = write!(acc, "token_{t} ");
+            acc
+        })
     }
 
     #[must_use]
@@ -156,7 +160,7 @@ mod tests {
     #[test]
     fn test_tokenizer_vocab_size() {
         let tokenizer = Tokenizer::new();
-        assert_eq!(tokenizer.vocab_size(), 151936);
+        assert_eq!(tokenizer.vocab_size(), 151_936);
     }
 
     #[test]

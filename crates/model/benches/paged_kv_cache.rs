@@ -2,8 +2,8 @@
 //!
 //! ## Strategy
 //!
-//! Uses realistic qwen3-7B-class block configurations (num_kv_heads=2,
-//! head_dim=64) as the standard benchmark, with the block_size held constant
+//! Uses realistic qwen3-7B-class block configurations (`num_kv_heads=2`,
+//! `head_dim=64`) as the standard benchmark, with the `block_size` held constant
 //! at `vllm_traits::BLOCK_SIZE = 16`. Standard configs vary `num_blocks`
 //! across small/medium/large caches. At bench runtime:
 //!
@@ -72,7 +72,7 @@ fn bench_paged_kv_cache(c: &mut Criterion) {
 
         let mut group = c.benchmark_group("paged_kv_cache");
 
-        for &(num_blocks, num_heads, head_dim) in STD_CONFIGS.iter() {
+        for &(num_blocks, num_heads, head_dim) in STD_CONFIGS {
             let mut cache = make_cache(STD_NUM_LAYERS, num_blocks, num_heads, head_dim, &device)
                 .expect("std paged kv cache init");
             let layer_idx = 0;
@@ -84,7 +84,7 @@ fn bench_paged_kv_cache(c: &mut Criterion) {
             let seq_len = 1;
             let label = format!("blocks{num_blocks}_h{num_heads}_d{head_dim}");
 
-            group.bench_with_input(BenchmarkId::new("read_write", &label), &(), |b, _| {
+            group.bench_with_input(BenchmarkId::new("read_write", &label), &(), |b, ()| {
                 b.iter(|| {
                     cache
                         .write_kv(

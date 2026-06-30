@@ -24,11 +24,12 @@ impl SSMHarmonicSSMLayer {
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new(
         d_inner: usize,
         d_state: usize,
         d_conv: usize,
-        vb: VarBuilder,
+        vb: VarBuilder<'_>,
     ) -> CandleResult<Self> {
         let x_proj = candle_nn::linear(d_inner * 3, d_inner * 3, vb.pp("x_proj"))?;
         let in_proj_a = candle_nn::linear(d_inner, d_state, vb.pp("in_proj_a"))?;
@@ -89,17 +90,17 @@ impl SSMHarmonicSSMLayer {
 
         let x_conv_len = x_conv.dims()[1];
         let x_len = x.dims()[1];
-        let x_conv = if x_conv_len > x_len {
-            x_conv.narrow(1, x_conv_len - x_len, x_len)?
-        } else if x_conv_len < x_len {
-            let pad = Tensor::zeros(
-                (x_conv.dims()[0], x_len - x_conv_len, x_conv.dims()[2]),
-                x_conv.dtype(),
-                x.device(),
-            )?;
-            Tensor::cat(&[&x_conv, &pad], 1)?
-        } else {
-            x_conv
+        let x_conv = match x_conv_len.cmp(&x_len) {
+            std::cmp::Ordering::Greater => x_conv.narrow(1, x_conv_len - x_len, x_len)?,
+            std::cmp::Ordering::Less => {
+                let pad = Tensor::zeros(
+                    (x_conv.dims()[0], x_len - x_conv_len, x_conv.dims()[2]),
+                    x_conv.dtype(),
+                    x.device(),
+                )?;
+                Tensor::cat(&[&x_conv, &pad], 1)?
+            }
+            std::cmp::Ordering::Equal => x_conv,
         };
 
         let x_ssm = self.x_proj.forward(&x_conv)?;

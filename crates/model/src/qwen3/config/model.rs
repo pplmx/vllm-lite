@@ -105,7 +105,7 @@ pub enum AttentionType {
 impl TextConfig {
     #[must_use]
     pub fn vocab_size(&self) -> usize {
-        self.vocab_size.unwrap_or(151936)
+        self.vocab_size.unwrap_or(151_936)
     }
 
     #[must_use]
@@ -210,65 +210,68 @@ impl Qwen3Config {
     #[must_use]
     pub fn vocab_size(&self) -> usize {
         self.vocab_size
-            .or(self.text_config.as_ref().map(TextConfig::vocab_size))
-            .unwrap_or(151936)
+            .or_else(|| self.text_config.as_ref().map(TextConfig::vocab_size))
+            .unwrap_or(151_936)
     }
 
     #[must_use]
     pub fn hidden_size(&self) -> usize {
         self.hidden_size
-            .or(self.text_config.as_ref().map(TextConfig::hidden_size))
+            .or_else(|| self.text_config.as_ref().map(TextConfig::hidden_size))
             .unwrap_or(4096)
     }
 
     #[must_use]
     pub fn num_hidden_layers(&self) -> usize {
         self.num_hidden_layers
-            .or(self.text_config.as_ref().map(TextConfig::num_hidden_layers))
+            .or_else(|| self.text_config.as_ref().map(TextConfig::num_hidden_layers))
             .unwrap_or(32)
     }
 
     #[must_use]
     pub fn num_attention_heads(&self) -> usize {
         self.num_attention_heads
-            .or(self
-                .text_config
-                .as_ref()
-                .map(TextConfig::num_attention_heads))
+            .or_else(|| {
+                self.text_config
+                    .as_ref()
+                    .map(TextConfig::num_attention_heads)
+            })
             .unwrap_or(32)
     }
 
     #[must_use]
     pub fn num_key_value_heads(&self) -> usize {
         self.num_key_value_heads
-            .or(self
-                .text_config
-                .as_ref()
-                .map(TextConfig::num_key_value_heads))
+            .or_else(|| {
+                self.text_config
+                    .as_ref()
+                    .map(TextConfig::num_key_value_heads)
+            })
             .unwrap_or(32)
     }
 
     #[must_use]
     pub fn intermediate_size(&self) -> usize {
         self.intermediate_size
-            .or(self.text_config.as_ref().map(TextConfig::intermediate_size))
+            .or_else(|| self.text_config.as_ref().map(TextConfig::intermediate_size))
             .unwrap_or(11008)
     }
 
     #[must_use]
     pub fn rope_theta(&self) -> f32 {
         self.rope_theta
-            .or(self.text_config.as_ref().map(TextConfig::rope_theta))
+            .or_else(|| self.text_config.as_ref().map(TextConfig::rope_theta))
             .unwrap_or(10000.0)
     }
 
     #[must_use]
     pub fn max_position_embeddings(&self) -> usize {
         self.max_position_embeddings
-            .or(self
-                .text_config
-                .as_ref()
-                .map(TextConfig::max_position_embeddings))
+            .or_else(|| {
+                self.text_config
+                    .as_ref()
+                    .map(TextConfig::max_position_embeddings)
+            })
             .unwrap_or(8192)
     }
 
@@ -276,7 +279,7 @@ impl Qwen3Config {
     pub fn rms_norm_eps(&self) -> f64 {
         f64::from(
             self.rms_norm_eps
-                .or(self.text_config.as_ref().map(TextConfig::rms_norm_eps))
+                .or_else(|| self.text_config.as_ref().map(TextConfig::rms_norm_eps))
                 .unwrap_or(1e-6),
         )
     }
@@ -362,7 +365,7 @@ mod tests {
             head_dim: None,
         };
 
-        assert_eq!(config.vocab_size(), 151936);
+        assert_eq!(config.vocab_size(), 151_936);
         assert!(!config.tie_word_embeddings());
         assert_eq!(config.hidden_size(), 4096);
         assert_eq!(config.num_hidden_layers(), 32);

@@ -4,8 +4,8 @@ use tokio::sync::mpsc;
 use vllm_core::types::{AdaptiveDraftConfig, Request, SchedulerConfig};
 use vllm_testing::TestFixtures;
 
-/// Upper bound on engine.step() calls per b.iter() to prevent infinite loops
-/// when step() returns empty results (e.g., engine idle or paused).
+/// Upper bound on `engine.step()` calls per `b.iter()` to prevent infinite loops
+/// when `step()` returns empty results (e.g., engine idle or paused).
 const MAX_STEPS_PER_ITER: usize = 10_000;
 
 /// SPEC-BENCH-02: Baseline comparison vs non-speculative inference.
@@ -24,7 +24,14 @@ fn bench_speculative_vs_baseline(c: &mut Criterion) {
                 let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
                 for i in 0..num_requests {
                     let (tx, _rx) = mpsc::channel(64);
-                    engine.add_request(Request::new(i as u64, vec![10, 20], 20), tx);
+                    engine.add_request(
+                        Request::new(
+                            u64::try_from(i).expect("bounded bench index"),
+                            vec![10, 20],
+                            20,
+                        ),
+                        tx,
+                    );
                 }
                 b.iter(|| {
                     let mut completed = 0;
@@ -50,7 +57,14 @@ fn bench_speculative_vs_baseline(c: &mut Criterion) {
                 engine.enable_adaptive_speculative(AdaptiveDraftConfig::default());
                 for i in 0..num_requests {
                     let (tx, _rx) = mpsc::channel(64);
-                    engine.add_request(Request::new(i as u64, vec![10, 20], 20), tx);
+                    engine.add_request(
+                        Request::new(
+                            u64::try_from(i).expect("bounded bench index"),
+                            vec![10, 20],
+                            20,
+                        ),
+                        tx,
+                    );
                 }
                 b.iter(|| {
                     let mut completed = 0;

@@ -1,6 +1,8 @@
 // crates/core/src/error/recovery.rs
 //! Error recovery management
 
+#![allow(dead_code)]
+
 use crate::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
 use std::time::Duration;
 

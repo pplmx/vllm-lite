@@ -10,9 +10,9 @@ pub struct Usage {
 
 impl Usage {
     #[must_use]
-    pub const fn new(prompt: usize, completion: usize) -> Self {
-        let prompt = prompt as i64;
-        let completion = completion as i64;
+    pub fn new(prompt: usize, completion: usize) -> Self {
+        let prompt = i64::try_from(prompt).unwrap_or(0);
+        let completion = i64::try_from(completion).unwrap_or(0);
         Self {
             prompt_tokens: prompt,
             completion_tokens: completion,
@@ -97,8 +97,7 @@ impl ChatResponse {
             object: "chat.completion".to_string(),
             created: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs() as i64)
-                .unwrap_or(0),
+                .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX)),
             model,
             choices,
             usage,
@@ -132,8 +131,7 @@ impl ChatChunk {
             object: "chat.completion.chunk".to_string(),
             created: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs() as i64)
-                .unwrap_or(0),
+                .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX)),
             model,
             choices: vec![choice],
         }
@@ -179,8 +177,7 @@ impl CompletionResponse {
             object: "text_completion".to_string(),
             created: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs() as i64)
-                .unwrap_or(0),
+                .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX)),
             model,
             choices,
             usage,
@@ -225,17 +222,20 @@ impl EmbeddingsResponse {
             .map(|(i, e)| Embedding {
                 object: "embedding".to_string(),
                 embedding: e,
-                index: i as i32,
+                index: i32::try_from(i).unwrap_or(0),
             })
             .collect();
 
-        let total_tokens: i64 = items.iter().map(|d| d.embedding.len() as i64).sum();
+        let total_tokens: i64 = items
+            .iter()
+            .map(|d| i64::try_from(d.embedding.len()).unwrap_or(0))
+            .sum();
 
         Self {
             object: "list".to_string(),
             data: items,
             model,
-            usage: Usage::new(total_tokens as usize, 0),
+            usage: Usage::new(usize::try_from(total_tokens).unwrap_or(0), 0),
         }
     }
 }

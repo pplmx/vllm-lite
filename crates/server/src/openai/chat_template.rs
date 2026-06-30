@@ -1,6 +1,7 @@
 //! Architecture-specific chat prompt formatting for the `OpenAI` chat API.
 
 use super::types::ChatMessage;
+use std::fmt::Write;
 use vllm_model::config::Architecture;
 
 /// Prompt formatting strategy selected from the loaded model architecture.
@@ -89,6 +90,7 @@ fn build_llama3_prompt(messages: &[ChatMessage]) -> String {
     prompt
 }
 
+#[allow(clippy::match_same_arms)]
 fn build_mistral_inst_prompt(messages: &[ChatMessage]) -> String {
     let system: String = messages
         .iter()
@@ -109,12 +111,13 @@ fn build_mistral_inst_prompt(messages: &[ChatMessage]) -> String {
                     prompt.push(' ');
                 }
                 if first_user && !system.is_empty() {
-                    prompt.push_str(&format!(
+                    let _ = write!(
+                        prompt,
                         "[INST] <<SYS>>\n{}\n<</SYS>>\n\n{} [/INST]",
                         system, msg.content
-                    ));
+                    );
                 } else {
-                    prompt.push_str(&format!("[INST] {} [/INST]", msg.content));
+                    let _ = write!(prompt, "[INST] {} [/INST]", msg.content);
                 }
                 first_user = false;
                 after_assistant = false;

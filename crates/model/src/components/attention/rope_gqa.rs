@@ -1,4 +1,7 @@
 #![allow(clippy::too_many_arguments, clippy::module_name_repetitions)]
+// invariant: position-id casts (usize -> i64) are bounded by sequence length,
+// well within i64 range.
+#![allow(clippy::cast_possible_wrap)]
 
 pub use crate::components::AttentionConfig;
 use crate::components::attention::GqaAttention as SharedGqaAttention;
@@ -25,7 +28,7 @@ impl RopeGqaAttention {
         num_kv_heads: usize,
         head_dim: usize,
         theta: f32,
-        vb: Option<candle_nn::VarBuilder>,
+        vb: Option<candle_nn::VarBuilder<'_>>,
         config: AttentionConfig,
         has_qk_norm: bool,
     ) -> Result<Self> {

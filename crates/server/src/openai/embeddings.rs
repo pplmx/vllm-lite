@@ -4,9 +4,11 @@ use axum::{Json, extract::State, response::IntoResponse};
 use tokio::sync::mpsc;
 use vllm_core::types::EngineMessage;
 
-/// OpenAI-compatible `/v1/embeddings` HTTP handler. Encodes each input
-/// string, sends an [`EngineMessage::GetEmbeddings`] to the engine, and
-/// serializes the returned vectors back into an OpenAI-shaped JSON response.
+/// OpenAI-compatible `/v1/embeddings` HTTP handler.
+///
+/// Encodes each input string, sends an [`EngineMessage::GetEmbeddings`] to the
+/// engine, and serializes the returned vectors back into an OpenAI-shaped JSON
+/// response.
 ///
 /// # Errors
 ///

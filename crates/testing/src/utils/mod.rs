@@ -1,4 +1,9 @@
 //! Utility functions for testing.
+//!
+//! The helpers below are the shared test fixtures used by integration
+//! tests across crates. They appear unused in this crate alone because
+//! consumers import them directly.
+#![allow(dead_code)]
 
 use vllm_traits::{Batch, SeqId, TokenId};
 

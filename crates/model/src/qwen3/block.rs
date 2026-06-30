@@ -70,7 +70,7 @@ impl TransformerBlock {
         intermediate_size: usize,
         theta: f32,
         rms_norm_eps: f64,
-        vb: Option<candle_nn::VarBuilder>,
+        vb: Option<candle_nn::VarBuilder<'_>>,
         has_qk_norm: bool,
     ) -> Result<Self> {
         let vb = vb.unwrap_or_else(|| {

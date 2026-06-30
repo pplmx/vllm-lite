@@ -8,7 +8,7 @@ use candle_core::{Device, Result, Tensor};
 use std::collections::HashMap;
 use vllm_traits::ModelBackend;
 
-use super::block::{LlamaBlock, block_from_weights};
+use super::block::block_from_weights;
 use super::model::LlamaModel;
 
 #[derive(Debug)]
@@ -27,9 +27,6 @@ impl Default for LlamaArchitecture {
         Self::new()
     }
 }
-
-/// `LlamaBlockWrapper`: llama block wrapper.
-pub(crate) type LlamaBlockWrapper = BlockWrapper<LlamaBlock>;
 
 impl Architecture for LlamaArchitecture {
     fn name(&self) -> &'static str {

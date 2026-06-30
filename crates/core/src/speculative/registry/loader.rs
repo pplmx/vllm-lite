@@ -38,6 +38,7 @@ impl DraftModelRegistry {
             return Err(DraftRegistryError::AlreadyLoaded(spec.id));
         }
         guard.insert(spec.id.clone(), DraftState::Unloaded(spec));
+        drop(guard);
         Ok(())
     }
 
@@ -68,23 +69,27 @@ impl DraftModelRegistry {
             .drafts
             .write()
             .expect("DraftModelRegistry mutex poisoned");
-        let entry = guard
-            .get_mut(id)
-            .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
-        let spec = match entry {
-            DraftState::Unloaded(s) => s.clone(),
-            DraftState::Loaded(_) => {
-                return Err(DraftRegistryError::AlreadyLoaded(id.clone()));
-            }
+        let result = {
+            let entry = guard
+                .get_mut(id)
+                .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
+            let spec = match entry {
+                DraftState::Unloaded(s) => s.clone(),
+                DraftState::Loaded(_) => {
+                    return Err(DraftRegistryError::AlreadyLoaded(id.clone()));
+                }
+            };
+            let kv_blocks = spec.kv_blocks;
+            let loaded = LoadedDraft {
+                spec,
+                backend: Arc::new(Mutex::new(backend)),
+                block_allocator: BlockAllocator::new(kv_blocks),
+            };
+            *entry = DraftState::Loaded(loaded);
+            Ok(())
         };
-        let kv_blocks = spec.kv_blocks;
-        let loaded = LoadedDraft {
-            spec,
-            backend: Arc::new(Mutex::new(backend)),
-            block_allocator: BlockAllocator::new(kv_blocks),
-        };
-        *entry = DraftState::Loaded(loaded);
-        Ok(())
+        drop(guard);
+        result
     }
 
     /// Promote an `Unloaded` entry to `Loaded` AND reserve the draft's
@@ -119,15 +124,15 @@ impl DraftModelRegistry {
                 .drafts
                 .read()
                 .expect("DraftModelRegistry mutex poisoned");
-            let entry = guard
-                .get(id)
-                .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
-            match entry {
-                DraftState::Loaded(_) => {
+            let result = match guard.get(id) {
+                None => return Err(DraftRegistryError::UnknownDraftId(id.clone())),
+                Some(DraftState::Loaded(_)) => {
                     return Err(DraftRegistryError::AlreadyLoaded(id.clone()));
                 }
-                DraftState::Unloaded(s) => (s.kv_blocks, s.estimated_total_bytes()),
-            }
+                Some(DraftState::Unloaded(s)) => (s.kv_blocks, s.estimated_total_bytes()),
+            };
+            drop(guard);
+            result
         };
 
         // Stage 2: budget reservation (may fail).
@@ -141,24 +146,28 @@ impl DraftModelRegistry {
             .drafts
             .write()
             .expect("DraftModelRegistry mutex poisoned");
-        let entry = guard
-            .get_mut(id)
-            .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
-        // Re-check state — it may have changed between read and write.
-        let spec = match entry {
-            DraftState::Loaded(_) => {
-                // Roll back the budget reservation we just made.
-                self.budget.release_draft(estimated);
-                return Err(DraftRegistryError::AlreadyLoaded(id.clone()));
-            }
-            DraftState::Unloaded(s) => s.clone(),
+        let result = {
+            let entry = guard
+                .get_mut(id)
+                .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?;
+            // Re-check state — it may have changed between read and write.
+            let spec = match entry {
+                DraftState::Loaded(_) => {
+                    // Roll back the budget reservation we just made.
+                    self.budget.release_draft(estimated);
+                    return Err(DraftRegistryError::AlreadyLoaded(id.clone()));
+                }
+                DraftState::Unloaded(s) => s.clone(),
+            };
+            let loaded = LoadedDraft {
+                spec,
+                backend: Arc::new(Mutex::new(backend)),
+                block_allocator: BlockAllocator::new(kv_blocks),
+            };
+            *entry = DraftState::Loaded(loaded);
+            Ok(())
         };
-        let loaded = LoadedDraft {
-            spec,
-            backend: Arc::new(Mutex::new(backend)),
-            block_allocator: BlockAllocator::new(kv_blocks),
-        };
-        *entry = DraftState::Loaded(loaded);
-        Ok(())
+        drop(guard);
+        result
     }
 }

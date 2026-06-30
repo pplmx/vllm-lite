@@ -16,7 +16,7 @@ pub struct ArchitectureRegistry {
 
 impl std::fmt::Debug for ArchitectureRegistry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let count = self.architectures.read().map(|m| m.len()).unwrap_or(0);
+        let count = self.architectures.read().map_or(0, |m| m.len());
         f.debug_struct("ArchitectureRegistry")
             .field("architectures_count", &count)
             .finish()
@@ -59,13 +59,19 @@ impl ArchitectureRegistry {
 
     pub fn detect(&self, config_json: &Value) -> Option<String> {
         let regs = self.architectures.read().ok()?;
-        for (name, factory) in regs.iter() {
-            let arch = factory();
-            if arch.detect(config_json) {
-                return Some(name.clone());
+        let result = {
+            let mut detected = None;
+            for (name, factory) in regs.iter() {
+                let arch = factory();
+                if arch.detect(config_json) {
+                    detected = Some(name.clone());
+                    break;
+                }
             }
-        }
-        None
+            detected
+        };
+        drop(regs);
+        result
     }
 
     pub fn names(&self) -> Vec<String> {

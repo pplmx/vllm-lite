@@ -29,7 +29,16 @@ impl SchedulingPolicy for SjfPolicy {
     fn compute_priority(&self, seq: &Sequence, _ctx: &SchedulingContext) -> PriorityScore {
         let remaining_tokens = seq.max_tokens.saturating_sub(seq.tokens.len());
         let user_priority = u64::from(seq.priority.0);
-        let score = self.sjf_priority_weight.mul_add(
+        // invariant: user_priority and remaining_tokens are bounded; f32
+        // precision loss is acceptable for the SJF score. The f32 score is
+        // non-negative (positive weights × non-negative counts), so the
+        // f32 -> u64 conversion is sign-safe.
+        #[allow(
+            clippy::cast_precision_loss,
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss
+        )]
+        let score: u64 = self.sjf_priority_weight.mul_add(
             user_priority as f32,
             self.sjf_remaining_work_weight * remaining_tokens as f32,
         ) as u64;

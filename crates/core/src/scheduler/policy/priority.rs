@@ -27,8 +27,18 @@ impl Default for PriorityPolicy {
 
 impl SchedulingPolicy for PriorityPolicy {
     fn compute_priority(&self, seq: &Sequence, _ctx: &SchedulingContext) -> PriorityScore {
-        let wait_factor = seq.id.saturating_sub(1) as f32;
-        let aging_bonus = (wait_factor * self.priority_aging_factor) as u64;
+        // invariant: seq.id is bounded by request count, far below 2^24; f32
+        // precision loss is acceptable for the wait-factor. wait_factor and
+        // the product are non-negative, so the f32 -> u64 conversion is sign-safe.
+        #[allow(
+            clippy::cast_precision_loss,
+            clippy::cast_sign_loss,
+            clippy::cast_possible_truncation
+        )]
+        let aging_bonus: u64 = {
+            let wait_factor = seq.id.saturating_sub(1) as f32;
+            (wait_factor * self.priority_aging_factor) as u64
+        };
         let base_priority = u64::from(seq.priority.0);
         let effective_priority = base_priority.saturating_sub(aging_bonus);
         PriorityScore(effective_priority)
@@ -135,12 +145,16 @@ mod prop_tests {
             let p_low = policy.compute_priority(&seq_low, &ctx());
             // `high` is the user-facing priority value where smaller
             // means more urgent; the score must reflect that ordering.
-            if high < low {
-                prop_assert!(p_high.0 <= p_low.0, "high priority (value={}) gave higher score {} vs low priority {} score {}", high, p_high.0, low, p_low.0);
-            } else if high > low {
-                prop_assert!(p_high.0 >= p_low.0);
-            } else {
-                prop_assert_eq!(p_high.0, p_low.0);
+            match high.cmp(&low) {
+                std::cmp::Ordering::Less => {
+                    prop_assert!(p_high.0 <= p_low.0, "high priority (value={}) gave higher score {} vs low priority {} score {}", high, p_high.0, low, p_low.0);
+                }
+                std::cmp::Ordering::Greater => {
+                    prop_assert!(p_high.0 >= p_low.0);
+                }
+                std::cmp::Ordering::Equal => {
+                    prop_assert_eq!(p_high.0, p_low.0);
+                }
             }
         }
 
@@ -158,12 +172,16 @@ mod prop_tests {
             let seq_b = make_seq(id_b, priority);
             let score_a = policy.compute_priority(&seq_a, &ctx());
             let score_b = policy.compute_priority(&seq_b, &ctx());
-            if id_a > id_b {
-                prop_assert!(score_a.0 <= score_b.0, "older seq id={} should have score <= newer seq id={}, got {} vs {}", id_a, id_b, score_a.0, score_b.0);
-            } else if id_a < id_b {
-                prop_assert!(score_a.0 >= score_b.0);
-            } else {
-                prop_assert_eq!(score_a.0, score_b.0);
+            match id_a.cmp(&id_b) {
+                std::cmp::Ordering::Greater => {
+                    prop_assert!(score_a.0 <= score_b.0, "older seq id={} should have score <= newer seq id={}, got {} vs {}", id_a, id_b, score_a.0, score_b.0);
+                }
+                std::cmp::Ordering::Less => {
+                    prop_assert!(score_a.0 >= score_b.0);
+                }
+                std::cmp::Ordering::Equal => {
+                    prop_assert_eq!(score_a.0, score_b.0);
+                }
             }
         }
 

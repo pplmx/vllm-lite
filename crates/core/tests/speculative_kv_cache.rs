@@ -36,7 +36,7 @@ fn make_seq(id: u64, tokens: Vec<u32>, status: Status, kv_blocks: Vec<usize>) ->
 /// draft positions). This checks that logit-based verification in
 /// engine/speculative.rs extends `input_tokens` with draft tokens.
 #[test]
-#[ignore]
+#[ignore = "requires speculative model setup"]
 fn test_speculative_kv_append_draft_tokens_to_input() {
     let config = SchedulerConfig::default();
     let mut engine = TestFixtures::increment_speculative_engine_with(config, 4, 1024);
@@ -65,7 +65,7 @@ fn test_speculative_kv_append_draft_tokens_to_input() {
 /// SPEC-03.4: Verify that the verification process handles multiple draft tokens
 /// per sequence, extending the target model input with draft tokens for verification.
 #[test]
-#[ignore]
+#[ignore = "requires speculative model setup"]
 fn test_speculative_kv_append_multiple_drafts() {
     let config = SchedulerConfig::default();
     let mut engine = TestFixtures::increment_speculative_engine_with(config, 6, 1024);
@@ -111,7 +111,7 @@ fn test_speculative_kv_append_multiple_drafts() {
 /// for the original tokens and draft tokens is computed in a single forward pass,
 /// avoiding separate recomputation of the original prefix.
 #[test]
-#[ignore]
+#[ignore = "requires speculative model setup"]
 fn test_speculative_kv_reuse_single_forward_pass() {
     let config = SchedulerConfig::default();
     let mut engine = TestFixtures::increment_speculative_engine_with(config, 4, 1024);
@@ -137,7 +137,7 @@ fn test_speculative_kv_reuse_single_forward_pass() {
 /// SPEC-01.5: Verify that accepted draft tokens reuse KV cache by checking
 /// that the scheduler state advances correctly after speculative verification.
 #[test]
-#[ignore]
+#[ignore = "requires speculative model setup"]
 fn test_speculative_kv_reuse_accepted_prefix() {
     let config = SchedulerConfig::default();
     let mut engine = TestFixtures::increment_speculative_engine_with(config, 4, 1024);
@@ -167,7 +167,7 @@ fn test_speculative_kv_reuse_accepted_prefix() {
 /// The verification pass runs the target model with extended tokens (input + drafts)
 /// and the KV block IDs are properly passed through.
 #[test]
-#[ignore]
+#[ignore = "requires speculative model setup"]
 fn test_speculative_kv_block_ids_during_verification() {
     // Create sequences to verify batch KV handling (no config needed for BatchComposer)
     let seq = make_seq(1, vec![1, 2, 3], Status::Decoding, vec![0, 1]);
@@ -203,7 +203,7 @@ fn test_speculative_kv_block_ids_during_verification() {
 /// while `num_computed_tokens` reflects the already-computed prefix, ensuring the
 /// KV cache for original (accepted) tokens isn't recomputed.
 #[test]
-#[ignore]
+#[ignore = "requires speculative model setup"]
 fn test_speculative_kv_reuse_num_computed_tokens() {
     // Simulate a decode scenario with 5 tokens total, 3 already computed
     let seq = make_seq(1, vec![1, 2, 3, 4, 5], Status::Decoding, vec![0]);
@@ -227,7 +227,7 @@ fn test_speculative_kv_reuse_num_computed_tokens() {
 /// SPEC-03.4 / SPEC-01.5: Smoke test that both speculative and standard decoding
 /// produce the same number of total output tokens for the same input.
 #[test]
-#[ignore]
+#[ignore = "requires speculative model setup"]
 fn test_speculative_kv_and_standard_produce_same_output_count() {
     // Standard decoding
     let config = SchedulerConfig::default();

@@ -123,6 +123,7 @@ impl std::fmt::Debug for CudaGraph {
 
 // SAFETY: CudaGraph can be Send because it only contains thread-safe types
 // The Arc<dyn CudaGraphNode> requires CudaGraphNode to be Send + Sync
+#[allow(unsafe_code)] // intentional Send impl; safety argument above
 unsafe impl Send for CudaGraph {}
 
 impl CudaGraph {
@@ -178,7 +179,7 @@ impl CudaGraph {
 
             let outputs = node.execute(&input_refs)?;
 
-            for (out_idx, output) in output_indices.iter().zip(outputs.into_iter()) {
+            for (out_idx, output) in output_indices.iter().zip(outputs) {
                 tensors[*out_idx] = output;
             }
         }

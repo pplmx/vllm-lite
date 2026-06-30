@@ -208,7 +208,7 @@ impl MemoryManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Priority, Status};
+    use crate::types::{Priority, SamplingParams, Status};
     use std::sync::Arc;
 
     fn make_sequence(id: u64, blocks: Vec<BlockId>, status: Status) -> Sequence {
@@ -220,7 +220,7 @@ mod tests {
             prompt_len: 3,
             status,
             max_tokens: 100,
-            sampling_params: Default::default(),
+            sampling_params: SamplingParams::default(),
             consecutive_decode_rounds: 0,
             priority: Priority::default(),
             degraded_draft: false,

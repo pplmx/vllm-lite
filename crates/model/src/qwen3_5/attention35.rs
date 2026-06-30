@@ -31,13 +31,14 @@ impl Attention35WithRoPE {
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new(
         hidden_size: usize,
         num_heads: usize,
         num_kv_heads: usize,
         head_dim: usize,
         rope: MRoPE,
-        vb: candle_nn::VarBuilder,
+        vb: candle_nn::VarBuilder<'_>,
     ) -> CandleResult<Self> {
         Ok(Self {
             q_proj: candle_nn::linear(hidden_size, num_heads * head_dim, vb.pp("q_proj"))?,
@@ -210,6 +211,9 @@ impl Attention35WithRoPE {
         k: &Tensor,
         positions: &[usize],
     ) -> CandleResult<(Tensor, Tensor)> {
+        // invariant: positions are bounded by sequence length; usize -> i64
+        // conversion is non-wrapping for any realistic sequence.
+        #[allow(clippy::cast_possible_wrap)]
         let positions_i64: Vec<i64> = positions.iter().map(|&p| p as i64).collect();
         self.rope.apply(q, k, &positions_i64)
     }

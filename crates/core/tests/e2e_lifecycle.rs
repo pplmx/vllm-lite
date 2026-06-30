@@ -286,7 +286,14 @@ fn test_step_latency_slo() {
     }
 
     latencies.sort_unstable();
-    let p99 = latencies[(latencies.len() as f64 * 0.99) as usize];
+    // invariant: 0.99 * len() is always < len(), bounded by usize range.
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
+    let p99_idx = (latencies.len() as f64 * 0.99) as usize;
+    let p99 = latencies[p99_idx];
 
     assert!(p99 < 1000, "P99 step latency {p99}ms exceeds 1000ms SLO");
 }

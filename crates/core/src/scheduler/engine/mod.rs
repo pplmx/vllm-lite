@@ -107,7 +107,7 @@ mod tests {
         let mut engine = create_test_engine(config, 10); // Small memory
 
         // Memory pressure should be 0.0 with all blocks free
-        assert_eq!(engine.get_memory_pressure(), 0.0);
+        assert!(engine.get_memory_pressure().abs() < 1e-6);
 
         // Add a request
         engine.add_request(Request::new(0, vec![1, 2, 3, 4, 5], 5));
@@ -136,7 +136,8 @@ mod tests {
         // Complete the sequence to add to cache
         // Update until max_tokens reached
         for i in 0..5 {
-            engine.update(&[id1], &[100 + i as u32], &[0]);
+            let next = u32::try_from(100 + i).expect("bounded test token");
+            engine.update(&[id1], &[next], &[0]);
         }
 
         // Add second request with same prefix

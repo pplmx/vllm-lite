@@ -122,8 +122,11 @@ impl ErrorTrackingEngine {
 
     async fn add_request(&self, max_tokens: usize) -> Result<u64, String> {
         let (tx, _rx) = mpsc::channel(64);
-        let mut engine = self.engine.lock().await;
-        let seq_id = engine.add_request(Request::new(1, vec![10, 20, 30], max_tokens), tx);
+        let seq_id = self
+            .engine
+            .lock()
+            .await
+            .add_request(Request::new(1, vec![10, 20, 30], max_tokens), tx);
         if seq_id > 0 {
             Ok(seq_id)
         } else {

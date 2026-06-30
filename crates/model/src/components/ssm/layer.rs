@@ -35,7 +35,8 @@ impl SSMLayer {
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
-    pub fn new(config: &SSMConfig, vb: VarBuilder) -> CandleResult<Self> {
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn new(config: &SSMConfig, vb: VarBuilder<'_>) -> CandleResult<Self> {
         let d_inner = config.d_inner();
 
         let x_proj = candle_nn::linear(d_inner, d_inner * 3, vb.pp("x_proj"))?;

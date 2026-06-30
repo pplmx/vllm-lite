@@ -48,6 +48,9 @@ impl PagedKvCache {
     /// for callers that do not have a host-side copy.
     #[must_use]
     pub fn compute_block_hash_from_slice(data: &[f32]) -> u64 {
+        // invariant: block hashes only need rough quantization of |x|; the
+        // truncation to u64 is part of the hash-mixing algorithm.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         data.iter()
             .map(|&x| (x.abs() * 1000.0) as u64)
             .fold(0u64, |acc, x| acc.wrapping_mul(31).wrapping_add(x))

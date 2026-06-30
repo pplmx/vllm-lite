@@ -35,8 +35,11 @@ fn scheduler_build_batch(c: &mut Criterion) {
     let mut scheduler = SchedulerEngine::new(config, 1024, metrics);
 
     for i in 0..100 {
-        let tokens: Vec<u32> = (0..128).map(|j| (i * 100 + j) as u32).collect();
-        scheduler.add_request(Request::new(i as u64, tokens, 256));
+        let tokens: Vec<u32> = (0..128)
+            .map(|j| u32::try_from(i * 100 + j).expect("bounded bench index"))
+            .collect();
+        let id = u64::try_from(i).expect("bounded bench index");
+        scheduler.add_request(Request::new(id, tokens, 256));
     }
 
     let mut group = c.benchmark_group("scheduler_build_batch");

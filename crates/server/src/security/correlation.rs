@@ -1,4 +1,4 @@
-#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::module_name_repetitions, dead_code)]
 use axum::{extract::Request, http::HeaderValue, middleware::Next, response::Response};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -32,15 +32,20 @@ impl CorrelationIdMiddleware {
     pub async fn generate_id(&self) -> String {
         let mut counter = self.id_generator.write().await;
         *counter += 1;
-        format!(
+        let id = format!(
             "{:x}-{:x}",
             // invariant: monotonic clock is always >= UNIX_EPOCH.
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos() as u64,
+            u64::try_from(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos(),
+            )
+            .unwrap_or(0),
             *counter
-        )
+        );
+        drop(counter);
+        id
     }
 
     #[must_use]

@@ -1,5 +1,15 @@
 //! Gemma4 Rotary Position Embedding implementation.
 
+// invariant: rope dim/position/half-rot-dim casts are bounded by head_dim and
+// sequence length, both small model constants; precision loss / truncation /
+// sign conversion is intentional.
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+
 use crate::config::architecture::RoPEConfig;
 use candle_core::{DType, Result, Tensor};
 
@@ -123,21 +133,21 @@ mod tests {
         };
         let rope = Gemma4RoPE::new(&config, 256);
 
-        assert_eq!(rope.rope_theta, 10000.0);
-        assert_eq!(rope.partial_rotary_factor, 1.0);
+        assert!((rope.rope_theta - 10_000.0).abs() < 1e-6);
+        assert!((rope.partial_rotary_factor - 1.0).abs() < 1e-6);
         assert_eq!(rope.head_dim, 256);
     }
 
     #[test]
     fn test_rope_config_full_attention() {
         let config = RoPEConfig {
-            rope_theta: 1000000.0,
+            rope_theta: 1_000_000.0,
             partial_rotary_factor: 0.25,
         };
         let rope = Gemma4RoPE::new(&config, 256);
 
-        assert_eq!(rope.rope_theta, 1000000.0);
-        assert_eq!(rope.partial_rotary_factor, 0.25);
+        assert!((rope.rope_theta - 1_000_000.0).abs() < 1e-6);
+        assert!((rope.partial_rotary_factor - 0.25).abs() < 1e-6);
         assert_eq!(rope.rot_dim(), 64);
     }
 
@@ -163,8 +173,8 @@ mod tests {
     #[test]
     fn test_rope_default() {
         let rope = Gemma4RoPE::default();
-        assert_eq!(rope.rope_theta, 10000.0);
-        assert_eq!(rope.partial_rotary_factor, 0.5);
+        assert!((rope.rope_theta - 10_000.0).abs() < 1e-6);
+        assert!((rope.partial_rotary_factor - 0.5).abs() < 1e-6);
     }
 
     #[test]
@@ -198,8 +208,8 @@ mod tests {
         let q_rem_sum = q_remainder.sum_all()?.to_scalar::<f32>()?;
         let k_rem_sum = k_remainder.sum_all()?.to_scalar::<f32>()?;
 
-        assert_eq!(q_rem_sum, 0.0);
-        assert_eq!(k_rem_sum, 0.0);
+        assert!(q_rem_sum.abs() < 1e-6);
+        assert!(k_rem_sum.abs() < 1e-6);
         Ok(())
     }
 
@@ -214,10 +224,10 @@ mod tests {
 
         let q = Tensor::ones((1, 1, 1, 64), DType::F32, &device)?;
 
-        let (q_out0, _) = rope.apply(&q, &q, &[0])?;
-        let (q_out10, _) = rope.apply(&q, &q, &[10])?;
+        let (q_out_zero, _) = rope.apply(&q, &q, &[0])?;
+        let (q_out_ten, _) = rope.apply(&q, &q, &[10])?;
 
-        let diff = (q_out0 - q_out10)?.abs()?.sum_all()?;
+        let diff = (q_out_zero - q_out_ten)?.abs()?.sum_all()?;
         assert!(
             diff.to_scalar::<f32>()? > 1e-5,
             "RoPE should produce different outputs for different positions"
@@ -243,8 +253,8 @@ mod tests {
         let diff_q = (q_out - q)?.abs()?.sum_all()?.to_scalar::<f32>()?;
         let diff_k = (k_out - k)?.abs()?.sum_all()?.to_scalar::<f32>()?;
 
-        assert_eq!(diff_q, 0.0);
-        assert_eq!(diff_k, 0.0);
+        assert!(diff_q.abs() < 1e-6);
+        assert!(diff_k.abs() < 1e-6);
         Ok(())
     }
 

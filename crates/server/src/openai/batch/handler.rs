@@ -47,10 +47,13 @@ pub async fn create_batch(
     })?;
     // invariant: SystemTime::now() is always >= UNIX_EPOCH on any platform with a working clock;
     // duration_since cannot underflow.
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64;
+    let now = i64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+    )
+    .unwrap_or(i64::MAX);
 
     Ok(Json(BatchResponse {
         id: job.id,
@@ -61,7 +64,7 @@ pub async fn create_batch(
         expires_at: now + 86400,
         completed_at: None,
         request_counts: Some(RequestCounts {
-            total: job.prompts.len() as i32,
+            total: i32::try_from(job.prompts.len()).unwrap_or(i32::MAX),
             completed: 0,
             failed: 0,
         }),
@@ -76,13 +79,15 @@ pub async fn get_batch(
     State(state): State<ApiState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<Json<BatchResponse>, (axum::http::StatusCode, Json<ErrorResponse>)> {
-    let job = state.batch_manager.get_job(&id).await.ok_or((
-        axum::http::StatusCode::NOT_FOUND,
-        Json(ErrorResponse::new(
-            "batch not found",
-            "invalid_request_error",
-        )),
-    ))?;
+    let job = state.batch_manager.get_job(&id).await.ok_or_else(|| {
+        (
+            axum::http::StatusCode::NOT_FOUND,
+            Json(ErrorResponse::new(
+                "batch not found",
+                "invalid_request_error",
+            )),
+        )
+    })?;
 
     let status = match job.status {
         BatchStatus::Pending => "pending",
@@ -91,8 +96,10 @@ pub async fn get_batch(
         BatchStatus::Failed => "failed",
     };
 
-    let completed = job.results.iter().filter(|r| r.status == "success").count() as i32;
-    let failed = job.results.iter().filter(|r| r.status == "error").count() as i32;
+    let completed =
+        i32::try_from(job.results.iter().filter(|r| r.status == "success").count()).unwrap_or(0);
+    let failed =
+        i32::try_from(job.results.iter().filter(|r| r.status == "error").count()).unwrap_or(0);
 
     Ok(Json(BatchResponse {
         id: job.id,
@@ -103,7 +110,7 @@ pub async fn get_batch(
         expires_at: job.created_at + 86400,
         completed_at: job.completed_at,
         request_counts: Some(RequestCounts {
-            total: job.prompts.len() as i32,
+            total: i32::try_from(job.prompts.len()).unwrap_or(i32::MAX),
             completed,
             failed,
         }),
@@ -118,13 +125,15 @@ pub async fn get_batch_results(
     State(state): State<ApiState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<Json<BatchResults>, (axum::http::StatusCode, Json<ErrorResponse>)> {
-    let job = state.batch_manager.get_job(&id).await.ok_or((
-        axum::http::StatusCode::NOT_FOUND,
-        Json(ErrorResponse::new(
-            "batch not found",
-            "invalid_request_error",
-        )),
-    ))?;
+    let job = state.batch_manager.get_job(&id).await.ok_or_else(|| {
+        (
+            axum::http::StatusCode::NOT_FOUND,
+            Json(ErrorResponse::new(
+                "batch not found",
+                "invalid_request_error",
+            )),
+        )
+    })?;
 
     let status = match job.status {
         BatchStatus::Pending => "pending",
@@ -148,10 +157,13 @@ pub async fn list_batches(State(state): State<ApiState>) -> Json<Vec<BatchRespon
     let jobs = state.batch_manager.get_all_jobs().await;
     // invariant: SystemTime::now() is always >= UNIX_EPOCH on any platform with a working clock;
     // duration_since cannot underflow.
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64;
+    let now = i64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+    )
+    .unwrap_or(i64::MAX);
 
     let responses: Vec<BatchResponse> = jobs
         .into_iter()
@@ -162,8 +174,11 @@ pub async fn list_batches(State(state): State<ApiState>) -> Json<Vec<BatchRespon
                 BatchStatus::Completed => "completed",
                 BatchStatus::Failed => "failed",
             };
-            let completed = job.results.iter().filter(|r| r.status == "success").count() as i32;
-            let failed = job.results.iter().filter(|r| r.status == "error").count() as i32;
+            let completed =
+                i32::try_from(job.results.iter().filter(|r| r.status == "success").count())
+                    .unwrap_or(0);
+            let failed = i32::try_from(job.results.iter().filter(|r| r.status == "error").count())
+                .unwrap_or(0);
 
             BatchResponse {
                 id: job.id,
@@ -174,7 +189,7 @@ pub async fn list_batches(State(state): State<ApiState>) -> Json<Vec<BatchRespon
                 expires_at: now + 86400,
                 completed_at: job.completed_at,
                 request_counts: Some(RequestCounts {
-                    total: job.prompts.len() as i32,
+                    total: i32::try_from(job.prompts.len()).unwrap_or(i32::MAX),
                     completed,
                     failed,
                 }),

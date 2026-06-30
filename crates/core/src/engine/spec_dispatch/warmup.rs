@@ -19,7 +19,7 @@ impl crate::engine::Engine {
     /// `ResolvedDraft::None`, the warmup is skipped (pure target decode).
     /// When no resolver is installed, falls back to the legacy single-
     /// `draft_model` behavior for backward compatibility with `new_boxed`.
-    pub(crate) fn warmup_draft_kv(&mut self, batch: &Batch) -> Result<()> {
+    pub(crate) fn warmup_draft_kv(&self, batch: &Batch) -> Result<()> {
         if !self.speculative_mode {
             return Ok(());
         }

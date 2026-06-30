@@ -168,7 +168,7 @@ impl Architecture for MistralSmallArchitecture {
             num_kv_blocks,
             self.num_experts,
             self.num_active_experts,
-        )?;
+        );
         Ok(Box::new(model))
     }
 }
@@ -193,14 +193,14 @@ impl MistralSmallModel {
         num_kv_blocks: usize,
         num_experts: usize,
         num_active_experts: usize,
-    ) -> Result<Self> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             config,
             device,
             num_kv_blocks,
             num_experts,
             num_active_experts,
-        })
+        }
     }
 }
 

@@ -11,6 +11,8 @@ mod support;
 use candle_core::D;
 use support::qwen3::{HIDDEN_SIZE, VOCAB_SIZE};
 
+const FRESH_BLOCK: usize = 1;
+
 fn require_model() -> support::on_disk::CachedModel {
     let fixture = support::qwen3::Qwen3Fixture::cpu();
     assert!(
@@ -58,24 +60,27 @@ fn test_qwen3_checkpoint_e2e() {
         .unwrap()
         .to_vec0::<u32>()
         .unwrap();
-    assert!(prefill_next < VOCAB_SIZE as u32);
+    assert!(prefill_next < u32::try_from(VOCAB_SIZE).expect("bounded vocab"));
 
     let (decode_logits, _) = model
         .forward_with_cache(&[42], 5, &[0], &[5], false)
         .expect("decode after prefill");
     assert_eq!(decode_logits.dims(), [1, 1, VOCAB_SIZE]);
     let decode_next = argmax_token(&decode_logits);
-    assert!(decode_next < VOCAB_SIZE as u32);
+    assert!(decode_next < u32::try_from(VOCAB_SIZE).expect("bounded vocab"));
 
     // --- embedding sanity (no KV) ---
     let hi = vec![6023u32];
     let embeddings = model.embed(&[hi], &[vec![0]]).expect("embed");
     assert_eq!(embeddings[0].len(), HIDDEN_SIZE);
     let non_zero = embeddings[0].iter().filter(|&&x| x != 0.0).count();
-    assert!(non_zero as f32 / HIDDEN_SIZE as f32 > 0.5);
+    // invariant: non_zero/HIDDEN_SIZE are bounded embedding dimensions; f32
+    // precision loss is acceptable for the test ratio.
+    #[allow(clippy::cast_precision_loss)]
+    let ratio = non_zero as f32 / HIDDEN_SIZE as f32;
+    assert!(ratio > 0.5);
 
     // --- determinism on a fresh KV block (avoid pollution from block 0 above) ---
-    const FRESH_BLOCK: usize = 1;
     let probe = vec![6023u32];
     let (l1, _) = model
         .forward_with_cache(&probe, 0, &[FRESH_BLOCK], &[0], true)
@@ -102,4 +107,5 @@ fn test_qwen3_checkpoint_e2e() {
         cosine < 0.99,
         "different tokens should differ, cosine={cosine}"
     );
+    drop(model);
 }

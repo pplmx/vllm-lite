@@ -23,7 +23,8 @@ impl MambaBlock {
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
-    pub fn new(d_model: usize, d_state: usize, vb: VarBuilder) -> CandleResult<Self> {
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn new(d_model: usize, d_state: usize, vb: VarBuilder<'_>) -> CandleResult<Self> {
         let config = SSMConfig::new(d_model).with_d_state(d_state);
 
         let input_proj = candle_nn::linear(d_model, config.d_inner() * 2, vb.pp("in_proj"))?;
@@ -43,6 +44,7 @@ impl MambaBlock {
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
+    #[allow(clippy::many_single_char_names)]
     pub fn forward(&mut self, x: &Tensor) -> CandleResult<Tensor> {
         let residual = x.clone();
 

@@ -27,7 +27,14 @@ fn bench_latency_percentiles(c: &mut Criterion) {
 
                     for i in 0..num_requests {
                         let (tx, _rx) = mpsc::channel(64);
-                        engine.add_request(Request::new(i as u64, vec![10, 20], 20), tx);
+                        engine.add_request(
+                            Request::new(
+                                u64::try_from(i).expect("bounded bench index"),
+                                vec![10, 20],
+                                20,
+                            ),
+                            tx,
+                        );
                     }
 
                     let start = Instant::now();
@@ -37,7 +44,7 @@ fn bench_latency_percentiles(c: &mut Criterion) {
                         completed += results.len();
                     }
 
-                    start.elapsed() / num_requests as u32
+                    start.elapsed() / u32::try_from(num_requests).expect("bounded bench index")
                 });
             },
         );

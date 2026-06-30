@@ -344,12 +344,12 @@ fn test_qwen3_decode_logits_2d_shape() {
     let device = Device::Cpu;
     let mut model = Qwen3Model::new(config, device, 1024).unwrap();
 
-    let _seq_ids = [1u64];
-    let _input_tokens = [vec![42u32]];
-    let _positions = [vec![7]];
-    let _kv_block_ids = [vec![0usize]];
-    let _num_computed_tokens = [7usize];
-    let _is_prefill = [false];
+    let _ = [1u64];
+    let _ = [vec![42u32]];
+    let _ = [vec![7]];
+    let _ = [vec![0usize]];
+    let _ = [7usize];
+    let _ = [false];
 
     let (logits, _hidden_token) = model
         .forward_with_cache(&[42], 7, &[0], &[7], false)

@@ -108,9 +108,7 @@ impl RbacMiddleware {
         match p {
             "/health" | "/ready" => None,
             "/v1/models" => Some("read"),
-            "/v1/chat/completions" => Some("execute"),
-            "/v1/completions" => Some("execute"),
-            "/v1/embeddings" => Some("execute"),
+            "/v1/chat/completions" | "/v1/completions" | "/v1/embeddings" => Some("execute"),
             "/metrics" => Some("view_metrics"),
             p if p.starts_with("/admin") => Some("manage_users"),
             // Default: unknown paths require `read` (least-privilege
@@ -121,17 +119,18 @@ impl RbacMiddleware {
 }
 
 ///
-/// Enforces role-based access control. Extracts the role from either
-/// the JWT-claims-style `X-User-Role` header (set upstream by the
-/// auth middleware) or the configured default role, then denies the
-/// request with HTTP 403 + a structured JSON error if the role lacks
-/// the required permission for the requested path.
+/// Enforces role-based access control.
+///
+/// Extracts the role from either the JWT-claims-style `X-User-Role`
+/// header (set upstream by the auth middleware) or the configured
+/// default role, then denies the request with HTTP 403 + a structured
+/// JSON error if the role lacks the required permission for the
+/// requested path.
 pub async fn rbac_middleware(request: Request, next: Next) -> Response {
     let rbac = RbacMiddleware::new(Role::Anonymous);
     let path = request.uri().path().to_string();
-    let required = match RbacMiddleware::required_action_for_path(&path) {
-        Some(a) => a,
-        None => return next.run(request).await,
+    let Some(required) = RbacMiddleware::required_action_for_path(&path) else {
+        return next.run(request).await;
     };
 
     let role = rbac.extract_role_from_headers(request.headers());

@@ -115,14 +115,12 @@ fn simulate_draft_tokens(
     num_tokens: usize,
 ) -> Vec<TokenId> {
     let mut current_token = start_token;
-    let mut num_computed = start_num_computed;
     let mut drafts = Vec::with_capacity(num_tokens);
 
-    for _ in 0..num_tokens {
+    for num_computed in (start_num_computed..).take(num_tokens) {
         let next = decode_token_to_layer(model, seq_id, current_token, num_computed, draft_layers);
         drafts.push(next);
         current_token = next;
-        num_computed += 1;
     }
 
     drafts

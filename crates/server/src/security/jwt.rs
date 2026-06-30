@@ -139,8 +139,7 @@ impl JwtValidator {
         // Structural sanity check (3 parts) before delegating to
         // jsonwebtoken (which will reject malformed tokens anyway, but
         // the explicit guard surfaces a clearer error class).
-        let parts: Vec<&str> = token.split('.').collect();
-        if parts.len() != 3 {
+        if token.split('.').count() != 3 {
             return Err(JwtError::InvalidFormat(
                 "Token must have 3 parts".to_string(),
             ));
@@ -165,7 +164,7 @@ impl JwtValidator {
         }
 
         // Construct the decoding key for this token's alg family.
-        let key = self.decoding_key(&header.alg)?;
+        let key = self.decoding_key(header.alg)?;
 
         // Build validation with the single allowed algorithm so
         // jsonwebtoken cannot be tricked into a different algorithm
@@ -191,8 +190,8 @@ impl JwtValidator {
         Ok(token_data.claims)
     }
 
-    fn decoding_key(&self, alg: &Algorithm) -> Result<DecodingKey, JwtError> {
-        if HMAC_ALGORITHMS.contains(alg) {
+    fn decoding_key(&self, alg: Algorithm) -> Result<DecodingKey, JwtError> {
+        if HMAC_ALGORITHMS.contains(&alg) {
             let secret = self
                 .config
                 .secret
@@ -270,7 +269,10 @@ mod tests {
             sub: "user-1".into(),
             iss: TEST_ISS.into(),
             aud: TEST_AUD.into(),
-            exp: (now as i64 + exp_offset_secs).max(0) as u64,
+            exp: u64::try_from(
+                i64::try_from(now).expect("bounded test timestamp") + exp_offset_secs,
+            )
+            .unwrap_or(0),
             iat: now,
             roles: vec![],
             scope: None,

@@ -15,6 +15,7 @@ impl Qwen3MlaAttention {
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
+    #[allow(clippy::similar_names)]
     pub fn new(
         hidden_size: usize,
         num_heads: usize,
@@ -24,7 +25,7 @@ impl Qwen3MlaAttention {
         qk_nope_dim: usize,
         qk_rope_dim: usize,
         v_head_dim: usize,
-        vb: Option<candle_nn::VarBuilder>,
+        vb: Option<candle_nn::VarBuilder<'_>>,
         config: AttentionConfig,
     ) -> Result<Self> {
         let inner = MlaAttention::new(

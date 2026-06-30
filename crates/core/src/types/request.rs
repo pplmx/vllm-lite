@@ -11,8 +11,10 @@ use vllm_traits::{SeqId, TokenId};
 pub struct Priority(pub u8);
 
 /// An inbound generation request: prompt + sampling configuration + optional
-/// external draft binding. Constructed by the HTTP server (or any other
-/// caller) and submitted via [`crate::engine::Engine::add_request`].
+/// external draft binding.
+///
+/// Constructed by the HTTP server (or any other caller) and submitted via
+/// [`crate::engine::Engine::add_request`].
 #[derive(Clone, Debug)]
 pub struct Request {
     /// Caller-supplied identifier for correlating logs and responses. Not

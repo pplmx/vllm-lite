@@ -83,7 +83,7 @@ mod gguf_loader {
         where
             Self: Sized,
         {
-            let storage_tensors = load_gguf_tensors(path, device)?;
+            let storage_tensors = load_gguf_tensors(path, device);
             let mut tensors = HashMap::new();
             for (name, storage) in storage_tensors {
                 let tensor = match storage {

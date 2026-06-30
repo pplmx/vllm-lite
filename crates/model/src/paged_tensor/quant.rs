@@ -1,3 +1,13 @@
+// invariant: quantization scalar math operates on bounded quantization levels
+// and tensor dimensions; precision loss / truncation / wrap is intentional in
+// the quantization rounding math.
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+
 use candle_core::{Device, Result, Tensor};
 
 /// `QuantizationType`: quantization type.
@@ -34,10 +44,7 @@ impl QuantizationType {
             Self::Fp16 => 16,
             Self::Fp32 => 32,
             Self::Int8 => 8,
-            Self::Int4 => 4,
-            Self::Awq => 4,
-            Self::Gptq => 4,
-            Self::GGUF => 4,
+            Self::Int4 | Self::Awq | Self::Gptq | Self::GGUF => 4,
         }
     }
 }
@@ -301,10 +308,20 @@ impl GPTQQuantization {
 mod tests {
     use super::*;
 
+    // invariant: test fixture indices 0..=127 fit in f32 exactly; precision loss
+    // is acceptable for the linear ramp test data.
+    #[allow(clippy::cast_precision_loss)]
+    fn make_ramp(start: f32, end: f32, count: usize) -> Vec<f32> {
+        let step = (end - start) / count as f32;
+        (0..count)
+            .map(|i| (i as f32).mul_add(step, start))
+            .collect()
+    }
+
     #[test]
     fn test_awq_quantize_dequantize() {
         let device = Device::Cpu;
-        let data: Vec<f32> = (0..128).map(|i| i as f32 * 0.1).collect();
+        let data: Vec<f32> = make_ramp(0.0, 12.8, 128);
         let awq = AWQQuantization::new(4, 32);
 
         let weights = awq.quantize(&data, &[128], &device).unwrap();
@@ -326,7 +343,8 @@ mod tests {
     #[test]
     fn test_gptq_quantize_dequantize() {
         let device = Device::Cpu;
-        let data: Vec<f32> = (0..64).map(|i| (i as f32 - 32.0) * 0.5).collect();
+        // ramp from -16 to +15.5 with step 0.5 (equivalent to (i - 32) * 0.5)
+        let data: Vec<f32> = make_ramp(-16.0, 16.0, 64);
         let gptq = GPTQQuantization::new(4, 16);
 
         let weights = gptq.quantize(&data, &[64], &device).unwrap();

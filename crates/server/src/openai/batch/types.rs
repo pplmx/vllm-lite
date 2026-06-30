@@ -46,6 +46,7 @@ where
         .ok_or_else(|| serde::de::Error::custom(format!("unknown batch endpoint: {s}")))
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
 fn serialize_batch_endpoint<S>(value: &BatchEndpoint, ser: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
@@ -149,10 +150,13 @@ impl BatchJob {
     ) -> Self {
         // invariant: SystemTime::now() is always >= UNIX_EPOCH on any platform with a working clock;
         // duration_since cannot underflow.
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Failed to get system time")
-            .as_secs() as i64;
+        let now = i64::try_from(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Failed to get system time")
+                .as_secs(),
+        )
+        .unwrap_or(i64::MAX);
         Self {
             id,
             endpoint,

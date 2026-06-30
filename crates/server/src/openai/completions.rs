@@ -22,9 +22,10 @@ fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &st
 }
 
 /// OpenAI-compatible `/v1/completions` HTTP handler. Dispatches to streaming
-/// (SSE) or non-streaming based on `req.stream`. Validates that `prompt` is
-/// non-empty and forwards an [`EngineMessage::AddRequest`] to the engine for
-/// each call.
+/// (SSE) or non-streaming based on `req.stream`.
+///
+/// Validates that `prompt` is non-empty and forwards an
+/// [`vllm_core::types::EngineMessage::AddRequest`] to the engine for each call.
 ///
 /// # Errors
 ///
@@ -50,7 +51,7 @@ pub async fn completions(
     let prompt = req.prompt;
     let prompt_tokens = state.tokenizer.encode(&prompt);
     let prompt_tokens_len = prompt_tokens.len();
-    let max_tokens = req.max_tokens.unwrap_or(100) as usize;
+    let max_tokens = usize::try_from(req.max_tokens.unwrap_or(100)).unwrap_or(100);
     let total_max = prompt_tokens_len + max_tokens;
 
     let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);

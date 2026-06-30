@@ -5,6 +5,14 @@
 //! so `mod.rs` stays a thin re-export surface.
 
 #![allow(clippy::too_many_arguments)]
+// invariant: tensor-dimension casts (head_dim/seq_len -> f32/u32) are bounded
+// by model architecture constants; precision loss / truncation is intentional.
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
 
 use candle_core::{Result, Tensor};
 
@@ -26,6 +34,7 @@ impl AttentionConfig {
 
     /// Returns a builder for configuring this type with the documented field defaults.
     /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
+    #[allow(dead_code)]
     pub(crate) fn builder() -> AttentionConfigBuilder {
         AttentionConfigBuilder::default()
     }
@@ -33,20 +42,24 @@ impl AttentionConfig {
 
 /// Builder for [`AttentionConfig`].
 #[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
 pub(crate) struct AttentionConfigBuilder {
     inner: AttentionConfig,
 }
 
 impl AttentionConfigBuilder {
+    #[allow(dead_code)]
     pub const fn with_tile_size(mut self, v: Option<usize>) -> Self {
         self.inner.tile_size = v;
         self
     }
+    #[allow(dead_code)]
     pub const fn with_use_fused(mut self, v: bool) -> Self {
         self.inner.use_fused = v;
         self
     }
     /// build: build the [`AttentionConfig`].
+    #[allow(dead_code)]
     pub const fn build(self) -> AttentionConfig {
         self.inner
     }
@@ -68,10 +81,10 @@ pub fn expand_kv(kv: &Tensor, num_q_heads: usize, num_kv_heads: usize) -> Result
         )));
     }
 
-    let _batch = dims[0];
-    let _seq = dims[1];
+    let _ = dims[0];
+    let _ = dims[1];
     let heads = dims[2];
-    let _dim = dims[3];
+    let _ = dims[3];
 
     if heads != num_kv_heads {
         return Err(candle_core::Error::msg(format!(
@@ -154,7 +167,7 @@ pub fn paged_attention(
     // H-11 #2: replaced `qk.mul(broadcast(scalar_tensor))` with `qk.affine(scale, 0.0)`.
     // Eliminates per-call scalar allocation and O(B*H*S*S) broadcast materialization.
     let scale = 1.0 / (head_dim as f32).sqrt();
-    let qk = qk.affine(scale as f64, 0.0)?;
+    let qk = qk.affine(f64::from(scale), 0.0)?;
     let attn_weights = candle_nn::ops::softmax(&qk, 3)?.contiguous()?;
 
     let attn_output = Tensor::matmul(&attn_weights, v)?;
@@ -204,7 +217,7 @@ pub fn tiled_attention(
         // Per-tile savings compound: tiled forward at seq_len=2048 / tile_size=16
         // saves ~128 O(B*H*T*T) broadcast materializations.
         let scale = 1.0 / (q.dims()[3] as f32).sqrt();
-        let qk = qk.affine(scale as f64, 0.0)?;
+        let qk = qk.affine(f64::from(scale), 0.0)?;
         let attn = candle_nn::ops::softmax(&qk, 3)?.contiguous()?;
 
         let out = Tensor::matmul(&attn, &v_tile)?;
@@ -418,12 +431,16 @@ mod tests {
             for j in 0..seq_len {
                 let idx = i * seq_len + j;
                 if j <= i {
-                    assert_eq!(mask_data[idx], 0.0, "Position ({i}, {j}) should be 0");
+                    assert!(
+                        mask_data[idx].abs() < 1e-6,
+                        "Position ({i}, {j}) should be 0"
+                    );
                 } else {
-                    assert_eq!(
-                        mask_data[idx],
-                        f32::NEG_INFINITY,
-                        "Position ({i}, {j}) should be -inf"
+                    assert!(
+                        mask_data[idx] == f32::NEG_INFINITY
+                            || mask_data[idx].is_infinite() && mask_data[idx] < 0.0,
+                        "Position ({i}, {j}) should be -inf, got {}",
+                        mask_data[idx]
                     );
                 }
             }

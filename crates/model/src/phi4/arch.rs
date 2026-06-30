@@ -129,7 +129,7 @@ impl Architecture for Phi4Architecture {
         num_kv_blocks: usize,
         _kv_quantization: bool,
     ) -> Result<Box<dyn ModelBackend>> {
-        let model = Phi4Model::new(config, device, num_kv_blocks)?;
+        let model = Phi4Model::new(config, device, num_kv_blocks);
         Ok(Box::new(model))
     }
 }
@@ -144,12 +144,12 @@ pub(crate) struct Phi4Model {
 }
 
 impl Phi4Model {
-    pub const fn new(config: ModelConfig, device: Device, num_kv_blocks: usize) -> Result<Self> {
-        Ok(Self {
+    pub const fn new(config: ModelConfig, device: Device, num_kv_blocks: usize) -> Self {
+        Self {
             config,
             device,
             num_kv_blocks,
-        })
+        }
     }
 }
 

@@ -2,12 +2,12 @@
 //!
 //! ## Strategy
 //!
-//! Uses realistic qwen3-7B class MLA dimensions (hidden_size=896,
-//! num_heads=14, kv_lora_rank=64, head_dim=64) as the standard benchmark,
+//! Uses realistic qwen3-7B class MLA dimensions (`hidden_size=896`,
+//! `num_heads=14`, `kv_lora_rank=64`, `head_dim=64`) as the standard benchmark,
 //! matching production workload. At bench runtime:
 //!
 //! - **CUDA available** (GPU runners): runs full standard benchmark with
-//!   realistic seq_len = [128, 512, 2048].
+//!   realistic `seq_len` = [128, 512, 2048].
 //!
 //! - **CPU-only** (default CI runners): runs a minimal smoke test that
 //!   verifies the forward path compiles and executes, but does NOT measure
@@ -59,7 +59,7 @@ fn std_input(seq_len: usize, device: &Device) -> candle_core::Result<Tensor> {
 }
 
 fn std_positions(seq_len: usize) -> Vec<i64> {
-    (0..seq_len as i64).collect()
+    (0..i64::try_from(seq_len).expect("bounded seq_len")).collect()
 }
 
 fn std_attn(device: &Device) -> candle_core::Result<MlaAttention> {
@@ -89,7 +89,7 @@ fn smoke_input(device: &Device) -> candle_core::Result<Tensor> {
 }
 
 fn smoke_positions() -> Vec<i64> {
-    (0..SMOKE_SEQ_LEN as i64).collect()
+    (0..i64::try_from(SMOKE_SEQ_LEN).expect("bounded smoke seq")).collect()
 }
 
 fn smoke_attn(device: &Device) -> candle_core::Result<MlaAttention> {
@@ -116,7 +116,7 @@ fn bench_mla_forward(c: &mut Criterion) {
 
         let mut group = c.benchmark_group("mla_forward");
 
-        for seq_len in STD_SEQ_LENS.iter() {
+        for seq_len in &STD_SEQ_LENS {
             let x = std_input(*seq_len, &device).expect("input tensor init");
             let positions = std_positions(*seq_len);
 

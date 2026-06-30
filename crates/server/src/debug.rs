@@ -21,6 +21,7 @@ pub struct MetricsSnapshotResponse {
     pub cuda_graph_hit_rate: f64,
 }
 
+#[allow(clippy::unused_async)]
 pub async fn metrics_snapshot(State(state): State<ApiState>) -> Json<MetricsSnapshotResponse> {
     let metrics = state.metrics;
     let counters: HashMap<String, u64> = [
@@ -53,13 +54,21 @@ pub async fn metrics_snapshot(State(state): State<ApiState>) -> Json<MetricsSnap
     .collect();
 
     let gauges: HashMap<String, f64> = [
+        // invariant: gauge values are bounded counts/ratios; u64 -> f64 precision
+        // loss is acceptable for snapshot display.
         (
             "packing_efficiency".to_string(),
-            metrics.get_gauge("packing_efficiency") as f64 / 1000.0,
+            #[allow(clippy::cast_precision_loss)]
+            {
+                metrics.get_gauge("packing_efficiency") as f64 / 1000.0
+            },
         ),
         (
             "speculative_acceptance_rate".to_string(),
-            metrics.get_gauge("speculative_acceptance_rate") as f64 / 1000.0,
+            #[allow(clippy::cast_precision_loss)]
+            {
+                metrics.get_gauge("speculative_acceptance_rate") as f64 / 1000.0
+            },
         ),
     ]
     .into_iter()
@@ -70,8 +79,13 @@ pub async fn metrics_snapshot(State(state): State<ApiState>) -> Json<MetricsSnap
 
     let hit_total = metrics.get_counter("cuda_graph_hits_total");
     let miss_total = metrics.get_counter("cuda_graph_misses_total");
+    // invariant: hit/miss totals are bounded counts; u64 -> f64 precision loss is
+    // acceptable for a ratio display.
     let cuda_graph_hit_rate = if hit_total + miss_total > 0 {
-        hit_total as f64 / (hit_total + miss_total) as f64
+        #[allow(clippy::cast_precision_loss)]
+        {
+            hit_total as f64 / (hit_total + miss_total) as f64
+        }
     } else {
         0.0
     };
@@ -105,12 +119,17 @@ pub async fn kv_cache_dump(State(state): State<ApiState>) -> Json<KvCacheDumpRes
 
     let metrics = response_rx.recv().await.unwrap_or_default();
 
-    let available_blocks = metrics.current_batch_size as usize;
+    let available_blocks = metrics.current_batch_size;
     let kv_cache_usage_percent = metrics.kv_cache_usage_percent;
+
+    // invariant: kv_cache_usage_percent is a 0..=100 ratio; 1024 * pct / 100 is
+    // bounded by 1024, well within usize range.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let used_blocks = (1024.0 * kv_cache_usage_percent / 100.0) as usize;
 
     Json(KvCacheDumpResponse {
         total_blocks: 1024,
-        used_blocks: (1024.0 * kv_cache_usage_percent / 100.0) as usize,
+        used_blocks,
         available_blocks,
         usage_percent: kv_cache_usage_percent,
         prefix_cache_nodes: 0,
@@ -126,6 +145,7 @@ pub struct TraceStatusResponse {
     pub spans_active: usize,
 }
 
+#[allow(clippy::unused_async)]
 pub async fn trace_status(State(_state): State<ApiState>) -> Json<TraceStatusResponse> {
     Json(TraceStatusResponse {
         tracing_enabled: true,

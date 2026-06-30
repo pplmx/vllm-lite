@@ -1,6 +1,10 @@
 #![allow(clippy::module_name_repetitions)]
 //! Fused attention layer kernel.
 
+// invariant: tensor-dimension casts (head_dim -> f32) are bounded by model
+// architecture constants; precision loss is intentional.
+#![allow(clippy::cast_precision_loss)]
+
 use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;
 
@@ -90,18 +94,15 @@ pub fn fused_mlp_layer(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
-    fn test_fused_attention_output_shape() -> Result<()> {
+    fn test_fused_attention_output_shape() {
         let _device = candle_core::Device::Cpu;
-        let _batch = 2;
-        let _seq = 8;
-        let _hidden = 256;
-        let _num_heads = 4;
-        let _head_dim = 64;
+        let _ = 2;
+        let _ = 8;
+        let _ = 256;
+        let _ = 4;
+        let _ = 64;
 
         // Skip actual computation - just verify function exists
-        Ok(())
     }
 }

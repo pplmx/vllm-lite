@@ -27,7 +27,7 @@ fn model_cache() -> &'static Mutex<ModelCache> {
 /// Holds the cache mutex for the lifetime of this handle; do not call `load_model()` again
 /// while a `CachedModel` is still alive (would deadlock).
 pub struct CachedModel {
-    _guard: std::sync::MutexGuard<'static, ModelCache>,
+    guard: std::sync::MutexGuard<'static, ModelCache>,
     key: String,
 }
 
@@ -35,7 +35,7 @@ impl Deref for CachedModel {
     type Target = dyn ModelBackend;
 
     fn deref(&self) -> &Self::Target {
-        self._guard
+        self.guard
             .get(self.key.as_str())
             .expect("cached model")
             .as_ref()
@@ -44,7 +44,7 @@ impl Deref for CachedModel {
 
 impl DerefMut for CachedModel {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self._guard
+        self.guard
             .get_mut(self.key.as_str())
             .expect("cached model")
             .as_mut()
@@ -126,10 +126,7 @@ impl OnDiskFixture {
             let model = self.loader()?.load_model()?;
             guard.insert(dir.clone(), model);
         }
-        Ok(CachedModel {
-            _guard: guard,
-            key: dir,
-        })
+        Ok(CachedModel { guard, key: dir })
     }
 
     pub fn checkpoint(

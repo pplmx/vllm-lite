@@ -8,6 +8,7 @@ mod support;
 #[cfg(test)]
 mod tests {
     use super::support;
+    use candle_core::D;
 
     #[test]
     #[ignore = "Known issue: partial prefill produces different output than full prefill"]
@@ -19,7 +20,16 @@ mod tests {
 
         // Full prompt
         let full_prompt = vec![
-            151643u32, 151644, 872, 198, 6023, 151645, 198, 151644, 77091, 198,
+            151_643_u32,
+            151_644,
+            872,
+            198,
+            6023,
+            151_645,
+            198,
+            151_644,
+            77091,
+            198,
         ];
 
         println!("=== Test 1: Full prefill, single batch ===");
@@ -28,7 +38,6 @@ mod tests {
             .forward_with_cache(&full_prompt, 0, &[0], &positions, true)
             .expect("Full prefill failed");
 
-        use candle_core::D;
         let next1: u32 = logits1
             .narrow(1, 9, 1)
             .unwrap()
@@ -47,7 +56,7 @@ mod tests {
         );
 
         println!("\n=== Test 2: Two-step prefill (chunk 1, then chunk 2) ===");
-        let chunk1 = vec![151643u32, 151644, 872, 198, 6023];
+        let chunk1 = vec![151_643_u32, 151_644, 872, 198, 6023];
         let pos1 = vec![0, 1, 2, 3, 4];
         let (logits_c1, _) = model
             .forward_with_cache(&chunk1, 0, &[0], &pos1, true)
@@ -71,7 +80,7 @@ mod tests {
         );
 
         // Second chunk starting from position 5 (simulating num_computed_tokens=5)
-        let chunk2 = vec![151645u32, 198, 151644, 77091, 198];
+        let chunk2 = vec![151_645_u32, 198, 151_644, 77091, 198];
         let pos2 = vec![5, 6, 7, 8, 9];
         let (logits_c2, _) = model
             .forward_with_cache(&chunk2, 5, &[0], &pos2, true)
@@ -112,6 +121,7 @@ mod tests {
         if outputs_differ {
             println!("[DOCUMENTED BUG] Partial prefill differs from full prefill");
         }
+        drop(model);
     }
 
     #[test]
@@ -123,7 +133,7 @@ mod tests {
         let tokenizer = support::tokenizer::qwen3_tokenizer();
 
         // Simulate partial prefill: first 5 tokens
-        let first_chunk = vec![151643u32, 151644, 872, 198, 6023];
+        let first_chunk = vec![151_643_u32, 151_644, 872, 198, 6023];
         let positions = vec![0, 1, 2, 3, 4];
 
         let (logits1, _) = model
@@ -131,7 +141,6 @@ mod tests {
             .expect("First chunk failed");
 
         // Get the last token's output
-        use candle_core::D;
         let next1: u32 = logits1
             .narrow(1, 4, 1)
             .unwrap()
@@ -151,7 +160,7 @@ mod tests {
         );
 
         // Second chunk: remaining 5 tokens (simulating num_computed_tokens=5)
-        let second_chunk = vec![151645u32, 198, 151644, 77091, 198];
+        let second_chunk = vec![151_645_u32, 198, 151_644, 77091, 198];
         let positions2 = vec![5, 6, 7, 8, 9];
 
         let (logits2, _) = model
@@ -178,7 +187,16 @@ mod tests {
 
         // Full prefill (all 10 tokens)
         let full_prompt = vec![
-            151643u32, 151644, 872, 198, 6023, 151645, 198, 151644, 77091, 198,
+            151_643_u32,
+            151_644,
+            872,
+            198,
+            6023,
+            151_645,
+            198,
+            151_644,
+            77091,
+            198,
         ];
         let positions_full = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
@@ -209,6 +227,7 @@ mod tests {
             next_full, 29054,
             "Full prefill should produce 29054, got {next_full}"
         );
+        drop(model);
     }
 
     #[test]
@@ -221,7 +240,16 @@ mod tests {
 
         // Test 1: Exact prompt from server
         let server_tokens = vec![
-            151643u32, 151644, 872, 198, 6023, 151645, 198, 151644, 77091, 198,
+            151_643_u32,
+            151_644,
+            872,
+            198,
+            6023,
+            151_645,
+            198,
+            151_644,
+            77091,
+            198,
         ];
         let server_positions: Vec<usize> = (0..10).collect();
 
@@ -229,7 +257,6 @@ mod tests {
             .forward_with_cache(&server_tokens, 0, &[0], &server_positions, true)
             .expect("Forward failed");
 
-        use candle_core::D;
         let next_token: u32 = logits
             .narrow(1, 9, 1)
             .unwrap()
@@ -278,6 +305,7 @@ mod tests {
             next_token, 29054,
             "Server prompt should produce token 29054 (from test), got {next_token}"
         );
+        drop(model);
     }
 
     #[test]
@@ -290,7 +318,16 @@ mod tests {
 
         // Exact server prompt tokens
         let prompt_tokens = vec![
-            151643u32, 151644, 872, 198, 6023, 151645, 198, 151644, 77091, 198,
+            151_643_u32,
+            151_644,
+            872,
+            198,
+            6023,
+            151_645,
+            198,
+            151_644,
+            77091,
+            198,
         ];
         let positions: Vec<usize> = (0..prompt_tokens.len()).collect();
 
@@ -302,7 +339,6 @@ mod tests {
             .forward_with_cache(&prompt_tokens, 0, &[0], &positions, true)
             .expect("Prefill failed");
 
-        use candle_core::D;
         let seq_len = prefill_logits.dims()[1];
         let first_token: u32 = prefill_logits
             .narrow(1, seq_len - 1, 1)
@@ -363,6 +399,7 @@ mod tests {
             !final_text.contains('\u{FFFD}'),
             "Should not contain replacement char"
         );
+        drop(model);
     }
 
     #[test]
@@ -431,9 +468,10 @@ mod tests {
                 .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
                 .map_or(0, |(i, _)| i);
 
-            let top_token = top_idx as u32;
-
-            if top_token >= vocab_size as u32 {
+            // invariant: top_idx is bounded by vocab_size in the test pipeline.
+            let top_token = u32::try_from(top_idx).expect("bounded test token");
+            let vocab_u32 = u32::try_from(vocab_size).expect("bounded vocab");
+            if top_token >= vocab_u32 {
                 println!("  WARNING: top_token {top_token} >= vocab_size {vocab_size}");
             } else {
                 let decoded = tokenizer.decode(&[top_token]);
@@ -456,6 +494,7 @@ mod tests {
             !final_decode.contains('\u{FFFD}'),
             "Final decode should not contain replacement char"
         );
+        drop(model);
     }
 
     #[test]
@@ -463,8 +502,8 @@ mod tests {
     fn test_server_streaming_token_handling() {
         let tokenizer = support::tokenizer::qwen3_tokenizer();
 
-        let eos_token = 151643u32;
-        let im_end_token = 151645u32;
+        let eos_token = 151_643_u32;
+        let im_end_token = 151_645_u32;
 
         let server_output_tokens = vec![13539u32, 47421u32, 60290u32, eos_token];
 
@@ -521,7 +560,16 @@ mod tests {
 
         // Server prompt tokens: [151643, 151644, 872, 198, 6023, 151645, 198, 151644, 77091, 198]
         let server_tokens = vec![
-            151643u32, 151644, 872, 198, 6023, 151645, 198, 151644, 77091, 198,
+            151_643_u32,
+            151_644,
+            872,
+            198,
+            6023,
+            151_645,
+            198,
+            151_644,
+            77091,
+            198,
         ];
         let positions: Vec<usize> = (0..server_tokens.len()).collect();
 
@@ -532,7 +580,6 @@ mod tests {
             .expect("Forward failed");
 
         // Get top token
-        use candle_core::D;
         let seq_len = logits.dims()[1];
         let next_token: u32 = logits
             .narrow(1, seq_len - 1, 1)
@@ -549,7 +596,8 @@ mod tests {
         let decoded = tokenizer.decode(&[next_token]);
         println!("First generated token: {next_token} -> '{decoded}'");
 
-        assert!(next_token < 151936, "Token should be in vocab range");
+        assert!(next_token < 151_936, "Token should be in vocab range");
+        drop(model);
     }
 
     #[test]
@@ -559,8 +607,16 @@ mod tests {
 
         // Exact tokens from server output
         let server_tokens = vec![
-            95060u32, 47625u32, 79128u32, 11433u32, 121471u32, 78348u32, 11234u32, 19906u32,
-            4342u32, 83454u32,
+            95060u32,
+            47625u32,
+            79128u32,
+            11433u32,
+            121_471_u32,
+            78348u32,
+            11234u32,
+            19906u32,
+            4342u32,
+            83454u32,
         ];
 
         println!("=== Decoding server token stream ===");
@@ -580,7 +636,7 @@ mod tests {
         let tokenizer = support::tokenizer::qwen3_tokenizer();
 
         // Tokens that caused garbage in server output
-        let server_problematic = vec![121471u32, 78348u32, 11234u32];
+        let server_problematic = vec![121_471_u32, 78348u32, 11234u32];
 
         println!("=== Testing server problematic tokens ===");
         for &token in &server_problematic {
@@ -615,9 +671,9 @@ mod tests {
     fn test_special_token_filtering() {
         let tokenizer = support::tokenizer::qwen3_tokenizer();
 
-        let eos_token = 151643u32;
-        let im_end_token = 151645u32;
-        let im_start_token = 151644u32;
+        let eos_token = 151_643_u32;
+        let im_end_token = 151_645_u32;
+        let im_start_token = 151_644_u32;
 
         let special_tokens = vec![
             ("EOS", eos_token),
@@ -696,10 +752,12 @@ mod tests {
         );
 
         println!("Model output '{top_token}' decodes to '{text}'");
+        drop(model);
     }
 
     #[test]
     #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
+    #[allow(clippy::too_many_lines)] // end-to-end simulation: server loop + decode steps in one fixture
     fn test_server_engine_loop_simulation() {
         let mut model = support::qwen3::Qwen3Fixture::cpu()
             .load_model()
@@ -708,7 +766,16 @@ mod tests {
 
         // Exact server prompt tokens
         let prompt_tokens = vec![
-            151643u32, 151644, 872, 198, 6023, 151645, 198, 151644, 77091, 198,
+            151_643_u32,
+            151_644,
+            872,
+            198,
+            6023,
+            151_645,
+            198,
+            151_644,
+            77091,
+            198,
         ];
         let _prompt_len = prompt_tokens.len();
 
@@ -759,7 +826,6 @@ mod tests {
                 .expect("Forward failed");
 
             // Extract next token
-            use candle_core::D;
             let next_token: u32 = if is_prefill {
                 // For prefill, take last token's logits
                 let seq_len = logits.dims()[1];
@@ -801,7 +867,7 @@ mod tests {
             };
 
             // Check for EOS
-            if next_token == 151643 || next_token == 151645 {
+            if next_token == 151_643 || next_token == 151_645 {
                 println!("  -> Got EOS/IM_END, stopping");
                 break;
             }
@@ -825,10 +891,12 @@ mod tests {
                 generated_tokens[0]
             );
         }
+        drop(model);
     }
 
     #[test]
     #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
+    #[allow(clippy::too_many_lines)] // comparison test: unit-test vs server-loop outputs in one fixture
     fn test_working_unit_test_vs_server_comparison() {
         // This test verifies that the working unit test and server loop produce same output
         let mut model = support::qwen3::Qwen3Fixture::cpu()
@@ -882,7 +950,8 @@ mod tests {
                 .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
                 .map_or(0, |(i, _)| i);
 
-            let top_token = top_idx as u32;
+            // invariant: top_idx is bounded by vocab_size in the test pipeline.
+            let top_token = u32::try_from(top_idx).expect("bounded test token");
             let decoded = tokenizer.decode(&[top_token]);
             println!(
                 "Method 1 (working test) - step {}: {} -> '{}'",
@@ -904,7 +973,6 @@ mod tests {
             .forward_with_cache(&input_tokens_1, num_computed, &[0], &positions_1, true)
             .expect("Prefill failed");
 
-        use candle_core::D;
         let seq_len_1 = logits_1.dims()[1];
         let first_token: u32 = logits_1
             .narrow(1, seq_len_1 - 1, 1)
@@ -958,6 +1026,7 @@ mod tests {
             println!("\n*** BUG FOUND: Unit test and server produce different outputs! ***");
             println!("This explains why server produces garbage while unit tests work.");
         }
+        drop(model);
     }
 
     #[test]
@@ -978,9 +1047,9 @@ mod tests {
         }
 
         let tokenizer = support::tokenizer::qwen3_tokenizer();
-        let eos_token = 151643u32;
-        let im_end_token = 151645u32;
-        let im_start_token = 151644u32;
+        let eos_token = 151_643_u32;
+        let im_end_token = 151_645_u32;
+        let im_start_token = 151_644_u32;
 
         // Test: tokens that decode to special tokens should be skipped
         let eos_decoded = tokenizer.decode(&[eos_token]);
@@ -1034,8 +1103,8 @@ mod tests {
         }
 
         let tokenizer = support::tokenizer::qwen3_tokenizer();
-        let eos_token = 151643u32;
-        let im_end_token = 151645u32;
+        let eos_token = 151_643_u32;
+        let im_end_token = 151_645_u32;
 
         // Simulate server token stream with special tokens
         let server_tokens = vec![
@@ -1113,7 +1182,6 @@ mod tests {
             .forward_with_cache(&all_tokens_prefill, 0, &[0], &positions_prefill, true)
             .expect("Prefill failed");
 
-        use candle_core::D;
         let next_after_prefill: u32 = {
             let seq_len = prefill_logits.dims()[1];
             prefill_logits
@@ -1208,5 +1276,6 @@ mod tests {
             println!("\n*** Position DOES matter for decode! ***");
             println!("This could be the source of the bug if server uses wrong position.");
         }
+        drop(model);
     }
 }

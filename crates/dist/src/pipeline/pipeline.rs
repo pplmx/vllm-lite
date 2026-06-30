@@ -174,6 +174,7 @@ mod tests {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             *count += 1;
+            drop(count);
 
             Ok(StageOutput {
                 hidden_states: input.hidden_states,

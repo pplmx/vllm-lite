@@ -26,9 +26,6 @@ impl Default for Gemma4Architecture {
     }
 }
 
-/// `Gemma4BlockWrapper`: gemma4 block wrapper.
-pub(crate) type Gemma4BlockWrapper = BlockWrapper<Gemma4Block>;
-
 impl Architecture for Gemma4Architecture {
     fn name(&self) -> &'static str {
         "gemma4"

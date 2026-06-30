@@ -69,7 +69,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "requires on-disk model checkpoint"]
     fn test_qwen35_weight_keys() {
         let model_path = "/models/Qwen3.5-0.8B";
         let device = Device::Cpu;
@@ -125,7 +125,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "requires on-disk model checkpoint"]
     fn test_qwen35_remapped_weight_structure() {
         use vllm_model::qwen3_5::arch::remap_qwen35_weight_keys;
 
@@ -168,7 +168,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "requires on-disk model checkpoint"]
     fn test_qwen3_tokenizer_roundtrip() {
         let tokenizer = support::qwen3::tokenizer();
         let test_inputs = [
@@ -186,14 +186,14 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "requires on-disk model checkpoint"]
     fn test_qwen3_direct_inference() {
         let mut model = support::qwen3::Qwen3Fixture::cpu()
             .with_kv_blocks(256)
             .load_model()
             .expect("Failed to load model");
 
-        let tokens: Vec<u32> = vec![0u32, 151643, 9925];
+        let tokens: Vec<u32> = vec![0u32, 151_643, 9925];
         let positions: Vec<usize> = vec![0, 1, 2];
         let block_ids: Vec<usize> = vec![0, 0, 0];
 
@@ -205,10 +205,11 @@ mod tests {
             .expect("Prefill forward failed");
 
         println!("Output: {output:?}");
+        drop(model);
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "requires on-disk model checkpoint"]
     fn test_qwen3_weight_diagnostics() {
         let weights = support::qwen3::Qwen3Fixture::cpu()
             .checkpoint()
@@ -262,7 +263,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "requires on-disk model checkpoint"]
     fn test_qwen3_qk_norm_weights() {
         let weights = support::qwen3::Qwen3Fixture::cpu()
             .checkpoint()
@@ -292,7 +293,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "requires on-disk model checkpoint"]
     fn test_all_models_loadable() {
         let qwen3_dir = support::qwen3::model_dir();
         let models = [

@@ -93,7 +93,9 @@ fn test_fake_model_batch_size_respected() {
     let mut model = FakeModel::new(1000);
 
     for batch_size in [1, 2, 5, 10] {
-        let seq_ids: Vec<u64> = (0..batch_size).map(|i| i as u64).collect();
+        let seq_ids: Vec<u64> = (0..batch_size)
+            .map(|i| u64::try_from(i).expect("bounded test batch"))
+            .collect();
         let input_tokens: Vec<Vec<u32>> = (0..batch_size).map(|_| vec![1]).collect();
         let positions: Vec<Vec<usize>> = (0..batch_size).map(|_| vec![0]).collect();
         let kv_block_ids: Vec<Vec<usize>> = (0..batch_size).map(|_| vec![0]).collect();
@@ -145,8 +147,12 @@ fn test_model_single_token_batch() {
 fn test_model_large_batch() {
     let mut model = FakeModel::new(1000);
     let batch_size = 32;
-    let seq_ids: Vec<u64> = (0..batch_size).map(|i| i as u64).collect();
-    let input_tokens: Vec<Vec<u32>> = (0..batch_size).map(|i| vec![i as u32]).collect();
+    let seq_ids: Vec<u64> = (0..batch_size)
+        .map(|i| u64::try_from(i).expect("bounded test batch"))
+        .collect();
+    let input_tokens: Vec<Vec<u32>> = (0..batch_size)
+        .map(|i| vec![u32::try_from(i).expect("bounded test batch")])
+        .collect();
     let positions: Vec<Vec<usize>> = (0..batch_size).map(|_| vec![0]).collect();
     let kv_block_ids: Vec<Vec<usize>> = (0..batch_size).map(|_| vec![0]).collect();
     let num_computed_tokens: Vec<usize> = (0..batch_size).map(|_| 0).collect();

@@ -41,9 +41,9 @@ mod tests {
         let data = vec![0.0f32, 0.0, 0.0];
         let result = quantize(&data);
 
-        assert_eq!(result.scale, 1.0);
+        assert!((result.scale - 1.0).abs() < 1e-6);
         for val in &result.data {
-            assert_eq!(*val, 0.0);
+            assert!(val.abs() < 1e-6);
         }
     }
 

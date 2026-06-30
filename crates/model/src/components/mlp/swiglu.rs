@@ -1,4 +1,8 @@
 #![allow(clippy::module_name_repetitions)]
+// invariant: tensor-dimension casts (data.len() -> f32) are bounded by the
+// MLP hidden_dim; precision loss is intentional for the test mean calc.
+#![allow(clippy::cast_precision_loss)]
+
 use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;
 
@@ -24,9 +28,9 @@ pub fn swiglu_forward(
 #[derive(Debug)]
 /// `SwiGLU`: swi glu.
 pub struct SwiGLU {
-    gate_proj: Linear,
-    up_proj: Linear,
-    down_proj: Linear,
+    gate: Linear,
+    up: Linear,
+    down: Linear,
 }
 
 impl SwiGLU {
@@ -37,20 +41,16 @@ impl SwiGLU {
     pub fn new(
         hidden_size: usize,
         intermediate_size: usize,
-        vb: Option<candle_nn::VarBuilder>,
+        vb: Option<candle_nn::VarBuilder<'_>>,
     ) -> Result<Self> {
         let vb = vb.unwrap_or_else(|| {
             candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu)
         });
 
-        let gate_proj = candle_nn::linear(hidden_size, intermediate_size, vb.pp("gate_proj"))?;
-        let up_proj = candle_nn::linear(hidden_size, intermediate_size, vb.pp("up_proj"))?;
-        let down_proj = candle_nn::linear(intermediate_size, hidden_size, vb.pp("down_proj"))?;
-        Ok(Self {
-            gate_proj,
-            up_proj,
-            down_proj,
-        })
+        let gate = candle_nn::linear(hidden_size, intermediate_size, vb.pp("gate_proj"))?;
+        let up = candle_nn::linear(hidden_size, intermediate_size, vb.pp("up_proj"))?;
+        let down = candle_nn::linear(intermediate_size, hidden_size, vb.pp("down_proj"))?;
+        Ok(Self { gate, up, down })
     }
 
     /// Runs the operation.
@@ -64,15 +64,11 @@ impl SwiGLU {
         up_weight: Tensor,
         down_weight: Tensor,
     ) -> Result<Self> {
-        let gate_proj = Linear::new(gate_weight, None);
-        let up_proj = Linear::new(up_weight, None);
-        let down_proj = Linear::new(down_weight, None);
+        let gate = Linear::new(gate_weight, None);
+        let up = Linear::new(up_weight, None);
+        let down = Linear::new(down_weight, None);
 
-        Ok(Self {
-            gate_proj,
-            up_proj,
-            down_proj,
-        })
+        Ok(Self { gate, up, down })
     }
 
     /// Runs the operation.
@@ -80,7 +76,7 @@ impl SwiGLU {
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        swiglu_forward(x, &self.gate_proj, &self.up_proj, &self.down_proj)
+        swiglu_forward(x, &self.gate, &self.up, &self.down)
     }
 }
 

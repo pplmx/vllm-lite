@@ -64,7 +64,7 @@ fn test_adaptive_speculative_adjusts_draft_count() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "requires speculative model setup"]
 fn test_adaptive_speculative_with_same_model_for_draft() {
     use tokio::sync::mpsc;
 
@@ -109,7 +109,7 @@ fn test_adaptive_speculative_with_same_model_for_draft() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "requires speculative model setup"]
 fn test_adaptive_speculative_run_loop_uses_adaptive() {
     use tokio::sync::mpsc;
 
@@ -157,7 +157,7 @@ fn test_adaptive_speculative_max_draft_tokens() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "requires speculative model setup"]
 fn test_speculative_verification_with_multiple_drafts() {
     use tokio::sync::mpsc;
 
@@ -204,7 +204,7 @@ fn test_speculative_verify_batch_dimensions_consistency() {
         Sequence {
             id,
             tokens,
-            kv_blocks: Arc::new(vec![id as usize]),
+            kv_blocks: Arc::new(vec![usize::try_from(id).expect("bounded test seq id")]),
             num_computed_tokens: 0,
             prompt_len: 3,
             status,
@@ -256,7 +256,7 @@ fn test_prefill_batch_single_sequence() {
         Sequence {
             id,
             tokens,
-            kv_blocks: Arc::new(vec![id as usize]),
+            kv_blocks: Arc::new(vec![usize::try_from(id).expect("bounded test seq id")]),
             num_computed_tokens: 0,
             prompt_len: 5,
             status,
@@ -297,7 +297,7 @@ fn test_prefill_batch_with_partial_computed() {
         Sequence {
             id,
             tokens,
-            kv_blocks: Arc::new(vec![id as usize]),
+            kv_blocks: Arc::new(vec![usize::try_from(id).expect("bounded test seq id")]),
             num_computed_tokens: num_computed,
             prompt_len: 10,
             status,
@@ -348,7 +348,7 @@ fn test_decode_batch_contains_only_last_token() {
         Sequence {
             id,
             tokens,
-            kv_blocks: Arc::new(vec![id as usize]),
+            kv_blocks: Arc::new(vec![usize::try_from(id).expect("bounded test seq id")]),
             num_computed_tokens: 0,
             prompt_len,
             status,
@@ -402,7 +402,7 @@ fn test_decode_batch_position_is_tokens_len_minus_one() {
         Sequence {
             id,
             tokens,
-            kv_blocks: Arc::new(vec![id as usize]),
+            kv_blocks: Arc::new(vec![usize::try_from(id).expect("bounded test seq id")]),
             num_computed_tokens: 0,
             prompt_len,
             status: Status::Decoding,

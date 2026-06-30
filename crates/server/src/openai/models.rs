@@ -21,6 +21,7 @@ struct ModelsResponse {
     data: Vec<ModelObject>,
 }
 
+#[allow(clippy::unused_async)]
 pub async fn models_handler(State(state): State<ApiState>) -> Response {
     let model_name = state
         .tokenizer
@@ -32,7 +33,7 @@ pub async fn models_handler(State(state): State<ApiState>) -> Response {
         data: vec![ModelObject {
             id: model_name,
             object: "model".to_string(),
-            created: 1700000000,
+            created: 1_700_000_000,
             owned_by: "vllm-lite".to_string(),
         }],
     };

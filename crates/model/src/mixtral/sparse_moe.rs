@@ -16,19 +16,14 @@ pub struct MixtralSparseMoe {
 
 #[derive(Debug)]
 struct Expert {
-    gate_proj: Linear,
-    up_proj: Linear,
-    down_proj: Linear,
+    gate: Linear,
+    up: Linear,
+    down: Linear,
 }
 
 impl Expert {
     fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        crate::components::mlp::swiglu::swiglu_forward(
-            x,
-            &self.gate_proj,
-            &self.up_proj,
-            &self.down_proj,
-        )
+        crate::components::mlp::swiglu::swiglu_forward(x, &self.gate, &self.up, &self.down)
     }
 }
 
@@ -60,16 +55,18 @@ fn compute_topk_routing(
 
     let mut routes_by_expert: Vec<Vec<ExpertRoute>> =
         (0..num_experts).map(|_| Vec::new()).collect();
-    for (token_idx, (indices, weights)) in expert_indices
-        .into_iter()
-        .zip(expert_weights.into_iter())
-        .enumerate()
+    for (token_idx, (indices, weights)) in
+        expert_indices.into_iter().zip(expert_weights).enumerate()
     {
         for (expert_idx, weight) in indices.into_iter().zip(weights) {
-            routes_by_expert[expert_idx as usize].push(ExpertRoute {
-                token_idx: token_idx as u32,
+            // invariant: expert_idx is bounded by the configured expert count
+            // (small architectural constant); usize truncation is not reachable.
+            #[allow(clippy::cast_possible_truncation)]
+            let route = ExpertRoute {
+                token_idx: u32::try_from(token_idx).unwrap_or(0),
                 weight,
-            });
+            };
+            routes_by_expert[expert_idx as usize].push(route);
         }
     }
 
@@ -81,12 +78,13 @@ impl MixtralSparseMoe {
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new(
         hidden_size: usize,
         num_experts: usize,
         expert_intermediate_size: usize,
         top_k: usize,
-        vb: candle_nn::VarBuilder,
+        vb: candle_nn::VarBuilder<'_>,
     ) -> Result<Self> {
         let mut experts = Vec::new();
         for i in 0..num_experts {
@@ -98,9 +96,9 @@ impl MixtralSparseMoe {
             let down_proj =
                 candle_nn::linear(expert_intermediate_size, hidden_size, vb.pp("down_proj"))?;
             experts.push(Expert {
-                gate_proj,
-                up_proj,
-                down_proj,
+                gate: gate_proj,
+                up: up_proj,
+                down: down_proj,
             });
         }
 
@@ -140,9 +138,9 @@ impl MixtralSparseMoe {
             let up_proj = Linear::new(up_w, None);
             let down_proj = Linear::new(down_w, None);
             experts.push(Expert {
-                gate_proj,
-                up_proj,
-                down_proj,
+                gate: gate_proj,
+                up: up_proj,
+                down: down_proj,
             });
         }
 

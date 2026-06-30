@@ -4,25 +4,26 @@ use candle_nn::Linear;
 /// `GeGLU`: ge glu.
 #[derive(Debug)]
 pub(crate) struct GeGLU {
-    gate_proj: Linear,
-    up_proj: Linear,
-    down_proj: Linear,
+    gate: Linear,
+    up: Linear,
+    down: Linear,
 }
 
 impl GeGLU {
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new(
         hidden_size: usize,
         intermediate_size: usize,
-        vb: candle_nn::VarBuilder,
+        vb: candle_nn::VarBuilder<'_>,
     ) -> Result<Self> {
         let gate_proj = candle_nn::linear(hidden_size, intermediate_size, vb.pp("gate_proj"))?;
         let up_proj = candle_nn::linear(hidden_size, intermediate_size, vb.pp("up_proj"))?;
         let down_proj = candle_nn::linear(intermediate_size, hidden_size, vb.pp("down_proj"))?;
 
         Ok(Self {
-            gate_proj,
-            up_proj,
-            down_proj,
+            gate: gate_proj,
+            up: up_proj,
+            down: down_proj,
         })
     }
 
@@ -32,22 +33,22 @@ impl GeGLU {
         gate: Tensor,
         up: Tensor,
         down: Tensor,
-    ) -> Result<Self> {
-        Ok(Self {
-            gate_proj: Linear::new(gate, None),
-            up_proj: Linear::new(up, None),
-            down_proj: Linear::new(down, None),
-        })
+    ) -> Self {
+        Self {
+            gate: Linear::new(gate, None),
+            up: Linear::new(up, None),
+            down: Linear::new(down, None),
+        }
     }
 
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        let gate = self.gate_proj.forward(x)?;
-        let up = self.up_proj.forward(x)?;
+        let gate = self.gate.forward(x)?;
+        let up = self.up.forward(x)?;
 
         let activated = gate.gelu()?;
         let activated = activated.broadcast_mul(&up)?;
 
-        self.down_proj.forward(&activated)
+        self.down.forward(&activated)
     }
 }
 

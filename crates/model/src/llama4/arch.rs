@@ -162,7 +162,7 @@ impl Architecture for Llama4Architecture {
         num_kv_blocks: usize,
         _kv_quantization: bool,
     ) -> Result<Box<dyn ModelBackend>> {
-        let model = Llama4Model::new(config, device, num_kv_blocks, self.is_moe, self.num_experts)?;
+        let model = Llama4Model::new(config, device, num_kv_blocks, self.is_moe, self.num_experts);
         Ok(Box::new(model))
     }
 }
@@ -187,14 +187,14 @@ impl Llama4Model {
         num_kv_blocks: usize,
         is_moe: bool,
         num_experts: usize,
-    ) -> Result<Self> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             config,
             device,
             num_kv_blocks,
             is_moe,
             num_experts,
-        })
+        }
     }
 }
 

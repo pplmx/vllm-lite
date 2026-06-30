@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -20,9 +22,11 @@ impl Default for BackpressureConfig {
 }
 
 impl BackpressureConfig {
-    pub fn new(max_buffer_size: usize) -> Self {
-        let high_water_mark = (max_buffer_size as f64 * 0.75) as usize;
-        let resume_threshold = (max_buffer_size as f64 * 0.25) as usize;
+    pub const fn new(max_buffer_size: usize) -> Self {
+        // invariant: integer arithmetic preserves precision for the 75% / 25%
+        // water marks; no float conversion needed.
+        let high_water_mark = max_buffer_size * 3 / 4;
+        let resume_threshold = max_buffer_size / 4;
         Self {
             max_buffer_size,
             high_water_mark,

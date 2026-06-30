@@ -123,7 +123,7 @@ fn test_end_to_end_engine_with_cuda_graph_config() {
         }
 
         fn vocab_size(&self) -> usize {
-            151936
+            151_936
         }
 
         fn num_layers(&self) -> usize {

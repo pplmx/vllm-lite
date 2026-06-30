@@ -4,6 +4,10 @@
 // causal convolution, qkv splitting, head repetition, l2 normalization,
 // and the gated delta step / recurrent scan.
 
+// invariant: tensor-dimension casts (head_dim -> f32) are bounded by model
+// architecture constants; precision loss is intentional.
+#![allow(clippy::cast_precision_loss)]
+
 use super::state::GatedDeltaConfig;
 use crate::components::ssm::softplus;
 use candle_core::{DType, Module, Result as CandleResult, Tensor};
@@ -34,6 +38,7 @@ pub fn l2_normalize(xs: &Tensor, eps: f32) -> CandleResult<Tensor> {
     xs.broadcast_div(&norm)
 }
 
+#[allow(clippy::similar_names)]
 fn repeat_kv_heads(kv: &Tensor, num_v_heads: usize) -> CandleResult<Tensor> {
     let num_k_heads = kv.dims()[2];
     if num_k_heads == num_v_heads {
@@ -205,6 +210,7 @@ pub fn gated_delta_recurrent(
 /// # Errors
 ///
 /// Returns `Err` if the operation fails.
+#[allow(clippy::many_single_char_names)]
 pub fn gated_delta_recurrent_with_state(
     q: &Tensor,
     k: &Tensor,
@@ -281,6 +287,7 @@ impl GatedDeltaNet {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
+    #[allow(clippy::many_single_char_names)]
     pub fn forward_prefill(
         &self,
         x: &Tensor,
@@ -324,6 +331,7 @@ impl GatedDeltaNet {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
+    #[allow(clippy::many_single_char_names)]
     pub fn forward_decode(
         &self,
         x: &Tensor,

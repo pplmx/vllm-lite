@@ -49,6 +49,7 @@ impl AuditLogger {
             result = %event.result,
             "Audit event"
         );
+        drop(events);
     }
 
     pub async fn log_auth_success(&self, user_id: &str, request_id: &str) {

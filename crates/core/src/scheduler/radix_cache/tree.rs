@@ -38,7 +38,7 @@ impl RadixTree {
                 matched_len = i + 1;
                 node = child;
                 if node.is_complete {
-                    matched_blocks = node.blocks.clone();
+                    matched_blocks.clone_from(&node.blocks);
                 }
             } else {
                 break;

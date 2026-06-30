@@ -61,6 +61,9 @@ impl DraftAccuracyTracker {
 
     /// Calculate current acceptance rate (sliding window, for debugging)
     #[must_use]
+    // invariant: history length is bounded by window_size; f32 precision loss
+    // is acceptable for the sliding-window rate metric.
+    #[allow(clippy::cast_precision_loss)]
     pub fn acceptance_rate(&self) -> f32 {
         if self.history.is_empty() {
             return 0.0;
@@ -162,7 +165,10 @@ impl AdaptiveSpeculativeDecoder {
         let threshold = self.config.deadband_threshold;
         let deviation = rate - target;
 
-        // Deadband hysteresis: only adjust if deviation exceeds threshold
+        // Deadband hysteresis: only adjust if deviation exceeds threshold.
+        // invariant: adjustment_step / current_max_draft_tokens / min/max_draft_tokens
+        // are bounded config values; i32/usize truncation is not reachable.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
         let adjustment: i32 = if deviation > threshold {
             // Rate too high (above target + threshold): increase draft tokens
             self.config.adjustment_step as i32
@@ -175,6 +181,14 @@ impl AdaptiveSpeculativeDecoder {
         };
 
         if adjustment != 0 {
+            // invariant: clamp(..., min_draft_tokens, max_draft_tokens) yields a
+            // non-negative i32 in a small config-defined range, so the i32 ->
+            // usize cast is sign-safe and bounded.
+            #[allow(
+                clippy::cast_possible_truncation,
+                clippy::cast_possible_wrap,
+                clippy::cast_sign_loss
+            )]
             let new_max = (self.current_max_draft_tokens as i32 + adjustment).clamp(
                 self.config.min_draft_tokens as i32,
                 self.config.max_draft_tokens as i32,
@@ -220,7 +234,7 @@ mod tests {
     #[test]
     fn test_accuracy_tracker_empty() {
         let tracker = DraftAccuracyTracker::new(5);
-        assert_eq!(tracker.acceptance_rate(), 0.0);
+        assert!(tracker.acceptance_rate().abs() < 1e-6);
     }
 
     #[test]
@@ -231,7 +245,7 @@ mod tests {
         tracker.record(false);
         tracker.record(true);
         tracker.record(false);
-        assert_eq!(tracker.acceptance_rate(), 0.6);
+        assert!((tracker.acceptance_rate() - 0.6).abs() < 1e-6);
     }
 
     #[test]
@@ -251,7 +265,7 @@ mod tests {
     fn test_ewma_initialization() {
         let mut tracker = DraftAccuracyTracker::with_alpha(10, 0.1);
         // Before any records, EWMA should return 0.0
-        assert_eq!(tracker.acceptance_rate_ewma(), 0.0);
+        assert!(tracker.acceptance_rate_ewma().abs() < 1e-6);
 
         // First record initializes smoothed_rate to the observed sliding window rate
         tracker.record(true);
@@ -568,8 +582,8 @@ mod tests {
     #[test]
     fn test_adaptive_config_defaults() {
         let config = AdaptiveDraftConfig::default();
-        assert_eq!(config.ewma_alpha, 0.1);
-        assert_eq!(config.deadband_threshold, 0.05);
+        assert!((config.ewma_alpha - 0.1).abs() < 1e-6);
+        assert!((config.deadband_threshold - 0.05).abs() < 1e-6);
     }
 
     #[test]

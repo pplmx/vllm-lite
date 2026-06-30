@@ -54,6 +54,9 @@ impl AllReduce for NcclAllReduce {
         input: &mut [f32],
         op: ReduceOp,
     ) -> Result<(), TensorParallelError> {
+        // invariant: world_size is a small mesh size (typ. < GPU count < 1k);
+        // f32 precision loss is acceptable for the divisor.
+        #[allow(clippy::cast_precision_loss)]
         let world_size = self.mesh.world_size as f32;
 
         match op {
@@ -131,7 +134,7 @@ mod tests {
 
         let expected: f32 = input.iter().sum();
         for v in &result {
-            assert_eq!(*v, expected);
+            assert!((*v - expected).abs() < 1e-6);
         }
         Ok(())
     }
@@ -146,7 +149,7 @@ mod tests {
 
         let expected: f32 = input.iter().sum::<f32>() / 2.0;
         for v in &result {
-            assert_eq!(*v, expected);
+            assert!((*v - expected).abs() < 1e-6);
         }
         Ok(())
     }
@@ -164,7 +167,7 @@ mod tests {
             .max_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap();
         for v in &result {
-            assert_eq!(*v, expected);
+            assert!((*v - expected).abs() < 1e-6);
         }
         Ok(())
     }
@@ -179,7 +182,7 @@ mod tests {
 
         let sum: f32 = 6.0;
         for v in &input {
-            assert_eq!(*v, sum);
+            assert!((*v - sum).abs() < 1e-6);
         }
         Ok(())
     }
@@ -197,7 +200,7 @@ mod tests {
 
             let expected: f32 = input.iter().sum();
             for v in &result {
-                assert_eq!(*v, expected);
+                assert!((*v - expected).abs() < 1e-6);
             }
         }
         Ok(())

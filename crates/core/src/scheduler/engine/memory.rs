@@ -66,6 +66,9 @@ impl SchedulerEngine {
     }
 
     /// Calculate current memory pressure (0.0 to 1.0)
+    // invariant: block counts are bounded by available memory; f32 precision
+    // loss is acceptable for the pressure ratio (always 0..=1).
+    #[allow(clippy::cast_precision_loss)]
     pub(super) fn get_memory_pressure(&self) -> f32 {
         let total = self.memory.total_blocks() as f32;
         let available = self.memory.available_blocks() as f32;

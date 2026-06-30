@@ -101,7 +101,7 @@ impl PhaseScheduler {
                 }
             }
             Phase::Prefill => {
-                if self.prefill_complete(state) {
+                if Self::prefill_complete(state) {
                     Phase::Decode
                 } else {
                     Phase::Prefill
@@ -144,7 +144,7 @@ impl PhaseScheduler {
         false
     }
 
-    const fn prefill_complete(&self, state: &SchedulerState) -> bool {
+    const fn prefill_complete(state: &SchedulerState) -> bool {
         state.prefill_queue_len == 0
     }
 }

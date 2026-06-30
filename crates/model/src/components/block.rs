@@ -17,6 +17,7 @@ pub trait TransformerBlock: PagedDecoderBlock + Send + Sync {
 }
 
 /// No-op paged prefill for registry-only block stubs (does not write KV).
+#[allow(clippy::unnecessary_wraps)]
 pub(crate) fn passthrough_paged_prefill(
     x: &Tensor,
     _kv_cache: &mut PagedKvCache,
@@ -28,6 +29,7 @@ pub(crate) fn passthrough_paged_prefill(
 }
 
 /// No-op paged decode for registry-only block stubs (does not write KV).
+#[allow(clippy::unnecessary_wraps)]
 pub(crate) fn passthrough_paged_decode(
     x: &Tensor,
     _kv_cache: &mut PagedKvCache,

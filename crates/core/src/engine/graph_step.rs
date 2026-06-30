@@ -65,7 +65,7 @@ impl Engine {
             }
         };
 
-        self.process_output(output, batch, start)
+        Ok(self.process_output(output, batch, start))
     }
 
     #[cfg(not(feature = "cuda-graph"))]
@@ -83,7 +83,7 @@ impl Engine {
 
     /// Execute regular forward pass (used by CUDA Graph fallback path).
     #[cfg(feature = "cuda-graph")]
-    fn execute_regular(&mut self, batch: &vllm_traits::Batch) -> Result<BatchOutput> {
+    fn execute_regular(&self, batch: &vllm_traits::Batch) -> Result<BatchOutput> {
         use crate::sync::lock_mutex;
 
         let total_tokens: usize = batch.input_tokens.iter().map(std::vec::Vec::len).sum();
@@ -106,7 +106,7 @@ impl Engine {
                 &batch.is_prefill,
             )
         };
-        let elapsed = start.elapsed().as_millis() as u64;
+        let elapsed = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
 
         match result {
             Ok(output) => {
@@ -126,12 +126,13 @@ impl Engine {
 
     /// Process model output and update state (CUDA Graph path).
     #[cfg(feature = "cuda-graph")]
+    #[allow(clippy::needless_pass_by_value)]
     fn process_output(
         &mut self,
         output: BatchOutput,
         input_counts: Vec<usize>,
         start: std::time::Instant,
-    ) -> Result<Vec<(SeqId, TokenId)>> {
+    ) -> Vec<(SeqId, TokenId)> {
         tracing::debug!(
             seq_ids = ?output.seq_ids,
             tokens = ?output.next_tokens,
@@ -166,14 +167,18 @@ impl Engine {
 
         // Record metrics
         if !results.is_empty() {
-            self.scheduler.metrics.record_tokens(results.len() as u64);
+            self.scheduler
+                .metrics
+                .record_tokens(u64::try_from(results.len()).unwrap_or(0));
             self.scheduler.metrics.record_batch_size(results.len());
+            // invariant: elapsed millis fits in f64 mantissa (< 2^52 ms ≈ 142 years).
+            #[allow(clippy::cast_precision_loss)]
             let elapsed = start.elapsed().as_millis() as f64;
             if elapsed > 0.0 {
                 self.scheduler.metrics.record_latency(elapsed);
             }
         }
 
-        Ok(results)
+        results
     }
 }

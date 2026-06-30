@@ -155,7 +155,6 @@ impl ModelLoader {
         ARCHITECTURE_REGISTRY
             .detect(&self.inner.config_json)
             .map_or(ConfigArchitecture::Llama, |name| match name.as_str() {
-                "llama" => ConfigArchitecture::Llama,
                 "mistral" => ConfigArchitecture::Mistral,
                 "qwen3" | "qwen2" => ConfigArchitecture::Qwen3,
                 "qwen3.5" => ConfigArchitecture::Qwen35,
@@ -291,6 +290,11 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    #[derive(serde::Deserialize, Debug, PartialEq)]
+    struct TestConfig {
+        test: String,
+    }
+
     #[test]
     fn test_builder_new() {
         let loader = ModelLoader::new(Device::Cpu);
@@ -372,11 +376,6 @@ mod tests {
             .with_model_dir(temp_dir.path().to_str().unwrap().to_string())
             .build()
             .unwrap();
-
-        #[derive(serde::Deserialize, Debug, PartialEq)]
-        struct TestConfig {
-            test: String,
-        }
 
         let config: TestConfig = loader.load_config().unwrap();
         assert_eq!(config.test, "value");

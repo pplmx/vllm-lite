@@ -1,6 +1,15 @@
 #![allow(clippy::module_name_repetitions)]
 //! flash_attention_v3: flash attention v3.
 
+// invariant: tensor-dimension casts (head_dim/seq_len -> f32/u32) are bounded
+// by model architecture constants; precision loss / truncation is intentional.
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+
 use candle_core::{Result, Tensor};
 use tracing::trace;
 
@@ -15,7 +24,7 @@ pub struct FlashAttentionV3 {
 }
 
 /// `FlashAttentionV3Config`: flash attention v3 configuration.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct FlashAttentionV3Config {
     pub num_heads: usize,
     pub head_dim: usize,
@@ -57,12 +66,12 @@ impl FlashAttentionV3 {
         qk = qk.mul(&Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?)?;
 
         if self.causal {
-            let mask = self.create_causal_mask(q.dims()[2], q.device())?;
+            let mask = Self::create_causal_mask(q.dims()[2], q.device())?;
             qk = qk.broadcast_add(&mask)?;
         }
 
         if let Some((left, right)) = self.window_size {
-            let mask = self.create_sliding_window_mask_simple(
+            let mask = Self::create_sliding_window_mask_simple(
                 q.dims()[2],
                 k.dims()[2],
                 left,
@@ -81,7 +90,7 @@ impl FlashAttentionV3 {
         };
 
         let output = Tensor::matmul(&attn_weights, v)?;
-        if dropout_scale == 1.0 {
+        if (dropout_scale - 1.0).abs() < f32::EPSILON {
             Ok(output)
         } else {
             let scale_tensor =
@@ -98,7 +107,7 @@ impl FlashAttentionV3 {
         self.forward(q, k, v)
     }
 
-    fn create_causal_mask(&self, seq_len: usize, device: &candle_core::Device) -> Result<Tensor> {
+    fn create_causal_mask(seq_len: usize, device: &candle_core::Device) -> Result<Tensor> {
         let row_indices =
             Tensor::arange(0u32, seq_len as u32, device)?.reshape((1, 1, seq_len, 1))?;
         let col_indices =
@@ -113,7 +122,6 @@ impl FlashAttentionV3 {
     }
 
     fn create_sliding_window_mask_simple(
-        &self,
         seq_q: usize,
         seq_k: usize,
         left: i32,
@@ -183,7 +191,7 @@ impl MqaFlashAttention {
         qk = qk.mul(&Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?)?;
 
         if self.causal {
-            let mask = self.create_causal_mask(seq_q, q.device())?;
+            let mask = Self::create_causal_mask(seq_q, q.device())?;
             qk = qk.broadcast_add(&mask)?;
         }
 
@@ -203,7 +211,7 @@ impl MqaFlashAttention {
         kv.repeat(&[1, repeat_factor, 1, 1])
     }
 
-    fn create_causal_mask(&self, seq_len: usize, device: &candle_core::Device) -> Result<Tensor> {
+    fn create_causal_mask(seq_len: usize, device: &candle_core::Device) -> Result<Tensor> {
         let row_indices =
             Tensor::arange(0u32, seq_len as u32, device)?.reshape((1, 1, seq_len, 1))?;
         let col_indices =
@@ -262,7 +270,7 @@ impl GqaFlashAttention {
         qk = qk.mul(&Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?)?;
 
         if self.causal {
-            let mask = self.create_causal_mask(seq_q, q.device())?;
+            let mask = Self::create_causal_mask(seq_q, q.device())?;
             qk = qk.broadcast_add(&mask)?;
         }
 
@@ -289,7 +297,7 @@ impl GqaFlashAttention {
         }
     }
 
-    fn create_causal_mask(&self, seq_len: usize, device: &candle_core::Device) -> Result<Tensor> {
+    fn create_causal_mask(seq_len: usize, device: &candle_core::Device) -> Result<Tensor> {
         let row_indices =
             Tensor::arange(0u32, seq_len as u32, device)?.reshape((1, 1, seq_len, 1))?;
         let col_indices =

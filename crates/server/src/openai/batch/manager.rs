@@ -70,10 +70,13 @@ impl BatchManager {
             job.status = BatchStatus::Completed;
             job.completed_at = Some(
                 // invariant: monotonic clock is always >= UNIX_EPOCH.
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs() as i64,
+                i64::try_from(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs(),
+                )
+                .unwrap_or(i64::MAX),
             );
         }
     }

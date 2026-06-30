@@ -120,7 +120,11 @@ fn bench_batch_building(c: &mut Criterion) {
             || {
                 let mut engine = SchedulerEngine::new(config.clone(), 1024, metrics.clone());
                 for i in 0..10 {
-                    engine.add_request(Request::new(i, vec![i as u32; 50], 100));
+                    engine.add_request(Request::new(
+                        i,
+                        vec![u32::try_from(i).expect("bounded bench index"); 50],
+                        100,
+                    ));
                 }
                 engine
             },
@@ -133,7 +137,11 @@ fn bench_batch_building(c: &mut Criterion) {
             || {
                 let mut engine = SchedulerEngine::new(config.clone(), 1024, metrics.clone());
                 for i in 0..100 {
-                    engine.add_request(Request::new(i, vec![i as u32; 50], 100));
+                    engine.add_request(Request::new(
+                        i,
+                        vec![u32::try_from(i).expect("bounded bench index"); 50],
+                        100,
+                    ));
                 }
                 engine
             },

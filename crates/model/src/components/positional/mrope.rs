@@ -1,3 +1,12 @@
+// invariant: mrope positional-index casts (position/seq_len -> f32) are bounded
+// by sequence length and head_dim, both small model-architecture constants;
+// precision loss / truncation is intentional.
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+
 use crate::qwen3::config::Qwen3Config;
 use candle_core::{Device, Result as CandleResult, Tensor};
 
@@ -142,11 +151,11 @@ mod tests {
     #[test]
     fn test_mrope_creation() {
         let config = Qwen3Config {
-            rope_theta: Some(10000000.0),
+            rope_theta: Some(10_000_000.0),
             head_dim: Some(256),
             rope_parameters: Some(RopeParameters {
                 rope_type: Some(RopeType::Default),
-                rope_theta: Some(10000000.0),
+                rope_theta: Some(10_000_000.0),
                 partial_rotary_factor: Some(0.5),
                 mrope_section: Some(vec![85, 85, 86]),
                 mrope_interleaved: Some(true),
@@ -155,7 +164,7 @@ mod tests {
         };
 
         let rope = MRoPE::from_config(&config);
-        assert_eq!(rope.theta, 10000000.0);
+        assert!((rope.theta - 10_000_000.0).abs() < 1e-6);
         assert_eq!(rope.dim, 256);
         assert_eq!(rope.sections, vec![85, 85, 86]);
     }
@@ -164,7 +173,7 @@ mod tests {
     fn test_mrope_new() {
         let rope = MRoPE::new(32, 10000.0, vec![10, 10, 12], 0.25);
         assert_eq!(rope.dim, 32);
-        assert_eq!(rope.theta, 10000.0);
+        assert!((rope.theta - 10_000.0).abs() < 1e-6);
         assert_eq!(rope.sections, vec![10, 10, 12]);
     }
 
@@ -240,8 +249,8 @@ mod tests {
             .to_scalar::<f32>()
             .unwrap();
 
-        assert_eq!(q_diff, 0.0, "RoPE should be deterministic for q");
-        assert_eq!(k_diff, 0.0, "RoPE should be deterministic for k");
+        assert!(q_diff.abs() < 1e-6, "RoPE should be deterministic for q");
+        assert!(k_diff.abs() < 1e-6, "RoPE should be deterministic for k");
     }
 
     #[test]

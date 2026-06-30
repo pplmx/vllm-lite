@@ -129,6 +129,7 @@ where
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn from_hf_weights_ln<F>(
         config: ModelConfig,
         device: Device,
@@ -254,6 +255,7 @@ where
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn from_hf_weights_rms<F>(
         config: ModelConfig,
         device: Device,

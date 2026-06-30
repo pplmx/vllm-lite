@@ -14,6 +14,7 @@ pub(crate) struct GdnLinearConfig {
 
 impl GdnLinearConfig {
     /// HF Qwen3.5 production defaults (e.g. Qwen3.5-397B-A17B `text_config`).
+    #[allow(dead_code)]
     pub const fn production_defaults() -> Self {
         Self {
             num_k_heads: 16,
@@ -25,6 +26,7 @@ impl GdnLinearConfig {
     }
 
     /// Zero-init fallback when no explicit GDN fields are present in config.
+    #[allow(clippy::similar_names)]
     pub fn legacy_heuristic(hidden_size: usize) -> Self {
         let num_v_heads = if hidden_size >= 512 {
             16
@@ -70,29 +72,33 @@ pub enum LayerType {
 }
 
 #[must_use]
+#[allow(clippy::match_same_arms)]
 pub fn parse_layer_types(config: &Qwen3Config) -> Vec<LayerType> {
-    if let Some(types) = config.layer_types() {
-        types
-            .iter()
-            .map(|t| match t.as_str() {
-                "linear_attention" => LayerType::LinearAttention,
-                "full_attention" => LayerType::FullAttention,
-                _ => LayerType::LinearAttention,
-            })
-            .collect()
-    } else {
-        let num_layers = config.num_hidden_layers();
-        let interval = config.full_attention_interval();
-        (0..num_layers)
-            .map(|i| {
-                if (i + 1) % interval == 0 {
-                    LayerType::FullAttention
-                } else {
-                    LayerType::LinearAttention
-                }
-            })
-            .collect()
-    }
+    config.layer_types().map_or_else(
+        || {
+            let num_layers = config.num_hidden_layers();
+            let interval = config.full_attention_interval();
+            (0..num_layers)
+                .map(|i| {
+                    if (i + 1) % interval == 0 {
+                        LayerType::FullAttention
+                    } else {
+                        LayerType::LinearAttention
+                    }
+                })
+                .collect()
+        },
+        |types| {
+            types
+                .iter()
+                .map(|t| match t.as_str() {
+                    "linear_attention" => LayerType::LinearAttention,
+                    "full_attention" => LayerType::FullAttention,
+                    _ => LayerType::LinearAttention,
+                })
+                .collect()
+        },
+    )
 }
 
 #[cfg(test)]
