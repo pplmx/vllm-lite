@@ -27,10 +27,11 @@ impl crate::engine::Engine {
         }
 
         // Warmup draft KV cache after prefill (Plans 17.4-A, 17.4-E)
-        if batch.phase == BatchPhase::Prefill && self.speculative_mode {
-            if let Err(e) = self.warmup_draft_kv(&batch) {
-                tracing::warn!(error = %e, "Draft warmup failed, continuing without warmup");
-            }
+        if batch.phase == BatchPhase::Prefill
+            && self.speculative_mode
+            && let Err(e) = self.warmup_draft_kv(&batch)
+        {
+            tracing::warn!(error = %e, "Draft warmup failed, continuing without warmup");
         }
 
         let draft_outputs = if self.draft_resolver.is_some() {

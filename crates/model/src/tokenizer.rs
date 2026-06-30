@@ -50,10 +50,12 @@ impl Tokenizer {
 
         let mut special_tokens = Vec::new();
         for id in tokenizer.get_added_tokens_decoder().keys() {
-            if let Some(token) = tokenizer.id_to_token(*id) {
-                if !token.starts_with('▁') && token.len() > 1 && token.starts_with('<') {
-                    special_tokens.push(token);
-                }
+            if let Some(token) = tokenizer.id_to_token(*id)
+                && !token.starts_with('▁')
+                && token.len() > 1
+                && token.starts_with('<')
+            {
+                special_tokens.push(token);
             }
         }
 
@@ -75,10 +77,10 @@ impl Tokenizer {
 
     #[must_use]
     pub fn encode(&self, text: &str) -> Vec<u32> {
-        if let Some(ref tokenizer) = self.inner {
-            if let Ok(encoding) = tokenizer.encode(text, false) {
-                return encoding.get_ids().to_vec();
-            }
+        if let Some(ref tokenizer) = self.inner
+            && let Ok(encoding) = tokenizer.encode(text, false)
+        {
+            return encoding.get_ids().to_vec();
         }
 
         text.split_whitespace()
@@ -89,10 +91,10 @@ impl Tokenizer {
 
     #[must_use]
     pub fn decode(&self, tokens: &[u32]) -> String {
-        if let Some(ref tokenizer) = self.inner {
-            if let Ok(text) = tokenizer.decode(tokens, false) {
-                return text;
-            }
+        if let Some(ref tokenizer) = self.inner
+            && let Ok(text) = tokenizer.decode(tokens, false)
+        {
+            return text;
         }
 
         tokens.iter().fold(String::new(), |mut acc, t| {

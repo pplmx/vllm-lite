@@ -44,7 +44,7 @@ fn repeat_kv_heads(kv: &Tensor, num_v_heads: usize) -> CandleResult<Tensor> {
     if num_k_heads == num_v_heads {
         return Ok(kv.clone());
     }
-    if num_v_heads % num_k_heads != 0 {
+    if !num_v_heads.is_multiple_of(num_k_heads) {
         return Err(candle_core::Error::msg(format!(
             "num_v_heads {num_v_heads} must be a multiple of num_k_heads {num_k_heads}"
         )));

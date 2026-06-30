@@ -55,10 +55,10 @@ impl GdnLinearConfig {
 
     /// `from_qwen3_config`: from qwen3 config.
     pub fn from_qwen3_config(config: &Qwen3Config) -> Self {
-        if let Some(tc) = config.text_config.as_ref() {
-            if tc.has_explicit_gdn_config() {
-                return Self::from_text_config(tc);
-            }
+        if let Some(tc) = config.text_config.as_ref()
+            && tc.has_explicit_gdn_config()
+        {
+            return Self::from_text_config(tc);
         }
         Self::legacy_heuristic(config.hidden_size())
     }

@@ -89,24 +89,24 @@ fn validate_config(path: &PathBuf) -> Result<()> {
         }
     }
 
-    if let Some(server) = parsed.get("server").and_then(|v| v.as_object()) {
-        if let Some(port) = server.get("port") {
-            if let Some(p) = port.as_i64() {
-                if !(1..=65535).contains(&p) {
-                    anyhow::bail!("invalid port: {p}");
-                }
-            }
-        }
+    if let Some(p) = parsed
+        .get("server")
+        .and_then(|v| v.as_object())
+        .and_then(|server| server.get("port"))
+        .and_then(Value::as_i64)
+        && !(1..=65535).contains(&p)
+    {
+        anyhow::bail!("invalid port: {p}");
     }
 
-    if let Some(engine) = parsed.get("engine").and_then(|v| v.as_object()) {
-        if let Some(kv_blocks) = engine.get("num_kv_blocks") {
-            if let Some(n) = kv_blocks.as_i64() {
-                if n < 1 {
-                    anyhow::bail!("invalid kv_blocks: {n}");
-                }
-            }
-        }
+    if let Some(n) = parsed
+        .get("engine")
+        .and_then(|v| v.as_object())
+        .and_then(|engine| engine.get("num_kv_blocks"))
+        .and_then(Value::as_i64)
+        && n < 1
+    {
+        anyhow::bail!("invalid kv_blocks: {n}");
     }
 
     Ok(())
@@ -126,14 +126,14 @@ fn list_models(dir: &PathBuf) -> Result<()> {
         let entry = entry.context("reading directory entry")?;
         let path = entry.path();
 
-        if path.is_dir() {
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                let size = calculate_dir_size(&path);
-                let size_str = format_size(size);
-                let model_type = detect_model_type(&path);
+        if path.is_dir()
+            && let Some(name) = path.file_name().and_then(|n| n.to_str())
+        {
+            let size = calculate_dir_size(&path);
+            let size_str = format_size(size);
+            let model_type = detect_model_type(&path);
 
-                println!("║ {name:<29} │ {size_str:>9} │ {model_type:<17} ║");
-            }
+            println!("║ {name:<29} │ {size_str:>9} │ {model_type:<17} ║");
         }
     }
 
@@ -244,31 +244,37 @@ fn format_size(bytes: u64) -> String {
 
 fn detect_model_type(path: &Path) -> &'static str {
     let config_path = path.join("config.json");
-    if config_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&config_path) {
-            if let Ok(config) = serde_json::from_str::<Value>(&content) {
-                if let Some(architectures) = config.get("architectures") {
-                    if let Some(arr) = architectures.as_array() {
-                        if let Some(first) = arr.first() {
-                            if let Some(name) = first.as_str() {
-                                if name.contains("Llama") {
-                                    return "LLaMA";
-                                } else if name.contains("Mistral") {
-                                    return "Mistral";
-                                } else if name.contains("Qwen") {
-                                    return "Qwen";
-                                } else if name.contains("Gemma") {
-                                    return "Gemma";
-                                } else if name.contains("Mixtral") {
-                                    return "Mixtral";
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    let Ok(content) = std::fs::read_to_string(config_path) else {
+        return "Unknown";
+    };
+    let Ok(config) = serde_json::from_str::<Value>(&content) else {
+        return "Unknown";
+    };
+    let Some(name) = config
+        .get("architectures")
+        .and_then(Value::as_array)
+        .and_then(|architectures| architectures.first())
+        .and_then(Value::as_str)
+    else {
+        return "Unknown";
+    };
+
+    if name.contains("Llama") {
+        return "LLaMA";
     }
+    if name.contains("Mistral") {
+        return "Mistral";
+    }
+    if name.contains("Qwen") {
+        return "Qwen";
+    }
+    if name.contains("Gemma") {
+        return "Gemma";
+    }
+    if name.contains("Mixtral") {
+        return "Mixtral";
+    }
+
     "Unknown"
 }
 
@@ -279,17 +285,16 @@ fn find_model_files(path: &PathBuf) -> Vec<(PathBuf, String)> {
     if let Ok(entries) = std::fs::read_dir(path) {
         for entry in entries.flatten() {
             let entry_path = entry.path();
-            if entry_path.is_file() {
-                if let Some(ext) = entry_path.extension().and_then(|e| e.to_str()) {
-                    if extensions.contains(&ext) {
-                        let filename = entry_path
-                            .file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                            .to_string();
-                        files.push((entry_path, filename));
-                    }
-                }
+            if entry_path.is_file()
+                && let Some(ext) = entry_path.extension().and_then(|e| e.to_str())
+                && extensions.contains(&ext)
+            {
+                let filename = entry_path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
+                files.push((entry_path, filename));
             }
         }
     }

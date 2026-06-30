@@ -248,10 +248,11 @@ fn test_engine_shutdown_synchronously() {
     let timeout = Duration::from_secs(10);
 
     while start.elapsed() < timeout {
-        if let Ok(results) = engine.step() {
-            if results.is_empty() && !engine.has_pending() {
-                break;
-            }
+        if let Ok(results) = engine.step()
+            && results.is_empty()
+            && !engine.has_pending()
+        {
+            break;
         }
     }
 

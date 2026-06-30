@@ -287,13 +287,13 @@ impl GqaFlashAttention {
         }
         debug_assert_eq!(num_kv_heads, self.num_kv_heads);
 
-        if num_q_heads % num_kv_heads != 0 {
+        if num_q_heads.is_multiple_of(num_kv_heads) {
+            let repeat_factor = num_q_heads / num_kv_heads;
+            kv.repeat(&[1, repeat_factor, 1, 1])
+        } else {
             let repeat_factor = num_q_heads.div_ceil(num_kv_heads);
             let kv_repeated = kv.repeat(&[1, repeat_factor, 1, 1])?;
             kv_repeated.narrow(1, 0, num_q_heads)
-        } else {
-            let repeat_factor = num_q_heads / num_kv_heads;
-            kv.repeat(&[1, repeat_factor, 1, 1])
         }
     }
 
