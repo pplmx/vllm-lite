@@ -67,11 +67,11 @@ impl KvCachePool {
         }
     }
 
-    pub fn is_available(&self) -> bool {
+    pub const fn is_available(&self) -> bool {
         !self.free_list.is_empty()
     }
 
-    pub fn available_blocks(&self) -> usize {
+    pub const fn available_blocks(&self) -> usize {
         self.free_list.len()
     }
 }

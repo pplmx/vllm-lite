@@ -9,9 +9,10 @@ homepage.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-candle-core = "0.10.2"
+candle-core = "0.11.0"
 thiserror = "2"
 tonic.workspace = true
+tonic-prost.workspace = true
 prost.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
@@ -23,7 +24,7 @@ tracing = "0.1"
 path = "../traits"
 
 [build-dependencies]
-tonic-build = "0.12"
+tonic-prost-build = "0.14"
 
 [lints]
 workspace = true

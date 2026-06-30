@@ -7,7 +7,7 @@ edition.workspace = true
 vllm-traits = { path = "../traits", features = ["candle"] }
 vllm-core = { path = "../core" }
 vllm-dist = { path = "../dist", optional = true }
-candle-core = "0.10.2"
+candle-core = "0.11.0"
 tokio = { version = "1", features = ["sync"] }
 rand = "0.10"
 

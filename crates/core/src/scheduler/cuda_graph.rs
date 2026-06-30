@@ -32,7 +32,7 @@ impl GraphBatch {
 
     /// Get batch size
     #[must_use]
-    pub fn batch_size(&self) -> usize {
+    pub const fn batch_size(&self) -> usize {
         match self {
             Self::Graph(prepared) => prepared.batch_size,
             Self::Regular(batch) => batch.seq_ids.len(),
@@ -53,7 +53,7 @@ impl GraphPreparedBatch {
     /// Wrap a `Batch` for graph execution, caching its size to avoid
     /// recomputing it on every dispatch.
     #[must_use]
-    pub fn new(batch: Batch) -> Self {
+    pub const fn new(batch: Batch) -> Self {
         let batch_size = batch.seq_ids.len();
         Self { batch, batch_size }
     }

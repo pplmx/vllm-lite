@@ -10,7 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // invariant: OUT_DIR is always set by Cargo during build script execution.
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    tonic_build::configure()
+    tonic_prost_build::configure()
         .build_server(true)
         .build_client(true)
         .out_dir(&out_dir)
