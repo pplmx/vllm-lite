@@ -53,7 +53,7 @@ impl ModelBackend for FaultInjectedModel {
     ) -> vllm_traits::Result<BatchOutput> {
         // Deterministic failure: fail every 10th call to ensure reproducible tests
         let count = self.failure_count.load(Ordering::Relaxed);
-        if self.should_fail() && count % 10 == 0 {
+        if self.should_fail() && count.is_multiple_of(10) {
             return Err(ModelError::new("Simulated failure"));
         }
         self.inner.forward(

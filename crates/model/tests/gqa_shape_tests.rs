@@ -20,7 +20,7 @@ fn test_expand_kv(
     let _ = dims[3];
 
     // Check if num_q_heads is divisible by num_kv_heads
-    if num_q_heads % num_kv_heads != 0 {
+    if !num_q_heads.is_multiple_of(num_kv_heads) {
         // Handle edge case: repeat KV heads to match Q heads
         let repeat_factor = num_q_heads.div_ceil(num_kv_heads);
         let kv_repeated = kv.repeat(&[1, 1, repeat_factor, 1])?;

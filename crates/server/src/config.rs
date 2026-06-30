@@ -96,24 +96,24 @@ impl AuthConfig {
     pub fn resolve_api_keys(&self) -> Vec<String> {
         let mut keys = self.api_keys.clone();
 
-        if let Some(ref env_var) = self.api_keys_env {
-            if let Ok(env_keys) = std::env::var(env_var) {
-                for key in env_keys.split(',') {
-                    let key = key.trim().to_string();
-                    if !key.is_empty() {
-                        keys.push(key);
-                    }
+        if let Some(ref env_var) = self.api_keys_env
+            && let Ok(env_keys) = std::env::var(env_var)
+        {
+            for key in env_keys.split(',') {
+                let key = key.trim().to_string();
+                if !key.is_empty() {
+                    keys.push(key);
                 }
             }
         }
 
-        if let Some(ref file_path) = self.api_keys_file {
-            if let Ok(content) = std::fs::read_to_string(file_path) {
-                for line in content.lines() {
-                    let key = line.trim().to_string();
-                    if !key.is_empty() && !key.starts_with('#') {
-                        keys.push(key);
-                    }
+        if let Some(ref file_path) = self.api_keys_file
+            && let Ok(content) = std::fs::read_to_string(file_path)
+        {
+            for line in content.lines() {
+                let key = line.trim().to_string();
+                if !key.is_empty() && !key.starts_with('#') {
+                    keys.push(key);
                 }
             }
         }
@@ -267,30 +267,19 @@ impl AppConfig {
     /// Use [`AppConfig::validate`] after loading to surface invalid configs.
     #[must_use]
     pub fn load(path: Option<PathBuf>) -> Self {
-        let mut config = Self::default();
+        let config = path
+            .filter(|config_path| config_path.exists())
+            .and_then(|config_path| std::fs::read_to_string(config_path).ok())
+            .and_then(|contents| serde_saphyr::from_str::<Self>(&contents).ok())
+            .unwrap_or_default();
 
-        if let Some(config_path) = path {
-            if config_path.exists() {
-                if let Ok(contents) = std::fs::read_to_string(&config_path) {
-                    if let Ok(loaded) = serde_saphyr::from_str::<Self>(&contents) {
-                        config = loaded;
-                    }
-                }
-            }
-        }
-
-        if let Ok(env_path) = std::env::var("VLLM_CONFIG_PATH") {
-            let env_config_path = PathBuf::from(env_path);
-            if env_config_path.exists() {
-                if let Ok(contents) = std::fs::read_to_string(&env_config_path) {
-                    if let Ok(loaded) = serde_saphyr::from_str::<Self>(&contents) {
-                        config = loaded;
-                    }
-                }
-            }
-        }
-
-        config
+        std::env::var("VLLM_CONFIG_PATH")
+            .ok()
+            .map(PathBuf::from)
+            .filter(|config_path| config_path.exists())
+            .and_then(|config_path| std::fs::read_to_string(config_path).ok())
+            .and_then(|contents| serde_saphyr::from_str::<Self>(&contents).ok())
+            .unwrap_or(config)
     }
 
     /// Check the loaded config against all invariants. Collects every
@@ -343,10 +332,10 @@ impl AppConfig {
         }
 
         // v18.0 validation
-        if let Some(b) = self.engine.vram_budget_bytes {
-            if b == 0 {
-                errors.push(ConfigValidationError::VramBudgetZero);
-            }
+        if let Some(b) = self.engine.vram_budget_bytes
+            && b == 0
+        {
+            errors.push(ConfigValidationError::VramBudgetZero);
         }
         let mut seen_draft_ids = std::collections::HashSet::new();
         for spec in &self.engine.draft_specs {

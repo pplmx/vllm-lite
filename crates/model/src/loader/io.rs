@@ -18,10 +18,10 @@ pub(crate) fn load_file_mmap_or_read(path: &Path) -> Result<Vec<u8>> {
     let metadata = std::fs::metadata(path)?;
     let file_size = metadata.len();
 
-    if (MMAP_THRESHOLD_BYTES..=MAX_MMAP_SIZE).contains(&file_size) {
-        if let Ok(mmap) = load_mmap(path) {
-            return Ok(mmap.to_vec());
-        }
+    if (MMAP_THRESHOLD_BYTES..=MAX_MMAP_SIZE).contains(&file_size)
+        && let Ok(mmap) = load_mmap(path)
+    {
+        return Ok(mmap.to_vec());
     }
 
     std::fs::read(path).map_err(|e| candle_core::Error::msg(format!("read failed: {e}")))
@@ -46,12 +46,11 @@ pub(crate) fn find_safetensors_files(model_dir: &Path) -> Result<Vec<PathBuf>> {
 
     for entry in entries.flatten() {
         let path = entry.path();
-        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if (name.starts_with("model-") || name.starts_with("model.safetensors-"))
-                && name.ends_with(".safetensors")
-            {
-                files.push(path);
-            }
+        if let Some(name) = path.file_name().and_then(|n| n.to_str())
+            && (name.starts_with("model-") || name.starts_with("model.safetensors-"))
+            && name.ends_with(".safetensors")
+        {
+            files.push(path);
         }
     }
 

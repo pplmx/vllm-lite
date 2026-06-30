@@ -47,11 +47,12 @@ impl EvictionPolicy {
 
         self.stats.total_selections += 1;
 
-        if let Some((ref cached, seq_hash)) = self.cached_victims {
-            if seq_hash == Self::compute_seq_hash(running_sequences) && cached.len() >= num_blocks {
-                self.stats.cache_hits += 1;
-                return cached.iter().take(num_blocks).copied().collect();
-            }
+        if let Some((ref cached, seq_hash)) = self.cached_victims
+            && seq_hash == Self::compute_seq_hash(running_sequences)
+            && cached.len() >= num_blocks
+        {
+            self.stats.cache_hits += 1;
+            return cached.iter().take(num_blocks).copied().collect();
         }
 
         let mut block_usage: HashMap<BlockId, (&Sequence, usize)> = HashMap::new();

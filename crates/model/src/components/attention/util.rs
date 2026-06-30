@@ -92,7 +92,7 @@ pub fn expand_kv(kv: &Tensor, num_q_heads: usize, num_kv_heads: usize) -> Result
         )));
     }
 
-    if num_q_heads % num_kv_heads != 0 {
+    if !num_q_heads.is_multiple_of(num_kv_heads) {
         let repeat_factor = num_q_heads.div_ceil(num_kv_heads);
         let kv_repeated = kv.repeat(&[1, 1, repeat_factor, 1])?;
         return kv_repeated.narrow(2, 0, num_q_heads);
