@@ -1,3 +1,7 @@
+//! Distributed KV-cache: cross-node replication and invalidation of paged KV blocks.
+//!
+//! Activated by `--features multi-node`. Re-exports the wire types from
+//! `protocol` and the in-process cache implementation from `cache`.
 pub mod cache;
 pub mod protocol;
 

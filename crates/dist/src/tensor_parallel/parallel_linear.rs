@@ -1,3 +1,9 @@
+//! Column- and row-parallel linear layers plus the top-level manager.
+//!
+//! Implements Megatron-style sharding: split the weight matrix across
+//! ranks along the contraction dimension (column) or output dimension
+//! (row), and pair each layer with the appropriate AllReduce primitive
+//! so the global computation is equivalent to the unsharded reference.
 #![allow(clippy::module_name_repetitions)]
 use super::all_reduce::{AllReduce, NcclAllReduce, ReduceOp};
 use super::device_mesh::DeviceMesh;

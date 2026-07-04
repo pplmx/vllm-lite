@@ -1,3 +1,7 @@
+//! Tensor-parallel and pipeline-parallel primitives for multi-node inference.
+//!
+//! Activated by `--features multi-node`. Pulls in `tonic` for gRPC transport
+//! and exposes cooperative tensor + pipeline parallel APIs to `vllm-core`.
 #![allow(clippy::module_name_repetitions)]
 use std::collections::HashMap;
 use std::sync::Arc;
