@@ -1,8 +1,23 @@
 #![allow(clippy::module_name_repetitions)]
+//! Structured logging initialisation for the vllm-lite server.
+//!
+//! Wraps [`tracing_subscriber`] with a dual-output setup (console + optional
+//! daily-rotating JSON file). Honours `RUST_LOG` env override if set; falls
+//! back to the `log_level` argument otherwise.
 use std::path::PathBuf;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
+/// Initialise the global tracing subscriber.
+///
+/// # Arguments
+/// * `log_dir` - If `Some`, also writes JSON logs to `<dir>/vllm-lite.log.YYYY-MM-DD`.
+///   Missing directories are created on best-effort basis.
+/// * `log_level` - Fallback filter directive (e.g. `"info"`, `"debug"`) when
+///   `RUST_LOG` is unset.
+///
+/// Calling this more than once is a no-op for the second call (tracing refuses
+/// to re-install the global subscriber).
 pub fn init_logging(log_dir: Option<PathBuf>, log_level: &str) {
     let env_filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
