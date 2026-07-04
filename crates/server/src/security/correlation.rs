@@ -1,3 +1,8 @@
+//! Request correlation: assign a unique `X-Request-ID` header to every incoming request and propagate it into logs + audit events.
+//!
+//! If the client supplied a `X-Request-ID` header we honour it (after
+//! validating the format); otherwise we mint a fresh UUIDv4. The ID is
+//! added to the response headers and threaded through `tracing` spans.
 #![allow(clippy::module_name_repetitions, dead_code)]
 use axum::{extract::Request, http::HeaderValue, middleware::Next, response::Response};
 use std::sync::Arc;

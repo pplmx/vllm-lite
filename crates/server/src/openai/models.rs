@@ -1,3 +1,4 @@
+//! OpenAI Models endpoint: `GET /v1/models`. Returns the loaded model id(s) so clients can confirm what's deployed.
 #![allow(clippy::module_name_repetitions)]
 use crate::ApiState;
 use axum::{
