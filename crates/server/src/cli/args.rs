@@ -1,3 +1,7 @@
+//! `clap`-derived CLI argument structs that override fields in [`AppConfig`](crate::config::AppConfig).
+//!
+//! Parsed once at startup; the resolved config is then handed to the
+//! engine constructor. Use `--help` for the full list of flags.
 use crate::config::AppConfig;
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;

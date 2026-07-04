@@ -1,3 +1,8 @@
+//! OpenAI-API wire types: request bodies, response bodies, streaming SSE chunks, and the OpenAI-specific batch endpoint types.
+//!
+//! These mirror the public OpenAI Chat Completions / Completions / Embeddings
+//! / Batch schemas 1:1. Field names and JSON casing match the upstream spec;
+//! renaming a field here is a breaking API change.
 use serde::{Deserialize, Serialize};
 
 /// Token usage statistics for API responses.
