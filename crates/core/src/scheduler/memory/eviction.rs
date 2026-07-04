@@ -2,7 +2,7 @@
 use crate::types::{BlockId, Sequence, Status};
 use std::collections::{HashMap, VecDeque};
 
-/// `EvictionPolicyStats`: eviction policy statistics.
+/// Per-policy eviction telemetry: total evictions, average block lifetime, recency-distribution buckets. Used to compare LRU vs. ARC vs. FIFO at runtime.
 #[derive(Debug, Clone, Default)]
 pub struct EvictionPolicyStats {
     pub total_evictions: usize,
@@ -11,7 +11,7 @@ pub struct EvictionPolicyStats {
 }
 
 #[derive(Debug)]
-/// `EvictionPolicy`: eviction policy.
+/// Trait implemented by every KV-cache eviction policy (`LruPolicy`, `ArcPolicy`, `FifoPolicy`). Defines the touch-eviction decision given the current sequence set and a candidate block.
 pub struct EvictionPolicy {
     block_access_order: VecDeque<BlockId>,
     block_ref_count: HashMap<BlockId, usize>,

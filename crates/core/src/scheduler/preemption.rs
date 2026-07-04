@@ -6,7 +6,7 @@
 
 use crate::types::{SchedulerConfig, Sequence, Status};
 
-/// `PreemptionManager`: preemption manager.
+/// Implements the preemption policy: when a new request cannot fit, decides which running sequence to preempt (LRU, priority, longest-job-first).
 #[derive(Debug)]
 pub(crate) struct PreemptionManager {
     config: SchedulerConfig,

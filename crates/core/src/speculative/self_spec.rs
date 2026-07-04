@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use vllm_traits::ModelBackend;
 
 #[derive(Debug)]
-/// `SelfSpeculativeModel`: self speculative model.
+/// `SelfSpeculativeModel`. See the type definition for fields and behavior.
 pub struct SelfSpeculativeModel<M: ModelBackend> {
     model: M,
     draft_layer_count: usize,

@@ -3,7 +3,7 @@ use super::trait_def::{PriorityScore, SchedulingContext, SchedulingPolicy};
 use crate::types::Sequence;
 
 #[derive(Debug)]
-/// `SjfPolicy`: sjf policy.
+/// Shortest-Job-First scheduling: sequences with the fewest remaining tokens are batched first. Optimizes tail latency but can starve long-running sequences.
 pub struct SjfPolicy {
     sjf_priority_weight: f32,
     sjf_remaining_work_weight: f32,

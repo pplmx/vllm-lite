@@ -5,7 +5,7 @@ use std::time::Duration;
 use tokio::sync::{RwLock, watch};
 use tracing::{info, warn};
 
-/// `LeadershipState`: leadership state enumeration.
+/// Internal state of Leadership. Mutated under a lock; read via accessor methods on the parent type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LeadershipState {
     Leader,
@@ -13,7 +13,7 @@ pub enum LeadershipState {
     Candidate,
 }
 
-/// `LeaderElection`: leader election.
+/// Coordinator that picks a leader among replicas using the configured algorithm (Raft, Bully, or simple lowest-id).
 pub struct LeaderElection {
     state: Arc<RwLock<LeadershipState>>,
     is_leader: Arc<RwLock<bool>>,

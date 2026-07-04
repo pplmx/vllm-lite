@@ -3,7 +3,7 @@ use super::trait_def::{PriorityScore, SchedulingContext, SchedulingPolicy};
 use crate::types::Sequence;
 
 #[derive(Debug)]
-/// `FcfsPolicy`: fcfs policy.
+/// First-Come-First-Served scheduling: sequences are batched in arrival order. Used as the baseline / fallback policy when fairness is the dominant constraint.
 pub struct FcfsPolicy;
 
 impl FcfsPolicy {

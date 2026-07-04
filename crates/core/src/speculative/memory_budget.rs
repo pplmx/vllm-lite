@@ -21,7 +21,7 @@ use std::sync::RwLock;
 /// here for callers that don't want to depend on the scheduler module.
 pub const DEFAULT_BLOCK_BYTES: u64 = BLOCK_BYTES as u64;
 
-/// `MemoryBudgetSnapshot`: memory budget snapshot.
+/// `MemoryBudgetSnapshot`. See the type definition for fields and behavior.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MemoryBudgetSnapshot {
     pub total_bytes: u64,
@@ -35,7 +35,7 @@ pub struct MemoryBudgetSnapshot {
 #[error(
     "memory budget exceeded: requested {requested_bytes} bytes, available {available_bytes} bytes (draft_id={draft_id:?})"
 )]
-/// `MemoryBudgetExceeded`: memory budget exceeded.
+/// `MemoryBudgetExceeded`. See the type definition for fields and behavior.
 pub struct MemoryBudgetExceeded {
     pub requested_bytes: u64,
     pub available_bytes: u64,
@@ -51,7 +51,7 @@ struct MemoryBudgetInner {
 }
 
 #[derive(Debug)]
-/// `MemoryBudget`: memory budget.
+/// Per-request memory budget for speculative decoding. Tracks bytes reserved by target + draft model, plus per-sequence draft-token budget.
 pub struct MemoryBudget {
     inner: RwLock<MemoryBudgetInner>,
 }
@@ -64,7 +64,7 @@ impl Default for MemoryBudget {
 
 impl MemoryBudget {
     #[must_use]
-    /// Runs the operation.
+    /// Construct a memory budget with effectively no cap (returns `usize::MAX`).
     /// # Panics
     ///
     /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
@@ -73,7 +73,7 @@ impl MemoryBudget {
         Self::new(u64::MAX).expect("u64::MAX always > 0")
     }
 
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -111,7 +111,7 @@ impl MemoryBudget {
         }
     }
 
-    /// Runs the operation.
+    /// Reserve memory for the target model forward pass.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -143,7 +143,7 @@ impl MemoryBudget {
         inner.reserved_target = 0;
     }
 
-    /// Runs the operation.
+    /// Atomically attempt to reserve memory for a draft model, returning the actual reservation on success or `None` on failure.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

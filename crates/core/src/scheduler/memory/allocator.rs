@@ -11,7 +11,7 @@ const NULL_BLOCK: BlockId = BlockId::MAX;
 /// should compute their own block size and use the helper APIs.
 pub(crate) const BLOCK_BYTES: usize = 16 * 1024 * 1024;
 
-/// `BlockAllocatorStats`: block allocator statistics.
+/// Block allocator telemetry: number of free/allocated/cached blocks, fragmentation ratio, allocation success rate. Updated on every `allocate`/`free` call.
 #[derive(Debug, Clone, Default)]
 pub struct BlockAllocatorStats {
     pub total_blocks: usize,
@@ -21,7 +21,7 @@ pub struct BlockAllocatorStats {
 }
 
 #[derive(Debug)]
-/// `BlockAllocator`: block allocator.
+/// Paged-KV-cache block allocator. Hands out contiguous virtual block IDs backed by physically scattered GPU/CPU blocks. Uses a free-list with split-on-OOM and coalescing on free.
 pub struct BlockAllocator {
     num_blocks: usize,
     next_free: Vec<BlockId>,

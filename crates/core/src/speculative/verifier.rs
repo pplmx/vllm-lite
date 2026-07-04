@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::types::{Batch, SeqId, TokenId};
 use thiserror::Error;
 
-/// `VerifierError`: verifier error.
+/// Error type for Verifier. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, Error)]
 pub enum VerifierError {
     #[error("draft generation failed: {0}")]
@@ -18,10 +18,10 @@ pub enum VerifierError {
     Verification(String),
 }
 
-/// Result: result.
+/// Convenience alias used by the speculative-decoding verifier modules.
 pub type Result<T> = std::result::Result<T, VerifierError>;
 
-/// `VerificationResult`: verification result alias.
+/// One result item: the Verification plus any associated metadata. Returned in a list from a bulk API.
 #[derive(Debug, Clone)]
 pub struct VerificationResult {
     pub seq_id: SeqId,
@@ -61,9 +61,9 @@ impl VerificationResult {
     }
 }
 
-/// `DraftVerifier`: draft verifier trait.
+/// `DraftVerifier`. See the type definition for fields and behavior.
 pub trait DraftVerifier: Send + Sync {
-    /// Runs the operation.
+    /// Generate `n` draft tokens speculatively using the draft model.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -73,7 +73,7 @@ pub trait DraftVerifier: Send + Sync {
         num_tokens: usize,
     ) -> Result<Vec<(SeqId, Vec<TokenId>)>>;
 
-    /// Runs the operation.
+    /// Verify draft tokens against the target model logits.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

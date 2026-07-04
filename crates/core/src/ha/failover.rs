@@ -8,7 +8,7 @@ use vllm_traits::SeqId;
 
 use super::leader_election::LeaderElection;
 
-/// `InFlightRequest`: in flight request.
+/// Request payload for InFlight. Contains input data, configuration, and request-tracking metadata.
 #[derive(Debug, Clone)]
 pub struct InFlightRequest {
     pub seq_id: SeqId,
@@ -17,7 +17,7 @@ pub struct InFlightRequest {
     pub node_id: String,
 }
 
-/// `FailoverManager`: failover manager.
+/// High-availability failover coordinator. Detects leader liveness via heartbeats and triggers leader election when the miss-threshold is crossed.
 pub struct FailoverManager {
     leader_election: Arc<LeaderElection>,
     inflight_requests: Arc<RwLock<HashMap<SeqId, InFlightRequest>>>,

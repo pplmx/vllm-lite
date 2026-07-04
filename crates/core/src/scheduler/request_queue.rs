@@ -35,7 +35,7 @@ impl Ord for ScheduledSequence {
 }
 
 #[derive(Debug)]
-/// `RequestQueue`: request queue.
+/// Thread-safe FIFO queue of pending inference requests. New requests are pushed on arrival and popped by the scheduler.
 pub struct RequestQueue {
     sequences: HashMap<SeqId, Sequence>,
     priority_queue: BinaryHeap<ScheduledSequence>,

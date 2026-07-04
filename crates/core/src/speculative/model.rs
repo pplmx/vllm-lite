@@ -9,7 +9,7 @@ use super::strategy::RejectionStrategy;
 use super::verifier::DraftVerifier;
 use vllm_traits::ModelBackend;
 
-/// `SpeculativeModel`: speculative model.
+/// Wrapper around a draft + target model pair for speculative decoding. Owns the [`DraftVerifier`] used to accept or reject draft tokens.
 pub struct SpeculativeModel<M: ModelBackend> {
     target_model: M,
     verifier: Box<dyn DraftVerifier>,

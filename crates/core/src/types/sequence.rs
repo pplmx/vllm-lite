@@ -7,7 +7,11 @@ use crate::types::request::Priority;
 use crate::types::sampling::SamplingParams;
 use vllm_traits::{BlockId, SeqId, TokenId};
 
-/// Sequence: sequence.
+/// One in-flight generation request in the scheduler.
+///
+/// A `Sequence` tracks the prompt tokens, all decoded tokens, scheduling
+/// metadata (priority, arrival time, status), and the bookkeeping the
+/// scheduler needs to decide preemption, batching, and KV-cache lifetime.
 #[derive(Clone, Debug)]
 pub struct Sequence {
     pub id: SeqId,

@@ -8,7 +8,7 @@
 
 pub mod recovery;
 
-/// `EngineError`: engine error.
+/// Top-level engine error type. Every public API in `vllm-core` returns `Result<T, EngineError>`. Variants cover model load, scheduler, sampling, KV-cache, and tokenizer failures; see the enum definition for the full list.
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {
     #[error("sequence {id} not found")]
@@ -87,7 +87,7 @@ impl From<crate::metrics::exporter::MetricsError> for EngineError {
     }
 }
 
-/// Result: result.
+/// Convenience alias used by every public API in `vllm-core`.
 pub type Result<T> = std::result::Result<T, EngineError>;
 
 impl EngineError {
