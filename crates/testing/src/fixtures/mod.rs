@@ -8,7 +8,7 @@ use vllm_core::types::{SchedulerConfig, SequencePackingConfig};
 use crate::mocks::IncrementModel;
 
 #[derive(Debug)]
-/// `TestFixtures`: test fixtures.
+/// `TestFixtures`. See the type definition for fields and behavior.
 pub struct TestFixtures;
 
 impl TestFixtures {
