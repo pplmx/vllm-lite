@@ -1,3 +1,9 @@
+//! Engine-level draft registry accessors: resolve a draft model by id, register a new draft, list loaded drafts.
+//!
+//! Thin wrapper over the `DraftModelRegistry` from `vllm_core::speculative::registry`.
+//! Kept separate from `mod.rs` so the Engine struct definition stays focused
+//! on state, not behaviour.
+
 // Sub-module for draft registry, resolver, and speculative-mode management methods on Engine.
 // See mod.rs for the Engine struct definition.
 

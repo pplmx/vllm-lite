@@ -1,3 +1,9 @@
+//! KV-cache memory subsystem: block allocator + eviction policy.
+//!
+//! Owns the paged KV blocks (`allocator`) and the policy that decides
+//! which block to free under pressure (`eviction`). The scheduler asks
+//! this module for `n_blocks` and gets either the blocks back or a
+//! preemption signal.
 #![allow(clippy::module_name_repetitions)]
 pub mod allocator;
 pub mod eviction;

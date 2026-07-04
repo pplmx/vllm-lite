@@ -1,3 +1,8 @@
+//! Phase-switch policy: decide when to flip between Prefill (ingest prompt tokens) and Decode (generate next tokens).
+//!
+//! Encapsulated as a [`PhasePolicy`] trait with multiple implementations:
+//! `DrainDecode`, `RoundRobin`, and `Hybrid`. The scheduler picks one at
+//! construction time based on the `SchedulerConfig.phase_policy` field.
 use crate::types::Phase;
 
 /// Strategy for switching between prefill and decode phases. Different policies optimize throughput (drain decode) vs. fairness (round-robin).

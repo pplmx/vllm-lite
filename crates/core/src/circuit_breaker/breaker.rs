@@ -1,5 +1,11 @@
 #![allow(dead_code, clippy::module_name_repetitions)]
 
+//! Circuit-breaker pattern: short-circuit calls to a failing backend after N consecutive failures, periodically re-closing to allow recovery.
+//!
+//! States: `Closed` (normal) → `Open` (failing) → `HalfOpen` (probing).
+//! Configurable failure threshold + reset timeout. The `AsyncFallbackStrategy`
+//! trait lets callers plug in custom recovery (e.g., retry-with-backoff).
+
 // crates/core/src/circuit_breaker/breaker.rs
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};

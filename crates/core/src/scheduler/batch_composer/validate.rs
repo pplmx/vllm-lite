@@ -1,3 +1,9 @@
+//! Batch-composer validation step: reject batches that would exceed memory budget, KV-cache block count, or per-step token limits.
+//!
+//! Runs synchronously after the composer fills a batch but before it's
+//! handed to the model. Pure function: `validate(&Batch, &EngineState)
+//! -> Result<(), EngineError>`.
+
 // crates/core/src/scheduler/batch_composer/validate.rs
 //
 // Configuration types and their validation/calculation helpers used by

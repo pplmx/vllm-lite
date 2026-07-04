@@ -1,3 +1,9 @@
+//! Lock-free counters and gauges backed by `crossbeam` channels, used by the hot path of the metrics pipeline.
+//!
+//! Producers send events through an unbounded MPSC channel; a dedicated
+//! consumer thread folds them into atomic counters that the exporter
+//! reads without ever taking a mutex. Falls back to the locked variant
+//! on single-threaded test builds.
 use crossbeam::channel::{Receiver, Sender, bounded};
 use serde::Serialize;
 use std::sync::Arc;

@@ -1,3 +1,9 @@
+//! Engine construction: `Engine::builder()`, `EngineBuilder::build()`, and the resource-acquisition steps.
+//!
+//! The Engine struct itself lives in `mod.rs`; this file owns the
+//! `EngineBuilder` that wires scheduler + model + draft registry + metrics.
+//! All heavy IO (model load, draft load) happens here.
+
 // Sub-module for constructors and EngineBuilder on Engine.
 // See mod.rs for the Engine struct definition.
 

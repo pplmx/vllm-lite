@@ -1,3 +1,7 @@
+//! Per-step scheduler statistics: running count, waiting count, preempted count, last-update timestamp.
+//!
+//! Emitted every scheduler step into the metrics channel; used by the
+//! Prometheus exporter to render queue-depth and preemption-rate gauges.
 #![allow(clippy::module_name_repetitions)]
 use std::time::Instant;
 
