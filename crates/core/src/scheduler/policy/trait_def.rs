@@ -2,7 +2,7 @@ use crate::types::Sequence;
 use std::sync::Arc;
 use std::time::Instant;
 
-/// Per-step snapshot passed to every [`SchedulingPolicy::select`]. Holds the running and waiting sequence lists, the prefix-cache hint, and the current batch budget.
+/// Per-step snapshot passed to every [`SchedulingPolicy::compute_priority`]. Holds the running and waiting sequence lists, the prefix-cache hint, and the current batch budget.
 #[derive(Clone, Debug)]
 pub struct SchedulingContext {
     pub current_time: Instant,
