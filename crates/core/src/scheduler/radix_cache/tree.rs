@@ -1,3 +1,8 @@
+//! Radix-tree prefix cache: shared across requests so identical prompt prefixes reuse KV blocks.
+//!
+//! Each node holds a token range + child edges; the tree is keyed by the
+//! prompt token sequence. `lookup(prefix)` returns the longest matching
+//! block range to copy into the request's own KV layout.
 #![allow(clippy::module_name_repetitions)]
 use super::node::RadixNode;
 use std::sync::Arc;

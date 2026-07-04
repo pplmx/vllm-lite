@@ -1,3 +1,8 @@
+//! Paged-KV block allocator: hands out contiguous blocks of `BLOCK_SIZE` tokens and recycles freed blocks.
+//!
+//! Implements a free-list with split / merge on adjacent free blocks.
+//! The scheduler calls `allocate(n)` for every prefill and `free(ranges)`
+//! when a sequence is dropped or preempted.
 #![allow(clippy::module_name_repetitions)]
 use crate::types::BlockId;
 use tracing::warn;

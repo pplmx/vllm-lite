@@ -1,4 +1,11 @@
 #![allow(clippy::module_name_repetitions)]
+//! Prometheus + OpenTelemetry + JSON exporters for engine metrics.
+//!
+//! `MetricsExporter` is the trait every concrete exporter implements;
+//! `PrometheusExporter` writes the text format to `/metrics`, the OTLP
+//! exporter streams to a configured collector, and the JSON exporter
+//! serves `/debug/metrics`. Activated by feature flags.
+
 // crates/core/src/metrics/exporter.rs
 // Prometheus text format requires explicit LF line terminators; explicit `\n` in
 // `write!` calls is clearer than `writeln!` for this protocol.
