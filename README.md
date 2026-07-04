@@ -542,11 +542,19 @@ vllm-lite/
 
 ### Feature Flags
 
-| Feature | 描述             |
-| ------- | ---------------- |
-| `cuda`  | Candle CUDA 支持 |
-| `gguf`  | GGUF 模型加载    |
-| `full`  | cuda + gguf      |
+| Feature         | Crate     | 描述                                                |
+| --------------- | --------- | --------------------------------------------------- |
+| `prometheus`    | core      | Prometheus 指标导出（默认启用）                      |
+| `opentelemetry` | core      | OpenTelemetry 追踪导出                              |
+| `cuda-graph`    | core      | 启用 CUDA Graph 捕获/回放（拉入 vllm-model 依赖）    |
+| `cuda`          | model     | Candle CUDA 支持                                    |
+| `gguf`          | model     | GGUF 模型加载                                       |
+| `multi-node`    | model     | 启用 vllm-dist 集成（张量并行 + pipeline + distributed_kv） |
+| `full`          | model     | cuda + gguf                                         |
+| `candle`        | traits    | 启用 Candle 核心类型                                |
+| `kernels`       | traits    | 启用 kernel trait 定义                              |
+| `cuda`          | testing   | 测试中启用 CUDA 路径                                |
+| `multi-node`    | testing   | 测试中启用 multi-node 路径                          |
 
 Note: Tokenizer (tiktoken, tokenizers) is always enabled - required for model inference.
 
