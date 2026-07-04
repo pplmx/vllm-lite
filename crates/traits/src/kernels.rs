@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// `CudaGraphConfig`: cuda graph configuration.
+/// Configuration for CudaGraph. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CudaGraphConfig {
     pub enabled: bool,
@@ -20,7 +20,7 @@ impl Default for CudaGraphConfig {
     }
 }
 
-/// `ModelGraphConfig`: model graph configuration.
+/// Configuration for ModelGraph. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModelGraphConfig {
     pub max_seq_len: usize,
@@ -66,7 +66,7 @@ impl CudaGraphConfig {
     }
 }
 
-/// `GraphExecutionError`: graph execution error.
+/// Error type for GraphExecution. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum GraphExecutionError {
     #[error("graph not found for batch size {0}")]

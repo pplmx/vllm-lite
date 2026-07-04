@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-/// `BLOCK_SIZE`: block size constant.
+/// Compile-time constant: `size`. Tune via feature flags or env vars in production.
 pub const BLOCK_SIZE: usize = 16;
-/// `BlockId`: block id.
+/// Opaque newtype identifier for a block. Hashable, comparable, serializable; use this rather than the raw integer.
 pub type BlockId = usize;
-/// `TokenId`: token id.
+/// Opaque newtype identifier for a token. Hashable, comparable, serializable; use this rather than the raw integer.
 pub type TokenId = u32;
-/// `SeqId`: seq id.
+/// Opaque newtype identifier for a seq. Hashable, comparable, serializable; use this rather than the raw integer.
 pub type SeqId = u64;
 
 /// Batch phase
@@ -17,7 +17,11 @@ pub enum BatchPhase {
     Mixed,
 }
 
-/// Batch: batch.
+/// One batched inference step: a list of sequences together with the
+/// per-sequence input tokens and positional metadata the scheduler
+/// needs to issue prefill and decode work concurrently.
+///
+/// Serialized to JSON when a batch is checkpointed to the request log.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Batch {
     pub seq_ids: Vec<SeqId>,
@@ -79,14 +83,14 @@ impl Default for Batch {
     }
 }
 
-/// `BatchOutput`: batch output.
+/// Output from Batch: the result payload plus any associated metadata. Returned to the caller.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BatchOutput {
     pub seq_ids: Vec<SeqId>,
     pub next_tokens: Vec<TokenId>,
 }
 
-/// `TensorParallelError`: tensor parallel error.
+/// Error type for TensorParallel. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum TensorParallelError {
     #[error("World size must be > 0")]
