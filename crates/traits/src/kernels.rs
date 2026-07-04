@@ -1,3 +1,8 @@
+//! Kernel and CUDA-Graph trait definitions consumed by `vllm-core` and `vllm-model`.
+//!
+//! Pure-data: configuration structs and an error enum. The actual capture /
+//! replay logic lives in `vllm-model::kernels::cuda_graph`. This module is
+//! the workspace-wide wire format for those configs.
 use serde::{Deserialize, Serialize};
 
 /// Configuration for CudaGraph. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.

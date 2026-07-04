@@ -1,3 +1,9 @@
+//! `ModelBackend` trait and the wire types that flow through it.
+//!
+//! The trait is the single seam between `vllm-core` (scheduler, KV cache,
+//! engine) and `vllm-model` (architecture implementations). Adding a new
+//! architecture means implementing `ModelBackend` and registering the
+//! impl in `vllm_model::arch::ArchitectureRegistry`.
 #![allow(clippy::module_name_repetitions)]
 
 use std::sync::Arc;
