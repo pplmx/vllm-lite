@@ -1,3 +1,9 @@
+//! CUDA-Graph executor: invokes the captured graph for a given batch shape and returns the output tensors.
+//!
+//! The capture step happens once per (batch_size, seq_len) tuple;
+//! subsequent invocations skip the launch overhead entirely. The
+//! executor owns the per-shape cache and the metrics counters
+//! (`stats`, `cache_hit_rate`).
 #![allow(clippy::module_name_repetitions)]
 // `stats`, `GraphStats`, and `cache_hit_rate` are public API on the
 // executor; downstream callers and tests consume them. They appear unused

@@ -1,3 +1,9 @@
+//! Multi-head Latent Attention (MLA): compresses the KV cache by projecting keys + values into a shared low-rank latent, decompressing on the fly per attention step.
+//!
+//! Implements the DeepSeek-V2/V3 design. Achieves ~32× KV cache
+//! compression at the cost of an extra low-rank projection per layer.
+//! Used by Qwen3 (`Qwen3MlaAttention` wraps this) and DeepSeek-style
+//! models.
 #![allow(
     clippy::too_many_arguments,
     clippy::module_name_repetitions,
