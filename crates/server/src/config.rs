@@ -1,3 +1,7 @@
+//! Server configuration: top-level `AppConfig` plus nested sections for model paths, scheduler tuning, auth, logging, and TLS.
+//!
+//! Loaded from TOML (and overridable via CLI flags). The `Default` impl
+//! produces a single-node CPU config suitable for local development.
 #![allow(clippy::module_name_repetitions)]
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
