@@ -11,17 +11,22 @@ use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 
 #[derive(Debug)]
-/// `RopeGqaAttention`: rope gqa attention.
+/// `RopeGqaAttention`. See the type definition for fields and behavior.
 pub struct RopeGqaAttention {
     inner: SharedGqaAttention,
     theta: f32,
 }
 
 impl RopeGqaAttention {
-    /// Runs the operation.
+    /// Construct a `RopeGqaAttention` from a `VarBuilder`. The inner
+    /// `GqaAttention` is built with the same projection layout
+    /// (`q`/`k`/`v`/`o` + optional QK-norm); this wrapper additionally
+    /// captures the RoPE base `theta` so [`Self::forward_prefill`] /
+    /// [`Self::forward_decode`] can apply rotary embeddings before the
+    /// attention matmul.
     /// # Errors
     ///
-    /// Returns `Err` if any required tensor allocation or weight loading fails.
+    /// Returns `Err` if the inner `GqaAttention::new` weight load fails.
     pub fn new(
         hidden_size: usize,
         num_heads: usize,
@@ -44,10 +49,13 @@ impl RopeGqaAttention {
         Ok(Self { inner, theta })
     }
 
-    /// Runs the operation.
+    /// Construct a `RopeGqaAttention` from already-loaded projection tensors.
+    /// Use this when sourcing weights from a non-HF checkpoint or when
+    /// wiring weights from a custom loader.
     /// # Errors
     ///
-    /// Returns `Err` if any required tensor allocation or weight loading fails.
+    /// Returns `Err` if `GqaAttention::new_with_weights` fails (e.g.
+    /// missing QK-norm weights when `has_qk_norm` is true).
     pub fn new_with_weights(
         hidden_size: usize,
         num_heads: usize,
@@ -80,7 +88,7 @@ impl RopeGqaAttention {
         Ok(Self { inner, theta })
     }
 
-    /// Runs the operation.
+    /// Standard non-causal forward (delegates to `GqaAttention::forward`).
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -124,10 +132,17 @@ impl RopeGqaAttention {
         Ok((q, k))
     }
 
-    /// Runs the operation.
+    /// Prefill path: project Q/K/V, apply optional QK-norm, apply RoPE,
+    /// write the new KV into the paged cache, then run causal attention.
+    ///
+    /// Used when a brand-new prompt arrives and the full KV prefix has to
+    /// be cached at once. The KV cache write happens before the attention
+    /// matmul so subsequent decode steps can reuse the cache without
+    /// re-encoding.
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
+    /// Returns `Err` if any projection, RoPE rotation, KV-cache write,
+    /// or attention matmul fails.
     pub fn forward_prefill(
         &self,
         x: &Tensor,
@@ -173,10 +188,17 @@ impl RopeGqaAttention {
         self.inner.run_attention_fn(&q, &k_expanded, &v_expanded)
     }
 
-    /// Runs the operation.
+    /// Decode path: project Q/K/V for one new token, apply optional QK-norm,
+    /// apply RoPE, read the existing KV prefix from the paged cache, append
+    /// the new K/V, then run causal attention over the full prefix.
+    ///
+    /// `num_computed_tokens` is the number of tokens already in the cache
+    /// for this sequence at the start of this step; it tells the cache
+    /// reader where to start writing the new entries.
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
+    /// Returns `Err` if any projection, RoPE rotation, KV-cache read,
+    /// or attention matmul fails.
     pub fn forward_decode(
         &self,
         x: &Tensor,

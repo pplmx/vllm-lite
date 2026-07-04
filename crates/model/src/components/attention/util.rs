@@ -16,7 +16,7 @@
 
 use candle_core::{Result, Tensor};
 
-/// `AttentionConfig`: attention configuration.
+/// Configuration for Attention. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Default)]
 pub struct AttentionConfig {
     pub tile_size: Option<usize>,
@@ -65,10 +65,15 @@ impl AttentionConfigBuilder {
     }
 }
 
-/// Runs the operation.
+/// Expand a grouped-query-attention KV tensor along the head axis so it
+/// has the same number of heads as the query tensor.
+///
+/// When `num_q_heads == num_kv_heads` the input is returned unchanged. For
+/// GQA/MQA ratios the KV is broadcast along axis 2 (heads).
 /// # Errors
 ///
-/// Returns `Err` if the operation fails.
+/// Returns `Err` if the input tensor is not 4-dimensional, has the wrong
+/// number of heads, or any underlying candle op fails.
 pub fn expand_kv(kv: &Tensor, num_q_heads: usize, num_kv_heads: usize) -> Result<Tensor> {
     if num_q_heads == num_kv_heads {
         return Ok(kv.clone());
@@ -102,10 +107,14 @@ pub fn expand_kv(kv: &Tensor, num_q_heads: usize, num_kv_heads: usize) -> Result
     kv.repeat(&[1, 1, repeat_factor, 1])
 }
 
-/// Runs the operation.
+/// Build a `[1, 1, seq_len, seq_len]` causal attention mask.
+///
+/// Entries are `0.0` where the key position `j <= query position i`
+/// (visible) and `-inf` otherwise (masked). Add this mask to the
+/// pre-softmax `Q @ Kᵀ` tensor to enforce causality.
 /// # Errors
 ///
-/// Returns `Err` if the operation fails.
+/// Returns `Err` if `arange` or `broadcast_as` fails (e.g. device OOM).
 pub fn causal_mask(seq_len: usize, device: &candle_core::Device) -> Result<Tensor> {
     let row_indices = Tensor::arange(0u32, seq_len as u32, device)?.reshape((1, 1, seq_len, 1))?;
     let col_indices = Tensor::arange(0u32, seq_len as u32, device)?.reshape((1, 1, 1, seq_len))?;
@@ -118,10 +127,16 @@ pub fn causal_mask(seq_len: usize, device: &candle_core::Device) -> Result<Tenso
     Ok(mask)
 }
 
-/// Runs the operation.
+/// Build a `[batch_size, 1, tile_len, key_len]` causal mask for one
+/// query tile in [`tiled_attention`].
+///
+/// Unlike [`causal_mask`] which uses full row indices, this materialises
+/// the mask for query indices `start..start+tile_len` and global column
+/// indices `0..key_len` — necessary because the tiled path processes
+/// rows in shifted windows.
 /// # Errors
 ///
-/// Returns `Err` if the operation fails.
+/// Returns `Err` if `from_slice` fails (shape mismatch or device error).
 pub fn causal_mask_tile(
     batch_size: usize,
     start: usize,
@@ -145,10 +160,14 @@ pub fn causal_mask_tile(
 }
 
 #[allow(clippy::too_many_arguments)]
-/// Runs the operation.
+/// Compute scaled dot-product causal attention for already-materialised
+/// `q`, `k`, `v` tensors (i.e. the non-paged reference path used by unit
+/// tests and small-batch inference).
+///
+/// Returns the output reshaped to `[batch, seq, num_heads * head_dim]`.
 /// # Errors
 ///
-/// Returns `Err` if the operation fails.
+/// Returns `Err` if any matmul, softmax, or reshape fails.
 pub fn paged_attention(
     q: &Tensor,
     k: &Tensor,
@@ -178,10 +197,15 @@ pub fn paged_attention(
 }
 
 #[allow(clippy::too_many_arguments)]
-/// Runs the operation.
+/// Compute causal attention one query tile at a time, then concatenate
+/// the per-tile outputs along the sequence axis.
+///
+/// Used as the "fallback" path when the fused attention kernel is
+/// unavailable; reduces peak memory at the cost of more kernel launches.
 /// # Errors
 ///
-/// Returns `Err` if the operation fails.
+/// Returns `Err` if any tile's matmul/softmax fails or the final
+/// `concat` cannot stack the per-tile outputs.
 pub fn tiled_attention(
     q: &Tensor,
     k: &Tensor,
