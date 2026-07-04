@@ -1,3 +1,8 @@
+//! Scheduler-observer trait: external hook for metrics / tracing subscribers to observe every scheduling decision.
+//!
+//! Implementations receive `ObserverEvent` callbacks (`OnSchedule`,
+//! `OnPreempt`, `OnFinish`). The default no-op `DefaultSchedulerObserver`
+//! is used when no observer is configured.
 #![allow(clippy::module_name_repetitions)]
 use crate::types::{SeqId, TokenId};
 use std::sync::{Arc, RwLock};

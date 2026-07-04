@@ -1,3 +1,8 @@
+//! Hash-based request router: hash the prompt prefix to a backend node id, with consistent hashing so the same prefix lands on the same node across rebalances.
+//!
+//! Activated only when `vllm-core` is built with `--features routing`.
+//! Single-node deployments instantiate a `HashRouter` with one node and
+//! always route locally.
 #![allow(dead_code)]
 
 use std::collections::hash_map::DefaultHasher;

@@ -1,3 +1,8 @@
+//! Metric value types: counter, gauge, histogram, summary.
+//!
+//! Each variant carries its own atomic storage and supports increment /
+//! record / snapshot. The exporter (`metrics/exporter.rs`) converts these
+//! into Prometheus text format or JSON, depending on configuration.
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Type of metric being recorded

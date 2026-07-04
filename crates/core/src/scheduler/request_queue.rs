@@ -1,3 +1,8 @@
+//! Request waiting queue: priority heap + insertion-order FIFO for fair scheduling.
+//!
+//! Sequences sit here until the scheduler promotes them to `running`.
+//! `RequestQueue` exposes `push`, `pop_next`, `peek`, and `remove` for the
+//! preemption path. Pure data; no I/O.
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::time::Instant;
 
