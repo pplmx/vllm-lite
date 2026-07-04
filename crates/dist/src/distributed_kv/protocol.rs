@@ -1,3 +1,8 @@
+//! Wire protocol for the distributed KV-cache: node identifiers, cache operations, and RPC message envelopes.
+//!
+//! Pure-data definitions; serialization happens at the gRPC boundary in
+//! `crate::grpc`. No I/O, no allocation beyond field construction.
+
 /// Opaque newtype identifier for a node. Hashable, comparable, serializable; use this rather than the raw integer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct NodeId(pub usize);

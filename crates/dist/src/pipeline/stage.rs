@@ -1,3 +1,7 @@
+//! Single stage in a pipeline-parallel graph: model-layer slice + input/output contracts.
+//!
+//! A stage holds the layers for one rank and the bookkeeping needed to
+//! send activations to the next stage and receive from the previous.
 #![allow(clippy::module_name_repetitions)]
 use candle_core::{Device, Result, Tensor};
 use std::sync::Arc;

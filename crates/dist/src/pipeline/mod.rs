@@ -1,3 +1,6 @@
+//! Pipeline-parallel orchestration: stage graph, input/output contracts, and the runtime that pushes micro-batches through them.
+//!
+//! Activated by `--features multi-node`. Pure-rs implementation; no CUDA required.
 #![allow(clippy::module_inception, clippy::module_name_repetitions)]
 
 pub mod pipeline;

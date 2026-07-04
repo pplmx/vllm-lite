@@ -1,3 +1,8 @@
+//! `PipelineParallel` runtime: drives micro-batches through an ordered DAG of stages.
+//!
+//! Each stage holds a contiguous slice of model layers on a single device;
+//! the runtime forwards activations, manages micro-batch scheduling, and
+//! exposes the bubble-fill knob via [`PipelineParallelConfig`].
 #![allow(clippy::module_name_repetitions)]
 use super::stage::{PipelineStage, StageInput, StageOutput};
 use candle_core::Result;

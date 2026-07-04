@@ -1,3 +1,8 @@
+//! AllReduce primitives for tensor-parallel collectives.
+//!
+//! Wraps the underlying ring/tree algorithms behind a trait object so the
+//! tensor-parallel linear layers can swap between NCCL (GPU), gRPC (CPU),
+//! and a stub no-op implementation in tests.
 #![allow(clippy::module_name_repetitions)]
 use super::device_mesh::DeviceMesh;
 use std::sync::Arc;

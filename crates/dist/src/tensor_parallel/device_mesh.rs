@@ -1,3 +1,8 @@
+//! Logical N-dimensional device topology for tensor-parallel routing.
+//!
+//! Maps logical (rank, mesh-coord) tuples to physical device IDs and
+//! provides the lookup table used by every collective (all-reduce,
+//! all-gather, all-to-all). Implementation is purely data; no I/O.
 use vllm_traits::TensorParallelError;
 
 /// `DeviceMesh`. See the type definition for fields and behavior.

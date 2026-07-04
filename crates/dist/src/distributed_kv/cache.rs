@@ -1,3 +1,7 @@
+//! Thread-safe distributed KV-cache implementation: in-process `HashMap` + optional gRPC peer sync.
+//!
+//! Activated by `--features multi-node`. The single-node path is the
+//! `HashMap`-backed `DistributedKVCache` used by tests and embedded builds.
 #![allow(clippy::module_name_repetitions)]
 use super::{CacheConfig, CacheMessage, NodeId};
 use std::collections::HashMap;
