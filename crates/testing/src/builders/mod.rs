@@ -3,7 +3,7 @@
 use vllm_traits::{Batch, BatchPhase, SeqId, TokenId};
 
 #[derive(Debug)]
-/// `RequestBuilder`: request builder.
+/// Builder for `Request`. Use `with_*` methods to override defaults, then call `.build()` to produce the final value.
 pub struct RequestBuilder {
     seq_id: SeqId,
     tokens: Vec<TokenId>,
@@ -39,7 +39,7 @@ impl RequestBuilder {
 }
 #[derive(Debug)]
 
-/// `BatchBuilder`: batch builder.
+/// Builder for `Batch`. Use `with_*` methods to override defaults, then call `.build()` to produce the final value.
 pub struct BatchBuilder {
     seq_ids: Vec<SeqId>,
     input_tokens: Vec<Vec<TokenId>>,
