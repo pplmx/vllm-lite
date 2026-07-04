@@ -1,3 +1,4 @@
+//! OpenAI Embeddings endpoint: `POST /v1/embeddings`. Tokenise the input list and return one embedding vector per input.
 use super::types::{EmbeddingsRequest, EmbeddingsResponse, ErrorResponse};
 use crate::ApiState;
 use axum::{Json, extract::State, response::IntoResponse};

@@ -1,3 +1,6 @@
+//! `vllm-server` binary entry point: parse CLI args, load config, construct the engine, bind the axum router, and run until SIGINT/SIGTERM.
+//!
+//! Used by the `vllm-server` package; the library form is `vllm_server` for embedding tests + integration.
 mod debug;
 
 use axum::{
