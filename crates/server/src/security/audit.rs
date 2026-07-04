@@ -1,3 +1,8 @@
+//! Structured audit logging: in-memory ring buffer of security-relevant events plus a `/debug/audit` JSON export endpoint.
+//!
+//! Records login attempts, auth failures, rate-limit triggers, and admin
+//! actions. Logged at INFO/WARN level via `tracing` and also retained in
+//! memory for the rolling export.
 #![allow(clippy::module_name_repetitions)]
 use serde::Serialize;
 use std::sync::Arc;

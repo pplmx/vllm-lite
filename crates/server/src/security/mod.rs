@@ -1,3 +1,6 @@
+//! Public API surface of the security subsystem: re-exports the JWT, RBAC, audit, TLS, and size-limit modules under one namespace.
+//!
+//! Mounted into the server's axum router via `security::install_middleware`.
 pub mod audit;
 pub mod correlation;
 pub mod jwt;
