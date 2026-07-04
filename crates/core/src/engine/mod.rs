@@ -38,18 +38,44 @@ use vllm_model::kernels::BatchCudaGraphExecutor;
 /// for interior mutability of model references. All external communication
 /// happens through mpsc channels (actor pattern).
 pub struct Engine {
+    /// Token-batch scheduler. Owns the queue, preemption policy, and
+    /// prefix-cache lookups for every in-flight sequence.
     pub scheduler: SchedulerEngine,
+    /// The verified (target) language model used for the canonical
+    /// forward pass on each step. Wrapped in a `Mutex<Box<dyn>>` so the
+    /// engine can swap implementations (e.g. paged vs. fused) at runtime.
     pub target_model: Arc<Mutex<Box<dyn ModelBackend>>>,
+    /// Optional draft model used by the legacy single-draft speculative
+    /// path. When [`Self::draft_resolver`] is `Some`, this is unused and
+    /// `None` is preferred for new code paths.
     pub draft_model: Option<Arc<Mutex<Box<dyn ModelBackend>>>>,
+    /// Maximum number of draft tokens generated per step on the legacy
+    /// single-draft path. Ignored when [`Self::draft_resolver`] is set.
     pub max_draft_tokens: usize,
+    /// When `true`, the step loop interleaves draft-token generation and
+    /// verification. When `false`, each step runs the target model
+    /// directly with no speculative decoding.
     pub speculative_mode: bool,
+    /// Monotonically increasing count of recoverable errors observed
+    /// by the engine. Used for health-check thresholds and metrics
+    /// export; tests and integration suites inspect this field.
     pub error_count: usize,
+    /// Most recent recoverable error message (string form). Kept for
+    /// log/diagnostics; the structured error chain is on the originating
+    /// request, this is just a convenience field for quick inspection.
     pub last_error: Option<String>,
+    /// Per-sequence mpsc senders for streaming generated tokens back to
+    /// requesters. Map keyed by [`SeqId`]; entries are removed when the
+    /// receiver is dropped. Visible to integration tests.
     pub response_txs: HashMap<SeqId, mpsc::Sender<TokenId>>,
     sleep_policy: SleepPolicy,
     #[cfg(feature = "cuda-graph")]
     cuda_graph: Option<BatchCudaGraphExecutor>,
+    /// Optional adaptive speculative decoder that tunes the draft-token
+    /// budget based on observed acceptance rates.
     pub adaptive_decoder: Option<AdaptiveSpeculativeDecoder>,
+    /// Shared draft-model registry. Holds every loaded draft spec keyed
+    /// by name; the resolver queries this map during each step.
     pub draft_registry: Arc<DraftModelRegistry>,
     /// v18.0 per-request draft resolver. When `Some`, the step loop dispatches
     /// each request to its named draft via `resolver.resolve()`. When `None`,
@@ -83,12 +109,26 @@ impl std::fmt::Debug for Engine {
     }
 }
 
-/// `SleepPolicy`: sleep policy.
+/// Adaptive sleep policy for the engine idle loop. Tracks consecutive
+/// idle ticks and grows the sleep interval geometrically up to
+/// [`Self::max_interval`], then snaps back to [`Self::base_interval`]
+/// when work resumes. Used by the step loop to avoid busy-spinning
+/// when the scheduler has no work.
 #[derive(Debug)]
 pub struct SleepPolicy {
+    /// Minimum sleep interval (ms) used when the engine just became
+    /// idle or has been busy recently.
     pub base_interval: u64,
+    /// Upper bound (ms) on the sleep interval — the geometric growth
+    /// caps here so the engine remains responsive to late-arriving
+    /// requests even after long idle periods.
     pub max_interval: u64,
+    /// Multiplicative growth factor applied each consecutive idle tick.
+    /// A value of 1.5 grows from `base` (1ms) to `max` (50ms) in roughly
+    /// 10 ticks.
     pub backoff_factor: f64,
+    /// Number of consecutive idle ticks observed so far. Reset to 0
+    /// by [`Self::next_interval`] whenever `has_work` is `true`.
     pub consecutive_idle: u32,
 }
 
