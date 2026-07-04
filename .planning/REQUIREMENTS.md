@@ -50,7 +50,7 @@ Audit Remediation — 28 requirements across 4 categories. Each maps to one of 4
 
 ### Final Verification (FINAL — per-phase + end-of-milestone)
 
-- [ ] **FINAL-01**: All 1179 tests pass after each phase (Phase 40-43)
+- [ ] **FINAL-01**: All 1219 tests pass after each phase (Phase 40-43)
 - [ ] **FINAL-02**: `cargo clippy --workspace --all-targets --all-features -- -D warnings` clean (Phase 43)
 - [ ] **FINAL-03**: `cargo fmt --all --check` clean (Phase 43)
 - [ ] **FINAL-04**: Test count ≥ 1179 post-v23.0 (no regression, remediation scope)
@@ -68,7 +68,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | Real-model benchmarks | OPS-04 still deferred (no GPU env) |
 | Doc coverage 97.8% → 99%+ | RFU-06; not in remediation scope |
 | Stub architecture full implementation | CODE-04 only handles policy (implement OR reject), not full forward impl |
-| New architectures (Falcon, DeepSeek, etc.) | Out of remediation scope |
+| New architectures (Falcon, etc.) | Out of remediation scope |
 | Online fine-tuning, WebAssembly | Long-term vision |
 | Tree-based speculation | Too complex (carried from v18.0) |
 
