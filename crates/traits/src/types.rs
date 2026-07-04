@@ -1,3 +1,8 @@
+//! Wire-format identifier types and constants shared by every backend and the scheduler.
+//!
+//! `SeqId`, `TokenId`, `BlockId` are opaque newtype aliases so that integer
+//! literals at call sites stay readable (`seq_id: SeqId = 42` instead of
+//! `seq_id: u64 = 42`); `BLOCK_SIZE` is the paged-KV allocator's page size.
 use serde::{Deserialize, Serialize};
 
 /// Compile-time constant: `size`. Tune via feature flags or env vars in production.
