@@ -1,3 +1,9 @@
+//! FlashAttention configuration: `AttentionVariant` (Baseline, FlashV2, FlashV3) and `FlashAttentionConfig` (block sizes, head dim, causal flag, softmax scale).
+//!
+//! The variant is selected by the architecture's `model.json` field;
+//! the config is built from the variant plus runtime hints
+//! (`max_seq_len`, batch size, head dim).
+
 // crates/model/src/kernels/flash_attention/config.rs
 //
 // Flash attention configuration: `AttentionVariant`, `FlashAttentionConfig`,

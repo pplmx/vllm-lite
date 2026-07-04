@@ -1,3 +1,9 @@
+//! Grouped-Query Attention implementation: `num_heads` query heads share `num_kv_heads` key/value heads with a configurable ratio.
+//!
+//! The default impl is the reference GQA used by Llama/Mistral; the
+//! `RopeGqaAttention` wrapper (in `rope_gqa.rs`) layers RoPE + QK-norm
+//! on top. Reads/writes KV through the paged tensor store so memory
+//! stays contiguous regardless of sequence length.
 #![allow(clippy::too_many_arguments, clippy::module_name_repetitions)]
 // invariant: tensor-dimension casts (head_dim/seq_len -> f32) are bounded by
 // model architecture constants; precision loss is intentional.

@@ -1,3 +1,8 @@
+//! Qwen3 RoPE configuration: theta, partial rotary factor, mrope sections for vision-language variants.
+//!
+//! Most variants use the standard `rope_theta=1_000_000`; vision-language
+//! Qwen3 models add the MRoPE sections (temporal / height / width).
+
 // crates/model/src/qwen3/config/rope.rs
 //
 // RoPE-related configuration types for Qwen3:
