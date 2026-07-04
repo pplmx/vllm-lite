@@ -90,6 +90,19 @@ impl From<crate::metrics::exporter::MetricsError> for EngineError {
 /// Convenience alias used by every public API in `vllm-core`.
 pub type Result<T> = std::result::Result<T, EngineError>;
 
+/// Convert any `std::sync::PoisonError<T>` into [`EngineError::LockPoisoned`].
+///
+/// This lets lock-guarded callers write `let guard = self.field.lock()?`
+/// instead of `.expect("mutex poisoned")`, propagating the failure as a typed
+/// `EngineError` rather than a panic. The wrapped `T` is discarded because
+/// the engine cannot meaningfully continue with a poisoned lock — the
+/// invariant of the protected data is broken until the lock is re-created.
+impl<T> From<std::sync::PoisonError<T>> for EngineError {
+    fn from(_err: std::sync::PoisonError<T>) -> Self {
+        Self::LockPoisoned
+    }
+}
+
 impl EngineError {
     /// Attach a `request_id` to this error for log correlation.
     ///
