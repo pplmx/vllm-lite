@@ -30,6 +30,7 @@ impl MlaKvCache {
                     candle_core::DType::F32,
                     &device,
                 )
+                // invariant: pre-conditions make this infallible at this call site.
                 .unwrap()
             })
             .collect();

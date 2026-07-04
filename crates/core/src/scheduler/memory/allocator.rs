@@ -286,6 +286,7 @@ mod prop_tests {
             for _ in 0..capacity {
                 let blocks = alloc.allocate(1);
                 prop_assert!(blocks.is_some(), "allocate returned None before exhaustion");
+                // invariant: caller guarantees non-empty block vector.
                 let blocks = blocks.unwrap();
                 prop_assert_eq!(blocks.len(), 1);
                 let id = blocks[0];
