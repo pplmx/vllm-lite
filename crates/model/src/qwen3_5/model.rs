@@ -17,7 +17,7 @@ use crate::qwen3_5::weights::load_hybrid_weights;
 use candle_core::{DType, Device, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, LayerNorm, VarBuilder};
 
-/// `Qwen35HybridModel`: qwen35 hybrid model.
+/// `Qwen35HybridModel`. See the type definition for fields and behavior.
 pub type Qwen35HybridModel = HybridLm<HybridBlock, LayerNorm, Qwen3Config>;
 
 impl HybridLmConfig for Qwen3Config {
@@ -39,7 +39,7 @@ impl HybridLmConfig for Qwen3Config {
 }
 
 impl Qwen35HybridModel {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -108,7 +108,7 @@ impl Qwen35HybridModel {
         ))
     }
 
-    /// Runs the operation.
+    /// Build from weights.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.

@@ -5,7 +5,7 @@
 
 use candle_core::{DType, Result as CandleResult, Tensor};
 
-/// `GatedDeltaConfig`: gated delta configuration.
+/// Configuration for GatedDelta. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Copy)]
 pub struct GatedDeltaConfig {
     pub num_k_heads: usize,
@@ -45,7 +45,7 @@ pub struct GatedDeltaState {
 }
 
 impl GatedDeltaState {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.

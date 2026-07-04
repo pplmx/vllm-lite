@@ -11,11 +11,11 @@ use candle_nn::Linear;
 
 use super::block::{Gemma4Block, block_from_weights, new_block};
 
-/// `Gemma4Model`: gemma4 model.
+/// `Gemma4Model`. See the type definition for fields and behavior.
 pub type Gemma4Model = CausalLm<Gemma4Block, RmsNorm, Linear>;
 
 impl Gemma4Model {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -28,7 +28,7 @@ impl Gemma4Model {
         Self::new_rms(config, device, num_kv_blocks, kv_quantization, new_block)
     }
 
-    /// Runs the operation.
+    /// Build from weights.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.

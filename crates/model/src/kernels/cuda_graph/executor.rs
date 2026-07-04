@@ -271,7 +271,7 @@ impl BatchCudaGraphExecutor {
     }
 }
 
-/// `GraphStats`: graph statistics.
+/// Telemetry snapshot for Graph: counters, gauges, and percentile latencies. Cloned and serialized on every metrics export.
 #[derive(Debug, Clone)]
 pub(crate) struct GraphStats {
     pub total_executions: u64,

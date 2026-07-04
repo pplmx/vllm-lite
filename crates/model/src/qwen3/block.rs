@@ -58,7 +58,7 @@ impl PagedDecoderBlock for TransformerBlock {
 
 impl TransformerBlock {
     #[allow(clippy::too_many_arguments)]
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -111,7 +111,7 @@ impl TransformerBlock {
 
     #[cfg(feature = "multi-node")]
     #[allow(clippy::too_many_arguments)]
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -161,7 +161,7 @@ impl TransformerBlock {
     }
 
     #[allow(clippy::too_many_arguments)]
-    /// Runs the operation.
+    /// Construct a new instance from already-loaded weight tensors.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -246,7 +246,7 @@ impl TransformerBlock {
         )))
     }
 
-    /// Runs the operation.
+    /// Build from weights.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.
@@ -335,7 +335,7 @@ impl TransformerBlock {
     }
 }
 
-/// Runs the operation.
+/// Run the operation (see signature for params and return type).
 /// # Errors
 ///
 /// Returns `Err` if any required tensor allocation or weight loading fails.

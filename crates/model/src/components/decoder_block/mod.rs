@@ -41,7 +41,7 @@ impl RopeGqaDecoderBlock {
         }
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -57,7 +57,7 @@ impl RopeGqaDecoderBlock {
         x.add(&residual)
     }
 
-    /// Runs the operation.
+    /// Run the prefill path: process the full prompt and cache its KV.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -82,7 +82,7 @@ impl RopeGqaDecoderBlock {
         x.add(&residual)
     }
 
-    /// Runs the operation.
+    /// Run the decode path: process one new token against cached KV.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -122,7 +122,7 @@ impl RopeGqaDecoderBlock {
 
 /// Paged-KV decoder layer: prefill and single-token decode with block table.
 pub trait PagedDecoderBlock {
-    /// Runs the operation.
+    /// Run the prefill path: process the full prompt and cache its KV.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -135,7 +135,7 @@ pub trait PagedDecoderBlock {
         positions: &[usize],
     ) -> Result<Tensor>;
 
-    /// Runs the operation.
+    /// Run the decode path: process one new token against cached KV.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

@@ -28,7 +28,7 @@ pub struct LayerCtx<'a> {
 
 /// Production decoder layer: paged-KV prefill/decode with optional aux state.
 pub trait DecoderLayer {
-    /// Runs the operation.
+    /// Run the prefill path: process the full prompt and cache its KV.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -39,7 +39,7 @@ pub trait DecoderLayer {
         layer_idx: usize,
     ) -> Result<Tensor>;
 
-    /// Runs the operation.
+    /// Run the decode path: process one new token against cached KV.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

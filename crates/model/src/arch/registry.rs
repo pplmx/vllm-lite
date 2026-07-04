@@ -9,7 +9,7 @@ use super::{ArchCapabilities, Architecture};
 
 type ArchFactory = Arc<dyn Fn() -> Box<dyn Architecture> + Send + Sync>;
 
-/// `ArchitectureRegistry`: architecture registry.
+/// Process-wide registry of Architecture. Insert via `register()`, look up by id; thread-safe via internal `RwLock`.
 pub struct ArchitectureRegistry {
     architectures: RwLock<HashMap<String, ArchFactory>>,
 }
@@ -37,7 +37,7 @@ impl ArchitectureRegistry {
         }
     }
 
-    /// Runs the operation.
+    /// Insert into the registry under its name.
     /// # Panics
     ///
     /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
@@ -89,7 +89,7 @@ impl ArchitectureRegistry {
     }
 }
 
-/// `ARCHITECTURE_REGISTRY`: architecture registry static value.
+/// `ARCHITECTURE_REGISTRY`. See the type definition for fields and behavior.
 pub static ARCHITECTURE_REGISTRY: LazyLock<ArchitectureRegistry> =
     LazyLock::new(ArchitectureRegistry::new);
 

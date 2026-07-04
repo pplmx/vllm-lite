@@ -10,7 +10,7 @@ use crate::components::decoder_block::PagedDecoderBlock;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 
-/// `TransformerBlock`: transformer block trait.
+/// Block abstraction for Transformer. Groups a contiguous range of work (e.g. one transformer layer, one pipeline stage).
 pub trait TransformerBlock: PagedDecoderBlock + Send + Sync {
     fn inner_dim(&self) -> usize;
     fn num_kv_heads(&self) -> usize;

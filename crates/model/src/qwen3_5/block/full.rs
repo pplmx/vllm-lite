@@ -11,7 +11,7 @@ use candle_core::{Module, Result as CandleResult, Tensor};
 use candle_nn::{LayerNorm, Linear, VarBuilder};
 
 #[derive(Debug)]
-/// `FullAttentionBlock35`: full attention block35.
+/// `FullAttentionBlock35`. See the type definition for fields and behavior.
 pub struct FullAttentionBlock35 {
     input_ln: LayerNorm,
     self_attn: Attention35WithRoPE,
@@ -21,7 +21,7 @@ pub struct FullAttentionBlock35 {
 }
 
 impl FullAttentionBlock35 {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -62,7 +62,7 @@ impl FullAttentionBlock35 {
         self
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -70,7 +70,7 @@ impl FullAttentionBlock35 {
         self.forward_with_attn(x, |x| self.self_attn.forward(x))
     }
 
-    /// Runs the operation.
+    /// Run the prefill path: process the full prompt and cache its KV.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -88,7 +88,7 @@ impl FullAttentionBlock35 {
         })
     }
 
-    /// Runs the operation.
+    /// Run the decode path: process one new token against cached KV.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -138,7 +138,7 @@ impl FullAttentionBlock35 {
 }
 
 impl FullAttentionBlock35 {
-    /// Runs the operation.
+    /// Build from weights.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.

@@ -1,7 +1,7 @@
 use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;
 
-/// `GeGLU`: ge glu.
+/// `GeGLU`. See the type definition for fields and behavior.
 #[derive(Debug)]
 pub(crate) struct GeGLU {
     gate: Linear,

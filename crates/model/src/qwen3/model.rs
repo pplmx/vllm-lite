@@ -11,11 +11,11 @@ use vllm_dist::TensorParallelConfig;
 
 use super::block::{block_from_weights, new_block};
 
-/// `Qwen3Model`: qwen3 model.
+/// `Qwen3Model`. See the type definition for fields and behavior.
 pub type Qwen3Model = CausalLm<super::block::TransformerBlock, LnLayerNorm, Linear>;
 
 impl Qwen3Model {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -29,7 +29,7 @@ impl Qwen3Model {
     }
 
     #[cfg(feature = "multi-node")]
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -41,7 +41,7 @@ impl Qwen3Model {
         super::tp::new_with_tp(config, tp_config, num_kv_blocks)
     }
 
-    /// Runs the operation.
+    /// Build from weights.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.

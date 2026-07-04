@@ -10,7 +10,7 @@ use crate::components::ssm::error::SSMError;
 use crate::components::ssm::layer::SSMLayer;
 
 #[derive(Debug)]
-/// `MambaBlock`: mamba block.
+/// Block abstraction for Mamba. Groups a contiguous range of work (e.g. one transformer layer, one pipeline stage).
 pub struct MambaBlock {
     input_proj: Linear,
     ssm: SSMLayer,
@@ -19,7 +19,7 @@ pub struct MambaBlock {
 }
 
 impl MambaBlock {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -40,7 +40,7 @@ impl MambaBlock {
         })
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -97,7 +97,7 @@ impl MambaBlock {
         self.norm.forward(&output)
     }
 
-    /// Runs the operation.
+    /// Build from weights.
     /// # Errors
     ///
     ///

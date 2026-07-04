@@ -20,7 +20,7 @@ pub fn softplus(xs: &Tensor) -> CandleResult<Tensor> {
 }
 
 #[derive(Debug)]
-/// `SSMLayer`: ssm layer.
+/// `SSMLayer`. See the type definition for fields and behavior.
 pub struct SSMLayer {
     x_proj: Linear,
     a_log: Linear,
@@ -31,7 +31,7 @@ pub struct SSMLayer {
 }
 
 impl SSMLayer {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -59,7 +59,7 @@ impl SSMLayer {
         })
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -101,7 +101,7 @@ impl SSMLayer {
         &self.d
     }
 
-    /// Runs the operation.
+    /// Build from weights.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.

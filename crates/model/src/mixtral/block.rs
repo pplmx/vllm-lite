@@ -13,7 +13,7 @@ use candle_core::{Result, Tensor};
 use candle_nn::VarBuilder;
 
 #[derive(Debug)]
-/// `MixtralBlock`: mixtral block.
+/// Block abstraction for Mixtral. Groups a contiguous range of work (e.g. one transformer layer, one pipeline stage).
 pub struct MixtralBlock {
     attention: RopeGqaAttention,
     mlp: MixtralSparseMoe,
@@ -22,7 +22,7 @@ pub struct MixtralBlock {
 }
 
 impl MixtralBlock {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -77,7 +77,7 @@ impl MixtralBlock {
         })
     }
 
-    /// Runs the operation.
+    /// Build from weights.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.
@@ -210,7 +210,7 @@ impl MixtralBlock {
         })
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -226,7 +226,7 @@ impl MixtralBlock {
         x.add(&residual)
     }
 
-    /// Runs the operation.
+    /// Run the prefill path: process the full prompt and cache its KV.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -251,7 +251,7 @@ impl MixtralBlock {
         x.add(&residual)
     }
 
-    /// Runs the operation.
+    /// Run the decode path: process one new token against cached KV.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

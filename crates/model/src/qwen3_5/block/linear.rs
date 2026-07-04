@@ -9,7 +9,7 @@ use candle_core::{DType, Result as CandleResult, Tensor};
 use candle_nn::{Conv1d, LayerNorm, Linear, VarBuilder, conv1d};
 
 #[derive(Debug)]
-/// `LinearAttentionBlock`: linear attention block.
+/// Block abstraction for LinearAttention. Groups a contiguous range of work (e.g. one transformer layer, one pipeline stage).
 pub struct LinearAttentionBlock {
     pub(crate) gdn: GatedDeltaNet,
 }
@@ -64,7 +64,7 @@ impl LinearAttentionBlock {
         Ok(Self { gdn })
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -72,7 +72,7 @@ impl LinearAttentionBlock {
         self.gdn.forward(x)
     }
 
-    /// Runs the operation.
+    /// Run the prefill path: process the full prompt and cache its KV.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -80,7 +80,7 @@ impl LinearAttentionBlock {
         self.gdn.forward_prefill(x)
     }
 
-    /// Runs the operation.
+    /// Run the decode path: process one new token against cached KV.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -90,7 +90,7 @@ impl LinearAttentionBlock {
 }
 
 impl LinearAttentionBlock {
-    /// Runs the operation.
+    /// Build from weights.
     /// # Errors
     ///
     ///

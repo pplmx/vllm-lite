@@ -2,7 +2,7 @@
 use candle_core::{Result, Tensor};
 
 #[derive(Debug)]
-/// `FlashAttention`: flash attention.
+/// `FlashAttention`. See the type definition for fields and behavior.
 pub struct FlashAttention;
 
 impl FlashAttention {
@@ -11,7 +11,7 @@ impl FlashAttention {
         Self
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -23,7 +23,7 @@ impl FlashAttention {
     }
 }
 
-/// `FlashAttentionConfig`: flash attention configuration.
+/// Configuration for FlashAttention. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Default)]
 pub struct FlashAttentionConfig {
     pub num_heads: usize,

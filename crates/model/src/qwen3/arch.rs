@@ -13,7 +13,7 @@ use super::block::TransformerBlock as Qwen3Block;
 use super::model::Qwen3Model;
 
 #[derive(Debug)]
-/// `Qwen3Architecture`: qwen3 architecture.
+/// `Qwen3Architecture`. See the type definition for fields and behavior.
 pub struct Qwen3Architecture;
 
 impl Qwen3Architecture {

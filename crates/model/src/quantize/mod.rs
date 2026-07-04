@@ -14,7 +14,14 @@ pub use types::{QuantizationConfig, QuantizationFormat, QuantizedTensor, Storage
 use candle_core::{Result, Tensor};
 use std::collections::HashMap;
 
-/// Checkpoint: checkpoint.
+/// In-memory representation of a loaded checkpoint: a name-keyed map
+/// of [`StorageTensor`] (so each tensor may be quantized or dequantized
+/// independently) plus the original `QuantizationConfig` if the source
+/// file carried one.
+///
+/// `pub(crate)` because checkpoint deserialization is an internal
+/// loader concern; the rest of the crate consumes weights through
+/// `ModelLoader` / `FormatLoader` only.
 #[derive(Debug)]
 pub(crate) struct Checkpoint {
     pub tensors: HashMap<String, StorageTensor>,

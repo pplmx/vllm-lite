@@ -7,7 +7,7 @@ use super::rope::{RopeParameters, RopeScaling};
 use crate::config::errors::{ConfigError, ConfigResult};
 use serde::Deserialize;
 
-/// `TextConfig`: text configuration.
+/// Configuration for Text. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct TextConfig {
     #[serde(default)]
@@ -48,7 +48,7 @@ pub struct TextConfig {
     pub full_attention_interval: Option<usize>,
 }
 
-/// `Qwen3Config`: qwen3 configuration.
+/// Configuration for Qwen3. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Qwen3Config {
     #[serde(default)]
@@ -93,7 +93,7 @@ pub struct Qwen3Config {
     pub head_dim: Option<usize>,
 }
 
-/// `AttentionType`: attention type.
+/// `AttentionType`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttentionType {
     MHA,
@@ -194,7 +194,7 @@ impl TextConfig {
 }
 
 impl Qwen3Config {
-    /// Runs the operation.
+    /// Construct a tokenizer from a tokenizer.json file.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.

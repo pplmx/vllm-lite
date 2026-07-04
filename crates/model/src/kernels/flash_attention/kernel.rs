@@ -17,14 +17,14 @@ use super::config::{AttentionVariant, FlashAttentionConfig, select_tile_size};
 use super::util::softmax_last_dim;
 use candle_core::{Result, Tensor};
 
-/// `FlashAttention`: flash attention trait.
+/// `FlashAttention`. See the type definition for fields and behavior.
 pub trait FlashAttention: Send + Sync + std::fmt::Debug {
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     fn forward(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor>;
-    /// Runs the operation.
+    /// Run attention with an explicit mask tensor.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -35,7 +35,7 @@ pub trait FlashAttention: Send + Sync + std::fmt::Debug {
         v: &Tensor,
         mask: &Tensor,
     ) -> Result<Tensor>;
-    /// Runs the operation.
+    /// Run attention tile-by-tile for memory efficiency.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -44,14 +44,14 @@ pub trait FlashAttention: Send + Sync + std::fmt::Debug {
 }
 
 #[derive(Debug)]
-/// `ScaledDotProductAttention`: scaled dot product attention.
+/// `ScaledDotProductAttention`. See the type definition for fields and behavior.
 pub struct ScaledDotProductAttention {
     scale: f32,
     tile_size: usize,
 }
 #[derive(Debug)]
 
-/// `FlashAttentionV2`: flash attention v2.
+/// `FlashAttentionV2`. See the type definition for fields and behavior.
 pub struct FlashAttentionV2 {
     scale: f32,
     block_size: usize,
@@ -77,7 +77,7 @@ impl FlashAttentionV2 {
         self
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -192,7 +192,7 @@ impl FlashAttentionV2 {
         Ok(final_output)
     }
 
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -366,7 +366,7 @@ impl ScaledDotProductAttention {
         self
     }
 
-    /// Runs the operation.
+    /// Compute tiled.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -432,7 +432,7 @@ impl ScaledDotProductAttention {
         Ok(result)
     }
 
-    /// Runs the operation.
+    /// Compute sliding window.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -486,7 +486,7 @@ impl FlashAttention for ScaledDotProductAttention {
     }
 }
 
-/// `FlashAttentionKernel`: flash attention kernel.
+/// `FlashAttentionKernel`. See the type definition for fields and behavior.
 #[derive(Debug)]
 pub struct FlashAttentionKernel {
     attention: Box<dyn FlashAttention>,
@@ -511,7 +511,7 @@ impl FlashAttentionKernel {
         Self { attention, config }
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).

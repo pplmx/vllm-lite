@@ -7,7 +7,7 @@ use super::errors::ConfigResult;
 use crate::arch::ARCHITECTURE_REGISTRY;
 
 #[derive(Debug)]
-/// `ModelConfig`: model configuration.
+/// Configuration for Model. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 pub struct ModelConfig {
     pub architecture: Architecture,
     pub hidden_size: usize,
@@ -212,7 +212,7 @@ impl ModelConfig {
         }
     }
 
-    /// Runs the operation.
+    /// Build from config json.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.

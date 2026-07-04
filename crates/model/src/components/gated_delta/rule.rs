@@ -14,7 +14,7 @@ use candle_core::{DType, Module, Result as CandleResult, Tensor};
 use candle_nn::{Conv1d, LayerNorm, Linear};
 
 #[derive(Debug)]
-/// `GatedDeltaNet`: gated delta net.
+/// `GatedDeltaNet`. See the type definition for fields and behavior.
 pub struct GatedDeltaNet {
     pub config: GatedDeltaConfig,
     in_proj_qkv: Linear,
@@ -206,7 +206,7 @@ pub fn gated_delta_recurrent(
     gated_delta_recurrent_with_state(q, k, v, g, beta, None)
 }
 
-/// Runs the operation.
+/// Run the operation (see signature for params and return type).
 /// # Errors
 ///
 /// Returns `Err` if the operation fails.
@@ -275,7 +275,7 @@ impl GatedDeltaNet {
         }
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -283,7 +283,7 @@ impl GatedDeltaNet {
         self.forward_prefill(x).map(|(out, _)| out)
     }
 
-    /// Runs the operation.
+    /// Run the prefill path: process the full prompt and cache its KV.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -327,7 +327,7 @@ impl GatedDeltaNet {
         Ok((output, super::state::GatedDeltaState { recurrent, conv }))
     }
 
-    /// Runs the operation.
+    /// Run the decode path: process one new token against cached KV.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

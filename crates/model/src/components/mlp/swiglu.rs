@@ -6,7 +6,7 @@
 use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;
 
-/// Runs the operation.
+/// Run the operation (see signature for params and return type).
 /// # Errors
 ///
 /// Returns `Err` if the operation fails.
@@ -26,7 +26,7 @@ pub fn swiglu_forward(
 }
 
 #[derive(Debug)]
-/// `SwiGLU`: swi glu.
+/// `SwiGLU`. See the type definition for fields and behavior.
 pub struct SwiGLU {
     gate: Linear,
     up: Linear,
@@ -34,7 +34,7 @@ pub struct SwiGLU {
 }
 
 impl SwiGLU {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -53,7 +53,7 @@ impl SwiGLU {
         Ok(Self { gate, up, down })
     }
 
-    /// Runs the operation.
+    /// Construct a new instance from already-loaded weight tensors.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -71,7 +71,7 @@ impl SwiGLU {
         Ok(Self { gate, up, down })
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).

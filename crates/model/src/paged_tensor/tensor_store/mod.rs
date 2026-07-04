@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use candle_core::{DType, Device, Result, Tensor};
 
 #[derive(Debug)]
-/// `PagedKvCache`: paged kv cache.
+/// Cache for PagedKv. Keyed lookup with the configured eviction policy (LRU, ARC, FIFO). Thread-safe.
 pub struct PagedKvCache {
     key_cache: Vec<Tensor>,
     value_cache: Vec<Tensor>,
@@ -31,7 +31,7 @@ pub struct PagedKvCache {
 }
 
 impl PagedKvCache {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.

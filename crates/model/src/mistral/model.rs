@@ -9,13 +9,13 @@ use std::collections::HashMap;
 
 use super::block::{block_from_weights, new_block};
 
-/// `MistralBlock`: mistral block.
+/// Block abstraction for Mistral. Groups a contiguous range of work (e.g. one transformer layer, one pipeline stage).
 pub type MistralBlock = RopeGqaDecoderBlock;
-/// `MistralModel`: mistral model.
+/// `MistralModel`. See the type definition for fields and behavior.
 pub type MistralModel = CausalLm<MistralBlock, LnLayerNorm, Linear>;
 
 impl MistralModel {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -23,7 +23,7 @@ impl MistralModel {
         Self::new_with_block_fn(config, device, num_kv_blocks, false, new_block)
     }
 
-    /// Runs the operation.
+    /// Build from weights.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.

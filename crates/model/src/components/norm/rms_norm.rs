@@ -7,7 +7,7 @@
 use candle_core::{Module, Result, Tensor};
 
 #[derive(Debug)]
-/// `RmsNorm`: rms norm.
+/// `RmsNorm`. See the type definition for fields and behavior.
 pub struct RmsNorm {
     weight: Tensor,
     eps: f64,
@@ -19,7 +19,7 @@ impl RmsNorm {
         Self { weight, eps }
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -55,7 +55,7 @@ impl Module for RmsNorm {
     }
 }
 
-/// Runs the operation.
+/// Run the operation (see signature for params and return type).
 /// # Errors
 ///
 /// Returns `Err` if the operation fails.

@@ -11,7 +11,7 @@ use vllm_traits::ModelBackend;
 use super::block::Gemma4Block;
 use super::model::Gemma4Model;
 
-/// `Gemma4Architecture`: gemma4 architecture.
+/// `Gemma4Architecture`. See the type definition for fields and behavior.
 pub(crate) struct Gemma4Architecture;
 
 impl Gemma4Architecture {

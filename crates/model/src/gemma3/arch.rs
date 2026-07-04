@@ -13,7 +13,7 @@ use vllm_traits::ModelBackend;
 use vllm_traits::types::BatchOutput;
 
 #[derive(Debug)]
-/// `Gemma3Architecture`: gemma3 architecture.
+/// `Gemma3Architecture`. See the type definition for fields and behavior.
 pub struct Gemma3Architecture {
     sliding_window: usize,
 }
@@ -33,7 +33,7 @@ impl Default for Gemma3Architecture {
     }
 }
 
-/// `Gemma3BlockWrapper`: gemma3 block wrapper.
+/// Wrapper around Gemma3Block. Adds a single responsibility (caching, locking, observation) on top of the inner type.
 pub(crate) struct Gemma3BlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,
@@ -141,7 +141,7 @@ impl Architecture for Gemma3Architecture {
     }
 }
 
-/// `Gemma3Model`: gemma3 model.
+/// `Gemma3Model`. See the type definition for fields and behavior.
 pub(crate) struct Gemma3Model {
     config: ModelConfig,
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)

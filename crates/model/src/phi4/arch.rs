@@ -13,7 +13,7 @@ use vllm_traits::ModelBackend;
 use vllm_traits::types::BatchOutput;
 
 #[derive(Debug)]
-/// `Phi4Architecture`: phi4 architecture.
+/// `Phi4Architecture`. See the type definition for fields and behavior.
 pub struct Phi4Architecture;
 
 impl Phi4Architecture {
@@ -29,7 +29,7 @@ impl Default for Phi4Architecture {
     }
 }
 
-/// `Phi4BlockWrapper`: phi4 block wrapper.
+/// Wrapper around Phi4Block. Adds a single responsibility (caching, locking, observation) on top of the inner type.
 pub(crate) struct Phi4BlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,
@@ -134,7 +134,7 @@ impl Architecture for Phi4Architecture {
     }
 }
 
-/// `Phi4Model`: phi4 model.
+/// `Phi4Model`. See the type definition for fields and behavior.
 pub(crate) struct Phi4Model {
     config: ModelConfig,
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)

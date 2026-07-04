@@ -8,7 +8,7 @@ use candle_nn::{Conv1d, Linear, VarBuilder, conv1d};
 use crate::components::ssm::error::SSMError;
 
 #[derive(Debug)]
-/// `SSMHarmonicSSMLayer`: ssm harmonic ssm layer.
+/// `SSMHarmonicSSMLayer`. See the type definition for fields and behavior.
 pub struct SSMHarmonicSSMLayer {
     x_proj: Linear,
     in_proj_a: Linear,
@@ -20,7 +20,7 @@ pub struct SSMHarmonicSSMLayer {
 }
 
 impl SSMHarmonicSSMLayer {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -52,7 +52,7 @@ impl SSMHarmonicSSMLayer {
         })
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -74,7 +74,7 @@ impl SSMHarmonicSSMLayer {
         Ok((delta, b.clone(), c.clone(), x_conv))
     }
 
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -137,7 +137,7 @@ impl SSMHarmonicSSMLayer {
         &self.dt_bias
     }
 
-    /// Runs the operation.
+    /// Build from weights.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.

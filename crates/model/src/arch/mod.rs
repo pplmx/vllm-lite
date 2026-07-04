@@ -26,7 +26,7 @@ pub trait Architecture: Send + Sync + 'static {
 
     fn capabilities(&self) -> ArchCapabilities;
 
-    /// Runs the operation.
+    /// Create block.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -38,7 +38,7 @@ pub trait Architecture: Send + Sync + 'static {
         device: &Device,
     ) -> Result<Box<dyn TransformerBlock>>;
 
-    /// Runs the operation.
+    /// Construct a model from the parsed config and checkpoint.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

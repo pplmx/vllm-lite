@@ -14,7 +14,7 @@ use crate::components::positional::MRoPE;
 use crate::paged_tensor::PagedKvCache;
 
 #[derive(Debug)]
-/// `Attention35WithRoPE`: attention35 with ro pe.
+/// `Attention35WithRoPE`. See the type definition for fields and behavior.
 pub struct Attention35WithRoPE {
     q_proj: Linear,
     k_proj: Linear,
@@ -27,7 +27,7 @@ pub struct Attention35WithRoPE {
 }
 
 impl Attention35WithRoPE {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -52,7 +52,7 @@ impl Attention35WithRoPE {
         })
     }
 
-    /// Runs the operation.
+    /// Build from weights.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.
@@ -99,7 +99,7 @@ impl Attention35WithRoPE {
         })
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -111,7 +111,7 @@ impl Attention35WithRoPE {
         self.compute_attention(&q, &k, &v, batch, seq_len, true)
     }
 
-    /// Runs the operation.
+    /// Run the prefill path: process the full prompt and cache its KV.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -146,7 +146,7 @@ impl Attention35WithRoPE {
         self.compute_paged_attention(&q, &k_expanded, &v_expanded, seq_len)
     }
 
-    /// Runs the operation.
+    /// Run the decode path: process one new token against cached KV.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
