@@ -1,3 +1,8 @@
+//! Qwen3 model config: hidden size, head counts, RoPE theta, sliding-window, QK-norm, MLA latent dim.
+//!
+//! Deserialized from `config.json`. The same struct serves Qwen3-`0.6B/4B/8B/32B`;
+//! the field set is the union so smaller models just leave optionals empty.
+
 // crates/model/src/qwen3/config/model.rs
 //
 // Model-specific configuration for Qwen3:
