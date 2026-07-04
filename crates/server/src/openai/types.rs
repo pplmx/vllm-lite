@@ -105,7 +105,7 @@ impl ChatResponse {
     }
 }
 
-/// `ChatChunkChoice`: chat chunk choice.
+/// `ChatChunkChoice`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChunkChoice {
     pub index: i32,
@@ -113,7 +113,7 @@ pub struct ChatChunkChoice {
     pub finish_reason: Option<String>,
 }
 
-/// `ChatChunk`: chat chunk.
+/// `ChatChunk`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChunk {
     pub id: String,
@@ -150,7 +150,7 @@ pub struct CompletionRequest {
     pub stop: Option<Vec<String>>,
 }
 
-/// `CompletionChoice`: completion choice.
+/// `CompletionChoice`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompletionChoice {
     pub text: String,

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-/// `BackpressureConfig`: backpressure configuration.
+/// Configuration for Backpressure. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub(crate) struct BackpressureConfig {
     pub max_buffer_size: usize,
@@ -35,7 +35,7 @@ impl BackpressureConfig {
     }
 }
 
-/// `FlowControlState`: flow control state enumeration.
+/// Internal state of FlowControl. Mutated under a lock; read via accessor methods on the parent type.
 #[derive(Debug, Clone)]
 pub(crate) enum FlowControlState {
     Normal,
@@ -43,7 +43,7 @@ pub(crate) enum FlowControlState {
     Resumed,
 }
 
-/// `BackpressureState`: backpressure state.
+/// Internal state of Backpressure. Mutated under a lock; read via accessor methods on the parent type.
 #[derive(Debug)]
 pub(crate) struct BackpressureState {
     pending_tokens: Arc<AtomicUsize>,
@@ -118,7 +118,7 @@ impl BackpressureState {
     }
 }
 
-/// `StreamingBackpressure`: streaming backpressure.
+/// `StreamingBackpressure`. See the type definition for fields and behavior.
 pub(crate) struct StreamingBackpressure {
     state: Arc<BackpressureState>,
 }

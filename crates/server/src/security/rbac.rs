@@ -57,7 +57,7 @@ impl Role {
 }
 
 #[derive(Debug)]
-/// `RbacMiddleware`: rbac middleware.
+/// `RbacMiddleware`. See the type definition for fields and behavior.
 pub struct RbacMiddleware {
     default_role: Role,
     role_permissions: Arc<Vec<(Role, Vec<&'static str>)>>,

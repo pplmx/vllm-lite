@@ -11,7 +11,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use vllm_core::types::EngineMessage;
 
-/// `MetricsSnapshotResponse`: metrics snapshot response.
+/// Response payload for MetricsSnapshot. Returned from handlers, serialized to JSON for the HTTP boundary.
 #[derive(Debug, Serialize)]
 pub struct MetricsSnapshotResponse {
     pub counters: HashMap<String, u64>,
@@ -99,7 +99,7 @@ pub async fn metrics_snapshot(State(state): State<ApiState>) -> Json<MetricsSnap
     })
 }
 
-/// `KvCacheDumpResponse`: kv cache dump response.
+/// Response payload for KvCacheDump. Returned from handlers, serialized to JSON for the HTTP boundary.
 #[derive(Debug, Serialize)]
 pub struct KvCacheDumpResponse {
     pub total_blocks: usize,
@@ -137,7 +137,7 @@ pub async fn kv_cache_dump(State(state): State<ApiState>) -> Json<KvCacheDumpRes
     })
 }
 
-/// `TraceStatusResponse`: trace status response.
+/// Response payload for TraceStatus. Returned from handlers, serialized to JSON for the HTTP boundary.
 #[derive(Debug, Serialize)]
 pub struct TraceStatusResponse {
     pub tracing_enabled: bool,

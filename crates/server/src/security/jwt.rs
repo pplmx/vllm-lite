@@ -23,7 +23,7 @@ use tokio::sync::RwLock;
 #[cfg(test)]
 use base64::Engine;
 
-/// `JwtError`: jwt error.
+/// Error type for Jwt. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, Error)]
 pub enum JwtError {
     #[error("Invalid token format: {0}")]
@@ -44,7 +44,12 @@ pub enum JwtError {
     KeyConfig(String),
 }
 
-/// Claims: claims.
+/// JWT claim set. Standard registered claims (`sub`, `iss`, `aud`,
+/// `exp`, `iat`) plus an open `extra: HashMap<String, Value>` for
+/// application-specific fields (e.g. tenant id, scope list).
+///
+/// Serialized as the JWT body and verified against the configured
+/// algorithm and audience before granting access.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
@@ -60,7 +65,7 @@ pub struct Claims {
     pub extra: HashMap<String, serde_json::Value>,
 }
 
-/// `JwtConfig`: jwt configuration.
+/// Configuration for Jwt. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub struct JwtConfig {
     pub secret: Option<String>,
@@ -117,7 +122,7 @@ const ASYMMETRIC_ALGORITHMS: &[Algorithm] = &[
 ];
 
 #[derive(Debug)]
-/// `JwtValidator`: jwt validator.
+/// `JwtValidator`. See the type definition for fields and behavior.
 pub struct JwtValidator {
     config: JwtConfig,
 }
@@ -224,7 +229,7 @@ impl JwtValidator {
 }
 #[derive(Debug)]
 
-/// `JwtAuthMiddleware`: jwt auth middleware.
+/// `JwtAuthMiddleware`. See the type definition for fields and behavior.
 pub struct JwtAuthMiddleware {
     validator: Arc<RwLock<JwtValidator>>,
 }
@@ -237,7 +242,7 @@ impl JwtAuthMiddleware {
         }
     }
 
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

@@ -54,7 +54,7 @@ where
     ser.serialize_str(value.as_str())
 }
 
-/// `SimpleBatchRequest`: simple batch request.
+/// Request payload for SimpleBatch. Contains input data, configuration, and request-tracking metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimpleBatchRequest {
     pub prompts: Vec<String>,
@@ -68,7 +68,7 @@ pub struct SimpleBatchRequest {
     pub temperature: Option<f32>,
 }
 
-/// `BatchResponse`: batch response.
+/// Response payload for Batch. Returned from handlers, serialized to JSON for the HTTP boundary.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchResponse {
     pub id: String,
@@ -85,7 +85,7 @@ pub struct BatchResponse {
     pub request_counts: Option<RequestCounts>,
 }
 
-/// `RequestCounts`: request counts.
+/// `RequestCounts`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestCounts {
     pub total: i32,
@@ -93,7 +93,7 @@ pub struct RequestCounts {
     pub failed: i32,
 }
 
-/// `BatchResults`: batch results.
+/// Collection of result items for Batch. Each entry pairs a request id with its result or error.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchResults {
     pub batch_id: String,
@@ -101,7 +101,7 @@ pub struct BatchResults {
     pub results: Vec<BatchResultItem>,
 }
 
-/// `BatchResultItem`: batch result item.
+/// `BatchResultItem`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchResultItem {
     pub index: usize,
@@ -110,7 +110,7 @@ pub struct BatchResultItem {
     pub error: Option<String>,
 }
 
-/// `BatchStatus`: batch status.
+/// Status of an async batch job: pending, running, completed, failed, or cancelled. Transitions are monotonic.
 #[derive(Debug, Clone)]
 pub enum BatchStatus {
     Pending,
@@ -119,7 +119,7 @@ pub enum BatchStatus {
     Failed,
 }
 
-/// `BatchJob`: batch job.
+/// Background job: scheduled for execution by the worker pool. Carries the work payload plus retry / cancellation metadata.
 #[derive(Debug, Clone)]
 pub struct BatchJob {
     pub id: String,
@@ -136,7 +136,7 @@ pub struct BatchJob {
 
 impl BatchJob {
     #[must_use]
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Panics
     ///
     /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).

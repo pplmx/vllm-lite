@@ -4,14 +4,14 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;
 
-/// `REQUEST_ID_HEADER`: request id header constant.
+/// `REQUEST_ID_HEADER`. See the type definition for fields and behavior.
 pub(crate) const REQUEST_ID_HEADER: &str = "X-Request-ID";
 
-/// `CorrelationId`: correlation id.
+/// Opaque newtype identifier for a correlation. Hashable, comparable, serializable; use this rather than the raw integer.
 #[derive(Debug, Clone)]
 pub(crate) struct CorrelationId(pub String);
 
-/// `CorrelationIdMiddleware`: correlation id middleware.
+/// `CorrelationIdMiddleware`. See the type definition for fields and behavior.
 #[derive(Debug, Clone)]
 pub struct CorrelationIdMiddleware {
     id_generator: Arc<RwLock<u64>>,
@@ -25,7 +25,7 @@ impl CorrelationIdMiddleware {
         }
     }
 
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Panics
     ///
     /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
