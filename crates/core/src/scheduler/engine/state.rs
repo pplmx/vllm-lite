@@ -267,9 +267,9 @@ impl SchedulerEngine {
         };
 
         sequences.sort_by(|a, b| {
-            let pa = self.policy.compute_priority(a, &ctx);
-            let pb = self.policy.compute_priority(b, &ctx);
-            pa.cmp(&pb)
+            let priority_a = self.policy.compute_priority(a, &ctx);
+            let priority_b = self.policy.compute_priority(b, &ctx);
+            priority_a.cmp(&priority_b)
         });
 
         // Check memory and preempt if needed
