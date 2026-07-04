@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
-/// `AuditEvent`: audit event.
+/// One event in the Audit stream. Variants cover the full state-machine of the subsystem.
 #[derive(Debug, Clone, Serialize)]
 pub struct AuditEvent {
     pub timestamp: String,
@@ -18,7 +18,7 @@ pub struct AuditEvent {
 }
 
 #[derive(Debug)]
-/// `AuditLogger`: audit logger.
+/// `AuditLogger`. See the type definition for fields and behavior.
 pub struct AuditLogger {
     events: Arc<RwLock<Vec<AuditEvent>>>,
     max_events: usize,

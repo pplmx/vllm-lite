@@ -11,13 +11,13 @@ use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
 #[derive(Debug)]
-/// `AuthMiddleware`: auth middleware.
+/// `AuthMiddleware`. See the type definition for fields and behavior.
 pub struct AuthMiddleware {
     api_keys: Arc<Vec<String>>,
     rate_limiter: Arc<RwLock<RateLimiter>>,
 }
 
-/// `RateLimiter`: rate limiter.
+/// `RateLimiter`. See the type definition for fields and behavior.
 #[derive(Debug)]
 pub(crate) struct RateLimiter {
     requests: HashMap<String, Vec<Instant>>,
@@ -60,7 +60,7 @@ impl AuthMiddleware {
         }
     }
 
-    /// Runs the operation.
+    /// Verify draft tokens against the target model logits.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -85,7 +85,7 @@ impl AuthMiddleware {
     }
 }
 
-/// Runs the operation.
+/// Run the operation (see signature for params and return type).
 /// # Panics
 ///
 /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).

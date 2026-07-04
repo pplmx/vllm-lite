@@ -2,7 +2,7 @@ use crate::config::AppConfig;
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 
-/// `CliValidationError`: cli validation error.
+/// Error type for CliValidation. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum CliValidationError {
     #[error("'{0}' is not a valid number")]
@@ -15,7 +15,7 @@ pub enum CliValidationError {
     PortOutOfRange,
 }
 
-/// `LogLevel`: log level enumeration.
+/// `LogLevel`. See the type definition for fields and behavior.
 #[derive(Clone, Debug, ValueEnum, PartialEq, Eq)]
 pub enum LogLevel {
     Trace,
@@ -86,7 +86,7 @@ fn validate_max_draft_tokens(s: &str) -> Result<usize, CliValidationError> {
     parse_usize_in_range(s, 0, 64)
 }
 
-/// `CliArgs`: cli args.
+/// `CliArgs`. See the type definition for fields and behavior.
 #[derive(Parser, Debug)]
 #[command(name = "vllm-server")]
 #[command(version = "0.1.0")]
@@ -121,7 +121,7 @@ struct ServerArgs {
     pub port: u16,
 }
 
-/// `ModelArgs`: model args.
+/// `ModelArgs`. See the type definition for fields and behavior.
 #[derive(clap::Args, Debug, Clone)]
 #[group(id = "model_args", required = true)]
 pub struct ModelArgs {

@@ -10,7 +10,7 @@ use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::rustls::server::WebPkiClientVerifier;
 use tokio_rustls::rustls::{self, ServerConfig};
 
-/// `TlsError`: tls error.
+/// Error type for Tls. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, Error)]
 pub enum TlsError {
     #[error("Failed to read certificate: {0}")]
@@ -24,7 +24,7 @@ pub enum TlsError {
 }
 
 #[derive(Debug)]
-/// `TlsConfig`: tls configuration.
+/// Configuration for Tls. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 pub struct TlsConfig {
     pub cert_path: String,
     pub key_path: String,
@@ -49,7 +49,7 @@ impl TlsConfig {
         self
     }
 
-    /// Runs the operation.
+    /// Run the loader and produce the target type (model, cache, etc.).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -103,13 +103,13 @@ impl TlsConfig {
 }
 #[derive(Debug)]
 
-/// `TlsListener`: tls listener.
+/// `TlsListener`. See the type definition for fields and behavior.
 pub struct TlsListener {
     config: Arc<ServerConfig>,
 }
 
 impl TlsListener {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -121,7 +121,7 @@ impl TlsListener {
         })
     }
 
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

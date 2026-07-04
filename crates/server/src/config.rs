@@ -2,7 +2,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-/// `ConfigValidationError`: config validation error.
+/// Error type for ConfigValidation. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ConfigValidationError {
     #[error("server.port must be > 0")]
@@ -27,12 +27,12 @@ pub enum ConfigValidationError {
     DuplicateDraftId(String),
 }
 
-/// `ConfigValidationErrors`: config validation errors.
+/// Configuration for validationerrors. Constructed at startup; immutable for the process lifetime.
 #[derive(Debug, thiserror::Error)]
 #[error("config validation failed: {0:?}")]
 pub struct ConfigValidationErrors(pub Vec<ConfigValidationError>);
 
-/// `ServerConfig`: server configuration.
+/// Configuration for Server. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::derivable_impls)]
 pub struct ServerConfig {
@@ -69,7 +69,7 @@ fn default_log_level() -> String {
     "info".to_string()
 }
 
-/// `AuthConfig`: auth configuration.
+/// Configuration for Auth. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthConfig {
     #[serde(default)]
@@ -142,7 +142,7 @@ const fn default_rate_limit_window() -> u64 {
     60
 }
 
-/// `DraftSpecConfig`: draft spec configuration.
+/// Configuration for DraftSpec. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DraftSpecConfig {
     pub id: String,
@@ -159,7 +159,7 @@ const fn default_draft_layers() -> usize {
     4
 }
 
-/// `EngineConfig`: engine configuration.
+/// Configuration for Engine. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[allow(clippy::derivable_impls)]
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct EngineConfig {
@@ -233,7 +233,7 @@ const fn default_enable_adaptive_speculative() -> bool {
     true
 }
 
-/// `AppConfig`: app configuration.
+/// Configuration for App. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::derivable_impls)]
 pub struct AppConfig {

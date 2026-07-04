@@ -4,7 +4,7 @@ use super::types::{BatchResponse, BatchResults, BatchStatus, RequestCounts, Simp
 use crate::ApiState;
 use crate::openai::types::ErrorResponse;
 
-/// Runs the operation.
+/// Create batch.
 /// # Errors
 ///
 /// # Panics
@@ -71,7 +71,7 @@ pub async fn create_batch(
     }))
 }
 
-/// Runs the operation.
+/// Get batch.
 /// # Errors
 ///
 /// Returns `Err` if the operation fails.
@@ -117,7 +117,7 @@ pub async fn get_batch(
     }))
 }
 
-/// Runs the operation.
+/// Get batch results.
 /// # Errors
 ///
 /// Returns `Err` if the operation fails.
@@ -149,7 +149,7 @@ pub async fn get_batch_results(
     }))
 }
 
-/// Runs the operation.
+/// Run the operation (see signature for params and return type).
 /// # Panics
 ///
 /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).

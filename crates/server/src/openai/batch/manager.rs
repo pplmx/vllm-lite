@@ -7,7 +7,7 @@ use uuid::Uuid;
 use super::types::{BatchEndpoint, BatchJob, BatchResultItem, BatchStatus};
 
 #[derive(Debug)]
-/// `BatchManager`: batch manager.
+/// Manager for Batch. Owns the underlying resource, coordinates concurrent access, and exposes a thread-safe public API.
 pub struct BatchManager {
     jobs: Arc<RwLock<HashMap<String, BatchJob>>>,
 }
@@ -60,7 +60,7 @@ impl BatchManager {
         }
     }
 
-    /// Runs the operation.
+    /// Set completed.
     /// # Panics
     ///
     /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).

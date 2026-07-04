@@ -14,13 +14,13 @@ use crate::ApiState;
 /// message each loop iteration.
 pub type EngineHandle = mpsc::UnboundedSender<EngineMessage>;
 
-/// `HealthResponse`: health response.
+/// Response payload for Health. Returned from handlers, serialized to JSON for the HTTP boundary.
 #[derive(Debug, Serialize)]
 pub struct HealthResponse {
     pub status: String,
 }
 
-/// `HealthDetailResponse`: health detail response.
+/// Response payload for HealthDetail. Returned from handlers, serialized to JSON for the HTTP boundary.
 #[derive(Debug, Serialize)]
 pub struct HealthDetailResponse {
     pub status: String,
