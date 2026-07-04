@@ -1,6 +1,6 @@
 use vllm_traits::TensorParallelError;
 
-/// `DeviceMesh`: device mesh.
+/// `DeviceMesh`. See the type definition for fields and behavior.
 #[derive(Debug, Clone)]
 pub struct DeviceMesh {
     pub world_size: usize,
@@ -9,7 +9,7 @@ pub struct DeviceMesh {
 }
 
 impl DeviceMesh {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -51,7 +51,7 @@ impl DeviceMesh {
     }
 }
 
-/// `NodeMesh`: node mesh.
+/// `NodeMesh`. See the type definition for fields and behavior.
 #[derive(Debug, Clone)]
 pub struct NodeMesh {
     pub node_mesh: Vec<DeviceMesh>,
@@ -63,7 +63,7 @@ pub struct NodeMesh {
 }
 
 impl NodeMesh {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.

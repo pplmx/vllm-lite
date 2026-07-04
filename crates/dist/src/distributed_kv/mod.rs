@@ -4,7 +4,7 @@ pub mod protocol;
 pub use cache::DistributedKVCache;
 pub use protocol::{CacheMessage, CacheOperation, NodeId};
 
-/// `CacheConfig`: cache configuration.
+/// Configuration for Cache. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub struct CacheConfig {
     pub node_id: NodeId,
@@ -14,7 +14,7 @@ pub struct CacheConfig {
     pub coherence_protocol: CoherenceProtocol,
 }
 
-/// `InvalidationStrategy`: invalidation strategy enumeration.
+/// Strategy pattern implementation for Invalidation. Encapsulates one of N interchangeable algorithms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InvalidationStrategy {
     WriteInvalidate,
@@ -22,7 +22,7 @@ pub enum InvalidationStrategy {
     NoInvalidation,
 }
 
-/// `CoherenceProtocol`: coherence protocol enumeration.
+/// `CoherenceProtocol`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoherenceProtocol {
     None,

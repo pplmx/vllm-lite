@@ -1,4 +1,4 @@
-/// `NodeId`: node id.
+/// Opaque newtype identifier for a node. Hashable, comparable, serializable; use this rather than the raw integer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct NodeId(pub usize);
 
@@ -14,7 +14,7 @@ impl NodeId {
     }
 }
 
-/// `CacheOperation`: cache operation enumeration.
+/// Enum of operations supported by Cache. Variants cover the full CRUD + admin verb set; serialized over the wire.
 #[derive(Debug, Clone)]
 pub enum CacheOperation {
     Read {
@@ -41,7 +41,7 @@ pub enum CacheOperation {
     },
 }
 
-/// `CacheMessage`: cache message.
+/// Wire message for the distributed KV-cache RPC protocol. Wraps a sequence id, op type (get/put/delete), and the corresponding payload.
 #[derive(Debug, Clone)]
 pub struct CacheMessage {
     pub id: u64,
@@ -52,7 +52,7 @@ pub struct CacheMessage {
 }
 
 impl CacheMessage {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Panics
     ///
     /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).

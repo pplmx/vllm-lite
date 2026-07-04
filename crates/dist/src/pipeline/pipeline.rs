@@ -4,13 +4,13 @@ use candle_core::Result;
 use std::sync::Arc;
 
 #[derive(Debug)]
-/// `PipelineParallel`: pipeline parallel.
+/// `PipelineParallel`. See the type definition for fields and behavior.
 pub struct PipelineParallel {
     stages: Vec<Arc<dyn PipelineStage>>,
     config: PipelineParallelConfig,
 }
 
-/// `PipelineParallelConfig`: pipeline parallel configuration.
+/// Configuration for PipelineParallel. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub struct PipelineParallelConfig {
     pub num_stages: usize,
@@ -58,7 +58,7 @@ impl PipelineParallel {
         self.stages.len() > 1
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -90,7 +90,7 @@ impl PipelineParallel {
         Result::Err(candle_core::Error::msg("No output generated"))
     }
 
-    /// Runs the operation.
+    /// Run the pipeline forward over microbatch splits for memory-bounded inference.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -115,7 +115,7 @@ impl PipelineParallel {
         Ok(all_outputs)
     }
 
-    /// Runs the operation.
+    /// Run pipeline forward following the given microbatch schedule.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

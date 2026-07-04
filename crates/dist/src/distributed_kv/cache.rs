@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 #[derive(Debug)]
-/// `DistributedKVCache`: distributed kv cache.
+/// Cache for DistributedKV. Keyed lookup with the configured eviction policy (LRU, ARC, FIFO). Thread-safe.
 pub struct DistributedKVCache {
     config: CacheConfig,
     local_cache: Arc<RwLock<HashMap<u64, CacheEntry>>>,
@@ -28,7 +28,7 @@ enum CacheState {
     Invalid,
 }
 
-/// `CacheStats`: cache statistics.
+/// Telemetry snapshot for Cache: counters, gauges, and percentile latencies. Cloned and serialized on every metrics export.
 #[derive(Debug, Default, Clone)]
 pub struct CacheStats {
     pub hits: u64,

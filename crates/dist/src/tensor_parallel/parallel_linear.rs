@@ -5,7 +5,7 @@ use std::sync::Arc;
 use vllm_traits::TensorParallelError;
 
 #[derive(Debug)]
-/// `ColumnParallelLinear`: column parallel linear.
+/// `ColumnParallelLinear`. See the type definition for fields and behavior.
 pub struct ColumnParallelLinear {
     input_size: usize,
     output_size: usize,
@@ -33,7 +33,7 @@ impl ColumnParallelLinear {
         self.output_size / self.mesh.world_size
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -61,7 +61,7 @@ impl ColumnParallelLinear {
 }
 #[derive(Debug)]
 
-/// `RowParallelLinear`: row parallel linear.
+/// `RowParallelLinear`. See the type definition for fields and behavior.
 pub struct RowParallelLinear {
     input_size: usize,
     output_size: usize,
@@ -89,7 +89,7 @@ impl RowParallelLinear {
         self.input_size / self.mesh.world_size
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -123,7 +123,7 @@ impl RowParallelLinear {
     }
 }
 
-/// `TensorParallelManager`: tensor parallel manager.
+/// Manager for TensorParallel. Owns the underlying resource, coordinates concurrent access, and exposes a thread-safe public API.
 #[derive(Debug)]
 pub struct TensorParallelManager {
     mesh: Arc<DeviceMesh>,
@@ -131,7 +131,7 @@ pub struct TensorParallelManager {
 }
 
 impl TensorParallelManager {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.

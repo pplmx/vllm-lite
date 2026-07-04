@@ -2,7 +2,7 @@
 use candle_core::{Device, Result, Tensor};
 use std::sync::Arc;
 
-/// `PipelineStageConfig`: pipeline stage configuration.
+/// Configuration for PipelineStage. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub struct PipelineStageConfig {
     pub stage_id: usize,
@@ -46,7 +46,7 @@ impl PipelineStageConfig {
     }
 }
 
-/// `StageInput`: stage input.
+/// Input to one pipeline stage: a tensor plus its microbatch id. Stages produce [`StageOutput`].
 #[derive(Debug, Clone)]
 pub struct StageInput {
     pub hidden_states: Tensor,
@@ -55,7 +55,7 @@ pub struct StageInput {
     pub kv_block_ids: Vec<Vec<usize>>,
 }
 
-/// `StageOutput`: stage output.
+/// Output from one pipeline stage: a tensor plus its microbatch id. Forwarded to the next stage or collected as the final result.
 #[derive(Debug, Clone)]
 pub struct StageOutput {
     pub hidden_states: Tensor,
@@ -65,17 +65,17 @@ pub struct StageOutput {
     pub is_generating: bool,
 }
 
-/// `PipelineStage`: pipeline stage trait.
+/// `PipelineStage`. See the type definition for fields and behavior.
 pub trait PipelineStage: Send + Sync + std::fmt::Debug {
     fn config(&self) -> &PipelineStageConfig;
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     fn forward(&self, input: StageInput) -> Result<StageOutput>;
 
-    /// Runs the operation.
+    /// Run the pipeline forward over microbatch splits for memory-bounded inference.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

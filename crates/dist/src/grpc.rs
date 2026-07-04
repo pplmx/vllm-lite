@@ -21,7 +21,7 @@ mod generated_proto {
 }
 pub use generated_proto::*;
 
-/// `GrpcState`: grpc state.
+/// Internal state of Grpc. Mutated under a lock; read via accessor methods on the parent type.
 #[derive(Debug, Clone)]
 pub struct GrpcState {
     pub node_id: String,
@@ -56,7 +56,7 @@ impl GrpcState {
     }
 }
 
-/// `NodeServiceImpl`: node service impl.
+/// `NodeServiceImpl`. See the type definition for fields and behavior.
 #[derive(Debug)]
 pub(crate) struct NodeServiceImpl {
     state: GrpcState,
@@ -135,7 +135,7 @@ impl node_service_server::NodeService for NodeServiceImpl {
     }
 }
 
-/// Runs the operation.
+/// Bind to the configured address and start accepting gRPC connections.
 /// # Errors
 ///
 /// Returns `Err` if the operation fails.

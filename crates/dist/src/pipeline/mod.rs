@@ -8,7 +8,7 @@ pub use stage::{PipelineStage, PipelineStageConfig, StageInput, StageOutput};
 
 use thiserror::Error;
 
-/// `PipelineError`: pipeline error.
+/// Error type for pipeline-parallel execution. Covers stage failure, microbatch desync, and IPC errors between stages.
 #[derive(Debug, Error)]
 pub enum PipelineError {
     #[error("stage {stage} not ready")]
@@ -27,5 +27,5 @@ pub enum PipelineError {
     DeviceError(String),
 }
 
-/// Result: result.
+/// Convenience alias used by every public API in the pipeline crate.
 pub type Result<T> = std::result::Result<T, PipelineError>;
