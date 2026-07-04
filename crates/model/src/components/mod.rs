@@ -1,3 +1,8 @@
+//! Shared transformer building blocks: attention (GQA + MLA + paged), MLP (SwiGLU), norm (RMSNorm + LayerNorm), positional (RoPE + MRoPE), SSM (Mamba + gated-delta), and a vision encoder placeholder.
+//!
+//! Each architecture in `model::llama`, `model::qwen3`, etc. composes
+//! these primitives rather than re-implementing them. The re-exports
+//! below surface the most-used items at `vllm_model::*` for ergonomics.
 pub mod attention;
 pub mod block;
 pub mod decoder_block;

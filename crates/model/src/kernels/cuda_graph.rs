@@ -1,3 +1,8 @@
+//! CUDA-Graph capture and replay: record a sequence of GPU kernel launches once, then replay it with near-zero CPU overhead for every subsequent batch of the same shape.
+//!
+//! Activated by `--features cuda-graph`. The `cuda_graph/` submodule
+//! owns the per-architecture capture logic; this file is the public
+//! façade that the engine constructs at startup.
 #![allow(clippy::module_name_repetitions)]
 use std::collections::HashMap;
 use std::sync::Arc;
