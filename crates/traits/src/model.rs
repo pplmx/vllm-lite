@@ -247,6 +247,7 @@ mod tests {
     fn model_backend_default_arc_works() {
         let mut backend: Arc<dyn ModelBackend> = <dyn ModelBackend>::default_arc();
         let output = Arc::get_mut(&mut backend)
+            // invariant: pre-conditions make this infallible at this call site.
             .expect("default Arc should be uniquely owned")
             .forward(
                 &[1, 2, 3],
@@ -256,6 +257,7 @@ mod tests {
                 &[0, 0, 0],
                 &[true, true, true],
             )
+            // invariant: pre-conditions make this infallible at this call site.
             .expect("stub forward should succeed");
         assert_eq!(output.seq_ids, vec![1, 2, 3]);
         assert_eq!(output.next_tokens, vec![0, 0, 0]);

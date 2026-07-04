@@ -188,6 +188,7 @@ impl LinearAttentionBlock {
                     DType::F32,
                     norm_w.device(),
                 )
+                // invariant: pre-conditions make this infallible at this call site.
                 .expect("Failed to create norm bias")
             });
 

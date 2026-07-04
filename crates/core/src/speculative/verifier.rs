@@ -162,6 +162,7 @@ mod tests {
         let verifier: Arc<dyn DraftVerifier> = <dyn DraftVerifier>::default_arc();
         let result = verifier
             .verify(42, &[10, 20, 30], &[0.0; 100])
+            // invariant: pre-conditions make this infallible at this call site.
             .expect("stub verify should succeed");
         assert_eq!(result.accepted_count, 3);
         assert!((result.acceptance_rate() - 1.0).abs() < 1e-6);

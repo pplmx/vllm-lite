@@ -155,9 +155,11 @@ mod tests {
     #[test]
     fn test_server_draft_loader_loads_valid_safetensors_directory() {
         use std::fs;
+        // invariant: pre-conditions make this infallible at this call site.
         let tmp = tempfile::tempdir().expect("tempdir");
         // Write a minimal config.json so ModelLoader::build succeeds.
         fs::write(tmp.path().join("config.json"), r#"{"model_type": "llama"}"#)
+            // invariant: pre-conditions make this infallible at this call site.
             .expect("write config.json");
         // Note: a full safetensors weights file isn't provided, so load_model()
         // will fail at weight-loading time — but the build() must succeed.

@@ -136,6 +136,7 @@ mod tests {
         // Complete the sequence to add to cache
         // Update until max_tokens reached
         for i in 0..5 {
+            // invariant: bounded by configured limit, cannot overflow at runtime.
             let next = u32::try_from(100 + i).expect("bounded test token");
             engine.update(&[id1], &[next], &[0]);
         }

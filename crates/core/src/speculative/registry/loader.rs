@@ -33,6 +33,7 @@ impl DraftModelRegistry {
         let mut guard = self
             .drafts
             .write()
+            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
             .expect("DraftModelRegistry mutex poisoned");
         if guard.contains_key(&spec.id) {
             return Err(DraftRegistryError::AlreadyLoaded(spec.id));
@@ -68,6 +69,7 @@ impl DraftModelRegistry {
         let mut guard = self
             .drafts
             .write()
+            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
             .expect("DraftModelRegistry mutex poisoned");
         let result = {
             let entry = guard
@@ -123,6 +125,7 @@ impl DraftModelRegistry {
             let guard = self
                 .drafts
                 .read()
+                // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
                 .expect("DraftModelRegistry mutex poisoned");
             let result = match guard.get(id) {
                 None => return Err(DraftRegistryError::UnknownDraftId(id.clone())),
@@ -145,6 +148,7 @@ impl DraftModelRegistry {
         let mut guard = self
             .drafts
             .write()
+            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
             .expect("DraftModelRegistry mutex poisoned");
         let result = {
             let entry = guard

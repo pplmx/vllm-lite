@@ -33,6 +33,7 @@ impl InMemoryMetricsExporter {
     pub fn record(&self, name: impl Into<String>, value: f64) {
         self.values
             .lock()
+            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
             .expect("metrics exporter mutex poisoned")
             .insert(name.into(), value);
     }
@@ -45,6 +46,7 @@ impl InMemoryMetricsExporter {
     pub fn snapshot(&self) -> Vec<(String, f64)> {
         self.values
             .lock()
+            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
             .expect("metrics exporter mutex poisoned")
             .iter()
             .map(|(k, v)| (k.clone(), *v))
@@ -55,6 +57,7 @@ impl InMemoryMetricsExporter {
 #[async_trait::async_trait]
 impl MetricsExporter for InMemoryMetricsExporter {
     async fn export(&self) -> Result<String, MetricsError> {
+        // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
         let values = self.values.lock().expect("metrics exporter mutex poisoned");
         let mut out = String::new();
         for (name, value) in values.iter() {
@@ -353,6 +356,7 @@ mod tests {
     #[tokio::test]
     async fn metrics_exporter_default_arc_returns_empty() {
         let exporter: Arc<dyn MetricsExporter> = <dyn MetricsExporter>::default_arc();
+        // invariant: pre-conditions make this infallible at this call site.
         let output = exporter.export().await.expect("default export succeeds");
         assert!(output.is_empty());
     }

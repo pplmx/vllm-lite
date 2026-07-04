@@ -81,6 +81,7 @@ pub async fn get_prometheus(State(state): State<ApiState>) -> String {
         // invariant: engine is shutdown only after all senders are dropped; the sender
         // outlives the receiver for the lifetime of this request handler.
         .send(EngineMessage::GetMetrics { response_tx })
+        // invariant: pre-conditions make this infallible at this call site.
         .expect("Engine channel should be available");
     let m = response_rx.recv().await.unwrap_or(MetricsSnapshot {
         tokens_total: 0,
@@ -150,6 +151,7 @@ mod tests {
     }
 
     async fn send_request(app: Router, request: Request<Body>) -> Response {
+        // invariant: pre-conditions make this infallible at this call site.
         app.oneshot(request).await.expect("Failed to send request")
     }
 

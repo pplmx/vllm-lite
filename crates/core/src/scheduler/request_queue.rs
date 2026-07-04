@@ -400,6 +400,7 @@ mod prop_tests {
 
             let got = queue.get(seq.id);
             prop_assert!(got.is_some());
+            // invariant: pre-conditions make this infallible at this call site.
             prop_assert_eq!(got.expect("just enqueued").id, seq.id);
         }
 

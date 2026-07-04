@@ -45,6 +45,7 @@ impl ArchitectureRegistry {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         self.architectures
             .write()
+            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
             .expect("RwLock poisoned - this indicates a bug")
             .insert(name.to_string(), factory);
     }

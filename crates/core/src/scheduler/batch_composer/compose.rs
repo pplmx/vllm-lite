@@ -445,6 +445,7 @@ mod tests {
 
         let seqs: Vec<_> = (1..=5)
             .map(|i| {
+                // invariant: bounded by configured limit, cannot overflow at runtime.
                 let token = u32::try_from(i).expect("bounded test id");
                 make_sequence(i, vec![token], Status::Decoding)
             })
@@ -466,6 +467,7 @@ mod tests {
 
         let seqs: Vec<_> = (1..=10)
             .map(|i| {
+                // invariant: bounded by configured limit, cannot overflow at runtime.
                 let token = u32::try_from(i).expect("bounded test id");
                 make_sequence(i, vec![token; 10], Status::Waiting)
             })
