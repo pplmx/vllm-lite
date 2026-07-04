@@ -1,3 +1,8 @@
+//! OpenAI Batch API request lifecycle: enqueue, dispatch to engine, poll status, cancel, collect results.
+//!
+//! `BatchManager` owns the per-batch state machine (`Validating` →
+//! `InProgress` → `Completed`/`Failed`/`Cancelled`) and is shared across
+//! the `/v1/batches` handlers via `Arc`.
 #![allow(clippy::module_name_repetitions)]
 use std::collections::HashMap;
 use std::sync::Arc;

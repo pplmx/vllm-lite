@@ -1,3 +1,7 @@
+//! OpenAI Batch API wire types: `BatchRequest`, `BatchResponse`, `BatchStatus`, request/result counts, and the per-line `BatchRequestInput` / `BatchResponseOutput` shapes.
+//!
+//! Mirrors the upstream OpenAI Batch schema 1:1; the handler (`handler.rs`)
+//! and manager (`manager.rs`) operate on these types end-to-end.
 use serde::{Deserialize, Serialize};
 
 /// `OpenAI` Batch API endpoint kind.
