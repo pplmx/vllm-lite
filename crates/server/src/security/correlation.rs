@@ -38,6 +38,7 @@ impl CorrelationIdMiddleware {
             u64::try_from(
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
+                    // invariant: pre-conditions make this infallible at this call site.
                     .unwrap()
                     .as_nanos(),
             )

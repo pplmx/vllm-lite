@@ -84,6 +84,7 @@ impl node_service_server::NodeService for NodeServiceImpl {
             // invariant: monotonic clock is always >= UNIX_EPOCH.
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
+                // invariant: pre-conditions make this infallible at this call site.
                 .unwrap()
                 .as_secs(),
         }))

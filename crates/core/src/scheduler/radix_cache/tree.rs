@@ -171,6 +171,7 @@ mod prop_tests {
             tree.insert(&key, blocks.clone());
             let result = tree.longest_prefix_match(&key);
             prop_assert!(result.is_some(), "exact-match lookup returned None after insert");
+            // invariant: pre-validated result is unwrapped here.
             let result = result.unwrap();
             prop_assert_eq!(result.matched_tokens, key.len());
             prop_assert_eq!(result.blocks.as_ref(), &blocks);
