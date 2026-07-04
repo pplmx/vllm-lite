@@ -1,5 +1,11 @@
 #![allow(dead_code, clippy::module_name_repetitions)]
 
+//! High-availability failover: detect peer failure via health checks and promote a standby to active.
+//!
+//! Coordinates with the circuit breaker for failure detection. Activated
+//! when `--features ha` is set in `vllm-core`; in single-node mode this
+//! module is a no-op.
+
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;

@@ -1,3 +1,9 @@
+//! Metrics sampling pipeline: receive raw events from workers, bucketise them, and publish aggregated snapshots to the `MetricsExporter`.
+//!
+//! The collector runs on a dedicated thread, draining the channel with
+//! `try_recv` to keep latency low and falling through to a periodic flush
+//! when the channel is idle. Exposed via [`crate::metrics::EnhancedMetricsCollector`].
+
 // crates/core/src/metrics/collector/sampler.rs
 //
 // Unified metrics collector: implements the runtime sampling and recording
