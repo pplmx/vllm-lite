@@ -1,7 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 use std::time::Instant;
 
-/// `SchedulerStats`: scheduler statistics.
+/// Telemetry snapshot of the scheduler: queue length, preemption count, prefix-cache hit rate, average batch fill ratio. Updated on every step and exposed via metrics.
 #[derive(Debug, Clone)]
 pub struct SchedulerStats {
     pub total_batches: usize,

@@ -2,7 +2,7 @@ use crate::types::Sequence;
 use std::sync::Arc;
 use std::time::Instant;
 
-/// `SchedulingContext`: scheduling context.
+/// Per-step snapshot passed to every [`SchedulingPolicy::select`]. Holds the running and waiting sequence lists, the prefix-cache hint, and the current batch budget.
 #[derive(Clone, Debug)]
 pub struct SchedulingContext {
     pub current_time: Instant,
@@ -11,12 +11,12 @@ pub struct SchedulingContext {
     pub memory_pressure: f32,
 }
 
-/// `PriorityScore`: priority score.
+/// Numeric priority score produced by a scheduling policy. Higher = earlier. Used by the batch composer to break ties when filling a batch.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[must_use]
 pub struct PriorityScore(pub u64);
 
-/// `SchedulingPolicy`: scheduling policy trait.
+/// Trait implemented by every scheduling strategy (`FcfsPolicy`, `SjfPolicy`, `PriorityPolicy`). The engine instantiates one and calls `select` on every step.
 pub trait SchedulingPolicy: Send + Sync {
     fn compute_priority(&self, seq: &Sequence, context: &SchedulingContext) -> PriorityScore;
     fn name(&self) -> &'static str;

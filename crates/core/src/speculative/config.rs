@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-/// `SpeculationConfig`: speculation configuration.
+/// Speculative-decoding configuration: number of draft tokens, acceptance threshold, max draft size, draft-model name. Built via [`SpeculationConfig::builder`].
 #[derive(Clone, Debug)]
 pub struct SpeculationConfig {
     pub draft_count: usize,
@@ -76,7 +76,7 @@ impl SpeculationConfig {
     }
 }
 
-/// `SpeculationConfigBuilder`: speculation config builder.
+/// Builder for `SpeculationConfig`. Use `with_*` methods to override defaults, then call `.build()` to produce the final value.
 #[derive(Debug, Default)]
 pub struct SpeculationConfigBuilder {
     config: SpeculationConfig,

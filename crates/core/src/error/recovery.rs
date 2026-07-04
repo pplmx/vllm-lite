@@ -48,7 +48,7 @@ pub(crate) struct RecoveryManager {
     config: RecoveryConfig,
 }
 
-/// `RecoveryConfig`: recovery configuration.
+/// Configuration for the error-recovery subsystem. Controls whether transient errors are retried, the maximum backoff between retries, and the circuit-breaker trip threshold.
 #[derive(Debug, Clone)]
 pub(crate) struct RecoveryConfig {
     pub retry_attempts: usize,

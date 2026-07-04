@@ -3,7 +3,7 @@ use super::trait_def::{PriorityScore, SchedulingContext, SchedulingPolicy};
 use crate::types::Sequence;
 
 #[derive(Debug)]
-/// `PriorityPolicy`: priority policy.
+/// Priority-based scheduling: sequences are batched in descending priority order, then by arrival time as tiebreaker. Use this when you have SLA tiers (premium vs. free).
 pub struct PriorityPolicy {
     priority_aging_factor: f32,
     _priority_levels: u8,

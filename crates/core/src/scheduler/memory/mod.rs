@@ -9,7 +9,7 @@ use crate::scheduler::preemption::PreemptionManager;
 use crate::types::{BlockId, SchedulerConfig, Sequence, Status};
 
 #[derive(Debug)]
-/// `MemoryManager`: memory manager.
+/// Top-level KV-cache memory coordinator. Composes a [`BlockAllocator`] and an [`EvictionPolicy`], and exposes the high-level `allocate` / `free` API the scheduler calls.
 pub struct MemoryManager {
     allocator: BlockAllocator,
     eviction_policy: EvictionPolicy,

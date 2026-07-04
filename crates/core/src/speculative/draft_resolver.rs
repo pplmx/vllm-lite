@@ -56,7 +56,7 @@ impl ResolvedDraft {
 /// Implemented by the server (which has access to `vllm_model::loader`) or
 /// by tests with stub loaders.
 pub trait DraftLoader: Send + Sync {
-    /// Runs the operation.
+    /// Run the loader and produce the target type (model, cache, etc.).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

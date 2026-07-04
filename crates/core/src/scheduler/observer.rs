@@ -2,7 +2,7 @@
 use crate::types::{SeqId, TokenId};
 use std::sync::{Arc, RwLock};
 
-/// `SchedulerObserverError`: scheduler observer error.
+/// Error type for the scheduler observer subsystem (event subscription, callback panics).
 #[derive(Debug, thiserror::Error)]
 pub enum SchedulerObserverError {
     #[error("observer mutex poisoned")]
@@ -11,7 +11,7 @@ pub enum SchedulerObserverError {
     MaxObserversReached(usize),
 }
 
-/// `SchedulerObserver`: scheduler observer trait.
+/// Trait implemented by metrics and tracing consumers. Receives [`ObserverEvent`]s on every scheduling decision (queue change, preemption, batch build).
 pub trait SchedulerObserver: Send + Sync {
     fn on_request_arrived(&self, seq_id: SeqId, prompt_len: usize);
     fn on_batch_scheduled(&self, seq_ids: &[SeqId], batch_size: usize);
@@ -51,7 +51,7 @@ impl dyn SchedulerObserver {
     }
 }
 
-/// `ObserverEvent`: observer event enumeration.
+/// One event from the scheduler observer stream: queue length change, preemption, batch composition, prefix-cache hit.
 #[derive(Clone, Debug)]
 pub enum ObserverEvent {
     RequestArrived {
@@ -79,7 +79,7 @@ pub enum ObserverEvent {
     },
 }
 
-/// `SchedulerObservers`: scheduler observers.
+/// Multiplexer that fans events out to many [`SchedulerObserver`]s. The default scheduler instantiates this; tests inject a single-observer version.
 pub struct SchedulerObservers {
     observers: RwLock<Vec<Box<dyn SchedulerObserver>>>,
 }
@@ -104,7 +104,7 @@ impl SchedulerObservers {
     /// `MAX_OBSERVERS`: max observers constant.
     pub const MAX_OBSERVERS: usize = 16;
 
-    /// Runs the operation.
+    /// Insert into the registry under its name.
     /// # Errors
     ///
     /// Returns `Err` if registration fails (e.g. duplicate name or invalid input).

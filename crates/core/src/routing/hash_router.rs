@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::debug;
 
-/// `NodeInfo`: node info.
+/// `NodeInfo`. See the type definition for fields and behavior.
 #[derive(Debug, Clone)]
 pub struct NodeInfo {
     pub node_id: String,
@@ -14,7 +14,7 @@ pub struct NodeInfo {
     pub has_cache: bool,
 }
 
-/// `HashRouter`: hash router.
+/// Consistent-hash request router. Maps request keys to replicas using a hash ring; supports virtual nodes for smoother load distribution.
 pub struct HashRouter {
     nodes: Arc<RwLock<Vec<NodeInfo>>>,
     #[allow(dead_code)]

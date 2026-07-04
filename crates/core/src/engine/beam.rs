@@ -8,7 +8,7 @@ use crate::sync::lock_mutex;
 use vllm_traits::TokenId;
 
 impl Engine {
-    /// Runs the operation.
+    /// Advance beam search by one step, expanding each beam with the top-k next tokens.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

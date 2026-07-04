@@ -81,7 +81,7 @@ impl dyn MetricsExporter {
     }
 }
 
-/// `MetricsError`: metrics error.
+/// Error type for the metrics export / serialization layer. Covers I/O failures on the export sink and Prometheus-format conversion errors.
 #[derive(Debug, thiserror::Error)]
 pub enum MetricsError {
     #[error("export failed: {0}")]

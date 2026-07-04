@@ -4,7 +4,7 @@
 //! Different strategies for determining which draft tokens to accept
 //! based on comparing draft and target model probabilities.
 
-/// `RejectionStrategy`: rejection strategy enumeration.
+/// Strategy pattern implementation for Rejection. Encapsulates one of N interchangeable algorithms.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum RejectionStrategy {
     #[default]

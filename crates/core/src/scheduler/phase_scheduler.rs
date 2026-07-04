@@ -1,6 +1,6 @@
 use crate::types::Phase;
 
-/// `PhaseSwitchPolicy`: phase switch policy.
+/// Strategy for switching between prefill and decode phases. Different policies optimize throughput (drain decode) vs. fairness (round-robin).
 #[derive(Clone, Debug)]
 pub struct PhaseSwitchPolicy {
     pub max_consecutive_decode: u32,
@@ -59,7 +59,7 @@ impl PhaseSwitchPolicyBuilder {
     }
 }
 
-/// `SchedulerState`: scheduler state.
+/// Internal mutable state of the phase scheduler: current phase, last-transition tick, accumulated stats. Mutated under the scheduler's lock on each transition.
 #[derive(Clone, Debug)]
 pub struct SchedulerState {
     pub waiting_count: usize,
@@ -71,7 +71,7 @@ pub struct SchedulerState {
 }
 
 #[derive(Debug)]
-/// `PhaseScheduler`: phase scheduler.
+/// Coordinator that interleaves prefill and decode batches within a single step. Avoids the head-of-line blocking that happens when a long prefill monopolizes the GPU.
 pub struct PhaseScheduler {
     current_phase: Phase,
     switch_policy: PhaseSwitchPolicy,

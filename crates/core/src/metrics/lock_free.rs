@@ -3,7 +3,7 @@ use serde::Serialize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// `MetricsSnapshot`: metrics snapshot.
+/// Snapshot of every observable engine metric at a single point in time. Fields cover throughput (tokens/sec), latency percentiles, scheduler queue depth, and KV-cache occupancy. Cloned and serialized on every metrics export.
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct MetricsSnapshot {
     pub tokens_total: u64,
@@ -23,7 +23,7 @@ pub struct MetricsSnapshot {
 }
 
 #[derive(Debug)]
-/// `LockFreeMetrics`: lock free metrics.
+/// Lock-free metrics recorder. Producers update per-counter atomics; consumers snapshot a [`MetricsSnapshot`] via `snapshot()`. Used in the hot path where mutex contention would show up in latency.
 pub struct LockFreeMetrics {
     tokens_total: Arc<AtomicU64>,
     requests_total: Arc<AtomicU64>,
@@ -290,7 +290,7 @@ impl Default for LockFreeMetrics {
     }
 }
 
-/// `MetricsCollector`: metrics collector.
+/// Trait implemented by every metrics backend (lock-free, enhanced, prometheus). Provides `snapshot()` and `reset()` for periodic export.
 pub type MetricsCollector = LockFreeMetrics;
 
 #[cfg(test)]
