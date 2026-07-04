@@ -13,7 +13,7 @@
 use candle_core::{Result, Tensor};
 use tracing::trace;
 
-/// `FlashAttentionV3`: flash attention v3.
+/// `FlashAttentionV3`. See the type definition for fields and behavior.
 #[derive(Debug, Clone)]
 pub struct FlashAttentionV3 {
     num_heads: usize,
@@ -23,7 +23,7 @@ pub struct FlashAttentionV3 {
     window_size: Option<(i32, i32)>,
 }
 
-/// `FlashAttentionV3Config`: flash attention v3 configuration.
+/// Configuration for FlashAttentionV3. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FlashAttentionV3Config {
     pub num_heads: usize,
@@ -45,7 +45,7 @@ impl FlashAttentionV3 {
         }
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -99,7 +99,7 @@ impl FlashAttentionV3 {
         }
     }
 
-    /// Runs the operation.
+    /// Run attention with sliding-window attention (SWA) limits.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -156,7 +156,7 @@ impl FlashAttentionV3 {
 }
 
 #[derive(Debug)]
-/// `MqaFlashAttention`: mqa flash attention.
+/// `MqaFlashAttention`. See the type definition for fields and behavior.
 pub struct MqaFlashAttention {
     num_heads: usize,
     num_kv_heads: usize,
@@ -175,7 +175,7 @@ impl MqaFlashAttention {
         }
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -227,7 +227,7 @@ impl MqaFlashAttention {
 }
 #[derive(Debug)]
 
-/// `GqaFlashAttention`: gqa flash attention.
+/// `GqaFlashAttention`. See the type definition for fields and behavior.
 pub struct GqaFlashAttention {
     num_heads: usize,
     num_kv_heads: usize,
@@ -246,7 +246,7 @@ impl GqaFlashAttention {
         }
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).

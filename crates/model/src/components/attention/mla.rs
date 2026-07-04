@@ -14,7 +14,7 @@ use super::AttentionConfig;
 use crate::components::positional::rope::apply_rope;
 
 #[derive(Debug)]
-/// `MlaAttention`: mla attention.
+/// `MlaAttention`. See the type definition for fields and behavior.
 pub struct MlaAttention {
     q_proj: Linear,
     kv_proj: Linear,
@@ -87,7 +87,7 @@ impl MlaAttention {
         &self.v_decompress
     }
 
-    /// Runs the operation.
+    /// Split compressed MLA Q into position-agnostic and rotary parts.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -104,7 +104,7 @@ impl MlaAttention {
         Ok((q_nope, q_rope))
     }
 
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -118,7 +118,7 @@ impl MlaAttention {
         q.contiguous()
     }
 
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -128,7 +128,7 @@ impl MlaAttention {
         k.contiguous()
     }
 
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -147,7 +147,7 @@ impl MlaAttention {
         q_rope_flat.reshape((batch_size, seq_len, self.num_heads, self.qk_rope_dim))
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Caution: No causal masking
     ///
     /// This is a low-level primitive. It does **NOT** apply causal masking.
@@ -237,7 +237,7 @@ impl MlaAttention {
     }
 
     #[allow(clippy::too_many_arguments)]
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.

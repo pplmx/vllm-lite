@@ -10,7 +10,7 @@ use tracing::trace;
 use super::{AttentionConfig, GqaFlashAttention, expand_kv, paged_attention, tiled_attention};
 
 #[derive(Debug)]
-/// `GqaAttention`: gqa attention.
+/// `GqaAttention`. See the type definition for fields and behavior.
 pub struct GqaAttention {
     q_proj: Linear,
     k_proj: Linear,
@@ -25,7 +25,7 @@ pub struct GqaAttention {
 }
 
 impl GqaAttention {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -72,7 +72,7 @@ impl GqaAttention {
         })
     }
 
-    /// Runs the operation.
+    /// Construct a new instance from already-loaded weight tensors.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -128,7 +128,7 @@ impl GqaAttention {
         })
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Caution: No causal masking
     ///
     /// This is a low-level primitive. It does **NOT** apply causal masking.
@@ -253,7 +253,7 @@ impl GqaAttention {
         Ok(o)
     }
 
-    /// Runs the operation.
+    /// Expand KV heads along the head axis to match the query head count.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -266,7 +266,7 @@ impl GqaAttention {
         expand_kv(kv, num_q_heads, num_kv_heads)
     }
 
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -276,7 +276,7 @@ impl GqaAttention {
         Ok(o)
     }
 
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -287,7 +287,7 @@ impl GqaAttention {
         Ok(o)
     }
 
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -376,7 +376,7 @@ impl GqaAttention {
         &self.config
     }
 
-    /// Runs the operation.
+    /// Project the input through Q/K/V linear projections.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -387,7 +387,7 @@ impl GqaAttention {
         Ok((q, k, v))
     }
 
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -409,7 +409,7 @@ impl GqaAttention {
         }
     }
 
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -431,7 +431,7 @@ impl GqaAttention {
         }
     }
 
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -444,7 +444,7 @@ impl GqaAttention {
         }
     }
 
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
