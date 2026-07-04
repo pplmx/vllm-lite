@@ -1,4 +1,9 @@
 #![allow(clippy::module_name_repetitions)]
+//! TLS configuration for the axum server: rustls-based server identity, optional client mTLS, and ALPN protocol negotiation.
+//!
+//! Activated when `AppConfig.tls.enabled = true`. Certificates and keys
+//! are loaded from PEM files at startup; invalid certs cause a startup
+//! abort rather than a runtime failure.
 use rustls::pki_types::pem::PemObject;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use std::fs;

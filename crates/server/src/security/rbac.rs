@@ -1,3 +1,7 @@
+//! Role-based access control middleware: `Role` enum, `Permission` enum, and the axum extractor that gates endpoints behind the configured role set.
+//!
+//! Default policy: `admin` > `operator` > `user` > `anonymous`. Roles and
+//! endpoint→role mappings are configured in [`AppConfig`](crate::config::AppConfig).
 #![allow(clippy::module_name_repetitions)]
 use axum::{
     Json,
