@@ -3,7 +3,7 @@ use super::device_mesh::DeviceMesh;
 use std::sync::Arc;
 use vllm_traits::TensorParallelError;
 
-/// `ReduceOp`: reduce op enumeration.
+/// `ReduceOp`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReduceOp {
     Sum,
@@ -11,14 +11,14 @@ pub enum ReduceOp {
     Max,
 }
 
-/// `AllReduce`: all reduce trait.
+/// `AllReduce`. See the type definition for fields and behavior.
 pub trait AllReduce: Send + Sync + std::fmt::Debug {
-    /// Runs the operation.
+    /// Sum a tensor across all ranks in the device mesh.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
     fn all_reduce(&self, input: &[f32], op: ReduceOp) -> Result<Vec<f32>, TensorParallelError>;
-    /// Runs the operation.
+    /// Sum a tensor in place across all ranks in the device mesh.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -30,7 +30,7 @@ pub trait AllReduce: Send + Sync + std::fmt::Debug {
 }
 
 #[derive(Debug)]
-/// `NcclAllReduce`: nccl all reduce.
+/// `NcclAllReduce`. See the type definition for fields and behavior.
 pub struct NcclAllReduce {
     mesh: Arc<DeviceMesh>,
 }

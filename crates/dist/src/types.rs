@@ -1,6 +1,6 @@
 use candle_core::Device;
 
-/// `TensorParallelConfig`: tensor parallel configuration.
+/// Configuration for TensorParallel. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub struct TensorParallelConfig {
     pub world_size: usize,
