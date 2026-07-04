@@ -1,6 +1,6 @@
 //! SSM configuration types.
 
-/// `SSMConfig`: ssm configuration.
+/// Configuration for SSM. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Clone, Debug)]
 pub struct SSMConfig {
     pub d_model: usize,

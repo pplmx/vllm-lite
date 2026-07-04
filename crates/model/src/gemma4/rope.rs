@@ -13,7 +13,7 @@
 use crate::config::architecture::RoPEConfig;
 use candle_core::{DType, Result, Tensor};
 
-/// `Gemma4RoPE`: gemma4 ro pe.
+/// `Gemma4RoPE`. See the type definition for fields and behavior.
 #[derive(Debug)]
 pub(crate) struct Gemma4RoPE {
     rope_theta: f32,

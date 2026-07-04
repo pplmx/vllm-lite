@@ -6,7 +6,7 @@ use candle_nn::Linear;
 use tracing::trace;
 
 #[derive(Debug)]
-/// `MixtralSparseMoe`: mixtral sparse moe.
+/// `MixtralSparseMoe`. See the type definition for fields and behavior.
 pub struct MixtralSparseMoe {
     experts: Vec<Expert>,
     gate: Linear,
@@ -74,7 +74,7 @@ fn compute_topk_routing(
 }
 
 impl MixtralSparseMoe {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -112,7 +112,7 @@ impl MixtralSparseMoe {
         })
     }
 
-    /// Runs the operation.
+    /// Construct a new instance from already-loaded weight tensors.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -154,7 +154,7 @@ impl MixtralSparseMoe {
         })
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).

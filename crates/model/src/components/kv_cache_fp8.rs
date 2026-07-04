@@ -12,7 +12,7 @@
 
 use candle_core::{DType, Result, Tensor};
 
-/// `KvCacheDtype`: kv cache dtype enumeration.
+/// `KvCacheDtype`. See the type definition for fields and behavior.
 #[derive(Debug, Clone)]
 pub enum KvCacheDtype {
     Fp16,
@@ -41,7 +41,7 @@ impl KvCacheDtype {
 }
 
 #[derive(Debug)]
-/// `Fp8Quantizer`: fp8 quantizer.
+/// `Fp8Quantizer`. See the type definition for fields and behavior.
 pub struct Fp8Quantizer {
     dtype: KvCacheDtype,
 }
@@ -52,7 +52,7 @@ impl Fp8Quantizer {
         Self { dtype }
     }
 
-    /// Runs the operation.
+    /// Quantize the input tensor into the configured storage dtype.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -64,7 +64,7 @@ impl Fp8Quantizer {
         }
     }
 
-    /// Runs the operation.
+    /// Dequantize the input tensor from its stored dtype back to F32/F16.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

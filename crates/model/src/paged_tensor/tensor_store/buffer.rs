@@ -8,7 +8,7 @@ use super::PagedKvCache;
 use candle_core::{DType, Result, Tensor};
 
 impl PagedKvCache {
-    /// Runs the operation.
+    /// Batch-write K/V across multiple blocks.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -82,7 +82,7 @@ impl PagedKvCache {
         Ok(())
     }
 
-    /// Runs the operation.
+    /// Write K/V for the current decode step into the paged cache.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -232,7 +232,7 @@ impl PagedKvCache {
         Ok(())
     }
 
-    /// Runs the operation.
+    /// Read cached K/V from the paged KV cache for a given sequence.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.

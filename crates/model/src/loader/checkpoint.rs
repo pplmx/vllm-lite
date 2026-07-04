@@ -12,7 +12,7 @@ use candle_core::{Device, Result, Tensor};
 use super::format::SafetensorsLoader;
 use super::io::{convert_tensor, find_safetensors_files, load_file_mmap_or_read};
 
-/// Runs the operation.
+/// Load a checkpoint from disk into a typed weight map.
 /// # Errors
 ///
 /// Returns `Err` if reading or parsing the source fails.

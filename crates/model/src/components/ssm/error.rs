@@ -2,7 +2,7 @@
 
 use thiserror::Error;
 
-/// `SSMError`: ssm error.
+/// Error type for SSM. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, Error)]
 pub enum SSMError {
     #[error("{0}")]

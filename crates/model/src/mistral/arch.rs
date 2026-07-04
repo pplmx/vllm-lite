@@ -11,7 +11,7 @@ use vllm_traits::ModelBackend;
 use super::block::block_from_weights;
 use super::model::MistralModel;
 
-/// `MistralArchitecture`: mistral architecture.
+/// `MistralArchitecture`. See the type definition for fields and behavior.
 pub(crate) struct MistralArchitecture;
 
 impl MistralArchitecture {

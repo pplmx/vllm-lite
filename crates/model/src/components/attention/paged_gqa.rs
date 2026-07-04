@@ -150,7 +150,7 @@ pub fn project_attention_output(
 
 /// Plugin for applying rotary embeddings to Q/K before paged KV write.
 pub trait QkRotaryEmb: Send + Sync {
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

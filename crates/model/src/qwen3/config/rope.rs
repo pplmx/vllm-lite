@@ -68,7 +68,7 @@ impl std::fmt::Display for RopeType {
     }
 }
 
-/// `RopeScaling`: rope scaling.
+/// `RopeScaling`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct RopeScaling {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -85,7 +85,7 @@ pub struct RopeScaling {
     pub mrope_section: Option<Vec<usize>>,
 }
 
-/// `RopeParameters`: rope parameters.
+/// `RopeParameters`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct RopeParameters {
     #[serde(default, skip_serializing_if = "Option::is_none")]

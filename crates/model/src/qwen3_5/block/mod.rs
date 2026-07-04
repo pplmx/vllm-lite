@@ -13,7 +13,7 @@ use crate::causal_lm::{DecoderLayer, LayerAuxMut, LayerCtx};
 use candle_core::{Result as CandleResult, Tensor};
 
 #[derive(Debug)]
-/// `HybridBlock`: hybrid block enumeration.
+/// Block abstraction for Hybrid. Groups a contiguous range of work (e.g. one transformer layer, one pipeline stage).
 pub enum HybridBlock {
     Linear(LinearAttentionBlock),
     Full(FullAttentionBlock35),

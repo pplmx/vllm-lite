@@ -4,14 +4,14 @@ use crate::components::MlaAttention;
 use candle_core::{Result, Tensor};
 
 #[derive(Debug)]
-/// `Qwen3MlaAttention`: qwen3 mla attention.
+/// `Qwen3MlaAttention`. See the type definition for fields and behavior.
 pub struct Qwen3MlaAttention {
     inner: MlaAttention,
 }
 
 impl Qwen3MlaAttention {
     #[allow(clippy::too_many_arguments)]
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -43,7 +43,7 @@ impl Qwen3MlaAttention {
         Ok(Self { inner })
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).

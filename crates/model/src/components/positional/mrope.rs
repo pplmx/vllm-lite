@@ -10,7 +10,7 @@
 use crate::qwen3::config::Qwen3Config;
 use candle_core::{Device, Result as CandleResult, Tensor};
 
-/// `MRoPE`: m ro pe.
+/// `MRoPE`. See the type definition for fields and behavior.
 #[derive(Clone, Debug)]
 #[allow(dead_code)] // audited 2026-06-26 (Wave 1): pub(crate) fields never read externally; callers use struct via from_config or pass through to Attention35WithRoPE
 pub struct MRoPE {
@@ -59,7 +59,7 @@ impl MRoPE {
         }
     }
 
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

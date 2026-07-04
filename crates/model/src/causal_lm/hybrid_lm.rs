@@ -24,7 +24,7 @@ pub trait HybridLmConfig: Clone {
 }
 
 #[derive(Debug)]
-/// `HybridLm`: hybrid lm.
+/// `HybridLm`. See the type definition for fields and behavior.
 pub struct HybridLm<B, Norm, C> {
     config: C,
     pub(crate) embed_tokens: Embedding,
@@ -63,7 +63,7 @@ where
         }
     }
 
-    /// Runs the operation.
+    /// Run the forward pass with the paged KV cache enabled.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

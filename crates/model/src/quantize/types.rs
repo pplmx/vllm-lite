@@ -1,6 +1,6 @@
 use candle_core::{DType, Result, Tensor};
 
-/// `StorageTensor`: storage tensor enumeration.
+/// `StorageTensor`. See the type definition for fields and behavior.
 #[derive(Debug, Clone)]
 pub enum StorageTensor {
     Quantized(QuantizedTensor),
@@ -8,7 +8,7 @@ pub enum StorageTensor {
     Fp32(Tensor),
 }
 
-/// `QuantizedTensor`: quantized tensor.
+/// `QuantizedTensor`. See the type definition for fields and behavior.
 #[derive(Debug, Clone)]
 pub struct QuantizedTensor {
     pub data: Vec<u8>,
@@ -18,7 +18,7 @@ pub struct QuantizedTensor {
     pub shape: Vec<usize>,
 }
 
-/// `QuantizationFormat`: quantization format enumeration.
+/// `QuantizationFormat`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum QuantizationFormat {
@@ -29,7 +29,7 @@ pub enum QuantizationFormat {
     AwqQ4,
 }
 
-/// `QuantizationConfig`: quantization configuration.
+/// Configuration for Quantization. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub struct QuantizationConfig {
     pub format: QuantizationFormat,

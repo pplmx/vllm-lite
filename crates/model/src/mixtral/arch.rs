@@ -12,7 +12,7 @@ use super::block::MixtralBlock;
 use super::model::MixtralModel;
 
 #[derive(Debug)]
-/// `MixtralArchitecture`: mixtral architecture.
+/// `MixtralArchitecture`. See the type definition for fields and behavior.
 pub struct MixtralArchitecture;
 
 impl MixtralArchitecture {

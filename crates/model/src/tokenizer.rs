@@ -2,7 +2,7 @@
 use std::fmt::Write;
 use tokenizers::Tokenizer as HFTokenizer;
 
-/// `TokenizerError`: tokenizer error.
+/// Error type for tokenizer encoding/decoding failures. Covers invalid UTF-8, missing vocab entries, and chat-template substitution errors.
 #[derive(Debug, thiserror::Error)]
 pub enum TokenizerError {
     #[error("failed to load tokenizer from {path}: {source}")]
@@ -14,7 +14,11 @@ pub enum TokenizerError {
 }
 
 #[derive(Debug)]
-/// Tokenizer: tokenizer.
+/// Tokenizer wrapper around HuggingFace `tokenizers::Tokenizer` with
+/// helpers for prompt + chat-template encoding. Constructed via
+/// `Tokenizer::from_file` or `Tokenizer::from_pretrained`; never
+/// instantiated directly because the inner HF tokenizer must be
+/// deserialized from a JSON file.
 pub struct Tokenizer {
     inner: Option<Box<HFTokenizer>>,
     vocab_size: usize,
@@ -37,7 +41,7 @@ impl Tokenizer {
         }
     }
 
-    /// Runs the operation.
+    /// Construct a tokenizer from a tokenizer.json file.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.

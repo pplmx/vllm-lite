@@ -13,7 +13,7 @@ use vllm_traits::ModelBackend;
 use vllm_traits::types::BatchOutput;
 
 #[derive(Debug)]
-/// `Llama4Architecture`: llama4 architecture.
+/// `Llama4Architecture`. See the type definition for fields and behavior.
 pub struct Llama4Architecture {
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     is_moe: bool,
@@ -49,7 +49,7 @@ impl Default for Llama4Architecture {
     }
 }
 
-/// `Llama4BlockWrapper`: llama4 block wrapper.
+/// Wrapper around Llama4Block. Adds a single responsibility (caching, locking, observation) on top of the inner type.
 pub(crate) struct Llama4BlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,
@@ -167,7 +167,7 @@ impl Architecture for Llama4Architecture {
     }
 }
 
-/// `Llama4Model`: llama4 model.
+/// `Llama4Model`. See the type definition for fields and behavior.
 pub(crate) struct Llama4Model {
     config: ModelConfig,
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)

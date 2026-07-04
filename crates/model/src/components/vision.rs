@@ -7,7 +7,7 @@
 use candle_core::{Module, Result as CandleResult, Tensor};
 use candle_nn::{Linear, VarBuilder};
 
-/// `VisionConfig`: vision configuration.
+/// Configuration for Vision. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Clone, Debug)]
 pub struct VisionConfig {
     pub image_size: usize,
@@ -34,13 +34,13 @@ impl VisionConfig {
 }
 
 #[derive(Debug)]
-/// `PatchEmbed`: patch embed.
+/// `PatchEmbed`. See the type definition for fields and behavior.
 pub struct PatchEmbed {
     proj: Linear,
 }
 
 impl PatchEmbed {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -54,7 +54,7 @@ impl PatchEmbed {
         Ok(Self { proj })
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -70,7 +70,7 @@ pub struct VisionEncoder {
 }
 
 impl VisionEncoder {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -85,7 +85,7 @@ impl VisionEncoder {
         &self.config
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).

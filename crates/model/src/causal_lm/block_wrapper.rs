@@ -7,7 +7,7 @@ use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 
 #[derive(Debug)]
-/// `BlockWrapper`: block wrapper.
+/// Wrapper around Block. Adds a single responsibility (caching, locking, observation) on top of the inner type.
 pub struct BlockWrapper<B> {
     inner: B,
     inner_dim: usize,

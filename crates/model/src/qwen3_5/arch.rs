@@ -46,7 +46,7 @@ pub fn remap_qwen35_weight_keys(weights: HashMap<String, Tensor>) -> HashMap<Str
     remapped
 }
 
-/// `Qwen35Architecture`: qwen35 architecture.
+/// `Qwen35Architecture`. See the type definition for fields and behavior.
 pub(crate) struct Qwen35Architecture;
 
 impl Qwen35Architecture {

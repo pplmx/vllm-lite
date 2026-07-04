@@ -11,11 +11,11 @@ use candle_nn::Linear;
 
 use super::block::MixtralBlock;
 
-/// `MixtralModel`: mixtral model.
+/// `MixtralModel`. See the type definition for fields and behavior.
 pub type MixtralModel = CausalLm<MixtralBlock, LnLayerNorm, Linear>;
 
 impl MixtralModel {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -34,7 +34,7 @@ impl MixtralModel {
         )
     }
 
-    /// Runs the operation.
+    /// Build from weights.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.

@@ -2,9 +2,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// `CudaGraphNode`: cuda graph node trait.
+/// `CudaGraphNode`. See the type definition for fields and behavior.
 pub trait CudaGraphNode: Send + Sync {
-    /// Runs the operation.
+    /// Execute a closure under fallback policy with retry semantics.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -60,7 +60,7 @@ impl dyn CudaGraphNode {
     }
 }
 
-/// `CudaGraphTensor`: cuda graph tensor trait.
+/// `CudaGraphTensor`. See the type definition for fields and behavior.
 pub trait CudaGraphTensor: Send + Sync {
     fn as_ptr(&self) -> *const std::ffi::c_void;
     fn shape(&self) -> &[usize];
@@ -89,7 +89,7 @@ impl CudaGraphTensor for NullCudaGraphTensor {
     }
 }
 
-/// `CudaGraphError`: cuda graph error.
+/// Error type for CudaGraph. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum CudaGraphError {
     #[error("capture failed: {0}")]
@@ -102,7 +102,7 @@ pub enum CudaGraphError {
     Unsupported(String),
 }
 
-/// `CudaGraph`: cuda graph.
+/// `CudaGraph`. See the type definition for fields and behavior.
 pub struct CudaGraph {
     nodes: Vec<Arc<dyn CudaGraphNode>>,
     node_inputs: Vec<Vec<usize>>,
@@ -149,7 +149,7 @@ impl CudaGraph {
         self.cached = false;
     }
 
-    /// Runs the operation.
+    /// Capture a sequence of tensor ops into a CUDA graph for fast replay.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -159,7 +159,7 @@ impl CudaGraph {
     }
 
     #[allow(unused_mut)]
-    /// Runs the operation.
+    /// Execute a closure under fallback policy with retry semantics.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -195,7 +195,7 @@ impl Default for CudaGraph {
 }
 #[derive(Debug)]
 
-/// `CudaGraphExecutor`: cuda graph executor.
+/// `CudaGraphExecutor`. See the type definition for fields and behavior.
 pub struct CudaGraphExecutor {
     graphs: HashMap<String, CudaGraph>,
     enable_cuda_graph: bool,
@@ -214,7 +214,7 @@ impl CudaGraphExecutor {
         self.graphs.insert(name, graph);
     }
 
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

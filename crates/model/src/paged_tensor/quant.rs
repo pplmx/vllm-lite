@@ -10,7 +10,7 @@
 
 use candle_core::{Device, Result, Tensor};
 
-/// `QuantizationType`: quantization type.
+/// `QuantizationType`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuantizationType {
     Fp16,
@@ -49,7 +49,7 @@ impl QuantizationType {
     }
 }
 
-/// `QuantizationConfig`: quantization configuration.
+/// Configuration for Quantization. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub struct QuantizationConfig {
     pub quant_type: QuantizationType,
@@ -90,7 +90,7 @@ impl QuantizationConfig {
 /// Quantization: quantization trait.
 pub trait Quantization: Send + Sync {
     fn quantize(&self, data: &[f32]) -> QuantizedWeights;
-    /// Runs the operation.
+    /// Dequantize the input tensor from its stored dtype back to F32/F16.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -99,7 +99,7 @@ pub trait Quantization: Send + Sync {
     fn quant_type(&self) -> QuantizationType;
 }
 
-/// `QuantizedWeights`: quantized weights.
+/// `QuantizedWeights`. See the type definition for fields and behavior.
 #[derive(Debug, Clone)]
 pub struct QuantizedWeights {
     pub qweight: Tensor,
@@ -137,7 +137,7 @@ impl QuantizedWeights {
 }
 
 #[derive(Debug)]
-/// `AWQQuantization`: awq quantization.
+/// `AWQQuantization`. See the type definition for fields and behavior.
 pub struct AWQQuantization {
     bits: usize,
     group_size: usize,
@@ -149,7 +149,7 @@ impl AWQQuantization {
         Self { bits, group_size }
     }
 
-    /// Runs the operation.
+    /// Quantize the input tensor into the configured storage dtype.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -190,7 +190,7 @@ impl AWQQuantization {
         Ok(QuantizedWeights::new(qweight_tensor, scales_tensor))
     }
 
-    /// Runs the operation.
+    /// Dequantize the input tensor from its stored dtype back to F32/F16.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -227,7 +227,7 @@ impl AWQQuantization {
 }
 #[derive(Debug)]
 
-/// `GPTQQuantization`: gptq quantization.
+/// `GPTQQuantization`. See the type definition for fields and behavior.
 pub struct GPTQQuantization {
     bits: usize,
     group_size: usize,
@@ -239,7 +239,7 @@ impl GPTQQuantization {
         Self { bits, group_size }
     }
 
-    /// Runs the operation.
+    /// Quantize the input tensor into the configured storage dtype.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -280,7 +280,7 @@ impl GPTQQuantization {
         Ok(QuantizedWeights::new(qweight_tensor, scales_tensor))
     }
 
-    /// Runs the operation.
+    /// Dequantize the input tensor from its stored dtype back to F32/F16.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

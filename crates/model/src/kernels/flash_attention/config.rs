@@ -3,7 +3,7 @@
 // Flash attention configuration: `AttentionVariant`, `FlashAttentionConfig`,
 // and the configuration helpers (`select_tile_size`, `should_use_tiled`).
 
-/// `AttentionVariant`: attention variant enumeration.
+/// `AttentionVariant`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AttentionVariant {
     #[default]
@@ -13,7 +13,7 @@ pub enum AttentionVariant {
     FlashV2,
 }
 
-/// `FlashAttentionConfig`: flash attention configuration.
+/// Configuration for FlashAttention. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Default)]
 pub struct FlashAttentionConfig {
     pub variant: AttentionVariant,

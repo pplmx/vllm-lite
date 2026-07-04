@@ -9,7 +9,7 @@
 
 use candle_core::{DType, Device, Result, Tensor};
 
-/// `CacheBlock`: cache block.
+/// Block abstraction for Cache. Groups a contiguous range of work (e.g. one transformer layer, one pipeline stage).
 pub struct CacheBlock {
     pub key: Tensor,
     pub value: Tensor,
@@ -17,7 +17,7 @@ pub struct CacheBlock {
     pub layer_idx: usize,
 }
 
-/// `KvCachePool`: kv cache pool.
+/// Pool of pre-allocated KvCache resources. Acquire returns a guard; release happens on drop.
 pub struct KvCachePool {
     blocks: Vec<CacheBlock>,
     free_list: Vec<usize>,

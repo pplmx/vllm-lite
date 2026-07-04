@@ -12,7 +12,7 @@ use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 
 #[derive(Debug)]
-/// `Gemma4Block`: gemma4 block.
+/// Block abstraction for Gemma4. Groups a contiguous range of work (e.g. one transformer layer, one pipeline stage).
 pub struct Gemma4Block {
     attention: Gemma4Attention,
     mlp: GeGLU,
@@ -21,7 +21,7 @@ pub struct Gemma4Block {
 }
 
 impl Gemma4Block {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -78,7 +78,7 @@ impl Gemma4Block {
         })
     }
 
-    /// Runs the operation.
+    /// Build from weights.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.
@@ -172,7 +172,7 @@ impl Gemma4Block {
         })
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -188,7 +188,7 @@ impl Gemma4Block {
         x.add(&residual)
     }
 
-    /// Runs the operation.
+    /// Run the prefill path: process the full prompt and cache its KV.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -213,7 +213,7 @@ impl Gemma4Block {
         x.add(&residual)
     }
 
-    /// Runs the operation.
+    /// Run the decode path: process one new token against cached KV.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

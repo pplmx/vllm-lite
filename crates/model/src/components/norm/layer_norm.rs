@@ -5,7 +5,7 @@ use candle_core::{Module, Result, Tensor};
 use candle_nn::LayerNorm;
 
 #[derive(Debug)]
-/// `LnLayerNorm`: ln layer norm.
+/// `LnLayerNorm`. See the type definition for fields and behavior.
 pub struct LnLayerNorm {
     weight: Tensor,
     bias: Tensor,
@@ -18,7 +18,7 @@ impl LnLayerNorm {
         Self { weight, bias, eps }
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -44,7 +44,7 @@ impl Module for LnLayerNorm {
     }
 }
 
-/// Runs the operation.
+/// Run the operation (see signature for params and return type).
 /// # Errors
 ///
 /// Returns `Err` if the operation fails.

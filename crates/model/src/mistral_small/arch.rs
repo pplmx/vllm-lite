@@ -13,7 +13,7 @@ use vllm_traits::ModelBackend;
 use vllm_traits::types::BatchOutput;
 
 #[derive(Debug)]
-/// `MistralSmallArchitecture`: mistral small architecture.
+/// `MistralSmallArchitecture`. See the type definition for fields and behavior.
 pub struct MistralSmallArchitecture {
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)
     num_experts: usize,
@@ -45,7 +45,7 @@ impl Default for MistralSmallArchitecture {
     }
 }
 
-/// `MistralSmallBlockWrapper`: mistral small block wrapper.
+/// Wrapper around MistralSmallBlock. Adds a single responsibility (caching, locking, observation) on top of the inner type.
 pub(crate) struct MistralSmallBlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,
@@ -173,7 +173,7 @@ impl Architecture for MistralSmallArchitecture {
     }
 }
 
-/// `MistralSmallModel`: mistral small model.
+/// `MistralSmallModel`. See the type definition for fields and behavior.
 pub(crate) struct MistralSmallModel {
     config: ModelConfig,
     #[allow(dead_code)] // audited 2026-06-26 (Wave 1): stub arch (Option C)

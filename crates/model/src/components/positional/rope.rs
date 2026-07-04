@@ -11,7 +11,7 @@
 use crate::qwen3::config::Qwen3Config;
 use candle_core::{Result, Tensor};
 
-/// `RoPE`: ro pe.
+/// `RoPE`. See the type definition for fields and behavior.
 #[derive(Clone, Debug)]
 #[allow(dead_code)] // audited 2026-06-26 (Wave 1): pub(crate) fields never read externally; struct only used in self-tests
 pub struct RoPE {
@@ -57,7 +57,7 @@ impl RoPE {
         self.scaling_factor
     }
 
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -65,7 +65,7 @@ impl RoPE {
         apply_rope(x, positions, self.theta)
     }
 
-    /// Runs the operation.
+    /// Run the layer forward pass over the input.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
@@ -77,7 +77,7 @@ impl RoPE {
     }
 }
 
-/// Runs the operation.
+/// Run the operation (see signature for params and return type).
 /// # Errors
 ///
 /// Returns `Err` if the operation fails.

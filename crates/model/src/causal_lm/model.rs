@@ -37,7 +37,7 @@ where
         self
     }
 
-    /// Runs the operation.
+    /// Run the forward pass with the paged KV cache enabled.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -70,7 +70,7 @@ impl<B> CausalLm<B, LnLayerNorm, Linear>
 where
     B: PagedDecoderBlock + Send + Sync,
 {
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -125,7 +125,7 @@ where
         })
     }
 
-    /// Runs the operation.
+    /// Build from hf weights ln.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.
@@ -197,7 +197,7 @@ impl<B> CausalLm<B, RmsNorm, Linear>
 where
     B: PagedDecoderBlock + Send + Sync,
 {
-    /// Runs the operation.
+    /// Run the operation (see signature for params and return type).
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -251,7 +251,7 @@ where
         })
     }
 
-    /// Runs the operation.
+    /// Build from hf weights rms.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.

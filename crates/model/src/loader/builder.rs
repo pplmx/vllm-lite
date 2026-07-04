@@ -8,7 +8,7 @@ use crate::config::Architecture as ConfigArchitecture;
 use crate::config::ModelConfig;
 
 #[derive(Debug)]
-/// `ModelLoaderBuilder`: model loader builder.
+/// Builder for `ModelLoader`. Use `with_*` methods to override defaults, then call `.build()` to produce the final value.
 pub struct ModelLoaderBuilder {
     device: Device,
     model_dir: Option<String>,
@@ -54,7 +54,7 @@ impl ModelLoaderBuilder {
         self
     }
 
-    /// Runs the operation.
+    /// Finalise the builder and return the constructed type.
     /// # Errors
     ///
     /// Returns `Err` if any required validation or resource acquisition fails.
@@ -77,7 +77,7 @@ impl ModelLoaderBuilder {
     }
 }
 
-/// `ModelLoader`: model loader.
+/// `ModelLoader`. See the type definition for fields and behavior.
 #[derive(Debug)]
 pub struct ModelLoader {
     inner: Arc<ModelLoaderInner>,
@@ -187,7 +187,7 @@ impl ModelLoader {
         Ok(arch.capabilities())
     }
 
-    /// Runs the operation.
+    /// Load config.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.
@@ -199,7 +199,7 @@ impl ModelLoader {
             .map_err(|e| candle_core::Error::msg(format!("Failed to parse config: {e}")))
     }
 
-    /// Runs the operation.
+    /// Load weights.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.
@@ -208,7 +208,7 @@ impl ModelLoader {
         super::checkpoint::load_checkpoint(path, &self.inner.device)
     }
 
-    /// Runs the operation.
+    /// Run the loader and produce the target type (model, cache, etc.).
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -264,7 +264,7 @@ impl ModelLoader {
         )
     }
 
-    /// Runs the operation.
+    /// Load the target language model and return its backend.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.

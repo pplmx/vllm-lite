@@ -12,7 +12,7 @@ use super::block::block_from_weights;
 use super::model::LlamaModel;
 
 #[derive(Debug)]
-/// `LlamaArchitecture`: llama architecture.
+/// `LlamaArchitecture`. See the type definition for fields and behavior.
 pub struct LlamaArchitecture;
 
 impl LlamaArchitecture {

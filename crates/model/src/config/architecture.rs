@@ -3,14 +3,14 @@
 //! Defines the Architecture enum and related types for supporting
 //! multiple model architectures.
 
-/// `LayerType`: layer type.
+/// `LayerType`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayerType {
     SlidingAttention,
     FullAttention,
 }
 
-/// `RoPEConfig`: ro pe configuration.
+/// Configuration for RoPE. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub struct RoPEConfig {
     pub rope_theta: f32,
@@ -43,7 +43,7 @@ impl Architecture {
     }
 }
 
-/// `AttentionType`: attention type.
+/// `AttentionType`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttentionType {
     Mha,
@@ -51,14 +51,14 @@ pub enum AttentionType {
     SlidingWindow,
 }
 
-/// `NormType`: norm type.
+/// `NormType`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NormType {
     RmsNorm,
     LayerNorm,
 }
 
-/// `MlpType`: mlp type.
+/// `MlpType`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MlpType {
     SwiGLU,

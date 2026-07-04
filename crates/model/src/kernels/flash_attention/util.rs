@@ -5,7 +5,7 @@
 
 use candle_core::{Result, Tensor};
 
-/// `AttentionStats`: attention statistics.
+/// Telemetry snapshot for Attention: counters, gauges, and percentile latencies. Cloned and serialized on every metrics export.
 #[derive(Debug, Clone, Default)]
 pub struct AttentionStats {
     pub forward_count: u64,
@@ -25,7 +25,7 @@ impl AttentionStats {
     }
 }
 
-/// Runs the operation.
+/// Run the operation (see signature for params and return type).
 /// # Errors
 ///
 /// Returns `Err` if the operation fails.

@@ -9,13 +9,13 @@ use std::collections::HashMap;
 
 use super::block::{block_from_weights, new_block};
 
-/// `LlamaBlock`: llama block.
+/// Block abstraction for Llama. Groups a contiguous range of work (e.g. one transformer layer, one pipeline stage).
 pub type LlamaBlock = RopeGqaDecoderBlock;
-/// `LlamaModel`: llama model.
+/// `LlamaModel`. See the type definition for fields and behavior.
 pub type LlamaModel = CausalLm<LlamaBlock, RmsNorm, Linear>;
 
 impl LlamaModel {
-    /// Runs the operation.
+    /// Construct a new instance from the given configuration.
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
@@ -23,7 +23,7 @@ impl LlamaModel {
         Self::new_rms(config, device, num_kv_blocks, false, new_block)
     }
 
-    /// Runs the operation.
+    /// Build from weights.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.
