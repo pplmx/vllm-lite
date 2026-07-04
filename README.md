@@ -237,7 +237,7 @@ cargo run -p vllm-server -- --log-dir ./logs
 | **首 Token 延迟 (TTFT)** | < 50ms         | 1K token prompt        |
 | **P99 延迟**             | < 100ms        | end-to-end             |
 | **显存效率**             | +40%           | vs 传统 KV Cache       |
-| **测试覆盖率**           | 1179+          | 单元 + 集成测试        |
+| **测试覆盖率**           | 1219+          | 单元 + 集成测试        |
 | **E2E 测试**             | 30+            | 全场景覆盖             |
 
 </div>
@@ -375,15 +375,25 @@ cargo run -p vllm-server -- --help
 
 <div align="center">
 
-| 端点                   | 方法     | 描述            | 认证  |
-| ---------------------- | -------- | --------------- | :---: |
-| `/v1/chat/completions` | POST     | Chat 补全       |  🔐   |
-| `/v1/completions`      | POST     | 文本补全        |  🔐   |
-| `/v1/embeddings`       | POST     | 向量嵌入        |  🔐   |
-| `/v1/batches`          | POST/GET | 批量请求        |  🔐   |
-| `/metrics`             | GET      | Prometheus 指标 |   -   |
-| `/health`              | GET      | 存活检查        |   -   |
-| `/ready`               | GET      | 就绪检查        |   -   |
+| 端点                       | 方法     | 描述            | 认证  |
+| -------------------------- | -------- | --------------- | :---: |
+| `/v1/models`               | GET      | 模型列表        |   -   |
+| `/v1/chat/completions`     | POST     | Chat 补全       |  🔐   |
+| `/v1/completions`          | POST     | 文本补全        |  🔐   |
+| `/v1/embeddings`           | POST     | 向量嵌入        |  🔐   |
+| `/v1/batches`              | POST/GET | 批量请求        |  🔐   |
+| `/v1/batches/{id}`         | GET      | 批量状态        |  🔐   |
+| `/v1/batches/{id}/results` | GET      | 批量结果        |  🔐   |
+| `/metrics`                 | GET      | Prometheus 指标 |   -   |
+| `/health`                  | GET      | 存活检查        |   -   |
+| `/health/live`             | GET      | K8s liveness    |   -   |
+| `/health/ready`            | GET      | K8s readiness   |   -   |
+| `/health/details`          | GET      | 详细健康状态    |   -   |
+| `/ready`                   | GET      | 就绪检查        |   -   |
+| `/debug/metrics`           | GET      | 调试指标快照    |   -   |
+| `/debug/kv-cache`          | GET      | KV cache 状态   |   -   |
+| `/debug/trace`             | GET      | 追踪状态        |   -   |
+| `/shutdown`                | GET      | 优雅关闭        |   -   |
 
 </div>
 
@@ -485,20 +495,28 @@ vllm-lite/
 ├── justfile                # 构建自动化
 ├── crates/
 │   ├── traits/             # 接口定义 (ModelBackend, Batch, Kernel traits)
-│   ├── core/               # Engine、Scheduler、KV Cache
-│   ├── model/              # 模型实现、Kernels
-│   │   └── src/
-│   │       ├── components/ # 共享组件层 (attention, mlp, norm, positional)
-│   │       ├── llama/      # Llama 架构
-│   │       ├── mistral/    # Mistral 架构
-│   │       ├── qwen3/      # Qwen2/3 架构
-│   │       ├── qwen3_5/    # Qwen3.5 架构 (Mamba Hybrid)
-│   │       ├── gemma4/     # Gemma4 架构
-│   │       ├── mixtral/    # Mixtral 架构 (MoE)
-│   │       └── kernels/    # GPU Kernels
-│   ├── dist/               # 张量并行
-│   ├── server/             # HTTP API (OpenAI 兼容)
-│   └── testing/            # 测试工具
+│   ├── core/               # Engine、Scheduler、KV Cache、Metrics
+│   ├── model/              # 模型实现、Loader、Quantize、Kernels
+│   │   ├── arch/           # Architecture trait + Registry
+│   │   ├── components/     # 共享组件层 (attention, mlp, norm, positional, ssm, gated_delta, vision)
+│   │   ├── loader/         # ModelLoader、format detection
+│   │   ├── paged_tensor/   # 物理 KV cache (tensor_store, quantization)
+│   │   ├── quantize/       # GGUF Q4_K_M + StorageTensor
+│   │   ├── causal_lm/      # CausalLM head + block wrapper + hybrid dispatcher
+│   │   ├── llama/          # Llama 架构
+│   │   ├── llama4/         # Llama 4 架构
+│   │   ├── mistral/        # Mistral 架构
+│   │   ├── mistral_small/  # Mistral Small 架构
+│   │   ├── mixtral/        # Mixtral 架构 (Sparse MoE)
+│   │   ├── qwen3/          # Qwen2/3 架构 (GQA + MLA)
+│   │   ├── qwen3_5/        # Qwen3.5 架构 (Mamba SSM Hybrid)
+│   │   ├── gemma3/         # Gemma 3 架构
+│   │   ├── gemma4/         # Gemma 4 架构
+│   │   ├── phi4/           # Phi-4 架构
+│   │   └── kernels/        # GPU Kernels (flash_attention, cuda_graph)
+│   ├── dist/               # 张量并行 (multi-node, feature-gated)
+│   ├── server/             # HTTP API (OpenAI 兼容 + 安全 + 批处理)
+│   └── testing/            # 测试工具 (BatchBuilder、fixtures、stubs)
 └── tests/                  # 集成测试
 ```
 
