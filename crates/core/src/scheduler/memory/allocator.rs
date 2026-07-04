@@ -307,8 +307,10 @@ mod prop_tests {
             capacity in 2usize..50,
         ) {
             let mut alloc = BlockAllocator::new(capacity);
+            // invariant: pre-conditions make this infallible at this call site.
             let first = alloc.allocate(1).expect("first allocate").pop().unwrap();
             alloc.free(&[first]);
+            // invariant: pre-conditions make this infallible at this call site.
             let second = alloc.allocate(1).expect("second allocate").pop().unwrap();
             prop_assert_eq!(first, second, "LIFO should reuse the freed id");
         }

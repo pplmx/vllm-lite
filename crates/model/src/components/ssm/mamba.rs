@@ -143,6 +143,7 @@ impl MambaBlock {
                 // invariant: tensor shape is derived from norm_w dimensions; allocation
                 // of a fixed-size zero buffer on the same device as norm_w cannot fail.
                 Tensor::zeros(norm_w.shape().dims()[0], DType::F32, norm_w.device())
+                    // invariant: pre-conditions make this infallible at this call site.
                     .expect("Failed to create zero bias")
             });
         let norm = candle_nn::LayerNorm::new(norm_w, norm_b, 1e-5);

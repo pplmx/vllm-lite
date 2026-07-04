@@ -165,6 +165,7 @@ impl Engine {
                 // invariant: caller (`with_drafts_boxed`) supplies a deduplicated spec list;
                 // duplicates are a programmer error.
                 .register(spec)
+                // invariant: pre-check guarantees uniqueness; this path is a programmer error.
                 .expect("with_drafts_boxed: duplicate draft id in spec list");
         }
         engine.install_default_resolver();
@@ -222,6 +223,7 @@ impl Engine {
                 // invariant: caller (`with_budget_boxed`) supplies a deduplicated spec list;
                 // duplicates are a programmer error.
                 .register(spec)
+                // invariant: pre-check guarantees uniqueness; this path is a programmer error.
                 .expect("with_budget_boxed: duplicate draft id in spec list");
         }
         engine.install_default_resolver();

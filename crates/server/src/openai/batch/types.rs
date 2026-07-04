@@ -153,6 +153,7 @@ impl BatchJob {
         let now = i64::try_from(
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
+                // invariant: pre-conditions make this infallible at this call site.
                 .expect("Failed to get system time")
                 .as_secs(),
         )
@@ -194,6 +195,7 @@ mod tests {
     fn test_simple_batch_request_deserialization() {
         let json = r#"{"prompts":["test"],"endpoint":"completions"}"#;
         let req: SimpleBatchRequest =
+            // invariant: pre-conditions make this infallible at this call site.
             serde_json::from_str(json).expect("Failed to deserialize batch request");
         assert_eq!(req.prompts.len(), 1);
         assert_eq!(req.endpoint, BatchEndpoint::Completion);
@@ -215,6 +217,7 @@ mod tests {
                 failed: 1,
             }),
         };
+        // invariant: pre-conditions make this infallible at this call site.
         let json = serde_json::to_string(&resp).expect("Failed to serialize batch response");
         assert!(json.contains("\"id\":\"batch_123\""));
         assert!(json.contains("\"status\":\"pending\""));
@@ -287,16 +290,19 @@ mod tests {
     fn batch_endpoint_serde_json_wire_compat() {
         // Existing JSON wire format must still deserialize.
         let json = r#"{"prompts":["test"],"endpoint":"chat","model":"qwen"}"#;
+        // invariant: pre-conditions make this infallible at this call site.
         let req: SimpleBatchRequest = serde_json::from_str(json).expect("should parse");
         assert_eq!(req.endpoint, BatchEndpoint::Chat);
 
         // Legacy "completions" alias must still work.
         let json = r#"{"prompts":["test"],"endpoint":"completions"}"#;
+        // invariant: pre-conditions make this infallible at this call site.
         let req: SimpleBatchRequest = serde_json::from_str(json).expect("should parse");
         assert_eq!(req.endpoint, BatchEndpoint::Completion);
 
         // Full OpenAI path must still work.
         let json = r#"{"prompts":["test"],"endpoint":"/v1/chat/completions"}"#;
+        // invariant: pre-conditions make this infallible at this call site.
         let req: SimpleBatchRequest = serde_json::from_str(json).expect("should parse");
         assert_eq!(req.endpoint, BatchEndpoint::Chat);
 

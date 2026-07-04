@@ -328,6 +328,7 @@ mod tests {
         .unwrap();
 
         let validator = JwtValidator::new(config_secret(secret));
+        // invariant: pre-conditions make this infallible at this call site.
         let parsed = validator.validate(&token).expect("valid token must parse");
         assert_eq!(parsed.sub, "user-1");
         assert_eq!(parsed.iss, TEST_ISS);

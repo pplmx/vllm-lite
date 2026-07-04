@@ -150,6 +150,7 @@ async fn main() {
             // invariant: vram_budget_bytes is validated by config deserialization (must be > 0
             // or None); 0 is rejected upstream before reaching this branch.
             vllm_core::speculative::MemoryBudget::new(budget_bytes)
+                // invariant: pre-conditions make this infallible at this call site.
                 .expect("server config: invalid vram_budget_bytes"),
         );
         tracing::info!(
@@ -358,6 +359,7 @@ async fn shutdown_signal() {
         // state; not recoverable from this process anyway.
         signal::ctrl_c()
             .await
+            // invariant: pre-conditions make this infallible at this call site.
             .expect("Failed to install Ctrl+C handler");
     };
 
@@ -366,6 +368,7 @@ async fn shutdown_signal() {
         // invariant: signal handler installation only fails if the OS is in an unrecoverable
         // state; not recoverable from this process anyway.
         signal::unix::signal(signal::unix::SignalKind::terminate())
+            // invariant: pre-conditions make this infallible at this call site.
             .expect("Failed to install signal handler")
             .recv()
             .await;

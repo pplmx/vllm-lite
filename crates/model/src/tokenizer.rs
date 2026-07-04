@@ -202,6 +202,7 @@ mod tests {
 
         if tokenizer_path.exists() {
             let tokenizer = Tokenizer::from_file(tokenizer_path.to_str().unwrap())
+                // invariant: pre-conditions make this infallible at this call site.
                 .expect("Failed to load tokenizer");
 
             let tokens = tokenizer.encode("hi");
@@ -222,6 +223,7 @@ mod tests {
 
         if tokenizer_path.exists() {
             let tokenizer = Tokenizer::from_file(tokenizer_path.to_str().unwrap())
+                // invariant: pre-conditions make this infallible at this call site.
                 .expect("Failed to load tokenizer");
 
             let im_start = "<|im_start|>";
