@@ -8,7 +8,7 @@
   <a href="https://github.com/pplmx/vllm-lite/releases">
     <img src="https://img.shields.io/github/v/release/pplmx/vllm-lite?style=flat-square&color=brightgreen" alt="Release">
   </a>
-  <img src="https://img.shields.io/badge/Tests-1179%20passing-success?style=flat-square" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-1219%20passing-success?style=flat-square" alt="Tests">
 </p>
 
 <!-- PROJECT LOGO -->
@@ -176,7 +176,7 @@ curl -X POST http://localhost:8000/v1/completions \
 ├─────────────────────────────────────────────────────────────┤
 │  🐳 Deployment         │  ✅ Testing                            │
 │  ├── Dockerfile        │  ├── 30+ E2E Tests                     │
-│  ├── docker-compose    │  ├── Unit Tests (1179+)               │
+│  ├── docker-compose    │  ├── Unit Tests (1219+)               │
 │  ├── K8s Manifests     │  └── Benchmarks                        │
 │  └── HPA               │                                        │
 └─────────────────────────────────────────────────────────────┘
