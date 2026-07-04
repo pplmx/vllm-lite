@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::types::{BatchOutput, SeqId, TokenId};
 
-/// `ModelError`: model error.
+/// Error type for Model. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum ModelError {
@@ -27,13 +27,13 @@ impl ModelError {
     }
 }
 
-/// Result: result.
+/// Convenience alias used by every public API in `vllm-traits`.
 pub type Result<T> = std::result::Result<T, ModelError>;
 
 #[cfg(feature = "candle")]
 use candle_core::Tensor;
 
-/// `ModelBackend`: model backend trait.
+/// `ModelBackend`. See the type definition for fields and behavior.
 pub trait ModelBackend: Send + Sync {
     /// Run a forward pass producing next-token logits for each sequence.
     ///
