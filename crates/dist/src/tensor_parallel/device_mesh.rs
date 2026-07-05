@@ -8,8 +8,11 @@ use vllm_traits::TensorParallelError;
 /// `DeviceMesh`. See the type definition for fields and behavior.
 #[derive(Debug, Clone)]
 pub struct DeviceMesh {
+    /// Total number of ranks in the local mesh.
     pub world_size: usize,
+    /// This rank's index within the mesh.
     pub rank: usize,
+    /// Physical device IDs for every rank (length must equal `world_size`).
     pub device_ids: Vec<usize>,
 }
 
@@ -48,33 +51,30 @@ impl DeviceMesh {
     #[must_use]
     pub const fn is_last_rank(&self) -> bool {
         self.rank == self.world_size - 1
-    /// `DeviceMesh`. See the type definition for fields and behavior.
-    #[derive(Debug, Clone)]
-    pub struct DeviceMesh {
-        /// Total number of ranks in the local mesh.
-        pub world_size: usize,
-        /// This rank's index within the mesh.
-        pub rank: usize,
-        /// Physical device IDs for every rank (length must equal `world_size`).
-        pub device_ids: Vec<usize>,
     }
 
-    /// `NodeMesh`. See the type definition for fields and behavior.
-    #[derive(Debug, Clone)]
-    pub struct NodeMesh {
-        /// Per-node device meshes (typically one per node).
-        pub node_mesh: Vec<DeviceMesh>,
-        /// Total number of nodes in the cluster.
-        pub num_nodes: usize,
-        /// This node's index within the cluster.
-        pub node_rank: usize,
-        /// Number of GPUs on this node (= `world_size` of the inner `DeviceMesh`).
-        pub local_world_size: usize,
-        /// This rank's index in the global (cluster-wide) ordering.
-        pub global_rank: usize,
-        /// Total number of ranks across all nodes (`num_nodes * local_world_size`).
-        pub global_world_size: usize,
+    #[must_use]
+    pub fn local_device_id(&self) -> usize {
+        self.device_ids[self.rank]
     }
+}
+
+/// `NodeMesh`. See the type definition for fields and behavior.
+#[derive(Debug, Clone)]
+pub struct NodeMesh {
+    /// Per-node device meshes (typically one per node).
+    pub node_mesh: Vec<DeviceMesh>,
+    /// Total number of nodes in the cluster.
+    pub num_nodes: usize,
+    /// This node's index within the cluster.
+    pub node_rank: usize,
+    /// Number of GPUs on this node (= `world_size` of the inner `DeviceMesh`).
+    pub local_world_size: usize,
+    /// This rank's index in the global (cluster-wide) ordering.
+    pub global_rank: usize,
+    /// Total number of ranks across all nodes (`num_nodes * local_world_size`).
+    pub global_world_size: usize,
+}
 
 impl NodeMesh {
     /// Construct a new instance from the given configuration.
