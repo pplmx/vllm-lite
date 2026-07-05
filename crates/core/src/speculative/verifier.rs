@@ -24,9 +24,13 @@ pub type Result<T> = std::result::Result<T, VerifierError>;
 /// One result item: the Verification plus any associated metadata. Returned in a list from a bulk API.
 #[derive(Debug, Clone)]
 pub struct VerificationResult {
+    /// Sequence this result belongs to.
     pub seq_id: SeqId,
+    /// Draft tokens that were presented for verification.
     pub draft_tokens: Vec<TokenId>,
+    /// Number of draft tokens that were accepted (counted from the start).
     pub accepted_count: usize,
+    /// Index within `draft_tokens` of the first rejection, if any.
     pub rejected_at: Option<usize>,
 }
 
