@@ -20,28 +20,50 @@ use super::metrics::DraftResolutionKind;
 #[derive(Debug)]
 /// Unified metrics collector for scheduler, engine, and HTTP export.
 pub struct EnhancedMetricsCollector {
+    /// Lock-free counters for the hottest path (request counts, latencies, etc.).
     runtime: LockFreeMetrics,
+    /// Total CUDA-Graph replay hits since process start.
     cuda_graph_hits: AtomicU64,
+    /// Total CUDA-Graph cache misses (re-captures) since process start.
     cuda_graph_misses: AtomicU64,
+    /// Total sequences packed into non-trivial batches.
     packing_sequences: AtomicU64,
+    /// Total adaptive-speculation adjustments applied.
     speculative_adjustments: AtomicU64,
+    /// Total error events observed across the engine + scheduler.
     errors_total: AtomicU64,
+    /// Packing waste ratio (bits stored / bits useful) × 1000 (fixed-point).
     packing_waste_ratio: AtomicU64,
+    /// Packing efficiency percentage × 100 (fixed-point).
     packing_efficiency: AtomicU64,
+    /// Speculative acceptance rate percentage × 100 (fixed-point).
     speculative_acceptance_rate: AtomicU64,
+    /// Total draft tokens emitted since process start.
     speculative_draft_count: AtomicU64,
+    /// Speculative efficiency (accepted / drafted) × 1000 (fixed-point).
     speculative_efficiency: AtomicU64,
+    /// Throughput speedup vs. greedy decoding × 100 (fixed-point).
     throughput_speedup_ratio: AtomicU64,
+    /// Current depth of the scheduler's request queue.
     request_queue_depth: AtomicU64,
+    /// Current number of active (running) sequences.
     active_sequences: AtomicU64,
+    /// Cumulative speculative-token count across all requests.
     speculative_per_request_count: AtomicU64,
     // v18.0 multi-model speculative decoding
+    /// Drafts resolved via the external registry.
     draft_resolutions_external_total: AtomicU64,
+    /// Drafts resolved via self-speculation.
     draft_resolutions_self_spec_total: AtomicU64,
+    /// Requests that fell back to no-draft.
     draft_resolutions_none_total: AtomicU64,
+    /// Total draft-loader failures (model missing / OOM / corrupt).
     draft_load_failures_total: AtomicU64,
+    /// Total runtime errors thrown by the draft backend.
     draft_runtime_errors_total: AtomicU64,
+    /// Per-endpoint inference-latency histograms (nanoseconds).
     inference_latency_ns: DashMap<String, Vec<u64>>,
+    /// Per-request accepted / drafted token tallies.
     per_request_acceptance: DashMap<SeqId, (AtomicU64, AtomicU64)>,
 }
 
