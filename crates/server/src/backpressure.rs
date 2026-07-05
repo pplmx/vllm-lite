@@ -11,8 +11,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// Configuration for Backpressure. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub(crate) struct BackpressureConfig {
+    /// Maximum in-flight requests before the backpressure gate trips.
     pub max_buffer_size: usize,
+    /// Buffer-fill level at which new requests start being throttled.
     pub high_water_mark: usize,
+    /// Buffer-fill level at which throttling is lifted.
     pub resume_threshold: usize,
 }
 
