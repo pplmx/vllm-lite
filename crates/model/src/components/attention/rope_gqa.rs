@@ -1,3 +1,9 @@
+//! GQA + RoPE + QK-norm fused attention layer used by Qwen3.
+//!
+//! Layers the rope embedding + Q/K normalisation on top of the
+//! reference GQA so the forward call is one fused op. Reads/writes
+//! through the paged tensor store; falls back to the baseline GQA on
+//! unsupported head-dim / seq-len combinations.
 #![allow(clippy::too_many_arguments, clippy::module_name_repetitions)]
 // invariant: position-id casts (usize -> i64) are bounded by sequence length,
 // well within i64 range.

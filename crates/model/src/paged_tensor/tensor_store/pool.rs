@@ -1,3 +1,9 @@
+//! Paged-KV block pool: `CacheBlock` (single block metadata + tensor handle) and `KvCachePool` (the global free-list + occupancy counters).
+//!
+//! The pool is owned by `tensor_store::TensorStore` and survives
+//! eviction / re-allocation cycles. Block id is a stable handle —
+//! the physical tensor can move, the id cannot.
+
 // crates/model/src/paged_tensor/tensor_store/pool.rs
 //
 // Block-allocator types: `CacheBlock` and `KvCachePool`.

@@ -1,3 +1,9 @@
+//! Gated DeltaNet recurrent state: `GatedDeltaConfig` (init parameters) and `GatedDeltaState` (the per-sequence hidden-state tensor).
+//!
+//! Used by the Qwen3.5 hybrid architecture; the recurrence is
+//! implemented in `rule.rs` and this file owns only the storage shapes
+//! + initialisation helpers.
+
 // crates/model/src/components/gated_delta/state.rs
 //
 // State-space state types for the Gated DeltaNet (GDN) layer:

@@ -1,3 +1,9 @@
+//! Gated DeltaNet recurrent rule + supporting kernels: causal convolution, qkv splitting, head repetition, L2 normalisation, and the gated delta step / recurrent scan.
+//!
+//! The `gated_delta_recurrent` function is the public entry point; it
+//! composes the helper kernels into a single recurrent call. Used by
+//! Qwen3.5 hybrid layers as the SSM component.
+
 // crates/model/src/components/gated_delta/rule.rs
 //
 // Gated DeltaNet (GDN) recurrent rule and supporting kernel helpers:

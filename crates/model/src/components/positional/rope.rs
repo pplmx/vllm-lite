@@ -1,3 +1,8 @@
+//! Rotary Position Embedding (RoPE): precompute sin/cos cache and apply rotation to query/key tensors.
+//!
+//! The cache shape is `(max_seq_len, head_dim/2)`; `apply_rope` mutates
+//! the input tensor in-place when possible. MRoPE (multi-modal RoPE
+//! for Qwen3.5-VL) lives in `mrope.rs` alongside this module.
 #![allow(clippy::module_name_repetitions)]
 // invariant: rope positional-index casts (position/seq_len -> f32) are bounded
 // by sequence length and head_dim, both small model-architecture constants;

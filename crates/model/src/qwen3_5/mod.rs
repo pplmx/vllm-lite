@@ -1,3 +1,6 @@
+//! Qwen3.5 architecture namespace: Mamba-only and Mamba+Attention hybrid variants with harmonic-SSM recurrence.
+//!
+//! Sub-modules: `arch` (Architecture trait impl), `attention35` (hybrid attention layer), `block` (decoder block), `config`, `forward`, `harmonicssm` (SSM layer), `loader` (checkpoint adapter).
 #![allow(clippy::module_name_repetitions)]
 pub mod arch;
 /// attention35: attention35 module.
