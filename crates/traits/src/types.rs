@@ -29,16 +29,25 @@ pub enum BatchPhase {
 /// Serialized to JSON when a batch is checkpointed to the request log.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Batch {
+    /// Identifiers of every sequence participating in this batch.
     pub seq_ids: Vec<SeqId>,
+    /// Per-sequence input tokens (prefill) or last-known token (decode).
     pub input_tokens: Vec<Vec<TokenId>>,
+    /// Per-sequence absolute positions (used for RoPE).
     pub positions: Vec<Vec<usize>>,
     // KV cache information
+    /// Per-sequence KV-cache block ids (parallel to `seq_ids`).
     pub kv_block_ids: Vec<Vec<BlockId>>,
+    /// How many tokens have already been computed and stored in the KV cache.
     pub num_computed_tokens: Vec<usize>,
+    /// Per-sequence `true` for prefill, `false` for decode.
     pub is_prefill: Vec<bool>,
     // New fields
+    /// Overall phase classification for this batch.
     pub phase: BatchPhase,
+    /// Sum of `input_tokens.len()` across all sequences.
     pub total_tokens: usize,
+    /// Longest sequence in this batch; used for padding / kernel launches.
     pub max_seq_len: usize,
 }
 
@@ -91,7 +100,9 @@ impl Default for Batch {
 /// Output from Batch: the result payload plus any associated metadata. Returned to the caller.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BatchOutput {
+    /// Identifiers of the sequences that produced these tokens (parallel to `next_tokens`).
     pub seq_ids: Vec<SeqId>,
+    /// Per-sequence next-token id emitted by the model.
     pub next_tokens: Vec<TokenId>,
 }
 
