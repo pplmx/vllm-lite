@@ -5,6 +5,8 @@
 //! renaming a field here is a breaking API change.
 use serde::{Deserialize, Serialize};
 
+use crate::util::time::unix_now_secs;
+
 /// Token usage statistics for API responses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Usage {
@@ -144,9 +146,7 @@ impl ChatResponse {
         Self {
             id,
             object: "chat.completion".to_string(),
-            created: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX)),
+            created: unix_now_secs(),
             model,
             choices,
             usage,
@@ -186,9 +186,7 @@ impl ChatChunk {
         Self {
             id,
             object: "chat.completion.chunk".to_string(),
-            created: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX)),
+            created: unix_now_secs(),
             model,
             choices: vec![choice],
         }
@@ -248,9 +246,7 @@ impl CompletionResponse {
         Self {
             id,
             object: "text_completion".to_string(),
-            created: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX)),
+            created: unix_now_secs(),
             model,
             choices,
             usage,

@@ -178,9 +178,11 @@ pub struct BatchJob {
 impl BatchJob {
     #[must_use]
     /// Construct a new instance from the given configuration.
-    /// # Panics
     ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
+    /// Uses [`crate::util::time::unix_now_secs`] which never panics — clock
+    /// skew before `UNIX_EPOCH` saturates to `0`, overflow saturates to
+    /// `i64::MAX`. This keeps batch creation robust on NTP-misconfigured
+    /// hosts.
     pub fn new(
         id: String,
         endpoint: BatchEndpoint,
@@ -189,16 +191,7 @@ impl BatchJob {
         max_tokens: Option<i64>,
         temperature: Option<f32>,
     ) -> Self {
-        // invariant: SystemTime::now() is always >= UNIX_EPOCH on any platform with a working clock;
-        // duration_since cannot underflow.
-        let now = i64::try_from(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                // invariant: pre-conditions make this infallible at this call site.
-                .expect("Failed to get system time")
-                .as_secs(),
-        )
-        .unwrap_or(i64::MAX);
+        let now = crate::util::time::unix_now_secs();
         Self {
             id,
             endpoint,

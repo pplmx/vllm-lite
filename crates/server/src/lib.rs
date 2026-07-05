@@ -24,6 +24,7 @@ pub mod health;
 pub mod logging;
 pub mod openai;
 pub mod security;
+pub mod util;
 
 /// Hidden test helpers for unit/integration tests.
 #[doc(hidden)]
