@@ -1,8 +1,9 @@
 //! Request backpressure: token-bucket + concurrency-cap admission control that protects the engine from overload.
 //!
-//! The handlers wrap each request through a [`RateLimiter`]/[`ConcurrencyGuard`]
-//! before forwarding to the engine; rejected requests get a 429 with a
-//! `Retry-After` header.
+//! The handlers wrap each request through the backpressure layer before
+//! forwarding to the engine; rejected requests get a 429 with a
+//! `Retry-After` header. The implementation lives in `pub(crate)`
+//! helpers and is not part of the public API.
 #![allow(dead_code)]
 
 use std::sync::Arc;

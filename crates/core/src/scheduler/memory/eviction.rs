@@ -1,7 +1,7 @@
 //! Eviction policy for KV-cache blocks under memory pressure: LRU with optional priority weighting and prefix-cache awareness.
 //!
-//! `EvictionPolicy` is a trait; the default impl is [`LruEviction`], with
-//! `PriorityEviction` available when `SchedulerConfig.eviction_priority_weight > 0`.
+//! The default impl is [`EvictionPolicy`] (LRU). Priority-weighted variants
+//! are available when `SchedulerConfig.eviction_priority_weight > 0`.
 //! Returns the victim block ranges for the allocator to free.
 #![allow(clippy::module_name_repetitions)]
 use crate::types::{BlockId, Sequence, Status};

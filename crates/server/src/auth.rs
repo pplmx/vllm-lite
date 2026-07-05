@@ -1,9 +1,8 @@
 //! Authentication: API-key lookup table + JWT verification.
 //!
-//! Selects between [`ApiKeyAuth`] (constant-time string compare) and
-//! [`JwtAuth`] (RS256/HS256 verification with claims validation) at
-//! startup based on `AppConfig.auth.method`. Mounted as an axum
-//! middleware before every request reaches the router.
+//! Wraps the [`AuthMiddleware`] which selects between API-key and JWT
+//! verification at startup based on `AppConfig.auth.method`. Mounted as
+//! an axum middleware before every request reaches the router.
 #![allow(clippy::module_name_repetitions)]
 use axum::{
     extract::Request,
