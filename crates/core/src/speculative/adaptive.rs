@@ -100,6 +100,7 @@ impl DraftAccuracyTracker {
 /// Adaptive speculative decoder with dynamic draft token adjustment
 #[derive(Clone, Debug)]
 pub struct AdaptiveSpeculativeDecoder {
+    /// Configuration for adjustment thresholds and bounds.
     config: AdaptiveDraftConfig,
     /// Current max draft tokens
     current_max_draft_tokens: usize,

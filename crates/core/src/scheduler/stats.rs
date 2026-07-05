@@ -8,14 +8,23 @@ use std::time::Instant;
 /// Telemetry snapshot of the scheduler: queue length, preemption count, prefix-cache hit rate, average batch fill ratio. Updated on every step and exposed via metrics.
 #[derive(Debug, Clone)]
 pub struct SchedulerStats {
+    /// Cumulative batches emitted by the scheduler since process start.
     pub total_batches: usize,
+    /// Cumulative prefill-phase requests processed.
     pub total_prefill_requests: usize,
+    /// Cumulative decode-phase requests processed.
     pub total_decode_requests: usize,
+    /// Cumulative preemption events.
     pub total_preemptions: usize,
+    /// Cumulative KV-cache block evictions.
     pub total_evictions: usize,
+    /// Running average batch size across all emitted batches.
     pub avg_batch_size: f64,
+    /// Batch size of the most recently emitted batch.
     pub last_batch_size: usize,
+    /// Cumulative batch-size sum (basis for the running average).
     pub batch_size_sum: u64,
+    /// Instant of the most recent stats update.
     pub last_update: Instant,
 }
 
