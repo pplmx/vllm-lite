@@ -12,7 +12,7 @@
 use crate::metrics::{DraftResolutionKind, EnhancedMetricsCollector};
 use crate::speculative::registry::{DraftId, DraftModelRegistry, DraftRegistryError};
 use std::sync::{Arc, Mutex};
-use vllm_traits::ModelBackend;
+use vllm_traits::{ModelBackend, ModelError};
 
 /// The outcome of resolving a draft for a single request.
 #[derive(Clone)]
@@ -76,12 +76,12 @@ pub struct NoopLoader;
 impl DraftLoader for NoopLoader {
     fn load(&self, id: &DraftId) -> std::result::Result<Box<dyn ModelBackend>, DraftRegistryError> {
         // NoopLoader is a deliberate sentinel used when no real loader is
-        // configured. Returning a typed IoLoad with no path is misleading;
-        // the deprecated string variant is the clearest signal here.
-        #[allow(deprecated)]
-        Err(DraftRegistryError::LoadFailed(format!(
-            "NoopLoader: no loader wired for {id}"
-        )))
+        // configured. Surface this as a typed `Model` failure (no I/O
+        // happened — there is no path or source io::Error to attach).
+        Err(DraftRegistryError::Model(
+            id.clone(),
+            ModelError::new(format!("NoopLoader: no loader wired for {id}")),
+        ))
     }
 }
 
@@ -244,8 +244,10 @@ mod tests {
             id: &DraftId,
         ) -> std::result::Result<Box<dyn ModelBackend>, DraftRegistryError> {
             if self.fail_on.iter().any(|f| f == id) {
-                #[allow(deprecated)]
-                return Err(DraftRegistryError::LoadFailed("stub failure".into()));
+                return Err(DraftRegistryError::Model(
+                    id.clone(),
+                    ModelError::new("stub failure"),
+                ));
             }
             Ok(Box::new(StubBackend))
         }

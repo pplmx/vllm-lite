@@ -1,4 +1,4 @@
-//! `clap`-derived CLI argument structs that override fields in [`AppConfig`](crate::config::AppConfig).
+//! `clap`-derived CLI argument structs that override fields in [`AppConfig`].
 //!
 //! Parsed once at startup; the resolved config is then handed to the
 //! engine constructor. Use `--help` for the full list of flags.
