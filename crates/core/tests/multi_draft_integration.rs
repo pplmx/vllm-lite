@@ -150,11 +150,9 @@ impl Default for MapLoader {
 impl DraftLoader for MapLoader {
     fn load(&self, id: &DraftId) -> std::result::Result<Box<dyn ModelBackend>, DraftRegistryError> {
         self.load_count.fetch_add(1, Ordering::Relaxed);
-        self.backends
-            .lock()
-            .unwrap()
-            .remove(id)
-            .ok_or_else(|| DraftRegistryError::LoadFailed(format!("no stub for {id}")))
+        self.backends.lock().unwrap().remove(id).ok_or_else(|| {
+            DraftRegistryError::Model(id.clone(), ModelError::new(format!("no stub for {id}")))
+        })
     }
 }
 

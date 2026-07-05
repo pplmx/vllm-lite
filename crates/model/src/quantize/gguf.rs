@@ -16,7 +16,7 @@ use std::path::Path;
 /// Detect whether a file path points at a GGUF checkpoint, based on
 /// the `.gguf` extension. Cheap, sync, allocation-free; safe to call
 /// as part of the format detection chain in
-/// [`crate::loader::format::load_checkpoint`].
+/// [`crate::loader::format`].
 pub(crate) fn is_gguf_file(path: &Path) -> bool {
     path.extension().is_some_and(|ext| ext == "gguf")
 }

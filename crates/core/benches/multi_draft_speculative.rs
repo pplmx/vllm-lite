@@ -20,7 +20,7 @@ use vllm_core::speculative::{
     DraftId, DraftLoader, DraftModelRegistry, DraftRegistryError, DraftResolver, DraftSpec,
     MemoryBudget, ResolvedDraft,
 };
-use vllm_traits::{BatchOutput, ModelBackend, Result as ModelResult, SeqId, TokenId};
+use vllm_traits::{BatchOutput, ModelBackend, ModelError, Result as ModelResult, SeqId, TokenId};
 
 // ───────────────────────── Stub Backend ───────────────────────────
 
@@ -104,19 +104,15 @@ impl BenchLoader {
 
 impl DraftLoader for BenchLoader {
     fn load(&self, id: &DraftId) -> std::result::Result<Box<dyn ModelBackend>, DraftRegistryError> {
-        self.backends
-            .lock()
-            .unwrap()
-            .remove(id)
-            // Bench-only sentinel; the deprecated string variant is fine.
-            .map_or_else(
-                || {
-                    #[allow(deprecated)]
-                    let err = DraftRegistryError::LoadFailed(format!("no backend for {id}"));
-                    Err(err)
-                },
-                Ok,
-            )
+        self.backends.lock().unwrap().remove(id).map_or_else(
+            || {
+                Err(DraftRegistryError::Model(
+                    id.clone(),
+                    ModelError::new(format!("no backend for {id}")),
+                ))
+            },
+            Ok,
+        )
     }
 }
 
