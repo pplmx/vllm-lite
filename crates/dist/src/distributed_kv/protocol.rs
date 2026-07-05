@@ -49,10 +49,15 @@ pub enum CacheOperation {
 /// Wire message for the distributed KV-cache RPC protocol. Wraps a sequence id, op type (get/put/delete), and the corresponding payload.
 #[derive(Debug, Clone)]
 pub struct CacheMessage {
+    /// Monotonic message id (process-local counter).
     pub id: u64,
+    /// Originating node id.
     pub source: NodeId,
+    /// Target node id (or broadcast group).
     pub destination: NodeId,
+    /// The cache operation being requested/responded.
     pub operation: CacheOperation,
+    /// Send timestamp in milliseconds since UNIX_EPOCH.
     pub timestamp: u64,
 }
 

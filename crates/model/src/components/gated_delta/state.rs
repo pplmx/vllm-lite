@@ -14,10 +14,15 @@ use candle_core::{DType, Result as CandleResult, Tensor};
 /// Configuration for GatedDelta. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Copy)]
 pub struct GatedDeltaConfig {
+    /// Number of K-projection heads (delta-rule keys).
     pub num_k_heads: usize,
+    /// Number of V-projection heads (delta-rule values).
     pub num_v_heads: usize,
+    /// Per-head K dimension.
     pub key_head_dim: usize,
+    /// Per-head V dimension.
     pub value_head_dim: usize,
+    /// Causal conv kernel size (typically 4 for Qwen3.5).
     pub conv_kernel_size: usize,
 }
 
@@ -46,7 +51,9 @@ impl GatedDeltaConfig {
 /// Fixed-size recurrent + causal conv cache for GDN decode.
 #[derive(Clone, Debug)]
 pub struct GatedDeltaState {
+    /// Recurrent (key × value) state tensor, shape `[B, num_v_heads, key_head_dim, value_head_dim]`.
     pub recurrent: Tensor,
+    /// Causal conv buffer, shape `[B, qkv_proj_dim, conv_kernel_size - 1]`.
     pub conv: Tensor,
 }
 
