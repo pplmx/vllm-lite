@@ -1,0 +1,39 @@
+name: cargo-deny
+
+# Enforces the project-wide dependency policy defined in deny.toml:
+#   * License allowlist (MIT-compatible only)
+#   * Ban duplicate crate versions
+#   * Surface RUSTSEC advisories
+#   * Block non-crates.io sources
+#
+# Cheap (~30s) and run on every PR. Local equivalent: `just deny`.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: "."
+          shared-key: "deny"
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@cargo-deny
+
+      - name: Run cargo-deny
+        run: cargo deny check

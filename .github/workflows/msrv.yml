@@ -1,0 +1,59 @@
+name: MSRV Check
+
+# Verify the workspace compiles against the project's stated Minimum Supported
+# Rust Version (1.88 — see Cargo.toml [workspace.package].rust-version).
+# Triggered on push to main + PRs; cheap (~2-3 min) thanks to the shared cache.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  CANDLE_NATIVE_BACKEND: 1
+
+jobs:
+  msrv:
+    name: Rust ${{ matrix.rust }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: ["1.88"]  # MSRV; expand here when bumped
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust ${{ matrix.rust }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: "."
+          shared-key: "msrv"
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
+      - name: Check (no run)
+        # We only verify the workspace compiles cleanly under MSRV;
+        # running tests under MSRV is intentionally out of scope to keep
+        # CI cost low. Add `cargo nextest run` here if MSRV regressions
+        # in test code start being a problem.
+        run: cargo check --workspace --all-features --all-targets
+
+      - name: MSRV drift guard
+        # If you bump rust-version in Cargo.toml, update the matrix above.
+        run: |
+          actual=$(grep '^rust-version' Cargo.toml | head -1 | awk -F'"' '{print $2}')
+          if [ "$actual" != "${{ matrix.rust }}" ]; then
+            echo "::error::Cargo.toml rust-version ($actual) != MSRV matrix (${{ matrix.rust }})"
+            exit 1
+          fi

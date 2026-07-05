@@ -1,5 +1,6 @@
-fail_fast: true
+fail_fast: false
 repos:
+    # Built-in file hygiene checks. Cheap; safe to run unconditionally.
     - repo: builtin
       hooks:
           - id: end-of-file-fixer
@@ -10,14 +11,58 @@ repos:
           - id: check-merge-conflict
           - id: mixed-line-ending
             args: ["--fix=lf"]
+          - id: check-added-large-files
+            args: ["--maxkb=512"]
+          - id: check-case-conflict
 
+    # Conventional commit messages (commit-msg hook).
     - repo: https://github.com/commitizen-tools/commitizen
       rev: v4.16.4
       hooks:
           - id: commitizen
+          - id: commitizen-branch
+            stages: [pre-push]
 
+    # Markdown lint + format.
     - repo: https://github.com/rvben/rumdl-pre-commit
       rev: v0.2.24
       hooks:
           - id: rumdl # Lint + auto-fix, fails if unfixable issues remain
           - id: rumdl-fmt # Pure format, always exits 0
+
+    # Rust toolchain checks — pre-commit local-only.
+    # These mutate the working tree when fixes are applied; downstream hooks
+    # re-stage changes. We only invoke the *check* variants on commit; the
+    # heavier `just quick` runs on pre-push (configured separately).
+    - repo: local
+      hooks:
+          - id: cargo-fmt-check
+            name: cargo fmt --check
+            entry: cargo fmt --all -- --check
+            language: system
+            types: [rust]
+            stages: [pre-commit]
+
+          - id: cargo-clippy-check
+            # Tiered deny matching CI exactly (see justfile `clippy`).
+            name: cargo clippy (deny correctness/suspicious/perf)
+            entry: >
+              bash -c 'cargo clippy --all-targets --workspace --all-features --
+              -D clippy::correctness
+              -D clippy::suspicious
+              -D clippy::perf'
+            language: system
+            types: [rust]
+            # pre-push only — too slow to gate every commit.
+            stages: [pre-push]
+            pass_filenames: false
+
+          - id: cargo-audit
+            # Cheap (~5s) when advisory-db is cached; protects against
+            # accidentally introducing a vulnerable dep.
+            name: cargo audit
+            entry: bash -c 'cargo audit --ignore RUSTSEC-2024-0436 --deny warnings'
+            language: system
+            types: [rust]
+            stages: [pre-push]
+            pass_filenames: false

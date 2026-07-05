@@ -58,20 +58,32 @@ clippy-pedantic:
 doc-check:
     RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --workspace --all-features
 
-# Run quick: fix/fmt/clippy will be fixed
-quick: fix doc-check nextest
+# Run quick read-only checks (does NOT modify source). Use `just autofix`
+# to apply auto-fixes, or `just fix` for both clippy-fix and fmt.
+quick: fmt-check clippy doc-check nextest
 
-# Run all CI checks (skips #[ignore] slow tests)
-ci: fmt-check clippy doc-check nextest
-
-# Auto-fix clippy warnings and format
-fix:
+# Auto-fix all fixable lints and format issues. Mutates the working tree —
+# use `just quick` if you want a non-mutating verification pass instead.
+autofix:
 	cargo fix --allow-dirty --allow-staged --all-targets --workspace --all-features
 	cargo clippy --fix --allow-dirty --allow-staged --all-targets --workspace --all-features -- \
 		-D clippy::correctness \
 		-D clippy::suspicious \
 		-D clippy::perf
 	cargo fmt --all
+
+# Legacy alias for `autofix`. Kept so existing muscle-memory commands still work.
+fix: autofix
+
+# Run all CI checks (skips #[ignore] slow tests)
+ci: fmt-check clippy doc-check nextest
+
+# Run the full CI gate including security checks (audit + deny). Requires
+# `cargo-audit` and `cargo-deny` installed locally.
+ci-all: fmt-check clippy doc-check nextest security
+
+# Legacy `fix` recipe removed — replaced by `autofix` (true meaning) and
+# `quick` (read-only). Old `fix` is now an alias for `autofix` defined above.
 
 # Generate documentation
 doc:
@@ -113,6 +125,17 @@ audit:
 # Run cargo audit (strict; will report the paste INFO warning)
 audit-strict:
     cargo audit
+
+# Run cargo-deny license/bans/advisories checks (requires cargo-deny installed)
+deny:
+    cargo deny check
+
+# Run cargo-deny (advisories only — useful for quick CI signal)
+deny-advisories:
+    cargo deny check advisories
+
+# Run all security gates (audit + deny) — local pre-push / pre-merge gate
+security: audit deny
 
 # Build fuzz binaries (debug). Requires nightly for sanitizer coverage.
 # Use `just fuzz-build` before `just fuzz-smoke` / `just fuzz TARGET` so the

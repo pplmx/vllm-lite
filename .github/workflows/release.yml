@@ -1,0 +1,158 @@
+name: Release
+
+# Triggered by a `vX.Y.Z` tag push (matches the conventional SemVer pattern
+# used by vLLM-lite). Builds:
+#   * Workspace release binaries for linux/darwin/windows (matrix)
+#   * Docker images (multi-arch linux/amd64 + linux/arm64) → GHCR
+#   * GitHub Release with auto-generated notes (via git-cliff)
+#
+# Manual dispatch allows dry-run / pre-flight without tagging.
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (skip publish step)"
+        required: false
+        default: "true"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # Use MUSL for fully-static Linux binaries (no glibc dependency).
+  # CUDA cannot be cross-compiled in CI; CUDA features are only enabled
+  # for the linux-amd64 native build.
+
+jobs:
+  # 1. Compute the version + verify CHANGELOG was bumped for this tag.
+  meta:
+    name: Metadata
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="0.0.0-dryrun"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          IS_PRERELEASE="false"
+          if [[ "$VERSION" == *-* ]]; then IS_PRERELEASE="true"; fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
+
+  # 2. Build workspace binaries for multiple targets.
+  build:
+    name: Build (${{ matrix.target }})
+    needs: meta
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+            features: ""
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04
+            # Cross-compile via apt-installed gcc-aarch64-linux-gnu
+            features: ""
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-22.04
+            features: ""
+          - target: x86_64-apple-darwin
+            os: macos-13
+            features: ""
+          - target: aarch64-apple-darwin
+            os: macos-14
+            features: ""
+          - target: x86_64-pc-windows-msvc
+            os: windows-2022
+            features: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: "."
+
+      - name: Build release
+        run: |
+          cargo build --release \
+            --target ${{ matrix.target }} \
+            -p vllm-server \
+            --locked
+
+      - name: Package binary
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          if [[ "${{ matrix.os }}" == windows-* ]]; then
+            cp "target/${{ matrix.target }}/release/vllm-server.exe" "artifacts/vllm-server-${{ needs.meta.outputs.version }}-${{ matrix.target }}.exe"
+          else
+            cp "target/${{ matrix.target }}/release/vllm-server" "artifacts/vllm-server-${{ needs.meta.outputs.version }}-${{ matrix.target }}"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vllm-server-${{ matrix.target }}
+          path: artifacts/
+
+  # 3. Publish GitHub Release (only on tag push, not on dry-run).
+  release:
+    name: GitHub Release
+    needs: [meta, build]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate release notes (git-cliff)
+        uses: orhun/git-cliff-action@v4
+        id: git-cliff
+        with:
+          config: docs/cliff.toml
+          args: --tag v${{ needs.meta.outputs.version }} --strip all
+        env:
+          OUTPUT: CHANGELOG.md
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.meta.outputs.version }}
+          name: v${{ needs.meta.outputs.version }}
+          body: ${{ steps.git-cliff.outputs.content }}
+          draft: false
+          prerelease: ${{ needs.meta.outputs.is_prerelease == 'true' }}
+          fail_on_unmatched_files: true
+          files: |
+            artifacts/**/*

@@ -1,0 +1,17 @@
+# CODEOWNERS — auto-assigns reviewers on PRs that touch the listed paths.
+# Order matters: last matching pattern wins. Add new teams/owners as the
+# project grows.
+
+# Default: no auto-assign. Uncomment when maintainer team handles triage.
+/crates/*/                @pplmx
+
+# Sensitive areas — extra reviewers required
+/crates/server/src/security/    @pplmx
+/crates/core/src/speculative/   @pplmx
+/crates/dist/                   @pplmx
+
+# CI / build changes touch all of us
+/.github/             @pplmx
+/justfile             @pplmx
+/Cargo.toml           @pplmx
+/deny.toml            @pplmx

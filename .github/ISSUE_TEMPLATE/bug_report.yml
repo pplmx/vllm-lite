@@ -1,0 +1,76 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill in the sections below so we
+        can reproduce and fix it efficiently.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Clear description of the bug.
+      placeholder: |
+        When I run `cargo run -p vllm-server --release` and send a request to
+        `/v1/chat/completions`, the server crashes with...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: Expected behavior.
+      placeholder: The server should return a 200 with a completion.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Minimal steps to reproduce. Include commands / config / payload.
+      placeholder: |
+        1. `cargo build --release`
+        2. `cargo run -p vllm-server`
+        3. `curl -X POST http://localhost:8080/v1/chat/completions -d '{...}'`
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: vLLM-lite version
+      description: Output of `git rev-parse HEAD` or crate version.
+      placeholder: "v0.1.0 (commit abc1234)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Rust version, GPU/CPU, CUDA, candle features.
+      placeholder: |
+        - OS: Ubuntu 24.04
+        - Rust: 1.88
+        - CUDA: 12.6
+        - candle features: cuda,flash-attn
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / stack trace
+      description: Paste the relevant `tracing` output or panic message.
+      placeholder: |
+        ```
+        ERROR engine::run: target model forward failed: ...
+        thread 'tokio-runtime-worker' panicked at ...
+        ```
+    validations:
+      required: false
