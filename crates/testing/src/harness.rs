@@ -12,9 +12,13 @@ use vllm_core::types::{Request, SchedulerConfig, SequencePackingConfig};
 /// Test harness configuration
 #[derive(Debug, Clone)]
 pub struct TestHarnessConfig {
+    /// Number of KV-cache blocks to allocate for the test scheduler.
     pub kv_blocks: usize,
+    /// Maximum batch size the test scheduler may produce.
     pub max_batch_size: usize,
+    /// Whether to enable prefix-cache sharing across requests.
     pub enable_prefix_cache: bool,
+    /// Whether to enable dynamic batching heuristics.
     pub enable_dynamic_batching: bool,
 }
 
@@ -91,11 +95,14 @@ impl TestHarnessConfig {
 ///
 /// let mut scheduler = harness.scheduler();
 /// let seq_id = scheduler.add_request(Request::new(0, vec![1, 2, 3], 10));
-#[derive(Debug)]
 /// ```
+#[derive(Debug)]
 pub struct TestHarness {
+    /// Harness configuration (mirrors into the scheduler).
     pub config: TestHarnessConfig,
+    /// Shared metrics collector for the test process.
     pub metrics: Arc<EnhancedMetricsCollector>,
+    /// Pre-built scheduler engine wired to the metrics collector.
     pub scheduler: SchedulerEngine,
 }
 
