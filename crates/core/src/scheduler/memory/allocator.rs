@@ -19,20 +19,30 @@ pub(crate) const BLOCK_BYTES: usize = 16 * 1024 * 1024;
 /// Block allocator telemetry: number of free/allocated/cached blocks, fragmentation ratio, allocation success rate. Updated on every `allocate`/`free` call.
 #[derive(Debug, Clone, Default)]
 pub struct BlockAllocatorStats {
+    /// Total number of blocks this allocator owns.
     pub total_blocks: usize,
+    /// Number of blocks currently free.
     pub available_blocks: usize,
+    /// Cumulative count of `allocate(n)` calls that succeeded.
     pub allocation_count: usize,
+    /// Cumulative count of `free(ranges)` calls.
     pub free_count: usize,
 }
 
 #[derive(Debug)]
 /// Paged-KV-cache block allocator. Hands out contiguous virtual block IDs backed by physically scattered GPU/CPU blocks. Uses a free-list with split-on-OOM and coalescing on free.
 pub struct BlockAllocator {
+    /// Total block capacity.
     num_blocks: usize,
+    /// Singly-linked free list (next-pointer per block id).
     next_free: Vec<BlockId>,
+    /// Doubly-linked free list (prev-pointer per block id).
     prev_free: Vec<BlockId>,
+    /// Head of the free list (`BlockId::MAX` when the list is empty).
     first_free: BlockId,
+    /// Per-block allocation flag.
     is_free: Vec<bool>,
+    /// Cumulative allocator statistics.
     stats: BlockAllocatorStats,
 }
 
