@@ -1,4 +1,4 @@
-//! OpenAI error-contract test matrix.
+//! `OpenAI` error-contract test matrix.
 //!
 //! Locks in the v0.1 server's wire-level error behavior so we don't silently
 //! regress it. Covers:
@@ -81,14 +81,18 @@ fn error_response_json_field_order_matches_openai_spec() {
 
 #[tokio::test]
 async fn chat_rejects_empty_model_with_400_and_invalid_request_code() {
+    use axum::{Json, extract::State};
     use vllm_server::openai::chat::chat_completions;
     use vllm_server::openai::types::{ChatMessage, ChatRequest};
-    use axum::{Json, extract::State};
 
     let state = create_test_state();
     let req = ChatRequest {
         model: String::new(),
-        messages: vec![ChatMessage { role: "user".into(), content: "hi".into(), name: None }],
+        messages: vec![ChatMessage {
+            role: "user".into(),
+            content: "hi".into(),
+            name: None,
+        }],
         temperature: None,
         top_p: None,
         max_tokens: None,
@@ -105,14 +109,18 @@ async fn chat_rejects_empty_model_with_400_and_invalid_request_code() {
 
 #[tokio::test]
 async fn chat_returns_503_with_engine_unavailable_code_when_channel_closed() {
+    use axum::{Json, extract::State};
     use vllm_server::openai::chat::chat_completions;
     use vllm_server::openai::types::{ChatMessage, ChatRequest};
-    use axum::{Json, extract::State};
 
     let state = create_test_state(); // engine_tx has no receiver
     let req = ChatRequest {
         model: "qwen3".into(),
-        messages: vec![ChatMessage { role: "user".into(), content: "hi".into(), name: None }],
+        messages: vec![ChatMessage {
+            role: "user".into(),
+            content: "hi".into(),
+            name: None,
+        }],
         temperature: None,
         top_p: None,
         max_tokens: Some(16),
@@ -137,12 +145,15 @@ async fn chat_returns_503_with_engine_unavailable_code_when_channel_closed() {
 
 #[tokio::test]
 async fn embeddings_rejects_empty_model_with_400() {
+    use axum::{Json, extract::State};
     use vllm_server::openai::embeddings::embeddings;
     use vllm_server::openai::types::EmbeddingsRequest;
-    use axum::{Json, extract::State};
 
     let state = create_test_state();
-    let req = EmbeddingsRequest { model: String::new(), input: vec!["hi".into()] };
+    let req = EmbeddingsRequest {
+        model: String::new(),
+        input: vec!["hi".into()],
+    };
 
     let result = embeddings(State(state), Json(req)).await;
     let (status, _) = result.expect_err("expected 400");
@@ -151,9 +162,9 @@ async fn embeddings_rejects_empty_model_with_400() {
 
 #[tokio::test]
 async fn embeddings_returns_503_with_engine_unavailable_code_when_channel_closed() {
+    use axum::{Json, extract::State};
     use vllm_server::openai::embeddings::embeddings;
     use vllm_server::openai::types::EmbeddingsRequest;
-    use axum::{Json, extract::State};
 
     let state = create_test_state();
     let req = EmbeddingsRequest {
@@ -173,9 +184,9 @@ async fn embeddings_returns_503_with_engine_unavailable_code_when_channel_closed
 
 #[tokio::test]
 async fn completions_rejects_empty_prompt_with_400() {
+    use axum::{Json, extract::State};
     use vllm_server::openai::completions::completions;
     use vllm_server::openai::types::CompletionRequest;
-    use axum::{Json, extract::State};
 
     let state = create_test_state();
     let req = CompletionRequest {
@@ -195,9 +206,9 @@ async fn completions_rejects_empty_prompt_with_400() {
 
 #[tokio::test]
 async fn completions_returns_503_with_engine_unavailable_code_when_channel_closed() {
+    use axum::{Json, extract::State};
     use vllm_server::openai::completions::completions;
     use vllm_server::openai::types::CompletionRequest;
-    use axum::{Json, extract::State};
 
     let state = create_test_state();
     let req = CompletionRequest {

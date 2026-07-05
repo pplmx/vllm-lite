@@ -64,7 +64,7 @@ impl ErrorResponse {
 
     /// Construct an [`ErrorResponse`] with a machine-readable `code` field.
     ///
-    /// OpenAI's error spec defines a `code` slot for stable identifiers such as
+    /// `OpenAI`'s error spec defines a `code` slot for stable identifiers such as
     /// `"context_length_exceeded"` or `"model_not_found"`. Use this when you
     /// know the specific failure category; clients can switch on `code` to
     /// drive retry / fallback logic.

@@ -115,7 +115,7 @@ impl DraftLoader for BenchLoader {
                     let err = DraftRegistryError::LoadFailed(format!("no backend for {id}"));
                     Err(err)
                 },
-                |b| Ok(b),
+                Ok,
             )
     }
 }

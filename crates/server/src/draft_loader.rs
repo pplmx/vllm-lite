@@ -111,14 +111,11 @@ impl DraftLoader for ServerDraftLoader {
             .map_err(|e| {
                 // ModelLoader::build returns candle_core::Error; wrap into
                 // the structured ModelError so callers see a typed source.
-                DraftRegistryError::Model(
-                    id.clone(),
-                    vllm_traits::ModelError::Candle(e),
-                )
+                DraftRegistryError::Model(id.clone(), vllm_traits::ModelError::Candle(e))
             })?;
-        model_loader.load_model().map_err(|e| {
-            DraftRegistryError::Model(id.clone(), vllm_traits::ModelError::Candle(e))
-        })
+        model_loader
+            .load_model()
+            .map_err(|e| DraftRegistryError::Model(id.clone(), vllm_traits::ModelError::Candle(e)))
     }
 }
 
