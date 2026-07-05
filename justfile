@@ -60,7 +60,11 @@ doc-check:
 
 # Run quick read-only checks (does NOT modify source). Use `just autofix`
 # to apply auto-fixes, or `just fix` for both clippy-fix and fmt.
-quick: fmt-check clippy doc-check nextest
+quick: fmt-check clippy doc-check doctest nextest
+
+# Run doctest examples (///  blocks) — exercises doc-comment code as tests.
+doctest:
+    cargo test --doc --workspace --all-features --no-fail-fast
 
 # Auto-fix all fixable lints and format issues. Mutates the working tree —
 # use `just quick` if you want a non-mutating verification pass instead.
@@ -76,11 +80,11 @@ autofix:
 fix: autofix
 
 # Run all CI checks (skips #[ignore] slow tests)
-ci: fmt-check clippy doc-check nextest
+ci: fmt-check clippy doc-check doctest nextest
 
 # Run the full CI gate including security checks (audit + deny). Requires
 # `cargo-audit` and `cargo-deny` installed locally.
-ci-all: fmt-check clippy doc-check nextest security
+ci-all: fmt-check clippy doc-check doctest nextest security
 
 # Legacy `fix` recipe removed — replaced by `autofix` (true meaning) and
 # `quick` (read-only). Old `fix` is now an alias for `autofix` defined above.

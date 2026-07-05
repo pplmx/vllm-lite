@@ -40,6 +40,15 @@ jobs:
       - name: Doc check
         run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --workspace
 
+      - name: Doctest
+        # Doctest examples in `///` doc comments are part of the contract.
+        # They are NOT exercised by `cargo nextest run` (which only runs
+        # #[test] / #[tokio::test] functions). A broken doc-example is
+        # silently shipped today — this step blocks PRs that introduce one.
+        # Wall-clock: ~30s on cold cache, <5s warm. All-features so doctests
+        # gated behind optional features are also verified.
+        run: cargo test --doc --workspace --all-features --no-fail-fast
+
       - name: Test
         run: cargo nextest run --workspace --no-fail-fast
 
@@ -81,4 +90,5 @@ jobs:
           cargo fmt --all --check
           cargo clippy --all-targets --workspace -- -D clippy::correctness -D clippy::suspicious -D clippy::perf
           RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --workspace
+          cargo test --doc --workspace --all-features --no-fail-fast
           cargo nextest run --workspace --no-fail-fast
