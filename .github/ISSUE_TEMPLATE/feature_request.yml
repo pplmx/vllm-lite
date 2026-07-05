@@ -1,0 +1,51 @@
+name: Feature Request
+description: Propose a new feature or improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the feature you'd like. Use cases and proposed API shapes
+        are especially helpful.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What problem does this solve? Who is affected?
+      placeholder: |
+        Inference servers currently have no way to introspect which sequences
+        in a batch are decode vs prefill without re-implementing the
+        scheduler observation hooks. This blocks operators from building
+        per-phase SLO dashboards.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: High-level description of the proposed change.
+      placeholder: |
+        Add `Engine::phase_breakdown() -> PhaseBreakdown { prefill_tokens, decode_seqs }`
+        and emit the values via the existing metrics recorder under the
+        `engine_phase_*` prefix.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches were considered? Why this one?
+      validations:
+      required: false
+
+  - type: textarea
+    id: effort
+    attributes:
+      label: Estimated effort
+      description: Roughly how much work? (rough size: S/M/L/XL)
+      placeholder: "M (~2-3 days)"
+    validations:
+      required: false

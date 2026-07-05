@@ -37,9 +37,7 @@ impl DraftModelRegistry {
     ///   Use `force_unload` to bypass.
     pub fn unload(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
-        let mut guard = self
-            .drafts
-            .write()?;
+        let mut guard = self.drafts.write()?;
         let result = {
             let entry = guard
                 .get_mut(id)
@@ -77,9 +75,7 @@ impl DraftModelRegistry {
     /// - `UnknownDraftId` if no entry with `id` exists
     pub fn force_unload(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
-        let mut guard = self
-            .drafts
-            .write()?;
+        let mut guard = self.drafts.write()?;
         let result = {
             let entry = guard
                 .get_mut(id)
@@ -120,9 +116,7 @@ impl DraftModelRegistry {
     /// see ADR-007 for the routing design.
     pub fn increment_ref(&self, id: &DraftId) -> Result<(), DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
-        let mut guard = self
-            .drafts
-            .write()?;
+        let mut guard = self.drafts.write()?;
         let result = {
             let entry = guard
                 .get_mut(id)
@@ -152,9 +146,7 @@ impl DraftModelRegistry {
     /// Returns `true` if auto-unload was triggered by this call.
     pub fn decrement_ref(&self, id: &DraftId) -> Result<bool, DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
-        let mut guard = self
-            .drafts
-            .write()?;
+        let mut guard = self.drafts.write()?;
         let result = {
             let entry = guard
                 .get_mut(id)
@@ -191,9 +183,7 @@ impl DraftModelRegistry {
     /// Snapshot the reference count for a registered draft.
     pub fn ref_count(&self, id: &DraftId) -> Result<usize, DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
-        let guard = self
-            .drafts
-            .read()?;
+        let guard = self.drafts.read()?;
         let ref_count = guard
             .get(id)
             .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?
@@ -288,9 +278,7 @@ impl DraftModelRegistry {
     /// KV-cache growth tracking (MEM-02).
     pub fn draft_allocated_bytes(&self, id: &DraftId) -> Result<u64, DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
-        let guard = self
-            .drafts
-            .read()?;
+        let guard = self.drafts.read()?;
         let bytes = match guard.get(id) {
             None => return Err(DraftRegistryError::UnknownDraftId(id.clone())),
             Some(DraftState::Unloaded(_)) => 0,
@@ -312,9 +300,7 @@ impl DraftModelRegistry {
     /// Zero for `Unloaded` drafts.
     pub fn draft_reserved_bytes(&self, id: &DraftId) -> Result<u64, DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
-        let guard = self
-            .drafts
-            .read()?;
+        let guard = self.drafts.read()?;
         let bytes = match guard.get(id) {
             None => return Err(DraftRegistryError::UnknownDraftId(id.clone())),
             Some(DraftState::Unloaded(_)) => 0,

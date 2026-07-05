@@ -30,9 +30,7 @@ impl DraftModelRegistry {
     /// id already exists in either state.
     pub fn register(&self, spec: DraftSpec) -> Result<(), DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
-        let mut guard = self
-            .drafts
-            .write()?;
+        let mut guard = self.drafts.write()?;
         if guard.contains_key(&spec.id) {
             return Err(DraftRegistryError::AlreadyLoaded(spec.id));
         }
@@ -64,9 +62,7 @@ impl DraftModelRegistry {
         backend: Box<dyn ModelBackend>,
     ) -> Result<(), DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
-        let mut guard = self
-            .drafts
-            .write()?;
+        let mut guard = self.drafts.write()?;
         let result = {
             let entry = guard
                 .get_mut(id)
@@ -118,9 +114,7 @@ impl DraftModelRegistry {
         // locks if budget fails.
         let (kv_blocks, estimated) = {
             // invariant: lock is only held for synchronous field access; no panic possible while holding.
-            let guard = self
-                .drafts
-                .read()?;
+            let guard = self.drafts.read()?;
             let result = match guard.get(id) {
                 None => return Err(DraftRegistryError::UnknownDraftId(id.clone())),
                 Some(DraftState::Loaded(_)) => {
@@ -139,9 +133,7 @@ impl DraftModelRegistry {
 
         // Stage 3: state transition under write lock.
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
-        let mut guard = self
-            .drafts
-            .write()?;
+        let mut guard = self.drafts.write()?;
         let result = {
             let entry = guard
                 .get_mut(id)

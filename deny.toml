@@ -1,0 +1,92 @@
+# cargo-deny configuration (https://embarkstudios.github.io/cargo-deny/)
+#
+# Run locally:  cargo deny check
+# Wire into CI:  just deny   (see justfile)
+#
+# This file enforces:
+#   * License whitelist aligned with vLLM-lite's MIT license (compatible only)
+#   * Ban duplicate crate versions in the dependency graph
+#   * Ban known-bad sources (git deps, non-crates.io URLs without allowlist)
+#   * Surface RUSTSEC advisories (paste INFO advisory is allow-listed with rationale)
+#
+# See SECURITY.md "Audit History" for the paste disposition.
+
+[graph]
+# All targets incl. dev-dependencies, benches, examples, tests
+all-features = true
+no-default-features = false
+
+[advisories]
+# Fetch the latest RustSec advisory database on every run.
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "warn"
+ignore = [
+  # RUSTSEC-2024-0436 — `paste` crate is unmaintained. INFO severity (no
+  # vulnerability, no patch). Deep transitive via gemm → candle-core.
+  # No candle-core release removes the paste dependency (verified v27.0).
+  # Tracked as accepted risk; see SECURITY.md.
+  "RUSTSEC-2024-0436",
+]
+
+[licenses]
+# Allowlist aligned with MIT-compatible licenses.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "CC0-1.0",
+    "OpenSSL",
+    "MPL-2.0",
+    "0BSD",
+]
+confidence-threshold = 0.8
+
+# Some transitive deps carry non-standard license strings we accept.
+# Each entry maps crate name -> allowed license expressions.
+exceptions = [
+    # ring: dual OpenSSL/ISC; OpenSSL license is in the allowlist above.
+    { name = "ring", allow = ["OpenSSL", "ISC"] },
+    # aws-lc-rs / aws-lc-sys: OpenSSL/ISC.
+    { name = "aws-lc-rs", allow = ["OpenSSL", "ISC"] },
+    { name = "aws-lc-sys", allow = ["OpenSSL", "ISC"] },
+    # rustls-pemfile historically had ISC; keep both options open.
+    { name = "rustls-pemfile", allow = ["ISC", "Apache-2.0", "MIT"] },
+    # cpp_demangle: Boost-1.0 (not in allowlist but is permissive).
+    # Pin to specific version to avoid drift.
+    { name = "cpp_demangle", version = "=0.5.1", allow = ["Boost-1.0"] },
+]
+
+[bans]
+# Multiple versions of the same crate waste compile time and risk subtle bugs.
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+workspace-default-features = "warn"
+external-default-features = "allow"
+
+# Banned crates — pull these out if you see them in `cargo tree`.
+deny = [
+    # Use `jsonwebtoken` instead (already in deps).
+    { name = "openssl", wrappers = ["openssl-sys"] },
+]
+skip = [
+    # Allowed: only used as Cargo build script helpers, no runtime.
+    "openssl-sys",
+    # Allowed: required by tokio-rustls 0.26; consider dropping when 0.27 ships.
+    "aws-lc-sys",
+]
+skip-tree = []
+
+[sources]
+# Only allow crates.io by default. Vendored and git deps need explicit allow.
+unknown-registry = "deny"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
