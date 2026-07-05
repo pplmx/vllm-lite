@@ -15,10 +15,15 @@ pub enum StorageTensor {
 /// `QuantizedTensor`. See the type definition for fields and behavior.
 #[derive(Debug, Clone)]
 pub struct QuantizedTensor {
+    /// Packed quantized payload (interpretation depends on `format`).
     pub data: Vec<u8>,
+    /// Per-block dequantization scales.
     pub scales: Vec<f32>,
+    /// Per-block zero points (None for symmetric quantization schemes).
     pub zeros: Option<Vec<f32>>,
+    /// Quantization scheme used (e.g. GGUF Q4_K_M).
     pub format: QuantizationFormat,
+    /// Logical tensor shape before quantization.
     pub shape: Vec<usize>,
 }
 
@@ -26,18 +31,26 @@ pub struct QuantizedTensor {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum QuantizationFormat {
+    /// GGUF Q4_K_M — 4-bit K-quant with per-group scales (default for Llama-class models).
     GgufQ4_K_M,
+    /// GGUF Q5_K_M — 5-bit K-quant with per-group scales.
     GgufQ5_K_M,
+    /// GGUF Q8_0 — 8-bit symmetric per-block.
     GgufQ8_0,
+    /// GPTQ 4-bit (reserved for future support).
     GptqQ4,
+    /// AWQ 4-bit (reserved for future support).
     AwqQ4,
 }
 
 /// Configuration for Quantization. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub struct QuantizationConfig {
+    /// Quantization scheme to apply.
     pub format: QuantizationFormat,
+    /// Quantization block size (e.g. 32 / 64 / 128 elements per block).
     pub block_size: usize,
+    /// Group size for per-group scale/zero sharing.
     pub group_size: usize,
 }
 

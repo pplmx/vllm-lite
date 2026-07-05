@@ -15,10 +15,15 @@ use crate::config::ModelConfig;
 #[derive(Debug)]
 /// Builder for `ModelLoader`. Use `with_*` methods to override defaults, then call `.build()` to produce the final value.
 pub struct ModelLoaderBuilder {
+    /// Compute device (CPU or CUDA).
     device: Device,
+    /// Checkpoint directory (required before `build`).
     model_dir: Option<String>,
+    /// KV-cache block count (default 1024 if unset).
     num_kv_blocks: Option<usize>,
+    /// Whether to enable FP8 KV-cache quantization (default false).
     kv_quantization: Option<bool>,
+    /// Allow loading stub architectures (Gemma3, Llama4, Phi4) that don't perform real inference.
     allow_stub: bool,
 }
 
