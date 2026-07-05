@@ -10,17 +10,24 @@ use std::collections::{HashMap, VecDeque};
 /// Per-policy eviction telemetry: total evictions, average block lifetime, recency-distribution buckets. Used to compare LRU vs. ARC vs. FIFO at runtime.
 #[derive(Debug, Clone, Default)]
 pub struct EvictionPolicyStats {
+    /// Cumulative blocks evicted by this policy.
     pub total_evictions: usize,
+    /// Cumulative `select_victims` calls.
     pub total_selections: usize,
+    /// Times a cached victim set was reused (avoided re-computation).
     pub cache_hits: usize,
 }
 
 #[derive(Debug)]
 /// Trait implemented by every KV-cache eviction policy (`LruPolicy`, `ArcPolicy`, `FifoPolicy`). Defines the touch-eviction decision given the current sequence set and a candidate block.
 pub struct EvictionPolicy {
+    /// LRU access order (front = most recently used).
     block_access_order: VecDeque<BlockId>,
+    /// Live reference count per block (across all sequences).
     block_ref_count: HashMap<BlockId, usize>,
+    /// Cached victim set with the seq-hash it was computed for.
     cached_victims: Option<(Vec<BlockId>, usize)>,
+    /// Cumulative policy statistics.
     stats: EvictionPolicyStats,
 }
 
