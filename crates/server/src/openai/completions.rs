@@ -32,7 +32,7 @@ fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &st
 ///
 /// Returns `(StatusCode, ErrorResponse)` when:
 /// - prompt is empty (`BAD_REQUEST`)
-/// - the engine channel is closed (`INTERNAL_SERVER_ERROR`)
+/// - the engine channel is closed (`SERVICE_UNAVAILABLE`, code `engine_unavailable`)
 /// - token decoding or SSE serialization fails
 pub async fn completions(
     State(state): State<ApiState>,
@@ -71,8 +71,12 @@ pub async fn completions(
         })
         .map_err(|_| {
             (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse::new("Engine unavailable", "internal_error")),
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse::with_code(
+                    "Engine unavailable",
+                    "server_error",
+                    "engine_unavailable",
+                )),
             )
         })?;
 
@@ -171,11 +175,14 @@ mod tests {
         };
 
         // With no engine running, this will fail to send to engine
-        // but we can verify it doesn't fail on validation
+        // but we can verify it doesn't fail on validation. The closed-channel
+        // error surfaces as 503 SERVICE_UNAVAILABLE with `engine_unavailable`
+        // code (see `completions` handler) — distinguishable from a real
+        // server-side bug, and safe for clients to retry.
         let result = completions(State(state), Json(req)).await;
-        // Expected: fails because engine channel has no receiver
         assert!(result.is_err());
-        let (status, _) = result.unwrap_err();
-        assert_eq!(status, axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+        let (status, body) = result.unwrap_err();
+        assert_eq!(status, axum::http::StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(body.error.code.as_deref(), Some("engine_unavailable"));
     }
 }
