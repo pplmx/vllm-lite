@@ -1,3 +1,6 @@
+//! First-come-first-served scheduling policy: priority = arrival timestamp; oldest waiting sequence runs first.
+//!
+//! Baseline impl; used as the default in dev/test configurations.
 #![allow(clippy::module_name_repetitions)]
 use super::trait_def::{PriorityScore, SchedulingContext, SchedulingPolicy};
 use crate::types::Sequence;

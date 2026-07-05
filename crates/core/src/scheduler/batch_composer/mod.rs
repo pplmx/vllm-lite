@@ -1,3 +1,8 @@
+//! Batch composer namespace: [`compose`] (the composer impl) and [`validate`] (config + size-budget validation).
+//!
+//! Runs synchronously inside the scheduler tick before the engine
+//! dispatches a batch.
+
 // crates/core/src/scheduler/batch_composer/mod.rs
 //
 // Facade for the batch composer subsystem. Sub-modules:

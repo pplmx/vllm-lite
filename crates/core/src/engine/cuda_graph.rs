@@ -1,3 +1,9 @@
+//! Engine CUDA-Graph helpers: enable/disable capture, status query, and per-shape cache configuration.
+//!
+//! The graph itself lives in `vllm-model::kernels::cuda_graph`; this
+//! file is the Engine-side façade the scheduler uses to opt into
+//! graph replay.
+
 // Sub-module for CUDA Graph capture and enable-check methods on Engine.
 // See mod.rs for the Engine struct definition.
 //

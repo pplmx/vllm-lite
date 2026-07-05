@@ -1,3 +1,8 @@
+//! Engine main run loop: tick → schedule → forward → update, plus the `has_pending` accessor.
+//!
+//! The loop runs on a dedicated OS thread; cancellation is
+//! cooperatively checked at the top of each tick.
+
 // Sub-module for the main run loop and has_pending accessor on Engine.
 // See mod.rs for the Engine struct definition.
 

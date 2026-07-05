@@ -1,3 +1,9 @@
+//! Leader election: pick one node in a multi-replica deployment to be the active scheduler; the rest stay as warm standbys.
+//!
+//! Raft-inspired term-based election: candidates bump their term,
+//! collect votes from a quorum, and promote themselves on success.
+//! `circuit_breaker/breaker.rs` is the failure-detector that drives
+//! re-elections when the active node is unhealthy.
 #![allow(dead_code)]
 
 use std::sync::Arc;

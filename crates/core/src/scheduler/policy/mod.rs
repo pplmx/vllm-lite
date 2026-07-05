@@ -1,3 +1,6 @@
+//! Scheduling-policy namespace: pluggable strategies for picking which waiting sequence runs next.
+//!
+//! Built-in impls: [`fcfs`] (first-come-first-served), [`priority`] (priority queue), [`sjf`] (shortest-job-first). New policies implement [`SchedulingPolicy`](trait_def::SchedulingPolicy).
 #![allow(clippy::module_name_repetitions)]
 pub mod fcfs;
 pub mod priority;

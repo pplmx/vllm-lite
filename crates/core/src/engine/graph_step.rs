@@ -1,3 +1,8 @@
+//! Engine step execution through a captured CUDA Graph: replays the graph for a given batch shape and unwraps the output tokens.
+//!
+//! Falls back to the eager (`engine/run.rs`) path when no captured
+//! graph matches the shape.
+
 // Sub-module for graph-based step execution on Engine.
 // See mod.rs for the Engine struct definition.
 //
