@@ -61,80 +61,117 @@ where
 /// Request payload for SimpleBatch. Contains input data, configuration, and request-tracking metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimpleBatchRequest {
+    /// Prompts to execute (one HTTP-style request per prompt).
     pub prompts: Vec<String>,
+    /// Which downstream endpoint to fan out to (chat vs. completions).
     #[serde(
         serialize_with = "serialize_batch_endpoint",
         deserialize_with = "deserialize_batch_endpoint"
     )]
     pub endpoint: BatchEndpoint,
+    /// Optional model override; `None` = server default.
     pub model: Option<String>,
+    /// Max tokens to generate per request.
     pub max_tokens: Option<i64>,
+    /// Sampling temperature for each request.
     pub temperature: Option<f32>,
 }
 
 /// Response payload for Batch. Returned from handlers, serialized to JSON for the HTTP boundary.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchResponse {
+    /// Server-allocated batch identifier (`"batch_..."`).
     pub id: String,
+    /// Always `"batch"`.
     pub object: String,
+    /// Endpoint that the batch will fan out to.
     #[serde(
         serialize_with = "serialize_batch_endpoint",
         deserialize_with = "deserialize_batch_endpoint"
     )]
     pub endpoint: BatchEndpoint,
+    /// Lifecycle state (`"pending"`, `"in_progress"`, `"completed"`, `"failed"`, etc.).
     pub status: String,
+    /// Unix timestamp at batch creation.
     pub created_at: i64,
+    /// Unix timestamp at which the batch expires (results still retrievable until then).
     pub expires_at: i64,
+    /// Unix timestamp at which the batch reached a terminal state, if any.
     pub completed_at: Option<i64>,
+    /// Aggregate counts of succeeded / failed requests.
     pub request_counts: Option<RequestCounts>,
 }
 
 /// `RequestCounts`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestCounts {
+    /// Total number of requests submitted in the batch.
     pub total: i32,
+    /// Number of requests that finished successfully.
     pub completed: i32,
+    /// Number of requests that failed (each generates a `BatchResultItem` with `error`).
     pub failed: i32,
 }
 
 /// Collection of result items for Batch. Each entry pairs a request id with its result or error.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchResults {
+    /// Identifier of the parent batch.
     pub batch_id: String,
+    /// Lifecycle state of the batch as a whole.
     pub status: String,
+    /// One entry per submitted request, in submission order.
     pub results: Vec<BatchResultItem>,
 }
 
 /// `BatchResultItem`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchResultItem {
+    /// Index of the original request within the batch (`0..prompts.len()`).
     pub index: usize,
+    /// `"succeeded"` or `"failed"`.
     pub status: String,
+    /// Output content when `status == "succeeded"`.
     pub content: Option<String>,
+    /// Error message when `status == "failed"`.
     pub error: Option<String>,
 }
 
 /// Status of an async batch job: pending, running, completed, failed, or cancelled. Transitions are monotonic.
 #[derive(Debug, Clone)]
 pub enum BatchStatus {
+    /// Queued, not yet picked up by a worker.
     Pending,
+    /// Currently being processed.
     InProgress,
+    /// All requests finished successfully.
     Completed,
+    /// One or more requests failed; partial results may still be available.
     Failed,
 }
 
 /// Background job: scheduled for execution by the worker pool. Carries the work payload plus retry / cancellation metadata.
 #[derive(Debug, Clone)]
 pub struct BatchJob {
+    /// Server-allocated batch identifier.
     pub id: String,
+    /// Which endpoint each prompt should be dispatched to.
     pub endpoint: BatchEndpoint,
+    /// Prompt strings to execute (one request per prompt).
     pub prompts: Vec<String>,
+    /// Optional model override.
     pub model: Option<String>,
+    /// Max tokens per request.
     pub max_tokens: Option<i64>,
+    /// Sampling temperature.
     pub temperature: Option<f32>,
+    /// Current lifecycle state.
     pub status: BatchStatus,
+    /// Per-request results accumulated so far.
     pub results: Vec<BatchResultItem>,
+    /// Unix timestamp at batch creation.
     pub created_at: i64,
+    /// Unix timestamp at which the batch reached a terminal state, if any.
     pub completed_at: Option<i64>,
 }
 

@@ -40,12 +40,16 @@ pub struct ConfigValidationErrors(pub Vec<ConfigValidationError>);
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::derivable_impls)]
 pub struct ServerConfig {
+    /// Bind address (e.g. `"0.0.0.0"` for all interfaces).
     #[serde(default = "default_host")]
     pub host: String,
+    /// TCP port to listen on; validated to be non-zero.
     #[serde(default = "default_port")]
     pub port: u16,
+    /// One of `trace`, `debug`, `info`, `warn`, `error`.
     #[serde(default = "default_log_level")]
     pub log_level: String,
+    /// If set, JSON-formatted log lines are also written to this directory.
     #[serde(default)]
     pub log_dir: Option<String>,
 }
@@ -76,14 +80,19 @@ fn default_log_level() -> String {
 /// Configuration for Auth. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthConfig {
+    /// Inline list of API keys that authenticate clients.
     #[serde(default)]
     pub api_keys: Vec<String>,
+    /// Optional env var name holding a comma-separated API key list.
     #[serde(default)]
     pub api_keys_env: Option<String>,
+    /// Optional path to a file of API keys, one per line (`#` for comments).
     #[serde(default)]
     pub api_keys_file: Option<String>,
+    /// Per-key request quota within `rate_limit_window_secs`.
     #[serde(default = "default_rate_limit_requests")]
     pub rate_limit_requests: usize,
+    /// Sliding window length (seconds) for the rate limiter.
     #[serde(default = "default_rate_limit_window")]
     pub rate_limit_window_secs: u64,
 }
@@ -149,12 +158,17 @@ const fn default_rate_limit_window() -> u64 {
 /// Configuration for DraftSpec. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DraftSpecConfig {
+    /// Unique identifier used at runtime to reference this draft.
     pub id: String,
+    /// Filesystem path to the draft model weights.
     pub path: String,
+    /// Number of transformer layers to load from the draft.
     #[serde(default = "default_draft_layers")]
     pub num_layers: usize,
+    /// Pre-computed weight size for budget accounting (optional).
     #[serde(default)]
     pub weight_size_bytes: u64,
+    /// Architecture hint (`"qwen3"`, `"llama"`, etc.) — used to pick a loader.
     #[serde(default)]
     pub architecture: Option<String>,
 }
@@ -167,18 +181,25 @@ const fn default_draft_layers() -> usize {
 #[allow(clippy::derivable_impls)]
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct EngineConfig {
+    /// Maximum draft tokens per speculative step (capped at 64).
     #[serde(default = "default_max_draft_tokens")]
     pub max_draft_tokens: usize,
+    /// Number of KV-cache blocks to allocate at startup.
     #[serde(default = "default_num_kv_blocks")]
     pub num_kv_blocks: usize,
+    /// Hard ceiling on batch size.
     #[serde(default = "default_max_batch_size")]
     pub max_batch_size: usize,
+    /// How many batches may sit in the waiting queue before backpressure kicks in.
     #[serde(default = "default_max_waiting_batches")]
     pub max_waiting_batches: usize,
+    /// Tensor-parallel degree (single-node when `1`).
     #[serde(default = "default_tensor_parallel_size")]
     pub tensor_parallel_size: usize,
+    /// Enable FP8 quantization for the KV cache.
     #[serde(default = "default_kv_quantization")]
     pub kv_quantization: bool,
+    /// Allow the Engine to evolve draft-token counts per request.
     #[serde(default = "default_enable_adaptive_speculative")]
     pub enable_adaptive_speculative: bool,
     /// v18.0: VRAM budget for speculative draft models in bytes. When set,
@@ -241,10 +262,13 @@ const fn default_enable_adaptive_speculative() -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::derivable_impls)]
 pub struct AppConfig {
+    /// HTTP server section (bind address, port, log level).
     #[serde(default)]
     pub server: ServerConfig,
+    /// Engine section (KV blocks, batch size, draft specs).
     #[serde(default)]
     pub engine: EngineConfig,
+    /// Authentication / rate-limit section.
     #[serde(default)]
     pub auth: AuthConfig,
 }
