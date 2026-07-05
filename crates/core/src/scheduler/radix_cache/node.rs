@@ -1,3 +1,7 @@
+//! Radix-tree node: one vertex in the prefix-cache tree, holding a token range + child edges keyed by next-token id.
+//!
+//! Trees are composed by `radix_cache/tree.rs`; this file owns only
+//! the per-node storage and child-lookup helpers.
 #![allow(clippy::module_name_repetitions)]
 use std::collections::HashMap;
 use std::sync::Arc;

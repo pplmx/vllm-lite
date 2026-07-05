@@ -1,3 +1,8 @@
+//! Scheduling-policy trait definition: `SchedulingPolicy::compute_priority` returns a per-sequence priority score from a [`SchedulingContext`].
+//!
+//! Higher scores run first. Implementations must be deterministic
+//! for the same context so scheduler replays stay reproducible.
+
 use crate::types::Sequence;
 use std::sync::Arc;
 use std::time::Instant;

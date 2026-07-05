@@ -1,3 +1,4 @@
+//! Metrics collector namespace: re-exports [`EnhancedMetricsCollector`] + the metric value types in `metrics` and the sampling pipeline in `sampler`.
 #![allow(clippy::module_name_repetitions)]
 // crates/core/src/metrics/collector/mod.rs
 //

@@ -1,3 +1,8 @@
+//! Shortest-job-first scheduling policy: scores sequences by remaining token count, shortest first.
+//!
+//! Minimises average completion time for mixed-length workloads at
+//! the cost of starving long sequences — typically paired with
+//! priority-policy for tiered fairness.
 #![allow(clippy::module_name_repetitions)]
 use super::trait_def::{PriorityScore, SchedulingContext, SchedulingPolicy};
 use crate::types::Sequence;

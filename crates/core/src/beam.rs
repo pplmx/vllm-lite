@@ -1,3 +1,7 @@
+//! Beam-search state: one beam hypothesis with its accumulated log-prob and emitted token sequence.
+//!
+//! `BeamSearchScheduler` (in `engine/beam.rs`) owns a `Vec<Beam>` of
+//! these per decoding step. See the scheduler for the lifecycle.
 #![allow(clippy::module_name_repetitions)]
 use crate::types::{BlockId, TokenId};
 use std::sync::Arc;

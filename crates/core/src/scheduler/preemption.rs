@@ -1,4 +1,10 @@
-// `select_victim`, `record_preemption`, `record_rejection`, and
+//! Preemption: when KV-cache memory is tight, pick a running sequence to evict and re-queue it.
+//!
+//! `PreemptionManager` owns the eviction policy (LRU by default, with
+//! priority-weighted overrides). `select_victim`, `record_preemption`,
+//! `record_rejection`, and `reset_stats` form the public surface that
+//! the scheduler engine wires into its tick loop.
+//! `select_victim`, `record_preemption`, `record_rejection`, and
 // `reset_stats` are public API surface on `PreemptionManager`. The
 // scheduler engine wires them when it adopts the preemption-driven
 // admission path; current uses bypass them.

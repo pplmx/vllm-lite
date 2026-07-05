@@ -1,3 +1,9 @@
+//! Metric value types for `EnhancedMetricsCollector`: counter/gauge/histogram variants with atomic storage.
+//!
+//! Distinct from `metrics/types.rs` (the runtime atomic counters) —
+//! these are richer structs that carry labels + unit metadata, used
+//! for higher-fidelity Prometheus exports.
+
 // crates/core/src/metrics/collector/metrics.rs
 //
 // Metric type definitions used by `EnhancedMetricsCollector` and external

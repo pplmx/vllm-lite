@@ -1,3 +1,7 @@
+//! Priority scheduling policy: scores sequences by their explicit priority field, breaking ties by arrival order.
+//!
+//! `Sequence::priority` is set by the API layer from the OpenAI
+//! `priority` parameter (or via the `/admin/priorities` endpoint).
 #![allow(clippy::module_name_repetitions)]
 use super::trait_def::{PriorityScore, SchedulingContext, SchedulingPolicy};
 use crate::types::Sequence;

@@ -1,3 +1,8 @@
+//! Engine beam-search methods: `beam_search`, `expand_beam`, and helpers.
+//!
+//! The beam state itself is in `beam.rs`; this file owns the
+//! orchestration of per-step expansion + sampling.
+
 // Sub-module for beam search methods on Engine.
 // See mod.rs for the Engine struct definition.
 

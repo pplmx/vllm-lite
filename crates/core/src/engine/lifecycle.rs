@@ -1,3 +1,8 @@
+//! Engine lifecycle methods: health checks, error state, cancel handling, and `add_request`.
+//!
+//! The main run loop is `engine/run.rs`; this file is the supporting
+//! surface that callers and tests poke at directly.
+
 // Sub-module for health, error, cancel, and add_request methods on Engine.
 // See mod.rs for the Engine struct definition.
 

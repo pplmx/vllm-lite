@@ -1,3 +1,7 @@
+//! `Batch` value type: the per-step plan handed to the model layer, with token ids, block ids, and per-sequence metadata.
+//!
+//! Constructed by `BatchComposer` (`scheduler/batch_composer/`); the
+//! model layer's `forward` consumes it as-is.
 use crate::error::Result;
 use crate::sync::lock_mutex;
 use vllm_traits::{SeqId, TokenId};

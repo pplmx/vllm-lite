@@ -1,3 +1,9 @@
+//! `BatchComposer` implementation: builds phase-specific batches (prefill, decode, mixed) from the running + waiting sequence lists.
+//!
+//! Runs every scheduler tick; the `compose` function is the entry
+//! point and is split into prefill-composition + decode-composition
+//! sub-passes with a configurable size budget per pass.
+
 // crates/core/src/scheduler/batch_composer/compose.rs
 //
 // `BatchComposer` implementation: builds phase-specific batches (prefill,
