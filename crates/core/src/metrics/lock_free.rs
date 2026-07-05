@@ -12,41 +12,71 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// Snapshot of every observable engine metric at a single point in time. Fields cover throughput (tokens/sec), latency percentiles, scheduler queue depth, and KV-cache occupancy. Cloned and serialized on every metrics export.
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct MetricsSnapshot {
+    /// Cumulative tokens generated since process start.
     pub tokens_total: u64,
+    /// Cumulative requests processed since process start.
     pub requests_total: u64,
+    /// Mean request latency in milliseconds.
     pub avg_latency_ms: f64,
+    /// 50th-percentile request latency in milliseconds.
     pub p50_latency_ms: f64,
+    /// 90th-percentile request latency in milliseconds.
     pub p90_latency_ms: f64,
+    /// 99th-percentile request latency in milliseconds.
     pub p99_latency_ms: f64,
+    /// Mean batch size over the recent sampling window.
     pub avg_batch_size: f64,
+    /// Batch size of the most recent scheduler step.
     pub current_batch_size: usize,
+    /// Requests currently in the scheduler (waiting + running).
     pub requests_in_flight: u64,
+    /// Fraction of KV-cache blocks currently in use.
     pub kv_cache_usage_percent: f64,
+    /// Prefix-cache hit rate since process start.
     pub prefix_cache_hit_rate: f64,
+    /// Prefill-phase tokens per second.
     pub prefill_throughput: f64,
+    /// Decode-phase tokens per second.
     pub decode_throughput: f64,
+    /// Mean time requests spent in the waiting queue.
     pub avg_scheduler_wait_time_ms: f64,
 }
 
 #[derive(Debug)]
 /// Lock-free metrics recorder. Producers update per-counter atomics; consumers snapshot a [`MetricsSnapshot`] via `snapshot()`. Used in the hot path where mutex contention would show up in latency.
 pub struct LockFreeMetrics {
+    /// Cumulative tokens generated.
     tokens_total: Arc<AtomicU64>,
+    /// Cumulative requests processed.
     requests_total: Arc<AtomicU64>,
+    /// Requests currently waiting or running.
     requests_in_flight: Arc<AtomicU64>,
+    /// KV-cache blocks currently allocated.
     kv_cache_blocks_used: Arc<AtomicU64>,
+    /// Total KV-cache blocks available.
     kv_cache_blocks_total: Arc<AtomicU64>,
+    /// Prefix-cache lookups that hit an existing entry.
     prefix_cache_hits: Arc<AtomicU64>,
+    /// Total prefix-cache lookups.
     prefix_cache_requests: Arc<AtomicU64>,
+    /// Cumulative prefill-phase tokens.
     prefill_tokens: Arc<AtomicU64>,
+    /// Cumulative decode-phase tokens.
     decode_tokens: Arc<AtomicU64>,
+    /// Process-start instant; basis for tokens/sec computation.
     start_time: std::time::Instant,
 
+    /// Sender side of the bounded latency ring channel.
     latency_sender: Sender<f64>,
+    /// Receiver side of the bounded latency ring channel.
     latency_receiver: Receiver<f64>,
+    /// Sender side of the bounded batch-size ring channel.
     batch_size_sender: Sender<usize>,
+    /// Receiver side of the bounded batch-size ring channel.
     batch_size_receiver: Receiver<usize>,
+    /// Sender side of the bounded scheduler-wait ring channel.
     scheduler_wait_sender: Sender<f64>,
+    /// Receiver side of the bounded scheduler-wait ring channel.
     scheduler_wait_receiver: Receiver<f64>,
 }
 

@@ -14,10 +14,15 @@ use vllm_core::types::EngineMessage;
 /// Response payload for MetricsSnapshot. Returned from handlers, serialized to JSON for the HTTP boundary.
 #[derive(Debug, Serialize)]
 pub struct MetricsSnapshotResponse {
+    /// Monotonic counters (events since process start).
     pub counters: HashMap<String, u64>,
+    /// Current gauge values (point-in-time samples).
     pub gauges: HashMap<String, f64>,
+    /// Current scheduler request queue depth.
     pub queue_depth: u64,
+    /// Number of sequences currently being processed.
     pub active_sequences: u64,
+    /// CUDA-Graph replay hit rate (0.0–1.0).
     pub cuda_graph_hit_rate: f64,
 }
 
