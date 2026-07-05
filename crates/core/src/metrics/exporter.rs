@@ -64,8 +64,7 @@ impl InMemoryMetricsExporter {
 #[async_trait::async_trait]
 impl MetricsExporter for InMemoryMetricsExporter {
     async fn export(&self) -> Result<String, MetricsError> {
-        // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
-        let values = self.values.lock().expect("metrics exporter mutex poisoned");
+        let values = self.values.lock()?;
         let mut out = String::new();
         for (name, value) in values.iter() {
             out.push_str(name);
@@ -96,6 +95,16 @@ impl dyn MetricsExporter {
 pub enum MetricsError {
     #[error("export failed: {0}")]
     ExportFailed(String),
+    /// A `Mutex`/`RwLock` guard was poisoned by a panic while held.
+    #[error("metrics exporter lock poisoned")]
+    LockPoisoned,
+}
+
+/// Convert any `std::sync::PoisonError<T>` into [`MetricsError::LockPoisoned`].
+impl<T> From<std::sync::PoisonError<T>> for MetricsError {
+    fn from(_: std::sync::PoisonError<T>) -> Self {
+        Self::LockPoisoned
+    }
 }
 
 #[derive(Debug)]
