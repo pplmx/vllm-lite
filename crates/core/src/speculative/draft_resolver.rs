@@ -75,6 +75,10 @@ pub struct NoopLoader;
 
 impl DraftLoader for NoopLoader {
     fn load(&self, id: &DraftId) -> std::result::Result<Box<dyn ModelBackend>, DraftRegistryError> {
+        // NoopLoader is a deliberate sentinel used when no real loader is
+        // configured. Returning a typed IoLoad with no path is misleading;
+        // the deprecated string variant is the clearest signal here.
+        #[allow(deprecated)]
         Err(DraftRegistryError::LoadFailed(format!(
             "NoopLoader: no loader wired for {id}"
         )))
@@ -240,10 +244,10 @@ mod tests {
             id: &DraftId,
         ) -> std::result::Result<Box<dyn ModelBackend>, DraftRegistryError> {
             if self.fail_on.iter().any(|f| f == id) {
-                Err(DraftRegistryError::LoadFailed("stub failure".into()))
-            } else {
-                Ok(Box::new(StubBackend))
+                #[allow(deprecated)]
+                return Err(DraftRegistryError::LoadFailed("stub failure".into()));
             }
+            Ok(Box::new(StubBackend))
         }
     }
 

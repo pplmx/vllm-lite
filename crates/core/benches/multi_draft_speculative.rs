@@ -108,7 +108,15 @@ impl DraftLoader for BenchLoader {
             .lock()
             .unwrap()
             .remove(id)
-            .ok_or_else(|| DraftRegistryError::LoadFailed(format!("no backend for {id}")))
+            // Bench-only sentinel; the deprecated string variant is fine.
+            .map_or_else(
+                || {
+                    #[allow(deprecated)]
+                    let err = DraftRegistryError::LoadFailed(format!("no backend for {id}"));
+                    Err(err)
+                },
+                |b| Ok(b),
+            )
     }
 }
 
