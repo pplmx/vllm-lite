@@ -10,7 +10,7 @@ pub enum LayerType {
     FullAttention,
 }
 
-/// Configuration for RoPE. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// Configuration for `RoPE`. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub struct RoPEConfig {
     pub rope_theta: f32,

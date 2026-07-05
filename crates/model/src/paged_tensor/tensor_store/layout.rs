@@ -1,4 +1,4 @@
-//! PagedKV cache layout helpers: block-hash computation (xxHash of token prefix + parent hash) and the lookup table used during prefix-cache hits.
+//! `PagedKV` cache layout helpers: block-hash computation (xxHash of token prefix + parent hash) and the lookup table used during prefix-cache hits.
 //!
 //! Hash stability across re-starts is what makes prefix caching
 //! survive process restarts; the implementation lives here.

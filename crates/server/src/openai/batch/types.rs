@@ -1,6 +1,6 @@
-//! OpenAI Batch API wire types: `BatchRequest`, `BatchResponse`, `BatchStatus`, request/result counts, and the per-line `BatchRequestInput` / `BatchResponseOutput` shapes.
+//! `OpenAI` Batch API wire types: `BatchRequest`, `BatchResponse`, `BatchStatus`, request/result counts, and the per-line `BatchRequestInput` / `BatchResponseOutput` shapes.
 //!
-//! Mirrors the upstream OpenAI Batch schema 1:1; the handler (`handler.rs`)
+//! Mirrors the upstream `OpenAI` Batch schema 1:1; the handler (`handler.rs`)
 //! and manager (`manager.rs`) operate on these types end-to-end.
 use serde::{Deserialize, Serialize};
 
@@ -58,7 +58,7 @@ where
     ser.serialize_str(value.as_str())
 }
 
-/// Request payload for SimpleBatch. Contains input data, configuration, and request-tracking metadata.
+/// Request payload for `SimpleBatch`. Contains input data, configuration, and request-tracking metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimpleBatchRequest {
     /// Prompts to execute (one HTTP-style request per prompt).

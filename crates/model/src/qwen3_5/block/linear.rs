@@ -9,7 +9,7 @@ use candle_core::{DType, Result as CandleResult, Tensor};
 use candle_nn::{Conv1d, LayerNorm, Linear, VarBuilder, conv1d};
 
 #[derive(Debug)]
-/// Block abstraction for LinearAttention. Groups a contiguous range of work (e.g. one transformer layer, one pipeline stage).
+/// Block abstraction for `LinearAttention`. Groups a contiguous range of work (e.g. one transformer layer, one pipeline stage).
 pub struct LinearAttentionBlock {
     pub(crate) gdn: GatedDeltaNet,
 }

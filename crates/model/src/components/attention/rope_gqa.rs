@@ -1,4 +1,4 @@
-//! GQA + RoPE + QK-norm fused attention layer used by Qwen3.
+//! GQA + `RoPE` + QK-norm fused attention layer used by Qwen3.
 //!
 //! Layers the rope embedding + Q/K normalisation on top of the
 //! reference GQA so the forward call is one fused op. Reads/writes
@@ -27,7 +27,7 @@ impl RopeGqaAttention {
     /// Construct a `RopeGqaAttention` from a `VarBuilder`. The inner
     /// `GqaAttention` is built with the same projection layout
     /// (`q`/`k`/`v`/`o` + optional QK-norm); this wrapper additionally
-    /// captures the RoPE base `theta` so [`Self::forward_prefill`] /
+    /// captures the `RoPE` base `theta` so [`Self::forward_prefill`] /
     /// [`Self::forward_decode`] can apply rotary embeddings before the
     /// attention matmul.
     /// # Errors
@@ -138,7 +138,7 @@ impl RopeGqaAttention {
         Ok((q, k))
     }
 
-    /// Prefill path: project Q/K/V, apply optional QK-norm, apply RoPE,
+    /// Prefill path: project Q/K/V, apply optional QK-norm, apply `RoPE`,
     /// write the new KV into the paged cache, then run causal attention.
     ///
     /// Used when a brand-new prompt arrives and the full KV prefix has to
@@ -147,7 +147,7 @@ impl RopeGqaAttention {
     /// re-encoding.
     /// # Errors
     ///
-    /// Returns `Err` if any projection, RoPE rotation, KV-cache write,
+    /// Returns `Err` if any projection, `RoPE` rotation, KV-cache write,
     /// or attention matmul fails.
     pub fn forward_prefill(
         &self,
@@ -195,7 +195,7 @@ impl RopeGqaAttention {
     }
 
     /// Decode path: project Q/K/V for one new token, apply optional QK-norm,
-    /// apply RoPE, read the existing KV prefix from the paged cache, append
+    /// apply `RoPE`, read the existing KV prefix from the paged cache, append
     /// the new K/V, then run causal attention over the full prefix.
     ///
     /// `num_computed_tokens` is the number of tokens already in the cache
@@ -203,7 +203,7 @@ impl RopeGqaAttention {
     /// reader where to start writing the new entries.
     /// # Errors
     ///
-    /// Returns `Err` if any projection, RoPE rotation, KV-cache read,
+    /// Returns `Err` if any projection, `RoPE` rotation, KV-cache read,
     /// or attention matmul fails.
     pub fn forward_decode(
         &self,

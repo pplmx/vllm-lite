@@ -18,7 +18,7 @@ use tracing::trace;
 pub struct FlashAttentionV3 {
     /// Number of attention heads.
     num_heads: usize,
-    /// Per-head dimension (head_dim).
+    /// Per-head dimension (`head_dim`).
     head_dim: usize,
     /// Dropout probability (0.0 = no dropout).
     dropout_p: f32,
@@ -28,12 +28,12 @@ pub struct FlashAttentionV3 {
     window_size: Option<(i32, i32)>,
 }
 
-/// Configuration for FlashAttentionV3. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// Configuration for `FlashAttentionV3`. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FlashAttentionV3Config {
     /// Number of attention heads.
     pub num_heads: usize,
-    /// Per-head dimension (head_dim).
+    /// Per-head dimension (`head_dim`).
     pub head_dim: usize,
     /// Dropout probability (0.0 = no dropout).
     pub dropout_p: f32,

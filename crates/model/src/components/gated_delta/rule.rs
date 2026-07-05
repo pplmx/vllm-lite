@@ -1,4 +1,4 @@
-//! Gated DeltaNet recurrent rule + supporting kernels: causal convolution, qkv splitting, head repetition, L2 normalisation, and the gated delta step / recurrent scan.
+//! Gated `DeltaNet` recurrent rule + supporting kernels: causal convolution, qkv splitting, head repetition, L2 normalisation, and the gated delta step / recurrent scan.
 //!
 //! The `gated_delta_recurrent` function is the public entry point; it
 //! composes the helper kernels into a single recurrent call. Used by

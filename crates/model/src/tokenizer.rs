@@ -1,4 +1,4 @@
-//! Tokenizer wrapper around `tokenizers` (HuggingFace) + chat-template rendering.
+//! Tokenizer wrapper around `tokenizers` (`HuggingFace`) + chat-template rendering.
 //!
 //! `Tokenizer` is constructed from the `tokenizer.json` + `tokenizer_config.json`
 //! shipped alongside the model weights. Chat templates are loaded from
@@ -20,7 +20,7 @@ pub enum TokenizerError {
 }
 
 #[derive(Debug)]
-/// Tokenizer wrapper around HuggingFace `tokenizers::Tokenizer` with
+/// Tokenizer wrapper around `HuggingFace` `tokenizers::Tokenizer` with
 /// helpers for prompt + chat-template encoding. Constructed via
 /// `Tokenizer::from_file` or `Tokenizer::from_pretrained`; never
 /// instantiated directly because the inner HF tokenizer must be

@@ -1,4 +1,4 @@
-//! FlashAttention wrapper for the Qwen3 model: `FlashAttention` config struct + a `forward` shim that routes to the kernel impl.
+//! `FlashAttention` wrapper for the Qwen3 model: `FlashAttention` config struct + a `forward` shim that routes to the kernel impl.
 //!
 //! Thin layer over `kernels::flash_attention`; exists so the Qwen3
 //! attention module can stay architecture-specific while the kernel
@@ -28,7 +28,7 @@ impl FlashAttention {
     }
 }
 
-/// Configuration for FlashAttention. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// Configuration for `FlashAttention`. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Default)]
 pub struct FlashAttentionConfig {
     pub num_heads: usize,

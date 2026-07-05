@@ -1,7 +1,7 @@
 //! `ModelLoader` + `ModelLoaderBuilder`: open a checkpoint directory, detect the format, load weights into the architecture registry, return a ready-to-use model.
 //!
 //! Format detection is automatic: safetensors (single or sharded),
-//! GGUF (with Q4_K_M dequantization to FP16). The builder wires the
+//! GGUF (with `Q4_K_M` dequantization to FP16). The builder wires the
 //! tokenizer, KV blocks, model config, and architecture selection.
 #![allow(clippy::module_name_repetitions)]
 use candle_core::{Device, Result, Tensor};

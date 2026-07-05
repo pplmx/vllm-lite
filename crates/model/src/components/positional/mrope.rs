@@ -1,4 +1,4 @@
-//! Multi-modal Rotary Position Embedding (MRoPE) for Qwen3.5-VL: separate rotary sections for the temporal, height, and width axes.
+//! Multi-modal Rotary Position Embedding (`MRoPE`) for Qwen3.5-VL: separate rotary sections for the temporal, height, and width axes.
 //!
 //! Used by the vision-language Qwen3.5 hybrid. The cache shape is
 //! `(max_seq_len, head_dim/2)`; `apply_mrope` rotates per-section.

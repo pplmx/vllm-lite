@@ -1,7 +1,7 @@
-//! SwiGLU MLP: gated feed-forward with `down(SiLU(gate(x)) * up(x))` projection.
+//! `SwiGLU` MLP: gated feed-forward with `down(SiLU(gate(x)) * up(x))` projection.
 //!
 //! Used by every transformer architecture in the crate (Llama, Mistral,
-//! Qwen3, Mixtral, Gemma). Both FP16 and quantized (Q4_K_M GGUF) weight
+//! Qwen3, Mixtral, Gemma). Both FP16 and quantized (`Q4_K_M` GGUF) weight
 //! tensors are accepted.
 #![allow(clippy::module_name_repetitions)]
 // invariant: tensor-dimension casts (data.len() -> f32) are bounded by the

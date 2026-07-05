@@ -1,4 +1,4 @@
-//! FlashAttention configuration: `AttentionVariant` (Baseline, FlashV2, FlashV3) and `FlashAttentionConfig` (block sizes, head dim, causal flag, softmax scale).
+//! `FlashAttention` configuration: `AttentionVariant` (Baseline, `FlashV2`, `FlashV3`) and `FlashAttentionConfig` (block sizes, head dim, causal flag, softmax scale).
 //!
 //! The variant is selected by the architecture's `model.json` field;
 //! the config is built from the variant plus runtime hints
@@ -19,12 +19,12 @@ pub enum AttentionVariant {
     FlashV2,
 }
 
-/// Configuration for FlashAttention. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// Configuration for `FlashAttention`. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Default)]
 pub struct FlashAttentionConfig {
     /// Which attention implementation to dispatch to.
     pub variant: AttentionVariant,
-    /// Block size for the FlashAttention tiled loop.
+    /// Block size for the `FlashAttention` tiled loop.
     pub flash_block_size: usize,
     /// Whether to apply sliding-window masking.
     pub use_sliding_window: bool,

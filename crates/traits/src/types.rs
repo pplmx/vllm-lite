@@ -33,7 +33,7 @@ pub struct Batch {
     pub seq_ids: Vec<SeqId>,
     /// Per-sequence input tokens (prefill) or last-known token (decode).
     pub input_tokens: Vec<Vec<TokenId>>,
-    /// Per-sequence absolute positions (used for RoPE).
+    /// Per-sequence absolute positions (used for `RoPE`).
     pub positions: Vec<Vec<usize>>,
     // KV cache information
     /// Per-sequence KV-cache block ids (parallel to `seq_ids`).
@@ -106,7 +106,7 @@ pub struct BatchOutput {
     pub next_tokens: Vec<TokenId>,
 }
 
-/// Error type for TensorParallel. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
+/// Error type for `TensorParallel`. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum TensorParallelError {
     #[error("World size must be > 0")]

@@ -1,8 +1,8 @@
-//! Top-level axum router and the `/health` / `/v1/models` / `/metrics` handlers that aren't part of the OpenAI surface.
+//! Top-level axum router and the `/health` / `/v1/models` / `/metrics` handlers that aren't part of the `OpenAI` surface.
 //!
 //! `build_router` is the entry point called from `main.rs`; it wires
 //! every middleware (auth, RBAC, backpressure, correlation, audit) and
-//! the OpenAI sub-router under `/v1`.
+//! the `OpenAI` sub-router under `/v1`.
 use axum::{Json, extract::State};
 use serde::Serialize;
 use tokio::sync::mpsc;
@@ -25,7 +25,7 @@ pub struct HealthResponse {
     pub status: String,
 }
 
-/// Response payload for HealthDetail. Returned from handlers, serialized to JSON for the HTTP boundary.
+/// Response payload for `HealthDetail`. Returned from handlers, serialized to JSON for the HTTP boundary.
 #[derive(Debug, Serialize)]
 pub struct HealthDetailResponse {
     pub status: String,

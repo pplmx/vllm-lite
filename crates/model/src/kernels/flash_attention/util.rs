@@ -1,4 +1,4 @@
-//! FlashAttention internal helpers: stable softmax over the last dimension, plus a few block-math utilities.
+//! `FlashAttention` internal helpers: stable softmax over the last dimension, plus a few block-math utilities.
 //!
 //! Used only by the kernel impl in `kernel.rs`; not part of the public
 //! API surface.

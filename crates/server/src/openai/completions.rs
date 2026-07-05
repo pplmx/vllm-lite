@@ -1,4 +1,4 @@
-//! OpenAI legacy Completions endpoint: `POST /v1/completions`. Prompt-string in, completion string out.
+//! `OpenAI` legacy Completions endpoint: `POST /v1/completions`. Prompt-string in, completion string out.
 use axum::{
     Json,
     extract::State,

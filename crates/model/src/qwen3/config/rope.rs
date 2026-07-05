@@ -1,7 +1,7 @@
-//! Qwen3 RoPE configuration: theta, partial rotary factor, mrope sections for vision-language variants.
+//! Qwen3 `RoPE` configuration: theta, partial rotary factor, mrope sections for vision-language variants.
 //!
 //! Most variants use the standard `rope_theta=1_000_000`; vision-language
-//! Qwen3 models add the MRoPE sections (temporal / height / width).
+//! Qwen3 models add the `MRoPE` sections (temporal / height / width).
 
 // crates/model/src/qwen3/config/rope.rs
 //
@@ -76,22 +76,22 @@ impl std::fmt::Display for RopeType {
 /// `RopeScaling`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct RopeScaling {
-    /// Which RoPE scaling algorithm to use (None = default).
+    /// Which `RoPE` scaling algorithm to use (None = default).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rope_type: Option<RopeType>,
-    /// Linear-interpolation / YaRN scaling factor.
+    /// Linear-interpolation / `YaRN` scaling factor.
     #[serde(default)]
     pub factor: Option<f32>,
     /// Original context length this scaling was tuned for.
     #[serde(default)]
     pub original_max_position_embeddings: Option<usize>,
-    /// Attention scaling factor applied alongside RoPE (YaRN).
+    /// Attention scaling factor applied alongside `RoPE` (`YaRN`).
     #[serde(default)]
     pub attn_factor: Option<f32>,
     /// Fraction of each head dimension that receives rotary embeddings (Qwen3 uses 0.25).
     #[serde(default)]
     pub partial_rotary_factor: Option<f32>,
-    /// MRoPE axis section sizes (temporal / height / width).
+    /// `MRoPE` axis section sizes (temporal / height / width).
     #[serde(default)]
     pub mrope_section: Option<Vec<usize>>,
 }
@@ -99,19 +99,19 @@ pub struct RopeScaling {
 /// `RopeParameters`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct RopeParameters {
-    /// Which RoPE scaling algorithm to use (None = default).
+    /// Which `RoPE` scaling algorithm to use (None = default).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rope_type: Option<RopeType>,
-    /// Base theta for the rotary inverse-frequency computation (Qwen3 = 1_000_000).
+    /// Base theta for the rotary inverse-frequency computation (Qwen3 = `1_000_000`).
     #[serde(default)]
     pub rope_theta: Option<f32>,
     /// Fraction of each head dimension that receives rotary embeddings.
     #[serde(default)]
     pub partial_rotary_factor: Option<f32>,
-    /// MRoPE axis section sizes (temporal / height / width).
+    /// `MRoPE` axis section sizes (temporal / height / width).
     #[serde(default)]
     pub mrope_section: Option<Vec<usize>>,
-    /// Whether MRoPE axes are interleaved rather than split.
+    /// Whether `MRoPE` axes are interleaved rather than split.
     #[serde(default)]
     pub mrope_interleaved: Option<bool>,
 }

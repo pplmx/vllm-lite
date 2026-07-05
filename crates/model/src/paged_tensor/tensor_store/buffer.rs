@@ -1,4 +1,4 @@
-//! PagedKV buffer operations: `write_kv`, `write_kv_batch`, `read_kv`, and the layer-aware batched variants.
+//! `PagedKV` buffer operations: `write_kv`, `write_kv_batch`, `read_kv`, and the layer-aware batched variants.
 //!
 //! These are the only entry points attention layers should call to
 //! mutate or read the KV cache. Block-level accounting is handled by

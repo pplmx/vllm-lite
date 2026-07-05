@@ -1,4 +1,4 @@
-//! AllReduce primitives for tensor-parallel collectives.
+//! `AllReduce` primitives for tensor-parallel collectives.
 //!
 //! Wraps the underlying ring/tree algorithms behind a trait object so the
 //! tensor-parallel linear layers can swap between NCCL (GPU), gRPC (CPU),

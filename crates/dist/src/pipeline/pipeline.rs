@@ -17,7 +17,7 @@ pub struct PipelineParallel {
     config: PipelineParallelConfig,
 }
 
-/// Configuration for PipelineParallel. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// Configuration for `PipelineParallel`. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub struct PipelineParallelConfig {
     /// Number of pipeline stages (= number of devices with model shards).

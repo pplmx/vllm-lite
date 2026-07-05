@@ -6,7 +6,7 @@ use crate::config::AppConfig;
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 
-/// Error type for CliValidation. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
+/// Error type for `CliValidation`. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum CliValidationError {
     #[error("'{0}' is not a valid number")]

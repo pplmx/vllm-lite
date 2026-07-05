@@ -6,7 +6,7 @@
 use candle_core::{Device, Result, Tensor};
 use std::sync::Arc;
 
-/// Configuration for PipelineStage. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// Configuration for `PipelineStage`. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub struct PipelineStageConfig {
     /// Zero-based index of this stage within the pipeline.
@@ -61,7 +61,7 @@ impl PipelineStageConfig {
 pub struct StageInput {
     /// Hidden-state activations arriving from the previous stage (or the embedding lookup for stage 0).
     pub hidden_states: Tensor,
-    /// Position ids (for RoPE) corresponding to each token in `hidden_states`.
+    /// Position ids (for `RoPE`) corresponding to each token in `hidden_states`.
     pub position_ids: Tensor,
     /// Absolute sequence positions (used for KV-block index translation).
     pub positions: Vec<usize>,

@@ -4,7 +4,7 @@
 //! supported LLM architecture (Llama, Qwen3, Mistral, Gemma, Mixtral,
 //! Qwen3.5 Mamba hybrid), the architecture-registry that picks among
 //! them at load time, the shared transformer components (attention,
-//! MLP, norm, RoPE), the kernels (FlashAttention, fused MLP, CUDA
+//! MLP, norm, `RoPE`), the kernels (`FlashAttention`, fused MLP, CUDA
 //! graph capture), and the checkpoint loader (safetensors + GGUF).
 pub mod arch;
 pub mod causal_lm;

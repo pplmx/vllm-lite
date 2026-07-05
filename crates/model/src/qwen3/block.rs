@@ -1,4 +1,4 @@
-//! Qwen3 transformer block: one decoder layer with grouped-query attention + SwiGLU MLP + QK-norm.
+//! Qwen3 transformer block: one decoder layer with grouped-query attention + `SwiGLU` MLP + QK-norm.
 //!
 //! Supports both the standard GQA variant and the MLA variant
 //! (`qwen3/mla_attention.rs`). Each block reads from / writes to the

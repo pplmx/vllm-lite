@@ -14,7 +14,7 @@ use vllm_traits::SeqId;
 
 use super::leader_election::LeaderElection;
 
-/// Request payload for InFlight. Contains input data, configuration, and request-tracking metadata.
+/// Request payload for `InFlight`. Contains input data, configuration, and request-tracking metadata.
 #[derive(Debug, Clone)]
 pub struct InFlightRequest {
     /// Sequence id of the tracked request.
