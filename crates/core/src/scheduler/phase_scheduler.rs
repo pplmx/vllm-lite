@@ -8,8 +8,11 @@ use crate::types::Phase;
 /// Strategy for switching between prefill and decode phases. Different policies optimize throughput (drain decode) vs. fairness (round-robin).
 #[derive(Clone, Debug)]
 pub struct PhaseSwitchPolicy {
+    /// Maximum decode rounds run back-to-back before the scheduler must visit prefill again.
     pub max_consecutive_decode: u32,
+    /// Minimum prefill-queue length that preempts the current decode run.
     pub prefill_priority_threshold: usize,
+    /// Minimum number of decode requests needed to keep the decode phase active.
     pub min_decode_batch_size: usize,
 }
 
