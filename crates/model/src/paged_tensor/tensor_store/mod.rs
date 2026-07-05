@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use candle_core::{DType, Device, Result, Tensor};
 
 #[derive(Debug)]
-/// Cache for PagedKv. Keyed lookup with the configured eviction policy (LRU, ARC, FIFO). Thread-safe.
+/// Cache for `PagedKv`. Keyed lookup with the configured eviction policy (LRU, ARC, FIFO). Thread-safe.
 pub struct PagedKvCache {
     key_cache: Vec<Tensor>,
     value_cache: Vec<Tensor>,

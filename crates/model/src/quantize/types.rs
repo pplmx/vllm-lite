@@ -21,7 +21,7 @@ pub struct QuantizedTensor {
     pub scales: Vec<f32>,
     /// Per-block zero points (None for symmetric quantization schemes).
     pub zeros: Option<Vec<f32>>,
-    /// Quantization scheme used (e.g. GGUF Q4_K_M).
+    /// Quantization scheme used (e.g. GGUF `Q4_K_M`).
     pub format: QuantizationFormat,
     /// Logical tensor shape before quantization.
     pub shape: Vec<usize>,
@@ -31,11 +31,11 @@ pub struct QuantizedTensor {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum QuantizationFormat {
-    /// GGUF Q4_K_M — 4-bit K-quant with per-group scales (default for Llama-class models).
+    /// GGUF `Q4_K_M` — 4-bit K-quant with per-group scales (default for Llama-class models).
     GgufQ4_K_M,
-    /// GGUF Q5_K_M — 5-bit K-quant with per-group scales.
+    /// GGUF `Q5_K_M` — 5-bit K-quant with per-group scales.
     GgufQ5_K_M,
-    /// GGUF Q8_0 — 8-bit symmetric per-block.
+    /// GGUF `Q8_0` — 8-bit symmetric per-block.
     GgufQ8_0,
     /// GPTQ 4-bit (reserved for future support).
     GptqQ4,

@@ -1,4 +1,4 @@
-//! Quantization helpers for the paged-KV tensor store: round-to-nearest FP8 / INT8 packing, dequantization to FP16, and Q4_K_M GGUF dequantization.
+//! Quantization helpers for the paged-KV tensor store: round-to-nearest FP8 / INT8 packing, dequantization to FP16, and `Q4_K_M` GGUF dequantization.
 //!
 //! The store (`paged_tensor/tensor_store.rs`) holds either FP16 or
 //! packed-quantized buffers; this module owns the conversion math and

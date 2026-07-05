@@ -43,7 +43,7 @@ impl BackpressureConfig {
     }
 }
 
-/// Internal state of FlowControl. Mutated under a lock; read via accessor methods on the parent type.
+/// Internal state of `FlowControl`. Mutated under a lock; read via accessor methods on the parent type.
 #[derive(Debug, Clone)]
 pub(crate) enum FlowControlState {
     Normal,

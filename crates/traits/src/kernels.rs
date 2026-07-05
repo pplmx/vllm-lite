@@ -5,7 +5,7 @@
 //! the workspace-wide wire format for those configs.
 use serde::{Deserialize, Serialize};
 
-/// Configuration for CudaGraph. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// Configuration for `CudaGraph`. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CudaGraphConfig {
     /// Whether CUDA Graph capture/replay is enabled.
@@ -29,7 +29,7 @@ impl Default for CudaGraphConfig {
     }
 }
 
-/// Configuration for ModelGraph. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// Configuration for `ModelGraph`. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModelGraphConfig {
     /// Maximum sequence length the captured graph supports.
@@ -78,7 +78,7 @@ impl CudaGraphConfig {
     }
 }
 
-/// Error type for GraphExecution. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
+/// Error type for `GraphExecution`. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum GraphExecutionError {
     #[error("graph not found for batch size {0}")]

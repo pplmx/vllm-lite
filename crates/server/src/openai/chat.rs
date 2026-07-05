@@ -1,7 +1,7 @@
-//! OpenAI Chat Completions endpoint: `POST /v1/chat/completions`.
+//! `OpenAI` Chat Completions endpoint: `POST /v1/chat/completions`.
 //!
 //! Handles both unary and SSE-streaming responses. Validates the
-//! request against the OpenAI schema, tokenises the messages through
+//! request against the `OpenAI` schema, tokenises the messages through
 //! the chat template, and dispatches to the engine. See
 //! `types.rs` for request/response shapes.
 #![allow(clippy::module_name_repetitions)]

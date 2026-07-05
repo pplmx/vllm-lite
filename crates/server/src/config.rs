@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-/// Error type for ConfigValidation. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
+/// Error type for `ConfigValidation`. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ConfigValidationError {
     #[error("server.port must be > 0")]
@@ -155,7 +155,7 @@ const fn default_rate_limit_window() -> u64 {
     60
 }
 
-/// Configuration for DraftSpec. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// Configuration for `DraftSpec`. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DraftSpecConfig {
     /// Unique identifier used at runtime to reference this draft.

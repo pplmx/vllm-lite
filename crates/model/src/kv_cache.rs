@@ -4,7 +4,7 @@
 
 use candle_core::{Device, Result, Tensor};
 
-/// Cache for MlaKv. Keyed lookup with the configured eviction policy (LRU, ARC, FIFO). Thread-safe.
+/// Cache for `MlaKv`. Keyed lookup with the configured eviction policy (LRU, ARC, FIFO). Thread-safe.
 pub(crate) struct MlaKvCache {
     kv_lora_rank: usize,
     block_size: usize,

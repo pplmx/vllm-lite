@@ -25,9 +25,9 @@ pub struct ModelConfig {
     pub vocab_size: usize,
     /// MLP hidden dimension (gate/up/down projections).
     pub intermediate_size: usize,
-    /// RoPE base wavelength.
+    /// `RoPE` base wavelength.
     pub rope_theta: f32,
-    /// RMSNorm numerical-stability epsilon.
+    /// `RMSNorm` numerical-stability epsilon.
     pub rms_norm_eps: f64,
     /// Sliding-window attention span (`None` = full causal).
     pub sliding_window: Option<usize>,
@@ -37,15 +37,15 @@ pub struct ModelConfig {
     pub max_position_embeddings: usize,
     /// Per-layer type list (sliding vs. full attention, SSM, etc.).
     pub layer_types: Vec<LayerType>,
-    /// Per-layer RoPE overrides (NTK scaling, MRoPE axes, etc.).
+    /// Per-layer `RoPE` overrides (NTK scaling, `MRoPE` axes, etc.).
     pub rope_configs: Vec<RoPEConfig>,
     /// Use the "double-wide" MLP variant (Phi-3 style).
     pub use_double_wide_mlp: bool,
-    /// Number of experts for sparse MoE (`None` = dense model).
+    /// Number of experts for sparse `MoE` (`None` = dense model).
     pub num_experts: Option<usize>,
-    /// Top-k routing for sparse MoE (`None` = dense model).
+    /// Top-k routing for sparse `MoE` (`None` = dense model).
     pub top_k_experts: Option<usize>,
-    /// Per-expert intermediate size for sparse MoE.
+    /// Per-expert intermediate size for sparse `MoE`.
     pub expert_intermediate_size: Option<usize>,
     /// Qwen3-style Q/K `RMSNorm` before `RoPE` (default false for other architectures).
     pub has_qk_norm: bool,

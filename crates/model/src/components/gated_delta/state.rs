@@ -1,4 +1,4 @@
-//! Gated DeltaNet recurrent state: `GatedDeltaConfig` (init parameters) and `GatedDeltaState` (the per-sequence hidden-state tensor).
+//! Gated `DeltaNet` recurrent state: `GatedDeltaConfig` (init parameters) and `GatedDeltaState` (the per-sequence hidden-state tensor).
 //!
 //! Used by the Qwen3.5 hybrid architecture; the recurrence is
 //! implemented in `rule.rs` and this file owns only the storage shapes
@@ -11,7 +11,7 @@
 
 use candle_core::{DType, Result as CandleResult, Tensor};
 
-/// Configuration for GatedDelta. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// Configuration for `GatedDelta`. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Copy)]
 pub struct GatedDeltaConfig {
     /// Number of K-projection heads (delta-rule keys).

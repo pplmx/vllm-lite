@@ -33,7 +33,7 @@ impl Default for Gemma3Architecture {
     }
 }
 
-/// Wrapper around Gemma3Block. Adds a single responsibility (caching, locking, observation) on top of the inner type.
+/// Wrapper around `Gemma3Block`. Adds a single responsibility (caching, locking, observation) on top of the inner type.
 pub(crate) struct Gemma3BlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,

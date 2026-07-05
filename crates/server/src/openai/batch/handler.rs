@@ -1,4 +1,4 @@
-//! OpenAI Batch API axum handlers: `POST /v1/batches`, `GET /v1/batches/{id}`, `POST /v1/batches/{id}/cancel`, `GET /v1/batches/{id}/results`.
+//! `OpenAI` Batch API axum handlers: `POST /v1/batches`, `GET /v1/batches/{id}`, `POST /v1/batches/{id}/cancel`, `GET /v1/batches/{id}/results`.
 //!
 //! Each handler is a thin wrapper over `BatchManager` plus RBAC + rate-limit middleware.
 use axum::{Json, extract::State};

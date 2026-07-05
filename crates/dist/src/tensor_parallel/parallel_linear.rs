@@ -2,7 +2,7 @@
 //!
 //! Implements Megatron-style sharding: split the weight matrix across
 //! ranks along the contraction dimension (column) or output dimension
-//! (row), and pair each layer with the appropriate AllReduce primitive
+//! (row), and pair each layer with the appropriate `AllReduce` primitive
 //! so the global computation is equivalent to the unsharded reference.
 #![allow(clippy::module_name_repetitions)]
 use super::all_reduce::{AllReduce, NcclAllReduce, ReduceOp};
@@ -129,7 +129,7 @@ impl RowParallelLinear {
     }
 }
 
-/// Manager for TensorParallel. Owns the underlying resource, coordinates concurrent access, and exposes a thread-safe public API.
+/// Manager for `TensorParallel`. Owns the underlying resource, coordinates concurrent access, and exposes a thread-safe public API.
 #[derive(Debug)]
 pub struct TensorParallelManager {
     mesh: Arc<DeviceMesh>,

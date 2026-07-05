@@ -95,7 +95,7 @@ pub enum CircuitBreakerError {
 pub struct CircuitBreaker {
     /// Configuration shared with the metrics layer.
     config: CircuitBreakerConfig,
-    /// Current breaker state (Closed / Open / HalfOpen).
+    /// Current breaker state (Closed / Open / `HalfOpen`).
     state: Arc<RwLock<CircuitState>>,
     /// Consecutive-failure counter since the last `Closed` reset.
     failure_count: Arc<AtomicU64>,

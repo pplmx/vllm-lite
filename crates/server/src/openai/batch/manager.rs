@@ -1,4 +1,4 @@
-//! OpenAI Batch API request lifecycle: enqueue, dispatch to engine, poll status, cancel, collect results.
+//! `OpenAI` Batch API request lifecycle: enqueue, dispatch to engine, poll status, cancel, collect results.
 //!
 //! `BatchManager` owns the per-batch state machine (`Validating` →
 //! `InProgress` → `Completed`/`Failed`/`Cancelled`) and is shared across

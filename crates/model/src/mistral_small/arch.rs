@@ -45,7 +45,7 @@ impl Default for MistralSmallArchitecture {
     }
 }
 
-/// Wrapper around MistralSmallBlock. Adds a single responsibility (caching, locking, observation) on top of the inner type.
+/// Wrapper around `MistralSmallBlock`. Adds a single responsibility (caching, locking, observation) on top of the inner type.
 pub(crate) struct MistralSmallBlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,

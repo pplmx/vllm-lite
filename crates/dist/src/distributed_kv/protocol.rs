@@ -57,7 +57,7 @@ pub struct CacheMessage {
     pub destination: NodeId,
     /// The cache operation being requested/responded.
     pub operation: CacheOperation,
-    /// Send timestamp in milliseconds since UNIX_EPOCH.
+    /// Send timestamp in milliseconds since `UNIX_EPOCH`.
     pub timestamp: u64,
 }
 

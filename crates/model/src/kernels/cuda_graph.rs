@@ -94,7 +94,7 @@ impl CudaGraphTensor for NullCudaGraphTensor {
     }
 }
 
-/// Error type for CudaGraph. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
+/// Error type for `CudaGraph`. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum CudaGraphError {
     #[error("capture failed: {0}")]

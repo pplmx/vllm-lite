@@ -23,7 +23,7 @@ pub struct CacheBlock {
     pub layer_idx: usize,
 }
 
-/// Pool of pre-allocated KvCache resources. Acquire returns a guard; release happens on drop.
+/// Pool of pre-allocated `KvCache` resources. Acquire returns a guard; release happens on drop.
 pub struct KvCachePool {
     blocks: Vec<CacheBlock>,
     free_list: Vec<usize>,

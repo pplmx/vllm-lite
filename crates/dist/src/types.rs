@@ -4,7 +4,7 @@
 //! sub-subsystem (`tensor_parallel::`, `pipeline::`, `distributed_kv::`).
 use candle_core::Device;
 
-/// Configuration for TensorParallel. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// Configuration for `TensorParallel`. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub struct TensorParallelConfig {
     pub world_size: usize,

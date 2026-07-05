@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 #[derive(Debug)]
-/// Cache for DistributedKV. Keyed lookup with the configured eviction policy (LRU, ARC, FIFO). Thread-safe.
+/// Cache for `DistributedKV`. Keyed lookup with the configured eviction policy (LRU, ARC, FIFO). Thread-safe.
 pub struct DistributedKVCache {
     /// Cache configuration (capacity, eviction policy, peer URLs).
     config: CacheConfig,

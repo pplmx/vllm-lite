@@ -2,7 +2,7 @@
 
 use crate::qwen3::config::{Qwen3Config, TextConfig};
 
-/// Configuration for GdnLinear. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// Configuration for `GdnLinear`. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct GdnLinearConfig {
     pub num_k_heads: usize,

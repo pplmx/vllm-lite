@@ -29,7 +29,7 @@ impl Default for Phi4Architecture {
     }
 }
 
-/// Wrapper around Phi4Block. Adds a single responsibility (caching, locking, observation) on top of the inner type.
+/// Wrapper around `Phi4Block`. Adds a single responsibility (caching, locking, observation) on top of the inner type.
 pub(crate) struct Phi4BlockWrapper {
     inner_dim: usize,
     num_kv_heads: usize,
