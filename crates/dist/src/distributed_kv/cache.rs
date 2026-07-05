@@ -10,8 +10,11 @@ use std::sync::{Arc, RwLock};
 #[derive(Debug)]
 /// Cache for DistributedKV. Keyed lookup with the configured eviction policy (LRU, ARC, FIFO). Thread-safe.
 pub struct DistributedKVCache {
+    /// Cache configuration (capacity, eviction policy, peer URLs).
     config: CacheConfig,
+    /// Local in-process KV map.
     local_cache: Arc<RwLock<HashMap<u64, CacheEntry>>>,
+    /// Cache statistics.
     stats: RwLock<CacheStats>,
 }
 
@@ -35,9 +38,13 @@ enum CacheState {
 /// Telemetry snapshot for Cache: counters, gauges, and percentile latencies. Cloned and serialized on every metrics export.
 #[derive(Debug, Default, Clone)]
 pub struct CacheStats {
+    /// Cumulative cache hits.
     pub hits: u64,
+    /// Cumulative cache misses.
     pub misses: u64,
+    /// Cumulative invalidations.
     pub invalidations: u64,
+    /// Cumulative successful updates (put-on-existing or new entries).
     pub updates: u64,
 }
 

@@ -61,9 +61,12 @@ impl Role {
 }
 
 #[derive(Debug)]
-/// `RbacMiddleware`. See the type definition for fields and behavior.
+/// RBAC middleware. Holds the default role for unauthenticated requests and the
+/// (role → permitted actions) table consulted by [`Self::check_permission`].
 pub struct RbacMiddleware {
+    /// Role assigned to requests without an `X-User-Role` header.
     default_role: Role,
+    /// Static (role → permitted actions) policy table.
     role_permissions: Arc<Vec<(Role, Vec<&'static str>)>>,
 }
 
