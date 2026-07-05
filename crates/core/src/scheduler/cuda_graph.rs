@@ -68,9 +68,9 @@ impl GraphPreparedBatch {
 /// Configuration for CUDA Graph in scheduler
 #[derive(Clone, Debug)]
 pub struct SchedulerCudaGraphConfig {
-    /// Enable CUDA Graph for decode
+    /// Enable CUDA Graph capture/replay for decode batches.
     pub enabled: bool,
-    /// Batch sizes to capture (must match `CudaGraphExecutor`)
+    /// Batch sizes to pre-capture (must match `CudaGraphExecutor`).
     pub batch_sizes: Vec<usize>,
 }
 
