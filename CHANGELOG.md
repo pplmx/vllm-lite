@@ -13,7 +13,7 @@
 
 |     版本     |    日期    |          测试          | 覆盖率 (raw / real) |
 | :----------: | :--------: | :--------------------: | :-----------------: |
-| [Unreleased] |     -      |         1191+          | 55.0% / 49.9% (Phase N baseline, `--real` excludes test/hidden/derive) |
+| [Unreleased] |     -      | 1230+ (post-comprehensive-refactor) | 55.0% / 49.9% (Phase N baseline, `--real` excludes test/hidden/derive) |
 |   [v22.0]    | 2026-06-27 |         1179+          | ~50% real (97.8% figure was placeholder-based) |
 |   [v21.0]    | 2026-06-27 |         1146+          | ~50% real |
 |   [v20.0]    | 2026-06-27 |         1144+          | ~50% real |
@@ -329,6 +329,119 @@
     - Pedantic warning count: 1496 → 1210 (-19% for this phase; the remaining top lints are `must_use_candidate`, `module_name_repetitions`, `cast_*`, `unreadable_literal`, `significant_drop_tightening` which are deferred to later sub-phases)
     - All 1191 tests pass (`just nextest` clean)
     - `just clippy`, `just fmt-check`, and `just doc-check` all pass
+
+- **Comprehensive Refactor (Phase 1 + Phase 2)** — production-grade hardening
+  across CI, error handling, observability, and the public API surface.
+  Follows the four parallel audits (architecture, error handling, testing,
+  CI/CD) that ran in this session. 7 atomic commits, 1230+ tests passing.
+
+  **Phase 1: Infrastructure (CI/CD + Engineering Practices)**
+    - **CI audit hardening** (audit findings C1, H6):
+      - Removed `|| true` from `cargo audit`; high/critical RUSTSEC
+        advisories now block PRs. RUSTSEC-2024-0436 (paste) is allow-listed
+        via `--ignore` with documented rationale in SECURITY.md.
+      - Swatinem/rust-cache@v2 replaces hand-rolled `actions/cache` (better
+        hit rates, profile/target-aware).
+      - Pinned dtolnay/rust-toolchain to `@stable` (was `@master`).
+    - **New CI workflows**:
+      - `msrv.yml` — Rust 1.88 MSRV compile check with drift guard
+        (fails if `[workspace.package].rust-version` and the matrix disagree).
+      - `deny.yml` — cargo-deny license/bans/advisories gate.
+      - `release.yml` — tag-triggered multi-OS build + GitHub Release with
+        auto-generated git-cliff notes.
+    - **`deny.toml`** — project-wide dependency policy: MIT-compatible
+      license allowlist, duplicate-version bans, non-crates.io source bans,
+      RUSTSEC allow-list with rationale comments.
+    - **GitHub project hygiene**:
+      - `.github/CODEOWNERS` (per-crate ownership, sensitive paths protected).
+      - `.github/PULL_REQUEST_TEMPLATE.md` (checklist including "no panic",
+        "no Box<dyn Error>", etc.).
+      - `.github/ISSUE_TEMPLATE/{bug_report,feature_request}.yml`.
+    - **Pre-commit** — Rust toolchain hooks added:
+      - `cargo fmt --check` on pre-commit.
+      - Tiered `cargo clippy` + `cargo audit` on pre-push.
+      - `check-added-large-files` (512KB cap), `check-case-conflict`.
+    - **`justfile`**:
+      - `quick` is now **read-only** (was running `cargo fix` and modifying
+        source). New `autofix` target for the mutating variant.
+      - New `deny`, `deny-advisories`, `security`, `doctest`, `ci-all` targets.
+    - **`CONTRIBUTING.md`** — synced to reality: Rust 1.75 → 1.88 (MSRV),
+      nextest as canonical test runner, tiered clippy denies matching CI,
+      documents the "no Box<dyn Error>", "no unwrap in non-test code"
+      contracts, project structure now lists all 6 crates.
+    - **`docs/cliff.toml`** — conventional-commits → CHANGELOG generator
+      used by `release.yml`.
+
+  **Phase 2: Security + Error Handling**
+    - **`main.rs` → `anyhow::Result`** (audit C4):
+      - All startup panics replaced with structured `?` propagation +
+        `anyhow::Context` (loader build, model load, draft model load,
+        server bind, serve).
+      - Distinct exit code 78 (EX_CONFIG) for config validation failures,
+        distinguishable from transient infra failures in supervisor
+        restart policies.
+      - Extracted helpers: `build_engine`, `configure_speculative`,
+        `load_tokenizer`. `main()` is now a linear sequence of focused
+        calls.
+    - **OpenAI error contract hardening** (audit H3, H4, C1):
+      - New `ErrorResponse::with_code(message, error_type, code)`
+        constructor — OpenAI-spec `code` slot for stable identifiers
+        (e.g. `engine_unavailable`, `context_length_exceeded`).
+      - All OpenAI handlers (chat, completions, embeddings) upgraded:
+        engine-channel-closed failures now return `503 SERVICE_UNAVAILABLE`
+        + `code = "engine_unavailable"` (was `500 INTERNAL_SERVER_ERROR`
+        with no code). Distinguishes transient + retryable failures from
+        real server-side bugs.
+      - `embeddings.rs`: replaced `let _ = state.engine_tx.send(...)`
+        (which silently dropped `SendError`) with `.map_err()`.
+      - Doc-comments updated; tests locked the contract.
+    - **`vllm_server::util::time`** — new module:
+      - `unix_now_secs()` and `unix_now_millis()` panic-free accessors
+        that saturate instead of panicking on NTP-induced clock skew
+        across `UNIX_EPOCH`. Replaces 5 `.expect("Failed to get system
+        time")` sites in `types.rs`, `batch/types.rs`, `batch/handler.rs`.
+      - 2 unit tests (post-2024 sanity + secs/millis consistency).
+    - **Typed `DraftRegistryError` variants** (audit C2, M1):
+      - Added typed `IoLoad { draft_id, path, source: io::Error }` and
+        `Model(DraftId, vllm_traits::ModelError)` variants.
+      - `From<std::io::Error>` and `From<vllm_traits::ModelError>` for
+        `?` ergonomics.
+      - Legacy `LoadFailed(String)` and `LoadFailedWithSource { ...,
+        source: Box<dyn Error> }` variants marked
+        `#[deprecated(since = "0.1.0", note = "Use IoLoad or Model
+        instead")]`. Eliminates the `Box<dyn Error>` from the new-code
+        path of the public API.
+      - 3 call sites (NoopLoader, BenchLoader, StubLoader) migrated
+        or annotated with `#[allow(deprecated)]`.
+    - **Workspace dependency unification** (audit H5):
+      - 8 common deps (`candle-core`, `candle-nn`, `tracing`,
+        `tracing-subscriber`, `thiserror`, `parking_lot`, `async-trait`,
+        `crossbeam`) centralised in `[workspace.dependencies]`. All 6
+        crate Cargo.toml files migrated to `{ workspace = true }`.
+      - Bumping any of these is now a one-line workspace edit instead of
+        touching 4-6 Cargo.toml files.
+    - **Doctest CI phase** (audit C1):
+      - `cargo test --doc --workspace --all-features` added to both
+        `ci.yml` and `matrix-test` jobs. Closes the gap where broken
+        doc-example code was silently shipped (nextest only runs
+        `#[test]` functions).
+    - **OpenAI error contract test matrix** (audit C4):
+      - New `crates/server/tests/error_contract.rs` — 9 tests locking
+        the v0.1 server's wire-level error behavior across all 3 OpenAI
+        handlers + the `ErrorResponse` constructors. Future refactors
+        cannot accidentally downgrade the contract.
+
+  **What this enables (for follow-up phases)**
+    - `gqa.rs` (1036 lines) and `compose.rs` (872 lines) are now
+      mechanical splits — file-size rules (800-line soft cap) are
+      straightforward to enforce in CI without behavioral risk.
+    - `parking_lot::Mutex` global replacement is now a pure refactor:
+      all error semantics are already correct (typed `LockPoisoned`,
+      `?` propagation, no panic-prone `.expect("poisoned")` on
+      production paths).
+    - The `Model(DraftId, ModelError)` variant enables per-failure
+      recovery policies (retry vs fallback vs circuit-break) in
+      future drafts work.
 
 ---
 
