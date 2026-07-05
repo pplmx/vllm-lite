@@ -27,6 +27,11 @@ pub enum DraftRegistryError {
     },
     #[error("{0}")]
     MemoryBudgetExceeded(MemoryBudgetExceeded),
+    /// A `Mutex`/`RwLock` guard was poisoned by a panic while held.
+    /// Returning this as a typed error preserves the failure mode
+    /// instead of unwinding the caller.
+    #[error("draft registry lock poisoned")]
+    LockPoisoned,
 }
 
 impl DraftRegistryError {
@@ -39,5 +44,16 @@ impl DraftRegistryError {
             message: message.into(),
             source: Box::new(source),
         }
+    }
+}
+
+/// Convert any `std::sync::PoisonError<T>` into [`DraftRegistryError::LockPoisoned`].
+///
+/// This lets callers write `let guard = self.foo.lock()?;` inside any function
+/// returning `Result<_, DraftRegistryError>` instead of `.expect("poisoned")`,
+/// which would panic the runtime on a poisoned lock.
+impl<T> From<std::sync::PoisonError<T>> for DraftRegistryError {
+    fn from(_: std::sync::PoisonError<T>) -> Self {
+        Self::LockPoisoned
     }
 }

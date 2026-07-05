@@ -32,9 +32,7 @@ impl DraftModelRegistry {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let mut guard = self
             .drafts
-            .write()
-            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
-            .expect("DraftModelRegistry mutex poisoned");
+            .write()?;
         if guard.contains_key(&spec.id) {
             return Err(DraftRegistryError::AlreadyLoaded(spec.id));
         }
@@ -68,9 +66,7 @@ impl DraftModelRegistry {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let mut guard = self
             .drafts
-            .write()
-            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
-            .expect("DraftModelRegistry mutex poisoned");
+            .write()?;
         let result = {
             let entry = guard
                 .get_mut(id)
@@ -124,9 +120,7 @@ impl DraftModelRegistry {
             // invariant: lock is only held for synchronous field access; no panic possible while holding.
             let guard = self
                 .drafts
-                .read()
-                // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
-                .expect("DraftModelRegistry mutex poisoned");
+                .read()?;
             let result = match guard.get(id) {
                 None => return Err(DraftRegistryError::UnknownDraftId(id.clone())),
                 Some(DraftState::Loaded(_)) => {
@@ -147,9 +141,7 @@ impl DraftModelRegistry {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let mut guard = self
             .drafts
-            .write()
-            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
-            .expect("DraftModelRegistry mutex poisoned");
+            .write()?;
         let result = {
             let entry = guard
                 .get_mut(id)

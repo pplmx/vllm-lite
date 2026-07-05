@@ -39,9 +39,7 @@ impl DraftModelRegistry {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let mut guard = self
             .drafts
-            .write()
-            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
-            .expect("DraftModelRegistry mutex poisoned");
+            .write()?;
         let result = {
             let entry = guard
                 .get_mut(id)
@@ -81,9 +79,7 @@ impl DraftModelRegistry {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let mut guard = self
             .drafts
-            .write()
-            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
-            .expect("DraftModelRegistry mutex poisoned");
+            .write()?;
         let result = {
             let entry = guard
                 .get_mut(id)
@@ -126,9 +122,7 @@ impl DraftModelRegistry {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let mut guard = self
             .drafts
-            .write()
-            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
-            .expect("DraftModelRegistry mutex poisoned");
+            .write()?;
         let result = {
             let entry = guard
                 .get_mut(id)
@@ -160,9 +154,7 @@ impl DraftModelRegistry {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let mut guard = self
             .drafts
-            .write()
-            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
-            .expect("DraftModelRegistry mutex poisoned");
+            .write()?;
         let result = {
             let entry = guard
                 .get_mut(id)
@@ -201,9 +193,7 @@ impl DraftModelRegistry {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let guard = self
             .drafts
-            .read()
-            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
-            .expect("DraftModelRegistry mutex poisoned");
+            .read()?;
         let ref_count = guard
             .get(id)
             .ok_or_else(|| DraftRegistryError::UnknownDraftId(id.clone()))?
@@ -222,11 +212,8 @@ impl DraftModelRegistry {
     /// `DraftResolver` to hand the backend to the engine.
     pub fn get_loaded_backend(&self, id: &DraftId) -> Option<Arc<Mutex<Box<dyn ModelBackend>>>> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
-        let guard = self
-            .drafts
-            .read()
-            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
-            .expect("DraftModelRegistry mutex poisoned");
+        // Degrade to `None` on poison rather than panic; invariant makes this unreachable.
+        let guard = self.drafts.read().ok()?;
         let result = match guard.get(id) {
             Some(DraftState::Loaded(loaded)) => Some(loaded.backend.clone()),
             _ => None,
@@ -244,11 +231,8 @@ impl DraftModelRegistry {
     /// Returns `None` if no entry with `id` is registered.
     pub fn lookup(&self, id: &DraftId) -> Option<DraftState> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
-        let guard = self
-            .drafts
-            .read()
-            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
-            .expect("DraftModelRegistry mutex poisoned");
+        // Degrade to `None` on poison rather than panic; invariant makes this unreachable.
+        let guard = self.drafts.read().ok()?;
         let result = guard.get(id).map(|s| match s {
             DraftState::Unloaded(s) => DraftState::Unloaded(s.clone()),
             DraftState::Loaded(l) => {
@@ -306,9 +290,7 @@ impl DraftModelRegistry {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let guard = self
             .drafts
-            .read()
-            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
-            .expect("DraftModelRegistry mutex poisoned");
+            .read()?;
         let bytes = match guard.get(id) {
             None => return Err(DraftRegistryError::UnknownDraftId(id.clone())),
             Some(DraftState::Unloaded(_)) => 0,
@@ -332,9 +314,7 @@ impl DraftModelRegistry {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let guard = self
             .drafts
-            .read()
-            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
-            .expect("DraftModelRegistry mutex poisoned");
+            .read()?;
         let bytes = match guard.get(id) {
             None => return Err(DraftRegistryError::UnknownDraftId(id.clone())),
             Some(DraftState::Unloaded(_)) => 0,
@@ -350,11 +330,11 @@ impl DraftModelRegistry {
     /// List all registered draft ids (sorted).
     pub fn ids(&self) -> Vec<DraftId> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
-        let guard = self
-            .drafts
-            .read()
-            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
-            .expect("DraftModelRegistry mutex poisoned");
+        // Degrade to empty vec on poison rather than panic; invariant makes this unreachable.
+        let guard = match self.drafts.read() {
+            Ok(g) => g,
+            Err(_) => return Vec::new(),
+        };
         let mut ids: Vec<DraftId> = guard.keys().cloned().collect();
         ids.sort();
         drop(guard);
