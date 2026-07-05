@@ -17,16 +17,23 @@ use super::leader_election::LeaderElection;
 /// Request payload for InFlight. Contains input data, configuration, and request-tracking metadata.
 #[derive(Debug, Clone)]
 pub struct InFlightRequest {
+    /// Sequence id of the tracked request.
     pub seq_id: SeqId,
+    /// Hash of the prompt prefix (used for de-dup during failover).
     pub prompt_hash: u64,
+    /// Instant when tracking started (basis for staleness check).
     pub created_at: std::time::Instant,
+    /// Originating node id; updated by `migrate_request` on failover.
     pub node_id: String,
 }
 
 /// High-availability failover coordinator. Detects leader liveness via heartbeats and triggers leader election when the miss-threshold is crossed.
 pub struct FailoverManager {
+    /// Shared leader-election state (term-based, Raft-inspired).
     leader_election: Arc<LeaderElection>,
+    /// Tracked in-flight requests keyed by sequence id.
     inflight_requests: Arc<RwLock<HashMap<SeqId, InFlightRequest>>>,
+    /// How old a request can get before it is reported as stale.
     request_timeout: std::time::Duration,
 }
 

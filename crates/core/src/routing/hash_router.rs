@@ -14,16 +14,21 @@ use tracing::debug;
 /// `NodeInfo`. See the type definition for fields and behavior.
 #[derive(Debug, Clone)]
 pub struct NodeInfo {
+    /// Stable identifier of the backend node.
     pub node_id: String,
+    /// Current load as reported by the node (interpretation is caller-defined; typically a 0.0–1.0 fraction).
     pub load: f64,
+    /// Whether this node already has a cached prefix for the routing key.
     pub has_cache: bool,
 }
 
 /// Consistent-hash request router. Maps request keys to replicas using a hash ring; supports virtual nodes for smoother load distribution.
 pub struct HashRouter {
+    /// Pool of backend nodes available for routing.
     nodes: Arc<RwLock<Vec<NodeInfo>>>,
     #[allow(dead_code)]
     // audited 2026-06-26 (Wave 1): consistent-hashing virtual-nodes placeholder; current route() uses nodes.len() modulo
+    /// Virtual-node multiplier (currently unused; reserved for hash-ring implementation).
     virtual_nodes: usize,
 }
 
