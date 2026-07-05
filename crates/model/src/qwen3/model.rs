@@ -1,3 +1,7 @@
+//! Qwen3 model architecture: registry `Architecture` trait impl that wires the right attention block (GQA / MLA) + Qwen3-specific config.
+//!
+//! Selected when `config.json` reports
+//! `"architectures": ["Qwen3ForCausalLM"]`.
 #![allow(clippy::module_name_repetitions)]
 use crate::causal_lm::CausalLm;
 use crate::components::LnLayerNorm;

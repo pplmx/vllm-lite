@@ -1,3 +1,7 @@
+//! FlashAttention namespace: facade re-exporting the `config` (variant + tile-size helpers), `kernel` (impls), and `util` (softmax + math helpers).
+//!
+//! Selected by the architecture's `model.json` field; the `forward`
+//! function in `kernel.rs` dispatches to the right impl.
 #![allow(clippy::module_name_repetitions)]
 // crates/model/src/kernels/flash_attention/mod.rs
 //
