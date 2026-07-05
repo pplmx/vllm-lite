@@ -24,8 +24,11 @@ pub enum CircuitState {
 /// Circuit breaker configuration
 #[derive(Debug, Clone)]
 pub struct CircuitBreakerConfig {
+    /// Consecutive failures that flip the breaker from `Closed` to `Open`.
     pub failure_threshold: usize,
+    /// Time the breaker stays `Open` before allowing a `HalfOpen` probe.
     pub recovery_timeout: Duration,
+    /// Maximum concurrent probe calls permitted in `HalfOpen`.
     pub half_open_max_calls: usize,
 }
 
@@ -90,10 +93,15 @@ pub enum CircuitBreakerError {
 /// Circuit breaker implementation
 #[derive(Clone)]
 pub struct CircuitBreaker {
+    /// Configuration shared with the metrics layer.
     config: CircuitBreakerConfig,
+    /// Current breaker state (Closed / Open / HalfOpen).
     state: Arc<RwLock<CircuitState>>,
+    /// Consecutive-failure counter since the last `Closed` reset.
     failure_count: Arc<AtomicU64>,
+    /// Time of the most recent failure (basis for `recovery_timeout`).
     last_failure_time: Arc<RwLock<Option<Instant>>>,
+    /// Number of probes currently admitted in `HalfOpen`.
     half_open_calls: Arc<AtomicU64>,
 }
 
