@@ -1,3 +1,7 @@
+//! Cross-cutting configuration types for the dist crate: `TensorParallelConfig` (degree, mesh layout, backend selection).
+//!
+//! Loaded from TOML or constructed via the builder; consumed by every
+//! sub-subsystem (`tensor_parallel::`, `pipeline::`, `distributed_kv::`).
 use candle_core::Device;
 
 /// Configuration for TensorParallel. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.

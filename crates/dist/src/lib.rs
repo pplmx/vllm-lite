@@ -1,3 +1,8 @@
+//! `vllm-dist` — multi-node inference primitives: gRPC transport, tensor-parallel (NCCL/Gloo), pipeline-parallel stages, and distributed KV-cache sync.
+//!
+//! Feature-gated behind `--features multi-node`. Each submodule exposes
+//! a focused subsystem; the most-used types are re-exported here for
+//! ergonomic `use vllm_dist::*` at the crate root.
 pub mod distributed_kv;
 pub mod error;
 pub mod grpc;
