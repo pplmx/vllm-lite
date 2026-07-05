@@ -48,16 +48,9 @@ pub async fn create_batch(
             )),
         )
     })?;
-    // invariant: SystemTime::now() is always >= UNIX_EPOCH on any platform with a working clock;
-    // duration_since cannot underflow.
-    let now = i64::try_from(
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            // invariant: pre-conditions make this infallible at this call site.
-            .unwrap()
-            .as_secs(),
-    )
-    .unwrap_or(i64::MAX);
+    // Use the panic-free helper (see `crate::util::time::unix_now_secs`):
+    // saturates to 0 on pre-1970 clocks, i64::MAX on overflow.
+    let now = crate::util::time::unix_now_secs();
 
     Ok(Json(BatchResponse {
         id: job.id,
@@ -159,16 +152,8 @@ pub async fn get_batch_results(
 /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
 pub async fn list_batches(State(state): State<ApiState>) -> Json<Vec<BatchResponse>> {
     let jobs = state.batch_manager.get_all_jobs().await;
-    // invariant: SystemTime::now() is always >= UNIX_EPOCH on any platform with a working clock;
-    // duration_since cannot underflow.
-    let now = i64::try_from(
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            // invariant: pre-conditions make this infallible at this call site.
-            .unwrap()
-            .as_secs(),
-    )
-    .unwrap_or(i64::MAX);
+    // See `crate::util::time::unix_now_secs` for the panic-free contract.
+    let now = crate::util::time::unix_now_secs();
 
     let responses: Vec<BatchResponse> = jobs
         .into_iter()
