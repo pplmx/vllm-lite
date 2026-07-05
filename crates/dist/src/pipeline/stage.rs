@@ -9,11 +9,17 @@ use std::sync::Arc;
 /// Configuration for PipelineStage. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub struct PipelineStageConfig {
+    /// Zero-based index of this stage within the pipeline.
     pub stage_id: usize,
+    /// Total number of stages in the pipeline.
     pub num_stages: usize,
+    /// Total model depth (sum of layers across all stages).
     pub num_layers: usize,
+    /// First layer index hosted by this stage (inclusive).
     pub layer_start: usize,
+    /// Last layer index hosted by this stage (exclusive).
     pub layer_end: usize,
+    /// Device on which this stage's weights live.
     pub device: Device,
 }
 
@@ -53,19 +59,28 @@ impl PipelineStageConfig {
 /// Input to one pipeline stage: a tensor plus its microbatch id. Stages produce [`StageOutput`].
 #[derive(Debug, Clone)]
 pub struct StageInput {
+    /// Hidden-state activations arriving from the previous stage (or the embedding lookup for stage 0).
     pub hidden_states: Tensor,
+    /// Position ids (for RoPE) corresponding to each token in `hidden_states`.
     pub position_ids: Tensor,
+    /// Absolute sequence positions (used for KV-block index translation).
     pub positions: Vec<usize>,
+    /// Per-sequence KV-cache block ids already allocated for the inputs.
     pub kv_block_ids: Vec<Vec<usize>>,
 }
 
 /// Output from one pipeline stage: a tensor plus its microbatch id. Forwarded to the next stage or collected as the final result.
 #[derive(Debug, Clone)]
 pub struct StageOutput {
+    /// Hidden-state activations produced by this stage.
     pub hidden_states: Tensor,
+    /// Updated position ids passed to the next stage.
     pub position_ids: Tensor,
+    /// Updated absolute sequence positions after this stage's tokens.
     pub next_positions: Vec<usize>,
+    /// KV-cache block ids allocated by this stage.
     pub kv_block_ids: Vec<Vec<usize>>,
+    /// `true` if this stage is producing new tokens (vs. running prefill).
     pub is_generating: bool,
 }
 

@@ -9,13 +9,21 @@ use std::sync::Arc;
 /// Speculative-decoding configuration: number of draft tokens, acceptance threshold, max draft size, draft-model name. Built via [`SpeculationConfig::builder`].
 #[derive(Clone, Debug)]
 pub struct SpeculationConfig {
+    /// Draft tokens produced per speculative step.
     pub draft_count: usize,
+    /// Maximum tree depth (number of draft rounds) before forcing verification.
     pub max_depth: usize,
+    /// Sampling temperature for the draft model.
     pub temperature: f32,
+    /// Top-k sampling cutoff for the draft model (`0` = disabled).
     pub top_k: usize,
+    /// Top-p (nucleus) sampling cutoff for the draft model.
     pub top_p: f32,
+    /// Identifier of the target model that verifies the draft tokens.
     pub target_model: Arc<String>,
+    /// Layer count for the draft model (`None` = use the registry default).
     pub draft_layers: Option<usize>,
+    /// Whether to use self-speculation (target-model also acts as the drafter).
     pub self_speculation: bool,
 }
 
