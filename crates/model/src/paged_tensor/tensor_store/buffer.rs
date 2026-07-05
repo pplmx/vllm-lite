@@ -1,3 +1,9 @@
+//! PagedKV buffer operations: `write_kv`, `write_kv_batch`, `read_kv`, and the layer-aware batched variants.
+//!
+//! These are the only entry points attention layers should call to
+//! mutate or read the KV cache. Block-level accounting is handled by
+//! the pool (`pool.rs`); this file is pure read/write logic.
+
 // crates/model/src/paged_tensor/tensor_store/buffer.rs
 //
 // PagedKvCache write/read operations on the K/V buffer:

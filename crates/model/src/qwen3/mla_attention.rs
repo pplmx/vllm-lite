@@ -1,3 +1,7 @@
+//! Qwen3 MLA attention wrapper: combines the latent KV projection with QK-norm for the MLA variant of Qwen3.
+//!
+//! Forwards to `components::MlaAttention`; selected automatically when
+//! `config.json` indicates latent attention (Qwen3-Next / DeepSeek-style).
 #![allow(clippy::module_name_repetitions)]
 use crate::components::AttentionConfig;
 use crate::components::MlaAttention;

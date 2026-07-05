@@ -1,3 +1,7 @@
+//! Gemma4 MLP variant: gated GeLU with learned gate bias, used in the Gemma 4 architecture.
+//!
+//! Same external signature as [`SwiGLU`](crate::components::mlp::SwiGLU) but
+//! uses GeLU activation and an additive bias on the gate projection.
 use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;
 
