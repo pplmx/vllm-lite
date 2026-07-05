@@ -50,9 +50,13 @@ impl From<String> for DraftId {
 /// is called.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DraftSpec {
+    /// User-supplied identifier (`"qwen-small"`, `"llama-tiny"`, ...).
     pub id: DraftId,
+    /// Path to the checkpoint directory on disk.
     pub model_dir: PathBuf,
+    /// Optional architecture hint to disambiguate the loader.
     pub arch_hint: Option<String>,
+    /// Number of KV-cache blocks to allocate when this draft is loaded.
     pub kv_blocks: usize,
     /// Conservative estimate of the draft's parameter footprint, in bytes.
     ///
@@ -61,6 +65,7 @@ pub struct DraftSpec {
     /// to decide whether loading this draft would exceed VRAM. Set conservatively —
     /// over-estimate is safe, under-estimate can cause runtime OOM.
     pub weight_size_estimate_bytes: u64,
+    /// Initial reference count (requests expected to use this draft concurrently).
     pub ref_count: usize,
 }
 

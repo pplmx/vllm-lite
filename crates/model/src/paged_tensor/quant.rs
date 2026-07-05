@@ -57,8 +57,11 @@ impl QuantizationType {
 /// Configuration for Quantization. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub struct QuantizationConfig {
+    /// Which quantization scheme to apply (see [`QuantizationType`]).
     pub quant_type: QuantizationType,
+    /// Group size for grouped quantization (AWQ/GPTQ); `None` = per-tensor.
     pub group_size: Option<usize>,
+    /// Bits per quantized element (mirrors `quant_type` but accepts custom values for experiments).
     pub bits: usize,
 }
 
