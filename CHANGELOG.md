@@ -13,7 +13,7 @@
 
 |     版本     |    日期    |          测试          | 覆盖率 (raw / real) |
 | :----------: | :--------: | :--------------------: | :-----------------: |
-| [Unreleased] |     -      | 1230+ (post-comprehensive-refactor) | 55.0% / 49.9% (Phase N baseline, `--real` excludes test/hidden/derive) |
+| [Unreleased] |     -      | 1235 (post-Phase-5 module-splitting) | 55.0% / 49.9% (Phase N baseline, `--real` excludes test/hidden/derive) |
 |   [v22.0]    | 2026-06-27 |         1179+          | ~50% real (97.8% figure was placeholder-based) |
 |   [v21.0]    | 2026-06-27 |         1146+          | ~50% real |
 |   [v20.0]    | 2026-06-27 |         1144+          | ~50% real |
@@ -442,6 +442,53 @@
     - The `Model(DraftId, ModelError)` variant enables per-failure
       recovery policies (retry vs fallback vs circuit-break) in
       future drafts work.
+
+---
+
+- **Comprehensive Refactor (Phase 5)** — module-splitting pass to bring
+  every Rust file under the project's 800-line soft cap. Pure file-size
+  refactors (zero behavioral change), all 1235 tests pass after each
+  commit. 7 atomic commits, 10 large files slimmed down.
+
+  Per-file line counts (before → after):
+    | File | Before | After | Pattern |
+    |------|-------:|------:|---------|
+    | `model/src/kernels/flash_attention/kernel.rs` | 869 | 126 | split into `kernel/` with `flash_attention_v2.rs`, `scaled_dot_product.rs`, `tests.rs` |
+    | `core/src/speculative/adaptive.rs` | 711 | 233 | extract 22 inline tests → `adaptive/tests.rs` |
+    | `model/src/components/attention/mla.rs` | 724 | 301 | extract 15 inline tests → `mla/tests.rs` |
+    | `model/src/components/attention/flash_attention_v3.rs` | 694 | 329 | extract 9 inline tests → `flash_attention_v3/tests.rs` |
+    | `model/src/qwen3/block.rs` | 613 | 376 | extract 9 inline tests → `block/tests.rs` |
+    | `model/src/qwen3/config/model.rs` | 556 | 381 | extract 9 inline tests → `model/tests.rs` |
+    | `model/src/paged_tensor/tensor_store/buffer.rs` | 799 | 317 | extract 24 inline tests → `buffer/tests.rs` |
+    | `core/src/scheduler/batch_composer/compose.rs` | 872 | 373 | (prior session) split into `compose/` with `tests.rs`, `prop_tests.rs` |
+    | `model/src/components/attention/gqa.rs` | 1036 | 472 | (prior session) extract 17 tests → `gqa/tests.rs` |
+
+  Pattern: each large file now declares `mod tests;` to point at a sibling
+  `tests.rs` file, keeping the implementation focused and the 800-line cap
+  enforceable. The kernel.rs split is a multi-way split (impl + tests) —
+  `FlashAttention` trait + `FlashAttentionKernel` facade stay in
+  `kernel.rs`, the `FlashAttentionV2` and `ScaledDotProductAttention`
+  impls move to their own files. Follows the existing `compose.rs` +
+  `compose/` sub-module pattern.
+
+  Additional cleanup folded into this phase:
+    - **Typed `DraftRegistryError` migration completion** (closes out the
+      C2 audit): the 5 remaining call sites using the deprecated
+      `LoadFailed(String)` variant (`NoopLoader`, `StubLoader` in
+      `core/src/speculative/draft_resolver.rs`, plus 3 test/bench
+      loaders) all migrated to the typed `Model(DraftId, ModelError)`
+      variant. Eliminates the last `#[allow(deprecated)]` surface in
+      the speculative decoding path; the legacy string variants are
+      still present but now have zero callers in the workspace.
+    - **Broken doc links fixed** (`crates/model/src/quantize/gguf.rs`,
+      `crates/server/src/cli/args.rs`): a stale link to
+      `crate::loader::format::load_checkpoint` (the symbol was renamed
+      to `Format::can_load`) and a redundant explicit link target —
+      both now pass `cargo doc --no-deps -D warnings`.
+
+  Test count: 1235 → 1235 (zero new tests, zero removed — these were
+  pure refactors). All Phase 5 commits verified by `just ci`
+  (fmt-check → clippy → doc-check → nextest).
 
 ---
 
