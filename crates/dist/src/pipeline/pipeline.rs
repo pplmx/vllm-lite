@@ -11,16 +11,22 @@ use std::sync::Arc;
 #[derive(Debug)]
 /// `PipelineParallel`. See the type definition for fields and behavior.
 pub struct PipelineParallel {
+    /// Ordered list of pipeline stages (one per model slice).
     stages: Vec<Arc<dyn PipelineStage>>,
+    /// Pipeline configuration.
     config: PipelineParallelConfig,
 }
 
 /// Configuration for PipelineParallel. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub struct PipelineParallelConfig {
+    /// Number of pipeline stages (= number of devices with model shards).
     pub num_stages: usize,
+    /// Number of micro-batches to split each input into.
     pub num_microbatches: usize,
+    /// Enable async prefetch between stages.
     pub enable_async: bool,
+    /// Number of micro-batches to prefetch ahead of the current step.
     pub prefetch_ahead: usize,
 }
 
