@@ -22,11 +22,17 @@ pub enum AttentionVariant {
 /// Configuration for FlashAttention. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Default)]
 pub struct FlashAttentionConfig {
+    /// Which attention implementation to dispatch to.
     pub variant: AttentionVariant,
+    /// Block size for the FlashAttention tiled loop.
     pub flash_block_size: usize,
+    /// Whether to apply sliding-window masking.
     pub use_sliding_window: bool,
+    /// Sliding-window size (tokens visible per query).
     pub sliding_window_size: usize,
+    /// Candidate tile sizes for non-flash attention variants.
     pub tile_sizes: Vec<usize>,
+    /// Whether to fuse softmax with the QK matmul.
     pub use_fused: bool,
 }
 
