@@ -3,9 +3,13 @@
 /// Configuration for SSM. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Clone, Debug)]
 pub struct SSMConfig {
+    /// Model hidden dimension (input/output of the SSM block).
     pub d_model: usize,
+    /// SSM state dimension (`N` in Mamba papers).
     pub d_state: usize,
+    /// Causal conv channel width.
     pub d_conv: usize,
+    /// Block expansion factor (`E`); inner dimension is `expand * d_model`.
     pub expand: usize,
 }
 
