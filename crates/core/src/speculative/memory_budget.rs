@@ -24,10 +24,15 @@ pub const DEFAULT_BLOCK_BYTES: u64 = BLOCK_BYTES as u64;
 /// `MemoryBudgetSnapshot`. See the type definition for fields and behavior.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MemoryBudgetSnapshot {
+    /// Total VRAM available to speculative decoding.
     pub total_bytes: u64,
+    /// Bytes permanently reserved by the target model + its KV cache.
     pub reserved_target_bytes: u64,
+    /// Bytes reserved by currently-loaded draft models.
     pub reserved_drafts_bytes: u64,
+    /// Bytes actually consumed by live draft tensors (subset of `reserved_drafts`).
     pub used_drafts_bytes: u64,
+    /// Remaining bytes that may still be reserved (`total - reserved_target - reserved_drafts`).
     pub available_bytes: u64,
 }
 
@@ -37,8 +42,11 @@ pub struct MemoryBudgetSnapshot {
 )]
 /// `MemoryBudgetExceeded`. See the type definition for fields and behavior.
 pub struct MemoryBudgetExceeded {
+    /// Bytes the failing reservation attempted to claim.
     pub requested_bytes: u64,
+    /// Bytes actually free at the time of the failure.
     pub available_bytes: u64,
+    /// Draft id whose load triggered the failure, if any.
     pub draft_id: Option<DraftId>,
 }
 
