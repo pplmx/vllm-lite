@@ -12,13 +12,21 @@ use tracing::{info, warn};
 /// One event in the Audit stream. Variants cover the full state-machine of the subsystem.
 #[derive(Debug, Clone, Serialize)]
 pub struct AuditEvent {
+    /// RFC-3339 timestamp when the event was recorded.
     pub timestamp: String,
+    /// Authenticated user id, if any (None for failed-auth events).
     pub user_id: Option<String>,
+    /// Action name (`"authenticate"`, `"rate_limit"`, `"admin_delete"`, ...).
     pub action: String,
+    /// Resource the action targeted (model id, route, etc).
     pub resource: String,
+    /// Outcome string (`"success"`, `"failure: <reason>"`, ...).
     pub result: String,
+    /// Correlation id from the inbound HTTP request.
     pub request_id: String,
+    /// Source IP if available.
     pub ip_address: Option<String>,
+    /// User-Agent header if available.
     pub user_agent: Option<String>,
 }
 
