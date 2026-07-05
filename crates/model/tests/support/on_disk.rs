@@ -54,9 +54,13 @@ impl DerefMut for CachedModel {
 /// Points at a HuggingFace-style model directory (`config.json` + weights).
 #[derive(Debug, Clone)]
 pub struct OnDiskFixture {
+    /// Env var that overrides the default checkpoint directory.
     env_var: &'static str,
+    /// Default checkpoint directory used when the env var is unset.
     default_dir: &'static str,
+    /// Compute device the model will be loaded onto.
     device: Device,
+    /// KV-cache block count handed to the loader.
     kv_blocks: usize,
 }
 
