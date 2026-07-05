@@ -20,8 +20,9 @@ pub enum TokenizerError {
 }
 
 #[derive(Debug)]
-/// Tokenizer wrapper around `HuggingFace` `tokenizers::Tokenizer` with
-/// helpers for prompt + chat-template encoding. Constructed via
+/// Tokenizer wrapper around `HuggingFace` `tokenizers::Tokenizer`.
+///
+/// Provides helpers for prompt + chat-template encoding. Constructed via
 /// `Tokenizer::from_file` or `Tokenizer::from_pretrained`; never
 /// instantiated directly because the inner HF tokenizer must be
 /// deserialized from a JSON file.

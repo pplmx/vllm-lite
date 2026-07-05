@@ -25,8 +25,10 @@ pub struct QuantizedTensor {
 }
 
 /// Quantize a flat `f32` slice into a [`QuantizedTensor`] using symmetric
-/// 8-bit scaling. The output `scale` is `max(|x|) / 127` (or `1.0` when all
-/// inputs are zero so we still produce a no-op dequantization).
+/// 8-bit scaling.
+///
+/// The output `scale` is `max(|x|) / 127` (or `1.0` when all inputs are
+/// zero so we still produce a no-op dequantization).
 pub fn quantize(data: &[f32]) -> QuantizedTensor {
     let max_val = data.iter().map(|v| v.abs()).fold(0.0f32, f32::max);
 

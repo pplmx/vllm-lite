@@ -331,9 +331,8 @@ impl DraftModelRegistry {
     pub fn ids(&self) -> Vec<DraftId> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         // Degrade to empty vec on poison rather than panic; invariant makes this unreachable.
-        let guard = match self.drafts.read() {
-            Ok(g) => g,
-            Err(_) => return Vec::new(),
+        let Ok(guard) = self.drafts.read() else {
+            return Vec::new();
         };
         let mut ids: Vec<DraftId> = guard.keys().cloned().collect();
         ids.sort();
