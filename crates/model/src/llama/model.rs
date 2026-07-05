@@ -1,3 +1,7 @@
+//! Llama architecture: 1:1 GQA + SwiGLU + RoPE transformer block, with the `Llama` `Architecture` trait impl.
+//!
+//! Concrete model wrapper exposed to the registry; selected when
+//! `config.json` reports `"architectures": ["LlamaForCausalLM"]`.
 #![allow(clippy::module_name_repetitions)]
 use crate::causal_lm::CausalLm;
 use crate::components::RmsNorm;

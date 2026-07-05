@@ -1,3 +1,7 @@
+//! Mistral architecture: Llama with sliding-window attention + optional GQA.
+//!
+//! `Architecture` trait impl selected when
+//! `config.json` reports `"architectures": ["MistralForCausalLM"]`.
 #![allow(clippy::module_name_repetitions)]
 use crate::causal_lm::CausalLm;
 use crate::components::LnLayerNorm;
