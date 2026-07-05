@@ -1,3 +1,10 @@
+//! FlashAttention kernel implementations: CPU reference (tiled attention), GPU FlashV2 (tiling + online softmax), and GPU FlashV3 (warp-specialised with FP8).
+//!
+//! Selected by `FlashAttentionConfig::variant`; the dispatch logic lives
+//! in the `forward` function which routes by head_dim + seq_len + device.
+//! CPU fallback is always available for tests; GPU paths require the
+//! `cuda` feature.
+
 // crates/model/src/kernels/flash_attention/kernel.rs
 //
 // Flash attention kernel implementations:

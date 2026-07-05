@@ -1,3 +1,8 @@
+//! Causal language model wrapper: ties embeddings → transformer layers → logits + sampler into the `ModelBackend` interface.
+//!
+//! The model itself is a thin facade; the per-architecture work lives
+//! in `llama/`, `qwen3/`, `qwen3_5/`, etc. `forward` dispatches to the
+//! architecture-specific forward impl selected by the registry.
 use std::collections::HashMap;
 
 use super::{

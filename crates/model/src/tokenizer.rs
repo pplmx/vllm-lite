@@ -1,3 +1,9 @@
+//! Tokenizer wrapper around `tokenizers` (HuggingFace) + chat-template rendering.
+//!
+//! `Tokenizer` is constructed from the `tokenizer.json` + `tokenizer_config.json`
+//! shipped alongside the model weights. Chat templates are loaded from
+//! `chat_template.jinja` if present; otherwise we fall back to the
+//! built-in Qwen / Llama / Mistral templates.
 #![allow(clippy::module_name_repetitions)]
 use std::fmt::Write;
 use tokenizers::Tokenizer as HFTokenizer;

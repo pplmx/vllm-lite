@@ -1,3 +1,7 @@
+//! Storage backend enum for the paged KV-cache: `Quantized(QuantizedTensor)` for memory-tight packed formats, `Fp16(Tensor)` for balanced, `Fp32(Tensor)` for highest precision.
+//!
+//! `StorageTensor` is the runtime abstraction; the on-disk `QuantizationFormat`
+//! enum lives in `mod.rs` and only describes what's in the checkpoint file.
 use candle_core::{DType, Result, Tensor};
 
 /// `StorageTensor`. See the type definition for fields and behavior.

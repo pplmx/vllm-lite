@@ -1,3 +1,8 @@
+//! PagedKV cache layout helpers: block-hash computation (xxHash of token prefix + parent hash) and the lookup table used during prefix-cache hits.
+//!
+//! Hash stability across re-starts is what makes prefix caching
+//! survive process restarts; the implementation lives here.
+
 // crates/model/src/paged_tensor/tensor_store/layout.rs
 //
 // PagedKvCache layout helpers: hash computation, block-hash lookup,
