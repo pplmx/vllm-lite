@@ -52,15 +52,23 @@ pub enum JwtError {
 /// algorithm and audience before granting access.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
+    /// Subject — typically the user / service-account id.
     pub sub: String,
+    /// Issuer — must match `JwtConfig::issuer`.
     pub iss: String,
+    /// Audience — must match `JwtConfig::audience`.
     pub aud: String,
+    /// Expiry as a UNIX timestamp (seconds).
     pub exp: u64,
+    /// Issued-at as a UNIX timestamp (seconds).
     pub iat: u64,
+    /// Optional role list; consumed by authorization checks downstream.
     #[serde(default)]
     pub roles: Vec<String>,
+    /// Optional OAuth-style space-separated scope string.
     #[serde(default)]
     pub scope: Option<String>,
+    /// Catch-all bucket for application-specific claims (tenant id, etc.).
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>,
 }
@@ -68,10 +76,15 @@ pub struct Claims {
 /// Configuration for Jwt. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub struct JwtConfig {
+    /// HMAC shared secret; required for HS256.
     pub secret: Option<String>,
+    /// PEM-encoded public key for RS256/RS384/RS512/ES256/ES384.
     pub public_key_pem: Option<String>,
+    /// Expected issuer claim (`iss`); tokens with a different `iss` are rejected.
     pub issuer: String,
+    /// Expected audience claim (`aud`); tokens with a different `aud` are rejected.
     pub audience: String,
+    /// Whether to enforce the `exp` claim and reject expired tokens.
     pub validate_exp: bool,
 }
 
