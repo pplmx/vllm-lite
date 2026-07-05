@@ -16,7 +16,7 @@
 //!
 //! # When to use `i64` vs `u64`
 //!
-//! OpenAI wire format requires `i64` (it serialises as a signed integer).
+//! `OpenAI` wire format requires `i64` (it serialises as a signed integer).
 //! Internal metrics may prefer `u64` (cheaper, no sign bit). Pick the variant
 //! that matches the wire format of the receiving system.
 
@@ -26,7 +26,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// saturated to `0` if the system clock is set before `UNIX_EPOCH`.
 ///
 /// Returns `i64::MAX` if the value overflows (year ~292 billion AD). This
-/// matches the OpenAI wire-format expectation.
+/// matches the `OpenAI` wire-format expectation.
 #[must_use]
 pub fn unix_now_secs() -> i64 {
     SystemTime::now()
@@ -54,7 +54,10 @@ mod tests {
         // We just need a sanity check that we're not getting 1970.
         // 2024-01-01 UTC = 1_704_067_200.
         let now = unix_now_secs();
-        assert!(now > 1_704_067_200, "expected post-2024 timestamp, got {now}");
+        assert!(
+            now > 1_704_067_200,
+            "expected post-2024 timestamp, got {now}"
+        );
     }
 
     #[test]

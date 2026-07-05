@@ -207,9 +207,7 @@ fn configure_speculative(app_config: &AppConfig, engine: &mut Engine) {
 fn load_tokenizer(model_dir: &std::path::Path) -> Arc<Tokenizer> {
     let tokenizer_path = model_dir.join("tokenizer.json");
     if !tokenizer_path.exists() {
-        tracing::warn!(
-            "No tokenizer.json found in model directory, using default tokenizer"
-        );
+        tracing::warn!("No tokenizer.json found in model directory, using default tokenizer");
         return Arc::new(Tokenizer::new());
     }
     let Some(path_str) = tokenizer_path.to_str() else {
@@ -251,8 +249,8 @@ async fn main() -> Result<()> {
 
     tracing::info!("Starting vllm-lite");
 
-    let (mut engine, loader, device) = build_engine(&app_config, &cli)
-        .context("failed to construct inference engine")?;
+    let (mut engine, loader, device) =
+        build_engine(&app_config, &cli).context("failed to construct inference engine")?;
 
     // v18.0: wire a real DraftLoader so the resolver can actually load draft
     // weights from disk. The engine installs a NoopLoader by default in the
@@ -295,7 +293,7 @@ async fn main() -> Result<()> {
         engine.run(msg_rx);
     });
 
-    let tokenizer = load_tokenizer(&cli.model_path());
+    let tokenizer = load_tokenizer(cli.model_path());
     let batch_manager = Arc::new(BatchManager::new());
 
     let auth_middleware = if app_config.auth.api_keys.is_empty() {
