@@ -41,6 +41,25 @@ tokio-stream = "0.1"
 tower = "0.5"
 tower-http = { version = "0.7", features = ["cors", "trace"] }
 
+# Core ML stack — pinned to the same version across all crates so a bump is
+# a single workspace edit. `candle-core` itself stays optional in `vllm-traits`
+# (the candle feature gates it); other crates that always need it pull it
+# via { workspace = true }.
+candle-core = "0.11.0"
+candle-nn = "0.11.0"
+
+# Logging — used by every binary crate; consistent version simplifies
+# log-format aggregation in production deployments.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Parking lot — project's CLAUDE.md mandates `parking_lot::Mutex` over
+# `std::sync::Mutex` for all scheduler/engine paths (no poison checks,
+# 5-10× faster).
+parking_lot = "0.12"
+async-trait = "0.1"
+crossbeam = "0.8"
+
 # Profiling (dev-only; v27.0 H-7)
 # Note: pprof 0.15's `criterion` feature pins criterion 0.5, which conflicts
 # with our workspace's criterion 0.8. Use `cargo-flamegraph` for criterion

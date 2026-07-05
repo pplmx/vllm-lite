@@ -16,7 +16,8 @@ use vllm_core::types::EngineMessage;
 /// Returns `(StatusCode, ErrorResponse)` when:
 /// - `model` is empty (`BAD_REQUEST`)
 /// - `input` is empty (`BAD_REQUEST`)
-/// - the engine fails to respond (`INTERNAL_SERVER_ERROR`)
+/// - the engine channel is closed or fails to respond (`SERVICE_UNAVAILABLE`,
+///   code `engine_unavailable`)
 pub async fn embeddings(
     State(state): State<ApiState>,
     Json(req): Json<EmbeddingsRequest>,
@@ -48,17 +49,30 @@ pub async fn embeddings(
 
     let (response_tx, mut rx) = mpsc::unbounded_channel::<Vec<Vec<f32>>>();
 
-    let _ = state.engine_tx.send(EngineMessage::GetEmbeddings {
-        input_tokens,
-        response_tx,
-    });
+    state
+        .engine_tx
+        .send(EngineMessage::GetEmbeddings {
+            input_tokens,
+            response_tx,
+        })
+        .map_err(|_| {
+            (
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse::with_code(
+                    "Engine unavailable",
+                    "server_error",
+                    "engine_unavailable",
+                )),
+            )
+        })?;
 
     let embeddings = rx.recv().await.ok_or_else(|| {
         (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse::new(
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse::with_code(
                 "Failed to get embeddings from engine",
-                "internal_error",
+                "server_error",
+                "engine_unavailable",
             )),
         )
     })?;
@@ -114,7 +128,15 @@ mod tests {
 
         let result = embeddings(State(state), Json(req)).await;
         assert!(result.is_err());
-        let (status, _) = result.unwrap_err();
-        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        // The test fixture's `engine_tx` is a closed mpsc channel; the handler
+        // surfaces that as a 503 SERVICE_UNAVAILABLE with `code = "engine_unavailable"`
+        // so clients know the failure is transient and retryable.
+        let (status, body) = result.unwrap_err();
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            body.error.code.as_deref(),
+            Some("engine_unavailable"),
+            "error code must be machine-readable"
+        );
     }
 }

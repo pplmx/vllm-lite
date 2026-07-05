@@ -116,8 +116,12 @@ async fn handle_chat(
         })
         .map_err(|_| {
             (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse::new("Engine unavailable", "internal_error")),
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse::with_code(
+                    "Engine unavailable",
+                    "server_error",
+                    "engine_unavailable",
+                )),
             )
         })?;
 
@@ -174,7 +178,7 @@ async fn handle_chat(
 ///
 /// Returns a `(StatusCode, ErrorResponse)` pair when:
 ///   - request validation fails (`BAD_REQUEST`)
-///   - the engine channel is closed (`INTERNAL_SERVER_ERROR`)
+///   - the engine channel is closed (`SERVICE_UNAVAILABLE`, code `engine_unavailable`)
 ///   - token decoding or response serialization fails
 ///
 /// # Panics
@@ -227,8 +231,12 @@ pub async fn chat_completions(
             })
             .map_err(|_| {
                 (
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse::new("Engine unavailable", "internal_error")),
+                    axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                    Json(ErrorResponse::with_code(
+                        "Engine unavailable",
+                        "server_error",
+                        "engine_unavailable",
+                    )),
                 )
             })?;
 

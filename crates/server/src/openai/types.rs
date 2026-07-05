@@ -59,6 +59,23 @@ impl ErrorResponse {
             },
         }
     }
+
+    /// Construct an [`ErrorResponse`] with a machine-readable `code` field.
+    ///
+    /// OpenAI's error spec defines a `code` slot for stable identifiers such as
+    /// `"context_length_exceeded"` or `"model_not_found"`. Use this when you
+    /// know the specific failure category; clients can switch on `code` to
+    /// drive retry / fallback logic.
+    #[must_use]
+    pub fn with_code(message: &str, error_type: &str, code: &str) -> Self {
+        Self {
+            error: ErrorDetail {
+                message: message.to_string(),
+                error_type: error_type.to_string(),
+                code: Some(code.to_string()),
+            },
+        }
+    }
 }
 
 /// A message in a chat conversation.
