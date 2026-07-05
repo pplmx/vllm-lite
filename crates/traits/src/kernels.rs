@@ -8,9 +8,13 @@ use serde::{Deserialize, Serialize};
 /// Configuration for CudaGraph. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CudaGraphConfig {
+    /// Whether CUDA Graph capture/replay is enabled.
     pub enabled: bool,
+    /// Batch sizes to capture (one graph per size).
     pub batch_sizes: Vec<usize>,
+    /// Model-graph sub-config (seq len, KV blocks, etc.).
     pub model_config: ModelGraphConfig,
+    /// Enable memory-pool sharing across graphs (default true; None = use runtime default).
     pub enable_graph_pooling: Option<bool>,
 }
 
@@ -28,8 +32,11 @@ impl Default for CudaGraphConfig {
 /// Configuration for ModelGraph. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModelGraphConfig {
+    /// Maximum sequence length the captured graph supports.
     pub max_seq_len: usize,
+    /// KV-cache block count for the captured graph.
     pub num_kv_blocks: usize,
+    /// Whether attention is captured separately (memory savings vs. flexibility).
     pub capture_attention_separate: bool,
 }
 

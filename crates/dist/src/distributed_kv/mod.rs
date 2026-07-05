@@ -11,26 +11,37 @@ pub use protocol::{CacheMessage, CacheOperation, NodeId};
 /// Configuration for Cache. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone)]
 pub struct CacheConfig {
+    /// Identifier of the local node.
     pub node_id: NodeId,
+    /// Total number of nodes in the cluster.
     pub num_nodes: usize,
+    /// Number of peers each cache entry is replicated to.
     pub replication_factor: usize,
+    /// Invalidation strategy used when a write occurs.
     pub invalidation_strategy: InvalidationStrategy,
+    /// Cache-coherence protocol (None / MESI / Directory).
     pub coherence_protocol: CoherenceProtocol,
 }
 
 /// Strategy pattern implementation for Invalidation. Encapsulates one of N interchangeable algorithms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InvalidationStrategy {
+    /// Writer invalidates remote copies (pull-on-read).
     WriteInvalidate,
+    /// Writer pushes updated values to replicas (push-on-write).
     WriteUpdate,
+    /// Disable invalidation (single-writer local cache only).
     NoInvalidation,
 }
 
 /// `CoherenceProtocol`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoherenceProtocol {
+    /// No coherence — single-node mode.
     None,
+    /// MESI four-state protocol.
     MESI,
+    /// Directory-based coherence with a central directory node.
     Directory,
 }
 
