@@ -9,24 +9,43 @@ use crate::arch::ARCHITECTURE_REGISTRY;
 #[derive(Debug)]
 /// Configuration for Model. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 pub struct ModelConfig {
+    /// Resolved architecture (`Llama`, `Qwen3`, `Mamba`, etc.).
     pub architecture: Architecture,
+    /// Residual stream dimensionality.
     pub hidden_size: usize,
+    /// Number of stacked decoder layers.
     pub num_layers: usize,
+    /// Number of query attention heads per layer.
     pub num_heads: usize,
+    /// Number of key/value heads (GQA grouping).
     pub num_kv_heads: usize,
+    /// Per-head dimension; for most models `hidden_size / num_heads`.
     pub head_dim: usize,
+    /// Tokeniser vocabulary size.
     pub vocab_size: usize,
+    /// MLP hidden dimension (gate/up/down projections).
     pub intermediate_size: usize,
+    /// RoPE base wavelength.
     pub rope_theta: f32,
+    /// RMSNorm numerical-stability epsilon.
     pub rms_norm_eps: f64,
+    /// Sliding-window attention span (`None` = full causal).
     pub sliding_window: Option<usize>,
+    /// Whether the LM head shares weights with the embedding table.
     pub tie_word_embeddings: bool,
+    /// Maximum sequence length the model was trained on.
     pub max_position_embeddings: usize,
+    /// Per-layer type list (sliding vs. full attention, SSM, etc.).
     pub layer_types: Vec<LayerType>,
+    /// Per-layer RoPE overrides (NTK scaling, MRoPE axes, etc.).
     pub rope_configs: Vec<RoPEConfig>,
+    /// Use the "double-wide" MLP variant (Phi-3 style).
     pub use_double_wide_mlp: bool,
+    /// Number of experts for sparse MoE (`None` = dense model).
     pub num_experts: Option<usize>,
+    /// Top-k routing for sparse MoE (`None` = dense model).
     pub top_k_experts: Option<usize>,
+    /// Per-expert intermediate size for sparse MoE.
     pub expert_intermediate_size: Option<usize>,
     /// Qwen3-style Q/K `RMSNorm` before `RoPE` (default false for other architectures).
     pub has_qk_norm: bool,
