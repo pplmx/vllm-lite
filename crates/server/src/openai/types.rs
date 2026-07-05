@@ -8,8 +8,11 @@ use serde::{Deserialize, Serialize};
 /// Token usage statistics for API responses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Usage {
+    /// Tokens in the prompt.
     pub prompt_tokens: i64,
+    /// Tokens generated in the completion.
     pub completion_tokens: i64,
+    /// `prompt_tokens + completion_tokens` (caller may validate against this total).
     pub total_tokens: i64,
 }
 
@@ -29,15 +32,19 @@ impl Usage {
 /// Error details following `OpenAI` API error format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorDetail {
+    /// Human-readable error message.
     pub message: String,
+    /// Error category (`"invalid_request_error"`, `"server_error"`, etc.).
     #[serde(rename = "type")]
     pub error_type: String,
+    /// Optional machine-readable error code (e.g. `"context_length_exceeded"`).
     pub code: Option<String>,
 }
 
 /// Error response wrapper following `OpenAI` API format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorResponse {
+    /// The error detail payload.
     pub error: ErrorDetail,
 }
 
@@ -57,40 +64,60 @@ impl ErrorResponse {
 /// A message in a chat conversation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
+    /// `"system"`, `"user"`, `"assistant"`, or `"tool"`.
     pub role: String,
+    /// Message text content.
     pub content: String,
+    /// Optional author name (rare; supported for multi-user logs).
     pub name: Option<String>,
 }
 
 /// Request body for chat completions endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatRequest {
+    /// Model identifier (e.g. `"qwen3-4b"`).
     pub model: String,
+    /// Ordered conversation history.
     pub messages: Vec<ChatMessage>,
+    /// Sampling temperature (`0.0`–`2.0`); `None` = model default.
     pub temperature: Option<f32>,
+    /// Nucleus sampling cumulative probability cutoff.
     pub top_p: Option<f32>,
+    /// Maximum number of tokens to generate.
     pub max_tokens: Option<i64>,
+    /// When `true`, stream via server-sent events.
     pub stream: Option<bool>,
+    /// Number of independent completions to generate.
     pub n: Option<i64>,
+    /// Stop sequences; generation halts when any is emitted.
     pub stop: Option<Vec<String>>,
 }
 
 /// A choice in a chat completion response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChoice {
+    /// Choice index (0-based; matches `ChatRequest::n`).
     pub index: i32,
+    /// The generated assistant message.
     pub message: ChatMessage,
+    /// `"stop"`, `"length"`, or `"tool_calls"` (when the model invokes a tool).
     pub finish_reason: Option<String>,
 }
 
 /// Response from chat completions endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatResponse {
+    /// Unique completion identifier (`"chatcmpl-..."`).
     pub id: String,
+    /// Always `"chat.completion"` for non-streaming, `"chat.completion.chunk"` for streaming.
     pub object: String,
+    /// Unix timestamp at which the response was generated.
     pub created: i64,
+    /// Echo of the requested model id.
     pub model: String,
+    /// Generated completions (length matches `ChatRequest::n`).
     pub choices: Vec<ChatChoice>,
+    /// Token accounting for this response.
     pub usage: Usage,
 }
 
@@ -113,18 +140,26 @@ impl ChatResponse {
 /// `ChatChunkChoice`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChunkChoice {
+    /// Choice index (0-based; constant across stream chunks).
     pub index: i32,
+    /// Streaming delta — partial message, usually only `role` on first chunk and `content` on subsequent chunks.
     pub delta: ChatMessage,
+    /// Set on the final chunk; `None` on intermediate deltas.
     pub finish_reason: Option<String>,
 }
 
 /// `ChatChunk`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChunk {
+    /// Stream identifier (shared across all chunks in the same response).
     pub id: String,
+    /// Always `"chat.completion.chunk"` for streaming.
     pub object: String,
+    /// Unix timestamp at the start of the stream.
     pub created: i64,
+    /// Echo of the requested model id.
     pub model: String,
+    /// Streaming choices (typically one per request).
     pub choices: Vec<ChatChunkChoice>,
 }
 
@@ -146,31 +181,47 @@ impl ChatChunk {
 /// Request body for text completions endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompletionRequest {
+    /// Model id; optional for the legacy `/v1/completions` endpoint.
     pub model: Option<String>,
+    /// Raw prompt text (no chat-template applied).
     pub prompt: String,
+    /// Sampling temperature.
     pub temperature: Option<f32>,
+    /// Maximum generated tokens.
     pub max_tokens: Option<i64>,
+    /// Enable streaming response.
     pub stream: Option<bool>,
+    /// Number of independent completions.
     pub n: Option<i64>,
+    /// Stop sequences.
     pub stop: Option<Vec<String>>,
 }
 
 /// `CompletionChoice`. See the type definition for fields and behavior.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompletionChoice {
+    /// Generated continuation text.
     pub text: String,
+    /// Choice index (0-based).
     pub index: i32,
+    /// Termination reason.
     pub finish_reason: Option<String>,
 }
 
 /// Response from text completions endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompletionResponse {
+    /// Unique completion identifier (`"cmpl-..."`).
     pub id: String,
+    /// Always `"text_completion"`.
     pub object: String,
+    /// Unix timestamp at which the response was generated.
     pub created: i64,
+    /// Echo of the requested model id.
     pub model: String,
+    /// Generated completions.
     pub choices: Vec<CompletionChoice>,
+    /// Token accounting for this response.
     pub usage: Usage,
 }
 
@@ -193,15 +244,20 @@ impl CompletionResponse {
 /// Request body for embeddings endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingsRequest {
+    /// Model id of the embedding model.
     pub model: String,
+    /// Input texts to embed (batch endpoint accepts strings).
     pub input: Vec<String>,
 }
 
 /// Embedding: single embedding item in an embeddings response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Embedding {
+    /// Always `"embedding"`.
     pub object: String,
+    /// Dense vector representation.
     pub embedding: Vec<f32>,
+    /// Index of this embedding within the input batch.
     pub index: i32,
 }
 
@@ -212,9 +268,13 @@ pub type EmbeddingData = Embedding;
 /// Response from embeddings endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingsResponse {
+    /// Always `"list"`.
     pub object: String,
+    /// Embedding results (one per input string).
     pub data: Vec<Embedding>,
+    /// Echo of the requested model id.
     pub model: String,
+    /// Token accounting for this response.
     pub usage: Usage,
 }
 
