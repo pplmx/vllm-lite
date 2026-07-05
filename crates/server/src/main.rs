@@ -3,6 +3,7 @@
 //! Used by the `vllm-server` package; the library form is `vllm_server` for embedding tests + integration.
 mod debug;
 
+use anyhow::{Context, Result};
 use axum::{
     Router, extract::State, http::StatusCode, response::Response, routing::get, routing::post,
 };
@@ -29,7 +30,7 @@ use vllm_server::openai::chat::chat_completions;
 use vllm_server::openai::completions::completions as openai_completions;
 use vllm_server::openai::embeddings::embeddings;
 use vllm_server::openai::models::models_handler;
-use vllm_server::{ApiState, api, auth, cli, health::HealthChecker, logging};
+use vllm_server::{ApiState, api, auth, cli, config::AppConfig, health::HealthChecker, logging};
 
 /// Health check endpoint - liveness probe
 async fn health_handler(State(state): State<ApiState>) -> Response {
@@ -72,26 +73,17 @@ async fn metrics_handler(State(state): State<ApiState>) -> Response {
         .unwrap_or_else(|_| Response::new(axum::body::Body::empty()))
 }
 
-#[tokio::main]
-#[allow(clippy::too_many_lines)] // server bootstrap: linear startup sequence with no natural decomposition
-async fn main() {
-    let cli = cli::CliArgs::parse();
-    let app_config = cli.to_app_config();
-
-    if let Err(errors) = app_config.validate() {
-        for err in &errors.0 {
-            tracing::error!(error = %err, "Config validation failed");
-        }
-        std::process::exit(1);
-    }
-
-    let log_dir = app_config.server.log_dir.as_ref().map(PathBuf::from);
-    logging::init_logging(log_dir, &app_config.server.log_level);
-
-    tracing::info!("Starting vllm-lite");
-
+/// Build the loader, model, optional draft model, and engine from CLI + config.
+///
+/// Returns the constructed engine and the model loader (the latter is retained
+/// because the engine stores a reference to its architecture for routing).
+#[allow(clippy::too_many_lines)]
+fn build_engine(
+    app_config: &AppConfig,
+    cli: &cli::CliArgs,
+) -> Result<(Engine, ModelLoader, Device)> {
     let device = Device::cuda_if_available(0).unwrap_or(Device::Cpu);
-    tracing::info!(device = ?device, "Device initialized: {:?}", device);
+    tracing::info!(device = ?device, "Device initialized");
 
     let model_path = cli.model_path().display().to_string();
     tracing::debug!(model_path = %model_path, "Model path configured");
@@ -102,11 +94,11 @@ async fn main() {
         .with_kv_quantization(app_config.engine.kv_quantization)
         .with_allow_stub(cli.model.allow_stub)
         .build()
-        .unwrap_or_else(|e| panic!("Failed to create loader: {e}"));
+        .context("failed to create model loader")?;
 
     let model = loader
         .load_model()
-        .unwrap_or_else(|e| panic!("Failed to load model: {e}"));
+        .context("failed to load model weights")?;
 
     tracing::info!(
         model_path = %model_path,
@@ -114,14 +106,10 @@ async fn main() {
         "Model loaded"
     );
 
-    // Only load draft model if speculative decoding is enabled
+    // Only load draft model if speculative decoding is enabled.
     let draft_model = if app_config.engine.max_draft_tokens > 0 {
         tracing::info!("Loading draft model (speculative decoding enabled)");
-        Some(
-            loader
-                .load_model()
-                .unwrap_or_else(|e| panic!("Failed to load draft model: {e}")),
-        )
+        Some(loader.load_model().context("failed to load draft model")?)
     } else {
         tracing::info!("Skipping draft model (speculative decoding disabled)");
         None
@@ -147,14 +135,10 @@ async fn main() {
         })
         .collect();
 
-    let mut engine = if let Some(budget_bytes) = app_config.engine.vram_budget_bytes {
-        use std::sync::Arc;
+    let engine = if let Some(budget_bytes) = app_config.engine.vram_budget_bytes {
         let budget = Arc::new(
-            // invariant: vram_budget_bytes is validated by config deserialization (must be > 0
-            // or None); 0 is rejected upstream before reaching this branch.
             vllm_core::speculative::MemoryBudget::new(budget_bytes)
-                // invariant: pre-conditions make this infallible at this call site.
-                .expect("server config: invalid vram_budget_bytes"),
+                .context("server config: invalid vram_budget_bytes")?,
         );
         tracing::info!(
             budget_bytes,
@@ -187,38 +171,11 @@ async fn main() {
         Engine::new_boxed(model, draft_model)
     };
 
-    // v18.0: wire a real DraftLoader so the resolver can actually load draft
-    // weights from disk. The engine installs a NoopLoader by default in the
-    // v18.0 constructors, which would silently fall back to self-spec for any
-    // declared spec. Replace it with ServerDraftLoader when a resolver is
-    // installed (i.e. the v18.0 path was taken).
-    if engine.draft_resolver.is_some() {
-        let draft_loader = vllm_server::draft_loader::ServerDraftLoader::new(
-            device.clone(),
-            &app_config.engine.draft_specs,
-        )
-        .with_kv_blocks(app_config.engine.num_kv_blocks)
-        .with_kv_quantization(app_config.engine.kv_quantization)
-        .with_allow_stub(cli.model.allow_stub);
-        tracing::info!(
-            registered_drafts = draft_loader.len(),
-            "Installed ServerDraftLoader (replaces NoopLoader)"
-        );
-        if !engine.set_draft_loader(Arc::new(draft_loader)) {
-            tracing::warn!(
-                "Engine.set_draft_loader was a no-op: resolver missing. \
-                 Drafts will fall back to self-spec."
-            );
-        }
-    }
+    Ok((engine, loader, device))
+}
 
-    tracing::debug!(
-        draft_enabled = app_config.engine.max_draft_tokens > 0,
-        kv_blocks = app_config.engine.num_kv_blocks,
-        has_resolver = engine.draft_resolver.is_some(),
-        "Engine configured"
-    );
-
+/// Wire optional speculative-decoding knobs onto a freshly constructed engine.
+fn configure_speculative(app_config: &AppConfig, engine: &mut Engine) {
     if app_config.engine.max_draft_tokens > 0 {
         if app_config.engine.enable_adaptive_speculative {
             tracing::info!(
@@ -243,6 +200,93 @@ async fn main() {
             engine.enable_speculative();
         }
     }
+}
+
+/// Load the tokenizer from `<model_dir>/tokenizer.json`, or fall back to a
+/// default-constructed tokenizer. Returns the `Arc<Tokenizer>` ready for use.
+fn load_tokenizer(model_dir: &std::path::Path) -> Arc<Tokenizer> {
+    let tokenizer_path = model_dir.join("tokenizer.json");
+    if !tokenizer_path.exists() {
+        tracing::warn!(
+            "No tokenizer.json found in model directory, using default tokenizer"
+        );
+        return Arc::new(Tokenizer::new());
+    }
+    let Some(path_str) = tokenizer_path.to_str() else {
+        tracing::error!(
+            path = ?tokenizer_path,
+            "Tokenizer path is not valid UTF-8; falling back to default tokenizer"
+        );
+        return Arc::new(Tokenizer::new());
+    };
+    match Tokenizer::from_file(path_str) {
+        Ok(t) => {
+            tracing::info!("Tokenizer loaded");
+            Arc::new(t)
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "Failed to load tokenizer from file, using default");
+            Arc::new(Tokenizer::new())
+        }
+    }
+}
+
+#[tokio::main]
+#[allow(clippy::too_many_lines)] // server bootstrap: linear startup sequence with no natural decomposition
+async fn main() -> Result<()> {
+    let cli = cli::CliArgs::parse();
+    let app_config = cli.to_app_config();
+
+    if let Err(errors) = app_config.validate() {
+        for err in &errors.0 {
+            tracing::error!(error = %err, "Config validation failed");
+        }
+        // Distinct exit code (78) for config errors — distinguishable from
+        // generic startup failures in supervisor restart policies.
+        std::process::exit(78);
+    }
+
+    let log_dir = app_config.server.log_dir.as_ref().map(PathBuf::from);
+    logging::init_logging(log_dir, &app_config.server.log_level);
+
+    tracing::info!("Starting vllm-lite");
+
+    let (mut engine, loader, device) = build_engine(&app_config, &cli)
+        .context("failed to construct inference engine")?;
+
+    // v18.0: wire a real DraftLoader so the resolver can actually load draft
+    // weights from disk. The engine installs a NoopLoader by default in the
+    // v18.0 constructors, which would silently fall back to self-spec for any
+    // declared spec. Replace it with ServerDraftLoader when a resolver is
+    // installed (i.e. the v18.0 path was taken).
+    if engine.draft_resolver.is_some() {
+        let draft_loader = vllm_server::draft_loader::ServerDraftLoader::new(
+            device,
+            &app_config.engine.draft_specs,
+        )
+        .with_kv_blocks(app_config.engine.num_kv_blocks)
+        .with_kv_quantization(app_config.engine.kv_quantization)
+        .with_allow_stub(cli.model.allow_stub);
+        tracing::info!(
+            registered_drafts = draft_loader.len(),
+            "Installed ServerDraftLoader (replaces NoopLoader)"
+        );
+        if !engine.set_draft_loader(Arc::new(draft_loader)) {
+            tracing::warn!(
+                "Engine.set_draft_loader was a no-op: resolver missing. \
+                 Drafts will fall back to self-spec."
+            );
+        }
+    }
+
+    tracing::debug!(
+        draft_enabled = app_config.engine.max_draft_tokens > 0,
+        kv_blocks = app_config.engine.num_kv_blocks,
+        has_resolver = engine.draft_resolver.is_some(),
+        "Engine configured"
+    );
+
+    configure_speculative(&app_config, &mut engine);
 
     let (msg_tx, msg_rx) = mpsc::unbounded_channel::<EngineMessage>();
     let engine_shutdown_tx = msg_tx.clone();
@@ -251,31 +295,7 @@ async fn main() {
         engine.run(msg_rx);
     });
 
-    let tokenizer_path = PathBuf::from(&model_path).join("tokenizer.json");
-    let tokenizer: Arc<Tokenizer> = if tokenizer_path.exists() {
-        tokenizer_path.to_str().map_or_else(
-            || {
-                tracing::error!(
-                    path = ?tokenizer_path,
-                    "Tokenizer path is not valid UTF-8; falling back to default tokenizer"
-                );
-                Arc::new(Tokenizer::new())
-            },
-            |path_str| match Tokenizer::from_file(path_str) {
-                Ok(t) => {
-                    tracing::info!("Tokenizer loaded");
-                    Arc::new(t)
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "Failed to load tokenizer from file, using default");
-                    Arc::new(Tokenizer::new())
-                }
-            },
-        )
-    } else {
-        tracing::warn!("No tokenizer.json found in model directory, using default tokenizer");
-        Arc::new(Tokenizer::new())
-    };
+    let tokenizer = load_tokenizer(&cli.model_path());
     let batch_manager = Arc::new(BatchManager::new());
 
     let auth_middleware = if app_config.auth.api_keys.is_empty() {
@@ -340,20 +360,17 @@ async fn main() {
     let addr = format!("{}:{}", app_config.server.host, app_config.server.port);
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
-        .unwrap_or_else(|e| {
-            panic!("Failed to bind server socket to {addr}: {e}");
-        });
+        .with_context(|| format!("failed to bind server socket to {addr}"))?;
     tracing::info!(address = %addr, "Server listening");
 
     axum::serve(listener, app.into_make_service())
         .with_graceful_shutdown(shutdown_signal())
         .await
-        .unwrap_or_else(|e| {
-            panic!("Server crashed while serving on {addr}: {e}");
-        });
+        .with_context(|| format!("server crashed while serving on {addr}"))?;
 
     tracing::info!("Shutting down gracefully");
     let _ = engine_shutdown_tx.send(EngineMessage::Shutdown);
+    Ok(())
 }
 
 async fn shutdown_signal() {
