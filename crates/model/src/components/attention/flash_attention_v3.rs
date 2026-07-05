@@ -16,20 +16,30 @@ use tracing::trace;
 /// `FlashAttentionV3`. See the type definition for fields and behavior.
 #[derive(Debug, Clone)]
 pub struct FlashAttentionV3 {
+    /// Number of attention heads.
     num_heads: usize,
+    /// Per-head dimension (head_dim).
     head_dim: usize,
+    /// Dropout probability (0.0 = no dropout).
     dropout_p: f32,
+    /// Apply causal mask.
     causal: bool,
+    /// Optional sliding-window attention bounds `(left, right)`.
     window_size: Option<(i32, i32)>,
 }
 
 /// Configuration for FlashAttentionV3. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FlashAttentionV3Config {
+    /// Number of attention heads.
     pub num_heads: usize,
+    /// Per-head dimension (head_dim).
     pub head_dim: usize,
+    /// Dropout probability (0.0 = no dropout).
     pub dropout_p: f32,
+    /// Apply causal mask.
     pub causal: bool,
+    /// Optional sliding-window attention bounds `(left, right)`.
     pub window_size: Option<(i32, i32)>,
 }
 
