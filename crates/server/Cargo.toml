@@ -18,7 +18,7 @@ path = "src/bin/vllm.rs"
 
 [dependencies]
 vllm-core = { path = "../core", features = ["cuda-graph"] }
-vllm-traits = { path = "../traits" }
+vllm-traits = { path = "../traits", features = ["candle"] }
 vllm-model = { path = "../model" }
 candle-core = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "time", "io-util", "fs", "net", "signal"] }

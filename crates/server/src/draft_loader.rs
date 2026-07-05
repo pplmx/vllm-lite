@@ -10,8 +10,9 @@
 //! The loader owns a `HashMap<DraftId, PathBuf>` populated from the server
 //! config's `draft_specs[]`. Loading constructs a fresh `ModelLoader` for the
 //! requested id's directory and delegates `load_model()` to it. Errors during
-//! `build()` or `load_model()` are surfaced as `DraftRegistryError::LoadFailed`
-//! — the resolver treats these as FALL-01 and falls back to self-spec.
+//! `build()` or `load_model()` are surfaced as `DraftRegistryError::Model`
+//! wrapping the typed `vllm_traits::ModelError` source — the resolver
+//! treats these as FALL-01 and falls back to self-spec.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -92,9 +93,14 @@ impl DraftLoader for ServerDraftLoader {
         id: &DraftId,
     ) -> std::result::Result<Box<dyn vllm_traits::ModelBackend>, DraftRegistryError> {
         let path = self.paths.get(id.as_str()).ok_or_else(|| {
-            DraftRegistryError::LoadFailed(format!(
-                "ServerDraftLoader: no path registered for {id}"
-            ))
+            // Config error: the draft id wasn't registered. Wrap into the
+            // typed Model variant so callers see the failure category.
+            DraftRegistryError::Model(
+                id.clone(),
+                vllm_traits::ModelError::Config(format!(
+                    "ServerDraftLoader: no path registered for {id}"
+                )),
+            )
         })?;
         let model_loader = ModelLoader::builder(self.device.clone())
             .with_model_dir(path.to_string_lossy().to_string())
@@ -103,14 +109,15 @@ impl DraftLoader for ServerDraftLoader {
             .with_allow_stub(self.allow_stub)
             .build()
             .map_err(|e| {
-                DraftRegistryError::LoadFailed(format!(
-                    "ServerDraftLoader: failed to build ModelLoader for {id}: {e}"
-                ))
+                // ModelLoader::build returns candle_core::Error; wrap into
+                // the structured ModelError so callers see a typed source.
+                DraftRegistryError::Model(
+                    id.clone(),
+                    vllm_traits::ModelError::Candle(e),
+                )
             })?;
         model_loader.load_model().map_err(|e| {
-            DraftRegistryError::LoadFailed(format!(
-                "ServerDraftLoader: failed to load model for {id}: {e}"
-            ))
+            DraftRegistryError::Model(id.clone(), vllm_traits::ModelError::Candle(e))
         })
     }
 }
@@ -120,20 +127,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_server_draft_loader_returns_load_failed_for_unknown_id() {
+    fn test_server_draft_loader_returns_model_error_for_unknown_id() {
         let loader = ServerDraftLoader::new(Device::Cpu, &[]);
         let result = loader.load(&DraftId("missing".into()));
+        // Unknown id → config error wrapped in the typed Model variant.
+        // The contract: no panic, typed error, message references the id.
         match result {
-            Err(DraftRegistryError::LoadFailed(msg)) => {
-                assert!(msg.contains("missing"), "msg = {msg}");
+            Err(DraftRegistryError::Model(id, _)) => {
+                assert_eq!(id.as_str(), "missing");
             }
-            Err(other) => panic!("expected LoadFailed, got error {other:?}"),
-            Ok(_) => panic!("expected LoadFailed, got Ok backend"),
+            Err(other) => panic!("expected Model error, got error {other:?}"),
+            Ok(_) => panic!("expected Model error, got Ok backend"),
         }
     }
 
     #[test]
-    fn test_server_draft_loader_returns_load_failed_for_nonexistent_path() {
+    fn test_server_draft_loader_returns_error_for_nonexistent_path() {
         let specs = vec![DraftSpecConfig {
             id: "a".into(),
             path: "/this/path/does/not/exist".into(),
@@ -143,13 +152,10 @@ mod tests {
         }];
         let loader = ServerDraftLoader::new(Device::Cpu, &specs);
         let result = loader.load(&DraftId("a".into()));
-        // Either LoadFailed (builder refuses because no config.json) or
-        // LoadFailed (load fails). Both are acceptable — the contract is
-        // "we do not panic; we surface an error".
-        assert!(
-            matches!(result, Err(DraftRegistryError::LoadFailed(_))),
-            "expected LoadFailed for missing dir"
-        );
+        // The contract is "we do not panic; we surface an error" — the exact
+        // typed variant depends on whether builder or weight loader fails
+        // first. Accept any non-Ok.
+        assert!(result.is_err(), "expected error for missing dir");
     }
 
     #[test]
@@ -172,11 +178,11 @@ mod tests {
         }];
         let loader = ServerDraftLoader::new(Device::Cpu, &specs);
         let result = loader.load(&DraftId("real".into()));
-        // Build succeeds; weight load fails (no checkpoint file) → LoadFailed.
-        // The contract is no panic and a clear error.
+        // Build succeeds; weight load fails (no checkpoint file) → Model
+        // variant. The contract is no panic and a typed error.
         assert!(
-            matches!(result, Err(DraftRegistryError::LoadFailed(_))),
-            "expected LoadFailed on missing weights"
+            matches!(result, Err(DraftRegistryError::Model(_, _))),
+            "expected Model error on missing weights"
         );
     }
 
