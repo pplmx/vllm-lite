@@ -8,12 +8,19 @@ use vllm_core::types::{Priority, Request, SamplingParams};
 /// Configuration for generating test requests
 #[derive(Debug, Clone)]
 pub struct RequestConfig {
+    /// Minimum prompt token count for generated requests.
     pub min_tokens: usize,
+    /// Maximum prompt token count for generated requests.
     pub max_tokens: usize,
+    /// Lower bound on per-request `max_tokens` sampling cap.
     pub min_max_tokens: usize,
+    /// Upper bound on per-request `max_tokens` sampling cap.
     pub max_max_tokens: usize,
+    /// Default sampling temperature for generated requests.
     pub temperature: f32,
+    /// Default top-k cutoff (0 = no cutoff).
     pub top_k: usize,
+    /// Default top-p nucleus sampling cutoff.
     pub top_p: f32,
 }
 
