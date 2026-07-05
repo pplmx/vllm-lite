@@ -109,11 +109,12 @@ impl std::fmt::Debug for Engine {
     }
 }
 
-/// Adaptive sleep policy for the engine idle loop. Tracks consecutive
-/// idle ticks and grows the sleep interval geometrically up to
-/// [`Self::max_interval`], then snaps back to [`Self::base_interval`]
-/// when work resumes. Used by the step loop to avoid busy-spinning
-/// when the scheduler has no work.
+/// Adaptive sleep policy for the engine idle loop.
+///
+/// Tracks consecutive idle ticks and grows the sleep interval
+/// geometrically up to [`Self::max_interval`], then snaps back to
+/// [`Self::base_interval`] when work resumes. Used by the step loop to
+/// avoid busy-spinning when the scheduler has no work.
 #[derive(Debug)]
 pub struct SleepPolicy {
     /// Minimum sleep interval (ms) used when the engine just became
