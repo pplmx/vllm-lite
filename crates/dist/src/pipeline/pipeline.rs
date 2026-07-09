@@ -42,6 +42,8 @@ impl Default for PipelineParallelConfig {
 }
 
 impl PipelineParallel {
+    /// Construct an empty pipeline. Stages are added via
+    /// [`Self::add_stage`] before [`Self::forward`] is called.
     #[must_use]
     pub fn new(config: PipelineParallelConfig) -> Self {
         Self {
@@ -50,29 +52,50 @@ impl PipelineParallel {
         }
     }
 
+    /// Append `stage` to the pipeline DAG. Stages execute in the
+    /// order they were added; for typical 1F1B / GPipe schedules this
+    /// matches model-layer order.
     pub fn add_stage(&mut self, stage: Arc<dyn PipelineStage>) {
         self.stages.push(stage);
     }
 
+    /// Number of stages currently registered. `> 1` is the threshold
+    /// at which [`Self::is_pipeline_parallel`] flips to `true` and the
+    /// multi-stage forward path is taken.
     #[must_use]
     pub fn num_stages(&self) -> usize {
         self.stages.len()
     }
 
+    /// Borrow the immutable [`PipelineParallelConfig`] used to
+    /// construct this pipeline (num_stages, num_microbatches,
+    /// enable_async, prefetch_ahead).
     #[must_use]
     pub const fn config(&self) -> &PipelineParallelConfig {
         &self.config
     }
 
+    /// `true` iff more than one stage is registered. When `false`,
+    /// [`Self::forward`] short-circuits to the single-stage path.
     #[must_use]
     pub fn is_pipeline_parallel(&self) -> bool {
         self.stages.len() > 1
     }
 
-    /// Run the layer forward pass over the input.
+    /// Push `input` through every registered stage in order and return
+    /// the final stage's output.
+    ///
+    /// Activations flow `stages[0].hidden_states → stages[1].hidden_states →
+    /// ... → stages[N-1].hidden_states`. Intermediate stage outputs
+    /// are kept alive only as long as needed to forward into the
+    /// next stage. For the single-stage fast path the first stage's
+    /// `forward` is called directly.
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
+    /// Returns `Err` if any stage's forward fails (shape mismatch,
+    /// out-of-memory, dtype incompatibility, or kernel error), or if
+    /// the pipeline has zero stages registered.
     pub fn forward(&self, input: StageInput) -> Result<StageOutput> {
         if !self.is_pipeline_parallel() {
             if let Some(stage) = self.stages.first() {
@@ -101,10 +124,18 @@ impl PipelineParallel {
         Result::Err(candle_core::Error::msg("No output generated"))
     }
 
-    /// Run the pipeline forward over microbatch splits for memory-bounded inference.
+    /// Split `inputs` into chunks of `config.num_microbatches` and
+    /// push each chunk sequentially through the pipeline.
+    ///
+    /// This is the bubble-fill knob: smaller chunks overlap
+    /// compute and communication across stages, larger chunks
+    /// maximize per-stage arithmetic intensity. Returns one
+    /// [`StageOutput`] per input, in order.
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
+    /// Returns `Err` if any per-input [`Self::forward`] call fails,
+    /// or if the pipeline has zero stages registered.
     pub fn forward_microbatches(&self, inputs: Vec<StageInput>) -> Result<Vec<StageOutput>> {
         if !self.is_pipeline_parallel() {
             if let Some(stage) = self.stages.first() {
@@ -126,10 +157,17 @@ impl PipelineParallel {
         Ok(all_outputs)
     }
 
-    /// Run pipeline forward following the given microbatch schedule.
+    /// Forward `inputs` through the pipeline in the order given (no
+    /// microbatch chunking). Single-stage pipelines delegate to
+    /// [`Self::forward_microbatches`] for the symmetric behaviour.
+    ///
+    /// Use this when the caller has already computed a custom
+    /// microbatch schedule (e.g. interleaved 1F1B) and just needs the
+    /// runtime to execute it sequentially.
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
+    /// Returns `Err` if any per-input [`Self::forward`] call fails.
     pub fn forward_with_schedule(&self, inputs: Vec<StageInput>) -> Result<Vec<StageOutput>> {
         if !self.is_pipeline_parallel() {
             return self.forward_microbatches(inputs);

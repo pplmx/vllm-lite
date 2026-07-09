@@ -49,6 +49,8 @@ pub struct CacheStats {
 }
 
 impl DistributedKVCache {
+    /// Construct a new cache scoped to `config.node_id`, with an empty
+    /// local store and zeroed statistics.
     #[must_use]
     pub fn new(config: CacheConfig) -> Self {
         Self {
@@ -58,6 +60,11 @@ impl DistributedKVCache {
         }
     }
 
+    /// Look up `key` in the local cache.
+    ///
+    /// Returns the cached `value_hash` on a hit; `None` on a miss or if
+    /// the local entry is in the `Invalid` state. Hits/misses are
+    /// recorded in the [`CacheStats`] returned by [`Self::stats`].
     pub fn get(&self, key: u64) -> Option<u64> {
         let mut cache = self.local_cache.write().ok()?;
 
@@ -79,6 +86,13 @@ impl DistributedKVCache {
         None
     }
 
+    /// Insert or update the local entry for `key` with `value_hash`.
+    ///
+    /// Computes the owner set via consistent hashing over the
+    /// configured node count and marks the local cache entry as
+    /// `Exclusive` (this node is the primary owner) / `Shared` (a
+    /// replica) / `Modified` (already-present entry being updated).
+    /// Updates the `updates` counter on [`CacheStats`].
     pub fn put(&self, key: u64, value_hash: u64) {
         let owner_nodes = self.compute_owner_nodes(key);
         let timestamp = current_timestamp();
@@ -109,6 +123,12 @@ impl DistributedKVCache {
         }
     }
 
+    /// Drop the local entry for `key` and increment the
+    /// `invalidations` counter on [`CacheStats`].
+    ///
+    /// Remote replicas are not notified here — coordination is the
+    /// caller's responsibility (typically via [`Self::handle_message`]
+    /// on the source node, then broadcasting an `Invalidate` message).
     pub fn invalidate(&self, key: u64) {
         if let Ok(mut cache) = self.local_cache.write() {
             cache.remove(&key);
@@ -118,6 +138,14 @@ impl DistributedKVCache {
         }
     }
 
+    /// Dispatch a wire-protocol `msg` arriving from a peer node.
+    ///
+    /// Returns the response (if any) that the caller should send back
+    /// to the source: `Read` → `Ack` on hit / no reply on miss,
+    /// `Invalidate` → local invalidate + `Ack`, `Update`/`Write` →
+    /// local `put` with no reply, `Ack` → no reply. This is the
+    /// single entry point that the gRPC handler in `grpc.rs` uses to
+    /// fold peer traffic into the local cache.
     pub fn handle_message(&self, msg: &CacheMessage) -> Option<CacheMessage> {
         match &msg.operation {
             super::protocol::CacheOperation::Read { key, .. } => {
@@ -157,6 +185,10 @@ impl DistributedKVCache {
         }
     }
 
+    /// Snapshot of hit / miss / update / invalidation counters since
+    /// cache construction. Cheap (clones the stats struct under the
+    /// stats lock).
+    #[must_use]
     pub fn stats(&self) -> CacheStats {
         self.stats.read().map(|s| s.clone()).unwrap_or_default()
     }
@@ -176,6 +208,11 @@ impl DistributedKVCache {
         nodes
     }
 
+    /// Approximate memory footprint of entries this node owns
+    /// (entries where `node_id` is in the entry's owner set), counted
+    /// as `count * sizeof(CacheEntry)`. Useful for capacity-planning
+    /// dashboards; does not account for hash-map overhead.
+    #[must_use]
     pub fn memory_usage(&self) -> usize {
         self.local_cache.read().map_or(0, |cache| {
             cache
