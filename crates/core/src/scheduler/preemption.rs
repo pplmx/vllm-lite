@@ -139,94 +139,9 @@ impl PreemptionManager {
     }
 }
 
+// Unit tests are extracted to `tests.rs` (sibling) to keep this
+// preemption module under the 800-line soft cap. They cover the
+// four-input `should_preempt` decision, the least-progress-first
+// victim selector, and the preempted/rejected stat counters.
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::{Priority, SamplingParams, Status};
-
-    fn make_sequence(id: u64, decode_rounds: u32) -> Sequence {
-        Sequence {
-            id,
-            tokens: vec![1, 2, 3],
-            kv_blocks: std::sync::Arc::new(vec![]),
-            num_computed_tokens: 3,
-            prompt_len: 3,
-            status: Status::Decoding,
-            max_tokens: 100,
-            sampling_params: SamplingParams::default(),
-            consecutive_decode_rounds: decode_rounds,
-            priority: Priority::default(),
-            degraded_draft: false,
-            draft_model_id: None,
-        }
-    }
-
-    #[test]
-    fn test_should_preempt_no_waiting() {
-        let manager = PreemptionManager::new(SchedulerConfig::default());
-        assert!(!manager.should_preempt(5, 0, 10, 1));
-    }
-
-    #[test]
-    fn test_should_preempt_no_running() {
-        let manager = PreemptionManager::new(SchedulerConfig::default());
-        assert!(!manager.should_preempt(0, 5, 10, 1));
-    }
-
-    #[test]
-    fn test_should_preempt_enough_blocks() {
-        let manager = PreemptionManager::new(SchedulerConfig::default());
-        assert!(!manager.should_preempt(5, 3, 10, 15));
-    }
-
-    #[test]
-    fn test_should_preempt_single_running() {
-        let manager = PreemptionManager::new(SchedulerConfig::default());
-        assert!(!manager.should_preempt(1, 5, 10, 1));
-    }
-
-    #[test]
-    fn test_should_preempt_all_conditions_met() {
-        let manager = PreemptionManager::new(SchedulerConfig::default());
-        assert!(manager.should_preempt(3, 5, 10, 5));
-    }
-
-    #[test]
-    fn test_select_victim_single() {
-        let manager = PreemptionManager::new(SchedulerConfig::default());
-        let running = vec![make_sequence(1, 5)];
-        assert!(manager.select_victim(&running).is_none());
-    }
-
-    #[test]
-    fn test_select_victim_multiple() {
-        let manager = PreemptionManager::new(SchedulerConfig::default());
-        let running = vec![
-            make_sequence(1, 10),
-            make_sequence(2, 5),
-            make_sequence(3, 15),
-        ];
-        let result = manager.select_victim(&running);
-        assert!(result.is_some());
-        let (idx, seq) = result.unwrap();
-        assert_eq!(idx, 1);
-        assert_eq!(seq.id, 2);
-    }
-
-    #[test]
-    fn test_stats() {
-        let mut manager = PreemptionManager::new(SchedulerConfig::default());
-        assert_eq!(manager.preempted_count(), 0);
-        assert_eq!(manager.rejected_count(), 0);
-
-        manager.record_preemption();
-        assert_eq!(manager.preempted_count(), 1);
-
-        manager.record_rejection();
-        assert_eq!(manager.rejected_count(), 1);
-
-        manager.reset_stats();
-        assert_eq!(manager.preempted_count(), 0);
-        assert_eq!(manager.rejected_count(), 0);
-    }
-}
+mod tests;
