@@ -17,10 +17,7 @@ struct StubLoader {
     fail_on: Vec<DraftId>,
 }
 impl DraftLoader for StubLoader {
-    fn load(
-        &self,
-        id: &DraftId,
-    ) -> std::result::Result<Box<dyn ModelBackend>, DraftRegistryError> {
+    fn load(&self, id: &DraftId) -> std::result::Result<Box<dyn ModelBackend>, DraftRegistryError> {
         if self.fail_on.iter().any(|f| f == id) {
             return Err(DraftRegistryError::Model(
                 id.clone(),
@@ -101,8 +98,7 @@ fn make_resolver(
 
 #[test]
 fn test_resolve_none_returns_self_spec_when_available() {
-    let self_spec: Arc<Mutex<Box<dyn ModelBackend>>> =
-        Arc::new(Mutex::new(Box::new(StubBackend)));
+    let self_spec: Arc<Mutex<Box<dyn ModelBackend>>> = Arc::new(Mutex::new(Box::new(StubBackend)));
     let (resolver, _) = make_resolver(vec![], &[], Some(self_spec.clone()), vec![]);
     match resolver.resolve(None) {
         ResolvedDraft::SelfSpec(_) => {}
@@ -129,10 +125,8 @@ fn test_resolve_loaded_returns_external() {
         weight_size_estimate_bytes: 0,
         ref_count: 0,
     };
-    let self_spec: Arc<Mutex<Box<dyn ModelBackend>>> =
-        Arc::new(Mutex::new(Box::new(StubBackend)));
-    let (resolver, _) =
-        make_resolver(vec![spec], &[DraftId("a".into())], Some(self_spec), vec![]);
+    let self_spec: Arc<Mutex<Box<dyn ModelBackend>>> = Arc::new(Mutex::new(Box::new(StubBackend)));
+    let (resolver, _) = make_resolver(vec![spec], &[DraftId("a".into())], Some(self_spec), vec![]);
     match resolver.resolve(Some(&DraftId("a".into()))) {
         ResolvedDraft::External(_) => {}
         other => panic!("expected External, got {other:?}"),
@@ -149,8 +143,7 @@ fn test_resolve_unloaded_triggers_loader_and_attaches() {
         weight_size_estimate_bytes: 0,
         ref_count: 0,
     };
-    let self_spec: Arc<Mutex<Box<dyn ModelBackend>>> =
-        Arc::new(Mutex::new(Box::new(StubBackend)));
+    let self_spec: Arc<Mutex<Box<dyn ModelBackend>>> = Arc::new(Mutex::new(Box::new(StubBackend)));
     let (resolver, _) = make_resolver(
         vec![spec],
         &[], // not pre-loaded
@@ -173,8 +166,7 @@ fn test_resolve_loader_failure_falls_back_to_self_spec() {
         weight_size_estimate_bytes: 0,
         ref_count: 0,
     };
-    let self_spec: Arc<Mutex<Box<dyn ModelBackend>>> =
-        Arc::new(Mutex::new(Box::new(StubBackend)));
+    let self_spec: Arc<Mutex<Box<dyn ModelBackend>>> = Arc::new(Mutex::new(Box::new(StubBackend)));
     let (resolver, _) = make_resolver(
         vec![spec],
         &[],
@@ -189,8 +181,7 @@ fn test_resolve_loader_failure_falls_back_to_self_spec() {
 
 #[test]
 fn test_resolve_unknown_id_with_no_loader_falls_back() {
-    let self_spec: Arc<Mutex<Box<dyn ModelBackend>>> =
-        Arc::new(Mutex::new(Box::new(StubBackend)));
+    let self_spec: Arc<Mutex<Box<dyn ModelBackend>>> = Arc::new(Mutex::new(Box::new(StubBackend)));
     let (resolver, _) = make_resolver(vec![], &[], Some(self_spec), vec![]);
     // "ghost" was never registered
     match resolver.resolve(Some(&DraftId("ghost".into()))) {
@@ -201,8 +192,7 @@ fn test_resolve_unknown_id_with_no_loader_falls_back() {
 
 #[test]
 fn test_resolve_records_metrics() {
-    let self_spec: Arc<Mutex<Box<dyn ModelBackend>>> =
-        Arc::new(Mutex::new(Box::new(StubBackend)));
+    let self_spec: Arc<Mutex<Box<dyn ModelBackend>>> = Arc::new(Mutex::new(Box::new(StubBackend)));
     let (resolver, metrics) = make_resolver(vec![], &[], Some(self_spec), vec![]);
     resolver.resolve(None);
     resolver.resolve(Some(&DraftId("nope".into())));

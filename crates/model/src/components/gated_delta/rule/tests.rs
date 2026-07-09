@@ -31,8 +31,7 @@ fn build_tiny_gdn() -> GatedDeltaNet {
     let hidden = 64;
     let vb = VarBuilder::zeros(DType::F32, &device);
 
-    let in_proj_qkv =
-        candle_nn::linear(hidden, cfg.qkv_proj_dim(), vb.pp("in_proj_qkv")).unwrap();
+    let in_proj_qkv = candle_nn::linear(hidden, cfg.qkv_proj_dim(), vb.pp("in_proj_qkv")).unwrap();
     let in_proj_z = candle_nn::linear(hidden, cfg.value_dim(), vb.pp("in_proj_z")).unwrap();
     let in_proj_a = candle_nn::linear(hidden, cfg.num_v_heads, vb.pp("in_proj_a")).unwrap();
     let in_proj_b = candle_nn::linear(hidden, cfg.num_v_heads, vb.pp("in_proj_b")).unwrap();
