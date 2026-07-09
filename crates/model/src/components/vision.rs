@@ -34,16 +34,33 @@ impl VisionConfig {
 }
 
 #[derive(Debug)]
-/// `PatchEmbed`. See the type definition for fields and behavior.
+/// Patch-embedding projection for a vision transformer.
+///
+/// Splits an input image into non-overlapping `patch_size × patch_size`
+/// patches (RGB channels flattened per patch), then linearly projects
+/// each patch into the model's `embed_dim`. The result is a sequence
+/// of `(num_patches, embed_dim)` token embeddings ready for the
+/// transformer stack.
+///
+/// Input shape to [`forward`](PatchEmbed::forward) is expected to be
+/// `[batch, num_patches, patch_size * patch_size * 3]` (i.e. the
+/// caller has already flattened the patches; a real ViT pipeline
+/// would have a separate patch-extraction step before this layer).
 pub struct PatchEmbed {
     proj: Linear,
 }
 
 impl PatchEmbed {
-    /// Construct a new instance from the given configuration.
+    /// Construct a new `PatchEmbed` from a [`VisionConfig`] and a
+    /// `VarBuilder` rooted at the `proj` prefix.
+    ///
+    /// The projection matrix has shape
+    /// `(patch_size * patch_size * 3) → embed_dim`.
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if any required tensor allocation or weight loading fails.
+    /// Returns `Err` if the underlying `Linear` weight tensor cannot
+    /// be allocated or loaded from the `VarBuilder`.
     #[allow(clippy::needless_pass_by_value)]
     pub fn new(config: &VisionConfig, vb: VarBuilder<'_>) -> CandleResult<Self> {
         let proj = candle_nn::linear(
@@ -54,96 +71,70 @@ impl PatchEmbed {
         Ok(Self { proj })
     }
 
-    /// Run the layer forward pass over the input.
+    /// Run the patch-embedding projection on a pre-flattened patch
+    /// tensor of shape `[batch, num_patches, patch_size²·3]`.
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
+    /// Returns `Err` on shape mismatch (last dim ≠
+    /// `patch_size²·3`), out-of-memory, dtype incompatibility, or
+    /// any kernel error from the underlying matmul.
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
         self.proj.forward(x)
     }
 }
 #[derive(Debug)]
 
-/// Placeholder vision tower until a vision-language architecture is wired in.
+/// Placeholder vision tower.
+///
+/// Owns a [`VisionConfig`] and currently passes its input through
+/// unchanged on [`forward`](VisionEncoder::forward). This exists so
+/// that vision-language model loaders can resolve a `vision_tower`
+/// module today and dispatch through a stable API; the real ViT
+/// (patch-embed + transformer + pooling) will replace the
+/// pass-through body without changing the public surface.
 pub struct VisionEncoder {
     config: VisionConfig,
 }
 
 impl VisionEncoder {
-    /// Construct a new instance from the given configuration.
+    /// Construct a new `VisionEncoder` from a [`VisionConfig`] and a
+    /// `VarBuilder` (currently unused — placeholder).
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if any required tensor allocation or weight loading fails.
+    /// Returns `Err` if any required tensor allocation or weight
+    /// loading fails. Today this always returns `Ok`.
     pub fn new(config: &VisionConfig, _vb: VarBuilder<'_>) -> CandleResult<Self> {
         Ok(Self {
             config: config.clone(),
         })
     }
 
+    /// Borrow the underlying [`VisionConfig`].
     #[must_use]
     pub const fn config(&self) -> &VisionConfig {
         &self.config
     }
 
-    /// Run the layer forward pass over the input.
+    /// Pass-through placeholder forward.
+    ///
+    /// Returns the input tensor unchanged. The shape contract is
+    /// `output.dims() == input.dims()` — future implementations will
+    /// preserve this by mapping input tokens to output embeddings.
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
+    /// Returns `Err` if any tensor operation fails. Today this
+    /// always returns `Ok` since the implementation is a `clone`.
     pub fn forward(&self, x: &Tensor) -> CandleResult<Tensor> {
         Ok(x.clone())
     }
 }
 
+// Unit tests are extracted to `tests.rs` (sibling) to keep this
+// module under the 800-line soft cap. They cover VisionConfig
+// patch-count math, PatchEmbed construction under zero-init, and
+// the VisionEncoder pass-through shape contract.
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use candle_core::{DType, Device};
-
-    #[test]
-    fn test_vision_config() {
-        let config = VisionConfig::new(1024, 16);
-        assert_eq!(config.num_patches(), 4096);
-    }
-
-    #[test]
-    fn test_vision_config_different_sizes() {
-        // Test different image sizes
-        assert_eq!(VisionConfig::new(512, 16).num_patches(), 1024); // (512/16)^2
-        assert_eq!(VisionConfig::new(768, 16).num_patches(), 2304); // (768/16)^2
-        assert_eq!(VisionConfig::new(1024, 16).num_patches(), 4096); // (1024/16)^2
-    }
-
-    #[test]
-    fn test_vision_config_different_patch_sizes() {
-        // Test different patch sizes
-        assert_eq!(VisionConfig::new(224, 16).num_patches(), 196); // (224/16)^2 = 14^2
-        assert_eq!(VisionConfig::new(224, 14).num_patches(), 256); // (224/14)^2 = 16^2
-        assert_eq!(VisionConfig::new(224, 7).num_patches(), 1024); // (224/7)^2 = 32^2
-    }
-
-    #[test]
-    fn test_patch_embed_creates() {
-        let config = VisionConfig::new(1024, 16);
-        let vb = VarBuilder::zeros(DType::F32, &Device::Cpu);
-        PatchEmbed::new(&config, vb).unwrap();
-    }
-
-    #[test]
-    fn test_vision_encoder_creates() {
-        let config = VisionConfig::new(224, 16);
-        let vb = VarBuilder::zeros(DType::F32, &Device::Cpu);
-        VisionEncoder::new(&config, vb).unwrap();
-    }
-
-    #[test]
-    fn test_vision_encoder_empty_forward() {
-        let config = VisionConfig::new(224, 16);
-        let vb = VarBuilder::zeros(DType::F32, &Device::Cpu);
-        let encoder = VisionEncoder::new(&config, vb).unwrap();
-
-        // Currently forward just returns input (placeholder)
-        let input = Tensor::zeros((1, 10, 768), DType::F32, &Device::Cpu).unwrap();
-        let output = encoder.forward(&input).unwrap();
-        assert_eq!(output.dims(), input.dims());
-    }
-}
+mod tests;
