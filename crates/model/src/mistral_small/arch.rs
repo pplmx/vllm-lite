@@ -258,52 +258,10 @@ impl ModelBackend for MistralSmallModel {
     }
 }
 
+// Unit tests are extracted to `tests.rs` (sibling) to keep this
+// architecture module under the 800-line soft cap. They cover
+// the model_type detection contract (positive + negative),
+// the canonical architecture name, and the expert-config
+// builder.
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn test_mistral_small_architecture_detect() {
-        let arch = MistralSmallArchitecture::new();
-        for model_type in ["mistral-small", "Mistral-Small-Instruct-2407"] {
-            let config = json!({
-                "model_type": model_type,
-                "hidden_size": 4096,
-                "num_local_experts": 8
-            });
-            assert!(
-                arch.detect(&config),
-                "Failed to detect model_type: {model_type}"
-            );
-        }
-    }
-
-    #[test]
-    fn test_mistral_small_architecture_not_detect_others() {
-        let arch = MistralSmallArchitecture::new();
-        for model_type in ["mistral", "mistral-7b", "llama"] {
-            let config = json!({
-                "model_type": model_type,
-                "hidden_size": 4096
-            });
-            assert!(
-                !arch.detect(&config),
-                "Should not detect model_type: {model_type}"
-            );
-        }
-    }
-
-    #[test]
-    fn test_mistral_small_architecture_name() {
-        let arch = MistralSmallArchitecture::new();
-        assert_eq!(arch.name(), "mistral-small");
-    }
-
-    #[test]
-    fn test_mistral_small_expert_config() {
-        let arch = MistralSmallArchitecture::with_experts(16, 4);
-        assert_eq!(arch.num_experts, 16);
-        assert_eq!(arch.num_active_experts, 4);
-    }
-}
+mod tests;
