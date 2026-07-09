@@ -76,6 +76,10 @@ pub struct RowParallelLinear {
 }
 
 impl RowParallelLinear {
+    /// Construct a row-parallel linear layer with the given global
+    /// `input_size` (split across ranks) and `output_size` (replicated
+    /// across ranks, then summed via `all_reduce` on every rank
+    /// except the last).
     pub fn new(
         input_size: usize,
         output_size: usize,
@@ -90,15 +94,24 @@ impl RowParallelLinear {
         }
     }
 
+    /// Per-rank slice of the input dimension: `input_size / world_size`.
+    /// Each rank owns a disjoint shard of the weight matrix's
+    /// contraction axis.
     #[must_use]
     pub fn input_size_per_rank(&self) -> usize {
         self.input_size / self.mesh.world_size
     }
 
-    /// Run the layer forward pass over the input.
+    /// Run the row-parallel forward pass: compute `output[i] =
+    /// sum_j shard_weight[i,j] * input[j]` locally, then
+    /// `all_reduce_sum` across ranks (skipped on the last rank which
+    /// owns the canonical result).
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
+    /// Returns `Err` if `input.len() != input_size_per_rank()` (returns
+    /// [`TensorParallelError::InputSizeMismatch`]) or if the
+    /// `all_reduce` call fails (NCCL / device error).
     pub fn forward(&self, input: &[f32]) -> Result<Vec<f32>, TensorParallelError> {
         let local_input_size = self.input_size_per_rank();
 
@@ -137,10 +150,15 @@ pub struct TensorParallelManager {
 }
 
 impl TensorParallelManager {
-    /// Construct a new instance from the given configuration.
+    /// Build a manager that owns the [`DeviceMesh`] for `world_size`
+    /// ranks and an NCCL-backed [`AllReduce`] primitive sharing the
+    /// same mesh.
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if any required tensor allocation or weight loading fails.
+    /// Returns `Err` if the device-mesh construction fails
+    /// (invalid `world_size` / `rank` / `device_ids` — see
+    /// [`DeviceMesh::new`]).
     pub fn new(
         world_size: usize,
         rank: usize,
@@ -152,6 +170,10 @@ impl TensorParallelManager {
         Ok(Self { mesh, all_reduce })
     }
 
+    /// Construct a [`ColumnParallelLinear`] bound to this manager's
+    /// mesh + all_reduce. The new layer splits its output dimension
+    /// across ranks; no `all_reduce` is needed on the forward path
+    /// because each rank produces its own shard.
     #[must_use]
     pub fn create_column_parallel(
         &self,
@@ -166,6 +188,10 @@ impl TensorParallelManager {
         )
     }
 
+    /// Construct a [`RowParallelLinear`] bound to this manager's mesh
+    /// + all_reduce. The new layer's output is replicated across
+    /// ranks; `forward` performs an `all_reduce_sum` on every rank
+    /// except the last.
     #[must_use]
     pub fn create_row_parallel(&self, input_size: usize, output_size: usize) -> RowParallelLinear {
         RowParallelLinear::new(
@@ -176,6 +202,8 @@ impl TensorParallelManager {
         )
     }
 
+    /// Borrow the underlying [`DeviceMesh`] (rank, world_size,
+    /// device_ids, is_first_rank / is_last_rank helpers).
     #[must_use]
     pub const fn mesh(&self) -> &Arc<DeviceMesh> {
         &self.mesh
