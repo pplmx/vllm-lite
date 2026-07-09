@@ -16,12 +16,7 @@ use crate::types::{Priority, SamplingParams};
 use proptest::prelude::*;
 use std::sync::Arc;
 
-fn make_sequence(
-    id: u64,
-    blocks: Vec<BlockId>,
-    status: Status,
-    decode_rounds: u32,
-) -> Sequence {
+fn make_sequence(id: u64, blocks: Vec<BlockId>, status: Status, decode_rounds: u32) -> Sequence {
     Sequence {
         id,
         tokens: vec![],
