@@ -95,34 +95,9 @@ pub async fn correlation_id_middleware(request: Request, next: Next) -> Response
     response
 }
 
+// Unit tests are extracted to `tests.rs` (sibling) to keep this
+// correlation-id module under the 800-line soft cap. They cover
+// ID generation (non-empty + pairwise-distinct) and header
+// extraction (present → Some(s), absent → None).
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_generate_id() {
-        let middleware = CorrelationIdMiddleware::new();
-        let id1 = middleware.generate_id().await;
-        let id2 = middleware.generate_id().await;
-
-        assert!(!id1.is_empty());
-        assert!(!id2.is_empty());
-        assert_ne!(id1, id2);
-    }
-
-    #[tokio::test]
-    async fn test_extract_id() {
-        let mut headers = axum::http::HeaderMap::new();
-        headers.insert(REQUEST_ID_HEADER, "test-id-123".parse().unwrap());
-
-        let id = CorrelationIdMiddleware::extract_id(&headers);
-        assert_eq!(id, Some("test-id-123".to_string()));
-    }
-
-    #[tokio::test]
-    async fn test_extract_id_missing() {
-        let headers = axum::http::HeaderMap::new();
-        let id = CorrelationIdMiddleware::extract_id(&headers);
-        assert_eq!(id, None);
-    }
-}
+mod tests;
