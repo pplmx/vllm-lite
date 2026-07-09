@@ -9,7 +9,23 @@ use super::{ArchCapabilities, Architecture};
 
 type ArchFactory = Arc<dyn Fn() -> Box<dyn Architecture> + Send + Sync>;
 
-/// Process-wide registry of Architecture. Insert via `register()`, look up by id; thread-safe via internal `RwLock`.
+/// Process-wide registry of [`Architecture`] implementations.
+///
+/// Architectures register themselves via [`register`](Self::register)
+/// (typically once at startup, from [`register_all_archs`]) and are
+/// later resolved by name through [`get`](Self::get) or by config
+/// shape through [`detect`](Self::detect). The internal `RwLock`
+/// makes concurrent reads cheap; the registry is not on the
+/// inference hot path.
+///
+/// # Examples
+///
+/// ```ignore
+/// let registry = ArchitectureRegistry::default();
+/// let factory: ArchFactory = Arc::new(|| Box::new(MyArch));
+/// registry.register("my_arch", factory);
+/// assert!(registry.get("my_arch").is_some());
+/// ```
 pub struct ArchitectureRegistry {
     architectures: RwLock<HashMap<String, ArchFactory>>,
 }
@@ -30,6 +46,7 @@ impl Default for ArchitectureRegistry {
 }
 
 impl ArchitectureRegistry {
+    /// Construct an empty registry.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -37,10 +54,15 @@ impl ArchitectureRegistry {
         }
     }
 
-    /// Insert into the registry under its name.
+    /// Register an architecture factory under a stable name.
+    ///
+    /// If `name` is already registered, the factory is replaced.
+    /// Typically called once at startup from [`register_all_archs`].
+    ///
     /// # Panics
     ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
+    /// Panics only if the internal `RwLock` is poisoned, which would
+    /// indicate another thread panicked while holding the write lock.
     pub fn register(&self, name: &'static str, factory: ArchFactory) {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         self.architectures
@@ -50,6 +72,12 @@ impl ArchitectureRegistry {
             .insert(name.to_string(), factory);
     }
 
+    /// Look up an architecture by name and instantiate it.
+    ///
+    /// Returns `None` if `name` is not registered. Each call
+    /// invokes the registered factory, producing a fresh
+    /// `Box<dyn Architecture>`; the registry itself is stateless
+    /// with respect to the instances.
     pub fn get(&self, name: &str) -> Option<Box<dyn Architecture>> {
         self.architectures
             .read()
@@ -58,6 +86,15 @@ impl ArchitectureRegistry {
             .map(|factory| factory())
     }
 
+    /// Iterate registered architectures and return the first one
+    /// whose [`Architecture::detect`] returns `true` for
+    /// `config_json`.
+    ///
+    /// Returns `Some(name)` (the registered name) on the first
+    /// match, or `None` if no architecture claims the config.
+    /// Iteration order is the underlying `HashMap` order, which is
+    /// unspecified; callers that need a deterministic winner must
+    /// order their registrations accordingly.
     pub fn detect(&self, config_json: &Value) -> Option<String> {
         let regs = self.architectures.read().ok()?;
         let result = {
@@ -75,6 +112,11 @@ impl ArchitectureRegistry {
         result
     }
 
+    /// Snapshot of all currently-registered architecture names.
+    ///
+    /// Returns an empty `Vec` if the lock is poisoned; in normal
+    /// operation this should always be non-empty after
+    /// [`register_all_archs`] has run.
     pub fn names(&self) -> Vec<String> {
         self.architectures
             .read()
@@ -83,14 +125,24 @@ impl ArchitectureRegistry {
             .unwrap_or_default()
     }
 
-    /// Returns capabilities for the architecture detected from `config_json`.
+    /// Resolve `config_json` to an architecture and return its
+    /// capabilities.
+    ///
+    /// Returns `None` if no architecture claims the config.
+    /// Combines [`detect`](Self::detect) + [`get`](Self::get) +
+    /// [`Architecture::capabilities`] in one call.
     pub fn capabilities_for(&self, config_json: &Value) -> Option<ArchCapabilities> {
         let name = self.detect(config_json)?;
         self.get(&name).map(|arch| arch.capabilities())
     }
 }
 
-/// `ARCHITECTURE_REGISTRY`. See the type definition for fields and behavior.
+/// Process-wide [`ArchitectureRegistry`] singleton.
+///
+/// Lazy-initialized via [`std::sync::LazyLock`] (Rust 1.80+), so
+/// the first access triggers `ArchitectureRegistry::new`. Most
+/// callers should also call [`register_all_archs`] once at
+/// startup to populate it.
 pub static ARCHITECTURE_REGISTRY: LazyLock<ArchitectureRegistry> =
     LazyLock::new(ArchitectureRegistry::new);
 
@@ -112,105 +164,9 @@ pub fn register_all_archs(registry: &ArchitectureRegistry) {
     crate::mixtral::register::register(registry);
 }
 
+// Unit tests are extracted to `tests.rs` (sibling) to keep this
+// registry module under the 800-line soft cap. They cover the
+// register/get/names/detect/capabilities_for surface against a
+// minimal `TestArch` stub.
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    struct TestArch;
-    impl Architecture for TestArch {
-        fn name(&self) -> &'static str {
-            "test"
-        }
-        fn detect(&self, config: &serde_json::Value) -> bool {
-            config
-                .get("test")
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or(false)
-        }
-        fn capabilities(&self) -> ArchCapabilities {
-            ArchCapabilities::STUB
-        }
-        fn create_block(
-            &self,
-            _config: &crate::config::ModelConfig,
-            _layer_idx: usize,
-            _weights: &HashMap<String, candle_core::Tensor>,
-            _device: &candle_core::Device,
-        ) -> candle_core::Result<Box<dyn crate::components::TransformerBlock>> {
-            Err(candle_core::Error::Msg("test arch has no blocks".into()))
-        }
-        fn create_model(
-            &self,
-            _config: crate::config::ModelConfig,
-            _device: candle_core::Device,
-            _weights: HashMap<String, candle_core::Tensor>,
-            _num_kv_blocks: usize,
-            _kv_quantization: bool,
-        ) -> candle_core::Result<Box<dyn vllm_traits::ModelBackend>> {
-            Err(candle_core::Error::Msg("test arch has no model".into()))
-        }
-    }
-
-    #[test]
-    fn test_registry_register_and_get() {
-        let registry = ArchitectureRegistry::new();
-        let factory: ArchFactory = Arc::new(|| Box::new(TestArch));
-
-        registry.register("test_arch", factory);
-
-        let arch = registry.get("test_arch");
-        assert!(arch.is_some());
-        assert_eq!(arch.unwrap().name(), "test");
-    }
-
-    #[test]
-    fn test_registry_get_missing() {
-        let registry = ArchitectureRegistry::new();
-        let arch = registry.get("nonexistent");
-        assert!(arch.is_none());
-    }
-
-    #[test]
-    fn test_registry_names() {
-        let registry = ArchitectureRegistry::new();
-        let factory: ArchFactory = Arc::new(|| Box::new(TestArch));
-
-        registry.register("arch1", Arc::clone(&factory));
-        registry.register("arch2", Arc::clone(&factory));
-
-        let names = registry.names();
-        assert_eq!(names.len(), 2);
-        assert!(names.contains(&"arch1".to_string()));
-        assert!(names.contains(&"arch2".to_string()));
-    }
-
-    #[test]
-    fn test_registry_names_empty() {
-        let registry = ArchitectureRegistry::new();
-        let names = registry.names();
-        assert!(names.is_empty());
-    }
-
-    #[test]
-    fn test_registry_detect() {
-        let registry = ArchitectureRegistry::new();
-        let factory: ArchFactory = Arc::new(|| Box::new(TestArch));
-        registry.register("test_arch", factory);
-
-        let config_true = serde_json::json!({ "test": true });
-        let config_false = serde_json::json!({ "test": false });
-
-        assert_eq!(registry.detect(&config_true), Some("test_arch".to_string()));
-        assert_eq!(registry.detect(&config_false), None);
-    }
-
-    #[test]
-    fn test_registry_detect_no_match() {
-        let registry = ArchitectureRegistry::new();
-        let factory: ArchFactory = Arc::new(|| Box::new(TestArch));
-        registry.register("test_arch", factory);
-
-        let config = serde_json::json!({ "other": true });
-        assert_eq!(registry.detect(&config), None);
-    }
-}
+mod tests;
