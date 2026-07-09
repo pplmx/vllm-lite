@@ -312,91 +312,11 @@ impl GPTQQuantization {
     }
 }
 
+// Unit tests are extracted to `tests.rs` (sibling) to keep this
+// quantization module under the 800-line soft cap. They cover the
+// AWQ/GPTQ quantize → dequantize round-trip on a linear ramp
+// (bounded max abs error), `QuantizationType::from_str` parsing
+// (incl. the legacy `llm-awq` alias), and the `QuantizedWeights`
+// builder chain.
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    // invariant: test fixture indices 0..=127 fit in f32 exactly; precision loss
-    // is acceptable for the linear ramp test data.
-    #[allow(clippy::cast_precision_loss)]
-    fn make_ramp(start: f32, end: f32, count: usize) -> Vec<f32> {
-        let step = (end - start) / count as f32;
-        (0..count)
-            .map(|i| (i as f32).mul_add(step, start))
-            .collect()
-    }
-
-    #[test]
-    fn test_awq_quantize_dequantize() {
-        let device = Device::Cpu;
-        let data: Vec<f32> = make_ramp(0.0, 12.8, 128);
-        let awq = AWQQuantization::new(4, 32);
-
-        let weights = awq.quantize(&data, &[128], &device).unwrap();
-        let dequantized = awq.dequantize(&weights).unwrap();
-
-        let deq_data: Vec<f32> = dequantized.to_vec1().unwrap();
-        let max_diff = data
-            .iter()
-            .zip(deq_data.iter())
-            .map(|(a, b)| (a - b).abs())
-            .fold(0.0f32, f32::max);
-
-        assert!(
-            max_diff < 10.0,
-            "Dequantization error too large: {max_diff}"
-        );
-    }
-
-    #[test]
-    fn test_gptq_quantize_dequantize() {
-        let device = Device::Cpu;
-        // ramp from -16 to +15.5 with step 0.5 (equivalent to (i - 32) * 0.5)
-        let data: Vec<f32> = make_ramp(-16.0, 16.0, 64);
-        let gptq = GPTQQuantization::new(4, 16);
-
-        let weights = gptq.quantize(&data, &[64], &device).unwrap();
-        let dequantized = gptq.dequantize(&weights).unwrap();
-
-        let deq_data: Vec<f32> = dequantized.to_vec1().unwrap();
-        let max_diff = data
-            .iter()
-            .zip(deq_data.iter())
-            .map(|(a, b)| (a - b).abs())
-            .fold(0.0f32, f32::max);
-
-        assert!(max_diff < 20.0, "GPTQ dequantization error too large");
-    }
-
-    #[test]
-    fn test_quantization_types() {
-        assert_eq!(
-            QuantizationType::from_str("awq"),
-            Some(QuantizationType::Awq)
-        );
-        assert_eq!(
-            QuantizationType::from_str("gptq"),
-            Some(QuantizationType::Gptq)
-        );
-        assert_eq!(
-            QuantizationType::from_str("llm-awq"),
-            Some(QuantizationType::Awq)
-        );
-
-        assert_eq!(QuantizationType::Awq.bits(), 4);
-        assert_eq!(QuantizationType::Gptq.bits(), 4);
-    }
-
-    #[test]
-    fn test_quantized_weights_builder() {
-        use candle_core::Device;
-
-        let qweight = Tensor::ones((32,), candle_core::DType::U8, &Device::Cpu).unwrap();
-        let scales = Tensor::ones((1,), candle_core::DType::F32, &Device::Cpu).unwrap();
-
-        let weights = QuantizedWeights::new(qweight, scales)
-            .with_zeros(Tensor::zeros((1,), candle_core::DType::F32, &Device::Cpu).unwrap());
-
-        assert!(weights.zeros.is_some());
-    }
-}
+mod tests;
