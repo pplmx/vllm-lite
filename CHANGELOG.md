@@ -545,11 +545,12 @@
 - **Comprehensive Refactor (Phase 7)** — third module-splitting pass.
   Closes out the remaining inline-test extractions across
   `crates/core/src/{speculative,metrics,scheduler}/`,
-  `crates/server/src/openai/`, the security/ subtree, and the
-  attention / kernel / mixtral / paged_tensor subtrees of
+  `crates/server/src/openai/` + `security/`, and the `arch/`,
+  attention / causal_lm / kv_cache_fp8 / mixtral / mistral_small /
+  paged_tensor / positional / qwen3-architecture subtrees of
   `crates/model/`. Pure file-size refactors (zero behavioral
-  change), all 1235 tests pass after each commit. 21 atomic
-  commits in this phase, 20 source files slimmed down plus 1 doc
+  change), all 1235 tests pass after each commit. 29 atomic
+  commits in this phase, 28 source files slimmed down plus 1 doc
   pass plus 1 doc + test commit.
 
   Per-file line counts (before → after):
@@ -570,13 +571,21 @@
     | `server/src/security/tls.rs` | 198 | 143 | extract 3 tests (incl. SEC-06 regression) → `tls/tests.rs` |
     | `server/src/security/size_limit.rs` | 131 | 27 | extract 4 `#[tokio::test]` cases → `size_limit/tests.rs` |
     | `model/src/loader/builder.rs` | 490 | 305 | extract 12 inline tests → `builder/tests.rs` |
+    | `model/src/arch/registry.rs` | 217 | 113 | extract 6 tests + doc pass on every public method |
+    | `model/src/arch/capabilities.rs` | 92 | 70 | extract 2 inline tests → `capabilities/tests.rs` |
+    | `model/src/causal_lm/mod.rs` | 327 | 231 | extract 3 inline tests → `causal_lm/tests.rs` |
     | `model/src/components/attention/rope_gqa.rs` | 483 | 255 | extract 6 inline tests → `rope_gqa/tests.rs` |
+    | `model/src/components/kv_cache_fp8.rs` | 318 | 226 | extract 7 inline tests → `kv_cache_fp8/tests.rs` |
+    | `model/src/components/positional/rope.rs` | 312 | 145 | extract 14 inline tests → `rope/tests.rs` |
+    | `model/src/components/vision.rs` | 149 | 95 | extract 6 tests + doc pass on PatchEmbed / VisionEncoder public surface |
     | `model/src/gemma4/attention.rs` | 484 | 399 | extract 2 inline tests → `attention/tests.rs` |
+    | `model/src/gemma4/block.rs` | 359 | 302 | extract 1 inline test → `block/tests.rs` |
     | `model/src/kernels/cuda_graph.rs` | 458 | 257 | extract 12 inline tests → `cuda_graph/tests.rs` |
     | `model/src/kernels/cuda_graph/executor.rs` | 480 | 301 | extract 13 inline tests → `executor/tests.rs` |
     | `model/src/mixtral/sparse_moe.rs` | 384 | 280 | extract 5 inline tests → `sparse_moe/tests.rs` |
+    | `model/src/mixtral/block.rs` | 375 | 322 | extract 1 inline test → `block/tests.rs` |
+    | `model/src/mistral_small/arch.rs` | 309 | 260 | extract 4 inline tests → `arch/tests.rs` |
     | `model/src/paged_tensor/quant.rs` | 402 | 314 | extract 4 inline tests → `quant/tests.rs` |
-    | `model/src/components/vision.rs` | 149 | 95 | extract 6 tests + doc pass on PatchEmbed / VisionEncoder public surface |
 
   Other commits in this phase:
     - `style`: cargo fmt fix on `draft_resolver/tests.rs` +
@@ -593,18 +602,22 @@
   `core/src/scheduler/`, `core/src/speculative/registry/`,
   `core/src/metrics/lock_free.rs`, `server/src/openai/`,
   `server/src/security/` (audit / correlation / jwt / rbac /
-  size_limit / tls), `model/src/loader/`, and the
-  `model/src/components/attention/`, `model/src/kernels/`,
-  `model/src/mixtral/`, `model/src/paged_tensor/`,
-  `model/src/gemma4/`, `model/src/components/vision.rs`
-  subtrees. The pattern is the default for new modules going
-  forward.
+  size_limit / tls), `model/src/loader/`, `model/src/arch/`,
+  `model/src/causal_lm/`, `model/src/components/{attention,
+  kv_cache_fp8, positional, vision}/`, `model/src/gemma4/`,
+  `model/src/kernels/`, `model/src/mixtral/`,
+  `model/src/mistral_small/`, and `model/src/paged_tensor/`.
+  The pattern is the default for new modules going forward.
 
-  Doc coverage delta: model crate real% moved from 48.8% → 48.9%
-  (+1 documented item: `VisionEncoder::forward`) on top of the
-  PatchEmbed / VisionEncoder / PatchEmbed::new /
-  PatchEmbed::forward / VisionEncoder::config improvements. Total
-  workspace real% 51.5% → 51.6%.
+  Doc coverage delta: model crate real% moved from 48.8% → 49.6%
+  on the strength of:
+    - `PatchEmbed`, `PatchEmbed::new`, `PatchEmbed::forward`,
+      `VisionEncoder::config`, `VisionEncoder::forward`
+      (`vision.rs` doc pass)
+    - `ArchitectureRegistry` + all 7 public methods on it, plus
+      the `ARCHITECTURE_REGISTRY` static
+      (`arch/registry.rs` doc pass)
+  Total workspace real% 51.5% → 51.9% (+4 net documented items).
 
   Test count: 1235 → 1235 (zero new tests, zero removed — these
   were pure refactors). All Phase 7 commits verified by `cargo
