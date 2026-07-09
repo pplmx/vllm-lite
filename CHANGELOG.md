@@ -530,6 +530,11 @@
       `cli/args/tests.rs` — both are valid but orthogonal to the
       file-size split. Deferred to a future phase that bundles the
       visibility change.
+      **Resolution (post-Phase-6 commit `9e557e4`)**: tests now live
+      at `cli/args/tests.rs` (a child module of `cli::args`), so
+      `use super::*;` retains full access to private fields. No
+      visibility refactor needed. `cli/args.rs` 554 → 237 lines; the
+      25 unit tests are unchanged.
     - One cargo fmt re-indent on `eviction/prop_tests.rs`
       (single-line commit, no functional change).
 
