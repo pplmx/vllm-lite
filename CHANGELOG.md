@@ -492,6 +492,53 @@
 
 ---
 
+- **Comprehensive Refactor (Phase 6)** — second module-splitting pass
+  targeting the remaining large source files. Pure file-size refactors
+  (zero behavioral change), all 1235 tests pass after each commit.
+  10 atomic commits, 10 large files slimmed down.
+
+  Per-file line counts (before → after):
+    | File | Before | After | Pattern |
+    |------|-------:|------:|---------|
+    | `server/src/security/jwt.rs` | 571 | 276 | extract 10 inline tests → `jwt/tests.rs` |
+    | `core/src/engine/mod.rs` | 510 | 175 | extract 19 inline tests → `engine/tests.rs` |
+    | `core/src/scheduler/memory/eviction.rs` | 459 | 196 | extract 11 tests + 3 proptests → `eviction/{tests,prop_tests}.rs` |
+    | `core/src/scheduler/request_queue.rs` | 456 | 220 | extract 4 tests + 4 proptests → `request_queue/{tests,prop_tests}.rs` |
+    | `core/src/sampling.rs` | 452 | 228 | extract 23 tests + 4 proptests → `sampling/{tests,prop_tests}.rs` |
+    | `server/src/config.rs` | 551 | 391 | extract 15 inline tests → `config/tests.rs` |
+    | `model/src/components/gated_delta/rule.rs` | 572 | 423 | extract 5 inline tests → `rule/tests.rs` |
+    | `model/src/components/attention/util.rs` | 532 | 262 | extract 10 inline tests → `util/tests.rs` |
+    | `core/src/scheduler/policy/priority.rs` | 207 | 64 | extract 1 test + 3 proptests → `priority/{tests,prop_tests}.rs` |
+    | `core/src/scheduler/engine/mod.rs` | 172 | 34 | extract 8 inline tests → `engine/tests.rs` |
+
+  Pattern: continues the Phase 5 sibling-file convention. For files
+  with both `mod tests` and `mod prop_tests` inline blocks (eviction,
+  request_queue, sampling, priority), both are extracted to separate
+  sibling files; this preserves the unit-vs-property test boundary
+  while keeping production code under the 800-line cap. Files whose
+  fields are pub-only (config.rs) split cleanly; one file with private
+  fields that needed broader visibility (cli/args.rs) was intentionally
+  skipped this phase to avoid coupling the split with a visibility
+  refactor.
+
+  Two small follow-ups:
+    - `cli/args.rs` was attempted but rolled back: the `CliArgs` struct
+      has private fields (`server`, `engine`, `auth`, `logging`,
+      `config`) and the tests access them directly via `cli.server.host`,
+      `cli.engine.kv_blocks`, etc. Splitting would require either
+      making those fields `pub(crate)` or moving the tests to
+      `cli/args/tests.rs` — both are valid but orthogonal to the
+      file-size split. Deferred to a future phase that bundles the
+      visibility change.
+    - One cargo fmt re-indent on `eviction/prop_tests.rs`
+      (single-line commit, no functional change).
+
+  Test count: 1235 → 1235 (zero new tests, zero removed — these were
+  pure refactors). All Phase 6 commits verified by `cargo nextest run
+  --workspace --no-fail-fast` and `cargo fmt --all --check`.
+
+---
+
 ## 🚀 [v18.0] — Multi-Model Speculative Decoding (2026-06-27)
 
 ### Added
