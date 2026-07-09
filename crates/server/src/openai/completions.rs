@@ -134,55 +134,9 @@ pub async fn completions(
     Ok(Json(response).into_response())
 }
 
+// Unit tests live in `tests.rs` (sibling) to keep this handler file
+// under the 800-line soft cap. They cover the empty-prompt validation
+// path and the engine-channel error mapping (closed channel → 503
+// `engine_unavailable`).
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn create_test_state() -> crate::ApiState {
-        crate::test_fixtures::api_state(vllm_model::config::Architecture::Qwen3)
-    }
-
-    #[tokio::test]
-    async fn test_completions_empty_prompt() {
-        let state = create_test_state();
-        let req = CompletionRequest {
-            model: None,
-            prompt: String::new(),
-            temperature: None,
-            max_tokens: Some(100),
-            stream: None,
-            n: None,
-            stop: None,
-        };
-
-        let result = completions(State(state), Json(req)).await;
-        assert!(result.is_err());
-        let (status, _) = result.unwrap_err();
-        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
-    }
-
-    #[tokio::test]
-    async fn test_completions_with_valid_max_tokens() {
-        let state = create_test_state();
-        let req = CompletionRequest {
-            model: None,
-            prompt: "Hello".to_string(),
-            temperature: None,
-            max_tokens: Some(10),
-            stream: None,
-            n: None,
-            stop: None,
-        };
-
-        // With no engine running, this will fail to send to engine
-        // but we can verify it doesn't fail on validation. The closed-channel
-        // error surfaces as 503 SERVICE_UNAVAILABLE with `engine_unavailable`
-        // code (see `completions` handler) — distinguishable from a real
-        // server-side bug, and safe for clients to retry.
-        let result = completions(State(state), Json(req)).await;
-        assert!(result.is_err());
-        let (status, body) = result.unwrap_err();
-        assert_eq!(status, axum::http::StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(body.error.code.as_deref(), Some("engine_unavailable"));
-    }
-}
+mod tests;
