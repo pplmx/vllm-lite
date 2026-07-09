@@ -543,22 +543,32 @@
   --workspace --no-fail-fast` and `cargo fmt --all --check`.
 
 - **Comprehensive Refactor (Phase 7)** — third module-splitting pass.
-  Closes out the remaining inline-test extractions in
-  `crates/server/src/openai/` and `crates/model/src/loader/` and
-  finishes the test/prop_tests directory split for
-  `crates/core/src/scheduler/memory/allocator.rs`. Pure file-size
+  Closes out the remaining inline-test extractions across
+  `crates/core/src/{speculative,metrics}/`, the second half of
+  `crates/server/src/openai/`, and the attention / kernel / mixtral
+  / paged_tensor subtrees of `crates/model/`. Pure file-size
   refactors (zero behavioral change), all 1235 tests pass after each
-  commit. 7 atomic commits in this phase, 4 source files slimmed
-  down plus 1 doc pass.
+  commit. 14 atomic commits in this phase, 11 source files slimmed
+  down plus 1 doc pass plus 1 doc + test commit.
 
   Per-file line counts (before → after):
     | File | Before | After | Pattern |
     |------|-------:|------:|---------|
     | `core/src/scheduler/memory/allocator.rs` | 381 | 195 | extract 7 unit + 3 proptests → `allocator/{tests,prop_tests}.rs` |
+    | `core/src/speculative/registry/mod.rs` | 434 | 87 | extract 25 inline tests → `registry/tests.rs` |
+    | `core/src/metrics/lock_free.rs` | 406 | 332 | extract 6 inline tests → `lock_free/tests.rs` |
     | `server/src/openai/chat.rs` | 496 | 313 | extract 14 inline tests → `chat/tests.rs` |
-    | `model/src/loader/builder.rs` | 490 | 305 | extract 12 inline tests → `builder/tests.rs` |
+    | `server/src/openai/chat_template.rs` | 258 | 149 | extract 10 inline tests → `chat_template/tests.rs` |
     | `server/src/openai/completions.rs` | 188 | 137 | extract 2 `#[tokio::test]` cases → `completions/tests.rs` |
-    | `dist/src/tensor_parallel/parallel_linear.rs` | — | — | doc pass on `RowParallelLinear` + `TensorParallelManager` public methods (no source change) |
+    | `server/src/openai/embeddings.rs` | 142 | 82 | extract 3 `#[tokio::test]` cases → `embeddings/tests.rs` |
+    | `model/src/loader/builder.rs` | 490 | 305 | extract 12 inline tests → `builder/tests.rs` |
+    | `model/src/components/attention/rope_gqa.rs` | 483 | 255 | extract 6 inline tests → `rope_gqa/tests.rs` |
+    | `model/src/gemma4/attention.rs` | 484 | 399 | extract 2 inline tests → `attention/tests.rs` |
+    | `model/src/kernels/cuda_graph.rs` | 458 | 257 | extract 12 inline tests → `cuda_graph/tests.rs` |
+    | `model/src/kernels/cuda_graph/executor.rs` | 480 | 301 | extract 13 inline tests → `executor/tests.rs` |
+    | `model/src/mixtral/sparse_moe.rs` | 384 | 280 | extract 5 inline tests → `sparse_moe/tests.rs` |
+    | `model/src/paged_tensor/quant.rs` | 402 | 314 | extract 4 inline tests → `quant/tests.rs` |
+    | `model/src/components/vision.rs` | 149 | 95 | extract 6 tests + doc pass on PatchEmbed / VisionEncoder public surface |
 
   Other commits in this phase:
     - `style`: cargo fmt fix on `draft_resolver/tests.rs` +
@@ -572,11 +582,21 @@
 
   Pattern: continues the Phase 5/6 sibling-file convention. After
   this phase, every source file in `core/src/scheduler/`,
-  `server/src/openai/`, and `model/src/loader/` that previously
-  held both inline tests and inline proptests is now in the
-  directory shape (`foo.rs` + `foo/tests.rs` + `foo/prop_tests.rs`)
-  or single-test shape (`foo.rs` + `foo/tests.rs`). The pattern is
-  the default for new modules.
+  `server/src/openai/`, and `model/src/loader/`, plus all of the
+  `model/src/components/attention/`, `model/src/kernels/`,
+  `model/src/mixtral/`, `model/src/paged_tensor/`,
+  `model/src/gemma4/`, `model/src/components/vision.rs`,
+  `core/src/speculative/registry/`, and
+  `core/src/metrics/lock_free.rs` test surface lives in the
+  directory shape: `foo.rs` + `foo/tests.rs` (+ `foo/prop_tests.rs`
+  when both kinds of tests exist). The pattern is the default for
+  new modules going forward.
+
+  Doc coverage delta: model crate real% moved from 48.8% → 48.9%
+  (+1 documented item: `VisionEncoder::forward`) on top of the
+  PatchEmbed / VisionEncoder / PatchEmbed::new /
+  PatchEmbed::forward / VisionEncoder::config improvements. Total
+  workspace real% 51.5% → 51.6%.
 
   Test count: 1235 → 1235 (zero new tests, zero removed — these
   were pure refactors). All Phase 7 commits verified by `cargo
