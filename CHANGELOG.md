@@ -542,6 +542,47 @@
   pure refactors). All Phase 6 commits verified by `cargo nextest run
   --workspace --no-fail-fast` and `cargo fmt --all --check`.
 
+- **Comprehensive Refactor (Phase 7)** — third module-splitting pass.
+  Closes out the remaining inline-test extractions in
+  `crates/server/src/openai/` and `crates/model/src/loader/` and
+  finishes the test/prop_tests directory split for
+  `crates/core/src/scheduler/memory/allocator.rs`. Pure file-size
+  refactors (zero behavioral change), all 1235 tests pass after each
+  commit. 7 atomic commits in this phase, 4 source files slimmed
+  down plus 1 doc pass.
+
+  Per-file line counts (before → after):
+    | File | Before | After | Pattern |
+    |------|-------:|------:|---------|
+    | `core/src/scheduler/memory/allocator.rs` | 381 | 195 | extract 7 unit + 3 proptests → `allocator/{tests,prop_tests}.rs` |
+    | `server/src/openai/chat.rs` | 496 | 313 | extract 14 inline tests → `chat/tests.rs` |
+    | `model/src/loader/builder.rs` | 490 | 305 | extract 12 inline tests → `builder/tests.rs` |
+    | `server/src/openai/completions.rs` | 188 | 137 | extract 2 `#[tokio::test]` cases → `completions/tests.rs` |
+    | `dist/src/tensor_parallel/parallel_linear.rs` | — | — | doc pass on `RowParallelLinear` + `TensorParallelManager` public methods (no source change) |
+
+  Other commits in this phase:
+    - `style`: cargo fmt fix on `draft_resolver/tests.rs` +
+      `gated_delta/rule/tests.rs` (mechanical re-indent of long
+      fn signatures; zero behavior change).
+    - `docs(dist)`: documented `RowParallelLinear::new`,
+      `input_size_per_rank`, `forward`, `TensorParallelManager::new`,
+      `create_column_parallel`, `create_row_parallel`, `mesh` —
+      spells out the per-rank split/replicate topology each method
+      implies and which error variants each can return.
+
+  Pattern: continues the Phase 5/6 sibling-file convention. After
+  this phase, every source file in `core/src/scheduler/`,
+  `server/src/openai/`, and `model/src/loader/` that previously
+  held both inline tests and inline proptests is now in the
+  directory shape (`foo.rs` + `foo/tests.rs` + `foo/prop_tests.rs`)
+  or single-test shape (`foo.rs` + `foo/tests.rs`). The pattern is
+  the default for new modules.
+
+  Test count: 1235 → 1235 (zero new tests, zero removed — these
+  were pure refactors). All Phase 7 commits verified by `cargo
+  nextest run --workspace --no-fail-fast` and `cargo fmt --all
+  --check`.
+
 ---
 
 ## 🚀 [v18.0] — Multi-Model Speculative Decoding (2026-06-27)
