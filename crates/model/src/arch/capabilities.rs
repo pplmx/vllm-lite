@@ -69,23 +69,8 @@ impl ArchCapabilities {
     }
 }
 
+// Unit tests are extracted to `tests.rs` (sibling) to keep this
+// small enum-like module under the 800-line soft cap. They cover
+// `is_stub()` and the four `tier()` label mappings.
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_stub_is_detected() {
-        assert!(ArchCapabilities::STUB.is_stub());
-        assert!(!ArchCapabilities::PRODUCTION.is_stub());
-    }
-
-    #[test]
-    fn test_tier_labels() {
-        assert_eq!(ArchCapabilities::STUB.tier(), "stub");
-        assert_eq!(ArchCapabilities::PRODUCTION.tier(), "production");
-        assert_eq!(
-            ArchCapabilities::PRODUCTION_SPECULATIVE.tier(),
-            "production-speculative"
-        );
-    }
-}
+mod tests;
