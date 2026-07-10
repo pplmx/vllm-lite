@@ -27,6 +27,16 @@ path = "../crates/model"
 [dependencies.serde_json]
 version = "1"
 
+[lints]
+workspace = true
+
+# cargo-machete can't see usage from the generated fuzz target binaries
+# (each `[[bin]]` is a separate compilation unit and the references live
+# in fuzz_targets/*.rs). `serde` is used by `#[derive(Serialize, Deserialize)]`
+# on shared types; `vllm-core` is referenced by the fuzz target entry points.
+[package.metadata.cargo-machete]
+ignored = ["serde", "vllm-core"]
+
 [[bin]]
 name = "fuzz_target_1"
 path = "fuzz_targets/fuzz_target_1.rs"

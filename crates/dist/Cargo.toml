@@ -26,3 +26,8 @@ tonic-prost-build = "0.14"
 
 [lints]
 workspace = true
+
+# cargo-machete can't see usage from the generated `vllm.distributed.rs`
+# file (tonic_prost::ProstCodec is used directly there). Keep tonic-prost.
+[package.metadata.cargo-machete]
+ignored = ["tonic-prost"]
