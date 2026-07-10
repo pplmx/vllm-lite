@@ -55,7 +55,7 @@ impl CorrelationIdMiddleware {
     }
 
     #[must_use]
-    pub fn extract_id(headers: &axum::http::HeaderMap) -> Option<String> {
+    pub(crate) fn extract_id(headers: &axum::http::HeaderMap) -> Option<String> {
         headers
             .get(REQUEST_ID_HEADER)
             .and_then(|v| v.to_str().ok())

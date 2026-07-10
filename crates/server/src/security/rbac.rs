@@ -103,7 +103,7 @@ impl RbacMiddleware {
     }
 
     #[must_use]
-    pub fn check_permission(&self, role: Role, action: &str) -> bool {
+    pub(crate) fn check_permission(&self, role: Role, action: &str) -> bool {
         for (r, actions) in self.role_permissions.iter() {
             if *r == role {
                 return actions.iter().any(|a| *a == "*" || *a == action);
@@ -125,7 +125,7 @@ impl RbacMiddleware {
     /// Returns `None` for paths that have no RBAC requirement (i.e.
     /// public endpoints like `/health`).
     #[must_use]
-    pub fn required_action_for_path(path: &str) -> Option<&'static str> {
+    pub(crate) fn required_action_for_path(path: &str) -> Option<&'static str> {
         // Strip trailing slash for matching.
         let p = path.trim_end_matches('/');
         match p {
