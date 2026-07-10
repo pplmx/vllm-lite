@@ -11,7 +11,10 @@ use candle_core::{Result, Tensor};
 /// # Errors
 ///
 /// Returns `Err` if the operation fails.
-pub fn new_block(config: &crate::config::ModelConfig, _layer_idx: usize) -> Result<TransformerBlock> {
+pub fn new_block(
+    config: &crate::config::ModelConfig,
+    _layer_idx: usize,
+) -> Result<TransformerBlock> {
     TransformerBlock::new(
         config.hidden_size,
         config.num_heads,
