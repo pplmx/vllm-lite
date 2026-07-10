@@ -181,3 +181,189 @@ fn test_rope_large_position() -> Result<()> {
     }
     Ok(())
 }
+
+// === Phase 15: long-context scaling (RopeType-aware apply_with_scaling) ===
+
+use crate::qwen3::config::{RopeScaling, RopeType};
+
+fn scaled_rope(rope_type: RopeType, scaling_factor: f32) -> RoPE {
+    RoPE {
+        theta: 10000.0,
+        head_dim: 64,
+        max_position: 1024,
+        scaling_factor,
+        device: Device::Cpu,
+        rope_type,
+        attn_factor: None,
+        original_max_position: None,
+    }
+}
+
+#[test]
+fn test_apply_with_scaling_default_matches_unscaled() -> Result<()> {
+    // Default rope_type + scaling_factor=1.0 should produce the same
+    // output as the plain apply path (no scaling).
+    let device = Device::Cpu;
+    let q = Tensor::randn(0.0f32, 1.0, (1, 4, 4, 64), &device)?;
+    let positions: Vec<i64> = vec![0, 1, 2, 3];
+
+    let rope_default = scaled_rope(RopeType::Default, 1.0);
+    let rope_unscaled = RoPE::new(64, 1024, 10000.0, &device);
+
+    let out_default = rope_default.apply_with_scaling(&q, &positions)?;
+    let out_unscaled = rope_unscaled.apply(&q, &positions)?;
+
+    let diff = (&out_default - &out_unscaled)?.abs()?.max_all()?.to_scalar::<f32>()?;
+    assert!(
+        diff < 1e-5,
+        "Default scaling should match unscaled apply (max diff = {diff})"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_apply_with_scaling_linear_modifies_output() -> Result<()> {
+    // Linear scaling with factor > 1 must produce a different output
+    // from the unscaled path.
+    let device = Device::Cpu;
+    let q = Tensor::randn(0.0f32, 1.0, (1, 4, 4, 64), &device)?;
+    let positions: Vec<i64> = vec![4, 5, 6, 7];
+
+    let rope_unscaled = RoPE::new(64, 1024, 10000.0, &device);
+    let rope_linear = scaled_rope(RopeType::Linear, 2.0);
+
+    let out_unscaled = rope_unscaled.apply(&q, &positions)?;
+    let out_linear = rope_linear.apply_with_scaling(&q, &positions)?;
+
+    let diff = (&out_unscaled - &out_linear)?.abs()?.sum_all()?.to_scalar::<f32>()?;
+    assert!(
+        diff > 1e-3,
+        "Linear scaling (factor=2) should noticeably change the output (sum diff = {diff})"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_apply_with_scaling_yarn_modifies_output() -> Result<()> {
+    // YaRN scaling must produce a different output from the unscaled
+    // path (NTK-aware theta adjustment). Note that YaRN's effects are
+    // smaller than Linear's at the same factor — high-frequency dims
+    // barely move.
+    let device = Device::Cpu;
+    let q = Tensor::randn(0.0f32, 1.0, (1, 4, 4, 64), &device)?;
+    let positions: Vec<i64> = vec![10, 11, 12, 13];
+
+    let rope_unscaled = RoPE::new(64, 1024, 10000.0, &device);
+    let rope_yarn = scaled_rope(RopeType::Yarn, 4.0);
+
+    let out_unscaled = rope_unscaled.apply(&q, &positions)?;
+    let out_yarn = rope_yarn.apply_with_scaling(&q, &positions)?;
+
+    let diff = (&out_unscaled - &out_yarn)?.abs()?.sum_all()?.to_scalar::<f32>()?;
+    assert!(
+        diff > 1e-6,
+        "YaRN scaling (factor=4) should change the output (sum diff = {diff})"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_apply_with_scaling_factor_one_is_noop() -> Result<()> {
+    // For any rope_type, scaling_factor == 1.0 should produce the same
+    // output as the unscaled path.
+    let device = Device::Cpu;
+    let q = Tensor::randn(0.0f32, 1.0, (1, 4, 4, 64), &device)?;
+    let positions: Vec<i64> = vec![5, 6, 7, 8];
+
+    let rope_unscaled = RoPE::new(64, 1024, 10000.0, &device);
+
+    for &kind in &[RopeType::Linear, RopeType::Yarn] {
+        let rope_scaled = scaled_rope(kind, 1.0);
+        let out_unscaled = rope_unscaled.apply(&q, &positions)?;
+        let out_scaled = rope_scaled.apply_with_scaling(&q, &positions)?;
+        let diff = (&out_unscaled - &out_scaled)?
+            .abs()?
+            .max_all()?
+            .to_scalar::<f32>()?;
+        assert!(
+            diff < 1e-5,
+            "factor=1.0 must be a no-op for {kind:?} (max diff = {diff})"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn test_rope_scaling_context_from_rope_scaling_extracts_all_fields() {
+    // RopeScalingContext::from(&RopeScaling) must extract every field
+    // the YAML/JSON config exposes.
+    let scaling = RopeScaling {
+        rope_type: Some(RopeType::Yarn),
+        factor: Some(8.0),
+        original_max_position_embeddings: Some(4096),
+        attn_factor: Some(0.2),
+        partial_rotary_factor: None,
+        mrope_section: None,
+    };
+    let ctx = RopeScalingContext::from(&scaling);
+    assert_eq!(ctx.rope_type, RopeType::Yarn);
+    assert!((ctx.scaling_factor - 8.0).abs() < 1e-6);
+    assert!((ctx.attn_factor.unwrap() - 0.2).abs() < 1e-6);
+    assert_eq!(ctx.original_max_position, Some(4096));
+}
+
+#[test]
+fn test_new_with_config_extracts_yarn_fields() {
+    // new_with_config must populate rope_type / attn_factor /
+    // original_max_position from a config that declares them.
+    use crate::qwen3::config::{Qwen3Config, TextConfig};
+    use serde_json::json;
+
+    let cfg: Qwen3Config = serde_json::from_value(json!({
+        "rope_theta": 1000000.0,
+        "max_position_embeddings": 32768,
+        "hidden_size": 4096,
+        "num_attention_heads": 32,
+        "rope_scaling": {
+            "rope_type": "yarn",
+            "factor": 4.0,
+            "attn_factor": 0.1,
+            "original_max_position_embeddings": 8192
+        }
+    }))
+    .expect("config deserializes");
+
+    // Sanity-check the deserialized fields before constructing RoPE.
+    let scaling = cfg.rope_scaling().expect("rope_scaling present");
+    assert_eq!(scaling.rope_type, Some(RopeType::Yarn));
+    let _ = TextConfig::default(); // keep `text_config` referenced so clippy doesn't complain about unused
+
+    let rope = RoPE::new_with_config(&cfg);
+    assert_eq!(rope.rope_type, RopeType::Yarn);
+    assert!((rope.scaling_factor - 4.0).abs() < 1e-6);
+    assert!((rope.attn_factor.unwrap() - 0.1).abs() < 1e-6);
+    assert_eq!(rope.original_max_position, Some(8192));
+}
+
+#[test]
+fn test_forward_with_scaling_matches_apply_with_scaling() -> Result<()> {
+    // The struct's `forward_with_scaling` helper must produce the same
+    // Q / K outputs as two separate `apply_with_scaling` calls.
+    let device = Device::Cpu;
+    let rope = scaled_rope(RopeType::Yarn, 4.0);
+
+    let q = Tensor::randn(0.0f32, 1.0, (1, 2, 4, 64), &device)?;
+    let k = Tensor::randn(0.0f32, 1.0, (1, 2, 4, 64), &device)?;
+
+    let (q_out, k_out) = rope.forward_with_scaling(&q, &k, 0)?;
+
+    let positions: Vec<i64> = (0..q.dim(1)? as i64).collect();
+    let q_ref = rope.apply_with_scaling(&q, &positions)?;
+    let k_ref = rope.apply_with_scaling(&k, &positions)?;
+
+    let q_diff = (&q_out - &q_ref)?.abs()?.max_all()?.to_scalar::<f32>()?;
+    let k_diff = (&k_out - &k_ref)?.abs()?.max_all()?.to_scalar::<f32>()?;
+    assert!(q_diff < 1e-5, "forward Q != apply Q (diff = {q_diff})");
+    assert!(k_diff < 1e-5, "forward K != apply K (diff = {k_diff})");
+    Ok(())
+}

@@ -3,6 +3,30 @@
 //! The cache shape is `(max_seq_len, head_dim/2)`; `apply_rope` mutates
 //! the input tensor in-place when possible. `MRoPE` (multi-modal `RoPE`
 //! for Qwen3.5-VL) lives in `mrope.rs` alongside this module.
+//!
+//! ## Long-context scaling (Phase 15)
+//!
+//! When constructed via `RoPE::new_with_config(&Qwen3Config)`, the
+//! scaling fields in the config (`rope_scaling.rope_type`,
+//! `rope_scaling.factor`, `rope_scaling.attn_factor`,
+//! `rope_scaling.original_max_position_embeddings`) are captured into
+//! the struct. Use [`RoPE::apply_with_scaling`] to honour them; the
+//! plain [`RoPE::apply`] / free [`apply_rope`] remain scaling-free
+//! for backward compatibility with callers that pass `theta` directly
+//! (rope_gqa, mla, gemma4 attention modules).
+//!
+//! Supported algorithms (selected by `RopeType`):
+//! - `Default` — no scaling (current behaviour, preserved).
+//! - `Linear`  — position interpolation: angle = (pos / scale) * freq.
+//! - `Yarn`    — NTK-aware theta adjustment: theta' = theta *
+//!   scale^(d/(d-2)). High-frequency dims barely change; low-frequency
+//!   dims compress to fit longer contexts. This is the "global NTK"
+//!   approximation used by many open-source implementations; the
+//!   attention-scaling half of YaRN (`attn_factor`) is **stored** on
+//!   the struct so the attention layer can pick it up, but is not
+//!   applied inside `apply_rope` (that lives in the attention kernel).
+//! - `Dynamic`, `Su`, `Other` — fall through to Default for now;
+//!   follow-up work can add bespoke algorithms.
 #![allow(clippy::module_name_repetitions)]
 // invariant: rope positional-index casts (position/seq_len -> f32) are bounded
 // by sequence length and head_dim, both small model-architecture constants;
@@ -13,7 +37,7 @@
     clippy::cast_possible_wrap
 )]
 
-use crate::qwen3::config::Qwen3Config;
+use crate::qwen3::config::{Qwen3Config, RopeScaling, RopeType};
 use candle_core::{Result, Tensor};
 
 /// `RoPE`. See the type definition for fields and behavior.
@@ -25,6 +49,13 @@ pub struct RoPE {
     pub(crate) max_position: usize,
     pub(crate) scaling_factor: f32,
     pub(crate) device: candle_core::Device,
+    /// Which long-context algorithm to apply (default = no scaling).
+    pub(crate) rope_type: RopeType,
+    /// Attention-scaling factor for YaRN; consumed by the attention
+    /// layer, not by `apply_rope` itself.
+    pub(crate) attn_factor: Option<f32>,
+    /// Original context length the scaling was tuned for (YaRN).
+    pub(crate) original_max_position: Option<usize>,
 }
 
 impl RoPE {
@@ -41,9 +72,14 @@ impl RoPE {
             max_position,
             scaling_factor: 1.0,
             device: device.clone(),
+            rope_type: RopeType::Default,
+            attn_factor: None,
+            original_max_position: None,
         }
     }
 
+    /// Construct from a Qwen3 config, extracting `rope_scaling` fields
+    /// (`rope_type`, `factor`, `attn_factor`, `original_max_position_embeddings`).
     #[must_use]
     pub fn new_with_config(config: &Qwen3Config) -> Self {
         use candle_core::Device;
@@ -54,6 +90,11 @@ impl RoPE {
             max_position: config.max_position_embeddings(),
             scaling_factor: rope_scaling.and_then(|r| r.factor).unwrap_or(1.0),
             device: Device::Cpu,
+            rope_type: rope_scaling
+                .and_then(|r| r.rope_type)
+                .unwrap_or(RopeType::Default),
+            attn_factor: rope_scaling.and_then(|r| r.attn_factor),
+            original_max_position: rope_scaling.and_then(|r| r.original_max_position_embeddings),
         }
     }
 
@@ -63,11 +104,39 @@ impl RoPE {
     }
 
     /// Run the operation (see signature for params and return type).
+    ///
+    /// **Does not apply any long-context scaling.** Use
+    /// [`RoPE::apply_with_scaling`] when the config declares
+    /// `rope_scaling.rope_type` other than `default`.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
     pub fn apply(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
         apply_rope(x, positions, self.theta)
+    }
+
+    /// Long-context-aware variant of [`RoPE::apply`].
+    ///
+    /// Selects the inverse-frequency formula based on `self.rope_type`:
+    /// - `Default` / unset → same as `apply`.
+    /// - `Linear` → position interpolation (`inv_freq / scaling_factor`).
+    /// - `Yarn` → NTK-aware theta adjustment.
+    /// - `Dynamic`, `Su`, `Other` → fall through to Default for now.
+    /// # Errors
+    ///
+    /// Returns `Err` if the candle operation fails.
+    pub fn apply_with_scaling(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
+        apply_rope_with_scaling(x, positions, self.theta, self.scaling_ctx())
+    }
+
+    /// Bundle the scaling-related fields for passing to the free function.
+    fn scaling_ctx(&self) -> RopeScalingContext {
+        RopeScalingContext {
+            rope_type: self.rope_type,
+            scaling_factor: self.scaling_factor,
+            attn_factor: self.attn_factor,
+            original_max_position: self.original_max_position,
+        }
     }
 
     /// Run the layer forward pass over the input.
@@ -80,6 +149,71 @@ impl RoPE {
         let k_out = apply_rope(k, &positions, self.theta)?;
         Ok((q_out, k_out))
     }
+
+    /// Long-context-aware variant of [`RoPE::forward`].
+    /// # Errors
+    ///
+    /// Returns `Err` if any candle operation fails.
+    pub fn forward_with_scaling(
+        &self,
+        q: &Tensor,
+        k: &Tensor,
+        position: i64,
+    ) -> Result<(Tensor, Tensor)> {
+        let positions: Vec<i64> = (0..q.dim(1)? as i64).map(|i| position + i).collect();
+        let q_out = apply_rope_with_scaling(q, &positions, self.theta, self.scaling_ctx())?;
+        let k_out = apply_rope_with_scaling(k, &positions, self.theta, self.scaling_ctx())?;
+        Ok((q_out, k_out))
+    }
+
+    /// `attn_factor` accessor — read by attention layers to apply
+    /// YaRN's attention-temperature scaling.
+    #[must_use]
+    pub const fn attn_factor(&self) -> Option<f32> {
+        self.attn_factor
+    }
+
+    /// `original_max_position_embeddings` accessor — sometimes useful
+    /// for attention kernels that need to know the trained context
+    /// length to pick the right temperature schedule.
+    #[must_use]
+    pub const fn original_max_position(&self) -> Option<usize> {
+        self.original_max_position
+    }
+}
+
+/// Bundle of scaling parameters extracted from `RopeScaling`.
+///
+/// Cheap to copy (`Copy + Clone`); intended for `apply_rope_with_scaling`
+/// callers that don't have a `RoPE` struct handy.
+#[derive(Copy, Clone, Debug)]
+pub struct RopeScalingContext {
+    pub rope_type: RopeType,
+    pub scaling_factor: f32,
+    pub attn_factor: Option<f32>,
+    pub original_max_position: Option<usize>,
+}
+
+impl Default for RopeScalingContext {
+    fn default() -> Self {
+        Self {
+            rope_type: RopeType::Default,
+            scaling_factor: 1.0,
+            attn_factor: None,
+            original_max_position: None,
+        }
+    }
+}
+
+impl From<&RopeScaling> for RopeScalingContext {
+    fn from(r: &RopeScaling) -> Self {
+        Self {
+            rope_type: r.rope_type.unwrap_or(RopeType::Default),
+            scaling_factor: r.factor.unwrap_or(1.0),
+            attn_factor: r.attn_factor,
+            original_max_position: r.original_max_position_embeddings,
+        }
+    }
 }
 
 /// Run the operation (see signature for params and return type).
@@ -87,22 +221,104 @@ impl RoPE {
 ///
 /// Returns `Err` if the operation fails.
 pub fn apply_rope(query: &Tensor, positions: &[i64], theta: f32) -> Result<Tensor> {
+    let inv_freq = compute_inv_freq_default(query, theta);
+    apply_rope_with_inv_freq(query, positions, &inv_freq)
+}
+
+/// Long-context-aware variant of [`apply_rope`].
+/// # Errors
+///
+/// Returns `Err` if the operation fails.
+pub fn apply_rope_with_scaling(
+    query: &Tensor,
+    positions: &[i64],
+    theta: f32,
+    scaling: RopeScalingContext,
+) -> Result<Tensor> {
+    let inv_freq = match scaling.rope_type {
+        RopeType::Default => compute_inv_freq_default(query, theta),
+        RopeType::Linear => compute_inv_freq_linear(query, theta, scaling.scaling_factor),
+        RopeType::Yarn => compute_inv_freq_yarn(query, theta, scaling.scaling_factor),
+        // Dynamic, Su, Other — fall back to default for now. These need
+        // either per-step recomputation (Dynamic) or different wavelength
+        // correction (Su) that is out of scope for Phase 15.
+        RopeType::Dynamic | RopeType::Su | RopeType::Other => {
+            compute_inv_freq_default(query, theta)
+        }
+    };
+    apply_rope_with_inv_freq(query, positions, &inv_freq)
+}
+
+/// Default inverse-frequency table for a given `theta`.
+///
+/// `inv_freq[i] = theta ^ (-2i / d)` for `i in 0..head_dim/2`.
+/// This is the standard RoPE formula unchanged from `apply_rope`.
+fn compute_inv_freq_default(query: &Tensor, theta: f32) -> Vec<f32> {
+    let (_batch, _seq_len, _num_heads, head_dim) = query.dims4().expect("dims4");
+    compute_inv_freq_for_head_dim(head_dim, theta)
+}
+
+/// Linear-scaling inverse-frequency table.
+///
+/// Linear position interpolation: divide the position by `scaling_factor`
+/// before multiplying by the frequency. Equivalently, divide the
+/// frequency by `scaling_factor`.
+fn compute_inv_freq_linear(query: &Tensor, theta: f32, scaling_factor: f32) -> Vec<f32> {
+    let (_batch, _seq_len, _num_heads, head_dim) = query.dims4().expect("dims4");
+    let inv_freq = compute_inv_freq_for_head_dim(head_dim, theta);
+    if scaling_factor == 1.0 {
+        return inv_freq;
+    }
+    inv_freq.into_iter().map(|f| f / scaling_factor).collect()
+}
+
+/// YaRN-style NTK-aware inverse-frequency table.
+///
+/// Adjusts `theta` by a global factor `scale^(d/(d-2))` so that:
+/// - high-frequency dims (small `i`) keep their original wavelength,
+/// - low-frequency dims (large `i`) compress to fit longer contexts.
+///
+/// This is the "global NTK" approximation of YaRN — see the [YaRN
+/// paper](https://arxiv.org/abs/2309.00071) §3.3. The attention-scaling
+/// half of YaRN (`attn_factor`) is **not** applied here; that lives in
+/// the attention kernel and is exposed via `RoPE::attn_factor()`.
+fn compute_inv_freq_yarn(query: &Tensor, theta: f32, scaling_factor: f32) -> Vec<f32> {
+    let (_batch, _seq_len, _num_heads, head_dim) = query.dims4().expect("dims4");
+    if scaling_factor == 1.0 {
+        return compute_inv_freq_for_head_dim(head_dim, theta);
+    }
+    // NTK-by-parts / global NTK correction: theta' = theta * scale^(d/(d-2))
+    // For head_dim = 64, d/(d-2) = 64/62 ≈ 1.032; for head_dim = 128,
+    // d/(d-2) = 128/126 ≈ 1.016. Higher head_dim → gentler correction.
+    let d = head_dim as f32;
+    let exponent = d / (d - 2.0);
+    let new_theta = theta * scaling_factor.powf(exponent);
+    compute_inv_freq_for_head_dim(head_dim, new_theta)
+}
+
+fn compute_inv_freq_for_head_dim(head_dim: usize, theta: f32) -> Vec<f32> {
+    let half_dim = head_dim / 2;
+    (0..half_dim)
+        .map(|i| theta.powf(-2.0 * (i as f32) / (head_dim as f32)))
+        .collect()
+}
+
+/// Inner implementation: rotate `query` by the given precomputed
+/// `inv_freq` table. `query` is `[B, S, H, D]`, `inv_freq` is `D/2`.
+fn apply_rope_with_inv_freq(query: &Tensor, positions: &[i64], inv_freq: &[f32]) -> Result<Tensor> {
     let (batch, seq_len, num_heads, head_dim) = query.dims4()?;
 
     let query = query.transpose(1, 2)?;
 
     let half_dim = head_dim / 2;
-
-    let inv_freq: Vec<f32> = (0..half_dim)
-        .map(|i| theta.powf(-2.0 * (i as f32) / (head_dim as f32)))
-        .collect();
+    debug_assert_eq!(inv_freq.len(), half_dim);
 
     let mut cos_matrix = Vec::with_capacity(seq_len * half_dim);
     let mut sin_matrix = Vec::with_capacity(seq_len * half_dim);
 
     for &pos in positions {
         let pos_f = pos as f32;
-        for &freq in &inv_freq {
+        for &freq in inv_freq {
             let angle = pos_f * freq;
             cos_matrix.push(angle.cos());
             sin_matrix.push(angle.sin());
@@ -148,6 +364,7 @@ pub fn precompute_rope_cache(seq_len: usize, head_dim: usize, theta: f32) -> Vec
 // `apply_rope` / `precompute_rope_cache` free functions and the
 // `RoPE` struct (`new`, `apply`, `forward`) — shape preservation,
 // determinism, positional sensitivity, and numerical robustness
-// at large positions.
+// at large positions. Phase 15 added `apply_with_scaling` tests
+// covering Default-vs-Linear-vs-Yarn behaviour.
 #[cfg(test)]
 mod tests;
