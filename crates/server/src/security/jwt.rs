@@ -101,7 +101,7 @@ impl JwtConfig {
     /// Build a [`JwtConfig`] configured for HS256 (HMAC) verification
     /// using `secret` as the shared key. `public_key_pem` is cleared
     /// and issuer/audience default to `"vllm"` / `"vllm-api"`.
-    pub fn with_secret(secret: impl Into<String>) -> Self {
+    pub(crate) fn with_secret(secret: impl Into<String>) -> Self {
         Self {
             secret: Some(secret.into()),
             public_key_pem: None,
@@ -114,7 +114,7 @@ impl JwtConfig {
     /// Build a [`JwtConfig`] configured for RS*/ES* (asymmetric)
     /// verification using `public_key_pem`. `secret` is cleared and
     /// issuer/audience default to `"vllm"` / `"vllm-api"`.
-    pub fn with_public_key(public_key_pem: impl Into<String>) -> Self {
+    pub(crate) fn with_public_key(public_key_pem: impl Into<String>) -> Self {
         Self {
             secret: None,
             public_key_pem: Some(public_key_pem.into()),
@@ -127,7 +127,7 @@ impl JwtConfig {
     /// Override the expected `iss` claim. Tokens carrying a different
     /// issuer are rejected.
     #[must_use]
-    pub fn with_issuer(mut self, issuer: impl Into<String>) -> Self {
+    pub(crate) fn with_issuer(mut self, issuer: impl Into<String>) -> Self {
         self.issuer = issuer.into();
         self
     }
@@ -135,7 +135,7 @@ impl JwtConfig {
     /// Override the expected `aud` claim. Tokens targeting a different
     /// audience are rejected.
     #[must_use]
-    pub fn with_audience(mut self, audience: impl Into<String>) -> Self {
+    pub(crate) fn with_audience(mut self, audience: impl Into<String>) -> Self {
         self.audience = audience.into();
         self
     }
@@ -258,7 +258,7 @@ impl JwtValidator {
     }
 
     #[must_use]
-    pub fn extract_token(auth_header: &str) -> Option<&str> {
+    pub(crate) fn extract_token(auth_header: &str) -> Option<&str> {
         auth_header.strip_prefix("Bearer ")
     }
 }

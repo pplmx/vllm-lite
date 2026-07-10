@@ -58,7 +58,7 @@ impl TlsConfig {
     /// Enable mutual TLS by recording `ca_cert_path` (PEM bundle of
     /// trusted client CAs) and flipping `mtls = true`.
     #[must_use]
-    pub fn with_ca_cert(mut self, ca_cert_path: impl Into<String>) -> Self {
+    pub(crate) fn with_ca_cert(mut self, ca_cert_path: impl Into<String>) -> Self {
         self.ca_cert_path = Some(ca_cert_path.into());
         self.mtls = true;
         self
