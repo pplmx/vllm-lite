@@ -6,9 +6,9 @@ use std::time::Instant;
 use vllm_traits::Batch;
 
 use super::SchedulerEngine;
+use crate::scheduler::SchedulerState;
 use crate::scheduler::observer::ObserverEvent;
 use crate::scheduler::policy::SchedulingContext;
-use crate::scheduler::SchedulerState;
 use crate::types::{Phase, Status};
 
 impl SchedulerEngine {
