@@ -102,7 +102,9 @@ pub struct BatchResponse {
     pub request_counts: Option<RequestCounts>,
 }
 
-/// `RequestCounts`. See the type definition for fields and behavior.
+/// Per-batch request tallies. `total == completed + failed` once the
+/// batch reaches a terminal state; while the batch is in-flight
+/// `total` may exceed the sum.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestCounts {
     /// Total number of requests submitted in the batch.
@@ -124,7 +126,9 @@ pub struct BatchResults {
     pub results: Vec<BatchResultItem>,
 }
 
-/// `BatchResultItem`. See the type definition for fields and behavior.
+/// One row in a [`BatchResults`] response. Carries either the
+/// generated `content` (on success) or an `error` message (on
+/// failure); `status` is the discriminator.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchResultItem {
     /// Index of the original request within the batch (`0..prompts.len()`).

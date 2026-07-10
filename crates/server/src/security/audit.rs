@@ -30,14 +30,21 @@ pub struct AuditEvent {
     pub user_agent: Option<String>,
 }
 
+/// Bounded in-memory ring buffer of [`AuditEvent`]s. Each `log_*`
+/// call also emits a structured `tracing` event at INFO (success) or
+/// WARN (failure) level. The oldest event is evicted once the buffer
+/// exceeds `max_events`.
 #[derive(Debug)]
-/// `AuditLogger`. See the type definition for fields and behavior.
 pub struct AuditLogger {
     events: Arc<RwLock<Vec<AuditEvent>>>,
     max_events: usize,
 }
 
 impl AuditLogger {
+    /// Build a logger that retains at most `max_events` entries.
+    /// Larger values trade memory for a deeper audit-trail window
+    /// available via [`AuditLogger::events`] / the `/debug/audit`
+    /// endpoint.
     #[must_use]
     pub fn new(max_events: usize) -> Self {
         Self {
@@ -46,6 +53,9 @@ impl AuditLogger {
         }
     }
 
+    /// Append `event` to the ring buffer (evicting the oldest entry
+    /// if full) and emit a structured `tracing` event for log
+    /// aggregation.
     pub async fn log(&self, event: AuditEvent) {
         let mut events = self.events.write().await;
         events.push(event.clone());
@@ -65,6 +75,8 @@ impl AuditLogger {
         drop(events);
     }
 
+    /// Convenience helper: record a successful authentication event
+    /// (`action = "authenticate"`, `result = "success"`).
     pub async fn log_auth_success(&self, user_id: &str, request_id: &str) {
         self.log(AuditEvent {
             timestamp: chrono::Utc::now().to_rfc3339(),
@@ -79,6 +91,8 @@ impl AuditLogger {
         .await;
     }
 
+    /// Convenience helper: record a failed authentication attempt
+    /// (`action = "authenticate"`, `result = "failure: <reason>"`).
     pub async fn log_auth_failure(&self, reason: &str, request_id: &str) {
         self.log(AuditEvent {
             timestamp: chrono::Utc::now().to_rfc3339(),

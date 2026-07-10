@@ -19,6 +19,9 @@ pub struct Usage {
 }
 
 impl Usage {
+    /// Construct a [`Usage`] from raw `usize` counts, saturating to `0`
+    /// on platforms where `usize > i64::MAX` (essentially never on
+    /// 64-bit targets, but defensive for portability).
     #[must_use]
     pub fn new(prompt: usize, completion: usize) -> Self {
         let prompt = i64::try_from(prompt).unwrap_or(0);
@@ -51,6 +54,9 @@ pub struct ErrorResponse {
 }
 
 impl ErrorResponse {
+    /// Construct an [`ErrorResponse`] with no machine-readable `code`.
+    /// Use [`ErrorResponse::with_code`] when the failure category maps
+    /// to a stable identifier the client can branch on.
     #[must_use]
     pub fn new(message: &str, error_type: &str) -> Self {
         Self {
@@ -141,6 +147,9 @@ pub struct ChatResponse {
 }
 
 impl ChatResponse {
+    /// Construct a non-streaming [`ChatResponse`]. Stamps the `object`
+    /// slot as `"chat.completion"` and `created` to the current Unix
+    /// second; streaming callers should build [`ChatChunk`]s directly.
     #[must_use]
     pub fn new(id: String, model: String, choices: Vec<ChatChoice>, usage: Usage) -> Self {
         Self {
@@ -154,7 +163,10 @@ impl ChatResponse {
     }
 }
 
-/// `ChatChunkChoice`. See the type definition for fields and behavior.
+/// A single choice inside an SSE [`ChatChunk`]. The `delta` carries
+/// only the partial message text emitted on this chunk — typically
+/// the `role` on the first chunk and `content` on subsequent chunks,
+/// mirroring the `OpenAI` streaming protocol.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChunkChoice {
     /// Choice index (0-based; constant across stream chunks).
@@ -165,7 +177,10 @@ pub struct ChatChunkChoice {
     pub finish_reason: Option<String>,
 }
 
-/// `ChatChunk`. See the type definition for fields and behavior.
+/// A single chunk in a chat-completion SSE stream. The server emits
+/// one `ChatChunk` per generated token, followed by a final chunk
+/// with `finish_reason = Some("stop")` and the OpenAI sentinel
+/// `"[DONE]"` appended to the SSE payload.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChunk {
     /// Stream identifier (shared across all chunks in the same response).
@@ -181,6 +196,9 @@ pub struct ChatChunk {
 }
 
 impl ChatChunk {
+    /// Construct a streaming [`ChatChunk`] for the given single choice.
+    /// Stamps `object = "chat.completion.chunk"` and `created` to the
+    /// current Unix second.
     #[must_use]
     pub fn new(id: String, model: String, choice: ChatChunkChoice) -> Self {
         Self {
@@ -212,7 +230,9 @@ pub struct CompletionRequest {
     pub stop: Option<Vec<String>>,
 }
 
-/// `CompletionChoice`. See the type definition for fields and behavior.
+/// A single choice in a text-completion response. The `text` field
+/// holds the raw continuation (no chat-template rendering) for the
+/// legacy `/v1/completions` endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompletionChoice {
     /// Generated continuation text.
@@ -241,6 +261,9 @@ pub struct CompletionResponse {
 }
 
 impl CompletionResponse {
+    /// Construct a [`CompletionResponse`] for the legacy
+    /// `/v1/completions` endpoint. Stamps `object = "text_completion"`
+    /// and `created` to the current Unix second.
     #[must_use]
     pub fn new(id: String, model: String, choices: Vec<CompletionChoice>, usage: Usage) -> Self {
         Self {
@@ -274,7 +297,8 @@ pub struct Embedding {
     pub index: i32,
 }
 
-/// Deprecated alias for [`Embedding`].
+/// Deprecated alias for [`Embedding`]. Retained for backward
+/// compatibility with clients written against the 0.19.x wire format.
 #[deprecated(since = "0.20.0", note = "use Embedding instead")]
 pub type EmbeddingData = Embedding;
 
@@ -292,6 +316,10 @@ pub struct EmbeddingsResponse {
 }
 
 impl EmbeddingsResponse {
+    /// Build an [`EmbeddingsResponse`] from raw dense vectors. The
+    /// `usage.prompt_tokens` field is set to the total dimension count
+    /// across all embeddings; `completion_tokens` is always `0` since
+    /// embeddings have no autoregressive output.
     #[must_use]
     pub fn new(embeddings: Vec<Vec<f32>>, model: String) -> Self {
         let items: Vec<Embedding> = embeddings

@@ -31,12 +31,17 @@ pub enum ConfigValidationError {
     DuplicateDraftId(String),
 }
 
-/// Configuration for validationerrors. Constructed at startup; immutable for the process lifetime.
+/// Aggregated list of [`ConfigValidationError`]s returned by
+/// [`AppConfig::validate`]. Always carries every violation found in
+/// one pass rather than failing on the first; the inner `Vec` is
+/// `pub` so callers can pattern-match or render their own summary.
 #[derive(Debug, thiserror::Error)]
 #[error("config validation failed: {0:?}")]
 pub struct ConfigValidationErrors(pub Vec<ConfigValidationError>);
 
-/// Configuration for Server. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// HTTP server section: bind address, TCP port, log level, optional
+/// structured-log directory. Constructed either from YAML/JSON via
+/// [`AppConfig::load`] or programmatically via `ServerConfig::default()`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::derivable_impls)]
 pub struct ServerConfig {
@@ -77,7 +82,13 @@ fn default_log_level() -> String {
     "info".to_string()
 }
 
-/// Configuration for Auth. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// Authentication and per-key rate-limiting configuration.
+///
+/// API keys are resolved from up to three sources at startup, in order:
+/// inline `api_keys`, the env var named by `api_keys_env`, and the file
+/// at `api_keys_file`. See [`AuthConfig::resolve_api_keys`] for the
+/// exact precedence. The rate limiter is a sliding-window counter
+/// applied per resolved key (best-effort; single-process).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthConfig {
     /// Inline list of API keys that authenticate clients.
@@ -155,7 +166,11 @@ const fn default_rate_limit_window() -> u64 {
     60
 }
 
-/// Configuration for `DraftSpec`. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// Configuration entry for one external draft model used in
+/// speculative decoding. Listed under [`EngineConfig::draft_specs`]
+/// and resolved lazily at first use — the server does **not** load
+/// weights at startup; the actual loader is selected via the
+/// `architecture` hint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DraftSpecConfig {
     /// Unique identifier used at runtime to reference this draft.
@@ -177,7 +192,10 @@ const fn default_draft_layers() -> usize {
     4
 }
 
-/// Configuration for Engine. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// Engine configuration: scheduler tuning, speculative-decoding
+/// parameters, and pre-declared draft-model specs. All fields have
+/// safe defaults via `#[serde(default = ...)]`; minimal configs only
+/// need to override the few values that differ from the default.
 #[allow(clippy::derivable_impls)]
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct EngineConfig {
@@ -258,7 +276,11 @@ const fn default_enable_adaptive_speculative() -> bool {
     true
 }
 
-/// Configuration for App. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// Top-level server configuration. Composes the three independent
+/// sections ([`ServerConfig`], [`EngineConfig`], [`AuthConfig`]) that
+/// are loaded as a single YAML/JSON document and validated together
+/// at startup. See [`AppConfig::load`] for the loading precedence and
+/// [`AppConfig::validate`] for the invariant check.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::derivable_impls)]
 pub struct AppConfig {
