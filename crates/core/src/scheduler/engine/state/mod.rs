@@ -20,9 +20,7 @@ use vllm_traits::{Batch, SeqId};
 
 use crate::metrics::EnhancedMetricsCollector;
 use crate::scheduler::cuda_graph::SchedulerCudaGraphConfig;
-use crate::scheduler::observer::{
-    SchedulerObserver, SchedulerObserverError, SchedulerObservers,
-};
+use crate::scheduler::observer::{SchedulerObserver, SchedulerObserverError, SchedulerObservers};
 use crate::scheduler::policy::{FcfsPolicy, SchedulingPolicy};
 use crate::scheduler::{
     BatchComposer, BatchCompositionConfig, MemoryManager, PhaseScheduler, PhaseSwitchPolicy,
