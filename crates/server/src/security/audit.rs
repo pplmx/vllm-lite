@@ -43,8 +43,7 @@ pub struct AuditLogger {
 impl AuditLogger {
     /// Build a logger that retains at most `max_events` entries.
     /// Larger values trade memory for a deeper audit-trail window
-    /// available via [`AuditLogger::events`] / the `/debug/audit`
-    /// endpoint.
+    /// available via the `/debug/audit` JSON export endpoint.
     #[must_use]
     pub fn new(max_events: usize) -> Self {
         Self {

@@ -26,6 +26,14 @@
 
 ### Added
 
+- **Quality Polish & Doc Coverage (v30.0 Phase 8)** — closes out remaining low-hanging fruit without touching architecture:
+    - **Test infra fix** (`.config/nextest.toml`): 3 `qwen35_speculative_tests` (each ~15s when run alone on CPU) were intermittently timing out under the `[profile.optimized]` 10s `slow-timeout`. Added a default-profile override pinning them to 1 thread with a 30s window — same pattern as `test_llama_block` / `test_qwen3_model` / `tokenizer_verification`. Now `just nextest-fast` completes 1230 tests without timeouts.
+    - **`chat_completions` split** (`crates/server/src/openai/chat.rs`): 103-line handler (over `pedantic::too_many_lines`) decomposed into `chat_completions` (10-line dispatcher) + `stream_chat_completion` (~85 lines) + `non_stream_chat_completion` (~7 lines). Public axum signature unchanged. Extracted the duplicated `SERVICE_UNAVAILABLE` + `engine_unavailable` error literal into `engine_unavailable_error()`. New `#[allow(clippy::unused_async)]` on `stream_chat_completion` documents why the keyword is kept (symmetry with `non_stream_chat_completion`; future async metrics work).
+    - **Doc coverage push** (server crate): Real% 42.3% → 55.8% (+13.5pp, +21 documented items). Workspace Real% 51.9% → 53.4% (+1.5pp). Touched 8 files focused on user-facing API: OpenAI DTOs (`types.rs`), Batch types (`batch/types.rs`), config sections (`config.rs`), security middleware (`audit.rs`, `jwt.rs`, `rbac.rs`, `tls.rs`), and `models.rs`. Rewrote 6 placeholder docs that referenced a non-existent `builder()` method with concrete descriptions of what each type does and how it composes. Added per-variant `# Errors` sections on `TlsConfig::load`.
+    - **Pedantic cleanup**: 80 `doc_markdown` / 2 `doc list item` warnings fixed across 31 files (mechanical backtick additions + 2 minor rewordings where the original phrasing was parsed as a markdown list item). Pedantic warnings 88 → 14 (the remaining 14 are nursery-tier `too_long_first_doc_paragraph` and crate-summary lines, kept at warn level).
+    - Test count: 1235 → 1235 (zero new tests, zero removed).
+    - Total commits: 5 (8.1, 8.2, 8.3, 8.4, this entry).
+
 - **Tutorial & Onboarding (v30.0 Phase P)** — guided path from clone to production:
     - `docs/tutorial/01-setup.md` — clone, build, verify (Rust 1.85+, `cargo build --workspace`, `just nextest`)
     - `docs/tutorial/02-load-model.md` — `ModelLoader::builder()` usage, supported formats (safetensors, GGUF Q4_K_M)
