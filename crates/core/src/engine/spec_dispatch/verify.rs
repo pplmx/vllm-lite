@@ -17,7 +17,10 @@ impl crate::engine::Engine {
         batch: &Batch,
         draft_outputs: &[Vec<TokenId>],
     ) -> Result<(Vec<(SeqId, TokenId)>, Vec<usize>)> {
-        let mut results = Vec::new();
+        // H-16 (PERF-05): pre-size `results` to the sequence count so the
+        // per-iteration `results.push(...)` does not reallocate. Mirrors
+        // the existing `accepted_counts` hint one line below.
+        let mut results = Vec::with_capacity(batch.seq_ids.len());
         let mut accepted_counts = Vec::with_capacity(batch.seq_ids.len());
 
         for (i, seq_id) in batch.seq_ids.iter().enumerate() {

@@ -60,7 +60,9 @@ impl crate::engine::Engine {
             }
         }
 
-        let mut results = Vec::new();
+        // H-16 (PERF-05): pre-size `results` to the verified-sequence
+        // count so the per-iteration push below does not reallocate.
+        let mut results = Vec::with_capacity(verified.len());
         for (seq_id, token) in &verified {
             if let Some(tx) = self.response_txs.get(seq_id) {
                 let _ = tx.try_send(*token);
