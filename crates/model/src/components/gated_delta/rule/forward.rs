@@ -30,10 +30,7 @@ impl GatedDeltaNet {
     ///
     /// Returns `Err` if the operation fails.
     #[allow(clippy::many_single_char_names)]
-    pub fn forward_prefill(
-        &self,
-        x: &Tensor,
-    ) -> CandleResult<(Tensor, GatedDeltaState)> {
+    pub fn forward_prefill(&self, x: &Tensor) -> CandleResult<(Tensor, GatedDeltaState)> {
         let residual = x.clone();
         let (batch, seq_len, _hidden) = x.dims3()?;
 
@@ -74,11 +71,7 @@ impl GatedDeltaNet {
     ///
     /// Returns `Err` if the operation fails.
     #[allow(clippy::many_single_char_names)]
-    pub fn forward_decode(
-        &self,
-        x: &Tensor,
-        state: &mut GatedDeltaState,
-    ) -> CandleResult<Tensor> {
+    pub fn forward_decode(&self, x: &Tensor, state: &mut GatedDeltaState) -> CandleResult<Tensor> {
         let residual = x.clone();
         let (batch, seq_len, _hidden) = x.dims3()?;
         if seq_len != 1 {

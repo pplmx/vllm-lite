@@ -119,8 +119,11 @@ where
         )?;
         let norm = LnLayerNorm::new(norm_weight, norm_bias, config.rms_norm_eps);
 
-        let lm_head =
-            super::super::weights::load_lm_head(&weights, embed_weight, config.tie_word_embeddings)?;
+        let lm_head = super::super::weights::load_lm_head(
+            &weights,
+            embed_weight,
+            config.tie_word_embeddings,
+        )?;
 
         let kv_cache = PagedKvCache::new(
             num_layers,
@@ -241,8 +244,11 @@ where
             .ok_or_else(|| candle_core::Error::msg(format!("Missing {norm_key}")))?;
         let norm = RmsNorm::new(norm_weight, config.rms_norm_eps);
 
-        let lm_head =
-            super::super::weights::load_lm_head(&weights, embed_weight, config.tie_word_embeddings)?;
+        let lm_head = super::super::weights::load_lm_head(
+            &weights,
+            embed_weight,
+            config.tie_word_embeddings,
+        )?;
 
         let kv_cache = PagedKvCache::new(
             num_layers,
