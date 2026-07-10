@@ -26,6 +26,13 @@
 
 ### Added
 
+- **Architectural File Splits (v30.0 Phase 11)** — three more production files split into module directories without behavior change:
+    - **`server/src/config.rs` (413 lines → 4 files)**: decomposed into `config/mod.rs` (`AppConfig` + `Default` + `load` + `validate` + `ConfigValidationError(s)`) + `config/server.rs` (`ServerConfig` + `Default`) + `config/engine.rs` (`EngineConfig` + `DraftSpecConfig` + `Default`) + `config/auth.rs` (`AuthConfig` + `Default` + `resolve_api_keys`). Public API preserved via re-exports in `mod.rs`.
+    - **`qwen3/block.rs` (376 lines → 4 files)**: decomposed into `block/mod.rs` (`TransformerBlock` struct + `Deref` + `PagedDecoderBlock` impl) + `block/construct.rs` (`new`, `new_with_tp`, `new_with_weights`) + `block/weights.rs` (`from_weights` HuggingFace weight-map loader) + `block/factory.rs` (free functions `new_block` + `block_from_weights`). The factory submodule is `pub(crate)` so `qwen3/model.rs` can still access `new_block` / `block_from_weights` via `super::block::{...}` as before.
+    - **`metrics/exporter.rs` (379 lines → 2 files)**: decomposed into `exporter/mod.rs` (`MetricsExporter` trait + `InMemoryMetricsExporter` + `MetricsError` + `dyn MetricsExporter::default_arc` + tests kept inline) + `exporter/prometheus.rs` (`PrometheusExporter` struct + `export_to_string` + `MetricsExporter` impl). Tests stay inline in `mod.rs` since they're short (~30 lines) and tightly coupled to the trait.
+    - All 143 `vllm-server` + 386 `vllm-model` + 307 `vllm-core` tests pass; workspace test suite unchanged.
+    - Total commits: 3 (one per file split).
+
 - **Architectural File Splits (v30.0 Phase 10)** — three more production files split into module directories without behavior change:
     - **`scheduler/engine/state.rs` (427 lines → 3 files)**: decomposed into `state/mod.rs` (struct + `Debug` + `Default` + `new()` + `set_policy` + `schedule` + small accessors + `register_observer`) + `state/request.rs` (`add_request` enqueue + prefix-cache check + metrics + observer dispatch) + `state/batch.rs` (`build_batch` phase selection + composition + preemption trigger + CUDA Graph metrics). The sibling `scheduler/engine/{graph, memory, update, mod, tests}` files are untouched.
     - **`engine/ctor.rs` (388 lines → 3 files)**: decomposed into `ctor/mod.rs` (basic `Engine::new_boxed`, `with_config_boxed`, `new`, `with_config`) + `ctor/drafts.rs` (draft-aware `with_drafts_*`, `with_budget_*`, private `install_default_resolver`) + `ctor/builder.rs` (`EngineBuilder` struct + `Debug` + impl). `pub use builder::EngineBuilder` preserves the public API.
