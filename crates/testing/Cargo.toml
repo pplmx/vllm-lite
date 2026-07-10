@@ -7,8 +7,6 @@ edition.workspace = true
 vllm-traits = { path = "../traits", features = ["candle"] }
 vllm-core = { path = "../core" }
 vllm-dist = { path = "../dist", optional = true }
-candle-core = { workspace = true }
-tokio = { workspace = true }
 rand = "0.10"
 
 [dev-dependencies]
@@ -18,7 +16,6 @@ proptest = "1.11"
 
 [features]
 default = []
-cuda = ["candle-core/cuda"]
 multi-node = ["dep:vllm-dist"]
 
 [lints]
