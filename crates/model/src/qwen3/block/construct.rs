@@ -1,71 +1,16 @@
-//! Qwen3 transformer block: one decoder layer with grouped-query attention + `SwiGLU` MLP + QK-norm.
-//!
-//! Supports both the standard GQA variant and the MLA variant
-//! (`qwen3/mla_attention.rs`). Each block reads from / writes to the
-//! paged KV cache through `AttentionConfig`.
-//!
-//! Tests for `TransformerBlock` live in `tests.rs` (sibling file) to keep
-//! this module under the 800-line soft cap.
-#![allow(clippy::type_complexity, clippy::module_name_repetitions)]
+//! `TransformerBlock` constructors: `new`, `new_with_tp` (feature-gated),
+//! `new_with_weights`.
 
-#[cfg(test)]
-mod tests;
-
+use super::TransformerBlock;
 use crate::components::AttentionConfig;
 use crate::components::LnLayerNorm;
 use crate::components::RopeGqaDecoderBlock;
 use crate::components::SwiGLU;
 use crate::components::attention::RopeGqaAttention;
-use crate::components::decoder_block::PagedDecoderBlock;
 use candle_core::{Result, Tensor};
-use std::ops::Deref;
+
 #[cfg(feature = "multi-node")]
 use vllm_dist::TensorParallelConfig;
-
-#[derive(Debug)]
-/// Qwen3 decoder layer wrapping the shared RoPE-GQA block.
-pub struct TransformerBlock(RopeGqaDecoderBlock);
-
-impl Deref for TransformerBlock {
-    type Target = RopeGqaDecoderBlock;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl PagedDecoderBlock for TransformerBlock {
-    fn forward_prefill(
-        &self,
-        x: &Tensor,
-        kv_cache: &mut crate::paged_tensor::PagedKvCache,
-        layer_idx: usize,
-        block_ids: &[usize],
-        positions: &[usize],
-    ) -> Result<Tensor> {
-        self.0
-            .forward_prefill(x, kv_cache, layer_idx, block_ids, positions)
-    }
-
-    fn forward_decode(
-        &self,
-        x: &Tensor,
-        kv_cache: &mut crate::paged_tensor::PagedKvCache,
-        layer_idx: usize,
-        block_ids: &[usize],
-        num_computed_tokens: usize,
-        positions: &[usize],
-    ) -> Result<Tensor> {
-        self.0.forward_decode(
-            x,
-            kv_cache,
-            layer_idx,
-            block_ids,
-            num_computed_tokens,
-            positions,
-        )
-    }
-}
 
 impl TransformerBlock {
     #[allow(clippy::too_many_arguments)]
@@ -228,8 +173,7 @@ impl TransformerBlock {
             post_attn_ln_w.dtype(),
             post_attn_ln_w.device(),
         )?;
-        let post_attention_layernorm =
-            LnLayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
+        let post_attention_layernorm = LnLayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
 
         let attention = RopeGqaAttention::new_with_weights(
             hidden_size,
@@ -256,121 +200,4 @@ impl TransformerBlock {
             mlp,
         )))
     }
-
-    /// Build from weights.
-    /// # Errors
-    ///
-    /// Returns `Err` if reading or parsing the source fails.
-    pub fn from_weights(
-        config: &crate::config::ModelConfig,
-        layer_idx: usize,
-        weights: &std::collections::HashMap<String, Tensor>,
-    ) -> Result<Self> {
-        let hidden_size = config.hidden_size;
-        let num_heads = config.num_heads;
-        let num_kv_heads = config.num_kv_heads;
-        let head_dim = config.head_dim;
-        let intermediate_size = config.intermediate_size;
-        let theta = config.rope_theta;
-        let rms_norm_eps = config.rms_norm_eps;
-        let has_qk_norm = config.has_qk_norm;
-
-        let get_weight = |keys: &[&str]| -> Option<&Tensor> {
-            for key in keys {
-                if let Some(w) = weights.get(*key) {
-                    return Some(w);
-                }
-            }
-            None
-        };
-
-        let q_key = get_weight(&[
-            &format!("model.layers.{layer_idx}.self_attn.q_proj.weight"),
-            &format!("model.layers.{layer_idx}.attn.q_proj.weight"),
-        ]);
-        let k_key = get_weight(&[
-            &format!("model.layers.{layer_idx}.self_attn.k_proj.weight"),
-            &format!("model.layers.{layer_idx}.attn.k_proj.weight"),
-        ]);
-        let v_key = get_weight(&[
-            &format!("model.layers.{layer_idx}.self_attn.v_proj.weight"),
-            &format!("model.layers.{layer_idx}.attn.v_proj.weight"),
-        ]);
-        let o_key = get_weight(&[
-            &format!("model.layers.{layer_idx}.self_attn.o_proj.weight"),
-            &format!("model.layers.{layer_idx}.attn.o_proj.weight"),
-        ]);
-
-        let q_norm_key = format!("model.layers.{layer_idx}.self_attn.q_norm.weight");
-        let k_norm_key = format!("model.layers.{layer_idx}.self_attn.k_norm.weight");
-        let q_norm_weight = weights.get(&q_norm_key).cloned();
-        let k_norm_weight = weights.get(&k_norm_key).cloned();
-
-        let layer_weights = Some((
-            q_key.cloned(),
-            k_key.cloned(),
-            v_key.cloned(),
-            o_key.cloned(),
-            weights
-                .get(&format!("model.layers.{layer_idx}.mlp.gate_proj.weight"))
-                .cloned(),
-            weights
-                .get(&format!("model.layers.{layer_idx}.mlp.up_proj.weight"))
-                .cloned(),
-            weights
-                .get(&format!("model.layers.{layer_idx}.mlp.down_proj.weight"))
-                .cloned(),
-            weights
-                .get(&format!("model.layers.{layer_idx}.input_layernorm.weight"))
-                .cloned(),
-            weights
-                .get(&format!(
-                    "model.layers.{layer_idx}.post_attention_layernorm.weight"
-                ))
-                .cloned(),
-            q_norm_weight,
-            k_norm_weight,
-        ));
-
-        Self::new_with_weights(
-            hidden_size,
-            num_heads,
-            num_kv_heads,
-            head_dim,
-            intermediate_size,
-            theta,
-            rms_norm_eps,
-            has_qk_norm,
-            layer_weights,
-        )
-    }
-}
-
-/// Run the operation (see signature for params and return type).
-/// # Errors
-///
-/// Returns `Err` if the operation fails.
-pub fn new_block(
-    config: &crate::config::ModelConfig,
-    _layer_idx: usize,
-) -> Result<TransformerBlock> {
-    TransformerBlock::new(
-        config.hidden_size,
-        config.num_heads,
-        config.num_kv_heads,
-        config.head_dim,
-        config.intermediate_size,
-        config.rope_theta,
-        config.rms_norm_eps,
-        None,
-        config.has_qk_norm,
-    )
-}
-
-pub(crate) fn block_from_weights(
-    config: &crate::config::ModelConfig,
-    layer_idx: usize,
-    weights: &std::collections::HashMap<String, Tensor>,
-) -> Result<TransformerBlock> {
-    TransformerBlock::from_weights(config, layer_idx, weights)
 }
