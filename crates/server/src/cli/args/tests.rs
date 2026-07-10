@@ -14,7 +14,7 @@
 //! - Long-form and short-form flag parsing
 //! - Required `--model` enforcement
 //! - Vector / file-path flags (`--api-key` × N, `--api-key-file`,
-//!   `--config`, `--model` PathBuf, `--log-dir`)
+//!   `--config`, `--model` `PathBuf`, `--log-dir`)
 //! - `--log-level` value mapping (case-insensitive, full enum coverage)
 //! - Range validation (port, kv-blocks, max-batch-size,
 //!   max-waiting-batches, max-draft-tokens, tensor-parallel-size)

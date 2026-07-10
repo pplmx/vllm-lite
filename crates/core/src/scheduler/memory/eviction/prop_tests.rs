@@ -4,9 +4,9 @@
 //! 800-line soft cap.
 //!
 //! Invariants under test:
-//! - record_blocks / release_blocks refcount conservation (count after
+//! - `record_blocks` / `release_blocks` refcount conservation (count after
 //!   N records and M releases equals `max(0, N - M)`)
-//! - select_victims returns at most `num_blocks` entries, and yields
+//! - `select_victims` returns at most `num_blocks` entries, and yields
 //!   empty for empty input sequences
 //! - cache-hit on identical `select_victims` call: `cache_hits` strictly
 //!   increases on the second call with the same input

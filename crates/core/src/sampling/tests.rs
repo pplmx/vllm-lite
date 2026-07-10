@@ -11,7 +11,7 @@
 //!   small/large T, empty input)
 //! - `top_p_sample` (T=1 ≡ greedy, small p, empty)
 //! - `top_k_sample` (top-k subset, k=0 ≡ greedy)
-//! - `sample_batch` (basic, T+top_p, top_k, repeat_penalty)
+//! - `sample_batch` (basic, `T+top_p`, `top_k`, `repeat_penalty`)
 //! - `apply_repeat_penalty` (basic penalty, no-op at 1.0)
 //! - Property-based tests (proptest) in the sibling `prop_tests`
 //!   module: batch length preservation, greedy index bounds,

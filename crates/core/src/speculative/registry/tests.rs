@@ -2,10 +2,10 @@
 //!
 //! Covers the registry's three concerns:
 //!
-//! 1. **Identity & state transitions**: register/attach_loaded/unload,
+//! 1. **Identity & state transitions**: `register`/`attach_loaded`/`unload`,
 //!    duplicate-id rejection, unknown-id errors, refcount-driven
 //!    auto-unload (LIFE-02/03).
-//! 2. **Lookup surface**: ids (sorted), len, is_empty, contains.
+//! 2. **Lookup surface**: `ids` (sorted), `len`, `is_empty`, `contains`.
 //! 3. **Memory budget integration**: budgeted attach reserves/releases
 //!    correctly, refuses when over budget, and accessor returns the
 //!    shared `Arc`.

@@ -4,7 +4,7 @@
 //!
 //! 1. **allocate / free**: `allocate(3)` reduces `available_blocks`
 //!    by 3; `free(blocks)` restores it. Round-trip invariant.
-//! 2. **select_victims**: returns up to `num_blocks` block IDs from
+//! 2. **`select_victims`**: returns up to `num_blocks` block IDs from
 //!    `Decoding` sequences (in order). For a single 2-block seq with
 //!    `num_blocks=1`, the result is 0 or 1 blocks (depends on
 //!    whether the partial block-count is honored — see the

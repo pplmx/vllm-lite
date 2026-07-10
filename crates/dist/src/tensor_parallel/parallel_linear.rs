@@ -171,7 +171,7 @@ impl TensorParallelManager {
     }
 
     /// Construct a [`ColumnParallelLinear`] bound to this manager's
-    /// mesh + all_reduce. The new layer splits its output dimension
+    /// mesh + `all_reduce`. The new layer splits its output dimension
     /// across ranks; no `all_reduce` is needed on the forward path
     /// because each rank produces its own shard.
     #[must_use]
@@ -189,9 +189,9 @@ impl TensorParallelManager {
     }
 
     /// Construct a [`RowParallelLinear`] bound to this manager's mesh
-    /// + all_reduce. The new layer's output is replicated across
-    /// ranks; `forward` performs an `all_reduce_sum` on every rank
-    /// except the last.
+    /// and `all_reduce`. Output is replicated across all ranks, with an
+    /// `all_reduce_sum` applied by `forward` on every rank except the
+    /// last.
     #[must_use]
     pub fn create_row_parallel(&self, input_size: usize, output_size: usize) -> RowParallelLinear {
         RowParallelLinear::new(
@@ -202,8 +202,8 @@ impl TensorParallelManager {
         )
     }
 
-    /// Borrow the underlying [`DeviceMesh`] (rank, world_size,
-    /// device_ids, is_first_rank / is_last_rank helpers).
+    /// Borrow the underlying [`DeviceMesh`] (`rank`, `world_size`,
+    /// `device_ids`, `is_first_rank` / `is_last_rank` helpers).
     #[must_use]
     pub const fn mesh(&self) -> &Arc<DeviceMesh> {
         &self.mesh

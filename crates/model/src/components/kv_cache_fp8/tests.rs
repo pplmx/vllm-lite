@@ -2,20 +2,18 @@
 //!
 //! Covers three layers of the FP8 surface:
 //!
-//! 1. **Dtype / quantizer basics (3)**: \`Fp8Quantizer::new(Fp8E4m3)\`
-//!    reports 1 byte/element; \`memory_reduction_ratio\` is 1.0 for
-//!    Fp16, 2.0 for Fp8E4m3; \`estimate_memory_savings\` returns
-//!    ~0.5 (50% savings) for a 1k-token, 16-layer, 32-head, 128-dim
-//!    configuration.
+//! 1. **Dtype / quantizer basics (3)**: `Fp8Quantizer::new(Fp8E4m3)`
+//!    reports 1 byte/element; `memory_reduction_ratio` is 1.0 for
+//!    `Fp16`, 2.0 for `Fp8E4m3`; `estimate_memory_savings` returns
 //! 2. **Round-trip + precision (2)**: quantizing a random N(-1, 1)
 //!    tensor and dequantizing preserves shape; small values
 //!    (~0.0001-0.001) are recovered within \`0.05\` absolute error
 //!    (the floor is the E4M3 subnormal range).
-//! 3. **Special values + Fp16 pass-through (2)**: 0.0 → 0 in E4M3;
-//!    1.0 → non-zero; Fp16 quantization is identity on the F16
+//! 3. **Special values + Fp16 pass-through (2)**: 0.0 → 0 in `E4M3`;
+//!    1.0 → non-zero; `Fp16` quantization is identity on the `F16`
 //!    tensor shape (no-op).
 //!
-//! All tests run on \`Device::Cpu\`.
+//! All tests run on `Device::Cpu`.
 use super::*;
 
 #[test]

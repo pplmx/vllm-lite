@@ -1,4 +1,4 @@
-//! Unit tests for the OpenAI `completions` endpoint.
+//! Unit tests for the `OpenAI` `/v1/completions` endpoint.
 //!
 //! Covers the validation path (empty prompt → 400) and the
 //! engine-channel error mapping (closed channel → 503

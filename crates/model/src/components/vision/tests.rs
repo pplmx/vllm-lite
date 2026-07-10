@@ -3,12 +3,12 @@
 //! Locks in three contracts on the placeholder vision tower:
 //!
 //! 1. **`VisionConfig::num_patches`**: `(image_size / patch_size).pow(2)`
-//!    for typical ViT input sizes (224 / 512 / 768 / 1024) and
+//!    for typical `ViT` input sizes (224 / 512 / 768 / 1024) and
 //!    patch sizes (7 / 14 / 16).
 //! 2. **`PatchEmbed::new`**: zero-init `VarBuilder` produces a
 //!    working layer (the `Linear` projection allocates cleanly).
 //! 3. **`VisionEncoder::forward`**: placeholder pass-through preserves
-//!    shape (the future real ViT stack will replace this with
+//!    shape (the future real `ViT` stack will replace this with
 //!    actual patch → transformer → pooling, but the contract is
 //!    "input shape == output shape" for now).
 use super::*;

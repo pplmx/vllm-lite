@@ -7,7 +7,7 @@
 //!   lower (or equal) `PriorityScore`.
 //! - Aging — for the same priority, an older sequence (higher id)
 //!   gets a lower score (more urgent).
-//! - PriorityScore is non-negative (u64 saturating math).
+//! - `PriorityScore` is non-negative (`u64` saturating math).
 
 use super::*;
 use crate::types::{Priority, SamplingParams, Status};

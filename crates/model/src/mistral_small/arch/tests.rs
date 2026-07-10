@@ -3,15 +3,15 @@
 //! Covers the architecture-detection contract for the Mistral Small
 //! (Mistral-Small-Instruct-2407 and similar) variants:
 //!
-//! 1. **Detection (positive)**: detects \`model_type\` in
-//!    \`{"mistral-small", "Mistral-Small-Instruct-2407"}\`. The
-//!    config must include \`num_local_experts\` for detection to
+//! 1. **Detection (positive)**: detects `model_type` in
+//!    `{"mistral-small", "Mistral-Small-Instruct-2407"}`. The
+//!    config must include `num_local_experts` for detection to
 //!    fire (the field is part of the heuristic).
-//! 2. **Detection (negative)**: does not detect \`mistral\`,
-//!    \`mistral-7b\`, or \`llama\` (these belong to other
+//! 2. **Detection (negative)**: does not detect `mistral`,
+//!    `mistral-7b`, or `llama` (these belong to other
 //!    architectures, not Mistral Small).
-//! 3. **Name**: \`name()\` returns \`"mistral-small"\`.
-//! 4. **Expert config**: \`with_experts(num_experts, num_active)\`
+//! 3. **Name**: `name()` returns `"mistral-small"`.
+//! 4. **Expert config**: `with_experts(num_experts, num_active)`
 //!    records both values.
 use super::*;
 use serde_json::json;

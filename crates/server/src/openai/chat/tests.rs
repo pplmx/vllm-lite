@@ -1,4 +1,4 @@
-//! Unit tests for the OpenAI `chat/completions` endpoint.
+//! Unit tests for the `OpenAI` `/v1/chat/completions` endpoint.
 //!
 //! Exercises the request-validation and prompt-rendering paths that
 //! do not require a live engine channel. The handler-level integration

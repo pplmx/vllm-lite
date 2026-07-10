@@ -6,7 +6,7 @@
 //!
 //! - `paged_attention` output shape (basic + single-token decode)
 //! - `tiled_attention` output shape parity vs. `paged_attention`
-//! - `tiled_attention` single-tile path (tile_size > seq_len)
+//! - `tiled_attention` single-tile path (`tile_size > seq_len`)
 //! - `expand_kv` GQA expansion (basic, no-expansion, invalid head count,
 //!   exact division)
 //! - `causal_mask` shape and causal values (0 below diagonal,

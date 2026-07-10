@@ -9,7 +9,7 @@
 //!    `forward_naive` reference implementation to within `1e-5` max
 //!    element diff, for both prefill and decode inputs. Guards against
 //!    regressions in the expert-grouped batching + `scatter_add`
-//!    scatter path introduced in the v22.0 MoE vectorization pass.
+//!    scatter path introduced in the v22.0 `MoE` vectorization pass.
 //!
 //! All tests run on `Device::Cpu` with `DType::F32`.
 use super::*;

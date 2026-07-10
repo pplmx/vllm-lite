@@ -2,7 +2,7 @@
 //!
 //! Covers three high-level entry points:
 //!
-//! 1. **forward_with_paged_kv end-to-end**: builds a minimal
+//! 1. **`forward_with_paged_kv` end-to-end**: builds a minimal
 //!    one-layer model (one `new_block`, one `norm`, one `lm_head`,
 //!    one `PagedKvCache`), runs a 3-token prefill and a single-step
 //!    decode through the same cache, and verifies both outputs

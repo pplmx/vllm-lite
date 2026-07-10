@@ -2,7 +2,7 @@
 //!
 //! Extracted from `mla.rs` to keep the implementation file under the
 //! project's 800-line soft cap. The tests cover construction, accessor
-//! round-trips, intermediate-projection shape checks, RoPE application,
+//! round-trips, intermediate-projection shape checks, `RoPE` application,
 //! and forward-pass determinism.
 
 use super::*;

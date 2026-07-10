@@ -4,7 +4,7 @@
 //!
 //! - `is_stub()` returns true iff `inference = false`. The
 //!   inverse checks both `PRODUCTION` (true) and the
-//!   \`PRODUCTION_SPECULATIVE\` shape (true).
+//!   `PRODUCTION_SPECULATIVE` shape (true).
 //! - `tier()` maps the four standard capability presets to their
 //!   canonical labels: "stub", "production",
 //!   "production-speculative".
