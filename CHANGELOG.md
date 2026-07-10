@@ -69,6 +69,36 @@
     - All 307 `vllm-core` tests pass; clippy (CI-equivalent) clean.
     - Total commits: 1.
 
+- **Long-Context Support — YaRN/Linear RoPE scaling (v30.0 Phase 15)** — closes the long-standing gap between the RoPE config layer (which already supported YaRN/Linear/Dynamic/Su/Other `RopeType` variants via `RopeScaling`) and the runtime (which ignored everything except linear `scaling_factor`). Choosing YaRN at config time now actually changes the rotation math instead of silently behaving like default RoPE.
+    - **Algorithms implemented in `crates/model/src/components/positional/rope.rs`** (selected by `RopeType`):
+        - `Default` — no scaling (unchanged behaviour).
+        - `Linear` — position interpolation: `inv_freq / scaling_factor`.
+        - `Yarn` — global NTK-aware theta: `theta' = theta * scale^(d/(d-2))`. High-frequency dims barely change; low-frequency dims compress to fit longer contexts. This is the open-source approximation of the YaRN paper §3.3; the attention-scaling half (`attn_factor`) is **stored** on the struct for the attention layer to consume but not applied inside `apply_rope` (it lives in the attention kernel).
+        - `Dynamic`, `Su`, `Other` — fall through to Default for now. Follow-up phase can add bespoke algorithms.
+    - **API additions (additive, no breaking changes)**:
+        - `RoPE` struct fields: `rope_type: RopeType`, `attn_factor: Option<f32>`, `original_max_position: Option<usize>`.
+        - Methods: `RoPE::apply_with_scaling`, `RoPE::forward_with_scaling`, `RoPE::attn_factor`, `RoPE::original_max_position`.
+        - Free function: `apply_rope_with_scaling(query, positions, theta, ctx)`.
+        - Helper struct: `RopeScalingContext` (`Copy + Clone`) with `From<&RopeScaling>` impl.
+    - **Backward compatibility preserved**:
+        - `RoPE::new(head_dim, max_position, theta, device)` keeps its 4-argument signature; new fields default to `RopeType::Default` / `None` / `None`.
+        - `RoPE::apply` and the free `apply_rope(query, positions, theta)` are **unchanged** — they ignore any scaling fields and behave exactly as before. This means existing callers (rope_gqa, mla, gemma4 attention modules) that pass `theta` directly continue to work without code changes.
+        - Migrating those callers to `apply_with_scaling` is mechanical (one-line change at each call site) and is the natural follow-up to a future Phase 16.
+    - **7 new tests** in `crates/model/src/components/positional/rope/tests.rs`:
+        - `test_apply_with_scaling_default_matches_unscaled` — sanity.
+        - `test_apply_with_scaling_linear_modifies_output` — Linear produces different output (sum diff > 1e-3 at factor=2).
+        - `test_apply_with_scaling_yarn_modifies_output` — YaRN produces different output (sum diff > 1e-6 at factor=4).
+        - `test_apply_with_scaling_factor_one_is_noop` — `scaling_factor=1.0` is identity for any `RopeType`.
+        - `test_rope_scaling_context_from_rope_scaling_extracts_all_fields` — config → context conversion preserves every field.
+        - `test_new_with_config_extracts_yarn_fields` — `Qwen3Config` with `rope_scaling={rope_type:yarn,...}` populates the struct correctly.
+        - `test_forward_with_scaling_matches_apply_with_scaling` — `forward_with_scaling` and `apply_with_scaling` agree on both Q and K outputs.
+    - All 392 `vllm-model` tests pass (was 385; +7 from the new tests). clippy (CI-equivalent: correctness/suspicious/perf) clean on the modified files.
+    - **Deferred (out of scope for Phase 15)**:
+        - Migrating rope_gqa / mla / gemma4 attention callers to `apply_with_scaling` (one-line each, follow-up).
+        - Implementing `Dynamic` (per-step NTK recomputation) and `Su` (different wavelength correction) algorithms.
+        - Wiring `attn_factor` into the attention kernel for the YaRN attention-temperature scaling half.
+    - Total commits: 1.
+
 - **Architectural File Splits (v30.0 Phase 11)** — three more production files split into module directories without behavior change:
     - **`server/src/config.rs` (413 lines → 4 files)**: decomposed into `config/mod.rs` (`AppConfig` + `Default` + `load` + `validate` + `ConfigValidationError(s)`) + `config/server.rs` (`ServerConfig` + `Default`) + `config/engine.rs` (`EngineConfig` + `DraftSpecConfig` + `Default`) + `config/auth.rs` (`AuthConfig` + `Default` + `resolve_api_keys`). Public API preserved via re-exports in `mod.rs`.
     - **`qwen3/block.rs` (376 lines → 4 files)**: decomposed into `block/mod.rs` (`TransformerBlock` struct + `Deref` + `PagedDecoderBlock` impl) + `block/construct.rs` (`new`, `new_with_tp`, `new_with_weights`) + `block/weights.rs` (`from_weights` HuggingFace weight-map loader) + `block/factory.rs` (free functions `new_block` + `block_from_weights`). The factory submodule is `pub(crate)` so `qwen3/model.rs` can still access `new_block` / `block_from_weights` via `super::block::{...}` as before.
