@@ -26,6 +26,13 @@
 
 ### Added
 
+- **Architectural File Splits (v30.0 Phase 9)** — three production files split into module directories without behavior change:
+    - **`causal_lm/model.rs` (463 lines → 2 files)**: facade file decomposed into `model/mod.rs` (struct + `ModelBackend` impl + inherent `forward_with_cache`) + `model/construct.rs` (the 4 constructors: `new_with_block_fn`, `from_hf_weights_ln`, `new_rms`, `from_hf_weights_rms`). Public API unchanged. Private fields stay private (construct.rs is in the same module).
+    - **`gated_delta/rule.rs` (423 lines → 5 files)**: rule + kernels split into `rule/mod.rs` (struct + getters + re-exports) + `rule/kernels.rs` (l2_normalize + qkv split + kv head repeat) + `rule/conv.rs` (causal conv prefill + incremental) + `rule/recurrent.rs` (gated-delta step + scan) + `rule/forward.rs` (prefill + decode paths). The `gated_delta::` public API preserved via re-exports.
+    - **`attention/gqa.rs` (472 lines → 3 files)**: split into `gqa/mod.rs` (struct + constructors + private QK-norm helpers + getters) + `gqa/forward.rs` (`forward` + production dispatchers, with all H-11 comments preserved) + `gqa/norm.rs` (public QK-norm API). The original `#[path = "gqa/tests.rs"]` attribute no longer needed once `gqa.rs` became `gqa/mod.rs`.
+    - All 386 `vllm-model` tests pass; workspace test suite unchanged.
+    - Total commits: 3 (one per file split).
+
 - **Quality Polish & Doc Coverage (v30.0 Phase 8)** — closes out remaining low-hanging fruit without touching architecture:
     - **Test infra fix** (`.config/nextest.toml`): 3 `qwen35_speculative_tests` (each ~15s when run alone on CPU) were intermittently timing out under the `[profile.optimized]` 10s `slow-timeout`. Added a default-profile override pinning them to 1 thread with a 30s window — same pattern as `test_llama_block` / `test_qwen3_model` / `tokenizer_verification`. Now `just nextest-fast` completes 1230 tests without timeouts.
     - **`chat_completions` split** (`crates/server/src/openai/chat.rs`): 103-line handler (over `pedantic::too_many_lines`) decomposed into `chat_completions` (10-line dispatcher) + `stream_chat_completion` (~85 lines) + `non_stream_chat_completion` (~7 lines). Public axum signature unchanged. Extracted the duplicated `SERVICE_UNAVAILABLE` + `engine_unavailable` error literal into `engine_unavailable_error()`. New `#[allow(clippy::unused_async)]` on `stream_chat_completion` documents why the keyword is kept (symmetry with `non_stream_chat_completion`; future async metrics work).
