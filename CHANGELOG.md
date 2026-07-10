@@ -26,6 +26,13 @@
 
 ### Added
 
+- **Architectural File Splits (v30.0 Phase 10)** — three more production files split into module directories without behavior change:
+    - **`scheduler/engine/state.rs` (427 lines → 3 files)**: decomposed into `state/mod.rs` (struct + `Debug` + `Default` + `new()` + `set_policy` + `schedule` + small accessors + `register_observer`) + `state/request.rs` (`add_request` enqueue + prefix-cache check + metrics + observer dispatch) + `state/batch.rs` (`build_batch` phase selection + composition + preemption trigger + CUDA Graph metrics). The sibling `scheduler/engine/{graph, memory, update, mod, tests}` files are untouched.
+    - **`engine/ctor.rs` (388 lines → 3 files)**: decomposed into `ctor/mod.rs` (basic `Engine::new_boxed`, `with_config_boxed`, `new`, `with_config`) + `ctor/drafts.rs` (draft-aware `with_drafts_*`, `with_budget_*`, private `install_default_resolver`) + `ctor/builder.rs` (`EngineBuilder` struct + `Debug` + impl). `pub use builder::EngineBuilder` preserves the public API.
+    - **`gemma4/attention.rs` (404 lines → 4 files)**: decomposed into `attention/mod.rs` (struct + `new` + `new_from_weights` + `Default`) + `attention/mask.rs` (`sliding_causal_mask` + `key_position`) + `attention/kernels.rs` (projection + `RoPE` + `expand_kv` + attention compute paths) + `attention/forward.rs` (full / sliding / paged prefill / paged decode entry points). `Device` re-imported under `#[cfg(test)]` so `attention/tests.rs` (via `super::*`) can find it.
+    - All 386 `vllm-model` tests + 307 `vllm-core` tests pass; workspace test suite unchanged.
+    - Total commits: 3 (one per file split).
+
 - **Architectural File Splits (v30.0 Phase 9)** — three production files split into module directories without behavior change:
     - **`causal_lm/model.rs` (463 lines → 2 files)**: facade file decomposed into `model/mod.rs` (struct + `ModelBackend` impl + inherent `forward_with_cache`) + `model/construct.rs` (the 4 constructors: `new_with_block_fn`, `from_hf_weights_ln`, `new_rms`, `from_hf_weights_rms`). Public API unchanged. Private fields stay private (construct.rs is in the same module).
     - **`gated_delta/rule.rs` (423 lines → 5 files)**: rule + kernels split into `rule/mod.rs` (struct + getters + re-exports) + `rule/kernels.rs` (l2_normalize + qkv split + kv head repeat) + `rule/conv.rs` (causal conv prefill + incremental) + `rule/recurrent.rs` (gated-delta step + scan) + `rule/forward.rs` (prefill + decode paths). The `gated_delta::` public API preserved via re-exports.
