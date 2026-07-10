@@ -173,7 +173,8 @@ impl TransformerBlock {
             post_attn_ln_w.dtype(),
             post_attn_ln_w.device(),
         )?;
-        let post_attention_layernorm = LnLayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
+        let post_attention_layernorm =
+            LnLayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
 
         let attention = RopeGqaAttention::new_with_weights(
             hidden_size,
