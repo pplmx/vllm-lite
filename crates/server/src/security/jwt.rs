@@ -25,7 +25,10 @@ use tokio::sync::RwLock;
 #[cfg(test)]
 mod tests;
 
-/// Error type for Jwt. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
+/// Errors raised during JWT validation. Every variant maps to a
+/// distinct failure mode so callers (auth middleware, batch job
+/// validation) can branch on the specific cause rather than parsing
+/// a single error message string.
 #[derive(Debug, Error)]
 pub enum JwtError {
     #[error("Invalid token format: {0}")]
@@ -75,7 +78,11 @@ pub struct Claims {
     pub extra: HashMap<String, serde_json::Value>,
 }
 
-/// Configuration for Jwt. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
+/// JWT verification configuration. Either `secret` (for HMAC HS256)
+/// or `public_key_pem` (for RS*/ES*) must be set — the validator
+/// refuses to start without one. Issuer and audience defaults are
+/// `"vllm"` / `"vllm-api"` and can be overridden via the builder
+/// methods.
 #[derive(Debug, Clone)]
 pub struct JwtConfig {
     /// HMAC shared secret; required for HS256.
@@ -91,6 +98,9 @@ pub struct JwtConfig {
 }
 
 impl JwtConfig {
+    /// Build a [`JwtConfig`] configured for HS256 (HMAC) verification
+    /// using `secret` as the shared key. `public_key_pem` is cleared
+    /// and issuer/audience default to `"vllm"` / `"vllm-api"`.
     pub fn with_secret(secret: impl Into<String>) -> Self {
         Self {
             secret: Some(secret.into()),
@@ -101,6 +111,9 @@ impl JwtConfig {
         }
     }
 
+    /// Build a [`JwtConfig`] configured for RS*/ES* (asymmetric)
+    /// verification using `public_key_pem`. `secret` is cleared and
+    /// issuer/audience default to `"vllm"` / `"vllm-api"`.
     pub fn with_public_key(public_key_pem: impl Into<String>) -> Self {
         Self {
             secret: None,
@@ -111,12 +124,16 @@ impl JwtConfig {
         }
     }
 
+    /// Override the expected `iss` claim. Tokens carrying a different
+    /// issuer are rejected.
     #[must_use]
     pub fn with_issuer(mut self, issuer: impl Into<String>) -> Self {
         self.issuer = issuer.into();
         self
     }
 
+    /// Override the expected `aud` claim. Tokens targeting a different
+    /// audience are rejected.
     #[must_use]
     pub fn with_audience(mut self, audience: impl Into<String>) -> Self {
         self.audience = audience.into();
@@ -136,8 +153,11 @@ const ASYMMETRIC_ALGORITHMS: &[Algorithm] = &[
     Algorithm::ES384,
 ];
 
+/// JWT validator. Wraps a [`JwtConfig`] and exposes a single
+/// `validate(token) -> Result<Claims, JwtError>` method that performs
+/// algorithm allowlist check + signature verification + standard
+/// claim validation.
 #[derive(Debug)]
-/// `JwtValidator`. See the type definition for fields and behavior.
 pub struct JwtValidator {
     config: JwtConfig,
 }

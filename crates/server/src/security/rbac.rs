@@ -13,7 +13,10 @@ use axum::{
 use serde_json::json;
 use std::sync::Arc;
 
-/// Role: role enumeration.
+/// Authenticated identity tier. Strict ordering:
+/// `Admin > Operator > User > Anonymous`. Each variant maps to a
+/// fixed capability set in [`RbacMiddleware::check_permission`] —
+/// `Admin` is the only role allowed to call `manage_*` actions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
     Admin,
@@ -23,6 +26,9 @@ pub enum Role {
 }
 
 impl Role {
+    /// Parse a role name case-insensitively. Unknown values fall back
+    /// to [`Role::Anonymous`] (fail-closed) rather than `Admin`, so a
+    /// typo can never grant elevated permissions.
     #[allow(clippy::should_implement_trait)]
     #[must_use]
     pub fn from_str(s: &str) -> Self {
@@ -34,26 +40,31 @@ impl Role {
         }
     }
 
+    /// `true` iff this role can read model metadata (`GET /v1/models`).
     #[must_use]
     pub const fn can_read_models(&self) -> bool {
         !matches!(self, Self::Anonymous)
     }
 
+    /// `true` iff this role can load or unload model weights (admin-only).
     #[must_use]
     pub const fn can_write_models(&self) -> bool {
         matches!(self, Self::Admin)
     }
 
+    /// `true` iff this role can invoke `/admin/*` user-management endpoints.
     #[must_use]
     pub const fn can_manage_users(&self) -> bool {
         matches!(self, Self::Admin)
     }
 
+    /// `true` iff this role can read the Prometheus `/metrics` endpoint.
     #[must_use]
     pub const fn can_view_metrics(&self) -> bool {
         matches!(self, Self::Admin | Self::Operator)
     }
 
+    /// `true` iff this role can reach the admin UI / dashboard.
     #[must_use]
     pub const fn can_access_admin(&self) -> bool {
         matches!(self, Self::Admin)
@@ -71,6 +82,11 @@ pub struct RbacMiddleware {
 }
 
 impl RbacMiddleware {
+    /// Construct an [`RbacMiddleware`] that grants `default_role` to
+    /// requests missing the `X-User-Role` header. The static
+    /// (role → action) policy table is baked in: `Admin → ["*"]`,
+    /// `Operator → ["read", "execute"]`, `User → ["read", "execute"]`,
+    /// `Anonymous → []`.
     #[must_use]
     pub fn new(default_role: Role) -> Self {
         let role_permissions = vec![

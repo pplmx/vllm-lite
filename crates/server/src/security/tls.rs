@@ -15,7 +15,10 @@ use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::rustls::server::WebPkiClientVerifier;
 use tokio_rustls::rustls::{self, ServerConfig};
 
-/// Error type for Tls. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
+/// Errors raised during TLS configuration load or handshake. Each
+/// variant carries the underlying error context as a `String` so
+/// startup logs surface the exact PEM file or handshake failure
+/// without exposing raw filesystem paths to the client.
 #[derive(Debug, Error)]
 pub enum TlsError {
     #[error("Failed to read certificate: {0}")]
@@ -28,8 +31,11 @@ pub enum TlsError {
     HandshakeFailed(String),
 }
 
+/// TLS configuration: PEM-encoded server certificate + private key,
+/// plus optional CA bundle for client-certificate verification. Plain
+/// TLS is selected when `mtls = false`; calling [`TlsConfig::with_ca_cert`]
+/// flips the flag and installs the CA path for mTLS.
 #[derive(Debug)]
-/// Configuration for Tls. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 pub struct TlsConfig {
     pub cert_path: String,
     pub key_path: String,
@@ -38,6 +44,8 @@ pub struct TlsConfig {
 }
 
 impl TlsConfig {
+    /// Build a plain (server-only) TLS configuration. Call
+    /// [`TlsConfig::with_ca_cert`] to upgrade to mTLS.
     pub fn new(cert_path: impl Into<String>, key_path: impl Into<String>) -> Self {
         Self {
             cert_path: cert_path.into(),
@@ -47,6 +55,8 @@ impl TlsConfig {
         }
     }
 
+    /// Enable mutual TLS by recording `ca_cert_path` (PEM bundle of
+    /// trusted client CAs) and flipping `mtls = true`.
     #[must_use]
     pub fn with_ca_cert(mut self, ca_cert_path: impl Into<String>) -> Self {
         self.ca_cert_path = Some(ca_cert_path.into());
@@ -54,10 +64,15 @@ impl TlsConfig {
         self
     }
 
-    /// Run the loader and produce the target type (model, cache, etc.).
+    /// Load the PEM files referenced by this config and assemble a
+    /// rustls [`ServerConfig`] ready to wrap the axum listener.
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
+    /// Returns [`TlsError::CertificateRead`] / [`TlsError::KeyRead`]
+    /// if a referenced file cannot be read, [`TlsError::InvalidConfig`]
+    /// if the PEM contents are malformed or the mTLS verifier builder
+    /// rejects the CA bundle.
     pub fn load(&self) -> Result<ServerConfig, TlsError> {
         let cert_bytes =
             fs::read(&self.cert_path).map_err(|e| TlsError::CertificateRead(e.to_string()))?;

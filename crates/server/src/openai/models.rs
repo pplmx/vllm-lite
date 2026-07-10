@@ -22,6 +22,17 @@ struct ModelsResponse {
     data: Vec<ModelObject>,
 }
 
+/// OpenAI-compatible `GET /v1/models` handler.
+///
+/// Returns a single-element list describing the currently loaded
+/// model. If the tokenizer does not expose a model name, the
+/// placeholder `"unknown"` is reported so clients always receive a
+/// well-formed response.
+///
+/// `async` is currently unused (`axum::Json::into_response` is sync);
+/// the keyword is kept so the handler signature matches the rest of
+/// the routes and to leave room for future async work (e.g. dynamic
+/// model listing once multi-model serving is wired).
 #[allow(clippy::unused_async)]
 pub async fn models_handler(State(state): State<ApiState>) -> Response {
     let model_name = state
