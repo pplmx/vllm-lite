@@ -7,22 +7,16 @@ rust-version.workspace = true
 [dependencies]
 vllm-traits = { path = "../traits", features = ["candle", "kernels"] }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
 async-trait = { workspace = true }
 rand = { version = "0.10", features = ["std"] }
 serde = { workspace = true }
 crossbeam = { workspace = true }
 tracing = { workspace = true }
 metrics = { workspace = true }
-metrics-exporter-prometheus = { workspace = true, optional = true }
-opentelemetry = { workspace = true, optional = true }
 dashmap = { workspace = true }
-parking_lot = { workspace = true }
 
 [features]
-default = ["prometheus"]
-prometheus = ["metrics-exporter-prometheus"]
-opentelemetry = ["dep:opentelemetry"]
 cuda-graph = ["dep:vllm-model"]
 
 [dependencies.vllm-model]
