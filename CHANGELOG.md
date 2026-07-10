@@ -61,6 +61,14 @@
     - All 307 `vllm-core` + 385 `vllm-model` + 143 `vllm-server` tests pass; clippy (CI-equivalent: correctness/suspicious/perf only) clean; cargo fmt clean; workspace build clean.
     - Total commits: 7 (5 splits + 1 fixup for the dropped deletions + 1 CHANGELOG, this entry).
 
+- **Performance — H-16 / PERF-05 (v30.0 Phase 14)** — two pre-allocation wins in the speculative-decoding hot path. Scope widened from H-11 (all four H-11 items are M/H risk — `expand_kv` fused kernel, FlashAttn tiled output buffer, BatchComposer Arc clone (cross-crate API change), PagedKV host round-trip elimination) to any low-risk perf improvement.
+    - **`spec_dispatch/verify.rs:20`**: `results` Vec was `Vec::new()` and grew by one element per seq_id in the batch. Replaced with `Vec::with_capacity(batch.seq_ids.len())` so the per-iteration `results.push(...)` does not reallocate. Mirrors the existing `accepted_counts` hint one line below.
+    - **`spec_dispatch/dispatch.rs:63`**: `results` Vec was `Vec::new()` and grew by one element per verified sequence. Replaced with `Vec::with_capacity(verified.len())` for the same reason.
+    - No behavior change — both Vecs are filled by push-loops with a known bound that matches the capacity. Allocation pattern changes from amortized-O(n) reallocations to a single exact-size allocation per call.
+    - **Deferred perf items (out of scope, M/H risk)** — recorded in `CHANGELOG.md:200` "Deferred optimizations (separate specs needed)": expand_kv fused kernel, FlashAttn tiled output buffer, BatchComposer kv_blocks Arc clone (cross-crate API change), PagedKV host round-trip elimination.
+    - All 307 `vllm-core` tests pass; clippy (CI-equivalent) clean.
+    - Total commits: 1.
+
 - **Architectural File Splits (v30.0 Phase 11)** — three more production files split into module directories without behavior change:
     - **`server/src/config.rs` (413 lines → 4 files)**: decomposed into `config/mod.rs` (`AppConfig` + `Default` + `load` + `validate` + `ConfigValidationError(s)`) + `config/server.rs` (`ServerConfig` + `Default`) + `config/engine.rs` (`EngineConfig` + `DraftSpecConfig` + `Default`) + `config/auth.rs` (`AuthConfig` + `Default` + `resolve_api_keys`). Public API preserved via re-exports in `mod.rs`.
     - **`qwen3/block.rs` (376 lines → 4 files)**: decomposed into `block/mod.rs` (`TransformerBlock` struct + `Deref` + `PagedDecoderBlock` impl) + `block/construct.rs` (`new`, `new_with_tp`, `new_with_weights`) + `block/weights.rs` (`from_weights` HuggingFace weight-map loader) + `block/factory.rs` (free functions `new_block` + `block_from_weights`). The factory submodule is `pub(crate)` so `qwen3/model.rs` can still access `new_block` / `block_from_weights` via `super::block::{...}` as before.
