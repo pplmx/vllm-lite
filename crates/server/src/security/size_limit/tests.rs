@@ -4,13 +4,13 @@
 //!
 //! 1. **Custom-limit layer**: a small JSON payload (< 1024 B limit)
 //!    passes through to 200 OK; a 256 B raw payload against a 64 B
-//!    limit is rejected with 413 PAYLOAD_TOO_LARGE.
-//! 2. **Default 1 MiB helper**: \`with_default_body_limit\` accepts
+//!    limit is rejected with 413 `PAYLOAD_TOO_LARGE`.
+//! 2. **Default 1 MiB helper**: `with_default_body_limit` accepts
 //!    up to 1 MiB (512 KiB test → OK) and rejects anything above
 //!    (2 MiB test → 413).
 //!
-//! Tests use a raw \`Bytes\` handler for the over-limit cases so
-//! the \`Json\` extractor's 415 short-circuit doesn't fire before
+//! Tests use a raw `Bytes` handler for the over-limit cases so
+//! the `Json` extractor's 415 short-circuit doesn't fire before
 //! the body-limit layer sees the request.
 use super::*;
 use axum::body::Body;

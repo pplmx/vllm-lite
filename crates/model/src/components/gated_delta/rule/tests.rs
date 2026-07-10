@@ -1,4 +1,4 @@
-//! Unit tests for the GatedDeltaNet rule primitives
+//! Unit tests for the `GatedDeltaNet` rule primitives
 //! (`l2_normalize`, `gated_delta_recurrent`, `gated_delta_step`,
 //! `GatedDeltaNet::forward`) and prefill/decode parity.
 //!

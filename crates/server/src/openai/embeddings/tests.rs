@@ -1,11 +1,11 @@
-//! Unit tests for the OpenAI `embeddings` endpoint.
+//! Unit tests for the `OpenAI` `/v1/embeddings` endpoint.
 //!
 //! Covers the validation gates and the engine-channel error mapping:
 //!
-//! - empty `model` → 400 BAD_REQUEST
-//! - empty `input` → 400 BAD_REQUEST
+//! - empty `model` → 400 `BAD_REQUEST`
+//! - empty `input` → 400 `BAD_REQUEST`
 //! - non-empty payload with closed engine channel → 503
-//!   SERVICE_UNAVAILABLE with `engine_unavailable` error code
+//!   `SERVICE_UNAVAILABLE` with `engine_unavailable` error code
 //!   (clients retry on this since it's a transient server-side issue).
 //!
 //! All tests rely on `crate::test_fixtures::api_state(Qwen3)` to

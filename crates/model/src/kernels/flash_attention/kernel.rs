@@ -2,8 +2,8 @@
 //! every kernel impl satisfies.
 //!
 //! The two concrete implementations live in sibling files:
-//! - [`flash_attention_v2`] — FlashAttentionV2 (tiling + online softmax)
-//! - [`scaled_dot_product`] — ScaledDotProductAttention (CPU reference,
+//! - [`flash_attention_v2`] — `FlashAttentionV2` (tiling + online softmax)
+//! - [`scaled_dot_product`] — `ScaledDotProductAttention` (CPU reference,
 //!   also used as the dispatch target for the `Tiled`, `Flash`, and
 //!   `Standard` variants).
 //!

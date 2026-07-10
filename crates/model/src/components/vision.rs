@@ -44,7 +44,7 @@ impl VisionConfig {
 ///
 /// Input shape to [`forward`](PatchEmbed::forward) is expected to be
 /// `[batch, num_patches, patch_size * patch_size * 3]` (i.e. the
-/// caller has already flattened the patches; a real ViT pipeline
+/// caller has already flattened the patches; a real `ViT` pipeline
 /// would have a separate patch-extraction step before this layer).
 pub struct PatchEmbed {
     proj: Linear,
@@ -90,7 +90,7 @@ impl PatchEmbed {
 /// Owns a [`VisionConfig`] and currently passes its input through
 /// unchanged on [`forward`](VisionEncoder::forward). This exists so
 /// that vision-language model loaders can resolve a `vision_tower`
-/// module today and dispatch through a stable API; the real ViT
+/// module today and dispatch through a stable API; the real `ViT`
 /// (patch-embed + transformer + pooling) will replace the
 /// pass-through body without changing the public surface.
 pub struct VisionEncoder {

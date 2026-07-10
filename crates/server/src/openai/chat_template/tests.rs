@@ -3,18 +3,18 @@
 //! Exercises the per-architecture prompt builders used by the
 //! `chat/completions` handler:
 //!
-//! - **ChatML** (Qwen3): wraps `<|im_start|>`/`<|im_end|>` markers
+//! - `ChatML` (Qwen3): wraps `<|im_start|>`/`<|im_end|>` markers
 //!   around role-tagged messages.
-//! - **Llama3**: uses `<|begin_of_text|>` and `assistant<|end_header_id|>`
+//! - `Llama3`: uses `<|begin_of_text|>` and `assistant<|end_header_id|>`
 //!   sentinels (loose `contains` checks because exact whitespace
 //!   formatting is allowed to drift).
-//! - **MistralInst**: `[INST]` / `[/INST]` envelope, with system
+//! - `MistralInst`: `[INST]` / `[/INST]` envelope, with system
 //!   messages wrapped in `<<SYS>>` / `<</SYS>>`.
-//! - **Plain**: simple `role: content` newline-separated format used
+//! - `Plain`: simple `role: content` newline-separated format used
 //!   as a fallback when the architecture is unknown.
 //!
-//! Architecture → template mapping (Qwen3 → ChatML, Llama → Llama3,
-//! Mistral → MistralInst) is locked in by the three `test_template_for_*`
+//! Architecture → template mapping (Qwen3 → `ChatML`, Llama → `Llama3`,
+//! Mistral → `MistralInst`) is locked in by the three `test_template_for_*`
 //! tests.
 //!
 //! Note: `[INST]` and `<<SYS>>` are literal Mistral template

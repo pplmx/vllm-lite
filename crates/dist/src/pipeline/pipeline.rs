@@ -53,7 +53,7 @@ impl PipelineParallel {
     }
 
     /// Append `stage` to the pipeline DAG. Stages execute in the
-    /// order they were added; for typical 1F1B / GPipe schedules this
+    /// order they were added; for typical 1F1B / `GPipe` schedules this
     /// matches model-layer order.
     pub fn add_stage(&mut self, stage: Arc<dyn PipelineStage>) {
         self.stages.push(stage);
@@ -68,8 +68,8 @@ impl PipelineParallel {
     }
 
     /// Borrow the immutable [`PipelineParallelConfig`] used to
-    /// construct this pipeline (num_stages, num_microbatches,
-    /// enable_async, prefetch_ahead).
+    /// construct this pipeline (`num_stages`, `num_microbatches`,
+    /// `enable_async`, `prefetch_ahead`).
     #[must_use]
     pub const fn config(&self) -> &PipelineParallelConfig {
         &self.config

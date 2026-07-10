@@ -2,9 +2,9 @@
 //!
 //! Locks in two contracts:
 //!
-//! 1. **Shape correctness**: forward / forward_decode / forward_prefill
+//! 1. **Shape correctness**: `forward` / `forward_decode` / `forward_prefill`
 //!    preserve the `[batch, seq, hidden]` / `[batch, 1, hidden]` shape
-//!    contract regardless of qk_norm / fused-kernel toggles.
+//!    contract regardless of `qk_norm` / `fused-kernel` toggles.
 //! 2. **Fused-paged equivalence**: when `use_fused` is toggled on, the
 //!    fused prefill and decode paths must match the paged reference
 //!    to within `1e-4` absolute max element diff. This guards against

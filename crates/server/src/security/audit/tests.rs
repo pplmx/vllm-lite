@@ -2,12 +2,12 @@
 //!
 //! Covers the ring-buffer contract:
 //!
-//! 1. **Single event**: \`log_auth_success\` records an
-//!    \`AuditEvent\` with \`action = "authenticate"\` and
-//!    \`result = "success"\`.
+//! 1. **Single event**: `log_auth_success` records an
+//!    `AuditEvent` with `action = "authenticate"` and
+//!    `result = "success"`.
 //! 2. **Bounded retention**: with capacity=3, logging 5 events keeps
-//!    only the most recent 3; the oldest (\`action-0\`, \`action-1\`)
-//!    are evicted, and \`events[0].action == "action-2"\`.
+//!    only the most recent 3; the oldest (`action-0`, `action-1`)
+//!    are evicted, and `events[0].action == "action-2"`.
 use super::*;
 
 #[tokio::test]

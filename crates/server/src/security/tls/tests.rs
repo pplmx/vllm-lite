@@ -2,14 +2,14 @@
 //!
 //! Three contracts are locked in:
 //!
-//! 1. **Basic construction**: \`TlsConfig::new(cert, key)\` records
-//!    the two paths and leaves \`mtls = false\`.
-//! 2. **mTLS builder**: \`with_ca_cert(ca)\` flips \`mtls = true\`
+//! 1. **Basic construction**: `TlsConfig::new(cert, key)` records
+//!    the two paths and leaves `mtls = false`.
+//! 2. **mTLS builder**: `with_ca_cert(ca)` flips `mtls = true`
 //!    and records the CA path.
-//! 3. **SEC-06 regression**: \`TlsConfig::load\` on an mTLS config
-//!    with a missing \`ca_cert_path\` must return a structured
-//!    \`TlsError\` rather than panicking on \`.unwrap()\`. The test
-//!    wraps the call in \`std::panic::catch_unwind\` and
+//! 3. **SEC-06 regression**: `TlsConfig::load` on an mTLS config
+//!    with a missing `ca_cert_path` must return a structured
+//!    `TlsError` rather than panicking on `.unwrap()`. The test
+//!    wraps the call in `std::panic::catch_unwind` and
 //!    re-raises any panic as a regression.
 use super::*;
 

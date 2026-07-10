@@ -3,11 +3,11 @@
 //! Two free-function paths and one struct path are exercised:
 //!
 //! 1. **`apply_rope` (free fn, 3 tests)**: shape preservation
-//!    (\`[B, H, S, D]\` → same shape), positional sensitivity
+//!    (`[B, H, S, D]` → same shape), positional sensitivity
 //!    (different positions produce different outputs), determinism
 //!    (same input → same output).
 //! 2. **`precompute_rope_cache` (3 tests)**: cache length matches
-//!    \`max_seq_len * (head_dim / 2)\`, edge cases for length=1 and
+//!    `max_seq_len * (head_dim / 2)`, edge cases for length=1 and
 //!    length=10.
 //! 3. **`RoPE::new` + `RoPE::apply` + `RoPE::forward` (8 tests)**:
 //!    construction records `theta` / `head_dim` / `scaling_factor`,

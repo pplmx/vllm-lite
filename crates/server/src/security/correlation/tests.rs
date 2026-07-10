@@ -4,10 +4,10 @@
 //!
 //! 1. **ID generation**: `generate_id()` returns non-empty,
 //!    pairwise-distinct IDs (UUID-derived; collision probability
-//!    is negligible but we still assert \`id1 != id2\`).
+//!    is negligible but we still assert `id1 != id2`).
 //! 2. **Header extraction**: `extract_id(&headers)` returns
-//!    \`Some(s)\` when the \`REQUEST_ID_HEADER\` is present, and
-//!    \`None\` when it is absent.
+//!    `Some(s)` when the `REQUEST_ID_HEADER` is present, and
+//!    `None` when it is absent.
 use super::*;
 
 #[tokio::test]

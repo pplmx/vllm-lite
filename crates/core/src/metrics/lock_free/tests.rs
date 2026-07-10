@@ -5,8 +5,8 @@
 //!
 //! 1. **`MetricsCollector` snapshot accuracy (3 tests)**: new fields
 //!    on the snapshot populate correctly under a hand-rolled
-//!    record-session (request_start → kv_cache → prefix_cache →
-//!    prefill/decode tokens → wait_time → end), `kv_cache_usage`
+//!    record-session (`request_start` → `kv_cache` → `prefix_cache` →
+//!    `prefill` / `decode_tokens` → `wait_time` → `end`), `kv_cache_usage`
 //!    with `total=0` returns `0.0` (no division-by-zero), and
 //!    `prefix_cache_hit_rate` is `0.0` when no requests have been
 //!    recorded.

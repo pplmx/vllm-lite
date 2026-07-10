@@ -9,7 +9,7 @@
 //!    input; `required_action_for_path` maps URL prefixes to the
 //!    action string required (`/health` → no action, `/v1/models`
 //!    → read, `/v1/chat/completions` → execute, `/admin/*` →
-//!    manage_users).
+//!    `manage_users`).
 //! 2. **Axum middleware integration (5)**: a tiny `axum::Router`
 //!    with the `rbac_middleware` layer installed; each test sends
 //!    one request via `tower::ServiceExt::oneshot` and asserts the
