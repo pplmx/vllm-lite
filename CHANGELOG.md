@@ -26,6 +26,17 @@
 
 ### Added
 
+- **Dead Dependency Cleanup (v30.0 Phase 12a)** — removed 8 unused dependencies from the workspace via `cargo-machete` audit:
+    - **`vllm-core`** — `metrics-exporter-prometheus` + `opentelemetry` + `parking_lot`. The `prometheus` and `opentelemetry` features were no-ops (no `#[cfg(feature = "...")]` code); removed both features. Added `time` to the vllm-core `tokio` feature list because `tokio::time::sleep` was previously pulled in transitively via the `prometheus` feature.
+    - **`vllm-dist`** — `tower` + `tower-http` (both never imported). Kept `tonic-prost` because the generated `vllm.distributed.rs` references `tonic_prost::ProstCodec` directly (cargo-machete false positive); added to ignore list.
+    - **`vllm-model`** — `rand` (tests use candle's `Tensor::randn`, not `rand` directly) + `tiktoken` (never imported). Kept `gguf` because it's a feature-gated optional dep behind the `gguf` feature flag; added to ignore list.
+    - **`vllm-testing`** — `candle-core` + `tokio` (neither imported). Removed the now-empty `cuda` feature (which only existed to forward `candle-core/cuda`).
+    - **`vllm-traits`** — `serde_json` (never imported).
+    - **`vllm-fuzz`** — kept `serde` and `vllm-core`; both flagged as cargo-machete false positives (used by fuzz target binaries in `fuzz_targets/`); added to ignore list.
+    - `cargo-machete` now reports "didn't find any unused dependencies" across the workspace.
+    - All `vllm-core` (307) + `vllm-model` (386) + `vllm-server` (143) tests still pass; workspace test suite unchanged.
+    - Total commits: 7 (5 dep removals + 1 ignore-list commit).
+
 - **Architectural File Splits (v30.0 Phase 11)** — three more production files split into module directories without behavior change:
     - **`server/src/config.rs` (413 lines → 4 files)**: decomposed into `config/mod.rs` (`AppConfig` + `Default` + `load` + `validate` + `ConfigValidationError(s)`) + `config/server.rs` (`ServerConfig` + `Default`) + `config/engine.rs` (`EngineConfig` + `DraftSpecConfig` + `Default`) + `config/auth.rs` (`AuthConfig` + `Default` + `resolve_api_keys`). Public API preserved via re-exports in `mod.rs`.
     - **`qwen3/block.rs` (376 lines → 4 files)**: decomposed into `block/mod.rs` (`TransformerBlock` struct + `Deref` + `PagedDecoderBlock` impl) + `block/construct.rs` (`new`, `new_with_tp`, `new_with_weights`) + `block/weights.rs` (`from_weights` HuggingFace weight-map loader) + `block/factory.rs` (free functions `new_block` + `block_from_weights`). The factory submodule is `pub(crate)` so `qwen3/model.rs` can still access `new_block` / `block_from_weights` via `super::block::{...}` as before.
