@@ -189,126 +189,169 @@ pub async fn chat_completions(
     State(state): State<ApiState>,
     Json(req): Json<ChatRequest>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    if req.stream.unwrap_or(false) {
+        stream_chat_completion(state, req).await
+    } else {
+        non_stream_chat_completion(state, req).await
+    }
+}
+
+/// Streaming (SSE) variant of `/v1/chat/completions`.
+///
+/// Builds the prompt, submits the request to the engine, and pipes each
+/// emitted token through the chat-template tokenizer into an SSE stream
+/// of [`ChatChunk`]s. A trailing `[DONE]` sentinel is appended when the
+/// engine channel closes.
+///
+/// # Errors
+///
+/// Returns `SERVICE_UNAVAILABLE` (code `engine_unavailable`) when the
+/// engine channel is closed at submission time. Streaming itself cannot
+/// fail mid-flight — the SSE transport is best-effort and a client
+/// disconnect simply drops the remaining chunks.
+///
+/// # Panics
+///
+/// Panics only if SSE chunk serialization fails (it cannot, given the
+/// payload types are plain `serde_json`-derived structs).
+// `async` is intentional for symmetry with `non_stream_chat_completion`
+// and to leave room for future async work (e.g., metrics collection,
+// tracing spans) without another signature change. Currently the
+// streaming prep is fully synchronous (`UnboundedSender::send` is
+// sync), so clippy flags this — silence here, not in the caller.
+#[allow(clippy::unused_async)]
+async fn stream_chat_completion(
+    state: ApiState,
+    req: ChatRequest,
+) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    let start = std::time::Instant::now();
     let request_id = format!(
         "req_{}",
         uuid::Uuid::new_v4().to_string()[..8].to_uppercase()
     );
+    let template = ChatTemplate::for_architecture(state.architecture);
+    let prompt = build_prompt_from_messages(template, &req.messages);
+    let prompt_tokens = state.tokenizer.encode(&prompt);
+    let prompt_tokens_len = prompt_tokens.len();
 
-    let is_streaming = req.stream.unwrap_or(false);
+    tracing::info!(
+        request_id = %request_id,
+        model = %req.model,
+        prompt_tokens = prompt_tokens_len,
+        "Streaming request started"
+    );
 
-    if is_streaming {
-        let start = std::time::Instant::now();
-        let template = ChatTemplate::for_architecture(state.architecture);
-        let prompt = build_prompt_from_messages(template, &req.messages);
-        let prompt_tokens = state.tokenizer.encode(&prompt);
-        let prompt_tokens_len = prompt_tokens.len();
+    let max_tokens = usize::try_from(req.max_tokens.unwrap_or(100)).unwrap_or(100);
+    let total_max = prompt_tokens.len() + max_tokens;
 
-        tracing::info!(
-            request_id = %request_id,
-            model = %req.model,
-            prompt_tokens = prompt_tokens_len,
-            "Streaming request started"
-        );
-
-        let max_tokens = usize::try_from(req.max_tokens.unwrap_or(100)).unwrap_or(100);
-        let total_max = prompt_tokens.len() + max_tokens;
-
-        let model = req.model.clone();
-
-        let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
-
-        if let Some(temp) = req.temperature {
-            request.sampling_params.temperature = temp;
-        }
-
-        let (response_tx, response_rx) = mpsc::channel(64);
-
-        state
-            .engine_tx
-            .send(vllm_core::types::EngineMessage::AddRequest {
-                request,
-                response_tx,
-            })
-            .map_err(|_| {
-                (
-                    axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                    Json(ErrorResponse::with_code(
-                        "Engine unavailable",
-                        "server_error",
-                        "engine_unavailable",
-                    )),
-                )
-            })?;
-
-        let tokenizer = state.tokenizer.clone();
-        let stream = stream::unfold(response_rx, move |mut rx| {
-            let tokenizer = tokenizer.clone();
-            let model = model.clone();
-            let request_id = request_id.clone();
-            let start = start;
-            async move {
-                if let Some(token) = rx.recv().await {
-                    let text = tokenizer.decode(&[token]);
-                    if should_skip_token_text(&tokenizer, &text) {
-                        return Some((Ok::<Event, Infallible>(Event::default().data("")), rx));
-                    }
-                    let chunk = ChatChunk::new(
-                        "chatcmpl-stream".to_string(),
-                        model.clone(),
-                        ChatChunkChoice {
-                            index: 0,
-                            delta: ChatMessage {
-                                role: "assistant".to_string(),
-                                content: text,
-                                name: None,
-                            },
-                            finish_reason: None,
-                        },
-                    );
-                    let sse_payload =
-                        // invariant: serializing a known-good struct (plain serde_json types);
-                        // to_string cannot fail.
-                        serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
-                    Some((Ok(Event::default().data(sse_payload)), rx))
-                } else {
-                    // Channel closed - could be normal completion or client disconnect
-                    // With bounded channel, if send fails due to backpressure, we log it
-                    let chunk = ChatChunk::new(
-                        "chatcmpl-stream".to_string(),
-                        model.clone(),
-                        ChatChunkChoice {
-                            index: 0,
-                            delta: ChatMessage {
-                                role: "assistant".to_string(),
-                                content: String::new(),
-                                name: None,
-                            },
-                            finish_reason: Some("stop".to_string()),
-                        },
-                    );
-                    let sse_payload =
-                        // invariant: serializing a known-good struct (plain serde_json types);
-                        // to_string cannot fail.
-                        serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
-                    tracing::info!(
-                        request_id = %request_id,
-                        duration_ms = %u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
-                        "Streaming request completed"
-                    );
-                    Some((
-                        Ok(Event::default().data(format!("{sse_payload}\n\n[DONE]"))),
-                        rx,
-                    ))
-                }
-            }
-        });
-
-        return Ok(Sse::new(Box::pin(stream)).into_response());
+    let model = req.model.clone();
+    let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
+    if let Some(temp) = req.temperature {
+        request.sampling_params.temperature = temp;
     }
 
-    // 非流式 - 返回普通 JSON
+    let (response_tx, response_rx) = mpsc::channel(64);
+    state
+        .engine_tx
+        .send(vllm_core::types::EngineMessage::AddRequest {
+            request,
+            response_tx,
+        })
+        .map_err(|_| engine_unavailable_error())?;
+
+    let tokenizer = state.tokenizer;
+    let stream = stream::unfold(response_rx, move |mut rx| {
+        let tokenizer = tokenizer.clone();
+        let model = model.clone();
+        let request_id = request_id.clone();
+        let start = start;
+        async move {
+            if let Some(token) = rx.recv().await {
+                let text = tokenizer.decode(&[token]);
+                if should_skip_token_text(&tokenizer, &text) {
+                    return Some((Ok::<Event, Infallible>(Event::default().data("")), rx));
+                }
+                let chunk = ChatChunk::new(
+                    "chatcmpl-stream".to_string(),
+                    model.clone(),
+                    ChatChunkChoice {
+                        index: 0,
+                        delta: ChatMessage {
+                            role: "assistant".to_string(),
+                            content: text,
+                            name: None,
+                        },
+                        finish_reason: None,
+                    },
+                );
+                let sse_payload =
+                    // invariant: serializing a known-good struct (plain serde_json types);
+                    // to_string cannot fail.
+                    serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
+                Some((Ok(Event::default().data(sse_payload)), rx))
+            } else {
+                // Channel closed - could be normal completion or client disconnect.
+                let chunk = ChatChunk::new(
+                    "chatcmpl-stream".to_string(),
+                    model.clone(),
+                    ChatChunkChoice {
+                        index: 0,
+                        delta: ChatMessage {
+                            role: "assistant".to_string(),
+                            content: String::new(),
+                            name: None,
+                        },
+                        finish_reason: Some("stop".to_string()),
+                    },
+                );
+                let sse_payload =
+                    // invariant: serializing a known-good struct (plain serde_json types);
+                    // to_string cannot fail.
+                    serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
+                tracing::info!(
+                    request_id = %request_id,
+                    duration_ms = %u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
+                    "Streaming request completed"
+                );
+                Some((
+                    Ok(Event::default().data(format!("{sse_payload}\n\n[DONE]"))),
+                    rx,
+                ))
+            }
+        }
+    });
+
+    Ok(Sse::new(Box::pin(stream)).into_response())
+}
+
+/// Non-streaming variant of `/v1/chat/completions`.
+///
+/// Delegates to [`handle_chat`] (which validates the request, builds
+/// the prompt, collects all tokens, and assembles a [`ChatResponse`])
+/// and wraps the result in a JSON HTTP response.
+///
+/// # Errors
+///
+/// See [`handle_chat`] — same error contract.
+async fn non_stream_chat_completion(
+    state: ApiState,
+    req: ChatRequest,
+) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
     let response = handle_chat(&state, req).await?;
     Ok(Json(response).into_response())
+}
+
+/// Build the standard `engine_unavailable` `(StatusCode, Json<ErrorResponse>)`
+/// pair returned when the engine channel is closed at request time.
+fn engine_unavailable_error() -> (axum::http::StatusCode, Json<ErrorResponse>) {
+    (
+        axum::http::StatusCode::SERVICE_UNAVAILABLE,
+        Json(ErrorResponse::with_code(
+            "Engine unavailable",
+            "server_error",
+            "engine_unavailable",
+        )),
+    )
 }
 
 // Unit tests are extracted to `tests.rs` to keep this handler file
