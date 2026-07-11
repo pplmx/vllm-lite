@@ -7,10 +7,10 @@
 //!
 //! The `Engine` struct itself lives in the parent `engine::mod`.
 //!
-//! **CUDA Graph construction** (Phase 18 ARCH-06): when the `cuda-graph`
-//! feature is enabled, this is the *only* file in `vllm-core` that imports
-//! the concrete `vllm_model::kernels::BatchCudaGraphExecutor`. It builds the
-//! value and immediately boxes it into
+//! **CUDA Graph construction**: when the `cuda-graph` feature is enabled,
+//! this is the *only* file in `vllm-core` that imports the concrete
+//! `vllm_model::kernels::BatchCudaGraphExecutor`. It builds the value
+//! and immediately boxes it into
 //! `Box<dyn vllm_traits::CudaGraphExecutor + Send>`. Every other engine
 //! call site talks to the trait, never the concrete type.
 

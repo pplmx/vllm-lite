@@ -1,12 +1,11 @@
 //! Engine distributed-KV helpers: status query, stats accessor, and the
 //! post-construction setter used by [`crate::engine::EngineBuilder`].
 //!
-//! Phase 19 OPS-05a establishes the [`vllm_dist::DistributedKVCache`] seam
-//! inside `Engine`. Today the cache is owned by the engine but not yet
-//! wired into the allocator — see the field docs on [`crate::engine::Engine`]
-//! for the OPS-05b follow-up. This module exposes the *presence* of the
-//! cache (so callers can check it's wired up) and the cache's own stats
-//! snapshot (so callers can introspect the cache's view of activity).
+//! Exposes the *presence* of the cache (so callers can check it's wired
+//! up) and the cache's own stats snapshot (so callers can introspect the
+//! cache's view of activity). The actual write-through happens inside
+//! [`crate::scheduler::memory::MemoryManager`] — see that module for
+//! how `allocate` / `free` round-trip through the cache.
 
 #[cfg(feature = "multi-node")]
 use std::sync::Arc;
@@ -18,15 +17,12 @@ impl crate::engine::Engine {
     /// Install a distributed KV-cache after construction.
     ///
     /// Used by [`crate::engine::EngineBuilder::with_distributed_kv`] to
-    /// override whatever `with_config_boxed` would build (today: nothing —
-    /// the field defaults to `None`). Crate-internal because the cache
-    /// type lives below the `core → dist` boundary; embedders go through
-    /// the builder.
+    /// install the cache. Crate-internal because the cache type lives
+    /// below the `core → dist` boundary; embedders go through the builder.
     ///
     /// Also propagates the cache into the scheduler's
     /// [`crate::scheduler::engine::SchedulerEngine`] so every subsequent
-    /// block allocate / free round-trips through the cache. Phase 19
-    /// OPS-05b.
+    /// block allocate / free round-trips through the cache.
     #[cfg(feature = "multi-node")]
     pub(crate) fn set_distributed_kv(&mut self, cache: Arc<vllm_dist::DistributedKVCache>) {
         self.scheduler.set_distributed_kv(Arc::clone(&cache));

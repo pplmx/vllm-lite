@@ -277,9 +277,9 @@ impl BatchCudaGraphExecutor {
     }
 }
 
-/// Trait object bridge — `BatchCudaGraphExecutor` is the only production
-/// implementation of [`vllm_traits::CudaGraphExecutor`] today, but the trait
-/// keeps it from leaking into `vllm-core` (Phase 18 ARCH-06).
+/// Trait object bridge — `BatchCudaGraphExecutor` is the production
+/// implementation of [`vllm_traits::CudaGraphExecutor`]. The trait keeps
+/// the concrete type from leaking into `vllm-core`.
 ///
 /// All three methods forward directly to the inherent methods above; the impl
 /// exists purely so `Engine` can store `Box<dyn CudaGraphExecutor + Send>`.

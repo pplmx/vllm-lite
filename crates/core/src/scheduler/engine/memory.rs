@@ -127,11 +127,11 @@ impl SchedulerEngine {
     }
 
     /// Install a distributed KV-cache so every subsequent block allocate
-    /// / free round-trips through the cache. Phase 19 OPS-05b.
+    /// / free round-trips through the cache.
     ///
     /// Idempotent — re-installing just replaces the cache reference.
-    /// Existing tracked blocks are NOT migrated; OPS-05b2 will provide a
-    /// snapshot-and-replay path for live migration.
+    /// Existing tracked blocks are NOT migrated; future work will
+    /// provide a snapshot-and-replay path for live migration if needed.
     #[cfg(feature = "multi-node")]
     pub fn set_distributed_kv(&mut self, cache: Arc<vllm_dist::DistributedKVCache>) {
         self.memory.set_distributed_kv(cache);

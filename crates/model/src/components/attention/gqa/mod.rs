@@ -38,7 +38,7 @@ pub struct GqaAttention {
     config: AttentionConfig,
     q_norm: Option<LayerNorm>,
     k_norm: Option<LayerNorm>,
-    /// YaRN attention-temperature scaling factor (Phase 16). When `Some(f)`,
+    /// YaRN attention-temperature scaling factor. When `Some(f)`,
     /// attention scores in the standard `forward()` are additionally
     /// divided by `f` before softmax. `None` or `Some(1.0)` = no scaling.
     /// Currently only honoured by the standard forward path; paged/tiled/

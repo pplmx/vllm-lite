@@ -16,10 +16,10 @@
 //! `ArchCapabilities::STUB`; `create_block` / `create_model` return
 //! the shared [`StubBlockWrapper`] / [`StubModel`], both of which
 //! always return zero tokens / passthrough KV (intentionally — see
-//! `.planning/MODEL-ARCHITECTURE-REFACTOR.md` Phase 4.4 Option C).
+//! `.planning/MODEL-ARCHITECTURE-REFACTOR.md`).
 //!
 //! `ModelLoader` still rejects stub models unless `--allow-stub` is
-//! passed (see `crates/server/src/main.rs` and Phase 12d policy).
+//! passed (see `crates/server/src/main.rs`).
 
 use crate::arch::{ArchCapabilities, Architecture};
 use crate::components::block::{

@@ -1,10 +1,10 @@
 // crates/core/tests/distributed_kv_integration.rs
 //
-// Phase 19 OPS-05a — verifies that Engine owns a `DistributedKVCache`
-// when constructed via `EngineBuilder::with_distributed_kv`, and that the
-// status / stats accessors reflect the cache's state. The allocator
-// hooks that wire block allocate/free into the cache are OPS-05b; this
-// file only exercises the *seam*.
+// Verifies that Engine owns a `DistributedKVCache` when constructed via
+// `EngineBuilder::with_distributed_kv`, that the status / stats
+// accessors reflect the cache's state, and that the cache is wired
+// through to the scheduler's `MemoryManager` so block allocate / free
+// round-trips through it.
 
 #![cfg(feature = "multi-node")]
 
@@ -50,8 +50,7 @@ fn engine_with_distributed_kv_reports_enabled() {
 #[test]
 fn engine_distributed_kv_stats_reflect_cache_state() {
     // The engine returns the cache's own stats snapshot. We mutate the
-    // cache directly (the allocator hooks are OPS-05b) and confirm the
-    // engine reports the new values.
+    // cache directly and confirm the engine reports the new values.
     let cache = make_cache();
     cache.put(42, 0xCAFE);
     cache.put(43, 0xBEEF);
@@ -92,10 +91,10 @@ fn multiple_engines_can_share_a_cache_via_arc() {
 
 #[test]
 fn engine_propagates_distributed_kv_to_scheduler_memory_manager() {
-    // Phase 19 OPS-05b — when the engine is built with a distributed
-    // cache, the cache is propagated into the scheduler's
-    // MemoryManager so every block allocate / free round-trips through
-    // the cache. We exercise this end-to-end by:
+    // When the engine is built with a distributed cache, the cache is
+    // propagated into the scheduler's MemoryManager so every block
+    // allocate / free round-trips through the cache. We exercise this
+    // end-to-end by:
     //   1. Building an engine with a cache.
     //   2. Asking the scheduler to allocate blocks (the same call the
     //      step loop makes for every prefill).

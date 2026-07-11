@@ -6,8 +6,9 @@
 //! format for those configs and the abstract interface every engine talks to.
 //!
 //! See [`CudaGraphExecutor`] for the trait that hides `BatchCudaGraphExecutor`
-//! behind a trait object — the contract `vllm-core` depends on. Phase 18
-//! ARCH-06 closes the `core → model` upward dependency via cuda-graph.
+//! behind a trait object — the contract `vllm-core` depends on. The trait
+//! closes the `core → model` upward dependency that would otherwise exist
+//! because the `cuda-graph` feature pulls `vllm-model` in.
 use serde::{Deserialize, Serialize};
 
 use crate::types::{Batch, BatchOutput};
@@ -105,12 +106,10 @@ pub enum GraphExecutionError {
 /// concrete type lives below the `core → model` boundary; the trait above it
 /// is what every consumer in `core` talks to.
 ///
-/// This is the abstraction that closes the `core → model` upward dependency
-/// surfaced by the `cuda-graph` feature (Phase 18 ARCH-06). Without it, every
-/// `core` call site that touched the executor had to know the concrete model
-/// type. With it, the only place that imports `BatchCudaGraphExecutor` is
-/// the engine constructor that builds the concrete value before boxing it
-/// into the trait object.
+/// Without this trait, every `core` call site that touched the executor had
+/// to know the concrete model type. With it, the only place that imports
+/// `BatchCudaGraphExecutor` is the engine constructor that builds the
+/// concrete value before boxing it into the trait object.
 ///
 /// # Object safety
 ///

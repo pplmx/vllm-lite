@@ -182,7 +182,7 @@ fn test_rope_large_position() -> Result<()> {
     Ok(())
 }
 
-// === Phase 15: long-context scaling (RopeType-aware apply_with_scaling) ===
+// === long-context scaling (RopeType-aware apply_with_scaling) ===
 
 use crate::qwen3::config::{RopeScaling, RopeType};
 
@@ -379,7 +379,7 @@ fn test_forward_with_scaling_matches_apply_with_scaling() -> Result<()> {
     Ok(())
 }
 
-// === Phase 16: Dynamic NTK scaling ===
+// === Dynamic NTK scaling ===
 
 fn dynamic_rope(scaling_factor: f32, orig_max: usize) -> RoPE {
     RoPE {

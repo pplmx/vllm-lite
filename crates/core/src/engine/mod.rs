@@ -76,15 +76,16 @@ pub struct Engine {
     /// type (`vllm_model::kernels::BatchCudaGraphExecutor`) is built by the
     /// engine constructor and immediately boxed — every other engine call
     /// site talks to the [`vllm_traits::CudaGraphExecutor`] trait, not the
-    /// concrete type. Phase 18 ARCH-06.
+    /// concrete type.
     #[cfg(feature = "cuda-graph")]
     cuda_graph: Option<Box<dyn CudaGraphExecutor + Send>>,
     /// Optional distributed KV-cache for cross-node cache coherence.
-    /// Phase 19 OPS-05a surfaces the [`vllm_dist::DistributedKVCache`]
-    /// seam to engine callers; the allocator-level hooks that wire block
-    /// allocate/free into the cache are OPS-05b. The field exists today
-    /// so callers can construct a multi-node engine, query its status,
-    /// and own the cache for the engine's lifetime.
+    /// Surfaces the [`vllm_dist::DistributedKVCache`] seam to engine
+    /// callers; the allocator-level hooks that wire block allocate/free
+    /// into the cache are wired in
+    /// [`crate::scheduler::memory::MemoryManager`]. The field exists so
+    /// callers can construct a multi-node engine, query its status, and
+    /// own the cache for the engine's lifetime.
     #[cfg(feature = "multi-node")]
     distributed_kv: Option<Arc<DistributedKVCache>>,
     /// Optional adaptive speculative decoder that tunes the draft-token

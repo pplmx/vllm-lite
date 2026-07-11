@@ -6,11 +6,11 @@ use crate::speculative::memory_budget::MemoryBudgetExceeded;
 /// Errors surfaced by the draft registry.
 ///
 /// All variants are typed; callers can `match` on the failure category
-/// without parsing message strings. Phase 12d removed the deprecated
+/// without parsing message strings. The previously-deprecated
 /// `LoadFailed` / `LoadFailedWithSource` variants and the
-/// `load_failed()` convenience constructor — they had no production
-/// callers and the typed variants (`IoLoad`, `Model`) cover the same
-/// use cases.
+/// `load_failed()` convenience constructor were removed — they had no
+/// production callers and the typed variants (`IoLoad`, `Model`) cover
+/// the same use cases.
 #[derive(Debug, thiserror::Error)]
 pub enum DraftRegistryError {
     #[error("unknown draft id: {0}")]

@@ -1,6 +1,6 @@
 //! Unit tests for `MemoryManager`.
 //!
-//! Covers the three entry points the scheduler actually drives:
+//! Covers the entry points the scheduler actually drives:
 //!
 //! 1. **allocate / free**: `allocate(3)` reduces `available_blocks`
 //!    by 3; `free(blocks)` restores it. Round-trip invariant.
@@ -11,11 +11,11 @@
 //!    implementation).
 //! 3. **OOM**: `allocate(capacity)` succeeds; `allocate(1)` on a
 //!    full manager returns `None`.
-//!
-//! Phase 19 OPS-05b adds a fourth block: when a `DistributedKVCache`
-//! is wired in, allocate / free round-trip through the cache so peer
-//! nodes can observe activity. The unit tests below assert the cache
-//! stats reflect the manager's lifecycle without touching the network.
+//! 4. **Distributed-KV write-through** (multi-node feature): when a
+//!    `DistributedKVCache` is wired in, allocate / free round-trip
+//!    through the cache so peer nodes can observe activity. The unit
+//!    tests below assert the cache stats reflect the manager's
+//!    lifecycle without touching the network.
 #[cfg(feature = "multi-node")]
 use vllm_dist::distributed_kv::protocol::NodeId;
 #[cfg(feature = "multi-node")]
@@ -73,9 +73,9 @@ fn test_memory_manager_oom() {
 #[cfg(feature = "multi-node")]
 #[test]
 fn test_memory_manager_allocate_bumps_cache_updates() {
-    // Phase 19 OPS-05b — when a cache is wired, allocate() registers
-    // each new block via cache.put. Verify the cache's `updates`
-    // counter reflects the number of blocks allocated.
+    // When a cache is wired, `allocate()` registers each new block
+    // via `cache.put`. Verify the cache's `updates` counter reflects
+    // the number of blocks allocated.
     let cache = Arc::new(DistributedKVCache::new(CacheConfig::new(NodeId(0), 4)));
     let mut manager =
         MemoryManager::new(SchedulerConfig::default(), 10).with_distributed_kv(Arc::clone(&cache));

@@ -562,7 +562,7 @@ fn test_matmul_rejects_non_contiguous_batch_dims() -> Result<()> {
     Ok(())
 }
 
-// === Phase 16: attn_factor wiring ===
+// === attn_factor wiring ===
 
 #[test]
 fn gqa_attn_factor_one_is_noop() -> Result<()> {

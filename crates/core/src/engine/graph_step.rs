@@ -2,8 +2,8 @@
 //!
 //! Falls back to the eager (`engine/run.rs`) path when no captured
 //! graph matches the shape. The executor behind `self.cuda_graph` is a
-//! `Box<dyn CudaGraphExecutor + Send>` (Phase 18 ARCH-06) so the call
-//! dispatches through the `vllm_traits::CudaGraphExecutor` trait.
+//! `Box<dyn CudaGraphExecutor + Send>` so the call dispatches through
+//! the `vllm_traits::CudaGraphExecutor` trait.
 
 // Sub-module for graph-based step execution on Engine.
 // See mod.rs for the Engine struct definition.
