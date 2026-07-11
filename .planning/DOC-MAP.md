@@ -16,7 +16,7 @@
 
 | Topic | Authority | Do not duplicate in |
 |-------|-----------|---------------------|
-| System architecture | [`docs/architecture.md`](../docs/architecture.md) | README (summary only), `.planning/codebase/ARCHITECTURE.md` (redirect stub) |
+| System architecture | [`docs/architecture.md`](../docs/architecture.md) | README (summary only), `.planning/codebase/` (redirect README only) |
 | Version history | [`CHANGELOG.md`](../CHANGELOG.md) | README badges, `.planning/MILESTONES.md` (internal digest) |
 | Operations / deploy | [`OPERATIONS.md`](../OPERATIONS.md) | README deploy section (link only) |
 | Active milestone | [`.planning/STATE.md`](./STATE.md) + [`v31.0-MASTER-PLAN.md`](./v31.0-MASTER-PLAN.md) | `.planning/ROADMAP.md`, `.planning/PROJECT.md` (headers only — bodies are historical) |
@@ -46,15 +46,14 @@ docs/
 ```text
 STATE.md               ★ GSD current pointer (gsd_state_version, milestone, %)
 v31.0-MASTER-PLAN.md   ★ Active roadmap (phases 31-A … 31-F)
-phases/                GSD active/historical phase dirs (/gsd-plan-phase writes here)
+phases/                GSD in-flight phase dirs (/gsd-plan-phase); empty until v31 phases start
 milestones/            Shipped milestone artifacts (v13–v23) — canonical archive
 DOC-MAP.md             This file
 PROJECT.md             Project charter (header synced to STATE; body = history)
 ROADMAP.md             Milestone list through v23 (header synced; body = archive)
 phase-12b/             Public API audit (v2 authoritative)
 phase-12e/             public-api CI baselines
-archive/               Superseded handoffs (e.g. SESSION-HANDOFF-v17)
-codebase/              Snapshot notes — verify against live code before trusting
+codebase/              Redirect README → docs/architecture.md (snapshots removed)
 ```
 
 ## Known Duplication / Conflicts
@@ -62,9 +61,9 @@ codebase/              Snapshot notes — verify against live code before trusti
 | Issue | Files | Resolution |
 |-------|-------|------------|
 | **Triple roadmap** | Root `ROADMAP.md`, `.planning/ROADMAP.md`, `v31.0-MASTER-PLAN.md` | Use **v31.0-MASTER-PLAN** for active work |
-| **phases/ vs milestones/** | v23 Phases 40–43 exist in both | **milestones/v23.0-phases/** is canonical archive; `phases/` may mirror until GSD prunes |
-| **Superpowers volume** | ~185 files under `docs/superpowers/` | Expected tool output; not clutter — exclude from rumdl; link from ADR when shipped |
-| **Architecture twin** | `docs/architecture.md` vs `.planning/codebase/ARCHITECTURE.md` | Trust `docs/architecture.md` |
+| **phases/ vs milestones/** | v23 shipped in `milestones/v23.0-phases/` only | GSD creates new dirs under `phases/` for in-flight work |
+| **Superpowers volume** | ~185 files under `docs/superpowers/` | Expected tool output; exclude from rumdl |
+| **Architecture** | `docs/architecture.md` | `.planning/codebase/` snapshots removed |
 | **Benchmark numbers** | [`docs/perf/v27-baseline.md`](../docs/perf/v27-baseline.md) | Criterion HTML under `target/criterion/` (gitignored) |
 | **Logs in plans** | e.g. `/tmp/mutants-*.log` in superpowers plans | Intentional *local* paths — never commit; `.gitignore` covers `*.log` |
 
@@ -84,16 +83,16 @@ codebase/              Snapshot notes — verify against live code before trusti
 | Safe | Unsafe |
 |------|--------|
 | `.gitignore` for `*.log`, `logs/`, `target/criterion/` | Moving `docs/superpowers/` |
-| Delete committed criterion HTML/JSON from repo | Deleting `.planning/phases/` while GSD active |
-| Slim root `ROADMAP.md` to redirect | Deleting `.planning/milestones/` |
-| Redirect stubs for superseded architecture snapshots | Treating superpowers specs as disposable drafts |
+| Delete superseded `.planning/archive/` handoffs | Deleting `.planning/milestones/` |
+| Remove stale `.planning/codebase/` snapshots | Treating superpowers specs as disposable |
 
 ## Cleanup Backlog
 
 - [x] Create `DOC-MAP.md` + tool-ownership section
 - [x] Doc coverage 55% → 67.4% real
 - [x] Phase 12e public-api CI gate
-- [x] Remove tracked criterion output (`docs/benchmark-results/`); gitignore + point to `docs/perf/`
-- [x] Slim root `ROADMAP.md`; mark `.planning/codebase/ARCHITECTURE.md` superseded
-- [ ] Optional: dedupe v23 `phases/40-43` vs `milestones/v23.0-phases/` when GSD confirms
-- [ ] Refresh `.planning/codebase/CONCERNS.md` against current code
+- [x] Remove tracked criterion output; gitignore `**/benchmark-results/`
+- [x] Remove `.planning/archive/` (superseded SESSION-HANDOFF)
+- [x] Remove v23 duplicate `.planning/phases/40-43` (canonical: `milestones/v23.0-phases/`)
+- [x] Remove stale `.planning/codebase/*` snapshots (2026-05-13)
+- [x] Slim root `ROADMAP.md`

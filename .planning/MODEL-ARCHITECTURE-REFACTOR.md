@@ -3,7 +3,7 @@
 > **创建日期:** 2026-06-12  
 > **最后更新:** 2026-06-26（Phase 0–5 全部完成；进入 Wave 1 收口 + Wave 2 增量）  
 > **目标:** 消除重复、统一推理抽象、区分生产级与 stub 架构，使 `vllm-model` 可维护、可扩展、可安全部署  
-> **关联文档:** `.planning/codebase/ARCHITECTURE.md`、`.planning/SESSION-HANDOFF.md`
+> **关联文档:** [`docs/architecture.md`](../docs/architecture.md)、[`.planning/STATE.md`](./STATE.md)
 
 ---
 
