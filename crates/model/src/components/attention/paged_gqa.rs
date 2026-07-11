@@ -37,10 +37,7 @@ pub fn write_prefill_kv(
 ) -> Result<()> {
     let block_size = kv_cache.block_size();
     for token_idx in 0..seq_len {
-        let global_pos = positions
-            .get(token_idx)
-            .copied()
-            .unwrap_or(token_idx);
+        let global_pos = positions.get(token_idx).copied().unwrap_or(token_idx);
         let block_id = block_ids
             .get(token_idx)
             .or_else(|| block_ids.first())
@@ -50,12 +47,8 @@ pub fn write_prefill_kv(
 
         let k_token = k.narrow(2, token_idx, 1)?.contiguous()?;
         let v_token = v.narrow(2, token_idx, 1)?.contiguous()?;
-        let k_slice = k_token
-            .squeeze(2)?
-            .reshape((1, k.dims()[1], k.dims()[3]))?;
-        let v_slice = v_token
-            .squeeze(2)?
-            .reshape((1, v.dims()[1], v.dims()[3]))?;
+        let k_slice = k_token.squeeze(2)?.reshape((1, k.dims()[1], k.dims()[3]))?;
+        let v_slice = v_token.squeeze(2)?.reshape((1, v.dims()[1], v.dims()[3]))?;
 
         kv_cache.write_kv(layer_idx, block_id, token_offset, &k_slice, &v_slice)?;
     }
@@ -210,15 +203,7 @@ mod tests {
         let block_ids = vec![0usize];
         let positions = vec![5usize, 6];
 
-        write_prefill_kv(
-            &mut kv_cache,
-            0,
-            &block_ids,
-            &positions,
-            seq_len,
-            &k,
-            &v,
-        )?;
+        write_prefill_kv(&mut kv_cache, 0, &block_ids, &positions, seq_len, &k, &v)?;
 
         let (read_k, _) = kv_cache.read_kv(0, &[0], 7)?;
         assert_eq!(read_k.dims(), &[7, num_heads, head_dim]);

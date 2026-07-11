@@ -99,20 +99,33 @@
 
 // === Module Declarations ===
 
+/// CUDA-graph batch preparation helpers for the scheduler loop.
 pub mod cuda_graph;
+/// Sequence packing utilities for mixed prefill/decode batches.
 pub mod packing;
+/// Prefill/decode phase selection and state machine.
 pub mod phase_scheduler;
+/// FCFS, SJF, and priority scheduling policies.
 pub mod policy;
+/// Sequence preemption when KV memory is exhausted.
 pub mod preemption;
+/// Radix-tree prefix cache for shared prompt blocks.
 pub mod radix_cache;
+/// Waiting, running, and finished request queues.
 pub mod request_queue;
 
+/// KV block allocator, eviction, and prefix-cache memory layer.
 pub mod memory;
 
+/// Batch data structures shared between scheduler and engine.
 pub mod batch;
+/// Composes runnable batches under token and sequence limits.
 pub mod batch_composer;
+/// Top-level scheduler engine coordinating all subsystems.
 pub mod engine;
+/// Observer hooks for metrics and tracing integration.
 pub mod observer;
+/// Scheduler counters exported to metrics collectors.
 pub mod stats;
 
 // === Public Re-exports ===

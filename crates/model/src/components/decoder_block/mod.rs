@@ -290,14 +290,12 @@ mod tests {
         let block_ids = vec![0usize];
         let positions: Vec<usize> = (0..seq_len).collect();
 
-        let mut full_cache =
-            PagedKvCache::new(1, 4, 16, 32, device.clone(), false).unwrap();
+        let mut full_cache = PagedKvCache::new(1, 4, 16, 32, device.clone(), false).unwrap();
         let full_out = block
             .forward_prefill(&x, &mut full_cache, 0, &block_ids, &positions)
             .unwrap();
 
-        let mut chunked_cache =
-            PagedKvCache::new(1, 4, 16, 32, device.clone(), false).unwrap();
+        let mut chunked_cache = PagedKvCache::new(1, 4, 16, 32, device.clone(), false).unwrap();
         let chunk1 = x.narrow(1, 0, 3).unwrap();
         let pos1: Vec<usize> = (0..3).collect();
         block
@@ -307,14 +305,7 @@ mod tests {
         let chunk2 = x.narrow(1, 3, 3).unwrap();
         let pos2: Vec<usize> = (3..6).collect();
         let cont_out = block
-            .forward_prefill_continue(
-                &chunk2,
-                &mut chunked_cache,
-                0,
-                &block_ids,
-                &pos2,
-                3,
-            )
+            .forward_prefill_continue(&chunk2, &mut chunked_cache, 0, &block_ids, &pos2, 3)
             .unwrap();
 
         let full_last = full_out.narrow(1, seq_len - 1, 1).unwrap();

@@ -266,16 +266,14 @@ impl MixtralBlock {
     ) -> Result<Tensor> {
         let residual = x.clone();
         let x = self.input_layernorm.forward(x)?;
-        let x = self
-            .attention
-            .forward_prefill_continue(
-                &x,
-                kv_cache,
-                layer_idx,
-                block_ids,
-                positions,
-                num_computed_tokens,
-            )?;
+        let x = self.attention.forward_prefill_continue(
+            &x,
+            kv_cache,
+            layer_idx,
+            block_ids,
+            positions,
+            num_computed_tokens,
+        )?;
         let x = (&x + &residual)?;
 
         let residual = x.clone();

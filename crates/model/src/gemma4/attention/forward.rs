@@ -86,25 +86,12 @@ impl Gemma4Attention {
         let k_new = k_expanded.transpose(1, 2)?.contiguous()?;
         let v_new = v_expanded.transpose(1, 2)?.contiguous()?;
 
-        let (cached_k, cached_v) =
-            kv_cache.read_kv(layer_idx, block_ids, num_computed_tokens)?;
-        let cached_k = cached_k
-            .transpose(0, 1)?
-            .unsqueeze(0)?
-            .contiguous()?;
-        let cached_v = cached_v
-            .transpose(0, 1)?
-            .unsqueeze(0)?
-            .contiguous()?;
+        let (cached_k, cached_v) = kv_cache.read_kv(layer_idx, block_ids, num_computed_tokens)?;
+        let cached_k = cached_k.transpose(0, 1)?.unsqueeze(0)?.contiguous()?;
+        let cached_v = cached_v.transpose(0, 1)?.unsqueeze(0)?.contiguous()?;
 
         write_prefill_kv(
-            kv_cache,
-            layer_idx,
-            block_ids,
-            positions,
-            seq_len,
-            &k_new,
-            &v_new,
+            kv_cache, layer_idx, block_ids, positions, seq_len, &k_new, &v_new,
         )?;
 
         let full_k = Tensor::cat(&[&cached_k, &k_new], 2)?.contiguous()?;

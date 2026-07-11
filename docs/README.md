@@ -13,16 +13,20 @@
 
 ```text
 docs/
-├── architecture.md     # System architecture (single source of truth)
-├── adr/                  # ADR-001 through ADR-019
-├── tutorial/             # 5-lesson onboarding path
-├── perf/                 # Performance profiling notes
-└── superpowers/
-    ├── specs/            # Design specifications
-    └── plans/            # Implementation plans
+├── architecture.md       # Human: system architecture (single source of truth)
+├── adr/                  # Human: ADR-001 … ADR-019
+├── tutorial/             # Human: onboarding path
+├── perf/                 # Human: profiling notes
+├── superpowers/          # Tool: Superpowers specs + plans (do not relocate)
+│   ├── specs/
+│   └── plans/
+├── archive/              # Generated artifacts (benchmark reports, etc.)
+└── benchmark-results/    # Redirect stub → archive/
 ```
 
-Integration tests live in `crates/*/tests/` (not a top-level `tests/` directory).
+Integration tests live in `crates/*/tests/`.
+
+**GSD** milestone state lives under [`.planning/`](../.planning/) (`STATE.md`, `phases/`, `milestones/`). See [`.planning/DOC-MAP.md`](../.planning/DOC-MAP.md).
 
 ## Crate Map
 
@@ -37,15 +41,12 @@ Integration tests live in `crates/*/tests/` (not a top-level `tests/` directory)
 
 ## Adding Features
 
-1. Write spec to `docs/superpowers/specs/YYYY-MM-DD-feature.md`
-2. Write plan to `docs/superpowers/plans/YYYY-MM-DD-feature.md`
-3. Implement with `just ci` verification
-4. Update `CHANGELOG.md` and relevant ADR
+**Superpowers workflow:** spec → plan under `docs/superpowers/` → implement → ADR + `CHANGELOG.md`.
+
+**Human docs:** update `architecture.md` / ADRs when the design is durable; do not treat every superpowers file as user documentation.
 
 ## Related
 
 - [README.md](../README.md)
 - [AGENTS.md](../AGENTS.md)
-- [.planning/v31.0-MASTER-PLAN.md](../.planning/v31.0-MASTER-PLAN.md) — active roadmap
-- [.planning/DOC-MAP.md](../.planning/DOC-MAP.md) — doc authority matrix
-- [ROADMAP.md](../ROADMAP.md) — historical Phase 1–8 roadmap (archived)
+- [.planning/DOC-MAP.md](../.planning/DOC-MAP.md)

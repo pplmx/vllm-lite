@@ -59,6 +59,7 @@ impl Default for ModelGraphConfig {
 }
 
 impl CudaGraphConfig {
+    /// Load CUDA-graph settings from `VLLM_CUDA_GRAPH_*` environment variables.
     #[must_use]
     pub fn from_env() -> Self {
         let enabled = std::env::var("VLLM_CUDA_GRAPH_ENABLED")

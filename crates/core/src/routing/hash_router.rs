@@ -33,6 +33,7 @@ pub struct HashRouter {
 }
 
 impl HashRouter {
+    /// Create an empty router; `virtual_nodes` is reserved for future hash-ring use.
     pub fn new(virtual_nodes: usize) -> Self {
         Self {
             nodes: Arc::new(RwLock::new(Vec::new())),
@@ -40,6 +41,7 @@ impl HashRouter {
         }
     }
 
+    /// Register a backend node if its id is not already present.
     pub async fn add_node(&self, node_id: String) {
         let mut nodes = self.nodes.write().await;
 
@@ -52,11 +54,13 @@ impl HashRouter {
         }
     }
 
+    /// Remove a backend node from the routing pool.
     pub async fn remove_node(&self, node_id: &str) {
         let mut nodes = self.nodes.write().await;
         nodes.retain(|n| n.node_id != node_id);
     }
 
+    /// Update the reported load fraction for `node_id`.
     pub async fn update_node_load(&self, node_id: &str, load: f64) {
         let mut nodes = self.nodes.write().await;
         if let Some(node) = nodes.iter_mut().find(|n| n.node_id == node_id) {
@@ -64,6 +68,7 @@ impl HashRouter {
         }
     }
 
+    /// Mark whether `node_id` already holds a prefix-cache entry for the key.
     pub async fn update_cache_status(&self, node_id: &str, has_cache: bool) {
         let mut nodes = self.nodes.write().await;
         if let Some(node) = nodes.iter_mut().find(|n| n.node_id == node_id) {
@@ -71,6 +76,7 @@ impl HashRouter {
         }
     }
 
+    /// Route `key` to a node preferring cache hits, else least-loaded.
     pub async fn route(&self, key: &str) -> Option<String> {
         let nodes = self.nodes.read().await;
 
@@ -107,6 +113,7 @@ impl HashRouter {
         result
     }
 
+    /// Route by a precomputed prompt hash (consistent modulo node count).
     pub async fn route_by_prompt_hash(&self, prompt_hash: u64) -> Option<String> {
         let nodes = self.nodes.read().await;
 
@@ -132,10 +139,12 @@ impl HashRouter {
         hasher.finish()
     }
 
+    /// Number of registered backend nodes.
     pub async fn get_node_count(&self) -> usize {
         self.nodes.read().await.len()
     }
 
+    /// Snapshot of all registered node ids.
     pub async fn get_all_nodes(&self) -> Vec<String> {
         self.nodes
             .read()

@@ -83,14 +83,7 @@ fn test_mixtral_block_prefill_continue_matches_full_prefill() {
     let chunk2 = x.narrow(1, 3, 3).unwrap();
     let pos2: Vec<usize> = (3..6).collect();
     let cont_out = block
-        .forward_prefill_continue(
-            &chunk2,
-            &mut chunked_cache,
-            0,
-            &block_ids,
-            &pos2,
-            3,
-        )
+        .forward_prefill_continue(&chunk2, &mut chunked_cache, 0, &block_ids, &pos2, 3)
         .unwrap();
 
     let full_last = full_out.narrow(1, seq_len - 1, 1).unwrap();

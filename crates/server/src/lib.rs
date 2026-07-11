@@ -13,17 +13,29 @@ pub use health::{HealthChecker, HealthStatus};
 pub use openai::batch::{BatchEndpoint, BatchManager, BatchResponse};
 pub use security::audit::AuditEvent;
 
+/// HTTP route handlers and engine channel bridge.
 pub mod api;
+/// JWT and API-key authentication middleware.
 pub mod auth;
+/// Token-bucket admission control for overload protection.
 pub mod backpressure;
+/// CLI argument parsing and server bootstrap.
 pub mod cli;
+/// Server configuration (auth, TLS, model paths).
 pub mod config;
+/// Debug and diagnostic endpoints.
 pub mod debug;
+/// Draft-model loading for speculative decoding.
 pub mod draft_loader;
+/// Liveness and readiness health probes.
 pub mod health;
+/// Structured logging setup (console + JSON file).
 pub mod logging;
+/// OpenAI-compatible chat, completions, and batch APIs.
 pub mod openai;
+/// Rate limiting, audit logging, and security middleware.
 pub mod security;
+/// Shared HTTP and serialization utilities.
 pub mod util;
 
 /// Hidden test helpers for unit/integration tests.

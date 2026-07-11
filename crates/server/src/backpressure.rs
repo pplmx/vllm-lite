@@ -31,6 +31,7 @@ impl Default for BackpressureConfig {
 }
 
 impl BackpressureConfig {
+    /// Build config with 75% high-water and 25% resume thresholds.
     pub const fn new(max_buffer_size: usize) -> Self {
         // invariant: integer arithmetic preserves precision for the 75% / 25%
         // water marks; no float conversion needed.
@@ -61,6 +62,7 @@ pub(crate) struct BackpressureState {
 }
 
 impl BackpressureState {
+    /// Create state tracking in-flight requests against `config` limits.
     pub fn new(config: BackpressureConfig) -> Self {
         Self {
             pending_tokens: Arc::new(AtomicUsize::new(0)),
@@ -69,21 +71,25 @@ impl BackpressureState {
         }
     }
 
+    /// Register one in-flight request and return the updated flow-control state.
     pub fn increment(&self) -> FlowControlState {
         let pending = self.pending_tokens.fetch_add(1, Ordering::SeqCst);
         self.evaluate_state(pending + 1)
     }
 
+    /// Release one in-flight request and return the updated flow-control state.
     pub fn decrement(&self) -> FlowControlState {
         let pending = self.pending_tokens.fetch_sub(1, Ordering::SeqCst);
         self.evaluate_state(pending.saturating_sub(1))
     }
 
+    /// Register `count` in-flight requests in a single atomic step.
     pub fn batch_increment(&self, count: usize) -> FlowControlState {
         let pending = self.pending_tokens.fetch_add(count, Ordering::SeqCst);
         self.evaluate_state(pending + count)
     }
 
+    /// Release `count` in-flight requests in a single atomic step.
     pub fn batch_decrement(&self, count: usize) -> FlowControlState {
         let pending = self.pending_tokens.fetch_sub(count, Ordering::SeqCst);
         self.evaluate_state(pending.saturating_sub(count))
@@ -109,15 +115,18 @@ impl BackpressureState {
         new_state
     }
 
+    /// Whether pending count has reached the high-water throttle threshold.
     pub fn should_throttle(&self) -> bool {
         let pending = self.pending_tokens.load(Ordering::SeqCst);
         pending >= self.config.high_water_mark
     }
 
+    /// Current number of in-flight requests tracked by this gate.
     pub fn pending_count(&self) -> usize {
         self.pending_tokens.load(Ordering::SeqCst)
     }
 
+    /// Clear pending count and return flow control to [`FlowControlState::Normal`].
     pub fn reset(&self) {
         self.pending_tokens.store(0, Ordering::SeqCst);
         *self
@@ -133,24 +142,29 @@ pub(crate) struct StreamingBackpressure {
 }
 
 impl StreamingBackpressure {
+    /// Wrap a new [`BackpressureState`] for streaming response admission control.
     pub fn new(config: BackpressureConfig) -> Self {
         Self {
             state: Arc::new(BackpressureState::new(config)),
         }
     }
 
+    /// Shared backpressure state for inspection in tests and middleware.
     pub const fn state(&self) -> &Arc<BackpressureState> {
         &self.state
     }
 
+    /// Acquire a send slot before emitting the next streaming chunk.
     pub fn before_send(&self) -> FlowControlState {
         self.state.increment()
     }
 
+    /// Release a send slot after a streaming chunk has been flushed.
     pub fn after_send(&self) -> FlowControlState {
         self.state.decrement()
     }
 
+    /// Whether a new streaming chunk may be sent without throttling.
     pub fn can_send(&self) -> bool {
         !self.state.should_throttle()
     }

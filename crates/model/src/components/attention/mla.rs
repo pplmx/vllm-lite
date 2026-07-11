@@ -45,55 +45,65 @@ pub struct MlaAttention {
 }
 
 impl MlaAttention {
+    /// Query attention head count.
     #[must_use]
     pub const fn num_heads(&self) -> usize {
         self.num_heads
     }
 
+    /// Key/value head count (may differ from query heads in GQA-style MLA).
     #[must_use]
     pub const fn num_kv_heads(&self) -> usize {
         self.num_kv_heads
     }
 
+    /// Combined per-head dimension after MLA decompression.
     #[must_use]
     pub const fn head_dim(&self) -> usize {
         self.head_dim
     }
 
+    /// Low-rank rank of the compressed KV latent.
     #[must_use]
     pub const fn kv_lora_rank(&self) -> usize {
         self.kv_lora_rank
     }
 
+    /// Low-rank rank of the compressed query latent.
     #[must_use]
     pub const fn q_lora_rank(&self) -> usize {
         self.q_lora_rank
     }
 
+    /// Shared attention hyper-parameters (dropout, scale, etc.).
     #[must_use]
     pub const fn config(&self) -> &AttentionConfig {
         &self.config
     }
 
     #[cfg(test)]
+    /// Test-only accessor to the query projection linear layer.
     #[must_use]
     pub const fn q_proj_test(&self) -> &Linear {
         &self.q_proj
     }
 
     #[cfg(test)]
+    /// Test-only accessor to the compressed KV projection linear layer.
     #[must_use]
     pub const fn kv_proj_test(&self) -> &Linear {
         &self.kv_proj
     }
 
     #[cfg(test)]
+    /// Test-only accessor to the key decompression linear layer.
     #[must_use]
     pub const fn k_decompress_test(&self) -> &Linear {
         &self.k_decompress
     }
 
     #[cfg(test)]
+    /// Test-only accessor to the value decompression linear layer.
     #[must_use]
     pub const fn v_decompress_test(&self) -> &Linear {
         &self.v_decompress

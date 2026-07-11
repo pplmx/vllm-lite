@@ -28,6 +28,7 @@ pub enum ModelError {
 }
 
 impl ModelError {
+    /// Construct a generic message-bearing error variant.
     pub fn new(message: impl Into<String>) -> Self {
         Self::Message(message.into())
     }
@@ -105,10 +106,13 @@ pub trait ModelBackend: Send + Sync {
     }
 
     #[cfg(feature = "candle")]
+    /// Vocabulary size of the loaded model weights.
     fn vocab_size(&self) -> usize;
 
+    /// Number of transformer layers in the model stack.
     fn num_layers(&self) -> usize;
 
+    /// Number of query attention heads.
     fn num_heads(&self) -> usize;
 
     /// Forward pass stopped after `upto_layer` layers.
