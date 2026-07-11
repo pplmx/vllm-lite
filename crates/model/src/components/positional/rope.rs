@@ -139,6 +139,11 @@ impl RoPE {
             scaling_factor: self.scaling_factor,
             attn_factor: self.attn_factor,
             original_max_position: self.original_max_position,
+            // RoPE struct does not carry Su per-dim factors; callers
+            // who need them must construct the context directly (e.g.
+            // via `RopeScalingContext::from(&RopeScaling)`).
+            short_factor: None,
+            long_factor: None,
         }
     }
 
@@ -187,14 +192,19 @@ impl RoPE {
 
 /// Bundle of scaling parameters extracted from `RopeScaling`.
 ///
-/// Cheap to copy (`Copy + Clone`); intended for `apply_rope_with_scaling`
-/// callers that don't have a `RoPE` struct handy.
-#[derive(Copy, Clone, Debug)]
+/// Cheap to clone (only the optional `Vec<f32>` Su factors may allocate);
+/// intended for `apply_rope_with_scaling` callers that don't have a `RoPE`
+/// struct handy. Not `Copy` because `Vec<f32>` is not `Copy`.
+#[derive(Clone, Debug)]
 pub struct RopeScalingContext {
     pub rope_type: RopeType,
     pub scaling_factor: f32,
     pub attn_factor: Option<f32>,
     pub original_max_position: Option<usize>,
+    /// Su RoPE per-dim factor for high-frequency dims.
+    pub short_factor: Option<Vec<f32>>,
+    /// Su RoPE per-dim factor for low-frequency dims.
+    pub long_factor: Option<Vec<f32>>,
 }
 
 impl Default for RopeScalingContext {
@@ -204,6 +214,8 @@ impl Default for RopeScalingContext {
             scaling_factor: 1.0,
             attn_factor: None,
             original_max_position: None,
+            short_factor: None,
+            long_factor: None,
         }
     }
 }
@@ -215,6 +227,8 @@ impl From<&RopeScaling> for RopeScalingContext {
             scaling_factor: r.factor.unwrap_or(1.0),
             attn_factor: r.attn_factor,
             original_max_position: r.original_max_position_embeddings,
+            short_factor: r.short_factor.clone(),
+            long_factor: r.long_factor.clone(),
         }
     }
 }
