@@ -56,7 +56,10 @@ impl Engine {
     /// Returns `Err` if registration fails (e.g. duplicate name or invalid input).
     /// if a draft with the same id already exists.
     #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
-    pub(crate) fn register_draft(&self, spec: DraftSpec) -> std::result::Result<(), DraftRegistryError> {
+    pub(crate) fn register_draft(
+        &self,
+        spec: DraftSpec,
+    ) -> std::result::Result<(), DraftRegistryError> {
         self.draft_registry.register(spec)
     }
 
@@ -113,7 +116,10 @@ impl Engine {
     /// Returns `Err` if the operation fails.
     /// and tests.
     #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
-    pub(crate) fn force_unload_draft(&self, id: &DraftId) -> std::result::Result<(), DraftRegistryError> {
+    pub(crate) fn force_unload_draft(
+        &self,
+        id: &DraftId,
+    ) -> std::result::Result<(), DraftRegistryError> {
         self.draft_registry.force_unload(id)
     }
 
@@ -124,7 +130,10 @@ impl Engine {
     /// Returns `Err` if the operation fails.
     /// routing logic since v18.3; see ADR-007.
     #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
-    pub(crate) fn increment_draft_ref(&self, id: &DraftId) -> std::result::Result<(), DraftRegistryError> {
+    pub(crate) fn increment_draft_ref(
+        &self,
+        id: &DraftId,
+    ) -> std::result::Result<(), DraftRegistryError> {
         self.draft_registry.increment_ref(id)
     }
 
