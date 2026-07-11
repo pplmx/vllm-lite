@@ -107,7 +107,7 @@ impl SchedulerObservers {
     }
 
     /// `MAX_OBSERVERS`: max observers constant.
-    pub const MAX_OBSERVERS: usize = 16;
+    pub(crate) const MAX_OBSERVERS: usize = 16;
 
     /// Insert into the registry under its name.
     /// # Errors
