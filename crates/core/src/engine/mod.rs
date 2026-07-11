@@ -1,7 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 //! Engine module — see sub-modules for specific method groups.
 
-mod beam;
 mod ctor;
 mod cuda_graph;
 mod draft_management;

@@ -60,10 +60,6 @@ impl EnhancedMetricsCollector {
         self.runtime.record_request();
     }
 
-    pub fn record_error(&self) {
-        self.errors_total.fetch_add(1, Ordering::Relaxed);
-    }
-
     pub fn set_queue_depth(&self, depth: u64) {
         self.request_queue_depth.store(depth, Ordering::Relaxed);
     }
