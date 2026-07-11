@@ -120,11 +120,14 @@ impl JwtConfig {
     /// verification using `public_key_pem`. `secret` is cleared and
     /// issuer/audience default to `"vllm"` / `"vllm-api"`.
     ///
-    /// NOTE: Part of the public API — symmetric counterpart to
-    /// [`JwtConfig::with_secret`]. External embedders configure
-    /// [`JwtConfig`] via these constructors; keep as `pub`.
+    /// NOTE: UNIT-TEST-ONLY per the Phase 12b v2 audit. No integration
+    /// test references this; production code paths use [`JwtConfig::new`]
+    /// or struct-literal initialisation. Tightened to `pub(crate)`.
+    /// If a future feature wires this into a public path, promote back
+    /// to `pub` and add an integration-test reference.
     #[must_use]
-    pub fn with_public_key(public_key_pem: impl Into<String>) -> Self {
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn with_public_key(public_key_pem: impl Into<String>) -> Self {
         Self {
             secret: None,
             public_key_pem: Some(public_key_pem.into()),
