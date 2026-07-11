@@ -56,12 +56,6 @@ impl FullAttentionBlock35 {
         })
     }
 
-    #[must_use]
-    pub fn with_attn_gate(mut self, gate: Linear) -> Self {
-        self.gate = Some(gate);
-        self
-    }
-
     /// Run the layer forward pass over the input.
     /// # Errors
     ///

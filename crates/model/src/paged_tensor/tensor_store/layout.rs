@@ -9,7 +9,6 @@
 // quantization scale tracking, and block-size accessor.
 
 use super::PagedKvCache;
-use candle_core::Tensor;
 
 impl PagedKvCache {
     #[must_use]
@@ -38,19 +37,10 @@ impl PagedKvCache {
         self.block_size
     }
 
-    #[must_use]
-    pub fn compute_block_hash(block: &Tensor) -> u64 {
-        block
-            .to_vec1::<f32>()
-            .map_or(0, |data| Self::compute_block_hash_from_slice(&data))
-    }
-
     /// Compute block hash directly from a host-side `&[f32]` buffer.
     ///
     /// H-13 (PERF-02): avoids the redundant device round-trip in
-    /// `write_kv` when the host-side data is already available. The
-    /// `Tensor`-based overload is preserved for external callers and
-    /// for callers that do not have a host-side copy.
+    /// `write_kv` when the host-side data is already available.
     #[must_use]
     pub fn compute_block_hash_from_slice(data: &[f32]) -> u64 {
         // invariant: block hashes only need rough quantization of |x|; the
@@ -59,18 +49,5 @@ impl PagedKvCache {
         data.iter()
             .map(|&x| (x.abs() * 1000.0) as u64)
             .fold(0u64, |acc, x| acc.wrapping_mul(31).wrapping_add(x))
-    }
-
-    #[must_use]
-    pub fn find_matching_blocks(&self, prompt_hash: u64, layer_idx: usize) -> Vec<usize> {
-        let mut matches = Vec::new();
-        if let Some(hash_map) = self.block_hashes.get(layer_idx) {
-            for (&hash, &block_id) in hash_map {
-                if prompt_hash == hash {
-                    matches.push(block_id);
-                }
-            }
-        }
-        matches
     }
 }

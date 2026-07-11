@@ -137,12 +137,6 @@ impl QuantizedWeights {
         self.zeros = Some(zeros);
         self
     }
-
-    #[must_use]
-    pub fn with_g_idx(mut self, g_idx: Tensor) -> Self {
-        self.g_idx = Some(g_idx);
-        self
-    }
 }
 
 #[derive(Debug)]

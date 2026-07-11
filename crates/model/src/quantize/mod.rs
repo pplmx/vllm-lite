@@ -53,10 +53,6 @@ impl Checkpoint {
         }
         Ok(result)
     }
-
-    pub fn into_raw(self) -> HashMap<String, StorageTensor> {
-        self.tensors
-    }
 }
 
 #[cfg(test)]

@@ -283,18 +283,6 @@ impl ModelLoader {
     pub fn load_model(&self) -> Result<Box<dyn vllm_traits::ModelBackend>> {
         self.load()
     }
-
-    pub fn print_weight_keys(weights: &std::collections::HashMap<String, Tensor>) {
-        let mut keys: Vec<_> = weights.keys().collect();
-        keys.sort();
-        println!("Loaded weight keys ({} total):", keys.len());
-        for key in &keys {
-            if let Some(t) = weights.get(*key) {
-                let dims: Vec<usize> = (0..t.dims().len()).map(|i| t.dims()[i]).collect();
-                println!("  {key}: {dims:?}");
-            }
-        }
-    }
 }
 
 #[cfg(test)]
