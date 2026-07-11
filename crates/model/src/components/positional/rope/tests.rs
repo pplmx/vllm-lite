@@ -477,3 +477,145 @@ fn test_derive_seq_len_handles_empty_positions() {
     assert_eq!(derive_seq_len(&[0, 1, 2, 3]), 4);
     assert_eq!(derive_seq_len(&[5]), 6); // non-contiguous: max + 1
 }
+
+// === Phase 16: Su RoPE per-dim scaling ===
+
+#[test]
+fn test_su_with_identity_factors_matches_default() -> Result<()> {
+    // Su with short_factor == long_factor == ones must match Default.
+    let device = Device::Cpu;
+    let q = Tensor::randn(0.0f32, 1.0, (1, 4, 4, 64), &device)?;
+    let positions: Vec<i64> = (0..4).collect();
+
+    let rope_default = RoPE::new(64, 4096, 10000.0, &device);
+    let ctx = RopeScalingContext {
+        rope_type: RopeType::Su,
+        scaling_factor: 1.0,
+        attn_factor: None,
+        original_max_position: Some(32),
+        short_factor: Some(vec![1.0; 32]),
+        long_factor: Some(vec![1.0; 32]),
+    };
+    let out_default = rope_default.apply_with_scaling(&q, &positions)?;
+    let out_su = apply_rope_with_scaling(&q, &positions, 10000.0, ctx)?;
+
+    let diff = (&out_default - &out_su)?
+        .abs()?
+        .max_all()?
+        .to_scalar::<f32>()?;
+    assert!(
+        diff < 1e-5,
+        "Su with identity factors must match Default (max diff = {diff})"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_su_short_factor_modifies_high_freq_dims() -> Result<()> {
+    // Su with a non-identity short_factor should produce different output.
+    let device = Device::Cpu;
+    let q = Tensor::randn(0.0f32, 1.0, (1, 4, 4, 64), &device)?;
+    let positions: Vec<i64> = (0..4).collect();
+
+    let rope_default = RoPE::new(64, 4096, 10000.0, &device);
+    let mut short_factor = vec![1.0; 32];
+    short_factor[0] = 2.0; // boost high-freq dim 0
+    let ctx = RopeScalingContext {
+        rope_type: RopeType::Su,
+        scaling_factor: 1.0,
+        attn_factor: None,
+        original_max_position: Some(32),
+        short_factor: Some(short_factor),
+        long_factor: Some(vec![1.0; 32]),
+    };
+    let out_default = rope_default.apply_with_scaling(&q, &positions)?;
+    let out_su = apply_rope_with_scaling(&q, &positions, 10000.0, ctx)?;
+
+    let diff = (&out_default - &out_su)?
+        .abs()?
+        .sum_all()?
+        .to_scalar::<f32>()?;
+    assert!(
+        diff > 1e-6,
+        "Su with non-identity short_factor must differ from Default (sum diff = {diff})"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_su_long_factor_modifies_low_freq_dims() -> Result<()> {
+    // Su with a non-identity long_factor should produce different output.
+    let device = Device::Cpu;
+    let q = Tensor::randn(0.0f32, 1.0, (1, 4, 4, 64), &device)?;
+    let positions: Vec<i64> = (0..4).collect();
+
+    let rope_default = RoPE::new(64, 4096, 10000.0, &device);
+    let mut long_factor = vec![1.0; 32];
+    long_factor[31] = 4.0; // boost low-freq dim 31
+    let ctx = RopeScalingContext {
+        rope_type: RopeType::Su,
+        scaling_factor: 1.0,
+        attn_factor: None,
+        original_max_position: Some(32),
+        short_factor: Some(vec![1.0; 32]),
+        long_factor: Some(long_factor),
+    };
+    let out_default = rope_default.apply_with_scaling(&q, &positions)?;
+    let out_su = apply_rope_with_scaling(&q, &positions, 10000.0, ctx)?;
+
+    let diff = (&out_default - &out_su)?
+        .abs()?
+        .sum_all()?
+        .to_scalar::<f32>()?;
+    assert!(
+        diff > 1e-6,
+        "Su with non-identity long_factor must differ from Default (sum diff = {diff})"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_su_scaling_context_from_rope_scaling_extracts_factors() {
+    let scaling = RopeScaling {
+        rope_type: Some(RopeType::Su),
+        factor: Some(1.0),
+        original_max_position_embeddings: Some(4096),
+        attn_factor: None,
+        partial_rotary_factor: None,
+        mrope_section: None,
+        short_factor: Some(vec![1.0, 1.5, 2.0]),
+        long_factor: Some(vec![4.0, 5.0, 6.0]),
+    };
+    let ctx = RopeScalingContext::from(&scaling);
+    assert_eq!(ctx.short_factor.as_deref(), Some([1.0_f32, 1.5, 2.0].as_slice()));
+    assert_eq!(ctx.long_factor.as_deref(), Some([4.0_f32, 5.0, 6.0].as_slice()));
+}
+
+#[test]
+fn test_su_missing_orig_max_falls_back_to_default() -> Result<()> {
+    // Without original_max_position_embeddings, Su cannot compute the
+    // boundary. Verify it falls back to Default (silently).
+    let device = Device::Cpu;
+    let q = Tensor::ones((1, 2, 2, 64), DType::F32, &device)?;
+    let positions: Vec<i64> = vec![0, 1];
+    let ctx = RopeScalingContext {
+        rope_type: RopeType::Su,
+        scaling_factor: 1.0,
+        attn_factor: None,
+        original_max_position: None, // <-- missing
+        short_factor: Some(vec![1.0; 32]),
+        long_factor: Some(vec![2.0; 32]),
+    };
+    let rope_default = RoPE::new(64, 4096, 10000.0, &device);
+    let out_default = rope_default.apply_with_scaling(&q, &positions)?;
+    let out_su = apply_rope_with_scaling(&q, &positions, 10000.0, ctx)?;
+    let diff = (&out_default - &out_su)?
+        .abs()?
+        .max_all()?
+        .to_scalar::<f32>()?;
+    assert!(
+        diff < 1e-5,
+        "Su without original_max_position must fall back to Default (max diff = {diff})"
+    );
+    Ok(())
+}
