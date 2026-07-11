@@ -127,6 +127,24 @@
     - All 407 `vllm-model` lib tests pass; clippy clean on modified files; cargo fmt clean.
     - Total commits: 3 (1 core tightening, 1 model removal, 1 review doc) + this CHANGELOG entry.
 
+- **Architecture Unification (v30.0 Phase 18)** — closes the three v23.0 deferred ARCH items: ARCH-05 (4 stub archs → 1 `StubArchitecture`), ARCH-09 (greedy_sample unification via shared helper), ARCH-10 (Architecture enum / UnknownArchitecture consolidation).
+    - **ARCH-10 — `Architecture::Unknown` variant** (`crates/model/src/config/architecture.rs`):
+        - Added `Unknown` variant to the `Architecture` enum, with `as_str()` returning `"unknown"`.
+        - **Bug fix** in `crates/model/src/config/model_config.rs:242`: `unwrap_or(Architecture::Llama)` → `unwrap_or(Architecture::Unknown)`. The old code silently misclassified unrecognised configs as Llama; the new fallback surfaces the mismatch.
+        - Updated `crates/server/src/openai/chat_template.rs::for_architecture` to handle the new `Unknown` arm (maps to the `Plain` chat template).
+        - `UnknownArchitecture` struct in `crates/model/src/arch/mod.rs` left untouched (it's the orphan-rule-required `Arc<dyn Architecture>` placeholder).
+    - **ARCH-09 — `argmax_logits` helper** (`crates/traits/src/sampling.rs`):
+        - New `vllm_traits::argmax_logits(&[f32]) -> TokenId` is the single source of truth for greedy token selection. 5 new tests (max, negative, ties, empty, single).
+        - `crates/core/src/sampling.rs::greedy_sample` now delegates to it (preserving the `tracing` instrumentation).
+        - `crates/model/src/causal_lm/mod.rs::greedy_sample_token` extracts the 1D logits vec and delegates the actual argmax to the shared helper. The candle `argmax` call site disappears.
+    - **ARCH-05 — unified `StubArchitecture`** (`crates/model/src/arch/stub.rs`):
+        - New `StubArchitecture { name, detect: StubDetectFn }` struct with four constructor helpers: `StubArchitecture::gemma3() / llama4() / phi4() / mistral_small()`. Detection logic preserved verbatim from each old stub.
+        - Shared `StubBlockWrapper` (passthrough paged decode) and `StubModel` (zero-token backend) replace the four per-stub wrapper/model structs.
+        - `register_all_archs` switched to `register_stub(...)` for each of the 4 stubs. 7 new tests cover detect / negatives / name / capabilities.
+        - Deleted `crates/model/src/gemma3/`, `llama4/`, `phi4/`, `mistral_small/` directories entirely (12 files, ~1200 lines removed). Removed `pub mod` declarations from `crates/model/src/lib.rs`.
+    - **Test count**: 407 → 400 vllm-model lib tests (delta: -21 old per-stub tests, +7 new `StubArchitecture` tests, +5 new `argmax_logits` tests, -1 stale test elsewhere, +2 round-trip). All workspace crates pass.
+    - **Total commits**: 7 (ARCH-10 × 1, ARCH-09a × 1, ARCH-09b × 1, ARCH-05a × 1, ARCH-05bcd × 1, cleanup × 1, this CHANGELOG).
+
 - **Architectural File Splits (v30.0 Phase 11)** — three more production files split into module directories without behavior change:
     - **`server/src/config.rs` (413 lines → 4 files)**: decomposed into `config/mod.rs` (`AppConfig` + `Default` + `load` + `validate` + `ConfigValidationError(s)`) + `config/server.rs` (`ServerConfig` + `Default`) + `config/engine.rs` (`EngineConfig` + `DraftSpecConfig` + `Default`) + `config/auth.rs` (`AuthConfig` + `Default` + `resolve_api_keys`). Public API preserved via re-exports in `mod.rs`.
     - **`qwen3/block.rs` (376 lines → 4 files)**: decomposed into `block/mod.rs` (`TransformerBlock` struct + `Deref` + `PagedDecoderBlock` impl) + `block/construct.rs` (`new`, `new_with_tp`, `new_with_weights`) + `block/weights.rs` (`from_weights` HuggingFace weight-map loader) + `block/factory.rs` (free functions `new_block` + `block_from_weights`). The factory submodule is `pub(crate)` so `qwen3/model.rs` can still access `new_block` / `block_from_weights` via `super::block::{...}` as before.
