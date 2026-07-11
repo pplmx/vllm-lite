@@ -58,6 +58,10 @@ impl TlsConfig {
     /// Enable mutual TLS by recording `ca_cert_path` (PEM bundle of
     /// trusted client CAs) and flipping `mtls = true`.
     #[must_use]
+    // Used only by unit tests in `tls/tests.rs`; rustc emits a dead-code
+    // warning during non-test builds even though the symbol is reachable
+    // under `cfg(test)`. The annotation is intentional.
+    #[allow(dead_code)]
     pub(crate) fn with_ca_cert(mut self, ca_cert_path: impl Into<String>) -> Self {
         self.ca_cert_path = Some(ca_cert_path.into());
         self.mtls = true;
