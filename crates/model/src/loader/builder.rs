@@ -28,6 +28,7 @@ pub struct ModelLoaderBuilder {
 }
 
 impl ModelLoaderBuilder {
+    /// Start a builder bound to the given Candle compute device.
     #[must_use]
     pub const fn new(device: Device) -> Self {
         Self {
@@ -39,18 +40,21 @@ impl ModelLoaderBuilder {
         }
     }
 
+    /// Set the checkpoint directory containing `config.json` and weight shards.
     #[must_use]
     pub fn with_model_dir(mut self, model_dir: String) -> Self {
         self.model_dir = Some(model_dir);
         self
     }
 
+    /// Set the number of paged KV blocks to allocate at load time.
     #[must_use]
     pub const fn with_kv_blocks(mut self, num_kv_blocks: usize) -> Self {
         self.num_kv_blocks = Some(num_kv_blocks);
         self
     }
 
+    /// Enable or disable FP8 KV-cache quantization for loaded models.
     #[must_use]
     pub const fn with_kv_quantization(mut self, enabled: bool) -> Self {
         self.kv_quantization = Some(enabled);
@@ -137,6 +141,7 @@ impl ModelLoaderInner {
 }
 
 impl ModelLoader {
+    /// Create a placeholder loader; prefer [`ModelLoader::builder`] for real use.
     #[must_use]
     pub fn new(device: Device) -> Self {
         Self {
@@ -151,16 +156,19 @@ impl ModelLoader {
         }
     }
 
+    /// Entry point for the fluent [`ModelLoaderBuilder`] API.
     #[must_use]
     pub const fn builder(device: Device) -> ModelLoaderBuilder {
         ModelLoaderBuilder::new(device)
     }
 
+    /// Borrow the compute device this loader will use for tensor allocation.
     #[must_use]
     pub fn device(&self) -> &Device {
         &self.inner.device
     }
 
+    /// Map detected registry architecture name to [`ConfigArchitecture`].
     pub fn architecture(&self) -> ConfigArchitecture {
         ARCHITECTURE_REGISTRY
             .detect(&self.inner.config_json)
@@ -174,6 +182,7 @@ impl ModelLoader {
             })
     }
 
+    /// Borrow the raw `config.json` value read at construction time.
     #[must_use]
     pub fn config_json(&self) -> &serde_json::Value {
         &self.inner.config_json

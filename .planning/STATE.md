@@ -4,7 +4,7 @@ milestone: v31.0
 milestone_name: Perfection & Elegance
 status: in_progress
 last_updated: "2026-07-12T00:00:00.000Z"
-last_activity: 2026-07-12
+last_activity: 2026-07-12 — doc coverage 67.4% real; 31-B complete
 progress:
   total_phases: 6
   completed_phases: 0
@@ -28,14 +28,14 @@ Last activity: 2026-07-12 — chunked prefill all-arch + doc map + Windows test 
 
 - Phases 8–19: file splits, YaRN, architecture unification, OPS-05 seams
 - Phases K–P: mutation testing, fuzz CI, proptest, docs, ADR, tutorial
-- 1235 tests; doc coverage 55.0% raw / 49.9% real
+- 1235 tests; doc coverage **70.8% raw / 67.4% real** (target 65% real ✅)
 
 ## v31 Active Work
 
 - [x] Chunked prefill continuation — all architectures + unit tests
 - [x] `docs/architecture.md`, README honesty, OPERATIONS.md, ADR-019
 - [x] `.planning/DOC-MAP.md` — doc authority matrix
-- [ ] Doc coverage 55% → 65% real
+- [x] Doc coverage 55% → **67.4% real** / 70.8% raw (target 65% real)
 - [x] Phase 12e `public-api-check` in CI + baselines refreshed
 - [ ] Multi-node KV block transfer (31-D)
 

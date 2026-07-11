@@ -29,6 +29,7 @@ impl<M: ModelBackend + std::fmt::Debug> std::fmt::Debug for SpeculativeModel<M> 
 }
 
 impl<M: ModelBackend> SpeculativeModel<M> {
+    /// Wrap `target_model` with the given verifier, config, and rejection strategy.
     pub fn new(
         target_model: M,
         verifier: Box<dyn DraftVerifier>,
@@ -43,30 +44,37 @@ impl<M: ModelBackend> SpeculativeModel<M> {
         }
     }
 
+    /// Borrow the underlying target [`ModelBackend`].
     pub const fn target_model(&self) -> &M {
         &self.target_model
     }
 
+    /// Borrow the draft verifier used for generate/accept cycles.
     pub fn verifier(&self) -> &dyn DraftVerifier {
         self.verifier.as_ref()
     }
 
+    /// Borrow the active [`SpeculationConfig`].
     pub const fn config(&self) -> &SpeculationConfig {
         &self.config
     }
 
+    /// Borrow the active [`RejectionStrategy`].
     pub const fn strategy(&self) -> &RejectionStrategy {
         &self.strategy
     }
 
+    /// Replace the rejection strategy (e.g. switch token-level to block-level).
     pub const fn set_strategy(&mut self, strategy: RejectionStrategy) {
         self.strategy = strategy;
     }
 
+    /// Draft tokens attempted per speculative step from [`SpeculationConfig`].
     pub const fn draft_count(&self) -> usize {
         self.config.draft_count
     }
 
+    /// Maximum speculative tree depth from [`SpeculationConfig`].
     pub const fn max_depth(&self) -> usize {
         self.config.max_depth
     }

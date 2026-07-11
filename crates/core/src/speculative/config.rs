@@ -43,11 +43,13 @@ impl Default for SpeculationConfig {
 }
 
 impl SpeculationConfig {
+    /// Start building a [`SpeculationConfig`] with crate defaults.
     #[must_use]
     pub fn builder() -> SpeculationConfigBuilder {
         SpeculationConfigBuilder::default()
     }
 
+    /// Load speculative-decoding settings from `VLLM_SPECULATIVE_*` env vars.
     #[must_use]
     pub fn from_env() -> Self {
         Self {
@@ -91,54 +93,63 @@ pub struct SpeculationConfigBuilder {
 }
 
 impl SpeculationConfigBuilder {
+    /// Set draft tokens produced per speculative verification step.
     #[must_use]
     pub const fn draft_count(mut self, count: usize) -> Self {
         self.config.draft_count = count;
         self
     }
 
+    /// Set maximum speculative tree depth before forcing target verification.
     #[must_use]
     pub const fn max_depth(mut self, depth: usize) -> Self {
         self.config.max_depth = depth;
         self
     }
 
+    /// Set draft-model sampling temperature (`0.0` = greedy).
     #[must_use]
     pub const fn temperature(mut self, temp: f32) -> Self {
         self.config.temperature = temp;
         self
     }
 
+    /// Set draft-model top-k cutoff (`0` disables top-k).
     #[must_use]
     pub const fn top_k(mut self, k: usize) -> Self {
         self.config.top_k = k;
         self
     }
 
+    /// Set draft-model nucleus (top-p) sampling cutoff.
     #[must_use]
     pub const fn top_p(mut self, p: f32) -> Self {
         self.config.top_p = p;
         self
     }
 
+    /// Set the target model name used for draft-token verification.
     #[must_use]
     pub fn target_model(mut self, model: String) -> Self {
         self.config.target_model = Arc::new(model);
         self
     }
 
+    /// Override draft-model layer count (registry default when unset).
     #[must_use]
     pub const fn draft_layers(mut self, layers: usize) -> Self {
         self.config.draft_layers = Some(layers);
         self
     }
 
+    /// Enable or disable self-speculation (target model also drafts).
     #[must_use]
     pub const fn self_speculation(mut self, enabled: bool) -> Self {
         self.config.self_speculation = enabled;
         self
     }
 
+    /// Finalize the builder into an owned [`SpeculationConfig`].
     #[must_use]
     pub fn build(self) -> SpeculationConfig {
         self.config

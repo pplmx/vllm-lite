@@ -19,15 +19,22 @@ Thumbs.db
 .env
 .env.local
 
-# Logs
+# Logs and runtime output
 *.log
+*.jsonl
+/logs/
+**/logs/
+
+# Criterion / benchmark artifacts (regenerate locally)
+/criterion/
+docs/benchmark-results/**
+!docs/benchmark-results/README.md
 
 # Test coverage
 coverage/
 
 # Workspace-level benchmark crate (not per-crate criterion benches)
 /benches/
-.worktrees/
 .worktrees/
 .claude/
 # Unix core dumps (do not use `core.*` — it ignores planning baselines)

@@ -9,7 +9,8 @@ use super::{AttentionType, Qwen3Config, TextConfig};
 use crate::config::errors::{ConfigError, ConfigResult};
 
 impl Qwen3Config {
-    /// Construct a tokenizer from a tokenizer.json file.
+    /// Load a Qwen3 config from a JSON file on disk.
+    ///
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.
@@ -22,6 +23,7 @@ impl Qwen3Config {
         Ok(config)
     }
 
+    /// Vocabulary size with `text_config` and canonical fallbacks.
     #[must_use]
     pub fn vocab_size(&self) -> usize {
         self.vocab_size
@@ -29,6 +31,7 @@ impl Qwen3Config {
             .unwrap_or(151_936)
     }
 
+    /// Hidden dimension with `text_config` and canonical fallbacks.
     #[must_use]
     pub fn hidden_size(&self) -> usize {
         self.hidden_size
@@ -36,6 +39,7 @@ impl Qwen3Config {
             .unwrap_or(4096)
     }
 
+    /// Layer count with `text_config` and canonical fallbacks.
     #[must_use]
     pub fn num_hidden_layers(&self) -> usize {
         self.num_hidden_layers
@@ -43,6 +47,7 @@ impl Qwen3Config {
             .unwrap_or(32)
     }
 
+    /// Query head count with `text_config` and canonical fallbacks.
     #[must_use]
     pub fn num_attention_heads(&self) -> usize {
         self.num_attention_heads
@@ -54,6 +59,7 @@ impl Qwen3Config {
             .unwrap_or(32)
     }
 
+    /// KV head count with `text_config` and canonical fallbacks.
     #[must_use]
     pub fn num_key_value_heads(&self) -> usize {
         self.num_key_value_heads
@@ -65,6 +71,7 @@ impl Qwen3Config {
             .unwrap_or(32)
     }
 
+    /// FFN intermediate width with `text_config` and canonical fallbacks.
     #[must_use]
     pub fn intermediate_size(&self) -> usize {
         self.intermediate_size
@@ -72,6 +79,7 @@ impl Qwen3Config {
             .unwrap_or(11008)
     }
 
+    /// RoPE base frequency with `text_config` and canonical fallbacks.
     #[must_use]
     pub fn rope_theta(&self) -> f32 {
         self.rope_theta
@@ -79,6 +87,7 @@ impl Qwen3Config {
             .unwrap_or(10000.0)
     }
 
+    /// Max position embeddings with `text_config` and canonical fallbacks.
     #[must_use]
     pub fn max_position_embeddings(&self) -> usize {
         self.max_position_embeddings
@@ -90,6 +99,7 @@ impl Qwen3Config {
             .unwrap_or(8192)
     }
 
+    /// RMSNorm epsilon as `f64` with `text_config` and canonical fallbacks.
     #[must_use]
     pub fn rms_norm_eps(&self) -> f64 {
         f64::from(
@@ -99,37 +109,44 @@ impl Qwen3Config {
         )
     }
 
+    /// Whether input and output embeddings share weights; defaults to false.
     #[must_use]
     pub fn tie_word_embeddings(&self) -> bool {
         self.tie_word_embeddings.unwrap_or(false)
     }
 
+    /// Whether Q/K projections apply RMSNorm before attention; defaults to false.
     #[must_use]
     pub fn has_qk_norm(&self) -> bool {
         self.has_qk_norm.unwrap_or(false)
     }
 
+    /// Optional YaRN / linear RoPE scaling parameters from the checkpoint.
     #[must_use]
     pub const fn rope_scaling(&self) -> Option<&super::super::rope::RopeScaling> {
         self.rope_scaling.as_ref()
     }
 
+    /// Optional extended RoPE parameter block from the checkpoint.
     #[must_use]
     pub const fn rope_parameters(&self) -> Option<&super::super::rope::RopeParameters> {
         self.rope_parameters.as_ref()
     }
 
+    /// Per-head dimension; derived from hidden size / head count when unset.
     #[must_use]
     pub fn head_dim(&self) -> usize {
         self.head_dim
             .unwrap_or_else(|| self.hidden_size() / self.num_attention_heads())
     }
 
+    /// Per-layer type tags delegated to nested `text_config` when present.
     #[must_use]
     pub fn layer_types(&self) -> Option<&[String]> {
         self.text_config.as_ref().and_then(|c| c.layer_types())
     }
 
+    /// Full-attention interval for hybrid stacks; defaults to 4.
     #[must_use]
     pub fn full_attention_interval(&self) -> usize {
         self.text_config
@@ -137,6 +154,7 @@ impl Qwen3Config {
             .map_or(4, TextConfig::full_attention_interval)
     }
 
+    /// Classify attention as MHA, MQA, GQA, or MLA from head counts and MLA dims.
     #[must_use]
     pub fn attention_type(&self) -> AttentionType {
         if self.q_len.is_some() || self.kv_len.is_some() {

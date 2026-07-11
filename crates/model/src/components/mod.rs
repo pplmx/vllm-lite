@@ -6,18 +6,27 @@
 //! architecture in `model::llama`, `model::qwen3`, etc. composes these
 //! primitives rather than re-implementing them. The re-exports below
 //! surface the most-used items at `vllm_model::*` for ergonomics.
+/// GQA, MLA, and paged attention implementations.
 pub mod attention;
+/// Generic transformer block composing attention + MLP + norm.
 pub mod block;
+/// Paged-KV-aware decoder blocks for causal LM stacks.
 pub mod decoder_block;
+/// Gated-delta (linear attention) layers for Qwen3.5 hybrid models.
 pub mod gated_delta;
-/// kv_cache_fp8: kv cache fp8 module.
+/// FP8 KV-cache quantization helpers.
 pub mod kv_cache_fp8;
+/// SwiGLU feed-forward network primitives.
 pub mod mlp;
+/// RMSNorm and LayerNorm building blocks.
 pub mod norm;
+/// RoPE and multi-axis MRoPE positional encodings.
 pub mod positional;
 
 pub use positional::{MRoPE, RoPE, apply_rope, precompute_rope_cache};
+/// Mamba SSM and harmonic hybrid SSM layers.
 pub mod ssm;
+/// Vision encoder placeholder for multimodal models.
 pub mod vision;
 
 pub use super::kernels::{fused_attention_layer, fused_mlp_layer};

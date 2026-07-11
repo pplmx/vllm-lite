@@ -174,8 +174,7 @@ mod tests {
         let layers = vec![layer];
 
         let seq_len = 6usize;
-        let hidden =
-            Tensor::ones((1, seq_len, config.hidden_size), DType::F32, &device).unwrap();
+        let hidden = Tensor::ones((1, seq_len, config.hidden_size), DType::F32, &device).unwrap();
         let block_ids: Vec<usize> = (0..seq_len.div_ceil(BLOCK_SIZE)).collect();
         let positions: Vec<usize> = (0..seq_len).collect();
 

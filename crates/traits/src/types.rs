@@ -14,11 +14,14 @@ pub type TokenId = u32;
 /// Opaque newtype identifier for a seq. Hashable, comparable, serializable; use this rather than the raw integer.
 pub type SeqId = u64;
 
-/// Batch phase
+/// Batch phase classification for mixed prefill/decode scheduling.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BatchPhase {
+    /// All sequences are in prefill.
     Prefill,
+    /// All sequences are in decode.
     Decode,
+    /// Batch contains both prefill and decode sequences.
     Mixed,
 }
 
@@ -80,11 +83,13 @@ impl Batch {
         self.seq_ids.len()
     }
 
+    /// Whether any sequence in this batch is in prefill phase.
     #[must_use]
     pub fn has_prefill(&self) -> bool {
         self.is_prefill.iter().any(|&p| p)
     }
 
+    /// Whether any sequence in this batch is in decode phase.
     #[must_use]
     pub fn has_decode(&self) -> bool {
         self.is_prefill.iter().any(|&p| !p)
