@@ -587,8 +587,14 @@ fn test_su_scaling_context_from_rope_scaling_extracts_factors() {
         long_factor: Some(vec![4.0, 5.0, 6.0]),
     };
     let ctx = RopeScalingContext::from(&scaling);
-    assert_eq!(ctx.short_factor.as_deref(), Some([1.0_f32, 1.5, 2.0].as_slice()));
-    assert_eq!(ctx.long_factor.as_deref(), Some([4.0_f32, 5.0, 6.0].as_slice()));
+    assert_eq!(
+        ctx.short_factor.as_deref(),
+        Some([1.0_f32, 1.5, 2.0].as_slice())
+    );
+    assert_eq!(
+        ctx.long_factor.as_deref(),
+        Some([4.0_f32, 5.0, 6.0].as_slice())
+    );
 }
 
 #[test]
