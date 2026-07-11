@@ -9,6 +9,7 @@ homepage.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+async-trait = { workspace = true }
 candle-core = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }

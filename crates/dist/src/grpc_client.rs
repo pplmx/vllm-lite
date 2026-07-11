@@ -1,12 +1,12 @@
 //! Client wrapper for cross-node distributed-KV replication.
 //!
 //! [`PeerClient`] wraps the tonic-generated [`NodeServiceClient`] and
-//! exposes just the two RPCs that the local
-//! [`crate::distributed_kv::DistributedKVCache`] needs to replicate
-//! state to peers: `put` and `invalidate`. The underlying
+//! exposes just the RPCs that the local
+//! [`crate::distributed_kv::DistributedKVCache`] needs to talk to
+//! peers: `put`, `invalidate`, and `fetch_block`. The underlying
 //! [`Channel`] is lazily connected on first call and reused for
-//! subsequent calls — cheap because tonic's [`Channel`] is
-//! internally `Arc`-backed.
+//! subsequent calls — cheap because tonic's [`Channel`] is internally
+//! `Arc`-backed.
 //!
 //! [`NodeServiceClient`]: crate::grpc::node_service_client::NodeServiceClient
 
@@ -15,6 +15,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::transport::{Channel, Endpoint};
 
+use crate::distributed_kv::MAX_BLOCK_TRANSFER_BYTES;
 use crate::error::GrpcError;
 use crate::grpc::node_service_client::NodeServiceClient;
 
@@ -97,6 +98,43 @@ impl PeerClient {
         client.invalidate_kv_cache(req).await.map(|_| ())
     }
 
+    /// Request a block-bytes transfer from this peer.
+    ///
+    /// Phase 31-D OPS-31d. The caller is responsible for verifying
+    /// `response.chain_hash == expected_hash` (the caller typically
+    /// also has a `DistributedKVCache::get(block_id)` result to
+    /// compare against). We do not pre-validate here so the caller
+    /// can distinguish "peer doesn't have the block" (response with
+    /// mismatched hash or a `Status::not_found`) from "peer has the
+    /// block but it disagrees with our local view" (mismatched hash).
+    ///
+    /// The generated client is configured with
+    /// [`MAX_BLOCK_TRANSFER_BYTES`] on both decode and encode so
+    /// production-sized blocks (≈14 MiB for Qwen3-7B at F32) fit.
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`tonic::Status`] from the underlying RPC or a
+    /// transport-level error during connect.
+    pub async fn fetch_block(
+        &self,
+        block_id: u64,
+        expected_hash: u64,
+    ) -> Result<crate::grpc::TransferKvBlockResponse, tonic::Status> {
+        let channel = self.ensure_channel().await?;
+        let mut client = NodeServiceClient::new(channel)
+            .max_decoding_message_size(MAX_BLOCK_TRANSFER_BYTES)
+            .max_encoding_message_size(MAX_BLOCK_TRANSFER_BYTES);
+        let req = crate::grpc::TransferKvBlockRequest {
+            block_id,
+            expected_hash,
+        };
+        client
+            .transfer_kv_block(req)
+            .await
+            .map(tonic::Response::into_inner)
+    }
+
     /// Ensure a [`Channel`] exists in the cache, connecting if not.
     async fn ensure_channel(&self) -> Result<Channel, tonic::Status> {
         // Fast path: someone already connected. Return their channel
@@ -152,6 +190,22 @@ mod tests {
             Arc::strong_count(&client.channel),
             2,
             "clones should share the inner Arc<Mutex>"
+        );
+    }
+
+    #[tokio::test]
+    async fn peer_client_fetch_block_returns_unavailable_on_dead_url() {
+        // Build a client pointing at a port that's almost certainly
+        // unbound on a CI host. The connect attempt must surface as
+        // `tonic::Status::unavailable` (or a similar transport
+        // status), not panic.
+        let client = PeerClient::new("http://127.0.0.1:1").expect("valid url");
+        let result = client.fetch_block(0, 0).await;
+        let status = result.expect_err("connect to closed port must fail");
+        assert_eq!(
+            status.code(),
+            tonic::Code::Unavailable,
+            "expected Unavailable on dead URL; got {status:?}"
         );
     }
 }

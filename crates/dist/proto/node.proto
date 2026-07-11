@@ -14,6 +14,14 @@ service NodeService {
   // Replicate a `DistributedKVCache::invalidate(block_id)` to a peer
   // node. Phase 19 OPS-05c.
   rpc InvalidateKVCache(InvalidateKVCacheRequest) returns (InvalidateKVCacheResponse);
+  // Phase 31-D. Cross-node transfer of KV-block bytes. The receiver
+  // supplies `expected_hash` from its local
+  // `DistributedKVCache::get`; the sender returns the bytes plus its
+  // locally-recorded `chain_hash` so the receiver can verify before
+  // installing. Message-size limits on both ends are bumped to
+  // 64 MiB via `MAX_BLOCK_TRANSFER_BYTES` -- see
+  // `crates/dist/src/distributed_kv/block_data_source.rs`.
+  rpc TransferKVBlock(TransferKVBlockRequest) returns (TransferKVBlockResponse);
 }
 
 message PingRequest {
@@ -76,4 +84,33 @@ message InvalidateKVCacheRequest {
 
 message InvalidateKVCacheResponse {
   bool success = 1;
+}
+
+// Phase 31-D. Wire form of `DistributedKVCache::fetch_block`.
+message TransferKVBlockRequest {
+  // Which block the receiver wants.
+  uint64 block_id = 1;
+  // The chain_hash the receiver has on record (from its local
+  // `DistributedKVCache::get`). The sender echoes this back in the
+  // response as `chain_hash` so the receiver can verify a peer
+  // didn't return bytes for a stale block.
+  uint64 expected_hash = 2;
+}
+
+message TransferKVBlockResponse {
+  // Echo of the requested block_id. Lets the receiver correlate
+  // responses to fan-out requests without an out-of-band map.
+  uint64 block_id = 1;
+  // The sender's locally-recorded chain_hash for this block. MUST
+  // match the receiver's `expected_hash` for the bytes to be
+  // accepted.
+  uint64 chain_hash = 2;
+  // Raw block bytes. Layout is producer-defined; in v31-D the
+  // production producer is the engine's `PagedKvCache` wrapper.
+  // The dist layer treats `data` as an opaque `Vec<u8>`.
+  bytes data = 3;
+  // How many tokens in this block are valid (0..=BLOCK_SIZE).
+  // Always `0` in v31-D -- the field is reserved for a future
+  // partial-block transfer.
+  uint32 num_tokens = 4;
 }
