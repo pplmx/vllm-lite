@@ -122,12 +122,13 @@ impl RoPE {
     /// - `Default` / unset → same as `apply`.
     /// - `Linear` → position interpolation (`inv_freq / scaling_factor`).
     /// - `Yarn` → NTK-aware theta adjustment.
-    /// - `Dynamic`, `Su`, `Other` → fall through to Default for now.
+    /// - `Dynamic` → HF-style recomputed scale based on current seq len.
+    /// - `Su` → per-dim factor arrays (`short_factor` / `long_factor`).
+    /// - `Other` → falls through to Default.
     /// # Errors
     ///
     /// Returns `Err` if the candle operation fails.
-    #[allow(dead_code)] // Phase 15 YaRN long-context variant; test-only for now
-    pub(crate) fn apply_with_scaling(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
+    pub fn apply_with_scaling(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
         apply_rope_with_scaling(x, positions, self.theta, self.scaling_ctx())
     }
 
@@ -156,8 +157,7 @@ impl RoPE {
     /// # Errors
     ///
     /// Returns `Err` if any candle operation fails.
-    #[allow(dead_code)] // Phase 15 YaRN long-context variant; test-only for now
-    pub(crate) fn forward_with_scaling(
+    pub fn forward_with_scaling(
         &self,
         q: &Tensor,
         k: &Tensor,
@@ -229,6 +229,14 @@ pub fn apply_rope(query: &Tensor, positions: &[i64], theta: f32) -> Result<Tenso
 }
 
 /// Long-context-aware variant of [`apply_rope`].
+///
+/// Selects the inverse-frequency formula based on `scaling.rope_type`:
+/// - `Default` → no scaling (same as [`apply_rope`]).
+/// - `Linear` → position interpolation (`inv_freq / scaling_factor`).
+/// - `Yarn` → NTK-aware theta adjustment (`theta' = theta * scale^(d/(d-2))`).
+/// - `Dynamic`, `Su`, `Other` → fall through to Default (Phase 16 will
+///   add Dynamic and Su implementations).
+///
 /// # Errors
 ///
 /// Returns `Err` if the operation fails.
@@ -242,9 +250,9 @@ pub fn apply_rope_with_scaling(
         RopeType::Default => compute_inv_freq_default(query, theta),
         RopeType::Linear => compute_inv_freq_linear(query, theta, scaling.scaling_factor),
         RopeType::Yarn => compute_inv_freq_yarn(query, theta, scaling.scaling_factor),
-        // Dynamic, Su, Other — fall back to default for now. These need
-        // either per-step recomputation (Dynamic) or different wavelength
-        // correction (Su) that is out of scope for Phase 15.
+        // Dynamic, Su, Other — fall back to default. Phase 16 adds
+        // Dynamic (HF-style) and Su (paper-original) implementations
+        // in subsequent commits.
         RopeType::Dynamic | RopeType::Su | RopeType::Other => {
             compute_inv_freq_default(query, theta)
         }
