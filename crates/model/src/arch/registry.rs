@@ -5,7 +5,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, RwLock};
 
-use super::{ArchCapabilities, Architecture};
+use super::{ArchCapabilities, Architecture, StubArchitecture};
 
 type ArchFactory = Arc<dyn Fn() -> Box<dyn Architecture> + Send + Sync>;
 
@@ -149,20 +149,29 @@ pub static ARCHITECTURE_REGISTRY: LazyLock<ArchitectureRegistry> =
 
 /// Register all known architectures for config detection and model creation.
 ///
-/// Stub architectures (Gemma3, Llama4, Phi4, `MistralSmall`) remain registered so
-/// `detect()` works, but `ModelLoader` rejects them unless `--allow-stub` is set
-/// (see Phase 4.4 Option C in `.planning/MODEL-ARCHITECTURE-REFACTOR.md`).
+/// Stub architectures (Gemma3, Llama4, Phi4, `MistralSmall`) are
+/// registered as [`StubArchitecture`] instances (Phase 18 ARCH-05) —
+/// `detect()` works, but `ModelLoader` rejects them unless
+/// `--allow-stub` is set (see Phase 4.4 Option C in
+/// `.planning/MODEL-ARCHITECTURE-REFACTOR.md`).
 pub fn register_all_archs(registry: &ArchitectureRegistry) {
     crate::llama::register::register(registry);
     crate::mistral::register::register(registry);
     crate::qwen3::register::register(registry);
     crate::qwen3_5::register::register(registry);
-    crate::gemma3::register::register(registry);
     crate::gemma4::register::register(registry);
-    crate::llama4::register::register(registry);
-    crate::mistral_small::register::register(registry);
-    crate::phi4::register::register(registry);
     crate::mixtral::register::register(registry);
+    // Stubs (Phase 18 ARCH-05: shared `StubArchitecture`).
+    register_stub(registry, StubArchitecture::gemma3());
+    register_stub(registry, StubArchitecture::llama4());
+    register_stub(registry, StubArchitecture::phi4());
+    register_stub(registry, StubArchitecture::mistral_small());
+}
+
+/// Register a [`StubArchitecture`] under its `name()`.
+fn register_stub(registry: &ArchitectureRegistry, stub: StubArchitecture) {
+    let factory: ArchFactory = Arc::new(move || Box::new(stub));
+    registry.register(stub.name(), factory);
 }
 
 // Unit tests are extracted to `tests.rs` (sibling) to keep this
