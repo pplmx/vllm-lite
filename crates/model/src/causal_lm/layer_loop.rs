@@ -129,6 +129,7 @@ mod tests {
     use crate::components::decoder_block::new_block;
     use crate::config::ModelConfig;
     use candle_core::{DType, Device};
+    use vllm_traits::BLOCK_SIZE;
 
     #[test]
     fn test_run_layers_matches_paged_decoder_block() {
@@ -148,7 +149,7 @@ mod tests {
 
         let seq_len = 3usize;
         let hidden = Tensor::ones((1, seq_len, config.hidden_size), DType::F32, &device).unwrap();
-        let block_ids: Vec<usize> = (0..seq_len).map(|i| i / 32).collect();
+        let block_ids: Vec<usize> = (0..seq_len.div_ceil(BLOCK_SIZE)).collect();
         let positions: Vec<usize> = (0..seq_len).collect();
 
         let mut ctx = LayerCtx {
@@ -161,5 +162,88 @@ mod tests {
         };
         let out = run_layers(&layers, hidden, &mut ctx).unwrap();
         assert_eq!(out.dims(), &[1, seq_len, config.hidden_size]);
+    }
+
+    #[test]
+    fn test_run_layers_transformer_block_chunked_prefill() {
+        use crate::qwen3::block::factory::new_block;
+
+        let config = ModelConfig::test_tiny();
+        let device = Device::Cpu;
+        let layer = new_block(&config, 0).unwrap();
+        let layers = vec![layer];
+
+        let seq_len = 6usize;
+        let hidden =
+            Tensor::ones((1, seq_len, config.hidden_size), DType::F32, &device).unwrap();
+        let block_ids: Vec<usize> = (0..seq_len.div_ceil(BLOCK_SIZE)).collect();
+        let positions: Vec<usize> = (0..seq_len).collect();
+
+        let mut full_cache = PagedKvCache::new(
+            1,
+            config.num_heads,
+            config.head_dim,
+            32,
+            device.clone(),
+            false,
+        )
+        .unwrap();
+        let mut full_ctx = LayerCtx {
+            kv_cache: &mut full_cache,
+            block_ids: &block_ids,
+            positions: &positions,
+            num_computed_tokens: 0,
+            is_prefill: true,
+            aux: None,
+        };
+        let full_out = run_layers(&layers, hidden.clone(), &mut full_ctx).unwrap();
+
+        let mut chunked_cache = PagedKvCache::new(
+            1,
+            config.num_heads,
+            config.head_dim,
+            32,
+            device.clone(),
+            false,
+        )
+        .unwrap();
+        let chunk1 = hidden.narrow(1, 0, 3).unwrap();
+        let pos1: Vec<usize> = (0..3).collect();
+        let mut ctx1 = LayerCtx {
+            kv_cache: &mut chunked_cache,
+            block_ids: &block_ids,
+            positions: &pos1,
+            num_computed_tokens: 0,
+            is_prefill: true,
+            aux: None,
+        };
+        run_layers(&layers, chunk1, &mut ctx1).unwrap();
+
+        let chunk2 = hidden.narrow(1, 3, 3).unwrap();
+        let pos2: Vec<usize> = (3..6).collect();
+        let mut ctx2 = LayerCtx {
+            kv_cache: &mut chunked_cache,
+            block_ids: &block_ids,
+            positions: &pos2,
+            num_computed_tokens: 3,
+            is_prefill: true,
+            aux: None,
+        };
+        let cont_out = run_layers(&layers, chunk2, &mut ctx2).unwrap();
+
+        let full_last = full_out.narrow(1, seq_len - 1, 1).unwrap();
+        let cont_last = cont_out.narrow(1, 2, 1).unwrap();
+        let diff = (full_last - cont_last)
+            .unwrap()
+            .abs()
+            .unwrap()
+            .sum_all()
+            .unwrap()
+            .to_vec0::<f32>()
+            .unwrap();
+        assert!(
+            diff < 1e-4,
+            "TransformerBlock chunked prefill diverged: diff={diff}"
+        );
     }
 }

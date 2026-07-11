@@ -287,7 +287,7 @@ mod tests {
 
         let seq_len = 6usize;
         let x = Tensor::ones((1, seq_len, 64), DType::F32, &device).unwrap();
-        let block_ids: Vec<usize> = (0..seq_len).map(|i| i / 16).collect();
+        let block_ids = vec![0usize];
         let positions: Vec<usize> = (0..seq_len).collect();
 
         let mut full_cache =
@@ -338,7 +338,7 @@ mod tests {
 
         let seq_len = 4usize;
         let x = Tensor::ones((1, seq_len, 64), DType::F32, &device).unwrap();
-        let block_ids: Vec<usize> = (0..seq_len).map(|i| i / 16).collect();
+        let block_ids = vec![0usize];
         let positions: Vec<usize> = (0..seq_len).collect();
 
         let prefill_out = block

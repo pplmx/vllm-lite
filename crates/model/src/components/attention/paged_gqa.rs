@@ -186,6 +186,7 @@ pub trait QkRotaryEmb: Send + Sync {
 mod tests {
     use super::*;
     use crate::components::attention::expand_kv;
+    use candle_core::DType;
 
     #[test]
     fn test_prefill_causal_mask_square_only() {
@@ -206,7 +207,7 @@ mod tests {
         let seq_len = 2usize;
         let k = Tensor::ones((1, num_heads, seq_len, head_dim), DType::F32, &device)?;
         let v = Tensor::zeros((1, num_heads, seq_len, head_dim), DType::F32, &device)?;
-        let block_ids = vec![0usize, 0];
+        let block_ids = vec![0usize];
         let positions = vec![5usize, 6];
 
         write_prefill_kv(
@@ -242,7 +243,7 @@ mod tests {
         let seq_len = 3usize;
         let k = Tensor::randn(0.0f32, 1.0, (1, num_heads, seq_len, head_dim), &device)?;
         let v = Tensor::randn(0.0f32, 1.0, (1, num_heads, seq_len, head_dim), &device)?;
-        let block_ids: Vec<usize> = (0..seq_len).map(|i| i / 16).collect();
+        let block_ids = vec![0usize];
 
         let positions: Vec<usize> = (0..seq_len).collect();
         write_prefill_kv(&mut kv_cache, 0, &block_ids, &positions, seq_len, &k, &v)?;
