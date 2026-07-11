@@ -16,7 +16,7 @@ pub use model::CausalLm;
 
 use crate::components::decoder_block::PagedDecoderBlock;
 use crate::paged_tensor::PagedKvCache;
-use candle_core::{D, Device, Module, Tensor};
+use candle_core::{Device, Module, Tensor};
 use candle_nn::Embedding;
 use vllm_traits::{argmax_logits, BatchOutput, ModelError, Result, SeqId, TokenId};
 
