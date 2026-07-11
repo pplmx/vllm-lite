@@ -1,4 +1,66 @@
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.46
+   Compiling unicode-ident v1.0.24
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling thiserror v2.0.18
+   Compiling syn v2.0.118
+   Compiling thiserror-impl v2.0.18
+   Compiling serde_derive v1.0.228
+ Documenting vllm-traits v0.1.0 (C:\Users\pplmx\JetBrains\RustroverProjects\vllm-lite\crates\traits)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.94s
 pub mod vllm_traits
+pub mod vllm_traits::distributed
+pub struct vllm_traits::distributed::IdentityHasher
+impl core::clone::Clone for vllm_traits::distributed::IdentityHasher
+pub fn vllm_traits::distributed::IdentityHasher::clone(&self) -> vllm_traits::distributed::IdentityHasher
+impl core::default::Default for vllm_traits::distributed::IdentityHasher
+pub fn vllm_traits::distributed::IdentityHasher::default() -> vllm_traits::distributed::IdentityHasher
+impl core::fmt::Debug for vllm_traits::distributed::IdentityHasher
+pub fn vllm_traits::distributed::IdentityHasher::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for vllm_traits::distributed::IdentityHasher
+impl vllm_traits::distributed::BlockHasher for vllm_traits::distributed::IdentityHasher
+pub fn vllm_traits::distributed::IdentityHasher::hash_allocated_block(&self, vllm_traits::types::BlockId, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::distributed::IdentityHasher::hash_block(&self, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::distributed::IdentityHasher::name(&self) -> &'static str
+impl core::marker::Freeze for vllm_traits::distributed::IdentityHasher
+impl core::marker::Send for vllm_traits::distributed::IdentityHasher
+impl core::marker::Sync for vllm_traits::distributed::IdentityHasher
+impl core::marker::Unpin for vllm_traits::distributed::IdentityHasher
+impl core::marker::UnsafeUnpin for vllm_traits::distributed::IdentityHasher
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::distributed::IdentityHasher
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::distributed::IdentityHasher
+pub struct vllm_traits::distributed::XorShiftHasher
+impl core::clone::Clone for vllm_traits::distributed::XorShiftHasher
+pub fn vllm_traits::distributed::XorShiftHasher::clone(&self) -> vllm_traits::distributed::XorShiftHasher
+impl core::default::Default for vllm_traits::distributed::XorShiftHasher
+pub fn vllm_traits::distributed::XorShiftHasher::default() -> vllm_traits::distributed::XorShiftHasher
+impl core::fmt::Debug for vllm_traits::distributed::XorShiftHasher
+pub fn vllm_traits::distributed::XorShiftHasher::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for vllm_traits::distributed::XorShiftHasher
+impl vllm_traits::distributed::BlockHasher for vllm_traits::distributed::XorShiftHasher
+pub fn vllm_traits::distributed::XorShiftHasher::hash_allocated_block(&self, vllm_traits::types::BlockId, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::distributed::XorShiftHasher::hash_block(&self, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::distributed::XorShiftHasher::name(&self) -> &'static str
+impl core::marker::Freeze for vllm_traits::distributed::XorShiftHasher
+impl core::marker::Send for vllm_traits::distributed::XorShiftHasher
+impl core::marker::Sync for vllm_traits::distributed::XorShiftHasher
+impl core::marker::Unpin for vllm_traits::distributed::XorShiftHasher
+impl core::marker::UnsafeUnpin for vllm_traits::distributed::XorShiftHasher
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::distributed::XorShiftHasher
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::distributed::XorShiftHasher
+pub trait vllm_traits::distributed::BlockHasher: core::marker::Send + core::marker::Sync + core::fmt::Debug
+pub fn vllm_traits::distributed::BlockHasher::hash_allocated_block(&self, vllm_traits::types::BlockId, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::distributed::BlockHasher::hash_block(&self, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::distributed::BlockHasher::name(&self) -> &'static str
+impl vllm_traits::distributed::BlockHasher for vllm_traits::distributed::IdentityHasher
+pub fn vllm_traits::distributed::IdentityHasher::hash_allocated_block(&self, vllm_traits::types::BlockId, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::distributed::IdentityHasher::hash_block(&self, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::distributed::IdentityHasher::name(&self) -> &'static str
+impl vllm_traits::distributed::BlockHasher for vllm_traits::distributed::XorShiftHasher
+pub fn vllm_traits::distributed::XorShiftHasher::hash_allocated_block(&self, vllm_traits::types::BlockId, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::distributed::XorShiftHasher::hash_block(&self, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::distributed::XorShiftHasher::name(&self) -> &'static str
 pub mod vllm_traits::kernels
 pub enum vllm_traits::kernels::GraphExecutionError
 pub vllm_traits::kernels::GraphExecutionError::CudaError(alloc::string::String)
@@ -64,16 +126,20 @@ impl core::marker::Unpin for vllm_traits::kernels::ModelGraphConfig
 impl core::marker::UnsafeUnpin for vllm_traits::kernels::ModelGraphConfig
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::kernels::ModelGraphConfig
 impl core::panic::unwind_safe::UnwindSafe for vllm_traits::kernels::ModelGraphConfig
+pub trait vllm_traits::kernels::CudaGraphExecutor: core::marker::Send
+pub fn vllm_traits::kernels::CudaGraphExecutor::capture_all_graphs(&mut self) -> core::result::Result<(), vllm_traits::kernels::GraphExecutionError>
+pub fn vllm_traits::kernels::CudaGraphExecutor::execute(&self, &vllm_traits::types::Batch) -> core::result::Result<vllm_traits::types::BatchOutput, vllm_traits::kernels::GraphExecutionError>
+pub fn vllm_traits::kernels::CudaGraphExecutor::is_enabled(&self) -> bool
 pub mod vllm_traits::model
 #[non_exhaustive] pub enum vllm_traits::model::ModelError
 pub vllm_traits::model::ModelError::Backend(alloc::string::String)
 pub vllm_traits::model::ModelError::Config(alloc::string::String)
-pub vllm_traits::model::ModelError::Io(std::io::error::Error)
+pub vllm_traits::model::ModelError::Io(core::io::error::Error)
 pub vllm_traits::model::ModelError::Message(alloc::string::String)
 impl vllm_traits::model::ModelError
 pub fn vllm_traits::model::ModelError::new(impl core::convert::Into<alloc::string::String>) -> Self
-impl core::convert::From<std::io::error::Error> for vllm_traits::model::ModelError
-pub fn vllm_traits::model::ModelError::from(std::io::error::Error) -> Self
+impl core::convert::From<core::io::error::Error> for vllm_traits::model::ModelError
+pub fn vllm_traits::model::ModelError::from(core::io::error::Error) -> Self
 impl core::error::Error for vllm_traits::model::ModelError
 pub fn vllm_traits::model::ModelError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for vllm_traits::model::ModelError
@@ -124,6 +190,8 @@ pub fn vllm_traits::model::StubModelBackend::forward_to_layer(&mut self, &[vllm_
 pub fn vllm_traits::model::StubModelBackend::num_heads(&self) -> usize
 pub fn vllm_traits::model::StubModelBackend::num_layers(&self) -> usize
 pub type vllm_traits::model::Result<T> = core::result::Result<T, vllm_traits::model::ModelError>
+pub mod vllm_traits::sampling
+pub fn vllm_traits::sampling::argmax_logits(&[f32]) -> vllm_traits::types::TokenId
 pub mod vllm_traits::types
 pub enum vllm_traits::types::BatchPhase
 pub vllm_traits::types::BatchPhase::Decode
@@ -271,12 +339,12 @@ impl core::panic::unwind_safe::UnwindSafe for vllm_traits::kernels::GraphExecuti
 #[non_exhaustive] pub enum vllm_traits::ModelError
 pub vllm_traits::ModelError::Backend(alloc::string::String)
 pub vllm_traits::ModelError::Config(alloc::string::String)
-pub vllm_traits::ModelError::Io(std::io::error::Error)
+pub vllm_traits::ModelError::Io(core::io::error::Error)
 pub vllm_traits::ModelError::Message(alloc::string::String)
 impl vllm_traits::model::ModelError
 pub fn vllm_traits::model::ModelError::new(impl core::convert::Into<alloc::string::String>) -> Self
-impl core::convert::From<std::io::error::Error> for vllm_traits::model::ModelError
-pub fn vllm_traits::model::ModelError::from(std::io::error::Error) -> Self
+impl core::convert::From<core::io::error::Error> for vllm_traits::model::ModelError
+pub fn vllm_traits::model::ModelError::from(core::io::error::Error) -> Self
 impl core::error::Error for vllm_traits::model::ModelError
 pub fn vllm_traits::model::ModelError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for vllm_traits::model::ModelError
@@ -386,6 +454,25 @@ impl core::marker::Unpin for vllm_traits::kernels::CudaGraphConfig
 impl core::marker::UnsafeUnpin for vllm_traits::kernels::CudaGraphConfig
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::kernels::CudaGraphConfig
 impl core::panic::unwind_safe::UnwindSafe for vllm_traits::kernels::CudaGraphConfig
+pub struct vllm_traits::IdentityHasher
+impl core::clone::Clone for vllm_traits::distributed::IdentityHasher
+pub fn vllm_traits::distributed::IdentityHasher::clone(&self) -> vllm_traits::distributed::IdentityHasher
+impl core::default::Default for vllm_traits::distributed::IdentityHasher
+pub fn vllm_traits::distributed::IdentityHasher::default() -> vllm_traits::distributed::IdentityHasher
+impl core::fmt::Debug for vllm_traits::distributed::IdentityHasher
+pub fn vllm_traits::distributed::IdentityHasher::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for vllm_traits::distributed::IdentityHasher
+impl vllm_traits::distributed::BlockHasher for vllm_traits::distributed::IdentityHasher
+pub fn vllm_traits::distributed::IdentityHasher::hash_allocated_block(&self, vllm_traits::types::BlockId, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::distributed::IdentityHasher::hash_block(&self, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::distributed::IdentityHasher::name(&self) -> &'static str
+impl core::marker::Freeze for vllm_traits::distributed::IdentityHasher
+impl core::marker::Send for vllm_traits::distributed::IdentityHasher
+impl core::marker::Sync for vllm_traits::distributed::IdentityHasher
+impl core::marker::Unpin for vllm_traits::distributed::IdentityHasher
+impl core::marker::UnsafeUnpin for vllm_traits::distributed::IdentityHasher
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::distributed::IdentityHasher
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::distributed::IdentityHasher
 pub struct vllm_traits::ModelGraphConfig
 pub vllm_traits::ModelGraphConfig::capture_attention_separate: bool
 pub vllm_traits::ModelGraphConfig::max_seq_len: usize
@@ -429,7 +516,42 @@ impl core::marker::Unpin for vllm_traits::model::StubModelBackend
 impl core::marker::UnsafeUnpin for vllm_traits::model::StubModelBackend
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::model::StubModelBackend
 impl core::panic::unwind_safe::UnwindSafe for vllm_traits::model::StubModelBackend
+pub struct vllm_traits::XorShiftHasher
+impl core::clone::Clone for vllm_traits::distributed::XorShiftHasher
+pub fn vllm_traits::distributed::XorShiftHasher::clone(&self) -> vllm_traits::distributed::XorShiftHasher
+impl core::default::Default for vllm_traits::distributed::XorShiftHasher
+pub fn vllm_traits::distributed::XorShiftHasher::default() -> vllm_traits::distributed::XorShiftHasher
+impl core::fmt::Debug for vllm_traits::distributed::XorShiftHasher
+pub fn vllm_traits::distributed::XorShiftHasher::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for vllm_traits::distributed::XorShiftHasher
+impl vllm_traits::distributed::BlockHasher for vllm_traits::distributed::XorShiftHasher
+pub fn vllm_traits::distributed::XorShiftHasher::hash_allocated_block(&self, vllm_traits::types::BlockId, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::distributed::XorShiftHasher::hash_block(&self, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::distributed::XorShiftHasher::name(&self) -> &'static str
+impl core::marker::Freeze for vllm_traits::distributed::XorShiftHasher
+impl core::marker::Send for vllm_traits::distributed::XorShiftHasher
+impl core::marker::Sync for vllm_traits::distributed::XorShiftHasher
+impl core::marker::Unpin for vllm_traits::distributed::XorShiftHasher
+impl core::marker::UnsafeUnpin for vllm_traits::distributed::XorShiftHasher
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::distributed::XorShiftHasher
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::distributed::XorShiftHasher
 pub const vllm_traits::BLOCK_SIZE: usize
+pub trait vllm_traits::BlockHasher: core::marker::Send + core::marker::Sync + core::fmt::Debug
+pub fn vllm_traits::BlockHasher::hash_allocated_block(&self, vllm_traits::types::BlockId, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::BlockHasher::hash_block(&self, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::BlockHasher::name(&self) -> &'static str
+impl vllm_traits::distributed::BlockHasher for vllm_traits::distributed::IdentityHasher
+pub fn vllm_traits::distributed::IdentityHasher::hash_allocated_block(&self, vllm_traits::types::BlockId, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::distributed::IdentityHasher::hash_block(&self, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::distributed::IdentityHasher::name(&self) -> &'static str
+impl vllm_traits::distributed::BlockHasher for vllm_traits::distributed::XorShiftHasher
+pub fn vllm_traits::distributed::XorShiftHasher::hash_allocated_block(&self, vllm_traits::types::BlockId, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::distributed::XorShiftHasher::hash_block(&self, u64, &[vllm_traits::types::TokenId]) -> u64
+pub fn vllm_traits::distributed::XorShiftHasher::name(&self) -> &'static str
+pub trait vllm_traits::CudaGraphExecutor: core::marker::Send
+pub fn vllm_traits::CudaGraphExecutor::capture_all_graphs(&mut self) -> core::result::Result<(), vllm_traits::kernels::GraphExecutionError>
+pub fn vllm_traits::CudaGraphExecutor::execute(&self, &vllm_traits::types::Batch) -> core::result::Result<vllm_traits::types::BatchOutput, vllm_traits::kernels::GraphExecutionError>
+pub fn vllm_traits::CudaGraphExecutor::is_enabled(&self) -> bool
 pub trait vllm_traits::ModelBackend: core::marker::Send + core::marker::Sync
 pub fn vllm_traits::ModelBackend::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
 pub fn vllm_traits::ModelBackend::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
@@ -444,6 +566,7 @@ pub fn vllm_traits::model::StubModelBackend::forward_logits(&mut self, &[vllm_tr
 pub fn vllm_traits::model::StubModelBackend::forward_to_layer(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool], usize) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
 pub fn vllm_traits::model::StubModelBackend::num_heads(&self) -> usize
 pub fn vllm_traits::model::StubModelBackend::num_layers(&self) -> usize
+pub fn vllm_traits::argmax_logits(&[f32]) -> vllm_traits::types::TokenId
 pub type vllm_traits::BlockId = usize
 pub type vllm_traits::Result<T> = core::result::Result<T, vllm_traits::model::ModelError>
 pub type vllm_traits::SeqId = u64

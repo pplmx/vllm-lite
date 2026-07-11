@@ -30,7 +30,9 @@ coverage/
 .worktrees/
 .worktrees/
 .claude/
-core.*
+# Unix core dumps (do not use `core.*` — it ignores planning baselines)
+core
+vgcore.*
 
 # cargo-mutants output (v30.0 Phase K)
 .mutants-out/
