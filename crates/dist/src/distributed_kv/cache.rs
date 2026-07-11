@@ -4,6 +4,8 @@
 //! `HashMap`-backed `DistributedKVCache` used by tests and embedded builds.
 #![allow(clippy::module_name_repetitions)]
 use super::{CacheConfig, CacheMessage, NodeId};
+use crate::error::GrpcError;
+use crate::grpc_client::PeerClient;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
@@ -16,6 +18,10 @@ pub struct DistributedKVCache {
     local_cache: Arc<RwLock<HashMap<u64, CacheEntry>>>,
     /// Cache statistics.
     stats: RwLock<CacheStats>,
+    /// Per-peer gRPC clients. `None` until [`Self::connect_peers`]
+    /// is called; `Some(vec![])` once called with no peer URLs in
+    /// the config (single-node mode, no broadcast). Phase 19 OPS-05c.
+    peer_clients: Option<Arc<Vec<PeerClient>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -50,13 +56,68 @@ pub struct CacheStats {
 impl DistributedKVCache {
     /// Construct a new cache scoped to `config.node_id`, with an empty
     /// local store and zeroed statistics.
+    ///
+    /// Peer clients are NOT built here — the constructor stays
+    /// synchronous. Call [`Self::connect_peers`] later to validate
+    /// the configured peer URLs and construct the per-peer client
+    /// handles (lazy channel connect happens on first RPC). Until
+    /// then, `put` / `invalidate` are purely local.
     #[must_use]
     pub fn new(config: CacheConfig) -> Self {
         Self {
             config,
             local_cache: Arc::new(RwLock::new(HashMap::new())),
             stats: RwLock::new(CacheStats::default()),
+            peer_clients: None,
         }
+    }
+
+    /// Build gRPC clients for every URL in [`CacheConfig::peer_urls`].
+    ///
+    /// Idempotent: re-calling replaces the existing peer list (the
+    /// old clients are dropped along with their channels). Calling
+    /// with an empty `peer_urls` clears any prior peer set, returning
+    /// the cache to single-node mode.
+    ///
+    /// This is a sync helper because [`PeerClient::new`] only
+    /// validates URLs and creates lazy endpoints — actual TCP+HTTP/2
+    /// handshakes happen later inside the client on the first RPC.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GrpcError`] if any URL fails to parse. Partial
+    /// success is not possible — if one URL is malformed, the call
+    /// returns before validating subsequent URLs and the cache is
+    /// left in its prior state.
+    pub fn connect_peers(&mut self) -> Result<(), GrpcError> {
+        let mut clients = Vec::with_capacity(self.config.peer_urls.len());
+        for url in &self.config.peer_urls {
+            let client = PeerClient::new(url.clone())?;
+            clients.push(client);
+        }
+        self.peer_clients = Some(Arc::new(clients));
+        Ok(())
+    }
+
+    /// Snapshot of the configured peer URLs.
+    #[must_use]
+    pub fn peer_urls(&self) -> &[String] {
+        &self.config.peer_urls
+    }
+
+    /// Whether [`Self::connect_peers`] has been called (regardless
+    /// of whether peer URLs were empty).
+    #[must_use]
+    pub const fn peers_connected(&self) -> bool {
+        self.peer_clients.is_some()
+    }
+
+    /// Number of currently-connected peer clients. `0` before
+    /// [`Self::connect_peers`] is called or when the config has no
+    /// peer URLs.
+    #[must_use]
+    pub fn peer_client_count(&self) -> usize {
+        self.peer_clients.as_ref().map_or(0, |v| v.len())
     }
 
     /// Look up `key` in the local cache.
@@ -152,6 +213,17 @@ impl DistributedKVCache {
     /// `Exclusive` (this node is the primary owner) / `Shared` (a
     /// replica) / `Modified` (already-present entry being updated).
     /// Updates the `updates` counter on [`CacheStats`].
+    ///
+    /// # Peer broadcast (OPS-05c)
+    ///
+    /// If peer clients were configured via [`Self::connect_peers`]
+    /// and the call is running inside a tokio runtime, the put is
+    /// also broadcast to every peer via a fire-and-forget tokio
+    /// task. The local put is always synchronous; broadcast failures
+    /// are logged and dropped (no retry, no back-pressure). When no
+    /// tokio runtime is available (test path without `#[tokio::test]`),
+    /// the broadcast is silently skipped — the local put still
+    /// happens.
     pub fn put(&self, key: u64, value_hash: u64) {
         let owner_nodes = self.compute_owner_nodes(key);
         let timestamp = current_timestamp();
@@ -179,14 +251,19 @@ impl DistributedKVCache {
         if let Ok(mut stats) = self.stats.write() {
             stats.updates += 1;
         }
+
+        self.broadcast_put(key, value_hash);
     }
 
     /// Drop the local entry for `key` and increment the
     /// `invalidations` counter on [`CacheStats`].
     ///
-    /// Remote replicas are not notified here — coordination is the
-    /// caller's responsibility (typically via [`Self::handle_message`]
-    /// on the source node, then broadcasting an `Invalidate` message).
+    /// # Peer broadcast (OPS-05c)
+    ///
+    /// Same fire-and-forget pattern as [`Self::put`]: a tokio task
+    /// is spawned (if a runtime is available) that calls each
+    /// peer's `InvalidateKVCache` RPC. Local invalidate always
+    /// happens first.
     pub fn invalidate(&self, key: u64) {
         if let Ok(mut cache) = self.local_cache.write() {
             cache.remove(&key);
@@ -194,6 +271,72 @@ impl DistributedKVCache {
         if let Ok(mut stats) = self.stats.write() {
             stats.invalidations += 1;
         }
+
+        self.broadcast_invalidate(key);
+    }
+
+    /// Spawn a tokio task that fires `put_kv_cache` on every peer.
+    /// No-op when no peer clients are configured or no tokio
+    /// runtime is available.
+    fn broadcast_put(&self, key: u64, value_hash: u64) {
+        let Some(clients) = self.peer_clients.clone() else {
+            return;
+        };
+        if clients.is_empty() {
+            return;
+        }
+        // try_current returns Err if no runtime is in scope (e.g.,
+        // unit tests outside `#[tokio::test]`). Silently skip —
+        // the local put still happened.
+        let Ok(handle) = tokio::runtime::Handle::try_current() else {
+            tracing::debug!(
+                block_id = key,
+                "put: no tokio runtime; skipping peer broadcast"
+            );
+            return;
+        };
+        handle.spawn(async move {
+            for client in clients.iter() {
+                if let Err(e) = client.put(key, value_hash).await {
+                    tracing::warn!(
+                        peer = %client.url(),
+                        block_id = key,
+                        error = %e,
+                        "peer put failed; local update stands"
+                    );
+                }
+            }
+        });
+    }
+
+    /// Spawn a tokio task that fires `invalidate_kv_cache` on every
+    /// peer. Same semantics as [`Self::broadcast_put`].
+    fn broadcast_invalidate(&self, key: u64) {
+        let Some(clients) = self.peer_clients.clone() else {
+            return;
+        };
+        if clients.is_empty() {
+            return;
+        }
+        let Ok(handle) = tokio::runtime::Handle::try_current() else {
+            tracing::debug!(
+                block_id = key,
+                "invalidate: no tokio runtime; skipping peer broadcast"
+            );
+            return;
+        };
+        handle.spawn(async move {
+            for client in clients.iter() {
+                if let Err(e) = client.invalidate(key).await {
+                    tracing::warn!(
+                        peer = %client.url(),
+                        block_id = key,
+                        error = %e,
+                        "peer invalidate failed; local drop stands"
+                    );
+                }
+            }
+        });
     }
 
     /// Dispatch a wire-protocol `msg` arriving from a peer node.

@@ -6,13 +6,15 @@
 pub mod distributed_kv;
 pub mod error;
 pub mod grpc;
+pub mod grpc_client;
 pub mod pipeline;
 pub mod tensor_parallel;
 pub mod types;
 
 pub use distributed_kv::{CacheConfig, CacheMessage, DistributedKVCache, NodeId};
 pub use error::{GrpcError, PipelineError, TensorParallelError};
-pub use grpc::GrpcState;
+pub use grpc::{GrpcState, start_grpc_server_with_listener};
+pub use grpc_client::PeerClient;
 pub use pipeline::{
     PipelineParallel, PipelineStage, PipelineStageConfig, Result, StageInput, StageOutput,
 };

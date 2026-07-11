@@ -7,6 +7,13 @@ service NodeService {
   rpc AllReduce(AllReduceRequest) returns (AllReduceResponse);
   rpc GetKVCache(GetKVCacheRequest) returns (GetKVCacheResponse);
   rpc GetPeers(GetPeersRequest) returns (GetPeersResponse);
+  // Replicate a `DistributedKVCache::put(block_id, value_hash)` to a
+  // peer node. The receiving side updates its local cache. Phase 19
+  // OPS-05c.
+  rpc PutKVCache(PutKVCacheRequest) returns (PutKVCacheResponse);
+  // Replicate a `DistributedKVCache::invalidate(block_id)` to a peer
+  // node. Phase 19 OPS-05c.
+  rpc InvalidateKVCache(InvalidateKVCacheRequest) returns (InvalidateKVCacheResponse);
 }
 
 message PingRequest {
@@ -47,4 +54,26 @@ message GetPeersRequest {
 
 message GetPeersResponse {
   repeated string peer_addresses = 1;
+}
+
+// Phase 19 OPS-05c. Wire form of `DistributedKVCache::put`.
+// `block_id` and `value_hash` are both u64 so the existing
+// local-cache key/value layout round-trips through gRPC without
+// translation.
+message PutKVCacheRequest {
+  uint64 block_id = 1;
+  uint64 value_hash = 2;
+}
+
+message PutKVCacheResponse {
+  bool success = 1;
+}
+
+// Phase 19 OPS-05c. Mirrors `DistributedKVCache::invalidate(block_id)`.
+message InvalidateKVCacheRequest {
+  uint64 block_id = 1;
+}
+
+message InvalidateKVCacheResponse {
+  bool success = 1;
 }
