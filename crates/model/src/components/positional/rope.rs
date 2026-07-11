@@ -4,7 +4,7 @@
 //! the input tensor in-place when possible. `MRoPE` (multi-modal `RoPE`
 //! for Qwen3.5-VL) lives in `mrope.rs` alongside this module.
 //!
-//! ## Long-context scaling (Phase 15)
+//! ## Long-context scaling
 //!
 //! When constructed via `RoPE::new_with_config(&Qwen3Config)`, the
 //! scaling fields in the config (`rope_scaling.rope_type`,
@@ -248,8 +248,9 @@ pub fn apply_rope(query: &Tensor, positions: &[i64], theta: f32) -> Result<Tenso
 /// - `Default` → no scaling (same as [`apply_rope`]).
 /// - `Linear` → position interpolation (`inv_freq / scaling_factor`).
 /// - `Yarn` → NTK-aware theta adjustment (`theta' = theta * scale^(d/(d-2))`).
-/// - `Dynamic`, `Su`, `Other` → fall through to Default (Phase 16 will
-///   add Dynamic and Su implementations).
+/// - `Dynamic` → NTK-aware theta recomputed for the current seq len.
+/// - `Su` → per-dim factor arrays (`short_factor` / `long_factor`).
+/// - `Other` → fall through to Default.
 ///
 /// # Errors
 ///
@@ -506,7 +507,7 @@ pub fn precompute_rope_cache(seq_len: usize, head_dim: usize, theta: f32) -> Vec
 // `apply_rope` / `precompute_rope_cache` free functions and the
 // `RoPE` struct (`new`, `apply`, `forward`) — shape preservation,
 // determinism, positional sensitivity, and numerical robustness
-// at large positions. Phase 15 added `apply_with_scaling` tests
-// covering Default-vs-Linear-vs-Yarn behaviour.
+// at large positions. The `apply_with_scaling` tests cover
+// Default-vs-Linear-vs-Yarn-vs-Dynamic-vs-Su behaviour.
 #[cfg(test)]
 mod tests;

@@ -25,8 +25,7 @@ impl ChatTemplate {
             Architecture::Llama | Architecture::Gemma4 | Architecture::Mixtral => Self::Llama3,
             Architecture::Mistral => Self::MistralInst,
             // Unknown / unrecognised architectures fall back to the plain
-            // role-prefixed template (Phase 18 ARCH-10 added the
-            // `Unknown` variant).
+            // role-prefixed template.
             Architecture::Unknown => Self::Plain,
         }
     }

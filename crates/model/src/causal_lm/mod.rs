@@ -58,7 +58,7 @@ pub(crate) fn greedy_sample_token(logits: &Tensor, is_prefill: bool) -> Result<T
             .map_err(ModelError::from)?
     };
 
-    // Phase 18 ARCH-09: delegate the actual argmax to the shared
+    // Delegate the actual argmax to the shared
     // `vllm_traits::argmax_logits` helper rather than calling
     // `tensor.argmax(...)` here — keeps the greedy core logic in one
     // place across the workspace.

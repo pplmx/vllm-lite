@@ -200,10 +200,10 @@ fn test_warmup() {
 
 #[test]
 fn test_trait_dispatch_via_cuda_graph_executor() {
-    // Phase 18 ARCH-06 — the engine stores `Box<dyn CudaGraphExecutor + Send>`,
-    // so every production call goes through the trait, not the inherent
-    // methods. This test exercises the trait surface end-to-end to make
-    // sure the dispatch wiring is correct.
+    // The engine stores `Box<dyn CudaGraphExecutor + Send>`, so every
+    // production call goes through the trait, not the inherent methods.
+    // This test exercises the trait surface end-to-end to make sure the
+    // dispatch wiring is correct.
     use vllm_traits::CudaGraphExecutor;
 
     let mut executor = BatchCudaGraphExecutor::new(CudaGraphConfig {

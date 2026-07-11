@@ -2,9 +2,10 @@
 //!
 //! The graph itself lives in `vllm-model::kernels::cuda_graph`; this
 //! file is the Engine-side façade the scheduler uses to opt into
-//! graph replay. The engine stores a `Box<dyn CudaGraphExecutor + Send>`
-//! (Phase 18 ARCH-06) so every call site in this file goes through the
-//! `vllm_traits::CudaGraphExecutor` trait, never the concrete model type.
+//! graph replay. The engine stores a
+//! `Box<dyn CudaGraphExecutor + Send>` so every call site in this file
+//! goes through the `vllm_traits::CudaGraphExecutor` trait, never the
+//! concrete model type.
 
 // Sub-module for CUDA Graph capture and enable-check methods on Engine.
 // See mod.rs for the Engine struct definition.

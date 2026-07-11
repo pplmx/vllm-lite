@@ -12,7 +12,7 @@
 //!   [`GraphExecutionError`]) consumed by `vllm-model` and `vllm-core`.
 //! - Shared sampling primitives ([`argmax_logits`]) used by both
 //!   `vllm-core::sampling` and `vllm-model::causal_lm` to avoid an
-//!   upward `model → core` dependency (Phase 18 ARCH-09).
+//!   upward `model → core` dependency.
 //!
 //! Most consumers should depend on `vllm-core` or `vllm-model` instead and
 //! reach these types via their crate-root re-exports.

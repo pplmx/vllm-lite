@@ -231,7 +231,7 @@ fn test_rope_gqa_decode_fused_matches_paged() {
     }
 }
 
-// === Phase 16: regression test for `apply_with_scaling` migration ===
+// === regression test for `apply_with_scaling` migration ===
 //
 // This test verifies the invariant the Task 2 migration depends on:
 // a `RoPE` constructed via `RoPE::new` (with default `RopeType::Default`,

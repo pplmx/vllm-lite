@@ -241,7 +241,7 @@ impl ModelConfig {
             .and_then(|name| Architecture::from_name(&name))
             // Fallback to `Unknown` rather than a guessed architecture
             // (previously this returned `Architecture::Llama`, which silently
-            // misclassified unrecognised configs as Llama — Phase 18 ARCH-10).
+            // misclassified unrecognised configs as Llama).
             .unwrap_or(Architecture::Unknown);
 
         let hidden_size = read_usize(value, "hidden_size", 4096);

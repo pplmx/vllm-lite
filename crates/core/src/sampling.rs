@@ -2,10 +2,10 @@
 //!
 //! Designed to be called per sequence per decode step. Beam-search
 //! state types live in [`crate::beam`]; no orchestration methods are
-//! currently shipped (Phase 12d removed the unused `step_beam` helper).
+//! currently shipped.
 //!
-//! Greedy decoding delegates to [`vllm_traits::argmax_logits`] (Phase 18
-//! ARCH-09). The local wrapper only adds the `tracing` instrumentation.
+//! Greedy decoding delegates to [`vllm_traits::argmax_logits`] — the
+//! local wrapper only adds the `tracing` instrumentation.
 #![allow(unused_variables)]
 
 use crate::types::TokenId;

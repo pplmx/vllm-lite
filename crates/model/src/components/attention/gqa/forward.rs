@@ -117,7 +117,7 @@ impl GqaAttention {
         // The scalar tensor was re-allocated and broadcast to O(B*H*S*S) every forward;
         // `affine` fuses the scaling into the existing kernel without materializing a broadcast tensor.
         //
-        // Phase 16: when `attn_factor` is set, the score scale is multiplied
+        // When `attn_factor` is set, the score scale is multiplied
         // by it (YaRN §3.3 attention-temperature scaling). `attn_factor = 1.0`
         // (or None) is a no-op; `attn_factor < 1.0` sharpens the softmax,
         // `attn_factor > 1.0` flattens it.
@@ -149,8 +149,8 @@ impl GqaAttention {
     }
 
     /// Paged attention. **Does NOT honour `attn_factor`** — silently
-    /// scales by 1.0. Phase 16 limitation; follow-up phase will thread
-    /// the factor through to the paged kernel.
+    /// scales by 1.0. The factor is not yet threaded through to the
+    /// paged kernel.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -160,8 +160,8 @@ impl GqaAttention {
         Ok(o)
     }
 
-    /// Tiled attention. **Does NOT honour `attn_factor`** — Phase 16
-    /// limitation, see [`Self::paged_attention_fn`].
+    /// Tiled attention. **Does NOT honour `attn_factor`** — see
+    /// [`Self::paged_attention_fn`].
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -172,8 +172,8 @@ impl GqaAttention {
         Ok(o)
     }
 
-    /// Flash attention. **Does NOT honour `attn_factor`** — Phase 16
-    /// limitation, see [`Self::paged_attention_fn`].
+    /// Flash attention. **Does NOT honour `attn_factor`** — see
+    /// [`Self::paged_attention_fn`].
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

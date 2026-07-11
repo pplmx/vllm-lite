@@ -2,10 +2,9 @@
 //! log-prob and emitted token sequence.
 //!
 //! `BeamSequence` is a public re-export ([`crate::BeamSequence`]). No
-//! production scheduling code currently drives a beam search — Phase 12d
-//! removed the previously-unused `step_beam` orchestrator. Kept here
-//! so future work can wire beam search in without re-deriving the
-//! state type.
+//! production scheduling code currently drives a beam search; the
+//! state types are kept here so future work can wire beam search in
+//! without re-deriving them.
 #![allow(clippy::module_name_repetitions)]
 use crate::types::{BlockId, TokenId};
 use std::sync::Arc;

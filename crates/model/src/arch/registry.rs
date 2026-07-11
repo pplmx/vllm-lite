@@ -150,10 +150,10 @@ pub static ARCHITECTURE_REGISTRY: LazyLock<ArchitectureRegistry> =
 /// Register all known architectures for config detection and model creation.
 ///
 /// Stub architectures (Gemma3, Llama4, Phi4, `MistralSmall`) are
-/// registered as [`StubArchitecture`] instances (Phase 18 ARCH-05) —
-/// `detect()` works, but `ModelLoader` rejects them unless
-/// `--allow-stub` is set (see Phase 4.4 Option C in
-/// `.planning/MODEL-ARCHITECTURE-REFACTOR.md`).
+/// registered as [`StubArchitecture`] instances — `detect()` works, but
+/// `ModelLoader` rejects them unless `--allow-stub` is set (see
+/// `.planning/MODEL-ARCHITECTURE-REFACTOR.md` for the original
+/// stub-capability decision).
 pub fn register_all_archs(registry: &ArchitectureRegistry) {
     crate::llama::register::register(registry);
     crate::mistral::register::register(registry);
@@ -161,7 +161,7 @@ pub fn register_all_archs(registry: &ArchitectureRegistry) {
     crate::qwen3_5::register::register(registry);
     crate::gemma4::register::register(registry);
     crate::mixtral::register::register(registry);
-    // Stubs (Phase 18 ARCH-05: shared `StubArchitecture`).
+    // Stub architectures — see `StubArchitecture` doc.
     register_stub(registry, StubArchitecture::gemma3());
     register_stub(registry, StubArchitecture::llama4());
     register_stub(registry, StubArchitecture::phi4());

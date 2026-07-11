@@ -9,8 +9,6 @@
 //! - `crate::speculative::registry::DraftSpec`
 //! - `crate::speculative::registry::DraftState`
 //! - `crate::speculative::registry::LoadedDraft`
-//!
-//! See Phase 31 plan `31-01` (v21.1) for the split rationale.
 
 #[deprecated(
     since = "0.21.0",

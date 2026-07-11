@@ -41,15 +41,17 @@ pub struct EngineBuilder {
     draft_resolver: Option<Arc<DraftResolver>>,
     sleep_policy: SleepPolicy,
     /// Caller-supplied CUDA-Graph executor. Overrides anything the engine
-    /// constructor would build from `config.cuda_graph.enabled`. Phase 18
-    /// ARCH-06 lets callers plug in their own `Box<dyn CudaGraphExecutor>`
-    /// without `vllm-core` knowing the concrete type.
+    /// constructor would build from `config.cuda_graph.enabled`. Lets
+    /// callers plug in their own `Box<dyn CudaGraphExecutor>` without
+    /// `vllm-core` knowing the concrete type.
     #[cfg(feature = "cuda-graph")]
     cuda_graph_executor: Option<Box<dyn CudaGraphExecutor + Send>>,
-    /// Caller-supplied distributed KV-cache. Phase 19 OPS-05a establishes
-    /// this seam; today the cache is owned but not yet wired into the
-    /// allocator (OPS-05b). Set this to opt into cross-node cache
-    /// coherence from the engine boundary.
+    /// Caller-supplied distributed KV-cache. The cache is owned by the
+    /// engine and reachable via [`Engine::distributed_kv_enabled`] and
+    /// [`Engine::distributed_kv_stats`]; the [`MemoryManager`] performs
+    /// allocate/free round-trips through it.
+    ///
+    /// [`MemoryManager`]: crate::scheduler::memory::MemoryManager
     #[cfg(feature = "multi-node")]
     distributed_kv: Option<Arc<DistributedKVCache>>,
 }
@@ -160,8 +162,9 @@ impl EngineBuilder {
     ///
     /// When set, this overrides whatever `Engine::with_config_boxed` would
     /// have constructed from `config.cuda_graph`. Use this when the
-    /// concrete executor type lives outside `vllm-core` (Phase 18 ARCH-06
-    /// is the whole reason the trait object exists).
+    /// concrete executor type lives outside `vllm-core` — the
+    /// [`vllm_traits::CudaGraphExecutor`] trait object is what makes
+    /// that possible.
     #[must_use]
     #[cfg(feature = "cuda-graph")]
     pub fn with_cuda_graph_executor(mut self, executor: Box<dyn CudaGraphExecutor + Send>) -> Self {
@@ -171,10 +174,12 @@ impl EngineBuilder {
 
     /// Plug in a pre-built distributed KV-cache.
     ///
-    /// Phase 19 OPS-05a establishes the seam. The cache is owned by the
-    /// engine and reachable via [`Engine::distributed_kv_enabled`] and
-    /// [`Engine::distributed_kv_stats`]. Allocator-level hooks that wire
-    /// block allocate/free into the cache are OPS-05b.
+    /// The cache is owned by the engine and reachable via
+    /// [`Engine::distributed_kv_enabled`] and [`Engine::distributed_kv_stats`].
+    /// See [`MemoryManager`] for how block allocate / free round-trips
+    /// through the cache.
+    ///
+    /// [`MemoryManager`]: crate::scheduler::memory::MemoryManager
     #[must_use]
     #[cfg(feature = "multi-node")]
     pub fn with_distributed_kv(mut self, cache: Arc<DistributedKVCache>) -> Self {
