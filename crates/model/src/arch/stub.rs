@@ -24,6 +24,7 @@
 use crate::arch::{ArchCapabilities, Architecture};
 use crate::components::block::{
     TransformerBlock, passthrough_paged_decode, passthrough_paged_prefill,
+    passthrough_paged_prefill_continue,
 };
 use crate::components::decoder_block::PagedDecoderBlock;
 use crate::config::ModelConfig;
@@ -204,6 +205,25 @@ impl PagedDecoderBlock for StubBlockWrapper {
         positions: &[usize],
     ) -> Result<Tensor> {
         passthrough_paged_prefill(x, kv_cache, layer_idx, block_ids, positions)
+    }
+
+    fn forward_prefill_continue(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        positions: &[usize],
+        num_computed_tokens: usize,
+    ) -> Result<Tensor> {
+        passthrough_paged_prefill_continue(
+            x,
+            kv_cache,
+            layer_idx,
+            block_ids,
+            positions,
+            num_computed_tokens,
+        )
     }
 
     fn forward_decode(

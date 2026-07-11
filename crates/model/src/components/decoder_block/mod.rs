@@ -166,6 +166,20 @@ pub trait PagedDecoderBlock {
         positions: &[usize],
     ) -> Result<Tensor>;
 
+    /// Run a chunked-prefill continuation against an existing KV prefix.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
+    fn forward_prefill_continue(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        positions: &[usize],
+        num_computed_tokens: usize,
+    ) -> Result<Tensor>;
+
     /// Run the decode path: process one new token against cached KV.
     /// # Errors
     ///
@@ -191,6 +205,26 @@ impl PagedDecoderBlock for RopeGqaDecoderBlock {
         positions: &[usize],
     ) -> Result<Tensor> {
         Self::forward_prefill(self, x, kv_cache, layer_idx, block_ids, positions)
+    }
+
+    fn forward_prefill_continue(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        positions: &[usize],
+        num_computed_tokens: usize,
+    ) -> Result<Tensor> {
+        Self::forward_prefill_continue(
+            self,
+            x,
+            kv_cache,
+            layer_idx,
+            block_ids,
+            positions,
+            num_computed_tokens,
+        )
     }
 
     fn forward_decode(

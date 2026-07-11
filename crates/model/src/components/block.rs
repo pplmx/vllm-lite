@@ -28,6 +28,19 @@ pub(crate) fn passthrough_paged_prefill(
     Ok(x.clone())
 }
 
+/// No-op chunked-prefill continuation for registry-only block stubs.
+#[allow(clippy::unnecessary_wraps)]
+pub(crate) fn passthrough_paged_prefill_continue(
+    x: &Tensor,
+    _kv_cache: &mut PagedKvCache,
+    _layer_idx: usize,
+    _block_ids: &[usize],
+    _positions: &[usize],
+    _num_computed_tokens: usize,
+) -> Result<Tensor> {
+    Ok(x.clone())
+}
+
 /// No-op paged decode for registry-only block stubs (does not write KV).
 #[allow(clippy::unnecessary_wraps)]
 pub(crate) fn passthrough_paged_decode(
