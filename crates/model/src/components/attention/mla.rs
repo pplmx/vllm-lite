@@ -23,7 +23,7 @@ use candle_core::{Module, Result, Tensor};
 use candle_nn::Linear;
 
 use super::AttentionConfig;
-use crate::components::positional::rope::{apply_rope_with_scaling, RopeScalingContext};
+use crate::components::positional::rope::{RopeScalingContext, apply_rope_with_scaling};
 
 #[derive(Debug)]
 /// `MlaAttention`. See the type definition for fields and behavior.
@@ -203,8 +203,12 @@ impl MlaAttention {
         // Default `RopeScalingContext` is a no-op (rope_type=Default,
         // scaling_factor=1.0) — identical numerical output to the previous
         // `apply_rope(&q, positions, 10000.0)` call.
-        let q_rope_rotated_4d =
-            apply_rope_with_scaling(&q_rope_4d, positions, 10000.0, RopeScalingContext::default())?;
+        let q_rope_rotated_4d = apply_rope_with_scaling(
+            &q_rope_4d,
+            positions,
+            10000.0,
+            RopeScalingContext::default(),
+        )?;
         let q_rope_rotated =
             q_rope_rotated_4d.reshape((batch_size, seq_len, self.num_heads * self.qk_rope_dim))?;
 

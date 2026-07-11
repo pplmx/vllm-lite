@@ -386,11 +386,7 @@ fn compute_inv_freq_dynamic(
 /// the base inv_freq and `orig_max`, matching the HF reference impl.
 ///
 /// Falls back to Default when `original_max_position` is None.
-fn compute_inv_freq_su(
-    query: &Tensor,
-    theta: f32,
-    scaling: &RopeScalingContext,
-) -> Vec<f32> {
+fn compute_inv_freq_su(query: &Tensor, theta: f32, scaling: &RopeScalingContext) -> Vec<f32> {
     let (_, _, _, head_dim) = query.dims4().expect("dims4");
     let half_dim = head_dim / 2;
 
@@ -435,7 +431,11 @@ fn compute_inv_freq_su(
 /// for both Dynamic and Su — they scale up at long contexts).
 #[must_use]
 pub(super) fn derive_seq_len(positions: &[i64]) -> usize {
-    positions.iter().copied().max().map_or(0, |m| (m + 1) as usize)
+    positions
+        .iter()
+        .copied()
+        .max()
+        .map_or(0, |m| (m + 1) as usize)
 }
 
 fn compute_inv_freq_for_head_dim(head_dim: usize, theta: f32) -> Vec<f32> {
