@@ -55,7 +55,8 @@ impl Engine {
     ///
     /// Returns `Err` if registration fails (e.g. duplicate name or invalid input).
     /// if a draft with the same id already exists.
-    pub fn register_draft(&self, spec: DraftSpec) -> std::result::Result<(), DraftRegistryError> {
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn register_draft(&self, spec: DraftSpec) -> std::result::Result<(), DraftRegistryError> {
         self.draft_registry.register(spec)
     }
 
@@ -68,7 +69,8 @@ impl Engine {
     ///
     /// Returns `Err` if the operation fails.
     /// a budget and you want VRAM enforcement.
-    pub fn attach_draft(
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn attach_draft(
         &self,
         id: &DraftId,
         backend: Box<dyn ModelBackend>,
@@ -83,7 +85,8 @@ impl Engine {
     ///
     /// Returns `Err` if the operation fails.
     /// exceed the configured budget.
-    pub fn attach_draft_budgeted(
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn attach_draft_budgeted(
         &self,
         id: &DraftId,
         backend: Box<dyn ModelBackend>,
@@ -98,7 +101,8 @@ impl Engine {
     ///
     /// Returns `Err` if the operation fails.
     /// [`Self::force_unload_draft`] to bypass.
-    pub fn unload_draft(&self, id: &DraftId) -> std::result::Result<(), DraftRegistryError> {
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn unload_draft(&self, id: &DraftId) -> std::result::Result<(), DraftRegistryError> {
         self.draft_registry.unload(id)
     }
 
@@ -108,7 +112,8 @@ impl Engine {
     ///
     /// Returns `Err` if the operation fails.
     /// and tests.
-    pub fn force_unload_draft(&self, id: &DraftId) -> std::result::Result<(), DraftRegistryError> {
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn force_unload_draft(&self, id: &DraftId) -> std::result::Result<(), DraftRegistryError> {
         self.draft_registry.force_unload(id)
     }
 
@@ -118,7 +123,8 @@ impl Engine {
     ///
     /// Returns `Err` if the operation fails.
     /// routing logic since v18.3; see ADR-007.
-    pub fn increment_draft_ref(&self, id: &DraftId) -> std::result::Result<(), DraftRegistryError> {
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn increment_draft_ref(&self, id: &DraftId) -> std::result::Result<(), DraftRegistryError> {
         self.draft_registry.increment_ref(id)
     }
 
@@ -128,7 +134,8 @@ impl Engine {
     ///
     /// Returns `Err` if the operation fails.
     /// reaches zero. Returns `true` if auto-unload was triggered.
-    pub fn decrement_draft_ref(
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn decrement_draft_ref(
         &self,
         id: &DraftId,
     ) -> std::result::Result<bool, DraftRegistryError> {

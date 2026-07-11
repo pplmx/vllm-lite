@@ -110,14 +110,19 @@ impl EngineBuilder {
 
     /// Set an optional adaptive speculative decoder.
     #[must_use]
-    pub fn with_adaptive_decoder(mut self, decoder: AdaptiveSpeculativeDecoder) -> Self {
+    // Used only by `ctor/builder/tests.rs`; `pub(crate)` is sufficient but
+    // rustc emits a dead-code warning during non-test builds because the
+    // symbol is reachable only under `cfg(test)`. Allow is intentional.
+    #[allow(dead_code)]
+    pub(crate) fn with_adaptive_decoder(mut self, decoder: AdaptiveSpeculativeDecoder) -> Self {
         self.adaptive_decoder = Some(decoder);
         self
     }
 
     /// Set an optional per-request draft resolver (v18+).
     #[must_use]
-    pub fn with_draft_resolver(mut self, resolver: Arc<DraftResolver>) -> Self {
+    #[allow(dead_code)]
+    pub(crate) fn with_draft_resolver(mut self, resolver: Arc<DraftResolver>) -> Self {
         self.draft_resolver = Some(resolver);
         self
     }

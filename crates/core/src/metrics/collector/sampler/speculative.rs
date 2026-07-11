@@ -12,9 +12,10 @@ impl EnhancedMetricsCollector {
     #[allow(
         clippy::cast_precision_loss,
         clippy::cast_possible_truncation,
-        clippy::cast_sign_loss
+        clippy::cast_sign_loss,
+        dead_code
     )]
-    pub fn record_speculative_acceptance(&self, accepted: usize, total: usize) {
+    pub(crate) fn record_speculative_acceptance(&self, accepted: usize, total: usize) {
         if total > 0 {
             let rate = (accepted as f64 / total as f64 * 100_000.0) as u64;
             self.speculative_acceptance_rate
@@ -36,8 +37,8 @@ impl EnhancedMetricsCollector {
         self.speculative_efficiency.store(fixed, Ordering::Relaxed);
     }
 
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    pub fn record_throughput_speedup(&self, ratio: f64) {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, dead_code)]
+    pub(crate) fn record_throughput_speedup(&self, ratio: f64) {
         let fixed = (ratio * 100_000.0) as u64;
         self.throughput_speedup_ratio
             .store(fixed, Ordering::Relaxed);

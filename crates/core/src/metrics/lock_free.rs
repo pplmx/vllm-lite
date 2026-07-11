@@ -75,6 +75,10 @@ pub struct LockFreeMetrics {
     /// Receiver side of the bounded batch-size ring channel.
     batch_size_receiver: Receiver<usize>,
     /// Sender side of the bounded scheduler-wait ring channel.
+    // Only read by `record_scheduler_wait_time` (test-only); rustc reports
+    // the field as never-read in non-test builds because the only consumer
+    // is reachable only under cfg(test).
+    #[allow(dead_code)]
     scheduler_wait_sender: Sender<f64>,
     /// Receiver side of the bounded scheduler-wait ring channel.
     scheduler_wait_receiver: Receiver<f64>,
@@ -136,13 +140,15 @@ impl LockFreeMetrics {
 
     /// Mark the start of a request: increment the in-flight counter so health
     /// probes can see concurrent load.
-    pub fn record_request_start(&self) {
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn record_request_start(&self) {
         self.requests_in_flight.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Mark the end of a request: decrement the in-flight counter. Must be
     /// paired with every `record_request_start` call.
-    pub fn record_request_end(&self) {
+    #[allow(dead_code)]
+    pub(crate) fn record_request_end(&self) {
         self.requests_in_flight.fetch_sub(1, Ordering::Relaxed);
     }
 
@@ -166,18 +172,21 @@ impl LockFreeMetrics {
     }
 
     /// Add `count` to the lifetime prefill-tokens counter.
-    pub fn record_prefill_tokens(&self, count: u64) {
+    #[allow(dead_code)]
+    pub(crate) fn record_prefill_tokens(&self, count: u64) {
         self.prefill_tokens.fetch_add(count, Ordering::Relaxed);
     }
 
     /// Add `count` to the lifetime decode-tokens counter.
-    pub fn record_decode_tokens(&self, count: u64) {
+    #[allow(dead_code)]
+    pub(crate) fn record_decode_tokens(&self, count: u64) {
         self.decode_tokens.fetch_add(count, Ordering::Relaxed);
     }
 
     /// Record a scheduler-wait-time sample in milliseconds. Dropped if the
     /// channel is full.
-    pub fn record_scheduler_wait_time(&self, ms: f64) {
+    #[allow(dead_code)]
+    pub(crate) fn record_scheduler_wait_time(&self, ms: f64) {
         let _ = self.scheduler_wait_sender.try_send(ms);
     }
 

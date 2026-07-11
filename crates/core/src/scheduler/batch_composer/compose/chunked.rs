@@ -11,6 +11,7 @@ use vllm_traits::{Batch, BatchPhase, TokenId};
 
 impl BatchComposer {
     /// Compose a chunked-prefill batch respecting memory constraints.
+    #[allow(dead_code)] // reachable only via test-only `compose_with_chunking`
     pub(super) fn compose_chunked_prefill(
         &self,
         sequences: Vec<Sequence>,

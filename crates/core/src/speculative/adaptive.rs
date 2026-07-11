@@ -39,7 +39,8 @@ impl DraftAccuracyTracker {
 
     /// Create a new accuracy tracker with configurable EWMA alpha
     #[must_use]
-    pub fn with_alpha(window_size: usize, ewma_alpha: f32) -> Self {
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn with_alpha(window_size: usize, ewma_alpha: f32) -> Self {
         Self {
             history: VecDeque::with_capacity(window_size),
             window_size,
@@ -80,7 +81,8 @@ impl DraftAccuracyTracker {
 
     /// Get the EWMA-smoothed acceptance rate
     #[must_use]
-    pub fn acceptance_rate_ewma(&self) -> f32 {
+    #[allow(dead_code)]
+    pub(crate) fn acceptance_rate_ewma(&self) -> f32 {
         self.smoothed_rate.unwrap_or(0.0)
     }
 

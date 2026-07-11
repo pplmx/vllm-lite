@@ -84,7 +84,8 @@ impl PreemptionManager {
         true
     }
 
-    pub fn select_victim(&self, running: &[Sequence]) -> Option<(usize, Sequence)> {
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn select_victim(&self, running: &[Sequence]) -> Option<(usize, Sequence)> {
         tracing::debug!(candidates = running.len(), "Selecting preemption victim");
 
         if running.len() <= self.config.min_batch_size.max(1) {
