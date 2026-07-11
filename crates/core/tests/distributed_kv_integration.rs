@@ -89,3 +89,38 @@ fn multiple_engines_can_share_a_cache_via_arc() {
     assert_eq!(stats_1.updates, stats_2.updates);
     assert_eq!(stats_1.updates, 1);
 }
+
+#[test]
+fn engine_propagates_distributed_kv_to_scheduler_memory_manager() {
+    // Phase 19 OPS-05b — when the engine is built with a distributed
+    // cache, the cache is propagated into the scheduler's
+    // MemoryManager so every block allocate / free round-trips through
+    // the cache. We exercise this end-to-end by:
+    //   1. Building an engine with a cache.
+    //   2. Asking the scheduler to allocate blocks (the same call the
+    //      step loop makes for every prefill).
+    //   3. Asserting the cache's `updates` counter moved.
+    let cache = make_cache();
+    let mut engine = EngineBuilder::new(Box::new(StubModelBackend::default()))
+        .with_num_kv_blocks(64)
+        .with_distributed_kv(Arc::clone(&cache))
+        .build();
+
+    // The scheduler owns the MemoryManager. We grab a mutable handle
+    // and ask it to allocate blocks — this is what step() does under
+    // the hood during prefill.
+    let scheduler = &mut engine.scheduler;
+    let blocks = scheduler
+        .memory_mut()
+        .allocate(2)
+        .expect("prefill-time allocation must succeed");
+    assert_eq!(blocks.len(), 2);
+
+    let stats = engine
+        .distributed_kv_stats()
+        .expect("cache installed → stats must be Some");
+    assert_eq!(
+        stats.updates, 2,
+        "two block allocations should register two puts in the cache"
+    );
+}

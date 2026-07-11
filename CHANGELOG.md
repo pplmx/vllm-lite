@@ -169,6 +169,25 @@
         - `multiple_engines_can_share_a_cache_via_arc` — two engines on the same `Arc<DistributedKVCache>` see consistent stats.
     - **Test count**: 1261 → 1265 (`--all-features`, +4 new). All 1265 tests pass `cargo test --all-features --workspace`.
     - **What is explicitly NOT wired up**: `BlockAllocator::allocate` / `free` do not call into the cache (OPS-05b); the prefix-cache lookup in `scheduler/engine/state/batch.rs` does not yet consult the distributed cache (OPS-05b); gRPC peer sync is dormant (OPS-05c); `PipelineParallel` / `PipelineStage` integration is out of scope (separate Engine refactor with its own ADR). See `.planning/phase-19/ops-05a-distributed-kv-seam.md` §6 for the full non-goal list.
+    - **Total commits**: 1 (this phase ships in a single commit, scoped to the seam + builder + accessors + 4 tests).
+
+- **Multi-Node Engine Wiring (v30.0 Phase 19 — OPS-05b)** — threads `DistributedKVCache` from `Engine` down into `MemoryManager` so every `allocate(n)` / `free(ranges)` round-trips through the cache. The cache is no longer a passive observer; it tracks real engine activity.
+    - **`MemoryManager.distributed_kv` field** (`crates/core/src/scheduler/memory/mod.rs`):
+        - New `#[cfg(feature = "multi-node")] distributed_kv: Option<Arc<DistributedKVCache>>`.
+        - New `with_distributed_kv(Arc<DistributedKVCache>) -> Self` (chainable builder) and `set_distributed_kv(...)` setter.
+        - `allocate(n)` now calls `cache.put(block_id, 0)` for every newly-allocated block after `BlockAllocator::allocate` returns. `free(blocks)` calls `cache.invalidate(block_id)` for every block before delegating to the allocator. Because `release_blocks` and `execute_preemption` both delegate to `free`, the eviction and preemption paths inherit the hook for free.
+        - Key = `block_id as u64`; value = `0` placeholder for the content hash that OPS-05b2 will compute. Block existence is enough to track coherence today.
+    - **`SchedulerEngine::set_distributed_kv`** (`crates/core/src/scheduler/engine/memory.rs`):
+        - Propagates the cache down into the scheduler's `MemoryManager`. New `memory_mut()` const accessor exposes the manager for tests; production code drives allocation via the request lifecycle.
+    - **`Engine::set_distributed_kv`** (`crates/core/src/engine/distributed_kv.rs`):
+        - Now does two things: stores the cache in `Engine.distributed_kv` for status accessors, **and** clones the `Arc` and pushes it into `SchedulerEngine` so the allocator hooks fire. Single setter, single source of truth.
+    - **4 new tests** (all feature-gated behind `multi-node`):
+        - `test_memory_manager_allocate_bumps_cache_updates` — `allocate(3)` → `updates == 3`; cumulative across two calls.
+        - `test_memory_manager_free_bumps_cache_invalidations` — `allocate(3)` + `free(blocks)` → `updates == 3`, `invalidations == 3`.
+        - `test_memory_manager_without_cache_is_a_no_op` — default construction path still works without a cache installed.
+        - `engine_propagates_distributed_kv_to_scheduler_memory_manager` (integration) — `EngineBuilder::with_distributed_kv(...)` → `scheduler.memory_mut().allocate(2)` → `engine.distributed_kv_stats().updates == 2`. End-to-end wiring verification.
+    - **Test count**: 1265 → 1269 (`--all-features`, +4 new). All 1269 tests pass `cargo test --all-features --workspace`.
+    - **What is explicitly NOT wired up**: content hashing (value is `0`; OPS-05b2); prefix-cache consultation of the distributed cache (OPS-05b2); gRPC peer sync across nodes (OPS-05c); live migration on cache re-install (out of scope unless needed); `PipelineParallel` / `PipelineStage` integration (separate Engine refactor + ADR). See `.planning/phase-19/ops-05b-memory-manager-hooks.md` §7 for the full non-goal list.
 
 - **Architectural File Splits (v30.0 Phase 11)** — three more production files split into module directories without behavior change:
     - **`server/src/config.rs` (413 lines → 4 files)**: decomposed into `config/mod.rs` (`AppConfig` + `Default` + `load` + `validate` + `ConfigValidationError(s)`) + `config/server.rs` (`ServerConfig` + `Default`) + `config/engine.rs` (`EngineConfig` + `DraftSpecConfig` + `Default`) + `config/auth.rs` (`AuthConfig` + `Default` + `resolve_api_keys`). Public API preserved via re-exports in `mod.rs`.

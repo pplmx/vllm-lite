@@ -18,6 +18,7 @@ use std::time::Instant;
 use vllm_traits::SeqId;
 
 use crate::scheduler::RadixTree;
+use crate::scheduler::memory::MemoryManager;
 use crate::scheduler::policy::SchedulingContext;
 use crate::types::Status;
 
@@ -113,5 +114,26 @@ impl SchedulerEngine {
     /// Get access to the prefix cache (`RadixTree`)
     pub const fn prefix_cache(&self) -> &RadixTree {
         &self.prefix_cache
+    }
+
+    /// Mutable accessor for the underlying [`MemoryManager`].
+    ///
+    /// Used by tests and integration code that needs to drive block
+    /// allocation directly (the scheduler's public methods only call
+    /// `allocate` indirectly during `add_request` / `build_batch`).
+    /// Production code should use the higher-level request lifecycle.
+    pub const fn memory_mut(&mut self) -> &mut MemoryManager {
+        &mut self.memory
+    }
+
+    /// Install a distributed KV-cache so every subsequent block allocate
+    /// / free round-trips through the cache. Phase 19 OPS-05b.
+    ///
+    /// Idempotent — re-installing just replaces the cache reference.
+    /// Existing tracked blocks are NOT migrated; OPS-05b2 will provide a
+    /// snapshot-and-replay path for live migration.
+    #[cfg(feature = "multi-node")]
+    pub fn set_distributed_kv(&mut self, cache: Arc<vllm_dist::DistributedKVCache>) {
+        self.memory.set_distributed_kv(cache);
     }
 }
