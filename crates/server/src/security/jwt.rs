@@ -101,7 +101,12 @@ impl JwtConfig {
     /// Build a [`JwtConfig`] configured for HS256 (HMAC) verification
     /// using `secret` as the shared key. `public_key_pem` is cleared
     /// and issuer/audience default to `"vllm"` / `"vllm-api"`.
-    pub(crate) fn with_secret(secret: impl Into<String>) -> Self {
+    ///
+    /// NOTE: This constructor is part of the public API — it is used by
+    /// integration tests in `crates/server/tests/` which require external
+    /// (`pub`) visibility. Keep as `pub`.
+    #[must_use]
+    pub fn with_secret(secret: impl Into<String>) -> Self {
         Self {
             secret: Some(secret.into()),
             public_key_pem: None,
@@ -114,7 +119,12 @@ impl JwtConfig {
     /// Build a [`JwtConfig`] configured for RS*/ES* (asymmetric)
     /// verification using `public_key_pem`. `secret` is cleared and
     /// issuer/audience default to `"vllm"` / `"vllm-api"`.
-    pub(crate) fn with_public_key(public_key_pem: impl Into<String>) -> Self {
+    ///
+    /// NOTE: Part of the public API — symmetric counterpart to
+    /// [`JwtConfig::with_secret`]. External embedders configure
+    /// [`JwtConfig`] via these constructors; keep as `pub`.
+    #[must_use]
+    pub fn with_public_key(public_key_pem: impl Into<String>) -> Self {
         Self {
             secret: None,
             public_key_pem: Some(public_key_pem.into()),
@@ -126,16 +136,22 @@ impl JwtConfig {
 
     /// Override the expected `iss` claim. Tokens carrying a different
     /// issuer are rejected.
+    ///
+    /// NOTE: Part of the public API builder chain — used by integration
+    /// tests in `crates/server/tests/`. Keep as `pub`.
     #[must_use]
-    pub(crate) fn with_issuer(mut self, issuer: impl Into<String>) -> Self {
+    pub fn with_issuer(mut self, issuer: impl Into<String>) -> Self {
         self.issuer = issuer.into();
         self
     }
 
     /// Override the expected `aud` claim. Tokens targeting a different
     /// audience are rejected.
+    ///
+    /// NOTE: Part of the public API builder chain — used by integration
+    /// tests in `crates/server/tests/`. Keep as `pub`.
     #[must_use]
-    pub(crate) fn with_audience(mut self, audience: impl Into<String>) -> Self {
+    pub fn with_audience(mut self, audience: impl Into<String>) -> Self {
         self.audience = audience.into();
         self
     }
