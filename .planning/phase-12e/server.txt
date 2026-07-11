@@ -1,0 +1,1585 @@
+pub mod vllm_server
+pub mod vllm_server::api
+pub struct vllm_server::api::HealthDetailResponse
+pub vllm_server::api::HealthDetailResponse::gpu_available: bool
+pub vllm_server::api::HealthDetailResponse::gpu_utilization: core::option::Option<f32>
+pub vllm_server::api::HealthDetailResponse::kv_cache_usage_percent: core::option::Option<f32>
+pub vllm_server::api::HealthDetailResponse::status: alloc::string::String
+impl core::fmt::Debug for vllm_server::api::HealthDetailResponse
+pub fn vllm_server::api::HealthDetailResponse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::api::HealthDetailResponse
+pub fn vllm_server::api::HealthDetailResponse::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for vllm_server::api::HealthDetailResponse
+impl core::marker::Send for vllm_server::api::HealthDetailResponse
+impl core::marker::Sync for vllm_server::api::HealthDetailResponse
+impl core::marker::Unpin for vllm_server::api::HealthDetailResponse
+impl core::marker::UnsafeUnpin for vllm_server::api::HealthDetailResponse
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::api::HealthDetailResponse
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::api::HealthDetailResponse
+pub struct vllm_server::api::HealthResponse
+pub vllm_server::api::HealthResponse::status: alloc::string::String
+impl core::fmt::Debug for vllm_server::api::HealthResponse
+pub fn vllm_server::api::HealthResponse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::api::HealthResponse
+pub fn vllm_server::api::HealthResponse::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for vllm_server::api::HealthResponse
+impl core::marker::Send for vllm_server::api::HealthResponse
+impl core::marker::Sync for vllm_server::api::HealthResponse
+impl core::marker::Unpin for vllm_server::api::HealthResponse
+impl core::marker::UnsafeUnpin for vllm_server::api::HealthResponse
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::api::HealthResponse
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::api::HealthResponse
+pub async fn vllm_server::api::get_prometheus(axum::extract::state::State<vllm_server::ApiState>) -> alloc::string::String
+pub async fn vllm_server::api::health_details(axum::extract::state::State<vllm_server::ApiState>) -> axum::json::Json<vllm_server::api::HealthDetailResponse>
+pub async fn vllm_server::api::shutdown(axum::extract::state::State<vllm_server::ApiState>) -> &'static str
+pub type vllm_server::api::EngineHandle = tokio::sync::mpsc::unbounded::UnboundedSender<vllm_core::types::messages::EngineMessage>
+pub mod vllm_server::auth
+pub struct vllm_server::auth::AuthMiddleware
+impl vllm_server::auth::AuthMiddleware
+pub fn vllm_server::auth::AuthMiddleware::new(alloc::vec::Vec<alloc::string::String>, usize, u64) -> Self
+pub async fn vllm_server::auth::AuthMiddleware::verify(&self, &http::header::map::HeaderMap) -> core::result::Result<alloc::string::String, http::status::StatusCode>
+impl core::fmt::Debug for vllm_server::auth::AuthMiddleware
+pub fn vllm_server::auth::AuthMiddleware::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::auth::AuthMiddleware
+impl core::marker::Send for vllm_server::auth::AuthMiddleware
+impl core::marker::Sync for vllm_server::auth::AuthMiddleware
+impl core::marker::Unpin for vllm_server::auth::AuthMiddleware
+impl core::marker::UnsafeUnpin for vllm_server::auth::AuthMiddleware
+impl !core::panic::unwind_safe::RefUnwindSafe for vllm_server::auth::AuthMiddleware
+impl !core::panic::unwind_safe::UnwindSafe for vllm_server::auth::AuthMiddleware
+pub async fn vllm_server::auth::auth_middleware(axum::extract::state::State<alloc::sync::Arc<vllm_server::auth::AuthMiddleware>>, axum_core::extract::Request, axum::middleware::from_fn::Next) -> axum_core::response::Response
+pub mod vllm_server::backpressure
+pub mod vllm_server::cli
+pub enum vllm_server::cli::CliValidationError
+pub vllm_server::cli::CliValidationError::InvalidPort(alloc::string::String)
+pub vllm_server::cli::CliValidationError::NotANumber(alloc::string::String)
+pub vllm_server::cli::CliValidationError::OutOfRange
+pub vllm_server::cli::CliValidationError::OutOfRange::max: usize
+pub vllm_server::cli::CliValidationError::OutOfRange::min: usize
+pub vllm_server::cli::CliValidationError::PortOutOfRange
+impl core::clone::Clone for vllm_server::cli::CliValidationError
+pub fn vllm_server::cli::CliValidationError::clone(&self) -> vllm_server::cli::CliValidationError
+impl core::error::Error for vllm_server::cli::CliValidationError
+impl core::fmt::Debug for vllm_server::cli::CliValidationError
+pub fn vllm_server::cli::CliValidationError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for vllm_server::cli::CliValidationError
+pub fn vllm_server::cli::CliValidationError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::cli::CliValidationError
+impl core::marker::Send for vllm_server::cli::CliValidationError
+impl core::marker::Sync for vllm_server::cli::CliValidationError
+impl core::marker::Unpin for vllm_server::cli::CliValidationError
+impl core::marker::UnsafeUnpin for vllm_server::cli::CliValidationError
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::cli::CliValidationError
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::cli::CliValidationError
+pub enum vllm_server::cli::LogLevel
+pub vllm_server::cli::LogLevel::Debug
+pub vllm_server::cli::LogLevel::Error
+pub vllm_server::cli::LogLevel::Info
+pub vllm_server::cli::LogLevel::Trace
+pub vllm_server::cli::LogLevel::Warn
+impl clap_builder::derive::ValueEnum for vllm_server::cli::LogLevel
+pub fn vllm_server::cli::LogLevel::to_possible_value<'a>(&self) -> core::option::Option<clap_builder::builder::possible_value::PossibleValue>
+pub fn vllm_server::cli::LogLevel::value_variants<'a>() -> &'a [Self]
+impl core::clone::Clone for vllm_server::cli::LogLevel
+pub fn vllm_server::cli::LogLevel::clone(&self) -> vllm_server::cli::LogLevel
+impl core::cmp::Eq for vllm_server::cli::LogLevel
+impl core::cmp::PartialEq for vllm_server::cli::LogLevel
+pub fn vllm_server::cli::LogLevel::eq(&self, &vllm_server::cli::LogLevel) -> bool
+impl core::default::Default for vllm_server::cli::LogLevel
+pub fn vllm_server::cli::LogLevel::default() -> Self
+impl core::fmt::Debug for vllm_server::cli::LogLevel
+pub fn vllm_server::cli::LogLevel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for vllm_server::cli::LogLevel
+pub fn vllm_server::cli::LogLevel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for vllm_server::cli::LogLevel
+impl core::marker::Freeze for vllm_server::cli::LogLevel
+impl core::marker::Send for vllm_server::cli::LogLevel
+impl core::marker::Sync for vllm_server::cli::LogLevel
+impl core::marker::Unpin for vllm_server::cli::LogLevel
+impl core::marker::UnsafeUnpin for vllm_server::cli::LogLevel
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::cli::LogLevel
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::cli::LogLevel
+pub struct vllm_server::cli::CliArgs
+pub vllm_server::cli::CliArgs::model: vllm_server::cli::ModelArgs
+impl vllm_server::cli::CliArgs
+pub const fn vllm_server::cli::CliArgs::model_path(&self) -> &std::path::PathBuf
+pub fn vllm_server::cli::CliArgs::to_app_config(&self) -> vllm_server::config::AppConfig
+impl clap_builder::derive::Args for vllm_server::cli::CliArgs
+pub fn vllm_server::cli::CliArgs::augment_args<'b>(clap_builder::builder::command::Command) -> clap_builder::builder::command::Command
+pub fn vllm_server::cli::CliArgs::augment_args_for_update<'b>(clap_builder::builder::command::Command) -> clap_builder::builder::command::Command
+pub fn vllm_server::cli::CliArgs::group_id() -> core::option::Option<clap_builder::util::id::Id>
+impl clap_builder::derive::CommandFactory for vllm_server::cli::CliArgs
+pub fn vllm_server::cli::CliArgs::command<'b>() -> clap_builder::builder::command::Command
+pub fn vllm_server::cli::CliArgs::command_for_update<'b>() -> clap_builder::builder::command::Command
+impl clap_builder::derive::FromArgMatches for vllm_server::cli::CliArgs
+pub fn vllm_server::cli::CliArgs::from_arg_matches(&clap_builder::parser::matches::arg_matches::ArgMatches) -> core::result::Result<Self, clap_builder::Error>
+pub fn vllm_server::cli::CliArgs::from_arg_matches_mut(&mut clap_builder::parser::matches::arg_matches::ArgMatches) -> core::result::Result<Self, clap_builder::Error>
+pub fn vllm_server::cli::CliArgs::update_from_arg_matches(&mut self, &clap_builder::parser::matches::arg_matches::ArgMatches) -> core::result::Result<(), clap_builder::Error>
+pub fn vllm_server::cli::CliArgs::update_from_arg_matches_mut(&mut self, &mut clap_builder::parser::matches::arg_matches::ArgMatches) -> core::result::Result<(), clap_builder::Error>
+impl clap_builder::derive::Parser for vllm_server::cli::CliArgs
+impl core::fmt::Debug for vllm_server::cli::CliArgs
+pub fn vllm_server::cli::CliArgs::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::cli::CliArgs
+impl core::marker::Send for vllm_server::cli::CliArgs
+impl core::marker::Sync for vllm_server::cli::CliArgs
+impl core::marker::Unpin for vllm_server::cli::CliArgs
+impl core::marker::UnsafeUnpin for vllm_server::cli::CliArgs
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::cli::CliArgs
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::cli::CliArgs
+pub struct vllm_server::cli::ModelArgs
+pub vllm_server::cli::ModelArgs::allow_stub: bool
+pub vllm_server::cli::ModelArgs::model: std::path::PathBuf
+impl clap_builder::derive::Args for vllm_server::cli::ModelArgs
+pub fn vllm_server::cli::ModelArgs::augment_args<'b>(clap_builder::builder::command::Command) -> clap_builder::builder::command::Command
+pub fn vllm_server::cli::ModelArgs::augment_args_for_update<'b>(clap_builder::builder::command::Command) -> clap_builder::builder::command::Command
+pub fn vllm_server::cli::ModelArgs::group_id() -> core::option::Option<clap_builder::util::id::Id>
+impl clap_builder::derive::FromArgMatches for vllm_server::cli::ModelArgs
+pub fn vllm_server::cli::ModelArgs::from_arg_matches(&clap_builder::parser::matches::arg_matches::ArgMatches) -> core::result::Result<Self, clap_builder::Error>
+pub fn vllm_server::cli::ModelArgs::from_arg_matches_mut(&mut clap_builder::parser::matches::arg_matches::ArgMatches) -> core::result::Result<Self, clap_builder::Error>
+pub fn vllm_server::cli::ModelArgs::update_from_arg_matches(&mut self, &clap_builder::parser::matches::arg_matches::ArgMatches) -> core::result::Result<(), clap_builder::Error>
+pub fn vllm_server::cli::ModelArgs::update_from_arg_matches_mut(&mut self, &mut clap_builder::parser::matches::arg_matches::ArgMatches) -> core::result::Result<(), clap_builder::Error>
+impl core::clone::Clone for vllm_server::cli::ModelArgs
+pub fn vllm_server::cli::ModelArgs::clone(&self) -> vllm_server::cli::ModelArgs
+impl core::fmt::Debug for vllm_server::cli::ModelArgs
+pub fn vllm_server::cli::ModelArgs::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::cli::ModelArgs
+impl core::marker::Send for vllm_server::cli::ModelArgs
+impl core::marker::Sync for vllm_server::cli::ModelArgs
+impl core::marker::Unpin for vllm_server::cli::ModelArgs
+impl core::marker::UnsafeUnpin for vllm_server::cli::ModelArgs
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::cli::ModelArgs
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::cli::ModelArgs
+pub mod vllm_server::config
+pub enum vllm_server::config::ConfigValidationError
+pub vllm_server::config::ConfigValidationError::DuplicateDraftId(alloc::string::String)
+pub vllm_server::config::ConfigValidationError::EmptyDraftId
+pub vllm_server::config::ConfigValidationError::InvalidLogLevel
+pub vllm_server::config::ConfigValidationError::KvBlocksTooLarge
+pub vllm_server::config::ConfigValidationError::KvBlocksZero
+pub vllm_server::config::ConfigValidationError::MaxBatchSizeZero
+pub vllm_server::config::ConfigValidationError::MaxDraftTokensTooLarge
+pub vllm_server::config::ConfigValidationError::PortZero
+pub vllm_server::config::ConfigValidationError::TensorParallelSizeZero
+pub vllm_server::config::ConfigValidationError::VramBudgetZero
+impl core::clone::Clone for vllm_server::config::ConfigValidationError
+pub fn vllm_server::config::ConfigValidationError::clone(&self) -> vllm_server::config::ConfigValidationError
+impl core::error::Error for vllm_server::config::ConfigValidationError
+impl core::fmt::Debug for vllm_server::config::ConfigValidationError
+pub fn vllm_server::config::ConfigValidationError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for vllm_server::config::ConfigValidationError
+pub fn vllm_server::config::ConfigValidationError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::config::ConfigValidationError
+impl core::marker::Send for vllm_server::config::ConfigValidationError
+impl core::marker::Sync for vllm_server::config::ConfigValidationError
+impl core::marker::Unpin for vllm_server::config::ConfigValidationError
+impl core::marker::UnsafeUnpin for vllm_server::config::ConfigValidationError
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::config::ConfigValidationError
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::config::ConfigValidationError
+pub struct vllm_server::config::AppConfig
+pub vllm_server::config::AppConfig::auth: vllm_server::AuthConfig
+pub vllm_server::config::AppConfig::engine: vllm_server::config::EngineConfig
+pub vllm_server::config::AppConfig::server: vllm_server::config::ServerConfig
+impl vllm_server::config::AppConfig
+pub fn vllm_server::config::AppConfig::load(core::option::Option<std::path::PathBuf>) -> Self
+pub fn vllm_server::config::AppConfig::validate(&self) -> core::result::Result<(), vllm_server::config::ConfigValidationErrors>
+impl core::clone::Clone for vllm_server::config::AppConfig
+pub fn vllm_server::config::AppConfig::clone(&self) -> vllm_server::config::AppConfig
+impl core::default::Default for vllm_server::config::AppConfig
+pub fn vllm_server::config::AppConfig::default() -> Self
+impl core::fmt::Debug for vllm_server::config::AppConfig
+pub fn vllm_server::config::AppConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::config::AppConfig
+pub fn vllm_server::config::AppConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::config::AppConfig
+pub fn vllm_server::config::AppConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::config::AppConfig
+impl core::marker::Send for vllm_server::config::AppConfig
+impl core::marker::Sync for vllm_server::config::AppConfig
+impl core::marker::Unpin for vllm_server::config::AppConfig
+impl core::marker::UnsafeUnpin for vllm_server::config::AppConfig
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::config::AppConfig
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::config::AppConfig
+pub struct vllm_server::config::AuthConfig
+pub vllm_server::config::AuthConfig::api_keys: alloc::vec::Vec<alloc::string::String>
+pub vllm_server::config::AuthConfig::api_keys_env: core::option::Option<alloc::string::String>
+pub vllm_server::config::AuthConfig::api_keys_file: core::option::Option<alloc::string::String>
+pub vllm_server::config::AuthConfig::rate_limit_requests: usize
+pub vllm_server::config::AuthConfig::rate_limit_window_secs: u64
+impl vllm_server::AuthConfig
+pub fn vllm_server::AuthConfig::resolve_api_keys(&self) -> alloc::vec::Vec<alloc::string::String>
+impl core::clone::Clone for vllm_server::AuthConfig
+pub fn vllm_server::AuthConfig::clone(&self) -> vllm_server::AuthConfig
+impl core::default::Default for vllm_server::AuthConfig
+pub fn vllm_server::AuthConfig::default() -> Self
+impl core::fmt::Debug for vllm_server::AuthConfig
+pub fn vllm_server::AuthConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::AuthConfig
+pub fn vllm_server::AuthConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::AuthConfig
+pub fn vllm_server::AuthConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::AuthConfig
+impl core::marker::Send for vllm_server::AuthConfig
+impl core::marker::Sync for vllm_server::AuthConfig
+impl core::marker::Unpin for vllm_server::AuthConfig
+impl core::marker::UnsafeUnpin for vllm_server::AuthConfig
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::AuthConfig
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::AuthConfig
+pub struct vllm_server::config::ConfigValidationErrors(pub alloc::vec::Vec<vllm_server::config::ConfigValidationError>)
+impl core::error::Error for vllm_server::config::ConfigValidationErrors
+impl core::fmt::Debug for vllm_server::config::ConfigValidationErrors
+pub fn vllm_server::config::ConfigValidationErrors::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for vllm_server::config::ConfigValidationErrors
+pub fn vllm_server::config::ConfigValidationErrors::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::config::ConfigValidationErrors
+impl core::marker::Send for vllm_server::config::ConfigValidationErrors
+impl core::marker::Sync for vllm_server::config::ConfigValidationErrors
+impl core::marker::Unpin for vllm_server::config::ConfigValidationErrors
+impl core::marker::UnsafeUnpin for vllm_server::config::ConfigValidationErrors
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::config::ConfigValidationErrors
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::config::ConfigValidationErrors
+pub struct vllm_server::config::DraftSpecConfig
+pub vllm_server::config::DraftSpecConfig::architecture: core::option::Option<alloc::string::String>
+pub vllm_server::config::DraftSpecConfig::id: alloc::string::String
+pub vllm_server::config::DraftSpecConfig::num_layers: usize
+pub vllm_server::config::DraftSpecConfig::path: alloc::string::String
+pub vllm_server::config::DraftSpecConfig::weight_size_bytes: u64
+impl core::clone::Clone for vllm_server::config::DraftSpecConfig
+pub fn vllm_server::config::DraftSpecConfig::clone(&self) -> vllm_server::config::DraftSpecConfig
+impl core::fmt::Debug for vllm_server::config::DraftSpecConfig
+pub fn vllm_server::config::DraftSpecConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::config::DraftSpecConfig
+pub fn vllm_server::config::DraftSpecConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::config::DraftSpecConfig
+pub fn vllm_server::config::DraftSpecConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::config::DraftSpecConfig
+impl core::marker::Send for vllm_server::config::DraftSpecConfig
+impl core::marker::Sync for vllm_server::config::DraftSpecConfig
+impl core::marker::Unpin for vllm_server::config::DraftSpecConfig
+impl core::marker::UnsafeUnpin for vllm_server::config::DraftSpecConfig
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::config::DraftSpecConfig
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::config::DraftSpecConfig
+pub struct vllm_server::config::EngineConfig
+pub vllm_server::config::EngineConfig::draft_specs: alloc::vec::Vec<vllm_server::config::DraftSpecConfig>
+pub vllm_server::config::EngineConfig::enable_adaptive_speculative: bool
+pub vllm_server::config::EngineConfig::kv_quantization: bool
+pub vllm_server::config::EngineConfig::max_batch_size: usize
+pub vllm_server::config::EngineConfig::max_draft_tokens: usize
+pub vllm_server::config::EngineConfig::max_waiting_batches: usize
+pub vllm_server::config::EngineConfig::num_kv_blocks: usize
+pub vllm_server::config::EngineConfig::tensor_parallel_size: usize
+pub vllm_server::config::EngineConfig::vram_budget_bytes: core::option::Option<u64>
+impl core::clone::Clone for vllm_server::config::EngineConfig
+pub fn vllm_server::config::EngineConfig::clone(&self) -> vllm_server::config::EngineConfig
+impl core::default::Default for vllm_server::config::EngineConfig
+pub fn vllm_server::config::EngineConfig::default() -> Self
+impl core::fmt::Debug for vllm_server::config::EngineConfig
+pub fn vllm_server::config::EngineConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::config::EngineConfig
+pub fn vllm_server::config::EngineConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::config::EngineConfig
+pub fn vllm_server::config::EngineConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::config::EngineConfig
+impl core::marker::Send for vllm_server::config::EngineConfig
+impl core::marker::Sync for vllm_server::config::EngineConfig
+impl core::marker::Unpin for vllm_server::config::EngineConfig
+impl core::marker::UnsafeUnpin for vllm_server::config::EngineConfig
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::config::EngineConfig
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::config::EngineConfig
+pub struct vllm_server::config::ServerConfig
+pub vllm_server::config::ServerConfig::host: alloc::string::String
+pub vllm_server::config::ServerConfig::log_dir: core::option::Option<alloc::string::String>
+pub vllm_server::config::ServerConfig::log_level: alloc::string::String
+pub vllm_server::config::ServerConfig::port: u16
+impl core::clone::Clone for vllm_server::config::ServerConfig
+pub fn vllm_server::config::ServerConfig::clone(&self) -> vllm_server::config::ServerConfig
+impl core::default::Default for vllm_server::config::ServerConfig
+pub fn vllm_server::config::ServerConfig::default() -> Self
+impl core::fmt::Debug for vllm_server::config::ServerConfig
+pub fn vllm_server::config::ServerConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::config::ServerConfig
+pub fn vllm_server::config::ServerConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::config::ServerConfig
+pub fn vllm_server::config::ServerConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::config::ServerConfig
+impl core::marker::Send for vllm_server::config::ServerConfig
+impl core::marker::Sync for vllm_server::config::ServerConfig
+impl core::marker::Unpin for vllm_server::config::ServerConfig
+impl core::marker::UnsafeUnpin for vllm_server::config::ServerConfig
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::config::ServerConfig
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::config::ServerConfig
+pub mod vllm_server::debug
+pub struct vllm_server::debug::KvCacheDumpResponse
+pub vllm_server::debug::KvCacheDumpResponse::available_blocks: usize
+pub vllm_server::debug::KvCacheDumpResponse::prefix_cache_hit_rate: f64
+pub vllm_server::debug::KvCacheDumpResponse::prefix_cache_nodes: usize
+pub vllm_server::debug::KvCacheDumpResponse::total_blocks: usize
+pub vllm_server::debug::KvCacheDumpResponse::usage_percent: f64
+pub vllm_server::debug::KvCacheDumpResponse::used_blocks: usize
+impl core::fmt::Debug for vllm_server::debug::KvCacheDumpResponse
+pub fn vllm_server::debug::KvCacheDumpResponse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::debug::KvCacheDumpResponse
+pub fn vllm_server::debug::KvCacheDumpResponse::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for vllm_server::debug::KvCacheDumpResponse
+impl core::marker::Send for vllm_server::debug::KvCacheDumpResponse
+impl core::marker::Sync for vllm_server::debug::KvCacheDumpResponse
+impl core::marker::Unpin for vllm_server::debug::KvCacheDumpResponse
+impl core::marker::UnsafeUnpin for vllm_server::debug::KvCacheDumpResponse
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::debug::KvCacheDumpResponse
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::debug::KvCacheDumpResponse
+pub struct vllm_server::debug::MetricsSnapshotResponse
+pub vllm_server::debug::MetricsSnapshotResponse::active_sequences: u64
+pub vllm_server::debug::MetricsSnapshotResponse::counters: std::collections::hash::map::HashMap<alloc::string::String, u64>
+pub vllm_server::debug::MetricsSnapshotResponse::cuda_graph_hit_rate: f64
+pub vllm_server::debug::MetricsSnapshotResponse::gauges: std::collections::hash::map::HashMap<alloc::string::String, f64>
+pub vllm_server::debug::MetricsSnapshotResponse::queue_depth: u64
+impl core::fmt::Debug for vllm_server::debug::MetricsSnapshotResponse
+pub fn vllm_server::debug::MetricsSnapshotResponse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::debug::MetricsSnapshotResponse
+pub fn vllm_server::debug::MetricsSnapshotResponse::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for vllm_server::debug::MetricsSnapshotResponse
+impl core::marker::Send for vllm_server::debug::MetricsSnapshotResponse
+impl core::marker::Sync for vllm_server::debug::MetricsSnapshotResponse
+impl core::marker::Unpin for vllm_server::debug::MetricsSnapshotResponse
+impl core::marker::UnsafeUnpin for vllm_server::debug::MetricsSnapshotResponse
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::debug::MetricsSnapshotResponse
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::debug::MetricsSnapshotResponse
+pub struct vllm_server::debug::TraceStatusResponse
+pub vllm_server::debug::TraceStatusResponse::log_level: alloc::string::String
+pub vllm_server::debug::TraceStatusResponse::spans_active: usize
+pub vllm_server::debug::TraceStatusResponse::tracing_enabled: bool
+impl core::fmt::Debug for vllm_server::debug::TraceStatusResponse
+pub fn vllm_server::debug::TraceStatusResponse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::debug::TraceStatusResponse
+pub fn vllm_server::debug::TraceStatusResponse::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for vllm_server::debug::TraceStatusResponse
+impl core::marker::Send for vllm_server::debug::TraceStatusResponse
+impl core::marker::Sync for vllm_server::debug::TraceStatusResponse
+impl core::marker::Unpin for vllm_server::debug::TraceStatusResponse
+impl core::marker::UnsafeUnpin for vllm_server::debug::TraceStatusResponse
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::debug::TraceStatusResponse
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::debug::TraceStatusResponse
+pub async fn vllm_server::debug::kv_cache_dump(axum::extract::state::State<vllm_server::ApiState>) -> axum::json::Json<vllm_server::debug::KvCacheDumpResponse>
+pub async fn vllm_server::debug::metrics_snapshot(axum::extract::state::State<vllm_server::ApiState>) -> axum::json::Json<vllm_server::debug::MetricsSnapshotResponse>
+pub async fn vllm_server::debug::trace_status(axum::extract::state::State<vllm_server::ApiState>) -> axum::json::Json<vllm_server::debug::TraceStatusResponse>
+pub mod vllm_server::draft_loader
+pub struct vllm_server::draft_loader::ServerDraftLoader
+impl vllm_server::draft_loader::ServerDraftLoader
+pub fn vllm_server::draft_loader::ServerDraftLoader::is_empty(&self) -> bool
+pub fn vllm_server::draft_loader::ServerDraftLoader::len(&self) -> usize
+pub fn vllm_server::draft_loader::ServerDraftLoader::new(candle_core::device::Device, &[vllm_server::config::DraftSpecConfig]) -> Self
+pub const fn vllm_server::draft_loader::ServerDraftLoader::with_allow_stub(self, bool) -> Self
+pub const fn vllm_server::draft_loader::ServerDraftLoader::with_kv_blocks(self, usize) -> Self
+pub const fn vllm_server::draft_loader::ServerDraftLoader::with_kv_quantization(self, bool) -> Self
+impl core::fmt::Debug for vllm_server::draft_loader::ServerDraftLoader
+pub fn vllm_server::draft_loader::ServerDraftLoader::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl vllm_core::speculative::draft_resolver::DraftLoader for vllm_server::draft_loader::ServerDraftLoader
+pub fn vllm_server::draft_loader::ServerDraftLoader::load(&self, &vllm_core::speculative::registry::types::DraftId) -> core::result::Result<alloc::boxed::Box<dyn vllm_traits::model::ModelBackend>, vllm_core::speculative::registry::errors::DraftRegistryError>
+impl core::marker::Freeze for vllm_server::draft_loader::ServerDraftLoader
+impl core::marker::Send for vllm_server::draft_loader::ServerDraftLoader
+impl core::marker::Sync for vllm_server::draft_loader::ServerDraftLoader
+impl core::marker::Unpin for vllm_server::draft_loader::ServerDraftLoader
+impl core::marker::UnsafeUnpin for vllm_server::draft_loader::ServerDraftLoader
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::draft_loader::ServerDraftLoader
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::draft_loader::ServerDraftLoader
+pub mod vllm_server::health
+pub enum vllm_server::health::HealthStatus
+pub vllm_server::health::HealthStatus::NotReady
+pub vllm_server::health::HealthStatus::Ok
+pub vllm_server::health::HealthStatus::Unhealthy
+impl vllm_server::health::HealthStatus
+pub const fn vllm_server::health::HealthStatus::as_str(&self) -> &'static str
+pub const fn vllm_server::health::HealthStatus::http_status(&self) -> u16
+pub const fn vllm_server::health::HealthStatus::is_ok(&self) -> bool
+impl core::clone::Clone for vllm_server::health::HealthStatus
+pub fn vllm_server::health::HealthStatus::clone(&self) -> vllm_server::health::HealthStatus
+impl core::cmp::Eq for vllm_server::health::HealthStatus
+impl core::cmp::PartialEq for vllm_server::health::HealthStatus
+pub fn vllm_server::health::HealthStatus::eq(&self, &vllm_server::health::HealthStatus) -> bool
+impl core::fmt::Debug for vllm_server::health::HealthStatus
+pub fn vllm_server::health::HealthStatus::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for vllm_server::health::HealthStatus
+impl core::marker::StructuralPartialEq for vllm_server::health::HealthStatus
+impl core::marker::Freeze for vllm_server::health::HealthStatus
+impl core::marker::Send for vllm_server::health::HealthStatus
+impl core::marker::Sync for vllm_server::health::HealthStatus
+impl core::marker::Unpin for vllm_server::health::HealthStatus
+impl core::marker::UnsafeUnpin for vllm_server::health::HealthStatus
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::health::HealthStatus
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::health::HealthStatus
+pub struct vllm_server::health::HealthChecker
+impl vllm_server::health::HealthChecker
+pub const fn vllm_server::health::HealthChecker::check_liveness(&self) -> vllm_server::health::HealthStatus
+pub const fn vllm_server::health::HealthChecker::check_readiness(&self) -> vllm_server::health::HealthStatus
+pub const fn vllm_server::health::HealthChecker::new(bool, bool) -> Self
+impl core::default::Default for vllm_server::health::HealthChecker
+pub fn vllm_server::health::HealthChecker::default() -> Self
+impl core::fmt::Debug for vllm_server::health::HealthChecker
+pub fn vllm_server::health::HealthChecker::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::health::HealthChecker
+impl core::marker::Send for vllm_server::health::HealthChecker
+impl core::marker::Sync for vllm_server::health::HealthChecker
+impl core::marker::Unpin for vllm_server::health::HealthChecker
+impl core::marker::UnsafeUnpin for vllm_server::health::HealthChecker
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::health::HealthChecker
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::health::HealthChecker
+pub mod vllm_server::logging
+pub fn vllm_server::logging::init_logging(core::option::Option<std::path::PathBuf>, &str)
+pub mod vllm_server::openai
+pub mod vllm_server::openai::batch
+pub mod vllm_server::openai::batch::handler
+pub async fn vllm_server::openai::batch::handler::create_batch(axum::extract::state::State<vllm_server::ApiState>, axum::json::Json<vllm_server::openai::batch::types::SimpleBatchRequest>) -> core::result::Result<axum::json::Json<vllm_server::openai::batch::types::BatchResponse>, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
+pub async fn vllm_server::openai::batch::handler::get_batch(axum::extract::state::State<vllm_server::ApiState>, axum::extract::path::Path<alloc::string::String>) -> core::result::Result<axum::json::Json<vllm_server::openai::batch::types::BatchResponse>, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
+pub async fn vllm_server::openai::batch::handler::get_batch_results(axum::extract::state::State<vllm_server::ApiState>, axum::extract::path::Path<alloc::string::String>) -> core::result::Result<axum::json::Json<vllm_server::openai::batch::types::BatchResults>, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
+pub async fn vllm_server::openai::batch::handler::list_batches(axum::extract::state::State<vllm_server::ApiState>) -> axum::json::Json<alloc::vec::Vec<vllm_server::openai::batch::types::BatchResponse>>
+pub mod vllm_server::openai::batch::manager
+pub struct vllm_server::openai::batch::manager::BatchManager
+impl vllm_server::openai::batch::manager::BatchManager
+pub async fn vllm_server::openai::batch::manager::BatchManager::add_result(&self, &str, vllm_server::openai::batch::types::BatchResultItem)
+pub async fn vllm_server::openai::batch::manager::BatchManager::create_job(&self, vllm_server::openai::batch::types::BatchEndpoint, alloc::vec::Vec<alloc::string::String>, core::option::Option<alloc::string::String>, core::option::Option<i64>, core::option::Option<f32>) -> alloc::string::String
+pub async fn vllm_server::openai::batch::manager::BatchManager::get_all_jobs(&self) -> alloc::vec::Vec<vllm_server::openai::batch::types::BatchJob>
+pub async fn vllm_server::openai::batch::manager::BatchManager::get_job(&self, &str) -> core::option::Option<vllm_server::openai::batch::types::BatchJob>
+pub fn vllm_server::openai::batch::manager::BatchManager::new() -> Self
+pub async fn vllm_server::openai::batch::manager::BatchManager::set_completed(&self, &str)
+pub async fn vllm_server::openai::batch::manager::BatchManager::update_job(&self, vllm_server::openai::batch::types::BatchJob)
+impl core::default::Default for vllm_server::openai::batch::manager::BatchManager
+pub fn vllm_server::openai::batch::manager::BatchManager::default() -> Self
+impl core::fmt::Debug for vllm_server::openai::batch::manager::BatchManager
+pub fn vllm_server::openai::batch::manager::BatchManager::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::openai::batch::manager::BatchManager
+impl core::marker::Send for vllm_server::openai::batch::manager::BatchManager
+impl core::marker::Sync for vllm_server::openai::batch::manager::BatchManager
+impl core::marker::Unpin for vllm_server::openai::batch::manager::BatchManager
+impl core::marker::UnsafeUnpin for vllm_server::openai::batch::manager::BatchManager
+impl !core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::manager::BatchManager
+impl !core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::manager::BatchManager
+pub mod vllm_server::openai::batch::types
+pub enum vllm_server::openai::batch::types::BatchEndpoint
+pub vllm_server::openai::batch::types::BatchEndpoint::Chat
+pub vllm_server::openai::batch::types::BatchEndpoint::Completion
+impl vllm_server::openai::batch::types::BatchEndpoint
+pub const fn vllm_server::openai::batch::types::BatchEndpoint::as_str(&self) -> &'static str
+pub fn vllm_server::openai::batch::types::BatchEndpoint::parse(&str) -> core::option::Option<Self>
+impl core::clone::Clone for vllm_server::openai::batch::types::BatchEndpoint
+pub fn vllm_server::openai::batch::types::BatchEndpoint::clone(&self) -> vllm_server::openai::batch::types::BatchEndpoint
+impl core::cmp::Eq for vllm_server::openai::batch::types::BatchEndpoint
+impl core::cmp::PartialEq for vllm_server::openai::batch::types::BatchEndpoint
+pub fn vllm_server::openai::batch::types::BatchEndpoint::eq(&self, &vllm_server::openai::batch::types::BatchEndpoint) -> bool
+impl core::fmt::Debug for vllm_server::openai::batch::types::BatchEndpoint
+pub fn vllm_server::openai::batch::types::BatchEndpoint::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for vllm_server::openai::batch::types::BatchEndpoint
+pub fn vllm_server::openai::batch::types::BatchEndpoint::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for vllm_server::openai::batch::types::BatchEndpoint
+pub fn vllm_server::openai::batch::types::BatchEndpoint::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::StructuralPartialEq for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::Freeze for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::Send for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::Sync for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::Unpin for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::UnsafeUnpin for vllm_server::openai::batch::types::BatchEndpoint
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::types::BatchEndpoint
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::types::BatchEndpoint
+pub enum vllm_server::openai::batch::types::BatchStatus
+pub vllm_server::openai::batch::types::BatchStatus::Completed
+pub vllm_server::openai::batch::types::BatchStatus::Failed
+pub vllm_server::openai::batch::types::BatchStatus::InProgress
+pub vllm_server::openai::batch::types::BatchStatus::Pending
+impl core::clone::Clone for vllm_server::openai::batch::types::BatchStatus
+pub fn vllm_server::openai::batch::types::BatchStatus::clone(&self) -> vllm_server::openai::batch::types::BatchStatus
+impl core::fmt::Debug for vllm_server::openai::batch::types::BatchStatus
+pub fn vllm_server::openai::batch::types::BatchStatus::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::openai::batch::types::BatchStatus
+impl core::marker::Send for vllm_server::openai::batch::types::BatchStatus
+impl core::marker::Sync for vllm_server::openai::batch::types::BatchStatus
+impl core::marker::Unpin for vllm_server::openai::batch::types::BatchStatus
+impl core::marker::UnsafeUnpin for vllm_server::openai::batch::types::BatchStatus
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::types::BatchStatus
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::types::BatchStatus
+pub struct vllm_server::openai::batch::types::BatchJob
+pub vllm_server::openai::batch::types::BatchJob::completed_at: core::option::Option<i64>
+pub vllm_server::openai::batch::types::BatchJob::created_at: i64
+pub vllm_server::openai::batch::types::BatchJob::endpoint: vllm_server::openai::batch::types::BatchEndpoint
+pub vllm_server::openai::batch::types::BatchJob::id: alloc::string::String
+pub vllm_server::openai::batch::types::BatchJob::max_tokens: core::option::Option<i64>
+pub vllm_server::openai::batch::types::BatchJob::model: core::option::Option<alloc::string::String>
+pub vllm_server::openai::batch::types::BatchJob::prompts: alloc::vec::Vec<alloc::string::String>
+pub vllm_server::openai::batch::types::BatchJob::results: alloc::vec::Vec<vllm_server::openai::batch::types::BatchResultItem>
+pub vllm_server::openai::batch::types::BatchJob::status: vllm_server::openai::batch::types::BatchStatus
+pub vllm_server::openai::batch::types::BatchJob::temperature: core::option::Option<f32>
+impl vllm_server::openai::batch::types::BatchJob
+pub fn vllm_server::openai::batch::types::BatchJob::new(alloc::string::String, vllm_server::openai::batch::types::BatchEndpoint, alloc::vec::Vec<alloc::string::String>, core::option::Option<alloc::string::String>, core::option::Option<i64>, core::option::Option<f32>) -> Self
+impl core::clone::Clone for vllm_server::openai::batch::types::BatchJob
+pub fn vllm_server::openai::batch::types::BatchJob::clone(&self) -> vllm_server::openai::batch::types::BatchJob
+impl core::fmt::Debug for vllm_server::openai::batch::types::BatchJob
+pub fn vllm_server::openai::batch::types::BatchJob::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::openai::batch::types::BatchJob
+impl core::marker::Send for vllm_server::openai::batch::types::BatchJob
+impl core::marker::Sync for vllm_server::openai::batch::types::BatchJob
+impl core::marker::Unpin for vllm_server::openai::batch::types::BatchJob
+impl core::marker::UnsafeUnpin for vllm_server::openai::batch::types::BatchJob
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::types::BatchJob
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::types::BatchJob
+pub struct vllm_server::openai::batch::types::BatchResponse
+pub vllm_server::openai::batch::types::BatchResponse::completed_at: core::option::Option<i64>
+pub vllm_server::openai::batch::types::BatchResponse::created_at: i64
+pub vllm_server::openai::batch::types::BatchResponse::endpoint: vllm_server::openai::batch::types::BatchEndpoint
+pub vllm_server::openai::batch::types::BatchResponse::expires_at: i64
+pub vllm_server::openai::batch::types::BatchResponse::id: alloc::string::String
+pub vllm_server::openai::batch::types::BatchResponse::object: alloc::string::String
+pub vllm_server::openai::batch::types::BatchResponse::request_counts: core::option::Option<vllm_server::openai::batch::types::RequestCounts>
+pub vllm_server::openai::batch::types::BatchResponse::status: alloc::string::String
+impl core::clone::Clone for vllm_server::openai::batch::types::BatchResponse
+pub fn vllm_server::openai::batch::types::BatchResponse::clone(&self) -> vllm_server::openai::batch::types::BatchResponse
+impl core::fmt::Debug for vllm_server::openai::batch::types::BatchResponse
+pub fn vllm_server::openai::batch::types::BatchResponse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::batch::types::BatchResponse
+pub fn vllm_server::openai::batch::types::BatchResponse::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::batch::types::BatchResponse
+pub fn vllm_server::openai::batch::types::BatchResponse::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::batch::types::BatchResponse
+impl core::marker::Send for vllm_server::openai::batch::types::BatchResponse
+impl core::marker::Sync for vllm_server::openai::batch::types::BatchResponse
+impl core::marker::Unpin for vllm_server::openai::batch::types::BatchResponse
+impl core::marker::UnsafeUnpin for vllm_server::openai::batch::types::BatchResponse
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::types::BatchResponse
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::types::BatchResponse
+pub struct vllm_server::openai::batch::types::BatchResultItem
+pub vllm_server::openai::batch::types::BatchResultItem::content: core::option::Option<alloc::string::String>
+pub vllm_server::openai::batch::types::BatchResultItem::error: core::option::Option<alloc::string::String>
+pub vllm_server::openai::batch::types::BatchResultItem::index: usize
+pub vllm_server::openai::batch::types::BatchResultItem::status: alloc::string::String
+impl core::clone::Clone for vllm_server::openai::batch::types::BatchResultItem
+pub fn vllm_server::openai::batch::types::BatchResultItem::clone(&self) -> vllm_server::openai::batch::types::BatchResultItem
+impl core::fmt::Debug for vllm_server::openai::batch::types::BatchResultItem
+pub fn vllm_server::openai::batch::types::BatchResultItem::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::batch::types::BatchResultItem
+pub fn vllm_server::openai::batch::types::BatchResultItem::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::batch::types::BatchResultItem
+pub fn vllm_server::openai::batch::types::BatchResultItem::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::batch::types::BatchResultItem
+impl core::marker::Send for vllm_server::openai::batch::types::BatchResultItem
+impl core::marker::Sync for vllm_server::openai::batch::types::BatchResultItem
+impl core::marker::Unpin for vllm_server::openai::batch::types::BatchResultItem
+impl core::marker::UnsafeUnpin for vllm_server::openai::batch::types::BatchResultItem
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::types::BatchResultItem
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::types::BatchResultItem
+pub struct vllm_server::openai::batch::types::BatchResults
+pub vllm_server::openai::batch::types::BatchResults::batch_id: alloc::string::String
+pub vllm_server::openai::batch::types::BatchResults::results: alloc::vec::Vec<vllm_server::openai::batch::types::BatchResultItem>
+pub vllm_server::openai::batch::types::BatchResults::status: alloc::string::String
+impl core::clone::Clone for vllm_server::openai::batch::types::BatchResults
+pub fn vllm_server::openai::batch::types::BatchResults::clone(&self) -> vllm_server::openai::batch::types::BatchResults
+impl core::fmt::Debug for vllm_server::openai::batch::types::BatchResults
+pub fn vllm_server::openai::batch::types::BatchResults::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::batch::types::BatchResults
+pub fn vllm_server::openai::batch::types::BatchResults::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::batch::types::BatchResults
+pub fn vllm_server::openai::batch::types::BatchResults::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::batch::types::BatchResults
+impl core::marker::Send for vllm_server::openai::batch::types::BatchResults
+impl core::marker::Sync for vllm_server::openai::batch::types::BatchResults
+impl core::marker::Unpin for vllm_server::openai::batch::types::BatchResults
+impl core::marker::UnsafeUnpin for vllm_server::openai::batch::types::BatchResults
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::types::BatchResults
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::types::BatchResults
+pub struct vllm_server::openai::batch::types::RequestCounts
+pub vllm_server::openai::batch::types::RequestCounts::completed: i32
+pub vllm_server::openai::batch::types::RequestCounts::failed: i32
+pub vllm_server::openai::batch::types::RequestCounts::total: i32
+impl core::clone::Clone for vllm_server::openai::batch::types::RequestCounts
+pub fn vllm_server::openai::batch::types::RequestCounts::clone(&self) -> vllm_server::openai::batch::types::RequestCounts
+impl core::fmt::Debug for vllm_server::openai::batch::types::RequestCounts
+pub fn vllm_server::openai::batch::types::RequestCounts::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::batch::types::RequestCounts
+pub fn vllm_server::openai::batch::types::RequestCounts::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::batch::types::RequestCounts
+pub fn vllm_server::openai::batch::types::RequestCounts::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::batch::types::RequestCounts
+impl core::marker::Send for vllm_server::openai::batch::types::RequestCounts
+impl core::marker::Sync for vllm_server::openai::batch::types::RequestCounts
+impl core::marker::Unpin for vllm_server::openai::batch::types::RequestCounts
+impl core::marker::UnsafeUnpin for vllm_server::openai::batch::types::RequestCounts
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::types::RequestCounts
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::types::RequestCounts
+pub struct vllm_server::openai::batch::types::SimpleBatchRequest
+pub vllm_server::openai::batch::types::SimpleBatchRequest::endpoint: vllm_server::openai::batch::types::BatchEndpoint
+pub vllm_server::openai::batch::types::SimpleBatchRequest::max_tokens: core::option::Option<i64>
+pub vllm_server::openai::batch::types::SimpleBatchRequest::model: core::option::Option<alloc::string::String>
+pub vllm_server::openai::batch::types::SimpleBatchRequest::prompts: alloc::vec::Vec<alloc::string::String>
+pub vllm_server::openai::batch::types::SimpleBatchRequest::temperature: core::option::Option<f32>
+impl core::clone::Clone for vllm_server::openai::batch::types::SimpleBatchRequest
+pub fn vllm_server::openai::batch::types::SimpleBatchRequest::clone(&self) -> vllm_server::openai::batch::types::SimpleBatchRequest
+impl core::fmt::Debug for vllm_server::openai::batch::types::SimpleBatchRequest
+pub fn vllm_server::openai::batch::types::SimpleBatchRequest::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::batch::types::SimpleBatchRequest
+pub fn vllm_server::openai::batch::types::SimpleBatchRequest::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::batch::types::SimpleBatchRequest
+pub fn vllm_server::openai::batch::types::SimpleBatchRequest::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::batch::types::SimpleBatchRequest
+impl core::marker::Send for vllm_server::openai::batch::types::SimpleBatchRequest
+impl core::marker::Sync for vllm_server::openai::batch::types::SimpleBatchRequest
+impl core::marker::Unpin for vllm_server::openai::batch::types::SimpleBatchRequest
+impl core::marker::UnsafeUnpin for vllm_server::openai::batch::types::SimpleBatchRequest
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::types::SimpleBatchRequest
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::types::SimpleBatchRequest
+pub enum vllm_server::openai::batch::BatchEndpoint
+pub vllm_server::openai::batch::BatchEndpoint::Chat
+pub vllm_server::openai::batch::BatchEndpoint::Completion
+impl vllm_server::openai::batch::types::BatchEndpoint
+pub const fn vllm_server::openai::batch::types::BatchEndpoint::as_str(&self) -> &'static str
+pub fn vllm_server::openai::batch::types::BatchEndpoint::parse(&str) -> core::option::Option<Self>
+impl core::clone::Clone for vllm_server::openai::batch::types::BatchEndpoint
+pub fn vllm_server::openai::batch::types::BatchEndpoint::clone(&self) -> vllm_server::openai::batch::types::BatchEndpoint
+impl core::cmp::Eq for vllm_server::openai::batch::types::BatchEndpoint
+impl core::cmp::PartialEq for vllm_server::openai::batch::types::BatchEndpoint
+pub fn vllm_server::openai::batch::types::BatchEndpoint::eq(&self, &vllm_server::openai::batch::types::BatchEndpoint) -> bool
+impl core::fmt::Debug for vllm_server::openai::batch::types::BatchEndpoint
+pub fn vllm_server::openai::batch::types::BatchEndpoint::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for vllm_server::openai::batch::types::BatchEndpoint
+pub fn vllm_server::openai::batch::types::BatchEndpoint::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for vllm_server::openai::batch::types::BatchEndpoint
+pub fn vllm_server::openai::batch::types::BatchEndpoint::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::StructuralPartialEq for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::Freeze for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::Send for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::Sync for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::Unpin for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::UnsafeUnpin for vllm_server::openai::batch::types::BatchEndpoint
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::types::BatchEndpoint
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::types::BatchEndpoint
+pub struct vllm_server::openai::batch::BatchManager
+impl vllm_server::openai::batch::manager::BatchManager
+pub async fn vllm_server::openai::batch::manager::BatchManager::add_result(&self, &str, vllm_server::openai::batch::types::BatchResultItem)
+pub async fn vllm_server::openai::batch::manager::BatchManager::create_job(&self, vllm_server::openai::batch::types::BatchEndpoint, alloc::vec::Vec<alloc::string::String>, core::option::Option<alloc::string::String>, core::option::Option<i64>, core::option::Option<f32>) -> alloc::string::String
+pub async fn vllm_server::openai::batch::manager::BatchManager::get_all_jobs(&self) -> alloc::vec::Vec<vllm_server::openai::batch::types::BatchJob>
+pub async fn vllm_server::openai::batch::manager::BatchManager::get_job(&self, &str) -> core::option::Option<vllm_server::openai::batch::types::BatchJob>
+pub fn vllm_server::openai::batch::manager::BatchManager::new() -> Self
+pub async fn vllm_server::openai::batch::manager::BatchManager::set_completed(&self, &str)
+pub async fn vllm_server::openai::batch::manager::BatchManager::update_job(&self, vllm_server::openai::batch::types::BatchJob)
+impl core::default::Default for vllm_server::openai::batch::manager::BatchManager
+pub fn vllm_server::openai::batch::manager::BatchManager::default() -> Self
+impl core::fmt::Debug for vllm_server::openai::batch::manager::BatchManager
+pub fn vllm_server::openai::batch::manager::BatchManager::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::openai::batch::manager::BatchManager
+impl core::marker::Send for vllm_server::openai::batch::manager::BatchManager
+impl core::marker::Sync for vllm_server::openai::batch::manager::BatchManager
+impl core::marker::Unpin for vllm_server::openai::batch::manager::BatchManager
+impl core::marker::UnsafeUnpin for vllm_server::openai::batch::manager::BatchManager
+impl !core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::manager::BatchManager
+impl !core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::manager::BatchManager
+pub struct vllm_server::openai::batch::BatchResponse
+pub vllm_server::openai::batch::BatchResponse::completed_at: core::option::Option<i64>
+pub vllm_server::openai::batch::BatchResponse::created_at: i64
+pub vllm_server::openai::batch::BatchResponse::endpoint: vllm_server::openai::batch::types::BatchEndpoint
+pub vllm_server::openai::batch::BatchResponse::expires_at: i64
+pub vllm_server::openai::batch::BatchResponse::id: alloc::string::String
+pub vllm_server::openai::batch::BatchResponse::object: alloc::string::String
+pub vllm_server::openai::batch::BatchResponse::request_counts: core::option::Option<vllm_server::openai::batch::types::RequestCounts>
+pub vllm_server::openai::batch::BatchResponse::status: alloc::string::String
+impl core::clone::Clone for vllm_server::openai::batch::types::BatchResponse
+pub fn vllm_server::openai::batch::types::BatchResponse::clone(&self) -> vllm_server::openai::batch::types::BatchResponse
+impl core::fmt::Debug for vllm_server::openai::batch::types::BatchResponse
+pub fn vllm_server::openai::batch::types::BatchResponse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::batch::types::BatchResponse
+pub fn vllm_server::openai::batch::types::BatchResponse::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::batch::types::BatchResponse
+pub fn vllm_server::openai::batch::types::BatchResponse::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::batch::types::BatchResponse
+impl core::marker::Send for vllm_server::openai::batch::types::BatchResponse
+impl core::marker::Sync for vllm_server::openai::batch::types::BatchResponse
+impl core::marker::Unpin for vllm_server::openai::batch::types::BatchResponse
+impl core::marker::UnsafeUnpin for vllm_server::openai::batch::types::BatchResponse
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::types::BatchResponse
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::types::BatchResponse
+pub mod vllm_server::openai::chat
+pub fn vllm_server::openai::chat::build_prompt_from_messages(vllm_server::openai::chat_template::ChatTemplate, &[vllm_server::openai::types::ChatMessage]) -> alloc::string::String
+pub async fn vllm_server::openai::chat::chat_completions(axum::extract::state::State<vllm_server::ApiState>, axum::json::Json<vllm_server::openai::types::ChatRequest>) -> core::result::Result<axum_core::response::Response, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
+pub mod vllm_server::openai::chat_template
+pub enum vllm_server::openai::chat_template::ChatTemplate
+pub vllm_server::openai::chat_template::ChatTemplate::ChatMl
+pub vllm_server::openai::chat_template::ChatTemplate::Llama3
+pub vllm_server::openai::chat_template::ChatTemplate::MistralInst
+pub vllm_server::openai::chat_template::ChatTemplate::Plain
+impl vllm_server::openai::chat_template::ChatTemplate
+pub const fn vllm_server::openai::chat_template::ChatTemplate::for_architecture(vllm_model::config::architecture::Architecture) -> Self
+impl core::clone::Clone for vllm_server::openai::chat_template::ChatTemplate
+pub fn vllm_server::openai::chat_template::ChatTemplate::clone(&self) -> vllm_server::openai::chat_template::ChatTemplate
+impl core::cmp::Eq for vllm_server::openai::chat_template::ChatTemplate
+impl core::cmp::PartialEq for vllm_server::openai::chat_template::ChatTemplate
+pub fn vllm_server::openai::chat_template::ChatTemplate::eq(&self, &vllm_server::openai::chat_template::ChatTemplate) -> bool
+impl core::fmt::Debug for vllm_server::openai::chat_template::ChatTemplate
+pub fn vllm_server::openai::chat_template::ChatTemplate::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for vllm_server::openai::chat_template::ChatTemplate
+impl core::marker::StructuralPartialEq for vllm_server::openai::chat_template::ChatTemplate
+impl core::marker::Freeze for vllm_server::openai::chat_template::ChatTemplate
+impl core::marker::Send for vllm_server::openai::chat_template::ChatTemplate
+impl core::marker::Sync for vllm_server::openai::chat_template::ChatTemplate
+impl core::marker::Unpin for vllm_server::openai::chat_template::ChatTemplate
+impl core::marker::UnsafeUnpin for vllm_server::openai::chat_template::ChatTemplate
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::chat_template::ChatTemplate
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::chat_template::ChatTemplate
+pub mod vllm_server::openai::completions
+pub async fn vllm_server::openai::completions::completions(axum::extract::state::State<vllm_server::ApiState>, axum::json::Json<vllm_server::openai::types::CompletionRequest>) -> core::result::Result<axum_core::response::Response, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
+pub mod vllm_server::openai::embeddings
+pub async fn vllm_server::openai::embeddings::embeddings(axum::extract::state::State<vllm_server::ApiState>, axum::json::Json<vllm_server::openai::types::EmbeddingsRequest>) -> core::result::Result<axum_core::response::Response, (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
+pub mod vllm_server::openai::models
+pub async fn vllm_server::openai::models::models_handler(axum::extract::state::State<vllm_server::ApiState>) -> axum_core::response::Response
+pub mod vllm_server::openai::types
+pub struct vllm_server::openai::types::ChatChoice
+pub vllm_server::openai::types::ChatChoice::finish_reason: core::option::Option<alloc::string::String>
+pub vllm_server::openai::types::ChatChoice::index: i32
+pub vllm_server::openai::types::ChatChoice::message: vllm_server::openai::types::ChatMessage
+impl core::clone::Clone for vllm_server::openai::types::ChatChoice
+pub fn vllm_server::openai::types::ChatChoice::clone(&self) -> vllm_server::openai::types::ChatChoice
+impl core::fmt::Debug for vllm_server::openai::types::ChatChoice
+pub fn vllm_server::openai::types::ChatChoice::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::types::ChatChoice
+pub fn vllm_server::openai::types::ChatChoice::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::ChatChoice
+pub fn vllm_server::openai::types::ChatChoice::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::types::ChatChoice
+impl core::marker::Send for vllm_server::openai::types::ChatChoice
+impl core::marker::Sync for vllm_server::openai::types::ChatChoice
+impl core::marker::Unpin for vllm_server::openai::types::ChatChoice
+impl core::marker::UnsafeUnpin for vllm_server::openai::types::ChatChoice
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::ChatChoice
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::ChatChoice
+pub struct vllm_server::openai::types::ChatChunk
+pub vllm_server::openai::types::ChatChunk::choices: alloc::vec::Vec<vllm_server::openai::types::ChatChunkChoice>
+pub vllm_server::openai::types::ChatChunk::created: i64
+pub vllm_server::openai::types::ChatChunk::id: alloc::string::String
+pub vllm_server::openai::types::ChatChunk::model: alloc::string::String
+pub vllm_server::openai::types::ChatChunk::object: alloc::string::String
+impl vllm_server::openai::types::ChatChunk
+pub fn vllm_server::openai::types::ChatChunk::new(alloc::string::String, alloc::string::String, vllm_server::openai::types::ChatChunkChoice) -> Self
+impl core::clone::Clone for vllm_server::openai::types::ChatChunk
+pub fn vllm_server::openai::types::ChatChunk::clone(&self) -> vllm_server::openai::types::ChatChunk
+impl core::fmt::Debug for vllm_server::openai::types::ChatChunk
+pub fn vllm_server::openai::types::ChatChunk::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::types::ChatChunk
+pub fn vllm_server::openai::types::ChatChunk::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::ChatChunk
+pub fn vllm_server::openai::types::ChatChunk::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::types::ChatChunk
+impl core::marker::Send for vllm_server::openai::types::ChatChunk
+impl core::marker::Sync for vllm_server::openai::types::ChatChunk
+impl core::marker::Unpin for vllm_server::openai::types::ChatChunk
+impl core::marker::UnsafeUnpin for vllm_server::openai::types::ChatChunk
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::ChatChunk
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::ChatChunk
+pub struct vllm_server::openai::types::ChatChunkChoice
+pub vllm_server::openai::types::ChatChunkChoice::delta: vllm_server::openai::types::ChatMessage
+pub vllm_server::openai::types::ChatChunkChoice::finish_reason: core::option::Option<alloc::string::String>
+pub vllm_server::openai::types::ChatChunkChoice::index: i32
+impl core::clone::Clone for vllm_server::openai::types::ChatChunkChoice
+pub fn vllm_server::openai::types::ChatChunkChoice::clone(&self) -> vllm_server::openai::types::ChatChunkChoice
+impl core::fmt::Debug for vllm_server::openai::types::ChatChunkChoice
+pub fn vllm_server::openai::types::ChatChunkChoice::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::types::ChatChunkChoice
+pub fn vllm_server::openai::types::ChatChunkChoice::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::ChatChunkChoice
+pub fn vllm_server::openai::types::ChatChunkChoice::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::types::ChatChunkChoice
+impl core::marker::Send for vllm_server::openai::types::ChatChunkChoice
+impl core::marker::Sync for vllm_server::openai::types::ChatChunkChoice
+impl core::marker::Unpin for vllm_server::openai::types::ChatChunkChoice
+impl core::marker::UnsafeUnpin for vllm_server::openai::types::ChatChunkChoice
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::ChatChunkChoice
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::ChatChunkChoice
+pub struct vllm_server::openai::types::ChatMessage
+pub vllm_server::openai::types::ChatMessage::content: alloc::string::String
+pub vllm_server::openai::types::ChatMessage::name: core::option::Option<alloc::string::String>
+pub vllm_server::openai::types::ChatMessage::role: alloc::string::String
+impl core::clone::Clone for vllm_server::openai::types::ChatMessage
+pub fn vllm_server::openai::types::ChatMessage::clone(&self) -> vllm_server::openai::types::ChatMessage
+impl core::fmt::Debug for vllm_server::openai::types::ChatMessage
+pub fn vllm_server::openai::types::ChatMessage::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::types::ChatMessage
+pub fn vllm_server::openai::types::ChatMessage::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::ChatMessage
+pub fn vllm_server::openai::types::ChatMessage::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::types::ChatMessage
+impl core::marker::Send for vllm_server::openai::types::ChatMessage
+impl core::marker::Sync for vllm_server::openai::types::ChatMessage
+impl core::marker::Unpin for vllm_server::openai::types::ChatMessage
+impl core::marker::UnsafeUnpin for vllm_server::openai::types::ChatMessage
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::ChatMessage
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::ChatMessage
+pub struct vllm_server::openai::types::ChatRequest
+pub vllm_server::openai::types::ChatRequest::max_tokens: core::option::Option<i64>
+pub vllm_server::openai::types::ChatRequest::messages: alloc::vec::Vec<vllm_server::openai::types::ChatMessage>
+pub vllm_server::openai::types::ChatRequest::model: alloc::string::String
+pub vllm_server::openai::types::ChatRequest::n: core::option::Option<i64>
+pub vllm_server::openai::types::ChatRequest::stop: core::option::Option<alloc::vec::Vec<alloc::string::String>>
+pub vllm_server::openai::types::ChatRequest::stream: core::option::Option<bool>
+pub vllm_server::openai::types::ChatRequest::temperature: core::option::Option<f32>
+pub vllm_server::openai::types::ChatRequest::top_p: core::option::Option<f32>
+impl core::clone::Clone for vllm_server::openai::types::ChatRequest
+pub fn vllm_server::openai::types::ChatRequest::clone(&self) -> vllm_server::openai::types::ChatRequest
+impl core::fmt::Debug for vllm_server::openai::types::ChatRequest
+pub fn vllm_server::openai::types::ChatRequest::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::types::ChatRequest
+pub fn vllm_server::openai::types::ChatRequest::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::ChatRequest
+pub fn vllm_server::openai::types::ChatRequest::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::types::ChatRequest
+impl core::marker::Send for vllm_server::openai::types::ChatRequest
+impl core::marker::Sync for vllm_server::openai::types::ChatRequest
+impl core::marker::Unpin for vllm_server::openai::types::ChatRequest
+impl core::marker::UnsafeUnpin for vllm_server::openai::types::ChatRequest
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::ChatRequest
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::ChatRequest
+pub struct vllm_server::openai::types::ChatResponse
+pub vllm_server::openai::types::ChatResponse::choices: alloc::vec::Vec<vllm_server::openai::types::ChatChoice>
+pub vllm_server::openai::types::ChatResponse::created: i64
+pub vllm_server::openai::types::ChatResponse::id: alloc::string::String
+pub vllm_server::openai::types::ChatResponse::model: alloc::string::String
+pub vllm_server::openai::types::ChatResponse::object: alloc::string::String
+pub vllm_server::openai::types::ChatResponse::usage: vllm_server::openai::types::Usage
+impl vllm_server::openai::types::ChatResponse
+pub fn vllm_server::openai::types::ChatResponse::new(alloc::string::String, alloc::string::String, alloc::vec::Vec<vllm_server::openai::types::ChatChoice>, vllm_server::openai::types::Usage) -> Self
+impl core::clone::Clone for vllm_server::openai::types::ChatResponse
+pub fn vllm_server::openai::types::ChatResponse::clone(&self) -> vllm_server::openai::types::ChatResponse
+impl core::fmt::Debug for vllm_server::openai::types::ChatResponse
+pub fn vllm_server::openai::types::ChatResponse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::types::ChatResponse
+pub fn vllm_server::openai::types::ChatResponse::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::ChatResponse
+pub fn vllm_server::openai::types::ChatResponse::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::types::ChatResponse
+impl core::marker::Send for vllm_server::openai::types::ChatResponse
+impl core::marker::Sync for vllm_server::openai::types::ChatResponse
+impl core::marker::Unpin for vllm_server::openai::types::ChatResponse
+impl core::marker::UnsafeUnpin for vllm_server::openai::types::ChatResponse
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::ChatResponse
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::ChatResponse
+pub struct vllm_server::openai::types::CompletionChoice
+pub vllm_server::openai::types::CompletionChoice::finish_reason: core::option::Option<alloc::string::String>
+pub vllm_server::openai::types::CompletionChoice::index: i32
+pub vllm_server::openai::types::CompletionChoice::text: alloc::string::String
+impl core::clone::Clone for vllm_server::openai::types::CompletionChoice
+pub fn vllm_server::openai::types::CompletionChoice::clone(&self) -> vllm_server::openai::types::CompletionChoice
+impl core::fmt::Debug for vllm_server::openai::types::CompletionChoice
+pub fn vllm_server::openai::types::CompletionChoice::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::types::CompletionChoice
+pub fn vllm_server::openai::types::CompletionChoice::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::CompletionChoice
+pub fn vllm_server::openai::types::CompletionChoice::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::types::CompletionChoice
+impl core::marker::Send for vllm_server::openai::types::CompletionChoice
+impl core::marker::Sync for vllm_server::openai::types::CompletionChoice
+impl core::marker::Unpin for vllm_server::openai::types::CompletionChoice
+impl core::marker::UnsafeUnpin for vllm_server::openai::types::CompletionChoice
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::CompletionChoice
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::CompletionChoice
+pub struct vllm_server::openai::types::CompletionRequest
+pub vllm_server::openai::types::CompletionRequest::max_tokens: core::option::Option<i64>
+pub vllm_server::openai::types::CompletionRequest::model: core::option::Option<alloc::string::String>
+pub vllm_server::openai::types::CompletionRequest::n: core::option::Option<i64>
+pub vllm_server::openai::types::CompletionRequest::prompt: alloc::string::String
+pub vllm_server::openai::types::CompletionRequest::stop: core::option::Option<alloc::vec::Vec<alloc::string::String>>
+pub vllm_server::openai::types::CompletionRequest::stream: core::option::Option<bool>
+pub vllm_server::openai::types::CompletionRequest::temperature: core::option::Option<f32>
+impl core::clone::Clone for vllm_server::openai::types::CompletionRequest
+pub fn vllm_server::openai::types::CompletionRequest::clone(&self) -> vllm_server::openai::types::CompletionRequest
+impl core::fmt::Debug for vllm_server::openai::types::CompletionRequest
+pub fn vllm_server::openai::types::CompletionRequest::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::types::CompletionRequest
+pub fn vllm_server::openai::types::CompletionRequest::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::CompletionRequest
+pub fn vllm_server::openai::types::CompletionRequest::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::types::CompletionRequest
+impl core::marker::Send for vllm_server::openai::types::CompletionRequest
+impl core::marker::Sync for vllm_server::openai::types::CompletionRequest
+impl core::marker::Unpin for vllm_server::openai::types::CompletionRequest
+impl core::marker::UnsafeUnpin for vllm_server::openai::types::CompletionRequest
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::CompletionRequest
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::CompletionRequest
+pub struct vllm_server::openai::types::CompletionResponse
+pub vllm_server::openai::types::CompletionResponse::choices: alloc::vec::Vec<vllm_server::openai::types::CompletionChoice>
+pub vllm_server::openai::types::CompletionResponse::created: i64
+pub vllm_server::openai::types::CompletionResponse::id: alloc::string::String
+pub vllm_server::openai::types::CompletionResponse::model: alloc::string::String
+pub vllm_server::openai::types::CompletionResponse::object: alloc::string::String
+pub vllm_server::openai::types::CompletionResponse::usage: vllm_server::openai::types::Usage
+impl vllm_server::openai::types::CompletionResponse
+pub fn vllm_server::openai::types::CompletionResponse::new(alloc::string::String, alloc::string::String, alloc::vec::Vec<vllm_server::openai::types::CompletionChoice>, vllm_server::openai::types::Usage) -> Self
+impl core::clone::Clone for vllm_server::openai::types::CompletionResponse
+pub fn vllm_server::openai::types::CompletionResponse::clone(&self) -> vllm_server::openai::types::CompletionResponse
+impl core::fmt::Debug for vllm_server::openai::types::CompletionResponse
+pub fn vllm_server::openai::types::CompletionResponse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::types::CompletionResponse
+pub fn vllm_server::openai::types::CompletionResponse::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::CompletionResponse
+pub fn vllm_server::openai::types::CompletionResponse::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::types::CompletionResponse
+impl core::marker::Send for vllm_server::openai::types::CompletionResponse
+impl core::marker::Sync for vllm_server::openai::types::CompletionResponse
+impl core::marker::Unpin for vllm_server::openai::types::CompletionResponse
+impl core::marker::UnsafeUnpin for vllm_server::openai::types::CompletionResponse
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::CompletionResponse
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::CompletionResponse
+pub struct vllm_server::openai::types::Embedding
+pub vllm_server::openai::types::Embedding::embedding: alloc::vec::Vec<f32>
+pub vllm_server::openai::types::Embedding::index: i32
+pub vllm_server::openai::types::Embedding::object: alloc::string::String
+impl core::clone::Clone for vllm_server::openai::types::Embedding
+pub fn vllm_server::openai::types::Embedding::clone(&self) -> vllm_server::openai::types::Embedding
+impl core::fmt::Debug for vllm_server::openai::types::Embedding
+pub fn vllm_server::openai::types::Embedding::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::types::Embedding
+pub fn vllm_server::openai::types::Embedding::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::Embedding
+pub fn vllm_server::openai::types::Embedding::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::types::Embedding
+impl core::marker::Send for vllm_server::openai::types::Embedding
+impl core::marker::Sync for vllm_server::openai::types::Embedding
+impl core::marker::Unpin for vllm_server::openai::types::Embedding
+impl core::marker::UnsafeUnpin for vllm_server::openai::types::Embedding
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::Embedding
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::Embedding
+pub struct vllm_server::openai::types::EmbeddingsRequest
+pub vllm_server::openai::types::EmbeddingsRequest::input: alloc::vec::Vec<alloc::string::String>
+pub vllm_server::openai::types::EmbeddingsRequest::model: alloc::string::String
+impl core::clone::Clone for vllm_server::openai::types::EmbeddingsRequest
+pub fn vllm_server::openai::types::EmbeddingsRequest::clone(&self) -> vllm_server::openai::types::EmbeddingsRequest
+impl core::fmt::Debug for vllm_server::openai::types::EmbeddingsRequest
+pub fn vllm_server::openai::types::EmbeddingsRequest::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::types::EmbeddingsRequest
+pub fn vllm_server::openai::types::EmbeddingsRequest::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::EmbeddingsRequest
+pub fn vllm_server::openai::types::EmbeddingsRequest::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::types::EmbeddingsRequest
+impl core::marker::Send for vllm_server::openai::types::EmbeddingsRequest
+impl core::marker::Sync for vllm_server::openai::types::EmbeddingsRequest
+impl core::marker::Unpin for vllm_server::openai::types::EmbeddingsRequest
+impl core::marker::UnsafeUnpin for vllm_server::openai::types::EmbeddingsRequest
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::EmbeddingsRequest
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::EmbeddingsRequest
+pub struct vllm_server::openai::types::EmbeddingsResponse
+pub vllm_server::openai::types::EmbeddingsResponse::data: alloc::vec::Vec<vllm_server::openai::types::Embedding>
+pub vllm_server::openai::types::EmbeddingsResponse::model: alloc::string::String
+pub vllm_server::openai::types::EmbeddingsResponse::object: alloc::string::String
+pub vllm_server::openai::types::EmbeddingsResponse::usage: vllm_server::openai::types::Usage
+impl vllm_server::openai::types::EmbeddingsResponse
+pub fn vllm_server::openai::types::EmbeddingsResponse::new(alloc::vec::Vec<alloc::vec::Vec<f32>>, alloc::string::String) -> Self
+impl core::clone::Clone for vllm_server::openai::types::EmbeddingsResponse
+pub fn vllm_server::openai::types::EmbeddingsResponse::clone(&self) -> vllm_server::openai::types::EmbeddingsResponse
+impl core::fmt::Debug for vllm_server::openai::types::EmbeddingsResponse
+pub fn vllm_server::openai::types::EmbeddingsResponse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::types::EmbeddingsResponse
+pub fn vllm_server::openai::types::EmbeddingsResponse::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::EmbeddingsResponse
+pub fn vllm_server::openai::types::EmbeddingsResponse::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::types::EmbeddingsResponse
+impl core::marker::Send for vllm_server::openai::types::EmbeddingsResponse
+impl core::marker::Sync for vllm_server::openai::types::EmbeddingsResponse
+impl core::marker::Unpin for vllm_server::openai::types::EmbeddingsResponse
+impl core::marker::UnsafeUnpin for vllm_server::openai::types::EmbeddingsResponse
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::EmbeddingsResponse
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::EmbeddingsResponse
+pub struct vllm_server::openai::types::ErrorDetail
+pub vllm_server::openai::types::ErrorDetail::code: core::option::Option<alloc::string::String>
+pub vllm_server::openai::types::ErrorDetail::error_type: alloc::string::String
+pub vllm_server::openai::types::ErrorDetail::message: alloc::string::String
+impl core::clone::Clone for vllm_server::openai::types::ErrorDetail
+pub fn vllm_server::openai::types::ErrorDetail::clone(&self) -> vllm_server::openai::types::ErrorDetail
+impl core::fmt::Debug for vllm_server::openai::types::ErrorDetail
+pub fn vllm_server::openai::types::ErrorDetail::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::types::ErrorDetail
+pub fn vllm_server::openai::types::ErrorDetail::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::ErrorDetail
+pub fn vllm_server::openai::types::ErrorDetail::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::types::ErrorDetail
+impl core::marker::Send for vllm_server::openai::types::ErrorDetail
+impl core::marker::Sync for vllm_server::openai::types::ErrorDetail
+impl core::marker::Unpin for vllm_server::openai::types::ErrorDetail
+impl core::marker::UnsafeUnpin for vllm_server::openai::types::ErrorDetail
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::ErrorDetail
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::ErrorDetail
+pub struct vllm_server::openai::types::ErrorResponse
+pub vllm_server::openai::types::ErrorResponse::error: vllm_server::openai::types::ErrorDetail
+impl vllm_server::openai::types::ErrorResponse
+pub fn vllm_server::openai::types::ErrorResponse::new(&str, &str) -> Self
+pub fn vllm_server::openai::types::ErrorResponse::with_code(&str, &str, &str) -> Self
+impl core::clone::Clone for vllm_server::openai::types::ErrorResponse
+pub fn vllm_server::openai::types::ErrorResponse::clone(&self) -> vllm_server::openai::types::ErrorResponse
+impl core::fmt::Debug for vllm_server::openai::types::ErrorResponse
+pub fn vllm_server::openai::types::ErrorResponse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::types::ErrorResponse
+pub fn vllm_server::openai::types::ErrorResponse::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::ErrorResponse
+pub fn vllm_server::openai::types::ErrorResponse::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::types::ErrorResponse
+impl core::marker::Send for vllm_server::openai::types::ErrorResponse
+impl core::marker::Sync for vllm_server::openai::types::ErrorResponse
+impl core::marker::Unpin for vllm_server::openai::types::ErrorResponse
+impl core::marker::UnsafeUnpin for vllm_server::openai::types::ErrorResponse
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::ErrorResponse
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::ErrorResponse
+pub struct vllm_server::openai::types::Usage
+pub vllm_server::openai::types::Usage::completion_tokens: i64
+pub vllm_server::openai::types::Usage::prompt_tokens: i64
+pub vllm_server::openai::types::Usage::total_tokens: i64
+impl vllm_server::openai::types::Usage
+pub fn vllm_server::openai::types::Usage::new(usize, usize) -> Self
+impl core::clone::Clone for vllm_server::openai::types::Usage
+pub fn vllm_server::openai::types::Usage::clone(&self) -> vllm_server::openai::types::Usage
+impl core::fmt::Debug for vllm_server::openai::types::Usage
+pub fn vllm_server::openai::types::Usage::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::types::Usage
+pub fn vllm_server::openai::types::Usage::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::types::Usage
+pub fn vllm_server::openai::types::Usage::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::types::Usage
+impl core::marker::Send for vllm_server::openai::types::Usage
+impl core::marker::Sync for vllm_server::openai::types::Usage
+impl core::marker::Unpin for vllm_server::openai::types::Usage
+impl core::marker::UnsafeUnpin for vllm_server::openai::types::Usage
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::types::Usage
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::types::Usage
+pub type vllm_server::openai::types::EmbeddingData = vllm_server::openai::types::Embedding
+pub mod vllm_server::security
+pub mod vllm_server::security::audit
+pub struct vllm_server::security::audit::AuditEvent
+pub vllm_server::security::audit::AuditEvent::action: alloc::string::String
+pub vllm_server::security::audit::AuditEvent::ip_address: core::option::Option<alloc::string::String>
+pub vllm_server::security::audit::AuditEvent::request_id: alloc::string::String
+pub vllm_server::security::audit::AuditEvent::resource: alloc::string::String
+pub vllm_server::security::audit::AuditEvent::result: alloc::string::String
+pub vllm_server::security::audit::AuditEvent::timestamp: alloc::string::String
+pub vllm_server::security::audit::AuditEvent::user_agent: core::option::Option<alloc::string::String>
+pub vllm_server::security::audit::AuditEvent::user_id: core::option::Option<alloc::string::String>
+impl core::clone::Clone for vllm_server::security::audit::AuditEvent
+pub fn vllm_server::security::audit::AuditEvent::clone(&self) -> vllm_server::security::audit::AuditEvent
+impl core::fmt::Debug for vllm_server::security::audit::AuditEvent
+pub fn vllm_server::security::audit::AuditEvent::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::security::audit::AuditEvent
+pub fn vllm_server::security::audit::AuditEvent::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for vllm_server::security::audit::AuditEvent
+impl core::marker::Send for vllm_server::security::audit::AuditEvent
+impl core::marker::Sync for vllm_server::security::audit::AuditEvent
+impl core::marker::Unpin for vllm_server::security::audit::AuditEvent
+impl core::marker::UnsafeUnpin for vllm_server::security::audit::AuditEvent
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::audit::AuditEvent
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::security::audit::AuditEvent
+pub struct vllm_server::security::audit::AuditLogger
+impl vllm_server::security::audit::AuditLogger
+pub async fn vllm_server::security::audit::AuditLogger::clear(&self)
+pub async fn vllm_server::security::audit::AuditLogger::get_events(&self) -> alloc::vec::Vec<vllm_server::security::audit::AuditEvent>
+pub async fn vllm_server::security::audit::AuditLogger::log(&self, vllm_server::security::audit::AuditEvent)
+pub async fn vllm_server::security::audit::AuditLogger::log_api_request(&self, core::option::Option<&str>, &str, &str, &str, &str)
+pub async fn vllm_server::security::audit::AuditLogger::log_auth_failure(&self, &str, &str)
+pub async fn vllm_server::security::audit::AuditLogger::log_auth_success(&self, &str, &str)
+pub fn vllm_server::security::audit::AuditLogger::new(usize) -> Self
+impl core::default::Default for vllm_server::security::audit::AuditLogger
+pub fn vllm_server::security::audit::AuditLogger::default() -> Self
+impl core::fmt::Debug for vllm_server::security::audit::AuditLogger
+pub fn vllm_server::security::audit::AuditLogger::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::security::audit::AuditLogger
+impl core::marker::Send for vllm_server::security::audit::AuditLogger
+impl core::marker::Sync for vllm_server::security::audit::AuditLogger
+impl core::marker::Unpin for vllm_server::security::audit::AuditLogger
+impl core::marker::UnsafeUnpin for vllm_server::security::audit::AuditLogger
+impl !core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::audit::AuditLogger
+impl !core::panic::unwind_safe::UnwindSafe for vllm_server::security::audit::AuditLogger
+pub mod vllm_server::security::correlation
+pub struct vllm_server::security::correlation::CorrelationIdMiddleware
+impl vllm_server::security::correlation::CorrelationIdMiddleware
+pub async fn vllm_server::security::correlation::CorrelationIdMiddleware::generate_id(&self) -> alloc::string::String
+pub fn vllm_server::security::correlation::CorrelationIdMiddleware::new() -> Self
+impl core::clone::Clone for vllm_server::security::correlation::CorrelationIdMiddleware
+pub fn vllm_server::security::correlation::CorrelationIdMiddleware::clone(&self) -> vllm_server::security::correlation::CorrelationIdMiddleware
+impl core::default::Default for vllm_server::security::correlation::CorrelationIdMiddleware
+pub fn vllm_server::security::correlation::CorrelationIdMiddleware::default() -> Self
+impl core::fmt::Debug for vllm_server::security::correlation::CorrelationIdMiddleware
+pub fn vllm_server::security::correlation::CorrelationIdMiddleware::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::security::correlation::CorrelationIdMiddleware
+impl core::marker::Send for vllm_server::security::correlation::CorrelationIdMiddleware
+impl core::marker::Sync for vllm_server::security::correlation::CorrelationIdMiddleware
+impl core::marker::Unpin for vllm_server::security::correlation::CorrelationIdMiddleware
+impl core::marker::UnsafeUnpin for vllm_server::security::correlation::CorrelationIdMiddleware
+impl !core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::correlation::CorrelationIdMiddleware
+impl !core::panic::unwind_safe::UnwindSafe for vllm_server::security::correlation::CorrelationIdMiddleware
+pub async fn vllm_server::security::correlation::correlation_id_middleware(axum_core::extract::Request, axum::middleware::from_fn::Next) -> axum_core::response::Response
+pub mod vllm_server::security::jwt
+pub enum vllm_server::security::jwt::JwtError
+pub vllm_server::security::jwt::JwtError::InvalidFormat(alloc::string::String)
+pub vllm_server::security::jwt::JwtError::InvalidIssuer(alloc::string::String)
+pub vllm_server::security::jwt::JwtError::InvalidSignature
+pub vllm_server::security::jwt::JwtError::KeyConfig(alloc::string::String)
+pub vllm_server::security::jwt::JwtError::MissingClaim(alloc::string::String)
+pub vllm_server::security::jwt::JwtError::SignatureVerification(alloc::string::String)
+pub vllm_server::security::jwt::JwtError::TokenExpired
+pub vllm_server::security::jwt::JwtError::UnsupportedAlgorithm(alloc::string::String)
+impl core::error::Error for vllm_server::security::jwt::JwtError
+impl core::fmt::Debug for vllm_server::security::jwt::JwtError
+pub fn vllm_server::security::jwt::JwtError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for vllm_server::security::jwt::JwtError
+pub fn vllm_server::security::jwt::JwtError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::security::jwt::JwtError
+impl core::marker::Send for vllm_server::security::jwt::JwtError
+impl core::marker::Sync for vllm_server::security::jwt::JwtError
+impl core::marker::Unpin for vllm_server::security::jwt::JwtError
+impl core::marker::UnsafeUnpin for vllm_server::security::jwt::JwtError
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::jwt::JwtError
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::security::jwt::JwtError
+pub struct vllm_server::security::jwt::Claims
+pub vllm_server::security::jwt::Claims::aud: alloc::string::String
+pub vllm_server::security::jwt::Claims::exp: u64
+pub vllm_server::security::jwt::Claims::extra: std::collections::hash::map::HashMap<alloc::string::String, serde_json::value::Value>
+pub vllm_server::security::jwt::Claims::iat: u64
+pub vllm_server::security::jwt::Claims::iss: alloc::string::String
+pub vllm_server::security::jwt::Claims::roles: alloc::vec::Vec<alloc::string::String>
+pub vllm_server::security::jwt::Claims::scope: core::option::Option<alloc::string::String>
+pub vllm_server::security::jwt::Claims::sub: alloc::string::String
+impl core::clone::Clone for vllm_server::security::jwt::Claims
+pub fn vllm_server::security::jwt::Claims::clone(&self) -> vllm_server::security::jwt::Claims
+impl core::fmt::Debug for vllm_server::security::jwt::Claims
+pub fn vllm_server::security::jwt::Claims::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::security::jwt::Claims
+pub fn vllm_server::security::jwt::Claims::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::security::jwt::Claims
+pub fn vllm_server::security::jwt::Claims::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::security::jwt::Claims
+impl core::marker::Send for vllm_server::security::jwt::Claims
+impl core::marker::Sync for vllm_server::security::jwt::Claims
+impl core::marker::Unpin for vllm_server::security::jwt::Claims
+impl core::marker::UnsafeUnpin for vllm_server::security::jwt::Claims
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::jwt::Claims
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::security::jwt::Claims
+pub struct vllm_server::security::jwt::JwtAuthMiddleware
+impl vllm_server::security::jwt::JwtAuthMiddleware
+pub fn vllm_server::security::jwt::JwtAuthMiddleware::new(vllm_server::security::jwt::JwtConfig) -> Self
+pub async fn vllm_server::security::jwt::JwtAuthMiddleware::update_config(&self, vllm_server::security::jwt::JwtConfig)
+pub async fn vllm_server::security::jwt::JwtAuthMiddleware::validate_request(&self, &str) -> core::result::Result<vllm_server::security::jwt::Claims, vllm_server::security::jwt::JwtError>
+impl core::fmt::Debug for vllm_server::security::jwt::JwtAuthMiddleware
+pub fn vllm_server::security::jwt::JwtAuthMiddleware::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::security::jwt::JwtAuthMiddleware
+impl core::marker::Send for vllm_server::security::jwt::JwtAuthMiddleware
+impl core::marker::Sync for vllm_server::security::jwt::JwtAuthMiddleware
+impl core::marker::Unpin for vllm_server::security::jwt::JwtAuthMiddleware
+impl core::marker::UnsafeUnpin for vllm_server::security::jwt::JwtAuthMiddleware
+impl !core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::jwt::JwtAuthMiddleware
+impl !core::panic::unwind_safe::UnwindSafe for vllm_server::security::jwt::JwtAuthMiddleware
+pub struct vllm_server::security::jwt::JwtConfig
+pub vllm_server::security::jwt::JwtConfig::audience: alloc::string::String
+pub vllm_server::security::jwt::JwtConfig::issuer: alloc::string::String
+pub vllm_server::security::jwt::JwtConfig::public_key_pem: core::option::Option<alloc::string::String>
+pub vllm_server::security::jwt::JwtConfig::secret: core::option::Option<alloc::string::String>
+pub vllm_server::security::jwt::JwtConfig::validate_exp: bool
+impl vllm_server::security::jwt::JwtConfig
+pub fn vllm_server::security::jwt::JwtConfig::with_audience(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn vllm_server::security::jwt::JwtConfig::with_issuer(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn vllm_server::security::jwt::JwtConfig::with_secret(impl core::convert::Into<alloc::string::String>) -> Self
+impl core::clone::Clone for vllm_server::security::jwt::JwtConfig
+pub fn vllm_server::security::jwt::JwtConfig::clone(&self) -> vllm_server::security::jwt::JwtConfig
+impl core::fmt::Debug for vllm_server::security::jwt::JwtConfig
+pub fn vllm_server::security::jwt::JwtConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::security::jwt::JwtConfig
+impl core::marker::Send for vllm_server::security::jwt::JwtConfig
+impl core::marker::Sync for vllm_server::security::jwt::JwtConfig
+impl core::marker::Unpin for vllm_server::security::jwt::JwtConfig
+impl core::marker::UnsafeUnpin for vllm_server::security::jwt::JwtConfig
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::jwt::JwtConfig
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::security::jwt::JwtConfig
+pub struct vllm_server::security::jwt::JwtValidator
+impl vllm_server::security::jwt::JwtValidator
+pub const fn vllm_server::security::jwt::JwtValidator::new(vllm_server::security::jwt::JwtConfig) -> Self
+pub fn vllm_server::security::jwt::JwtValidator::validate(&self, &str) -> core::result::Result<vllm_server::security::jwt::Claims, vllm_server::security::jwt::JwtError>
+impl core::fmt::Debug for vllm_server::security::jwt::JwtValidator
+pub fn vllm_server::security::jwt::JwtValidator::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::security::jwt::JwtValidator
+impl core::marker::Send for vllm_server::security::jwt::JwtValidator
+impl core::marker::Sync for vllm_server::security::jwt::JwtValidator
+impl core::marker::Unpin for vllm_server::security::jwt::JwtValidator
+impl core::marker::UnsafeUnpin for vllm_server::security::jwt::JwtValidator
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::jwt::JwtValidator
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::security::jwt::JwtValidator
+pub mod vllm_server::security::rbac
+pub enum vllm_server::security::rbac::Role
+pub vllm_server::security::rbac::Role::Admin
+pub vllm_server::security::rbac::Role::Anonymous
+pub vllm_server::security::rbac::Role::Operator
+pub vllm_server::security::rbac::Role::User
+impl vllm_server::security::rbac::Role
+pub const fn vllm_server::security::rbac::Role::can_access_admin(&self) -> bool
+pub const fn vllm_server::security::rbac::Role::can_manage_users(&self) -> bool
+pub const fn vllm_server::security::rbac::Role::can_read_models(&self) -> bool
+pub const fn vllm_server::security::rbac::Role::can_view_metrics(&self) -> bool
+pub const fn vllm_server::security::rbac::Role::can_write_models(&self) -> bool
+pub fn vllm_server::security::rbac::Role::from_str(&str) -> Self
+impl core::clone::Clone for vllm_server::security::rbac::Role
+pub fn vllm_server::security::rbac::Role::clone(&self) -> vllm_server::security::rbac::Role
+impl core::cmp::Eq for vllm_server::security::rbac::Role
+impl core::cmp::PartialEq for vllm_server::security::rbac::Role
+pub fn vllm_server::security::rbac::Role::eq(&self, &vllm_server::security::rbac::Role) -> bool
+impl core::fmt::Debug for vllm_server::security::rbac::Role
+pub fn vllm_server::security::rbac::Role::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for vllm_server::security::rbac::Role
+impl core::marker::StructuralPartialEq for vllm_server::security::rbac::Role
+impl core::marker::Freeze for vllm_server::security::rbac::Role
+impl core::marker::Send for vllm_server::security::rbac::Role
+impl core::marker::Sync for vllm_server::security::rbac::Role
+impl core::marker::Unpin for vllm_server::security::rbac::Role
+impl core::marker::UnsafeUnpin for vllm_server::security::rbac::Role
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::rbac::Role
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::security::rbac::Role
+pub struct vllm_server::security::rbac::RbacMiddleware
+impl vllm_server::security::rbac::RbacMiddleware
+pub fn vllm_server::security::rbac::RbacMiddleware::extract_role_from_headers(&self, &http::header::map::HeaderMap) -> vllm_server::security::rbac::Role
+pub fn vllm_server::security::rbac::RbacMiddleware::new(vllm_server::security::rbac::Role) -> Self
+impl core::fmt::Debug for vllm_server::security::rbac::RbacMiddleware
+pub fn vllm_server::security::rbac::RbacMiddleware::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::security::rbac::RbacMiddleware
+impl core::marker::Send for vllm_server::security::rbac::RbacMiddleware
+impl core::marker::Sync for vllm_server::security::rbac::RbacMiddleware
+impl core::marker::Unpin for vllm_server::security::rbac::RbacMiddleware
+impl core::marker::UnsafeUnpin for vllm_server::security::rbac::RbacMiddleware
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::rbac::RbacMiddleware
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::security::rbac::RbacMiddleware
+pub async fn vllm_server::security::rbac::rbac_middleware(axum_core::extract::Request, axum::middleware::from_fn::Next) -> axum_core::response::Response
+pub mod vllm_server::security::size_limit
+pub const vllm_server::security::size_limit::DEFAULT_BODY_LIMIT_BYTES: usize
+pub fn vllm_server::security::size_limit::with_body_size_limit(axum::routing::Router, usize) -> axum::routing::Router
+pub fn vllm_server::security::size_limit::with_default_body_limit(axum::routing::Router) -> axum::routing::Router
+pub mod vllm_server::security::tls
+pub enum vllm_server::security::tls::TlsError
+pub vllm_server::security::tls::TlsError::CertificateRead(alloc::string::String)
+pub vllm_server::security::tls::TlsError::HandshakeFailed(alloc::string::String)
+pub vllm_server::security::tls::TlsError::InvalidConfig(alloc::string::String)
+pub vllm_server::security::tls::TlsError::KeyRead(alloc::string::String)
+impl core::error::Error for vllm_server::security::tls::TlsError
+impl core::fmt::Debug for vllm_server::security::tls::TlsError
+pub fn vllm_server::security::tls::TlsError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for vllm_server::security::tls::TlsError
+pub fn vllm_server::security::tls::TlsError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::security::tls::TlsError
+impl core::marker::Send for vllm_server::security::tls::TlsError
+impl core::marker::Sync for vllm_server::security::tls::TlsError
+impl core::marker::Unpin for vllm_server::security::tls::TlsError
+impl core::marker::UnsafeUnpin for vllm_server::security::tls::TlsError
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::tls::TlsError
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::security::tls::TlsError
+pub struct vllm_server::security::tls::TlsConfig
+pub vllm_server::security::tls::TlsConfig::ca_cert_path: core::option::Option<alloc::string::String>
+pub vllm_server::security::tls::TlsConfig::cert_path: alloc::string::String
+pub vllm_server::security::tls::TlsConfig::key_path: alloc::string::String
+pub vllm_server::security::tls::TlsConfig::mtls: bool
+impl vllm_server::security::tls::TlsConfig
+pub fn vllm_server::security::tls::TlsConfig::load(&self) -> core::result::Result<rustls::server::server_conn::ServerConfig, vllm_server::security::tls::TlsError>
+pub fn vllm_server::security::tls::TlsConfig::new(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> Self
+impl core::fmt::Debug for vllm_server::security::tls::TlsConfig
+pub fn vllm_server::security::tls::TlsConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::security::tls::TlsConfig
+impl core::marker::Send for vllm_server::security::tls::TlsConfig
+impl core::marker::Sync for vllm_server::security::tls::TlsConfig
+impl core::marker::Unpin for vllm_server::security::tls::TlsConfig
+impl core::marker::UnsafeUnpin for vllm_server::security::tls::TlsConfig
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::tls::TlsConfig
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::security::tls::TlsConfig
+pub enum vllm_server::security::Role
+pub vllm_server::security::Role::Admin
+pub vllm_server::security::Role::Anonymous
+pub vllm_server::security::Role::Operator
+pub vllm_server::security::Role::User
+impl vllm_server::security::rbac::Role
+pub const fn vllm_server::security::rbac::Role::can_access_admin(&self) -> bool
+pub const fn vllm_server::security::rbac::Role::can_manage_users(&self) -> bool
+pub const fn vllm_server::security::rbac::Role::can_read_models(&self) -> bool
+pub const fn vllm_server::security::rbac::Role::can_view_metrics(&self) -> bool
+pub const fn vllm_server::security::rbac::Role::can_write_models(&self) -> bool
+pub fn vllm_server::security::rbac::Role::from_str(&str) -> Self
+impl core::clone::Clone for vllm_server::security::rbac::Role
+pub fn vllm_server::security::rbac::Role::clone(&self) -> vllm_server::security::rbac::Role
+impl core::cmp::Eq for vllm_server::security::rbac::Role
+impl core::cmp::PartialEq for vllm_server::security::rbac::Role
+pub fn vllm_server::security::rbac::Role::eq(&self, &vllm_server::security::rbac::Role) -> bool
+impl core::fmt::Debug for vllm_server::security::rbac::Role
+pub fn vllm_server::security::rbac::Role::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for vllm_server::security::rbac::Role
+impl core::marker::StructuralPartialEq for vllm_server::security::rbac::Role
+impl core::marker::Freeze for vllm_server::security::rbac::Role
+impl core::marker::Send for vllm_server::security::rbac::Role
+impl core::marker::Sync for vllm_server::security::rbac::Role
+impl core::marker::Unpin for vllm_server::security::rbac::Role
+impl core::marker::UnsafeUnpin for vllm_server::security::rbac::Role
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::rbac::Role
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::security::rbac::Role
+pub struct vllm_server::security::AuditLogger
+impl vllm_server::security::audit::AuditLogger
+pub async fn vllm_server::security::audit::AuditLogger::clear(&self)
+pub async fn vllm_server::security::audit::AuditLogger::get_events(&self) -> alloc::vec::Vec<vllm_server::security::audit::AuditEvent>
+pub async fn vllm_server::security::audit::AuditLogger::log(&self, vllm_server::security::audit::AuditEvent)
+pub async fn vllm_server::security::audit::AuditLogger::log_api_request(&self, core::option::Option<&str>, &str, &str, &str, &str)
+pub async fn vllm_server::security::audit::AuditLogger::log_auth_failure(&self, &str, &str)
+pub async fn vllm_server::security::audit::AuditLogger::log_auth_success(&self, &str, &str)
+pub fn vllm_server::security::audit::AuditLogger::new(usize) -> Self
+impl core::default::Default for vllm_server::security::audit::AuditLogger
+pub fn vllm_server::security::audit::AuditLogger::default() -> Self
+impl core::fmt::Debug for vllm_server::security::audit::AuditLogger
+pub fn vllm_server::security::audit::AuditLogger::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::security::audit::AuditLogger
+impl core::marker::Send for vllm_server::security::audit::AuditLogger
+impl core::marker::Sync for vllm_server::security::audit::AuditLogger
+impl core::marker::Unpin for vllm_server::security::audit::AuditLogger
+impl core::marker::UnsafeUnpin for vllm_server::security::audit::AuditLogger
+impl !core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::audit::AuditLogger
+impl !core::panic::unwind_safe::UnwindSafe for vllm_server::security::audit::AuditLogger
+pub struct vllm_server::security::CorrelationIdMiddleware
+impl vllm_server::security::correlation::CorrelationIdMiddleware
+pub async fn vllm_server::security::correlation::CorrelationIdMiddleware::generate_id(&self) -> alloc::string::String
+pub fn vllm_server::security::correlation::CorrelationIdMiddleware::new() -> Self
+impl core::clone::Clone for vllm_server::security::correlation::CorrelationIdMiddleware
+pub fn vllm_server::security::correlation::CorrelationIdMiddleware::clone(&self) -> vllm_server::security::correlation::CorrelationIdMiddleware
+impl core::default::Default for vllm_server::security::correlation::CorrelationIdMiddleware
+pub fn vllm_server::security::correlation::CorrelationIdMiddleware::default() -> Self
+impl core::fmt::Debug for vllm_server::security::correlation::CorrelationIdMiddleware
+pub fn vllm_server::security::correlation::CorrelationIdMiddleware::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::security::correlation::CorrelationIdMiddleware
+impl core::marker::Send for vllm_server::security::correlation::CorrelationIdMiddleware
+impl core::marker::Sync for vllm_server::security::correlation::CorrelationIdMiddleware
+impl core::marker::Unpin for vllm_server::security::correlation::CorrelationIdMiddleware
+impl core::marker::UnsafeUnpin for vllm_server::security::correlation::CorrelationIdMiddleware
+impl !core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::correlation::CorrelationIdMiddleware
+impl !core::panic::unwind_safe::UnwindSafe for vllm_server::security::correlation::CorrelationIdMiddleware
+pub struct vllm_server::security::JwtValidator
+impl vllm_server::security::jwt::JwtValidator
+pub const fn vllm_server::security::jwt::JwtValidator::new(vllm_server::security::jwt::JwtConfig) -> Self
+pub fn vllm_server::security::jwt::JwtValidator::validate(&self, &str) -> core::result::Result<vllm_server::security::jwt::Claims, vllm_server::security::jwt::JwtError>
+impl core::fmt::Debug for vllm_server::security::jwt::JwtValidator
+pub fn vllm_server::security::jwt::JwtValidator::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::security::jwt::JwtValidator
+impl core::marker::Send for vllm_server::security::jwt::JwtValidator
+impl core::marker::Sync for vllm_server::security::jwt::JwtValidator
+impl core::marker::Unpin for vllm_server::security::jwt::JwtValidator
+impl core::marker::UnsafeUnpin for vllm_server::security::jwt::JwtValidator
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::jwt::JwtValidator
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::security::jwt::JwtValidator
+pub struct vllm_server::security::RbacMiddleware
+impl vllm_server::security::rbac::RbacMiddleware
+pub fn vllm_server::security::rbac::RbacMiddleware::extract_role_from_headers(&self, &http::header::map::HeaderMap) -> vllm_server::security::rbac::Role
+pub fn vllm_server::security::rbac::RbacMiddleware::new(vllm_server::security::rbac::Role) -> Self
+impl core::fmt::Debug for vllm_server::security::rbac::RbacMiddleware
+pub fn vllm_server::security::rbac::RbacMiddleware::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::security::rbac::RbacMiddleware
+impl core::marker::Send for vllm_server::security::rbac::RbacMiddleware
+impl core::marker::Sync for vllm_server::security::rbac::RbacMiddleware
+impl core::marker::Unpin for vllm_server::security::rbac::RbacMiddleware
+impl core::marker::UnsafeUnpin for vllm_server::security::rbac::RbacMiddleware
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::rbac::RbacMiddleware
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::security::rbac::RbacMiddleware
+pub struct vllm_server::security::TlsConfig
+pub vllm_server::security::TlsConfig::ca_cert_path: core::option::Option<alloc::string::String>
+pub vllm_server::security::TlsConfig::cert_path: alloc::string::String
+pub vllm_server::security::TlsConfig::key_path: alloc::string::String
+pub vllm_server::security::TlsConfig::mtls: bool
+impl vllm_server::security::tls::TlsConfig
+pub fn vllm_server::security::tls::TlsConfig::load(&self) -> core::result::Result<rustls::server::server_conn::ServerConfig, vllm_server::security::tls::TlsError>
+pub fn vllm_server::security::tls::TlsConfig::new(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> Self
+impl core::fmt::Debug for vllm_server::security::tls::TlsConfig
+pub fn vllm_server::security::tls::TlsConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::security::tls::TlsConfig
+impl core::marker::Send for vllm_server::security::tls::TlsConfig
+impl core::marker::Sync for vllm_server::security::tls::TlsConfig
+impl core::marker::Unpin for vllm_server::security::tls::TlsConfig
+impl core::marker::UnsafeUnpin for vllm_server::security::tls::TlsConfig
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::tls::TlsConfig
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::security::tls::TlsConfig
+pub const vllm_server::security::DEFAULT_BODY_LIMIT_BYTES: usize
+pub fn vllm_server::security::with_body_size_limit(axum::routing::Router, usize) -> axum::routing::Router
+pub fn vllm_server::security::with_default_body_limit(axum::routing::Router) -> axum::routing::Router
+pub mod vllm_server::util
+pub mod vllm_server::util::time
+pub fn vllm_server::util::time::unix_now_millis() -> i64
+pub fn vllm_server::util::time::unix_now_secs() -> i64
+pub enum vllm_server::BatchEndpoint
+pub vllm_server::BatchEndpoint::Chat
+pub vllm_server::BatchEndpoint::Completion
+impl vllm_server::openai::batch::types::BatchEndpoint
+pub const fn vllm_server::openai::batch::types::BatchEndpoint::as_str(&self) -> &'static str
+pub fn vllm_server::openai::batch::types::BatchEndpoint::parse(&str) -> core::option::Option<Self>
+impl core::clone::Clone for vllm_server::openai::batch::types::BatchEndpoint
+pub fn vllm_server::openai::batch::types::BatchEndpoint::clone(&self) -> vllm_server::openai::batch::types::BatchEndpoint
+impl core::cmp::Eq for vllm_server::openai::batch::types::BatchEndpoint
+impl core::cmp::PartialEq for vllm_server::openai::batch::types::BatchEndpoint
+pub fn vllm_server::openai::batch::types::BatchEndpoint::eq(&self, &vllm_server::openai::batch::types::BatchEndpoint) -> bool
+impl core::fmt::Debug for vllm_server::openai::batch::types::BatchEndpoint
+pub fn vllm_server::openai::batch::types::BatchEndpoint::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for vllm_server::openai::batch::types::BatchEndpoint
+pub fn vllm_server::openai::batch::types::BatchEndpoint::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for vllm_server::openai::batch::types::BatchEndpoint
+pub fn vllm_server::openai::batch::types::BatchEndpoint::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::StructuralPartialEq for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::Freeze for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::Send for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::Sync for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::Unpin for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::UnsafeUnpin for vllm_server::openai::batch::types::BatchEndpoint
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::types::BatchEndpoint
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::types::BatchEndpoint
+pub enum vllm_server::HealthStatus
+pub vllm_server::HealthStatus::NotReady
+pub vllm_server::HealthStatus::Ok
+pub vllm_server::HealthStatus::Unhealthy
+impl vllm_server::health::HealthStatus
+pub const fn vllm_server::health::HealthStatus::as_str(&self) -> &'static str
+pub const fn vllm_server::health::HealthStatus::http_status(&self) -> u16
+pub const fn vllm_server::health::HealthStatus::is_ok(&self) -> bool
+impl core::clone::Clone for vllm_server::health::HealthStatus
+pub fn vllm_server::health::HealthStatus::clone(&self) -> vllm_server::health::HealthStatus
+impl core::cmp::Eq for vllm_server::health::HealthStatus
+impl core::cmp::PartialEq for vllm_server::health::HealthStatus
+pub fn vllm_server::health::HealthStatus::eq(&self, &vllm_server::health::HealthStatus) -> bool
+impl core::fmt::Debug for vllm_server::health::HealthStatus
+pub fn vllm_server::health::HealthStatus::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for vllm_server::health::HealthStatus
+impl core::marker::StructuralPartialEq for vllm_server::health::HealthStatus
+impl core::marker::Freeze for vllm_server::health::HealthStatus
+impl core::marker::Send for vllm_server::health::HealthStatus
+impl core::marker::Sync for vllm_server::health::HealthStatus
+impl core::marker::Unpin for vllm_server::health::HealthStatus
+impl core::marker::UnsafeUnpin for vllm_server::health::HealthStatus
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::health::HealthStatus
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::health::HealthStatus
+pub struct vllm_server::ApiState
+pub vllm_server::ApiState::architecture: vllm_model::config::architecture::Architecture
+pub vllm_server::ApiState::auth: core::option::Option<alloc::sync::Arc<vllm_server::auth::AuthMiddleware>>
+pub vllm_server::ApiState::batch_manager: alloc::sync::Arc<vllm_server::openai::batch::manager::BatchManager>
+pub vllm_server::ApiState::engine_tx: vllm_server::api::EngineHandle
+pub vllm_server::ApiState::health: alloc::sync::Arc<std::sync::poison::rwlock::RwLock<vllm_server::health::HealthChecker>>
+pub vllm_server::ApiState::metrics: alloc::sync::Arc<vllm_core::metrics::collector::sampler::EnhancedMetricsCollector>
+pub vllm_server::ApiState::tokenizer: alloc::sync::Arc<vllm_model::tokenizer::Tokenizer>
+impl core::clone::Clone for vllm_server::ApiState
+pub fn vllm_server::ApiState::clone(&self) -> vllm_server::ApiState
+impl core::fmt::Debug for vllm_server::ApiState
+pub fn vllm_server::ApiState::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::ApiState
+impl core::marker::Send for vllm_server::ApiState
+impl core::marker::Sync for vllm_server::ApiState
+impl core::marker::Unpin for vllm_server::ApiState
+impl core::marker::UnsafeUnpin for vllm_server::ApiState
+impl !core::panic::unwind_safe::RefUnwindSafe for vllm_server::ApiState
+impl !core::panic::unwind_safe::UnwindSafe for vllm_server::ApiState
+pub struct vllm_server::AuditEvent
+pub vllm_server::AuditEvent::action: alloc::string::String
+pub vllm_server::AuditEvent::ip_address: core::option::Option<alloc::string::String>
+pub vllm_server::AuditEvent::request_id: alloc::string::String
+pub vllm_server::AuditEvent::resource: alloc::string::String
+pub vllm_server::AuditEvent::result: alloc::string::String
+pub vllm_server::AuditEvent::timestamp: alloc::string::String
+pub vllm_server::AuditEvent::user_agent: core::option::Option<alloc::string::String>
+pub vllm_server::AuditEvent::user_id: core::option::Option<alloc::string::String>
+impl core::clone::Clone for vllm_server::security::audit::AuditEvent
+pub fn vllm_server::security::audit::AuditEvent::clone(&self) -> vllm_server::security::audit::AuditEvent
+impl core::fmt::Debug for vllm_server::security::audit::AuditEvent
+pub fn vllm_server::security::audit::AuditEvent::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::security::audit::AuditEvent
+pub fn vllm_server::security::audit::AuditEvent::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for vllm_server::security::audit::AuditEvent
+impl core::marker::Send for vllm_server::security::audit::AuditEvent
+impl core::marker::Sync for vllm_server::security::audit::AuditEvent
+impl core::marker::Unpin for vllm_server::security::audit::AuditEvent
+impl core::marker::UnsafeUnpin for vllm_server::security::audit::AuditEvent
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::security::audit::AuditEvent
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::security::audit::AuditEvent
+pub struct vllm_server::AuthConfig
+pub vllm_server::AuthConfig::api_keys: alloc::vec::Vec<alloc::string::String>
+pub vllm_server::AuthConfig::api_keys_env: core::option::Option<alloc::string::String>
+pub vllm_server::AuthConfig::api_keys_file: core::option::Option<alloc::string::String>
+pub vllm_server::AuthConfig::rate_limit_requests: usize
+pub vllm_server::AuthConfig::rate_limit_window_secs: u64
+impl vllm_server::AuthConfig
+pub fn vllm_server::AuthConfig::resolve_api_keys(&self) -> alloc::vec::Vec<alloc::string::String>
+impl core::clone::Clone for vllm_server::AuthConfig
+pub fn vllm_server::AuthConfig::clone(&self) -> vllm_server::AuthConfig
+impl core::default::Default for vllm_server::AuthConfig
+pub fn vllm_server::AuthConfig::default() -> Self
+impl core::fmt::Debug for vllm_server::AuthConfig
+pub fn vllm_server::AuthConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::AuthConfig
+pub fn vllm_server::AuthConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::AuthConfig
+pub fn vllm_server::AuthConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::AuthConfig
+impl core::marker::Send for vllm_server::AuthConfig
+impl core::marker::Sync for vllm_server::AuthConfig
+impl core::marker::Unpin for vllm_server::AuthConfig
+impl core::marker::UnsafeUnpin for vllm_server::AuthConfig
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::AuthConfig
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::AuthConfig
+pub struct vllm_server::AuthMiddleware
+impl vllm_server::auth::AuthMiddleware
+pub fn vllm_server::auth::AuthMiddleware::new(alloc::vec::Vec<alloc::string::String>, usize, u64) -> Self
+pub async fn vllm_server::auth::AuthMiddleware::verify(&self, &http::header::map::HeaderMap) -> core::result::Result<alloc::string::String, http::status::StatusCode>
+impl core::fmt::Debug for vllm_server::auth::AuthMiddleware
+pub fn vllm_server::auth::AuthMiddleware::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::auth::AuthMiddleware
+impl core::marker::Send for vllm_server::auth::AuthMiddleware
+impl core::marker::Sync for vllm_server::auth::AuthMiddleware
+impl core::marker::Unpin for vllm_server::auth::AuthMiddleware
+impl core::marker::UnsafeUnpin for vllm_server::auth::AuthMiddleware
+impl !core::panic::unwind_safe::RefUnwindSafe for vllm_server::auth::AuthMiddleware
+impl !core::panic::unwind_safe::UnwindSafe for vllm_server::auth::AuthMiddleware
+pub struct vllm_server::BatchManager
+impl vllm_server::openai::batch::manager::BatchManager
+pub async fn vllm_server::openai::batch::manager::BatchManager::add_result(&self, &str, vllm_server::openai::batch::types::BatchResultItem)
+pub async fn vllm_server::openai::batch::manager::BatchManager::create_job(&self, vllm_server::openai::batch::types::BatchEndpoint, alloc::vec::Vec<alloc::string::String>, core::option::Option<alloc::string::String>, core::option::Option<i64>, core::option::Option<f32>) -> alloc::string::String
+pub async fn vllm_server::openai::batch::manager::BatchManager::get_all_jobs(&self) -> alloc::vec::Vec<vllm_server::openai::batch::types::BatchJob>
+pub async fn vllm_server::openai::batch::manager::BatchManager::get_job(&self, &str) -> core::option::Option<vllm_server::openai::batch::types::BatchJob>
+pub fn vllm_server::openai::batch::manager::BatchManager::new() -> Self
+pub async fn vllm_server::openai::batch::manager::BatchManager::set_completed(&self, &str)
+pub async fn vllm_server::openai::batch::manager::BatchManager::update_job(&self, vllm_server::openai::batch::types::BatchJob)
+impl core::default::Default for vllm_server::openai::batch::manager::BatchManager
+pub fn vllm_server::openai::batch::manager::BatchManager::default() -> Self
+impl core::fmt::Debug for vllm_server::openai::batch::manager::BatchManager
+pub fn vllm_server::openai::batch::manager::BatchManager::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::openai::batch::manager::BatchManager
+impl core::marker::Send for vllm_server::openai::batch::manager::BatchManager
+impl core::marker::Sync for vllm_server::openai::batch::manager::BatchManager
+impl core::marker::Unpin for vllm_server::openai::batch::manager::BatchManager
+impl core::marker::UnsafeUnpin for vllm_server::openai::batch::manager::BatchManager
+impl !core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::manager::BatchManager
+impl !core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::manager::BatchManager
+pub struct vllm_server::BatchResponse
+pub vllm_server::BatchResponse::completed_at: core::option::Option<i64>
+pub vllm_server::BatchResponse::created_at: i64
+pub vllm_server::BatchResponse::endpoint: vllm_server::openai::batch::types::BatchEndpoint
+pub vllm_server::BatchResponse::expires_at: i64
+pub vllm_server::BatchResponse::id: alloc::string::String
+pub vllm_server::BatchResponse::object: alloc::string::String
+pub vllm_server::BatchResponse::request_counts: core::option::Option<vllm_server::openai::batch::types::RequestCounts>
+pub vllm_server::BatchResponse::status: alloc::string::String
+impl core::clone::Clone for vllm_server::openai::batch::types::BatchResponse
+pub fn vllm_server::openai::batch::types::BatchResponse::clone(&self) -> vllm_server::openai::batch::types::BatchResponse
+impl core::fmt::Debug for vllm_server::openai::batch::types::BatchResponse
+pub fn vllm_server::openai::batch::types::BatchResponse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_server::openai::batch::types::BatchResponse
+pub fn vllm_server::openai::batch::types::BatchResponse::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::batch::types::BatchResponse
+pub fn vllm_server::openai::batch::types::BatchResponse::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_server::openai::batch::types::BatchResponse
+impl core::marker::Send for vllm_server::openai::batch::types::BatchResponse
+impl core::marker::Sync for vllm_server::openai::batch::types::BatchResponse
+impl core::marker::Unpin for vllm_server::openai::batch::types::BatchResponse
+impl core::marker::UnsafeUnpin for vllm_server::openai::batch::types::BatchResponse
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::openai::batch::types::BatchResponse
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::openai::batch::types::BatchResponse
+pub struct vllm_server::HealthChecker
+impl vllm_server::health::HealthChecker
+pub const fn vllm_server::health::HealthChecker::check_liveness(&self) -> vllm_server::health::HealthStatus
+pub const fn vllm_server::health::HealthChecker::check_readiness(&self) -> vllm_server::health::HealthStatus
+pub const fn vllm_server::health::HealthChecker::new(bool, bool) -> Self
+impl core::default::Default for vllm_server::health::HealthChecker
+pub fn vllm_server::health::HealthChecker::default() -> Self
+impl core::fmt::Debug for vllm_server::health::HealthChecker
+pub fn vllm_server::health::HealthChecker::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_server::health::HealthChecker
+impl core::marker::Send for vllm_server::health::HealthChecker
+impl core::marker::Sync for vllm_server::health::HealthChecker
+impl core::marker::Unpin for vllm_server::health::HealthChecker
+impl core::marker::UnsafeUnpin for vllm_server::health::HealthChecker
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::health::HealthChecker
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::health::HealthChecker
