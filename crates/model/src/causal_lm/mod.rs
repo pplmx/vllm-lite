@@ -18,7 +18,7 @@ use crate::components::decoder_block::PagedDecoderBlock;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{D, Device, Module, Tensor};
 use candle_nn::Embedding;
-use vllm_traits::{BatchOutput, ModelError, Result, SeqId, TokenId};
+use vllm_traits::{argmax_logits, BatchOutput, ModelError, Result, SeqId, TokenId};
 
 /// Map candle errors into [`ModelError`] via `?`.
 pub(crate) fn map_candle<T>(result: candle_core::Result<T>) -> Result<T> {
@@ -58,9 +58,12 @@ pub(crate) fn greedy_sample_token(logits: &Tensor, is_prefill: bool) -> Result<T
             .map_err(ModelError::from)?
     };
 
-    map_candle(logits.argmax(D::Minus1))?
-        .to_vec0::<u32>()
-        .map_err(ModelError::from)
+    // Phase 18 ARCH-09: delegate the actual argmax to the shared
+    // `vllm_traits::argmax_logits` helper rather than calling
+    // `tensor.argmax(...)` here — keeps the greedy core logic in one
+    // place across the workspace.
+    let logits_vec = map_candle(logits.to_vec1::<f32>())?;
+    Ok(argmax_logits(&logits_vec))
 }
 
 pub(crate) fn logits_to_vector(logits: &Tensor, is_prefill: bool) -> Result<Vec<f32>> {
