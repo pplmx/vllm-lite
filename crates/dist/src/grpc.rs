@@ -9,6 +9,8 @@ use tokio::sync::RwLock;
 use tonic::{Request, Response, Status};
 use tracing::{info, warn};
 
+use crate::distributed_kv::DistributedKVCache;
+
 // Lints are disabled for the generated proto module because tonic_build output
 // is not under our control. See crates/dist/proto/node.proto for the source.
 #[allow(
@@ -30,6 +32,14 @@ pub use generated_proto::*;
 pub struct GrpcState {
     pub node_id: String,
     pub peers: Arc<RwLock<Vec<String>>>,
+    /// Optional reference to the local [`DistributedKVCache`] that
+    /// `PutKVCache` / `InvalidateKVCache` RPCs replicate into.
+    /// Phase 19 OPS-05c.
+    pub distributed_kv: Option<Arc<DistributedKVCache>>,
+    /// Legacy: byte-string KV store used by the `GetKVCache` RPC
+    /// handler. Kept for backward compatibility with the existing
+    /// `GetKVCache` RPC and is **not** the same as
+    /// [`Self::distributed_kv`].
     pub kv_cache: Arc<RwLock<HashMap<String, Vec<u8>>>>,
 }
 
@@ -39,8 +49,17 @@ impl GrpcState {
         Self {
             node_id,
             peers: Arc::new(RwLock::new(Vec::new())),
+            distributed_kv: None,
             kv_cache: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    /// Attach a [`DistributedKVCache`] so `PutKVCache` /
+    /// `InvalidateKVCache` RPCs from peers replicate into it.
+    #[must_use]
+    pub fn with_distributed_kv(mut self, cache: Arc<DistributedKVCache>) -> Self {
+        self.distributed_kv = Some(cache);
+        self
     }
 
     pub async fn add_peer(&self, peer: String) {
@@ -138,22 +157,91 @@ impl node_service_server::NodeService for NodeServiceImpl {
             peer_addresses: peers.clone(),
         }))
     }
+
+    async fn put_kv_cache(
+        &self,
+        request: Request<PutKvCacheRequest>,
+    ) -> Result<Response<PutKvCacheResponse>, Status> {
+        let req = request.into_inner();
+        // Replicate into the local cache. `put` is sync and bumps
+        // stats; we treat any failure here as a server-side bug
+        // (not a network error) so always return success.
+        if let Some(cache) = self.state.distributed_kv.as_ref() {
+            cache.put(req.block_id, req.value_hash);
+        } else {
+            // No cache wired — log and accept the message anyway
+            // (peer may be sending for an outdated config). The
+            // alternative (failing the RPC) would create retry
+            // storms.
+            warn!(
+                block_id = req.block_id,
+                "PutKVCache received but no DistributedKVCache wired in; dropping"
+            );
+        }
+        Ok(Response::new(PutKvCacheResponse { success: true }))
+    }
+
+    async fn invalidate_kv_cache(
+        &self,
+        request: Request<InvalidateKvCacheRequest>,
+    ) -> Result<Response<InvalidateKvCacheResponse>, Status> {
+        let req = request.into_inner();
+        if let Some(cache) = self.state.distributed_kv.as_ref() {
+            cache.invalidate(req.block_id);
+        } else {
+            warn!(
+                block_id = req.block_id,
+                "InvalidateKVCache received but no DistributedKVCache wired in; dropping"
+            );
+        }
+        Ok(Response::new(InvalidateKvCacheResponse { success: true }))
+    }
 }
 
 /// Bind to the configured address and start accepting gRPC connections.
+///
+/// `cache` is the local [`DistributedKVCache`] that `PutKVCache` /
+/// `InvalidateKVCache` RPCs replicate into. Pass `None` if the server
+/// is not part of a multi-node cluster (e.g., a standalone server
+/// for tensor-parallel only).
 /// # Errors
 ///
-/// Returns `Err` if the operation fails.
+/// Returns [`crate::error::GrpcError::Bind`] if `listen_addr` cannot
+/// be bound, or any error propagated from
+/// [`start_grpc_server_with_listener`].
 pub async fn start_grpc_server(
     node_id: String,
     listen_addr: &str,
+    cache: Option<Arc<DistributedKVCache>>,
 ) -> Result<(), crate::error::GrpcError> {
-    let state = GrpcState::new(node_id);
+    let listener = tokio::net::TcpListener::bind(listen_addr).await?;
+    info!(addr = %listener.local_addr()?, "Starting gRPC server");
+    start_grpc_server_with_listener(node_id, listener, cache).await
+}
+
+/// Same as [`start_grpc_server`] but takes a pre-bound listener.
+///
+/// Useful for tests that need to bind to port `0` (let the OS pick a
+/// free port) and then read back the chosen port from
+/// `listener.local_addr()` before starting the server.
+///
+/// # Errors
+///
+/// Returns [`crate::error::GrpcError`] from the tonic transport if
+/// the server fails to start serving (e.g., shutdown mid-flight).
+pub async fn start_grpc_server_with_listener(
+    node_id: String,
+    listener: tokio::net::TcpListener,
+    cache: Option<Arc<DistributedKVCache>>,
+) -> Result<(), crate::error::GrpcError> {
+    let state = GrpcState {
+        node_id,
+        peers: Arc::new(RwLock::new(Vec::new())),
+        distributed_kv: cache,
+        kv_cache: Arc::new(RwLock::new(HashMap::new())),
+    };
     let service = NodeServiceImpl::new(state).into_service();
 
-    info!(addr = %listen_addr, "Starting gRPC server");
-
-    let listener = tokio::net::TcpListener::bind(listen_addr).await?;
     tonic::transport::Server::builder()
         .add_service(service)
         .serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(listener))
@@ -189,5 +277,16 @@ mod tests {
         assert_eq!(peers.len(), 1);
         assert_eq!(peers[0], "node-2:50051");
         drop(peers);
+    }
+
+    #[tokio::test]
+    async fn test_grpc_state_with_distributed_kv() {
+        use crate::distributed_kv::CacheConfig;
+        use crate::distributed_kv::protocol::NodeId;
+        let cache = Arc::new(DistributedKVCache::new(CacheConfig::new(NodeId(0), 2)));
+        let state = GrpcState::new("node-0".to_string()).with_distributed_kv(Arc::clone(&cache));
+        assert!(state.distributed_kv.is_some());
+        // The same Arc should be returned.
+        assert!(Arc::ptr_eq(state.distributed_kv.as_ref().unwrap(), &cache,));
     }
 }

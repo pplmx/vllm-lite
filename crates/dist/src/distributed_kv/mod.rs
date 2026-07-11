@@ -21,6 +21,13 @@ pub struct CacheConfig {
     pub invalidation_strategy: InvalidationStrategy,
     /// Cache-coherence protocol (None / MESI / Directory).
     pub coherence_protocol: CoherenceProtocol,
+    /// URLs of peer nodes' gRPC services (e.g.
+    /// `http://node-1:50051`). When non-empty, the cache broadcasts
+    /// every `put` / `invalidate` to these peers via the
+    /// [`crate::PeerClient`]. Empty (the default) means
+    /// single-node mode — no replication, no network. Phase 19
+    /// OPS-05c.
+    pub peer_urls: Vec<String>,
 }
 
 /// Strategy pattern implementation for Invalidation. Encapsulates one of N interchangeable algorithms.
@@ -53,6 +60,9 @@ impl Default for CacheConfig {
             replication_factor: 2,
             invalidation_strategy: InvalidationStrategy::WriteInvalidate,
             coherence_protocol: CoherenceProtocol::Directory,
+            // Single-node mode by default. Set this to a non-empty
+            // Vec to enable cross-node replication. Phase 19 OPS-05c.
+            peer_urls: Vec::new(),
         }
     }
 }
@@ -66,6 +76,20 @@ impl CacheConfig {
             replication_factor: 2.min(num_nodes),
             ..Default::default()
         }
+    }
+
+    /// Builder-style setter for [`Self::peer_urls`].
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let config = CacheConfig::new(NodeId(0), 2)
+    ///     .with_peer_urls(vec!["http://node-1:50051".to_string()]);
+    /// ```
+    #[must_use]
+    pub fn with_peer_urls(mut self, peer_urls: Vec<String>) -> Self {
+        self.peer_urls = peer_urls;
+        self
     }
 }
 
