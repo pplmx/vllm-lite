@@ -213,7 +213,10 @@ fn test_apply_with_scaling_default_matches_unscaled() -> Result<()> {
     let out_default = rope_default.apply_with_scaling(&q, &positions)?;
     let out_unscaled = rope_unscaled.apply(&q, &positions)?;
 
-    let diff = (&out_default - &out_unscaled)?.abs()?.max_all()?.to_scalar::<f32>()?;
+    let diff = (&out_default - &out_unscaled)?
+        .abs()?
+        .max_all()?
+        .to_scalar::<f32>()?;
     assert!(
         diff < 1e-5,
         "Default scaling should match unscaled apply (max diff = {diff})"
@@ -235,7 +238,10 @@ fn test_apply_with_scaling_linear_modifies_output() -> Result<()> {
     let out_unscaled = rope_unscaled.apply(&q, &positions)?;
     let out_linear = rope_linear.apply_with_scaling(&q, &positions)?;
 
-    let diff = (&out_unscaled - &out_linear)?.abs()?.sum_all()?.to_scalar::<f32>()?;
+    let diff = (&out_unscaled - &out_linear)?
+        .abs()?
+        .sum_all()?
+        .to_scalar::<f32>()?;
     assert!(
         diff > 1e-3,
         "Linear scaling (factor=2) should noticeably change the output (sum diff = {diff})"
@@ -259,7 +265,10 @@ fn test_apply_with_scaling_yarn_modifies_output() -> Result<()> {
     let out_unscaled = rope_unscaled.apply(&q, &positions)?;
     let out_yarn = rope_yarn.apply_with_scaling(&q, &positions)?;
 
-    let diff = (&out_unscaled - &out_yarn)?.abs()?.sum_all()?.to_scalar::<f32>()?;
+    let diff = (&out_unscaled - &out_yarn)?
+        .abs()?
+        .sum_all()?
+        .to_scalar::<f32>()?;
     assert!(
         diff > 1e-6,
         "YaRN scaling (factor=4) should change the output (sum diff = {diff})"

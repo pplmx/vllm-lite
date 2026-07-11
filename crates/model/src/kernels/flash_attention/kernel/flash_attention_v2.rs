@@ -151,7 +151,6 @@ impl FlashAttentionV2 {
 
         Ok(final_output)
     }
-
 }
 
 impl FlashAttention for FlashAttentionV2 {

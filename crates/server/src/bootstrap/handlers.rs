@@ -5,11 +5,7 @@
 // (`/health/live`, `/health/ready`) and the legacy aliases (`/health`,
 // `/ready`).
 
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::Response,
-};
+use axum::{extract::State, http::StatusCode, response::Response};
 use serde_json::json;
 use vllm_core::metrics::PrometheusExporter;
 use vllm_server::ApiState;
