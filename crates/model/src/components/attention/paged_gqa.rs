@@ -9,8 +9,6 @@
     clippy::cast_sign_loss
 )]
 
-use std::collections::BTreeMap;
-
 use candle_core::{Device, Module, Result, Tensor};
 use candle_nn::Linear;
 
@@ -18,6 +16,11 @@ use super::causal_mask;
 use crate::paged_tensor::PagedKvCache;
 
 /// Write expanded K/V tensors to the paged KV cache during prefill.
+///
+/// Each token is written at the global position given by `positions[token_idx]`
+/// (converted to `(block_id, token_offset)` via the block table), so chunked
+/// prefill continuations land at the correct cache slots instead of always
+/// overwriting offset 0.
 ///
 /// # Errors
 ///
@@ -27,29 +30,34 @@ pub fn write_prefill_kv(
     kv_cache: &mut PagedKvCache,
     layer_idx: usize,
     block_ids: &[usize],
+    positions: &[usize],
     seq_len: usize,
     k: &Tensor,
     v: &Tensor,
 ) -> Result<()> {
-    let mut block_groups: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
-    for (token_idx, &block_id) in block_ids.iter().take(seq_len).enumerate() {
-        block_groups.entry(block_id).or_default().push(token_idx);
-    }
+    let block_size = kv_cache.block_size();
+    for token_idx in 0..seq_len {
+        let global_pos = positions
+            .get(token_idx)
+            .copied()
+            .unwrap_or(token_idx);
+        let block_id = block_ids
+            .get(token_idx)
+            .or_else(|| block_ids.first())
+            .copied()
+            .unwrap_or(0);
+        let token_offset = global_pos % block_size;
 
-    for (block_id, token_indices) in &block_groups {
-        if token_indices.is_empty() {
-            continue;
-        }
+        let k_token = k.narrow(2, token_idx, 1)?.contiguous()?;
+        let v_token = v.narrow(2, token_idx, 1)?.contiguous()?;
+        let k_slice = k_token
+            .squeeze(2)?
+            .reshape((1, k.dims()[1], k.dims()[3]))?;
+        let v_slice = v_token
+            .squeeze(2)?
+            .reshape((1, v.dims()[1], v.dims()[3]))?;
 
-        let indices: Vec<u32> = token_indices.iter().map(|&i| i as u32).collect();
-        let indices_tensor = Tensor::new(indices.as_slice(), k.device())?;
-
-        let k_block = k.index_select(&indices_tensor, 2)?.contiguous()?;
-        let v_block = v.index_select(&indices_tensor, 2)?.contiguous()?;
-        let k_block = k_block.transpose(1, 2)?.contiguous()?;
-        let v_block = v_block.transpose(1, 2)?.contiguous()?;
-
-        kv_cache.write_kv_batch(layer_idx, *block_id, 0, &k_block, &v_block)?;
+        kv_cache.write_kv(layer_idx, block_id, token_offset, &k_slice, &v_slice)?;
     }
 
     Ok(())
@@ -106,6 +114,23 @@ pub fn prefill_causal_mask(q_seq: usize, kv_seq: usize, device: &Device) -> Resu
     } else {
         Ok(None)
     }
+}
+
+/// Rectangular causal mask for chunked-prefill continuation.
+///
+/// `q` covers `q_seq` new tokens starting at global index `past_len`; `kv`
+/// spans the full prefix (`past_len + q_seq` tokens). Position `i` in the
+/// query may attend to key positions `0..=past_len + i`.
+///
+/// # Errors
+///
+/// Returns `Err` if mask tensor allocation fails.
+pub fn prefill_continue_causal_mask(
+    q_seq: usize,
+    past_len: usize,
+    device: &Device,
+) -> Result<Tensor> {
+    super::util::causal_mask_tile(1, past_len, q_seq, past_len + q_seq, device)
 }
 
 /// Scaled dot-product GQA attention with optional broadcast mask.
@@ -170,6 +195,44 @@ mod tests {
     }
 
     #[test]
+    fn test_write_prefill_kv_respects_global_positions() -> Result<()> {
+        let device = Device::Cpu;
+        let num_heads = 2;
+        let head_dim = 4;
+        let block_size = 16usize;
+        let mut kv_cache =
+            PagedKvCache::new(1, num_heads, head_dim, block_size, device.clone(), false)?;
+
+        let seq_len = 2usize;
+        let k = Tensor::ones((1, num_heads, seq_len, head_dim), DType::F32, &device)?;
+        let v = Tensor::zeros((1, num_heads, seq_len, head_dim), DType::F32, &device)?;
+        let block_ids = vec![0usize, 0];
+        let positions = vec![5usize, 6];
+
+        write_prefill_kv(
+            &mut kv_cache,
+            0,
+            &block_ids,
+            &positions,
+            seq_len,
+            &k,
+            &v,
+        )?;
+
+        let (read_k, _) = kv_cache.read_kv(0, &[0], 7)?;
+        assert_eq!(read_k.dims(), &[7, num_heads, head_dim]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_prefill_continue_causal_mask_shape() -> Result<()> {
+        let device = Device::Cpu;
+        let mask = prefill_continue_causal_mask(3, 5, &device)?;
+        assert_eq!(mask.dims(), &[1, 1, 3, 8]);
+        Ok(())
+    }
+
+    #[test]
     fn test_write_and_read_decode_kv_roundtrip() -> Result<()> {
         let device = Device::Cpu;
         let num_heads = 2;
@@ -181,7 +244,8 @@ mod tests {
         let v = Tensor::randn(0.0f32, 1.0, (1, num_heads, seq_len, head_dim), &device)?;
         let block_ids: Vec<usize> = (0..seq_len).map(|i| i / 16).collect();
 
-        write_prefill_kv(&mut kv_cache, 0, &block_ids, seq_len, &k, &v)?;
+        let positions: Vec<usize> = (0..seq_len).collect();
+        write_prefill_kv(&mut kv_cache, 0, &block_ids, &positions, seq_len, &k, &v)?;
 
         let k_new = Tensor::randn(0.0f32, 1.0, (num_heads, 1, head_dim), &device)?;
         let v_new = Tensor::randn(0.0f32, 1.0, (num_heads, 1, head_dim), &device)?;

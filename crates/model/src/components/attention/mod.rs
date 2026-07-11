@@ -23,8 +23,8 @@ pub use flash_attention_v3::{
 pub use gqa::GqaAttention;
 pub use mla::MlaAttention;
 pub use paged_gqa::{
-    QkRotaryEmb, compute_gqa_attention, prefill_causal_mask, project_attention_output,
-    read_decode_kv, write_prefill_kv,
+    QkRotaryEmb, compute_gqa_attention, prefill_causal_mask, prefill_continue_causal_mask,
+    project_attention_output, read_decode_kv, write_prefill_kv,
 };
 pub use rope_gqa::RopeGqaAttention;
 pub use util::{

@@ -82,6 +82,37 @@ impl RopeGqaDecoderBlock {
         x.add(&residual)
     }
 
+    /// Run a chunked-prefill continuation against an existing KV prefix.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
+    pub fn forward_prefill_continue(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        positions: &[usize],
+        num_computed_tokens: usize,
+    ) -> Result<Tensor> {
+        let residual = x.clone();
+        let x = self.input_layernorm.forward(x)?;
+        let x = self.attention.forward_prefill_continue(
+            &x,
+            kv_cache,
+            layer_idx,
+            block_ids,
+            positions,
+            num_computed_tokens,
+        )?;
+        let x = (&x + &residual)?;
+
+        let residual = x.clone();
+        let x = self.post_attention_layernorm.forward(&x)?;
+        let x = self.mlp.forward(&x)?;
+        x.add(&residual)
+    }
+
     /// Run the decode path: process one new token against cached KV.
     /// # Errors
     ///
@@ -213,6 +244,56 @@ mod tests {
         let mlp = SwiGLU::new(hidden, 128, None).unwrap();
 
         RopeGqaDecoderBlock::new(input_layernorm, post_attention_layernorm, attention, mlp)
+    }
+
+    #[test]
+    fn test_decoder_prefill_continue_matches_full_prefill() {
+        let device = Device::Cpu;
+        let block = tiny_block(&device);
+
+        let seq_len = 6usize;
+        let x = Tensor::ones((1, seq_len, 64), DType::F32, &device).unwrap();
+        let block_ids: Vec<usize> = (0..seq_len).map(|i| i / 16).collect();
+        let positions: Vec<usize> = (0..seq_len).collect();
+
+        let mut full_cache =
+            PagedKvCache::new(1, 4, 16, 32, device.clone(), false).unwrap();
+        let full_out = block
+            .forward_prefill(&x, &mut full_cache, 0, &block_ids, &positions)
+            .unwrap();
+
+        let mut chunked_cache =
+            PagedKvCache::new(1, 4, 16, 32, device.clone(), false).unwrap();
+        let chunk1 = x.narrow(1, 0, 3).unwrap();
+        let pos1: Vec<usize> = (0..3).collect();
+        block
+            .forward_prefill(&chunk1, &mut chunked_cache, 0, &block_ids, &pos1)
+            .unwrap();
+
+        let chunk2 = x.narrow(1, 3, 3).unwrap();
+        let pos2: Vec<usize> = (3..6).collect();
+        let cont_out = block
+            .forward_prefill_continue(
+                &chunk2,
+                &mut chunked_cache,
+                0,
+                &block_ids,
+                &pos2,
+                3,
+            )
+            .unwrap();
+
+        let full_last = full_out.narrow(1, seq_len - 1, 1).unwrap();
+        let cont_last = cont_out.narrow(1, 2, 1).unwrap();
+        let diff = (full_last - cont_last)
+            .unwrap()
+            .abs()
+            .unwrap()
+            .sum_all()
+            .unwrap()
+            .to_vec0::<f32>()
+            .unwrap();
+        assert!(diff < 1e-4, "chunked continuation diverged: diff={diff}");
     }
 
     #[test]

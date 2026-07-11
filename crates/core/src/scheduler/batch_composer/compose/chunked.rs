@@ -67,9 +67,9 @@ impl BatchComposer {
 
             kv_block_ids.push(seq.kv_blocks.as_ref().clone());
             num_computed_tokens.push(start);
-            // Only treat as prefill if this is the first chunk
-            // Subsequent chunks use is_prefill=false to continue prefill
-            is_prefill.push(start == 0);
+            // Every chunked-prefill step embeds the full chunk; continuation
+            // uses `forward_prefill_continue` when `start > 0`.
+            is_prefill.push(true);
 
             tracing::debug!(
                 seq_id = seq.id,

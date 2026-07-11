@@ -11,8 +11,8 @@ mod tests {
     use candle_core::D;
 
     #[test]
-    #[ignore = "Known issue: partial prefill produces different output than full prefill"]
-    fn test_qwen3_partial_prefill_kv_cache_issue() {
+    #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
+    fn test_qwen3_partial_prefill_matches_full_prefill() {
         let mut model = support::qwen3::Qwen3Fixture::cpu()
             .load_model()
             .expect("Failed to load model");
@@ -107,20 +107,10 @@ mod tests {
         println!("Full prefill gives: {next1}");
         println!("Two-step gives: first={next_c1}, second={next_c2}");
 
-        // The issue is that partial prefill doesn't give the same result
-        // as full prefill because of KV cache/state issues
-        let outputs_differ = next1 != next_c2;
-        println!("Outputs differ: {outputs_differ}");
-
-        if outputs_differ {
-            println!("\n*** BUG: Partial prefill produces different output! ***");
-            println!("This is likely due to KV cache not being properly handled");
-        }
-
-        // This test documents the issue - pass regardless but log the problem
-        if outputs_differ {
-            println!("[DOCUMENTED BUG] Partial prefill differs from full prefill");
-        }
+        assert_eq!(
+            next1, next_c2,
+            "chunked prefill must match full prefill for the same prompt"
+        );
         drop(model);
     }
 

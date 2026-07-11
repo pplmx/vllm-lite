@@ -22,7 +22,12 @@ use std::collections::HashMap;
 use candle_core::{DType, Device, Result, Tensor};
 
 #[derive(Debug)]
-/// Cache for `PagedKv`. Keyed lookup with the configured eviction policy (LRU, ARC, FIFO). Thread-safe.
+/// Physical paged KV cache backing store for attention layers.
+///
+/// Stores per-layer K/V tensors in fixed-size blocks (`BLOCK_SIZE` tokens per
+/// block). Attention paths call [`Self::write_kv`] / [`Self::read_kv`] during
+/// prefill and decode; the scheduler's logical block allocator tracks which
+/// physical blocks are assigned to each sequence.
 pub struct PagedKvCache {
     key_cache: Vec<Tensor>,
     value_cache: Vec<Tensor>,
