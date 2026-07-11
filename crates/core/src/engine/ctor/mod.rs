@@ -6,6 +6,13 @@
 //! - [`builder`] — `EngineBuilder` struct + impl
 //!
 //! The `Engine` struct itself lives in the parent `engine::mod`.
+//!
+//! **CUDA Graph construction** (Phase 18 ARCH-06): when the `cuda-graph`
+//! feature is enabled, this is the *only* file in `vllm-core` that imports
+//! the concrete `vllm_model::kernels::BatchCudaGraphExecutor`. It builds the
+//! value and immediately boxes it into
+//! `Box<dyn vllm_traits::CudaGraphExecutor + Send>`. Every other engine
+//! call site talks to the trait, never the concrete type.
 
 mod builder;
 mod drafts;
@@ -27,7 +34,7 @@ use vllm_traits::ModelBackend;
 use vllm_model::kernels::BatchCudaGraphExecutor;
 
 #[cfg(feature = "cuda-graph")]
-use vllm_traits::kernels::CudaGraphConfig;
+use vllm_traits::kernels::{CudaGraphConfig, CudaGraphExecutor};
 
 impl Engine {
     /// Construct an Engine with default scheduler configuration and a fixed
@@ -68,14 +75,14 @@ impl Engine {
     ) -> Self {
         let max_seqs = config.max_num_seqs;
         #[cfg(feature = "cuda-graph")]
-        let cuda_graph = if config.cuda_graph.enabled {
+        let cuda_graph: Option<Box<dyn CudaGraphExecutor + Send>> = if config.cuda_graph.enabled {
             let graph_config = CudaGraphConfig {
                 enabled: true,
                 batch_sizes: config.cuda_graph.batch_sizes.clone(),
                 ..Default::default()
             };
             match BatchCudaGraphExecutor::new(graph_config) {
-                Ok(executor) => Some(executor),
+                Ok(executor) => Some(Box::new(executor)),
                 Err(e) => {
                     tracing::warn!("Failed to initialize CUDA Graph: {}", e);
                     None

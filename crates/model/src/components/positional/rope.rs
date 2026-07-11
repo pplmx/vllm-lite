@@ -133,7 +133,7 @@ impl RoPE {
     }
 
     /// Bundle the scaling-related fields for passing to the free function.
-    fn scaling_ctx(&self) -> RopeScalingContext {
+    const fn scaling_ctx(&self) -> RopeScalingContext {
         RopeScalingContext {
             rope_type: self.rope_type,
             scaling_factor: self.scaling_factor,

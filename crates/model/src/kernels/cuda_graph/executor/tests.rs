@@ -197,3 +197,40 @@ fn test_warmup() {
     assert!(executor.has_graph(4));
     assert!(executor.has_graph(8));
 }
+
+#[test]
+fn test_trait_dispatch_via_cuda_graph_executor() {
+    // Phase 18 ARCH-06 — the engine stores `Box<dyn CudaGraphExecutor + Send>`,
+    // so every production call goes through the trait, not the inherent
+    // methods. This test exercises the trait surface end-to-end to make
+    // sure the dispatch wiring is correct.
+    use vllm_traits::CudaGraphExecutor;
+
+    let mut executor = BatchCudaGraphExecutor::new(CudaGraphConfig {
+        enabled: true,
+        batch_sizes: vec![1, 2],
+        ..Default::default()
+    })
+    .unwrap();
+    let boxed: Box<dyn CudaGraphExecutor + Send> = Box::new(executor);
+
+    // `is_enabled` reflects the config flag.
+    assert!(boxed.is_enabled());
+
+    // `capture_all_graphs` succeeds and is idempotent.
+    let mut owned = boxed;
+    owned.capture_all_graphs().expect("capture should succeed");
+    owned
+        .capture_all_graphs()
+        .expect("re-capture should also succeed");
+
+    // `execute` for an uncaptured batch size returns the typed error.
+    let batch = create_mock_batch(16);
+    let err = owned
+        .execute(&batch)
+        .expect_err("execute for size 16 must miss the captured pool");
+    assert!(matches!(
+        err,
+        vllm_traits::GraphExecutionError::GraphNotFound(16)
+    ));
+}
