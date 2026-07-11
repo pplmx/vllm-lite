@@ -50,14 +50,6 @@ impl PrometheusExporter {
             self.collector.get_counter("cuda_graph_misses_total")
         );
 
-        output.push_str("# HELP packing_sequences_total Total sequences packed\n");
-        output.push_str("# TYPE packing_sequences_total counter\n");
-        let _ = write!(
-            output,
-            "packing_sequences_total {}\n",
-            self.collector.get_counter("packing_sequences_total")
-        );
-
         output.push_str(
             "# HELP speculative_adjustments_total Number of speculative draft adjustments\n",
         );
@@ -74,14 +66,6 @@ impl PrometheusExporter {
             output,
             "requests_total {}\n",
             self.collector.get_counter("requests_total")
-        );
-
-        output.push_str("# HELP errors_total Total errors encountered\n");
-        output.push_str("# TYPE errors_total counter\n");
-        let _ = write!(
-            output,
-            "errors_total {}\n",
-            self.collector.get_counter("errors_total")
         );
 
         // v18.0 multi-model speculative decoding metrics
@@ -138,23 +122,10 @@ impl PrometheusExporter {
         let eff = self.collector.get_gauge("packing_efficiency") as f64 / 100_000.0;
         let _ = write!(output, "packing_efficiency {eff:.3}\n");
 
-        output.push_str("# HELP packing_waste_ratio Waste ratio (0-1)\n");
-        output.push_str("# TYPE packing_waste_ratio gauge\n");
-        let waste = self.collector.get_gauge("packing_waste_ratio") as f64 / 100_000.0;
-        let _ = write!(output, "packing_waste_ratio {waste:.3}\n");
-
         output.push_str("# HELP speculative_acceptance_rate Token acceptance rate (0-1)\n");
         output.push_str("# TYPE speculative_acceptance_rate gauge\n");
         let rate = self.collector.get_gauge("speculative_acceptance_rate") as f64 / 100_000.0;
         let _ = write!(output, "speculative_acceptance_rate {rate:.3}\n");
-
-        output.push_str("# HELP speculative_draft_count Current draft tokens\n");
-        output.push_str("# TYPE speculative_draft_count gauge\n");
-        let _ = write!(
-            output,
-            "speculative_draft_count {}\n",
-            self.collector.get_gauge("speculative_draft_count")
-        );
 
         output.push_str("# HELP speculative_efficiency Draft token efficiency ratio (0-1)\n");
         output.push_str("# TYPE speculative_efficiency gauge\n");

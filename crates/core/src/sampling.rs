@@ -1,7 +1,8 @@
 //! Token sampling: temperature scaling, top-k, top-p (nucleus), and the combined `sample` entry point.
 //!
 //! Designed to be called per sequence per decode step. Beam-search
-//! sampling lives in `engine/beam.rs` instead.
+//! state types live in [`crate::beam`]; no orchestration methods are
+//! currently shipped (Phase 12d removed the unused `step_beam` helper).
 #![allow(unused_variables)]
 
 use crate::types::TokenId;

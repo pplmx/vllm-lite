@@ -30,16 +30,6 @@ impl RadixNode {
             is_complete: false,
         }
     }
-
-    #[must_use]
-    pub fn with_tokens(tokens: Vec<TokenId>) -> Self {
-        Self {
-            tokens,
-            blocks: None,
-            children: HashMap::new(),
-            is_complete: false,
-        }
-    }
 }
 
 impl Default for RadixNode {

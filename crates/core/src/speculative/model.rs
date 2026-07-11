@@ -51,10 +51,6 @@ impl<M: ModelBackend> SpeculativeModel<M> {
         self.verifier.as_ref()
     }
 
-    pub fn mut_verifier(&mut self) -> &mut Box<dyn DraftVerifier> {
-        &mut self.verifier
-    }
-
     pub const fn config(&self) -> &SpeculationConfig {
         &self.config
     }

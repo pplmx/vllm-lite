@@ -65,10 +65,6 @@ impl<M: ModelBackend> SelfSpeculativeModel<M> {
         &self.draft_kv_block_ids
     }
 
-    pub fn clear_draft_kv(&mut self) {
-        self.draft_kv_block_ids.clear();
-    }
-
     #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
     pub(crate) fn remove_draft_seq(&mut self, seq_id: SeqId) {
         self.draft_kv_block_ids.remove(&seq_id);
