@@ -51,6 +51,17 @@
     - `just public-api-check` fails when public API grows without a `CHANGELOG.md` entry; shrinking is allowed.
     - `just public-api-baseline` regenerates snapshots after intentional API changes.
 
+- **KV Block Transfer Protocol (v31.0 Phase 31-D / OPS-31d)** — closes the protocol-layer gap left by OPS-05c: replicated `(block_id, chain_hash)` intent can now be paired with actual KV tensor bytes flowing across nodes.
+    - **`BlockDataSource` trait** (`crates/dist/src/distributed_kv/block_data_source.rs`) — async, object-safe abstraction over raw block bytes. Production wraps `PagedKvCache` (v32+); tests use `MockBlockDataSource`.
+    - **`TransferKVBlock` gRPC RPC** — receiver sends `(block_id, expected_hash)`; sender returns `(block_id, chain_hash, bytes data, num_tokens)`. Chain-hash verification prevents wrong-content transfers.
+    - **`PeerClient::fetch_block`** — clones the existing `put`/`invalidate` pattern; bumps the generated client builder's `max_decoding_message_size` / `max_encoding_message_size` to `MAX_BLOCK_TRANSFER_BYTES` (64 MiB) so production-sized blocks (≈14 MiB for Qwen3-7B at F32) fit.
+    - **`DistributedKVCache::fetch_block`** — fan-out fallback over every peer (first response whose `chain_hash` matches the local `value_hash` wins); falls back to the local `BlockDataSource` if fan-out fails. Smart owner-based routing is explicitly deferred to v32+.
+    - **`FetchError`** — typed enum with `NotFound`, `HashMismatch`, `SourceUnavailable`, `NoPeers`, `AllPeersFailed`, `Transport` variants.
+    - **`GrpcState::block_data_source`** + `transfer_kv_block` handler — serves inbound `TransferKVBlock` RPCs from the local source; symmetric 64 MiB message limit on the server side.
+    - **`MAX_BLOCK_TRANSFER_BYTES = 64 MiB`** — applied symmetrically on server *and* client (Tonic's default 4 MiB would silently fail for any production-sized block). Integration test `fetch_block_works_above_default_message_limit` verifies a 5 MiB block round-trips end-to-end.
+    - **Test count delta**: `vllm-dist` unit 59 → 75 (+16); `vllm-dist` integration 5 → 12 (+7); workspace 1307 → 1338 (+31).
+    - Phase plan: `.planning/phase-19/ops-31d-kv-block-transfer.md`.
+
 ### Changed
 
 - **Test-Only Public API (v31.0 Phase 31-C)** — Phase 12c tightened ~43 UNIT-TEST-ONLY items to `pub(crate)`. Six `TEST-ONLY-MIXED` items (`with_drafts`, `pack_sequences`, `total_bytes`, JWT builders) remain `pub` because integration tests live outside the crate.

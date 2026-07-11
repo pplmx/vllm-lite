@@ -32,7 +32,8 @@ async fn spawn_server(cache: Arc<DistributedKVCache>) -> (tokio::task::JoinHandl
         // own assertions and shouldn't depend on the server's
         // shutdown semantics.
         let _ =
-            start_grpc_server_with_listener("test-node".to_string(), listener, Some(cache)).await;
+            start_grpc_server_with_listener("test-node".to_string(), listener, Some(cache), None)
+                .await;
     });
 
     // Give the server a moment to actually bind + register with

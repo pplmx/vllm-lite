@@ -3,6 +3,7 @@
 //! Activated by `--features multi-node`. The single-node path is the
 //! `HashMap`-backed `DistributedKVCache` used by tests and embedded builds.
 #![allow(clippy::module_name_repetitions)]
+use super::block_data_source::{BlockDataSource, FetchError};
 use super::{CacheConfig, CacheMessage, NodeId};
 use crate::error::GrpcError;
 use crate::grpc_client::PeerClient;
@@ -22,6 +23,10 @@ pub struct DistributedKVCache {
     /// is called; `Some(vec![])` once called with no peer URLs in
     /// the config (single-node mode, no broadcast). Phase 19 OPS-05c.
     peer_clients: Option<Arc<Vec<PeerClient>>>,
+    /// Optional source of raw block bytes for [`Self::fetch_block`].
+    /// Without this, [`Self::fetch_block`] can only satisfy requests
+    /// via remote peers. Phase 31-D OPS-31d.
+    block_data_source: Option<Arc<dyn BlockDataSource>>,
 }
 
 #[derive(Debug, Clone)]
@@ -69,7 +74,19 @@ impl DistributedKVCache {
             local_cache: Arc::new(RwLock::new(HashMap::new())),
             stats: RwLock::new(CacheStats::default()),
             peer_clients: None,
+            block_data_source: None,
         }
+    }
+
+    /// Attach a [`BlockDataSource`] so [`Self::fetch_block`] can
+    /// serve requests from local bytes when no peer has the block
+    /// (or in single-node mode).
+    ///
+    /// Phase 31-D OPS-31d.
+    #[must_use]
+    pub fn with_block_data_source(mut self, source: Arc<dyn BlockDataSource>) -> Self {
+        self.block_data_source = Some(source);
+        self
     }
 
     /// Build gRPC clients for every URL in [`CacheConfig::peer_urls`].
@@ -273,6 +290,105 @@ impl DistributedKVCache {
         }
 
         self.broadcast_invalidate(key);
+    }
+
+    /// Fetch raw bytes for `block_id` from a peer (or the local
+    /// [`BlockDataSource`] as a fallback).
+    ///
+    /// Phase 31-D OPS-31d. The algorithm is fan-out fallback:
+    ///
+    /// 1. **Local precheck**: the local cache must already hold an
+    ///    entry for `block_id`; otherwise the caller has no
+    ///    `expected_hash` to verify against and the request is
+    ///    meaningless — return [`FetchError::NotFound`].
+    /// 2. **Fan-out**: every configured peer is queried in parallel
+    ///    via [`PeerClient::fetch_block`]. The first response whose
+    ///    `chain_hash` matches the local `value_hash` wins; peers
+    ///    returning a mismatch (or a transport error) are logged and
+    ///    skipped.
+    /// 3. **Local fallback**: if fan-out yields no success, try the
+    ///    local [`BlockDataSource`] (production wraps `PagedKvCache`).
+    /// 4. **Nothing worked**: return
+    ///    [`FetchError::NoPeers`](if no peers and no source) or
+    ///    [`FetchError::AllPeersFailed`](otherwise).
+    ///
+    /// Smart owner-based routing (using [`Self::compute_owner_nodes`])
+    /// is deferred to v32+ — fan-out wastes bandwidth but is correct
+    /// and simple.
+    ///
+    /// # Errors
+    ///
+    /// See [`FetchError`].
+    pub async fn fetch_block(&self, block_id: u64) -> Result<Vec<u8>, FetchError> {
+        // Step 1: precheck. We need an expected_hash to verify peer
+        // responses against; without a local entry there's nothing
+        // to verify, so the call is a no-op miss.
+        let expected_hash = self.get(block_id).ok_or(FetchError::NotFound(block_id))?;
+
+        // Step 2: fan-out to peers (if any).
+        let peers: Vec<PeerClient> = self
+            .peer_clients
+            .as_ref()
+            .map(|c| c.iter().cloned().collect())
+            .unwrap_or_default();
+
+        if !peers.is_empty() {
+            // Use tokio::task::JoinSet to fan out across peers
+            // without adding a `futures` crate dependency.
+            let mut join_set = tokio::task::JoinSet::new();
+            for client in &peers {
+                let client = client.clone();
+                join_set.spawn(async move {
+                    (
+                        client.url().to_string(),
+                        client.fetch_block(block_id, expected_hash).await,
+                    )
+                });
+            }
+            while let Some(joined) = join_set.join_next().await {
+                let (url, result) = match joined {
+                    Ok(pair) => pair,
+                    Err(e) => {
+                        tracing::warn!(error = %e, "peer fetch task failed to join");
+                        continue;
+                    }
+                };
+                match result {
+                    Ok(resp) if resp.chain_hash == expected_hash => {
+                        return Ok(resp.data);
+                    }
+                    Ok(resp) => {
+                        tracing::warn!(
+                            peer = %url,
+                            block_id,
+                            expected = expected_hash,
+                            actual = resp.chain_hash,
+                            "peer returned block bytes with mismatched chain_hash"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            peer = %url,
+                            block_id,
+                            error = %e,
+                            "peer fetch_block failed"
+                        );
+                    }
+                }
+            }
+        }
+
+        // Step 3: fall back to the local source.
+        if let Some(source) = self.block_data_source.as_ref() {
+            return source.fetch_block(block_id).await;
+        }
+
+        // Step 4: nothing worked.
+        if peers.is_empty() {
+            Err(FetchError::NoPeers)
+        } else {
+            Err(FetchError::AllPeersFailed(peers.len()))
+        }
     }
 
     /// Spawn a tokio task that fires `put_kv_cache` on every peer.
@@ -597,6 +713,81 @@ mod tests {
             cache_b.lookup_prefix(&[1, 2]),
             0,
             "cache_b never saw key 1; both keys miss"
+        );
+    }
+
+    // --- fetch_block (Phase 31-D OPS-31d) ---
+    //
+    // These tests use a `tokio::test` runtime for the async path,
+    // but cover only the precheck + local-source-fallback branches.
+    // Peer-fan-out paths are exercised by the integration tests in
+    // `tests/kv_block_transfer.rs` because they need a real gRPC
+    // server on an ephemeral port.
+
+    #[tokio::test]
+    async fn fetch_block_returns_not_found_when_local_cache_missing() {
+        // Source is wired but the cache has no entry for `1` — the
+        // precheck fails, so we never call the source.
+        use crate::distributed_kv::block_data_source::MockBlockDataSource;
+        let mut source = MockBlockDataSource::new();
+        // Insert a block the cache has never heard of.
+        source.insert(99, vec![1, 2, 3]);
+
+        let cache = DistributedKVCache::new(CacheConfig::new(NodeId(0), 1))
+            .with_block_data_source(Arc::new(source));
+
+        let result = cache.fetch_block(99).await;
+        assert!(
+            matches!(result, Err(FetchError::NotFound(99))),
+            "expected NotFound(99); got {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn fetch_block_returns_no_peers_when_single_node_no_source() {
+        // Cache has an entry, but no peers and no local source — we
+        // can't fetch from anywhere.
+        let cache = DistributedKVCache::new(CacheConfig::new(NodeId(0), 1));
+        cache.put(7, 0xABCD);
+
+        let result = cache.fetch_block(7).await;
+        assert!(
+            matches!(result, Err(FetchError::NoPeers)),
+            "expected NoPeers; got {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn fetch_block_falls_back_to_local_source_when_no_peers() {
+        // Cache has an entry, local source has the bytes, no peers —
+        // should return the source bytes.
+        use crate::distributed_kv::block_data_source::MockBlockDataSource;
+        let mut source = MockBlockDataSource::new();
+        source.insert(7, vec![0xDE, 0xAD, 0xBE, 0xEF]);
+
+        let cache = DistributedKVCache::new(CacheConfig::new(NodeId(0), 1))
+            .with_block_data_source(Arc::new(source));
+        cache.put(7, 0xABCD);
+
+        let bytes = cache.fetch_block(7).await.expect("fetch ok");
+        assert_eq!(bytes, vec![0xDE, 0xAD, 0xBE, 0xEF]);
+    }
+
+    #[tokio::test]
+    async fn fetch_block_propagates_source_not_found() {
+        // Cache has an entry, local source does NOT have the bytes —
+        // should bubble the source's NotFound up.
+        use crate::distributed_kv::block_data_source::MockBlockDataSource;
+        let source = MockBlockDataSource::new(); // empty
+
+        let cache = DistributedKVCache::new(CacheConfig::new(NodeId(0), 1))
+            .with_block_data_source(Arc::new(source));
+        cache.put(7, 0xABCD);
+
+        let result = cache.fetch_block(7).await;
+        assert!(
+            matches!(result, Err(FetchError::NotFound(7))),
+            "expected NotFound(7) from source; got {result:?}"
         );
     }
 }

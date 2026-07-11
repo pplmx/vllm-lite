@@ -3847,6 +3847,7 @@ dependencies = [
 name = "vllm-dist"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "candle-core",
  "prost",
  "thiserror 2.0.18",
