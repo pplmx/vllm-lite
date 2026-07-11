@@ -14,9 +14,11 @@ use crate::config::ModelConfig;
 
 pub mod capabilities;
 pub mod registry;
+pub mod stub;
 
 pub use capabilities::ArchCapabilities;
 pub use registry::{ARCHITECTURE_REGISTRY, ArchitectureRegistry, register_all_archs};
+pub use stub::StubArchitecture;
 
 /// Architecture: architecture trait.
 pub trait Architecture: Send + Sync + 'static {
