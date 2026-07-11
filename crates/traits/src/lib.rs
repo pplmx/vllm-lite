@@ -13,15 +13,21 @@
 //! - Shared sampling primitives ([`argmax_logits`]) used by both
 //!   `vllm-core::sampling` and `vllm-model::causal_lm` to avoid an
 //!   upward `model → core` dependency.
+//! - Distributed block hashing ([`BlockHasher`] and the
+//!   [`IdentityHasher`] / [`XorShiftHasher`] implementations) used
+//!   by `vllm-core::scheduler::memory::MemoryManager` to content-
+//!   address KV blocks across nodes.
 //!
 //! Most consumers should depend on `vllm-core` or `vllm-model` instead and
 //! reach these types via their crate-root re-exports.
 
+pub mod distributed;
 pub mod kernels;
 pub mod model;
 pub mod sampling;
 pub mod types;
 
+pub use distributed::{BlockHasher, IdentityHasher, XorShiftHasher};
 pub use kernels::{CudaGraphConfig, CudaGraphExecutor, GraphExecutionError, ModelGraphConfig};
 pub use model::{ModelBackend, ModelError, Result, StubModelBackend};
 pub use sampling::argmax_logits;

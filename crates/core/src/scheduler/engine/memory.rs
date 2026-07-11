@@ -136,4 +136,19 @@ impl SchedulerEngine {
     pub fn set_distributed_kv(&mut self, cache: Arc<vllm_dist::DistributedKVCache>) {
         self.memory.set_distributed_kv(cache);
     }
+
+    /// Mutable accessor for the per-sequence chain cursors
+    /// ([`super::state::SchedulerEngine::chain_cursors`]).
+    ///
+    /// Used by [`super::update::SchedulerEngine::update`] to advance
+    /// the cursor after each block allocation, and by tests / ops
+    /// tools to inspect the chain state without poking at private
+    /// fields. Production code should let the request lifecycle
+    /// (allocate → record → advance) drive the cursors; this is
+    /// exposed so test code can seed cursors and so the prefix-cache
+    /// lookup (OPS-05b3) can read them.
+    #[cfg(feature = "multi-node")]
+    pub const fn chain_cursors_mut(&mut self) -> &mut std::collections::HashMap<SeqId, u64> {
+        &mut self.chain_cursors
+    }
 }

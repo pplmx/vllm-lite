@@ -14,6 +14,9 @@
 mod batch;
 mod request;
 
+#[cfg(feature = "multi-node")]
+use std::collections::HashMap;
+
 use std::sync::Arc;
 
 use vllm_traits::{Batch, SeqId};
@@ -51,6 +54,16 @@ pub struct SchedulerEngine {
     pub(super) cuda_graph: SchedulerCudaGraphConfig,
     /// Metrics collector for tracking engine performance
     pub metrics: Arc<EnhancedMetricsCollector>,
+    /// Per-sequence chain cursor for distributed KV-block content
+    /// hashing. Stores the hash of the last block each sequence
+    /// allocated, so the next block's hash is
+    /// `hasher.hash_block(parent_hash, tokens)`.
+    ///
+    /// Phase 19 OPS-05b2. Side-table rather than a field on
+    /// [`crate::types::Sequence`] so the Sequence layout stays
+    /// unchanged across feature flags.
+    #[cfg(feature = "multi-node")]
+    pub(super) chain_cursors: HashMap<SeqId, u64>,
 }
 
 impl std::fmt::Debug for SchedulerEngine {
@@ -118,6 +131,8 @@ impl SchedulerEngine {
             observers: SchedulerObservers::new(),
             cuda_graph,
             metrics,
+            #[cfg(feature = "multi-node")]
+            chain_cursors: HashMap::new(),
         }
     }
 
