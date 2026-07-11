@@ -126,11 +126,6 @@ impl NodeMesh {
     }
 
     #[must_use]
-    pub fn local_mesh(&self) -> &DeviceMesh {
-        &self.node_mesh[0]
-    }
-
-    #[must_use]
     pub fn peers(&self) -> Vec<String> {
         let mut peers = Vec::new();
         for i in 0..self.num_nodes {

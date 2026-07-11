@@ -143,11 +143,6 @@ impl TestHarness {
         &self.metrics
     }
 
-    /// Reset the metrics collector
-    pub fn reset_metrics(&self) {
-        let _ = self.metrics.get_counter("requests_total");
-    }
-
     /// Add a test request to the scheduler
     pub fn add_test_request(&mut self, prompt: Vec<u32>, max_tokens: usize) -> u64 {
         let request = Request::new(0, prompt, max_tokens);

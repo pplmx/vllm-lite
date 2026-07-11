@@ -156,32 +156,6 @@ impl PipelineParallel {
 
         Ok(all_outputs)
     }
-
-    /// Forward `inputs` through the pipeline in the order given (no
-    /// microbatch chunking). Single-stage pipelines delegate to
-    /// [`Self::forward_microbatches`] for the symmetric behaviour.
-    ///
-    /// Use this when the caller has already computed a custom
-    /// microbatch schedule (e.g. interleaved 1F1B) and just needs the
-    /// runtime to execute it sequentially.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err` if any per-input [`Self::forward`] call fails.
-    pub fn forward_with_schedule(&self, inputs: Vec<StageInput>) -> Result<Vec<StageOutput>> {
-        if !self.is_pipeline_parallel() {
-            return self.forward_microbatches(inputs);
-        }
-
-        let mut outputs = Vec::with_capacity(inputs.len());
-
-        for input in inputs {
-            let output = self.forward(input)?;
-            outputs.push(output);
-        }
-
-        Ok(outputs)
-    }
 }
 
 impl Default for PipelineParallel {
