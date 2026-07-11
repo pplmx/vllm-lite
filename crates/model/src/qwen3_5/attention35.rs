@@ -138,6 +138,7 @@ impl Attention35WithRoPE {
             kv_cache,
             layer_idx,
             block_ids,
+            positions,
             seq_len,
             &k_expanded,
             &v_expanded,

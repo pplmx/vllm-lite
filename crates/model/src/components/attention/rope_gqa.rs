@@ -11,7 +11,9 @@
 
 pub use crate::components::AttentionConfig;
 use crate::components::attention::GqaAttention as SharedGqaAttention;
-use crate::components::attention::paged_gqa::{read_decode_kv, write_prefill_kv};
+use crate::components::attention::paged_gqa::{
+    compute_gqa_attention, prefill_continue_causal_mask, read_decode_kv, write_prefill_kv,
+};
 use crate::components::positional::rope::RoPE;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
@@ -197,12 +199,95 @@ impl RopeGqaAttention {
             kv_cache,
             layer_idx,
             block_ids,
+            positions,
             seq_len,
             &k_expanded,
             &v_expanded,
         )?;
 
         self.inner.run_attention_fn(&q, &k_expanded, &v_expanded)
+    }
+
+    /// Chunked-prefill continuation: process new tokens against an existing KV
+    /// prefix. Queries attend over `num_computed_tokens + seq_len` cached keys
+    /// with a rectangular causal mask; new KV entries are written at the global
+    /// positions given by `positions`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if projection, RoPE, KV read/write, or attention fails.
+    pub fn forward_prefill_continue(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        positions: &[usize],
+        num_computed_tokens: usize,
+    ) -> Result<Tensor> {
+        let batch_size = x.dims()[0];
+        let seq_len = x.dims()[1];
+        let num_heads = self.inner.num_heads();
+        let num_kv_heads = self.inner.num_kv_heads();
+        let head_dim = self.inner.head_dim();
+
+        let (q, k, v) = self.inner.project_qkv(x)?;
+
+        let q = q.reshape((batch_size, seq_len, num_heads, head_dim))?;
+        let k = k.reshape((batch_size, seq_len, num_kv_heads, head_dim))?;
+        let v = v.reshape((batch_size, seq_len, num_kv_heads, head_dim))?;
+
+        let (q, k) = self.apply_qk_norm(q, k, batch_size, seq_len)?;
+
+        let position_ids: Vec<i64> = positions.iter().map(|&p| p as i64).collect();
+        let q = self.rope.apply_with_scaling(&q, &position_ids)?;
+        let k = self.rope.apply_with_scaling(&k, &position_ids)?;
+
+        let k_expanded = self.inner.expand_kv(&k, num_heads, num_kv_heads)?;
+        let v_expanded = self.inner.expand_kv(&v, num_heads, num_kv_heads)?;
+
+        let q = q.transpose(1, 2)?.contiguous()?;
+        let k_new = k_expanded.transpose(1, 2)?.contiguous()?;
+        let v_new = v_expanded.transpose(1, 2)?.contiguous()?;
+
+        let (cached_k, cached_v) =
+            kv_cache.read_kv(layer_idx, block_ids, num_computed_tokens)?;
+        let cached_k = cached_k
+            .transpose(0, 1)?
+            .unsqueeze(0)?
+            .contiguous()?;
+        let cached_v = cached_v
+            .transpose(0, 1)?
+            .unsqueeze(0)?
+            .contiguous()?;
+
+        write_prefill_kv(
+            kv_cache,
+            layer_idx,
+            block_ids,
+            positions,
+            seq_len,
+            &k_new,
+            &v_new,
+        )?;
+
+        let full_k = Tensor::cat(&[&cached_k, &k_new], 2)?.contiguous()?;
+        let full_v = Tensor::cat(&[&cached_v, &v_new], 2)?.contiguous()?;
+
+        let mask = prefill_continue_causal_mask(seq_len, num_computed_tokens, q.device())?;
+
+        let attn_output = compute_gqa_attention(
+            &q,
+            &full_k,
+            &full_v,
+            head_dim,
+            Some(&mask),
+        )?;
+
+        let attn_output = attn_output.transpose(1, 2)?;
+        let attn_output =
+            attn_output.reshape((batch_size, seq_len, num_heads * head_dim))?;
+        self.inner.o_proj.forward(&attn_output)
     }
 
     /// Decode path: project Q/K/V for one new token, apply optional QK-norm,

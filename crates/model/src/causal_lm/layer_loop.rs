@@ -1,6 +1,6 @@
 //! Unified decoder layer loop with optional per-layer auxiliary state (e.g. GDN).
 
-use crate::components::decoder_block::PagedDecoderBlock;
+use crate::components::decoder_block::{PagedDecoderBlock, RopeGqaDecoderBlock};
 use crate::components::gated_delta::GatedDeltaState;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
@@ -69,6 +69,54 @@ impl<L: PagedDecoderBlock> DecoderLayer for L {
     ) -> Result<Tensor> {
         let decode_position = [ctx.positions[0]];
         self.forward_decode(
+            x,
+            ctx.kv_cache,
+            layer_idx,
+            ctx.block_ids,
+            ctx.num_computed_tokens,
+            &decode_position,
+        )
+    }
+}
+
+impl DecoderLayer for RopeGqaDecoderBlock {
+    fn forward_prefill(
+        &self,
+        x: &Tensor,
+        ctx: &mut LayerCtx<'_>,
+        layer_idx: usize,
+    ) -> Result<Tensor> {
+        if ctx.num_computed_tokens > 0 {
+            Self::forward_prefill_continue(
+                self,
+                x,
+                ctx.kv_cache,
+                layer_idx,
+                ctx.block_ids,
+                ctx.positions,
+                ctx.num_computed_tokens,
+            )
+        } else {
+            Self::forward_prefill(
+                self,
+                x,
+                ctx.kv_cache,
+                layer_idx,
+                ctx.block_ids,
+                ctx.positions,
+            )
+        }
+    }
+
+    fn forward_decode(
+        &self,
+        x: &Tensor,
+        ctx: &mut LayerCtx<'_>,
+        layer_idx: usize,
+    ) -> Result<Tensor> {
+        let decode_position = [ctx.positions[0]];
+        Self::forward_decode(
+            self,
             x,
             ctx.kv_cache,
             layer_idx,
