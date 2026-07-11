@@ -75,6 +75,7 @@ phases/                ⚠ Duplicate of milestones/v23.0-phases/ — do not edit
 
 - [x] Create `DOC-MAP.md` (this file)
 - [x] Sync redirect headers on stale roadmaps
+- [x] Phase 12e public-api CI gate + baselines (incl. `core.txt`; fixed `.gitignore` `core.*`)
 - [ ] Move `docs/superpowers/` → `docs/archive/superpowers/` (bulk; check links first)
 - [ ] Remove duplicate `.planning/phases/` after link audit
 - [ ] Refresh `.planning/codebase/CONCERNS.md` against current code (JWT etc. may be stale)
