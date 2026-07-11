@@ -44,6 +44,10 @@ decisions in vllm-lite.
 - [ADR-017](ADR-017-fuzz-strategy.md) — Fuzz testing (cargo-fuzz)
 - [ADR-018](ADR-018-mutation-testing.md) — Mutation testing (cargo-mutants)
 
+### Documentation (v31.0+)
+
+- [ADR-019](ADR-019-documentation-standards.md) — Documentation and comment standards
+
 ## Conventions
 
 Each ADR follows the format:

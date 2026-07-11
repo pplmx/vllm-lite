@@ -1,6 +1,6 @@
 <!-- PROJECT SHIELDS -->
 <p align="center">
-  <img src="https://img.shields.io/badge/Rust-1.85+-orange.svg?style=flat-square&logo=rust" alt="Rust">
+  <img src="https://img.shields.io/badge/Rust-1.88+-orange.svg?style=flat-square&logo=rust" alt="Rust">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License">
   <a href="https://github.com/pplmx/vllm-lite/actions/workflows/ci.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/pplmx/vllm-lite/ci.yml?branch=main&style=flat-square&label=CI" alt="Build Status">
@@ -8,7 +8,7 @@
   <a href="https://github.com/pplmx/vllm-lite/releases">
     <img src="https://img.shields.io/github/v/release/pplmx/vllm-lite?style=flat-square&color=brightgreen" alt="Release">
   </a>
-  <img src="https://img.shields.io/badge/Tests-1219%20passing-success?style=flat-square" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-1235%20passing-success?style=flat-square" alt="Tests">
 </p>
 
 <!-- PROJECT LOGO -->
@@ -102,9 +102,9 @@ cargo fmt --all --check
 
 | 🚀 **高性能**   | 🛡️ **生产就绪**      | 📊 **可观测性**    | 🐳 **云原生**   |
 | :-------------- | :------------------- | :----------------- | :-------------- |
-| Rust 原生实现   | Circuit Breaker 熔断 | Structured Logging | Docker/K8s 支持 |
-| Paged Attention | 30+ E2E 测试         | Prometheus Metrics | 多阶段构建      |
-| Flash Attention | 自动故障恢复         | Health Check       | HPA 自动扩缩    |
+| Rust 原生实现   | JWT / RBAC / 审计    | Structured Logging | Docker/K8s 支持 |
+| Paged Attention | 请求体大小限制       | Prometheus Metrics | 多阶段构建      |
+| Flash Attention | 优雅关闭 / 健康检查  | Health / Ready     | HPA 自动扩缩    |
 
 </div>
 
@@ -175,10 +175,10 @@ curl -X POST http://localhost:8000/v1/completions \
 │  └── Structured Logs │                                        │
 ├─────────────────────────────────────────────────────────────┤
 │  🐳 Deployment         │  ✅ Testing                            │
-│  ├── Dockerfile        │  ├── 30+ E2E Tests                     │
-│  ├── docker-compose    │  ├── Unit Tests (1219+)               │
-│  ├── K8s Manifests     │  └── Benchmarks                        │
-│  └── HPA               │                                        │
+│  ├── Dockerfile        │  ├── 1235+ unit/integration tests    │
+│  ├── docker-compose    │  ├── 51 integration test files         │
+│  ├── K8s Manifests     │  ├── Fuzz + Mutation + Proptest      │
+│  └── HPA               │  └── Criterion benchmarks              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -237,8 +237,8 @@ cargo run -p vllm-server -- --log-dir ./logs
 | **首 Token 延迟 (TTFT)** | < 50ms         | 1K token prompt        |
 | **P99 延迟**             | < 100ms        | end-to-end             |
 | **显存效率**             | +40%           | vs 传统 KV Cache       |
-| **测试覆盖率**           | 1219+          | 单元 + 集成测试        |
-| **E2E 测试**             | 30+            | 全场景覆盖             |
+| **测试数**               | 1235+          | 默认 `just nextest`（跳过 `#[ignore]`） |
+| **Checkpoint 测试**      | 25+            | `just nextest-checkpoint`（需模型权重） |
 
 </div>
 
@@ -253,15 +253,15 @@ cargo run -p vllm-server -- --log-dir ./logs
 | 模型              | 架构                     |  状态   | 显存需求 |
 | ----------------- | ------------------------ | :-----: | -------: |
 | **Llama**         | GQA + RMSNorm            |   ✅    |   2-8 GB |
-| **Llama 4**       | MoE + Hybrid Attention   | 🟡 stub | 16-64 GB |
+| **Llama 4**       | MoE + Hybrid Attention   | 🟡 StubArchitecture | 16-64 GB |
 | **Mistral**       | Sliding Window + GQA     |   ✅    |   2-8 GB |
-| **Mistral Small** | Grouped Query + Sliding  | 🟡 stub |   4-8 GB |
+| **Mistral Small** | Grouped Query + Sliding  | 🟡 StubArchitecture |   4-8 GB |
 | **Qwen3**         | GQA + MLA + RoPE         |   ✅    |   1-4 GB |
 | **Qwen3.5**       | Mamba SSM Hybrid         |   ✅    |   1-4 GB |
-| **Gemma3**        | GQA + GeLU               | 🟡 stub |   2-4 GB |
+| **Gemma3**        | GQA + GeLU               | 🟡 StubArchitecture |   2-4 GB |
 | **Gemma4**        | Hybrid Attention + GeGLU |   ✅    |   2-8 GB |
 | **Mixtral**       | Sparse MoE (8 experts)   |   ✅    |  8-16 GB |
-| **Phi-4**         | GQA + RoPE               | 🟡 stub |   4-8 GB |
+| **Phi-4**         | GQA + RoPE               | 🟡 StubArchitecture |   4-8 GB |
 
 </div>
 
@@ -271,13 +271,7 @@ cargo run -p vllm-server -- --log-dir ./logs
 - ✅ **Qwen3**: 支持 0.5B 到 110B 参数模型
 - ✅ **Qwen3.5**: Mamba SSM Hybrid 架构
 - ✅ **Llama**: 支持 Llama 2/3 系列
-- ✅ **Llama 4**: 已注册架构 (stub 实现,等待权重层)
-- ✅ **Mistral**: 支持 Mistral 7B 和 Mixtral 8x7B
-- ✅ **Mistral Small**: 已注册架构 (stub 实现)
-- ✅ **Gemma3**: 已注册架构 (stub 实现)
-- ✅ **Gemma4**: Google Gemma 4 系列
-- ✅ **Mixtral**: Sparse MoE (8 experts)
-- 🟡 **Phi-4**: 已注册架构 (stub 实现)
+- ✅ **Llama 4 / Gemma3 / Mistral Small / Phi-4**: 通过 `StubArchitecture` 注册（检测权重，拒绝推理直至完整实现）
 - ⏳ **更多模型**: 持续添加中...
 
 </details>
@@ -489,6 +483,8 @@ engine.set_policy(Box::new(PriorityPolicy::default()));
 
 ## 🏗️ 架构
 
+> 完整架构图与请求生命周期见 **[docs/architecture.md](./docs/architecture.md)**。
+
 ```text
 vllm-lite/
 ├── Cargo.toml              # Workspace (6 crates)
@@ -497,28 +493,25 @@ vllm-lite/
 │   ├── traits/             # 接口定义 (ModelBackend, Batch, Kernel traits)
 │   ├── core/               # Engine、Scheduler、KV Cache、Metrics
 │   ├── model/              # 模型实现、Loader、Quantize、Kernels
-│   │   ├── arch/           # Architecture trait + Registry
-│   │   ├── components/     # 共享组件层 (attention, mlp, norm, positional, ssm, gated_delta, vision)
+│   │   ├── arch/           # Architecture trait + Registry + StubArchitecture
+│   │   ├── components/     # 共享组件层 (attention, mlp, norm, positional, ssm)
 │   │   ├── loader/         # ModelLoader、format detection
 │   │   ├── paged_tensor/   # 物理 KV cache (tensor_store, quantization)
 │   │   ├── quantize/       # GGUF Q4_K_M + StorageTensor
 │   │   ├── causal_lm/      # CausalLM head + block wrapper + hybrid dispatcher
 │   │   ├── llama/          # Llama 架构
-│   │   ├── llama4/         # Llama 4 架构
 │   │   ├── mistral/        # Mistral 架构
-│   │   ├── mistral_small/  # Mistral Small 架构
 │   │   ├── mixtral/        # Mixtral 架构 (Sparse MoE)
 │   │   ├── qwen3/          # Qwen2/3 架构 (GQA + MLA)
 │   │   ├── qwen3_5/        # Qwen3.5 架构 (Mamba SSM Hybrid)
-│   │   ├── gemma3/         # Gemma 3 架构
 │   │   ├── gemma4/         # Gemma 4 架构
-│   │   ├── phi4/           # Phi-4 架构
 │   │   └── kernels/        # GPU Kernels (flash_attention, cuda_graph)
-│   ├── dist/               # 张量并行 (multi-node, feature-gated)
+│   ├── dist/               # 多节点原语 (multi-node, feature-gated)
 │   ├── server/             # HTTP API (OpenAI 兼容 + 安全 + 批处理)
 │   └── testing/            # 测试工具 (BatchBuilder、fixtures、stubs)
-└── tests/                  # 集成测试
 ```
+
+集成测试位于 `crates/*/tests/`（非顶层 `tests/` 目录）。
 
 ### 技术栈
 
@@ -542,21 +535,17 @@ vllm-lite/
 
 ### Feature Flags
 
-| Feature         | Crate     | 描述                                                |
-| --------------- | --------- | --------------------------------------------------- |
-| `prometheus`    | core      | Prometheus 指标导出（默认启用）                      |
-| `opentelemetry` | core      | OpenTelemetry 追踪导出                              |
-| `cuda-graph`    | core      | 启用 CUDA Graph 捕获/回放（拉入 vllm-model 依赖）    |
-| `cuda`          | model     | Candle CUDA 支持                                    |
-| `gguf`          | model     | GGUF 模型加载                                       |
-| `multi-node`    | model     | 启用 vllm-dist 集成（张量并行 + pipeline + distributed_kv） |
-| `full`          | model     | cuda + gguf                                         |
-| `candle`        | traits    | 启用 Candle 核心类型                                |
-| `kernels`       | traits    | 启用 kernel trait 定义                              |
-| `cuda`          | testing   | 测试中启用 CUDA 路径                                |
-| `multi-node`    | testing   | 测试中启用 multi-node 路径                          |
+| Feature         | Crate              | 描述                                                |
+| --------------- | ------------------ | --------------------------------------------------- |
+| `cuda-graph`    | core, server       | CUDA Graph 捕获/回放（经 `CudaGraphExecutor` trait） |
+| `cuda`          | model              | Candle CUDA 支持                                    |
+| `gguf`          | model              | GGUF 模型加载                                       |
+| `multi-node`    | core, model, testing | 启用 `vllm-dist`（分布式 KV + gRPC）              |
+| `full`          | model              | `cuda` + `gguf`                                     |
+| `candle`        | traits             | 启用 Candle 核心类型                                |
+| `kernels`       | traits             | 启用 kernel trait 定义                              |
 
-Note: Tokenizer (tiktoken, tokenizers) is always enabled - required for model inference.
+Note: Tokenizer (`tiktoken`, `tokenizers`) 始终启用。`vllm-dist` 非 default-member，需 `--features multi-node` 构建。
 
 ---
 
@@ -573,9 +562,12 @@ Note: Tokenizer (tiktoken, tokenizers) is always enabled - required for model in
 
 ## 📚 文档
 
+- [docs/architecture.md](./docs/architecture.md) - 系统架构（单一真相源）
+- [OPERATIONS.md](./OPERATIONS.md) - 部署与故障排查
 - [ROADMAP.md](./ROADMAP.md) - 开发路线图
 - [CHANGELOG.md](./CHANGELOG.md) - 版本历史
 - [CONTRIBUTING.md](./CONTRIBUTING.md) - 贡献指南
+- [docs/adr/](./docs/adr/) - 架构决策记录 (18 篇 ADR)
 - [Tutorials](./docs/tutorial/01-setup.md) - 新贡献者教程（从 clone 到 serving）
 
 ---
