@@ -24,6 +24,13 @@ pub trait SchedulerObserver: Send + Sync {
     fn on_sequence_finished(&self, seq_id: SeqId, total_tokens: usize);
     fn on_preemption(&self, seq_id: SeqId, reason: &str);
     fn on_memory_pressure(&self, available_blocks: usize);
+    /// Fired when a new request's prompt prefix matched some chain
+    /// hash in the distributed KV cache. `matched_tokens` may be 0
+    /// (full miss) — implementations that only care about hits
+    /// should filter on `matched_tokens > 0`.
+    ///
+    /// Phase 19 OPS-05b3.
+    fn on_distributed_prefix_matched(&self, seq_id: SeqId, matched_tokens: usize);
 }
 
 /// Default no-op `SchedulerObserver`.
@@ -40,6 +47,7 @@ impl SchedulerObserver for NoopSchedulerObserver {
     fn on_sequence_finished(&self, _seq_id: SeqId, _total_tokens: usize) {}
     fn on_preemption(&self, _seq_id: SeqId, _reason: &str) {}
     fn on_memory_pressure(&self, _available_blocks: usize) {}
+    fn on_distributed_prefix_matched(&self, _seq_id: SeqId, _matched_tokens: usize) {}
 }
 
 impl dyn SchedulerObserver {
@@ -81,6 +89,13 @@ pub enum ObserverEvent {
     },
     MemoryPressure {
         available_blocks: usize,
+    },
+    /// A request's prompt prefix matched `matched_tokens` consecutive
+    /// tokens in the distributed KV cache (`0` means full miss).
+    /// Phase 19 OPS-05b3.
+    DistributedPrefixMatched {
+        seq_id: SeqId,
+        matched_tokens: usize,
     },
 }
 
@@ -167,6 +182,12 @@ impl SchedulerObservers {
             }
             ObserverEvent::MemoryPressure { available_blocks } => {
                 observer.on_memory_pressure(*available_blocks);
+            }
+            ObserverEvent::DistributedPrefixMatched {
+                seq_id,
+                matched_tokens,
+            } => {
+                observer.on_distributed_prefix_matched(*seq_id, *matched_tokens);
             }
         }
     }

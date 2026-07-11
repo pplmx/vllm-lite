@@ -28,7 +28,7 @@ use vllm_dist::distributed_kv::protocol::NodeId;
 #[cfg(feature = "multi-node")]
 use vllm_dist::{CacheConfig, DistributedKVCache};
 #[cfg(feature = "multi-node")]
-use vllm_traits::{TokenId, XorShiftHasher};
+use vllm_traits::{BLOCK_SIZE, TokenId, XorShiftHasher};
 
 use super::*;
 use crate::types::{Priority, SamplingParams, Status};
@@ -249,21 +249,23 @@ fn test_memory_manager_record_block_tokens_advances_chain() {
     let h0_repeat = manager.record_block_tokens(blocks[0], 0, &tokens_block0);
     assert_eq!(h0_repeat, h0, "chain hashing must be deterministic");
 
-    // Cache values match the returned hashes.
+    // Cache entries keyed by content hash (not block_id) — see
+    // `record_block_tokens` docs. Each block is findable via its
+    // chain hash, which is what `lookup_distributed_prefix` walks.
     assert_eq!(
-        cache.get(u64::try_from(blocks[0]).unwrap_or(u64::MAX)),
-        Some(h0),
-        "block 0 cache value must match recorded hash"
+        cache.get(h0),
+        Some(u64::try_from(blocks[0]).unwrap_or(u64::MAX)),
+        "block 0 cache entry must be keyed by h0"
     );
     assert_eq!(
-        cache.get(u64::try_from(blocks[1]).unwrap_or(u64::MAX)),
-        Some(h1),
-        "block 1 cache value must match recorded hash"
+        cache.get(h1),
+        Some(u64::try_from(blocks[1]).unwrap_or(u64::MAX)),
+        "block 1 cache entry must be keyed by h1"
     );
     assert_eq!(
-        cache.get(u64::try_from(blocks[2]).unwrap_or(u64::MAX)),
-        Some(h2),
-        "block 2 cache value must match recorded hash"
+        cache.get(h2),
+        Some(u64::try_from(blocks[2]).unwrap_or(u64::MAX)),
+        "block 2 cache entry must be keyed by h2"
     );
 }
 
@@ -286,4 +288,145 @@ fn test_memory_manager_record_block_tokens_different_sequences_diverge() {
         h_seq_a, h_seq_b,
         "same tokens but different parent hashes must diverge"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Distributed prefix-lookup tests (Phase 19 OPS-05b3)
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "multi-node")]
+#[test]
+fn test_memory_manager_lookup_distributed_prefix_full_hit() {
+    // Allocate 2 blocks, record known tokens, then look up a 3-block
+    // prompt whose first 2 blocks match — the 3rd block's chain
+    // hash is unknown so the match is partial (2/3).
+    //
+    // To make the test exercise a full match, we publish 3 hashes
+    // for a 3-block prompt and look up the same 3-block prompt.
+    let cache = Arc::new(DistributedKVCache::new(CacheConfig::new(NodeId(0), 4)));
+    let manager = MemoryManager::new(SchedulerConfig::default(), 10)
+        .with_distributed_kv(Arc::clone(&cache))
+        .with_block_hasher(Arc::new(XorShiftHasher));
+
+    // Build a 3-block prompt (BLOCK_SIZE = 16) and pre-publish each
+    // block's chain hash into the cache directly. We compute the
+    // hashes the same way the lookup would.
+    let prompt: Vec<TokenId> = (0..(3 * BLOCK_SIZE)).map(|i| i as TokenId).collect();
+    let chain_hashes = {
+        let mut hashes = Vec::new();
+        let mut parent = 0u64;
+        for chunk in prompt.chunks(BLOCK_SIZE) {
+            let h = manager.hasher().hash_block(parent, chunk);
+            hashes.push(h);
+            parent = h;
+        }
+        hashes
+    };
+    for &h in &chain_hashes {
+        // Use the cache directly; key is arbitrary as long as the
+        // lookup uses the same keys.
+        cache.put(h, 0xCAFE);
+    }
+
+    let result = manager
+        .lookup_distributed_prefix(&prompt)
+        .expect("full prefix should hit");
+    assert_eq!(result.matched_blocks, 3);
+    assert_eq!(result.matched_tokens, 3 * BLOCK_SIZE);
+    assert_eq!(result.hasher_name, "xorshift");
+}
+
+#[cfg(feature = "multi-node")]
+#[test]
+fn test_memory_manager_lookup_distributed_prefix_partial_match() {
+    // Two-block prefix prompt; only the first block's hash is in
+    // the cache. The lookup should return matched_blocks = 1.
+    let cache = Arc::new(DistributedKVCache::new(CacheConfig::new(NodeId(0), 4)));
+    let manager = MemoryManager::new(SchedulerConfig::default(), 10)
+        .with_distributed_kv(Arc::clone(&cache))
+        .with_block_hasher(Arc::new(XorShiftHasher));
+
+    let prompt: Vec<TokenId> = (0..(2 * BLOCK_SIZE)).map(|i| i as TokenId).collect();
+    let first_hash = manager.hasher().hash_block(0, &prompt[..BLOCK_SIZE]);
+    cache.put(first_hash, 0xCAFE);
+    // second_hash is NOT in the cache.
+
+    let result = manager
+        .lookup_distributed_prefix(&prompt)
+        .expect("first block should hit");
+    assert_eq!(result.matched_blocks, 1, "only first block should match");
+    assert_eq!(result.matched_tokens, BLOCK_SIZE);
+}
+
+#[cfg(feature = "multi-node")]
+#[test]
+fn test_memory_manager_lookup_distributed_prefix_no_match() {
+    // Empty cache: any prompt must return None.
+    let cache = Arc::new(DistributedKVCache::new(CacheConfig::new(NodeId(0), 4)));
+    let manager = MemoryManager::new(SchedulerConfig::default(), 10)
+        .with_distributed_kv(Arc::clone(&cache))
+        .with_block_hasher(Arc::new(XorShiftHasher));
+
+    let prompt: Vec<TokenId> = (0..BLOCK_SIZE).map(|i| i as TokenId).collect();
+    assert!(manager.lookup_distributed_prefix(&prompt).is_none());
+}
+
+#[cfg(feature = "multi-node")]
+#[test]
+fn test_memory_manager_lookup_distributed_prefix_empty_prompt() {
+    let cache = Arc::new(DistributedKVCache::new(CacheConfig::new(NodeId(0), 4)));
+    let manager =
+        MemoryManager::new(SchedulerConfig::default(), 10).with_distributed_kv(Arc::clone(&cache));
+    assert!(manager.lookup_distributed_prefix(&[]).is_none());
+}
+
+#[cfg(feature = "multi-node")]
+#[test]
+fn test_memory_manager_lookup_distributed_prefix_no_cache_returns_none() {
+    // No cache wired in: lookup is a no-op that returns None
+    // (mirrors the "default construction" semantics — there's no
+    // cache to ask).
+    let manager = MemoryManager::new(SchedulerConfig::default(), 10)
+        .with_block_hasher(Arc::new(XorShiftHasher));
+    let prompt: Vec<TokenId> = (0..BLOCK_SIZE).map(|i| i as TokenId).collect();
+    assert!(manager.lookup_distributed_prefix(&prompt).is_none());
+}
+
+#[cfg(feature = "multi-node")]
+#[test]
+fn test_memory_manager_lookup_distributed_prefix_round_trip_with_record() {
+    // Allocate blocks via the manager, record tokens (using a real
+    // chain cursor), then look up the same prompt — every block's
+    // chain hash is in the cache (it was just put there by
+    // record_block_tokens), so the lookup returns a full match.
+    //
+    // This mirrors what the production scheduler does in
+    // `SchedulerEngine::update` (allocate → record with parent =
+    // previous block's hash → advance cursor).
+    let cache = Arc::new(DistributedKVCache::new(CacheConfig::new(NodeId(0), 4)));
+    let mut manager = MemoryManager::new(SchedulerConfig::default(), 10)
+        .with_distributed_kv(Arc::clone(&cache))
+        .with_block_hasher(Arc::new(XorShiftHasher));
+
+    // Build a 2-block prompt.
+    let prompt: Vec<TokenId> = (0..(2 * BLOCK_SIZE))
+        .map(|i| (i + 100) as TokenId)
+        .collect();
+
+    // Allocate 2 blocks and record tokens for each, threading the
+    // chain cursor (parent_hash = previous block's hash).
+    let blocks = manager.allocate(2).expect("allocation should succeed");
+    let h0 = manager.record_block_tokens(blocks[0], 0, &prompt[..BLOCK_SIZE]);
+    let h1 = manager.record_block_tokens(blocks[1], h0, &prompt[BLOCK_SIZE..]);
+    // Silence the unused-warning for h1 (it's the cursor the
+    // scheduler would store; the lookup is the real assertion).
+    let _ = h1;
+
+    // Now look up the same prompt — every chain hash is in the
+    // cache (recorded via the per-block puts above).
+    let result = manager
+        .lookup_distributed_prefix(&prompt)
+        .expect("all blocks recorded → all should hit on lookup");
+    assert_eq!(result.matched_blocks, 2);
+    assert_eq!(result.matched_tokens, 2 * BLOCK_SIZE);
 }

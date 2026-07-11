@@ -52,6 +52,27 @@ impl SchedulerEngine {
                 (req.prompt.clone(), Arc::new(vec![]), 0)
             };
 
+        // Distributed prefix-cache lookup (OPS-05b3): even when the
+        // local `RadixTree` misses, some peer node (post OPS-05c)
+        // may hold KV for this prompt's prefix. The result is
+        // informational today — actual block reuse requires the
+        // gRPC transfer protocol. We dispatch an observer event so
+        // metrics collectors / tracing can report cross-node hit
+        // rates.
+        #[cfg(feature = "multi-node")]
+        let distributed_matched_tokens = self
+            .lookup_distributed_prefix(&req.prompt)
+            .map_or(0, |m| m.matched_tokens);
+        #[cfg(not(feature = "multi-node"))]
+        let distributed_matched_tokens: usize = 0;
+        if distributed_matched_tokens > 0 {
+            tracing::trace!(
+                request_id = req.id,
+                matched_tokens = distributed_matched_tokens,
+                "Distributed prefix hit"
+            );
+        }
+
         let seq = Sequence {
             id: req.id,
             tokens,
@@ -89,6 +110,14 @@ impl SchedulerEngine {
             seq_id: req.id,
             prompt_len: req.prompt.len(),
         });
+        // Distributed prefix-cache result (OPS-05b3). Dispatched
+        // unconditionally — the no-op observer just drops it; the
+        // default `NoopSchedulerObserver` is silent.
+        self.observers
+            .dispatch(&ObserverEvent::DistributedPrefixMatched {
+                seq_id: req.id,
+                matched_tokens: distributed_matched_tokens,
+            });
 
         tracing::info!(
             request_id = req.id,
