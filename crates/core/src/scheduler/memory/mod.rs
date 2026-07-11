@@ -4,6 +4,15 @@
 //! which block to free under pressure (`eviction`). The scheduler asks
 //! this module for `n_blocks` and gets either the blocks back or a
 //! preemption signal.
+//!
+//! ## Multi-node cache coherence
+//!
+//! Phase 19 OPS-05b adds an optional [`vllm_dist::DistributedKVCache`]
+//! that the `MemoryManager` writes through on every allocate / free.
+//! The cache value is `0` today (placeholder for the content hash that
+//! OPS-05b2 will compute); the *key* is the block id, and the cache
+//! stats surface allocate / free activity. With gRPC peer sync
+//! (OPS-05c) this becomes the cross-node coherence layer.
 #![allow(clippy::module_name_repetitions)]
 pub mod allocator;
 pub mod eviction;
@@ -14,12 +23,23 @@ pub use eviction::{EvictionPolicy, EvictionPolicyStats};
 use crate::scheduler::preemption::PreemptionManager;
 use crate::types::{BlockId, SchedulerConfig, Sequence, Status};
 
+#[cfg(feature = "multi-node")]
+use std::sync::Arc;
+
+#[cfg(feature = "multi-node")]
+use vllm_dist::DistributedKVCache;
+
 #[derive(Debug)]
 /// Top-level KV-cache memory coordinator. Composes a [`BlockAllocator`] and an [`EvictionPolicy`], and exposes the high-level `allocate` / `free` API the scheduler calls.
 pub struct MemoryManager {
     allocator: BlockAllocator,
     eviction_policy: EvictionPolicy,
     preemption_manager: PreemptionManager,
+    /// Optional distributed KV-cache; when `Some`, every `allocate`
+    /// registers new blocks and every `free` invalidates them so peer
+    /// nodes can observe activity. Phase 19 OPS-05b.
+    #[cfg(feature = "multi-node")]
+    distributed_kv: Option<Arc<DistributedKVCache>>,
 }
 
 impl Default for MemoryManager {
@@ -36,18 +56,56 @@ impl MemoryManager {
             allocator: BlockAllocator::new(num_blocks),
             eviction_policy: EvictionPolicy::new(),
             preemption_manager: PreemptionManager::new(config),
+            #[cfg(feature = "multi-node")]
+            distributed_kv: None,
         }
+    }
+
+    /// Wire a [`vllm_dist::DistributedKVCache`] into the memory coordinator.
+    ///
+    /// Called once during engine construction (or later via [`Self::set_distributed_kv`])
+    /// so that every subsequent `allocate` / `free` round-trips through
+    /// the cache. Phase 19 OPS-05b.
+    #[cfg(feature = "multi-node")]
+    #[must_use]
+    pub fn with_distributed_kv(mut self, cache: Arc<DistributedKVCache>) -> Self {
+        self.distributed_kv = Some(cache);
+        self
+    }
+
+    /// Install a distributed KV-cache after construction. Equivalent to
+    /// [`Self::with_distributed_kv`] but usable when the manager is
+    /// already owned by another struct. Phase 19 OPS-05b.
+    #[cfg(feature = "multi-node")]
+    pub fn set_distributed_kv(&mut self, cache: Arc<DistributedKVCache>) {
+        self.distributed_kv = Some(cache);
     }
 
     /// Allocates the specified number of blocks.
     /// Returns None if not enough blocks are available.
     pub fn allocate(&mut self, num_blocks: usize) -> Option<Vec<BlockId>> {
-        self.allocator.allocate(num_blocks)
+        let blocks = self.allocator.allocate(num_blocks);
+        #[cfg(feature = "multi-node")]
+        if let (Some(cache), Some(blocks)) = (self.distributed_kv.as_ref(), blocks.as_ref()) {
+            // Register each new block. Value is 0 — content hashing is
+            // OPS-05b2; the key (block id) is enough to track existence
+            // across nodes today.
+            for &block_id in blocks {
+                cache.put(u64::try_from(block_id).unwrap_or(u64::MAX), 0);
+            }
+        }
+        blocks
     }
 
     /// Frees the given blocks without updating eviction policy.
     /// Use `release_blocks` if you want to also update reference counts.
     pub fn free(&mut self, blocks: &[BlockId]) {
+        #[cfg(feature = "multi-node")]
+        if let Some(cache) = self.distributed_kv.as_ref() {
+            for &block_id in blocks {
+                cache.invalidate(u64::try_from(block_id).unwrap_or(u64::MAX));
+            }
+        }
         self.allocator.free(blocks);
     }
 

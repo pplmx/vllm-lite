@@ -22,9 +22,14 @@ impl crate::engine::Engine {
     /// the field defaults to `None`). Crate-internal because the cache
     /// type lives below the `core → dist` boundary; embedders go through
     /// the builder.
+    ///
+    /// Also propagates the cache into the scheduler's
+    /// [`crate::scheduler::engine::SchedulerEngine`] so every subsequent
+    /// block allocate / free round-trips through the cache. Phase 19
+    /// OPS-05b.
     #[cfg(feature = "multi-node")]
-    #[allow(dead_code)]
     pub(crate) fn set_distributed_kv(&mut self, cache: Arc<vllm_dist::DistributedKVCache>) {
+        self.scheduler.set_distributed_kv(Arc::clone(&cache));
         self.distributed_kv = Some(cache);
     }
 
