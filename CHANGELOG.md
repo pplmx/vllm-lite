@@ -151,6 +151,25 @@
     - **Test count**: 1253 → 1260 (delta: +6 new `CudaGraphExecutor` trait tests, +1 model-side trait dispatch test). All workspace crates pass `cargo test --all-features --workspace`.
     - **Total commits**: ARCH-06 adds 7 (trait × 1, model impl × 1, core refactor × 1, builder × 1, drive-by const fix × 1, planning doc × 1, this CHANGELOG × 1) on top of the prior Phase 18 baseline of 7.
 
+- **Multi-Node Engine Seam (v30.0 Phase 19 — OPS-05a)** — surfaces the `vllm_dist::DistributedKVCache` to Engine callers via a feature-gated field, builder hook, and status accessors. Lays the groundwork for the OPS-05 multi-node resurrection without claiming end-to-end cross-node inference.
+    - **`Engine.distributed_kv` field** (`crates/core/src/engine/mod.rs`):
+        - New `#[cfg(feature = "multi-node")] distributed_kv: Option<Arc<DistributedKVCache>>` mirrors the `cuda_graph` field's pattern. Default `None`.
+        - Field doc explicitly notes that allocator-level hooks are OPS-05b; today's role is to let callers construct a multi-node engine and reach the cache via accessors.
+    - **`crates/core/Cargo.toml`** gains a `multi-node = ["dep:vllm-dist"]` feature and an optional `vllm-dist` dependency, mirroring how `cuda-graph = ["dep:vllm-model"]` works. The two features stay independent — single-node binaries don't pull in vllm-dist.
+    - **New `crates/core/src/engine/distributed_kv.rs`** exposes three Engine methods:
+        - `set_distributed_kv(Arc<DistributedKVCache>)` — `pub(crate)` setter used by the builder.
+        - `distributed_kv_enabled() -> bool` — `const fn` returning the field's `is_some()`. Has a `#[cfg(not(feature = "multi-node"))]` stub returning `false` so call sites compile unchanged on single-node builds (same pattern as `cuda_graph_enabled`).
+        - `distributed_kv_stats() -> Option<CacheStats>` — snapshots the cache's hit / miss / invalidation / update counters. Returns `None` when no cache is installed.
+    - **`EngineBuilder::with_distributed_kv(Arc<DistributedKVCache>)`** — parallel to `with_cuda_graph_executor`. Installs the cache during `build()` via the new setter.
+    - **`Engine::Debug`** reports the cache's `Arc::strong_count` so logs tell operators whether the cache is shared or per-engine (mirrors how `draft_resolver` is rendered).
+    - **4 new integration tests** in `crates/core/tests/distributed_kv_integration.rs` (feature-gated behind `multi-node`):
+        - `engine_without_distributed_kv_reports_disabled` — default builder → `false` / `None`.
+        - `engine_with_distributed_kv_reports_enabled` — `with_distributed_kv(...)` flips the flag.
+        - `engine_distributed_kv_stats_reflect_cache_state` — two `put()` + one `get()` miss surface as `updates: 2, misses: 1` through the engine accessor.
+        - `multiple_engines_can_share_a_cache_via_arc` — two engines on the same `Arc<DistributedKVCache>` see consistent stats.
+    - **Test count**: 1261 → 1265 (`--all-features`, +4 new). All 1265 tests pass `cargo test --all-features --workspace`.
+    - **What is explicitly NOT wired up**: `BlockAllocator::allocate` / `free` do not call into the cache (OPS-05b); the prefix-cache lookup in `scheduler/engine/state/batch.rs` does not yet consult the distributed cache (OPS-05b); gRPC peer sync is dormant (OPS-05c); `PipelineParallel` / `PipelineStage` integration is out of scope (separate Engine refactor with its own ADR). See `.planning/phase-19/ops-05a-distributed-kv-seam.md` §6 for the full non-goal list.
+
 - **Architectural File Splits (v30.0 Phase 11)** — three more production files split into module directories without behavior change:
     - **`server/src/config.rs` (413 lines → 4 files)**: decomposed into `config/mod.rs` (`AppConfig` + `Default` + `load` + `validate` + `ConfigValidationError(s)`) + `config/server.rs` (`ServerConfig` + `Default`) + `config/engine.rs` (`EngineConfig` + `DraftSpecConfig` + `Default`) + `config/auth.rs` (`AuthConfig` + `Default` + `resolve_api_keys`). Public API preserved via re-exports in `mod.rs`.
     - **`qwen3/block.rs` (376 lines → 4 files)**: decomposed into `block/mod.rs` (`TransformerBlock` struct + `Deref` + `PagedDecoderBlock` impl) + `block/construct.rs` (`new`, `new_with_tp`, `new_with_weights`) + `block/weights.rs` (`from_weights` HuggingFace weight-map loader) + `block/factory.rs` (free functions `new_block` + `block_from_weights`). The factory submodule is `pub(crate)` so `qwen3/model.rs` can still access `new_block` / `block_from_weights` via `super::block::{...}` as before.
