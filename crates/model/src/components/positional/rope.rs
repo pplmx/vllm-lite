@@ -81,7 +81,8 @@ impl RoPE {
     /// Construct from a Qwen3 config, extracting `rope_scaling` fields
     /// (`rope_type`, `factor`, `attn_factor`, `original_max_position_embeddings`).
     #[must_use]
-    pub fn new_with_config(config: &Qwen3Config) -> Self {
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn new_with_config(config: &Qwen3Config) -> Self {
         use candle_core::Device;
         let rope_scaling = config.rope_scaling();
         Self {
@@ -125,7 +126,8 @@ impl RoPE {
     /// # Errors
     ///
     /// Returns `Err` if the candle operation fails.
-    pub fn apply_with_scaling(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
+    #[allow(dead_code)] // Phase 15 YaRN long-context variant; test-only for now
+    pub(crate) fn apply_with_scaling(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
         apply_rope_with_scaling(x, positions, self.theta, self.scaling_ctx())
     }
 
@@ -154,7 +156,8 @@ impl RoPE {
     /// # Errors
     ///
     /// Returns `Err` if any candle operation fails.
-    pub fn forward_with_scaling(
+    #[allow(dead_code)] // Phase 15 YaRN long-context variant; test-only for now
+    pub(crate) fn forward_with_scaling(
         &self,
         q: &Tensor,
         k: &Tensor,

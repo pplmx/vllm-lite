@@ -132,7 +132,8 @@ impl QuantizedWeights {
     }
 
     #[must_use]
-    pub fn with_zeros(mut self, zeros: Tensor) -> Self {
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn with_zeros(mut self, zeros: Tensor) -> Self {
         self.zeros = Some(zeros);
         self
     }

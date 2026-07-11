@@ -103,7 +103,8 @@ impl ScaledDotProductAttention {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
-    pub fn compute_sliding_window(
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn compute_sliding_window(
         &self,
         q: &Tensor,
         k: &Tensor,

@@ -131,7 +131,8 @@ impl ArchitectureRegistry {
     /// Returns `None` if no architecture claims the config.
     /// Combines [`detect`](Self::detect) + [`get`](Self::get) +
     /// [`Architecture::capabilities`] in one call.
-    pub fn capabilities_for(&self, config_json: &Value) -> Option<ArchCapabilities> {
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn capabilities_for(&self, config_json: &Value) -> Option<ArchCapabilities> {
         let name = self.detect(config_json)?;
         self.get(&name).map(|arch| arch.capabilities())
     }

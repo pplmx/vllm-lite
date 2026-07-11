@@ -103,7 +103,8 @@ impl MlaAttention {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
-    pub fn split_q(&self, q_compressed: &Tensor, seq_len: usize) -> Result<(Tensor, Tensor)> {
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn split_q(&self, q_compressed: &Tensor, seq_len: usize) -> Result<(Tensor, Tensor)> {
         let batch_size = q_compressed.dims()[0];
         let q_nope_dim = self.num_heads * self.qk_nope_dim;
         let q_rope_dim_total = self.num_heads * self.qk_rope_dim;
@@ -120,7 +121,8 @@ impl MlaAttention {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
-    pub fn concat_q_nope_rope(&self, q_nope: &Tensor, q_rope: &Tensor) -> Result<Tensor> {
+    #[allow(dead_code)]
+    pub(crate) fn concat_q_nope_rope(&self, q_nope: &Tensor, q_rope: &Tensor) -> Result<Tensor> {
         let q = Tensor::cat(&[q_nope, q_rope], 2)?;
         let batch_size = q.dims()[0];
         let seq_len = q.dims()[1];
@@ -134,7 +136,8 @@ impl MlaAttention {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
-    pub fn reshape_k(&self, k_flat: &Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
+    #[allow(dead_code)]
+    pub(crate) fn reshape_k(&self, k_flat: &Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
         let k = k_flat.reshape((batch_size, seq_len, self.num_kv_heads, self.v_head_dim))?;
         let k = k.transpose(1, 2)?;
         k.contiguous()
@@ -144,7 +147,8 @@ impl MlaAttention {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
-    pub fn reshape_v(&self, v_flat: &Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
+    #[allow(dead_code)]
+    pub(crate) fn reshape_v(&self, v_flat: &Tensor, batch_size: usize, seq_len: usize) -> Result<Tensor> {
         let v = v_flat.reshape((batch_size, seq_len, self.num_kv_heads, self.v_head_dim))?;
         let v = v.transpose(1, 2)?;
         v.contiguous()

@@ -153,7 +153,7 @@ impl BatchCudaGraphExecutor {
     }
 
     /// Get number of captured graphs
-    pub fn graph_count(&self) -> usize {
+    pub(crate) fn graph_count(&self) -> usize {
         self.graphs.len()
     }
 
@@ -289,7 +289,8 @@ impl GraphStats {
     // invariant: cache_hits/total_executions are bounded counters; u64 -> f64
     // precision loss is acceptable for the hit-rate metric.
     #[allow(clippy::cast_precision_loss)]
-    pub fn cache_hit_rate(&self) -> f64 {
+    #[allow(dead_code)] // test-only accessor; reachable via stats() in tests
+    pub(crate) fn cache_hit_rate(&self) -> f64 {
         if self.total_executions == 0 {
             0.0
         } else {

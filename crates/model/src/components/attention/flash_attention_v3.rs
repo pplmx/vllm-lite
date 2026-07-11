@@ -119,7 +119,8 @@ impl FlashAttentionV3 {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
-    pub fn forward_with_swa(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn forward_with_swa(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
         self.forward(q, k, v)
     }
 
