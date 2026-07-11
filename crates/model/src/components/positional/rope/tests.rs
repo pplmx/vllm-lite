@@ -313,6 +313,8 @@ fn test_rope_scaling_context_from_rope_scaling_extracts_all_fields() {
         attn_factor: Some(0.2),
         partial_rotary_factor: None,
         mrope_section: None,
+        short_factor: None,
+        long_factor: None,
     };
     let ctx = RopeScalingContext::from(&scaling);
     assert_eq!(ctx.rope_type, RopeType::Yarn);

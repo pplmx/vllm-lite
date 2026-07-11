@@ -94,6 +94,14 @@ pub struct RopeScaling {
     /// `MRoPE` axis section sizes (temporal / height / width).
     #[serde(default)]
     pub mrope_section: Option<Vec<usize>>,
+    /// Su RoPE per-dim factor for high-frequency dims (length head_dim/2).
+    /// Used only when `rope_type == Su`; ignored otherwise.
+    #[serde(default)]
+    pub short_factor: Option<Vec<f32>>,
+    /// Su RoPE per-dim factor for low-frequency dims (length head_dim/2).
+    /// Used only when `rope_type == Su`; ignored otherwise.
+    #[serde(default)]
+    pub long_factor: Option<Vec<f32>>,
 }
 
 /// `RopeParameters`. See the type definition for fields and behavior.
@@ -190,5 +198,35 @@ mod tests {
         let json = r#"{"rope_type": "yarn"}"#;
         let parsed: RopeParameters = serde_json::from_str(json).unwrap();
         assert_eq!(parsed.rope_type, Some(RopeType::Yarn));
+    }
+
+    // === Phase 16: Su RoPE config fields ===
+
+    #[test]
+    fn rope_scaling_short_factor_deserializes() {
+        let json = r#"{"short_factor": [1.0, 1.5, 2.0, 2.5]}"#;
+        let parsed: RopeScaling = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            parsed.short_factor.as_deref(),
+            Some([1.0_f32, 1.5, 2.0, 2.5].as_slice())
+        );
+    }
+
+    #[test]
+    fn rope_scaling_long_factor_deserializes() {
+        let json = r#"{"long_factor": [4.0, 4.5, 5.0, 5.5]}"#;
+        let parsed: RopeScaling = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            parsed.long_factor.as_deref(),
+            Some([4.0_f32, 4.5, 5.0, 5.5].as_slice())
+        );
+    }
+
+    #[test]
+    fn rope_scaling_missing_new_fields_defaults_to_none() {
+        let json = r#"{"rope_type": "yarn", "factor": 4.0}"#;
+        let parsed: RopeScaling = serde_json::from_str(json).unwrap();
+        assert!(parsed.short_factor.is_none());
+        assert!(parsed.long_factor.is_none());
     }
 }
