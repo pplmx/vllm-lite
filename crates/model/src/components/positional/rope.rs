@@ -250,12 +250,18 @@ pub fn apply_rope_with_scaling(
         RopeType::Default => compute_inv_freq_default(query, theta),
         RopeType::Linear => compute_inv_freq_linear(query, theta, scaling.scaling_factor),
         RopeType::Yarn => compute_inv_freq_yarn(query, theta, scaling.scaling_factor),
-        // Dynamic, Su, Other — fall back to default. Phase 16 adds
-        // Dynamic (HF-style) and Su (paper-original) implementations
-        // in subsequent commits.
-        RopeType::Dynamic | RopeType::Su | RopeType::Other => {
-            compute_inv_freq_default(query, theta)
+        RopeType::Dynamic => {
+            let cur_seq_len = derive_seq_len(positions);
+            compute_inv_freq_dynamic(
+                query,
+                theta,
+                scaling.scaling_factor,
+                scaling.original_max_position,
+                cur_seq_len,
+            )
         }
+        // Su implemented in Phase 16 Task 7; Other falls back to Default.
+        RopeType::Su | RopeType::Other => compute_inv_freq_default(query, theta),
     };
     apply_rope_with_inv_freq(query, positions, &inv_freq)
 }
@@ -294,10 +300,17 @@ fn compute_inv_freq_linear(query: &Tensor, theta: f32, scaling_factor: f32) -> V
 /// half of YaRN (`attn_factor`) is **not** applied here; that lives in
 /// the attention kernel and is exposed via `RoPE::attn_factor()`.
 fn compute_inv_freq_yarn(query: &Tensor, theta: f32, scaling_factor: f32) -> Vec<f32> {
-    let (_batch, _seq_len, _num_heads, head_dim) = query.dims4().expect("dims4");
+    let (_, _, _, head_dim) = query.dims4().expect("dims4");
     if scaling_factor == 1.0 {
         return compute_inv_freq_for_head_dim(head_dim, theta);
     }
+    compute_inv_freq_yarn_impl(head_dim, theta, scaling_factor)
+}
+
+/// Core YaRN NTK formula. `scaling_factor` must be > 1.0 (caller's
+/// responsibility to check). Used by both YaRN (with the config-declared
+/// scale) and Dynamic NTK (with a recomputed scale per forward).
+fn compute_inv_freq_yarn_impl(head_dim: usize, theta: f32, scaling_factor: f32) -> Vec<f32> {
     // NTK-by-parts / global NTK correction: theta' = theta * scale^(d/(d-2))
     // For head_dim = 64, d/(d-2) = 64/62 ≈ 1.032; for head_dim = 128,
     // d/(d-2) = 128/126 ≈ 1.016. Higher head_dim → gentler correction.
@@ -305,6 +318,56 @@ fn compute_inv_freq_yarn(query: &Tensor, theta: f32, scaling_factor: f32) -> Vec
     let exponent = d / (d - 2.0);
     let new_theta = theta * scaling_factor.powf(exponent);
     compute_inv_freq_for_head_dim(head_dim, new_theta)
+}
+
+/// HF Transformers / YaRN-style Dynamic NTK scaling.
+///
+/// At each forward, recompute the scaling factor based on the current
+/// sequence length:
+///
+/// ```text
+/// scale = max(1, factor × (cur / orig_max) - (factor - 1))
+/// ```
+///
+/// If `cur_seq_len <= orig_max`, fall back to the default inv_freq table
+/// (no scaling). Otherwise apply the YaRN NTK formula with the
+/// dynamic `scale`.
+///
+/// This matches the implementation in HF Transformers
+/// (`transformers.modeling_qwen2.RotaryEmbedding._dynamic_frequency_update`)
+/// and the open-source Qwen2.5 / Qwen3 long-context reference impls.
+fn compute_inv_freq_dynamic(
+    query: &Tensor,
+    theta: f32,
+    scaling_factor: f32,
+    orig_max: Option<usize>,
+    cur_seq_len: usize,
+) -> Vec<f32> {
+    let (_, _, _, head_dim) = query.dims4().expect("dims4");
+    let Some(orig_max) = orig_max else {
+        // Without orig_max, Dynamic cannot decide. Default to Default.
+        return compute_inv_freq_for_head_dim(head_dim, theta);
+    };
+    if cur_seq_len <= orig_max || scaling_factor == 1.0 {
+        return compute_inv_freq_for_head_dim(head_dim, theta);
+    }
+    let factor = scaling_factor;
+    let dynamic_scale = factor * (cur_seq_len as f32 / orig_max as f32) - (factor - 1.0);
+    // dynamic_scale is guaranteed >= 1.0 by the cur > orig_max branch
+    compute_inv_freq_yarn_impl(head_dim, theta, dynamic_scale)
+}
+
+/// Derive the current sequence length from a positions slice.
+///
+/// Used by scaling algorithms that need to know how long the current
+/// forward pass is (Dynamic NTK, Su RoPE).
+///
+/// Assumes positions are typically contiguous from 0; for non-contiguous
+/// positions, returns `max(positions) + 1` (overestimate, but conservative
+/// for both Dynamic and Su — they scale up at long contexts).
+#[must_use]
+pub(super) fn derive_seq_len(positions: &[i64]) -> usize {
+    positions.iter().copied().max().map_or(0, |m| (m + 1) as usize)
 }
 
 fn compute_inv_freq_for_head_dim(head_dim: usize, theta: f32) -> Vec<f32> {

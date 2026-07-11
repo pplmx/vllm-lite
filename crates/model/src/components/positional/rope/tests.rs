@@ -376,3 +376,102 @@ fn test_forward_with_scaling_matches_apply_with_scaling() -> Result<()> {
     assert!(k_diff < 1e-5, "forward K != apply K (diff = {k_diff})");
     Ok(())
 }
+
+// === Phase 16: Dynamic NTK scaling ===
+
+fn dynamic_rope(scaling_factor: f32, orig_max: usize) -> RoPE {
+    RoPE {
+        theta: 10000.0,
+        head_dim: 64,
+        max_position: 1024,
+        scaling_factor,
+        device: Device::Cpu,
+        rope_type: RopeType::Dynamic,
+        attn_factor: None,
+        original_max_position: Some(orig_max),
+    }
+}
+
+#[test]
+fn test_dynamic_scaling_matches_default_below_orig_max() -> Result<()> {
+    // Dynamic at cur_seq_len <= orig_max should fall back to Default inv_freq.
+    // We use seq_len=4 with positions in [0, 4) so derived_seq_len=4 < orig_max=64.
+    let device = Device::Cpu;
+    let q = Tensor::randn(0.0f32, 1.0, (1, 4, 4, 64), &device)?;
+    let positions: Vec<i64> = (0..4).collect();
+
+    let rope_default = RoPE::new(64, 1024, 10000.0, &device);
+    let rope_dynamic = dynamic_rope(4.0, 64);
+
+    let out_default = rope_default.apply_with_scaling(&q, &positions)?;
+    let out_dynamic = rope_dynamic.apply_with_scaling(&q, &positions)?;
+
+    let diff = (&out_default - &out_dynamic)?
+        .abs()?
+        .max_all()?
+        .to_scalar::<f32>()?;
+    assert!(
+        diff < 1e-5,
+        "Dynamic at cur<=orig_max must match Default (max diff = {diff})"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_dynamic_scaling_differs_above_orig_max() -> Result<()> {
+    // Dynamic at cur_seq_len > orig_max should differ from Default.
+    // positions start at 200 so derived_seq_len=204 > orig_max=64.
+    let device = Device::Cpu;
+    let q = Tensor::randn(0.0f32, 1.0, (1, 4, 4, 64), &device)?;
+    let positions: Vec<i64> = vec![200, 201, 202, 203];
+
+    let rope_default = RoPE::new(64, 1024, 10000.0, &device);
+    let rope_dynamic = dynamic_rope(4.0, 64);
+
+    let out_default = rope_default.apply_with_scaling(&q, &positions)?;
+    let out_dynamic = rope_dynamic.apply_with_scaling(&q, &positions)?;
+
+    let diff = (&out_default - &out_dynamic)?
+        .abs()?
+        .sum_all()?
+        .to_scalar::<f32>()?;
+    assert!(
+        diff > 1e-3,
+        "Dynamic at cur>orig_max must differ from Default (sum diff = {diff})"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_dynamic_scaling_at_orig_max_boundary() -> Result<()> {
+    // At cur_seq_len == orig_max, Dynamic must match Default (boundary).
+    // positions [60, 61, 62, 63] → derived_seq_len = 64 == orig_max.
+    let device = Device::Cpu;
+    let q = Tensor::randn(0.0f32, 1.0, (1, 4, 4, 64), &device)?;
+    let positions: Vec<i64> = vec![60, 61, 62, 63];
+
+    let rope_default = RoPE::new(64, 1024, 10000.0, &device);
+    let rope_dynamic = dynamic_rope(4.0, 64);
+
+    let out_default = rope_default.apply_with_scaling(&q, &positions)?;
+    let out_dynamic = rope_dynamic.apply_with_scaling(&q, &positions)?;
+
+    let diff = (&out_default - &out_dynamic)?
+        .abs()?
+        .max_all()?
+        .to_scalar::<f32>()?;
+    assert!(
+        diff < 1e-5,
+        "Dynamic at boundary cur==orig_max must match Default (max diff = {diff})"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_derive_seq_len_handles_empty_positions() {
+    use super::derive_seq_len;
+    assert_eq!(derive_seq_len(&[]), 0);
+    assert_eq!(derive_seq_len(&[0]), 1);
+    assert_eq!(derive_seq_len(&[0, 1, 2, 3]), 4);
+    assert_eq!(derive_seq_len(&[5]), 6); // non-contiguous: max + 1
+}
