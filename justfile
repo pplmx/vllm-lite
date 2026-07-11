@@ -79,8 +79,14 @@ autofix:
 # Legacy alias for `autofix`. Kept so existing muscle-memory commands still work.
 fix: autofix
 
+# Phase 12e: cargo-public-api baseline diff — fails if the public API of
+# any workspace crate grows without a corresponding CHANGELOG entry.
+# Shrinking is allowed (the baseline IS the record of what we removed).
+public-api-check:
+    bash .planning/phase-12e/check-public-api.sh
+
 # Run all CI checks (skips #[ignore] slow tests)
-ci: fmt-check clippy doc-check doctest nextest
+ci: fmt-check clippy doc-check doctest nextest public-api-check
 
 # Run the full CI gate including security checks (audit + deny). Requires
 # `cargo-audit` and `cargo-deny` installed locally.

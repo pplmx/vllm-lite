@@ -1,0 +1,450 @@
+pub mod vllm_traits
+pub mod vllm_traits::kernels
+pub enum vllm_traits::kernels::GraphExecutionError
+pub vllm_traits::kernels::GraphExecutionError::CudaError(alloc::string::String)
+pub vllm_traits::kernels::GraphExecutionError::GraphCaptureFailed(alloc::string::String)
+pub vllm_traits::kernels::GraphExecutionError::GraphExecutionFailed(alloc::string::String)
+pub vllm_traits::kernels::GraphExecutionError::GraphNotFound(usize)
+impl core::clone::Clone for vllm_traits::kernels::GraphExecutionError
+pub fn vllm_traits::kernels::GraphExecutionError::clone(&self) -> vllm_traits::kernels::GraphExecutionError
+impl core::error::Error for vllm_traits::kernels::GraphExecutionError
+impl core::fmt::Debug for vllm_traits::kernels::GraphExecutionError
+pub fn vllm_traits::kernels::GraphExecutionError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for vllm_traits::kernels::GraphExecutionError
+pub fn vllm_traits::kernels::GraphExecutionError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_traits::kernels::GraphExecutionError
+impl core::marker::Send for vllm_traits::kernels::GraphExecutionError
+impl core::marker::Sync for vllm_traits::kernels::GraphExecutionError
+impl core::marker::Unpin for vllm_traits::kernels::GraphExecutionError
+impl core::marker::UnsafeUnpin for vllm_traits::kernels::GraphExecutionError
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::kernels::GraphExecutionError
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::kernels::GraphExecutionError
+pub struct vllm_traits::kernels::CudaGraphConfig
+pub vllm_traits::kernels::CudaGraphConfig::batch_sizes: alloc::vec::Vec<usize>
+pub vllm_traits::kernels::CudaGraphConfig::enable_graph_pooling: core::option::Option<bool>
+pub vllm_traits::kernels::CudaGraphConfig::enabled: bool
+pub vllm_traits::kernels::CudaGraphConfig::model_config: vllm_traits::kernels::ModelGraphConfig
+impl vllm_traits::kernels::CudaGraphConfig
+pub fn vllm_traits::kernels::CudaGraphConfig::from_env() -> Self
+impl core::clone::Clone for vllm_traits::kernels::CudaGraphConfig
+pub fn vllm_traits::kernels::CudaGraphConfig::clone(&self) -> vllm_traits::kernels::CudaGraphConfig
+impl core::default::Default for vllm_traits::kernels::CudaGraphConfig
+pub fn vllm_traits::kernels::CudaGraphConfig::default() -> Self
+impl core::fmt::Debug for vllm_traits::kernels::CudaGraphConfig
+pub fn vllm_traits::kernels::CudaGraphConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_traits::kernels::CudaGraphConfig
+pub fn vllm_traits::kernels::CudaGraphConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_traits::kernels::CudaGraphConfig
+pub fn vllm_traits::kernels::CudaGraphConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_traits::kernels::CudaGraphConfig
+impl core::marker::Send for vllm_traits::kernels::CudaGraphConfig
+impl core::marker::Sync for vllm_traits::kernels::CudaGraphConfig
+impl core::marker::Unpin for vllm_traits::kernels::CudaGraphConfig
+impl core::marker::UnsafeUnpin for vllm_traits::kernels::CudaGraphConfig
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::kernels::CudaGraphConfig
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::kernels::CudaGraphConfig
+pub struct vllm_traits::kernels::ModelGraphConfig
+pub vllm_traits::kernels::ModelGraphConfig::capture_attention_separate: bool
+pub vllm_traits::kernels::ModelGraphConfig::max_seq_len: usize
+pub vllm_traits::kernels::ModelGraphConfig::num_kv_blocks: usize
+impl core::clone::Clone for vllm_traits::kernels::ModelGraphConfig
+pub fn vllm_traits::kernels::ModelGraphConfig::clone(&self) -> vllm_traits::kernels::ModelGraphConfig
+impl core::default::Default for vllm_traits::kernels::ModelGraphConfig
+pub fn vllm_traits::kernels::ModelGraphConfig::default() -> Self
+impl core::fmt::Debug for vllm_traits::kernels::ModelGraphConfig
+pub fn vllm_traits::kernels::ModelGraphConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_traits::kernels::ModelGraphConfig
+pub fn vllm_traits::kernels::ModelGraphConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_traits::kernels::ModelGraphConfig
+pub fn vllm_traits::kernels::ModelGraphConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_traits::kernels::ModelGraphConfig
+impl core::marker::Send for vllm_traits::kernels::ModelGraphConfig
+impl core::marker::Sync for vllm_traits::kernels::ModelGraphConfig
+impl core::marker::Unpin for vllm_traits::kernels::ModelGraphConfig
+impl core::marker::UnsafeUnpin for vllm_traits::kernels::ModelGraphConfig
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::kernels::ModelGraphConfig
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::kernels::ModelGraphConfig
+pub mod vllm_traits::model
+#[non_exhaustive] pub enum vllm_traits::model::ModelError
+pub vllm_traits::model::ModelError::Backend(alloc::string::String)
+pub vllm_traits::model::ModelError::Config(alloc::string::String)
+pub vllm_traits::model::ModelError::Io(std::io::error::Error)
+pub vllm_traits::model::ModelError::Message(alloc::string::String)
+impl vllm_traits::model::ModelError
+pub fn vllm_traits::model::ModelError::new(impl core::convert::Into<alloc::string::String>) -> Self
+impl core::convert::From<std::io::error::Error> for vllm_traits::model::ModelError
+pub fn vllm_traits::model::ModelError::from(std::io::error::Error) -> Self
+impl core::error::Error for vllm_traits::model::ModelError
+pub fn vllm_traits::model::ModelError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for vllm_traits::model::ModelError
+pub fn vllm_traits::model::ModelError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for vllm_traits::model::ModelError
+pub fn vllm_traits::model::ModelError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_traits::model::ModelError
+impl core::marker::Send for vllm_traits::model::ModelError
+impl core::marker::Sync for vllm_traits::model::ModelError
+impl core::marker::Unpin for vllm_traits::model::ModelError
+impl core::marker::UnsafeUnpin for vllm_traits::model::ModelError
+impl !core::panic::unwind_safe::RefUnwindSafe for vllm_traits::model::ModelError
+impl !core::panic::unwind_safe::UnwindSafe for vllm_traits::model::ModelError
+pub struct vllm_traits::model::StubModelBackend
+impl core::clone::Clone for vllm_traits::model::StubModelBackend
+pub fn vllm_traits::model::StubModelBackend::clone(&self) -> vllm_traits::model::StubModelBackend
+impl core::default::Default for vllm_traits::model::StubModelBackend
+pub fn vllm_traits::model::StubModelBackend::default() -> vllm_traits::model::StubModelBackend
+impl core::fmt::Debug for vllm_traits::model::StubModelBackend
+pub fn vllm_traits::model::StubModelBackend::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for vllm_traits::model::StubModelBackend
+impl vllm_traits::model::ModelBackend for vllm_traits::model::StubModelBackend
+pub fn vllm_traits::model::StubModelBackend::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_traits::model::StubModelBackend::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
+pub fn vllm_traits::model::StubModelBackend::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_traits::model::StubModelBackend::forward_to_layer(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool], usize) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
+pub fn vllm_traits::model::StubModelBackend::num_heads(&self) -> usize
+pub fn vllm_traits::model::StubModelBackend::num_layers(&self) -> usize
+impl core::marker::Freeze for vllm_traits::model::StubModelBackend
+impl core::marker::Send for vllm_traits::model::StubModelBackend
+impl core::marker::Sync for vllm_traits::model::StubModelBackend
+impl core::marker::Unpin for vllm_traits::model::StubModelBackend
+impl core::marker::UnsafeUnpin for vllm_traits::model::StubModelBackend
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::model::StubModelBackend
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::model::StubModelBackend
+pub trait vllm_traits::model::ModelBackend: core::marker::Send + core::marker::Sync
+pub fn vllm_traits::model::ModelBackend::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_traits::model::ModelBackend::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
+pub fn vllm_traits::model::ModelBackend::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_traits::model::ModelBackend::forward_to_layer(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool], usize) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
+pub fn vllm_traits::model::ModelBackend::num_heads(&self) -> usize
+pub fn vllm_traits::model::ModelBackend::num_layers(&self) -> usize
+impl vllm_traits::model::ModelBackend for vllm_traits::model::StubModelBackend
+pub fn vllm_traits::model::StubModelBackend::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_traits::model::StubModelBackend::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
+pub fn vllm_traits::model::StubModelBackend::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_traits::model::StubModelBackend::forward_to_layer(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool], usize) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
+pub fn vllm_traits::model::StubModelBackend::num_heads(&self) -> usize
+pub fn vllm_traits::model::StubModelBackend::num_layers(&self) -> usize
+pub type vllm_traits::model::Result<T> = core::result::Result<T, vllm_traits::model::ModelError>
+pub mod vllm_traits::types
+pub enum vllm_traits::types::BatchPhase
+pub vllm_traits::types::BatchPhase::Decode
+pub vllm_traits::types::BatchPhase::Mixed
+pub vllm_traits::types::BatchPhase::Prefill
+impl core::clone::Clone for vllm_traits::types::BatchPhase
+pub fn vllm_traits::types::BatchPhase::clone(&self) -> vllm_traits::types::BatchPhase
+impl core::cmp::Eq for vllm_traits::types::BatchPhase
+impl core::cmp::PartialEq for vllm_traits::types::BatchPhase
+pub fn vllm_traits::types::BatchPhase::eq(&self, &vllm_traits::types::BatchPhase) -> bool
+impl core::fmt::Debug for vllm_traits::types::BatchPhase
+pub fn vllm_traits::types::BatchPhase::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for vllm_traits::types::BatchPhase
+impl core::marker::StructuralPartialEq for vllm_traits::types::BatchPhase
+impl serde_core::ser::Serialize for vllm_traits::types::BatchPhase
+pub fn vllm_traits::types::BatchPhase::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_traits::types::BatchPhase
+pub fn vllm_traits::types::BatchPhase::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_traits::types::BatchPhase
+impl core::marker::Send for vllm_traits::types::BatchPhase
+impl core::marker::Sync for vllm_traits::types::BatchPhase
+impl core::marker::Unpin for vllm_traits::types::BatchPhase
+impl core::marker::UnsafeUnpin for vllm_traits::types::BatchPhase
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::types::BatchPhase
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::types::BatchPhase
+pub enum vllm_traits::types::TensorParallelError
+pub vllm_traits::types::TensorParallelError::AllReduceFailed(alloc::string::String)
+pub vllm_traits::types::TensorParallelError::CudaError(alloc::string::String)
+pub vllm_traits::types::TensorParallelError::DeviceMismatch
+pub vllm_traits::types::TensorParallelError::InputSizeMismatch
+pub vllm_traits::types::TensorParallelError::InvalidRank
+pub vllm_traits::types::TensorParallelError::InvalidWorldSize
+impl core::clone::Clone for vllm_traits::types::TensorParallelError
+pub fn vllm_traits::types::TensorParallelError::clone(&self) -> vllm_traits::types::TensorParallelError
+impl core::error::Error for vllm_traits::types::TensorParallelError
+impl core::fmt::Debug for vllm_traits::types::TensorParallelError
+pub fn vllm_traits::types::TensorParallelError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for vllm_traits::types::TensorParallelError
+pub fn vllm_traits::types::TensorParallelError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_traits::types::TensorParallelError
+impl core::marker::Send for vllm_traits::types::TensorParallelError
+impl core::marker::Sync for vllm_traits::types::TensorParallelError
+impl core::marker::Unpin for vllm_traits::types::TensorParallelError
+impl core::marker::UnsafeUnpin for vllm_traits::types::TensorParallelError
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::types::TensorParallelError
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::types::TensorParallelError
+pub struct vllm_traits::types::Batch
+pub vllm_traits::types::Batch::input_tokens: alloc::vec::Vec<alloc::vec::Vec<vllm_traits::types::TokenId>>
+pub vllm_traits::types::Batch::is_prefill: alloc::vec::Vec<bool>
+pub vllm_traits::types::Batch::kv_block_ids: alloc::vec::Vec<alloc::vec::Vec<vllm_traits::types::BlockId>>
+pub vllm_traits::types::Batch::max_seq_len: usize
+pub vllm_traits::types::Batch::num_computed_tokens: alloc::vec::Vec<usize>
+pub vllm_traits::types::Batch::phase: vllm_traits::types::BatchPhase
+pub vllm_traits::types::Batch::positions: alloc::vec::Vec<alloc::vec::Vec<usize>>
+pub vllm_traits::types::Batch::seq_ids: alloc::vec::Vec<vllm_traits::types::SeqId>
+pub vllm_traits::types::Batch::total_tokens: usize
+impl vllm_traits::types::Batch
+pub const fn vllm_traits::types::Batch::empty() -> Self
+pub fn vllm_traits::types::Batch::has_decode(&self) -> bool
+pub fn vllm_traits::types::Batch::has_prefill(&self) -> bool
+pub const fn vllm_traits::types::Batch::is_empty(&self) -> bool
+pub const fn vllm_traits::types::Batch::len(&self) -> usize
+impl core::clone::Clone for vllm_traits::types::Batch
+pub fn vllm_traits::types::Batch::clone(&self) -> vllm_traits::types::Batch
+impl core::default::Default for vllm_traits::types::Batch
+pub fn vllm_traits::types::Batch::default() -> Self
+impl core::fmt::Debug for vllm_traits::types::Batch
+pub fn vllm_traits::types::Batch::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_traits::types::Batch
+pub fn vllm_traits::types::Batch::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_traits::types::Batch
+pub fn vllm_traits::types::Batch::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_traits::types::Batch
+impl core::marker::Send for vllm_traits::types::Batch
+impl core::marker::Sync for vllm_traits::types::Batch
+impl core::marker::Unpin for vllm_traits::types::Batch
+impl core::marker::UnsafeUnpin for vllm_traits::types::Batch
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::types::Batch
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::types::Batch
+pub struct vllm_traits::types::BatchOutput
+pub vllm_traits::types::BatchOutput::next_tokens: alloc::vec::Vec<vllm_traits::types::TokenId>
+pub vllm_traits::types::BatchOutput::seq_ids: alloc::vec::Vec<vllm_traits::types::SeqId>
+impl core::clone::Clone for vllm_traits::types::BatchOutput
+pub fn vllm_traits::types::BatchOutput::clone(&self) -> vllm_traits::types::BatchOutput
+impl core::fmt::Debug for vllm_traits::types::BatchOutput
+pub fn vllm_traits::types::BatchOutput::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_traits::types::BatchOutput
+pub fn vllm_traits::types::BatchOutput::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_traits::types::BatchOutput
+pub fn vllm_traits::types::BatchOutput::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_traits::types::BatchOutput
+impl core::marker::Send for vllm_traits::types::BatchOutput
+impl core::marker::Sync for vllm_traits::types::BatchOutput
+impl core::marker::Unpin for vllm_traits::types::BatchOutput
+impl core::marker::UnsafeUnpin for vllm_traits::types::BatchOutput
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::types::BatchOutput
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::types::BatchOutput
+pub const vllm_traits::types::BLOCK_SIZE: usize
+pub type vllm_traits::types::BlockId = usize
+pub type vllm_traits::types::SeqId = u64
+pub type vllm_traits::types::TokenId = u32
+pub enum vllm_traits::BatchPhase
+pub vllm_traits::BatchPhase::Decode
+pub vllm_traits::BatchPhase::Mixed
+pub vllm_traits::BatchPhase::Prefill
+impl core::clone::Clone for vllm_traits::types::BatchPhase
+pub fn vllm_traits::types::BatchPhase::clone(&self) -> vllm_traits::types::BatchPhase
+impl core::cmp::Eq for vllm_traits::types::BatchPhase
+impl core::cmp::PartialEq for vllm_traits::types::BatchPhase
+pub fn vllm_traits::types::BatchPhase::eq(&self, &vllm_traits::types::BatchPhase) -> bool
+impl core::fmt::Debug for vllm_traits::types::BatchPhase
+pub fn vllm_traits::types::BatchPhase::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for vllm_traits::types::BatchPhase
+impl core::marker::StructuralPartialEq for vllm_traits::types::BatchPhase
+impl serde_core::ser::Serialize for vllm_traits::types::BatchPhase
+pub fn vllm_traits::types::BatchPhase::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_traits::types::BatchPhase
+pub fn vllm_traits::types::BatchPhase::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_traits::types::BatchPhase
+impl core::marker::Send for vllm_traits::types::BatchPhase
+impl core::marker::Sync for vllm_traits::types::BatchPhase
+impl core::marker::Unpin for vllm_traits::types::BatchPhase
+impl core::marker::UnsafeUnpin for vllm_traits::types::BatchPhase
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::types::BatchPhase
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::types::BatchPhase
+pub enum vllm_traits::GraphExecutionError
+pub vllm_traits::GraphExecutionError::CudaError(alloc::string::String)
+pub vllm_traits::GraphExecutionError::GraphCaptureFailed(alloc::string::String)
+pub vllm_traits::GraphExecutionError::GraphExecutionFailed(alloc::string::String)
+pub vllm_traits::GraphExecutionError::GraphNotFound(usize)
+impl core::clone::Clone for vllm_traits::kernels::GraphExecutionError
+pub fn vllm_traits::kernels::GraphExecutionError::clone(&self) -> vllm_traits::kernels::GraphExecutionError
+impl core::error::Error for vllm_traits::kernels::GraphExecutionError
+impl core::fmt::Debug for vllm_traits::kernels::GraphExecutionError
+pub fn vllm_traits::kernels::GraphExecutionError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for vllm_traits::kernels::GraphExecutionError
+pub fn vllm_traits::kernels::GraphExecutionError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_traits::kernels::GraphExecutionError
+impl core::marker::Send for vllm_traits::kernels::GraphExecutionError
+impl core::marker::Sync for vllm_traits::kernels::GraphExecutionError
+impl core::marker::Unpin for vllm_traits::kernels::GraphExecutionError
+impl core::marker::UnsafeUnpin for vllm_traits::kernels::GraphExecutionError
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::kernels::GraphExecutionError
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::kernels::GraphExecutionError
+#[non_exhaustive] pub enum vllm_traits::ModelError
+pub vllm_traits::ModelError::Backend(alloc::string::String)
+pub vllm_traits::ModelError::Config(alloc::string::String)
+pub vllm_traits::ModelError::Io(std::io::error::Error)
+pub vllm_traits::ModelError::Message(alloc::string::String)
+impl vllm_traits::model::ModelError
+pub fn vllm_traits::model::ModelError::new(impl core::convert::Into<alloc::string::String>) -> Self
+impl core::convert::From<std::io::error::Error> for vllm_traits::model::ModelError
+pub fn vllm_traits::model::ModelError::from(std::io::error::Error) -> Self
+impl core::error::Error for vllm_traits::model::ModelError
+pub fn vllm_traits::model::ModelError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for vllm_traits::model::ModelError
+pub fn vllm_traits::model::ModelError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for vllm_traits::model::ModelError
+pub fn vllm_traits::model::ModelError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_traits::model::ModelError
+impl core::marker::Send for vllm_traits::model::ModelError
+impl core::marker::Sync for vllm_traits::model::ModelError
+impl core::marker::Unpin for vllm_traits::model::ModelError
+impl core::marker::UnsafeUnpin for vllm_traits::model::ModelError
+impl !core::panic::unwind_safe::RefUnwindSafe for vllm_traits::model::ModelError
+impl !core::panic::unwind_safe::UnwindSafe for vllm_traits::model::ModelError
+pub enum vllm_traits::TensorParallelError
+pub vllm_traits::TensorParallelError::AllReduceFailed(alloc::string::String)
+pub vllm_traits::TensorParallelError::CudaError(alloc::string::String)
+pub vllm_traits::TensorParallelError::DeviceMismatch
+pub vllm_traits::TensorParallelError::InputSizeMismatch
+pub vllm_traits::TensorParallelError::InvalidRank
+pub vllm_traits::TensorParallelError::InvalidWorldSize
+impl core::clone::Clone for vllm_traits::types::TensorParallelError
+pub fn vllm_traits::types::TensorParallelError::clone(&self) -> vllm_traits::types::TensorParallelError
+impl core::error::Error for vllm_traits::types::TensorParallelError
+impl core::fmt::Debug for vllm_traits::types::TensorParallelError
+pub fn vllm_traits::types::TensorParallelError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for vllm_traits::types::TensorParallelError
+pub fn vllm_traits::types::TensorParallelError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for vllm_traits::types::TensorParallelError
+impl core::marker::Send for vllm_traits::types::TensorParallelError
+impl core::marker::Sync for vllm_traits::types::TensorParallelError
+impl core::marker::Unpin for vllm_traits::types::TensorParallelError
+impl core::marker::UnsafeUnpin for vllm_traits::types::TensorParallelError
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::types::TensorParallelError
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::types::TensorParallelError
+pub struct vllm_traits::Batch
+pub vllm_traits::Batch::input_tokens: alloc::vec::Vec<alloc::vec::Vec<vllm_traits::types::TokenId>>
+pub vllm_traits::Batch::is_prefill: alloc::vec::Vec<bool>
+pub vllm_traits::Batch::kv_block_ids: alloc::vec::Vec<alloc::vec::Vec<vllm_traits::types::BlockId>>
+pub vllm_traits::Batch::max_seq_len: usize
+pub vllm_traits::Batch::num_computed_tokens: alloc::vec::Vec<usize>
+pub vllm_traits::Batch::phase: vllm_traits::types::BatchPhase
+pub vllm_traits::Batch::positions: alloc::vec::Vec<alloc::vec::Vec<usize>>
+pub vllm_traits::Batch::seq_ids: alloc::vec::Vec<vllm_traits::types::SeqId>
+pub vllm_traits::Batch::total_tokens: usize
+impl vllm_traits::types::Batch
+pub const fn vllm_traits::types::Batch::empty() -> Self
+pub fn vllm_traits::types::Batch::has_decode(&self) -> bool
+pub fn vllm_traits::types::Batch::has_prefill(&self) -> bool
+pub const fn vllm_traits::types::Batch::is_empty(&self) -> bool
+pub const fn vllm_traits::types::Batch::len(&self) -> usize
+impl core::clone::Clone for vllm_traits::types::Batch
+pub fn vllm_traits::types::Batch::clone(&self) -> vllm_traits::types::Batch
+impl core::default::Default for vllm_traits::types::Batch
+pub fn vllm_traits::types::Batch::default() -> Self
+impl core::fmt::Debug for vllm_traits::types::Batch
+pub fn vllm_traits::types::Batch::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_traits::types::Batch
+pub fn vllm_traits::types::Batch::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_traits::types::Batch
+pub fn vllm_traits::types::Batch::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_traits::types::Batch
+impl core::marker::Send for vllm_traits::types::Batch
+impl core::marker::Sync for vllm_traits::types::Batch
+impl core::marker::Unpin for vllm_traits::types::Batch
+impl core::marker::UnsafeUnpin for vllm_traits::types::Batch
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::types::Batch
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::types::Batch
+pub struct vllm_traits::BatchOutput
+pub vllm_traits::BatchOutput::next_tokens: alloc::vec::Vec<vllm_traits::types::TokenId>
+pub vllm_traits::BatchOutput::seq_ids: alloc::vec::Vec<vllm_traits::types::SeqId>
+impl core::clone::Clone for vllm_traits::types::BatchOutput
+pub fn vllm_traits::types::BatchOutput::clone(&self) -> vllm_traits::types::BatchOutput
+impl core::fmt::Debug for vllm_traits::types::BatchOutput
+pub fn vllm_traits::types::BatchOutput::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_traits::types::BatchOutput
+pub fn vllm_traits::types::BatchOutput::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_traits::types::BatchOutput
+pub fn vllm_traits::types::BatchOutput::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_traits::types::BatchOutput
+impl core::marker::Send for vllm_traits::types::BatchOutput
+impl core::marker::Sync for vllm_traits::types::BatchOutput
+impl core::marker::Unpin for vllm_traits::types::BatchOutput
+impl core::marker::UnsafeUnpin for vllm_traits::types::BatchOutput
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::types::BatchOutput
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::types::BatchOutput
+pub struct vllm_traits::CudaGraphConfig
+pub vllm_traits::CudaGraphConfig::batch_sizes: alloc::vec::Vec<usize>
+pub vllm_traits::CudaGraphConfig::enable_graph_pooling: core::option::Option<bool>
+pub vllm_traits::CudaGraphConfig::enabled: bool
+pub vllm_traits::CudaGraphConfig::model_config: vllm_traits::kernels::ModelGraphConfig
+impl vllm_traits::kernels::CudaGraphConfig
+pub fn vllm_traits::kernels::CudaGraphConfig::from_env() -> Self
+impl core::clone::Clone for vllm_traits::kernels::CudaGraphConfig
+pub fn vllm_traits::kernels::CudaGraphConfig::clone(&self) -> vllm_traits::kernels::CudaGraphConfig
+impl core::default::Default for vllm_traits::kernels::CudaGraphConfig
+pub fn vllm_traits::kernels::CudaGraphConfig::default() -> Self
+impl core::fmt::Debug for vllm_traits::kernels::CudaGraphConfig
+pub fn vllm_traits::kernels::CudaGraphConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_traits::kernels::CudaGraphConfig
+pub fn vllm_traits::kernels::CudaGraphConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_traits::kernels::CudaGraphConfig
+pub fn vllm_traits::kernels::CudaGraphConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_traits::kernels::CudaGraphConfig
+impl core::marker::Send for vllm_traits::kernels::CudaGraphConfig
+impl core::marker::Sync for vllm_traits::kernels::CudaGraphConfig
+impl core::marker::Unpin for vllm_traits::kernels::CudaGraphConfig
+impl core::marker::UnsafeUnpin for vllm_traits::kernels::CudaGraphConfig
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::kernels::CudaGraphConfig
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::kernels::CudaGraphConfig
+pub struct vllm_traits::ModelGraphConfig
+pub vllm_traits::ModelGraphConfig::capture_attention_separate: bool
+pub vllm_traits::ModelGraphConfig::max_seq_len: usize
+pub vllm_traits::ModelGraphConfig::num_kv_blocks: usize
+impl core::clone::Clone for vllm_traits::kernels::ModelGraphConfig
+pub fn vllm_traits::kernels::ModelGraphConfig::clone(&self) -> vllm_traits::kernels::ModelGraphConfig
+impl core::default::Default for vllm_traits::kernels::ModelGraphConfig
+pub fn vllm_traits::kernels::ModelGraphConfig::default() -> Self
+impl core::fmt::Debug for vllm_traits::kernels::ModelGraphConfig
+pub fn vllm_traits::kernels::ModelGraphConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for vllm_traits::kernels::ModelGraphConfig
+pub fn vllm_traits::kernels::ModelGraphConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for vllm_traits::kernels::ModelGraphConfig
+pub fn vllm_traits::kernels::ModelGraphConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for vllm_traits::kernels::ModelGraphConfig
+impl core::marker::Send for vllm_traits::kernels::ModelGraphConfig
+impl core::marker::Sync for vllm_traits::kernels::ModelGraphConfig
+impl core::marker::Unpin for vllm_traits::kernels::ModelGraphConfig
+impl core::marker::UnsafeUnpin for vllm_traits::kernels::ModelGraphConfig
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::kernels::ModelGraphConfig
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::kernels::ModelGraphConfig
+pub struct vllm_traits::StubModelBackend
+impl core::clone::Clone for vllm_traits::model::StubModelBackend
+pub fn vllm_traits::model::StubModelBackend::clone(&self) -> vllm_traits::model::StubModelBackend
+impl core::default::Default for vllm_traits::model::StubModelBackend
+pub fn vllm_traits::model::StubModelBackend::default() -> vllm_traits::model::StubModelBackend
+impl core::fmt::Debug for vllm_traits::model::StubModelBackend
+pub fn vllm_traits::model::StubModelBackend::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for vllm_traits::model::StubModelBackend
+impl vllm_traits::model::ModelBackend for vllm_traits::model::StubModelBackend
+pub fn vllm_traits::model::StubModelBackend::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_traits::model::StubModelBackend::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
+pub fn vllm_traits::model::StubModelBackend::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_traits::model::StubModelBackend::forward_to_layer(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool], usize) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
+pub fn vllm_traits::model::StubModelBackend::num_heads(&self) -> usize
+pub fn vllm_traits::model::StubModelBackend::num_layers(&self) -> usize
+impl core::marker::Freeze for vllm_traits::model::StubModelBackend
+impl core::marker::Send for vllm_traits::model::StubModelBackend
+impl core::marker::Sync for vllm_traits::model::StubModelBackend
+impl core::marker::Unpin for vllm_traits::model::StubModelBackend
+impl core::marker::UnsafeUnpin for vllm_traits::model::StubModelBackend
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::model::StubModelBackend
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::model::StubModelBackend
+pub const vllm_traits::BLOCK_SIZE: usize
+pub trait vllm_traits::ModelBackend: core::marker::Send + core::marker::Sync
+pub fn vllm_traits::ModelBackend::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_traits::ModelBackend::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
+pub fn vllm_traits::ModelBackend::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_traits::ModelBackend::forward_to_layer(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool], usize) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
+pub fn vllm_traits::ModelBackend::num_heads(&self) -> usize
+pub fn vllm_traits::ModelBackend::num_layers(&self) -> usize
+impl vllm_traits::model::ModelBackend for vllm_traits::model::StubModelBackend
+pub fn vllm_traits::model::StubModelBackend::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_traits::model::StubModelBackend::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
+pub fn vllm_traits::model::StubModelBackend::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_traits::model::StubModelBackend::forward_to_layer(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool], usize) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
+pub fn vllm_traits::model::StubModelBackend::num_heads(&self) -> usize
+pub fn vllm_traits::model::StubModelBackend::num_layers(&self) -> usize
+pub type vllm_traits::BlockId = usize
+pub type vllm_traits::Result<T> = core::result::Result<T, vllm_traits::model::ModelError>
+pub type vllm_traits::SeqId = u64
+pub type vllm_traits::TokenId = u32
