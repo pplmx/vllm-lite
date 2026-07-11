@@ -8,6 +8,7 @@
 | [tutorial/01-setup.md](./tutorial/01-setup.md) | New users | Clone → build → serve |
 | [adr/](./adr/) | Contributors | 19 Architecture Decision Records |
 | [OPERATIONS.md](../OPERATIONS.md) | Operators | Deploy, monitor, troubleshoot |
+| [technical-due-diligence/](./technical-due-diligence/) | Maintainers | 2026-07 holistic architecture and engineering assessment |
 
 ## Directory Structure
 
@@ -17,6 +18,7 @@ docs/
 ├── adr/                  # Human: ADR-001 … ADR-019
 ├── tutorial/             # Human: onboarding path
 ├── perf/                 # Human: profiling notes + distilled baselines
+├── technical-due-diligence/ # Human: maintainer-oriented technical assessment
 ├── superpowers/          # Tool: Superpowers specs + plans (do not relocate)
 ```
 
