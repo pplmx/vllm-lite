@@ -1,133 +1,39 @@
 ---
 gsd_state_version: 1.0
-milestone: v30.0
-milestone_name: Test Ecosystem & Docs Enhancement
+milestone: v31.0
+milestone_name: Perfection & Elegance
 status: in_progress
-last_updated: "2026-06-29T00:30:00.000Z"
-last_activity: 2026-06-29
+last_updated: "2026-07-12T00:00:00.000Z"
+last_activity: 2026-07-12
 progress:
   total_phases: 6
-  completed_phases: 1
+  completed_phases: 0
   total_plans: 6
-  completed_plans: 1
-  percent: 17
+  completed_plans: 2
+  percent: 33
 ---
 
 # Project State
 
-## Project Reference
-
-See: .planning/PROJECT.md (updated 2026-06-28)
-
-**Core value:** Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
-**Current focus:** v30.0 Test Ecosystem & Docs Enhancement — spec approved 2026-06-28; Phase K ready to execute.
-
 ## Current Position
 
-Phase: v30.0 Phase K (Mutation Testing) — SHIPPED
-Plan: `docs/superpowers/plans/2026-06-28-v30-phase-k-mutation-testing.md`
-Spec: `docs/superpowers/specs/2026-06-28-v30-test-docs-design.md`
-Overview: `docs/superpowers/plans/2026-06-28-v30-overview.md`
-Status: 1/6 phases complete; Phase K shipped (907 mutants, 100% strict score, 1 real test gap fixed)
-Next: Phase L (Fuzz CI) — see `docs/superpowers/plans/2026-06-28-v30-phase-l-fuzz-ci.md`
-Last activity: 2026-06-29 — Phase K complete; CHANGELOG + STATE updated
+Phase: v31.0 Phase A+B (Correctness + Documentation)
+Plan: `.planning/v31.0-MASTER-PLAN.md`
+Status: v30 shipped (CHANGELOG authoritative); v31 in progress
+Last activity: 2026-07-12 — partial prefill fix + docs overhaul
 
-## Performance Metrics
+## v30 Outcomes (shipped per CHANGELOG)
 
-**v30.0 Phase K Outcomes:**
+- Phases 8–19: file splits, YaRN, architecture unification, OPS-05 seams
+- Phases K–P: mutation testing, fuzz CI, proptest, docs, ADR, tutorial
+- 1235 tests; doc coverage 55.0% raw / 49.9% real
 
-- cargo-mutants v27.1.0 installed and configured
-- 4 modules scanned (scheduler/, sampling.rs, speculative/, engine/): 907 mutants, 100% strict mutation score
-- Real bug fixed: Engine::cuda_graph_enabled mutation now caught
-- justfile targets: 5 (mutants, mutants-report, mutants-clean, mutants-score, mutants-ci)
-- scripts/check_mutation_score.sh regression checker
-- 4 baseline reports committed
-- 1 methodology doc committed
-- CI integration deferred to v31 (scan time + --baseline skip workaround)
-- Total commits: 9
+## v31 Active Work
 
-**Velocity (v23.0 actual — MILESTONE COMPLETE):**
+- Partial prefill KV cache correctness fix
+- `docs/architecture.md`, README honesty, OPERATIONS.md, ADR-019
+- Next: Phase 12c API tightening, multi-node KV block transfer
 
-- Total test count post-v23.0: **1162 tests** (1179 v22.0 baseline − 17 from dead code removal)
-- Doc coverage: maintained at **97.8%** (no regression; placeholder docs removed ~1300 LOC)
-- Cargo doc warnings: **0**
-- Clippy: clean (0 warnings, 0 errors, including `cargo doc --no-deps`)
-- Cargo fmt: clean
-- ADRs: 15 (no new ADRs in v23.0; ARCH-06 deferred)
-- Phases shipped: **4/4** (Phase 40-43)
-- Requirements covered: **28/33** (5 partials documented: CMT-04, ARCH-05/06/09/10)
+## Deferred Items (v32+)
 
-**v23.0 Outcomes:**
-
-- Phase 40 (CODE-01..05): TensorParallelError → thiserror; Engine::from ModelError preserves source chain; GrpcError typed enum; LoadError::StubNotAllowed typed; prefix_cache_hit_rate implemented against metrics
-- Phase 41 (DOC-02..09): CLAUDE.md rewritten (6 crates, current Rust, Box<dyn>); README scheduling imports fixed; CHANGELOG backfilled v19-v22; MIGRATING v22 entry; docs/architecture.md created; README badge 1179; optimization_guide API + dates
-- Phase 42 (CMT-01..06): 66 module placeholders + 1062 function placeholders + 13 builder docs removed; 4 wrong comments fixed; qwen3_config shim deleted
-- Phase 43 (ARCH-01..04, 07): 851 LOC dead modules deleted (batch_planner, predictive_batching, kv_cache/mod); sync/circuit_breaker/routing/ha scoped to pub(crate); reqwest removed from server
-
-**v24.0+ Candidates (deferred from v23.0 close):**
-
-- Long context (>32K) — NMC-01
-- Multimodal/Vision — NMC-02
-- Tool calling — NMC-03
-- Multi-node / vllm-dist resurrection — OPS-05
-- Real-model benchmark — OPS-04 (requires GPU env)
-- ARCH-05: 4 stubs → 1 StubArchitecture struct
-- ARCH-06: core → model upward dep via cuda-graph
-- ARCH-09: 3 greedy_sample implementations unify
-- ARCH-10: 2 Architecture types unify
-- CMT-04: Full phase ID strip from rustdoc
-- Doc coverage push to 99%+ — RFU-06
-
-## Key Decisions Logged
-
-- v23.0 direction: Audit Remediation (NOT new features) — user input 2026-06-28
-- v23.0 phase structure: 4 phases mirroring v20.0/v21.0/v22.0 patterns
-- v23.0 phase numbering: continuous from Phase 39 → Phase 40
-- v23.0 dependency chain: linear 40 → 41 → 42 → 43
-- v23.0 partial completions documented in PHASE-43-SUMMARY (CMT-04, ARCH-05/06/09/10)
-- phase_id_convention: `sequential` (Phase 40, not Phase 23-01)
-
-## Accumulated Context
-
-### Decisions
-
-Recent decisions affecting current work:
-- v22.0 chosen as Production Hardening (vs new feature work)
-- v23.0 chosen as Audit Remediation (vs new features like long context/multimodal)
-- v23.0 partial completions deferred to v24+ candidates (CMT-04, ARCH-05/06/09/10)
-
-### Pending Todos
-
-None — v23.0 shipped; v24.0 candidates identified for next milestone planning.
-
-### Blockers/Concerns
-
-None.
-
-## Deferred Items
-
-Items acknowledged and carried forward from v23.0 close:
-
-| Category | Item | Status | Deferred At |
-|----------|------|--------|-------------|
-| New capability | NMC-01: Long context (>32K) | Future (v24+ candidate) | v22.0 planning |
-| New capability | NMC-02: Multimodal/Vision | Future (v24+ candidate) | v22.0 planning |
-| New capability | NMC-03: Tool calling | Future | v22.0 planning |
-| Operational | OPS-04: Real-model benchmark | Deferred (no GPU env) | v18.0 |
-| Operational | OPS-05: Multi-node / vllm-dist resurrection | Feature-gated; future cycle | v20.1 |
-| Architecture | ARCH-05: 4 stubs → 1 StubArchitecture | Deferred from v23.0 | v23.0 |
-| Architecture | ARCH-06: cuda-graph upward dep | Deferred from v23.0 | v23.0 |
-| Architecture | ARCH-09: greedy_sample unification | Deferred from v23.0 | v23.0 |
-| Architecture | ARCH-10: Architecture types unification | Deferred from v23.0 | v23.0 |
-| Refactor | CMT-04: Full phase ID strip | Deferred from v23.0 | v23.0 |
-| Refactor | RFU-06: Doc coverage 97.8% → 99%+ | Future | v21.0 |
-
-## Session Continuity
-
-Last session: 2026-06-28 — v23.0 milestone shipped (4 phases; 10 plans; 1162 tests)
-Stopped at: v23.0 SHIPPED; awaiting `/gsd-new-milestone` for v24.0 planning
-Resume file: None
-
----
-
-*Last updated: 2026-06-28 — **v23.0 Audit Remediation SHIPPED** (4/4 phases; 10/10 plans; 1162 tests pass; clippy/fmt/doc clean; 851 LOC dead modules deleted; ~1300 LOC placeholder docs removed; 28/33 requirements fully met; 5 partials documented as v24+ candidates; v22.0 invariants preserved: clippy/fmt/doc clean, doc coverage 97.8%, typed errors throughout, parking_lot::Mutex, LazyLock)*
+See `.planning/v31.0-MASTER-PLAN.md` § Deferred to v32+
