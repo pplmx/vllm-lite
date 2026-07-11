@@ -274,8 +274,8 @@ pub fn apply_rope_with_scaling(
                 cur_seq_len,
             )
         }
-        // Su implemented in Phase 16 Task 7; Other falls back to Default.
-        RopeType::Su | RopeType::Other => compute_inv_freq_default(query, theta),
+        RopeType::Su => compute_inv_freq_su(query, theta, &scaling),
+        RopeType::Other => compute_inv_freq_default(query, theta),
     };
     apply_rope_with_inv_freq(query, positions, &inv_freq)
 }
@@ -369,6 +369,60 @@ fn compute_inv_freq_dynamic(
     let dynamic_scale = factor * (cur_seq_len as f32 / orig_max as f32) - (factor - 1.0);
     // dynamic_scale is guaranteed >= 1.0 by the cur > orig_max branch
     compute_inv_freq_yarn_impl(head_dim, theta, dynamic_scale)
+}
+
+/// Su RoPE: per-dimension scaling using `short_factor` (high-frequency
+/// dims) and `long_factor` (low-frequency dims).
+///
+/// Per Su et al. 2024 ("RoPE in any precision"). The algorithm:
+///
+/// 1. Compute the default inv_freq: `inv_freq[i] = 1 / theta^(2i/d)`.
+/// 2. Compute `boundary` = smallest `i` such that the *base* wavelength
+///    `2π / inv_freq[i]` exceeds `original_max_position_embeddings`.
+/// 3. For each `i < boundary`: `inv_freq[i] /= short_factor[i]` (default 1.0).
+/// 4. For each `i >= boundary`: `inv_freq[i] /= long_factor[i]` (default 1.0).
+///
+/// Boundary calculation ignores the actual factors — it depends only on
+/// the base inv_freq and `orig_max`, matching the HF reference impl.
+///
+/// Falls back to Default when `original_max_position` is None.
+fn compute_inv_freq_su(
+    query: &Tensor,
+    theta: f32,
+    scaling: &RopeScalingContext,
+) -> Vec<f32> {
+    let (_, _, _, head_dim) = query.dims4().expect("dims4");
+    let half_dim = head_dim / 2;
+
+    let Some(orig_max) = scaling.original_max_position else {
+        return compute_inv_freq_default(query, theta);
+    };
+
+    let base_inv_freq = compute_inv_freq_for_head_dim(head_dim, theta);
+    let wavelength_at = |i: usize| 2.0 * std::f32::consts::PI / base_inv_freq[i];
+    let boundary = (0..half_dim)
+        .find(|&i| wavelength_at(i) > orig_max as f32)
+        .unwrap_or(half_dim);
+
+    let default_factor = 1.0_f32;
+    (0..half_dim)
+        .map(|i| {
+            let factor = if i < boundary {
+                scaling
+                    .short_factor
+                    .as_ref()
+                    .and_then(|v| v.get(i).copied())
+                    .unwrap_or(default_factor)
+            } else {
+                scaling
+                    .long_factor
+                    .as_ref()
+                    .and_then(|v| v.get(i).copied())
+                    .unwrap_or(default_factor)
+            };
+            base_inv_freq[i] / factor
+        })
+        .collect()
 }
 
 /// Derive the current sequence length from a positions slice.
