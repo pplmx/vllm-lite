@@ -22,7 +22,6 @@ pub struct DistributedKVCache {
 struct CacheEntry {
     key: u64,
     value_hash: u64,
-    owner_nodes: Vec<NodeId>,
     state: CacheState,
     last_access: u64,
 }
@@ -111,7 +110,6 @@ impl DistributedKVCache {
                 CacheEntry {
                     key,
                     value_hash,
-                    owner_nodes,
                     state,
                     last_access: timestamp,
                 },
@@ -206,21 +204,6 @@ impl DistributedKVCache {
         }
 
         nodes
-    }
-
-    /// Approximate memory footprint of entries this node owns
-    /// (entries where `node_id` is in the entry's owner set), counted
-    /// as `count * sizeof(CacheEntry)`. Useful for capacity-planning
-    /// dashboards; does not account for hash-map overhead.
-    #[must_use]
-    pub fn memory_usage(&self) -> usize {
-        self.local_cache.read().map_or(0, |cache| {
-            cache
-                .values()
-                .filter(|entry| entry.owner_nodes.contains(&self.config.node_id))
-                .count()
-                * std::mem::size_of::<CacheEntry>()
-        })
     }
 }
 

@@ -13,4 +13,4 @@ pub use correlation::CorrelationIdMiddleware;
 pub use jwt::JwtValidator;
 pub use rbac::{RbacMiddleware, Role};
 pub use size_limit::{DEFAULT_BODY_LIMIT_BYTES, with_body_size_limit, with_default_body_limit};
-pub use tls::{TlsConfig, TlsListener};
+pub use tls::TlsConfig;

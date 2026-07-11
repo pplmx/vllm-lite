@@ -168,13 +168,6 @@ impl RequestFactory {
         (0..count).map(|_| self.create()).collect()
     }
 
-    /// Create a batch of requests starting from a specific ID
-    pub fn create_batch_from(&mut self, start_id: u64, count: usize) -> Vec<Request> {
-        (0..count)
-            .map(|i| self.create_with_id(start_id + i as u64))
-            .collect()
-    }
-
     /// Create a request with specific prompt tokens
     pub fn create_with_prompt(&mut self, prompt: Vec<u32>, max_tokens: usize) -> Request {
         let params = SamplingParams {

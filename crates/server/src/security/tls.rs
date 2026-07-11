@@ -9,8 +9,6 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use std::fs;
 use std::sync::Arc;
 use thiserror::Error;
-use tokio::net::TcpListener;
-use tokio_rustls::TlsAcceptor;
 use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::rustls::server::WebPkiClientVerifier;
 use tokio_rustls::rustls::{self, ServerConfig};
@@ -125,41 +123,6 @@ impl TlsConfig {
         Ok(config)
     }
 }
-#[derive(Debug)]
-
-/// `TlsListener`. See the type definition for fields and behavior.
-pub struct TlsListener {
-    config: Arc<ServerConfig>,
-}
-
-impl TlsListener {
-    /// Construct a new instance from the given configuration.
-    /// # Errors
-    ///
-    /// Returns `Err` if any required tensor allocation or weight loading fails.
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn new(config: TlsConfig) -> Result<Self, TlsError> {
-        let server_config = config.load()?;
-        Ok(Self {
-            config: Arc::new(server_config),
-        })
-    }
-
-    /// Run the operation (see signature for params and return type).
-    /// # Errors
-    ///
-    /// Returns `Err` if the operation fails.
-    pub async fn bind(&self, addr: &str) -> Result<TcpListener, std::io::Error> {
-        let listener = TcpListener::bind(addr).await?;
-        Ok(listener)
-    }
-
-    #[must_use]
-    pub fn acceptor(&self) -> TlsAcceptor {
-        TlsAcceptor::from(self.config.clone())
-    }
-}
-
 // Unit tests are extracted to `tests.rs` (sibling) to keep this TLS
 // config module under the 800-line soft cap. They cover the basic
 // `TlsConfig::new` / `with_ca_cert` builder chain and the v22.0
