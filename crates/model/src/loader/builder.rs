@@ -183,7 +183,8 @@ impl ModelLoader {
     ///
     /// Returns `Err` if the operation fails.
     /// Returns capability flags for the architecture detected from the model config.
-    pub fn detected_capabilities(&self) -> Result<ArchCapabilities> {
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn detected_capabilities(&self) -> Result<ArchCapabilities> {
         register_all_archs(&ARCHITECTURE_REGISTRY);
 
         let arch_name = ARCHITECTURE_REGISTRY
@@ -201,7 +202,8 @@ impl ModelLoader {
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.
-    pub fn load_config<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn load_config<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
         let config_path = Path::new(&self.inner.model_dir).join("config.json");
         let content = std::fs::read_to_string(config_path)
             .map_err(|e| candle_core::Error::msg(format!("Failed to read config: {e}")))?;

@@ -189,7 +189,8 @@ impl Fp8Quantizer {
     }
 
     #[must_use]
-    pub fn estimate_memory_savings(
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn estimate_memory_savings(
         num_blocks: usize,
         block_size: usize,
         num_heads: usize,

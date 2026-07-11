@@ -215,7 +215,8 @@ impl CudaGraphExecutor {
         }
     }
 
-    pub fn register_graph(&mut self, name: String, graph: CudaGraph) {
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn register_graph(&mut self, name: String, graph: CudaGraph) {
         self.graphs.insert(name, graph);
     }
 
@@ -223,7 +224,8 @@ impl CudaGraphExecutor {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
-    pub fn execute_graph(
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn execute_graph(
         &self,
         name: &str,
         tensors: &mut [Box<dyn CudaGraphTensor>],
