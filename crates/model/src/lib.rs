@@ -10,22 +10,15 @@ pub mod arch;
 pub mod causal_lm;
 pub mod components;
 pub mod config;
-/// gemma3: gemma3 module.
-pub mod gemma3;
 /// gemma4: gemma4 module.
 pub mod gemma4;
 pub mod kernels;
 pub mod kv_cache;
 pub mod llama;
-/// llama4: llama4 module.
-pub mod llama4;
 pub mod loader;
 pub mod mistral;
-pub mod mistral_small;
 pub mod mixtral;
 pub mod paged_tensor;
-/// phi4: phi4 module.
-pub mod phi4;
 pub mod quantize;
 /// qwen3: qwen3 module.
 pub mod qwen3;

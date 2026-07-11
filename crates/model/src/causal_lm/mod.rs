@@ -18,7 +18,7 @@ use crate::components::decoder_block::PagedDecoderBlock;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Device, Module, Tensor};
 use candle_nn::Embedding;
-use vllm_traits::{argmax_logits, BatchOutput, ModelError, Result, SeqId, TokenId};
+use vllm_traits::{BatchOutput, ModelError, Result, SeqId, TokenId, argmax_logits};
 
 /// Map candle errors into [`ModelError`] via `?`.
 pub(crate) fn map_candle<T>(result: candle_core::Result<T>) -> Result<T> {
