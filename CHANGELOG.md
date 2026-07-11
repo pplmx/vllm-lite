@@ -24,6 +24,27 @@
 
 ## 🚀 [Unreleased]
 
+### Fixed
+
+- **Chunked Prefill Correctness (v31.0 Phase 31-A)** — fixes the long-standing partial-prefill bug where multi-step prefill produced different logits than single-shot prefill.
+    - **`write_prefill_kv`**: now writes each token at its global position (`positions[i] % block_size`) instead of always overwriting block offset 0.
+    - **`RopeGqaAttention::forward_prefill_continue`**: new path for continuation chunks — reads existing KV prefix, applies rectangular causal mask (`prefill_continue_causal_mask`), writes new tokens, and attends over the full prefix.
+    - **`RopeGqaDecoderBlock`**: specialized `DecoderLayer` impl dispatches to `forward_prefill_continue` when `num_computed_tokens > 0`.
+    - **`BatchComposer::compose_chunked_prefill`**: continuation chunks now set `is_prefill = true` (all chunk tokens are embedded; model layer handles continuation).
+    - Unit tests: `test_decoder_prefill_continue_matches_full_prefill`, `test_write_prefill_kv_respects_global_positions`, `test_prefill_continue_causal_mask_shape`.
+    - Checkpoint test `test_qwen3_partial_prefill_matches_full_prefill` updated to assert equality (still `#[ignore]` — requires on-disk weights).
+
+### Added
+
+- **Documentation Overhaul (v31.0 Phase 31-B)** — honest, architecture-first documentation.
+    - `docs/architecture.md` — system design with Mermaid diagrams (single source of truth).
+    - `OPERATIONS.md` — deployment, monitoring, troubleshooting runbook.
+    - `docs/adr/ADR-019-documentation-standards.md` — doc coverage targets and comment conventions.
+    - `.planning/v31.0-MASTER-PLAN.md` — v31 milestone plan (6 phases).
+    - `.planning/STATE.md` updated to v31 in_progress.
+    - `docs/README.md` rewritten with accurate crate map and doc index.
+    - `README.md` honesty pass: badges (1235 tests, Rust 1.88+), removed deleted feature flags (`prometheus`/`opentelemetry`), fixed architecture tree (StubArchitecture, no top-level `tests/`), accurate feature flag table.
+
 ### Added
 
 - **Dead Dependency Cleanup (v30.0 Phase 12a)** — removed 8 unused dependencies from the workspace via `cargo-machete` audit:

@@ -1,49 +1,50 @@
 # vLLM-lite Documentation
 
-## Overview
+## Start Here
 
-This directory contains design documents and implementation plans for vLLM-lite.
+| Document | Audience | Description |
+|----------|----------|-------------|
+| [architecture.md](./architecture.md) | All | System design with Mermaid diagrams |
+| [tutorial/01-setup.md](./tutorial/01-setup.md) | New users | Clone → build → serve |
+| [adr/](./adr/) | Contributors | 19 Architecture Decision Records |
+| [OPERATIONS.md](../OPERATIONS.md) | Operators | Deploy, monitor, troubleshoot |
 
 ## Directory Structure
 
 ```text
-vllm-lite/
-├── crates/
-│   ├── traits/      # Interface definitions (ModelBackend trait)
-│   ├── core/        # Engine, Scheduler, KV Cache, Metrics
-│   ├── model/       # Model implementations, kernels, components
-│   ├── dist/        # Tensor Parallel support
-│   └── server/      # HTTP API (OpenAI compatible)
-├── docs/
-│   └── superpowers/
-│       ├── specs/   # Design specifications
-│       └── plans/   # Implementation plans
-└── tests/           # Integration tests
+docs/
+├── architecture.md     # System architecture (single source of truth)
+├── adr/                  # ADR-001 through ADR-019
+├── tutorial/             # 5-lesson onboarding path
+├── perf/                 # Performance profiling notes
+└── superpowers/
+    ├── specs/            # Design specifications
+    └── plans/            # Implementation plans
 ```
 
-## Architecture
+Integration tests live in `crates/*/tests/` (not a top-level `tests/` directory).
 
-The project follows a clean separation of concerns:
+## Crate Map
 
-| Crate    | Responsibility                        |
-| -------- | ------------------------------------- |
-| `traits` | Interface definitions                 |
-| `core`   | Scheduling, memory management, engine |
-| `model`  | ML implementations, kernels           |
-| `dist`   | Tensor parallelism                    |
-| `server` | HTTP API layer                        |
+| Crate | Responsibility |
+|-------|----------------|
+| `traits` | `ModelBackend`, `Batch`, kernel traits |
+| `core` | Engine, Scheduler, prefix cache, speculative decoding |
+| `model` | Architectures, components, kernels, weight loading |
+| `server` | OpenAI-compatible HTTP API |
+| `dist` | Multi-node primitives (feature-gated) |
+| `testing` | Test harness and stubs |
 
-See [superpowers/specs/2026-03-29-vllm-lite-design.md](./superpowers/specs/2026-03-29-vllm-lite-design.md) for detailed architecture.
+## Adding Features
 
-## Adding New Features
-
-1. Use **brainstorming** skill to design the feature
-2. Write spec to `docs/superpowers/specs/YYYY-MM-DD-feature-name.md`
-3. Write plan to `docs/superpowers/plans/YYYY-MM-DD-feature-name.md`
-4. Use **subagent-driven-development** skill to implement
+1. Write spec to `docs/superpowers/specs/YYYY-MM-DD-feature.md`
+2. Write plan to `docs/superpowers/plans/YYYY-MM-DD-feature.md`
+3. Implement with `just ci` verification
+4. Update `CHANGELOG.md` and relevant ADR
 
 ## Related
 
-- [Main README](../README.md)
+- [README.md](../README.md)
 - [AGENTS.md](../AGENTS.md)
 - [ROADMAP.md](../ROADMAP.md)
+- [.planning/v31.0-MASTER-PLAN.md](../.planning/v31.0-MASTER-PLAN.md)
