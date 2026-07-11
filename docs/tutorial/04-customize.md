@@ -10,14 +10,12 @@ Per-request sampling is configured via `SamplingParams` on each `Request`:
 use vllm_core::types::{Request, SamplingParams};
 
 # fn doc() {
-let req = Request::new(1, vec![10, 20, 30], 50)
-    .with_sampling_params(
-        SamplingParams::builder()
-            .with_temperature(0.7)
-            .with_top_k(40)
-            .with_top_p(0.9)
-            .build(),
-    );
+let mut req = Request::new(1, vec![10, 20, 30], 50);
+req.sampling_params = SamplingParams::builder()
+    .with_temperature(0.7)
+    .with_top_k(40)
+    .with_top_p(0.9)
+    .build();
 # }
 ```
 
