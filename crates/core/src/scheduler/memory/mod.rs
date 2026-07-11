@@ -10,9 +10,16 @@
 //! When a [`vllm_dist::DistributedKVCache`] is wired in via
 //! [`MemoryManager::with_distributed_kv`] (or the corresponding setter),
 //! `allocate` / `free` write through it. The cache key is the block id
-//! and the cache value is currently `0` (placeholder for a content
-//! hash). The cache's hit / miss / invalidation / update counters
-//! surface block-lifecycle activity so peer nodes can observe it.
+//! and the cache value is the per-block hash computed by the
+//! [`vllm_traits::BlockHasher`] (a chain hash that depends on the
+//! previous block's hash and the tokens stored in this block — see
+//! [`MemoryManager::record_block_tokens`]).
+//!
+//! For backward compatibility, `allocate` writes a deterministic
+//! placeholder hash that depends only on the block id (no tokens).
+//! The scheduler can overwrite this with a content-derived hash via
+//! [`MemoryManager::record_block_tokens`] once it knows the tokens for
+//! the block. Cross-node prefix lookup is OPS-05b3.
 #![allow(clippy::module_name_repetitions)]
 pub mod allocator;
 pub mod eviction;
@@ -29,6 +36,9 @@ use std::sync::Arc;
 #[cfg(feature = "multi-node")]
 use vllm_dist::DistributedKVCache;
 
+#[cfg(feature = "multi-node")]
+use vllm_traits::{BlockHasher, IdentityHasher, TokenId};
+
 #[derive(Debug)]
 /// Top-level KV-cache memory coordinator. Composes a [`BlockAllocator`] and an [`EvictionPolicy`], and exposes the high-level `allocate` / `free` API the scheduler calls.
 pub struct MemoryManager {
@@ -40,6 +50,26 @@ pub struct MemoryManager {
     /// nodes can observe activity.
     #[cfg(feature = "multi-node")]
     distributed_kv: Option<Arc<DistributedKVCache>>,
+    /// Content hasher used to compute the value side of
+    /// `DistributedKVCache::put`. Default is
+    /// [`vllm_traits::IdentityHasher`] (collapses every block to its
+    /// parent's hash — fine for block-existence tracking, useless for
+    /// content addressing).
+    #[cfg(feature = "multi-node")]
+    hasher: Arc<dyn BlockHasher>,
+    /// Chain cursor: hash of the most-recently allocated block.
+    /// Advances on every [`Self::allocate`] and is fed back as the
+    /// `parent_hash` argument to [`BlockHasher::hash_allocated_block`].
+    /// `0` until the first allocate.
+    ///
+    /// Single-cursor design (one chain per `MemoryManager`) matches
+    /// OPS-05b2 §1-§2 exactly. Per-sequence cursors for content-derived
+    /// hashing live at the scheduler level via
+    /// [`Self::record_block_tokens`] (which receives `parent_hash` from
+    /// the caller) — that's the path step 3 ("prefix-cache lookup
+    /// through distributed cache") builds on.
+    #[cfg(feature = "multi-node")]
+    chain_cursor: u64,
 }
 
 impl Default for MemoryManager {
@@ -58,6 +88,10 @@ impl MemoryManager {
             preemption_manager: PreemptionManager::new(config),
             #[cfg(feature = "multi-node")]
             distributed_kv: None,
+            #[cfg(feature = "multi-node")]
+            hasher: Arc::new(IdentityHasher),
+            #[cfg(feature = "multi-node")]
+            chain_cursor: 0,
         }
     }
 
@@ -81,20 +115,87 @@ impl MemoryManager {
         self.distributed_kv = Some(cache);
     }
 
+    /// Install a [`vllm_traits::BlockHasher`] for content-derived
+    /// block hashing.
+    ///
+    /// Default (no call to this method) is
+    /// [`vllm_traits::IdentityHasher`] — every block collapses to its
+    /// parent hash, which preserves block-existence semantics but
+    /// produces no useful content address. Production deployments
+    /// should pass [`vllm_traits::XorShiftHasher`] or a custom
+    /// hasher (blake3, xxhash, …).
+    #[cfg(feature = "multi-node")]
+    #[must_use]
+    pub fn with_block_hasher(mut self, hasher: Arc<dyn BlockHasher>) -> Self {
+        self.hasher = hasher;
+        self
+    }
+
+    /// Replace the block hasher after construction. Equivalent to
+    /// [`Self::with_block_hasher`] but usable when the manager is
+    /// already owned by another struct.
+    #[cfg(feature = "multi-node")]
+    pub fn set_block_hasher(&mut self, hasher: Arc<dyn BlockHasher>) {
+        self.hasher = hasher;
+    }
+
     /// Allocates the specified number of blocks.
     /// Returns None if not enough blocks are available.
     pub fn allocate(&mut self, num_blocks: usize) -> Option<Vec<BlockId>> {
         let blocks = self.allocator.allocate(num_blocks);
         #[cfg(feature = "multi-node")]
         if let (Some(cache), Some(blocks)) = (self.distributed_kv.as_ref(), blocks.as_ref()) {
-            // Register each new block. Value is 0 — content hashing is
-            // OPS-05b2; the key (block id) is enough to track existence
-            // across nodes today.
+            // Per-block chain hash: parent_hash is the cursor, which
+            // advances as we publish each block. The hash is content-
+            // free at this point (tokens aren't known to the
+            // MemoryManager — see `record_block_tokens` for the
+            // content-aware path) but is still deterministic given
+            // the block id and the cursor.
             for &block_id in blocks {
-                cache.put(u64::try_from(block_id).unwrap_or(u64::MAX), 0);
+                let hash = self
+                    .hasher
+                    .hash_allocated_block(block_id, self.chain_cursor, &[]);
+                cache.put(u64::try_from(block_id).unwrap_or(u64::MAX), hash);
+                self.chain_cursor = hash;
             }
         }
         blocks
+    }
+
+    /// Re-publish a block's content-derived hash to the cache.
+    ///
+    /// Called by the scheduler after prefill, when the tokens for the
+    /// block are known. The chain property requires the caller to
+    /// supply the previous block's hash as `parent_hash` — the
+    /// scheduler maintains a per-sequence cursor.
+    ///
+    /// Returns the new hash so the caller can advance its cursor for
+    /// the next block in the sequence.
+    ///
+    /// # Multi-node feature
+    ///
+    /// Only meaningful when a [`DistributedKVCache`] is wired in (no-op
+    /// otherwise). Each call bumps the cache's `updates` counter
+    /// (re-publishing the value overwrites the placeholder from
+    /// `allocate`).
+    #[cfg(feature = "multi-node")]
+    pub fn record_block_tokens(
+        &mut self,
+        block_id: BlockId,
+        parent_hash: u64,
+        tokens: &[TokenId],
+    ) -> u64 {
+        let hash = self.hasher.hash_block(parent_hash, tokens);
+        // Also update the per-block cursor so subsequent
+        // `allocate(block_id + 1)` keeps the chain property (best-
+        // effort — only holds when allocate-id order matches the
+        // physical sequence order; for true per-sequence chains use
+        // the scheduler-side cursor and call this method only).
+        self.chain_cursor = hash;
+        if let Some(cache) = self.distributed_kv.as_ref() {
+            cache.put(u64::try_from(block_id).unwrap_or(u64::MAX), hash);
+        }
+        hash
     }
 
     /// Frees the given blocks without updating eviction policy.

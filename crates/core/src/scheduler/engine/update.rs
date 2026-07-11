@@ -77,6 +77,28 @@ impl SchedulerEngine {
                 let blocks_needed = seq.tokens.len().div_ceil(vllm_traits::BLOCK_SIZE);
                 while seq.kv_blocks.len() < blocks_needed {
                     if let Some(new_blocks) = self.memory.allocate(1) {
+                        #[cfg(feature = "multi-node")]
+                        {
+                            // Feed tokens for each newly-allocated block
+                            // back to the MemoryManager so the chain
+                            // hash advances with real content. Per-
+                            // sequence cursor lives in `chain_cursors`;
+                            // starting at `0` for the first block of
+                            // each sequence (matches `BlockHasher`'s
+                            // "parent_hash == 0 for first block" contract).
+                            let block_idx = seq.kv_blocks.len();
+                            let start = block_idx * vllm_traits::BLOCK_SIZE;
+                            let end = (start + vllm_traits::BLOCK_SIZE).min(seq.tokens.len());
+                            let parent_hash = self.chain_cursors.get(&seq_id).copied().unwrap_or(0);
+                            for &block_id in &new_blocks {
+                                let hash = self.memory.record_block_tokens(
+                                    block_id,
+                                    parent_hash,
+                                    &seq.tokens[start..end],
+                                );
+                                self.chain_cursors.insert(seq_id, hash);
+                            }
+                        }
                         let mut blocks = (*seq.kv_blocks).clone();
                         blocks.extend(new_blocks);
                         seq.kv_blocks = Arc::new(blocks);
