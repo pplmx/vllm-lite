@@ -37,10 +37,8 @@ docs/
   architecture.md      ★ Architecture single source of truth
   adr/                 ADR-001 … ADR-019
   tutorial/            01-setup … 05-production
-  perf/                v27 profiling notes (reference)
+  perf/                v27 profiling notes + distilled baselines
   superpowers/         ★ Superpowers tool workspace (specs + plans)
-  archive/             Generated artifacts (benchmark reports)
-  benchmark-results/   Redirect stub → archive/benchmark-results/
 ```
 
 ## GSD Workspace (`.planning/`)
@@ -67,7 +65,7 @@ codebase/              Snapshot notes — verify against live code before trusti
 | **phases/ vs milestones/** | v23 Phases 40–43 exist in both | **milestones/v23.0-phases/** is canonical archive; `phases/` may mirror until GSD prunes |
 | **Superpowers volume** | ~185 files under `docs/superpowers/` | Expected tool output; not clutter — exclude from rumdl; link from ADR when shipped |
 | **Architecture twin** | `docs/architecture.md` vs `.planning/codebase/ARCHITECTURE.md` | Trust `docs/architecture.md` |
-| **Benchmark artifacts** | `docs/archive/benchmark-results/` | Criterion output; regenerate locally; `.gitignore` blocks re-commit |
+| **Benchmark numbers** | [`docs/perf/v27-baseline.md`](../docs/perf/v27-baseline.md) | Criterion HTML under `target/criterion/` (gitignored) |
 | **Logs in plans** | e.g. `/tmp/mutants-*.log` in superpowers plans | Intentional *local* paths — never commit; `.gitignore` covers `*.log` |
 
 ## Recommended Reading Paths
@@ -85,8 +83,8 @@ codebase/              Snapshot notes — verify against live code before trusti
 
 | Safe | Unsafe |
 |------|--------|
-| `.gitignore` for `*.log`, `logs/`, criterion output | Moving `docs/superpowers/` |
-| Archive `docs/benchmark-results/` → `docs/archive/` | Deleting `.planning/phases/` while GSD active |
+| `.gitignore` for `*.log`, `logs/`, `target/criterion/` | Moving `docs/superpowers/` |
+| Delete committed criterion HTML/JSON from repo | Deleting `.planning/phases/` while GSD active |
 | Slim root `ROADMAP.md` to redirect | Deleting `.planning/milestones/` |
 | Redirect stubs for superseded architecture snapshots | Treating superpowers specs as disposable drafts |
 
@@ -95,7 +93,7 @@ codebase/              Snapshot notes — verify against live code before trusti
 - [x] Create `DOC-MAP.md` + tool-ownership section
 - [x] Doc coverage 55% → 67.4% real
 - [x] Phase 12e public-api CI gate
-- [x] Move criterion output → `docs/archive/benchmark-results/`; gitignore regeneration
+- [x] Remove tracked criterion output (`docs/benchmark-results/`); gitignore + point to `docs/perf/`
 - [x] Slim root `ROADMAP.md`; mark `.planning/codebase/ARCHITECTURE.md` superseded
 - [ ] Optional: dedupe v23 `phases/40-43` vs `milestones/v23.0-phases/` when GSD confirms
 - [ ] Refresh `.planning/codebase/CONCERNS.md` against current code

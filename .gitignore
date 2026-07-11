@@ -25,10 +25,10 @@ Thumbs.db
 /logs/
 **/logs/
 
-# Criterion / benchmark artifacts (regenerate locally)
+# Criterion / benchmark artifacts (regenerate locally; never commit)
 /criterion/
-docs/benchmark-results/**
-!docs/benchmark-results/README.md
+**/benchmark-results/
+docs/benchmark-results/
 
 # Test coverage
 coverage/

@@ -5,8 +5,7 @@ This guide documents the three major performance optimizations implemented in vL
 > **Note on performance numbers:** All percentages in this guide are illustrative
 > ranges based on internal benchmarks conducted on a reference GPU configuration.
 > Actual improvements vary with model size, batch size, sequence length, and
-> hardware. For reproducible numbers, see [`docs/archive/benchmark-results/`](./archive/benchmark-results/) (latest:
-> v22.0 Production Hardening, 2026-06-27). Per-feature attribution dates:
+> hardware. For reproducible numbers, run `just bench` locally (output under `target/criterion/`) or see distilled baselines in [`docs/perf/v27-baseline.md`](./perf/v27-baseline.md).
 >
 > - CUDA Graph: v18.0+ (perf table below — last measured 2026-06-27)
 > - Sequence Packing: v17.0+ (perf table below — last measured 2026-06-27)

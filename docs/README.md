@@ -16,12 +16,8 @@ docs/
 ├── architecture.md       # Human: system architecture (single source of truth)
 ├── adr/                  # Human: ADR-001 … ADR-019
 ├── tutorial/             # Human: onboarding path
-├── perf/                 # Human: profiling notes
+├── perf/                 # Human: profiling notes + distilled baselines
 ├── superpowers/          # Tool: Superpowers specs + plans (do not relocate)
-│   ├── specs/
-│   └── plans/
-├── archive/              # Generated artifacts (benchmark reports, etc.)
-└── benchmark-results/    # Redirect stub → archive/
 ```
 
 Integration tests live in `crates/*/tests/`.
