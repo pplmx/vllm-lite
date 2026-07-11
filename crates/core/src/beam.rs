@@ -1,7 +1,11 @@
-//! Beam-search state: one beam hypothesis with its accumulated log-prob and emitted token sequence.
+//! Beam-search state types: one beam hypothesis with its accumulated
+//! log-prob and emitted token sequence.
 //!
-//! `BeamSearchScheduler` (in `engine/beam.rs`) owns a `Vec<Beam>` of
-//! these per decoding step. See the scheduler for the lifecycle.
+//! `BeamSequence` is a public re-export ([`crate::BeamSequence`]). No
+//! production scheduling code currently drives a beam search — Phase 12d
+//! removed the previously-unused `step_beam` orchestrator. Kept here
+//! so future work can wire beam search in without re-deriving the
+//! state type.
 #![allow(clippy::module_name_repetitions)]
 use crate::types::{BlockId, TokenId};
 use std::sync::Arc;

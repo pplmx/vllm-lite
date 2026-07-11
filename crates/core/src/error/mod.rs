@@ -45,9 +45,6 @@ pub enum EngineError {
 
     #[error("backend unavailable: {backend}")]
     BackendUnavailable { backend: String },
-
-    #[error("beam search produced no candidate beams")]
-    EmptyBeamList,
 }
 
 impl From<vllm_traits::ModelError> for EngineError {
@@ -193,12 +190,6 @@ mod tests {
             backend: "cuda".to_string(),
         };
         assert_eq!(err.to_string(), "backend unavailable: cuda");
-    }
-
-    #[test]
-    fn test_empty_beam_list_error_message() {
-        let err = EngineError::EmptyBeamList;
-        assert_eq!(err.to_string(), "beam search produced no candidate beams");
     }
 
     #[test]

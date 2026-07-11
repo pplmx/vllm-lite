@@ -38,20 +38,12 @@ pub struct EnhancedMetricsCollector {
     cuda_graph_hits: AtomicU64,
     /// Total CUDA-Graph cache misses (re-captures) since process start.
     cuda_graph_misses: AtomicU64,
-    /// Total sequences packed into non-trivial batches.
-    packing_sequences: AtomicU64,
     /// Total adaptive-speculation adjustments applied.
     speculative_adjustments: AtomicU64,
-    /// Total error events observed across the engine + scheduler.
-    errors_total: AtomicU64,
-    /// Packing waste ratio (bits stored / bits useful) × 1000 (fixed-point).
-    packing_waste_ratio: AtomicU64,
     /// Packing efficiency percentage × 100 (fixed-point).
     packing_efficiency: AtomicU64,
     /// Speculative acceptance rate percentage × 100 (fixed-point).
     speculative_acceptance_rate: AtomicU64,
-    /// Total draft tokens emitted since process start.
-    speculative_draft_count: AtomicU64,
     /// Speculative efficiency (accepted / drafted) × 1000 (fixed-point).
     speculative_efficiency: AtomicU64,
     /// Throughput speedup vs. greedy decoding × 100 (fixed-point).
@@ -86,13 +78,9 @@ impl EnhancedMetricsCollector {
             runtime: LockFreeMetrics::new(),
             cuda_graph_hits: AtomicU64::new(0),
             cuda_graph_misses: AtomicU64::new(0),
-            packing_sequences: AtomicU64::new(0),
             speculative_adjustments: AtomicU64::new(0),
-            errors_total: AtomicU64::new(0),
-            packing_waste_ratio: AtomicU64::new(0),
             packing_efficiency: AtomicU64::new(0),
             speculative_acceptance_rate: AtomicU64::new(0),
-            speculative_draft_count: AtomicU64::new(0),
             speculative_efficiency: AtomicU64::new(0),
             throughput_speedup_ratio: AtomicU64::new(0),
             request_queue_depth: AtomicU64::new(0),
@@ -113,10 +101,8 @@ impl EnhancedMetricsCollector {
         match name {
             "cuda_graph_hits_total" => self.cuda_graph_hits.load(Ordering::Relaxed),
             "cuda_graph_misses_total" => self.cuda_graph_misses.load(Ordering::Relaxed),
-            "packing_sequences_total" => self.packing_sequences.load(Ordering::Relaxed),
             "speculative_adjustments_total" => self.speculative_adjustments.load(Ordering::Relaxed),
             "requests_total" => self.runtime.requests_total(),
-            "errors_total" => self.errors_total.load(Ordering::Relaxed),
             _ => 0,
         }
     }
@@ -124,11 +110,9 @@ impl EnhancedMetricsCollector {
     pub fn get_gauge(&self, name: &str) -> u64 {
         match name {
             "packing_efficiency" => self.packing_efficiency.load(Ordering::Relaxed),
-            "packing_waste_ratio" => self.packing_waste_ratio.load(Ordering::Relaxed),
             "speculative_acceptance_rate" => {
                 self.speculative_acceptance_rate.load(Ordering::Relaxed)
             }
-            "speculative_draft_count" => self.speculative_draft_count.load(Ordering::Relaxed),
             "speculative_efficiency" => self.speculative_efficiency.load(Ordering::Relaxed),
             "throughput_speedup_ratio" => self.throughput_speedup_ratio.load(Ordering::Relaxed),
             "request_queue_depth" => self.request_queue_depth.load(Ordering::Relaxed),
