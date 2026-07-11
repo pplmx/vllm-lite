@@ -58,7 +58,7 @@ impl SequencePacker {
 
     /// Pack sequences using Best-Fit Decreasing algorithm
     #[must_use]
-    pub fn pack_sequences(&self, sequences: Vec<Sequence>) -> Vec<PackedBatch> {
+    pub(crate) fn pack_sequences(&self, sequences: Vec<Sequence>) -> Vec<PackedBatch> {
         if sequences.is_empty() {
             return vec![];
         }

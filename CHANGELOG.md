@@ -44,6 +44,14 @@
     - `.planning/STATE.md` updated to v31 in_progress.
     - `docs/README.md` rewritten with accurate crate map and doc index.
     - `README.md` honesty pass: badges (1235 tests, Rust 1.88+), removed deleted feature flags (`prometheus`/`opentelemetry`), fixed architecture tree (StubArchitecture, no top-level `tests/`), accurate feature flag table.
+    - Tutorial 03/04 rewritten to match real `Engine::run` + `EngineMessage` actor API and `SchedulerEngine::set_policy`.
+
+### Changed
+
+- **Test-Only Public API Tightening (v31.0 Phase 31-C partial)** — Phase 12b `TEST-ONLY-MIXED` items tightened to `pub(crate)`:
+    - `Engine::with_drafts`, `SequencePacker::pack_sequences`, `MemoryBudget::total_bytes`
+    - `JwtConfig::with_secret` / `with_issuer` / `with_audience`
+    - Zero behavior change; all callers are in-crate tests.
 
 ### Added
 
