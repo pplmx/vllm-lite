@@ -1,70 +1,100 @@
 # Tutorial 3: Run Inference
 
-This tutorial runs a single inference pass through the engine.
+This tutorial runs inference through the engine **actor API** — the same
+pattern used by `vllm-server` and validated in
+`crates/server/tests/tutorial_e2e.rs`.
 
 ## The Request Lifecycle
 
 ```text
-add_request → build_batch → model.forward → update_state → repeat
+AddRequest → Engine::run loop → stream tokens → Shutdown
 ```
 
-1. **`engine.add_request(req)`** — enqueue a generation request
-2. **`engine.build_batch()`** — group requests into a batch (decode or prefill)
-3. **`model.forward(&batch)`** — run the model on the batch, get output tokens
-4. **`engine.update(&seq_ids, &tokens, &input_counts)`** — advance request state
+1. Spawn `Engine::run(msg_rx)` on a dedicated worker thread
+2. Send `EngineMessage::AddRequest { request, response_tx }`
+3. Receive generated tokens from `response_tx`
+4. Send `EngineMessage::Shutdown` when done
+
+The engine owns scheduling, batching, and model forward internally — callers
+do not call `build_batch()` or `model.forward()` directly.
 
 ## Minimal Inference Loop
 
 ```rust,no_run
+use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
-use vllm_core::types::Request;
-use vllm_model::llama::LlamaModel;
-use std::sync::Arc;
+use vllm_core::types::{EngineMessage, Request};
+use vllm_traits::{StubModelBackend, TokenId};
 
-# async fn doc() -> Result<(), Box<dyn std::error::Error>> {
-// 1. Load model (Tutorial 2)
-let device = candle_core::Device::Cpu;
-let model = LlamaModel::from_path("path/to/model", &device)?;
-let model = Arc::new(model);
+# fn doc() -> Result<(), Box<dyn std::error::Error>> {
+// 1. Build engine (StubModelBackend needs no checkpoint files)
+let mut engine = Engine::new(StubModelBackend, None::<StubModelBackend>);
+let (msg_tx, msg_rx) = mpsc::unbounded_channel::<EngineMessage>();
+let (token_tx, mut token_rx) = mpsc::channel::<TokenId>(64);
 
-// 2. Build engine
-let engine = Engine::new(model, None);
+// 2. Start the engine actor on a worker thread
+let handle = std::thread::spawn(move || {
+    engine.run(msg_rx);
+});
 
-// 3. Add request
-let req = Request::new(/*seq_id=*/ 1, /*tokens=*/ vec![1, 2, 3], /*max_tokens=*/ 10);
-engine.add_request(req);
+// 3. Submit a request
+let req = Request::new(1, vec![1, 2, 3], /*max_tokens=*/ 10);
+msg_tx.send(EngineMessage::AddRequest {
+    request: req,
+    response_tx: token_tx,
+})?;
 
-// 4. Inference loop
-for step in 0..10 {
-    let batch = engine.build_batch();
-    if batch.is_empty() { break; }
-    let output = engine.model().forward(&batch).await?;
-    engine.update(&batch.seq_ids, &output.tokens, &output.input_counts);
+// 4. Drain streamed tokens
+let rt = tokio::runtime::Builder::new_current_thread()
+    .enable_all()
+    .build()?;
+while let Some(token) = rt.block_on(token_rx.recv()) {
+    println!("token: {token}");
 }
 
-// 5. Inspect output
-for (seq_id, request) in engine.active_requests() {
-    println!("seq {}: {:?}", seq_id, request.tokens());
-}
+// 5. Shut down cleanly
+msg_tx.send(EngineMessage::Shutdown)?;
+handle.join().expect("engine thread");
 # Ok(())
 # }
 ```
 
-## Phases
+## With a Real Model
 
-Requests transition through phases:
+Replace `StubModelBackend` with a loaded `Box<dyn ModelBackend>`:
 
-- **Prefill** — initial prompt processing (long, parallel)
-- **Decode** — token-by-token generation (short, sequential)
-- **Finished** — request complete (EOS reached or max_tokens)
+```rust,no_run
+use candle_core::Device;
+use vllm_model::loader::ModelLoader;
 
-`engine.build_batch()` returns a `Batch` with a phase indicator.
+# fn doc() -> Result<(), Box<dyn std::error::Error>> {
+let model = ModelLoader::builder(Device::Cpu)
+    .with_model_dir("/path/to/checkpoint".into())
+    .with_kv_blocks(1024)
+    .build()?
+    .load_model()?;
+
+let mut engine = Engine::new_boxed(model, None);
+# Ok(())
+# }
+```
+
+## Phases (Internal)
+
+Inside the engine step loop, requests move through:
+
+- **Prefill** — process the prompt (possibly chunked for long contexts)
+- **Decode** — generate one token per step
+- **Finished** — EOS or `max_tokens` reached
+
+You observe phases via `RUST_LOG=debug` scheduler logs, not via a public
+`build_batch()` call.
 
 ## Concurrency
 
-vllm-lite supports concurrent requests via continuous batching: while one
-request is in prefill, others can be in decode. The scheduler (`SchedulerEngine`)
-handles this automatically — you just keep calling `build_batch()` in a loop.
+Submit multiple `AddRequest` messages before draining tokens. The scheduler
+continuously batches prefill and decode steps — no manual batch management
+required.
 
 ## Next Steps
 
