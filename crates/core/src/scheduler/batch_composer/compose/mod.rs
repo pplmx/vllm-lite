@@ -26,6 +26,9 @@ mod prefill;
 pub struct BatchComposer {
     config: BatchCompositionConfig,
     packing_config: SequencePackingConfig,
+    // Read only by `compose_with_chunking` (test-only); rustc reports the
+    // field as never-read in non-test builds.
+    #[allow(dead_code)]
     chunked_prefill: ChunkedPrefillConfig,
 }
 
@@ -55,7 +58,8 @@ impl BatchComposer {
 
     /// Create a new batch composer with chunked prefill configuration
     #[must_use]
-    pub fn with_chunked_prefill(
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn with_chunked_prefill(
         config: BatchCompositionConfig,
         chunked_prefill: ChunkedPrefillConfig,
     ) -> Self {
@@ -81,7 +85,8 @@ impl BatchComposer {
     /// Compose batch with chunked prefill support
     /// Returns a batch that respects memory constraints by splitting long sequences
     #[must_use]
-    pub fn compose_with_chunking(
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn compose_with_chunking(
         &self,
         sequences: Vec<Sequence>,
         phase: Phase,

@@ -276,7 +276,8 @@ impl DraftModelRegistry {
     ///
     /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// KV-cache growth tracking (MEM-02).
-    pub fn draft_allocated_bytes(&self, id: &DraftId) -> Result<u64, DraftRegistryError> {
+    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
+    pub(crate) fn draft_allocated_bytes(&self, id: &DraftId) -> Result<u64, DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let guard = self.drafts.read()?;
         let bytes = match guard.get(id) {
@@ -298,7 +299,8 @@ impl DraftModelRegistry {
     ///
     /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// Zero for `Unloaded` drafts.
-    pub fn draft_reserved_bytes(&self, id: &DraftId) -> Result<u64, DraftRegistryError> {
+    #[allow(dead_code)]
+    pub(crate) fn draft_reserved_bytes(&self, id: &DraftId) -> Result<u64, DraftRegistryError> {
         // invariant: lock is only held for synchronous field access; no panic possible while holding.
         let guard = self.drafts.read()?;
         let bytes = match guard.get(id) {
