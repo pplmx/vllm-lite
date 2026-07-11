@@ -20,6 +20,11 @@ pub struct RoPEConfig {
 /// Architecture: architecture enumeration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Architecture {
+    /// Unknown / unrecognised model architecture. Use as a fallback when
+    /// config parsing yields no recognised `model_type`; the corresponding
+    /// trait impl is [`crate::arch::UnknownArchitecture`] (always errors
+    /// on `create_block` / `create_model`).
+    Unknown,
     Qwen3,
     Qwen35,
     Llama,
@@ -39,6 +44,21 @@ impl Architecture {
             "qwen3.5" | "qwen3_5" => Some(Self::Qwen35),
             "gemma4" => Some(Self::Gemma4),
             _ => None,
+        }
+    }
+
+    /// Wire-format name (matches HF `model_type` for the supported
+    /// architectures; "unknown" for [`Self::Unknown`]).
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Unknown => "unknown",
+            Self::Llama => "llama",
+            Self::Mistral => "mistral",
+            Self::Mixtral => "mixtral",
+            Self::Qwen3 => "qwen3",
+            Self::Qwen35 => "qwen3.5",
+            Self::Gemma4 => "gemma4",
         }
     }
 }
