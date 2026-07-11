@@ -101,12 +101,6 @@ impl MemoryManager {
         self.allocator.total()
     }
 
-    /// Returns statistics about the block allocator.
-    #[must_use]
-    pub fn allocator_stats(&self) -> BlockAllocatorStats {
-        self.allocator.stats()
-    }
-
     /// Determines whether preemption should be triggered based on current system state.
     #[must_use]
     pub fn should_preempt(

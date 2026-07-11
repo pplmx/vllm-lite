@@ -200,12 +200,6 @@ impl SchedulerConfigBuilder {
         self.inner.max_batch_size = v;
         self
     }
-    /// Override the CUDA Graph sub-config.
-    #[must_use]
-    pub fn with_cuda_graph(mut self, v: SchedulerCudaGraphConfig) -> Self {
-        self.inner.cuda_graph = v;
-        self
-    }
     /// Override the sequence-packing sub-config.
     #[must_use]
     pub const fn with_packing(mut self, v: SequencePackingConfig) -> Self {

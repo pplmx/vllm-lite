@@ -23,10 +23,6 @@ impl EnhancedMetricsCollector {
         }
     }
 
-    pub fn record_speculative_draft_count(&self, count: u64) {
-        self.speculative_draft_count.store(count, Ordering::Relaxed);
-    }
-
     pub fn record_speculative_adjustment(&self) {
         self.speculative_adjustments.fetch_add(1, Ordering::Relaxed);
     }
@@ -69,23 +65,6 @@ impl EnhancedMetricsCollector {
         let len = self.per_request_acceptance.len();
         self.speculative_per_request_count
             .store(len as u64, Ordering::Relaxed);
-    }
-
-    // invariant: per-request accepted/total are small counters; u64 -> f64
-    // precision loss is acceptable for the acceptance-rate metric.
-    #[allow(clippy::cast_precision_loss)]
-    pub fn get_per_request_acceptance_rate(&self, seq_id: SeqId) -> f64 {
-        self.per_request_acceptance
-            .get(&seq_id)
-            .map_or(0.0, |entry| {
-                let accepted = entry.0.load(Ordering::Relaxed);
-                let total = entry.1.load(Ordering::Relaxed);
-                if total == 0 {
-                    0.0
-                } else {
-                    accepted as f64 / total as f64
-                }
-            })
     }
 
     pub fn remove_per_request(&self, seq_id: SeqId) {

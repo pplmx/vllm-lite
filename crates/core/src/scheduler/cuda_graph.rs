@@ -111,12 +111,6 @@ impl SchedulerCudaGraphConfigBuilder {
         self.inner.enabled = v;
         self
     }
-    /// Override [`SchedulerCudaGraphConfig::batch_sizes`].
-    #[must_use]
-    pub fn with_batch_sizes(mut self, v: Vec<usize>) -> Self {
-        self.inner.batch_sizes = v;
-        self
-    }
     /// Finalize the builder into a [`SchedulerCudaGraphConfig`].
     #[must_use]
     pub fn build(self) -> SchedulerCudaGraphConfig {

@@ -5,12 +5,12 @@ use crate::speculative::memory_budget::MemoryBudgetExceeded;
 
 /// Errors surfaced by the draft registry.
 ///
-/// # Variants
-///
-/// Prefer the **typed** variants ([`Self::IoLoad`], [`Self::Model`]) over
-/// the legacy string variants ([`Self::LoadFailed`], [`Self::LoadFailedWithSource`])
-/// — they let callers `match` on the failure category without parsing the
-/// message string.
+/// All variants are typed; callers can `match` on the failure category
+/// without parsing message strings. Phase 12d removed the deprecated
+/// `LoadFailed` / `LoadFailedWithSource` variants and the
+/// `load_failed()` convenience constructor — they had no production
+/// callers and the typed variants (`IoLoad`, `Model`) cover the same
+/// use cases.
 #[derive(Debug, thiserror::Error)]
 pub enum DraftRegistryError {
     #[error("unknown draft id: {0}")]
@@ -35,32 +35,6 @@ pub enum DraftRegistryError {
     #[error("model construction failed for draft {0}: {1}")]
     Model(DraftId, #[source] vllm_traits::ModelError),
 
-    /// Free-form load failure (legacy — message-only).
-    ///
-    /// **Deprecated**: prefer the typed variants above. Kept temporarily
-    /// for backward compatibility with callers that produce plain strings.
-    #[deprecated(
-        since = "0.1.0",
-        note = "Use IoLoad or Model variants instead to preserve type info"
-    )]
-    #[error("draft load failed: {0}")]
-    LoadFailed(String),
-
-    /// Free-form load failure wrapping any `std::error::Error + Send + Sync`.
-    ///
-    /// **Deprecated**: prefer the typed variants above so callers can
-    /// `match` on the failure category without string parsing.
-    #[deprecated(
-        since = "0.1.0",
-        note = "Use IoLoad or Model variants instead to preserve type info"
-    )]
-    #[error("draft load failed: {message}")]
-    LoadFailedWithSource {
-        message: String,
-        #[source]
-        source: Box<dyn std::error::Error + Send + Sync>,
-    },
-
     #[error("{0}")]
     MemoryBudgetExceeded(MemoryBudgetExceeded),
 
@@ -72,22 +46,6 @@ pub enum DraftRegistryError {
 }
 
 impl DraftRegistryError {
-    /// Convenience constructor for the deprecated [`Self::LoadFailedWithSource`].
-    #[deprecated(
-        since = "0.1.0",
-        note = "Use the typed IoLoad / Model variants instead"
-    )]
-    #[allow(deprecated)]
-    pub fn load_failed(
-        message: impl Into<String>,
-        source: impl std::error::Error + Send + Sync + 'static,
-    ) -> Self {
-        Self::LoadFailedWithSource {
-            message: message.into(),
-            source: Box::new(source),
-        }
-    }
-
     /// Construct [`Self::IoLoad`] for a draft whose checkpoint read failed.
     pub fn io_load(draft_id: DraftId, path: impl Into<String>, source: std::io::Error) -> Self {
         Self::IoLoad {
