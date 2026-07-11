@@ -58,7 +58,7 @@ impl Engine {
     }
 
     /// Construct an Engine pre-loaded with a set of draft specs (generic form).
-    pub(crate) fn with_drafts<M: ModelBackend + 'static>(
+    pub fn with_drafts<M: ModelBackend + 'static>(
         target_model: M,
         draft_model: Option<M>,
         draft_specs: Vec<DraftSpec>,

@@ -106,7 +106,7 @@ impl JwtConfig {
     /// integration tests in `crates/server/tests/` which require external
     /// (`pub`) visibility. Keep as `pub`.
     #[must_use]
-    pub(crate) fn with_secret(secret: impl Into<String>) -> Self {
+    pub fn with_secret(secret: impl Into<String>) -> Self {
         Self {
             secret: Some(secret.into()),
             public_key_pem: None,
@@ -143,7 +143,7 @@ impl JwtConfig {
     /// NOTE: Part of the public API builder chain — used by integration
     /// tests in `crates/server/tests/`. Keep as `pub`.
     #[must_use]
-    pub(crate) fn with_issuer(mut self, issuer: impl Into<String>) -> Self {
+    pub fn with_issuer(mut self, issuer: impl Into<String>) -> Self {
         self.issuer = issuer.into();
         self
     }
@@ -154,7 +154,7 @@ impl JwtConfig {
     /// NOTE: Part of the public API builder chain — used by integration
     /// tests in `crates/server/tests/`. Keep as `pub`.
     #[must_use]
-    pub(crate) fn with_audience(mut self, audience: impl Into<String>) -> Self {
+    pub fn with_audience(mut self, audience: impl Into<String>) -> Self {
         self.audience = audience.into();
         self
     }

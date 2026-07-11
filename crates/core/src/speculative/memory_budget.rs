@@ -209,7 +209,7 @@ impl MemoryBudget {
         }
     }
 
-    pub(crate) fn total_bytes(&self) -> u64 {
+    pub fn total_bytes(&self) -> u64 {
         let inner = self
             .inner
             .read()
