@@ -67,6 +67,16 @@ impl SchedulerObserver for TrackingObserver {
             .unwrap()
             .push(ObserverEvent::MemoryPressure { available_blocks });
     }
+
+    fn on_distributed_prefix_matched(&self, seq_id: u64, matched_tokens: usize) {
+        self.events
+            .lock()
+            .unwrap()
+            .push(ObserverEvent::DistributedPrefixMatched {
+                seq_id,
+                matched_tokens,
+            });
+    }
 }
 
 #[test]
@@ -226,6 +236,7 @@ fn test_observer_dispatch_panic_safety() {
         fn on_sequence_finished(&self, _seq_id: u64, _total_tokens: usize) {}
         fn on_preemption(&self, _seq_id: u64, _reason: &str) {}
         fn on_memory_pressure(&self, _available_blocks: usize) {}
+        fn on_distributed_prefix_matched(&self, _seq_id: u64, _matched_tokens: usize) {}
     }
 
     let observers = SchedulerObservers::new();

@@ -151,4 +151,20 @@ impl SchedulerEngine {
     pub const fn chain_cursors_mut(&mut self) -> &mut std::collections::HashMap<SeqId, u64> {
         &mut self.chain_cursors
     }
+
+    /// Look up `prompt_tokens` in the distributed KV cache.
+    ///
+    /// Thin wrapper around [`crate::scheduler::memory::MemoryManager::lookup_distributed_prefix`]
+    /// so callers don't need to reach into the manager directly.
+    /// Returns `None` when no cache is wired in.
+    ///
+    /// Phase 19 OPS-05b3.
+    #[cfg(feature = "multi-node")]
+    #[must_use]
+    pub fn lookup_distributed_prefix(
+        &self,
+        prompt_tokens: &[vllm_traits::TokenId],
+    ) -> Option<crate::scheduler::memory::DistributedPrefixMatch> {
+        self.memory.lookup_distributed_prefix(prompt_tokens)
+    }
 }

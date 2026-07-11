@@ -123,3 +123,105 @@ fn engine_propagates_distributed_kv_to_scheduler_memory_manager() {
         "two block allocations should register two puts in the cache"
     );
 }
+
+#[test]
+fn engine_scheduler_lookup_distributed_prefix_round_trip() {
+    // Phase 19 OPS-05b3 — verify the scheduler-level
+    // `lookup_distributed_prefix` end-to-end through the engine.
+    //
+    // 1. Build an engine with a distributed cache.
+    // 2. Allocate blocks via the MemoryManager and record tokens for
+    //    each — this publishes content-hash-keyed entries into the
+    //    cache via `record_block_tokens`.
+    // 3. Call `scheduler.lookup_distributed_prefix(prompt)` and
+    //    assert it returns a `DistributedPrefixMatch` covering the
+    //    same blocks.
+    use std::sync::Arc;
+    use vllm_core::scheduler::memory::DistributedPrefixMatch;
+    use vllm_traits::{TokenId, XorShiftHasher};
+
+    let cache = make_cache();
+    let mut engine = EngineBuilder::new(Box::new(StubModelBackend::default()))
+        .with_num_kv_blocks(64)
+        .with_distributed_kv(Arc::clone(&cache))
+        .build();
+
+    let scheduler = &mut engine.scheduler;
+    scheduler
+        .memory_mut()
+        .set_block_hasher(Arc::new(XorShiftHasher));
+
+    // Build a 2-block prompt (BLOCK_SIZE = 16).
+    const BLOCK_SIZE: usize = 16;
+    let prompt: Vec<TokenId> = (0..(2 * BLOCK_SIZE))
+        .map(|i| (i + 200) as TokenId)
+        .collect();
+
+    // Allocate 2 blocks, record tokens with a real chain cursor so
+    // the cache entries are content-hash-keyed (the path
+    // `lookup_distributed_prefix` queries).
+    let blocks = scheduler
+        .memory_mut()
+        .allocate(2)
+        .expect("allocation must succeed");
+    let h0 = scheduler
+        .memory_mut()
+        .record_block_tokens(blocks[0], 0, &prompt[..BLOCK_SIZE]);
+    let h1 = scheduler
+        .memory_mut()
+        .record_block_tokens(blocks[1], h0, &prompt[BLOCK_SIZE..]);
+    let _ = h1;
+
+    // Lookup the same prompt — both chain hashes are present, so
+    // the lookup returns a full match.
+    let result = scheduler
+        .lookup_distributed_prefix(&prompt)
+        .expect("all chain hashes recorded → lookup must hit");
+    let expected = DistributedPrefixMatch {
+        matched_blocks: 2,
+        matched_tokens: 2 * BLOCK_SIZE,
+        hasher_name: "xorshift",
+    };
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn engine_scheduler_lookup_distributed_prefix_partial_match() {
+    // Record tokens for 1 block; lookup a 2-block prompt — only the
+    // first block should match (the 2nd block's chain hash is unknown).
+    use std::sync::Arc;
+    use vllm_traits::{TokenId, XorShiftHasher};
+
+    let cache = make_cache();
+    let mut engine = EngineBuilder::new(Box::new(StubModelBackend::default()))
+        .with_num_kv_blocks(64)
+        .with_distributed_kv(Arc::clone(&cache))
+        .build();
+
+    let scheduler = &mut engine.scheduler;
+    scheduler
+        .memory_mut()
+        .set_block_hasher(Arc::new(XorShiftHasher));
+
+    const BLOCK_SIZE: usize = 16;
+    let prompt: Vec<TokenId> = (0..(2 * BLOCK_SIZE))
+        .map(|i| (i + 300) as TokenId)
+        .collect();
+
+    let blocks = scheduler
+        .memory_mut()
+        .allocate(2)
+        .expect("allocation must succeed");
+    scheduler
+        .memory_mut()
+        .record_block_tokens(blocks[0], 0, &prompt[..BLOCK_SIZE]);
+    // Note: do NOT record blocks[1] — its chain hash must remain
+    // absent from the cache for the partial-match assertion below.
+
+    let result = scheduler
+        .lookup_distributed_prefix(&prompt)
+        .expect("first block recorded → partial hit expected");
+    assert_eq!(result.matched_blocks, 1);
+    assert_eq!(result.matched_tokens, BLOCK_SIZE);
+    assert_eq!(result.hasher_name, "xorshift");
+}
