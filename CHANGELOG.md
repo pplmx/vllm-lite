@@ -46,14 +46,14 @@
     - `README.md` honesty pass: badges (1235 tests, Rust 1.88+), removed deleted feature flags (`prometheus`/`opentelemetry`), fixed architecture tree (StubArchitecture, no top-level `tests/`), accurate feature flag table.
     - Tutorial 03/04 rewritten to match real `Engine::run` + `EngineMessage` actor API and `SchedulerEngine::set_policy`.
 
+- **Public API CI Gate (v31.0 Phase 31-C / Phase 12e)** — `cargo-public-api` baseline diff wired into `just ci` and GitHub Actions.
+    - Baselines refreshed for all 6 workspace crates (including new `core.txt`) under `.planning/phase-12e/`.
+    - `just public-api-check` fails when public API grows without a `CHANGELOG.md` entry; shrinking is allowed.
+    - `just public-api-baseline` regenerates snapshots after intentional API changes.
+
 ### Changed
 
-- **Test-Only Public API Tightening (v31.0 Phase 31-C partial)** — Phase 12b `TEST-ONLY-MIXED` items tightened to `pub(crate)`:
-    - `Engine::with_drafts`, `SequencePacker::pack_sequences`, `MemoryBudget::total_bytes`
-    - `JwtConfig::with_secret` / `with_issuer` / `with_audience`
-    - Zero behavior change; all callers are in-crate tests.
-
-### Added
+- **Test-Only Public API (v31.0 Phase 31-C)** — Phase 12c tightened ~43 UNIT-TEST-ONLY items to `pub(crate)`. Six `TEST-ONLY-MIXED` items (`with_drafts`, `pack_sequences`, `total_bytes`, JWT builders) remain `pub` because integration tests live outside the crate.
 
 - **Dead Dependency Cleanup (v30.0 Phase 12a)** — removed 8 unused dependencies from the workspace via `cargo-machete` audit:
     - **`vllm-core`** — `metrics-exporter-prometheus` + `opentelemetry` + `parking_lot`. The `prometheus` and `opentelemetry` features were no-ops (no `#[cfg(feature = "...")]` code); removed both features. Added `time` to the vllm-core `tokio` feature list because `tokio::time::sleep` was previously pulled in transitively via the `prometheus` feature.

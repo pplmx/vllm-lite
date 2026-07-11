@@ -85,12 +85,16 @@ fix: autofix
 public-api-check:
     bash .planning/phase-12e/check-public-api.sh
 
+# Regenerate committed public-API baselines (run after intentional API changes).
+public-api-baseline:
+    bash .planning/phase-12e/refresh-baselines.sh
+
 # Run all CI checks (skips #[ignore] slow tests)
 ci: fmt-check clippy doc-check doctest nextest public-api-check
 
 # Run the full CI gate including security checks (audit + deny). Requires
 # `cargo-audit` and `cargo-deny` installed locally.
-ci-all: fmt-check clippy doc-check doctest nextest security
+ci-all: fmt-check clippy doc-check doctest nextest public-api-check security
 
 # Legacy `fix` recipe removed — replaced by `autofix` (true meaning) and
 # `quick` (read-only). Old `fix` is now an alias for `autofix` defined above.

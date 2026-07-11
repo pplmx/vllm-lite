@@ -36,7 +36,7 @@ Last activity: 2026-07-12 — chunked prefill all-arch + doc map + Windows test 
 - [x] `docs/architecture.md`, README honesty, OPERATIONS.md, ADR-019
 - [x] `.planning/DOC-MAP.md` — doc authority matrix
 - [ ] Doc coverage 55% → 65% real
-- [ ] Phase 12e `public-api-check` in CI
+- [x] Phase 12e `public-api-check` in CI + baselines refreshed
 - [ ] Multi-node KV block transfer (31-D)
 
 ## Deferred Items (v32+)

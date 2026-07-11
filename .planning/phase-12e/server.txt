@@ -1,3 +1,240 @@
+   Compiling serde_core v1.0.228
+   Compiling cfg-if v1.0.4
+    Checking subtle v2.6.1
+    Checking windows-sys v0.61.2
+   Compiling generic-array v0.14.7
+    Checking typenum v1.20.1
+    Checking const-oid v0.9.6
+    Checking smallvec v1.15.2
+    Checking getrandom v0.2.17
+    Checking log v0.4.33
+    Checking base64ct v1.8.3
+   Compiling serde_json v1.0.150
+   Compiling zeroize_derive v1.5.0
+    Checking bytes v1.12.0
+    Checking regex-automata v0.4.14
+    Checking tracing-core v0.1.36
+    Checking futures-core v0.3.32
+   Compiling dunce v1.0.5
+   Compiling fs_extra v1.3.0
+    Checking futures-sink v0.3.32
+   Compiling getrandom v0.3.4
+    Checking base16ct v0.2.0
+    Checking spin v0.9.8
+    Checking rand_core v0.6.4
+    Checking unicode-normalization-alignments v0.1.12
+    Checking num-integer v0.1.46
+    Checking cpufeatures v0.2.17
+    Checking futures-channel v0.3.32
+    Checking lazy_static v1.5.0
+   Compiling jobserver v0.1.34
+   Compiling aws-lc-rs v1.17.0
+    Checking pem-rfc7468 v0.7.0
+   Compiling semver v1.0.28
+    Checking ff v0.13.1
+    Checking anstyle v1.0.14
+   Compiling futures-macro v0.3.32
+    Checking tracing v0.1.44
+   Compiling time-core v0.1.9
+   Compiling num-conv v0.2.2
+    Checking slab v0.4.12
+   Compiling httparse v1.10.1
+    Checking http v1.4.2
+    Checking zeroize v1.9.0
+   Compiling cc v1.2.65
+    Checking futures-task v0.3.32
+    Checking tower-service v0.3.3
+    Checking futures-io v0.3.32
+    Checking rand_chacha v0.3.1
+    Checking group v0.13.0
+    Checking tower-layer v0.3.3
+   Compiling rustc_version v0.4.1
+    Checking deranged v0.5.8
+    Checking once_cell_polyfill v1.70.2
+    Checking powerfmt v0.2.0
+    Checking percent-encoding v2.3.2
+   Compiling time-macros v0.2.30
+    Checking utf8parse v0.2.2
+   Compiling num-bigint-dig v0.8.6
+    Checking rand v0.8.6
+    Checking num-iter v0.1.45
+   Compiling curve25519-dalek-derive v0.1.1
+    Checking anstyle-parse v1.0.0
+    Checking der v0.7.10
+    Checking rustls-pki-types v1.14.1
+    Checking crossbeam-channel v0.5.15
+   Compiling rustls v0.23.41
+    Checking atomic-waker v1.1.2
+    Checking base64 v0.22.1
+   Compiling curve25519-dalek v4.1.3
+    Checking sync_wrapper v1.0.2
+    Checking http-body v1.0.1
+    Checking httpdate v1.0.3
+    Checking untrusted v0.9.0
+    Checking is_terminal_polyfill v1.70.2
+    Checking colorchoice v1.0.5
+    Checking futures-util v0.3.32
+    Checking form_urlencoded v1.2.2
+    Checking http-body-util v0.1.3
+    Checking parking_lot_core v0.9.12
+    Checking sharded-slab v0.1.7
+    Checking num-bigint v0.4.6
+    Checking tracing-log v0.2.0
+    Checking block-buffer v0.10.4
+    Checking crypto-common v0.1.7
+    Checking crypto-bigint v0.5.5
+    Checking thread_local v1.1.9
+   Compiling cmake v0.1.58
+    Checking encoding_rs v0.8.35
+    Checking mime v0.3.17
+    Checking spki v0.7.3
+    Checking arraydeque v0.5.1
+    Checking digest v0.10.7
+    Checking strsim v0.11.1
+   Compiling anyhow v1.0.103
+    Checking clap_lex v1.1.0
+   Compiling heck v0.5.0
+    Checking socket2 v0.6.4
+    Checking mio v1.2.1
+    Checking pkcs8 v0.10.2
+    Checking tempfile v3.27.0
+    Checking console v0.16.3
+    Checking anstyle-wincon v3.0.11
+    Checking hmac v0.12.1
+    Checking regex v1.12.4
+    Checking signature v2.2.0
+    Checking sec1 v0.7.3
+    Checking sha2 v0.10.9
+    Checking anstyle-query v1.1.5
+    Checking hkdf v0.12.4
+    Checking rfc6979 v0.4.0
+    Checking pkcs1 v0.7.5
+    Checking matchers v0.2.0
+    Checking ed25519 v2.2.3
+    Checking time v0.3.51
+    Checking anstream v1.0.0
+    Checking nu-ansi-term v0.50.3
+    Checking dashmap v6.2.1
+    Checking tokio v1.52.3
+   Compiling onig_sys v69.9.3
+   Compiling esaxx-rs v0.1.10
+   Compiling aws-lc-sys v0.41.0
+    Checking indicatif v0.18.4
+   Compiling clap_derive v4.6.1
+    Checking granit-parser v0.0.6
+    Checking axum-core v0.5.6
+    Checking clap_builder v4.6.0
+    Checking serde v1.0.228
+    Checking monostate v0.1.18
+    Checking hashbrown v0.16.1
+    Checking rsa v0.9.10
+    Checking serde_path_to_error v0.1.20
+    Checking encoding_rs_io v0.1.7
+    Checking crossbeam v0.8.4
+    Checking elliptic-curve v0.13.8
+    Checking pem v3.0.6
+    Checking annotate-snippets v0.12.16
+   Compiling axum-macros v0.5.1
+    Checking symlink v0.1.0
+    Checking ahash v0.8.12
+    Checking spm_precompiled v0.1.4
+    Checking dary_heap v0.3.9
+    Checking compact_str v0.9.1
+    Checking tracing-serde v0.2.0
+    Checking safetensors v0.8.0
+    Checking primeorder v0.13.6
+    Checking ecdsa v0.16.9
+    Checking ed25519-dalek v2.2.0
+    Checking serde_urlencoded v0.7.1
+    Checking tracing-subscriber v0.3.23
+    Checking matchit v0.8.4
+    Checking nohash-hasher v0.2.0
+    Checking chrono v0.4.44
+    Checking tower-http v0.7.0
+    Checking uuid v1.23.1
+    Checking p384 v0.13.1
+    Checking p256 v0.13.2
+    Checking serde-saphyr v0.0.28
+    Checking futures-executor v0.3.32
+    Checking futures v0.3.32
+    Checking simple_asn1 v0.6.4
+    Checking clap v4.6.1
+    Checking jsonwebtoken v10.4.0
+    Checking tracing-appender v0.2.5
+    Checking onig v6.5.3
+    Checking hyper v1.10.1
+    Checking tokenizers v0.22.2
+    Checking tokenizers v0.23.1
+    Checking tower v0.5.3
+    Checking hyper-util v0.1.20
+    Checking axum v0.8.9
+    Checking candle-core v0.11.0
+    Checking vllm-traits v0.1.0 (C:\Users\pplmx\JetBrains\RustroverProjects\vllm-lite\crates\traits)
+    Checking candle-nn v0.11.0
+    Checking vllm-model v0.1.0 (C:\Users\pplmx\JetBrains\RustroverProjects\vllm-lite\crates\model)
+    Checking vllm-core v0.1.0 (C:\Users\pplmx\JetBrains\RustroverProjects\vllm-lite\crates\core)
+    Checking rustls-webpki v0.103.13
+    Checking tokio-rustls v0.26.4
+ Documenting vllm-server v0.1.0 (C:\Users\pplmx\JetBrains\RustroverProjects\vllm-lite\crates\server)
+warning: public documentation for `config` links to private item `server`
+  --> crates\server\src\config\mod.rs:10:9
+   |
+10 | //! - [`server`] — `ServerConfig` (bind address, port, log level)
+   |         ^^^^^^ this item is private
+   |
+   = note: this link will resolve properly if you pass `--document-private-items`
+   = note: `#[warn(rustdoc::private_intra_doc_links)]` on by default
+
+warning: public documentation for `config` links to private item `engine`
+  --> crates\server\src\config\mod.rs:11:9
+   |
+11 | //! - [`engine`] — `EngineConfig` + `DraftSpecConfig` (scheduler tuning, draft specs)
+   |         ^^^^^^ this item is private
+   |
+   = note: this link will resolve properly if you pass `--document-private-items`
+
+warning: public documentation for `config` links to private item `auth`
+  --> crates\server\src\config\mod.rs:12:9
+   |
+12 | //! - [`auth`] — `AuthConfig` + `resolve_api_keys` (API keys + rate limit)
+   |         ^^^^ this item is private
+   |
+   = note: this link will resolve properly if you pass `--document-private-items`
+
+warning: public documentation for `Role` links to private item `RbacMiddleware::check_permission`
+  --> crates\server\src\security\rbac.rs:18:31
+   |
+18 | /// fixed capability set in [`RbacMiddleware::check_permission`] —
+   |                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this item is private
+   |
+   = note: this link will resolve properly if you pass `--document-private-items`
+
+warning: public documentation for `RbacMiddleware` links to private item `Self::check_permission`
+  --> crates\server\src\security\rbac.rs:76:53
+   |
+76 | /// (role → permitted actions) table consulted by [`Self::check_permission`].
+   |                                                     ^^^^^^^^^^^^^^^^^^^^^^ this item is private
+   |
+   = note: this link will resolve properly if you pass `--document-private-items`
+
+warning: public documentation for `TlsConfig` links to private item `TlsConfig::with_ca_cert`
+  --> crates\server\src\security\tls.rs:34:52
+   |
+34 | /// TLS is selected when `mtls = false`; calling [`TlsConfig::with_ca_cert`]
+   |                                                    ^^^^^^^^^^^^^^^^^^^^^^^ this item is private
+   |
+   = note: this link will resolve properly if you pass `--document-private-items`
+
+warning: public documentation for `new` links to private item `TlsConfig::with_ca_cert`
+  --> crates\server\src\security\tls.rs:46:11
+   |
+46 |     /// [`TlsConfig::with_ca_cert`] to upgrade to mTLS.
+   |           ^^^^^^^^^^^^^^^^^^^^^^^ this item is private
+   |
+   = note: this link will resolve properly if you pass `--document-private-items`
+
+warning: `vllm-server` (lib doc) generated 7 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 38.98s
 pub mod vllm_server
 pub mod vllm_server::api
 pub struct vllm_server::api::HealthDetailResponse

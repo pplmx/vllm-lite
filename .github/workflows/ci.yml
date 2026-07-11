@@ -52,6 +52,11 @@ jobs:
       - name: Test
         run: cargo nextest run --workspace --no-fail-fast
 
+      - name: Public API baseline check
+        run: |
+          cargo install cargo-public-api --locked
+          bash .planning/phase-12e/check-public-api.sh
+
       - name: Security audit
         # Fail on warnings (matches `just audit`); RUSTSEC-2024-0436 (paste,
         # deep transitive via candle-core/gemm) is an accepted-risk INFO
@@ -92,3 +97,5 @@ jobs:
           RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --workspace
           cargo test --doc --workspace --all-features --no-fail-fast
           cargo nextest run --workspace --no-fail-fast
+          cargo install cargo-public-api --locked
+          bash .planning/phase-12e/check-public-api.sh
