@@ -66,13 +66,6 @@ impl KvCachePool {
         self.free_list.pop()
     }
 
-    pub fn deallocate(&mut self, block_id: usize) {
-        if block_id < self.total_blocks {
-            self.blocks[block_id].is_free = true;
-            self.free_list.push(block_id);
-        }
-    }
-
     pub const fn is_available(&self) -> bool {
         !self.free_list.is_empty()
     }

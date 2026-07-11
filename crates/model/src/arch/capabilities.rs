@@ -32,14 +32,6 @@ impl ArchCapabilities {
         speculative: true,
     };
 
-    /// Hybrid production path without speculative hooks (reserved for partial integrations).
-    pub const HYBRID: Self = Self {
-        inference: true,
-        paged_kv: true,
-        weight_load: true,
-        speculative: false,
-    };
-
     /// Placeholder architecture — must not be used for real serving without opt-in.
     pub const STUB: Self = Self {
         inference: false,
