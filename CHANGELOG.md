@@ -99,6 +99,25 @@
         - Wiring `attn_factor` into the attention kernel for the YaRN attention-temperature scaling half.
     - Total commits: 1.
 
+- **YaRN Long-Context Wiring (v30.0 Phase 16)** — closes out the three deferred Phase 15 items. Production RoPE callers now route through `apply_with_scaling`, the `Dynamic` and `Su` algorithms are implemented, and `attn_factor` is applied to attention scores in the standard `forward()` path. Paged / tiled / flash attention paths silently ignore `attn_factor` (documented limitation; follow-up phase).
+    - **`apply_with_scaling` / `forward_with_scaling`** promoted from `pub(crate)` to `pub`; `#[allow(dead_code)]` markers removed.
+    - **`RopeGqaAttention`** field changed from `theta: f32` to `rope: RoPE`; `forward_prefill` and `forward_decode` now call `self.rope.apply_with_scaling`. Default behaviour is unchanged (no-op when `rope_type == Default`).
+    - **`mla` attention** routes through `apply_rope_with_scaling` (with `RopeScalingContext::default()` for now; production configs that need YaRN/Linear/etc. will plumb `RopeScaling` through a follow-up).
+    - **`gemma4` rope** migration deferred to a later phase — gemma4 uses `partial_rotary_factor` which is incompatible with the standard `RoPE` struct's full-rotation math; requires either teaching `RoPE` about partial rotation or keeping gemma4's bespoke path.
+    - **`Dynamic` NTK** (HF / YaRN style) implemented; `scale = max(1, factor × (cur / orig_max) - (factor - 1))`. Falls back to Default when `cur_seq_len <= orig_max`. New helper `derive_seq_len(positions)` extracts current seq length.
+    - **`Su` RoPE** (paper-original, Su et al. 2024) implemented with per-dim `short_factor` / `long_factor`. New `RopeScaling` fields `short_factor` / `long_factor` (both `Option<Vec<f32>>`, backward-compatible — default `None`). Boundary computed from base wavelength vs `original_max_position_embeddings` (matches HF impl). Falls back to Default when `original_max_position` is missing.
+    - **`attn_factor` wiring**: `GqaAttention` gains `attn_factor: Option<f32>`; standard `forward()` multiplies the score scale by it. `attn_factor=1.0` is a no-op. `paged_attention_fn` / `tiled_attention_fn` / `flash_attention_fn` documented as silently ignoring it (Phase 16 limitation).
+    - **`GqaAttention`** gains a `device()` accessor so `RopeGqaAttention` can construct a `RoPE` on the same device as the projection weights.
+    - **API**: `RopeScalingContext` gains `short_factor` / `long_factor` fields; `Copy` bound dropped (`Vec<f32>` is not `Copy`).
+    - **New tests** (~15): `rope.rs/tests.rs` Dynamic suite (4: matches-default-below-orig-max, differs-above, boundary, derive_seq_len) + Su suite (5: identity-factors-match, short-factor-modifies-high-freq, long-factor-modifies-low-freq, scaling-context-extraction, missing-orig-max-fallback) + `gqa/tests.rs` attn_factor suite (2: 1.0-is-noop, 0.5-changes-output) + `qwen3/config/rope.rs` serde tests (3: short-factor, long-factor, missing-fields-default-None). Plus 1 regression test on `rope_gqa/tests.rs` that locks in Default no-op.
+    - All 408 `vllm-model` lib tests pass (was 392; +16 from the new tests). clippy (CI-equivalent: correctness/suspicious/perf) clean on the modified files.
+    - **Deferred to follow-up phase**:
+        - (a) wiring `attn_factor` into `paged_attention_fn` / `tiled_attention_fn` / `flash_attention_fn`.
+        - (b) threading `RopeScaling` from `Qwen3Config` through `Block::new` into `RoPE::new_with_config` (currently `RopeGqaAttention::new` hard-codes `max_position=4096` and uses `RoPE::new` directly).
+        - (c) migrating `gemma4` rope to the unified `apply_with_scaling` path (requires `partial_rotary_factor` support in the standard `RoPE` struct or a separate migration track).
+        - (d) implementing `Su` paper-original full algorithm variants (e.g., Su paper's "extrapolation" vs "interpolation" mode selection).
+    - Total commits: 8.
+
 - **Architectural File Splits (v30.0 Phase 11)** — three more production files split into module directories without behavior change:
     - **`server/src/config.rs` (413 lines → 4 files)**: decomposed into `config/mod.rs` (`AppConfig` + `Default` + `load` + `validate` + `ConfigValidationError(s)`) + `config/server.rs` (`ServerConfig` + `Default`) + `config/engine.rs` (`EngineConfig` + `DraftSpecConfig` + `Default`) + `config/auth.rs` (`AuthConfig` + `Default` + `resolve_api_keys`). Public API preserved via re-exports in `mod.rs`.
     - **`qwen3/block.rs` (376 lines → 4 files)**: decomposed into `block/mod.rs` (`TransformerBlock` struct + `Deref` + `PagedDecoderBlock` impl) + `block/construct.rs` (`new`, `new_with_tp`, `new_with_weights`) + `block/weights.rs` (`from_weights` HuggingFace weight-map loader) + `block/factory.rs` (free functions `new_block` + `block_from_weights`). The factory submodule is `pub(crate)` so `qwen3/model.rs` can still access `new_block` / `block_from_weights` via `super::block::{...}` as before.
