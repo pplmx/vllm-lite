@@ -561,3 +561,99 @@ fn test_matmul_rejects_non_contiguous_batch_dims() -> Result<()> {
     );
     Ok(())
 }
+
+// === Phase 16: attn_factor wiring ===
+
+#[test]
+fn gqa_attn_factor_one_is_noop() -> Result<()> {
+    let device = candle_core::Device::Cpu;
+    let num_heads = 4;
+    let num_kv_heads = 4;
+    let head_dim = 32;
+    let hidden_size = num_heads * head_dim;
+
+    let q_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
+    let k_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
+    let v_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
+    let o_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
+
+    let mut attn = GqaAttention::new_with_weights(
+        hidden_size,
+        num_heads,
+        num_kv_heads,
+        head_dim,
+        q_w,
+        k_w,
+        v_w,
+        o_w,
+        AttentionConfig::default(),
+        false,
+        None,
+        None,
+    )?;
+
+    let x = Tensor::randn(0.0f32, 1.0, (1, 4, hidden_size), &device)?;
+
+    // attn_factor = 1.0 must match attn_factor = None
+    attn.attn_factor = Some(1.0);
+    let out_with_factor = attn.forward(&x)?;
+    attn.attn_factor = None;
+    let out_without_factor = attn.forward(&x)?;
+
+    let diff = (&out_with_factor - &out_without_factor)?
+        .abs()?
+        .max_all()?
+        .to_scalar::<f32>()?;
+    assert!(
+        diff < 1e-5,
+        "attn_factor=1.0 must be a no-op (max diff = {diff})"
+    );
+    Ok(())
+}
+
+#[test]
+fn gqa_attn_factor_changes_output() -> Result<()> {
+    let device = candle_core::Device::Cpu;
+    let num_heads = 4;
+    let num_kv_heads = 4;
+    let head_dim = 32;
+    let hidden_size = num_heads * head_dim;
+
+    let q_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
+    let k_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
+    let v_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
+    let o_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
+
+    let mut attn = GqaAttention::new_with_weights(
+        hidden_size,
+        num_heads,
+        num_kv_heads,
+        head_dim,
+        q_w,
+        k_w,
+        v_w,
+        o_w,
+        AttentionConfig::default(),
+        false,
+        None,
+        None,
+    )?;
+
+    let x = Tensor::randn(0.0f32, 1.0, (1, 4, hidden_size), &device)?;
+
+    // attn_factor = 0.5 must change the output (halves the score temperature)
+    attn.attn_factor = Some(0.5);
+    let out_with_factor = attn.forward(&x)?;
+    attn.attn_factor = None;
+    let out_without_factor = attn.forward(&x)?;
+
+    let diff = (&out_with_factor - &out_without_factor)?
+        .abs()?
+        .max_all()?
+        .to_scalar::<f32>()?;
+    assert!(
+        diff > 1e-5,
+        "attn_factor=0.5 must change the output (max diff = {diff})"
+    );
+    Ok(())
+}

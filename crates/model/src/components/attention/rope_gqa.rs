@@ -56,6 +56,10 @@ impl RopeGqaAttention {
         // Production configs that need YaRN/Linear/etc. scaling should
         // construct via a future entry point that plumbs `RopeScaling`.
         let rope = RoPE::new(head_dim, 4096, theta, inner.device());
+        let mut inner = inner;
+        // Plumb YaRN's attention-temperature scaling factor from the rope
+        // config into the underlying GqaAttention. Default (no scaling).
+        inner.attn_factor = rope.attn_factor();
         Ok(Self { inner, rope })
     }
 
@@ -96,6 +100,8 @@ impl RopeGqaAttention {
             k_norm_weight,
         )?;
         let rope = RoPE::new(head_dim, 4096, theta, inner.device());
+        let mut inner = inner;
+        inner.attn_factor = rope.attn_factor();
         Ok(Self { inner, rope })
     }
 
