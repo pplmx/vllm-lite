@@ -645,7 +645,6 @@ fn test_cancel_request_cleans_response_txs() {
 }
 
 #[test]
-#[ignore = "empty prompt handling needs validation at API layer"]
 fn test_empty_prompt_handling() {
     let config = SchedulerConfig::default();
     let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);

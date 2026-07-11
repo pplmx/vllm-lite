@@ -127,19 +127,20 @@ impl AsyncFallbackStrategy for RetryStrategy {
         E: Send,
     {
         let mut last_error = None;
-        for attempt in 0..self.max_attempts {
+        let attempts = self.max_attempts.max(1);
+        for attempt in 0..attempts {
             match operation().await {
                 Ok(result) => return Ok(result),
                 Err(e) => {
                     last_error = Some(e);
-                    if attempt < self.max_attempts - 1 {
+                    if attempt < attempts - 1 {
                         tokio::time::sleep(self.calculate_delay(attempt)).await;
                     }
                 }
             }
         }
         // invariant: loop populates `last_error` on every iteration that doesn't return Ok;
-        // if the loop exits without setting it, the success path has already returned.
+        // `attempts` is at least 1, so the loop always runs at least once.
         Err(last_error.unwrap())
     }
 }
@@ -240,6 +241,20 @@ mod tests {
         let strategy = RetryStrategy::default();
         let result: Result<i32, ()> = strategy.execute(|| async { Ok(1) }).await;
         assert_eq!(result, Ok(1));
+    }
+
+    #[tokio::test]
+    async fn test_retry_strategy_zero_attempts_runs_once() {
+        let strategy = RetryStrategy::new(0, Duration::from_millis(1));
+        let attempts = std::sync::atomic::AtomicUsize::new(0);
+        let result: Result<i32, ()> = strategy
+            .execute(|| async {
+                attempts.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                Err(())
+            })
+            .await;
+        assert_eq!(result, Err(()));
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::Relaxed), 1);
     }
 
     // ────── Builder ──────

@@ -30,6 +30,7 @@ impl DecoderLayer for HybridBlock {
             kv_cache,
             block_ids,
             positions,
+            num_computed_tokens,
             aux,
             ..
         } = ctx;
@@ -47,7 +48,20 @@ impl DecoderLayer for HybridBlock {
                 *gdn_state = Some(state);
                 Ok(out)
             }
-            Self::Full(b) => b.forward_prefill(x, kv_cache, layer_idx, block_ids, positions),
+            Self::Full(b) => {
+                if *num_computed_tokens > 0 {
+                    b.forward_prefill_continue(
+                        x,
+                        kv_cache,
+                        layer_idx,
+                        block_ids,
+                        positions,
+                        *num_computed_tokens,
+                    )
+                } else {
+                    b.forward_prefill(x, kv_cache, layer_idx, block_ids, positions)
+                }
+            }
         }
     }
 

@@ -12,7 +12,8 @@
 pub use crate::components::AttentionConfig;
 use crate::components::attention::GqaAttention as SharedGqaAttention;
 use crate::components::attention::paged_gqa::{
-    compute_gqa_attention, prefill_continue_causal_mask, read_decode_kv, write_prefill_kv,
+    compute_gqa_attention, prefill_continue_causal_mask, project_attention_output, read_decode_kv,
+    write_prefill_kv,
 };
 use crate::components::positional::rope::RoPE;
 use crate::paged_tensor::PagedKvCache;
@@ -284,10 +285,14 @@ impl RopeGqaAttention {
             Some(&mask),
         )?;
 
-        let attn_output = attn_output.transpose(1, 2)?;
-        let attn_output =
-            attn_output.reshape((batch_size, seq_len, num_heads * head_dim))?;
-        self.inner.o_proj.forward(&attn_output)
+        project_attention_output(
+            &attn_output,
+            batch_size,
+            seq_len,
+            num_heads,
+            head_dim,
+            self.inner.o_proj_linear(),
+        )
     }
 
     /// Decode path: project Q/K/V for one new token, apply optional QK-norm,

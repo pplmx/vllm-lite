@@ -82,6 +82,31 @@ impl FullAttentionBlock35 {
         })
     }
 
+    /// Run a chunked-prefill continuation against an existing KV prefix.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
+    pub fn forward_prefill_continue(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        positions: &[usize],
+        num_computed_tokens: usize,
+    ) -> CandleResult<Tensor> {
+        self.forward_with_attn(x, |x| {
+            self.self_attn.forward_prefill_continue(
+                x,
+                kv_cache,
+                layer_idx,
+                block_ids,
+                positions,
+                num_computed_tokens,
+            )
+        })
+    }
+
     /// Run the decode path: process one new token against cached KV.
     /// # Errors
     ///

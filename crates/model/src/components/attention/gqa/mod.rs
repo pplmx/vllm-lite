@@ -213,6 +213,11 @@ impl GqaAttention {
     }
 
     #[must_use]
+    pub(crate) const fn o_proj_linear(&self) -> &Linear {
+        &self.o_proj
+    }
+
+    #[must_use]
     pub const fn has_q_norm(&self) -> bool {
         self.q_norm.is_some()
     }

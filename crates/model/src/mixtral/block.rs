@@ -251,6 +251,39 @@ impl MixtralBlock {
         x.add(&residual)
     }
 
+    /// Run a chunked-prefill continuation against an existing KV prefix.
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
+    pub fn forward_prefill_continue(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        positions: &[usize],
+        num_computed_tokens: usize,
+    ) -> Result<Tensor> {
+        let residual = x.clone();
+        let x = self.input_layernorm.forward(x)?;
+        let x = self
+            .attention
+            .forward_prefill_continue(
+                &x,
+                kv_cache,
+                layer_idx,
+                block_ids,
+                positions,
+                num_computed_tokens,
+            )?;
+        let x = (&x + &residual)?;
+
+        let residual = x.clone();
+        let x = self.post_attention_layernorm.forward(&x)?;
+        let x = self.mlp.forward(&x)?;
+        x.add(&residual)
+    }
+
     /// Run the decode path: process one new token against cached KV.
     /// # Errors
     ///
@@ -297,6 +330,26 @@ impl PagedDecoderBlock for MixtralBlock {
         positions: &[usize],
     ) -> Result<Tensor> {
         Self::forward_prefill(self, x, kv_cache, layer_idx, block_ids, positions)
+    }
+
+    fn forward_prefill_continue(
+        &self,
+        x: &Tensor,
+        kv_cache: &mut PagedKvCache,
+        layer_idx: usize,
+        block_ids: &[usize],
+        positions: &[usize],
+        num_computed_tokens: usize,
+    ) -> Result<Tensor> {
+        Self::forward_prefill_continue(
+            self,
+            x,
+            kv_cache,
+            layer_idx,
+            block_ids,
+            positions,
+            num_computed_tokens,
+        )
     }
 
     fn forward_decode(
