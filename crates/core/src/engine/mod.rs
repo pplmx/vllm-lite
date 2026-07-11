@@ -3,6 +3,7 @@
 
 mod ctor;
 mod cuda_graph;
+mod distributed_kv;
 mod draft_management;
 mod graph_step;
 mod lifecycle;
@@ -22,6 +23,9 @@ use vllm_traits::{ModelBackend, SeqId, TokenId};
 
 #[cfg(feature = "cuda-graph")]
 use vllm_traits::CudaGraphExecutor;
+
+#[cfg(feature = "multi-node")]
+use vllm_dist::DistributedKVCache;
 
 /// Core inference engine managing requests, scheduling, and model execution.
 ///
@@ -75,6 +79,14 @@ pub struct Engine {
     /// concrete type. Phase 18 ARCH-06.
     #[cfg(feature = "cuda-graph")]
     cuda_graph: Option<Box<dyn CudaGraphExecutor + Send>>,
+    /// Optional distributed KV-cache for cross-node cache coherence.
+    /// Phase 19 OPS-05a surfaces the [`vllm_dist::DistributedKVCache`]
+    /// seam to engine callers; the allocator-level hooks that wire block
+    /// allocate/free into the cache are OPS-05b. The field exists today
+    /// so callers can construct a multi-node engine, query its status,
+    /// and own the cache for the engine's lifetime.
+    #[cfg(feature = "multi-node")]
+    distributed_kv: Option<Arc<DistributedKVCache>>,
     /// Optional adaptive speculative decoder that tunes the draft-token
     /// budget based on observed acceptance rates.
     pub adaptive_decoder: Option<AdaptiveSpeculativeDecoder>,
@@ -113,6 +125,11 @@ impl std::fmt::Debug for Engine {
         dbg.field(
             "cuda_graph",
             &self.cuda_graph.as_ref().map(|_| "<dyn CudaGraphExecutor>"),
+        );
+        #[cfg(feature = "multi-node")]
+        dbg.field(
+            "distributed_kv",
+            &self.distributed_kv.as_ref().map(Arc::strong_count),
         );
         dbg.finish_non_exhaustive()
     }

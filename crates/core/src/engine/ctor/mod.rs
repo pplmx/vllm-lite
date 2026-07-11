@@ -105,6 +105,8 @@ impl Engine {
             sleep_policy: SleepPolicy::default(),
             #[cfg(feature = "cuda-graph")]
             cuda_graph,
+            #[cfg(feature = "multi-node")]
+            distributed_kv: None,
             adaptive_decoder: None,
             draft_registry: Arc::new(DraftModelRegistry::new()),
             draft_resolver: None,

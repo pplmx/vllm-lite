@@ -18,9 +18,14 @@ dashmap = { workspace = true }
 
 [features]
 cuda-graph = ["dep:vllm-model"]
+multi-node = ["dep:vllm-dist"]
 
 [dependencies.vllm-model]
 path = "../model"
+optional = true
+
+[dependencies.vllm-dist]
+path = "../dist"
 optional = true
 
 [dev-dependencies]

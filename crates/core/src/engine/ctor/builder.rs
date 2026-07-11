@@ -14,6 +14,9 @@ use vllm_traits::ModelBackend;
 #[cfg(feature = "cuda-graph")]
 use vllm_traits::CudaGraphExecutor;
 
+#[cfg(feature = "multi-node")]
+use vllm_dist::DistributedKVCache;
+
 /// Builder for [`Engine`] with named methods for all optional fields.
 ///
 /// # Example
@@ -43,6 +46,12 @@ pub struct EngineBuilder {
     /// without `vllm-core` knowing the concrete type.
     #[cfg(feature = "cuda-graph")]
     cuda_graph_executor: Option<Box<dyn CudaGraphExecutor + Send>>,
+    /// Caller-supplied distributed KV-cache. Phase 19 OPS-05a establishes
+    /// this seam; today the cache is owned but not yet wired into the
+    /// allocator (OPS-05b). Set this to opt into cross-node cache
+    /// coherence from the engine boundary.
+    #[cfg(feature = "multi-node")]
+    distributed_kv: Option<Arc<DistributedKVCache>>,
 }
 
 impl std::fmt::Debug for EngineBuilder {
@@ -88,6 +97,8 @@ impl EngineBuilder {
             sleep_policy: SleepPolicy::default(),
             #[cfg(feature = "cuda-graph")]
             cuda_graph_executor: None,
+            #[cfg(feature = "multi-node")]
+            distributed_kv: None,
         }
     }
 
@@ -158,6 +169,19 @@ impl EngineBuilder {
         self
     }
 
+    /// Plug in a pre-built distributed KV-cache.
+    ///
+    /// Phase 19 OPS-05a establishes the seam. The cache is owned by the
+    /// engine and reachable via [`Engine::distributed_kv_enabled`] and
+    /// [`Engine::distributed_kv_stats`]. Allocator-level hooks that wire
+    /// block allocate/free into the cache are OPS-05b.
+    #[must_use]
+    #[cfg(feature = "multi-node")]
+    pub fn with_distributed_kv(mut self, cache: Arc<DistributedKVCache>) -> Self {
+        self.distributed_kv = Some(cache);
+        self
+    }
+
     /// Build the [`Engine`]. Equivalent to calling `Engine::with_config_boxed(...)`
     /// then setting the optional fields directly.
     #[must_use]
@@ -176,6 +200,12 @@ impl EngineBuilder {
         {
             if let Some(executor) = self.cuda_graph_executor {
                 engine.set_cuda_graph_executor(executor);
+            }
+        }
+        #[cfg(feature = "multi-node")]
+        {
+            if let Some(cache) = self.distributed_kv {
+                engine.set_distributed_kv(cache);
             }
         }
         engine
