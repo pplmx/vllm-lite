@@ -10,16 +10,21 @@
 //!   constant used by the paged-KV allocator.
 //! - The kernel-side trait surface ([`CudaGraphConfig`],
 //!   [`GraphExecutionError`]) consumed by `vllm-model`.
+//! - Shared sampling primitives ([`argmax_logits`]) used by both
+//!   `vllm-core::sampling` and `vllm-model::causal_lm` to avoid an
+//!   upward `model → core` dependency (Phase 18 ARCH-09).
 //!
 //! Most consumers should depend on `vllm-core` or `vllm-model` instead and
 //! reach these types via their crate-root re-exports.
 
 pub mod kernels;
 pub mod model;
+pub mod sampling;
 pub mod types;
 
 pub use kernels::{CudaGraphConfig, GraphExecutionError, ModelGraphConfig};
 pub use model::{ModelBackend, ModelError, Result, StubModelBackend};
+pub use sampling::argmax_logits;
 pub use types::{
     BLOCK_SIZE, Batch, BatchOutput, BatchPhase, BlockId, SeqId, TensorParallelError, TokenId,
 };

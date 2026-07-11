@@ -3,10 +3,14 @@
 //! Designed to be called per sequence per decode step. Beam-search
 //! state types live in [`crate::beam`]; no orchestration methods are
 //! currently shipped (Phase 12d removed the unused `step_beam` helper).
+//!
+//! Greedy decoding delegates to [`vllm_traits::argmax_logits`] (Phase 18
+//! ARCH-09). The local wrapper only adds the `tracing` instrumentation.
 #![allow(unused_variables)]
 
 use crate::types::TokenId;
 use tracing::trace;
+use vllm_traits::argmax_logits;
 
 fn random_f32() -> f32 {
     rand::random::<f32>()
@@ -14,19 +18,7 @@ fn random_f32() -> f32 {
 
 pub(crate) fn greedy_sample(logits: &[f32]) -> TokenId {
     trace!(vocab_size = logits.len(), "Greedy sampling");
-    let idx = logits
-        .iter()
-        .enumerate()
-        .fold((0, f32::NEG_INFINITY), |(max_idx, max_val), (i, &val)| {
-            if val > max_val {
-                (i, val)
-            } else {
-                (max_idx, max_val)
-            }
-        })
-        .0;
-    // invariant: vocab indices are bounded by the model vocabulary size, well within u32 range.
-    TokenId::try_from(idx).unwrap_or(0)
+    argmax_logits(logits)
 }
 
 pub(crate) fn temperature_sample(logits: &[f32], temperature: f32) -> TokenId {
