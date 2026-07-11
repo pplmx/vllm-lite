@@ -8,8 +8,8 @@
 //!   flow between the scheduler and backends.
 //! - ID aliases ([`SeqId`], [`TokenId`], [`BlockId`]) and the [`BLOCK_SIZE`]
 //!   constant used by the paged-KV allocator.
-//! - The kernel-side trait surface ([`CudaGraphConfig`],
-//!   [`GraphExecutionError`]) consumed by `vllm-model`.
+//! - The kernel-side trait surface ([`CudaGraphConfig`], [`CudaGraphExecutor`],
+//!   [`GraphExecutionError`]) consumed by `vllm-model` and `vllm-core`.
 //! - Shared sampling primitives ([`argmax_logits`]) used by both
 //!   `vllm-core::sampling` and `vllm-model::causal_lm` to avoid an
 //!   upward `model → core` dependency (Phase 18 ARCH-09).
@@ -22,7 +22,7 @@ pub mod model;
 pub mod sampling;
 pub mod types;
 
-pub use kernels::{CudaGraphConfig, GraphExecutionError, ModelGraphConfig};
+pub use kernels::{CudaGraphConfig, CudaGraphExecutor, GraphExecutionError, ModelGraphConfig};
 pub use model::{ModelBackend, ModelError, Result, StubModelBackend};
 pub use sampling::argmax_logits;
 pub use types::{

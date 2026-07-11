@@ -13,7 +13,7 @@ use super::CudaGraph;
 use super::config::CudaGraphConfig;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use vllm_traits::kernels::GraphExecutionError;
+use vllm_traits::kernels::{CudaGraphExecutor, GraphExecutionError};
 use vllm_traits::{Batch, BatchOutput};
 
 /// Executor for managing CUDA Graph capture and execution
@@ -274,6 +274,29 @@ impl BatchCudaGraphExecutor {
             seq_ids: batch.seq_ids.clone(),
             next_tokens: vec![0u32; batch_size],
         })
+    }
+}
+
+/// Trait object bridge — `BatchCudaGraphExecutor` is the only production
+/// implementation of [`vllm_traits::CudaGraphExecutor`] today, but the trait
+/// keeps it from leaking into `vllm-core` (Phase 18 ARCH-06).
+///
+/// All three methods forward directly to the inherent methods above; the impl
+/// exists purely so `Engine` can store `Box<dyn CudaGraphExecutor + Send>`.
+///
+/// `Send` is satisfied because every field is `Send` (`HashMap<usize, CudaGraph>`
+/// is `Send` when `CudaGraph` is, and the atomics are `Send`).
+impl CudaGraphExecutor for BatchCudaGraphExecutor {
+    fn is_enabled(&self) -> bool {
+        Self::is_enabled(self)
+    }
+
+    fn execute(&self, batch: &Batch) -> Result<BatchOutput, GraphExecutionError> {
+        Self::execute(self, batch)
+    }
+
+    fn capture_all_graphs(&mut self) -> Result<(), GraphExecutionError> {
+        Self::capture_all_graphs(self)
     }
 }
 

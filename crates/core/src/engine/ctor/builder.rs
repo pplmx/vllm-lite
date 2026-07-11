@@ -11,6 +11,9 @@ use crate::speculative::draft_resolver::DraftResolver;
 use crate::types::SchedulerConfig;
 use vllm_traits::ModelBackend;
 
+#[cfg(feature = "cuda-graph")]
+use vllm_traits::CudaGraphExecutor;
+
 /// Builder for [`Engine`] with named methods for all optional fields.
 ///
 /// # Example
@@ -34,6 +37,12 @@ pub struct EngineBuilder {
     adaptive_decoder: Option<AdaptiveSpeculativeDecoder>,
     draft_resolver: Option<Arc<DraftResolver>>,
     sleep_policy: SleepPolicy,
+    /// Caller-supplied CUDA-Graph executor. Overrides anything the engine
+    /// constructor would build from `config.cuda_graph.enabled`. Phase 18
+    /// ARCH-06 lets callers plug in their own `Box<dyn CudaGraphExecutor>`
+    /// without `vllm-core` knowing the concrete type.
+    #[cfg(feature = "cuda-graph")]
+    cuda_graph_executor: Option<Box<dyn CudaGraphExecutor + Send>>,
 }
 
 impl std::fmt::Debug for EngineBuilder {
@@ -77,6 +86,8 @@ impl EngineBuilder {
             adaptive_decoder: None,
             draft_resolver: None,
             sleep_policy: SleepPolicy::default(),
+            #[cfg(feature = "cuda-graph")]
+            cuda_graph_executor: None,
         }
     }
 
@@ -134,6 +145,19 @@ impl EngineBuilder {
         self
     }
 
+    /// Plug in a pre-built CUDA-Graph executor.
+    ///
+    /// When set, this overrides whatever `Engine::with_config_boxed` would
+    /// have constructed from `config.cuda_graph`. Use this when the
+    /// concrete executor type lives outside `vllm-core` (Phase 18 ARCH-06
+    /// is the whole reason the trait object exists).
+    #[must_use]
+    #[cfg(feature = "cuda-graph")]
+    pub fn with_cuda_graph_executor(mut self, executor: Box<dyn CudaGraphExecutor + Send>) -> Self {
+        self.cuda_graph_executor = Some(executor);
+        self
+    }
+
     /// Build the [`Engine`]. Equivalent to calling `Engine::with_config_boxed(...)`
     /// then setting the optional fields directly.
     #[must_use]
@@ -148,6 +172,12 @@ impl EngineBuilder {
         engine.adaptive_decoder = self.adaptive_decoder;
         engine.draft_resolver = self.draft_resolver;
         engine.sleep_policy = self.sleep_policy;
+        #[cfg(feature = "cuda-graph")]
+        {
+            if let Some(executor) = self.cuda_graph_executor {
+                engine.set_cuda_graph_executor(executor);
+            }
+        }
         engine
     }
 }

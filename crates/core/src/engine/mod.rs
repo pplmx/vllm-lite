@@ -21,7 +21,7 @@ use tokio::sync::mpsc;
 use vllm_traits::{ModelBackend, SeqId, TokenId};
 
 #[cfg(feature = "cuda-graph")]
-use vllm_model::kernels::BatchCudaGraphExecutor;
+use vllm_traits::CudaGraphExecutor;
 
 /// Core inference engine managing requests, scheduling, and model execution.
 ///
@@ -68,8 +68,13 @@ pub struct Engine {
     /// receiver is dropped. Visible to integration tests.
     pub response_txs: HashMap<SeqId, mpsc::Sender<TokenId>>,
     sleep_policy: SleepPolicy,
+    /// Optional CUDA-Graph executor behind a trait object. The concrete
+    /// type (`vllm_model::kernels::BatchCudaGraphExecutor`) is built by the
+    /// engine constructor and immediately boxed — every other engine call
+    /// site talks to the [`vllm_traits::CudaGraphExecutor`] trait, not the
+    /// concrete type. Phase 18 ARCH-06.
     #[cfg(feature = "cuda-graph")]
-    cuda_graph: Option<BatchCudaGraphExecutor>,
+    cuda_graph: Option<Box<dyn CudaGraphExecutor + Send>>,
     /// Optional adaptive speculative decoder that tunes the draft-token
     /// budget based on observed acceptance rates.
     pub adaptive_decoder: Option<AdaptiveSpeculativeDecoder>,
@@ -85,8 +90,8 @@ pub struct Engine {
 
 impl std::fmt::Debug for Engine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Engine")
-            .field("scheduler", &self.scheduler)
+        let mut dbg = f.debug_struct("Engine");
+        dbg.field("scheduler", &self.scheduler)
             .field("target_model", &"<dyn ModelBackend>")
             .field(
                 "draft_model",
@@ -103,8 +108,13 @@ impl std::fmt::Debug for Engine {
             .field(
                 "draft_resolver",
                 &self.draft_resolver.as_ref().map(Arc::strong_count),
-            )
-            .finish_non_exhaustive()
+            );
+        #[cfg(feature = "cuda-graph")]
+        dbg.field(
+            "cuda_graph",
+            &self.cuda_graph.as_ref().map(|_| "<dyn CudaGraphExecutor>"),
+        );
+        dbg.finish_non_exhaustive()
     }
 }
 

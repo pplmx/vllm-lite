@@ -127,7 +127,13 @@
     - All 407 `vllm-model` lib tests pass; clippy clean on modified files; cargo fmt clean.
     - Total commits: 3 (1 core tightening, 1 model removal, 1 review doc) + this CHANGELOG entry.
 
-- **Architecture Unification (v30.0 Phase 18)** — closes the three v23.0 deferred ARCH items: ARCH-05 (4 stub archs → 1 `StubArchitecture`), ARCH-09 (greedy_sample unification via shared helper), ARCH-10 (Architecture enum / UnknownArchitecture consolidation).
+- **Architecture Unification (v30.0 Phase 18)** — closes the four v23.0 deferred ARCH items: ARCH-05 (4 stub archs → 1 `StubArchitecture`), ARCH-06 (`core → model` upward dep via cuda-graph), ARCH-09 (greedy_sample unification via shared helper), ARCH-10 (Architecture enum / UnknownArchitecture consolidation).
+    - **ARCH-06 — `CudaGraphExecutor` trait** (`crates/traits/src/kernels.rs`):
+        - New `pub trait CudaGraphExecutor: Send` with 3 methods (`is_enabled`, `execute`, `capture_all_graphs`); re-exported from `vllm_traits::CudaGraphExecutor`. 6 new tests in `crates/traits/tests/cuda_graph_executor.rs` (object-safety, dispatch, counter assertions, disabled no-op, call order).
+        - `impl CudaGraphExecutor for BatchCudaGraphExecutor` in `crates/model/src/kernels/cuda_graph/executor.rs` — thin shim that forwards to the inherent methods. New model-side test `test_trait_dispatch_via_cuda_graph_executor` boxes a real executor and exercises the trait surface end-to-end.
+        - `vllm-core::engine::Engine::cuda_graph` changes from `Option<BatchCudaGraphExecutor>` to `Option<Box<dyn CudaGraphExecutor + Send>>`. Every `core` call site that touches the executor (`cuda_graph_enabled`, `capture_cuda_graphs`, `step_with_graph`) goes through the trait — only `engine/ctor/mod.rs` still imports the concrete type, and only to box it.
+        - New `EngineBuilder::with_cuda_graph_executor(Box<dyn CudaGraphExecutor + Send>)` lets callers override whatever `with_config_boxed` would build from `config.cuda_graph.enabled`. Backed by `Engine::set_cuda_graph_executor(pub(crate))`. This is the migration path toward dropping the `cuda-graph` feature entirely in a follow-up.
+        - Drive-by: `crates/model/src/components/positional/rope.rs::scaling_ctx` marked `const fn` to satisfy the workspace `missing_const_for_fn = "deny"` lint that was blocking CI after recent rope changes.
     - **ARCH-10 — `Architecture::Unknown` variant** (`crates/model/src/config/architecture.rs`):
         - Added `Unknown` variant to the `Architecture` enum, with `as_str()` returning `"unknown"`.
         - **Bug fix** in `crates/model/src/config/model_config.rs:242`: `unwrap_or(Architecture::Llama)` → `unwrap_or(Architecture::Unknown)`. The old code silently misclassified unrecognised configs as Llama; the new fallback surfaces the mismatch.
@@ -142,8 +148,8 @@
         - Shared `StubBlockWrapper` (passthrough paged decode) and `StubModel` (zero-token backend) replace the four per-stub wrapper/model structs.
         - `register_all_archs` switched to `register_stub(...)` for each of the 4 stubs. 7 new tests cover detect / negatives / name / capabilities.
         - Deleted `crates/model/src/gemma3/`, `llama4/`, `phi4/`, `mistral_small/` directories entirely (12 files, ~1200 lines removed). Removed `pub mod` declarations from `crates/model/src/lib.rs`.
-    - **Test count**: 407 → 400 vllm-model lib tests (delta: -21 old per-stub tests, +7 new `StubArchitecture` tests, +5 new `argmax_logits` tests, -1 stale test elsewhere, +2 round-trip). All workspace crates pass.
-    - **Total commits**: 7 (ARCH-10 × 1, ARCH-09a × 1, ARCH-09b × 1, ARCH-05a × 1, ARCH-05bcd × 1, cleanup × 1, this CHANGELOG).
+    - **Test count**: 1253 → 1260 (delta: +6 new `CudaGraphExecutor` trait tests, +1 model-side trait dispatch test). All workspace crates pass `cargo test --all-features --workspace`.
+    - **Total commits**: ARCH-06 adds 7 (trait × 1, model impl × 1, core refactor × 1, builder × 1, drive-by const fix × 1, planning doc × 1, this CHANGELOG × 1) on top of the prior Phase 18 baseline of 7.
 
 - **Architectural File Splits (v30.0 Phase 11)** — three more production files split into module directories without behavior change:
     - **`server/src/config.rs` (413 lines → 4 files)**: decomposed into `config/mod.rs` (`AppConfig` + `Default` + `load` + `validate` + `ConfigValidationError(s)`) + `config/server.rs` (`ServerConfig` + `Default`) + `config/engine.rs` (`EngineConfig` + `DraftSpecConfig` + `Default`) + `config/auth.rs` (`AuthConfig` + `Default` + `resolve_api_keys`). Public API preserved via re-exports in `mod.rs`.

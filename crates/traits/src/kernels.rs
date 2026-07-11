@@ -1,9 +1,16 @@
 //! Kernel and CUDA-Graph trait definitions consumed by `vllm-core` and `vllm-model`.
 //!
-//! Pure-data: configuration structs and an error enum. The actual capture /
-//! replay logic lives in `vllm-model::kernels::cuda_graph`. This module is
-//! the workspace-wide wire format for those configs.
+//! Pure-data: configuration structs, an error enum, and the
+//! [`CudaGraphExecutor`] trait. The actual capture / replay logic lives in
+//! `vllm-model::kernels::cuda_graph`. This module is the workspace-wide wire
+//! format for those configs and the abstract interface every engine talks to.
+//!
+//! See [`CudaGraphExecutor`] for the trait that hides `BatchCudaGraphExecutor`
+//! behind a trait object — the contract `vllm-core` depends on. Phase 18
+//! ARCH-06 closes the `core → model` upward dependency via cuda-graph.
 use serde::{Deserialize, Serialize};
+
+use crate::types::{Batch, BatchOutput};
 
 /// Configuration for `CudaGraph`. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -89,4 +96,54 @@ pub enum GraphExecutionError {
     GraphExecutionFailed(String),
     #[error("CUDA error: {0}")]
     CudaError(String),
+}
+
+/// Abstract interface over a CUDA-Graph executor.
+///
+/// `vllm-core::engine::Engine` holds an `Option<Box<dyn CudaGraphExecutor + Send>>`
+/// rather than a concrete `vllm_model::kernels::BatchCudaGraphExecutor`. The
+/// concrete type lives below the `core → model` boundary; the trait above it
+/// is what every consumer in `core` talks to.
+///
+/// This is the abstraction that closes the `core → model` upward dependency
+/// surfaced by the `cuda-graph` feature (Phase 18 ARCH-06). Without it, every
+/// `core` call site that touched the executor had to know the concrete model
+/// type. With it, the only place that imports `BatchCudaGraphExecutor` is
+/// the engine constructor that builds the concrete value before boxing it
+/// into the trait object.
+///
+/// # Object safety
+///
+/// `+ Send` is required so the boxed executor can move between threads if a
+/// future caller spawns the engine loop on a worker thread. The trait has no
+/// generic methods and no `Self` in return position, so it is object-safe.
+pub trait CudaGraphExecutor: Send {
+    /// Whether graph capture has completed and the executor can replay.
+    ///
+    /// The engine's run loop checks this every step to decide between the
+    /// fast-path (`step_with_graph`) and the regular `step`. Implementations
+    /// must be cheap — this is on the hot path.
+    fn is_enabled(&self) -> bool;
+
+    /// Replay the captured graph for `batch` and return the model output.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GraphExecutionError::GraphNotFound`] if no graph has been
+    /// captured for the batch's shape, and `GraphExecutionFailed` if the
+    /// underlying GPU launch failed. Callers are expected to fall back to a
+    /// regular forward pass on any error.
+    fn execute(&self, batch: &Batch) -> Result<BatchOutput, GraphExecutionError>;
+
+    /// Capture one graph per configured batch size.
+    ///
+    /// Called once after model load and before serving traffic. Subsequent
+    /// calls are no-ops in most implementations.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GraphExecutionError::GraphCaptureFailed`] if capture fails
+    /// on any of the configured batch sizes. Capture failure aborts the
+    /// call early; later sizes are not attempted.
+    fn capture_all_graphs(&mut self) -> Result<(), GraphExecutionError>;
 }
