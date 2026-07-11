@@ -12,7 +12,7 @@
 pub use crate::components::AttentionConfig;
 use crate::components::attention::GqaAttention as SharedGqaAttention;
 use crate::components::attention::paged_gqa::{read_decode_kv, write_prefill_kv};
-use crate::components::positional::apply_rope;
+use crate::components::positional::rope::RoPE;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Result, Tensor};
 
@@ -20,7 +20,7 @@ use candle_core::{Result, Tensor};
 /// `RopeGqaAttention`. See the type definition for fields and behavior.
 pub struct RopeGqaAttention {
     inner: SharedGqaAttention,
-    theta: f32,
+    rope: RoPE,
 }
 
 impl RopeGqaAttention {
@@ -52,7 +52,11 @@ impl RopeGqaAttention {
             config,
             has_qk_norm,
         )?;
-        Ok(Self { inner, theta })
+        // Default max_position = 4096 matches the workspace-wide default.
+        // Production configs that need YaRN/Linear/etc. scaling should
+        // construct via a future entry point that plumbs `RopeScaling`.
+        let rope = RoPE::new(head_dim, 4096, theta, inner.device());
+        Ok(Self { inner, rope })
     }
 
     /// Construct a `RopeGqaAttention` from already-loaded projection tensors.
@@ -91,7 +95,8 @@ impl RopeGqaAttention {
             q_norm_weight,
             k_norm_weight,
         )?;
-        Ok(Self { inner, theta })
+        let rope = RoPE::new(head_dim, 4096, theta, inner.device());
+        Ok(Self { inner, rope })
     }
 
     /// Standard non-causal forward (delegates to `GqaAttention::forward`).
@@ -172,8 +177,8 @@ impl RopeGqaAttention {
         let (q, k) = self.apply_qk_norm(q, k, batch_size, seq_len)?;
 
         let position_ids: Vec<i64> = positions.iter().map(|&p| p as i64).collect();
-        let q = apply_rope(&q, &position_ids, self.theta)?;
-        let k = apply_rope(&k, &position_ids, self.theta)?;
+        let q = self.rope.apply_with_scaling(&q, &position_ids)?;
+        let k = self.rope.apply_with_scaling(&k, &position_ids)?;
 
         let k_expanded = self.inner.expand_kv(&k, num_heads, num_kv_heads)?;
         let v_expanded = self.inner.expand_kv(&v, num_heads, num_kv_heads)?;
@@ -228,8 +233,8 @@ impl RopeGqaAttention {
         let (q, k) = self.apply_qk_norm(q, k, batch_size, 1)?;
 
         let position_ids: Vec<i64> = positions.iter().map(|&p| p as i64).collect();
-        let q = apply_rope(&q, &position_ids, self.theta)?;
-        let k = apply_rope(&k, &position_ids, self.theta)?;
+        let q = self.rope.apply_with_scaling(&q, &position_ids)?;
+        let k = self.rope.apply_with_scaling(&k, &position_ids)?;
 
         let k_expanded = self.inner.expand_kv(&k, num_heads, num_kv_heads)?;
         let v_expanded = self.inner.expand_kv(&v, num_heads, num_kv_heads)?;
