@@ -116,8 +116,14 @@ impl GqaAttention {
         // H-11 #2: replaced `qk.mul(broadcast(scalar_tensor))` with `qk.affine(scale, 0.0)`.
         // The scalar tensor was re-allocated and broadcast to O(B*H*S*S) every forward;
         // `affine` fuses the scaling into the existing kernel without materializing a broadcast tensor.
-        let scale = 1.0 / (self.head_dim as f32).sqrt();
-        let qk = qk.affine(f64::from(scale), 0.0)?;
+        //
+        // Phase 16: when `attn_factor` is set, the score scale is multiplied
+        // by it (YaRN §3.3 attention-temperature scaling). `attn_factor = 1.0`
+        // (or None) is a no-op; `attn_factor < 1.0` sharpens the softmax,
+        // `attn_factor > 1.0` flattens it.
+        let base_scale = 1.0 / (self.head_dim as f32).sqrt();
+        let attn_scale = self.attn_factor.unwrap_or(1.0) * base_scale;
+        let qk = qk.affine(f64::from(attn_scale), 0.0)?;
         // H-11 #3: `candle_nn::ops::softmax` already returns a contiguous tensor
         // (verified in candle-nn 0.10.2 src/ops.rs:22-29 — final op is
         // `broadcast_div`, which produces a fresh contiguous tensor). The
@@ -142,7 +148,9 @@ impl GqaAttention {
         Ok(o)
     }
 
-    /// Run the operation (see signature for params and return type).
+    /// Paged attention. **Does NOT honour `attn_factor`** — silently
+    /// scales by 1.0. Phase 16 limitation; follow-up phase will thread
+    /// the factor through to the paged kernel.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -152,7 +160,8 @@ impl GqaAttention {
         Ok(o)
     }
 
-    /// Run the operation (see signature for params and return type).
+    /// Tiled attention. **Does NOT honour `attn_factor`** — Phase 16
+    /// limitation, see [`Self::paged_attention_fn`].
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -163,7 +172,8 @@ impl GqaAttention {
         Ok(o)
     }
 
-    /// Run the operation (see signature for params and return type).
+    /// Flash attention. **Does NOT honour `attn_factor`** — Phase 16
+    /// limitation, see [`Self::paged_attention_fn`].
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
