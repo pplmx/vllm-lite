@@ -3,6 +3,10 @@
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
 </p>
 
+> **⚠ 历史文档** — 本文件记录 Phase 1–8 早期路线图（已全部完成）。  
+> **当前活跃规划：** [`.planning/v31.0-MASTER-PLAN.md`](./.planning/v31.0-MASTER-PLAN.md) · [`.planning/STATE.md`](./.planning/STATE.md)  
+> **文档导航：** [`.planning/DOC-MAP.md`](./.planning/DOC-MAP.md)
+
 <h1 align="center">vLLM-lite 路线图</h1>
 
 <p align="center">

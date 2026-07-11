@@ -564,10 +564,10 @@ Note: Tokenizer (`tiktoken`, `tokenizers`) 始终启用。`vllm-dist` 非 defaul
 
 - [docs/architecture.md](./docs/architecture.md) - 系统架构（单一真相源）
 - [OPERATIONS.md](./OPERATIONS.md) - 部署与故障排查
-- [ROADMAP.md](./ROADMAP.md) - 开发路线图
+- [.planning/v31.0-MASTER-PLAN.md](./.planning/v31.0-MASTER-PLAN.md) - 当前开发路线图
 - [CHANGELOG.md](./CHANGELOG.md) - 版本历史
 - [CONTRIBUTING.md](./CONTRIBUTING.md) - 贡献指南
-- [docs/adr/](./docs/adr/) - 架构决策记录 (18 篇 ADR)
+- [docs/adr/](./docs/adr/) - 架构决策记录 (19 篇 ADR)
 - [Tutorials](./docs/tutorial/01-setup.md) - 新贡献者教程（从 clone 到 serving）
 
 ---

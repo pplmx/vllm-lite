@@ -1,5 +1,8 @@
 # vllm-lite
 
+> **Current milestone:** v31.0 — see [`.planning/STATE.md`](./STATE.md) and [`.planning/v31.0-MASTER-PLAN.md`](./v31.0-MASTER-PLAN.md).  
+> **Doc map:** [`.planning/DOC-MAP.md`](./DOC-MAP.md)
+
 ## What This Is
 
 A production-ready LLM inference engine in Rust, optimized for single and multi-node GPU deployment with Kubernetes integration, high availability, and enterprise security.
@@ -8,7 +11,17 @@ A production-ready LLM inference engine in Rust, optimized for single and multi-
 
 Fast, memory-efficient LLM inference with continuous batching, paged KV cache, and tensor parallelism — deployed with production-grade ops tooling and security.
 
-## Current Milestone: v23.0 审计修复 (Audit Remediation)
+## Current Milestone: v31.0 Perfection & Elegance
+
+**Status:** In progress (see [STATE.md](./STATE.md))
+
+**Goal:** Correctness closure, documentation honesty, API tightening, multi-node KV reuse
+
+**Previous milestone (shipped):** v23.0 Audit Remediation — Phases 40–43 complete
+
+---
+
+## Historical: v23.0 审计修复 (Audit Remediation)
 
 **Status:** ◆ Active (planning)
 

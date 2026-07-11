@@ -1,5 +1,9 @@
 # Roadmap: vllm-lite
 
+> **Active roadmap:** [v31.0-MASTER-PLAN.md](./v31.0-MASTER-PLAN.md) + [STATE.md](./STATE.md)  
+> **This file** lists shipped milestones v16–v23 for historical reference.  
+> **Doc map:** [DOC-MAP.md](./DOC-MAP.md)
+
 ## Milestones
 
 - ✅ **v16.0 Speculative Decoding** — Phases 16.1-16.4 (shipped 2026-04-28)
@@ -9,13 +13,14 @@
 - ✅ **v20.0 Codebase Remediation** — Phases 25-30 (shipped 2026-06-27; 48/48 reqs; 1144 tests; clippy/fmt clean; doc 97.8%)
 - ✅ **v21.0 P2/P3 Backlog Cleanup** — Phases 31-35 (shipped 2026-06-27; 38 of 42 actively addressed; 1146 tests; 100% backlog closure)
 - ✅ **v22.0 Production Hardening** — Phases 36-39 (shipped 2026-06-27; 21/21 reqs; 1179 tests; clippy/fmt/doc clean; P0 bug fixed, security wired, polish applied)
-- ◆ **v23.0 Audit Remediation** — Phases 40-43 (active 2026-06-28; 29 functional + 5 FINAL reqs; ~50h estimated; remediates 22 findings from v22.0 post-ship audit across P0 code / stale docs / placeholder docs / dead code)
+- ◆ **v23.0 Audit Remediation** — Phases 40-43 (shipped; see `milestones/v23.0-phases/`)
+- ◆ **v31.0 Perfection & Elegance** — **ACTIVE** (see [v31.0-MASTER-PLAN.md](./v31.0-MASTER-PLAN.md))
 
 ## Current Position
 
-**Active milestone:** v23.0 Audit Remediation ◆ ACTIVE (roadmap created 2026-06-28; 4 phases planned; Phase 40 ready for `/gsd-discuss-phase 40`)
+**Active milestone:** v31.0 Perfection & Elegance ◆ IN PROGRESS (started 2026-07-12)
 
-**Previous milestone:** v22.0 Production Hardening ✅ SHIPPED 2026-06-27 (Phases 36-39; 21/21 reqs; 1179 tests; FINAL-01..05 green)
+**Previous milestone:** v23.0 Audit Remediation ✅ SHIPPED (Phases 40-43 complete)
 
 ## Phases
 

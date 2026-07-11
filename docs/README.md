@@ -46,5 +46,6 @@ Integration tests live in `crates/*/tests/` (not a top-level `tests/` directory)
 
 - [README.md](../README.md)
 - [AGENTS.md](../AGENTS.md)
-- [ROADMAP.md](../ROADMAP.md)
-- [.planning/v31.0-MASTER-PLAN.md](../.planning/v31.0-MASTER-PLAN.md)
+- [.planning/v31.0-MASTER-PLAN.md](../.planning/v31.0-MASTER-PLAN.md) — active roadmap
+- [.planning/DOC-MAP.md](../.planning/DOC-MAP.md) — doc authority matrix
+- [ROADMAP.md](../ROADMAP.md) — historical Phase 1–8 roadmap (archived)
