@@ -217,6 +217,15 @@ impl GqaAttention {
     pub const fn config(&self) -> &AttentionConfig {
         &self.config
     }
+
+    /// Device on which the projection weights live.
+    ///
+    /// Used by wrappers (e.g. `RopeGqaAttention`) that need to construct
+    /// a `RoPE` matching the underlying attention's device.
+    #[must_use]
+    pub fn device(&self) -> &candle_core::Device {
+        self.q_proj.weight().device()
+    }
 }
 
 // Unit tests live in a separate file to keep this implementation file under

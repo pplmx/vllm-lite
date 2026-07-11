@@ -230,3 +230,43 @@ fn test_rope_gqa_decode_fused_matches_paged() {
         );
     }
 }
+
+// === Phase 16: regression test for `apply_with_scaling` migration ===
+//
+// This test verifies the invariant the Task 2 migration depends on:
+// a `RoPE` constructed via `RoPE::new` (with default `RopeType::Default`,
+// `scaling_factor=1.0`) must produce the same output from
+// `apply_with_scaling` as from `apply`. If this regresses, every
+// production caller that switched to `apply_with_scaling` (rope_gqa,
+// mla, gemma4) silently changes its numerical output.
+#[test]
+fn test_rope_gqa_default_scaling_matches_unscaled() {
+    use crate::components::positional::rope::RoPE;
+    use candle_core::{DType, Device, Tensor};
+
+    let device = Device::Cpu;
+    let head_dim = 64;
+    let theta = 10000.0;
+
+    let rope = RoPE::new(head_dim, 1024, theta, &device);
+    let q = Tensor::randn(0.0f32, 1.0, (1, 4, 8, head_dim), &device).unwrap();
+    let positions: Vec<i64> = vec![0, 1, 2, 3];
+
+    let out_apply = rope.apply(&q, &positions).unwrap();
+    let out_with_scaling = rope.apply_with_scaling(&q, &positions).unwrap();
+
+    let diff = (&out_apply - &out_with_scaling)
+        .unwrap()
+        .abs()
+        .unwrap()
+        .max_all()
+        .unwrap()
+        .to_scalar::<f32>()
+        .unwrap();
+    assert!(
+        diff < 1e-5,
+        "Default apply_with_scaling must match apply (max diff = {diff})"
+    );
+    // silence unused-import warning for DType under minimal feature build
+    let _ = DType::F32;
+}
