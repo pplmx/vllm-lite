@@ -32,6 +32,7 @@ impl BatchComposer {
         let mut kv_block_ids = Vec::with_capacity(capacity);
         let mut num_computed_tokens = Vec::with_capacity(capacity);
         let mut is_prefill = Vec::with_capacity(capacity);
+        let mut sampling_params = Vec::with_capacity(capacity);
         let mut total_tokens = 0usize;
         let mut max_seq_len = 0usize;
 
@@ -70,6 +71,9 @@ impl BatchComposer {
             // Every chunked-prefill step embeds the full chunk; continuation
             // uses `forward_prefill_continue` when `start > 0`.
             is_prefill.push(true);
+            // ARCH-02: per-sequence sampling params ride along with
+            // the chunked-prefill batch.
+            sampling_params.push(seq.sampling_params.clone());
 
             tracing::debug!(
                 seq_id = seq.id,
@@ -87,6 +91,7 @@ impl BatchComposer {
             kv_block_ids,
             num_computed_tokens,
             is_prefill,
+            sampling_params,
             phase: BatchPhase::Prefill,
             total_tokens,
             max_seq_len,

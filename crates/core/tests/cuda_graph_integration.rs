@@ -62,7 +62,7 @@ fn test_scheduler_cuda_graph_config_supports_batch_size() {
 /// Test `GraphBatch` conversion
 #[test]
 fn test_graph_batch_conversion() {
-    use vllm_traits::{Batch, BatchPhase};
+    use vllm_traits::{Batch, BatchPhase, SamplingParams};
     let batch = Batch {
         seq_ids: vec![1, 2, 3],
         input_tokens: vec![vec![1], vec![2], vec![3]],
@@ -70,6 +70,7 @@ fn test_graph_batch_conversion() {
         kv_block_ids: vec![vec![], vec![], vec![]],
         num_computed_tokens: vec![0, 0, 0],
         is_prefill: vec![false, false, false],
+        sampling_params: vec![SamplingParams::default(); 3],
         phase: BatchPhase::Decode,
         total_tokens: 3,
         max_seq_len: 1,

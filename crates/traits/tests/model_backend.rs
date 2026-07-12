@@ -1,4 +1,6 @@
-use vllm_traits::{BLOCK_SIZE, Batch, BatchOutput, BatchPhase, ModelError, SeqId, TokenId};
+use vllm_traits::{
+    BLOCK_SIZE, Batch, BatchOutput, BatchPhase, ModelError, SamplingParams, SeqId, TokenId,
+};
 
 #[test]
 fn test_batch_output_creation() {
@@ -48,6 +50,7 @@ fn test_batch_creation() {
         kv_block_ids: vec![vec![0], vec![1]],
         num_computed_tokens: vec![0, 0],
         is_prefill: vec![true, false],
+        sampling_params: vec![SamplingParams::default(); 2],
         phase: BatchPhase::Mixed,
         total_tokens: 4,
         max_seq_len: 2,
@@ -65,6 +68,7 @@ fn test_batch_is_empty() {
         kv_block_ids: vec![],
         num_computed_tokens: vec![],
         is_prefill: vec![],
+        sampling_params: vec![],
         phase: BatchPhase::Mixed,
         total_tokens: 0,
         max_seq_len: 0,
@@ -78,6 +82,7 @@ fn test_batch_is_empty() {
         kv_block_ids: vec![vec![0]],
         num_computed_tokens: vec![0],
         is_prefill: vec![true],
+        sampling_params: vec![SamplingParams::default()],
         phase: BatchPhase::Prefill,
         total_tokens: 1,
         max_seq_len: 1,
@@ -94,6 +99,7 @@ fn test_batch_has_prefill() {
         kv_block_ids: vec![vec![0], vec![0]],
         num_computed_tokens: vec![0, 0],
         is_prefill: vec![true, false],
+        sampling_params: vec![SamplingParams::default(); 2],
         phase: BatchPhase::Mixed,
         total_tokens: 2,
         max_seq_len: 1,
@@ -107,6 +113,7 @@ fn test_batch_has_prefill() {
         kv_block_ids: vec![vec![0]],
         num_computed_tokens: vec![5],
         is_prefill: vec![false],
+        sampling_params: vec![SamplingParams::default()],
         phase: BatchPhase::Decode,
         total_tokens: 1,
         max_seq_len: 1,
@@ -123,6 +130,7 @@ fn test_batch_has_decode() {
         kv_block_ids: vec![vec![0], vec![0]],
         num_computed_tokens: vec![0, 5],
         is_prefill: vec![true, false],
+        sampling_params: vec![SamplingParams::default(); 2],
         phase: BatchPhase::Mixed,
         total_tokens: 2,
         max_seq_len: 1,
@@ -136,6 +144,7 @@ fn test_batch_has_decode() {
         kv_block_ids: vec![vec![0]],
         num_computed_tokens: vec![0],
         is_prefill: vec![true],
+        sampling_params: vec![SamplingParams::default()],
         phase: BatchPhase::Prefill,
         total_tokens: 3,
         max_seq_len: 3,

@@ -24,6 +24,11 @@ pub(crate) fn assert_batch_consistency(batch: &Batch) {
         "num_computed_tokens length mismatch"
     );
     assert_eq!(batch.is_prefill.len(), n, "is_prefill length mismatch");
+    assert_eq!(
+        batch.sampling_params.len(),
+        n,
+        "sampling_params length mismatch"
+    );
 }
 
 pub(crate) fn create_simple_batch(seq_ids: &[SeqId], token: TokenId) -> Batch {
@@ -35,6 +40,7 @@ pub(crate) fn create_simple_batch(seq_ids: &[SeqId], token: TokenId) -> Batch {
         kv_block_ids: seq_ids.iter().map(|_| vec![0]).collect(),
         num_computed_tokens: vec![0; seq_ids.len()],
         is_prefill: vec![true; seq_ids.len()],
+        sampling_params: vec![vllm_traits::SamplingParams::default(); seq_ids.len()],
         phase: vllm_traits::BatchPhase::Prefill,
         total_tokens,
         max_seq_len: 1,
@@ -66,6 +72,7 @@ mod tests {
             kv_block_ids: vec![vec![0]],
             num_computed_tokens: vec![0],
             is_prefill: vec![true],
+            sampling_params: vec![vllm_traits::SamplingParams::default()],
             phase: vllm_traits::BatchPhase::Prefill,
             total_tokens: 1,
             max_seq_len: 1,

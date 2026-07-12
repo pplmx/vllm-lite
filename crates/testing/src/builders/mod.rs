@@ -93,6 +93,7 @@ impl BatchBuilder {
             BatchPhase::Mixed
         };
 
+        let n = self.seq_ids.len();
         Batch {
             seq_ids: self.seq_ids,
             input_tokens: self.input_tokens,
@@ -100,6 +101,9 @@ impl BatchBuilder {
             kv_block_ids: self.kv_block_ids,
             num_computed_tokens: self.num_computed_tokens,
             is_prefill: self.is_prefill,
+            sampling_params: std::iter::repeat_with(vllm_traits::SamplingParams::default)
+                .take(n)
+                .collect(),
             phase,
             total_tokens,
             max_seq_len,

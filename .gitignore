@@ -37,8 +37,9 @@ coverage/
 /benches/
 .worktrees/
 .claude/
-# Unix core dumps (do not use `core.*` — it ignores planning baselines)
-core
+# Unix core dumps (do not use `core.*` — it ignores planning baselines).
+# Anchored to repo root so `crates/core/` keeps tracking.
+/core
 vgcore.*
 
 # cargo-mutants output (v30.0 Phase K)

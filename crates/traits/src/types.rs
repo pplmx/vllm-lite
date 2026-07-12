@@ -5,6 +5,8 @@
 //! `seq_id: u64 = 42`); `BLOCK_SIZE` is the paged-KV allocator's page size.
 use serde::{Deserialize, Serialize};
 
+use crate::sampling::SamplingParams;
+
 /// Compile-time constant: `size`. Tune via feature flags or env vars in production.
 pub const BLOCK_SIZE: usize = 16;
 /// Opaque newtype identifier for a block. Hashable, comparable, serializable; use this rather than the raw integer.
@@ -45,6 +47,18 @@ pub struct Batch {
     pub num_computed_tokens: Vec<usize>,
     /// Per-sequence `true` for prefill, `false` for decode.
     pub is_prefill: Vec<bool>,
+    /// Per-sequence sampling parameters (temperature, top-p, top-k,
+    /// repeat penalty, etc.). The engine reads this together with
+    /// `forward_logits` output to produce the next token; an empty
+    /// `sampling_params` (e.g. on a synthetic test batch) is
+    /// equivalent to greedy decoding.
+    ///
+    /// ARCH-02 (technical due diligence): carrying the params on
+    /// the batch closes the loop where the HTTP layer accepted them
+    /// but the model layer always did greedy sampling. The model
+    /// layer used to own the sampling decision; that decision now
+    /// moves up to the engine where the params are visible.
+    pub sampling_params: Vec<SamplingParams>,
     // New fields
     /// Overall phase classification for this batch.
     pub phase: BatchPhase,
@@ -65,6 +79,7 @@ impl Batch {
             kv_block_ids: Vec::new(),
             num_computed_tokens: Vec::new(),
             is_prefill: Vec::new(),
+            sampling_params: Vec::new(),
             phase: BatchPhase::Mixed,
             total_tokens: 0,
             max_seq_len: 0,

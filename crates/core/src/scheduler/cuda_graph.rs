@@ -121,7 +121,7 @@ impl SchedulerCudaGraphConfigBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vllm_traits::{Batch, BatchPhase, SeqId};
+    use vllm_traits::{Batch, BatchPhase, SamplingParams, SeqId};
 
     fn create_test_batch(batch_size: usize) -> Batch {
         Batch {
@@ -131,6 +131,7 @@ mod tests {
             kv_block_ids: vec![vec![]; batch_size],
             num_computed_tokens: vec![0; batch_size],
             is_prefill: vec![false; batch_size],
+            sampling_params: vec![SamplingParams::default(); batch_size],
             phase: BatchPhase::Decode,
             total_tokens: batch_size,
             max_seq_len: 1,

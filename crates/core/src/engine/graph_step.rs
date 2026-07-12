@@ -91,6 +91,7 @@ impl Engine {
     /// Execute regular forward pass (used by CUDA Graph fallback path).
     #[cfg(feature = "cuda-graph")]
     fn execute_regular(&self, batch: &vllm_traits::Batch) -> Result<BatchOutput> {
+        use crate::sampling::sample_batch_with_params;
         use crate::sync::lock_mutex;
 
         let total_tokens: usize = batch.input_tokens.iter().map(std::vec::Vec::len).sum();
@@ -102,17 +103,36 @@ impl Engine {
         );
 
         let start = std::time::Instant::now();
-        let result = {
+        let result: Result<BatchOutput> = (|| {
             let mut model = lock_mutex(&self.target_model)?;
-            model.forward(
+            let logits_list = model.forward_logits(
                 &batch.seq_ids,
                 &batch.input_tokens,
                 &batch.positions,
                 &batch.kv_block_ids,
                 &batch.num_computed_tokens,
                 &batch.is_prefill,
-            )
-        };
+            )?;
+            let vocab_size = model.vocab_size();
+            let per_seq: Vec<Vec<f32>> = logits_list
+                .iter()
+                .map(|seq_logits| {
+                    let start = seq_logits.len().saturating_sub(vocab_size);
+                    seq_logits[start..].to_vec()
+                })
+                .collect();
+            // ARCH-02: repeat penalty's seen-set is the already-generated
+            // portion of each sequence. The CUDA-Graph fallback path
+            // doesn't have direct scheduler access here, so we degrade
+            // gracefully (empty seen-set → repeat_penalty no-op).
+            let seen_tokens: Vec<Vec<TokenId>> = vec![vec![]; batch.seq_ids.len()];
+            let next_tokens =
+                sample_batch_with_params(&per_seq, &batch.sampling_params, &seen_tokens);
+            Ok(BatchOutput {
+                seq_ids: batch.seq_ids.clone(),
+                next_tokens,
+            })
+        })();
         let elapsed = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
 
         match result {
@@ -126,7 +146,7 @@ impl Engine {
             }
             Err(e) => {
                 tracing::error!(error = %e, "Model forward failed");
-                Err(crate::error::EngineError::from(e))
+                Err(e)
             }
         }
     }

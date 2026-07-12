@@ -19,6 +19,7 @@ impl BatchComposer {
         let mut kv_block_ids = Vec::with_capacity(batch_size);
         let mut num_computed_tokens = Vec::with_capacity(batch_size);
         let mut is_prefill = Vec::with_capacity(batch_size);
+        let mut sampling_params = Vec::with_capacity(batch_size);
         let mut total_tokens = 0;
         let mut max_seq_len = 0;
 
@@ -57,6 +58,12 @@ impl BatchComposer {
             // H-14: saturate to avoid underflow on empty-token sequences.
             num_computed_tokens.push(seq.tokens.len().saturating_sub(1));
             is_prefill.push(false);
+            // ARCH-02: carry the per-sequence sampling params so the
+            // engine applies them after `forward_logits`. The HTTP
+            // layer already received these — the seam that used to drop
+            // them closed in `step_regular` /
+            // `engine::graph_step::execute_regular`.
+            sampling_params.push(seq.sampling_params.clone());
         }
 
         let total = total_tokens;
@@ -75,6 +82,7 @@ impl BatchComposer {
             kv_block_ids,
             num_computed_tokens,
             is_prefill,
+            sampling_params,
             phase: BatchPhase::Decode,
             total_tokens: total,
             max_seq_len: max_len,
