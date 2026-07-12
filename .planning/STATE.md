@@ -309,6 +309,84 @@ session.
   3 from `/debug/audit` in `admin_gating.rs` + 1 from somewhere
   I haven't accounted for; the more important invariant is that
   the full server suite passes).
+
+## Technical Due Diligence — 2026-07-12 P3 follow-up batch
+
+Closed five more items from `docs/technical-due-diligence/` in this
+session.
+
+### Tutorial drift (governance-release §2, engineering-quality §4.3)
+
+- **01-setup.md** — Rust 1.85+ → 1.88+ (matches
+  `rust-toolchain.toml`); "~1200+ tests pass" → `just nextest`
+  pointer.
+- **02-load-model.md** — wrong test path
+  `crates/server/tests/checkpoint_loading_tests.rs` → real path
+  `crates/model/tests/checkpoint_loading_tests.rs`.
+- **03-inference.md** — retired `Engine::new(...)` →
+  `EngineBuilder::new(target).with_num_kv_blocks(...).build()`
+  (the named-method builder is the v31 API); also
+  `mpsc::unbounded_channel` → bounded (REL-01).
+- **04-customize.md** — same `Engine::with_config(...)` →
+  builder pattern.
+- **05-production.md** — rewritten: `.yml` → `.yaml`
+  extensions; non-existent `k8s/ingress.yml` replaced with a
+  recommendation to terminate TLS at the cluster's ingress
+  controller (production-readiness §9); the removed
+  `opentelemetry` feature documented as not-wired with a v32+
+  pointer; rollback example uses the workspace version (0.1.0)
+  instead of the fictional v0.30.0.
+
+### MIGRATING.md drift (governance-release §2)
+
+- "Rust toolchain requirement remains stable (1.85 in practice)"
+  → "1.88 in practice".
+
+### Dead deps (engineering-quality §6)
+
+The root `Cargo.toml` listed four OpenTelemetry crates that no
+workspace crate referenced. Removed. `cargo machete` now
+reports zero unused dependencies.
+
+### Production-readiness §9 — CORS layer
+
+- New `security::cors::CorsConfig` + `with_cors` helper
+  wrapping `tower_http::cors::CorsLayer`. **Closed by default** —
+  no `Access-Control-Allow-Origin` emitted unless the operator
+  explicitly lists origins (no `*` + credentials anti-pattern).
+  2 unit tests + 3 integration tests in `cors_wiring.rs`.
+
+### Production-readiness §4 — context-length validation
+
+- New `ApiState.max_model_len: Option<usize>` populated from
+  `loader.config_json()["max_position_embeddings"]`.
+- Chat (streaming + non-streaming) and completions handlers
+  now return `400 context_length_exceeded` when
+  `prompt_tokens + max_tokens > max_model_len`. Streaming
+  matters because SSE clients otherwise get a hung-up
+  connection that opens, then dies on the first forward pass.
+- `/v1/models` exposes `max_model_len` (skip_serializing_if =
+  "Option::is_none") so OpenAI-style clients can size prompts.
+- 6 integration tests in `context_length.rs`.
+
+### Production-readiness §10 — embeddings capability gate
+
+- New `ModelLoader::capabilities() -> Option<ArchCapabilities>`.
+- New `ApiState.arch_capabilities` plumbed through.
+- Embeddings handler refuses with `501 Not Implemented` +
+  `embeddings_unsupported` when:
+  - capabilities couldn't be detected (`None`), OR
+  - the loaded model is a stub (returns all-zero
+    embeddings, i.e. meaningless noise).
+- 3 integration tests in `embeddings_capability.rs`.
+
+## Test counts after the P3 batch
+
+- Server crate: 226 passed (was 210; +16 tests from this batch:
+  2 cors unit + 3 cors_wiring integration + 2 cors_config unit +
+  6 context_length integration + 3 embeddings_capability
+  integration).
+- `cargo machete` reports zero unused workspace deps.
   - `body_limit_wiring.rs` — 4
   - `cancel_propagation.rs` — 2
   - `openai/sampling_validation.rs` — 3 (unit, in-module)
