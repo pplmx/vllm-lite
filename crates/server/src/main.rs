@@ -179,6 +179,22 @@ async fn main() -> Result<()> {
 
     let architecture = loader.architecture();
 
+    // Production-readiness §4: extract the model's max context
+    // length so the chat/completions handlers can return a
+    // `400 context_length_exceeded` instead of wasting KV
+    // blocks on an over-budget prompt. The field name follows
+    // the HuggingFace convention (`max_position_embeddings`),
+    // which the Qwen3 / Llama / Mistral checkpoints all carry.
+    // For architectures that don't declare it (stub models,
+    // GGUF variants, etc.) we leave the value as `None` and
+    // skip the validation entirely — better to admit
+    // uncertainty than to crash on a missing key.
+    let max_model_len = loader
+        .config_json()
+        .get("max_position_embeddings")
+        .and_then(|v| v.as_u64())
+        .and_then(|n| usize::try_from(n).ok());
+
     let state = ApiState {
         engine_tx: msg_tx.clone(),
         tokenizer,
@@ -188,6 +204,7 @@ async fn main() -> Result<()> {
         audit: audit_logger.clone(),
         health: health_checker,
         metrics: metrics_collector,
+        max_model_len,
     };
 
     let mut app: axum::Router<()> = Router::new()

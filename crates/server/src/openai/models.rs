@@ -14,6 +14,15 @@ struct ModelObject {
     object: String,
     created: i64,
     owned_by: String,
+    /// Maximum context length in tokens, exposed so OpenAI-style
+    /// clients can size their prompts before sending. `None` when
+    /// the loaded model did not declare `max_position_embeddings`
+    /// (stub models, some GGUF variants). Production-readiness §4:
+    /// the field is a *capacity hint*, not a guarantee — clients
+    /// must still handle the `400 context_length_exceeded` error
+    /// on race / config-drift conditions.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_model_len: Option<usize>,
 }
 
 #[derive(Serialize)]
@@ -47,6 +56,7 @@ pub async fn models_handler(State(state): State<ApiState>) -> Response {
             object: "model".to_string(),
             created: 1_700_000_000,
             owned_by: "vllm-lite".to_string(),
+            max_model_len: state.max_model_len,
         }],
     };
 

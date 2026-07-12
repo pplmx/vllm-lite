@@ -51,6 +51,7 @@ fn build_state(engine_tx: mpsc::Sender<EngineMessage>) -> ApiState {
         audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
         health: Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true))),
         metrics,
+        max_model_len: None,
     }
 }
 

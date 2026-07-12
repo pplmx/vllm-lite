@@ -72,4 +72,18 @@ pub struct ApiState {
     pub health: Arc<std::sync::RwLock<HealthChecker>>,
     /// Enhanced metrics collector
     pub metrics: Arc<EnhancedMetricsCollector>,
+    /// Maximum context length in tokens, read from the loaded
+    /// model's `max_position_embeddings` config field. `None`
+    /// when the model did not declare one (stub models, GGUF
+    /// without the field, or any config that omits the key) —
+    /// in that case context-length validation is skipped.
+    ///
+    /// Production-readiness recommendation §4: tokenization
+    /// after the fact, the chat/completions handlers compare
+    /// `prompt_tokens + max_tokens` against this value and
+    /// return `400 context_length_exceeded` (OpenAI-compatible
+    /// error code) when the request would exceed the limit.
+    /// Without this, a 10× oversize prompt can exhaust KV
+    /// blocks before any application-level validation runs.
+    pub max_model_len: Option<usize>,
 }

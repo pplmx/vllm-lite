@@ -101,6 +101,31 @@ async fn handle_chat(
     let max_tokens = usize::try_from(req.max_tokens.unwrap_or(100)).unwrap_or(100);
     let total_max = prompt_tokens_len + max_tokens;
 
+    // Production-readiness §4: reject requests whose
+    // prompt + max_tokens would exceed the model's context
+    // length. Without this gate a 10× oversize prompt
+    // exhausts KV blocks before any application-level
+    // validation runs. We emit the OpenAI-standard
+    // `context_length_exceeded` code so OpenAI-compatible
+    // clients can detect the failure mode and split the
+    // request.
+    if let Some(max_model_len) = state.max_model_len {
+        if total_max > max_model_len {
+            let message = format!(
+                "prompt_tokens ({prompt_tokens_len}) + max_tokens ({max_tokens}) \
+                 = {total_max} exceeds the model's context length ({max_model_len})"
+            );
+            return Err((
+                axum::http::StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::with_code(
+                    &message,
+                    "invalid_request_error",
+                    "context_length_exceeded",
+                )),
+            ));
+        }
+    }
+
     let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
 
     if let Some(temp) = req.temperature {
@@ -252,6 +277,29 @@ async fn stream_chat_completion(
 
     let max_tokens = usize::try_from(req.max_tokens.unwrap_or(100)).unwrap_or(100);
     let total_max = prompt_tokens.len() + max_tokens;
+
+    // Production-readiness §4: context-length gate (streaming
+    // variant). See non_stream_chat_completion for the full
+    // rationale; we apply the same check here so SSE clients
+    // get the same `400 context_length_exceeded` instead of a
+    // hung-up connection that opens, then dies on the first
+    // forward pass.
+    if let Some(max_model_len) = state.max_model_len {
+        if total_max > max_model_len {
+            let message = format!(
+                "prompt_tokens ({prompt_tokens_len}) + max_tokens ({max_tokens}) \
+                 = {total_max} exceeds the model's context length ({max_model_len})"
+            );
+            return Err((
+                axum::http::StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::with_code(
+                    &message,
+                    "invalid_request_error",
+                    "context_length_exceeded",
+                )),
+            ));
+        }
+    }
 
     let model = req.model.clone();
     let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
