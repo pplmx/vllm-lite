@@ -70,6 +70,7 @@ async fn test_closed_channel_returns_engine_unavailable_503() {
         health: Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true))),
         metrics: Arc::new(EnhancedMetricsCollector::new()),
         max_model_len: None,
+        arch_capabilities: None,
     };
 
     let app = router(state);

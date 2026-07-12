@@ -59,6 +59,7 @@ fn build_state(engine_tx: EngineHandle) -> ApiState {
         ))),
         metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
         max_model_len: None,
+        arch_capabilities: None,
     }
 }
 

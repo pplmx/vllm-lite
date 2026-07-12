@@ -52,6 +52,7 @@ fn build_state(engine_tx: mpsc::Sender<EngineMessage>) -> ApiState {
         health: Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true))),
         metrics,
         max_model_len: None,
+        arch_capabilities: None,
     }
 }
 

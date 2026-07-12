@@ -84,6 +84,9 @@ pub fn api_state(architecture: Architecture) -> ApiState {
         // need the guard. Tests that want to exercise the
         // context-length gate build the state explicitly.
         max_model_len: None,
+        // `None` lets capability-gated endpoints (e.g. embeddings)
+        // take their default path (currently: refuse with 501).
+        arch_capabilities: None,
     }
 }
 
@@ -142,6 +145,7 @@ pub fn api_state_with_mock_engine(
         health: Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true))),
         metrics: Arc::new(EnhancedMetricsCollector::new()),
         max_model_len: None,
+        arch_capabilities: None,
     };
     (state, handle)
 }

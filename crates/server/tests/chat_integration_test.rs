@@ -125,6 +125,7 @@ async fn test_chat_completions_streaming_returns_sse() {
         ))),
         metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
         max_model_len: None,
+        arch_capabilities: None,
     };
     let app = router(state);
 

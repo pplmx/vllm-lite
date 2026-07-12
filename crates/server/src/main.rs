@@ -195,6 +195,12 @@ async fn main() -> Result<()> {
         .and_then(|v| v.as_u64())
         .and_then(|n| usize::try_from(n).ok());
 
+    // Production-readiness §10: read capability flags so
+    // capability-gated endpoints (e.g. `/v1/embeddings`) can
+    // refuse on stubs / unknown architectures rather than
+    // silently returning meaningless data.
+    let arch_capabilities = loader.capabilities();
+
     let state = ApiState {
         engine_tx: msg_tx.clone(),
         tokenizer,
@@ -205,6 +211,7 @@ async fn main() -> Result<()> {
         health: health_checker,
         metrics: metrics_collector,
         max_model_len,
+        arch_capabilities,
     };
 
     let mut app: axum::Router<()> = Router::new()

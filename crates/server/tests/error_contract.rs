@@ -26,6 +26,18 @@ fn create_test_state() -> vllm_server::ApiState {
     vllm_server::test_fixtures::api_state(vllm_model::config::Architecture::Qwen3)
 }
 
+/// Embeddings-capable variant: sets `arch_capabilities` to a
+/// production profile so the embeddings handler's capability
+/// gate is skipped. Used by the embeddings-specific tests in
+/// this file; the `None` path is covered by
+/// `embeddings_capability.rs`.
+fn create_embeddings_capable_state() -> vllm_server::ApiState {
+    use vllm_model::arch::ArchCapabilities;
+    let mut state = create_test_state();
+    state.arch_capabilities = Some(ArchCapabilities::PRODUCTION);
+    state
+}
+
 // ---------------------------------------------------------------------------
 // ErrorResponse constructors
 // ---------------------------------------------------------------------------
@@ -149,7 +161,7 @@ async fn embeddings_rejects_empty_model_with_400() {
     use vllm_server::openai::embeddings::embeddings;
     use vllm_server::openai::types::EmbeddingsRequest;
 
-    let state = create_test_state();
+    let state = create_embeddings_capable_state();
     let req = EmbeddingsRequest {
         model: String::new(),
         input: vec!["hi".into()],
@@ -166,7 +178,7 @@ async fn embeddings_returns_503_with_engine_unavailable_code_when_channel_closed
     use vllm_server::openai::embeddings::embeddings;
     use vllm_server::openai::types::EmbeddingsRequest;
 
-    let state = create_test_state();
+    let state = create_embeddings_capable_state();
     let req = EmbeddingsRequest {
         model: "qwen3".into(),
         input: vec!["hi".into()],
