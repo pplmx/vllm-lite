@@ -7,7 +7,6 @@
 //! the `bootstrap` submodule to keep this entry file focused on wiring.
 
 mod bootstrap;
-mod debug;
 
 use anyhow::{Context, Result};
 use axum::{
@@ -30,7 +29,7 @@ use vllm_server::openai::completions::completions as openai_completions;
 use vllm_server::openai::embeddings::embeddings;
 use vllm_server::openai::models::models_handler;
 use vllm_server::security::correlation::correlation_id_middleware;
-use vllm_server::{ApiState, api, auth, cli, health::HealthChecker, logging};
+use vllm_server::{ApiState, api, auth, cli, debug, health::HealthChecker, logging};
 
 #[tokio::main]
 #[allow(clippy::too_many_lines)] // server bootstrap: linear startup sequence with no natural decomposition
@@ -222,6 +221,7 @@ async fn main() -> Result<()> {
         .route("/debug/metrics", get(debug::metrics_snapshot))
         .route("/debug/kv-cache", get(debug::kv_cache_dump))
         .route("/debug/trace", get(debug::trace_status))
+        .route("/debug/audit", get(debug::audit_dump))
         // Shutdown
         .route("/shutdown", get(api::shutdown))
         .with_state(state);

@@ -15,6 +15,7 @@
 //! user-supplied `X-User-Role` header.
 
 use crate::ApiState;
+use crate::security::audit::AuditEvent;
 use axum::{
     Json,
     extract::State,
@@ -234,6 +235,56 @@ pub struct TraceStatusResponse {
     pub tracing_enabled: bool,
     pub log_level: String,
     pub spans_active: usize,
+}
+
+/// Response payload for `AuditDump`. Returned from handlers, serialized to JSON for the HTTP boundary.
+#[derive(Debug, Serialize)]
+pub struct AuditDumpResponse {
+    /// Total number of audit events currently in the in-memory
+    /// ring buffer (may exceed `events.len()` if events were
+    /// evicted between this snapshot and the next caller).
+    pub count: usize,
+    /// The `events.len()` actually returned (≤ `count`). When the
+    /// buffer has been pruned, `count > events.len()` and operators
+    /// know the older rows are gone — they must reconstruct them
+    /// from the structured `tracing` log stream.
+    pub returned: usize,
+    /// Hard cap we applied before serializing — protects the JSON
+    /// response from runaway growth on a long-lived process.
+    pub cap: usize,
+    /// Most recent audit events (newest first). Empty for a server
+    /// that hasn't processed any requests yet.
+    pub events: Vec<AuditEvent>,
+}
+
+const AUDIT_DUMP_DEFAULT_CAP: usize = 1000;
+
+pub async fn audit_dump(State(state): State<ApiState>, headers: axum::http::HeaderMap) -> Response {
+    if let Err(response) = require_admin(&state, &headers) {
+        return response;
+    }
+    let cap = AUDIT_DUMP_DEFAULT_CAP;
+    // Snapshot the events and reverse so callers see newest-first.
+    // Audit rows are append-only; reversing is cheap for the
+    // bounded buffer (10 000 entries by default) and matches the
+    // mental model "what just happened?".
+    let mut all_events = state.audit.get_events().await;
+    let count = all_events.len();
+    // Take only the trailing `cap` events to keep the response
+    // bounded. We do this BEFORE the reverse so we get the most
+    // recent N (the tail of the buffer).
+    let start = count.saturating_sub(cap);
+    all_events.drain(..start);
+    let returned = all_events.len();
+    all_events.reverse();
+
+    Json(AuditDumpResponse {
+        count,
+        returned,
+        cap,
+        events: all_events,
+    })
+    .into_response()
 }
 
 #[allow(clippy::unused_async)]

@@ -66,6 +66,7 @@ fn debug_router(state: ApiState) -> Router {
         .route("/debug/metrics", get(debug::metrics_snapshot))
         .route("/debug/kv-cache", get(debug::kv_cache_dump))
         .route("/debug/trace", get(debug::trace_status))
+        .route("/debug/audit", get(debug::audit_dump))
         .with_state(state)
 }
 
@@ -314,4 +315,89 @@ async fn authorization_header_must_use_bearer_scheme() {
         StatusCode::UNAUTHORIZED,
         "Authorization header without 'Bearer ' prefix must not authenticate"
     );
+}
+
+// ---------------------------------------------------------------------------
+// /debug/audit — admin-gated JSON dump of the in-memory audit ring buffer.
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn debug_audit_returns_503_admin_disabled_when_no_auth_configured() {
+    let state = state_with_auth(vec![]);
+    let app = debug_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/debug/audit")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::SERVICE_UNAVAILABLE,
+        "/debug/audit must refuse with 503 when no auth is configured"
+    );
+    let json = body_json(response).await;
+    assert_eq!(json["error"].as_str(), Some("admin_disabled"));
+}
+
+#[tokio::test]
+async fn debug_audit_with_valid_bearer_returns_empty_buffer() {
+    let state = state_with_auth(vec!["good-key".to_string()]);
+    let app = debug_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/debug/audit")
+                .header(AUTHORIZATION, "Bearer good-key")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "valid Bearer token must reach /debug/audit"
+    );
+    let json = body_json(response).await;
+    // No requests have been processed by this router, so the
+    // ring buffer is empty but the response shape is fixed.
+    assert_eq!(json["count"].as_u64(), Some(0));
+    assert_eq!(json["returned"].as_u64(), Some(0));
+    assert!(
+        json["events"].as_array().map(Vec::is_empty) == Some(true),
+        "events array must be empty for an idle server, got {:?}",
+        json["events"]
+    );
+}
+
+#[tokio::test]
+async fn debug_audit_with_wrong_bearer_returns_401() {
+    let state = state_with_auth(vec!["good-key".to_string()]);
+    let app = debug_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/debug/audit")
+                .header(AUTHORIZATION, "Bearer wrong-key")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let json = body_json(response).await;
+    assert_eq!(json["error"].as_str(), Some("unauthorized"));
 }
