@@ -65,6 +65,20 @@ impl AuthMiddleware {
         }
     }
 
+    /// SEC-01 (technical due diligence): read-only access to the
+    /// configured API keys. Debug and shutdown endpoints use this to
+    /// verify a `Bearer` token against the same list the global auth
+    /// middleware consults, so the admin gate cannot drift from the
+    /// regular auth gate.
+    ///
+    /// Returns the list in declaration order. Callers MUST treat this
+    /// as read-only — keys are sensitive material and should not be
+    /// cloned, logged, or persisted by the caller.
+    #[must_use]
+    pub fn api_keys(&self) -> &[String] {
+        &self.api_keys
+    }
+
     /// Verify draft tokens against the target model logits.
     /// # Errors
     ///

@@ -4,12 +4,80 @@
 //! - Request tracing via tracing spans
 //! - KV cache dump
 //! - Metrics snapshot
+//!
+//! SEC-01 (technical due diligence): every handler in this module
+//! is gated by [`require_admin`] — when no API keys are configured
+//! the endpoint refuses with `503 admin_disabled` (so it can't be
+//! silently reachable on a non-loopback bind), and when keys are
+//! configured the caller must present a valid `Bearer` token. This
+//! is a deliberately crude check; the long-term fix is to bind
+//! the RBAC role to a verified JWT claim rather than the
+//! user-supplied `X-User-Role` header.
 
 use crate::ApiState;
-use axum::{Json, extract::State};
+use axum::{
+    Json,
+    extract::State,
+    http::{HeaderMap, StatusCode, header::AUTHORIZATION},
+    response::{IntoResponse, Response},
+};
 use serde::Serialize;
 use std::collections::HashMap;
 use vllm_core::types::EngineMessage;
+
+/// SEC-01: enforce admin auth at the debug-handler boundary. Returns
+/// `Ok(())` if the request is authorized to reach the handler body,
+/// otherwise an `(StatusCode, JSON body)` tuple suitable for
+/// `IntoResponse`.
+///
+/// Policy (intentionally simple — see module docs):
+///
+/// 1. **No API keys configured** → all callers get `503 admin_disabled`.
+///    This is the fail-closed half of the SEC-01 fix: if the operator
+///    has not set up auth, debug endpoints refuse rather than silently
+///    exposing internal state. Reachable in non-loopback environments
+///    via `--insecure-allow-public-no-auth` (CLI) or
+///    `VLLM_INSECURE_ALLOW_PUBLIC_NO_AUTH=true` (env), but those
+///    affect *only* the startup warning — admin gating here stays
+///    strict because the cost of a debug leak is much higher than
+///    the cost of an operator having to set up an API key for
+///    legitimate debugging.
+/// 2. **API keys configured, no/malformed `Authorization` header**
+///    → `401 unauthorized`.
+/// 3. **API keys configured, valid `Bearer` key** → `200 ok`.
+///
+/// We deliberately do NOT trust the `X-User-Role` header here even
+/// though the existing RBAC middleware does. The debug surface
+/// should not assume the request passed through RBAC, and the RBAC
+/// role extraction is a known vulnerability (SEC-01 again). Treating
+/// any valid key as admin is consistent with the current model
+/// where every API key is equivalent; once keys are bound to roles
+/// via JWT, this check should narrow to require the `admin` claim.
+fn require_admin(state: &ApiState, headers: &HeaderMap) -> Result<(), Response> {
+    let Some(auth) = state.auth.as_ref() else {
+        let body = Json(serde_json::json!({
+            "error": "admin_disabled",
+            "message": "debug endpoints require API key auth to be configured; \
+                        set --api-key or VLLM_API_KEY to enable admin access",
+        }));
+        return Err((StatusCode::SERVICE_UNAVAILABLE, body).into_response());
+    };
+
+    let api_key = headers
+        .get(AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|h| h.strip_prefix("Bearer "));
+    match api_key {
+        Some(key) if auth.api_keys().iter().any(|k| k == key) => Ok(()),
+        _ => {
+            let body = Json(serde_json::json!({
+                "error": "unauthorized",
+                "message": "valid Bearer token required for admin endpoint",
+            }));
+            Err((StatusCode::UNAUTHORIZED, body).into_response())
+        }
+    }
+}
 
 /// Response payload for `MetricsSnapshot`. Returned from handlers, serialized to JSON for the HTTP boundary.
 #[derive(Debug, Serialize)]
@@ -27,7 +95,13 @@ pub struct MetricsSnapshotResponse {
 }
 
 #[allow(clippy::unused_async)]
-pub async fn metrics_snapshot(State(state): State<ApiState>) -> Json<MetricsSnapshotResponse> {
+pub async fn metrics_snapshot(
+    State(state): State<ApiState>,
+    headers: axum::http::HeaderMap,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers) {
+        return response;
+    }
     let metrics = state.metrics;
     let counters: HashMap<String, u64> = [
         (
@@ -102,6 +176,7 @@ pub async fn metrics_snapshot(State(state): State<ApiState>) -> Json<MetricsSnap
         active_sequences,
         cuda_graph_hit_rate,
     })
+    .into_response()
 }
 
 /// Response payload for `KvCacheDump`. Returned from handlers, serialized to JSON for the HTTP boundary.
@@ -115,7 +190,13 @@ pub struct KvCacheDumpResponse {
     pub prefix_cache_hit_rate: f64,
 }
 
-pub async fn kv_cache_dump(State(state): State<ApiState>) -> Json<KvCacheDumpResponse> {
+pub async fn kv_cache_dump(
+    State(state): State<ApiState>,
+    headers: axum::http::HeaderMap,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers) {
+        return response;
+    }
     let (response_tx, mut response_rx) = tokio::sync::mpsc::unbounded_channel();
 
     // REL-01: `try_send` so this debug endpoint never blocks. We
@@ -144,6 +225,7 @@ pub async fn kv_cache_dump(State(state): State<ApiState>) -> Json<KvCacheDumpRes
         prefix_cache_nodes: 0,
         prefix_cache_hit_rate: metrics.prefix_cache_hit_rate,
     })
+    .into_response()
 }
 
 /// Response payload for `TraceStatus`. Returned from handlers, serialized to JSON for the HTTP boundary.
@@ -155,12 +237,19 @@ pub struct TraceStatusResponse {
 }
 
 #[allow(clippy::unused_async)]
-pub async fn trace_status(State(_state): State<ApiState>) -> Json<TraceStatusResponse> {
+pub async fn trace_status(
+    State(state): State<ApiState>,
+    headers: axum::http::HeaderMap,
+) -> Response {
+    if let Err(response) = require_admin(&state, &headers) {
+        return response;
+    }
     Json(TraceStatusResponse {
         tracing_enabled: true,
         log_level: std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
         spans_active: 0,
     })
+    .into_response()
 }
 
 #[cfg(test)]
