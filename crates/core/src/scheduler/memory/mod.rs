@@ -327,10 +327,35 @@ impl MemoryManager {
         self.allocator.free(blocks);
     }
 
-    /// Releases blocks, updating eviction policy reference counts and freeing the blocks.
+    /// Releases blocks, updating eviction policy reference counts and
+    /// freeing ONLY the blocks whose refcount just reached zero.
+    ///
+    /// ARCH-01 (technical due diligence): the previous implementation
+    /// always freed every released block, which corrupted shared
+    /// prefix-cache entries. The fixed contract:
+    ///
+    /// - `record_blocks` is the *only* way to claim ownership of a
+    ///   block. The caller MUST pair every `record_blocks` with one
+    ///   `release_blocks`.
+    /// - `release_blocks` decrements the per-block refcount and only
+    ///   returns blocks to the allocator when no live owner remains.
+    /// - When two sequences share a prefix, both `record_blocks`
+    ///   against the same blocks. The first sequence to finish
+    ///   triggers a release that drops the refcount to 1 (the second
+    ///   sequence still owns it); the second sequence's release drops
+    ///   it to 0 and only then is the block returned to the allocator.
     pub fn release_blocks(&mut self, blocks: &[BlockId]) {
-        self.eviction_policy.release_blocks(blocks);
-        self.allocator.free(blocks);
+        let freed = self.eviction_policy.release_blocks(blocks);
+        if freed.is_empty() {
+            return;
+        }
+        #[cfg(feature = "multi-node")]
+        if let Some(cache) = self.distributed_kv.as_ref() {
+            for &block_id in &freed {
+                cache.invalidate(u64::try_from(block_id).unwrap_or(u64::MAX));
+            }
+        }
+        self.allocator.free(&freed);
     }
 
     /// Selects victim blocks from running sequences to free up the requested number of blocks.
