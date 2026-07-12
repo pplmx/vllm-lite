@@ -13,7 +13,7 @@
 
 |     版本     |    日期    |          测试          | 覆盖率 (raw / real) |
 | :----------: | :--------: | :--------------------: | :-----------------: |
-| [Unreleased] |     -      | 1235 (post-Phase-5 module-splitting) | 55.0% / 49.9% (Phase N baseline, `--real` excludes test/hidden/derive) |
+| [Unreleased] |     -      | `just nextest` (post-P2 audit/GOV-01 batch) | 55.0% / 49.9% (Phase N baseline, `--real` excludes test/hidden/derive) |
 |   [v22.0]    | 2026-06-27 |         1179+          | ~50% real (97.8% figure was placeholder-based) |
 |   [v21.0]    | 2026-06-27 |         1146+          | ~50% real |
 |   [v20.0]    | 2026-06-27 |         1144+          | ~50% real |
@@ -34,6 +34,10 @@
     - **`BatchComposer::compose_chunked_prefill`**: continuation chunks now set `is_prefill = true` (all chunk tokens are embedded; model layer handles continuation).
     - Unit tests: `test_decoder_prefill_continue_matches_full_prefill`, `test_write_prefill_kv_respects_global_positions`, `test_prefill_continue_causal_mask_shape`.
     - Checkpoint test `test_qwen3_partial_prefill_matches_full_prefill` updated to assert equality (still `#[ignore]` — requires on-disk weights).
+- **Audit-trail write path wired** (technical due diligence §6) — `AuditLogger` ring buffer existed but nothing called `log_api_request` for HTTP requests, so every API call left no in-process trail. New `security::audit_middleware` reads `CorrelationId` + `AuthenticatedUser` from request extensions and records one row per request after the handler returns. Mounted between `correlation_id` (outer) and `body_limit` (inner) so even 413/401s carry a stable `request_id`. `AuthenticatedUser` extension stamps `key:<first-8-chars>` so the full key never appears in audit exports. Integration test `audit_middleware_wiring.rs` (3 cases: happy / 404-failure / distinct rows).
+- **`/debug/audit` endpoint exposes the audit ring buffer** — `audit_middleware` was write-only until this commit. New `debug::audit_dump` (gated by the existing `require_admin` fail-closed policy) returns the ring buffer newest-first, capped at 1000 entries (`count` + `returned` + `cap` fields let operators detect eviction without parsing events). Three tests in `admin_gating.rs` cover 503 / 401 / 200.
+- **Helm Chart packaged in release pipeline** (GOV-01) — `Chart.yaml` shipped with placeholder `version` / `appVersion` and the release workflow never packaged it. New `scripts/sync-chart-version.sh` substitutes the values from the release manifest (uses `awk`, no helm dependency); new `chart` job in `release.yml` packages `vllm-lite-$VERSION.tgz` and attaches it to the GitHub Release. `smoke-deployment.sh` now asserts `Chart.yaml.{version,appVersion} == workspace.version` so drift fails CI.
+- **Benchmark workflow re-enabled** (engineering-quality §5) — `.github/workflows/benchmark.yml` was a placeholder claiming "no benchmark targets configured", but 10 Criterion benches (`radix_cache`, `scheduler*`, `prefix_cache_benchmarks`, `latency_percentiles`, `*_speculative*`, `optimization_benchmarks`, `flash_attention`, `gqa_forward`) actually exist. The workflow now runs them on push to main and uploads output + criterion data as artifacts.
 
 ### Added
 
