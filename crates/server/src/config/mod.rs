@@ -12,6 +12,7 @@
 //! - [`auth`] — `AuthConfig` + `resolve_api_keys` (API keys + rate limit)
 
 mod auth;
+mod cors;
 mod engine;
 mod server;
 
@@ -52,6 +53,7 @@ pub enum ConfigValidationError {
 pub struct ConfigValidationErrors(pub Vec<ConfigValidationError>);
 
 pub use auth::AuthConfig;
+pub use cors::CorsConfigFile;
 pub use engine::{DraftSpecConfig, EngineConfig};
 pub use server::{ServerConfig, is_loopback_address};
 
@@ -72,6 +74,10 @@ pub struct AppConfig {
     /// Authentication / rate-limit section.
     #[serde(default)]
     pub auth: AuthConfig,
+    /// CORS section. Closed by default — operators opt in via
+    /// `cors.allow_origins` in the YAML/JSON config.
+    #[serde(default)]
+    pub cors: CorsConfigFile,
 }
 
 impl Default for AppConfig {
@@ -81,6 +87,7 @@ impl Default for AppConfig {
             server: ServerConfig::default(),
             engine: EngineConfig::default(),
             auth: AuthConfig::default(),
+            cors: CorsConfigFile::default(),
         }
     }
 }

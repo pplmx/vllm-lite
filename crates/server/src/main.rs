@@ -271,6 +271,18 @@ async fn main() -> Result<()> {
         ));
     }
 
+    // Production-readiness recommendation §9: CORS layer.
+    //
+    // Mounted AFTER auth so a 401 response carries
+    // `Access-Control-Allow-Origin` if the operator opted in
+    // (browser-direct callers need it on the failure path too).
+    // The layer is closed by default — no `Access-Control-Allow-Origin`
+    // is emitted unless the operator set `cors.allow_origins` in
+    // the YAML config. The default keeps server-to-server SDKs
+    // unaffected while forcing browser-direct callers to list
+    // exact origins (no `*` + credentials anti-pattern).
+    app = vllm_server::security::cors::with_cors(app, app_config.cors.into_runtime());
+
     let addr = format!("{}:{}", app_config.server.host, app_config.server.port);
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
