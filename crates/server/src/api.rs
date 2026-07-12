@@ -81,10 +81,7 @@ pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailR
 /// the network stop the inference process. See `debug.rs` for the
 /// matching policy applied to `/debug/*`.
 #[allow(clippy::unused_async)]
-pub async fn shutdown(
-    State(state): State<ApiState>,
-    headers: axum::http::HeaderMap,
-) -> Response {
+pub async fn shutdown(State(state): State<ApiState>, headers: axum::http::HeaderMap) -> Response {
     // SEC-01: keep this in sync with debug::require_admin. We could
     // call that function directly but live in a sibling module; the
     // duplication is small and explicit.

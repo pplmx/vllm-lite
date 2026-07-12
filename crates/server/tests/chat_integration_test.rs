@@ -119,6 +119,7 @@ async fn test_chat_completions_streaming_returns_sse() {
         architecture: Architecture::Llama,
         batch_manager: Arc::new(vllm_server::openai::batch::manager::BatchManager::new()),
         auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
         health: Arc::new(std::sync::RwLock::new(vllm_server::HealthChecker::new(
             true, true,
         ))),

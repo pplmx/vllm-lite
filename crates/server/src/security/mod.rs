@@ -2,6 +2,7 @@
 //!
 //! Mounted into the server's axum router via `security::install_middleware`.
 pub mod audit;
+pub mod audit_middleware;
 pub mod correlation;
 pub mod jwt;
 pub mod rbac;
@@ -9,6 +10,7 @@ pub mod size_limit;
 pub mod tls;
 
 pub use audit::AuditLogger;
+pub use audit_middleware::audit_middleware;
 pub use correlation::CorrelationIdMiddleware;
 pub use jwt::JwtValidator;
 pub use rbac::{RbacMiddleware, Role};

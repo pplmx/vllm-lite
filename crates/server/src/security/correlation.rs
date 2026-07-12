@@ -12,16 +12,23 @@
 //! minted a fallback id (production-readiness recommendation 6).
 #![allow(clippy::module_name_repetitions)]
 use axum::{extract::Request, http::HeaderValue, middleware::Next, response::Response};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tracing::info;
 
 /// `REQUEST_ID_HEADER`. See the type definition for fields and behavior.
 pub(crate) const REQUEST_ID_HEADER: &str = "X-Request-ID";
 
 /// Opaque newtype identifier for a correlation. Hashable, comparable, serializable; use this rather than the raw integer.
+///
+/// Inserted into request extensions by [`correlation_id_middleware`]
+/// so downstream layers (audit, auth-failure handler, structured
+/// logs) can read the id without re-parsing the `X-Request-ID`
+/// header. Production-readiness recommendation 6: every request
+/// must carry a single correlation id through HTTP → scheduler →
+/// token stream so operators can trace a request across the whole
+/// pipeline.
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // reserved for typed APIs that thread the id through layers
 pub(crate) struct CorrelationId(pub String);
 
 /// `CorrelationIdMiddleware`. See the type definition for fields and behavior.
@@ -93,6 +100,14 @@ pub async fn correlation_id_middleware(request: Request, next: Next) -> Response
         REQUEST_ID_HEADER,
         HeaderValue::from_str(&request_id).unwrap_or_else(|_| HeaderValue::from_static("unknown")),
     );
+    // Also expose the id via request extensions so the audit
+    // middleware (and any future layer that wants the id without
+    // re-parsing the header) can read it directly. This is the
+    // typed counterpart to the header and keeps the public API
+    // — header is for clients, extension is for layers.
+    request
+        .extensions_mut()
+        .insert(CorrelationId(request_id.clone()));
 
     let mut response = next.run(request).await;
 

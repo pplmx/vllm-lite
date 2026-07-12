@@ -126,4 +126,3 @@ mod loopback_tests {
         assert!(!is_loopback_address("127..1.1"));
     }
 }
-

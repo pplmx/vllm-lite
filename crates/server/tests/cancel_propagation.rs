@@ -53,9 +53,10 @@ fn build_state(engine_tx: EngineHandle) -> ApiState {
         architecture: Architecture::Llama,
         batch_manager: Arc::new(BatchManager::new()),
         auth: None,
-        health: Arc::new(std::sync::RwLock::new(
-            vllm_server::HealthChecker::new(true, true),
-        )),
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(vllm_server::HealthChecker::new(
+            true, true,
+        ))),
         metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
     }
 }
@@ -73,8 +74,7 @@ fn router(state: ApiState) -> Router {
 fn spawn_recording_mock_engine(
     tokens: Vec<TokenId>,
 ) -> (EngineHandle, Arc<tokio::sync::Mutex<Vec<u64>>>) {
-    let cancels: Arc<tokio::sync::Mutex<Vec<u64>>> =
-        Arc::new(tokio::sync::Mutex::new(Vec::new()));
+    let cancels: Arc<tokio::sync::Mutex<Vec<u64>>> = Arc::new(tokio::sync::Mutex::new(Vec::new()));
     let cancels_clone = cancels.clone();
 
     let (engine_tx, mut engine_rx) = mpsc::channel(TEST_MAILBOX);
@@ -114,7 +114,8 @@ async fn streaming_client_disconnect_sends_cancel_request() {
     // when we drop it. The mock emits them as fast as the
     // channel allows; we drop the body after reading the
     // first SSE frame.
-    let (engine_tx, cancels) = spawn_recording_mock_engine((0..100u32).map(|i| i as TokenId).collect());
+    let (engine_tx, cancels) =
+        spawn_recording_mock_engine((0..100u32).map(|i| i as TokenId).collect());
 
     let state = build_state(engine_tx);
     let app = router(state);

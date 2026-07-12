@@ -76,6 +76,7 @@ pub fn api_state(architecture: Architecture) -> ApiState {
         architecture,
         batch_manager: Arc::new(BatchManager::new()),
         auth: None,
+        audit: Arc::new(crate::security::audit::AuditLogger::new(1000)),
         health: Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true))),
         metrics: Arc::new(EnhancedMetricsCollector::new()),
     }
@@ -132,6 +133,7 @@ pub fn api_state_with_mock_engine(
         architecture,
         batch_manager: Arc::new(BatchManager::new()),
         auth: None,
+        audit: Arc::new(crate::security::audit::AuditLogger::new(1000)),
         health: Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true))),
         metrics: Arc::new(EnhancedMetricsCollector::new()),
     };
