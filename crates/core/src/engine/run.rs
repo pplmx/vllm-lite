@@ -33,8 +33,30 @@ impl Engine {
                     EngineMessage::AddRequest {
                         request,
                         response_tx,
+                        seq_id_tx,
                     } => {
-                        self.add_request(request, response_tx);
+                        // Production-readiness recommendation: when an
+                        // HTTP handler sends an `seq_id_tx` oneshot,
+                        // reply with the assigned seq_id so the
+                        // handler can later send CancelRequest on
+                        // client disconnect. `add_request` returns 0
+                        // on rejection (e.g. empty prompt); the
+                        // caller treats 0 as "do not bother
+                        // cancelling".
+                        let seq_id = self.add_request(request, response_tx);
+                        if let Some(tx) = seq_id_tx {
+                            let _ = tx.send(seq_id);
+                        }
+                    }
+                    EngineMessage::CancelRequest { seq_id } => {
+                        // Production-readiness recommendation: when an
+                        // HTTP client disconnects mid-stream, the
+                        // handler sends CancelRequest to release the
+                        // sequence's KV blocks and response channel.
+                        // Unknown seq_id is a no-op (race with natural
+                        // completion) — `cancel_request` returns
+                        // false and we drop the message silently.
+                        let _ = self.cancel_request(seq_id);
                     }
                     EngineMessage::GetMetrics { response_tx } => {
                         let (used, total) = self.scheduler.get_kv_cache_usage();

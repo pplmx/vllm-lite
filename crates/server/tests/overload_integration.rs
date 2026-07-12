@@ -122,6 +122,7 @@ async fn test_saturated_mailbox_returns_engine_overloaded_503() {
         match state.engine_tx.try_send(EngineMessage::AddRequest {
             request: req,
             response_tx,
+            seq_id_tx: None,
         }) {
             Ok(()) => filled += 1,
             Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => break,

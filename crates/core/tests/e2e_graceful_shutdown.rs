@@ -47,6 +47,7 @@ impl ShutdownEngine {
             .try_send(EngineMessage::AddRequest {
                 request,
                 response_tx: tx,
+                seq_id_tx: None,
             })
             .map_err(|_| "Failed to send request")?;
 

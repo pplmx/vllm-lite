@@ -86,13 +86,33 @@ pub fn api_state(architecture: Architecture) -> ApiState {
 pub fn spawn_mock_engine(reply_tokens: Vec<TokenId>) -> (EngineHandle, JoinHandle<()>) {
     let (engine_tx, mut engine_rx) = mpsc::channel(TEST_MAILBOX_CAPACITY);
     let handle = tokio::spawn(async move {
+        let mut next_seq_id: u64 = 1;
         while let Some(msg) = engine_rx.recv().await {
-            if let EngineMessage::AddRequest { response_tx, .. } = msg {
-                for token in &reply_tokens {
-                    if response_tx.send(*token).await.is_err() {
-                        break;
+            match msg {
+                EngineMessage::AddRequest {
+                    response_tx,
+                    seq_id_tx,
+                    ..
+                } => {
+                    // Reply with a synthetic seq_id so chat
+                    // handlers that wait for the round-trip
+                    // don't time out in tests.
+                    let seq_id = next_seq_id;
+                    next_seq_id += 1;
+                    if let Some(tx) = seq_id_tx {
+                        let _ = tx.send(seq_id);
+                    }
+                    for token in &reply_tokens {
+                        if response_tx.send(*token).await.is_err() {
+                            break;
+                        }
                     }
                 }
+                EngineMessage::CancelRequest { .. } => {
+                    // No-op in the mock engine — production
+                    // engines would drop the sequence here.
+                }
+                _ => {}
             }
         }
     });
