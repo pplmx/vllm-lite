@@ -137,9 +137,21 @@ async fn main() -> Result<()> {
     // surfaces the same source of truth.
     let metrics_collector = engine.scheduler.metrics.clone();
 
-    std::thread::spawn(move || {
-        engine.run(msg_rx);
-    });
+    // Production-readiness recommendation (graceful shutdown): keep
+    // the engine worker's JoinHandle so we can wait for it to exit
+    // AFTER sending `EngineMessage::Shutdown`. Without this, the
+    // process exits immediately after the HTTP server returns and
+    // the worker thread is dropped mid-step, which (a) loses any
+    // KV blocks it was holding and (b) can panic on `unwrap()` of
+    // a poisoned lock if we abort mid-write. The thread is
+    // detached-by-Arc-join: we call `JoinHandle::join()` with a
+    // timeout below (see `engine_thread.join()`).
+    let engine_thread = std::thread::Builder::new()
+        .name("vllm-engine".to_string())
+        .spawn(move || {
+            engine.run(msg_rx);
+        })
+        .with_context(|| "failed to spawn vllm-engine worker thread")?;
 
     let tokenizer = bootstrap::tokenizer::load_tokenizer(cli.model_path());
     let batch_manager = Arc::new(BatchManager::new());
@@ -238,8 +250,46 @@ async fn main() -> Result<()> {
         .await
         .with_context(|| format!("server crashed while serving on {addr}"))?;
 
-    tracing::info!("Shutting down gracefully");
+    tracing::info!("HTTP server stopped; draining engine");
+
+    // Production-readiness recommendation (graceful shutdown):
+    // 1. Tell the engine to exit its run loop. The `try_send`
+    //    keeps working because the receiver is still alive (the
+    //    worker thread holds it).
+    // 2. Wait for the worker to acknowledge shutdown by joining
+    //    the thread. Cap at 10s so a stuck engine can't pin the
+    //    process forever; operators can `SIGKILL` if that's
+    //    needed.
     let _ = engine_shutdown_tx.send(EngineMessage::Shutdown);
+    const ENGINE_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+    let join_start = std::time::Instant::now();
+    // `JoinHandle::join()` is blocking; we wrap it with a
+    // background timeout thread so the main thread can still log
+    // progress and exit the process cleanly if the join takes
+    // too long. We don't abort the engine — that's the
+    // operator's call — we just stop blocking the process.
+    let join_handle = std::thread::spawn(move || {
+        let _ = engine_thread.join();
+        join_start.elapsed()
+    });
+    let deadline = std::time::Instant::now() + ENGINE_DRAIN_TIMEOUT;
+    while !join_handle.is_finished() {
+        if std::time::Instant::now() >= deadline {
+            tracing::warn!(
+                timeout_secs = ENGINE_DRAIN_TIMEOUT.as_secs(),
+                "engine thread did not exit within drain timeout; exiting anyway"
+            );
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    if join_handle.is_finished() {
+        let elapsed = join_handle.join().unwrap_or(ENGINE_DRAIN_TIMEOUT);
+        tracing::info!(
+            drain_ms = %u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX),
+            "engine thread joined cleanly"
+        );
+    }
     Ok(())
 }
 
