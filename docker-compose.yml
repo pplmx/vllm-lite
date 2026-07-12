@@ -1,4 +1,29 @@
-version: "3.8"
+# docker-compose.yml — local single-node vLLM-lite deployment.
+#
+# DEP-01 (technical due diligence): the previous file was broken
+# in three ways:
+#   1. `target: runtime` referenced a stage that didn't exist
+#      (the Dockerfile used an unnamed final stage). Fixed by
+#      giving the Dockerfile a `runtime` stage name and keeping
+#      the target reference.
+#   2. The Prometheus and Grafana bind-mounts pointed at
+#      `./monitoring/{prometheus.yml,grafana}` which do not
+#      exist; the real Prometheus config lives in `./config/`.
+#      Grafana provisioning is optional and only enabled when
+#      the operator mounts it explicitly.
+#   3. Environment variable names did not match the CLI
+#      (`VLLM_MODEL` is required; `MODEL_PATH` was ignored).
+#
+# Two profiles are kept:
+#   - default : just the inference server
+#   - monitoring : add Prometheus + Grafana with the local config
+#   - loadtest : add k6 for burst testing (requires the operator
+#     to mount a script at ./tests/load/load_test.js)
+#
+# Usage:
+#   docker compose up --build                 # inference server only
+#   docker compose --profile monitoring up    # + Prometheus/Grafana
+#   docker compose --profile loadtest up      # + k6
 
 services:
   vllm-server:
@@ -6,26 +31,37 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runtime
-    image: vllm-lite:latest
+    image: vllm-lite:local
     container_name: vllm-lite-server
     ports:
       - "8000:8000"
     environment:
-      - RUST_LOG=info
+      - RUST_LOG=${RUST_LOG:-info}
       - RUST_BACKTRACE=1
-      # Performance optimizations
-      - VLLM_CUDA_GRAPH_ENABLED=true
-      - VLLM_SEQ_PACKING_ENABLED=true
-      - VLLM_ADAPTIVE_MIN_DRAFT=2
-      - VLLM_ADAPTIVE_MAX_DRAFT=8
-      # Resource limits
-      - VLLM_MAX_NUM_SEQS=256
-      - VLLM_MAX_BATCHED_TOKENS=4096
+      # DEP-01: use VLLM_MODEL (the env var the CLI actually
+      # reads via clap `env = "VLLM_MODEL"`). Previously this
+      # used MODEL_PATH, which the binary ignored entirely.
+      # Operators are expected to override via .env or
+      # `docker compose run -e VLLM_MODEL=/models/qwen`.
+      - VLLM_MODEL=${VLLM_MODEL:-/app/models/default}
+      # Tuning knobs read by the server config; see
+      # crates/server/src/config/engine.rs for the full list.
+      - VLLM_MAX_NUM_SEQS=${VLLM_MAX_NUM_SEQS:-256}
+      - VLLM_MAX_BATCHED_TOKENS=${VLLM_MAX_BATCHED_TOKENS:-4096}
+      - VLLM_NUM_KV_BLOCKS=${VLLM_NUM_KV_BLOCKS:-1024}
+      # REL-01: bounded engine mailbox. Operators with high
+      # request fan-in should raise this to avoid spurious
+      # 503 engine_overloaded under sustained load.
+      - VLLM_ENGINE_MAILBOX_CAPACITY=${VLLM_ENGINE_MAILBOX_CAPACITY:-256}
     volumes:
-      - ./models:/app/models:ro
-      - vllm-cache:/app/.cache
+      # Model directory must be mounted read-only by the
+      # operator. There is no model auto-download; the README
+      # documents the local-path requirement.
+      - ${VLLM_MODEL_HOST:-./models}:${VLLM_MODEL:-/app/models/default}:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      # DEP-01: probe /health/live over HTTP. Mirrors the
+      # Dockerfile HEALTHCHECK so container + compose agree.
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health/live"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -42,14 +78,15 @@ services:
     networks:
       - vllm-network
 
-  # Optional: Prometheus monitoring
   prometheus:
     image: prom/prometheus:latest
     container_name: vllm-prometheus
     ports:
       - "9090:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # DEP-01: was ./monitoring/prometheus.yml (does not exist).
+      # The canonical config is in ./config/prometheus.yml.
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -59,20 +96,21 @@ services:
     profiles:
       - monitoring
 
-  # Optional: Grafana dashboards
   grafana:
     image: grafana/grafana:latest
     container_name: vllm-grafana
     ports:
       - "3000:3000"
     volumes:
-      - ./monitoring/grafana:/etc/grafana/provisioning:ro
+      # DEP-01: was ./monitoring/grafana (does not exist).
+      # Provisioning is optional; if the operator wants the
+      # bundled dashboards they should mount
+      # ./docs/grafana/provisioning or their own provisioning
+      # directory here.
       - grafana-data:/var/lib/grafana
     environment:
-      # Credentials are read from .env via Compose substitution.
-      # Override GRAFANA_ADMIN_USER / GRAFANA_ADMIN_PASSWORD in your
-      # .env file (which is gitignored). Defaults are present so the
-      # compose file remains self-contained for local development.
+      # Credentials via .env substitution. Defaults make local
+      # development friction-free; production must override.
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-vllm-admin}
     networks:
@@ -80,12 +118,14 @@ services:
     profiles:
       - monitoring
 
-  # Load testing service
   k6:
     image: grafana/k6:latest
     container_name: vllm-k6
+    # DEP-01: was a hard-coded ./tests/load/load_test.js which
+    # does not exist in the repository. The script is now
+    # operator-supplied; see OPERATIONS.md for an example.
     volumes:
-      - ./tests/load:/tests:ro
+      - ${K6_TEST_DIR:-./tests/load}:/tests:ro
     command: run /tests/load_test.js
     networks:
       - vllm-network
@@ -93,8 +133,6 @@ services:
       - loadtest
 
 volumes:
-  vllm-cache:
-    driver: local
   prometheus-data:
     driver: local
   grafana-data:

@@ -63,13 +63,23 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           env:
-            - name: MODEL_PATH
-              value: {{ .Values.config.modelPath }}
-            - name: MAX_BATCH_SIZE
+            # DEP-01 (technical due diligence): the previous chart
+            # emitted MODEL_PATH / MAX_BATCH_SIZE / NUM_KV_BLOCKS /
+            # TENSOR_PARALLEL_SIZE, none of which the CLI reads —
+            # clap uses VLLM_* prefixed env vars
+            # (see crates/server/src/cli/args.rs). The mismatch
+            # meant a helm-installed pod would silently fall back
+            # to CLI defaults (e.g. required VLLM_MODEL would be
+            # missing entirely) and the operator would have to
+            # set the right vars manually. The chart now emits
+            # the env vars the binary actually reads.
+            - name: VLLM_MODEL
+              value: {{ .Values.config.modelPath | quote }}
+            - name: VLLM_MAX_BATCH_SIZE
               value: {{ .Values.config.maxBatchSize | quote }}
-            - name: NUM_KV_BLOCKS
+            - name: VLLM_KV_BLOCKS
               value: {{ .Values.config.numKvBlocks | quote }}
-            - name: TENSOR_PARALLEL_SIZE
+            - name: VLLM_TENSOR_PARALLEL_SIZE
               value: {{ .Values.config.tensorParallelSize | quote }}
             - name: NODE_NAME
               valueFrom:

@@ -1,0 +1,18 @@
+# Rust toolchain pin.
+#
+# Required by Dockerfile and CI: keeps the build host, Docker
+# builder stage, and `just ci` aligned on one MSRV instead of
+# silently picking up whatever `rustup` happens to resolve locally.
+#
+# MSRV policy: matches `rust-version` in the root Cargo.toml. Bump
+# both files together; do not let one drift from the other.
+#
+# Channel: stable (1.88+). We pin the minimum version rather than
+# a specific patch release so the build can pick up the latest
+# stable compiler; reproducible builds rely on the committed
+# `Cargo.lock`, not the toolchain.
+
+[toolchain]
+channel = "1.88"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
