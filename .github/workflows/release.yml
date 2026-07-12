@@ -142,7 +142,7 @@ jobs:
   # 3. Publish GitHub Release (only on tag push, not on dry-run).
   release:
     name: GitHub Release
-    needs: [meta, build]
+    needs: [meta, build, chart]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
@@ -177,3 +177,50 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             artifacts/**/*
+
+  # 4. Helm Chart package (GOV-01 follow-up).
+  #
+  # The committed `Chart.yaml` carries placeholder `version` /
+  # `appVersion` (documented in the file itself). At release time
+  # we substitute the manifest's `VLLM_CHART_VERSION` /
+  # `VLLM_CHART_APP_VERSION` into Chart.yaml, then `tar` the
+  # chart directory into a `.tgz` and attach it to the GitHub
+  # Release via the `release` job's `files` glob.
+  #
+  # This avoids a helm action dependency for what is
+  # effectively a 2-line substitution + archive step.
+  chart:
+    name: Helm Chart
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download manifest env
+        uses: actions/download-artifact@v4
+        with:
+          name: release-manifest
+          path: target
+
+      # shellcheck disable=SC1091
+      - name: Sync Chart.yaml version
+        env:
+          VLLM_CHART_VERSION: ${{ needs.meta.outputs.chart_version }}
+        run: |
+          set -a; source target/release-manifest.env; set +a
+          bash scripts/sync-chart-version.sh
+
+      - name: Package chart (.tgz)
+        run: |
+          mkdir -p artifacts
+          tar -czf "artifacts/vllm-lite-$VLLM_CHART_VERSION.tgz" \
+              -C k8s/charts vllm-lite
+          ls -lh artifacts/
+
+      - name: Upload chart artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vllm-lite-chart
+          path: artifacts/vllm-lite-*.tgz
