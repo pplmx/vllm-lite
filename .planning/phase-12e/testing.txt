@@ -1,348 +1,284 @@
-    Checking vllm-core v0.1.0 (C:\Users\pplmx\JetBrains\RustroverProjects\vllm-lite\crates\core)
- Documenting vllm-testing v0.1.0 (C:\Users\pplmx\JetBrains\RustroverProjects\vllm-lite\crates\testing)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.47s
-pub mod vllm_testing
-pub mod vllm_testing::builders
-pub struct vllm_testing::builders::BatchBuilder
-impl vllm_testing::builders::BatchBuilder
-pub fn vllm_testing::builders::BatchBuilder::add_sequence(self, vllm_traits::types::SeqId, alloc::vec::Vec<vllm_traits::types::TokenId>, bool) -> Self
-pub fn vllm_testing::builders::BatchBuilder::build(self) -> vllm_traits::types::Batch
-pub const fn vllm_testing::builders::BatchBuilder::new() -> Self
+impl core::clone::Clone for vllm_testing::harness::TestHarnessConfig
+impl core::clone::Clone for vllm_testing::mocks::ConstModel
+impl core::clone::Clone for vllm_testing::mocks::StubModel
+impl core::clone::Clone for vllm_testing::request_factory::RequestConfig
+impl core::clone::Clone for vllm_testing::request_factory::RequestFactory
+impl core::clone::Clone for vllm_testing::slow_model::SlowModel
 impl core::default::Default for vllm_testing::builders::BatchBuilder
-pub fn vllm_testing::builders::BatchBuilder::default() -> Self
+impl core::default::Default for vllm_testing::harness::TestHarness
+impl core::default::Default for vllm_testing::harness::TestHarnessConfig
+impl core::default::Default for vllm_testing::mocks::StubModel
+impl core::default::Default for vllm_testing::request_factory::RequestConfig
+impl core::default::Default for vllm_testing::request_factory::RequestFactory
 impl core::fmt::Debug for vllm_testing::builders::BatchBuilder
-pub fn vllm_testing::builders::BatchBuilder::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Debug for vllm_testing::builders::RequestBuilder
+impl core::fmt::Debug for vllm_testing::fixtures::TestFixtures
+impl core::fmt::Debug for vllm_testing::harness::TestHarness
+impl core::fmt::Debug for vllm_testing::harness::TestHarnessConfig
+impl core::fmt::Debug for vllm_testing::mocks::ConstModel
+impl core::fmt::Debug for vllm_testing::mocks::FakeModel
+impl core::fmt::Debug for vllm_testing::mocks::IncrementModel
+impl core::fmt::Debug for vllm_testing::mocks::StubModel
+impl core::fmt::Debug for vllm_testing::request_factory::RequestConfig
+impl core::fmt::Debug for vllm_testing::request_factory::RequestFactory
+impl core::fmt::Debug for vllm_testing::slow_model::SlowModel
+impl core::marker::Copy for vllm_testing::mocks::StubModel
 impl core::marker::Freeze for vllm_testing::builders::BatchBuilder
+impl core::marker::Freeze for vllm_testing::builders::RequestBuilder
+impl core::marker::Freeze for vllm_testing::fixtures::TestFixtures
+impl !core::marker::Freeze for vllm_testing::harness::TestHarness
+impl core::marker::Freeze for vllm_testing::harness::TestHarnessConfig
+impl core::marker::Freeze for vllm_testing::mocks::ConstModel
+impl core::marker::Freeze for vllm_testing::mocks::FakeModel
+impl core::marker::Freeze for vllm_testing::mocks::IncrementModel
+impl core::marker::Freeze for vllm_testing::mocks::StubModel
+impl core::marker::Freeze for vllm_testing::request_factory::RequestConfig
+impl core::marker::Freeze for vllm_testing::request_factory::RequestFactory
+impl core::marker::Freeze for vllm_testing::slow_model::SlowModel
 impl core::marker::Send for vllm_testing::builders::BatchBuilder
+impl core::marker::Send for vllm_testing::builders::RequestBuilder
+impl core::marker::Send for vllm_testing::fixtures::TestFixtures
+impl core::marker::Send for vllm_testing::harness::TestHarness
+impl core::marker::Send for vllm_testing::harness::TestHarnessConfig
+impl core::marker::Send for vllm_testing::mocks::ConstModel
+impl core::marker::Send for vllm_testing::mocks::FakeModel
+impl core::marker::Send for vllm_testing::mocks::IncrementModel
+impl core::marker::Send for vllm_testing::mocks::StubModel
+impl core::marker::Send for vllm_testing::request_factory::RequestConfig
+impl core::marker::Send for vllm_testing::request_factory::RequestFactory
+impl core::marker::Send for vllm_testing::slow_model::SlowModel
 impl core::marker::Sync for vllm_testing::builders::BatchBuilder
+impl core::marker::Sync for vllm_testing::builders::RequestBuilder
+impl core::marker::Sync for vllm_testing::fixtures::TestFixtures
+impl core::marker::Sync for vllm_testing::harness::TestHarness
+impl core::marker::Sync for vllm_testing::harness::TestHarnessConfig
+impl core::marker::Sync for vllm_testing::mocks::ConstModel
+impl core::marker::Sync for vllm_testing::mocks::FakeModel
+impl core::marker::Sync for vllm_testing::mocks::IncrementModel
+impl core::marker::Sync for vllm_testing::mocks::StubModel
+impl core::marker::Sync for vllm_testing::request_factory::RequestConfig
+impl core::marker::Sync for vllm_testing::request_factory::RequestFactory
+impl core::marker::Sync for vllm_testing::slow_model::SlowModel
 impl core::marker::Unpin for vllm_testing::builders::BatchBuilder
+impl core::marker::Unpin for vllm_testing::builders::RequestBuilder
+impl core::marker::Unpin for vllm_testing::fixtures::TestFixtures
+impl core::marker::Unpin for vllm_testing::harness::TestHarness
+impl core::marker::Unpin for vllm_testing::harness::TestHarnessConfig
+impl core::marker::Unpin for vllm_testing::mocks::ConstModel
+impl core::marker::Unpin for vllm_testing::mocks::FakeModel
+impl core::marker::Unpin for vllm_testing::mocks::IncrementModel
+impl core::marker::Unpin for vllm_testing::mocks::StubModel
+impl core::marker::Unpin for vllm_testing::request_factory::RequestConfig
+impl core::marker::Unpin for vllm_testing::request_factory::RequestFactory
+impl core::marker::Unpin for vllm_testing::slow_model::SlowModel
 impl core::marker::UnsafeUnpin for vllm_testing::builders::BatchBuilder
+impl core::marker::UnsafeUnpin for vllm_testing::builders::RequestBuilder
+impl core::marker::UnsafeUnpin for vllm_testing::fixtures::TestFixtures
+impl core::marker::UnsafeUnpin for vllm_testing::harness::TestHarness
+impl core::marker::UnsafeUnpin for vllm_testing::harness::TestHarnessConfig
+impl core::marker::UnsafeUnpin for vllm_testing::mocks::ConstModel
+impl core::marker::UnsafeUnpin for vllm_testing::mocks::FakeModel
+impl core::marker::UnsafeUnpin for vllm_testing::mocks::IncrementModel
+impl core::marker::UnsafeUnpin for vllm_testing::mocks::StubModel
+impl core::marker::UnsafeUnpin for vllm_testing::request_factory::RequestConfig
+impl core::marker::UnsafeUnpin for vllm_testing::request_factory::RequestFactory
+impl core::marker::UnsafeUnpin for vllm_testing::slow_model::SlowModel
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::builders::BatchBuilder
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::builders::RequestBuilder
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::fixtures::TestFixtures
+impl !core::panic::unwind_safe::RefUnwindSafe for vllm_testing::harness::TestHarness
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::harness::TestHarnessConfig
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::mocks::ConstModel
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::mocks::FakeModel
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::mocks::IncrementModel
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::mocks::StubModel
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::request_factory::RequestConfig
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::request_factory::RequestFactory
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::slow_model::SlowModel
 impl core::panic::unwind_safe::UnwindSafe for vllm_testing::builders::BatchBuilder
-pub struct vllm_testing::builders::RequestBuilder
+impl core::panic::unwind_safe::UnwindSafe for vllm_testing::builders::RequestBuilder
+impl core::panic::unwind_safe::UnwindSafe for vllm_testing::fixtures::TestFixtures
+impl !core::panic::unwind_safe::UnwindSafe for vllm_testing::harness::TestHarness
+impl core::panic::unwind_safe::UnwindSafe for vllm_testing::harness::TestHarnessConfig
+impl core::panic::unwind_safe::UnwindSafe for vllm_testing::mocks::ConstModel
+impl core::panic::unwind_safe::UnwindSafe for vllm_testing::mocks::FakeModel
+impl core::panic::unwind_safe::UnwindSafe for vllm_testing::mocks::IncrementModel
+impl core::panic::unwind_safe::UnwindSafe for vllm_testing::mocks::StubModel
+impl core::panic::unwind_safe::UnwindSafe for vllm_testing::request_factory::RequestConfig
+impl core::panic::unwind_safe::UnwindSafe for vllm_testing::request_factory::RequestFactory
+impl core::panic::unwind_safe::UnwindSafe for vllm_testing::slow_model::SlowModel
+impl vllm_testing::builders::BatchBuilder
 impl vllm_testing::builders::RequestBuilder
-pub fn vllm_testing::builders::RequestBuilder::build(self) -> (vllm_traits::types::SeqId, alloc::vec::Vec<vllm_traits::types::TokenId>, usize)
+impl vllm_testing::fixtures::TestFixtures
+impl vllm_testing::harness::TestHarness
+impl vllm_testing::harness::TestHarnessConfig
+impl vllm_testing::mocks::ConstModel
+impl vllm_testing::mocks::FakeModel
+impl vllm_testing::mocks::StubModel
+impl vllm_testing::request_factory::RequestConfig
+impl vllm_testing::request_factory::RequestFactory
+impl vllm_testing::slow_model::SlowModel
+impl vllm_traits::model::ModelBackend for vllm_testing::mocks::ConstModel
+impl vllm_traits::model::ModelBackend for vllm_testing::mocks::FakeModel
+impl vllm_traits::model::ModelBackend for vllm_testing::mocks::IncrementModel
+impl vllm_traits::model::ModelBackend for vllm_testing::mocks::StubModel
+impl vllm_traits::model::ModelBackend for vllm_testing::slow_model::SlowModel
+pub const fn vllm_testing::builders::BatchBuilder::new() -> Self
 pub const fn vllm_testing::builders::RequestBuilder::new(vllm_traits::types::SeqId) -> Self
 pub const fn vllm_testing::builders::RequestBuilder::with_max_tokens(self, usize) -> Self
-pub fn vllm_testing::builders::RequestBuilder::with_prompt(self, alloc::vec::Vec<vllm_traits::types::TokenId>) -> Self
-impl core::fmt::Debug for vllm_testing::builders::RequestBuilder
-pub fn vllm_testing::builders::RequestBuilder::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Freeze for vllm_testing::builders::RequestBuilder
-impl core::marker::Send for vllm_testing::builders::RequestBuilder
-impl core::marker::Sync for vllm_testing::builders::RequestBuilder
-impl core::marker::Unpin for vllm_testing::builders::RequestBuilder
-impl core::marker::UnsafeUnpin for vllm_testing::builders::RequestBuilder
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::builders::RequestBuilder
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::builders::RequestBuilder
-pub mod vllm_testing::fixtures
-pub struct vllm_testing::fixtures::TestFixtures
-impl vllm_testing::fixtures::TestFixtures
-pub fn vllm_testing::fixtures::TestFixtures::default_scheduler_config() -> vllm_core::types::scheduler_config::SchedulerConfig
-pub fn vllm_testing::fixtures::TestFixtures::increment_engine(usize) -> vllm_core::engine::Engine
-pub fn vllm_testing::fixtures::TestFixtures::increment_engine_with(vllm_core::types::scheduler_config::SchedulerConfig, usize, usize) -> vllm_core::engine::Engine
-pub fn vllm_testing::fixtures::TestFixtures::increment_speculative_engine(usize) -> vllm_core::engine::Engine
-pub fn vllm_testing::fixtures::TestFixtures::increment_speculative_engine_with(vllm_core::types::scheduler_config::SchedulerConfig, usize, usize) -> vllm_core::engine::Engine
-pub fn vllm_testing::fixtures::TestFixtures::oom_scenario_config() -> vllm_core::types::scheduler_config::SchedulerConfig
-pub fn vllm_testing::fixtures::TestFixtures::small_batch_config() -> vllm_core::types::scheduler_config::SchedulerConfig
-impl core::fmt::Debug for vllm_testing::fixtures::TestFixtures
-pub fn vllm_testing::fixtures::TestFixtures::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Freeze for vllm_testing::fixtures::TestFixtures
-impl core::marker::Send for vllm_testing::fixtures::TestFixtures
-impl core::marker::Sync for vllm_testing::fixtures::TestFixtures
-impl core::marker::Unpin for vllm_testing::fixtures::TestFixtures
-impl core::marker::UnsafeUnpin for vllm_testing::fixtures::TestFixtures
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::fixtures::TestFixtures
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::fixtures::TestFixtures
-pub mod vllm_testing::harness
-pub struct vllm_testing::harness::TestHarness
-pub vllm_testing::harness::TestHarness::config: vllm_testing::harness::TestHarnessConfig
-pub vllm_testing::harness::TestHarness::metrics: alloc::sync::Arc<vllm_core::metrics::collector::sampler::EnhancedMetricsCollector>
-pub vllm_testing::harness::TestHarness::scheduler: vllm_core::scheduler::engine::state::SchedulerEngine
-impl vllm_testing::harness::TestHarness
-pub fn vllm_testing::harness::TestHarness::add_test_request(&mut self, alloc::vec::Vec<u32>, usize) -> u64
-pub fn vllm_testing::harness::TestHarness::build_test_batch(&mut self) -> vllm_traits::types::Batch
-pub fn vllm_testing::harness::TestHarness::from_config(vllm_testing::harness::TestHarnessConfig) -> Self
-pub fn vllm_testing::harness::TestHarness::has_pending(&self) -> bool
-pub const fn vllm_testing::harness::TestHarness::metrics(&self) -> &alloc::sync::Arc<vllm_core::metrics::collector::sampler::EnhancedMetricsCollector>
-pub fn vllm_testing::harness::TestHarness::new() -> Self
-pub const fn vllm_testing::harness::TestHarness::running_count(&self) -> usize
-pub const fn vllm_testing::harness::TestHarness::scheduler(&self) -> &vllm_core::scheduler::engine::state::SchedulerEngine
-pub const fn vllm_testing::harness::TestHarness::scheduler_mut(&mut self) -> &mut vllm_core::scheduler::engine::state::SchedulerEngine
-pub fn vllm_testing::harness::TestHarness::waiting_count(&self) -> usize
-impl core::default::Default for vllm_testing::harness::TestHarness
-pub fn vllm_testing::harness::TestHarness::default() -> Self
-impl core::fmt::Debug for vllm_testing::harness::TestHarness
-pub fn vllm_testing::harness::TestHarness::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl !core::marker::Freeze for vllm_testing::harness::TestHarness
-impl core::marker::Send for vllm_testing::harness::TestHarness
-impl core::marker::Sync for vllm_testing::harness::TestHarness
-impl core::marker::Unpin for vllm_testing::harness::TestHarness
-impl core::marker::UnsafeUnpin for vllm_testing::harness::TestHarness
-impl !core::panic::unwind_safe::RefUnwindSafe for vllm_testing::harness::TestHarness
-impl !core::panic::unwind_safe::UnwindSafe for vllm_testing::harness::TestHarness
-pub struct vllm_testing::harness::TestHarnessConfig
-pub vllm_testing::harness::TestHarnessConfig::enable_dynamic_batching: bool
-pub vllm_testing::harness::TestHarnessConfig::enable_prefix_cache: bool
-pub vllm_testing::harness::TestHarnessConfig::kv_blocks: usize
-pub vllm_testing::harness::TestHarnessConfig::max_batch_size: usize
-impl vllm_testing::harness::TestHarnessConfig
 pub const fn vllm_testing::harness::TestHarnessConfig::enable_dynamic_batching(self, bool) -> Self
 pub const fn vllm_testing::harness::TestHarnessConfig::enable_prefix_cache(self, bool) -> Self
-pub fn vllm_testing::harness::TestHarnessConfig::into_scheduler_config(self) -> vllm_core::types::scheduler_config::SchedulerConfig
 pub const fn vllm_testing::harness::TestHarnessConfig::kv_blocks(self, usize) -> Self
 pub const fn vllm_testing::harness::TestHarnessConfig::max_batch_size(self, usize) -> Self
-impl core::clone::Clone for vllm_testing::harness::TestHarnessConfig
-pub fn vllm_testing::harness::TestHarnessConfig::clone(&self) -> vllm_testing::harness::TestHarnessConfig
-impl core::default::Default for vllm_testing::harness::TestHarnessConfig
-pub fn vllm_testing::harness::TestHarnessConfig::default() -> Self
-impl core::fmt::Debug for vllm_testing::harness::TestHarnessConfig
-pub fn vllm_testing::harness::TestHarnessConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Freeze for vllm_testing::harness::TestHarnessConfig
-impl core::marker::Send for vllm_testing::harness::TestHarnessConfig
-impl core::marker::Sync for vllm_testing::harness::TestHarnessConfig
-impl core::marker::Unpin for vllm_testing::harness::TestHarnessConfig
-impl core::marker::UnsafeUnpin for vllm_testing::harness::TestHarnessConfig
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::harness::TestHarnessConfig
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::harness::TestHarnessConfig
-pub mod vllm_testing::mocks
-pub struct vllm_testing::mocks::ConstModel
-pub vllm_testing::mocks::ConstModel::return_token: vllm_traits::types::TokenId
-impl vllm_testing::mocks::ConstModel
+pub const fn vllm_testing::harness::TestHarness::metrics(&self) -> &alloc::sync::Arc<vllm_core::metrics::collector::sampler::EnhancedMetricsCollector>
+pub const fn vllm_testing::harness::TestHarness::running_count(&self) -> usize
+pub const fn vllm_testing::harness::TestHarness::scheduler_mut(&mut self) -> &mut vllm_core::scheduler::engine::state::SchedulerEngine
+pub const fn vllm_testing::harness::TestHarness::scheduler(&self) -> &vllm_core::scheduler::engine::state::SchedulerEngine
 pub const fn vllm_testing::mocks::ConstModel::new(vllm_traits::types::TokenId) -> Self
-impl core::clone::Clone for vllm_testing::mocks::ConstModel
-pub fn vllm_testing::mocks::ConstModel::clone(&self) -> vllm_testing::mocks::ConstModel
-impl core::fmt::Debug for vllm_testing::mocks::ConstModel
-pub fn vllm_testing::mocks::ConstModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl vllm_traits::model::ModelBackend for vllm_testing::mocks::ConstModel
-pub fn vllm_testing::mocks::ConstModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::ConstModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
-pub fn vllm_testing::mocks::ConstModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::ConstModel::num_heads(&self) -> usize
-pub fn vllm_testing::mocks::ConstModel::num_layers(&self) -> usize
-pub fn vllm_testing::mocks::ConstModel::vocab_size(&self) -> usize
-impl core::marker::Freeze for vllm_testing::mocks::ConstModel
-impl core::marker::Send for vllm_testing::mocks::ConstModel
-impl core::marker::Sync for vllm_testing::mocks::ConstModel
-impl core::marker::Unpin for vllm_testing::mocks::ConstModel
-impl core::marker::UnsafeUnpin for vllm_testing::mocks::ConstModel
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::mocks::ConstModel
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::mocks::ConstModel
-pub struct vllm_testing::mocks::FakeModel
-impl vllm_testing::mocks::FakeModel
 pub const fn vllm_testing::mocks::FakeModel::new(usize) -> Self
-impl core::fmt::Debug for vllm_testing::mocks::FakeModel
-pub fn vllm_testing::mocks::FakeModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl vllm_traits::model::ModelBackend for vllm_testing::mocks::FakeModel
-pub fn vllm_testing::mocks::FakeModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::FakeModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
-pub fn vllm_testing::mocks::FakeModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::FakeModel::num_heads(&self) -> usize
-pub fn vllm_testing::mocks::FakeModel::num_layers(&self) -> usize
-pub fn vllm_testing::mocks::FakeModel::vocab_size(&self) -> usize
-impl core::marker::Freeze for vllm_testing::mocks::FakeModel
-impl core::marker::Send for vllm_testing::mocks::FakeModel
-impl core::marker::Sync for vllm_testing::mocks::FakeModel
-impl core::marker::Unpin for vllm_testing::mocks::FakeModel
-impl core::marker::UnsafeUnpin for vllm_testing::mocks::FakeModel
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::mocks::FakeModel
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::mocks::FakeModel
-pub struct vllm_testing::mocks::IncrementModel
-impl core::fmt::Debug for vllm_testing::mocks::IncrementModel
-pub fn vllm_testing::mocks::IncrementModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl vllm_traits::model::ModelBackend for vllm_testing::mocks::IncrementModel
-pub fn vllm_testing::mocks::IncrementModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::IncrementModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
-pub fn vllm_testing::mocks::IncrementModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::IncrementModel::num_heads(&self) -> usize
-pub fn vllm_testing::mocks::IncrementModel::num_layers(&self) -> usize
-pub fn vllm_testing::mocks::IncrementModel::vocab_size(&self) -> usize
-impl core::marker::Freeze for vllm_testing::mocks::IncrementModel
-impl core::marker::Send for vllm_testing::mocks::IncrementModel
-impl core::marker::Sync for vllm_testing::mocks::IncrementModel
-impl core::marker::Unpin for vllm_testing::mocks::IncrementModel
-impl core::marker::UnsafeUnpin for vllm_testing::mocks::IncrementModel
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::mocks::IncrementModel
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::mocks::IncrementModel
-pub struct vllm_testing::mocks::StubModel
-impl vllm_testing::mocks::StubModel
 pub const fn vllm_testing::mocks::StubModel::returning(vllm_traits::types::TokenId) -> Self
-impl core::clone::Clone for vllm_testing::mocks::StubModel
-pub fn vllm_testing::mocks::StubModel::clone(&self) -> vllm_testing::mocks::StubModel
-impl core::default::Default for vllm_testing::mocks::StubModel
-pub fn vllm_testing::mocks::StubModel::default() -> Self
-impl core::fmt::Debug for vllm_testing::mocks::StubModel
-pub fn vllm_testing::mocks::StubModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Copy for vllm_testing::mocks::StubModel
-impl vllm_traits::model::ModelBackend for vllm_testing::mocks::StubModel
-pub fn vllm_testing::mocks::StubModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::StubModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
-pub fn vllm_testing::mocks::StubModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::StubModel::num_heads(&self) -> usize
-pub fn vllm_testing::mocks::StubModel::num_layers(&self) -> usize
-pub fn vllm_testing::mocks::StubModel::vocab_size(&self) -> usize
-impl core::marker::Freeze for vllm_testing::mocks::StubModel
-impl core::marker::Send for vllm_testing::mocks::StubModel
-impl core::marker::Sync for vllm_testing::mocks::StubModel
-impl core::marker::Unpin for vllm_testing::mocks::StubModel
-impl core::marker::UnsafeUnpin for vllm_testing::mocks::StubModel
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::mocks::StubModel
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::mocks::StubModel
-pub mod vllm_testing::prelude
-pub struct vllm_testing::prelude::ConstModel
-pub vllm_testing::prelude::ConstModel::return_token: vllm_traits::types::TokenId
-impl vllm_testing::mocks::ConstModel
-pub const fn vllm_testing::mocks::ConstModel::new(vllm_traits::types::TokenId) -> Self
-impl core::clone::Clone for vllm_testing::mocks::ConstModel
-pub fn vllm_testing::mocks::ConstModel::clone(&self) -> vllm_testing::mocks::ConstModel
-impl core::fmt::Debug for vllm_testing::mocks::ConstModel
-pub fn vllm_testing::mocks::ConstModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl vllm_traits::model::ModelBackend for vllm_testing::mocks::ConstModel
-pub fn vllm_testing::mocks::ConstModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::ConstModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
-pub fn vllm_testing::mocks::ConstModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::ConstModel::num_heads(&self) -> usize
-pub fn vllm_testing::mocks::ConstModel::num_layers(&self) -> usize
-pub fn vllm_testing::mocks::ConstModel::vocab_size(&self) -> usize
-impl core::marker::Freeze for vllm_testing::mocks::ConstModel
-impl core::marker::Send for vllm_testing::mocks::ConstModel
-impl core::marker::Sync for vllm_testing::mocks::ConstModel
-impl core::marker::Unpin for vllm_testing::mocks::ConstModel
-impl core::marker::UnsafeUnpin for vllm_testing::mocks::ConstModel
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::mocks::ConstModel
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::mocks::ConstModel
-pub struct vllm_testing::prelude::FakeModel
-impl vllm_testing::mocks::FakeModel
-pub const fn vllm_testing::mocks::FakeModel::new(usize) -> Self
-impl core::fmt::Debug for vllm_testing::mocks::FakeModel
-pub fn vllm_testing::mocks::FakeModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl vllm_traits::model::ModelBackend for vllm_testing::mocks::FakeModel
-pub fn vllm_testing::mocks::FakeModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::FakeModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
-pub fn vllm_testing::mocks::FakeModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::FakeModel::num_heads(&self) -> usize
-pub fn vllm_testing::mocks::FakeModel::num_layers(&self) -> usize
-pub fn vllm_testing::mocks::FakeModel::vocab_size(&self) -> usize
-impl core::marker::Freeze for vllm_testing::mocks::FakeModel
-impl core::marker::Send for vllm_testing::mocks::FakeModel
-impl core::marker::Sync for vllm_testing::mocks::FakeModel
-impl core::marker::Unpin for vllm_testing::mocks::FakeModel
-impl core::marker::UnsafeUnpin for vllm_testing::mocks::FakeModel
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::mocks::FakeModel
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::mocks::FakeModel
-pub struct vllm_testing::prelude::IncrementModel
-impl core::fmt::Debug for vllm_testing::mocks::IncrementModel
-pub fn vllm_testing::mocks::IncrementModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl vllm_traits::model::ModelBackend for vllm_testing::mocks::IncrementModel
-pub fn vllm_testing::mocks::IncrementModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::IncrementModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
-pub fn vllm_testing::mocks::IncrementModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::IncrementModel::num_heads(&self) -> usize
-pub fn vllm_testing::mocks::IncrementModel::num_layers(&self) -> usize
-pub fn vllm_testing::mocks::IncrementModel::vocab_size(&self) -> usize
-impl core::marker::Freeze for vllm_testing::mocks::IncrementModel
-impl core::marker::Send for vllm_testing::mocks::IncrementModel
-impl core::marker::Sync for vllm_testing::mocks::IncrementModel
-impl core::marker::Unpin for vllm_testing::mocks::IncrementModel
-impl core::marker::UnsafeUnpin for vllm_testing::mocks::IncrementModel
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::mocks::IncrementModel
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::mocks::IncrementModel
-pub struct vllm_testing::prelude::RequestFactory
-impl vllm_testing::request_factory::RequestFactory
-pub fn vllm_testing::request_factory::RequestFactory::create(&mut self) -> vllm_core::types::request::Request
-pub fn vllm_testing::request_factory::RequestFactory::create_batch(&mut self, usize) -> alloc::vec::Vec<vllm_core::types::request::Request>
-pub fn vllm_testing::request_factory::RequestFactory::create_with_id(&mut self, u64) -> vllm_core::types::request::Request
-pub fn vllm_testing::request_factory::RequestFactory::create_with_prompt(&mut self, alloc::vec::Vec<u32>, usize) -> vllm_core::types::request::Request
+pub const fn vllm_testing::request_factory::RequestConfig::max_max_tokens(self, usize) -> Self
+pub const fn vllm_testing::request_factory::RequestConfig::max_tokens(self, usize) -> Self
+pub const fn vllm_testing::request_factory::RequestConfig::min_max_tokens(self, usize) -> Self
+pub const fn vllm_testing::request_factory::RequestConfig::min_tokens(self, usize) -> Self
+pub const fn vllm_testing::request_factory::RequestConfig::temperature(self, f32) -> Self
 pub const fn vllm_testing::request_factory::RequestFactory::from_config(vllm_testing::request_factory::RequestConfig) -> Self
 pub const fn vllm_testing::request_factory::RequestFactory::max_max_tokens(self, usize) -> Self
 pub const fn vllm_testing::request_factory::RequestFactory::max_tokens(self, usize) -> Self
 pub const fn vllm_testing::request_factory::RequestFactory::min_max_tokens(self, usize) -> Self
 pub const fn vllm_testing::request_factory::RequestFactory::min_tokens(self, usize) -> Self
-pub fn vllm_testing::request_factory::RequestFactory::new() -> Self
 pub const fn vllm_testing::request_factory::RequestFactory::reset_counter(&mut self)
 pub const fn vllm_testing::request_factory::RequestFactory::temperature(self, f32) -> Self
-impl core::clone::Clone for vllm_testing::request_factory::RequestFactory
-pub fn vllm_testing::request_factory::RequestFactory::clone(&self) -> vllm_testing::request_factory::RequestFactory
-impl core::default::Default for vllm_testing::request_factory::RequestFactory
-pub fn vllm_testing::request_factory::RequestFactory::default() -> Self
-impl core::fmt::Debug for vllm_testing::request_factory::RequestFactory
-pub fn vllm_testing::request_factory::RequestFactory::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Freeze for vllm_testing::request_factory::RequestFactory
-impl core::marker::Send for vllm_testing::request_factory::RequestFactory
-impl core::marker::Sync for vllm_testing::request_factory::RequestFactory
-impl core::marker::Unpin for vllm_testing::request_factory::RequestFactory
-impl core::marker::UnsafeUnpin for vllm_testing::request_factory::RequestFactory
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::request_factory::RequestFactory
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::request_factory::RequestFactory
-pub struct vllm_testing::prelude::StubModel
-impl vllm_testing::mocks::StubModel
-pub const fn vllm_testing::mocks::StubModel::returning(vllm_traits::types::TokenId) -> Self
-impl core::clone::Clone for vllm_testing::mocks::StubModel
-pub fn vllm_testing::mocks::StubModel::clone(&self) -> vllm_testing::mocks::StubModel
-impl core::default::Default for vllm_testing::mocks::StubModel
-pub fn vllm_testing::mocks::StubModel::default() -> Self
-impl core::fmt::Debug for vllm_testing::mocks::StubModel
-pub fn vllm_testing::mocks::StubModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Copy for vllm_testing::mocks::StubModel
-impl vllm_traits::model::ModelBackend for vllm_testing::mocks::StubModel
-pub fn vllm_testing::mocks::StubModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::StubModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
-pub fn vllm_testing::mocks::StubModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::StubModel::num_heads(&self) -> usize
-pub fn vllm_testing::mocks::StubModel::num_layers(&self) -> usize
-pub fn vllm_testing::mocks::StubModel::vocab_size(&self) -> usize
-impl core::marker::Freeze for vllm_testing::mocks::StubModel
-impl core::marker::Send for vllm_testing::mocks::StubModel
-impl core::marker::Sync for vllm_testing::mocks::StubModel
-impl core::marker::Unpin for vllm_testing::mocks::StubModel
-impl core::marker::UnsafeUnpin for vllm_testing::mocks::StubModel
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::mocks::StubModel
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::mocks::StubModel
-pub struct vllm_testing::prelude::TestFixtures
-impl vllm_testing::fixtures::TestFixtures
+pub const fn vllm_testing::slow_model::SlowModel::delay(self, core::time::Duration) -> Self
+pub const fn vllm_testing::slow_model::SlowModel::new(core::time::Duration) -> Self
+pub const fn vllm_testing::slow_model::SlowModel::return_token(self, vllm_traits::types::TokenId) -> Self
+pub const fn vllm_testing::slow_model::SlowModel::with_token(core::time::Duration, vllm_traits::types::TokenId) -> Self
+pub fn vllm_testing::builders::BatchBuilder::add_sequence(self, vllm_traits::types::SeqId, alloc::vec::Vec<vllm_traits::types::TokenId>, bool) -> Self
+pub fn vllm_testing::builders::BatchBuilder::build(self) -> vllm_traits::types::Batch
+pub fn vllm_testing::builders::BatchBuilder::default() -> Self
+pub fn vllm_testing::builders::BatchBuilder::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_testing::builders::RequestBuilder::build(self) -> (vllm_traits::types::SeqId, alloc::vec::Vec<vllm_traits::types::TokenId>, usize)
+pub fn vllm_testing::builders::RequestBuilder::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_testing::builders::RequestBuilder::with_prompt(self, alloc::vec::Vec<vllm_traits::types::TokenId>) -> Self
 pub fn vllm_testing::fixtures::TestFixtures::default_scheduler_config() -> vllm_core::types::scheduler_config::SchedulerConfig
+pub fn vllm_testing::fixtures::TestFixtures::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_testing::fixtures::TestFixtures::increment_engine(usize) -> vllm_core::engine::Engine
 pub fn vllm_testing::fixtures::TestFixtures::increment_engine_with(vllm_core::types::scheduler_config::SchedulerConfig, usize, usize) -> vllm_core::engine::Engine
 pub fn vllm_testing::fixtures::TestFixtures::increment_speculative_engine(usize) -> vllm_core::engine::Engine
 pub fn vllm_testing::fixtures::TestFixtures::increment_speculative_engine_with(vllm_core::types::scheduler_config::SchedulerConfig, usize, usize) -> vllm_core::engine::Engine
 pub fn vllm_testing::fixtures::TestFixtures::oom_scenario_config() -> vllm_core::types::scheduler_config::SchedulerConfig
 pub fn vllm_testing::fixtures::TestFixtures::small_batch_config() -> vllm_core::types::scheduler_config::SchedulerConfig
-impl core::fmt::Debug for vllm_testing::fixtures::TestFixtures
-pub fn vllm_testing::fixtures::TestFixtures::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Freeze for vllm_testing::fixtures::TestFixtures
-impl core::marker::Send for vllm_testing::fixtures::TestFixtures
-impl core::marker::Sync for vllm_testing::fixtures::TestFixtures
-impl core::marker::Unpin for vllm_testing::fixtures::TestFixtures
-impl core::marker::UnsafeUnpin for vllm_testing::fixtures::TestFixtures
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::fixtures::TestFixtures
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::fixtures::TestFixtures
+pub fn vllm_testing::harness::TestHarness::add_test_request(&mut self, alloc::vec::Vec<u32>, usize) -> u64
+pub fn vllm_testing::harness::TestHarness::build_test_batch(&mut self) -> vllm_traits::types::Batch
+pub fn vllm_testing::harness::TestHarnessConfig::clone(&self) -> vllm_testing::harness::TestHarnessConfig
+pub fn vllm_testing::harness::TestHarnessConfig::default() -> Self
+pub fn vllm_testing::harness::TestHarnessConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_testing::harness::TestHarnessConfig::into_scheduler_config(self) -> vllm_core::types::scheduler_config::SchedulerConfig
+pub fn vllm_testing::harness::TestHarness::default() -> Self
+pub fn vllm_testing::harness::TestHarness::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_testing::harness::TestHarness::from_config(vllm_testing::harness::TestHarnessConfig) -> Self
+pub fn vllm_testing::harness::TestHarness::has_pending(&self) -> bool
+pub fn vllm_testing::harness::TestHarness::new() -> Self
+pub fn vllm_testing::harness::TestHarness::waiting_count(&self) -> usize
+pub fn vllm_testing::mocks::ConstModel::clone(&self) -> vllm_testing::mocks::ConstModel
+pub fn vllm_testing::mocks::ConstModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_testing::mocks::ConstModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_testing::mocks::ConstModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_testing::mocks::ConstModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
+pub fn vllm_testing::mocks::ConstModel::num_heads(&self) -> usize
+pub fn vllm_testing::mocks::ConstModel::num_layers(&self) -> usize
+pub fn vllm_testing::mocks::ConstModel::vocab_size(&self) -> usize
+pub fn vllm_testing::mocks::FakeModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_testing::mocks::FakeModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_testing::mocks::FakeModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_testing::mocks::FakeModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
+pub fn vllm_testing::mocks::FakeModel::num_heads(&self) -> usize
+pub fn vllm_testing::mocks::FakeModel::num_layers(&self) -> usize
+pub fn vllm_testing::mocks::FakeModel::vocab_size(&self) -> usize
+pub fn vllm_testing::mocks::IncrementModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_testing::mocks::IncrementModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_testing::mocks::IncrementModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_testing::mocks::IncrementModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
+pub fn vllm_testing::mocks::IncrementModel::num_heads(&self) -> usize
+pub fn vllm_testing::mocks::IncrementModel::num_layers(&self) -> usize
+pub fn vllm_testing::mocks::IncrementModel::vocab_size(&self) -> usize
+pub fn vllm_testing::mocks::StubModel::clone(&self) -> vllm_testing::mocks::StubModel
+pub fn vllm_testing::mocks::StubModel::default() -> Self
+pub fn vllm_testing::mocks::StubModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_testing::mocks::StubModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_testing::mocks::StubModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_testing::mocks::StubModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
+pub fn vllm_testing::mocks::StubModel::num_heads(&self) -> usize
+pub fn vllm_testing::mocks::StubModel::num_layers(&self) -> usize
+pub fn vllm_testing::mocks::StubModel::vocab_size(&self) -> usize
+pub fn vllm_testing::request_factory::RequestConfig::clone(&self) -> vllm_testing::request_factory::RequestConfig
+pub fn vllm_testing::request_factory::RequestConfig::default() -> Self
+pub fn vllm_testing::request_factory::RequestConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_testing::request_factory::RequestFactory::clone(&self) -> vllm_testing::request_factory::RequestFactory
+pub fn vllm_testing::request_factory::RequestFactory::create_batch(&mut self, usize) -> alloc::vec::Vec<vllm_core::types::request::Request>
+pub fn vllm_testing::request_factory::RequestFactory::create(&mut self) -> vllm_core::types::request::Request
+pub fn vllm_testing::request_factory::RequestFactory::create_with_id(&mut self, u64) -> vllm_core::types::request::Request
+pub fn vllm_testing::request_factory::RequestFactory::create_with_prompt(&mut self, alloc::vec::Vec<u32>, usize) -> vllm_core::types::request::Request
+pub fn vllm_testing::request_factory::RequestFactory::default() -> Self
+pub fn vllm_testing::request_factory::RequestFactory::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_testing::request_factory::RequestFactory::new() -> Self
+pub fn vllm_testing::slow_model::SlowModel::clone(&self) -> vllm_testing::slow_model::SlowModel
+pub fn vllm_testing::slow_model::SlowModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_testing::slow_model::SlowModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_testing::slow_model::SlowModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
+pub fn vllm_testing::slow_model::SlowModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
+pub fn vllm_testing::slow_model::SlowModel::num_heads(&self) -> usize
+pub fn vllm_testing::slow_model::SlowModel::num_layers(&self) -> usize
+pub fn vllm_testing::slow_model::SlowModel::vocab_size(&self) -> usize
+pub mod vllm_testing
+pub mod vllm_testing::builders
+pub mod vllm_testing::fixtures
+pub mod vllm_testing::harness
+pub mod vllm_testing::mocks
+pub mod vllm_testing::prelude
+pub mod vllm_testing::request_factory
+pub mod vllm_testing::slow_model
+pub mod vllm_testing::utils
+pub struct vllm_testing::builders::BatchBuilder
+pub struct vllm_testing::builders::RequestBuilder
+pub struct vllm_testing::ConstModel
+pub struct vllm_testing::FakeModel
+pub struct vllm_testing::fixtures::TestFixtures
+pub struct vllm_testing::harness::TestHarness
+pub struct vllm_testing::harness::TestHarnessConfig
+pub struct vllm_testing::IncrementModel
+pub struct vllm_testing::mocks::ConstModel
+pub struct vllm_testing::mocks::FakeModel
+pub struct vllm_testing::mocks::IncrementModel
+pub struct vllm_testing::mocks::StubModel
+pub struct vllm_testing::prelude::ConstModel
+pub struct vllm_testing::prelude::FakeModel
+pub struct vllm_testing::prelude::IncrementModel
+pub struct vllm_testing::prelude::RequestFactory
+pub struct vllm_testing::prelude::StubModel
+pub struct vllm_testing::prelude::TestFixtures
 pub struct vllm_testing::prelude::TestHarness
+pub struct vllm_testing::RequestFactory
+pub struct vllm_testing::request_factory::RequestConfig
+pub struct vllm_testing::request_factory::RequestFactory
+pub struct vllm_testing::SlowModel
+pub struct vllm_testing::slow_model::SlowModel
+pub struct vllm_testing::StubModel
+pub struct vllm_testing::TestFixtures
+pub struct vllm_testing::TestHarness
+pub vllm_testing::ConstModel::return_token: vllm_traits::types::TokenId
+pub vllm_testing::harness::TestHarnessConfig::enable_dynamic_batching: bool
+pub vllm_testing::harness::TestHarnessConfig::enable_prefix_cache: bool
+pub vllm_testing::harness::TestHarnessConfig::kv_blocks: usize
+pub vllm_testing::harness::TestHarnessConfig::max_batch_size: usize
+pub vllm_testing::harness::TestHarness::config: vllm_testing::harness::TestHarnessConfig
+pub vllm_testing::harness::TestHarness::metrics: alloc::sync::Arc<vllm_core::metrics::collector::sampler::EnhancedMetricsCollector>
+pub vllm_testing::harness::TestHarness::scheduler: vllm_core::scheduler::engine::state::SchedulerEngine
+pub vllm_testing::mocks::ConstModel::return_token: vllm_traits::types::TokenId
+pub vllm_testing::prelude::ConstModel::return_token: vllm_traits::types::TokenId
 pub vllm_testing::prelude::TestHarness::config: vllm_testing::harness::TestHarnessConfig
 pub vllm_testing::prelude::TestHarness::metrics: alloc::sync::Arc<vllm_core::metrics::collector::sampler::EnhancedMetricsCollector>
 pub vllm_testing::prelude::TestHarness::scheduler: vllm_core::scheduler::engine::state::SchedulerEngine
-impl vllm_testing::harness::TestHarness
-pub fn vllm_testing::harness::TestHarness::add_test_request(&mut self, alloc::vec::Vec<u32>, usize) -> u64
-pub fn vllm_testing::harness::TestHarness::build_test_batch(&mut self) -> vllm_traits::types::Batch
-pub fn vllm_testing::harness::TestHarness::from_config(vllm_testing::harness::TestHarnessConfig) -> Self
-pub fn vllm_testing::harness::TestHarness::has_pending(&self) -> bool
-pub const fn vllm_testing::harness::TestHarness::metrics(&self) -> &alloc::sync::Arc<vllm_core::metrics::collector::sampler::EnhancedMetricsCollector>
-pub fn vllm_testing::harness::TestHarness::new() -> Self
-pub const fn vllm_testing::harness::TestHarness::running_count(&self) -> usize
-pub const fn vllm_testing::harness::TestHarness::scheduler(&self) -> &vllm_core::scheduler::engine::state::SchedulerEngine
-pub const fn vllm_testing::harness::TestHarness::scheduler_mut(&mut self) -> &mut vllm_core::scheduler::engine::state::SchedulerEngine
-pub fn vllm_testing::harness::TestHarness::waiting_count(&self) -> usize
-impl core::default::Default for vllm_testing::harness::TestHarness
-pub fn vllm_testing::harness::TestHarness::default() -> Self
-impl core::fmt::Debug for vllm_testing::harness::TestHarness
-pub fn vllm_testing::harness::TestHarness::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl !core::marker::Freeze for vllm_testing::harness::TestHarness
-impl core::marker::Send for vllm_testing::harness::TestHarness
-impl core::marker::Sync for vllm_testing::harness::TestHarness
-impl core::marker::Unpin for vllm_testing::harness::TestHarness
-impl core::marker::UnsafeUnpin for vllm_testing::harness::TestHarness
-impl !core::panic::unwind_safe::RefUnwindSafe for vllm_testing::harness::TestHarness
-impl !core::panic::unwind_safe::UnwindSafe for vllm_testing::harness::TestHarness
-pub mod vllm_testing::request_factory
-pub struct vllm_testing::request_factory::RequestConfig
 pub vllm_testing::request_factory::RequestConfig::max_max_tokens: usize
 pub vllm_testing::request_factory::RequestConfig::max_tokens: usize
 pub vllm_testing::request_factory::RequestConfig::min_max_tokens: usize
@@ -350,252 +286,6 @@ pub vllm_testing::request_factory::RequestConfig::min_tokens: usize
 pub vllm_testing::request_factory::RequestConfig::temperature: f32
 pub vllm_testing::request_factory::RequestConfig::top_k: usize
 pub vllm_testing::request_factory::RequestConfig::top_p: f32
-impl vllm_testing::request_factory::RequestConfig
-pub const fn vllm_testing::request_factory::RequestConfig::max_max_tokens(self, usize) -> Self
-pub const fn vllm_testing::request_factory::RequestConfig::max_tokens(self, usize) -> Self
-pub const fn vllm_testing::request_factory::RequestConfig::min_max_tokens(self, usize) -> Self
-pub const fn vllm_testing::request_factory::RequestConfig::min_tokens(self, usize) -> Self
-pub const fn vllm_testing::request_factory::RequestConfig::temperature(self, f32) -> Self
-impl core::clone::Clone for vllm_testing::request_factory::RequestConfig
-pub fn vllm_testing::request_factory::RequestConfig::clone(&self) -> vllm_testing::request_factory::RequestConfig
-impl core::default::Default for vllm_testing::request_factory::RequestConfig
-pub fn vllm_testing::request_factory::RequestConfig::default() -> Self
-impl core::fmt::Debug for vllm_testing::request_factory::RequestConfig
-pub fn vllm_testing::request_factory::RequestConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Freeze for vllm_testing::request_factory::RequestConfig
-impl core::marker::Send for vllm_testing::request_factory::RequestConfig
-impl core::marker::Sync for vllm_testing::request_factory::RequestConfig
-impl core::marker::Unpin for vllm_testing::request_factory::RequestConfig
-impl core::marker::UnsafeUnpin for vllm_testing::request_factory::RequestConfig
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::request_factory::RequestConfig
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::request_factory::RequestConfig
-pub struct vllm_testing::request_factory::RequestFactory
-impl vllm_testing::request_factory::RequestFactory
-pub fn vllm_testing::request_factory::RequestFactory::create(&mut self) -> vllm_core::types::request::Request
-pub fn vllm_testing::request_factory::RequestFactory::create_batch(&mut self, usize) -> alloc::vec::Vec<vllm_core::types::request::Request>
-pub fn vllm_testing::request_factory::RequestFactory::create_with_id(&mut self, u64) -> vllm_core::types::request::Request
-pub fn vllm_testing::request_factory::RequestFactory::create_with_prompt(&mut self, alloc::vec::Vec<u32>, usize) -> vllm_core::types::request::Request
-pub const fn vllm_testing::request_factory::RequestFactory::from_config(vllm_testing::request_factory::RequestConfig) -> Self
-pub const fn vllm_testing::request_factory::RequestFactory::max_max_tokens(self, usize) -> Self
-pub const fn vllm_testing::request_factory::RequestFactory::max_tokens(self, usize) -> Self
-pub const fn vllm_testing::request_factory::RequestFactory::min_max_tokens(self, usize) -> Self
-pub const fn vllm_testing::request_factory::RequestFactory::min_tokens(self, usize) -> Self
-pub fn vllm_testing::request_factory::RequestFactory::new() -> Self
-pub const fn vllm_testing::request_factory::RequestFactory::reset_counter(&mut self)
-pub const fn vllm_testing::request_factory::RequestFactory::temperature(self, f32) -> Self
-impl core::clone::Clone for vllm_testing::request_factory::RequestFactory
-pub fn vllm_testing::request_factory::RequestFactory::clone(&self) -> vllm_testing::request_factory::RequestFactory
-impl core::default::Default for vllm_testing::request_factory::RequestFactory
-pub fn vllm_testing::request_factory::RequestFactory::default() -> Self
-impl core::fmt::Debug for vllm_testing::request_factory::RequestFactory
-pub fn vllm_testing::request_factory::RequestFactory::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Freeze for vllm_testing::request_factory::RequestFactory
-impl core::marker::Send for vllm_testing::request_factory::RequestFactory
-impl core::marker::Sync for vllm_testing::request_factory::RequestFactory
-impl core::marker::Unpin for vllm_testing::request_factory::RequestFactory
-impl core::marker::UnsafeUnpin for vllm_testing::request_factory::RequestFactory
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::request_factory::RequestFactory
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::request_factory::RequestFactory
-pub mod vllm_testing::slow_model
-pub struct vllm_testing::slow_model::SlowModel
-impl vllm_testing::slow_model::SlowModel
-pub const fn vllm_testing::slow_model::SlowModel::delay(self, core::time::Duration) -> Self
-pub const fn vllm_testing::slow_model::SlowModel::new(core::time::Duration) -> Self
-pub const fn vllm_testing::slow_model::SlowModel::return_token(self, vllm_traits::types::TokenId) -> Self
-pub const fn vllm_testing::slow_model::SlowModel::with_token(core::time::Duration, vllm_traits::types::TokenId) -> Self
-impl core::clone::Clone for vllm_testing::slow_model::SlowModel
-pub fn vllm_testing::slow_model::SlowModel::clone(&self) -> vllm_testing::slow_model::SlowModel
-impl core::fmt::Debug for vllm_testing::slow_model::SlowModel
-pub fn vllm_testing::slow_model::SlowModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl vllm_traits::model::ModelBackend for vllm_testing::slow_model::SlowModel
-pub fn vllm_testing::slow_model::SlowModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::slow_model::SlowModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
-pub fn vllm_testing::slow_model::SlowModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::slow_model::SlowModel::num_heads(&self) -> usize
-pub fn vllm_testing::slow_model::SlowModel::num_layers(&self) -> usize
-pub fn vllm_testing::slow_model::SlowModel::vocab_size(&self) -> usize
-impl core::marker::Freeze for vllm_testing::slow_model::SlowModel
-impl core::marker::Send for vllm_testing::slow_model::SlowModel
-impl core::marker::Sync for vllm_testing::slow_model::SlowModel
-impl core::marker::Unpin for vllm_testing::slow_model::SlowModel
-impl core::marker::UnsafeUnpin for vllm_testing::slow_model::SlowModel
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::slow_model::SlowModel
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::slow_model::SlowModel
-pub mod vllm_testing::utils
-pub struct vllm_testing::ConstModel
-pub vllm_testing::ConstModel::return_token: vllm_traits::types::TokenId
-impl vllm_testing::mocks::ConstModel
-pub const fn vllm_testing::mocks::ConstModel::new(vllm_traits::types::TokenId) -> Self
-impl core::clone::Clone for vllm_testing::mocks::ConstModel
-pub fn vllm_testing::mocks::ConstModel::clone(&self) -> vllm_testing::mocks::ConstModel
-impl core::fmt::Debug for vllm_testing::mocks::ConstModel
-pub fn vllm_testing::mocks::ConstModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl vllm_traits::model::ModelBackend for vllm_testing::mocks::ConstModel
-pub fn vllm_testing::mocks::ConstModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::ConstModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
-pub fn vllm_testing::mocks::ConstModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::ConstModel::num_heads(&self) -> usize
-pub fn vllm_testing::mocks::ConstModel::num_layers(&self) -> usize
-pub fn vllm_testing::mocks::ConstModel::vocab_size(&self) -> usize
-impl core::marker::Freeze for vllm_testing::mocks::ConstModel
-impl core::marker::Send for vllm_testing::mocks::ConstModel
-impl core::marker::Sync for vllm_testing::mocks::ConstModel
-impl core::marker::Unpin for vllm_testing::mocks::ConstModel
-impl core::marker::UnsafeUnpin for vllm_testing::mocks::ConstModel
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::mocks::ConstModel
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::mocks::ConstModel
-pub struct vllm_testing::FakeModel
-impl vllm_testing::mocks::FakeModel
-pub const fn vllm_testing::mocks::FakeModel::new(usize) -> Self
-impl core::fmt::Debug for vllm_testing::mocks::FakeModel
-pub fn vllm_testing::mocks::FakeModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl vllm_traits::model::ModelBackend for vllm_testing::mocks::FakeModel
-pub fn vllm_testing::mocks::FakeModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::FakeModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
-pub fn vllm_testing::mocks::FakeModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::FakeModel::num_heads(&self) -> usize
-pub fn vllm_testing::mocks::FakeModel::num_layers(&self) -> usize
-pub fn vllm_testing::mocks::FakeModel::vocab_size(&self) -> usize
-impl core::marker::Freeze for vllm_testing::mocks::FakeModel
-impl core::marker::Send for vllm_testing::mocks::FakeModel
-impl core::marker::Sync for vllm_testing::mocks::FakeModel
-impl core::marker::Unpin for vllm_testing::mocks::FakeModel
-impl core::marker::UnsafeUnpin for vllm_testing::mocks::FakeModel
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::mocks::FakeModel
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::mocks::FakeModel
-pub struct vllm_testing::IncrementModel
-impl core::fmt::Debug for vllm_testing::mocks::IncrementModel
-pub fn vllm_testing::mocks::IncrementModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl vllm_traits::model::ModelBackend for vllm_testing::mocks::IncrementModel
-pub fn vllm_testing::mocks::IncrementModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::IncrementModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
-pub fn vllm_testing::mocks::IncrementModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::IncrementModel::num_heads(&self) -> usize
-pub fn vllm_testing::mocks::IncrementModel::num_layers(&self) -> usize
-pub fn vllm_testing::mocks::IncrementModel::vocab_size(&self) -> usize
-impl core::marker::Freeze for vllm_testing::mocks::IncrementModel
-impl core::marker::Send for vllm_testing::mocks::IncrementModel
-impl core::marker::Sync for vllm_testing::mocks::IncrementModel
-impl core::marker::Unpin for vllm_testing::mocks::IncrementModel
-impl core::marker::UnsafeUnpin for vllm_testing::mocks::IncrementModel
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::mocks::IncrementModel
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::mocks::IncrementModel
-pub struct vllm_testing::RequestFactory
-impl vllm_testing::request_factory::RequestFactory
-pub fn vllm_testing::request_factory::RequestFactory::create(&mut self) -> vllm_core::types::request::Request
-pub fn vllm_testing::request_factory::RequestFactory::create_batch(&mut self, usize) -> alloc::vec::Vec<vllm_core::types::request::Request>
-pub fn vllm_testing::request_factory::RequestFactory::create_with_id(&mut self, u64) -> vllm_core::types::request::Request
-pub fn vllm_testing::request_factory::RequestFactory::create_with_prompt(&mut self, alloc::vec::Vec<u32>, usize) -> vllm_core::types::request::Request
-pub const fn vllm_testing::request_factory::RequestFactory::from_config(vllm_testing::request_factory::RequestConfig) -> Self
-pub const fn vllm_testing::request_factory::RequestFactory::max_max_tokens(self, usize) -> Self
-pub const fn vllm_testing::request_factory::RequestFactory::max_tokens(self, usize) -> Self
-pub const fn vllm_testing::request_factory::RequestFactory::min_max_tokens(self, usize) -> Self
-pub const fn vllm_testing::request_factory::RequestFactory::min_tokens(self, usize) -> Self
-pub fn vllm_testing::request_factory::RequestFactory::new() -> Self
-pub const fn vllm_testing::request_factory::RequestFactory::reset_counter(&mut self)
-pub const fn vllm_testing::request_factory::RequestFactory::temperature(self, f32) -> Self
-impl core::clone::Clone for vllm_testing::request_factory::RequestFactory
-pub fn vllm_testing::request_factory::RequestFactory::clone(&self) -> vllm_testing::request_factory::RequestFactory
-impl core::default::Default for vllm_testing::request_factory::RequestFactory
-pub fn vllm_testing::request_factory::RequestFactory::default() -> Self
-impl core::fmt::Debug for vllm_testing::request_factory::RequestFactory
-pub fn vllm_testing::request_factory::RequestFactory::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Freeze for vllm_testing::request_factory::RequestFactory
-impl core::marker::Send for vllm_testing::request_factory::RequestFactory
-impl core::marker::Sync for vllm_testing::request_factory::RequestFactory
-impl core::marker::Unpin for vllm_testing::request_factory::RequestFactory
-impl core::marker::UnsafeUnpin for vllm_testing::request_factory::RequestFactory
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::request_factory::RequestFactory
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::request_factory::RequestFactory
-pub struct vllm_testing::SlowModel
-impl vllm_testing::slow_model::SlowModel
-pub const fn vllm_testing::slow_model::SlowModel::delay(self, core::time::Duration) -> Self
-pub const fn vllm_testing::slow_model::SlowModel::new(core::time::Duration) -> Self
-pub const fn vllm_testing::slow_model::SlowModel::return_token(self, vllm_traits::types::TokenId) -> Self
-pub const fn vllm_testing::slow_model::SlowModel::with_token(core::time::Duration, vllm_traits::types::TokenId) -> Self
-impl core::clone::Clone for vllm_testing::slow_model::SlowModel
-pub fn vllm_testing::slow_model::SlowModel::clone(&self) -> vllm_testing::slow_model::SlowModel
-impl core::fmt::Debug for vllm_testing::slow_model::SlowModel
-pub fn vllm_testing::slow_model::SlowModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl vllm_traits::model::ModelBackend for vllm_testing::slow_model::SlowModel
-pub fn vllm_testing::slow_model::SlowModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::slow_model::SlowModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
-pub fn vllm_testing::slow_model::SlowModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::slow_model::SlowModel::num_heads(&self) -> usize
-pub fn vllm_testing::slow_model::SlowModel::num_layers(&self) -> usize
-pub fn vllm_testing::slow_model::SlowModel::vocab_size(&self) -> usize
-impl core::marker::Freeze for vllm_testing::slow_model::SlowModel
-impl core::marker::Send for vllm_testing::slow_model::SlowModel
-impl core::marker::Sync for vllm_testing::slow_model::SlowModel
-impl core::marker::Unpin for vllm_testing::slow_model::SlowModel
-impl core::marker::UnsafeUnpin for vllm_testing::slow_model::SlowModel
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::slow_model::SlowModel
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::slow_model::SlowModel
-pub struct vllm_testing::StubModel
-impl vllm_testing::mocks::StubModel
-pub const fn vllm_testing::mocks::StubModel::returning(vllm_traits::types::TokenId) -> Self
-impl core::clone::Clone for vllm_testing::mocks::StubModel
-pub fn vllm_testing::mocks::StubModel::clone(&self) -> vllm_testing::mocks::StubModel
-impl core::default::Default for vllm_testing::mocks::StubModel
-pub fn vllm_testing::mocks::StubModel::default() -> Self
-impl core::fmt::Debug for vllm_testing::mocks::StubModel
-pub fn vllm_testing::mocks::StubModel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Copy for vllm_testing::mocks::StubModel
-impl vllm_traits::model::ModelBackend for vllm_testing::mocks::StubModel
-pub fn vllm_testing::mocks::StubModel::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::StubModel::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
-pub fn vllm_testing::mocks::StubModel::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
-pub fn vllm_testing::mocks::StubModel::num_heads(&self) -> usize
-pub fn vllm_testing::mocks::StubModel::num_layers(&self) -> usize
-pub fn vllm_testing::mocks::StubModel::vocab_size(&self) -> usize
-impl core::marker::Freeze for vllm_testing::mocks::StubModel
-impl core::marker::Send for vllm_testing::mocks::StubModel
-impl core::marker::Sync for vllm_testing::mocks::StubModel
-impl core::marker::Unpin for vllm_testing::mocks::StubModel
-impl core::marker::UnsafeUnpin for vllm_testing::mocks::StubModel
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::mocks::StubModel
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::mocks::StubModel
-pub struct vllm_testing::TestFixtures
-impl vllm_testing::fixtures::TestFixtures
-pub fn vllm_testing::fixtures::TestFixtures::default_scheduler_config() -> vllm_core::types::scheduler_config::SchedulerConfig
-pub fn vllm_testing::fixtures::TestFixtures::increment_engine(usize) -> vllm_core::engine::Engine
-pub fn vllm_testing::fixtures::TestFixtures::increment_engine_with(vllm_core::types::scheduler_config::SchedulerConfig, usize, usize) -> vllm_core::engine::Engine
-pub fn vllm_testing::fixtures::TestFixtures::increment_speculative_engine(usize) -> vllm_core::engine::Engine
-pub fn vllm_testing::fixtures::TestFixtures::increment_speculative_engine_with(vllm_core::types::scheduler_config::SchedulerConfig, usize, usize) -> vllm_core::engine::Engine
-pub fn vllm_testing::fixtures::TestFixtures::oom_scenario_config() -> vllm_core::types::scheduler_config::SchedulerConfig
-pub fn vllm_testing::fixtures::TestFixtures::small_batch_config() -> vllm_core::types::scheduler_config::SchedulerConfig
-impl core::fmt::Debug for vllm_testing::fixtures::TestFixtures
-pub fn vllm_testing::fixtures::TestFixtures::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Freeze for vllm_testing::fixtures::TestFixtures
-impl core::marker::Send for vllm_testing::fixtures::TestFixtures
-impl core::marker::Sync for vllm_testing::fixtures::TestFixtures
-impl core::marker::Unpin for vllm_testing::fixtures::TestFixtures
-impl core::marker::UnsafeUnpin for vllm_testing::fixtures::TestFixtures
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_testing::fixtures::TestFixtures
-impl core::panic::unwind_safe::UnwindSafe for vllm_testing::fixtures::TestFixtures
-pub struct vllm_testing::TestHarness
 pub vllm_testing::TestHarness::config: vllm_testing::harness::TestHarnessConfig
 pub vllm_testing::TestHarness::metrics: alloc::sync::Arc<vllm_core::metrics::collector::sampler::EnhancedMetricsCollector>
 pub vllm_testing::TestHarness::scheduler: vllm_core::scheduler::engine::state::SchedulerEngine
-impl vllm_testing::harness::TestHarness
-pub fn vllm_testing::harness::TestHarness::add_test_request(&mut self, alloc::vec::Vec<u32>, usize) -> u64
-pub fn vllm_testing::harness::TestHarness::build_test_batch(&mut self) -> vllm_traits::types::Batch
-pub fn vllm_testing::harness::TestHarness::from_config(vllm_testing::harness::TestHarnessConfig) -> Self
-pub fn vllm_testing::harness::TestHarness::has_pending(&self) -> bool
-pub const fn vllm_testing::harness::TestHarness::metrics(&self) -> &alloc::sync::Arc<vllm_core::metrics::collector::sampler::EnhancedMetricsCollector>
-pub fn vllm_testing::harness::TestHarness::new() -> Self
-pub const fn vllm_testing::harness::TestHarness::running_count(&self) -> usize
-pub const fn vllm_testing::harness::TestHarness::scheduler(&self) -> &vllm_core::scheduler::engine::state::SchedulerEngine
-pub const fn vllm_testing::harness::TestHarness::scheduler_mut(&mut self) -> &mut vllm_core::scheduler::engine::state::SchedulerEngine
-pub fn vllm_testing::harness::TestHarness::waiting_count(&self) -> usize
-impl core::default::Default for vllm_testing::harness::TestHarness
-pub fn vllm_testing::harness::TestHarness::default() -> Self
-impl core::fmt::Debug for vllm_testing::harness::TestHarness
-pub fn vllm_testing::harness::TestHarness::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl !core::marker::Freeze for vllm_testing::harness::TestHarness
-impl core::marker::Send for vllm_testing::harness::TestHarness
-impl core::marker::Sync for vllm_testing::harness::TestHarness
-impl core::marker::Unpin for vllm_testing::harness::TestHarness
-impl core::marker::UnsafeUnpin for vllm_testing::harness::TestHarness
-impl !core::panic::unwind_safe::RefUnwindSafe for vllm_testing::harness::TestHarness
-impl !core::panic::unwind_safe::UnwindSafe for vllm_testing::harness::TestHarness
