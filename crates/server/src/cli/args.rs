@@ -109,6 +109,9 @@ pub struct CliArgs {
     auth: AuthArgs,
 
     #[command(flatten)]
+    pub security: SecurityArgs,
+
+    #[command(flatten)]
     logging: LoggingArgs,
 
     #[command(flatten)]
@@ -170,6 +173,29 @@ struct AuthArgs {
 
     #[arg(long, env = "VLLM_API_KEYS_FILE")]
     pub api_key_file: Option<PathBuf>,
+}
+
+/// Security posture flags — currently just the SEC-01 escape hatch.
+///
+/// SEC-01 (technical due diligence): when the server binds to a
+/// non-loopback address with no API keys configured, anyone reachable
+/// on the network can hit `/v1/chat/completions`, `/debug/*`, and
+/// `/shutdown`. The default is to print a loud warning; operators
+/// running a known-internal single-tenant instance on `0.0.0.0`
+/// can pass `--insecure-allow-public-no-auth` to silence it. We
+/// deliberately do NOT fail closed: that would break local dev
+/// and CI, and the cost of a wrong warning (operator annoyance)
+/// is much lower than the cost of a wrong refusal (engineer can't
+/// smoke-test). The choice is documented in OPERATIONS.md.
+#[derive(clap::Args, Debug, Clone)]
+#[group(id = "security_args")]
+pub struct SecurityArgs {
+    #[arg(
+        long,
+        default_value = "false",
+        env = "VLLM_INSECURE_ALLOW_PUBLIC_NO_AUTH"
+    )]
+    pub insecure_allow_public_no_auth: bool,
 }
 
 #[derive(clap::Args, Debug, Clone)]

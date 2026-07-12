@@ -3,7 +3,11 @@
 //! `build_router` is the entry point called from `main.rs`; it wires
 //! every middleware (auth, RBAC, backpressure, correlation, audit) and
 //! the `OpenAI` sub-router under `/v1`.
-use axum::{Json, extract::State};
+use axum::{
+    Json,
+    extract::State,
+    response::{IntoResponse, Response},
+};
 use serde::Serialize;
 use tokio::sync::mpsc;
 use vllm_core::metrics::MetricsSnapshot;
@@ -70,13 +74,58 @@ pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailR
 /// exits.
 ///
 /// Useful for graceful drain during orchestrator rolling updates.
+///
+/// SEC-01 (technical due diligence): gated by [`require_admin`]. When
+/// no API keys are configured the endpoint refuses with `503
+/// admin_disabled` rather than silently letting anyone reachable on
+/// the network stop the inference process. See `debug.rs` for the
+/// matching policy applied to `/debug/*`.
 #[allow(clippy::unused_async)]
-pub async fn shutdown(State(state): State<ApiState>) -> &'static str {
+pub async fn shutdown(
+    State(state): State<ApiState>,
+    headers: axum::http::HeaderMap,
+) -> Response {
+    // SEC-01: keep this in sync with debug::require_admin. We could
+    // call that function directly but live in a sibling module; the
+    // duplication is small and explicit.
+    let Some(auth) = state.auth.as_ref() else {
+        return (
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({
+                "error": "admin_disabled",
+                "message": "/shutdown requires API key auth to be configured; \
+                            set --api-key or VLLM_API_KEY to enable admin access",
+            })),
+        )
+            .into_response();
+    };
+    let api_key = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|h| h.strip_prefix("Bearer "));
+    match api_key {
+        Some(key) if auth.api_keys().iter().any(|k| k == key) => {}
+        _ => {
+            return (
+                axum::http::StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({
+                    "error": "unauthorized",
+                    "message": "valid Bearer token required for /shutdown",
+                })),
+            )
+                .into_response();
+        }
+    }
+
     // REL-01: try_send so a saturated mailbox doesn't block
     // shutdown — operators expect `/shutdown` to return immediately
     // even under load.
     let _ = state.engine_tx.try_send(EngineMessage::Shutdown);
-    "Shutting down"
+    (
+        axum::http::StatusCode::OK,
+        Json(serde_json::json!("Shutting down")),
+    )
+        .into_response()
 }
 
 /// `/metrics` Prometheus exposition handler. Returns a text/plain payload in

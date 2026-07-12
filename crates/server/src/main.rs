@@ -51,6 +51,35 @@ async fn main() -> Result<()> {
 
     tracing::info!("Starting vllm-lite");
 
+    // SEC-01 (technical due diligence): refuse to be quiet about an
+    // unauthenticated bind to a non-loopback address. The previous
+    // behavior was to start silently with no auth, which let any
+    // network-reachable client hit `/v1/chat/completions`,
+    // `/debug/*`, and `/shutdown`.
+    //
+    // We deliberately *warn* rather than *refuse*: failing closed
+    // would break local dev where `127.0.0.1` is the implicit bind
+    // but operators may also legitimately smoke-test on a LAN. The
+    // warning is structured so log-aggregation rules can alert on
+    // it. Pass `--insecure-allow-public-no-auth` (or
+    // `VLLM_INSECURE_ALLOW_PUBLIC_NO_AUTH=true`) to silence it for
+    // intentional internal deployments.
+    {
+        let resolved_keys = app_config.auth.resolve_api_keys();
+        let auth_configured = !resolved_keys.is_empty();
+        let bind_exposes_public = !vllm_server::config::is_loopback_address(&app_config.server.host);
+        if bind_exposes_public && !auth_configured && !cli.security.insecure_allow_public_no_auth {
+            tracing::warn!(
+                host = %app_config.server.host,
+                "SEC-01: server is bound to a non-loopback address with no API \
+                 keys configured. Anyone reachable on the network can invoke \
+                 inference, read /debug/*, and trigger /shutdown. Set \
+                 --api-key / VLLM_API_KEY or pass --insecure-allow-public-no-auth \
+                 for intentional internal deployments."
+            );
+        }
+    }
+
     let (mut engine, loader, device) = bootstrap::engine::build_engine(&app_config, &cli)
         .context("failed to construct inference engine")?;
 

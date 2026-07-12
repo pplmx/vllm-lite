@@ -53,7 +53,7 @@ pub struct ConfigValidationErrors(pub Vec<ConfigValidationError>);
 
 pub use auth::AuthConfig;
 pub use engine::{DraftSpecConfig, EngineConfig};
-pub use server::ServerConfig;
+pub use server::{ServerConfig, is_loopback_address};
 
 /// Top-level server configuration. Composes the three independent
 /// sections ([`ServerConfig`], [`EngineConfig`], [`AuthConfig`]) that
