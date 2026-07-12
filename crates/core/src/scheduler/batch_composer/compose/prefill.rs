@@ -44,6 +44,7 @@ impl BatchComposer {
         let mut kv_block_ids = Vec::with_capacity(capacity);
         let mut num_computed_tokens = Vec::with_capacity(capacity);
         let mut is_prefill = Vec::with_capacity(capacity);
+        let mut sampling_params = Vec::with_capacity(capacity);
         let mut total_tokens = 0usize;
         let mut max_seq_len = 0usize;
 
@@ -97,6 +98,9 @@ impl BatchComposer {
             // Only treat as prefill if this is the first chunk of the sequence
             // If start > 0, this is a resume from partial prefill, use decode mode
             is_prefill.push(start == 0);
+            // ARCH-02: thread per-sequence sampling params into the
+            // batch so the engine applies them after `forward_logits`.
+            sampling_params.push(seq.sampling_params.clone());
         }
 
         let total = total_tokens;
@@ -115,6 +119,7 @@ impl BatchComposer {
             kv_block_ids,
             num_computed_tokens,
             is_prefill,
+            sampling_params,
             phase: BatchPhase::Prefill,
             total_tokens: total,
             max_seq_len: max_len,

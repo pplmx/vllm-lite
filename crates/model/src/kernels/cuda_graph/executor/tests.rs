@@ -21,7 +21,7 @@
 //! All tests run on CPU — they only exercise the executor's
 //! metadata + lookup paths, never an actual CUDA graph launch.
 use super::*;
-use vllm_traits::{Batch, BatchPhase};
+use vllm_traits::{Batch, BatchPhase, SamplingParams};
 
 fn create_mock_batch(batch_size: usize) -> Batch {
     Batch {
@@ -31,6 +31,7 @@ fn create_mock_batch(batch_size: usize) -> Batch {
         kv_block_ids: vec![vec![]; batch_size],
         num_computed_tokens: vec![0; batch_size],
         is_prefill: vec![false; batch_size],
+        sampling_params: vec![SamplingParams::default(); batch_size],
         phase: BatchPhase::Decode,
         total_tokens: batch_size,
         max_seq_len: 1,

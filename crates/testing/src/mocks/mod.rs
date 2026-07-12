@@ -53,14 +53,19 @@ impl ModelBackend for StubModel {
         _num_computed_tokens: &[usize],
         _is_prefill: &[bool],
     ) -> Result<Vec<Vec<f32>>> {
+        // ARCH-02: make `forward_logits` agree with the configured
+        // `token` so engine tests that depend on a deterministic
+        // returned token still see it after the engine switched to
+        // `forward_logits` + engine-side sampling.
         let vocab_size = self.vocab_size();
+        let peak = f32::from(u16::try_from(self.token).unwrap_or(u16::MAX));
         Ok(input_tokens
             .iter()
             .map(|tokens| {
                 let mut logits = Vec::with_capacity(tokens.len() * vocab_size);
-                for &t in tokens {
+                for _ in tokens {
                     let mut pos_logits = vec![-10.0; vocab_size];
-                    pos_logits[t as usize] = 10.0;
+                    pos_logits[self.token as usize] = peak;
                     logits.extend(pos_logits);
                 }
                 logits

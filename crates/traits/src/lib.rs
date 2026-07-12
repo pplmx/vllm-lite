@@ -30,7 +30,7 @@ pub mod types;
 pub use distributed::{BlockHasher, IdentityHasher, XorShiftHasher};
 pub use kernels::{CudaGraphConfig, CudaGraphExecutor, GraphExecutionError, ModelGraphConfig};
 pub use model::{ModelBackend, ModelError, Result, StubModelBackend};
-pub use sampling::argmax_logits;
+pub use sampling::{SamplingParams, SamplingParamsBuilder, argmax_logits};
 pub use types::{
     BLOCK_SIZE, Batch, BatchOutput, BatchPhase, BlockId, SeqId, TensorParallelError, TokenId,
 };

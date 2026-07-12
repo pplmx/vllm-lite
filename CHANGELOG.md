@@ -26,6 +26,7 @@
 
 ### Fixed
 
+- **ARCH-02 sampling parameters reach the hot path** — previously the HTTP layer accepted `temperature` / `top_p` / `top_k` / `repeat_penalty` and stored them on the `Request`, but `Engine::step_regular` called `model.forward`, which chose the next token greedily inside the model layer. The params were silently dropped. The seam is now `forward_logits → engine-side sample_batch_with_params(batch.sampling_params)`. `Batch` carries a per-sequence `Vec<SamplingParams>` (moved to `vllm_traits::sampling` so the wire type doesn't depend on `vllm_core`); `BatchComposer::{decode,prefill,chunked}` populate it from `Sequence::sampling_params`; `sample_batch_with_params` is the new entry point that respects per-sequence params. Regression test in `crates/core/tests/sampling_params.rs` (3 cases).
 - **Chunked Prefill Correctness (v31.0 Phase 31-A)** — fixes the long-standing partial-prefill bug where multi-step prefill produced different logits than single-shot prefill.
     - **`write_prefill_kv`**: now writes each token at its global position (`positions[i] % block_size`) instead of always overwriting block offset 0.
     - **`RopeGqaAttention::forward_prefill_continue`**: new path for continuation chunks — reads existing KV prefix, applies rectangular causal mask (`prefill_continue_causal_mask`), writes new tokens, and attends over the full prefix.

@@ -10,7 +10,7 @@
 
 use crate::types::TokenId;
 use tracing::trace;
-use vllm_traits::argmax_logits;
+use vllm_traits::{SamplingParams, argmax_logits};
 
 fn random_f32() -> f32 {
     rand::random::<f32>()
@@ -182,6 +182,86 @@ pub fn sample_batch(
             }
         })
         .collect()
+}
+
+/// Sample one token per row from a batch of per-sequence logits, using a
+/// per-sequence [`SamplingParams`] for the decision.
+///
+/// This is the engine-side entry point used after [`crate::scheduler`]
+/// builds a batch: the model returns raw logits via
+/// [`vllm_traits::ModelBackend::forward_logits`], and the engine hands
+/// them back here together with the per-sequence sampling parameters
+/// carried on the [`vllm_traits::Batch`]. Closing this loop is the
+/// fix for ARCH-02 (technical due diligence) — previously the HTTP
+/// layer accepted `temperature` / `top_p` / `top_k` and the model
+/// layer always chose argmax, so the params silently had no effect.
+///
+/// `params_list`, `seen_tokens`, and `logits_list` must have the same
+/// length. The returned `Vec<TokenId>` has length `logits_list.len()`.
+///
+/// Beam search (`beam_width > 1`) is not implemented here — callers
+/// must intercept those requests before they reach this function.
+#[must_use]
+pub fn sample_batch_with_params(
+    logits_list: &[Vec<f32>],
+    params_list: &[SamplingParams],
+    seen_tokens: &[Vec<TokenId>],
+) -> Vec<TokenId> {
+    logits_list
+        .iter()
+        .zip(params_list.iter())
+        .zip(seen_tokens.iter())
+        .map(|((logits, params), seen)| sample_one_with_params(logits, params, seen))
+        .collect()
+}
+
+/// Apply the full sampling pipeline (repeat penalty → temperature →
+/// top-k → top-p / temperature / greedy) using a single
+/// [`SamplingParams`] for one sequence.
+///
+/// Public for tests; production callers should use
+/// [`sample_batch_with_params`].
+#[must_use]
+pub fn sample_one_with_params(
+    logits: &[f32],
+    params: &SamplingParams,
+    seen: &[TokenId],
+) -> TokenId {
+    let mut logits = logits.to_vec();
+
+    if (params.repeat_penalty - 1.0).abs() > f32::EPSILON && !seen.is_empty() {
+        apply_repeat_penalty(&mut logits, seen, params.repeat_penalty);
+    }
+
+    if params.temperature > 0.0 && (params.temperature - 1.0).abs() > f32::EPSILON {
+        for l in &mut logits {
+            *l /= params.temperature;
+        }
+    }
+
+    if params.top_k > 0 {
+        let top_k_limit = params.top_k.min(logits.len());
+        let mut indexed: Vec<(usize, f32)> =
+            logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
+        indexed.select_nth_unstable_by(top_k_limit - 1, |a, b| {
+            b.1.partial_cmp(&a.1)
+                .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
+        });
+        let threshold = indexed[top_k_limit - 1].1;
+        for l in &mut logits {
+            if *l < threshold {
+                *l = f32::NEG_INFINITY;
+            }
+        }
+    }
+
+    if params.top_p < 1.0 {
+        top_p_sample(&logits, params.top_p)
+    } else if params.temperature > 0.0 {
+        temperature_sample(&logits, params.temperature)
+    } else {
+        greedy_sample(&logits)
+    }
 }
 
 /// Divide the logit at each id present in `seen_tokens` by `penalty`.

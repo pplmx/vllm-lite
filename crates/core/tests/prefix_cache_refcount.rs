@@ -85,7 +85,10 @@ fn prefix_cache_hit_returns_same_block_ids_after_first_completion() {
     while engine.has_pending() {
         engine.step().expect("first request step failed");
         steps += 1;
-        assert!(steps < 1000, "first request never completes (infinite loop?)");
+        assert!(
+            steps < 1000,
+            "first request never completes (infinite loop?)"
+        );
     }
     let first_blocks = blocks_used_for_prompt(&engine, &prompt)
         .expect("prefix cache must contain an entry after first request");
@@ -157,7 +160,10 @@ fn prefix_cache_hit_returns_same_block_ids_after_first_completion() {
     //    scope for the ARCH-01 test). cancel_request exercises the
     //    same release_blocks code path the completion path uses.
     let cancelled = engine.scheduler.cancel_request(2);
-    assert!(cancelled, "cancel_request must succeed for the cache-hit sequence");
+    assert!(
+        cancelled,
+        "cancel_request must succeed for the cache-hit sequence"
+    );
 
     // 6. After cancelling the second sequence, the prefix cache
     //    still holds its reference — the block must NOT be in the

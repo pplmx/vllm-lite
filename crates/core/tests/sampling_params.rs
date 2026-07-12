@@ -1,0 +1,249 @@
+//! ARCH-02 regression: per-sequence sampling parameters must reach the
+//! hot path.
+//!
+//! Background (technical due diligence): prior to this fix, the HTTP
+//! layer accepted `temperature` / `top_p` / `top_k` from the OpenAI
+//! request and stored them on the `Request`, but the engine always
+//! called `model.forward`, which chose the next token greedily inside
+//! the model layer. The parameters were silently dropped. This file
+//! locks in the seam:
+//!
+//! ```text
+//! forward_logits → engine-side sample_batch_with_params(batch.sampling_params)
+//! ```
+//!
+//! The tests use a deterministic mock that exposes per-sequence logits
+//! so we can assert which token the engine emitted without relying on
+//! randomness.
+
+use tokio::sync::mpsc;
+use vllm_core::engine::Engine;
+use vllm_core::types::Request;
+use vllm_traits::{BatchOutput, ModelBackend, Result, SamplingParams, SeqId, TokenId};
+
+/// Mock whose `forward_logits` lights up one or two tokens per
+/// sequence based on the sequence's first prompt token (used as a key
+/// into `peaks`). This lets us assert per-sequence argmax in tests
+/// where two requests run in the same step, and lets us design a
+/// repeat-penalty test where the seen-token penalty flips the argmax.
+struct PerSeqPeakModel {
+    /// `peaks[prompt[0] as usize]` is the token id that will be the
+    /// argmax for that sequence. Vocabulary must be large enough that
+    /// each peak index is in range.
+    peaks: Vec<TokenId>,
+    /// Secondary peaks at half the primary height, used to test
+    /// repeat-penalty. Indexed by the same key as `peaks`. When set to
+    /// `None` for a key, only the primary peak is lit.
+    secondary: Vec<Option<TokenId>>,
+    vocab: usize,
+}
+
+impl PerSeqPeakModel {
+    fn new(peaks: Vec<TokenId>, vocab: usize) -> Self {
+        let n = peaks.len();
+        Self {
+            peaks,
+            secondary: vec![None; n],
+            vocab,
+        }
+    }
+
+    fn with_secondary(mut self, secondary: Vec<Option<TokenId>>) -> Self {
+        self.secondary = secondary;
+        self
+    }
+}
+
+impl ModelBackend for PerSeqPeakModel {
+    fn forward(
+        &mut self,
+        seq_ids: &[SeqId],
+        _input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+        _kv_block_ids: &[Vec<usize>],
+        _num_computed_tokens: &[usize],
+        _is_prefill: &[bool],
+    ) -> Result<BatchOutput> {
+        // Legacy path: still has to compile and produce something
+        // sensible (used by the speculative dispatcher).
+        Ok(BatchOutput {
+            seq_ids: seq_ids.to_vec(),
+            next_tokens: vec![0; seq_ids.len()],
+        })
+    }
+
+    fn forward_logits(
+        &mut self,
+        _seq_ids: &[SeqId],
+        input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+        _kv_block_ids: &[Vec<usize>],
+        _num_computed_tokens: &[usize],
+        _is_prefill: &[bool],
+    ) -> Result<Vec<Vec<f32>>> {
+        Ok(input_tokens
+            .iter()
+            .map(|tokens| {
+                let mut logits = vec![0.0f32; tokens.len() * self.vocab];
+                let key = tokens.first().copied().unwrap_or(0) as usize;
+                let peak = self.peaks[key.min(self.peaks.len() - 1)] as usize;
+                let sec = self.secondary[key.min(self.secondary.len() - 1)];
+                // Light up the peak in the LAST position (the one the
+                // engine reads after slicing).
+                let last = tokens.len().saturating_sub(1) * self.vocab;
+                if last + self.vocab <= logits.len() {
+                    logits[last + peak] = 5.0;
+                    if let Some(s) = sec {
+                        logits[last + s as usize] = 2.5;
+                    }
+                }
+                logits
+            })
+            .collect())
+    }
+
+    fn embed(
+        &mut self,
+        input_tokens: &[Vec<TokenId>],
+        _positions: &[Vec<usize>],
+    ) -> Result<Vec<Vec<f32>>> {
+        Ok(input_tokens
+            .iter()
+            .map(|tokens| vec![0.0; tokens.len()])
+            .collect())
+    }
+
+    fn vocab_size(&self) -> usize {
+        self.vocab
+    }
+
+    fn num_layers(&self) -> usize {
+        1
+    }
+
+    fn num_heads(&self) -> usize {
+        1
+    }
+}
+
+#[test]
+fn arch_02_greedy_per_sequence_uses_argmax() {
+    // Two requests, both with default (greedy) sampling params.
+    // The mock's `peaks` table maps prompt[0] → peak token: 0→10,
+    // 1→20. Expect seq 1 → 10, seq 2 → 20.
+    let model = PerSeqPeakModel::new(vec![10, 20], 32);
+    let mut engine = Engine::new(model, None);
+
+    let mut r1 = Request::new(1, vec![0], 1);
+    r1.sampling_params = SamplingParams::default(); // T = 0 → greedy
+    let mut r2 = Request::new(2, vec![1], 1);
+    r2.sampling_params = SamplingParams::default();
+
+    let (tx1, mut rx1) = mpsc::channel(16);
+    let (tx2, mut rx2) = mpsc::channel(16);
+    engine.add_request(r1, tx1);
+    engine.add_request(r2, tx2);
+
+    engine.step().expect("step ok");
+
+    // Channel ordering isn't strictly seq-id, so collect and assert
+    // both expected tokens are present.
+    let mut got: Vec<u32> = Vec::new();
+    if let Ok(t) = rx1.try_recv() {
+        got.push(t);
+    }
+    if let Ok(t) = rx2.try_recv() {
+        got.push(t);
+    }
+    got.sort_unstable();
+    assert_eq!(
+        got,
+        vec![10, 20],
+        "engine must emit the per-prompt peak token when each sequence uses greedy sampling"
+    );
+}
+
+#[test]
+fn arch_02_top_k_one_still_argmax_with_explicit_params() {
+    // Same model behaviour, but each request declares top_k = 1
+    // explicitly (not the default of 0). This proves that
+    // non-default params survive the Batch composer → engine seam.
+    let model = PerSeqPeakModel::new(vec![7, 13], 32);
+    let mut engine = Engine::new(model, None);
+
+    let mut r1 = Request::new(1, vec![0], 1);
+    r1.sampling_params = SamplingParams::builder()
+        .with_temperature(0.0)
+        .with_top_k(1)
+        .with_top_p(1.0)
+        .with_repeat_penalty(1.0)
+        .build();
+    let mut r2 = Request::new(2, vec![1], 1);
+    r2.sampling_params = SamplingParams::builder()
+        .with_temperature(0.0)
+        .with_top_k(1)
+        .with_top_p(1.0)
+        .with_repeat_penalty(1.0)
+        .build();
+
+    let (tx1, mut rx1) = mpsc::channel(16);
+    let (tx2, mut rx2) = mpsc::channel(16);
+    engine.add_request(r1, tx1);
+    engine.add_request(r2, tx2);
+
+    engine.step().expect("step ok");
+
+    let mut got: Vec<u32> = Vec::new();
+    if let Ok(t) = rx1.try_recv() {
+        got.push(t);
+    }
+    if let Ok(t) = rx2.try_recv() {
+        got.push(t);
+    }
+    got.sort_unstable();
+    assert_eq!(
+        got,
+        vec![7, 13],
+        "top_k=1 must still produce the deterministic argmax per sequence"
+    );
+}
+
+#[test]
+fn arch_02_repeat_penalty_suppresses_seen_token() {
+    // Mock maps prompt[0]=0 → primary peak at 10, secondary at 3
+    // (half height: 2.5 vs 5.0). For decode the input is the
+    // previously-emitted token (10), so the mock lights up both 10
+    // and 3 in the LAST position. With repeat_penalty=2.0 the
+    // primary logit at 10 is divided by 2.0 → 2.5, which now ties
+    // with the secondary at 3. Ties go to the lowest index in our
+    // argmax implementation, so the engine should emit 3 (or any
+    // non-10 token) on the second decode step.
+    let model = PerSeqPeakModel::new(vec![10], 32).with_secondary(vec![Some(3)]);
+    let mut engine = Engine::new(model, None);
+
+    let mut r1 = Request::new(1, vec![0], 3);
+    r1.sampling_params = SamplingParams::builder()
+        .with_temperature(0.0)
+        .with_repeat_penalty(2.0)
+        .build();
+
+    let (tx1, mut rx1) = mpsc::channel(16);
+    engine.add_request(r1, tx1);
+
+    // Step 0: prefill → mock maps prompt[0]=0 → primary peak 10
+    // wins over secondary 3 (5.0 > 2.5). Expect 10.
+    engine.step().expect("step ok");
+    let t1 = rx1.try_recv().expect("first token");
+    assert_eq!(t1, 10, "prefill should emit the raw argmax (10)");
+
+    // Step 1: decode → mock maps prompt[0]=10 → peaks[0]=10,
+    // secondary=3 → logits at 10 (5.0) and 3 (2.5). With
+    // repeat_penalty=2.0 on seen set [10], the logit at 10 is
+    // halved to 2.5. Argmax tie at 2.5 resolves to index 3.
+    engine.step().expect("step ok");
+    let t2 = rx1.try_recv().expect("second token");
+    assert_ne!(
+        t2, 10,
+        "repeat_penalty must suppress the previously-seen token (got {t2})"
+    );
+}

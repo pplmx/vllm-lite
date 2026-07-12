@@ -194,6 +194,7 @@ fn test_warmup_draft_kv_invokes_draft_per_sequence() {
         kv_block_ids: vec![vec![0], vec![0], vec![0]],
         num_computed_tokens: vec![0, 0, 0],
         is_prefill: vec![true, true, true],
+        sampling_params: vec![vllm_traits::SamplingParams::default(); 3],
         phase: vllm_traits::BatchPhase::Prefill,
         total_tokens: 6,
         max_seq_len: 3,
