@@ -2,6 +2,13 @@ apiVersion: v2
 name: vllm-lite
 description: A lightweight LLM inference engine for Kubernetes
 type: application
+# GOV-01 (technical due diligence): the committed `version` and
+# `appVersion` below are *placeholders*. Release automation
+# overrides both from `scripts/release-manifest.sh` at packaging
+# time (`helm package --set version=$VLLM_CHART_VERSION
+# --set appVersion=$VLLM_CHART_APP_VERSION`). Do NOT bump them by
+# hand — bump `[workspace.package] version` in Cargo.toml
+# instead; the manifest script propagates the new value here.
 version: 0.1.0
 appVersion: "0.1.0"
 keywords:

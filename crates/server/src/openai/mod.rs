@@ -8,4 +8,5 @@ pub mod chat_template;
 pub mod completions;
 pub mod embeddings;
 pub mod models;
+pub mod sampling_validation;
 pub mod types;

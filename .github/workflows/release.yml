@@ -28,27 +28,48 @@ env:
 
 jobs:
   # 1. Compute the version + verify CHANGELOG was bumped for this tag.
+  #
+  # GOV-01 (technical due diligence): the workspace version in
+  # Cargo.toml is the single source of truth. The tag must match.
+  # `scripts/release-manifest.sh --validate` enforces the contract
+  # and also writes the manifest env file that downstream jobs
+  # (Docker, Chart, GitHub Release) all consume.
   meta:
     name: Metadata
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.meta.outputs.version }}
-      is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
+      version: ${{ steps.manifest.outputs.version }}
+      is_prerelease: ${{ steps.manifest.outputs.is_prerelease }}
+      image_tag: ${{ steps.manifest.outputs.image_tag }}
+      chart_version: ${{ steps.manifest.outputs.chart_version }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - id: meta
+      - id: manifest
         run: |
+          TAG_REF="${GITHUB_REF_NAME#v}"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="0.0.0-dryrun"
+            # Dry-run: use whatever the workspace says; do not validate.
+            bash scripts/release-manifest.sh \
+              --out target/release-manifest.env > /dev/null
           else
-            VERSION="${GITHUB_REF_NAME#v}"
+            bash scripts/release-manifest.sh \
+              --validate "$TAG_REF" \
+              --out target/release-manifest.env > /dev/null
           fi
-          IS_PRERELEASE="false"
-          if [[ "$VERSION" == *-* ]]; then IS_PRERELEASE="true"; fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
+          # shellcheck disable=SC1091
+          set -a; source target/release-manifest.env; set +a
+          echo "version=$VLLM_VERSION"         >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$VLLM_IS_PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$VLLM_IMAGE_TAG"     >> "$GITHUB_OUTPUT"
+          echo "chart_version=$VLLM_CHART_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Upload manifest env
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest
+          path: target/release-manifest.env
 
   # 2. Build workspace binaries for multiple targets.
   build:

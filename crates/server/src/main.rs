@@ -29,6 +29,7 @@ use vllm_server::openai::chat::chat_completions;
 use vllm_server::openai::completions::completions as openai_completions;
 use vllm_server::openai::embeddings::embeddings;
 use vllm_server::openai::models::models_handler;
+use vllm_server::security::correlation::correlation_id_middleware;
 use vllm_server::{ApiState, api, auth, cli, health::HealthChecker, logging};
 
 #[tokio::main]
@@ -180,11 +181,11 @@ async fn main() -> Result<()> {
         .route("/v1/batches/{id}", get(get_batch))
         .route("/v1/batches/{id}/results", get(get_batch_results))
         // Health, readiness, and metrics endpoints (K8s-compatible paths)
-        .route("/health/live", get(bootstrap::handlers::health_handler))
-        .route("/health/ready", get(bootstrap::handlers::ready_handler))
-        .route("/health", get(bootstrap::handlers::health_handler))
-        .route("/ready", get(bootstrap::handlers::ready_handler))
-        .route("/metrics", get(bootstrap::handlers::metrics_handler))
+        .route("/health/live", get(vllm_server::health_handlers::health_handler))
+        .route("/health/ready", get(vllm_server::health_handlers::ready_handler))
+        .route("/health", get(vllm_server::health_handlers::health_handler))
+        .route("/ready", get(vllm_server::health_handlers::ready_handler))
+        .route("/metrics", get(vllm_server::health_handlers::metrics_handler))
         .route("/health/details", get(api::health_details))
         // Debug endpoints
         .route("/debug/metrics", get(debug::metrics_snapshot))
@@ -193,6 +194,16 @@ async fn main() -> Result<()> {
         // Shutdown
         .route("/shutdown", get(api::shutdown))
         .with_state(state);
+
+    // Mount correlation_id_middleware as the OUTERMOST layer: it must
+    // see every request (auth-gated or not) and stamp an `X-Request-ID`
+    // header before auth/size-limit/audit run, so even rejected
+    // requests get a stable ID in the response and logs.
+    //
+    // Production-readiness recommendation 6: thread a single
+    // correlation ID through HTTP → scheduler → token stream so
+    // operators can trace a request across the whole pipeline.
+    app = app.layer(axum::middleware::from_fn(correlation_id_middleware));
 
     if let Some(auth) = auth_middleware {
         app = app.layer(axum::middleware::from_fn_with_state(

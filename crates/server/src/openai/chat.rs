@@ -18,6 +18,7 @@ use std::convert::Infallible;
 use tokio::sync::mpsc;
 
 use super::chat_template::{self, ChatTemplate};
+use super::sampling_validation::validate_sampling_params;
 use super::types::{
     ChatChoice, ChatChunk, ChatChunkChoice, ChatMessage, ChatRequest, ChatResponse, ErrorResponse,
     Usage,
@@ -105,6 +106,10 @@ async fn handle_chat(
     if let Some(temp) = req.temperature {
         request.sampling_params.temperature = temp;
     }
+
+    // Reject sampling parameters the engine cannot honour (currently
+    // beam_width > 1) BEFORE enqueuing — see `sampling_validation`.
+    validate_sampling_params(&request.sampling_params)?;
 
     let (response_tx, mut response_rx) = mpsc::channel(64);
 
@@ -249,6 +254,10 @@ async fn stream_chat_completion(
     if let Some(temp) = req.temperature {
         request.sampling_params.temperature = temp;
     }
+
+    // Reject sampling parameters the engine cannot honour (currently
+    // beam_width > 1) BEFORE enqueuing — see `sampling_validation`.
+    validate_sampling_params(&request.sampling_params)?;
 
     let (response_tx, response_rx) = mpsc::channel(64);
     state

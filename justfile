@@ -89,6 +89,22 @@ public-api-check:
 public-api-baseline:
     bash .planning/phase-12e/refresh-baselines.sh
 
+# === Release manifest (GOV-01) ===
+# Print the release manifest derived from [workspace.package] version.
+# Use this to preview what `release.yml` will see on tag push.
+release-manifest:
+    bash scripts/release-manifest.sh
+
+# Validate a candidate tag against the workspace version. Exits 1 if
+# they disagree. Use before tagging to catch typos.
+release-manifest-validate TAG:
+    bash scripts/release-manifest.sh --validate "{{TAG}}" > /dev/null
+
+# Write the manifest to target/release-manifest.env so it can be
+# sourced in another shell / CI step.
+release-manifest-write:
+    bash scripts/release-manifest.sh --out target/release-manifest.env
+
 # Run all CI checks (skips #[ignore] slow tests)
 ci: fmt-check clippy doc-check doctest nextest public-api-check
 
