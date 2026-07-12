@@ -23,6 +23,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+# Source the release manifest if it's already been generated in a
+# previous step (CI typically runs `release-manifest.sh --out
+# target/release-manifest.env` first). If it isn't present we
+# generate it inline so the drift check below can compare
+# Chart.yaml against the workspace version.
+if [[ -z "${VLLM_VERSION:-}" ]]; then
+    if [[ -f target/release-manifest.env ]]; then
+        # shellcheck disable=SC1091
+        set -a; source target/release-manifest.env; set +a
+    elif command -v bash >/dev/null 2>&1 && [[ -x scripts/release-manifest.sh ]]; then
+        # shellcheck disable=SC1091
+        eval "$(scripts/release-manifest.sh)" 2>/dev/null || true
+    fi
+fi
+
 fail() {
     echo "FAIL: $*" >&2
     exit 1
@@ -180,6 +195,27 @@ if ! python3 -c "import yaml; yaml.safe_load(open('k8s/charts/vllm-lite/values.y
     fail "Helm values.yaml is not valid YAML"
 fi
 ok "Helm values.yaml is valid YAML"
+
+# Chart.yaml version + appVersion must mirror [workspace.package] version.
+# GOV-01 (technical due diligence): the placeholder substitution is
+# `scripts/release-manifest.sh` → `scripts/sync-chart-version.sh` at
+# release time, but if a contributor forgets to re-run it after
+# bumping Cargo.toml the chart will silently drift. This check
+# catches that case in CI before a release goes out.
+CHART=k8s/charts/vllm-lite/Chart.yaml
+if [[ ! -f "$CHART" ]]; then
+    fail "Chart.yaml is missing at $CHART"
+fi
+CHART_VERSION="$(grep -E '^version:[[:space:]]' "$CHART" | head -1 | sed -E 's/^version:[[:space:]]+//' | tr -d '\"')"
+CHART_APP_VERSION="$(grep -E '^appVersion:[[:space:]]' "$CHART" | head -1 | sed -E 's/^appVersion:[[:space:]]+//' | tr -d '\"')"
+if [[ "$CHART_VERSION" != "$VLLM_VERSION" ]]; then
+    fail "Chart.yaml version '$CHART_VERSION' does not match workspace version '$VLLM_VERSION' (GOV-01: drift). \
+Run 'scripts/sync-chart-version.sh' after bumping [workspace.package] version in Cargo.toml."
+fi
+if [[ "$CHART_APP_VERSION" != "$VLLM_VERSION" ]]; then
+    fail "Chart.yaml appVersion '$CHART_APP_VERSION' does not match workspace version '$VLLM_VERSION' (GOV-01: drift)."
+fi
+ok "Chart.yaml version + appVersion match workspace version $VLLM_VERSION"
 
 echo
 echo "deployment smoke test: PASS"
