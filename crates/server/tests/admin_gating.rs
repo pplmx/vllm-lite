@@ -32,11 +32,11 @@ use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_model::config::Architecture;
 use vllm_model::tokenizer::Tokenizer;
 use vllm_server::ApiState;
+use vllm_server::api;
 use vllm_server::auth::AuthMiddleware;
 use vllm_server::debug;
 use vllm_server::health::HealthChecker;
 use vllm_server::openai::batch::BatchManager;
-use vllm_server::api;
 
 /// Build an `ApiState` with optional admin auth. The engine_tx is a
 /// stub that immediately drops incoming messages — handlers under
@@ -47,11 +47,7 @@ fn state_with_auth(api_keys: Vec<String>) -> ApiState {
     let auth = if api_keys.is_empty() {
         None
     } else {
-        Some(Arc::new(AuthMiddleware::new(
-            api_keys,
-            100,
-            60,
-        )))
+        Some(Arc::new(AuthMiddleware::new(api_keys, 100, 60)))
     };
     ApiState {
         engine_tx,
@@ -59,6 +55,7 @@ fn state_with_auth(api_keys: Vec<String>) -> ApiState {
         architecture: Architecture::Qwen3,
         batch_manager: Arc::new(BatchManager::new()),
         auth,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
         health: Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true))),
         metrics: Arc::new(EnhancedMetricsCollector::new()),
     }

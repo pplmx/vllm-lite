@@ -68,7 +68,8 @@ async fn main() -> Result<()> {
     {
         let resolved_keys = app_config.auth.resolve_api_keys();
         let auth_configured = !resolved_keys.is_empty();
-        let bind_exposes_public = !vllm_server::config::is_loopback_address(&app_config.server.host);
+        let bind_exposes_public =
+            !vllm_server::config::is_loopback_address(&app_config.server.host);
         if bind_exposes_public && !auth_configured && !cli.security.insecure_allow_public_no_auth {
             tracing::warn!(
                 host = %app_config.server.host,
@@ -169,6 +170,14 @@ async fn main() -> Result<()> {
     // Initialize health checker
     let health_checker = Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true)));
 
+    // Production-readiness recommendation: shared in-memory
+    // audit ring buffer (10 000 events) backed by a structured
+    // `tracing` event per row. Mounted as a layer below; the
+    // `Arc` here lets us share the same instance between
+    // `ApiState` (for direct handler access if needed) and the
+    // middleware `State` extractor.
+    let audit_logger = Arc::new(vllm_server::security::audit::AuditLogger::new(10_000));
+
     let architecture = loader.architecture();
 
     let state = ApiState {
@@ -177,6 +186,7 @@ async fn main() -> Result<()> {
         architecture,
         batch_manager,
         auth: auth_middleware.clone(),
+        audit: audit_logger.clone(),
         health: health_checker,
         metrics: metrics_collector,
     };
@@ -193,11 +203,20 @@ async fn main() -> Result<()> {
         .route("/v1/batches/{id}", get(get_batch))
         .route("/v1/batches/{id}/results", get(get_batch_results))
         // Health, readiness, and metrics endpoints (K8s-compatible paths)
-        .route("/health/live", get(vllm_server::health_handlers::health_handler))
-        .route("/health/ready", get(vllm_server::health_handlers::ready_handler))
+        .route(
+            "/health/live",
+            get(vllm_server::health_handlers::health_handler),
+        )
+        .route(
+            "/health/ready",
+            get(vllm_server::health_handlers::ready_handler),
+        )
         .route("/health", get(vllm_server::health_handlers::health_handler))
         .route("/ready", get(vllm_server::health_handlers::ready_handler))
-        .route("/metrics", get(vllm_server::health_handlers::metrics_handler))
+        .route(
+            "/metrics",
+            get(vllm_server::health_handlers::metrics_handler),
+        )
         .route("/health/details", get(api::health_details))
         // Debug endpoints
         .route("/debug/metrics", get(debug::metrics_snapshot))
@@ -216,6 +235,19 @@ async fn main() -> Result<()> {
     // correlation ID through HTTP → scheduler → token stream so
     // operators can trace a request across the whole pipeline.
     app = app.layer(axum::middleware::from_fn(correlation_id_middleware));
+
+    // Production-readiness recommendation (audit trail): record
+    // every request — authenticated OR not, success OR
+    // failure — in the in-memory audit ring buffer (exportable
+    // via `/debug/audit`) and the structured `tracing` stream.
+    // Sits BELOW correlation_id so even requests that never
+    // reach a handler carry a `request_id` in the audit row,
+    // and ABOVE body-limit/auth so 413s and 401s are captured
+    // (we want a record of who tried what, including rejections).
+    app = app.layer(axum::middleware::from_fn_with_state(
+        audit_logger.clone(),
+        vllm_server::security::audit_middleware::audit_middleware,
+    ));
 
     // Production-readiness recommendation (input boundary protection):
     // cap the inbound JSON body at `DEFAULT_BODY_LIMIT_BYTES` (1 MiB)

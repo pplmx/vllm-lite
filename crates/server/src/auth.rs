@@ -104,17 +104,51 @@ impl AuthMiddleware {
     }
 }
 
+/// Opaque marker: an authenticated request, with a stable,
+/// **non-secret** user identifier that the audit layer can log.
+///
+/// We store only a truncated prefix of the api key — the full key
+/// must never appear in audit events because audit logs are
+/// exported to `/debug/audit` (and, in production, to an external
+/// SIEM). Logging the full key would leak credentials to anyone
+/// who can read the audit trail.
+///
+/// Inserted into request extensions by [`auth_middleware`] on a
+/// successful verify so downstream layers (audit, structured
+/// logs) can read the user without re-parsing the
+/// `Authorization` header.
+#[derive(Debug, Clone)]
+pub(crate) struct AuthenticatedUser(pub String);
+
+/// Compute a short, stable identifier for an authenticated user
+/// from the api key. First 8 chars is enough to disambiguate keys
+/// in normal use without exposing the credential itself.
+#[must_use]
+pub(crate) fn user_id_from_key(api_key: &str) -> String {
+    let prefix: String = api_key.chars().take(8).collect();
+    format!("key:{prefix}")
+}
+
 /// Run the operation (see signature for params and return type).
 /// # Panics
 ///
 /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
 pub async fn auth_middleware(
     auth: axum::extract::State<Arc<AuthMiddleware>>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Response {
     match auth.verify(request.headers()).await {
-        Ok(_) => next.run(request).await,
+        Ok(api_key) => {
+            // Stamp the user id on the request so the audit
+            // middleware (and any future per-user handler logic)
+            // can read it from extensions without re-parsing the
+            // Authorization header.
+            request
+                .extensions_mut()
+                .insert(AuthenticatedUser(user_id_from_key(&api_key)));
+            next.run(request).await
+        }
         Err(status) => {
             // invariant: builder pattern with all required fields (status, body) set above.
             Response::builder().status(status).body("".into()).unwrap()

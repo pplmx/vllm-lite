@@ -48,13 +48,16 @@ fn build_state(engine_tx: mpsc::Sender<EngineMessage>) -> ApiState {
         architecture: Architecture::Qwen3,
         batch_manager: Arc::new(BatchManager::new()),
         auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
         health: Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true))),
         metrics,
     }
 }
 
 fn router(state: ApiState) -> Router {
-    Router::new().route("/health/ready", get(ready_handler)).with_state(state)
+    Router::new()
+        .route("/health/ready", get(ready_handler))
+        .with_state(state)
 }
 
 async fn read_body(resp: axum::response::Response) -> serde_json::Value {

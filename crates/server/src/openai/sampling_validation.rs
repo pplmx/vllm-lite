@@ -66,7 +66,7 @@ mod tests {
         let params = SamplingParams::builder().with_beam_width(2).build();
         let err = validate_sampling_params(&params).expect_err("beam_width = 2 must be rejected");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
-        let body = err.1 .0;
+        let body = err.1.0;
         assert_eq!(body.error.error_type, "invalid_request_error");
         assert!(
             body.error.message.contains("beam search"),

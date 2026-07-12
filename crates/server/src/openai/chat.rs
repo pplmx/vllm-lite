@@ -291,16 +291,12 @@ async fn stream_chat_completion(
     // (the engine is on a dedicated thread; if it's wedged, the
     // whole server is wedged — but failing fast at the handler
     // is still better than hanging).
-    let seq_id: vllm_traits::SeqId = match tokio::time::timeout(
-        std::time::Duration::from_secs(1),
-        seq_id_rx,
-    )
-    .await
-    {
-        Ok(Ok(id)) => id,
-        Ok(Err(_)) => return Err(engine_unavailable_error()),
-        Err(_) => return Err(engine_unavailable_error()),
-    };
+    let seq_id: vllm_traits::SeqId =
+        match tokio::time::timeout(std::time::Duration::from_secs(1), seq_id_rx).await {
+            Ok(Ok(id)) => id,
+            Ok(Err(_)) => return Err(engine_unavailable_error()),
+            Err(_) => return Err(engine_unavailable_error()),
+        };
     // If the engine rejected admission (empty prompt), `seq_id`
     // is the sentinel 0. We still stream — the engine closes the
     // response_tx promptly — but the cancel guard below will not
@@ -361,7 +357,10 @@ async fn stream_chat_completion(
                         // invariant: serializing a known-good struct (plain serde_json types);
                         // to_string cannot fail.
                         serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
-                    Some((Ok(Event::default().data(sse_payload)), (rx, cancel_guard, done)))
+                    Some((
+                        Ok(Event::default().data(sse_payload)),
+                        (rx, cancel_guard, done),
+                    ))
                 } else {
                     // Channel closed - could be normal completion or client disconnect.
                     // Mark the guard as fired so its Drop impl doesn't
@@ -463,9 +462,9 @@ impl Drop for CancelOnDrop {
         // Best-effort: `try_send` because the engine mailbox may
         // already be closed during shutdown. Failing here just
         // means the engine was torn down first, which is fine.
-        let _ = self.engine_tx.try_send(vllm_core::types::EngineMessage::CancelRequest {
-            seq_id,
-        });
+        let _ = self
+            .engine_tx
+            .try_send(vllm_core::types::EngineMessage::CancelRequest { seq_id });
         tracing::info!(
             request_id = %self.request_id,
             seq_id,
