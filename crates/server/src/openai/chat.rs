@@ -108,21 +108,21 @@ async fn handle_chat(
 
     let (response_tx, mut response_rx) = mpsc::channel(64);
 
+    // REL-01 (technical due diligence): use `try_send` so a full
+    // engine mailbox fails fast with `503 engine_overloaded`
+    // instead of blocking on capacity. Distinguishes two failure
+    // modes:
+    //   - `Full`:   mailbox is saturated → 503 `engine_overloaded`
+    //   - `Closed`: engine has shut down → 503 `engine_unavailable`
     state
         .engine_tx
-        .send(vllm_core::types::EngineMessage::AddRequest {
+        .try_send(vllm_core::types::EngineMessage::AddRequest {
             request,
             response_tx,
         })
-        .map_err(|_| {
-            (
-                axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                Json(ErrorResponse::with_code(
-                    "Engine unavailable",
-                    "server_error",
-                    "engine_unavailable",
-                )),
-            )
+        .map_err(|e| match e {
+            tokio::sync::mpsc::error::TrySendError::Full(_) => engine_overloaded_error(),
+            tokio::sync::mpsc::error::TrySendError::Closed(_) => engine_unavailable_error(),
         })?;
 
     let mut tokens = Vec::new();
@@ -253,11 +253,14 @@ async fn stream_chat_completion(
     let (response_tx, response_rx) = mpsc::channel(64);
     state
         .engine_tx
-        .send(vllm_core::types::EngineMessage::AddRequest {
+        .try_send(vllm_core::types::EngineMessage::AddRequest {
             request,
             response_tx,
         })
-        .map_err(|_| engine_unavailable_error())?;
+        .map_err(|e| match e {
+            tokio::sync::mpsc::error::TrySendError::Full(_) => engine_overloaded_error(),
+            tokio::sync::mpsc::error::TrySendError::Closed(_) => engine_unavailable_error(),
+        })?;
 
     let tokenizer = state.tokenizer;
     let stream = stream::unfold(response_rx, move |mut rx| {
@@ -350,6 +353,21 @@ fn engine_unavailable_error() -> (axum::http::StatusCode, Json<ErrorResponse>) {
             "Engine unavailable",
             "server_error",
             "engine_unavailable",
+        )),
+    )
+}
+
+/// REL-01: build the standard `engine_overloaded` error returned when
+/// the bounded engine mailbox is saturated. Clients should treat
+/// this as retryable with backoff (the message explicitly suggests
+/// `Retry-After`-style behavior).
+fn engine_overloaded_error() -> (axum::http::StatusCode, Json<ErrorResponse>) {
+    (
+        axum::http::StatusCode::SERVICE_UNAVAILABLE,
+        Json(ErrorResponse::with_code(
+            "Engine overloaded; retry with backoff",
+            "server_error",
+            "engine_overloaded",
         )),
     )
 }

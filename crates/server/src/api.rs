@@ -12,12 +12,16 @@ use vllm_core::types::EngineMessage;
 use crate::ApiState;
 
 /// Sender side of the engine mailbox. Each handler holds a clone of this
-/// `UnboundedSender`; sending an [`EngineMessage`] enqueues work for the
-/// engine's run loop.
+/// bounded [`mpsc::Sender`]; sending an [`EngineMessage`] enqueues work
+/// for the engine's run loop.
 ///
-/// Backpressure is intentionally not applied here — the engine drains every
-/// message each loop iteration.
-pub type EngineHandle = mpsc::UnboundedSender<EngineMessage>;
+/// REL-01 (technical due diligence): the channel is bounded — see
+/// [`crate::config::EngineConfig::engine_mailbox_capacity`]. When the
+/// queue is full, handlers MUST use [`mpsc::Sender::try_send`] so they
+/// fail fast with a 503 instead of building an unbounded backlog.
+/// The default capacity (256) absorbs short bursts while bounding
+/// memory under sustained overload.
+pub type EngineHandle = mpsc::Sender<EngineMessage>;
 
 /// Response payload for Health. Returned from handlers, serialized to JSON for the HTTP boundary.
 #[derive(Debug, Serialize)]
@@ -43,9 +47,11 @@ pub struct HealthDetailResponse {
 #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
 pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailResponse> {
     let (response_tx, mut response_rx) = mpsc::unbounded_channel();
+    // REL-01: try_send so this endpoint never blocks on a full
+    // mailbox; we fall back to defaults below on failure.
     let _ = state
         .engine_tx
-        .send(EngineMessage::GetMetrics { response_tx });
+        .try_send(EngineMessage::GetMetrics { response_tx });
 
     let metrics = response_rx.recv().await.unwrap_or_default();
 
@@ -66,7 +72,10 @@ pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailR
 /// Useful for graceful drain during orchestrator rolling updates.
 #[allow(clippy::unused_async)]
 pub async fn shutdown(State(state): State<ApiState>) -> &'static str {
-    let _ = state.engine_tx.send(EngineMessage::Shutdown);
+    // REL-01: try_send so a saturated mailbox doesn't block
+    // shutdown — operators expect `/shutdown` to return immediately
+    // even under load.
+    let _ = state.engine_tx.try_send(EngineMessage::Shutdown);
     "Shutting down"
 }
 
@@ -81,13 +90,13 @@ pub async fn shutdown(State(state): State<ApiState>) -> &'static str {
 /// channel the engine reads from).
 pub async fn get_prometheus(State(state): State<ApiState>) -> String {
     let (response_tx, mut response_rx) = mpsc::unbounded_channel();
-    state
+    // REL-01: try_send; on Full or Closed we fall back to the
+    // default snapshot below rather than panicking. The /metrics
+    // scrape path must never panic — Prometheus monitoring of the
+    // server depends on it.
+    let _ = state
         .engine_tx
-        // invariant: engine is shutdown only after all senders are dropped; the sender
-        // outlives the receiver for the lifetime of this request handler.
-        .send(EngineMessage::GetMetrics { response_tx })
-        // invariant: pre-conditions make this infallible at this call site.
-        .expect("Engine channel should be available");
+        .try_send(EngineMessage::GetMetrics { response_tx });
     let m = response_rx.recv().await.unwrap_or(MetricsSnapshot {
         tokens_total: 0,
         requests_total: 0,

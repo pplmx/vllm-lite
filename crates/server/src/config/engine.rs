@@ -67,6 +67,16 @@ pub struct EngineConfig {
     /// does NOT load weights at startup; lazy loading via `DraftLoader`.
     #[serde(default)]
     pub draft_specs: Vec<DraftSpecConfig>,
+    /// REL-01 (technical due diligence): capacity of the bounded
+    /// engine mailbox (`mpsc::Sender<EngineMessage>` in
+    /// `crates/server/src/api.rs::EngineHandle`). When the queue is
+    /// full, new HTTP requests fail fast with `503
+    /// engine_overloaded` instead of building an unbounded backlog
+    /// that risks OOM. Default 256 strikes a balance between
+    /// absorbing short bursts and bounding memory; tune via config
+    /// for production.
+    #[serde(default = "default_engine_mailbox_capacity")]
+    pub engine_mailbox_capacity: usize,
 }
 
 impl Default for EngineConfig {
@@ -81,6 +91,7 @@ impl Default for EngineConfig {
             enable_adaptive_speculative: default_enable_adaptive_speculative(),
             vram_budget_bytes: None,
             draft_specs: Vec::new(),
+            engine_mailbox_capacity: default_engine_mailbox_capacity(),
         }
     }
 }
@@ -111,4 +122,12 @@ const fn default_kv_quantization() -> bool {
 
 const fn default_enable_adaptive_speculative() -> bool {
     true
+}
+
+/// REL-01: mailbox capacity for the engine. 256 absorbs short bursts
+/// (typical batch-completion window) without giving unbounded memory
+/// under sustained overload. Tunable via config for high-throughput
+/// deployments.
+const fn default_engine_mailbox_capacity() -> usize {
+    256
 }

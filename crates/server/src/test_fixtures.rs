@@ -61,10 +61,15 @@ use crate::api::EngineHandle;
 use crate::health::HealthChecker;
 use crate::openai::batch::BatchManager;
 
+/// Default mailbox capacity used by test fixtures. Mirrors
+/// `EngineConfig::default().engine_mailbox_capacity` so handler tests
+/// exercise the same code path as production. REL-01.
+const TEST_MAILBOX_CAPACITY: usize = 256;
+
 /// Build [`ApiState`] with defaults suitable for handler tests.
 #[must_use]
 pub fn api_state(architecture: Architecture) -> ApiState {
-    let (engine_tx, _engine_rx) = mpsc::unbounded_channel();
+    let (engine_tx, _engine_rx) = mpsc::channel(TEST_MAILBOX_CAPACITY);
     ApiState {
         engine_tx,
         tokenizer: Arc::new(Tokenizer::new()),
@@ -79,7 +84,7 @@ pub fn api_state(architecture: Architecture) -> ApiState {
 /// Mock engine that replies with the given token stream for each chat request.
 #[must_use]
 pub fn spawn_mock_engine(reply_tokens: Vec<TokenId>) -> (EngineHandle, JoinHandle<()>) {
-    let (engine_tx, mut engine_rx) = mpsc::unbounded_channel();
+    let (engine_tx, mut engine_rx) = mpsc::channel(TEST_MAILBOX_CAPACITY);
     let handle = tokio::spawn(async move {
         while let Some(msg) = engine_rx.recv().await {
             if let EngineMessage::AddRequest { response_tx, .. } = msg {
