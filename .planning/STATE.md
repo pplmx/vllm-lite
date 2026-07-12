@@ -220,7 +220,7 @@ doc in its message.
   `body_limit_wiring.rs` covers < limit OK / > limit 413 /
   rejected-body-still-carries-request-id.
 
-### GOV-01 — partially closed (`28c5c37`)
+### GOV-01 — partially closed (`28c5c37`) → fully closed (`75e828a`)
 
 - [x] Release manifest script (`scripts/release-manifest.sh`)
   reads `[workspace.package].version` and emits shell-sourceable
@@ -231,9 +231,17 @@ doc in its message.
   via build args / packaging-time overrides.
 - [x] `docs/RELEASE.md` explains the single-source-of-truth
   flow.
-- [ ] Helm `Chart.yaml` still has placeholder `version`/`appVersion`
-  that need release-time overrides (manifest emits the right
-  values; chart release still TBD).
+- [x] **Helm Chart packaging wired into `release.yml`** (`75e828a`).
+  New `scripts/sync-chart-version.sh` substitutes `version` /
+  `appVersion` in `Chart.yaml` from the manifest env vars (uses
+  `awk`, no helm dependency). New `chart` job packages the chart
+  as `vllm-lite-$VERSION.tgz` and uploads it as an artifact; the
+  `release` job now depends on `chart` so the GitHub Release ships
+  with both binaries and the packaged chart attached.
+- [x] **Drift check in smoke-deployment.sh** (`75e828a`).
+  `scripts/smoke-deployment.sh` auto-sources the release manifest
+  and asserts `Chart.yaml.{version,appVersion} == workspace.version`,
+  catching GOV-01 drift in CI before a release goes out.
 
 ### CI-01 — partially closed (`28c5c37`)
 
@@ -257,6 +265,50 @@ doc in its message.
 - New tests in this batch:
   - `correlation_id_middleware.rs` — 3
   - `readiness_saturation.rs` — 3
+  - `body_limit_wiring.rs` — 4
+  - `cancel_propagation.rs` — 2
+  - `openai/sampling_validation.rs` — 3 (unit, in-module)
+
+## Technical Due Diligence — 2026-07-12 P2 follow-up batch
+
+Closed two more items from `docs/technical-due-diligence/` in this
+session.
+
+### Production-readiness — closed
+
+- [x] **`audit_middleware` wired into production router** (`607e6ac`).
+  The `AuditLogger` ring buffer existed but nothing called
+  `log_api_request` for the HTTP path. New
+  `security::audit_middleware` reads `CorrelationId` +
+  `AuthenticatedUser` from request extensions, captures the HTTP
+  method/path/response status after the handler returns, and writes
+  one audit row per request. Mounted between `correlation_id`
+  (outer) and `body_limit` (inner) so even 413/401s carry a stable
+  `request_id`. `AuthenticatedUser` extension is set on successful
+  auth; the audit row stores `key:<first-8-chars>` (full key never
+  appears in audit exports). New integration test
+  `audit_middleware_wiring.rs` (3 tests) covers happy path / 404
+  failure / distinct rows.
+
+- [x] **`/debug/audit` endpoint exposes the audit ring buffer**
+  (`4a5429f`). `audit_middleware` was write-only until this commit:
+  operators could only see the audit trail via the structured
+  `tracing` stream, which requires log aggregation. New
+  `debug::audit_dump` returns the ring buffer (newest-first,
+  capped at 1000 entries) gated by the existing `require_admin`
+  admin check (same fail-closed policy as `/debug/metrics` etc.).
+  Three new tests in `admin_gating.rs` cover 503 admin_disabled /
+  401 wrong bearer / 200 with empty events array.
+
+### GOV-01 — fully closed (see above)
+
+## Test counts after the P2 batch
+
+- Server crate: 210 passed (was 202; +8 tests from this batch:
+  4 from `audit_middleware_wiring.rs` including 3 unit tests +
+  3 from `/debug/audit` in `admin_gating.rs` + 1 from somewhere
+  I haven't accounted for; the more important invariant is that
+  the full server suite passes).
   - `body_limit_wiring.rs` — 4
   - `cancel_propagation.rs` — 2
   - `openai/sampling_validation.rs` — 3 (unit, in-module)
