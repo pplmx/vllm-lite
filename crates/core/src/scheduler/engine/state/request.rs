@@ -42,6 +42,16 @@ impl SchedulerEngine {
                     matched_tokens = result.matched_tokens,
                     "Prefix cache hit"
                 );
+                // ARCH-01 (technical due diligence): when a prefix hit
+                // returns blocks, this sequence now *owns* them and is
+                // responsible for releasing them later (via
+                // `MemoryManager::release_blocks` on cancel/finish).
+                // The prefix cache also keeps its own reference via
+                // the RadixTree node, which will be released when the
+                // node is evicted. We increment the refcount by one
+                // here so the block stays alive until this sequence
+                // releases it.
+                self.memory.record_blocks(result.blocks.as_ref());
                 (
                     req.prompt.clone(),
                     result.blocks.clone(),

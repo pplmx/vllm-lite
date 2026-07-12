@@ -155,16 +155,48 @@ impl EvictionPolicy {
         self.invalidate_cache();
     }
 
-    pub fn release_blocks(&mut self, blocks: &[BlockId]) {
+    /// Decrement the refcount for every block in `blocks` and return
+    /// the subset that just reached zero — i.e., the blocks that are
+    /// now safe for the allocator to free.
+    ///
+    /// ARCH-01 (technical due diligence): the previous implementation
+    /// returned `()` and the caller had no way to know which blocks
+    /// could be freed. That forced the caller (MemoryManager) to free
+    /// every released block unconditionally, which corrupted shared
+    /// prefix-cache entries: if sequence A finishes and inserts its
+    /// blocks into the prefix cache, the very next sequence reusing
+    /// those blocks got back freed memory.
+    ///
+    /// The new contract is:
+    ///   - Every `record_blocks` MUST be paired with exactly one
+    ///     `release_blocks`. (Refcount > 0 keeps a block alive.)
+    ///   - Returned blocks MUST be passed to the allocator's
+    ///     `free()`. (Refcount 0 means no live owner.)
+    ///   - Blocks whose refcount is already 0 (drift / double
+    ///     release) are reported back too — better to free the
+    ///     block than to leak it indefinitely.
+    ///
+    /// `saturating_sub(1)` is preserved for the refcount path so a
+    /// pathological extra release doesn't underflow into a wrap-
+    /// around refcount explosion.
+    pub fn release_blocks(&mut self, blocks: &[BlockId]) -> Vec<BlockId> {
+        let mut freed = Vec::new();
         for &block in blocks {
-            if let Some(count) = self.block_ref_count.get_mut(&block) {
-                *count = count.saturating_sub(1);
-                if *count == 0 {
-                    self.block_ref_count.remove(&block);
+            let decremented_to_zero = match self.block_ref_count.get_mut(&block) {
+                Some(count) => {
+                    *count = count.saturating_sub(1);
+                    *count == 0
                 }
+                None => true, // Already at 0 (or never recorded); still safe to free.
+            };
+            if decremented_to_zero {
+                self.block_ref_count.remove(&block);
+                self.block_access_order.retain(|&b| b != block);
+                freed.push(block);
             }
         }
         self.invalidate_cache();
+        freed
     }
 
     pub fn touch_blocks(&mut self, blocks: &[BlockId]) {

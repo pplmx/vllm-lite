@@ -77,6 +77,17 @@ impl SchedulerEngine {
                 let blocks_needed = seq.tokens.len().div_ceil(vllm_traits::BLOCK_SIZE);
                 while seq.kv_blocks.len() < blocks_needed {
                     if let Some(new_blocks) = self.memory.allocate(1) {
+                        // ARCH-01 (technical due diligence): record the
+                        // freshly allocated blocks so the refcount
+                        // matches the number of live owners (this
+                        // sequence = 1). Without this, a subsequent
+                        // `release_blocks` from this sequence would
+                        // not actually return the block to the
+                        // allocator's free list — and worse, if the
+                        // prefix cache ever stored it, the block
+                        // would be freed underneath the cache.
+                        self.memory.record_blocks(&new_blocks);
+
                         #[cfg(feature = "multi-node")]
                         {
                             // Feed tokens for each newly-allocated block
@@ -110,9 +121,16 @@ impl SchedulerEngine {
                 // Check completion
                 if seq.tokens.len() >= seq.max_tokens {
                     seq.status = Status::Finished;
-                    // Add to prefix cache
+                    // Add to prefix cache. ARCH-01: the prefix cache
+                    // now takes a reference to these blocks, so we
+                    // bump the refcount before the sequence releases
+                    // its own reference in the loop below. After this
+                    // insert the refcount is 2 (sequence + cache); the
+                    // subsequent release drops it to 1 (cache only),
+                    // keeping the block alive for the next prefix hit.
                     let prompt_tokens = &seq.tokens[..seq.prompt_len];
                     let blocks: Vec<BlockId> = seq.kv_blocks.as_ref().clone();
+                    self.memory.record_blocks(&blocks);
                     self.prefix_cache.insert(prompt_tokens, blocks);
                 }
             }
