@@ -36,7 +36,14 @@ This Code of Conduct applies within all community spaces, and also applies when 
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement at [INSERT CONTACT EMAIL].
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement through any of these channels:
+
+- **GitHub Security Advisory** (preferred for sensitive reports):
+  <https://github.com/pplmx/vllm-lite/security/advisories/new>
+- **Maintainer email** (see [`MAINTAINERS.md`](./MAINTAINERS.md) for the
+  current address; the file is updated whenever ownership rotates)
+- **GitHub Discussions** for non-sensitive community concerns:
+  <https://github.com/pplmx/vllm-lite/discussions>
 
 All complaints will be reviewed and investigated promptly and fairly.
 

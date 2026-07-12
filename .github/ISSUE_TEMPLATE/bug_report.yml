@@ -36,7 +36,7 @@ body:
       placeholder: |
         1. `cargo build --release`
         2. `cargo run -p vllm-server`
-        3. `curl -X POST http://localhost:8080/v1/chat/completions -d '{...}'`
+        3. `curl -X POST http://localhost:8000/v1/chat/completions -d '{...}'`
     validations:
       required: true
 

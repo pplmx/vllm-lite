@@ -69,14 +69,20 @@ cd vllm-lite
 # 构建
 cargo build --workspace
 
-# 启动服务 (默认模型: Qwen2.5-0.5B-Instruct)
-cargo run -p vllm-server
+# 启动服务 — 你必须先准备一个本地模型目录（含 tokenizer.json 和权重），
+# 然后通过 --model 或 VLLM_MODEL 指向它。vLLM-lite 不会自动下载模型。
+# 例：使用 Qwen2.5-0.5B-Instruct（自行从 Hugging Face 下载到 ./models/qwen2.5-0.5b）
+cargo run -p vllm-server -- --model ./models/qwen2.5-0.5b
 
 # 测试请求
 curl -X POST http://localhost:8000/v1/completions \
   -H "Content-Type: application/json" \
   -d '{"prompt": "Hello, how are you?", "max_tokens": 50}'
 ```
+
+> ⚠️ **诚实声明**：CLI 要求显式 `--model <PATH>`（或 `VLLM_MODEL`），
+> 启动时不会下载权重。如果某个示例/教程声称无参启动或自动下载，
+> 那就是 bug，请报告给我们。
 
 ### 开发命令
 
@@ -117,9 +123,10 @@ cargo fmt --all --check
 ### 🎯 一行命令启动
 
 ```bash
-# 克隆并启动
+# 克隆 + 构建 + 启动（需要本地已有模型目录；参见上面的快速开始）
 git clone https://github.com/pplmx/vllm-lite.git && cd vllm-lite
-cargo run -p vllm-server
+cargo build --workspace
+cargo run -p vllm-server -- --model ./models/qwen2.5-0.5b
 ```
 
 ### 📝 测试请求
@@ -134,7 +141,8 @@ curl -X POST http://localhost:8000/v1/completions \
   }' | jq .
 ```
 
-> 💡 **提示**: 默认使用 Qwen2.5-0.5B-Instruct 模型，首次运行会自动下载
+> 💡 **提示**: 需要先自行准备模型目录（含 `tokenizer.json` 与权重），
+> 并通过 `--model` 或 `VLLM_MODEL` 指向。vLLM-lite 不会自动下载。
 
 > 📘 **新手教程**: 第一次接触 vllm-lite？请按顺序阅读 [教程 1: 环境搭建与构建](./docs/tutorial/01-setup.md) 到 [教程 5: 生产部署](./docs/tutorial/05-production.md)。
 
@@ -146,12 +154,19 @@ curl -X POST http://localhost:8000/v1/completions \
 
 ### 🚀 核心推理优化
 
-| 特性                    | 说明                           | 性能提升       |
-| ----------------------- | ------------------------------ | -------------- |
-| **Paged Attention**     | 分页 KV Cache，减少内存碎片    | 内存效率 ↑ 40% |
-| **Continuous Batching** | 动态批处理，GPU 利用率最大化   | 吞吐量 ↑ 35%   |
-| **Prefix Caching**      | Radix Tree 前缀缓存，O(k) 查找 | TTFT ↓ 60%     |
-| **Flash Attention**     | 动态 Tile 大小 (64/128/256)    | 计算速度 ↑ 2x  |
+> ⚠️ **诚实声明**：下表的百分比来自历史/受控基准，**不是当前实现的
+> 持续回归值**。当前批次调度仍是逐序列 `forward`（见
+> `docs/technical-due-diligence/architecture-performance.md` 的
+> PERF-01）；真实数字应由 release 阶段的稳定基准产生并写入
+> `docs/perf/`。我们保留这些目标数字作为长期方向，但请勿作为当下
+> 部署选型的依据。
+
+| 特性                    | 说明                           | 目标性能（受控基准，非当前实测） |
+| ----------------------- | ------------------------------ | --------------------------------- |
+| **Paged Attention**     | 分页 KV Cache，减少内存碎片    | 内存效率 ↑ 40%（目标）            |
+| **Continuous Batching** | 动态批处理，GPU 利用率最大化   | 吞吐量 ↑ 35%（目标）              |
+| **Prefix Caching**      | Radix Tree 前缀缓存，O(k) 查找 | TTFT ↓ 60%（目标）                |
+| **Flash Attention**     | 动态 Tile 大小 (64/128/256)    | 计算速度 ↑ 2x（目标）             |
 
 ### 🎯 高级调度策略
 
@@ -175,8 +190,8 @@ curl -X POST http://localhost:8000/v1/completions \
 │  └── Structured Logs │                                        │
 ├─────────────────────────────────────────────────────────────┤
 │  🐳 Deployment         │  ✅ Testing                            │
-│  ├── Dockerfile        │  ├── 1235+ unit/integration tests    │
-│  ├── docker-compose    │  ├── 51 integration test files         │
+│  ├── Dockerfile        │  ├── \`just nextest\` 输出当前测试数 │
+│  ├── docker-compose    │  ├── 集成测试覆盖 OpenAI 路由         │
 │  ├── K8s Manifests     │  ├── Fuzz + Mutation + Proptest      │
 │  └── HPA               │  └── Criterion benchmarks              │
 └─────────────────────────────────────────────────────────────┘
@@ -229,16 +244,21 @@ cargo run -p vllm-server -- --log-dir ./logs
 
 ## 📊 性能指标
 
+> ⚠️ **诚实声明**：吞吐量 / TTFT / P99 / 显存效率的数字来自历史内部
+> 测量，**当前实现尚未接入持续 GPU 基准**（CI-01 仍 deferred）。
+> 真实数字应以 `docs/perf/` 下的 release 阶段基准产物为准。本节保留
+> 数字仅为长期目标参考；不要将其作为当前部署的吞吐/延迟承诺。
+
 <div align="center">
 
-| 指标                     | 数值           | 说明                   |
-| ------------------------ | -------------- | ---------------------- |
-| **吞吐量**               | ~2000 tokens/s | Qwen2.5-0.5B, A100 GPU |
-| **首 Token 延迟 (TTFT)** | < 50ms         | 1K token prompt        |
-| **P99 延迟**             | < 100ms        | end-to-end             |
-| **显存效率**             | +40%           | vs 传统 KV Cache       |
-| **测试数**               | 1235+          | 默认 `just nextest`（跳过 `#[ignore]`） |
-| **Checkpoint 测试**      | 25+            | `just nextest-checkpoint`（需模型权重） |
+| 指标                     | 数值（目标，非当前实测） | 说明                              |
+| ------------------------ | ------------------------ | --------------------------------- |
+| **吞吐量**               | ~2000 tokens/s（目标）   | Qwen2.5-0.5B, A100 GPU（参考）    |
+| **首 Token 延迟 (TTFT)** | < 50ms（目标）           | 1K token prompt（参考）           |
+| **P99 延迟**             | < 100ms（目标）          | end-to-end（参考）                |
+| **显存效率**             | +40%（目标）             | vs 传统 KV Cache（参考）          |
+| **测试数**               | `just nextest`           | 跑一次即得当前数；不要硬编码到文档 |
+| **Checkpoint 测试**      | `just nextest-checkpoint`| 需模型权重，默认 ignored          |
 
 </div>
 
