@@ -1,20 +1,76 @@
 name: Benchmarks
 
-# Benchmark sources are not yet wired in the workspace; run manually when restored.
+# Runs the workspace Criterion benchmarks on every push to main
+# and on manual dispatch. Results are uploaded as artifacts so
+# they can be inspected over time (engineering-quality.md §5:
+# "Benchmarks run in CI" was a placeholder until this commit).
+#
+# Performance *regression* detection (comparing PR against main,
+# failing CI on >N% drift) is intentionally out of scope here —
+# Criterion benchmarks on CI runners have too much hardware
+# noise to gate PRs on absolute numbers. This workflow gives
+# operators a place to look at the latest numbers; the
+# performance-regression.yml workflow handles the comparison
+# story when it's ready.
+
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   benchmark:
+    name: Criterion Benchmarks (${{ matrix.crate }})
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        crate: [vllm-core, vllm-model]
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: "."
+
       - name: Run benchmarks
         run: |
-          echo "No benchmark targets are configured in this workspace."
-          echo "Re-enable this workflow after restoring crates/benches or core/benches sources."
-          exit 0
+          # `--workspace --all-features` to match `just nextest`.
+          # Criterion benchmarks write a per-bench baseline file
+          # under target/criterion/ that `cargo bench -- --save-baseline`
+          # would persist; we don't pin baselines here because
+          # runner-to-runner drift makes the comparison
+          # meaningless. Numbers are still useful for inspection
+          # (see artifact upload below).
+          cargo bench \
+            -p "${{ matrix.crate }}" \
+            --all-features \
+            --no-fail-fast \
+            -- \
+            --output-format bencher \
+            --warm-up-time 2 \
+            --measurement-time 5 \
+            2>&1 | tee bench-output.txt
+
+      - name: Upload benchmark output
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-${{ matrix.crate }}-${{ github.run_id }}
+          path: bench-output.txt
+
+      - name: Upload criterion data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-${{ matrix.crate }}-${{ github.run_id }}
+          path: target/criterion/
+          retention-days: 14
