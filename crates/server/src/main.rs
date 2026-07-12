@@ -97,6 +97,16 @@ async fn main() -> Result<()> {
     let (msg_tx, msg_rx) = mpsc::channel::<EngineMessage>(mailbox_capacity);
     let engine_shutdown_tx = msg_tx.clone();
 
+    // OBS-01 (technical due diligence): wire the HTTP `/metrics` exporter to
+    // the *engine's* metrics collector, not a freshly constructed duplicate.
+    // Previously we created a separate `EnhancedMetricsCollector` here which
+    // meant the Prometheus exporter read zero values while the engine kept
+    // its real counters internally — `/metrics` showed an idle system while
+    // `/health/details` showed the live counters. Cloning the engine's Arc
+    // (before the engine is moved into the worker thread below) gives both
+    // surfaces the same source of truth.
+    let metrics_collector = engine.scheduler.metrics.clone();
+
     std::thread::spawn(move || {
         engine.run(msg_rx);
     });
@@ -114,9 +124,8 @@ async fn main() -> Result<()> {
         )))
     };
 
-    // Initialize health checker and metrics collector
+    // Initialize health checker
     let health_checker = Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true)));
-    let metrics_collector = Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new());
 
     let architecture = loader.architecture();
 
