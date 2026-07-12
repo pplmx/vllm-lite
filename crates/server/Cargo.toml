@@ -28,7 +28,7 @@ tower-http = { workspace = true, features = ["limit"] }
 futures = "0.3"
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde-saphyr = "0.0.28"
+serde-saphyr = "0.0.29"
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["json"] }
 tracing-appender = "0.2"
