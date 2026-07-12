@@ -38,6 +38,13 @@ pub mod security;
 /// Shared HTTP and serialization utilities.
 pub mod util;
 
+/// HTTP handlers for liveness/readiness/metrics probes.
+///
+/// Extracted from `main.rs` so integration tests can mount the
+/// routes against a real `axum::Router` with a controlled
+/// `ApiState` and assert mailbox-saturation behaviour.
+pub mod health_handlers;
+
 /// Hidden test helpers for unit/integration tests.
 #[doc(hidden)]
 pub mod test_fixtures;

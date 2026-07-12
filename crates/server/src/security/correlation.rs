@@ -1,12 +1,19 @@
 //! Request correlation: assign a unique `X-Request-ID` header to every incoming request and propagate it into logs + audit events.
 //!
-//! If the client supplied a `X-Request-ID` header we honour it (after
-//! validating the format); otherwise we mint a fresh `UUIDv4`. The ID is
-//! added to the response headers and threaded through `tracing` spans.
-#![allow(clippy::module_name_repetitions, dead_code)]
+//! If the client supplied an `X-Request-ID` header we honour it (after
+//! validating the format); otherwise we mint a fresh
+//! `<unix-nanos-hex>-<process-counter-hex>` id. The id is added to
+//! the response headers and threaded through `tracing` info-span.
+//!
+//! The id generator uses a synchronous `AtomicU64` counter rather
+//! than `tokio::sync::RwLock` because the middleware itself runs
+//! inside the tokio runtime — the previous async-counter
+//! implementation deadlocked on `Handle::current().block_on()` when
+//! minted a fallback id (production-readiness recommendation 6).
+#![allow(clippy::module_name_repetitions)]
 use axum::{extract::Request, http::HeaderValue, middleware::Next, response::Response};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tracing::info;
 
 /// `REQUEST_ID_HEADER`. See the type definition for fields and behavior.
@@ -14,44 +21,39 @@ pub(crate) const REQUEST_ID_HEADER: &str = "X-Request-ID";
 
 /// Opaque newtype identifier for a correlation. Hashable, comparable, serializable; use this rather than the raw integer.
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // reserved for typed APIs that thread the id through layers
 pub(crate) struct CorrelationId(pub String);
 
 /// `CorrelationIdMiddleware`. See the type definition for fields and behavior.
 #[derive(Debug, Clone)]
 pub struct CorrelationIdMiddleware {
-    id_generator: Arc<RwLock<u64>>,
+    counter: Arc<AtomicU64>,
 }
 
 impl CorrelationIdMiddleware {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            id_generator: Arc::new(RwLock::new(0)),
+            counter: Arc::new(AtomicU64::new(0)),
         }
     }
 
-    /// Run the operation (see signature for params and return type).
-    /// # Panics
-    ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
-    pub async fn generate_id(&self) -> String {
-        let mut counter = self.id_generator.write().await;
-        *counter += 1;
-        let id = format!(
-            "{:x}-{:x}",
-            // invariant: monotonic clock is always >= UNIX_EPOCH.
-            u64::try_from(
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    // invariant: pre-conditions make this infallible at this call site.
-                    .unwrap()
-                    .as_nanos(),
-            )
-            .unwrap_or(0),
-            *counter
-        );
-        drop(counter);
-        id
+    /// Synchronous id generator — safe to call from inside an
+    /// existing tokio task. Format:
+    /// `<unix-nanos-hex>-<process-counter-hex>`. The counter
+    /// disambiguates ids minted in the same nanosecond (common when
+    /// a burst of requests arrives concurrently).
+    #[must_use]
+    pub fn generate_id(&self) -> String {
+        let counter = self.counter.fetch_add(1, Ordering::Relaxed);
+        let nanos = u64::try_from(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0),
+        )
+        .unwrap_or(0);
+        format!("{nanos:x}-{counter:x}")
     }
 
     #[must_use]
@@ -69,11 +71,15 @@ impl Default for CorrelationIdMiddleware {
     }
 }
 
+/// Axum middleware: ensure every request carries an `X-Request-ID`
+/// header (forwarding the client's value if present and well-formed,
+/// minting a fresh id otherwise), echo it on the response, and log
+/// the request lifecycle with the id attached.
 pub async fn correlation_id_middleware(request: Request, next: Next) -> Response {
     let middleware = CorrelationIdMiddleware::new();
 
     let request_id = CorrelationIdMiddleware::extract_id(request.headers())
-        .unwrap_or_else(|| tokio::runtime::Handle::current().block_on(middleware.generate_id()));
+        .unwrap_or_else(|| middleware.generate_id());
 
     info!(
         request_id = %request_id,
@@ -88,7 +94,14 @@ pub async fn correlation_id_middleware(request: Request, next: Next) -> Response
         HeaderValue::from_str(&request_id).unwrap_or_else(|_| HeaderValue::from_static("unknown")),
     );
 
-    let response = next.run(request).await;
+    let mut response = next.run(request).await;
+
+    // Echo the id on the response so the client (or an upstream
+    // gateway) can correlate logs without inspecting internal
+    // tracing spans.
+    if let Ok(value) = HeaderValue::from_str(&request_id) {
+        response.headers_mut().insert(REQUEST_ID_HEADER, value);
+    }
 
     info!(request_id = %request_id, "Request completed");
 

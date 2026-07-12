@@ -65,6 +65,42 @@ jobs:
           cargo install cargo-audit --locked
           cargo audit --ignore RUSTSEC-2024-0436 --deny warnings
 
+  # CI-01 (technical due diligence): `--all-features` parity with
+  # `just ci`. The default `ci` job above uses default features only
+  # (because GitHub runners have no GPU), but `just ci` exercises
+  # `--all-features`. Without this job, PRs can pass CI green and break
+  # the `multi-node` / `cuda-graph` / `gguf` feature combos locally.
+  # Build-only — no test execution — to keep wall-clock low.
+  ci-all-features:
+    name: CI (all-features build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo (Swatinem rust-cache — separate key from default job)
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: "."
+          shared-key: "all-features"
+
+      - name: Clippy (all features)
+        # Mirrors `just clippy` exactly so a PR that breaks the
+        # `--all-features` build (which `just ci` catches locally) is
+        # blocked here too. Build-only: clippy's deny-tier lints only
+        # fire on `cargo check`, no need to run tests.
+        run: |
+          cargo clippy --all-targets --workspace --all-features -- \
+            -D clippy::correctness \
+            -D clippy::suspicious \
+            -D clippy::perf
+
+      - name: Doc check (all features)
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --workspace --all-features
+
   matrix-test:
     name: Matrix Test (${{ matrix.rust }})
     runs-on: ubuntu-latest
