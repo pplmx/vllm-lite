@@ -28,10 +28,10 @@ serde_json = "1"
 metrics = "0.24"
 metrics-exporter-prometheus = "0.18"
 metrics-util = "0.20"
-opentelemetry = "0.32"
-opentelemetry-otlp = "0.32"
-opentelemetry_sdk = "0.32"
-tracing-opentelemetry = "0.33"
+# NOTE: OpenTelemetry deps were removed in v30.0 Phase 12a
+# (see CHANGELOG.md §Dead Dependency Cleanup). The feature gates
+# they were behind were no-ops; adding real OTel export is a
+# v32+ item per docs/technical-due-diligence/roadmap.md §3.
 dashmap = "6.2"
 tonic = "0.14"
 tonic-prost = "0.14"

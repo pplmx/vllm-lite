@@ -5,7 +5,9 @@ working build.
 
 ## Prerequisites
 
-- **Rust 1.85+** (we use edition 2024). Install via [rustup](https://rustup.rs/):
+- **Rust 1.88+** (we use edition 2024 — matches `rust-version` in
+  the root `Cargo.toml` and the `rust-toolchain.toml` pinned by the
+  repo). Install via [rustup](https://rustup.rs/):
   ```bash
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
   ```
@@ -35,7 +37,9 @@ just nextest
 cargo test --workspace --no-fail-fast
 ```
 
-Expected: ~1200+ tests pass, 0 failures.
+Expected: all tests pass, 0 failures. The exact count changes
+every batch — run `just nextest` for the current number; don't
+trust hard-coded numbers in older docs.
 
 ## Install Just (Task Runner)
 

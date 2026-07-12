@@ -7,8 +7,9 @@ This tutorial walks through loading a test model with `ModelLoader`.
 For testing, we use small synthetic checkpoints rather than real LLMs
 (downloading 7B models just to verify the loader isn't practical).
 
-The `crates/server/tests/checkpoint_loading_tests.rs` integration test
-shows the canonical pattern. Here's a minimal reproducer:
+The `crates/model/tests/checkpoint_loading_tests.rs` integration test
+(installed under `just nextest-checkpoint`) shows the canonical
+pattern. Here's a minimal reproducer:
 
 ```rust,no_run
 use candle_core::Device;
