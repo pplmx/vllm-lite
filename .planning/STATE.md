@@ -3,8 +3,13 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Perfection & Elegance
 status: in_progress
-last_updated: "2026-07-12T15:30:00.000Z"
-last_activity: 2026-07-12 — Technical due diligence P0 batch complete (ARCH-01, API-01, ARCH-02)
+last_updated: "2026-07-12T18:30:00.000Z"
+last_activity: 2026-07-12 — Technical due diligence P1 follow-up batch:
+cancel propagation, graceful shutdown thread join, body-limit
+wiring, correlation_id + readiness-saturation + sampling-validation,
+governance (CoC / SECURITY / MAINTAINERS / templates), README
+honesty pass, GOV-01 release manifest, CI-01 all-features parity,
+Dependabot config.
 progress:
   total_phases: 6
   completed_phases: 0
@@ -22,10 +27,15 @@ progress:
 Phase: v31.0 Phase D (Multi-Node)
 Plan: `.planning/v31.0-MASTER-PLAN.md`
 Status: v30 shipped (CHANGELOG authoritative); v31 in progress
-Last activity: 2026-07-12 — Technical due diligence P0 batch:
-ARCH-01 (`4a2eaed`), API-01 (`5f232b9`), ARCH-02 (pending commit)
-all closed. ARCH-02 closes the seam where the HTTP layer accepted
-sampling parameters but the model layer always chose argmax.
+Last activity: 2026-07-12 — Technical due diligence P1 follow-up
+batch closed 12 more items (see "Technical Due Diligence — 2026-07-12
+P1 follow-up batch" below). Highlights: client-disconnect →
+CancelRequest propagation, graceful shutdown engine-thread join,
+body-limit wiring, correlation_id + readiness-saturation +
+sampling-validation mounted, governance (CoC / SECURITY /
+MAINTAINERS / templates), README honesty pass, GOV-01 release
+manifest, CI-01 all-features parity, Dependabot config.
+Test count: 1307 → 1382 (+75 tests).
 
 ## v30 Outcomes (shipped per CHANGELOG)
 
@@ -116,5 +126,139 @@ doc reference in its commit message.
 - **GOV-01** (version unification) — workspace version, image
   tag, Helm appVersion, and CHANGELOG all need to derive from a
   single release manifest.
+
+## Technical Due Diligence — 2026-07-12 P1 follow-up batch
+
+Closed six more items from `docs/technical-due-diligence/` in one
+session. Each commit is self-contained and references the ID +
+doc in its message.
+
+### Production-readiness — closed
+
+- [x] **Recommendation #6 — correlation_id wired into router**
+  (`28c5c37`). `main.rs` now mounts `from_fn(correlation_id_middleware)`
+  as the OUTERMOST layer. `correlation.rs` swaps the async tokio
+  `RwLock` counter (which deadlocked when minted a fallback id from
+  inside an existing tokio task) for a synchronous `AtomicU64`.
+  New integration test `correlation_id_middleware.rs` covers
+  missing/forwarded/distinct-id invariants on a real axum router.
+
+- [x] **Recommendation #7 — readiness reflects mailbox
+  saturation** (`28c5c37`). `ready_handler` no longer returns
+  the static `HealthChecker` flag alone; it OR's that with a
+  live mailbox-fill ratio (`max_capacity() - capacity()`). Above
+  90 % the probe flips to `NotReady` (HTTP 503) so K8s stops
+  routing new traffic to a saturated pod. New integration test
+  `readiness_saturation.rs` covers empty / drained / saturated
+  invariants.
+
+- [x] **Sampling-validation defensive boundary** (`28c5c37`).
+  New `openai::sampling_validation` rejects `beam_width > 1`
+  with 400 `invalid_request_error` before enqueuing. chat +
+  completions handlers call it before the engine `try_send`.
+
+- [x] **REL-01 follow-up — client disconnect → CancelRequest**
+  (`b6a70cf`). `EngineMessage` gains `CancelRequest { seq_id }`
+  and `AddRequest` gains `seq_id_tx: Option<oneshot::Sender<SeqId>>`.
+  New `chat::CancelOnDrop` guard (Arc-wrapped in the SSE state)
+  sends `CancelRequest` when axum drops the response body
+  mid-stream, freeing the engine's KV blocks. New integration
+  test `cancel_propagation.rs` proves the guard fires on
+  disconnect AND disarms on natural completion.
+
+- [x] **Graceful shutdown — engine thread join** (`8276765`).
+  Previously the engine worker thread was `std::thread::spawn`
+  with the `JoinHandle` discarded; the process exited before the
+  worker finished its step, which can leave poisoned locks and
+  leaks KV blocks. Now: thread is named (`vllm-engine`), the
+  JoinHandle is captured and waited on (10 s timeout) after the
+  HTTP server stops, and `drain_ms` is logged on clean exit.
+
+### Governance — closed
+
+- [x] **CODE_OF_CONDUCT contact placeholder** (`d00cbd1`).
+  `[INSERT CONTACT EMAIL]` → three real channels (GitHub
+  Security Advisory, maintainer email via MAINTAINERS.md,
+  GitHub Discussions).
+
+- [x] **SECURITY.md private-advisory channel** (`d00cbd1`).
+  GitHub Security Advisory now the explicit primary channel
+  with a deep-link to the new-advisory form; cross-reference
+  to MAINTAINERS.md.
+
+- [x] **MAINTAINERS.md created** (`d00cbd1`). Single source of
+  truth for ownership, review SLO, and the path to becoming a
+  maintainer. Email deliberately NOT hard-coded.
+
+- [x] **Issue + PR template port fix** (`d00cbd1`). Port
+  `8080` → `8000` in both templates (8080 is wrong and was
+  misleading submitters).
+
+- [x] **README quickstart honesty** (`d00cbd1`). Removed the
+  false "no-args starts default model" and "auto-download on
+  first run" claims; added an honest disclaimer that `--model`
+  is required and vLLM-lite does not auto-download.
+
+- [x] **README performance claims honesty** (`d00cbd1`). The
+  `~2000 tokens/s`, `TTFT < 50ms`, `P99 < 100ms`, `+40% memory`,
+  `+35% throughput`, `-60% TTFT`, `2x speed` rows are now
+  marked "目标 / historical, NOT current measured values" with
+  a pointer to the due-diligence document explaining why.
+
+- [x] **README test count honesty** (`d00cbd1`). Hard-coded
+  `1235+` → `just nextest` pointer so the doc can't drift from
+  reality.
+
+### Body-limit wiring — closed
+
+- [x] **Production-readiness input boundary — body limit wired
+  into router** (`d00cbd1`). `main.rs` mounts
+  `with_default_body_limit` (1 MiB default) below
+  `correlation_id` (so 413 still carries `X-Request-ID`) and
+  above auth (so unauthenticated clients can't waste memory on
+  oversized bodies). New integration test
+  `body_limit_wiring.rs` covers < limit OK / > limit 413 /
+  rejected-body-still-carries-request-id.
+
+### GOV-01 — partially closed (`28c5c37`)
+
+- [x] Release manifest script (`scripts/release-manifest.sh`)
+  reads `[workspace.package].version` and emits shell-sourceable
+  env vars. `--validate TAG` exits non-zero on mismatch.
+- [x] `release.yml` consumes the manifest (no more re-deriving
+  from `GITHUB_REF_NAME`).
+- [x] Dockerfile + Chart.yaml thread the same version through
+  via build args / packaging-time overrides.
+- [x] `docs/RELEASE.md` explains the single-source-of-truth
+  flow.
+- [ ] Helm `Chart.yaml` still has placeholder `version`/`appVersion`
+  that need release-time overrides (manifest emits the right
+  values; chart release still TBD).
+
+### CI-01 — partially closed (`28c5c37`)
+
+- [x] New ci.yml job `ci-all-features` mirrors `just clippy`
+  exactly (`--all-features`). Default-features CI no longer
+  hides `--all-features` regressions.
+- [ ] Sustained GPU / real-checkpoint CI still deferred (no GPU
+  runner available).
+
+### Dependabot (`87134d0`)
+
+- [x] `.github/dependabot.yml` adds weekly Cargo + GitHub-Actions
+  bumps, grouped minor/patch so a quiet week doesn't generate
+  five PRs for the same family. Ignores major bumps for
+  candle-core + candle-kernels (manual work — see SECURITY.md).
+
+## Test counts after this iteration
+
+- Workspace total: 1382 passed, 40 ignored (`just nextest`).
+- Server crate: 202 passed.
+- New tests in this batch:
+  - `correlation_id_middleware.rs` — 3
+  - `readiness_saturation.rs` — 3
+  - `body_limit_wiring.rs` — 4
+  - `cancel_propagation.rs` — 2
+  - `openai/sampling_validation.rs` — 3 (unit, in-module)
 
 

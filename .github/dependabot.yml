@@ -1,0 +1,63 @@
+# Dependabot configuration for vLLM-lite.
+#
+# Technical-due-diligence governance recommendation: the project
+# previously had no Dependabot/Renovate config; security updates
+# were caught only by the periodic `cargo audit` run documented in
+# `SECURITY.md`. Dependabot gives us per-PR automated version bumps
+# for Cargo + GitHub Actions, which surfaces security patches as
+# ordinary code review rather than surprise upgrades.
+#
+# Strategy:
+# - Weekly cadence for both ecosystems (Cargo + GH Actions). Daily
+#   is too noisy; monthly misses short-window advisories.
+# - Group minor + patch updates so a quiet week doesn't generate
+#   five PRs for the same crate family.
+# - Major-version updates stay separate so they get a human eye.
+# - Limit open PRs to 10 to avoid a stale backlog during heavy
+#   development.
+# - Ignore major bumps for crates known to require manual work
+#   (candle-core still depends on the `paste` transitive; see
+#   SECURITY.md for the disposition).
+
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    groups:
+      rust-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+        # Group all minor/patch bumps into a single PR so
+        # review doesn't drown in single-line PRs.
+    ignore:
+      # candle-core is the ML backend; major bumps need a
+      # hand-curated test pass against real checkpoints.
+      - dependency-name: "candle-core"
+        update-types: ["version-update:semver-major"]
+      # candle-kernels pins to a candle-core major; ignore
+      # major bumps here too.
+      - dependency-name: "candle-kernels"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    groups:
+      actions-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
