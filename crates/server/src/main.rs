@@ -205,6 +205,21 @@ async fn main() -> Result<()> {
     // operators can trace a request across the whole pipeline.
     app = app.layer(axum::middleware::from_fn(correlation_id_middleware));
 
+    // Production-readiness recommendation (input boundary protection):
+    // cap the inbound JSON body at `DEFAULT_BODY_LIMIT_BYTES` (1 MiB)
+    // before auth/handlers can be reached. This blocks trivial JSON
+    // allocation attacks where a multi-MiB prompt exhausts memory
+    // before any application-level validation runs. Larger limits can
+    // be configured via the `with_body_size_limit` helper if a
+    // deployment legitimately needs them; the default keeps a known
+    // upper bound on memory pressure per request.
+    //
+    // Body limit lives BELOW correlation_id so a 413 response still
+    // carries an `X-Request-ID` header (operators need it to trace
+    // the rejected request), and ABOVE auth so unauthenticated
+    // clients can't waste server memory on oversized bodies either.
+    app = vllm_server::security::size_limit::with_default_body_limit(app);
+
     if let Some(auth) = auth_middleware {
         app = app.layer(axum::middleware::from_fn_with_state(
             auth,

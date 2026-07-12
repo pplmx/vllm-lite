@@ -8,9 +8,19 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability, please open a **GitHub Security Advisory** or contact maintainers directly.
+If you discover a security vulnerability in vLLM-lite, **open a private
+GitHub Security Advisory** — that channel keeps the report confidential
+until a fix ships and credits you in the release notes:
 
-Please include the following information:
+👉 <https://github.com/pplmx/vllm-lite/security/advisories/new>
+
+For non-sensitive issues (typos in this policy, questions about
+supported versions) open a regular GitHub issue instead.
+
+For a list of current maintainers and their areas of responsibility see
+[`MAINTAINERS.md`](./MAINTAINERS.md).
+
+Please include the following information in the advisory:
 
 - Type of vulnerability
 - Full paths of source file(s) related to the vulnerability

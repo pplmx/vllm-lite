@@ -28,7 +28,7 @@ reviewers understand your changes.
 - [ ] `just ci` passes locally
 - [ ] New tests added (if behavior changed)
 - [ ] Existing tests still pass
-- [ ] Manual smoke run: `cargo run -p vllm-server` then `curl localhost:8080/v1/models`
+- [ ] Manual smoke run: `cargo run -p vllm-server -- --model /path/to/model` then `curl localhost:8000/v1/models`
 
 ## Checklist
 
