@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Perfection & Elegance
 status: in_progress
-last_updated: "2026-07-12T14:30:00.000Z"
-last_activity: 2026-07-12 — Technical due diligence P0/P1 batch: ARCH-01 + API-01 committed
+last_updated: "2026-07-12T15:30:00.000Z"
+last_activity: 2026-07-12 — Technical due diligence P0 batch complete (ARCH-01, API-01, ARCH-02)
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 6
-  completed_plans: 3
-  percent: 50
+  completed_plans: 4
+  percent: 67
 ---
 
 # Project State
@@ -22,8 +22,10 @@ progress:
 Phase: v31.0 Phase D (Multi-Node)
 Plan: `.planning/v31.0-MASTER-PLAN.md`
 Status: v30 shipped (CHANGELOG authoritative); v31 in progress
-Last activity: 2026-07-12 — Technical due diligence batch:
-ARCH-01 (`4a2eaed`) + API-01 (`5f232b9`) committed.
+Last activity: 2026-07-12 — Technical due diligence P0 batch:
+ARCH-01 (`4a2eaed`), API-01 (`5f232b9`), ARCH-02 (pending commit)
+all closed. ARCH-02 closes the seam where the HTTP layer accepted
+sampling parameters but the model layer always chose argmax.
 
 ## v30 Outcomes (shipped per CHANGELOG)
 
@@ -42,7 +44,7 @@ ARCH-01 (`4a2eaed`) + API-01 (`5f232b9`) committed.
 
 ## Technical Due Diligence — closed items
 
-Closed six items from `docs/technical-due-diligence/` across two
+Closed seven items from `docs/technical-due-diligence/` across three
 sessions. Each PR is self-contained and carries the issue ID +
 doc reference in its commit message.
 
@@ -80,6 +82,22 @@ doc reference in its commit message.
   `crates/core/tests/prefix_cache_refcount.rs` covers three
   regressions: cache-hit returns same block IDs, outstanding
   refcount prevents free, unrecorded-block release still frees.
+- [x] **ARCH-02** (pending commit) — `SamplingParams` moved from
+  `vllm_core::types` to `vllm_traits::sampling` so the wire-format
+  `Batch` can carry a per-sequence `Vec<SamplingParams>` without a
+  cyclic dependency. `BatchComposer::{decode,prefill,chunked}`
+  populate the field from `Sequence::sampling_params`.
+  `Engine::step_regular` and `engine::graph_step::execute_regular`
+  switched from `model.forward` (greedy internally) to
+  `model.forward_logits` + the new
+  `sampling::sample_batch_with_params`. Repeat penalty uses
+  `seq.tokens[prompt_len..]` as the seen-set so generated tokens
+  are penalised. `StubModel::forward_logits` updated to honour
+  the configured `return_token` so engine tests still observe
+  deterministic tokens. New regression test
+  `crates/core/tests/sampling_params.rs` covers greedy per-seq
+  argmax, explicit `top_k=1`, and `repeat_penalty` flipping the
+  argmax on the second decode step.
 
 ### P1 (closed)
 
@@ -91,11 +109,6 @@ doc reference in its commit message.
 
 ## Deferred Items (v32+)
 
-- **ARCH-02** (sampling params) — still open; requires adding
-  `SamplingParams` to the `Batch` value type and switching
-  `Engine::step_regular` from `model.forward` (greedy
-  internally) to `model.forward_logits` +
-  `core::sampling::sample_batch`. Multi-file refactor.
 - **PERF-01** (continuous batching kernel) — very-high complexity;
   blocked on a stable KernelBackend seam.
 - **CI-01** (GPU/real-weight CI) — needs a runner with a GPU
