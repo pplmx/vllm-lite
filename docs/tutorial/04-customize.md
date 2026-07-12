@@ -62,12 +62,14 @@ Built-in policies: `FcfsPolicy`, `SjfPolicy`, `PriorityPolicy` — see
 
 ## Engine Configuration
 
-Tune batch limits and KV capacity at construction time:
+Tune batch limits and KV capacity at construction time. The
+`Engine::with_config(...)` constructor was retired in v31; use the
+builder's `with_*` methods instead:
 
 ```rust,no_run
-use vllm_core::engine::Engine;
+use vllm_core::EngineBuilder;
 use vllm_core::types::SchedulerConfig;
-use vllm_traits::StubModelBackend;
+use vllm_traits::{StubModelBackend, ModelBackend};
 
 # fn doc() {
 let config = SchedulerConfig::builder()
@@ -75,7 +77,12 @@ let config = SchedulerConfig::builder()
     .with_max_num_batched_tokens(4096)
     .build();
 
-let engine = Engine::with_config(StubModelBackend, None, config, 4, 2048);
+let target: Box<dyn ModelBackend> = Box::new(StubModelBackend);
+let engine = EngineBuilder::new(target)
+    .with_num_kv_blocks(2048)
+    .with_max_draft_tokens(4)
+    .with_config(config)
+    .build();
 # }
 ```
 

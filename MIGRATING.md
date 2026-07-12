@@ -282,8 +282,9 @@ use std::sync::LazyLock;
 static REGISTRY: LazyLock<RwLock<HashMap<String, ...>>> = LazyLock::new(|| ...);
 ```
 
-Rust toolchain requirement remains `stable` (1.85 in practice); no consumer
-toolchain change required.
+Rust toolchain requirement remains `stable` (1.88 in practice — see
+the workspace's `rust-toolchain.toml`); no consumer toolchain
+change required.
 
 ### Engine signature refactor (ARF-06, ARF-07)
 

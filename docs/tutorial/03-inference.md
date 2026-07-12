@@ -22,14 +22,19 @@ do not call `build_batch()` or `model.forward()` directly.
 
 ```rust,no_run
 use tokio::sync::mpsc;
-use vllm_core::engine::Engine;
+use vllm_core::EngineBuilder;
 use vllm_core::types::{EngineMessage, Request};
 use vllm_traits::{StubModelBackend, TokenId};
 
 # fn doc() -> Result<(), Box<dyn std::error::Error>> {
-// 1. Build engine (StubModelBackend needs no checkpoint files)
-let mut engine = Engine::new(StubModelBackend, None::<StubModelBackend>);
-let (msg_tx, msg_rx) = mpsc::unbounded_channel::<EngineMessage>();
+// 1. Build engine via the builder (StubModelBackend needs no
+//    checkpoint files). `Engine::new(...)` was retired in v31 in
+//    favour of the named-method builder pattern.
+let target: Box<dyn vllm_traits::ModelBackend> = Box::new(StubModelBackend);
+let mut engine = EngineBuilder::new(target)
+    .with_num_kv_blocks(1024)
+    .build();
+let (msg_tx, msg_rx) = mpsc::channel::<EngineMessage>(256); // bounded; REL-01
 let (token_tx, mut token_rx) = mpsc::channel::<TokenId>(64);
 
 // 2. Start the engine actor on a worker thread
@@ -65,7 +70,9 @@ Replace `StubModelBackend` with a loaded `Box<dyn ModelBackend>`:
 
 ```rust,no_run
 use candle_core::Device;
+use vllm_core::EngineBuilder;
 use vllm_model::loader::ModelLoader;
+use vllm_traits::ModelBackend;
 
 # fn doc() -> Result<(), Box<dyn std::error::Error>> {
 let model = ModelLoader::builder(Device::Cpu)
@@ -74,7 +81,10 @@ let model = ModelLoader::builder(Device::Cpu)
     .build()?
     .load_model()?;
 
-let mut engine = Engine::new_boxed(model, None);
+let target: Box<dyn ModelBackend> = model;
+let mut engine = EngineBuilder::new(target)
+    .with_num_kv_blocks(1024)
+    .build();
 # Ok(())
 # }
 ```
