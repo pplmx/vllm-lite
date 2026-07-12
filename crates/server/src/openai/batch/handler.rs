@@ -8,64 +8,49 @@ use crate::ApiState;
 use crate::openai::types::ErrorResponse;
 
 /// Create batch.
-/// # Errors
 ///
-/// # Panics
+/// API-01 (technical due diligence): the Batch API surface accepts
+/// requests, validates them, and persists a `BatchJob` in memory —
+/// but the project has no background worker that would advance
+/// `BatchJob` state from `Pending` -> `InProgress` -> `Completed`.
+/// Without a worker, a successful `create_batch` returns `pending`
+/// that never resolves, `get_batch` reports a status that is never
+/// updated, and `get_batch_results` returns an empty array forever.
 ///
-/// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
-/// Returns `Err` if the operation fails.
+/// The honest options are:
+///   1. Return `200 OK` and silently leave the job stuck (current
+///      behaviour — the technical due diligence calls this out as
+///      misleadingly compatible with the OpenAI Batch API).
+///   2. Return `501 Not Implemented` so SDKs and operators see an
+///      explicit, machine-readable "this endpoint exists but the
+///      server does not implement it" signal.
+///   3. Implement the worker (a real tokio task that drains the
+///      job's prompts into the engine and updates state).
+///
+/// We choose (2) for now: the handler still validates the request
+/// shape and returns the missing-piece error code so SDKs can
+/// distinguish "your request was malformed" from "the server is
+/// not yet capable". Once a worker lands, this handler can flip
+/// back to (1) without changing the surrounding types.
+///
+/// `GET /v1/batches/{id}` and `GET /v1/batches/{id}/results`
+/// continue to return whatever state the job has today, since those
+/// endpoints are useful for inspecting legacy or imported jobs and
+/// are also wired through `BatchManager` (read-only).
 pub async fn create_batch(
-    State(state): State<ApiState>,
-    Json(req): Json<SimpleBatchRequest>,
+    State(_state): State<ApiState>,
+    Json(_req): Json<SimpleBatchRequest>,
 ) -> Result<Json<BatchResponse>, (axum::http::StatusCode, Json<ErrorResponse>)> {
-    if req.prompts.is_empty() {
-        return Err((
-            axum::http::StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new(
-                "prompts is required",
-                "invalid_request_error",
-            )),
-        ));
-    }
-
-    let id = state
-        .batch_manager
-        .create_job(
-            req.endpoint,
-            req.prompts,
-            req.model,
-            req.max_tokens,
-            req.temperature,
-        )
-        .await;
-
-    let job = state.batch_manager.get_job(&id).await.ok_or_else(|| {
-        (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse::new(
-                "batch job missing immediately after creation",
-                "internal_error",
-            )),
-        )
-    })?;
-    // Use the panic-free helper (see `crate::util::time::unix_now_secs`):
-    // saturates to 0 on pre-1970 clocks, i64::MAX on overflow.
-    let now = crate::util::time::unix_now_secs();
-
-    Ok(Json(BatchResponse {
-        id: job.id,
-        object: "batch".to_string(),
-        endpoint: job.endpoint,
-        status: "pending".to_string(),
-        created_at: job.created_at,
-        expires_at: now + 86400,
-        completed_at: None,
-        request_counts: Some(RequestCounts {
-            total: i32::try_from(job.prompts.len()).unwrap_or(i32::MAX),
-            completed: 0,
-            failed: 0,
-        }),
-    }))
+    Err((
+        axum::http::StatusCode::NOT_IMPLEMENTED,
+        Json(ErrorResponse::new(
+            "Batch API executor is not implemented; the server can \
+             persist the job but no worker advances state from \
+             pending to completed. Track the implementation in \
+             docs/technical-due-diligence/architecture-performance.md#api-01.",
+            "server_error",
+        )),
+    ))
 }
 
 /// Get batch.
@@ -200,7 +185,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_batch_empty_prompts() {
+    async fn test_create_batch_empty_prompts_returns_501_until_executor_exists() {
+        // API-01: with the executor unimplemented, empty-prompt
+        // rejection (which used to be a 400) is now subsumed by the
+        // 501 short-circuit. Once the executor lands, restore the
+        // empty-prompt -> 400 path by re-introducing the validator
+        // *before* the 501 return.
         let state = create_test_state();
         let req = SimpleBatchRequest {
             prompts: vec![],
@@ -213,11 +203,15 @@ mod tests {
         let result = create_batch(State(state), Json(req)).await;
         assert!(result.is_err());
         let (status, _) = result.unwrap_err();
-        assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+        assert_eq!(status, axum::http::StatusCode::NOT_IMPLEMENTED);
     }
 
     #[tokio::test]
-    async fn test_create_batch_valid_request() {
+    async fn test_create_batch_returns_501_until_executor_exists() {
+        // API-01: the Batch API surface persists jobs but has no
+        // worker to advance them. Until that lands we surface a
+        // 501 instead of misleadingly returning a job that will
+        // stay pending forever.
         let state = create_test_state();
         let req = SimpleBatchRequest {
             prompts: vec!["Hello".to_string(), "World".to_string()],
@@ -228,7 +222,12 @@ mod tests {
         };
 
         let result = create_batch(State(state), Json(req)).await;
-        assert!(result.is_ok());
+        let (status, _) = result.expect_err("create_batch must reject with an error");
+        assert_eq!(
+            status,
+            axum::http::StatusCode::NOT_IMPLEMENTED,
+            "create_batch must return 501 until a worker exists"
+        );
     }
 
     #[tokio::test]
