@@ -14,6 +14,9 @@ use vllm_core::types::EngineMessage;
 /// # Errors
 ///
 /// Returns `(StatusCode, ErrorResponse)` when:
+/// - the loaded model cannot produce meaningful embeddings
+///   (`SERVICE_UNAVAILABLE` or `NOT_IMPLEMENTED`, code
+///   `embeddings_unsupported`)
 /// - `model` is empty (`BAD_REQUEST`)
 /// - `input` is empty (`BAD_REQUEST`)
 /// - the engine channel is closed or fails to respond (`SERVICE_UNAVAILABLE`,
@@ -22,6 +25,35 @@ pub async fn embeddings(
     State(state): State<ApiState>,
     Json(req): Json<EmbeddingsRequest>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    // Production-readiness §10: refuse with 501 when the loaded
+    // model is a stub (or capabilities couldn't be detected).
+    // Stub models return all-zero embeddings, which is
+    // meaningless noise that clients would mistakenly use as a
+    // real signal. The 501 + `embeddings_unsupported` code lets
+    // OpenAI-compatible clients distinguish "your model isn't
+    // loaded" from "your model is loaded but doesn't support
+    // embeddings".
+    let Some(caps) = state.arch_capabilities else {
+        return Err((
+            axum::http::StatusCode::NOT_IMPLEMENTED,
+            Json(ErrorResponse::with_code(
+                "Embeddings not supported: architecture capabilities could not be detected for the loaded model",
+                "server_error",
+                "embeddings_unsupported",
+            )),
+        ));
+    };
+    if caps.is_stub() {
+        return Err((
+            axum::http::StatusCode::NOT_IMPLEMENTED,
+            Json(ErrorResponse::with_code(
+                "Embeddings not supported: the loaded model is a stub architecture that returns meaningless (all-zero) vectors",
+                "server_error",
+                "embeddings_unsupported",
+            )),
+        ));
+    }
+
     if req.model.is_empty() {
         return Err((
             axum::http::StatusCode::BAD_REQUEST,

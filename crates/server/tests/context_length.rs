@@ -61,6 +61,7 @@ fn build_state(max_model_len: Option<usize>) -> ApiState {
         health: Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true))),
         metrics: Arc::new(EnhancedMetricsCollector::new()),
         max_model_len,
+        arch_capabilities: None,
     }
 }
 

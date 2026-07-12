@@ -182,6 +182,23 @@ impl ModelLoader {
             })
     }
 
+    /// Return the capability flags for the detected architecture.
+    ///
+    /// Production-readiness §10: callers (e.g. the OpenAI embeddings
+    /// handler) consult this to refuse requests on architectures that
+    /// don't support a given capability rather than silently
+    /// returning meaningless data (e.g. all-zero embeddings from a
+    /// stub). Returns `None` when the architecture could not be
+    /// detected — callers should treat `None` as "unknown, refuse
+    /// with 501" rather than assuming any capability.
+    #[must_use]
+    pub fn capabilities(&self) -> Option<ArchCapabilities> {
+        register_all_archs(&ARCHITECTURE_REGISTRY);
+        let arch_name = ARCHITECTURE_REGISTRY.detect(&self.inner.config_json)?;
+        let arch = ARCHITECTURE_REGISTRY.get(&arch_name)?;
+        Some(arch.capabilities())
+    }
+
     /// Borrow the raw `config.json` value read at construction time.
     #[must_use]
     pub fn config_json(&self) -> &serde_json::Value {

@@ -11,12 +11,24 @@
 //! All tests rely on `crate::test_fixtures::api_state(Qwen3)` to
 //! stand up an `ApiState` without a live engine; the closed
 //! `engine_tx` channel is what surfaces as 503.
+//!
+//! Production-readiness §10: the capability gate runs first —
+//! we set `arch_capabilities = Some(PRODUCTION)` so the
+//! validation paths are exercised. The `None` path
+//! (`embeddings_unsupported`) is covered by the
+//! `embeddings_capability.rs` integration test.
 use super::*;
 
 use axum::http::StatusCode;
+use vllm_model::arch::ArchCapabilities;
 
 fn create_test_state() -> crate::ApiState {
-    crate::test_fixtures::api_state(vllm_model::config::Architecture::Qwen3)
+    let mut state = crate::test_fixtures::api_state(vllm_model::config::Architecture::Qwen3);
+    // Skip the embeddings-capability gate so the per-field
+    // validation paths (empty model / empty input / closed
+    // engine) are exercised.
+    state.arch_capabilities = Some(ArchCapabilities::PRODUCTION);
+    state
 }
 
 #[tokio::test]

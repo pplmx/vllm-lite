@@ -86,4 +86,19 @@ pub struct ApiState {
     /// Without this, a 10× oversize prompt can exhaust KV
     /// blocks before any application-level validation runs.
     pub max_model_len: Option<usize>,
+    /// Capability flags for the loaded architecture. `None`
+    /// when the architecture could not be detected (unknown
+    /// checkpoint, missing `model_type` field, etc.) —
+    /// capability-gated endpoints (e.g. `/v1/embeddings`)
+    /// treat `None` as "refuse with 501" rather than guessing.
+    ///
+    /// Production-readiness recommendation §10: not every
+    /// causal LM checkpoint can produce quality-usable,
+    /// normalised, dimension-stable embeddings. The
+    /// embeddings handler reads [`Self::arch_capabilities`]
+    /// to refuse with `501 Not Implemented` when the loaded
+    /// model is a stub (which returns all-zero embeddings,
+    /// i.e. meaningless noise) instead of silently shipping
+    /// a degenerate response.
+    pub arch_capabilities: Option<vllm_model::arch::ArchCapabilities>,
 }
