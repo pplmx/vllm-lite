@@ -79,6 +79,11 @@ pub fn api_state(architecture: Architecture) -> ApiState {
         audit: Arc::new(crate::security::audit::AuditLogger::new(1000)),
         health: Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true))),
         metrics: Arc::new(EnhancedMetricsCollector::new()),
+        // `None` skips context-length validation in tests — most
+        // handler tests assert behavior on small inputs and don't
+        // need the guard. Tests that want to exercise the
+        // context-length gate build the state explicitly.
+        max_model_len: None,
     }
 }
 
@@ -136,6 +141,7 @@ pub fn api_state_with_mock_engine(
         audit: Arc::new(crate::security::audit::AuditLogger::new(1000)),
         health: Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true))),
         metrics: Arc::new(EnhancedMetricsCollector::new()),
+        max_model_len: None,
     };
     (state, handle)
 }

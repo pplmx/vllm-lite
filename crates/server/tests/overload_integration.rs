@@ -69,6 +69,7 @@ async fn test_closed_channel_returns_engine_unavailable_503() {
         audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
         health: Arc::new(std::sync::RwLock::new(HealthChecker::new(true, true))),
         metrics: Arc::new(EnhancedMetricsCollector::new()),
+        max_model_len: None,
     };
 
     let app = router(state);

@@ -64,6 +64,26 @@ pub async fn completions(
     let max_tokens = usize::try_from(req.max_tokens.unwrap_or(100)).unwrap_or(100);
     let total_max = prompt_tokens_len + max_tokens;
 
+    // Production-readiness §4: reject requests whose
+    // prompt + max_tokens would exceed the model's context
+    // length. See chat.rs for the full rationale.
+    if let Some(max_model_len) = state.max_model_len {
+        if total_max > max_model_len {
+            let message = format!(
+                "prompt_tokens ({prompt_tokens_len}) + max_tokens ({max_tokens}) \
+                 = {total_max} exceeds the model's context length ({max_model_len})"
+            );
+            return Err((
+                axum::http::StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::with_code(
+                    &message,
+                    "invalid_request_error",
+                    "context_length_exceeded",
+                )),
+            ));
+        }
+    }
+
     let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
 
     if let Some(temp) = req.temperature {
