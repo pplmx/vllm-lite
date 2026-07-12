@@ -43,6 +43,7 @@ fn test_tutorial_engine_lifecycle() {
         .try_send(EngineMessage::AddRequest {
             request: req,
             response_tx: token_tx,
+            seq_id_tx: None,
         })
         .expect("engine mailbox should be open");
 
