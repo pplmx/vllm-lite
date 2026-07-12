@@ -28,7 +28,8 @@ fn test_tutorial_engine_lifecycle() {
     // an `AddRequest` message, drain tokens from the per-request channel,
     // then send `Shutdown`. This is what the vllm-server main loop does.
     let mut engine = Engine::new(StubModelBackend, None::<StubModelBackend>);
-    let (msg_tx, msg_rx) = mpsc::unbounded_channel::<EngineMessage>();
+    // REL-01: bounded channel (mirrors production main.rs).
+    let (msg_tx, msg_rx) = mpsc::channel::<EngineMessage>(256);
     let (token_tx, mut token_rx) = mpsc::channel::<vllm_traits::TokenId>(64);
 
     let handle = std::thread::spawn(move || {
@@ -36,8 +37,10 @@ fn test_tutorial_engine_lifecycle() {
     });
 
     let req = Request::new(1, vec![1, 2, 3], 3);
+    // REL-01: `try_send` is sync so this works outside an async
+    // context. Mailbox capacity is 256 so the send succeeds.
     msg_tx
-        .send(EngineMessage::AddRequest {
+        .try_send(EngineMessage::AddRequest {
             request: req,
             response_tx: token_tx,
         })
@@ -52,6 +55,11 @@ fn test_tutorial_engine_lifecycle() {
         .expect("expected at least one token from StubModelBackend");
     assert_eq!(token, 0);
 
-    msg_tx.send(EngineMessage::Shutdown).expect("send Shutdown");
+    // REL-01: `try_send` works in non-async context (this is a
+    // regular `#[test]`). Mailbox has capacity 256 so the send
+    // succeeds.
+    msg_tx
+        .try_send(EngineMessage::Shutdown)
+        .expect("send Shutdown");
     handle.join().expect("engine thread should exit cleanly");
 }

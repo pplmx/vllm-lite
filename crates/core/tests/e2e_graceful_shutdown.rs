@@ -9,7 +9,7 @@ use vllm_testing::TestFixtures;
 
 /// Engine with shutdown capabilities using actor pattern
 struct ShutdownEngine {
-    msg_tx: mpsc::UnboundedSender<EngineMessage>,
+    msg_tx: mpsc::Sender<EngineMessage>,
     shutdown_complete: Arc<Mutex<bool>>,
 }
 
@@ -18,7 +18,8 @@ impl ShutdownEngine {
         let config = SchedulerConfig::default();
         let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
 
-        let (msg_tx, msg_rx) = mpsc::unbounded_channel::<EngineMessage>();
+        // REL-01: bounded mailbox (matches production main.rs).
+        let (msg_tx, msg_rx) = mpsc::channel::<EngineMessage>(256);
         let shutdown_complete = Arc::new(Mutex::new(false));
         let shutdown_complete_clone = Arc::clone(&shutdown_complete);
 
@@ -43,7 +44,7 @@ impl ShutdownEngine {
         let request = Request::new(1, vec![10, 20, 30], max_tokens);
 
         self.msg_tx
-            .send(EngineMessage::AddRequest {
+            .try_send(EngineMessage::AddRequest {
                 request,
                 response_tx: tx,
             })
@@ -56,7 +57,7 @@ impl ShutdownEngine {
     #[allow(clippy::unused_async)]
     async fn shutdown(&self) -> Result<(), String> {
         self.msg_tx
-            .send(EngineMessage::Shutdown)
+            .try_send(EngineMessage::Shutdown)
             .map_err(|_| "Failed to send shutdown")?;
         Ok(())
     }

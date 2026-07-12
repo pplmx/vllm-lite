@@ -25,7 +25,7 @@ impl Engine {
     /// This call blocks the current thread and never returns except on
     /// `EngineMessage::Shutdown`. Spawn it on a dedicated worker thread
     /// (the `vllm-server` crate does this for you).
-    pub fn run(&mut self, mut msg_rx: mpsc::UnboundedReceiver<EngineMessage>) {
+    pub fn run(&mut self, mut msg_rx: mpsc::Receiver<EngineMessage>) {
         let mut step_count = 0u64;
         loop {
             while let Ok(msg) = msg_rx.try_recv() {

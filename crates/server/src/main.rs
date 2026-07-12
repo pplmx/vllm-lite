@@ -88,7 +88,13 @@ async fn main() -> Result<()> {
 
     bootstrap::engine::configure_speculative(&app_config, &mut engine);
 
-    let (msg_tx, msg_rx) = mpsc::unbounded_channel::<EngineMessage>();
+    // REL-01 (technical due diligence): use a bounded mailbox so a
+    // flood of HTTP requests fails fast with `503 engine_overloaded`
+    // instead of building an unbounded backlog. The default capacity
+    // (256) absorbs short bursts while bounding memory; tunable via
+    // `app_config.engine.engine_mailbox_capacity`.
+    let mailbox_capacity = app_config.engine.engine_mailbox_capacity.max(1);
+    let (msg_tx, msg_rx) = mpsc::channel::<EngineMessage>(mailbox_capacity);
     let engine_shutdown_tx = msg_tx.clone();
 
     std::thread::spawn(move || {

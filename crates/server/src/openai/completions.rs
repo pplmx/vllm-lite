@@ -63,21 +63,17 @@ pub async fn completions(
 
     let (response_tx, mut response_rx) = mpsc::channel(64);
 
+    // REL-01: use `try_send` so a saturated mailbox fails fast with
+    // 503 `engine_overloaded` instead of blocking.
     state
         .engine_tx
-        .send(vllm_core::types::EngineMessage::AddRequest {
+        .try_send(vllm_core::types::EngineMessage::AddRequest {
             request,
             response_tx,
         })
-        .map_err(|_| {
-            (
-                axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                Json(ErrorResponse::with_code(
-                    "Engine unavailable",
-                    "server_error",
-                    "engine_unavailable",
-                )),
-            )
+        .map_err(|e| match e {
+            tokio::sync::mpsc::error::TrySendError::Full(_) => overload_response(),
+            tokio::sync::mpsc::error::TrySendError::Closed(_) => unavailable_response(),
         })?;
 
     if is_streaming {
@@ -132,6 +128,36 @@ pub async fn completions(
     );
 
     Ok(Json(response).into_response())
+}
+
+/// REL-01: 503 response returned when the bounded engine mailbox is
+/// saturated (`mpsc::error::TrySendError::Full`). Distinct from
+/// `unavailable_response` so clients can implement smarter retry
+/// (backoff + jitter) for transient overload.
+fn overload_response() -> (axum::http::StatusCode, Json<ErrorResponse>) {
+    (
+        axum::http::StatusCode::SERVICE_UNAVAILABLE,
+        Json(ErrorResponse::with_code(
+            "Engine overloaded; retry with backoff",
+            "server_error",
+            "engine_overloaded",
+        )),
+    )
+}
+
+/// 503 response returned when the engine channel is closed
+/// (`mpsc::error::TrySendError::Closed`). Distinct from
+/// `overload_response` so clients know not to retry — the engine is
+/// gone.
+fn unavailable_response() -> (axum::http::StatusCode, Json<ErrorResponse>) {
+    (
+        axum::http::StatusCode::SERVICE_UNAVAILABLE,
+        Json(ErrorResponse::with_code(
+            "Engine unavailable",
+            "server_error",
+            "engine_unavailable",
+        )),
+    )
 }
 
 // Unit tests live in `tests.rs` (sibling) to keep this handler file

@@ -118,9 +118,13 @@ pub struct KvCacheDumpResponse {
 pub async fn kv_cache_dump(State(state): State<ApiState>) -> Json<KvCacheDumpResponse> {
     let (response_tx, mut response_rx) = tokio::sync::mpsc::unbounded_channel();
 
+    // REL-01: `try_send` so this debug endpoint never blocks. We
+    // ignore the failure (Full or Closed) and fall back to the
+    // default `MetricsSnapshot` below — debug endpoints should
+    // never fail the caller because of an overloaded engine.
     let _ = state
         .engine_tx
-        .send(EngineMessage::GetMetrics { response_tx });
+        .try_send(EngineMessage::GetMetrics { response_tx });
 
     let metrics = response_rx.recv().await.unwrap_or_default();
 

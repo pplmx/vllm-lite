@@ -51,19 +51,27 @@ pub async fn embeddings(
 
     state
         .engine_tx
-        .send(EngineMessage::GetEmbeddings {
+        .try_send(EngineMessage::GetEmbeddings {
             input_tokens,
             response_tx,
         })
-        .map_err(|_| {
-            (
+        .map_err(|e| match e {
+            tokio::sync::mpsc::error::TrySendError::Full(_) => (
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse::with_code(
+                    "Engine overloaded; retry with backoff",
+                    "server_error",
+                    "engine_overloaded",
+                )),
+            ),
+            tokio::sync::mpsc::error::TrySendError::Closed(_) => (
                 axum::http::StatusCode::SERVICE_UNAVAILABLE,
                 Json(ErrorResponse::with_code(
                     "Engine unavailable",
                     "server_error",
                     "engine_unavailable",
                 )),
-            )
+            ),
         })?;
 
     let embeddings = rx.recv().await.ok_or_else(|| {

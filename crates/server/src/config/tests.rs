@@ -23,6 +23,10 @@ fn test_app_config_defaults() {
     assert_eq!(config.engine.num_kv_blocks, 1024);
     assert_eq!(config.engine.max_batch_size, 256);
     assert_eq!(config.engine.max_waiting_batches, 10);
+    // REL-01: bounded engine mailbox default. Bumping this number
+    // is a wire-compatible config change; lowering requires
+    // confirming the new bound is >= concurrent request fan-in.
+    assert_eq!(config.engine.engine_mailbox_capacity, 256);
 }
 
 #[test]
