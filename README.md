@@ -8,7 +8,9 @@
   <a href="https://github.com/pplmx/vllm-lite/releases">
     <img src="https://img.shields.io/github/v/release/pplmx/vllm-lite?style=flat-square&color=brightgreen" alt="Release">
   </a>
-  <img src="https://img.shields.io/badge/Tests-1235%20passing-success?style=flat-square" alt="Tests">
+  <!-- Test count badge is intentionally generic; the running number
+       drifts every batch. Run `just nextest` for the current count. -->
+  <img src="https://img.shields.io/badge/Tests-`just%20nextest`-success?style=flat-square" alt="Tests (run `just nextest` for the current count)">
 </p>
 
 <!-- PROJECT LOGO -->
