@@ -162,7 +162,7 @@ jobs:
           OUTPUT: CHANGELOG.md
 
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
@@ -199,7 +199,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download manifest env
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-manifest
           path: target
