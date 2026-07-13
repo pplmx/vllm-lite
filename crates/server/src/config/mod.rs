@@ -11,6 +11,12 @@
 //! - [`engine`] — `EngineConfig` + `DraftSpecConfig` (scheduler tuning, draft specs)
 //! - [`auth`] — `AuthConfig` + `resolve_api_keys` (API keys + rate limit)
 
+// `ConfigXxx` / `AppConfig` / `ServerConfig` etc. are intentional public
+// API names — re-exported across the workspace and consumed by
+// downstream tooling. The `ConfigValidationError` /
+// `ConfigValidationErrors` aggregate type follows the same convention.
+#![allow(clippy::module_name_repetitions)]
+
 mod auth;
 mod cors;
 mod engine;

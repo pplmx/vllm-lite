@@ -81,8 +81,11 @@ fn test_graph_batch_conversion() {
     assert_eq!(converted.seq_ids, vec![1, 2, 3]);
 }
 
-/// Test end-to-end with mock model
+/// Test end-to-end with mock model. Only meaningful when `cuda-graph`
+/// is enabled — without it, `cuda_graph_enabled()` always returns `false`
+/// and the assertion at line 149 would fail for the wrong reason.
 #[test]
+#[cfg(feature = "cuda-graph")]
 fn test_end_to_end_engine_with_cuda_graph_config() {
     #[derive(Clone)]
     struct MockModel;

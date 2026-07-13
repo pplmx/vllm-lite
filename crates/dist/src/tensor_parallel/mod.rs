@@ -7,6 +7,12 @@ pub mod all_reduce;
 pub mod device_mesh;
 pub mod parallel_linear;
 
-pub use all_reduce::{AllReduce, NcclAllReduce, ReduceOp};
+// `NcclAllReduce` is a deprecated alias for `LocalSumAllReduce`; we
+// re-export it for the v0.x transition so downstream `use
+// vllm_dist::*` callers keep compiling. The `#[allow(deprecated)]`
+// is scoped to the re-export line — the actual users (e.g.
+// `parallel_linear`) already use `LocalSumAllReduce` directly.
+#[allow(deprecated)]
+pub use all_reduce::{AllReduce, LocalSumAllReduce, NcclAllReduce, ReduceOp};
 pub use device_mesh::{DeviceMesh, NodeMesh};
 pub use parallel_linear::{ColumnParallelLinear, RowParallelLinear, TensorParallelManager};

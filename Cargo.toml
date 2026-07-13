@@ -1,6 +1,6 @@
 [workspace]
 members = ["crates/core", "crates/model", "crates/server", "crates/traits", "crates/dist", "crates/testing"]
-default-members = ["crates/core", "crates/model", "crates/server", "crates/traits", "crates/testing"]
+default-members = ["crates/core", "crates/model", "crates/server", "crates/traits", "crates/dist", "crates/testing"]
 exclude = ["fuzz"]
 resolver = "2"
 

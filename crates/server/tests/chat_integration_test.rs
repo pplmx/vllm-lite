@@ -149,3 +149,128 @@ async fn test_chat_completions_streaming_returns_sse() {
         .unwrap_or("");
     assert!(content_type.contains("text/event-stream"));
 }
+
+/// API-01 regression: pre-fix the streaming handler concatenated the
+/// final JSON chunk and the `[DONE]` sentinel into a single SSE event
+/// (`"{json}\n\n[DONE]"`), which strict OpenAI SDK / SSE clients do
+/// not parse. Post-fix the final chunk and `[DONE]` are separate
+/// `data:` events; see `docs/technical-due-diligence/architecture-performance.md`
+/// §5.1.3 and the v31.0 P4 follow-up batch.
+#[tokio::test]
+async fn test_chat_streaming_done_is_separate_event() {
+    let (engine_tx, _handle) = spawn_mock_engine(vec![7, 8]);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Llama,
+        batch_manager: Arc::new(vllm_server::openai::batch::manager::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(vllm_server::HealthChecker::new(
+            true, true,
+        ))),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(chat_request_json("llama-test", true)))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+
+    // Split on the SSE event terminator `\n\n` so we can count events.
+    let events: Vec<&str> = body_str.split("\n\n").filter(|s| !s.is_empty()).collect();
+    assert!(
+        !events.is_empty(),
+        "SSE stream should contain at least one event, body was: {body_str}"
+    );
+
+    // The very last event MUST be the `[DONE]` sentinel, and it MUST
+    // NOT contain any JSON payload — strict clients parse each `data:`
+    // field separately and reject `[DONE]` that carries JSON.
+    let last = events.last().unwrap();
+    assert!(
+        last.contains("[DONE]"),
+        "last SSE event should contain [DONE], got: {last}"
+    );
+    assert!(
+        !last.contains("\"finish_reason\""),
+        "[DONE] event must not contain JSON payload (pre-fix bug), got: {last}"
+    );
+
+    // The penultimate event(s) must contain the final chunk's JSON
+    // payload — look for the finish_reason field, which the pre-fix
+    // version never emitted on the streaming path.
+    let final_chunk = events
+        .iter()
+        .rev()
+        .find(|e| e.contains("\"finish_reason\""))
+        .unwrap_or_else(|| panic!("no SSE event carried finish_reason; events: {events:?}"));
+    assert!(
+        final_chunk.contains("\"finish_reason\":\"stop\"")
+            || final_chunk.contains("\"finish_reason\":\"length\""),
+        "final chunk must carry a non-null finish_reason, got: {final_chunk}"
+    );
+}
+
+/// API-01 regression: pre-fix the non-streaming chat handler
+/// hardcoded `finish_reason: "stop"` even when the engine actually
+/// stopped because the sequence hit `max_tokens`. Post-fix the
+/// engine-supplied [`vllm_traits::FinishReason`] is mapped to the
+/// OpenAI string (`"length"`).
+#[tokio::test]
+async fn test_chat_non_streaming_finish_reason_propagation() {
+    // We use the default mock engine which does NOT send a finish
+    // reason; the handler must fall back to `"stop"` rather than
+    // panic or hang. The exact string is asserted here.
+    let (engine_tx, _handle) = spawn_mock_engine(vec![7, 8, 9]);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Llama,
+        batch_manager: Arc::new(vllm_server::openai::batch::manager::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(vllm_server::HealthChecker::new(
+            true, true,
+        ))),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(chat_request_json("llama-test", false)))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    let finish_reason = body["choices"][0]["finish_reason"].as_str();
+    assert_eq!(
+        finish_reason,
+        Some("stop"),
+        "non-streaming mock should yield finish_reason=stop (mock drops the reason oneshot)"
+    );
+}

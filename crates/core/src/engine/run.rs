@@ -34,6 +34,7 @@ impl Engine {
                         request,
                         response_tx,
                         seq_id_tx,
+                        finish_reason_tx,
                     } => {
                         // Production-readiness recommendation: when an
                         // HTTP handler sends an `seq_id_tx` oneshot,
@@ -43,7 +44,17 @@ impl Engine {
                         // on rejection (e.g. empty prompt); the
                         // caller treats 0 as "do not bother
                         // cancelling".
+                        //
+                        // `finish_reason_tx` is parallel: when the
+                        // handler supplies one, the engine sends the
+                        // [`FinishReason`] (length, cancelled, …) before
+                        // dropping the token response channel, so the
+                        // HTTP layer can emit the OpenAI-correct
+                        // `finish_reason` instead of hardcoding `"stop"`.
                         let seq_id = self.add_request(request, response_tx);
+                        if let Some(tx) = finish_reason_tx {
+                            self.finish_reason_txs.insert(seq_id, tx);
+                        }
                         if let Some(tx) = seq_id_tx {
                             let _ = tx.send(seq_id);
                         }

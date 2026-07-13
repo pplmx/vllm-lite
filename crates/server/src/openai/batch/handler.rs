@@ -37,6 +37,13 @@ use crate::openai::types::ErrorResponse;
 /// continue to return whatever state the job has today, since those
 /// endpoints are useful for inspecting legacy or imported jobs and
 /// are also wired through `BatchManager` (read-only).
+///
+/// # Errors
+///
+/// Always returns `501 Not Implemented` (error code `server_error`)
+/// because the Batch API executor is not yet implemented. The
+/// request is validated for shape but never persisted; callers
+/// should retry after the executor ships.
 pub async fn create_batch(
     State(_state): State<ApiState>,
     Json(_req): Json<SimpleBatchRequest>,

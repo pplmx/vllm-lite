@@ -5,7 +5,7 @@
 //! (row), and pair each layer with the appropriate `AllReduce` primitive
 //! so the global computation is equivalent to the unsharded reference.
 #![allow(clippy::module_name_repetitions)]
-use super::all_reduce::{AllReduce, NcclAllReduce, ReduceOp};
+use super::all_reduce::{AllReduce, LocalSumAllReduce, ReduceOp};
 use super::device_mesh::DeviceMesh;
 use std::sync::Arc;
 use vllm_traits::TensorParallelError;
@@ -165,7 +165,7 @@ impl TensorParallelManager {
         device_ids: Vec<usize>,
     ) -> Result<Self, TensorParallelError> {
         let mesh = Arc::new(DeviceMesh::new(world_size, rank, device_ids)?);
-        let all_reduce = Arc::new(NcclAllReduce::new(mesh.clone()));
+        let all_reduce = Arc::new(LocalSumAllReduce::new(mesh.clone()));
 
         Ok(Self { mesh, all_reduce })
     }
@@ -224,7 +224,7 @@ mod tests {
     #[test]
     fn test_column_parallel_output_size() -> Result<(), TensorParallelError> {
         let mesh = Arc::new(DeviceMesh::new(2, 0, vec![0, 1])?);
-        let all_reduce = Arc::new(NcclAllReduce::new(mesh.clone()));
+        let all_reduce = Arc::new(LocalSumAllReduce::new(mesh.clone()));
         let linear = ColumnParallelLinear::new(8, 16, mesh, all_reduce);
 
         assert_eq!(linear.output_size_per_rank(), 8);
@@ -234,7 +234,7 @@ mod tests {
     #[test]
     fn test_row_parallel_input_size() -> Result<(), TensorParallelError> {
         let mesh = Arc::new(DeviceMesh::new(2, 0, vec![0, 1])?);
-        let all_reduce = Arc::new(NcclAllReduce::new(mesh.clone()));
+        let all_reduce = Arc::new(LocalSumAllReduce::new(mesh.clone()));
         let linear = RowParallelLinear::new(16, 8, mesh, all_reduce);
 
         assert_eq!(linear.input_size_per_rank(), 8);
@@ -244,7 +244,7 @@ mod tests {
     #[test]
     fn test_column_parallel_forward() -> Result<(), TensorParallelError> {
         let mesh = Arc::new(DeviceMesh::new(2, 0, vec![0, 1])?);
-        let all_reduce = Arc::new(NcclAllReduce::new(mesh.clone()));
+        let all_reduce = Arc::new(LocalSumAllReduce::new(mesh.clone()));
         let linear = ColumnParallelLinear::new(4, 4, mesh, all_reduce);
 
         let input = vec![1.0, 2.0, 3.0, 4.0];
@@ -257,7 +257,7 @@ mod tests {
     #[test]
     fn test_row_parallel_forward() -> Result<(), TensorParallelError> {
         let mesh = Arc::new(DeviceMesh::new(2, 0, vec![0, 1])?);
-        let all_reduce = Arc::new(NcclAllReduce::new(mesh.clone()));
+        let all_reduce = Arc::new(LocalSumAllReduce::new(mesh.clone()));
         let linear = RowParallelLinear::new(4, 4, mesh, all_reduce);
 
         let input = vec![1.0, 2.0];
@@ -283,7 +283,7 @@ mod tests {
     #[test]
     fn test_row_parallel_input_error() -> Result<(), TensorParallelError> {
         let mesh = Arc::new(DeviceMesh::new(2, 0, vec![0, 1])?);
-        let all_reduce = Arc::new(NcclAllReduce::new(mesh.clone()));
+        let all_reduce = Arc::new(LocalSumAllReduce::new(mesh.clone()));
         let linear = RowParallelLinear::new(4, 4, mesh, all_reduce);
 
         let wrong_input = vec![1.0, 2.0, 3.0];
@@ -296,7 +296,7 @@ mod tests {
     #[test]
     fn test_column_parallel_large_batch() -> Result<(), TensorParallelError> {
         let mesh = Arc::new(DeviceMesh::new(4, 0, vec![0, 1, 2, 3])?);
-        let all_reduce = Arc::new(NcclAllReduce::new(mesh.clone()));
+        let all_reduce = Arc::new(LocalSumAllReduce::new(mesh.clone()));
         let linear = ColumnParallelLinear::new(1024, 2048, mesh, all_reduce);
 
         assert_eq!(linear.output_size_per_rank(), 512);

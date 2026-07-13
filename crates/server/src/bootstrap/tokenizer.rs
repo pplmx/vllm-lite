@@ -5,6 +5,11 @@
 // not valid UTF-8, or fails to parse. Returns the `Arc<Tokenizer>` ready
 // for use in `ApiState`.
 
+// `load_tokenizer` is the natural name for the bootstrap helper in
+// `bootstrap::tokenizer` — the module name describes the concern, the
+// function name describes the action.
+#![allow(clippy::module_name_repetitions)]
+
 use std::path::Path;
 use std::sync::Arc;
 use vllm_model::tokenizer::Tokenizer;

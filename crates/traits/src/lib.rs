@@ -22,15 +22,18 @@
 //! reach these types via their crate-root re-exports.
 
 pub mod distributed;
+#[cfg(feature = "kernels")]
 pub mod kernels;
 pub mod model;
 pub mod sampling;
 pub mod types;
 
 pub use distributed::{BlockHasher, IdentityHasher, XorShiftHasher};
+#[cfg(feature = "kernels")]
 pub use kernels::{CudaGraphConfig, CudaGraphExecutor, GraphExecutionError, ModelGraphConfig};
 pub use model::{ModelBackend, ModelError, Result, StubModelBackend};
 pub use sampling::{SamplingParams, SamplingParamsBuilder, argmax_logits};
 pub use types::{
-    BLOCK_SIZE, Batch, BatchOutput, BatchPhase, BlockId, SeqId, TensorParallelError, TokenId,
+    BLOCK_SIZE, Batch, BatchOutput, BatchPhase, BlockId, FinishReason, SeqId, TensorParallelError,
+    TokenId,
 };

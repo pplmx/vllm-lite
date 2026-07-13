@@ -17,7 +17,7 @@ name = "vllm"
 path = "src/bin/vllm.rs"
 
 [dependencies]
-vllm-core = { path = "../core", features = ["cuda-graph"] }
+vllm-core = { path = "../core", default-features = false }
 vllm-traits = { path = "../traits", features = ["candle"] }
 vllm-model = { path = "../model" }
 candle-core = { workspace = true }
@@ -47,6 +47,11 @@ tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 hyper = "1"
 tempfile = "3"
+
+[features]
+# Enable CUDA-graph capture/replay through vllm-core. Off by default so
+# minimal deployments don't pull in the GPU-side graph types.
+cuda-graph = ["vllm-core/cuda-graph"]
 
 [lints]
 workspace = true

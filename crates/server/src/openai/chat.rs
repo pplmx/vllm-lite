@@ -137,6 +137,12 @@ async fn handle_chat(
     validate_sampling_params(&request.sampling_params)?;
 
     let (response_tx, mut response_rx) = mpsc::channel(64);
+    // API-01 finish_reason propagation: the engine sends a
+    // [`FinishReason`] through this oneshot just before it drops the
+    // token response channel, so we can emit the OpenAI-correct
+    // `finish_reason` (e.g. `"length"` when the sequence hit
+    // `max_tokens`, instead of the pre-fix hardcoded `"stop"`).
+    let (finish_reason_tx, finish_reason_rx) = tokio::sync::oneshot::channel();
 
     // REL-01 (technical due diligence): use `try_send` so a full
     // engine mailbox fails fast with `503 engine_overloaded`
@@ -153,6 +159,7 @@ async fn handle_chat(
             // round-trip; the request runs to natural completion
             // (or max_tokens) and we drop the oneshot on the floor.
             seq_id_tx: None,
+            finish_reason_tx: Some(finish_reason_tx),
         })
         .map_err(|e| match e {
             tokio::sync::mpsc::error::TrySendError::Full(_) => engine_overloaded_error(),
@@ -163,6 +170,17 @@ async fn handle_chat(
     while let Some(token) = response_rx.recv().await {
         tokens.push(token);
     }
+
+    // The engine sends the reason right before dropping
+    // `response_tx`. If we don't see one (engine panicked, or the
+    // oneshot was dropped for some other reason), default to `"stop"`
+    // for backwards compatibility.
+    let finish_reason = match finish_reason_rx.await {
+        Ok(vllm_traits::FinishReason::Length) => "length".to_string(),
+        Ok(vllm_traits::FinishReason::Stop) => "stop".to_string(),
+        Ok(vllm_traits::FinishReason::Cancelled) => "stop".to_string(),
+        Err(_) => "stop".to_string(),
+    };
 
     let raw_decode = state.tokenizer.decode(&tokens);
 
@@ -184,7 +202,10 @@ async fn handle_chat(
             content: completion_text,
             name: None,
         },
-        finish_reason: Some("stop".to_string()),
+        // API-01 finish_reason propagation: see comment above;
+        // emitted from the engine-supplied FinishReason so the client
+        // sees `"length"` when the sequence hit `max_tokens`.
+        finish_reason: Some(finish_reason),
     };
 
     let usage = Usage::new(prompt_tokens_len, tokens.len());
@@ -319,12 +340,20 @@ async fn stream_chat_completion(
     // wasting GPU cycles and KV-block slots.
     let (seq_id_tx, seq_id_rx) = tokio::sync::oneshot::channel();
     let (response_tx, response_rx) = mpsc::channel(64);
+    // API-01 finish_reason propagation: parallel to `seq_id_tx`, the
+    // engine sends the [`FinishReason`] (length, cancelled, …) through
+    // this oneshot before dropping the token response channel. The
+    // streaming unfold races this against `response_rx` so the final
+    // chunk carries the OpenAI-correct `finish_reason` instead of the
+    // pre-fix hardcoded `"stop"`.
+    let (finish_reason_tx, finish_reason_rx) = tokio::sync::oneshot::channel();
     state
         .engine_tx
         .try_send(vllm_core::types::EngineMessage::AddRequest {
             request,
             response_tx,
             seq_id_tx: Some(seq_id_tx),
+            finish_reason_tx: Some(finish_reason_tx),
         })
         .map_err(|e| match e {
             tokio::sync::mpsc::error::TrySendError::Full(_) => engine_overloaded_error(),
@@ -364,92 +393,135 @@ async fn stream_chat_completion(
     });
 
     let tokenizer = state.tokenizer;
+
+    // `unfold` can only yield one event per call. End-of-stream needs
+    // to deliver TWO OpenAI events (a final `ChatChunk` with the real
+    // `finish_reason`, then the `[DONE]` sentinel) and then close the
+    // body — so the state machine below uses a 3-phase terminal:
+    // `Streaming` → `EmitDoneSentinel` → `Done`. Pre-fix, both the
+    // final chunk and `[DONE]` were crammed into a single SSE `data:`
+    // field (`"{json}\n\n[DONE]"`), which strict SSE / OpenAI SDK
+    // clients do not parse correctly. See
+    // `docs/technical-due-diligence/architecture-performance.md` §5.1.3.
+    //
+    // We don't race `reason_rx` against `rx.recv()` because the engine
+    // code (`finalize_finished` in `engine/lifecycle.rs`) sends the
+    // reason BEFORE dropping the response channel — so by the time
+    // `rx.recv()` returns `None`, the reason is already in the oneshot
+    // and `reason_rx.await` resolves immediately.
+    enum Terminal {
+        Streaming,
+        EmitDoneSentinel,
+        Done,
+    }
+
     let stream = stream::unfold(
-        (response_rx, cancel_guard.clone(), false),
-        move |(mut rx, cancel_guard, mut done)| {
+        (
+            response_rx,
+            cancel_guard.clone(),
+            Some(finish_reason_rx),
+            Terminal::Streaming,
+        ),
+        move |(mut rx, cancel_guard, mut reason_rx_opt, mut terminal)| {
             let tokenizer = tokenizer.clone();
             let model = model.clone();
             let request_id = request_id.clone();
             let start = start;
             async move {
-                // After the final [DONE] event was emitted, end
-                // the stream on the next poll so axum closes the
-                // HTTP body. Clients that watch for end-of-stream
-                // (e.g. `content-length`, half-close) need this
-                // to know the request is finished.
-                if done {
-                    return None;
-                }
-                if let Some(token) = rx.recv().await {
-                    let text = tokenizer.decode(&[token]);
-                    if should_skip_token_text(&tokenizer, &text) {
+                match terminal {
+                    Terminal::Done => {
+                        // Stream fully terminated on the previous
+                        // call; close the HTTP body now.
+                        return None;
+                    }
+                    Terminal::EmitDoneSentinel => {
+                        // Final chunk already emitted with the real
+                        // finish_reason; now emit the [DONE] sentinel
+                        // as its own SSE event so strict clients can
+                        // detect end-of-stream.
+                        terminal = Terminal::Done;
                         return Some((
-                            Ok::<Event, Infallible>(Event::default().data("")),
-                            (rx, cancel_guard, done),
+                            Ok::<Event, Infallible>(Event::default().data("[DONE]")),
+                            (rx, cancel_guard, reason_rx_opt, terminal),
                         ));
                     }
-                    let chunk = ChatChunk::new(
-                        "chatcmpl-stream".to_string(),
-                        model.clone(),
-                        ChatChunkChoice {
-                            index: 0,
-                            delta: ChatMessage {
-                                role: "assistant".to_string(),
-                                content: text,
-                                name: None,
-                            },
-                            finish_reason: None,
-                        },
-                    );
-                    let sse_payload =
-                        // invariant: serializing a known-good struct (plain serde_json types);
-                        // to_string cannot fail.
-                        serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
-                    Some((
-                        Ok(Event::default().data(sse_payload)),
-                        (rx, cancel_guard, done),
-                    ))
-                } else {
-                    // Channel closed - could be normal completion or client disconnect.
-                    // Mark the guard as fired so its Drop impl doesn't
-                    // send a redundant CancelRequest for a sequence
-                    // that finished naturally.
-                    cancel_guard.disarm();
-                    let chunk = ChatChunk::new(
-                        "chatcmpl-stream".to_string(),
-                        model.clone(),
-                        ChatChunkChoice {
-                            index: 0,
-                            delta: ChatMessage {
-                                role: "assistant".to_string(),
-                                content: String::new(),
-                                name: None,
-                            },
-                            finish_reason: Some("stop".to_string()),
-                        },
-                    );
-                    let sse_payload =
-                        // invariant: serializing a known-good struct (plain serde_json types);
-                        // to_string cannot fail.
-                        serde_json::to_string(&chunk).expect("Failed to serialize chat chunk");
-                    tracing::info!(
-                        request_id = %request_id,
-                        duration_ms = %u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
-                        "Streaming request completed"
-                    );
-                    // Final [DONE] event. Stream terminates on
-                    // the NEXT call: `done` is set, so the
-                    // unfold closure returns None next time
-                    // axum polls it. This ensures the SSE body
-                    // closes after the [DONE] marker — clients
-                    // relying on `content-length` or
-                    // connection-close to detect end-of-stream
-                    // would otherwise hang.
-                    done = true;
-                    Some((
-                        Ok(Event::default().data(format!("{sse_payload}\n\n[DONE]"))),
-                        (rx, cancel_guard, done),
-                    ))
+                    Terminal::Streaming => match rx.recv().await {
+                        Some(token) => {
+                            let text = tokenizer.decode(&[token]);
+                            if should_skip_token_text(&tokenizer, &text) {
+                                return Some((
+                                    Ok::<Event, Infallible>(Event::default().data("")),
+                                    (rx, cancel_guard, reason_rx_opt, terminal),
+                                ));
+                            }
+                            let chunk = ChatChunk::new(
+                                "chatcmpl-stream".to_string(),
+                                model.clone(),
+                                ChatChunkChoice {
+                                    index: 0,
+                                    delta: ChatMessage {
+                                        role: "assistant".to_string(),
+                                        content: text,
+                                        name: None,
+                                    },
+                                    finish_reason: None,
+                                },
+                            );
+                            let sse_payload = serde_json::to_string(&chunk)
+                                .expect("Failed to serialize chat chunk");
+                            Some((
+                                Ok(Event::default().data(sse_payload)),
+                                (rx, cancel_guard, reason_rx_opt, terminal),
+                            ))
+                        }
+                        None => {
+                            // Channel closed by the engine. Block on
+                            // the reason oneshot — the engine sends
+                            // the reason before closing the channel,
+                            // so this resolves immediately. If the
+                            // engine skipped finalize for some reason,
+                            // fall back to `"stop"`.
+                            let reason_string = if let Some(rx) = reason_rx_opt.take() {
+                                match rx.await {
+                                    Ok(vllm_traits::FinishReason::Length) => "length",
+                                    Ok(vllm_traits::FinishReason::Stop) => "stop",
+                                    Ok(vllm_traits::FinishReason::Cancelled) => "stop",
+                                    Err(_) => "stop",
+                                }
+                            } else {
+                                "stop"
+                            };
+                            cancel_guard.disarm();
+                            let chunk = ChatChunk::new(
+                                "chatcmpl-stream".to_string(),
+                                model.clone(),
+                                ChatChunkChoice {
+                                    index: 0,
+                                    delta: ChatMessage {
+                                        role: "assistant".to_string(),
+                                        content: String::new(),
+                                        name: None,
+                                    },
+                                    finish_reason: Some(reason_string.to_string()),
+                                },
+                            );
+                            let sse_payload = serde_json::to_string(&chunk)
+                                .expect("Failed to serialize chat chunk");
+                            tracing::info!(
+                                request_id = %request_id,
+                                duration_ms = %u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
+                                "Streaming request completed"
+                            );
+                            // Emit the final chunk now; the NEXT call
+                            // emits [DONE], and the one after that
+                            // returns None.
+                            terminal = Terminal::EmitDoneSentinel;
+                            Some((
+                                Ok(Event::default().data(sse_payload)),
+                                (rx, cancel_guard, reason_rx_opt, terminal),
+                            ))
+                        }
+                    },
                 }
             }
         },
@@ -461,7 +533,7 @@ async fn stream_chat_completion(
     // is dropped, and the LAST remaining cancel_guard is
     // dropped — firing CancelRequest. The natural-completion
     // path explicitly disarms the guard before returning the
-    // final [DONE] event so we don't double-cancel.
+    // final chunk so we don't double-cancel.
     Ok(Sse::new(Box::pin(stream)).into_response())
 }
 

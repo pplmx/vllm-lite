@@ -321,14 +321,19 @@ async fn main() -> Result<()> {
     tracing::info!("HTTP server stopped; draining engine");
 
     // Production-readiness recommendation (graceful shutdown):
-    // 1. Tell the engine to exit its run loop. The `try_send`
-    //    keeps working because the receiver is still alive (the
-    //    worker thread holds it).
+    // 1. Tell the engine to exit its run loop. `blocking_send` is the
+    //    synchronous mpsc send — it always returns immediately (with
+    //    Err only when the channel is closed) and never produces a
+    //    future that needs awaiting. The receiver stays alive (the
+    //    worker thread holds it) until we join below, so the send
+    //    succeeds.
     // 2. Wait for the worker to acknowledge shutdown by joining
     //    the thread. Cap at 10s so a stuck engine can't pin the
     //    process forever; operators can `SIGKILL` if that's
     //    needed.
-    let _ = engine_shutdown_tx.send(EngineMessage::Shutdown);
+    if let Err(e) = engine_shutdown_tx.blocking_send(EngineMessage::Shutdown) {
+        tracing::warn!(error = %e, "engine shutdown send failed");
+    }
     const ENGINE_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
     let join_start = std::time::Instant::now();
     // `JoinHandle::join()` is blocking; we wrap it with a

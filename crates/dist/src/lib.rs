@@ -21,8 +21,12 @@ pub use grpc_client::PeerClient;
 pub use pipeline::{
     PipelineParallel, PipelineStage, PipelineStageConfig, Result, StageInput, StageOutput,
 };
+// `NcclAllReduce` is a deprecated alias re-exported for the v0.x
+// transition window; silence the deprecation lint at the re-export
+// boundary only. Downstream code should use `LocalSumAllReduce`.
+#[allow(deprecated)]
 pub use tensor_parallel::{
-    AllReduce, ColumnParallelLinear, DeviceMesh, NcclAllReduce, NodeMesh, ReduceOp,
-    RowParallelLinear, TensorParallelManager,
+    AllReduce, ColumnParallelLinear, DeviceMesh, LocalSumAllReduce, NcclAllReduce, NodeMesh,
+    ReduceOp, RowParallelLinear, TensorParallelManager,
 };
 pub use types::TensorParallelConfig;

@@ -12,6 +12,9 @@ candle-core = { workspace = true, optional = true }
 [features]
 default = []
 candle = ["candle-core"]
+# Gate the `kernels` module (CudaGraphConfig, CudaGraphExecutor, etc.).
+# Consumers that wire the CUDA-graph executor path must opt in so minimal
+# builds don't pay for graph-related types.
 kernels = []
 
 [lints]

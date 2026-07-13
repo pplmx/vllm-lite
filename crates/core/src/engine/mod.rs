@@ -18,8 +18,8 @@ use crate::speculative::draft_resolver::DraftResolver;
 use crate::speculative::registry::DraftModelRegistry;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc;
-use vllm_traits::{ModelBackend, SeqId, TokenId};
+use tokio::sync::{mpsc, oneshot};
+use vllm_traits::{FinishReason, ModelBackend, SeqId, TokenId};
 
 #[cfg(feature = "cuda-graph")]
 use vllm_traits::CudaGraphExecutor;
@@ -71,6 +71,17 @@ pub struct Engine {
     /// requesters. Map keyed by [`SeqId`]; entries are removed when the
     /// receiver is dropped. Visible to integration tests.
     pub response_txs: HashMap<SeqId, mpsc::Sender<TokenId>>,
+    /// Per-sequence oneshot senders for delivering the [`FinishReason`]
+    /// that describes why the sequence stopped (`Length`, `Cancelled`,
+    /// …). Populated by [`crate::engine::Engine::add_request`] (defined
+    /// in the `lifecycle` sub-module) when the caller supplies one (the
+    /// HTTP streaming handlers do); drained by the same paths that drop
+    /// the matching `response_txs` entry so the handler learns the
+    /// reason **before** the channel close. See the v31.0 P4 follow-up
+    /// batch and `docs/technical-due-diligence/architecture-performance.md`
+    /// §5.1.2 — pre-fix this reason was lost and the HTTP layer hardcoded
+    /// `finish_reason = "stop"` for every response.
+    pub finish_reason_txs: HashMap<SeqId, oneshot::Sender<FinishReason>>,
     sleep_policy: SleepPolicy,
     /// Optional CUDA-Graph executor behind a trait object. The concrete
     /// type (`vllm_model::kernels::BatchCudaGraphExecutor`) is built by the
@@ -115,6 +126,7 @@ impl std::fmt::Debug for Engine {
             .field("error_count", &self.error_count)
             .field("last_error", &self.last_error)
             .field("response_txs_count", &self.response_txs.len())
+            .field("finish_reason_txs_count", &self.finish_reason_txs.len())
             .field("sleep_policy", &self.sleep_policy)
             .field("adaptive_decoder", &self.adaptive_decoder)
             .field("draft_registry", &self.draft_registry)
