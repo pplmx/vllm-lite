@@ -27,6 +27,39 @@ pub enum BatchPhase {
     Mixed,
 }
 
+/// Why a generation request stopped.
+///
+/// Mirrors the OpenAI `finish_reason` semantics for the cases vLLM-lite
+/// can actually produce today. The HTTP layer in `vllm-server` maps
+/// these to the corresponding OpenAI string values
+/// (`"stop"` / `"length"`).
+///
+/// `Cancelled` is emitted when the request was aborted by
+/// `EngineMessage::CancelRequest` (e.g. the SSE client disconnected
+/// mid-stream and the `CancelOnDrop` guard fired) — the HTTP layer
+/// surfaces this by truncating the response rather than emitting a
+/// final chunk, since the stream is already gone.
+///
+/// See `docs/technical-due-diligence/architecture-performance.md` §5.1.2
+/// and the v31.0 P4 follow-up batch — pre-fix the engine closed the
+/// response channel without telling the handler whether the stop was
+/// natural, hit-max-tokens, or cancelled, and the HTTP layer
+/// hardcoded `finish_reason = "stop"` for all three.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FinishReason {
+    /// Model emitted an end-of-sentence token, or a configured stop
+    /// sequence matched.
+    Stop,
+    /// Sequence hit its `max_tokens` cap without producing an EOS /
+    /// stop-sequence token.
+    Length,
+    /// Sequence was cancelled by an external request (client
+    /// disconnect, admin shutdown, etc.). The HTTP layer does not
+    /// surface this in the response body — the stream is already
+    /// gone by the time the engine reports it.
+    Cancelled,
+}
+
 /// One batched inference step: a list of sequences together with the
 /// per-sequence input tokens and positional metadata the scheduler
 /// needs to issue prefill and decode work concurrently.

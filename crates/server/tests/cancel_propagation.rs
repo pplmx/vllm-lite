@@ -87,6 +87,7 @@ fn spawn_recording_mock_engine(
                 EngineMessage::AddRequest {
                     response_tx,
                     seq_id_tx,
+                    finish_reason_tx,
                     ..
                 } => {
                     let seq_id = next_seq_id;
@@ -94,6 +95,10 @@ fn spawn_recording_mock_engine(
                     if let Some(tx) = seq_id_tx {
                         let _ = tx.send(seq_id);
                     }
+                    // Mock engine doesn't simulate finalization —
+                    // drop the reason so the handler falls back to
+                    // `"stop"`.
+                    drop(finish_reason_tx);
                     for token in &tokens {
                         if response_tx.send(*token).await.is_err() {
                             break;

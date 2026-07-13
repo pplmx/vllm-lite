@@ -3,7 +3,9 @@ name = "vllm-fuzz"
 version = "0.1.0"
 publish = false
 edition = "2024"
-rust-version = "1.85"
+# MSRV matches the workspace root (Cargo.toml) and `rust-toolchain.toml`.
+# Bump together with the rest of the toolchain policy.
+rust-version = "1.88"
 
 [package.metadata]
 cargo-fuzz = true

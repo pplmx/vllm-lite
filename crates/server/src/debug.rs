@@ -54,6 +54,7 @@ use vllm_core::types::EngineMessage;
 /// any valid key as admin is consistent with the current model
 /// where every API key is equivalent; once keys are bound to roles
 /// via JWT, this check should narrow to require the `admin` claim.
+#[allow(clippy::result_large_err)] // Response is the natural Err shape for axum handlers
 fn require_admin(state: &ApiState, headers: &HeaderMap) -> Result<(), Response> {
     let Some(auth) = state.auth.as_ref() else {
         let body = Json(serde_json::json!({

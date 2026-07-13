@@ -12,7 +12,7 @@
 //! 7. Records speculative metrics (efficiency, accuracy, per-request rates).
 
 use crate::error::Result;
-use vllm_traits::{BatchPhase, SeqId, TokenId};
+use vllm_traits::{BatchPhase, FinishReason, SeqId, TokenId};
 
 impl crate::engine::Engine {
     /// Speculative decode step (called from `Engine::step` when speculative mode is on).
@@ -114,7 +114,10 @@ impl crate::engine::Engine {
 
         let finished = self.scheduler.finished_sequences();
         for seq in &finished {
-            self.response_txs.remove(&seq.id);
+            // Tell the handler the sequence stopped, then drop the
+            // matching token channel. See `lifecycle::finalize_finished`
+            // for the rationale.
+            self.finalize_finished(seq.id, FinishReason::Length);
             self.scheduler.metrics.remove_per_request(seq.id);
         }
         self.scheduler.clear_finished();

@@ -69,6 +69,9 @@
 
 ### Changed
 
+- **`NcclAllReduce` honest renaming** (v31.0 P4 follow-up batch / technical due diligence `dist` §3.1) — `NcclAllReduce` and `LocalSumAllReduce` were two identically-implemented types; the `Nccl` prefix was misleading because v0.x has no NCCL backend. `LocalSumAllReduce` is now the canonical type; `NcclAllReduce` is a `#[deprecated]` type alias so existing callers keep compiling during the v0.x transition window. Re-exports updated to prefer `LocalSumAllReduce`. Compile-only test `nccl_all_reduce_alias_resolves_to_local_sum` guards the deprecation contract.
+- **public-api: vllm-dist added** — `LocalSumAllReduce` (canonical), the `NcclAllReduce` deprecated alias, and 8 associated method/impl items (Phase 31-D follow-up / v31.0 P4).
+
 - **Test-Only Public API (v31.0 Phase 31-C)** — Phase 12c tightened ~43 UNIT-TEST-ONLY items to `pub(crate)`. Six `TEST-ONLY-MIXED` items (`with_drafts`, `pack_sequences`, `total_bytes`, JWT builders) remain `pub` because integration tests live outside the crate.
 
 - **Dead Dependency Cleanup (v30.0 Phase 12a)** — removed 8 unused dependencies from the workspace via `cargo-machete` audit:

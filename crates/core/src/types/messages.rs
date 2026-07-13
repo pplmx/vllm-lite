@@ -24,10 +24,23 @@ pub enum EngineMessage {
     /// if the client disconnects mid-stream — otherwise the
     /// engine would keep generating tokens for a caller that has
     /// already gone away.
+    ///
+    /// `finish_reason_tx` is optional. When supplied, the engine
+    /// sends the [`vllm_traits::FinishReason`] describing why the
+    /// sequence stopped (length cap, cancellation, etc.) **before**
+    /// dropping `response_tx`. The HTTP layer maps this to OpenAI's
+    /// `finish_reason` (`"length"`, `"stop"`, etc.). Pre-fix, the
+    /// channel close alone signalled completion and the HTTP layer
+    /// hardcoded `finish_reason = "stop"` for every response, even
+    /// when the engine actually stopped because the sequence hit
+    /// `max_tokens` — see
+    /// `docs/technical-due-diligence/architecture-performance.md` §5.1.2
+    /// and the v31.0 P4 follow-up batch.
     AddRequest {
         request: Request,
         response_tx: mpsc::Sender<TokenId>,
         seq_id_tx: Option<oneshot::Sender<SeqId>>,
+        finish_reason_tx: Option<oneshot::Sender<vllm_traits::FinishReason>>,
     },
     /// Cancel an in-flight or queued sequence identified by `seq_id`
     /// (the value returned from the engine when the request was

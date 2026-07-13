@@ -2,11 +2,24 @@
 //!
 //! Default policy: `admin` > `operator` > `user` > `anonymous`. Roles and
 //! endpoint→role mappings are configured in [`AppConfig`](crate::config::AppConfig).
+//!
+//! ## SEC-01 (residual) — untrusted-header forgery closed
+//!
+//! The original `rbac_middleware` extracted the role from the
+//! client-supplied `X-User-Role` request header, which let any caller
+//! claim `admin` and reach `/metrics`, `/admin/*`, etc. without a
+//! valid API key. As of the v31.0 P4 follow-up batch the role must
+//! come from the [`AuthenticatedRole`] request extension, which can
+//! only be inserted by server-side middleware (JWT claim extraction,
+//! or a future role-aware auth path). Headers are no longer consulted
+//! at any decision point. See `docs/technical-due-diligence/production-readiness.md`
+//! §2 (SEC-01) and the follow-up note in `debug.rs` for the residual
+//! vulnerability that this commit closes.
 #![allow(clippy::module_name_repetitions)]
 use axum::{
     Json,
     extract::Request,
-    http::{HeaderMap, StatusCode},
+    http::StatusCode,
     middleware::Next,
     response::{IntoResponse, Response},
 };
@@ -15,7 +28,7 @@ use std::sync::Arc;
 
 /// Authenticated identity tier. Strict ordering:
 /// `Admin > Operator > User > Anonymous`. Each variant maps to a
-/// fixed capability set in [`RbacMiddleware::check_permission`] —
+/// fixed capability set in `RbacMiddleware::check_permission` —
 /// `Admin` is the only role allowed to call `manage_*` actions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
@@ -29,6 +42,10 @@ impl Role {
     /// Parse a role name case-insensitively. Unknown values fall back
     /// to [`Role::Anonymous`] (fail-closed) rather than `Admin`, so a
     /// typo can never grant elevated permissions.
+    ///
+    /// Only intended for trusted server-side inputs (e.g. JWT claim
+    /// strings parsed by `security::jwt`). The HTTP middleware MUST NOT
+    /// call this on values derived from the client.
     #[allow(clippy::should_implement_trait)]
     #[must_use]
     pub fn from_str(s: &str) -> Self {
@@ -71,11 +88,30 @@ impl Role {
     }
 }
 
+/// Server-injected role claim for the current request.
+///
+/// Inserted into request extensions by `auth_middleware` (after JWT
+/// claim parsing) or by future role-aware middleware. The
+/// `rbac_middleware` then reads this value to decide whether the
+/// request has the required permission.
+///
+/// **This type must never be constructible from a request header.**
+/// The whole point of the v31.0 P4 SEC-01 fix is that the only way
+/// `rbac_middleware` learns a role is through this extension, and the
+/// only writers of this extension are server-side middleware that have
+/// already authenticated the caller.
+#[derive(Debug, Clone, Copy)]
+pub struct AuthenticatedRole(pub Role);
+
+/// RBAC middleware. Holds the default role for requests with no role
+/// extension installed (always `Anonymous` in production — the only
+/// way to bypass `Anonymous` is for upstream middleware to insert
+/// [`AuthenticatedRole`]) and the (role → permitted actions) table
+/// consulted by `Self::check_permission`.
 #[derive(Debug)]
-/// RBAC middleware. Holds the default role for unauthenticated requests and the
-/// (role → permitted actions) table consulted by [`Self::check_permission`].
 pub struct RbacMiddleware {
-    /// Role assigned to requests without an `X-User-Role` header.
+    /// Role assigned to requests missing an [`AuthenticatedRole`] extension.
+    /// Always `Anonymous` in production; tests may override for fixture setup.
     default_role: Role,
     /// Static (role → permitted actions) policy table.
     role_permissions: Arc<Vec<(Role, Vec<&'static str>)>>,
@@ -83,10 +119,15 @@ pub struct RbacMiddleware {
 
 impl RbacMiddleware {
     /// Construct an [`RbacMiddleware`] that grants `default_role` to
-    /// requests missing the `X-User-Role` header. The static
-    /// (role → action) policy table is baked in: `Admin → ["*"]`,
+    /// requests missing the [`AuthenticatedRole`] extension. The
+    /// static (role → action) policy table is baked in: `Admin → ["*"]`,
     /// `Operator → ["read", "execute"]`, `User → ["read", "execute"]`,
     /// `Anonymous → []`.
+    ///
+    /// **SEC-01**: `default_role` is the *fallback* when no extension
+    /// is set, not a privilege granted by an absent auth header. To
+    /// preserve the v31.0 P4 fix, production callers must pass
+    /// `Role::Anonymous` here.
     #[must_use]
     pub fn new(default_role: Role) -> Self {
         let role_permissions = vec![
@@ -112,11 +153,18 @@ impl RbacMiddleware {
         false
     }
 
-    pub fn extract_role_from_headers(&self, headers: &HeaderMap) -> Role {
-        headers
-            .get("X-User-Role")
-            .and_then(|v| v.to_str().ok())
-            .map_or(self.default_role, Role::from_str)
+    /// Resolve the effective [`Role`] for a request.
+    ///
+    /// Looks at the [`AuthenticatedRole`] request extension installed
+    /// by upstream middleware. Falls back to `self.default_role` when
+    /// no extension is present, so a request that bypassed auth is
+    /// `Anonymous` rather than implicitly `User`.
+    ///
+    /// **Never reads from request headers** — that was the SEC-01
+    /// residual vulnerability.
+    #[must_use]
+    pub(crate) fn resolve_role(&self, extension: Option<&AuthenticatedRole>) -> Role {
+        extension.map_or(self.default_role, |r| r.0)
     }
 
     ///
@@ -144,11 +192,14 @@ impl RbacMiddleware {
 ///
 /// Enforces role-based access control.
 ///
-/// Extracts the role from either the JWT-claims-style `X-User-Role`
-/// header (set upstream by the auth middleware) or the configured
-/// default role, then denies the request with HTTP 403 + a structured
-/// JSON error if the role lacks the required permission for the
-/// requested path.
+/// Resolves the role from the [`AuthenticatedRole`] request extension
+/// installed by upstream auth middleware (JWT claim path in production,
+/// fixtures in tests). Rejects the request with HTTP 403 if the role
+/// lacks the required permission for the path.
+///
+/// **Never reads from request headers** — the SEC-01 residual
+/// vulnerability (X-User-Role forgery) is closed by relying solely on
+/// the server-installed extension.
 pub async fn rbac_middleware(request: Request, next: Next) -> Response {
     let rbac = RbacMiddleware::new(Role::Anonymous);
     let path = request.uri().path().to_string();
@@ -156,7 +207,8 @@ pub async fn rbac_middleware(request: Request, next: Next) -> Response {
         return next.run(request).await;
     };
 
-    let role = rbac.extract_role_from_headers(request.headers());
+    let extension = request.extensions().get::<AuthenticatedRole>().copied();
+    let role = rbac.resolve_role(extension.as_ref());
     if rbac.check_permission(role, required) {
         next.run(request).await
     } else {
@@ -171,8 +223,11 @@ pub async fn rbac_middleware(request: Request, next: Next) -> Response {
 
 // Unit + integration tests live in `tests.rs` (sibling) to keep this
 // middleware module under the 800-line soft cap. They cover the
-// pure-unit role/permission matrix (3 tests) and an axum middleware
-// integration that exercises the full request → middleware →
-// response path through `tower::ServiceExt::oneshot` (5 tests).
+// pure-unit role/permission matrix (4 tests including the new SEC-01
+// forgery-resistance assertions) and an axum middleware integration
+// that exercises the full request → middleware → response path through
+// `tower::ServiceExt::oneshot` (5 tests, all updated to install
+// `AuthenticatedRole` via request extensions rather than forging
+// `X-User-Role` headers).
 #[cfg(test)]
 mod tests;

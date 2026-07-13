@@ -101,6 +101,7 @@ pub fn spawn_mock_engine(reply_tokens: Vec<TokenId>) -> (EngineHandle, JoinHandl
                 EngineMessage::AddRequest {
                     response_tx,
                     seq_id_tx,
+                    finish_reason_tx,
                     ..
                 } => {
                     // Reply with a synthetic seq_id so chat
@@ -111,6 +112,13 @@ pub fn spawn_mock_engine(reply_tokens: Vec<TokenId>) -> (EngineHandle, JoinHandl
                     if let Some(tx) = seq_id_tx {
                         let _ = tx.send(seq_id);
                     }
+                    // Mock engine never sends a finish reason —
+                    // dropping the oneshot causes the handler's
+                    // `reason_rx.await` to resolve to `Err`, which
+                    // our code maps to `"stop"`. Tests that care
+                    // about the exact reason should use a real
+                    // engine (or extend this mock).
+                    drop(finish_reason_tx);
                     for token in &reply_tokens {
                         if response_tx.send(*token).await.is_err() {
                             break;

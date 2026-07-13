@@ -9,7 +9,7 @@
 use crate::engine::Engine;
 use crate::types::Request;
 use tokio::sync::mpsc;
-use vllm_traits::{SeqId, TokenId};
+use vllm_traits::{FinishReason, SeqId, TokenId};
 
 impl Engine {
     /// Returns `true` if the engine is considered healthy and ready to process
@@ -30,6 +30,27 @@ impl Engine {
         self.last_error.as_deref()
     }
 
+    /// Notify any registered handler of the [`FinishReason`] for `seq_id`,
+    /// then drop both the finish-reason sender and the matching token
+    /// response channel.
+    ///
+    /// Used by the regular and speculative step paths (`scheduler/batch.rs`,
+    /// `engine/spec_dispatch/dispatch.rs`, `engine/graph_step.rs`) just
+    /// before they drop `response_txs`. Centralising the helper keeps
+    /// the three sites consistent — pre-fix each one dropped the
+    /// channel without telling the handler *why*, and the HTTP layer
+    /// hardcoded `finish_reason = "stop"` for every response.
+    ///
+    /// The `send` is best-effort: if the handler already dropped the
+    /// oneshot (e.g. it gave up waiting after a client disconnect),
+    /// the `Result` is ignored.
+    pub(crate) fn finalize_finished(&mut self, seq_id: SeqId, reason: FinishReason) {
+        if let Some(tx) = self.finish_reason_txs.remove(&seq_id) {
+            let _ = tx.send(reason);
+        }
+        self.response_txs.remove(&seq_id);
+    }
+
     /// Cancel an in-flight or queued request identified by `seq_id`.
     ///
     /// Returns `true` if a request with that id was found and removed from the
@@ -37,10 +58,16 @@ impl Engine {
     /// caller is responsible for sending any partial-result notifications to
     /// the client before invoking this method; once cancelled, no further
     /// tokens will be produced for the sequence.
+    ///
+    /// If the cancelled sequence had a `finish_reason_tx` registered
+    /// (i.e. the HTTP layer asked for one), this method sends
+    /// [`FinishReason::Cancelled`] through it before removing the
+    /// channel — so the handler can distinguish "client cancelled"
+    /// from a channel close that happened for some other reason.
     pub fn cancel_request(&mut self, seq_id: SeqId) -> bool {
         let canceled = self.scheduler.cancel_request(seq_id);
         if canceled {
-            self.response_txs.remove(&seq_id);
+            self.finalize_finished(seq_id, FinishReason::Cancelled);
             self.scheduler.metrics.remove_per_request(seq_id);
         }
         canceled
@@ -56,6 +83,15 @@ impl Engine {
     /// If `req.prompt` is empty the request is rejected: `last_error` is set
     /// and `0` is returned. (Sequence id 0 is reserved as a sentinel for the
     /// "no request allocated" case.)
+    ///
+    /// **No `FinishReason` notification**: this method does not accept a
+    /// finish-reason oneshot. Callers that need the OpenAI-correct
+    /// `finish_reason` (HTTP streaming handlers) should send an
+    /// `EngineMessage::AddRequest` over the engine mailbox instead — the
+    /// message variant carries the optional `finish_reason_tx` field. Tests
+    /// and other in-process callers that talk to the engine directly don't
+    /// need it: when the response channel closes without a reason, the
+    /// caller falls back to `"stop"`.
     pub fn add_request(&mut self, req: Request, response_tx: mpsc::Sender<TokenId>) -> SeqId {
         // Validate prompt is not empty
         if req.prompt.is_empty() {

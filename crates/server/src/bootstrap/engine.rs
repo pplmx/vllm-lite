@@ -9,6 +9,11 @@
 // Also includes `configure_speculative` which wires adaptive or vanilla
 // speculative decoding onto a freshly constructed engine.
 
+// `build_engine` / `configure_speculative` are the natural names for
+// the bootstrap helpers in the `bootstrap::engine` module — the module
+// name describes the concern, the function name describes the action.
+#![allow(clippy::module_name_repetitions)]
+
 use anyhow::{Context, Result};
 use candle_core::Device;
 use std::sync::Arc;

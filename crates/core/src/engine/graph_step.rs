@@ -20,7 +20,7 @@ use vllm_traits::{SeqId, TokenId};
 use tracing::trace;
 
 #[cfg(feature = "cuda-graph")]
-use vllm_traits::{BatchOutput, BatchPhase};
+use vllm_traits::{BatchOutput, BatchPhase, FinishReason};
 
 impl Engine {
     #[cfg(feature = "cuda-graph")]
@@ -186,9 +186,10 @@ impl Engine {
 
         let finished = self.scheduler.finished_sequences();
         for seq in &finished {
-            if let Some(tx) = self.response_txs.remove(&seq.id) {
-                drop(tx);
-            }
+            // Tell the handler the sequence stopped, then drop the
+            // matching token channel. See `lifecycle::finalize_finished`
+            // for the rationale.
+            self.finalize_finished(seq.id, FinishReason::Length);
         }
         self.scheduler.clear_finished();
 

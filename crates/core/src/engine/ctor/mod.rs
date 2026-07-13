@@ -102,6 +102,7 @@ impl Engine {
             error_count: 0,
             last_error: None,
             response_txs: HashMap::with_capacity(max_seqs),
+            finish_reason_txs: HashMap::with_capacity(max_seqs),
             sleep_policy: SleepPolicy::default(),
             #[cfg(feature = "cuda-graph")]
             cuda_graph,

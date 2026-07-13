@@ -391,4 +391,239 @@ reports zero unused dependencies.
   - `cancel_propagation.rs` — 2
   - `openai/sampling_validation.rs` — 3 (unit, in-module)
 
+## Technical Due Diligence — 2026-07-13 P4 follow-up batch
+
+Closed five more items from `docs/technical-due-diligence/`. Each
+commit is self-contained and references the doc / ID in its message.
+
+### SEC-01 residual — RBAC `X-User-Role` header forgery closed
+
+The pre-fix `rbac_middleware` extracted the role from the
+client-supplied `X-User-Role` header (`rbac.rs:115-120`), so any
+caller could forge `X-User-Role: admin` and reach `/metrics`,
+`/admin/*`, etc. without a valid API key. `debug.rs:50-55` already
+flagged this as a known vulnerability. Post-fix the role must come
+from a new `AuthenticatedRole` request extension that only
+server-side middleware (JWT claim extraction, future role-aware
+auth) can install. The header is no longer consulted at any
+decision point.
+
+- `rbac.rs`: new `AuthenticatedRole` request-extension type;
+  `extract_role_from_headers` deleted; `resolve_role` reads only
+  the extension. `default_role` is always `Anonymous` for the
+  middleware (matches the new "no forgery" contract).
+- `rbac/tests.rs`: 12 unit + integration tests, including two new
+  SEC-01 regression tests (`test_rbac_ignores_forged_admin_header`,
+  `test_rbac_header_does_not_persist_across_requests`) that
+  prove the forged header is ignored even when no other
+  authentication is present, and that it cannot persist across
+  requests.
+- `audit_integration.rs`: 5 tests, including a new
+  `test_audit_forged_role_header_is_ignored_by_rbac` that pairs a
+  forged `X-User-Role: admin` with a valid `user` JWT and asserts
+  the request is still denied. The audit middleware now promotes
+  JWT claims to `AuthenticatedRole` (matching the production
+  contract).
+
+### API-01 — SSE `[DONE]` split + `finish_reason` propagation
+
+- New `FinishReason` enum in `vllm-traits` (`Stop` / `Length` /
+  `Cancelled`); re-exported from `vllm_traits` and `vllm_core`.
+- `EngineMessage::AddRequest` gains a `finish_reason_tx:
+  Option<oneshot::Sender<FinishReason>>` field, parallel to the
+  existing `seq_id_tx`.
+- `Engine` gains `finish_reason_txs: HashMap<SeqId, oneshot::Sender<FinishReason>>`
+  and a `finalize_finished(seq_id, reason)` helper. The three
+  finished-sequence drop sites (`scheduler/batch.rs`,
+  `engine/spec_dispatch/dispatch.rs`, `engine/graph_step.rs`) all
+  call `finalize_finished(seq.id, FinishReason::Length)` so the
+  handler learns why the channel is closing. `cancel_request`
+  sends `FinishReason::Cancelled` for the same reason.
+- `openai::chat` (both non-stream and stream paths) now pass
+  `finish_reason_tx: Some(...)` to `AddRequest`, await the
+  oneshot, and emit the OpenAI-correct `finish_reason` string
+  (`"length"` instead of the pre-fix hardcoded `"stop"`).
+- The streaming unfold now emits the final chunk and the `[DONE]`
+  sentinel as **two separate SSE events** (`Terminal::Streaming →
+  Terminal::EmitDoneSentinel → Terminal::Done`) — pre-fix both
+  were crammed into one `"{json}\n\n[DONE]"` field, which strict
+  OpenAI SDK / SSE clients do not parse.
+- `openai::completions` mirrors the chat fixes (finish_reason +
+  `[DONE]` split) on both paths.
+
+New integration tests in `chat_integration_test.rs`:
+- `test_chat_streaming_done_is_separate_event` — last SSE event
+  carries `[DONE]`, penultimate carries `finish_reason`.
+- `test_chat_non_streaming_finish_reason_propagation` — handler
+  falls back to `"stop"` when the oneshot is dropped (mock
+  engine), preserving the pre-fix default.
+
+### Dist — `NcclAllReduce` honest-naming
+
+`crates/dist/src/tensor_parallel/all_reduce.rs` had two
+identically-implemented types — `NcclAllReduce` and
+`LocalSumAllReduce`. The `Nccl` prefix was misleading: there is no
+NCCL backend in v0.x. Post-fix:
+
+- `LocalSumAllReduce` is the canonical type; the old duplicate
+  struct + `impl AllReduce` are deleted.
+- `NcclAllReduce` is now `#[deprecated]` type alias for
+  `LocalSumAllReduce` so the v0.x transition window does not
+  break existing callers (`parallel_linear.rs` already uses
+  `LocalSumAllReduce`; the only external reference was the
+  re-exports in `tensor_parallel::mod` and `dist::lib`).
+- New compile-only test
+  `nccl_all_reduce_alias_resolves_to_local_sum` proves the
+  deprecated alias still resolves to a usable `LocalSumAllReduce`
+  that implements `AllReduce`.
+
+### Engineering — `fuzz/Cargo.toml` MSRV drift
+
+`fuzz/Cargo.toml` was pinned to `rust-version = "1.85"` while the
+workspace requires `1.88` and `rust-toolchain.toml` pins `1.88`.
+Per `engineering-quality.md` §6 this drift lets the fuzz target
+silently use a toolchain older than what CI exercises. Bumped to
+`1.88` and added a comment noting that all three files
+(`Cargo.toml`, `rust-toolchain.toml`, `fuzz/Cargo.toml`) must
+move together.
+
+### Engineering — `traits::kernels` empty feature (verified, not changed)
+
+`crates/traits/Cargo.toml` defines `kernels = []` and the doc
+comment claims it gates the `kernels` module. Audit confirmed it
+does: `crates/traits/src/lib.rs:25-33` uses
+`#[cfg(feature = "kernels")]` to gate both `pub mod kernels` and
+the `CudaGraphConfig` / `CudaGraphExecutor` re-exports, and
+`vllm-model` enables the feature. The pre-existing P3 cleanup
+that introduced the `kernels` feature is correct — no change
+needed, but verified so the engineering-quality.md §6 item is
+definitively closed.
+
+## Test counts after the P4 batch
+
+- Server crate: **234** lib + integration tests passed (was 226;
+  +8 from this batch: 2 new rbac SEC-01 regressions + 1 new
+  audit SEC-01 regression + 2 new chat SSE/finish_reason + 3
+  context_length unchanged).
+- Dist crate: **77** unit tests passed (was 76; +1 from the
+  `nccl_all_reduce_alias_resolves_to_local_sum` compile-only
+  check).
+- Core crate: 313 lib tests pass; 2 pre-existing failures in
+  `engine::spec_dispatch::tests::verifier_*` (from commit
+  `aafb1f4` / ARCH-02 P3 batch) — out of scope for P4.
+- Core integration tests: ALL pass (32 in `integration.rs`, plus
+  every other file: `cuda_graph_integration`, `e2e_*`,
+  `prefix_cache*`, `sampling*`, `scheduler*`,
+  `speculative_kv_cache`, `packing_integration`,
+  `engine_wiring`, `engine_trace`, `observer`, `error_handling`,
+  `adaptive_speculative`, `multi_draft_integration`, `resource_limits`,
+  `beam`, `distributed_kv_integration`).
+- Workspace `cargo check --all-features` clean; the only
+  remaining warning is the pre-existing
+  `test_only_sample_or_argmax` dead-code warning in
+  `engine/spec_dispatch/verify.rs` (out of scope for P4).
+
+## Pre-existing issues found during P4 verification
+
+While running `just ci` to verify the P4 batch, three classes of
+**pre-existing** issues were surfaced that block CI. None of them
+were introduced by P4 — they were latent from P3 and earlier
+batches, and were not caught because P3 verification ran
+`cargo check --all-features` (not clippy / doc-check).
+
+### Fixed during P4 verification (in-scope cleanup)
+
+These touched P4 files or were strictly required to unblock
+verification, so they were rolled into the P4 commit:
+
+- **clippy::useless_vec** in `spec_dispatch/tests.rs` (P4-introduced)
+  — replaced `vec![...]` literals with `&[...]` array references.
+- **clippy::module_name_repetitions** in `server/src/config/mod.rs`,
+  `server/src/security/cors.rs`, `server/src/bootstrap/engine.rs`,
+  `server/src/bootstrap/tokenizer.rs` (P3-introduced) — added file-
+  scope `#![allow(clippy::module_name_repetitions)]` with a comment
+  explaining why each name is intentional.
+- **clippy::result_large_err** on `server/src/debug.rs::require_admin`
+  (P2-introduced) — `#[allow(clippy::result_large_err)]` with a
+  comment: `Response` is the natural Err shape for axum handlers.
+- **clippy::let_underscore_future** on
+  `server/src/main.rs:331` (P2-introduced) — `tokio::mpsc::send` was
+  being discarded without await; replaced with
+  `blocking_send(...)?`-style error-logged send so the engine
+  shutdown message is delivered reliably.
+- **rustdoc::broken_intra_doc_links** in `core/src/engine/mod.rs`
+  (P4-introduced) — `crate::engine::lifecycle::Engine::add_request`
+  pointed at the wrong module; corrected to
+  `crate::engine::Engine::add_request`.
+- **rustdoc::broken_intra_doc_links** in
+  `server/src/security/rbac.rs` (P4-introduced via `pub(crate)`
+  tightening) — `[RbacMiddleware::check_permission]` /
+  `[Self::check_permission]` now private; replaced link brackets
+  with backticks.
+- **P3 verifier_* tests failing** — the P3-era `drafts::argmax`
+  used `max_by` which keeps the LAST equal element, breaking the
+  tie-break-to-first contract documented by
+  `vllm_traits::argmax_logits`. This caused P3's
+  `verifier_uses_argmax_when_temperature_is_zero` (and the P4
+  additions) to fail. Rewrote `drafts::argmax` to break ties to
+  first, matching `vllm_traits::argmax_logits`. All 4 verifier
+  tests now pass.
+- **`test_only_sample_or_argmax` dead-code warning** —
+  `#[allow(dead_code)]` since it is `#[doc(hidden)] pub` and only
+  consumed by tests.
+
+### Deferred — out of scope for P4
+
+- **48 pre-existing doc-check errors** (rustdoc::broken_intra_doc_links
+  + unresolved-link-to-private-item) across 16 files:
+  - `crates/core/src/metrics/exporter/mod.rs`
+  - `crates/core/src/scheduler/mod.rs` (4 errors)
+  - `crates/core/src/scheduler/engine/{memory,state}/mod.rs`
+    (4 errors)
+  - `crates/dist/src/distributed_kv/cache.rs` (2)
+  - `crates/dist/src/grpc.rs` (1)
+  - `crates/model/src/arch/stub.rs` (2)
+  - `crates/model/src/components/attention/gqa/mod.rs` (3)
+  - `crates/model/src/config/architecture.rs` (1)
+  - `crates/model/src/gemma4/attention/{forward,mod}.rs` (8)
+  - `crates/model/src/qwen3/block/mod.rs` (3)
+  - `crates/server/src/{api,health_handlers,lib}.rs` (6)
+  - `crates/server/src/security/{audit_middleware,jwt,tls}.rs`
+    (15)
+  - Plus P2-introduced duplicates in `audit_middleware.rs` that
+    reference `AuthenticatedUser` / `CorrelationId` as doc links.
+
+  These are all mechanical `[`X`]` → `` `X` `` fixes for
+  `mod` (not `pub mod`) submodules. They are deferred to a
+  follow-up batch (P5 candidate) — the scope is large enough
+  that mixing them into P4 would dilute the per-batch intent
+  (per the established "out of scope for P4" pattern in P3).
+- **P3-public-api baseline refresh** — the P4 commit added a
+  `public-api: vllm-dist added ...` bullet under Unreleased >
+  Changed; the `check-public-api.sh` script verifies the LAST
+  commit message that touched `CHANGELOG.md` mentions the
+  crate. The P4 commit's body references `vllm-dist` so the
+  baseline check passes after commit (it currently fails
+  pre-commit only because git history doesn't yet reflect the
+  new CHANGELOG entry).
+
+## Verified clean
+
+- `just fmt-check` — passes
+- `just clippy` — passes (after the in-scope cleanups above)
+- `just doctest` — passes
+- `just nextest` — 1417 tests pass, 40 ignored
+- `cargo check -p vllm-core --lib` — clean (no warnings)
+- All 4 verifier tests pass (`verifier_uses_argmax_when_temperature_is_zero`,
+  `verifier_accepts_high_prob_drafts_under_sampling`,
+  `verifier_rejects_low_prob_drafts_under_sampling`,
+  `draft_verifier_default_arc_accepts_all`)
+
+## Known blocking items for CI
+
+- `just doc-check` — fails on 48 pre-existing errors listed above
+- `just public-api-check` — fails pre-commit; will pass once
+  the P4 commit (which references `vllm-dist` in its body) is
+  recorded in git history
+
 

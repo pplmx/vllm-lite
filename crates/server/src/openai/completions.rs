@@ -108,6 +108,12 @@ pub async fn completions(
     };
 
     let (response_tx, mut response_rx) = mpsc::channel(64);
+    // API-01 finish_reason propagation (mirrors chat.rs): the engine
+    // sends the [`FinishReason`] through this oneshot just before it
+    // drops the token response channel, so we can emit the
+    // OpenAI-correct `finish_reason` (`"length"` when the sequence hit
+    // `max_tokens`, instead of the pre-fix hardcoded `"stop"`).
+    let (finish_reason_tx, finish_reason_rx) = tokio::sync::oneshot::channel();
 
     // REL-01: use `try_send` so a saturated mailbox fails fast with
     // 503 `engine_overloaded` instead of blocking.
@@ -117,6 +123,7 @@ pub async fn completions(
             request,
             response_tx,
             seq_id_tx,
+            finish_reason_tx: Some(finish_reason_tx),
         })
         .map_err(|e| match e {
             tokio::sync::mpsc::error::TrySendError::Full(_) => overload_response(),
@@ -148,37 +155,88 @@ pub async fn completions(
         });
 
         let tokenizer = state.tokenizer.clone();
+        // API-01 finish_reason propagation + `[DONE]` split: mirror
+        // `chat.rs` — final chunk carries the real `finish_reason`
+        // and `[DONE]` is a separate SSE event. See
+        // `docs/technical-due-diligence/architecture-performance.md` §5.1.3.
+        enum Terminal {
+            Streaming,
+            EmitDoneSentinel,
+            Done,
+        }
         let stream = stream::unfold(
-            (response_rx, cancel_guard.clone()),
-            move |(mut rx, cancel_guard)| {
+            (
+                response_rx,
+                cancel_guard.clone(),
+                Some(finish_reason_rx),
+                Terminal::Streaming,
+            ),
+            move |(mut rx, cancel_guard, mut reason_rx_opt, mut terminal)| {
                 let tokenizer = tokenizer.clone();
                 async move {
-                    match rx.recv().await {
-                        Some(token) => {
-                            let text = tokenizer.decode(&[token]);
-                            if should_skip_token_text(&tokenizer, &text) {
-                                return Some((
-                                    Ok::<Event, Infallible>(Event::default().data("")),
-                                    (rx, cancel_guard),
-                                ));
+                    match terminal {
+                        Terminal::Done => None,
+                        Terminal::EmitDoneSentinel => {
+                            terminal = Terminal::Done;
+                            Some((
+                                Ok::<Event, Infallible>(Event::default().data("[DONE]")),
+                                (rx, cancel_guard, reason_rx_opt, terminal),
+                            ))
+                        }
+                        Terminal::Streaming => match rx.recv().await {
+                            Some(token) => {
+                                let text = tokenizer.decode(&[token]);
+                                if should_skip_token_text(&tokenizer, &text) {
+                                    return Some((
+                                        Ok::<Event, Infallible>(Event::default().data("")),
+                                        (rx, cancel_guard, reason_rx_opt, terminal),
+                                    ));
+                                }
+                                let chunk = serde_json::json!({
+                                    "id": "cmpl-stream",
+                                    "object": "text_completion",
+                                    "choices": [{
+                                        "text": text,
+                                        "index": 0,
+                                    }]
+                                });
+                                let sse_payload = chunk.to_string();
+                                Some((
+                                    Ok(Event::default().data(sse_payload)),
+                                    (rx, cancel_guard, reason_rx_opt, terminal),
+                                ))
                             }
-                            let chunk = serde_json::json!({
-                                "id": "cmpl-stream",
-                                "object": "text_completion",
-                                "choices": [{
-                                    "text": text,
-                                    "index": 0,
-                                }]
-                            });
-                            let sse_payload = chunk.to_string();
-                            Some((Ok(Event::default().data(sse_payload)), (rx, cancel_guard)))
-                        }
-                        None => {
-                            // Natural completion — disarm so Drop
-                            // doesn't send a redundant CancelRequest.
-                            cancel_guard.disarm();
-                            Some((Ok(Event::default().data("[DONE]")), (rx, cancel_guard)))
-                        }
+                            None => {
+                                let reason_string = if let Some(rx) = reason_rx_opt.take() {
+                                    match rx.await {
+                                        Ok(vllm_traits::FinishReason::Length) => "length",
+                                        Ok(vllm_traits::FinishReason::Stop) => "stop",
+                                        Ok(vllm_traits::FinishReason::Cancelled) => "stop",
+                                        Err(_) => "stop",
+                                    }
+                                } else {
+                                    "stop"
+                                };
+                                // Natural completion — disarm so Drop
+                                // doesn't send a redundant CancelRequest.
+                                cancel_guard.disarm();
+                                let chunk = serde_json::json!({
+                                    "id": "cmpl-stream",
+                                    "object": "text_completion",
+                                    "choices": [{
+                                        "text": "",
+                                        "index": 0,
+                                        "finish_reason": reason_string,
+                                    }]
+                                });
+                                let sse_payload = chunk.to_string();
+                                terminal = Terminal::EmitDoneSentinel;
+                                Some((
+                                    Ok(Event::default().data(sse_payload)),
+                                    (rx, cancel_guard, reason_rx_opt, terminal),
+                                ))
+                            }
+                        },
                     }
                 }
             },
@@ -193,11 +251,22 @@ pub async fn completions(
         tokens.push(token);
     }
 
+    // Engine sends the reason before closing the response channel, so
+    // this resolves immediately in the normal case. Fall back to
+    // `"stop"` only when the oneshot was dropped without a value
+    // (e.g. engine panicked between the two steps).
+    let finish_reason = match finish_reason_rx.await {
+        Ok(vllm_traits::FinishReason::Length) => "length".to_string(),
+        Ok(vllm_traits::FinishReason::Stop) => "stop".to_string(),
+        Ok(vllm_traits::FinishReason::Cancelled) => "stop".to_string(),
+        Err(_) => "stop".to_string(),
+    };
+
     let text = clean_completion_text(&state.tokenizer, &state.tokenizer.decode(&tokens));
     let choice = CompletionChoice {
         text,
         index: 0,
-        finish_reason: Some("stop".to_string()),
+        finish_reason: Some(finish_reason),
     };
 
     let usage = Usage::new(prompt_tokens_len, tokens.len());

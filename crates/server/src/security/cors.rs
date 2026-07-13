@@ -33,6 +33,12 @@
 //! layer without going through body-limit / auth (the preflight
 //! has no body and no auth header).
 
+// `CorsConfig` / `with_cors` are the natural names for the CORS
+// configuration type and its router helper. The `cors` module is the
+// only place this idiom exists, so suppressing the lint at file
+// scope is cleaner than per-item attributes.
+#![allow(clippy::module_name_repetitions)]
+
 use axum::Router;
 use tower_http::cors::{Any, CorsLayer};
 

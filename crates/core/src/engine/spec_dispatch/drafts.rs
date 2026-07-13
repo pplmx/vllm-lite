@@ -225,10 +225,22 @@ impl crate::engine::Engine {
 }
 
 /// argmax: argmax helper used by the verifier path.
+///
+/// Tie-breaks to the FIRST max index to stay consistent with
+/// [`vllm_traits::argmax_logits`] (the single source of truth for
+/// greedy decoding). The two functions must agree on ties: the
+/// verifier's temperature-aware path can fall through to either
+/// depending on `params.temperature`, and a tie-break mismatch
+/// would silently change the accepted draft sequence under
+/// temperature == 0 when several logits share the maximum.
 pub fn argmax(logits: &[f32]) -> TokenId {
-    logits
-        .iter()
-        .enumerate()
-        .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-        .map_or(0, |(i, _)| TokenId::try_from(i).unwrap_or(0))
+    let mut best_idx = 0_usize;
+    let mut best_val = f32::NEG_INFINITY;
+    for (i, &v) in logits.iter().enumerate() {
+        if v > best_val {
+            best_idx = i;
+            best_val = v;
+        }
+    }
+    TokenId::try_from(best_idx).unwrap_or(0)
 }

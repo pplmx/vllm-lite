@@ -5,7 +5,7 @@
 use crate::error::Result;
 use crate::sampling::sample_batch_with_params;
 use crate::sync::lock_mutex;
-use vllm_traits::{BatchOutput, SeqId, TokenId};
+use vllm_traits::{BatchOutput, FinishReason, SeqId, TokenId};
 
 impl crate::engine::Engine {
     /// Regular (non-speculative) decode step.
@@ -119,9 +119,14 @@ impl crate::engine::Engine {
         let finished = self.scheduler.finished_sequences();
         for seq in &finished {
             tracing::debug!(seq_id = seq.id, "Sequence finished");
-            if let Some(tx) = self.response_txs.remove(&seq.id) {
-                drop(tx);
-            }
+            // Tell the handler *why* the channel is closing before
+            // dropping it. Today the only path that sets
+            // `Status::Finished` is the `seq.tokens.len() >=
+            // seq.max_tokens` check in `scheduler/engine/update.rs`, so
+            // the honest reason is `Length`. If EOS detection is added
+            // later, the scheduler will need to carry a per-sequence
+            // reason and this call site should switch to it.
+            self.finalize_finished(seq.id, FinishReason::Length);
         }
         self.scheduler.clear_finished();
 
