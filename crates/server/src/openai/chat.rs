@@ -18,7 +18,7 @@ use std::convert::Infallible;
 use tokio::sync::mpsc;
 
 use super::chat_template::{self, ChatTemplate};
-use super::sampling_validation::validate_sampling_params;
+use super::sampling_validation::{validate_chat_request_fields, validate_sampling_params};
 use super::types::{
     ChatChoice, ChatChunk, ChatChunkChoice, ChatMessage, ChatRequest, ChatResponse, ErrorResponse,
     Usage,
@@ -244,6 +244,12 @@ pub async fn chat_completions(
     State(state): State<ApiState>,
     Json(req): Json<ChatRequest>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    // API-01: reject OpenAI fields the engine does not yet honour
+    // BEFORE doing any work. Architecture-performance §5.1
+    // "ChatRequest declares top-p, n, stop etc but handler/engine
+    // does not fully apply them." Honest 400 > silent degradation.
+    validate_chat_request_fields(&req)?;
+
     if req.stream.unwrap_or(false) {
         stream_chat_completion(state, req).await
     } else {

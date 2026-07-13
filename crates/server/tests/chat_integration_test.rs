@@ -274,3 +274,158 @@ async fn test_chat_non_streaming_finish_reason_propagation() {
         "non-streaming mock should yield finish_reason=stop (mock drops the reason oneshot)"
     );
 }
+
+/// API-01 (technical due diligence §5.1): `n > 1` is declared in
+/// `ChatRequest` but the engine emits exactly one completion per
+/// request. Silent acceptance + ignored field would be a contract
+/// violation — we return 400 invalid_request_error instead.
+#[tokio::test]
+async fn test_chat_rejects_n_greater_than_one_with_400() {
+    let state = vllm_server::test_fixtures::api_state(Architecture::Qwen3);
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "n": 2,
+        "max_tokens": 3,
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "n > 1 must be rejected at the HTTP boundary"
+    );
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(body["error"]["type"], "invalid_request_error");
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap_or("")
+            .contains("n > 1"),
+        "error message must name the rejected field, got: {}",
+        body["error"]["message"]
+    );
+}
+
+/// API-01 (technical due diligence §5.1): `n = 1` is the OpenAI
+/// default and must NOT be rejected — it is functionally identical
+/// to omitting the field.
+#[tokio::test]
+async fn test_chat_accepts_n_equal_to_one() {
+    let (state, _handle) = api_state_with_mock_engine(Architecture::Qwen3, vec![10]);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "n": 1,
+        "max_tokens": 3,
+    })
+    .to_string();
+
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "n = 1 must be accepted (equivalent to omitting the field)"
+    );
+}
+
+/// API-01: non-empty `stop` is declared in `ChatRequest` but the
+/// engine stops at `max_tokens` or natural EOS only. Accepting it
+/// and ignoring it would silently truncate at `max_tokens` even
+/// when a stop sequence was emitted.
+#[tokio::test]
+async fn test_chat_rejects_non_empty_stop_with_400() {
+    let state = vllm_server::test_fixtures::api_state(Architecture::Qwen3);
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "stop": ["\n", "END"],
+        "max_tokens": 3,
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "non-empty stop must be rejected at the HTTP boundary"
+    );
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap_or("")
+            .contains("stop sequences"),
+        "error message must name the rejected field"
+    );
+}
+
+/// API-01: empty `stop` array is functionally a no-op and must
+/// pass through unchanged.
+#[tokio::test]
+async fn test_chat_accepts_empty_stop_array() {
+    let (state, _handle) = api_state_with_mock_engine(Architecture::Qwen3, vec![10]);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "stop": [],
+        "max_tokens": 3,
+    })
+    .to_string();
+
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "empty stop array must be accepted (no-op)"
+    );
+}
