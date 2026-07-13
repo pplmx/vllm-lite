@@ -44,8 +44,7 @@ pub struct GrpcState {
     pub kv_cache: Arc<RwLock<HashMap<String, Vec<u8>>>>,
     /// Optional source of raw KV-block bytes that the
     /// `TransferKVBlock` RPC handler serves from. Phase 31-D OPS-31d.
-    /// `None` means the handler returns
-    /// [`tonic::Code::Unavailable`](tonic::Code::Unavailable) for
+    /// `None` means the handler returns `tonic::Code::Unavailable` for
     /// every inbound transfer request.
     pub block_data_source: Option<Arc<dyn BlockDataSource>>,
 }

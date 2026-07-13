@@ -67,7 +67,7 @@ pub async fn health_handler(State(state): State<ApiState>) -> Response {
 /// # Panics
 ///
 /// Panics if `state.health.read()` returns a poisoned `RwLock`;
-/// see [`health_handler`](self::health_handler) for the rationale.
+/// see [`health_handler`] for the rationale.
 pub async fn ready_handler(State(state): State<ApiState>) -> Response {
     let static_status = state.health.read().unwrap().check_readiness();
 

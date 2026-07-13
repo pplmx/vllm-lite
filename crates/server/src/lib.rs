@@ -66,7 +66,7 @@ pub struct ApiState {
     /// in-memory ring buffer (exportable via `/debug/audit`) and
     /// the structured `tracing` log stream. Bounded at 10 000
     /// events by default. Mounted into the router via
-    /// [`security::audit_middleware`].
+    /// the [`mod@security::audit_middleware`] module.
     pub audit: Arc<crate::security::audit::AuditLogger>,
     /// Health checker for liveness/readiness probes
     pub health: Arc<std::sync::RwLock<HealthChecker>>,

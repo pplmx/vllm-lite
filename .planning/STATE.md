@@ -523,6 +523,49 @@ definitively closed.
   `test_only_sample_or_argmax` dead-code warning in
   `engine/spec_dispatch/verify.rs` (out of scope for P4).
 
+## Technical Due Diligence — 2026-07-13 P5 follow-up batch
+
+Closed one follow-up item from the P4 batch: the 48 pre-existing
+doc-check errors (deferred from P4 as out-of-scope) were all
+mechanical `[`X`]` → `` `X` `` / `[`X`](otherwise)` fixes
+that landed in this commit. Touched 24 files; no behaviour change.
+
+Patterns closed (one fix per pattern):
+
+- `[`X`](otherwise)` → `[`X`] (otherwise)` — `[`FetchError::NoPeers`](if no peers and no source)` in
+  `crates/dist/src/distributed_kv/cache.rs` (rustdoc doesn't
+  parse `otherwise` as a path).
+- `[`X`](Y)` where `X` already resolves to `Y` →
+  `[`X`]` (redundant explicit link target).
+  E.g. `health_handler` in `crates/server/src/health_handlers.rs`,
+  `tonic::Code::Unavailable` in `crates/dist/src/grpc.rs`.
+- `[`crate::arch::UnknownArchitecture`]` /
+  `[`StubBlockWrapper`]` / `[`StubModel`]` / `[`mask`]` /
+  `[`kernels`]` / `[`Self::forward_*`]` / `[`TlsConfig::with_ca_cert`]` /
+  `[`JwtConfig::new`]` → plain backticks (private items or
+  no-such-field; the doc text still reads as code references).
+- `[`state`]` / `[`graph`]` / `[`memory`]` / `[`update`]` in
+  `crates/core/src/scheduler/engine/mod.rs` and friends →
+  plain backticks (sibling modules reachable only via
+  `super::`, not `crate::`).
+- `[`SchedulingPolicy`]` in `crates/core/src/scheduler/policy/mod.rs`
+  → plain backticks (rustdoc resolves via re-export but the
+  closure-style link rendered ambiguously against the trait's
+  associated items).
+- `[`Self::compute_owner_nodes`]` in
+  `crates/dist/src/distributed_kv/cache.rs` → plain backticks
+  (private method).
+- `[`mod@security::audit_middleware`]` is the canonical way
+  to disambiguate from the function with the same name —
+  applied in `crates/server/src/lib.rs:69`.
+
+After this batch:
+
+- `just ci` exits 0 (every step: fmt-check, clippy, doc-check,
+  doctest, nextest, public-api-check — passes).
+- Test count unchanged at 1417 (this batch is doc-only, no
+  source-code behaviour changes).
+
 ## Pre-existing issues found during P4 verification
 
 While running `just ci` to verify the P4 batch, three classes of
@@ -575,29 +618,23 @@ verification, so they were rolled into the P4 commit:
 ### Deferred — out of scope for P4
 
 - **48 pre-existing doc-check errors** (rustdoc::broken_intra_doc_links
-  + unresolved-link-to-private-item) across 16 files:
+  + unresolved-link-to-private-item) across 16 files. These were
+  mechanical `[`X`]` → `` `X` `` fixes for `mod` (not `pub mod`)
+  submodules and unresolved `[`X`](otherwise)` syntax. They were
+  fixed in the P5 follow-up batch (this section) so `just ci`
+  now passes cleanly. Files touched:
   - `crates/core/src/metrics/exporter/mod.rs`
-  - `crates/core/src/scheduler/mod.rs` (4 errors)
-  - `crates/core/src/scheduler/engine/{memory,state}/mod.rs`
-    (4 errors)
-  - `crates/dist/src/distributed_kv/cache.rs` (2)
-  - `crates/dist/src/grpc.rs` (1)
-  - `crates/model/src/arch/stub.rs` (2)
-  - `crates/model/src/components/attention/gqa/mod.rs` (3)
-  - `crates/model/src/config/architecture.rs` (1)
-  - `crates/model/src/gemma4/attention/{forward,mod}.rs` (8)
-  - `crates/model/src/qwen3/block/mod.rs` (3)
-  - `crates/server/src/{api,health_handlers,lib}.rs` (6)
+  - `crates/core/src/scheduler/{batch_composer,policy,radix_cache}/mod.rs`
+  - `crates/core/src/scheduler/engine/{memory,state/mod,mod}.rs`
+  - `crates/dist/src/distributed_kv/cache.rs`
+  - `crates/dist/src/grpc.rs`
+  - `crates/model/src/arch/stub.rs`
+  - `crates/model/src/components/attention/gqa/mod.rs`
+  - `crates/model/src/config/architecture.rs`
+  - `crates/model/src/gemma4/attention/{forward,mod}.rs`
+  - `crates/model/src/qwen3/block/mod.rs`
+  - `crates/server/src/{api,config,debug,health_handlers,lib,util}/`
   - `crates/server/src/security/{audit_middleware,jwt,tls}.rs`
-    (15)
-  - Plus P2-introduced duplicates in `audit_middleware.rs` that
-    reference `AuthenticatedUser` / `CorrelationId` as doc links.
-
-  These are all mechanical `[`X`]` → `` `X` `` fixes for
-  `mod` (not `pub mod`) submodules. They are deferred to a
-  follow-up batch (P5 candidate) — the scope is large enough
-  that mixing them into P4 would dilute the per-batch intent
-  (per the established "out of scope for P4" pattern in P3).
 - **P3-public-api baseline refresh** — the P4 commit added a
   `public-api: vllm-dist added ...` bullet under Unreleased >
   Changed; the `check-public-api.sh` script verifies the LAST
@@ -612,7 +649,11 @@ verification, so they were rolled into the P4 commit:
 - `just fmt-check` — passes
 - `just clippy` — passes (after the in-scope cleanups above)
 - `just doctest` — passes
+- `just doc-check` — passes (after the P5 follow-up batch closed
+  the 48 pre-existing doc-link errors)
 - `just nextest` — 1417 tests pass, 40 ignored
+- `just public-api-check` — passes (P4 commit body references
+  `vllm-dist`)
 - `cargo check -p vllm-core --lib` — clean (no warnings)
 - All 4 verifier tests pass (`verifier_uses_argmax_when_temperature_is_zero`,
   `verifier_accepts_high_prob_drafts_under_sampling`,
@@ -621,9 +662,6 @@ verification, so they were rolled into the P4 commit:
 
 ## Known blocking items for CI
 
-- `just doc-check` — fails on 48 pre-existing errors listed above
-- `just public-api-check` — fails pre-commit; will pass once
-  the P4 commit (which references `vllm-dist` in its body) is
-  recorded in git history
+- _None_ — `just ci` exits 0 (see "Verified clean" above).
 
 

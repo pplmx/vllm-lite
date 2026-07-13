@@ -6,7 +6,7 @@
 //! - Metrics snapshot
 //!
 //! SEC-01 (technical due diligence): every handler in this module
-//! is gated by [`require_admin`] — when no API keys are configured
+//! is gated by `require_admin` — when no API keys are configured
 //! the endpoint refuses with `503 admin_disabled` (so it can't be
 //! silently reachable on a non-loopback bind), and when keys are
 //! configured the caller must present a valid `Bearer` token. This

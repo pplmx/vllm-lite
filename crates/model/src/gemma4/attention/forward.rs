@@ -2,11 +2,11 @@
 //!
 //! Five public entry points:
 //!
-//! - [`Self::forward`] — dispatcher that picks `forward_full` or `forward_sliding`
+//! - `Self::forward` — dispatcher that picks `forward_full` or `forward_sliding`
 //!   based on `self.layer_type`
-//! - [`Self::forward_full`] / [`Self::forward_sliding`] — non-paged paths,
+//! - `Self::forward_full` / `Self::forward_sliding` — non-paged paths,
 //!   delegate to `gqa_attention`
-//! - [`Self::forward_prefill`] / [`Self::forward_decode`] — paged paths that
+//! - `Self::forward_prefill` / `Self::forward_decode` — paged paths that
 //!   read/write KV through `PagedKvCache`
 
 use candle_core::{Result, Tensor};

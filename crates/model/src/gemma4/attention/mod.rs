@@ -3,9 +3,9 @@
 //! Module layout:
 //!
 //! - [`self`] (`mod.rs`) — `Gemma4Attention` struct + `new` + `new_from_weights` + `Default` impl
-//! - [`mask`] — sliding-window causal mask helpers
-//! - [`kernels`] — projection / `RoPE` / `expand_kv` / attention compute kernels
-//! - [`forward`] — `forward` + `forward_full` + `forward_sliding` + `forward_prefill` + `forward_decode`
+//! - `mask` — sliding-window causal mask helpers
+//! - `kernels` — projection / `RoPE` / `expand_kv` / attention compute kernels
+//! - `forward` — `forward` + `forward_full` + `forward_sliding` + `forward_prefill` + `forward_decode`
 //!
 //! Tests live in the sibling `tests.rs` and exercise the sliding-window
 //! mask contract + non-paged vs paged numerical equivalence for sliding

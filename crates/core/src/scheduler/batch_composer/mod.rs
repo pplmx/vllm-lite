@@ -1,7 +1,7 @@
 //! Batch composer namespace.
 //!
 //! Re-exports [`BatchComposer`] (the composer impl) and the
-//! [`BatchCompositionConfig`] / [`ChunkedPrefillConfig`] types (size-budget
+//! `BatchCompositionConfig` / `ChunkedPrefillConfig` types (size-budget
 //! validation + chunked-prefill config). Runs synchronously inside the
 //! scheduler tick before the engine dispatches a batch.
 

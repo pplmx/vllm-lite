@@ -121,8 +121,9 @@ impl JwtConfig {
     /// issuer/audience default to `"vllm"` / `"vllm-api"`.
     ///
     /// NOTE: UNIT-TEST-ONLY per the Phase 12b v2 audit. No integration
-    /// test references this; production code paths use [`JwtConfig::new`]
-    /// or struct-literal initialisation. Tightened to `pub(crate)`.
+    /// test references this; production code paths use the public
+    /// `JwtConfig::new` constructor (or struct-literal initialisation
+    /// in cfg(test)). Tightened to `pub(crate)`.
     /// If a future feature wires this into a public path, promote back
     /// to `pub` and add an integration-test reference.
     #[must_use]

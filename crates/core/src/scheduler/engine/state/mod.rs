@@ -8,8 +8,8 @@
 //! Module layout:
 //!
 //! - [`self`] (`mod.rs`) — struct + `Debug` + `Default` + `new()` + `set_policy` + small getters + observer registration
-//! - [`request`] — `add_request` (enqueue + prefix-cache check + metrics + observer dispatch)
-//! - [`batch`] — `build_batch` + `schedule` (phase selection + composition + preemption trigger)
+//! - `request` — `add_request` (enqueue + prefix-cache check + metrics + observer dispatch)
+//! - `batch` — `build_batch` + `schedule` (phase selection + composition + preemption trigger)
 
 mod batch;
 mod request;

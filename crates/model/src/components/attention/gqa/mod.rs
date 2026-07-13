@@ -8,9 +8,9 @@
 //! Module layout:
 //!
 //! - [`self`] (`mod.rs`) — `GqaAttention` struct + construction + private QK-norm helpers + getters
-//! - [`forward`] — `forward` + the production dispatchers (`paged_attention_fn`, `tiled_attention_fn`, `flash_attention_fn`, `run_attention_fn`)
-//! - [`norm`] — public QK-norm API (`project_qkv`, `apply_q_norm_impl_flattened`, `apply_k_norm_impl_flattened`) used by external callers that need finer-grained control
-//! - [`tests`] — unit tests (sibling file)
+//! - `forward` — `forward` + the production dispatchers (`paged_attention_fn`, `tiled_attention_fn`, `flash_attention_fn`, `run_attention_fn`)
+//! - `norm` — public QK-norm API (`project_qkv`, `apply_q_norm_impl_flattened`, `apply_k_norm_impl_flattened`) used by external callers that need finer-grained control
+//! - `tests` — unit tests (sibling file)
 
 #![allow(clippy::too_many_arguments, clippy::module_name_repetitions)]
 // invariant: tensor-dimension casts (head_dim/seq_len -> f32) are bounded by

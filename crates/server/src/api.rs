@@ -75,7 +75,7 @@ pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailR
 ///
 /// Useful for graceful drain during orchestrator rolling updates.
 ///
-/// SEC-01 (technical due diligence): gated by [`require_admin`]. When
+/// SEC-01 (technical due diligence): gated by `require_admin`. When
 /// no API keys are configured the endpoint refuses with `503
 /// admin_disabled` rather than silently letting anyone reachable on
 /// the network stop the inference process. See `debug.rs` for the
