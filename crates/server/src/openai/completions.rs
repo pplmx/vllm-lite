@@ -11,7 +11,7 @@ use futures::stream;
 use std::convert::Infallible;
 use tokio::sync::mpsc;
 
-use super::sampling_validation::validate_sampling_params;
+use super::sampling_validation::{validate_completion_request_fields, validate_sampling_params};
 use super::types::{CompletionChoice, CompletionRequest, CompletionResponse, ErrorResponse, Usage};
 use crate::ApiState;
 
@@ -47,6 +47,11 @@ pub async fn completions(
     State(state): State<ApiState>,
     Json(req): Json<CompletionRequest>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    // API-01: reject OpenAI fields the engine does not yet honour
+    // BEFORE doing any work. Mirror of chat.rs:
+    // `validate_chat_request_fields`. Honest 400 > silent degradation.
+    validate_completion_request_fields(&req)?;
+
     if req.prompt.is_empty() {
         return Err((
             axum::http::StatusCode::BAD_REQUEST,

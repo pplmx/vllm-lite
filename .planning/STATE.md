@@ -664,4 +664,61 @@ verification, so they were rolled into the P4 commit:
 
 - _None_ — `just ci` exits 0 (see "Verified clean" above).
 
+## Technical Due Diligence — 2026-07-13 P6 follow-up batch
+
+Closed one follow-up item from
+`docs/technical-due-diligence/architecture-performance.md` §5.1
+("API-01: OpenAI 兼容是部分兼容") and §6 ("主要偏差 #1: ChatRequest
+声明 top-p, n, stop 等字段,但 handler/engine 未完整应用").
+
+**The fix**: stop silently dropping declared-but-not-honoured
+fields. Pre-fix, callers who sent `n: 2` got exactly one completion
+back and never knew the field was ignored — a contract violation.
+Post-fix, the wire types now explicitly reject `n > 1` and non-empty
+`stop` with `400 invalid_request_error` BEFORE the engine is
+touched. `n = 1` and `stop = []` are accepted as functionally
+no-ops matching OpenAI defaults.
+
+Files touched:
+
+- `crates/server/src/openai/sampling_validation.rs` — new
+  `validate_chat_request_fields` and
+  `validate_completion_request_fields`. 8 new unit tests covering
+  default-pass, n=1-pass, n=2-reject, empty-stop-pass,
+  non-empty-stop-reject for both request types.
+- `crates/server/src/openai/chat.rs` — calls
+  `validate_chat_request_fields(&req)?` at the top of
+  `chat_completions` (before stream vs non-stream dispatch).
+- `crates/server/src/openai/completions.rs` — calls
+  `validate_completion_request_fields(&req)?` at the top of
+  `completions` (before prompt-empty check).
+- `crates/server/tests/chat_integration_test.rs` — 4 new
+  integration tests:
+  `test_chat_rejects_n_greater_than_one_with_400`,
+  `test_chat_accepts_n_equal_to_one`,
+  `test_chat_rejects_non_empty_stop_with_400`,
+  `test_chat_accepts_empty_stop_array`.
+- `docs/reference/openai-compatibility.md` — new. Single source of
+  truth for what the OpenAI wire types do vs don't honour, by
+  endpoint and by field. Covers `/v1/chat/completions`,
+  `/v1/completions`, `/v1/models`, `/v1/embeddings`, `/v1/batches`,
+  and the error-code contract.
+- `docs/README.md` — links to the new doc from "Start Here" and
+  adds `reference/` to the directory tree.
+
+Test counts:
+
+- Server crate lib: 240 (was 234; +6 net after the P4 batch
+  rebuilt + this batch: 8 new `sampling_validation` tests minus
+  0 deletions)
+- Server integration: 14 in `chat_integration_test.rs` alone (was
+  10; +4 new).
+- Workspace: **1429** tests pass (was 1417; +12 from this batch).
+
+`top_p` is still **not declared** on the wire types — adding it
+requires the engine to honour it AND a CHANGELOG entry. Tracked
+in `docs/reference/openai-compatibility.md` as a v0.2 follow-up.
+
+`seed` is similarly not declared.
+
 

@@ -6,6 +6,7 @@
 |----------|----------|-------------|
 | [architecture.md](./architecture.md) | All | System design with Mermaid diagrams |
 | [tutorial/01-setup.md](./tutorial/01-setup.md) | New users | Clone → build → serve |
+| [reference/openai-compatibility.md](./reference/openai-compatibility.md) | API users | What `/v1/chat/completions` actually honours vs silently drops |
 | [adr/](./adr/) | Contributors | 19 Architecture Decision Records |
 | [OPERATIONS.md](../OPERATIONS.md) | Operators | Deploy, monitor, troubleshoot |
 | [technical-due-diligence/](./technical-due-diligence/) | Maintainers | 2026-07 holistic architecture and engineering assessment |
@@ -16,6 +17,7 @@
 docs/
 ├── architecture.md       # Human: system architecture (single source of truth)
 ├── adr/                  # Human: ADR-001 … ADR-019
+├── reference/            # Human: stable reference docs (OpenAI compatibility, config keys)
 ├── tutorial/             # Human: onboarding path
 ├── perf/                 # Human: profiling notes + distilled baselines
 ├── technical-due-diligence/ # Human: maintainer-oriented technical assessment
