@@ -9,7 +9,7 @@
 //!
 //! - [`self`] (`mod.rs`) — `MetricsExporter` trait + `InMemoryMetricsExporter`
 //!   + `MetricsError` + `dyn MetricsExporter::default_arc` + tests
-//! - [`prometheus`] — `PrometheusExporter` struct + impl
+//! - `prometheus` — `PrometheusExporter` struct + impl
 
 // crates/core/src/metrics/exporter/mod.rs
 // Prometheus text format requires explicit LF line terminators; explicit `\n` in

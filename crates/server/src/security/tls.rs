@@ -31,7 +31,7 @@ pub enum TlsError {
 
 /// TLS configuration: PEM-encoded server certificate + private key,
 /// plus optional CA bundle for client-certificate verification. Plain
-/// TLS is selected when `mtls = false`; calling [`TlsConfig::with_ca_cert`]
+/// TLS is selected when `mtls = false`; calling `TlsConfig::with_ca_cert`
 /// flips the flag and installs the CA path for mTLS.
 #[derive(Debug)]
 pub struct TlsConfig {
@@ -43,7 +43,7 @@ pub struct TlsConfig {
 
 impl TlsConfig {
     /// Build a plain (server-only) TLS configuration. Call
-    /// [`TlsConfig::with_ca_cert`] to upgrade to mTLS.
+    /// `TlsConfig::with_ca_cert` to upgrade to mTLS.
     pub fn new(cert_path: impl Into<String>, key_path: impl Into<String>) -> Self {
         Self {
             cert_path: cert_path.into(),

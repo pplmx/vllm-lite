@@ -28,9 +28,9 @@
 //!
 //! One `log_api_request` row per request, after the handler
 //! returns, with:
-//! - `request_id` — from the [`CorrelationId`] extension set by
+//! - `request_id` — from the `CorrelationId` extension set by
 //!   the correlation middleware
-//! - `user_id` — from the [`AuthenticatedUser`] extension set by
+//! - `user_id` — from the `AuthenticatedUser` extension set by
 //!   the auth middleware (or `None` for unauthenticated requests)
 //! - `action` — HTTP method (`GET`, `POST`, ...)
 //! - `resource` — request path
@@ -56,9 +56,9 @@ use crate::security::correlation::CorrelationId;
 /// Axum middleware: record every request in the audit trail.
 ///
 /// The middleware reads `request_id` from the
-/// [`CorrelationId`] extension set by [`correlation_id_middleware`]
-/// (above this layer) and `user_id` from the [`AuthenticatedUser`]
-/// extension set by [`auth_middleware`] (below). It runs the
+/// `CorrelationId` extension set by the correlation middleware
+/// (above this layer) and `user_id` from the `AuthenticatedUser`
+/// extension set by the auth middleware (below). It runs the
 /// handler, then records one audit row with the HTTP method,
 /// path, and outcome.
 ///
@@ -103,8 +103,8 @@ pub async fn audit_middleware(
 ///
 /// - 2xx → "success"
 /// - 3xx → "redirect" (rare on a JSON API but possible)
-/// - 4xx → "failure: <status> <reason>"
-/// - 5xx → "failure: <status> <reason>"
+/// - 4xx → `"failure: {status} {reason}"`
+/// - 5xx → `"failure: {status} {reason}"`
 #[must_use]
 pub fn audit_status_to_result(status: axum::http::StatusCode) -> String {
     let code = status.as_u16();

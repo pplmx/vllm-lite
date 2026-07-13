@@ -14,7 +14,7 @@
 //!
 //! `StubArchitecture::STUB_CAPABILITIES` reports
 //! `ArchCapabilities::STUB`; `create_block` / `create_model` return
-//! the shared [`StubBlockWrapper`] / [`StubModel`], both of which
+//! the shared `StubBlockWrapper` / `StubModel`, both of which
 //! always return zero tokens / passthrough KV (intentionally — see
 //! `.planning/MODEL-ARCHITECTURE-REFACTOR.md`).
 //!

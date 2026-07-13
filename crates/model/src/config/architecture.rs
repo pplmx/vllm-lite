@@ -22,7 +22,7 @@ pub struct RoPEConfig {
 pub enum Architecture {
     /// Unknown / unrecognised model architecture. Use as a fallback when
     /// config parsing yields no recognised `model_type`; the corresponding
-    /// trait impl is [`crate::arch::UnknownArchitecture`] (always errors
+    /// trait impl is `crate::arch::UnknownArchitecture` (always errors
     /// on `create_block` / `create_model`).
     Unknown,
     Qwen3,

@@ -2,16 +2,16 @@
 //! `SchedulerEngine` — continuous-batching engine.
 //!
 //! This module is split into four focused sub-modules that share a
-//! single `SchedulerEngine` struct (defined in [`state`]):
+//! single `SchedulerEngine` struct (defined in `state`):
 //!
-//! - [`graph`] (3 methods) — CUDA Graph helpers (`build_batch_with_graph`
+//! - `graph` (3 methods) — CUDA Graph helpers (`build_batch_with_graph`
 //!   plus the two private helpers it relies on).
-//! - [`update`] — `update`, the post-step state update invoked after
+//! - `update` — `update`, the post-step state update invoked after
 //!   the model forward pass returns.
-//! - [`memory`] (6 methods) — preemption, KV cache rollback, request
+//! - `memory` (6 methods) — preemption, KV cache rollback, request
 //!   cancellation, pressure reporting, KV usage stats, and the
 //!   prefix cache accessor.
-//! - [`state`] — the struct itself, its constructor, the major
+//! - `state` — the struct itself, its constructor, the major
 //!   lifecycle methods (`add_request`, `build_batch`, `schedule`,
 //!   `set_policy`), the `Default` impl, and the read-only state
 //!   accessors.

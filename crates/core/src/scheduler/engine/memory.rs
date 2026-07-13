@@ -138,9 +138,9 @@ impl SchedulerEngine {
     }
 
     /// Mutable accessor for the per-sequence chain cursors
-    /// ([`super::state::SchedulerEngine::chain_cursors`]).
+    /// (see `super::state::SchedulerEngine::chain_cursors`).
     ///
-    /// Used by [`super::update::SchedulerEngine::update`] to advance
+    /// Used by `super::update::SchedulerEngine::update` to advance
     /// the cursor after each block allocation, and by tests / ops
     /// tools to inspect the chain state without poking at private
     /// fields. Production code should let the request lifecycle

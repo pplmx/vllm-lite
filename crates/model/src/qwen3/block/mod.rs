@@ -7,9 +7,9 @@
 //! Module layout:
 //!
 //! - [`self`] (`mod.rs`) — `TransformerBlock` struct + `Deref` + `PagedDecoderBlock` impl
-//! - [`construct`] — `new`, `new_with_tp` (feature-gated), `new_with_weights`
-//! - [`weights`] — `from_weights` (HuggingFace weight map loader)
-//! - [`factory`] — free functions `new_block` + `block_from_weights`
+//! - `construct` — `new`, `new_with_tp` (feature-gated), `new_with_weights`
+//! - `weights` — `from_weights` (HuggingFace weight map loader)
+//! - `factory` — free functions `new_block` + `block_from_weights`
 //!
 //! Tests live in `tests.rs` (sibling file) to keep this module under the
 //! 800-line soft cap.

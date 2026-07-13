@@ -1,15 +1,15 @@
 //! Server configuration: top-level `AppConfig` plus error types and
-//! loading/validation. The three independent sections
-//! ([`ServerConfig`], [`EngineConfig`], [`AuthConfig`]) live in sibling
-//! modules and are composed into a single YAML/JSON document.
+//! loading/validation. The three independent sections (`ServerConfig`,
+//! `EngineConfig`, `AuthConfig`) live in sibling modules and are composed
+//! into a single YAML/JSON document.
 //!
 //! Module layout:
 //!
-//! - [`self`] (`mod.rs`) — `AppConfig` + `Default` + `load` + `validate`
-//!   + `ConfigValidationError` / `ConfigValidationErrors`
-//! - [`server`] — `ServerConfig` (bind address, port, log level)
-//! - [`engine`] — `EngineConfig` + `DraftSpecConfig` (scheduler tuning, draft specs)
-//! - [`auth`] — `AuthConfig` + `resolve_api_keys` (API keys + rate limit)
+//! - `mod.rs` — `AppConfig` + `Default` + `load` + `validate` +
+//!   `ConfigValidationError` / `ConfigValidationErrors`
+//! - `server` — `ServerConfig` (bind address, port, log level)
+//! - `engine` — `EngineConfig` + `DraftSpecConfig` (scheduler tuning, draft specs)
+//! - `auth` — `AuthConfig` + `resolve_api_keys` (API keys + rate limit)
 
 // `ConfigXxx` / `AppConfig` / `ServerConfig` etc. are intentional public
 // API names — re-exported across the workspace and consumed by

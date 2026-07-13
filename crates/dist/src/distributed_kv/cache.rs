@@ -309,10 +309,10 @@ impl DistributedKVCache {
     /// 3. **Local fallback**: if fan-out yields no success, try the
     ///    local [`BlockDataSource`] (production wraps `PagedKvCache`).
     /// 4. **Nothing worked**: return
-    ///    [`FetchError::NoPeers`](if no peers and no source) or
-    ///    [`FetchError::AllPeersFailed`](otherwise).
+    ///    [`FetchError::NoPeers`] (if no peers and no source) or
+    ///    [`FetchError::AllPeersFailed`] (otherwise).
     ///
-    /// Smart owner-based routing (using [`Self::compute_owner_nodes`])
+    /// Smart owner-based routing (using `Self::compute_owner_nodes`)
     /// is deferred to v32+ — fan-out wastes bandwidth but is correct
     /// and simple.
     ///
