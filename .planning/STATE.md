@@ -722,3 +722,84 @@ in `docs/reference/openai-compatibility.md` as a v0.2 follow-up.
 `seed` is similarly not declared.
 
 
+## Technical Due Diligence — 2026-07-14 P7 follow-up batch
+
+Closed two remaining items in one session:
+
+### Production-readiness §7 — graceful shutdown flips readiness before listener closes
+
+The §7 shutdown sequence lists six steps; pre-fix the implementation
+covered steps 4–6 (cancel queued / drain in-flight / flush logs via
+axum's `with_graceful_shutdown`, then `EngineMessage::Shutdown` +
+`engine_thread.join`) but the first two (readiness=false, wait for
+orchestrator drain) were missing. Concretely:
+
+- `/shutdown` handler sent `EngineMessage::Shutdown` and returned 200
+  without touching the readiness flag. A Kubernetes probe polling
+  `/health/ready` between `/shutdown` and SIGTERM still saw `Ok` and
+  could route new traffic to a pod whose engine was already tearing
+  down.
+- `shutdown_signal()` returned from `tokio::select!` immediately,
+  so axum slammed the listener shut on SIGTERM before the
+  orchestrator's readiness probe had a chance to detect the new
+  state and remove the pod from the Service endpoints list.
+
+Post-fix:
+
+- `HealthChecker::mark_not_ready` (const fn, idempotent). Both
+  the `/shutdown` handler and the SIGTERM/Ctrl+C shutdown
+  coordinator call it on entry; idempotency means they can race
+  without coordination.
+- `shutdown_signal()` now takes `Arc<RwLock<HealthChecker>>` +
+  `drain_grace_secs`: (1) `mark_not_ready`, (2) sleep for the
+  grace period, (3) return — letting `with_graceful_shutdown`
+  close the listener. The sleep is interruptible and yields the
+  runtime, so the accept loop keeps processing (and rejecting)
+  new connections during the grace period; the listener itself
+  stays open.
+- `ServerConfig::shutdown_drain_grace_secs` (default 5 s, capped
+  at 300 s via `ConfigValidationError::ShutdownDrainGraceTooLarge`
+  so a typo can't block shutdown for an hour). 5 s matches the
+  default K8s readiness probe `failureThreshold (3) *
+  periodSeconds (1)` so two or three failed probes reliably
+  catch the flip before the listener closes; operators tune via
+  YAML to match their probe timing.
+
+### Public-API check — `[Unreleased]`-aware verification
+
+`check-public-api.sh` previously inspected only the LATEST commit
+message that touched `CHANGELOG.md`, which meant a CHANGELOG
+bullet added in an earlier commit (e.g. the original P3 / P4
+follow-ups) was invisible when the public-API check ran during a
+later batch. Replaced with an awk extraction of the entire
+`[Unreleased]` section and a regex that requires an explicit
+`public-api:` bullet naming the crate. Incidental mentions
+(e.g. test counts that list the crate) do NOT satisfy the
+check. Backfilled four missing `public-api:` bullets in the
+existing `[Unreleased]` > Changed section: `vllm-traits`
+(FinishReason + 28 items), `vllm-core` (8 items:
+finish_reason_txs + EngineMessage fields + CancelRequest),
+`vllm-model` (1 item: `ModelLoader::capabilities`), `vllm-server`
+(102 items: P2/P3/P4/P6 hardening + P7 shutdown readiness).
+
+## Test counts after the P7 batch
+
+- Workspace: **1436** tests pass (was 1429; +7 from this batch:
+  +2 unit in `health.rs` + 5 integration in
+  `crates/server/tests/shutdown_readiness.rs`).
+- vllm-server lib: 174 (was 172; +2 unit).
+- vllm-server integration: +5 new file
+  (`shutdown_readiness.rs`).
+- `just ci` exits 0 (fmt-check, clippy, doc-check, doctest,
+  nextest, public-api-check all pass).
+
+## Remaining open items
+
+- **PERF-01** (continuous batching kernel) — deferred to v32+;
+  very-high complexity, blocked on a stable `KernelBackend` seam.
+- **CI-01** (sustained GPU / real-checkpoint CI) — deferred;
+  needs a runner with a GPU and a checkpoint cache.
+- **OpenAI compat: top_p / seed wire types** — tracked in
+  `docs/reference/openai-compatibility.md` as a v0.2 follow-up
+  (requires engine honour + CHANGELOG entry; out of scope for
+  the v31.0 hardening batches).
