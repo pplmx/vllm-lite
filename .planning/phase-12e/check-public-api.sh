@@ -83,23 +83,41 @@ for crate in "${crates[@]}"; do
         continue
     fi
 
-    # Growth: require CHANGELOG entry referencing this crate.
-    # `git log --oneline -1 -- CHANGELOG.md` is the most recent commit
-    # touching CHANGELOG; its body should mention `crate` or "phase 12c/12d".
+    # Growth: require a CHANGELOG entry that explicitly tags the change
+    # as a public-API modification for this crate. We scan the entire
+    # [Unreleased] section (not just the latest commit message) because
+    # API growth typically spans many commits within a single milestone.
+    # The grep requires an explicit `public-api:` line that mentions this
+    # crate's name — incidental mentions (e.g. test counts that list the
+    # crate) do NOT count.
     if [ ! -f "CHANGELOG.md" ]; then
         echo "FAIL: public API grew (+${added_count}) in ${crate} but CHANGELOG.md missing" >&2
         fail=1
         continue
     fi
 
-    changelog_msg="$(git log -1 --format='%s%n%b' -- CHANGELOG.md 2>/dev/null || true)"
-    if echo "$changelog_msg" | grep -qiE "vllm-${crate}|phase 12|public.?api" ; then
-        echo "  ${crate}: grew +${added_count} (CHANGELOG entry present)"
+    # Extract the [Unreleased] section, dropping everything before its
+    # heading and after the next `## ` heading (next version). CHANGELOG
+    # headings sometimes lead with an emoji (e.g. `## 🚀 [Unreleased]`),
+    # so we match on the marker `[Unreleased]` and break on any `## `.
+    changelog_msg="$(awk '
+        /^## .*\[Unreleased\]/ { in_unreleased = 1; next }
+        in_unreleased && /^## / { exit }
+        in_unreleased            { print }
+    ' CHANGELOG.md)"
+
+    # Match a `public-api:` (or `public_api:` / `publicapi:`) marker
+    # followed by the crate name. The marker must appear at the start of
+    # a bullet (after `-` / `*` / whitespace, optionally with markdown
+    # bold `**` wrapping) so prose mentions of "public-API" don't
+    # satisfy it.
+    if echo "$changelog_msg" | grep -qiE "^\s*[-*]\s*(\*\*)?\s*public[._-]?api[: ].*vllm-${crate}\b" ; then
+        echo "  ${crate}: grew +${added_count} (CHANGELOG entry present in [Unreleased])"
         continue
     fi
 
     echo "FAIL: public API grew (+${added_count}) in vllm-${crate} but no CHANGELOG entry references it" >&2
-    echo "  Add a CHANGELOG.md bullet under the most recent Unreleased section:" >&2
+    echo "  Add a CHANGELOG.md bullet under the [Unreleased] section like:" >&2
     echo "    - public-api: vllm-${crate} added <items> (Phase XX)" >&2
     fail=1
 done
