@@ -95,6 +95,45 @@ public-api-check:
 public-api-baseline:
     bash .planning/phase-12e/refresh-baselines.sh
 
+# === Doc coverage gate (Phase 31-E) ===
+# Print the per-crate and workspace /// doc coverage. Use
+# `just doc-coverage-real` to blank out test mods / hidden /
+# derive-generated items for a more honest number.
+doc-coverage:
+    bash scripts/doc_coverage.sh
+
+# Same as `doc-coverage` but with the `real` filter (excludes
+# `#[cfg(test)]` / `#[doc(hidden)]` / derive-generated items).
+doc-coverage-real:
+    bash scripts/doc_coverage.sh --real
+
+# Phase 31-E doc-coverage gate. Reads the per-crate JSON from
+# `scripts/doc_coverage.sh --real json`, aggregates to a single
+# workspace `real_pct`, and exits non-zero if it drops below
+# the threshold (default 65%, matches the v31.0 master plan).
+# Override via the env var DOC_COVERAGE_MIN.
+doc-coverage-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    THRESHOLD="${DOC_COVERAGE_MIN:-65.0}"
+    json="$(bash scripts/doc_coverage.sh --real json)"
+    real_pct="$(echo "$json" | python3 -c "
+    import sys, json
+    data = json.load(sys.stdin)
+    total = sum(int(c.get('real_total', 0)) for c in data.values())
+    doc = sum(int(c.get('real_documented', 0)) for c in data.values())
+    print(f'{(doc/total)*100:.2f}' if total else '0.00')
+    ")"
+    echo "workspace real doc coverage: ${real_pct}% (target >= ${THRESHOLD}%)"
+    python3 -c "
+    import sys
+    threshold = float('${THRESHOLD}')
+    actual = float('${real_pct}')
+    if actual < threshold:
+        print(f'FAIL: doc coverage {actual}% below threshold {threshold}%', file=sys.stderr)
+        sys.exit(1)
+    "
+
 # === Release manifest (GOV-01) ===
 # Print the release manifest derived from [workspace.package] version.
 # Use this to preview what `release.yml` will see on tag push.
@@ -112,11 +151,11 @@ release-manifest-write:
     bash scripts/release-manifest.sh --out target/release-manifest.env
 
 # Run all CI checks (skips #[ignore] slow tests)
-ci: fmt-check clippy doc-check doctest nextest public-api-check
+ci: fmt-check clippy doc-check doctest nextest public-api-check doc-coverage-check
 
 # Run the full CI gate including security checks (audit + deny). Requires
 # `cargo-audit` and `cargo-deny` installed locally.
-ci-all: fmt-check clippy doc-check doctest nextest public-api-check security
+ci-all: fmt-check clippy doc-check doctest nextest public-api-check doc-coverage-check security
 
 # Engineering-quality §8: `just ci-full` is the documented three-entry
 # alias for the full-gate recipe. We keep `ci-all` as the canonical
