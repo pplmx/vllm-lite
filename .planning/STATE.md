@@ -803,3 +803,74 @@ finish_reason_txs + EngineMessage fields + CancelRequest),
   `docs/reference/openai-compatibility.md` as a v0.2 follow-up
   (requires engine honour + CHANGELOG entry; out of scope for
   the v31.0 hardening batches).
+
+## Technical Due Diligence — 2026-07-14 P8 follow-up batch
+
+Closed three follow-up items in one session:
+
+### Engineering-quality §8 — `just check` / `just ci-full` aliases
+
+The doc recommends three primary entry points (`just check / just
+ci / just ci-full`); the actual recipes were `quick / ci / ci-all`.
+Added `check` and `ci-full` as aliases for `quick` and `ci-all`
+respectively; original names retained for muscle memory. `just
+--list` now exposes both spellings.
+
+### Production-readiness §7 / multi-node — OPERATIONS.md drift
+
+The Multi-Node section claimed "KV block transfer is not yet
+production-ready" — but Phase 31-D / OPS-31d shipped the
+TransferKVBlock RPC + fan-out fallback + 64 MiB message limit.
+Rewrote the section to honestly split what works (CacheMessage
+replication, TransferKVBlock, fan-out fallback) vs. what's still
+v32+ (smart owner routing, failure recovery, MESI/Directory
+enforcement), added a library-API quickstart, and explicitly
+noted that peer_urls is library-level only — no CLI / VLLM_*
+env var exists yet.
+
+The Graceful Shutdown section now documents the §7 four-step
+sequence (readiness flip + drain grace + axum drain + engine
+join) introduced by P7, including the new
+`shutdown_drain_grace_secs` YAML key and how to tune it for K8s
+probe timing. Pre-fix the doc said only "engine drains in-flight
+requests" which understated the new behaviour.
+
+### Phase 31-E — doc-coverage gate at 65% real
+
+Last Phase 31-E master-plan item. The `scripts/doc_coverage.sh`
+script existed but wasn't wired into any gate, so the per-crate /
+workspace numbers in STATE.md / CHANGELOG could silently drift
+down. New CI step after Public API baseline check:
+
+- Reads `scripts/doc_coverage.sh --real json`
+- Sums `real_total` + `real_documented` across crates
+- Exits non-zero if workspace `real_pct < DOC_COVERAGE_MIN`
+  (default `65.0`, override per workflow run)
+
+`just doc-coverage-check` mirrors the gate for the local loop
+and is wired into `just ci` / `just ci-all`. Current measured
+value: **67.91%** real (target 65%).
+
+## Test counts after the P8 batch
+
+- Workspace: **1436** tests pass (no test changes this batch —
+  documentation + CI gate only).
+- `just ci` exits 0.
+- `DOC_COVERAGE_MIN=70.0 just doc-coverage-check` correctly
+  fails with exit 1, proving the gate is wired correctly.
+
+## Remaining open items (after P8)
+
+- **PERF-01** (continuous batching kernel) — deferred to v32+.
+- **CI-01** (sustained GPU / real-checkpoint CI) — deferred.
+- **OpenAI compat: top_p / seed wire types** — tracked as v0.2
+  follow-up in `docs/reference/openai-compatibility.md`.
+- **Phase 31-D: 2-node integration test** — not yet exercised
+  end-to-end; the unit tests for `TransferKVBlock` and
+  `DistributedKVCache::fetch_block` are in place but a 2-process
+  round-trip (start two nodes, route a prefix cache hit across
+  them) is still outstanding.
+- **Phase 31-F (performance)** — `attn_factor` in paged/flash
+  attention paths, `RopeScaling` config → Block wiring,
+  `expand_kv` fused kernel, PagedKV host round-trip elimination
+  all deferred.
