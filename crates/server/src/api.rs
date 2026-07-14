@@ -118,6 +118,18 @@ pub async fn shutdown(State(state): State<ApiState>, headers: axum::http::Header
     // shutdown — operators expect `/shutdown` to return immediately
     // even under load.
     let _ = state.engine_tx.try_send(EngineMessage::Shutdown);
+
+    // Production-readiness §7: also flip the readiness flag so the
+    // next `/health/ready` probe (orchestrator or external monitor)
+    // reports `NotReady` and stops routing new traffic to this pod.
+    // We don't wait for the orchestrator to drain — the orchestrator
+    // owns the rolling-update cadence — but we make sure the
+    // process is *advertised* as draining immediately rather than
+    // waiting for SIGTERM to propagate to the probe path. Matches
+    // the SIGTERM path's behaviour in `main.rs::shutdown_signal`.
+    if let Ok(mut checker) = state.health.write() {
+        checker.mark_not_ready();
+    }
     (
         axum::http::StatusCode::OK,
         Json(serde_json::json!("Shutting down")),

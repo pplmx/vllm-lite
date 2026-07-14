@@ -71,6 +71,25 @@ impl HealthChecker {
             HealthStatus::NotReady
         }
     }
+
+    /// Flip the readiness flag to `false`. Used by the graceful-shutdown
+    /// path (`SIGTERM`, `/shutdown`) so the orchestrator's next readiness
+    /// probe flips to `NotReady` and stops routing new traffic to this
+    /// pod before the HTTP listener actually closes.
+    ///
+    /// Production-readiness §7: "SIGTERM/admin request → readiness=false →
+    /// stop accepting new inference → cancel or drain queued requests →
+    /// wait in-flight with deadline → flush metrics/logs → shutdown
+    /// engine and join thread → exit". This method implements the first
+    /// step; the caller (the shutdown coordinator) is responsible for
+    /// the subsequent steps.
+    ///
+    /// Idempotent: calling on an already-not-ready checker is a no-op so
+    /// the SIGTERM handler and the `/shutdown` handler can both invoke
+    /// it without coordination.
+    pub const fn mark_not_ready(&mut self) {
+        self.ready = false;
+    }
 }
 
 impl Default for HealthChecker {
@@ -109,5 +128,27 @@ mod tests {
         assert_eq!(HealthStatus::Ok.as_str(), "ok");
         assert_eq!(HealthStatus::NotReady.as_str(), "not_ready");
         assert_eq!(HealthStatus::Unhealthy.as_str(), "unhealthy");
+    }
+
+    #[test]
+    fn mark_not_ready_flips_a_ready_checker() {
+        let mut checker = HealthChecker::new(true, true);
+        assert_eq!(checker.check_readiness(), HealthStatus::Ok);
+        checker.mark_not_ready();
+        assert_eq!(checker.check_readiness(), HealthStatus::NotReady);
+        // Liveness is unaffected — only readiness drops.
+        assert_eq!(checker.check_liveness(), HealthStatus::Ok);
+    }
+
+    #[test]
+    fn mark_not_ready_is_idempotent() {
+        // Calling mark_not_ready on an already-not-ready checker is a
+        // no-op; the SIGTERM handler and the /shutdown handler can both
+        // invoke it without coordination.
+        let mut checker = HealthChecker::new(true, false);
+        checker.mark_not_ready();
+        assert_eq!(checker.check_readiness(), HealthStatus::NotReady);
+        checker.mark_not_ready();
+        assert_eq!(checker.check_readiness(), HealthStatus::NotReady);
     }
 }

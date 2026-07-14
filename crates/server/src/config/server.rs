@@ -21,6 +21,17 @@ pub struct ServerConfig {
     /// If set, JSON-formatted log lines are also written to this directory.
     #[serde(default)]
     pub log_dir: Option<String>,
+    /// Seconds the shutdown coordinator waits between flipping
+    /// `readiness=false` and actually closing the HTTP listener.
+    ///
+    /// Production-readiness §7: Kubernetes stops routing new traffic to
+    /// a pod only AFTER its readiness probe fails two or three times in
+    /// a row (the default `failureThreshold * periodSeconds`). Five
+    /// seconds is enough head-room for the default probe timing and
+    /// still fast enough to feel responsive to a `kubectl delete pod`.
+    /// Set to `0` to skip the wait entirely (mostly useful for tests).
+    #[serde(default = "default_shutdown_drain_grace_secs")]
+    pub shutdown_drain_grace_secs: u64,
 }
 
 impl Default for ServerConfig {
@@ -30,6 +41,7 @@ impl Default for ServerConfig {
             port: default_port(),
             log_level: default_log_level(),
             log_dir: None,
+            shutdown_drain_grace_secs: default_shutdown_drain_grace_secs(),
         }
     }
 }
@@ -44,6 +56,10 @@ const fn default_port() -> u16 {
 
 fn default_log_level() -> String {
     "info".to_string()
+}
+
+const fn default_shutdown_drain_grace_secs() -> u64 {
+    5
 }
 
 /// SEC-01 (technical due diligence): classify a bind address as loopback

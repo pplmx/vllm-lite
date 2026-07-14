@@ -208,7 +208,7 @@ async fn main() -> Result<()> {
         batch_manager,
         auth: auth_middleware.clone(),
         audit: audit_logger.clone(),
-        health: health_checker,
+        health: health_checker.clone(),
         metrics: metrics_collector,
         max_model_len,
         arch_capabilities,
@@ -314,7 +314,10 @@ async fn main() -> Result<()> {
     tracing::info!(address = %addr, "Server listening");
 
     axum::serve(listener, app.into_make_service())
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(shutdown_signal(
+            health_checker,
+            app_config.server.shutdown_drain_grace_secs,
+        ))
         .await
         .with_context(|| format!("server crashed while serving on {addr}"))?;
 
@@ -366,7 +369,10 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn shutdown_signal() {
+async fn shutdown_signal(
+    health_checker: Arc<std::sync::RwLock<HealthChecker>>,
+    drain_grace_secs: u64,
+) {
     let ctrl_c = async {
         // invariant: signal handler installation only fails if the OS is in an unrecoverable
         // state; not recoverable from this process anyway.
@@ -396,4 +402,35 @@ async fn shutdown_signal() {
     }
 
     tracing::info!("Shutdown signal received");
+
+    // Production-readiness §7 step 1: flip readiness=false BEFORE
+    // returning from this future. axum's `with_graceful_shutdown`
+    // closes the listener as soon as this future resolves, so we
+    // need to (a) publish the new readiness state to any K8s probe
+    // that pings us in the next few seconds, and (b) hold the
+    // listener open for `drain_grace_secs` so the probe has a chance
+    // to observe 503 and remove the pod from the Service endpoints
+    // list. Without this grace, the listener slams shut on SIGTERM
+    // and any in-flight L7 connections get RST instead of a clean
+    // close.
+    //
+    // The `mark_not_ready` call holds the write lock only long
+    // enough to flip the bool — no I/O, no allocation — so a
+    // concurrent `/health/ready` probe is delayed by microseconds at
+    // most. The subsequent `tokio::time::sleep` is interruptible and
+    // yields the runtime, so it does NOT block the listener's accept
+    // loop; axum keeps accepting (and immediately rejecting) new
+    // connections during the grace period.
+    if let Ok(mut checker) = health_checker.write() {
+        checker.mark_not_ready();
+    } else {
+        tracing::warn!("health_checker lock poisoned during shutdown; readiness may not flip");
+    }
+    tracing::info!(
+        drain_grace_secs,
+        "readiness flipped to NotReady; waiting for orchestrator drain before closing listener"
+    );
+    if drain_grace_secs > 0 {
+        tokio::time::sleep(std::time::Duration::from_secs(drain_grace_secs)).await;
+    }
 }
