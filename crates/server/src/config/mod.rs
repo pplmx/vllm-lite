@@ -48,6 +48,8 @@ pub enum ConfigValidationError {
     EmptyDraftId,
     #[error("engine.draft_specs[].id duplicate: {0}")]
     DuplicateDraftId(String),
+    #[error("server.shutdown_drain_grace_secs must be <= 300")]
+    ShutdownDrainGraceTooLarge,
 }
 
 /// Aggregated list of [`ConfigValidationError`]s returned by
@@ -152,6 +154,14 @@ impl AppConfig {
         let valid_levels = ["trace", "debug", "info", "warn", "error"];
         if !valid_levels.contains(&self.server.log_level.as_str()) {
             errors.push(ConfigValidationError::InvalidLogLevel);
+        }
+
+        // Production-readiness §7: cap the drain grace so a typo
+        // (e.g. `shutdown_drain_grace_secs: 3600`) can't block shutdown
+        // for an hour. 5 minutes is the upper bound a patient operator
+        // might reasonably want; the default is 5 seconds.
+        if self.server.shutdown_drain_grace_secs > 300 {
+            errors.push(ConfigValidationError::ShutdownDrainGraceTooLarge);
         }
 
         if self.engine.max_draft_tokens > 64 {
