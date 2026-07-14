@@ -57,6 +57,42 @@ jobs:
           cargo install cargo-public-api --locked
           bash .planning/phase-12e/check-public-api.sh
 
+      - name: Doc coverage gate
+        # Phase 31-E (technical due diligence): doc-coverage real-pct
+        # must stay at or above the target (default 65%). The
+        # `real` mode blanks out `#[cfg(test)]` modules,
+        # `#[doc(hidden)]` items, and `#[derive(...)]` so the
+        # percentage reflects genuine user-facing documentation
+        # effort rather than incidental coverage of auto-generated
+        # items. Pre-fix the gate did not exist; the `real` doc
+        # coverage number in STATE.md / CHANGELOG could drift down
+        # without anyone noticing. Threshold can be overridden via
+        # the `DOC_COVERAGE_MIN` repo / workflow variable.
+        env:
+          DOC_COVERAGE_MIN: '65.0'
+        run: |
+          json=$(bash scripts/doc_coverage.sh --real json)
+          # Compute workspace aggregate from per-crate fields. The
+          # script emits each crate's `real_total` /
+          # `real_documented` so a single pass over the JSON gives
+          # us the workspace number we want to gate on.
+          real_pct=$(echo "$json" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          total = sum(int(c.get('real_total', 0)) for c in data.values())
+          doc = sum(int(c.get('real_documented', 0)) for c in data.values())
+          print(f'{(doc/total)*100:.2f}' if total else '0.00')
+          ")
+          echo "::notice::workspace real doc coverage: ${real_pct}% (target >= ${DOC_COVERAGE_MIN}%)"
+          python3 -c "
+          import sys
+          threshold = float('${DOC_COVERAGE_MIN}')
+          actual = float('${real_pct}')
+          if actual < threshold:
+              print(f'::error::doc coverage {actual}% below threshold {threshold}%', file=sys.stderr)
+              sys.exit(1)
+          "
+
       - name: Security audit
         # Fail on warnings (matches `just audit`); RUSTSEC-2024-0436 (paste,
         # deep transitive via candle-core/gemm) is an accepted-risk INFO
