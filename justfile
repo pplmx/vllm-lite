@@ -62,6 +62,12 @@ doc-check:
 # to apply auto-fixes, or `just fix` for both clippy-fix and fmt.
 quick: fmt-check clippy doc-check doctest nextest
 
+# Engineering-quality §8: `just check` is the documented three-entry
+# alias for the local-loop recipe. We keep `quick` as the canonical
+# name (older muscle memory) and expose `check` alongside it so the
+# engineering-quality doc stays accurate.
+check: quick
+
 # Run doctest examples (///  blocks) — exercises doc-comment code as tests.
 doctest:
     cargo test --doc --workspace --all-features --no-fail-fast
@@ -111,6 +117,13 @@ ci: fmt-check clippy doc-check doctest nextest public-api-check
 # Run the full CI gate including security checks (audit + deny). Requires
 # `cargo-audit` and `cargo-deny` installed locally.
 ci-all: fmt-check clippy doc-check doctest nextest public-api-check security
+
+# Engineering-quality §8: `just ci-full` is the documented three-entry
+# alias for the full-gate recipe. We keep `ci-all` as the canonical
+# name (more precise — "all" = security + everything) and expose
+# `ci-full` alongside it so the engineering-quality doc stays
+# accurate.
+ci-full: ci-all
 
 # Legacy `fix` recipe removed — replaced by `autofix` (true meaning) and
 # `quick` (read-only). Old `fix` is now an alias for `autofix` defined above.
