@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Perfection & Elegance
 status: in_progress
-last_updated: "2026-07-15T17:00:00.000Z"
-last_activity: 2026-07-15 — Technical due diligence P14
+last_updated: "2026-07-15T17:30:00.000Z"
+last_activity: 2026-07-15 — Technical due diligence P15
 follow-up batches: |-
-  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta); OPERATIONS.md "Multi-Node (Experimental)" expanded with 3-node snippet + TransferKVBlock wire-protocol spec (P12, doc-only — closes the remaining Phase 31-D master-plan items); mutation nightly CI wired in .github/workflows/mutation-nightly.yml with --baseline skip dropped after verifying it is unnecessary for the scanned modules under default features (P13, CI-only — closes one Phase 31-E master-plan item); ADR-020 captures the six OPS-31d architectural decisions (BlockDataSource trait, unary TransferKVBlock RPC, fan-out routing, 64 MiB limit, engine-integration deferral, legacy GetKVCache non-removal) as a permanent record for future maintainers (P14, docs-only). P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half (checksums + provenance remain as a v32+ follow-up); P12 closed the Phase 31-D master-plan checkboxes (engine wiring to MemoryManager remains v32+ / OPS-32a); P13 closed the mutation-testing half of Phase 31-E (GPU nightly smoke remains deferred — requires self-hosted GPU runner); P14 added ADR-020 (no master-plan item, but the OPS-31d architecture decisions were undocumented at the ADR level).
+  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta); OPERATIONS.md "Multi-Node (Experimental)" expanded with 3-node snippet + TransferKVBlock wire-protocol spec (P12, doc-only — closes the remaining Phase 31-D master-plan items); mutation nightly CI wired in .github/workflows/mutation-nightly.yml with --baseline skip dropped after verifying it is unnecessary for the scanned modules under default features (P13, CI-only — closes one Phase 31-E master-plan item); ADR-020 captures the six OPS-31d architectural decisions (P14, docs-only); v0.2 follow-ups section added to docs/reference/openai-compatibility.md (seed / user / response_format queue for v0.2; frequency_penalty / logit_bias / logprobs / tools defer to v32+), plus stale-item closure for engineering-quality §6 + §7 (P15, docs-only). P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half; P12 closed the Phase 31-D master-plan checkboxes; P13 closed the mutation-testing half of Phase 31-E; P14 added ADR-020; P15 closed the documentation-drift items in engineering-quality §6 + §7 and made the v0.2 backlog visible from the OpenAI compat matrix. Checksums + provenance remain as a v32+ follow-up; engine wiring to MemoryManager remains v32+ / OPS-32a; GPU nightly smoke remains deferred (self-hosted GPU runner).
 progress:
   total_phases: 6
   completed_phases: 5
@@ -1390,7 +1390,101 @@ will hit immediately when they touch the dist layer; the stale
 §6 items document decisions that have already been resolved
 correctly by the workspace.
 
-## Remaining open items (after P14)
+## Technical Due Diligence — 2026-07-15 P15 follow-up batch
+
+Closed two documentation-drift items that had accumulated since
+the technical due diligence was written (during v19.x):
+(a) the `docs/reference/openai-compatibility.md` matrix had
+nine "Not declared" rows with no explicit v0.2 vs v32+ split;
+(b) the engineering-quality §6 + §7 sections described concerns
+that the v31.0 workspace had already resolved. Both are pure
+docs-only closures; no Rust / no test / no API delta.
+
+### What changed
+
+- **`docs/reference/openai-compatibility.md`** — new
+  "v0.2 follow-ups (planned)" section between the
+  `/v1/batches` table and the "Error contract" section.
+  Splits the nine "Not declared" rows into:
+    - **v0.2 candidates**: `seed` (declaration + validation;
+      honoring requires RNG seeding in
+      `vllm_core::sampling` — v32+ work), `user`
+      (declaration + tracing pass-through; honoring is a no-op
+      until a downstream consumer subscribes), `response_format`
+      JSON-mode subset (declaration + validation accepting
+      `{type: "text"}` and `{type: "json_object"}`; the JSON
+      schema subset defers to v0.3 because it requires a
+      grammar-constrained decoder).
+    - **v32+ candidates**: `frequency_penalty` /
+      `presence_penalty` (renaming `repeat_penalty` is a
+      public-API delta — v0.3 work), `logit_bias` (requires
+      sampler softmax-step injection), `logprobs` /
+      `top_logprobs` (requires top-K logprob generation),
+      `tools` / `tool_choice` (grammar-constrained decoder
+      + per-request tool schema cache).
+  Each row has a "Why v0.2 (and not v32+)" or "Why v32+"
+  rationale column so the split is justified, not arbitrary.
+  Header paragraph updated with a pointer to the new section
+  so a reader scanning the field tables immediately knows
+  where the backlog lives.
+
+- **`docs/technical-due-diligence/engineering-quality.md`** —
+  two new closure tables ("§6 闭合状态" and "§7 闭合状态")
+  added at the bottom of their respective sections. §6 marks
+  3 of 4 stale items as closed (with evidence: `kernels = []`
+  is the cfg-gate syntax; `vllm-core = { ..., default-features
+  = false }` in server's Cargo.toml; `dist` in
+  default-members per workspace `Cargo.toml`) and 1 item as
+  half-closed (the "feature matrix doc" follow-up is partially
+  covered by `docs/architecture.md` §Feature Flags but a
+  full matrix doc is still v0.2/32+ work). §7 marks all 4
+  evidence lines closed (rust-toolchain.toml exists; Dockerfile
+  uses 1.88; fuzz uses 1.88; release/container builds use
+  `--locked`) and 3 of 4 suggested actions closed (SBOM via
+  P11; checksums + provenance still v32+).
+
+- **`CHANGELOG.md`** — two new `[Unreleased] / Added` entries
+  describing the OpenAI compat matrix expansion and the
+  engineering-quality §6 + §7 closure.
+
+### Docs-only change (no Rust / no test / no CI delta)
+
+- No Rust code touched, so `just nextest` is unchanged:
+  **1452 passed, 40 ignored**.
+- No public API delta.
+- Workspace real doc coverage holds at **67.93 %** (the new
+  "v0.2 follow-ups" section is real prose; the closure tables
+  in engineering-quality are mostly table rows, which `real`
+  coverage treats as commentary rather than code-documentation
+  — net change is roughly neutral).
+
+### Why P15 and not, e.g., a `seed` field declaration
+
+A `seed` field declaration + HTTP-boundary validation is the
+natural v0.2 work and would mirror the P6/P9 pattern exactly.
+It is **deliberately deferred** in P15 because:
+
+- Declaring a field without honoring it is the "silent acceptance
+  vs silent drop" regression that P6/P9 explicitly fixed. Adding
+  `seed: Option<i64>` and forwarding to an engine that ignores
+  it (the current sampler reads `rand`'s thread-local RNG,
+  unseeded) means the contract regresses from "rejected by serde"
+  to "accepted and ignored".
+- The clean P6/P9-equivalent for `seed` requires both declaration
+  AND engine-side RNG seeding — the latter is a non-trivial
+  sampler change that crosses the v0.2 / v32+ line depending on
+  whether the sampler is rewritten with explicit seeding.
+- Documenting the v0.2 candidate FIRST (this batch) makes the
+  scope of the future `seed` PR explicit — declaration +
+  validation only in v0.2, RNG seeding in v32+ — so the PR that
+  lands it doesn't have to re-litigate the contract decision.
+
+P16+ candidates: actual `seed` declaration (when the
+validation contract is fully designed), §6 #4 feature-matrix
+doc, or back to technical due diligence for the next stale-item
+section.
+
+## Remaining open items (after P15)
 
 - **PERF-01** (continuous batching kernel) — deferred to v32+.
 - **CI-01** (sustained GPU / real-checkpoint CI) — deferred.
