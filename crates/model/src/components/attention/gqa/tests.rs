@@ -657,3 +657,186 @@ fn gqa_attn_factor_changes_output() -> Result<()> {
     );
     Ok(())
 }
+
+// === attn_factor wiring in paged / tiled / flash attention paths ===
+//
+// Phase 31-F first item (v31.0 P18): verify that the three production
+// forward paths honour `attn_factor` the same way the standard `forward()`
+// path does. Pre-scaling Q by `attn_factor` before delegating to the
+// lower-level attention function (which applies its own `1/sqrt(d)`) is
+// mathematically equivalent to the standard path's
+// `qk.affine(attn_factor / sqrt(d), 0.0)` because softmax is invariant to
+// positive scalar multiplication. Tests below use the same shape as the
+// standard-path tests (`seq_len=4` fits one tile for the tiled path; all
+// three paths accept the same Q/K/V layout).
+
+/// Build a `GqaAttention` with random projection weights (shared across the
+/// per-test pairs so the only varying input is `attn_factor`).
+fn build_random_attn() -> Result<GqaAttention> {
+    let device = candle_core::Device::Cpu;
+    let num_heads = 4;
+    let num_kv_heads = 4;
+    let head_dim = 32;
+    let hidden_size = num_heads * head_dim;
+
+    let q_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
+    let k_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
+    let v_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
+    let o_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
+
+    GqaAttention::new_with_weights(
+        hidden_size,
+        num_heads,
+        num_kv_heads,
+        head_dim,
+        q_w,
+        k_w,
+        v_w,
+        o_w,
+        AttentionConfig::default(),
+        false,
+        None,
+        None,
+    )
+}
+
+/// Build random Q/K/V tensors in the `[batch, num_heads, seq_len, head_dim]`
+/// layout expected by `paged_attention_fn` / `tiled_attention_fn` /
+/// `flash_attention_fn`.
+fn build_random_qkv() -> Result<(Tensor, Tensor, Tensor)> {
+    let device = candle_core::Device::Cpu;
+    let batch = 1;
+    let num_heads = 4;
+    let seq_len = 4;
+    let head_dim = 32;
+    let q = Tensor::randn(0.0f32, 1.0, (batch, num_heads, seq_len, head_dim), &device)?;
+    let k = Tensor::randn(0.0f32, 1.0, (batch, num_heads, seq_len, head_dim), &device)?;
+    let v = Tensor::randn(0.0f32, 1.0, (batch, num_heads, seq_len, head_dim), &device)?;
+    Ok((q, k, v))
+}
+
+#[test]
+fn paged_attention_fn_attn_factor_one_is_noop() -> Result<()> {
+    let mut attn = build_random_attn()?;
+    let (q, k, v) = build_random_qkv()?;
+
+    attn.attn_factor = None;
+    let out_none = attn.paged_attention_fn(&q, &k, &v)?;
+    attn.attn_factor = Some(1.0);
+    let out_one = attn.paged_attention_fn(&q, &k, &v)?;
+
+    let diff = (&out_none - &out_one)?
+        .abs()?
+        .max_all()?
+        .to_scalar::<f32>()?;
+    assert!(
+        diff < 1e-5,
+        "paged_attention_fn: attn_factor=1.0 must match None (max diff = {diff})"
+    );
+    Ok(())
+}
+
+#[test]
+fn paged_attention_fn_attn_factor_changes_output() -> Result<()> {
+    let mut attn = build_random_attn()?;
+    let (q, k, v) = build_random_qkv()?;
+
+    attn.attn_factor = Some(0.5);
+    let out_with = attn.paged_attention_fn(&q, &k, &v)?;
+    attn.attn_factor = None;
+    let out_without = attn.paged_attention_fn(&q, &k, &v)?;
+
+    let diff = (&out_with - &out_without)?
+        .abs()?
+        .max_all()?
+        .to_scalar::<f32>()?;
+    assert!(
+        diff > 1e-5,
+        "paged_attention_fn: attn_factor=0.5 must change output (max diff = {diff})"
+    );
+    Ok(())
+}
+
+#[test]
+fn tiled_attention_fn_attn_factor_one_is_noop() -> Result<()> {
+    let mut attn = build_random_attn()?;
+    let (q, k, v) = build_random_qkv()?;
+
+    attn.attn_factor = None;
+    let out_none = attn.tiled_attention_fn(&q, &k, &v)?;
+    attn.attn_factor = Some(1.0);
+    let out_one = attn.tiled_attention_fn(&q, &k, &v)?;
+
+    let diff = (&out_none - &out_one)?
+        .abs()?
+        .max_all()?
+        .to_scalar::<f32>()?;
+    assert!(
+        diff < 1e-5,
+        "tiled_attention_fn: attn_factor=1.0 must match None (max diff = {diff})"
+    );
+    Ok(())
+}
+
+#[test]
+fn tiled_attention_fn_attn_factor_changes_output() -> Result<()> {
+    let mut attn = build_random_attn()?;
+    let (q, k, v) = build_random_qkv()?;
+
+    attn.attn_factor = Some(0.5);
+    let out_with = attn.tiled_attention_fn(&q, &k, &v)?;
+    attn.attn_factor = None;
+    let out_without = attn.tiled_attention_fn(&q, &k, &v)?;
+
+    let diff = (&out_with - &out_without)?
+        .abs()?
+        .max_all()?
+        .to_scalar::<f32>()?;
+    assert!(
+        diff > 1e-5,
+        "tiled_attention_fn: attn_factor=0.5 must change output (max diff = {diff})"
+    );
+    Ok(())
+}
+
+#[test]
+fn flash_attention_fn_attn_factor_one_is_noop() -> Result<()> {
+    let mut attn = build_random_attn()?;
+    let (q, k, v) = build_random_qkv()?;
+
+    attn.attn_factor = None;
+    let out_none = attn.flash_attention_fn(&q, &k, &v)?;
+    attn.attn_factor = Some(1.0);
+    let out_one = attn.flash_attention_fn(&q, &k, &v)?;
+
+    let diff = (&out_none - &out_one)?
+        .abs()?
+        .max_all()?
+        .to_scalar::<f32>()?;
+    assert!(
+        diff < 1e-5,
+        "flash_attention_fn: attn_factor=1.0 must match None (max diff = {diff})"
+    );
+    Ok(())
+}
+
+#[test]
+fn flash_attention_fn_attn_factor_changes_output() -> Result<()> {
+    let mut attn = build_random_attn()?;
+    let (q, k, v) = build_random_qkv()?;
+
+    attn.attn_factor = Some(0.5);
+    let out_with = attn.flash_attention_fn(&q, &k, &v)?;
+    attn.attn_factor = None;
+    let out_without = attn.flash_attention_fn(&q, &k, &v)?;
+
+    let diff = (&out_with - &out_without)?
+        .abs()?
+        .max_all()?
+        .to_scalar::<f32>()?;
+    assert!(
+        diff > 1e-5,
+        "flash_attention_fn: attn_factor=0.5 must change output (max diff = {diff})"
+    );
+    Ok(())
+}

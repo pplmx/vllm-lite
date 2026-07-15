@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Perfection & Elegance
 status: in_progress
-last_updated: "2026-07-15T19:00:00.000Z"
-last_activity: 2026-07-15 — Technical due diligence P17
+last_updated: "2026-07-15T20:00:00.000Z"
+last_activity: 2026-07-15 — Phase 31-F P18 attn_factor threading
 follow-up batches: |-
-  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta); OPERATIONS.md "Multi-Node (Experimental)" expanded with 3-node snippet + TransferKVBlock wire-protocol spec (P12, doc-only — closes the remaining Phase 31-D master-plan items); mutation nightly CI wired in .github/workflows/mutation-nightly.yml with --baseline skip dropped after verifying it is unnecessary for the scanned modules under default features (P13, CI-only — closes one Phase 31-E master-plan item); ADR-020 captures the six OPS-31d architectural decisions (P14, docs-only); v0.2 follow-ups section added to docs/reference/openai-compatibility.md (seed / user / response_format queue for v0.2; frequency_penalty / logit_bias / logprobs / tools defer to v32+), plus stale-item closure for engineering-quality §6 + §7 (P15, docs-only); closure tables added to production-readiness.md §2-§11 with a top-of-document P0-P15 aggregate (29 closed / 5 partial / 9 v32+ candidates out of 43 original observations); closure table added to architecture-performance.md §6 covering 7 speculative + distributed observations (4 closed / 1 partial sampled-match / 2 still-gap-but-documented) (P17, docs-only). P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half; P12 closed the Phase 31-D master-plan checkboxes; P13 closed the mutation-testing half of Phase 31-E; P14 added ADR-020; P15 closed the documentation-drift items in engineering-quality §6 + §7 and made the v0.2 backlog visible from the OpenAI compat matrix; P16 closed the documentation-drift items in production-readiness.md; P17 closed the documentation-drift items in architecture-performance §6 (speculative + distributed) and verified `verify_draft_tokens_logits` is already temperature-aware sampled-match. Checksums + provenance remain as a v32+ follow-up; engine wiring to MemoryManager remains v32+ / OPS-32a; GPU nightly smoke remains deferred (self-hosted GPU runner); OTLP exporter + per-tenant quota + TLS 主路径接线 + readiness 模型加载信号 + feature matrix doc + 容量基准 runbook + sampled-match → min(1, p/q) rejection-sampling + CUDA Graph + speculative coexistence remain as v32+ candidates surfaced by P15-P17.
+  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta); OPERATIONS.md "Multi-Node (Experimental)" expanded with 3-node snippet + TransferKVBlock wire-protocol spec (P12, doc-only — closes the remaining Phase 31-D master-plan items); mutation nightly CI wired in .github/workflows/mutation-nightly.yml with --baseline skip dropped after verifying it is unnecessary for the scanned modules under default features (P13, CI-only — closes one Phase 31-E master-plan item); ADR-020 captures the six OPS-31d architectural decisions (P14, docs-only); v0.2 follow-ups section added to docs/reference/openai-compatibility.md (seed / user / response_format queue for v0.2; frequency_penalty / logit_bias / logprobs / tools defer to v32+), plus stale-item closure for engineering-quality §6 + §7 (P15, docs-only); closure tables added to production-readiness.md §2-§11 with a top-of-document P0-P15 aggregate (29 closed / 5 partial / 9 v32+ candidates out of 43 original observations); closure table added to architecture-performance.md §6 covering 7 speculative + distributed observations (4 closed / 1 partial sampled-match / 2 still-gap-but-documented) (P17, docs-only); `attn_factor` (YaRN §3.3 attention-temperature scaling) threaded through paged/tiled/flash attention paths via new `apply_attn_factor` helper that pre-scales Q by `attn_factor` (mathematically equivalent to standard path's `qk.affine(attn_factor / sqrt(d), 0.0)` via softmax's positive-scalar invariance; no-op when `attn_factor` is `None` or `Some(1.0)`) — closes Phase 31-F first item (P18, feat — 6 new tests, no public API signature change). P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half; P12 closed the Phase 31-D master-plan checkboxes; P13 closed the mutation-testing half of Phase 31-E; P14 added ADR-020; P15 closed the documentation-drift items in engineering-quality §6 + §7 and made the v0.2 backlog visible from the OpenAI compat matrix; P16 closed the documentation-drift items in production-readiness.md; P17 closed the documentation-drift items in architecture-performance §6 and verified `verify_draft_tokens_logits` is already temperature-aware sampled-match; P18 closed the Phase 31-F `attn_factor in paged/flash attention paths` item. Checksums + provenance remain as a v32+ follow-up; engine wiring to MemoryManager remains v32+ / OPS-32a; GPU nightly smoke remains deferred (self-hosted GPU runner); OTLP exporter + per-tenant quota + TLS 主路径接线 + readiness 模型加载信号 + feature matrix doc + 容量基准 runbook + sampled-match → min(1, p/q) rejection-sampling + CUDA Graph + speculative coexistence remain as v32+ candidates; the remaining Phase 31-F items (expand_kv fused kernel, PagedKV host round-trip elimination) also remain v32+ candidates (very-high complexity).
 progress:
   total_phases: 6
   completed_phases: 5
@@ -1594,7 +1594,88 @@ The due-diligence backlog-as-documentation is fully reconciled with v31.0 realit
 
 P18+ candidates: real engineering work (PERF-01 / Phase 31-F) or feature work (`seed` declaration, feature matrix doc).
 
-## Remaining open items (after P17)
+## Phase 31-F — 2026-07-15 P18 follow-up batch
+
+Closed the **first item** of Phase 31-F (Performance): `attn_factor in paged/flash attention paths`. After three consecutive docs-only batches (P15/P16/P17) the v31.0 loop flips back to **real engineering work** — the first production code change since P10 (request_id propagation).
+
+### The gap
+
+`attn_factor` (YaRN §3.3 attention-temperature scaling) was stored on `GqaAttention` (`gqa/mod.rs:47`) and set by `RopeGqaAttention` from `rope.attn_factor()` (`rope_gqa.rs:65, 107`), but only the standard `forward()` path actually applied it (`gqa/forward.rs:124-126`: `attn_scale = attn_factor * base_scale`). The three **production** paths (`paged_attention_fn`, `tiled_attention_fn`, `flash_attention_fn`) each delegate to a lower-level function that applies its own `1/sqrt(d)` scaling internally — and the attn_factor was silently ignored. The field-level doc-comment in `gqa/mod.rs:41-46` admitted the limitation:
+
+> "Currently only honoured by the standard forward path; paged/tiled/flash attention paths silently ignore this value (documented limitation; follow-up phase will thread it through)."
+
+A user setting `RopeScaling { attn_factor: Some(0.5) }` for YaRN-style long-context inference would see the value silently ignored in production — production routes through `run_attention_fn`, never through the standard `forward()`.
+
+### The fix
+
+New private helper `apply_attn_factor` on `GqaAttention` (in `gqa/forward.rs`):
+
+```rust
+fn apply_attn_factor(&self, q: Tensor) -> Result<Tensor> {
+    match self.attn_factor {
+        Some(f) if (f - 1.0).abs() > f32::EPSILON => q.affine(f64::from(f), 0.0),
+        _ => Ok(q),
+    }
+}
+```
+
+Called at the top of `paged_attention_fn`, `tiled_attention_fn`, `flash_attention_fn`, and in the `use_fused` branch of `forward()`. Pre-scaling Q by `attn_factor` is **mathematically equivalent** to applying it to the post-`Q@K^T` logits: `(Q * attn_factor) @ K^T = attn_factor * (Q @ K^T)`, then the internal `1/sqrt(d)` gives `attn_factor / sqrt(d) * (Q @ K^T)`. softmax is invariant to positive scalar multiplication, so the final distribution equals `softmax(Q @ K^T * attn_factor / sqrt(d))` — identical to the standard path's `qk.affine(attn_factor / sqrt(d), 0.0)`.
+
+**Critical caveat:** pre-scaling Q must include ONLY `attn_factor`, never `attn_factor * base_scale`. The `1/sqrt(d)` factor is the responsibility of the downstream attention function. The helper enforces this by accepting `self.attn_factor` directly (not a precomputed scale).
+
+**No-op guarantee:** when `attn_factor` is `None` or `Some(1.0)` (within `f32::EPSILON`), `apply_attn_factor` returns Q unchanged — no allocation, no kernel launch. The common case for non-YaRN models pays zero cost.
+
+### Files modified
+
+- `crates/model/src/components/attention/gqa/forward.rs` — new `apply_attn_factor` helper (12 lines including doc-comment); pre-scaling calls at 4 sites (~5 lines each including comments). Three `Does NOT honour attn_factor` doc-comments updated.
+- `crates/model/src/components/attention/gqa/mod.rs` — `attn_factor` field doc-comment rewritten (lines 41-50) to remove the limitation note and document the pre-scaling equivalence.
+- `crates/model/src/components/attention/gqa/tests.rs` — 6 new unit tests + 2 private helpers (`build_random_attn`, `build_random_qkv`). Tests follow the existing `gqa_attn_factor_*` pattern at lines 567-659: each test mutates `attn.attn_factor` between calls (None vs `Some(1.0)` for no-op, `Some(0.5)` for "changes output") and asserts via max-abs-diff.
+
+### Test count
+
+- Workspace: **1458 passed** (was 1452; +6 from this batch).
+- New tests in `crates/model/src/components/attention/gqa/tests.rs`:
+  - `paged_attention_fn_attn_factor_one_is_noop`
+  - `paged_attention_fn_attn_factor_changes_output`
+  - `tiled_attention_fn_attn_factor_one_is_noop`
+  - `tiled_attention_fn_attn_factor_changes_output`
+  - `flash_attention_fn_attn_factor_one_is_noop`
+  - `flash_attention_fn_attn_factor_changes_output`
+
+### Why pre-scale Q (not extend lower-level signatures)
+
+The lower-level functions (`util::paged_attention`, `util::tiled_attention`, `GqaFlashAttention::forward`) are all public API (`mod.rs:30-32` re-exports + `flash_attention_v3::GqaFlashAttention` public struct). Adding an `attn_factor` parameter would be a public-API breaking change requiring downstream callers to migrate. Pre-scaling Q keeps all signatures stable — `cargo public-api` baseline shows no delta, so the public-api-check gate passes without a `public-api:` CHANGELOG bullet.
+
+### Verification
+
+- `just fmt-check` ✓
+- `just clippy` ✓ (no new warnings in gqa/attention files; the +5 vs P17 baseline are pre-existing test warnings elsewhere)
+- `just doc-check` ✓
+- `just doctest` ✓
+- `just nextest` ✓ 1458 tests pass
+- `just public-api-check` ✓ (no signature change)
+- `just doc-coverage-check` ✓ 67.93% ≥ 65%
+
+### What this batch explicitly does NOT close
+
+The remaining Phase 31-F items stay v32+ candidates:
+
+- **`RopeScaling` config → Block wiring** — partially done for Qwen3 (Phase 15 wired `RoPE::from(&RopeScaling)`); other architectures (Gemma4 / Mixtral / etc.) need a separate audit to verify `RopeScaling` propagates correctly. Out of scope for P18.
+- **`expand_kv` fused kernel** — deferred from v30 (very-high complexity). Needs custom GQA-broadcast matmul kernel.
+- **PagedKV host round-trip elimination** — deferred from v30 (very-high complexity). Needs fused host-device KV access.
+
+### Why this batch and not `seed` declaration
+
+The P17 candidate list mentioned `seed` declaration as a v0.2 candidate. P18 chose `attn_factor` because:
+
+- **Concrete scope** — the gap was 6 production lines + 6 tests + 2 doc-comment updates; bounded and verifiable.
+- **No sampler-design dependency** — unlike `seed`, this doesn't require engine-side RNG seeding. The standard path was already correct; the production paths just needed to call into it.
+- **Closes a real contract violation** — users setting `attn_factor` for YaRN silently got no effect in production. That's worse than `seed`'s "rejected by serde" because there's no error signal.
+- **First real engineering work since P10** — three docs-only batches in a row means the v31.0 backlog of code gaps wasn't shrinking. P18 reopens the engineering track.
+
+P19+ candidates: the remaining Phase 31-F items (`RopeScaling` audit across architectures, `expand_kv` kernel, PagedKV host round-trip elimination — but the last two are very-high-complexity); `seed` declaration (v0.2); feature matrix doc; or back to due-diligence drift closure if any items remain.
+
+## Remaining open items (after P18)
 
 - **PERF-01** (continuous batching kernel) — deferred to v32+.
 - **CI-01** (sustained GPU / real-checkpoint CI) — deferred.
