@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Perfection & Elegance
 status: in_progress
-last_updated: "2026-07-15T13:30:00.000Z"
-last_activity: 2026-07-15 — Technical due diligence P11
+last_updated: "2026-07-15T14:10:00.000Z"
+last_activity: 2026-07-15 — Technical due diligence P12
 follow-up batches: |-
-  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta). P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half (checksums + provenance remain as a v32+ follow-up).
+  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta); OPERATIONS.md "Multi-Node (Experimental)" expanded with 3-node snippet + TransferKVBlock wire-protocol spec (P12, doc-only — closes the remaining Phase 31-D master-plan items). P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half (checksums + provenance remain as a v32+ follow-up); P12 closed the Phase 31-D master-plan checkboxes (engine wiring to MemoryManager remains v32+ / OPS-32a).
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 4
   total_plans: 6
   completed_plans: 4
   percent: 67
@@ -1112,7 +1112,89 @@ Splitting into two batches keeps each PR reviewable:
   pinned to a specific image). Closing those is v32+ work
   unless a downstream consumer asks for it in v0.1.
 
-## Remaining open items (after P11)
+## Technical Due Diligence — 2026-07-15 P12 follow-up batch
+
+Closed the two remaining Phase 31-D master-plan items
+(`KV block serialization protocol spec` and
+`Multi-node quickstart in OPERATIONS.md`). The actual
+multi-node functionality — `BlockDataSource` trait,
+`TransferKVBlock` gRPC RPC, `DistributedKVCache::fetch_block`
+fan-out fallback, 64 MiB symmetric message limit, and
+in-process 2-node + 3-node integration tests — already shipped
+in OPS-31d (commit `cff1444` / Phase 19, `2026-07-12`). This
+batch is **doc-only**: it makes the shipped functionality
+discoverable for embedders without forcing them to read the
+proto file or the phase plan.
+
+### What changed
+
+- **`OPERATIONS.md`** — the "Multi-Node (Experimental)" section
+  was a 46-line single-purpose block; it is now a 150-line
+  reference with explicit subsections:
+    - **"What works"** — 3 bullets lifted from the proto +
+      `kv_block_transfer.rs` (`PutKVCache`/`InvalidateKVCache`
+      replication, `TransferKVBlock` RPC, fan-out fallback).
+    - **"What is not yet production-ready"** — 4 bullets, led
+      by the **load-bearing** one: engine integration. Without
+      a `PagedKvCacheWrapper → MemoryManager` wiring, the gRPC
+      server answers `Status::unavailable("TransferKVBlock
+      called but no BlockDataSource wired in")` for every block
+      transfer, so multi-node replication works for
+      `(block_id, chain_hash)` *intent* but actual block bytes
+      stay local-only in the default engine build. This is
+      OPS-32a work — explicit, scoped, and called out so
+      embedders don't misread "the protocol works" as "the
+      engine ships with cross-node KV transfer".
+    - **"Minimum viable cluster"** — both 2-node AND 3-node
+      snippets. The 3-node form mirrors the structure of
+      `crates/dist/tests/distributed_kv_peer_sync.rs::multi_peer_broadcast`
+      and exercises `peer_client_count()` so an embedder
+      can sanity-check their wiring.
+    - **"Verify it works"** — points operators at the in-process
+      gRPC integration tests (`cargo test -p vllm-dist --test
+      kv_block_transfer`, `--test distributed_kv_peer_sync`)
+      that exercise real 2-node + 3-node fan-out without a
+      real network.
+    - **"Wire protocol (TransferKVBlock, Phase 31-D)"** —
+      quotes the proto definitions, explains the 64 MiB
+      symmetric message limit (with the explicit warning that
+      custom embedders must bump the same limits or block
+      transfers will return `tonic::Status::out_of_range_error`),
+      and documents the hash-verification contract
+      (`response.chain_hash == expected_hash`, mismatch is
+      fatal — no retry — see "Failure recovery" under "What is
+      not yet production-ready").
+- **`.planning/v31.0-MASTER-PLAN.md`** — 31-D status flips
+  from `Pending` to `✅ Done`; all four master-plan items
+  under 31-D are now ticked with a one-line pointer to
+  where the work landed. The deliverable in the phase-index
+  table is updated to reflect the new state.
+- **`CHANGELOG.md`** — new `[Unreleased] / Added` entry
+  recording the OPERATIONS.md expansion and the master-plan
+  closure.
+
+### Doc-only change (no test / no Rust delta)
+
+- No Rust code touched, so `just nextest` is unchanged:
+  **1452 passed, 40 ignored**.
+- No public API delta.
+- Workspace real doc coverage nudges upward (the new
+  "Wire protocol" section is real prose, not boilerplate);
+  re-measurement deferred to the next batch.
+
+### What this batch explicitly does NOT close
+
+The Phase 31-D follow-up list under "Remaining open items"
+(after P11) called out six items as v32+ non-goals: MESI
+coherence, owner-routed peer fetch, streaming RPCs, wire
+compression, block refcounting during transfer,
+`PagedKvCacheWrapper: BlockDataSource`. None of those are
+addressed here — they remain v32+ candidates per
+`.planning/phase-19/ops-31d-kv-block-transfer.md` §7. This
+batch only closed the **documentation** half of 31-D, not
+the engine-integration half.
+
+## Remaining open items (after P12)
 
 - **PERF-01** (continuous batching kernel) — deferred to v32+.
 - **CI-01** (sustained GPU / real-checkpoint CI) — deferred.
@@ -1120,12 +1202,15 @@ Splitting into two batches keeps each PR reviewable:
   follow-up in `docs/reference/openai-compatibility.md`.
 - **Phase 31-D follow-up work (post-OPS-31d)** — `kv_block_transfer.rs`
   integration tests already exercise real 2-node + 3-node gRPC
-  round-trips. Remaining items per
-  `ops-31d-kv-block-transfer.md` §7 are all v32+ non-goals
-  (MESI coherence, owner-routed peer fetch, streaming RPCs,
-  wire compression, block refcounting during transfer,
-  `PagedKvCacheWrapper: BlockDataSource`). Tracking only —
-  none block the v31.0 alpha.
+  round-trips. The master-plan checkboxes are now closed
+  (P12). Remaining items per
+  `ops-31d-kv-block-transfer.md` §7 are still all v32+
+  non-goals: MESI coherence, owner-routed peer fetch,
+  streaming RPCs, wire compression, block refcounting
+  during transfer, **`PagedKvCacheWrapper: BlockDataSource`**
+  (the load-bearing engine-wiring piece — see P12 batch
+  section "What this batch explicitly does NOT close").
+  Tracking only — none block the v31.0 alpha.
 - **Phase 31-F (performance)** — `attn_factor` in paged/flash
   attention paths, `RopeScaling` config → Block wiring,
   `expand_kv` fused kernel, PagedKV host round-trip elimination

@@ -139,9 +139,11 @@ server:
 Multi-node setup is **library-level only** — there is no CLI flag
 or `VLLM_*` environment variable for `peer_urls`. Embedders
 construct a `vllm_dist::CacheConfig` and pass it into the engine
-init; the binary does not currently expose it.
+init; the binary does not currently expose it. If you just want to
+ship a single-node binary, **stop reading here** — the rest of this
+section only matters for embedders building multi-node deployments.
 
-What works (Phase 31-D / OPS-31d, v0.1+):
+### What works (Phase 31-D / OPS-31d, v0.1+)
 
 - Cross-node `(block_id, chain_hash)` replication over gRPC
   (`CacheMessage::Put` / `Invalidate`).
@@ -154,8 +156,19 @@ What works (Phase 31-D / OPS-31d, v0.1+):
   matches the local `value_hash`, fall back to the local
   `BlockDataSource` if every peer fails.
 
-What is **not** yet production-ready:
+### What is **not** yet production-ready
 
+- **Engine integration (the load-bearing piece)** — the
+  `BlockDataSource` trait and `TransferKVBlock` handler exist,
+  but no `PagedKvCacheWrapper` wires them through
+  `MemoryManager` yet. Without that wrapper, the gRPC server
+  answers `Status::unavailable("TransferKVBlock called but no
+  BlockDataSource wired in")` for every block transfer. The
+  integration tests in `crates/dist/tests/kv_block_transfer.rs`
+  use an in-memory `MockBlockDataSource`; production wiring
+  lands in v32+ (OPS-32a). Until then, multi-node replication
+  works for `(block_id, chain_hash)` *intent* but actual block
+  bytes stay local-only in the default engine build.
 - **Smart owner-based routing** — fan-out is fine for 2–4 nodes
   but degrades quadratically; v32+ will track the block owner via
   the directory-coherence protocol and route the `TransferKVBlock`
@@ -168,18 +181,110 @@ What is **not** yet production-ready:
   consistency); switching to `MESI` or `Directory` currently
   returns `unimplemented!`.
 
-Minimum viable cluster (2 nodes, library API):
+### Minimum viable cluster (2 nodes, library API)
+
+This is the canonical 2-node setup. The library API is the same
+whether you run 2 or 32 nodes; only `peer_urls` changes.
 
 ```rust
 use vllm_dist::{CacheConfig, NodeId, DistributedKVCache};
 
+// On node 0:
 let cfg = CacheConfig::new(NodeId(0), 2)
     .with_peer_urls(vec!["http://node-1:50051".to_string()]);
 let cache = DistributedKVCache::new(cfg);
-// see crates/dist/src/distributed_kv for the full API surface
+cache.connect_peers().expect("connect_peers ok");
 ```
 
-For architecture context see [docs/architecture.md §vllm-dist](./docs/architecture.md#crate-map).
+For 3 nodes, pass both peer URLs — fan-out broadcasts to each:
+
+```rust
+use vllm_dist::{CacheConfig, NodeId, DistributedKVCache};
+
+// On node 1 (middle of A=0, B=1, C=2):
+let cfg = CacheConfig::new(NodeId(1), 3)
+    .with_peer_urls(vec![
+        "http://node-0:50051".to_string(),
+        "http://node-2:50051".to_string(),
+    ]);
+let cache = DistributedKVCache::new(cfg);
+cache.connect_peers().expect("connect_peers ok");
+assert_eq!(cache.peer_client_count(), 2);
+```
+
+### Verify it works
+
+The integration tests in `crates/dist/tests/` exercise both
+the intent loop and the block-transfer loop end-to-end on a
+local in-process gRPC pair (no real network needed):
+
+```bash
+# Peer-sync (intent loop) — 2-node + 3-node + single-node
+cargo test -p vllm-dist --test distributed_kv_peer_sync
+
+# Block transfer — fan-out fallback, hash verification,
+# above-default message sizes (5 MiB round-trip)
+cargo test -p vllm-dist --test kv_block_transfer
+```
+
+`multi_peer_broadcast` is the 3-node test: it spawns two servers
+(A, C) and one client (B), calls `cache_b.put(99, 0xDEAD)`,
+and asserts both A and C observe `block_id=99` within 100
+polls × 20 ms. If that test passes, your `peer_urls` wiring is
+correct. The block-transfer tests use a `MockBlockDataSource`
+to verify `TransferKVBlock` round-trips including a
+deliberately-large 5 MiB block (above Tonic's default 4 MiB
+message limit).
+
+### Wire protocol (TransferKVBlock, Phase 31-D)
+
+The KV-block-transfer protocol is defined in
+[`crates/dist/proto/node.proto`](./crates/dist/proto/node.proto).
+The wire shape is intentionally minimal — the dist layer treats
+block bytes as an opaque `Vec<u8>`:
+
+```protobuf
+service NodeService {
+  // ... Ping, AllReduce, GetKVCache, GetPeers,
+  //     PutKVCache, InvalidateKVCache ...
+  rpc TransferKVBlock(TransferKVBlockRequest)
+      returns (TransferKVBlockResponse);
+}
+
+message TransferKVBlockRequest {
+  uint64 block_id       = 1;
+  uint64 expected_hash  = 2;  // receiver's local chain_hash
+}
+
+message TransferKVBlockResponse {
+  uint64 block_id    = 1;     // echo of requested block_id
+  uint64 chain_hash  = 2;     // sender's local chain_hash
+                              // (MUST equal expected_hash)
+  bytes  data        = 3;     // opaque block bytes
+  uint32 num_tokens  = 4;     // reserved; always 0 in v0.1
+}
+```
+
+**Message-size limit:** both server and client bump
+`max_decoding_message_size` and `max_encoding_message_size`
+to `MAX_BLOCK_TRANSFER_BYTES = 64 MiB`
+(`crates/dist/src/distributed_kv/block_data_source.rs`).
+Tonic's default 4 MiB would silently fail any production-sized
+block. If you embed vllm-dist in a custom server / client,
+**bump the same limits** or block transfers will return
+`tonic::Status::out_of_range_error`.
+
+**Hash verification:** the receiver compares
+`response.chain_hash` against its `expected_hash` before
+installing bytes. Mismatch is fatal (no retry — see
+"Failure recovery" under "What is not yet production-ready"
+above). This prevents stale-block installation when a peer's
+local cache has been invalidated between `lookup_prefix` and
+`fetch_block`.
+
+For architecture context see [docs/architecture.md §Crate Responsibilities](./docs/architecture.md#crate-responsibilities).
+The phase plan for OPS-31d (the work that shipped this section)
+is at `.planning/phase-19/ops-31d-kv-block-transfer.md`.
 
 ## CI Verification (Developers)
 
