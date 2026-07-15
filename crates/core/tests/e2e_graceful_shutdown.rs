@@ -49,6 +49,7 @@ impl ShutdownEngine {
                 response_tx: tx,
                 seq_id_tx: None,
                 finish_reason_tx: None,
+                request_id: None,
             })
             .map_err(|_| "Failed to send request")?;
 

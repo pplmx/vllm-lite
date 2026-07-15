@@ -3,13 +3,14 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Perfection & Elegance
 status: in_progress
-last_updated: "2026-07-12T18:30:00.000Z"
-last_activity: 2026-07-12 — Technical due diligence P1 follow-up batch:
-cancel propagation, graceful shutdown thread join, body-limit
-wiring, correlation_id + readiness-saturation + sampling-validation,
-governance (CoC / SECURITY / MAINTAINERS / templates), README
-honesty pass, GOV-01 release manifest, CI-01 all-features parity,
-Dependabot config.
+last_updated: "2026-07-15T12:00:00.000Z"
+last_activity: 2026-07-15 — Technical due diligence P9 + P10
+follow-up batches: top_p honoured end-to-end (P9, 12 new
+tests); request_id propagated HTTP → engine via
+EngineMessage::AddRequest + tracing::info_span! (P10, 4 new
+tests in request_id_propagation.rs). P9 closed the
+architecture-performance §5.1.6 item; P10 closed the
+production-readiness §6 item.
 progress:
   total_phases: 6
   completed_phases: 0
@@ -968,14 +969,109 @@ Files touched:
   attention paths, `RopeScaling` config → Block wiring,
   `expand_kv` fused kernel, PagedKV host round-trip elimination
   all deferred.
-- **production-readiness §6 — request_id propagation to engine
-  spans** — `correlation_id_middleware` (P1) sets the X-Request-ID
-  header on the response and writes an audit row, but the value
-  is not carried into `EngineMessage::AddRequest` so tracing spans
-  inside `vllm_core::engine::run` cannot correlate engine log
-  lines with the originating HTTP request. Wiring this requires
-  a new `request_id: Option<String>` field on `AddRequest`,
-  updating all sites that construct it, and reading it from the
-  `CorrelationId` extension the middleware already installs.
-  Medium complexity; useful for cross-layer debugging once the
-  perf work resumes.
+
+## Technical Due Diligence — 2026-07-15 P10 follow-up batch
+
+Closed the `production-readiness §6 — request_id propagation`
+item listed in the P9 remaining-items section.
+
+### request_id propagated HTTP → engine
+
+Pre-fix: `correlation_id_middleware` (P1 batch) set the
+`X-Request-ID` response header and installed a `CorrelationId`
+request extension on every incoming request, but the value
+never reached `EngineMessage::AddRequest`. Engine-side
+`tracing` log lines inside `vllm_core::engine::run` and
+`Engine::add_request` could not be correlated with the
+originating HTTP request — operators chasing a slow request
+through logs had no join key across the HTTP → scheduler →
+engine boundary.
+
+Post-fix:
+
+- `EngineMessage::AddRequest` gains a `request_id: Option<String>`
+  field (no `Serialize`/`Deserialize` on `EngineMessage`, so no
+  wire-format change). All 4 production construction sites
+  (`openai::chat::handle_chat` non-streaming + `stream_chat_completion`,
+  `openai::completions::completions`, plus the engine run loop
+  consumer) and 3 test construction sites (`e2e_graceful_shutdown`,
+  `overload_integration`, `tutorial_e2e`) updated.
+- `openai::chat::chat_completions` and
+  `openai::completions::completions` extract
+  `Extension<CorrelationId>` from request extensions and forward
+  `correlation_id.0` as the `request_id` field.
+- `security::correlation::CorrelationId` is now `pub` (was
+  `pub(crate)`) so axum's `FromRequestParts` reflection can
+  name the type from a public handler.
+- The engine run loop enters
+  `tracing::info_span!("engine.add_request", request_id)` around
+  the synchronous `add_request` call. The span is RAII-scoped to
+  the rest of the match arm, so all engine-side log lines for
+  this HTTP request carry the same id. When `request_id` is
+  `None` (test fixtures, non-HTTP callers), the span still
+  enters with the field rendering as `null`.
+- 4 production router test fixtures updated to mount
+  `correlation_id_middleware` so the handler extractors don't
+  fail with 500 (`cancel_propagation`, `chat_integration_test`,
+  `context_length`, `overload_integration`). The middleware MUST
+  sit as the OUTERMOST layer in any router hosting these
+  handlers — see `main.rs` for the production wiring.
+
+### New integration test file
+
+`crates/server/tests/request_id_propagation.rs` (4 tests, all
+pass):
+
+- `chat_handler_forwards_client_supplied_request_id` — client
+  supplies `X-Request-ID: client-supplied-trace-42`, the
+  response echoes it, AND the capturing mock engine sees it on
+  the `AddRequest.request_id` field. Proves the handler doesn't
+  re-mint the id (pre-fix bug from the audit-middleware
+  review).
+- `chat_handler_forwards_minted_request_id_when_client_omits_header`
+  — client omits `X-Request-ID`, middleware mints one, handler
+  forwards the SAME minted id (not None, not a different
+  value). Proves the id is minted ONCE and reused.
+- `completions_handler_forwards_client_supplied_request_id` —
+  mirror of the chat test on `/v1/completions`.
+- `completions_handler_forwards_minted_request_id_when_client_omits_header`
+  — companion for the chat minted-id variant on
+  `/v1/completions`.
+
+### Test counts after the P10 batch
+
+- Workspace: **1452** tests pass (was 1448; +4 from
+  `request_id_propagation.rs`).
+- `just ci` exits 0 (fmt-check, clippy, doc-check, doctest,
+  nextest, public-api-check, doc-coverage-check).
+- Public API grew by 5 items in `vllm-server`
+  (`CorrelationId` + 4 `impl`-level items) + 2 handler signature
+  changes (chat + completions widened with `Extension<CorrelationId>`);
+  CHANGELOG `[Unreleased]` has a `public-api: vllm-server`
+  bullet naming the crate.
+- Workspace real doc coverage: **67.93 %** (target 65 %).
+
+## Remaining open items (after P10)
+
+- **PERF-01** (continuous batching kernel) — deferred to v32+.
+- **CI-01** (sustained GPU / real-checkpoint CI) — deferred.
+- **OpenAI compat: `seed` wire type** — still tracked as v0.2
+  follow-up in `docs/reference/openai-compatibility.md`.
+- **Phase 31-D follow-up work (post-OPS-31d)** — `kv_block_transfer.rs`
+  integration tests already exercise real 2-node + 3-node gRPC
+  round-trips. Remaining items per
+  `ops-31d-kv-block-transfer.md` §7 are all v32+ non-goals
+  (MESI coherence, owner-routed peer fetch, streaming RPCs,
+  wire compression, block refcounting during transfer,
+  `PagedKvCacheWrapper: BlockDataSource`). Tracking only —
+  none block the v31.0 alpha.
+- **Phase 31-F (performance)** — `attn_factor` in paged/flash
+  attention paths, `RopeScaling` config → Block wiring,
+  `expand_kv` fused kernel, PagedKV host round-trip elimination
+  all deferred.
+- **production-readiness §6 OTLP follow-up** — the `info_span!`
+  work in P10 is the prerequisite for OTLP exporter wiring
+  (production-readiness §6 last bullet: "先完善结构化 span，再接
+  OTLP；不要仅添加依赖而没有 trace topology"). The workspace
+  has no OTLP dependency; adding one is a v32+ non-goal pending
+  a real OTLP backend (no CI-side collector). Tracking only.

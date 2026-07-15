@@ -93,9 +93,10 @@ fn error_response_json_field_order_matches_openai_spec() {
 
 #[tokio::test]
 async fn chat_rejects_empty_model_with_400_and_invalid_request_code() {
-    use axum::{Json, extract::State};
+    use axum::{Extension, Json, extract::State};
     use vllm_server::openai::chat::chat_completions;
     use vllm_server::openai::types::{ChatMessage, ChatRequest};
+    use vllm_server::security::correlation::CorrelationId;
 
     let state = create_test_state();
     let req = ChatRequest {
@@ -113,7 +114,12 @@ async fn chat_rejects_empty_model_with_400_and_invalid_request_code() {
         stop: None,
     };
 
-    let result = chat_completions(State(state), Json(req)).await;
+    let result = chat_completions(
+        State(state),
+        Extension(CorrelationId("test-correlation-id".into())),
+        Json(req),
+    )
+    .await;
     let (status, body) = result.expect_err("expected error for empty model");
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body.error.error_type, "invalid_request_error");
@@ -121,9 +127,10 @@ async fn chat_rejects_empty_model_with_400_and_invalid_request_code() {
 
 #[tokio::test]
 async fn chat_returns_503_with_engine_unavailable_code_when_channel_closed() {
-    use axum::{Json, extract::State};
+    use axum::{Extension, Json, extract::State};
     use vllm_server::openai::chat::chat_completions;
     use vllm_server::openai::types::{ChatMessage, ChatRequest};
+    use vllm_server::security::correlation::CorrelationId;
 
     let state = create_test_state(); // engine_tx has no receiver
     let req = ChatRequest {
@@ -141,7 +148,12 @@ async fn chat_returns_503_with_engine_unavailable_code_when_channel_closed() {
         stop: None,
     };
 
-    let result = chat_completions(State(state), Json(req)).await;
+    let result = chat_completions(
+        State(state),
+        Extension(CorrelationId("test-correlation-id".into())),
+        Json(req),
+    )
+    .await;
     let (status, body) = result.expect_err("expected engine-channel error");
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(
@@ -196,9 +208,10 @@ async fn embeddings_returns_503_with_engine_unavailable_code_when_channel_closed
 
 #[tokio::test]
 async fn completions_rejects_empty_prompt_with_400() {
-    use axum::{Json, extract::State};
+    use axum::{Extension, Json, extract::State};
     use vllm_server::openai::completions::completions;
     use vllm_server::openai::types::CompletionRequest;
+    use vllm_server::security::correlation::CorrelationId;
 
     let state = create_test_state();
     let req = CompletionRequest {
@@ -212,16 +225,22 @@ async fn completions_rejects_empty_prompt_with_400() {
         stop: None,
     };
 
-    let result = completions(State(state), Json(req)).await;
+    let result = completions(
+        State(state),
+        Extension(CorrelationId("test-correlation-id".into())),
+        Json(req),
+    )
+    .await;
     let (status, _) = result.expect_err("expected 400");
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
 async fn completions_returns_503_with_engine_unavailable_code_when_channel_closed() {
-    use axum::{Json, extract::State};
+    use axum::{Extension, Json, extract::State};
     use vllm_server::openai::completions::completions;
     use vllm_server::openai::types::CompletionRequest;
+    use vllm_server::security::correlation::CorrelationId;
 
     let state = create_test_state();
     let req = CompletionRequest {
@@ -235,7 +254,12 @@ async fn completions_returns_503_with_engine_unavailable_code_when_channel_close
         stop: None,
     };
 
-    let result = completions(State(state), Json(req)).await;
+    let result = completions(
+        State(state),
+        Extension(CorrelationId("test-correlation-id".into())),
+        Json(req),
+    )
+    .await;
     let (status, body) = result.expect_err("expected engine-channel error");
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(body.error.code.as_deref(), Some("engine_unavailable"));

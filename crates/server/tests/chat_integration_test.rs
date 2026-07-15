@@ -33,6 +33,13 @@ fn router(state: ApiState) -> Router {
     Router::new()
         .route("/v1/chat/completions", post(chat_completions))
         .with_state(state)
+        // chat_completions requires `Extension<CorrelationId>`
+        // (P10 / production-readiness §6). Mount the same
+        // middleware the production router uses so tests exercise
+        // the real boundary.
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ))
 }
 
 #[tokio::test]
@@ -689,7 +696,14 @@ async fn test_completions_forwards_top_p_to_engine() {
     };
     let app = Router::new()
         .route("/v1/completions", post(completions))
-        .with_state(state);
+        .with_state(state)
+        // completions requires `Extension<CorrelationId>`
+        // (P10 / production-readiness §6). Mount the same
+        // middleware the production router uses so tests exercise
+        // the real boundary.
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
 
     let body = serde_json::json!({
         "model": "test-model",

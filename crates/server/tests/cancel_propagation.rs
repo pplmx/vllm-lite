@@ -67,6 +67,13 @@ fn router(state: ApiState) -> Router {
     Router::new()
         .route("/v1/chat/completions", post(chat_completions))
         .with_state(state)
+        // chat_completions now requires `Extension<CorrelationId>`
+        // (P10 / production-readiness §6). Mount the same middleware
+        // the production router uses so the tests exercise the real
+        // boundary instead of returning 500 from a failed extractor.
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ))
 }
 
 /// Spawn a mock engine that records every `CancelRequest`

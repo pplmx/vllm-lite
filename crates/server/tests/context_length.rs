@@ -71,6 +71,13 @@ fn router(state: ApiState) -> Router {
         .route("/v1/completions", post(openai_completions))
         .route("/v1/models", get(models_handler))
         .with_state(state)
+        // chat_completions / completions require
+        // `Extension<CorrelationId>` (P10 / §6). Mount the same
+        // middleware the production router uses so tests exercise
+        // the real boundary.
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ))
 }
 
 async fn body_json(response: axum::response::Response) -> serde_json::Value {
