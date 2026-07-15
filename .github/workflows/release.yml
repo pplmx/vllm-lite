@@ -76,6 +76,14 @@ jobs:
     name: Build (${{ matrix.target }})
     needs: meta
     runs-on: ${{ matrix.os }}
+    # SBOM upload (anchore/sbom-action) and binary upload both
+    # write workflow artifacts; `contents: write` lets the SBOM
+    # step also publish release assets when wired to the release
+    # job. `actions: read` is implicit on public repos but listed
+    # explicitly per the action's documented permissions.
+    permissions:
+      contents: write
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -132,6 +140,29 @@ jobs:
           else
             cp "target/${{ matrix.target }}/release/vllm-server" "artifacts/vllm-server-${{ needs.meta.outputs.version }}-${{ matrix.target }}"
           fi
+
+      # Engineering-quality §7 (MSRV 与可复现构建) last bullet:
+      # "release 生成 SBOM、校验和与构建 provenance". This step
+      # closes the SBOM half. Anchore's `syft` (under the hood)
+      # scans the packaged binary in `artifacts/` plus the
+      # workspace's Cargo.lock to produce a CycloneDX JSON SBOM
+      # capturing Rust crates, vendored C libraries, and any
+      # system libs that ended up linked into the binary.
+      #
+      # The artifact glob `artifacts/**/*` in the `release` job
+      # below picks this up automatically — no extra wiring is
+      # needed to attach it to the GitHub Release.
+      #
+      # `upload-artifact: true` keeps it downloadable from the
+      # workflow run too (useful for one-off inspection without
+      # cutting a release).
+      - name: Generate SBOM (CycloneDX JSON)
+        uses: anchore/sbom-action@v0
+        with:
+          path: artifacts/
+          format: cyclonedx-json
+          artifact-name: sbom-${{ matrix.target }}
+          upload-artifact: true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
