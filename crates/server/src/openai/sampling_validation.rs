@@ -20,11 +20,67 @@
 //! rejection (400 invalid_request_error) — silent acceptance + ignored
 //! field would be a contract violation for any caller that explicitly
 //! asked for `n > 1` or `stop` sequences.
+//!
+//! `top_p` is HONOURED: the engine's `sample_batch_with_params`
+//! reads `SamplingParams::top_p` and applies nucleus sampling
+//! before selecting the next token. Validation rejects out-of-range
+//! values (`top_p <= 0`, `top_p > 1`, `NaN`) with `400` so the
+//! caller learns about the bad value before paying the cost of
+//! enqueuing the request.
 
 use axum::{Json, http::StatusCode};
 use vllm_core::types::SamplingParams;
 
 use super::types::{ChatRequest, CompletionRequest, ErrorResponse};
+
+/// Validate a `top_p` value from an HTTP request.
+///
+/// Per the OpenAI API specification the valid range is `(0, 1]`:
+/// `top_p = 0` would select zero tokens, `top_p > 1` is undefined
+/// (the nucleus set would include more than the full vocabulary),
+/// and `NaN` would make the math ill-defined.
+///
+/// `None` is accepted (use the engine default of `1.0`, i.e. no
+/// nucleus filtering).
+///
+/// # Errors
+///
+/// Returns `Err((StatusCode::BAD_REQUEST, …))` when `top_p` is
+/// outside `(0, 1]` or `NaN`. The error message names the field
+/// and the bad value so callers can adapt without reading the
+/// source.
+pub fn validate_top_p(top_p: Option<f32>) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    if let Some(p) = top_p {
+        if p.is_nan() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "top_p must be a finite number in the (0, 1] interval (got NaN)",
+                    "invalid_request_error",
+                )),
+            ));
+        }
+        if p <= 0.0 {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "top_p must be > 0; top_p = 0 would select zero tokens",
+                    "invalid_request_error",
+                )),
+            ));
+        }
+        if p > 1.0 {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "top_p must be <= 1 (per OpenAI spec); values > 1 are undefined",
+                    "invalid_request_error",
+                )),
+            ));
+        }
+    }
+    Ok(())
+}
 
 /// Reject sampling parameters the engine cannot honour.
 ///
@@ -50,7 +106,8 @@ pub fn validate_sampling_params(
     Ok(())
 }
 
-/// Reject chat-request fields the engine does not yet honour.
+/// Reject chat-request fields the engine does not yet honour, and
+/// validate the ones it does.
 ///
 /// Currently rejects:
 /// - `n != 1` — the engine emits exactly one completion per request.
@@ -62,14 +119,21 @@ pub fn validate_sampling_params(
 ///   truncate at `max_tokens` even when a stop sequence was emitted,
 ///   which is a contract violation.
 ///
+/// Validates:
+/// - `top_p` — must be in `(0, 1]`. The engine honours `top_p` via
+///   `sample_batch_with_params`; an out-of-range value would either
+///   crash the sampler or silently produce garbage, so we reject
+///   up front.
+///
 /// # Errors
 ///
-/// Returns `Err((StatusCode::BAD_REQUEST, …))` when either check
-/// fires. The error message names the rejected field so callers can
-/// adapt without having to read the source.
+/// Returns `Err((StatusCode::BAD_REQUEST, …))` when any check fires.
+/// The error message names the rejected field so callers can adapt
+/// without having to read the source.
 pub fn validate_chat_request_fields(
     req: &ChatRequest,
 ) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    validate_top_p(req.top_p)?;
     if let Some(n) = req.n
         && n != 1
     {
@@ -95,19 +159,20 @@ pub fn validate_chat_request_fields(
     Ok(())
 }
 
-/// Reject completion-request fields the engine does not yet honour.
+/// Reject completion-request fields the engine does not yet honour,
+/// and validate the ones it does.
 ///
 /// Mirror of [`validate_chat_request_fields`] for the legacy
-/// `/v1/completions` endpoint. Same two checks (`n != 1` and
-/// non-empty `stop`).
+/// `/v1/completions` endpoint. Same three checks (`n != 1`,
+/// non-empty `stop`, out-of-range `top_p`).
 ///
 /// # Errors
 ///
-/// Returns `Err((StatusCode::BAD_REQUEST, …))` when either check
-/// fires.
+/// Returns `Err((StatusCode::BAD_REQUEST, …))` when any check fires.
 pub fn validate_completion_request_fields(
     req: &CompletionRequest,
 ) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    validate_top_p(req.top_p)?;
     if let Some(n) = req.n
         && n != 1
     {
@@ -194,6 +259,19 @@ mod tests {
         }
     }
 
+    fn chat_request_with_top_p(top_p: Option<f32>) -> ChatRequest {
+        ChatRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            temperature: None,
+            top_p,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+        }
+    }
+
     #[test]
     fn chat_request_default_passes_field_validation() {
         let req = chat_request_with_n(None);
@@ -247,6 +325,7 @@ mod tests {
             model: None,
             prompt: "hello".to_string(),
             temperature: None,
+            top_p: None,
             max_tokens: None,
             stream: None,
             n,
@@ -259,10 +338,24 @@ mod tests {
             model: None,
             prompt: "hello".to_string(),
             temperature: None,
+            top_p: None,
             max_tokens: None,
             stream: None,
             n: None,
             stop,
+        }
+    }
+
+    fn completion_request_with_top_p(top_p: Option<f32>) -> CompletionRequest {
+        CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
         }
     }
 
@@ -289,5 +382,82 @@ mod tests {
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         let body = err.1.0;
         assert!(body.error.message.contains("stop sequences"));
+    }
+
+    // top_p validation tests — covers both the standalone
+    // `validate_top_p` helper (called from each request-validator)
+    // and the end-to-end chat / completion validators.
+
+    #[test]
+    fn top_p_none_passes() {
+        // None means "use the engine default" (1.0 = no nucleus
+        // filtering); both the standalone helper and the chat /
+        // completion validators must accept it.
+        validate_top_p(None).expect("top_p = None must pass");
+        let chat = chat_request_with_top_p(None);
+        validate_chat_request_fields(&chat).expect("chat with top_p = None must pass");
+        let comp = completion_request_with_top_p(None);
+        validate_completion_request_fields(&comp).expect("completion with top_p = None must pass");
+    }
+
+    #[test]
+    fn top_p_one_passes() {
+        // top_p = 1.0 is the inclusive upper bound; means "consider
+        // all tokens" and matches the engine default.
+        validate_top_p(Some(1.0)).expect("top_p = 1.0 must pass");
+        let chat = chat_request_with_top_p(Some(1.0));
+        validate_chat_request_fields(&chat).expect("chat with top_p = 1.0 must pass");
+    }
+
+    #[test]
+    fn top_p_intermediate_passes() {
+        // A typical value (0.9) must pass validation.
+        validate_top_p(Some(0.9)).expect("top_p = 0.9 must pass");
+        let comp = completion_request_with_top_p(Some(0.9));
+        validate_completion_request_fields(&comp).expect("completion with top_p = 0.9 must pass");
+    }
+
+    #[test]
+    fn top_p_zero_is_rejected() {
+        // top_p = 0 would select zero tokens — undefined behaviour
+        // for the sampler; reject with 400.
+        let err = validate_top_p(Some(0.0)).expect_err("top_p = 0 must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("> 0"));
+
+        let chat = chat_request_with_top_p(Some(0.0));
+        let err = validate_chat_request_fields(&chat).expect_err("chat top_p = 0 must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn top_p_negative_is_rejected() {
+        // Negative values are nonsensical; reject up front rather
+        // than letting them through to the sampler.
+        let err = validate_top_p(Some(-0.1)).expect_err("top_p < 0 must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn top_p_above_one_is_rejected() {
+        // Per OpenAI spec the upper bound is inclusive 1; values
+        // > 1 are undefined.
+        let err = validate_top_p(Some(1.5)).expect_err("top_p > 1 must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("<= 1"));
+
+        let comp = completion_request_with_top_p(Some(2.0));
+        let err = validate_completion_request_fields(&comp)
+            .expect_err("completion top_p = 2 must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn top_p_nan_is_rejected() {
+        // NaN would make the nucleus comparison ill-defined; the
+        // sampler would either panic or produce undefined behaviour.
+        let err = validate_top_p(Some(f32::NAN)).expect_err("top_p = NaN must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("NaN"));
     }
 }

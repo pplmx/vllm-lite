@@ -220,6 +220,8 @@ pub struct CompletionRequest {
     pub prompt: String,
     /// Sampling temperature.
     pub temperature: Option<f32>,
+    /// Nucleus sampling cumulative probability cutoff.
+    pub top_p: Option<f32>,
     /// Maximum generated tokens.
     pub max_tokens: Option<i64>,
     /// Enable streaming response.

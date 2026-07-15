@@ -132,6 +132,17 @@ async fn handle_chat(
         request.sampling_params.temperature = temp;
     }
 
+    // Forward `top_p` to the engine. The engine's
+    // `sample_batch_with_params` honours `top_p` via nucleus sampling
+    // (see `vllm_core::sampling::top_p_sample`). The value is
+    // range-checked by `validate_chat_request_fields` earlier in
+    // this handler so we only need to copy the field here — out-of-
+    // range / NaN values were rejected with `400` before reaching
+    // this line.
+    if let Some(top_p) = req.top_p {
+        request.sampling_params.top_p = top_p;
+    }
+
     // Reject sampling parameters the engine cannot honour (currently
     // beam_width > 1) BEFORE enqueuing — see `sampling_validation`.
     validate_sampling_params(&request.sampling_params)?;

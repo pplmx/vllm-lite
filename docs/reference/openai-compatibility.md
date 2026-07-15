@@ -1,6 +1,6 @@
 # OpenAI API Compatibility Matrix
 
-> **Status (2026-07-13):** v0.x alpha. The matrix below lists every
+> **Status (2026-07-15):** v0.x alpha. The matrix below lists every
 > field on the OpenAI request/response types that vLLM-lite exposes
 > over HTTP, and the current implementation status. Anything not
 > listed under "Wired" is either "Declared but not honoured" (silently
@@ -22,7 +22,7 @@
 | `model` | `string` (required) | Wired | Empty string → `400 model is required` |
 | `messages` | `Vec<ChatMessage>` (required) | Wired | Empty list → `400 messages is required` |
 | `temperature` | `Option<f32>` (0.0–2.0) | Wired | Passed through to engine `SamplingParams.temperature` |
-| `top_p` | `Option<f32>` | **Not declared** | Rejected by serde (no field on the wire type). Tracked for v0.2 (P2 follow-up). |
+| `top_p` | `Option<f32>` (0.0–1.0) | **Wired** | Forwarded to engine `SamplingParams.top_p`; honours nucleus sampling via `vllm_core::sampling::sample_batch_with_params`. `validate_top_p` rejects `top_p <= 0`, `top_p > 1`, and `NaN` with `400 invalid_request_error` at the HTTP boundary (P9 follow-up). |
 | `max_tokens` | `Option<i64>` | Wired | Default 100; cap checked against `max_model_len` |
 | `stream` | `Option<bool>` | Wired | `true` → SSE; `false`/missing → unary |
 | `n` | `Option<i64>` | **Wired (validation)** | `n = 1` accepted (default); `n > 1` → `400 invalid_request_error` ("n > 1 is not supported…") |
@@ -76,7 +76,7 @@
 | `stream` | `Option<bool>` | Wired | SSE or unary |
 | `n` | `Option<i64>` | **Wired (validation)** | Same rejection as chat |
 | `stop` | `Option<Vec<String>>` | **Wired (validation)** | Same rejection as chat |
-| `top_p` | (not declared) | **Not declared** | Rejected by serde |
+| `top_p` | `Option<f32>` (0.0–1.0) | **Wired** | Same honouring + range check as chat (P9 follow-up) |
 | `seed` | (not declared) | **Not declared** | Rejected by serde |
 | `logprobs` / `echo` / `suffix` / `best_of` | (not declared) | **Not declared** | Rejected by serde |
 

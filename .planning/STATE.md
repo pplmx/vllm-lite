@@ -874,3 +874,93 @@ value: **67.91%** real (target 65%).
   attention paths, `RopeScaling` config → Block wiring,
   `expand_kv` fused kernel, PagedKV host round-trip elimination
   all deferred.
+
+## Technical Due Diligence — 2026-07-15 P9 follow-up batch
+
+Closed one follow-up item from
+`docs/technical-due-diligence/architecture-performance.md` §5.1.6
+("API-01: ChatRequest 声明 top-p, n, stop 等字段,但 handler/engine
+未完整应用" — top_p item) and §6 ("主要偏差 #1: top_p 未真正生效").
+
+### `top_p` honoured end-to-end
+
+Pre-fix: `ChatRequest.top_p` and `CompletionRequest.top_p` were
+**not declared** on the wire types, so the JSON field was
+silently dropped by serde. STATE.md flagged this as a tracked
+v0.2 follow-up. Post-fix, `top_p` is declared on BOTH wire
+types AND forwarded to the engine — `vllm_core::sampling::
+sample_batch_with_params` already implemented nucleus sampling,
+the only missing piece was the HTTP boundary → `Request::
+sampling_params.top_p` plumbing.
+
+Files touched:
+
+- `crates/server/src/openai/types.rs` — `top_p: Option<f32>`
+  added to `ChatRequest` and `CompletionRequest`.
+- `crates/server/src/openai/sampling_validation.rs` — new
+  `validate_top_p(Option<f32>)` rejects `top_p <= 0`, `top_p > 1`,
+  and `NaN` with `400 invalid_request_error` (OpenAI spec range
+  is `(0, 1]`). The existing
+  `validate_chat_request_fields` /
+  `validate_completion_request_fields` callers now also validate
+  `top_p` before enqueuing. 7 new unit tests:
+  `top_p_none_passes`, `top_p_zero_is_rejected`,
+  `top_p_negative_is_rejected`, `top_p_one_passes`,
+  `top_p_above_one_is_rejected`, `top_p_nan_is_rejected`,
+  `top_p_intermediate_passes`.
+- `crates/server/src/openai/chat.rs` — handler copies
+  `req.top_p` into `request.sampling_params.top_p` so the engine
+  sees the forwarded value.
+- `crates/server/src/openai/completions.rs` — same forwarding
+  for `/v1/completions`.
+- `crates/server/tests/chat_integration_test.rs` — 5 new
+  integration tests using a capturing mock engine (records
+  the `SamplingParams` of the first `AddRequest` it sees, then
+  asserts the field round-tripped from JSON):
+  - `test_chat_forwards_top_p_to_engine`
+  - `test_chat_omitted_top_p_uses_engine_default`
+  - `test_chat_rejects_top_p_above_one_with_400`
+  - `test_chat_rejects_top_p_zero_with_400`
+  - `test_completions_forwards_top_p_to_engine`
+- `crates/server/src/openai/completions/tests.rs` — three
+  existing fixtures updated to include the new field.
+- `crates/server/tests/error_contract.rs` — two existing
+  fixtures updated to include the new field.
+- `docs/reference/openai-compatibility.md` — `top_p` row on
+  BOTH `/v1/chat/completions` and `/v1/completions` tables
+  flipped from "Not declared" to "Wired" with a forward-pointer
+  to `validate_top_p` and `sample_batch_with_params`. Status
+  date bumped to 2026-07-15.
+- `CHANGELOG.md` — new "top_p is now honoured end-to-end" bullet
+  under `[Unreleased] > Added`, plus a `public-api: vllm-server
+  added` bullet for the 3 new items (`ChatRequest::top_p`,
+  `CompletionRequest::top_p`, `validate_top_p`).
+
+### Test counts after the P9 batch
+
+- Workspace: **1448** tests pass (was 1436; +12: 7 unit in
+  `sampling_validation` + 5 integration in
+  `chat_integration_test.rs`).
+- `just ci` exits 0 (fmt-check, clippy, doc-check, doctest,
+  nextest, public-api-check, doc-coverage-check).
+- Public API grew by 3 items in `vllm-server`; CHANGELOG
+  `[Unreleased]` entry references `vllm-server` so the gate
+  passes.
+- Workspace real doc coverage: **67.93 %** (target 65 %).
+
+## Remaining open items (after P9)
+
+- **PERF-01** (continuous batching kernel) — deferred to v32+.
+- **CI-01** (sustained GPU / real-checkpoint CI) — deferred.
+- **OpenAI compat: `seed` wire type** — still tracked as v0.2
+  follow-up in `docs/reference/openai-compatibility.md`. (`top_p`
+  closed by this batch.)
+- **Phase 31-D: 2-node integration test** — not yet exercised
+  end-to-end; the unit tests for `TransferKVBlock` and
+  `DistributedKVCache::fetch_block` are in place but a 2-process
+  round-trip (start two nodes, route a prefix cache hit across
+  them) is still outstanding.
+- **Phase 31-F (performance)** — `attn_factor` in paged/flash
+  attention paths, `RopeScaling` config → Block wiring,
+  `expand_kv` fused kernel, PagedKV host round-trip elimination
+  all deferred.
