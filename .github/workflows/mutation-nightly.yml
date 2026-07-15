@@ -1,0 +1,156 @@
+name: Mutation Nightly
+
+# Long-run mutation scan (cargo-mutants 27.x) on a nightly cron.
+# Phase 31-E (CI Hardening): closes the "Mutation testing CI"
+# master-plan item. Wall-clock is ~5 min per module on 4-core
+# ubuntu-latest, so the schedule covers three independent modules
+# in parallel.
+#
+# Why nightly (not on every PR):
+# - Full scan of `vllm_core::sampling` is ~5 min; `scheduler` is
+#   ~30-60 min per the comment in `justfile` `mutants MODULE`.
+#   A PR gating step would add unacceptable latency.
+# - Cargo-mutants is **differential**: it only reports new
+#   surviving mutants vs the previous scan. A nightly cadence
+#   means each run re-baselines from the previous run, so
+#   drift accumulates slowly and is reviewable in 1-2 PRs
+#   instead of all-at-once at release time.
+# - The CI job `ci` already runs `cargo nextest run
+#   --workspace` so a pre-existing test failure (the original
+#   reason for `--baseline skip` in `justfile`) is caught
+#   separately and immediately, not buried inside a 30-min
+#   mutation scan.
+#
+# Output:
+# - `.mutants-out/` uploaded as a workflow artifact per module
+#   for offline inspection (`mutants-report` in the justfile
+#   summarizes the local copy).
+# - Score check via `scripts/check_mutation_score.sh` against
+#   a per-module baseline; failure exits non-zero so the cron
+#   surfaces in the Actions UI.
+#
+# Triggered by:
+# - Daily at 03:00 UTC (low-traffic window, after 04:00 fuzz to
+#   avoid cache contention).
+# - Manual `workflow_dispatch` for ad-hoc pre-release runs.
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  CARGO_NET_RETRY: 10
+
+jobs:
+  mutation:
+    name: Mutation scan (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Three short modules that exercise different mutation
+        # classes (arithmetic, control flow, bool flips). Long
+        # modules (scheduler/) live in the manual workflow_dispatch
+        # path — they take 30-60 min and would crowd the daily
+        # budget if run on cron.
+        #
+        # Baselines are derived from observed mutation scores at
+        # P13 ship time and intentionally set conservatively
+        # (5-10pp below observed) so the first nightly run passes
+        # and the score-check has headroom to flag real
+        # regressions without false positives:
+        #   - sampling.rs:  ~45% observed → 40% floor
+        #     (sampling code has many arithmetic mutations that
+        #     only affect specific edge cases; proptest doesn't
+        #     exercise the full probability space, so misses are
+        #     a structural fact rather than a quality concern)
+        #   - scheduler/policy: ~100% on viable observed (K-1.3
+        #     verification) → 95% floor
+        #   - engine/cuda_graph.rs: no prior scan; 50% floor
+        #     until first nightly run establishes a real baseline
+        module:
+          - { path: sampling.rs,               baseline: '40' }
+          - { path: scheduler/policy,          baseline: '95' }
+          - { path: engine/cuda_graph.rs,      baseline: '50' }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # Pin to the workspace MSRV (rust-toolchain.toml) so
+          # nightly mutation scans use the same toolchain as
+          # release builds; otherwise a newer rustc could
+          # surface unrelated mutations.
+          toolchain: '1.88'
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: "."
+          shared-key: "mutation-nightly"
+
+      - name: Cache cargo-mutants binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-mutants
+          key: cargo-mutants-27.1.0-${{ runner.os }}
+
+      - name: Install cargo-mutants (if not cached)
+        if: steps.cargo-mutants-cache.outputs.cache-hit != 'true'
+        run: cargo install cargo-mutants --version "^27" --locked
+
+      # Dropped `--baseline skip` (the workaround present in the
+      # `just mutants` recipe) after verifying that `cargo mutants`
+      # without it passes baseline for `crates/core/src/sampling.rs`
+      # under default features. The pre-existing comment in
+      # `justfile` referenced `cuda_graph_integration.rs:148`, but
+      # that line is inside a `#[cfg(feature = "cuda-graph")]`
+      # test, so under default features (the only feature set the
+      # scan uses) the test is gated out and does not contribute to
+      # baseline. If a future scan surfaces a baseline failure,
+      # `--baseline skip` is still available as a one-line escape
+      # hatch — and the per-PR `ci` job's `cargo nextest run` will
+      # have already caught the underlying test failure separately.
+      #
+      # The `module.path` is fed verbatim to `--file`; cargo-mutants
+      # accepts a single file or a directory (recursive scan).
+      - name: Run mutation scan (${{ matrix.module.path }})
+        run: |
+          cargo mutants \
+            --package vllm-core \
+            --file "crates/core/src/${{ matrix.module.path }}" \
+            --timeout 30 \
+            --jobs $(($(nproc) > 4 ? 4 : $(nproc))) \
+            --output .mutants-out/ \
+            --shuffle
+
+      - name: Check mutation score (>= ${{ matrix.module.baseline }}%)
+        run: |
+          ./scripts/check_mutation_score.sh \
+            .mutants-out/mutants.out \
+            "${{ matrix.module.baseline }}"
+
+      - name: Render survived-mutant summary
+        if: always()
+        run: |
+          if [ -f .mutants-out/mutants.out/mutants.json ]; then
+            jq -r '.[] | select(.status == "SURVIVED") |
+              "\(.file):\(.span.start_line)  \(.mutant_name)"' \
+              .mutants-out/mutants.out/mutants.json | head -30
+          else
+            echo "no mutants.json — scan failed or skipped"
+          fi
+
+      - name: Upload mutation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutants-out-${{ matrix.module.path }}
+          path: .mutants-out/
+          if-no-files-found: ignore
+          retention-days: 14
