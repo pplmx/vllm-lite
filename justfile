@@ -254,6 +254,17 @@ fuzz-repro TARGET CRASH:
 # runs reuse the cache. A full scheduler scan takes ~30-60 min on 4 cores.
 # `--baseline skip` works around a pre-existing test failure in
 # cuda_graph_integration.rs:148 — fix the test in v31+ to drop this flag.
+#
+# Update (P13): the nightly mutation workflow
+# (.github/workflows/mutation-nightly.yml) drops `--baseline skip`
+# and verified that the baseline passes for sampling.rs under
+# default features (135 mutants, 60 caught, 73 missed, 2 unviable).
+# Line 148 of cuda_graph_integration.rs is inside a
+# `#[cfg(feature = "cuda-graph")]` test, so under default features
+# (which the scan uses) it does not contribute to baseline. The
+# flag is kept here as a safety net for developers with broken
+# tests in progress; CI is the ground truth for "does the scan
+# baseline pass".
 mutants MODULE:
     #!/usr/bin/env bash
     set -euo pipefail

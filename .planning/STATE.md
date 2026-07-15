@@ -3,16 +3,16 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Perfection & Elegance
 status: in_progress
-last_updated: "2026-07-15T14:10:00.000Z"
-last_activity: 2026-07-15 — Technical due diligence P12
+last_updated: "2026-07-15T16:30:00.000Z"
+last_activity: 2026-07-15 — Technical due diligence P13
 follow-up batches: |-
-  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta); OPERATIONS.md "Multi-Node (Experimental)" expanded with 3-node snippet + TransferKVBlock wire-protocol spec (P12, doc-only — closes the remaining Phase 31-D master-plan items). P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half (checksums + provenance remain as a v32+ follow-up); P12 closed the Phase 31-D master-plan checkboxes (engine wiring to MemoryManager remains v32+ / OPS-32a).
+  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta); OPERATIONS.md "Multi-Node (Experimental)" expanded with 3-node snippet + TransferKVBlock wire-protocol spec (P12, doc-only — closes the remaining Phase 31-D master-plan items); mutation nightly CI wired in .github/workflows/mutation-nightly.yml with --baseline skip dropped after verifying it is unnecessary for the scanned modules under default features (P13, CI-only — closes one Phase 31-E master-plan item). P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half (checksums + provenance remain as a v32+ follow-up); P12 closed the Phase 31-D master-plan checkboxes (engine wiring to MemoryManager remains v32+ / OPS-32a); P13 closed the mutation-testing half of Phase 31-E (GPU nightly smoke remains deferred — requires self-hosted GPU runner).
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 6
-  completed_plans: 4
-  percent: 67
+  completed_plans: 5
+  percent: 83
 ---
 
 # Project State
@@ -1194,7 +1194,99 @@ addressed here — they remain v32+ candidates per
 batch only closed the **documentation** half of 31-D, not
 the engine-integration half.
 
-## Remaining open items (after P12)
+## Technical Due Diligence — 2026-07-15 P13 follow-up batch
+
+Closed one of the two remaining Phase 31-E master-plan items:
+**"Mutation testing CI (fix baseline workaround)"**. The
+`clippy --all-features` matrix job (commit `28c5c37`) and the
+doc-coverage gate at 65% (commit `867412f`) were already in
+place; mutation testing had scripts (`scripts/check_mutation_score.sh`,
+`just mutants-ci`) but no CI workflow. This batch wires the
+scan into a nightly cron + manual dispatch workflow and fixes
+the `--baseline skip` workaround for the modules under scan.
+
+### What changed
+
+- **`.github/workflows/mutation-nightly.yml`** — new workflow
+  that runs `cargo mutants` on three short `vllm-core` modules
+  (`sampling.rs`, `scheduler/policy`, `engine/cuda_graph.rs`)
+  on a daily 03:00 UTC cron (off-peak, after the 04:00 fuzz
+  nightly) plus manual `workflow_dispatch` for ad-hoc
+  pre-release scans. Each module:
+    - is gated against a per-module score floor via
+      `scripts/check_mutation_score.sh` (baselines:
+      sampling.rs=40, scheduler/policy=95, engine/cuda_graph.rs=50 —
+      each 5-10pp below the P13-ship-time observed score so
+      real regressions are caught without false positives)
+    - uploads `.mutants-out/` as a 14-day workflow artifact
+      for offline inspection (mirrors the `just mutants-report`
+      local flow)
+    - prints the top 30 surviving mutants for fast triage when
+      the score check fails.
+  Cache layout mirrors `fuzz-nightly.yml`: `Swatinem/rust-cache@v2`
+  with `shared-key: "mutation-nightly"` (workspace-wide) + a
+  dedicated cache for the `cargo-mutants` binary
+  (`cargo-mutants-27.1.0-${{ runner.os }}`). Rust toolchain
+  pinned to `1.88` (the workspace MSRV in `rust-toolchain.toml`)
+  so nightly scans use the same compiler as release builds.
+
+- **Baseline fix (the "fix baseline workaround" half)** —
+  `just mutants` was using `--baseline skip` to mask a
+  pre-existing test failure tracked as a v31+ follow-up.
+  Verified by running `cargo mutants --package vllm-core
+  --file crates/core/src/sampling.rs` *without* `--baseline
+  skip`: the baseline passes (cargo test exits 0) and the
+  scan completes normally — 135 mutants tested in 5 min,
+  60 caught, 73 missed, 2 unviable. The pre-existing comment
+  referenced `cuda_graph_integration.rs:148`, but that line is
+  inside a `#[cfg(feature = "cuda-graph")]` test, so under
+  default features (the only feature set the scan uses) the
+  test does not compile and cannot contribute to baseline.
+  **The CI workflow drops `--baseline skip`**. The local
+  justfile keeps it as a safety net for developers with broken
+  tests in progress (CI is the ground truth for "does the
+  scan baseline pass").
+
+- **`justfile`** — `mutants MODULE` recipe comment updated
+  with the P13 verification (135 mutants / 60 caught / 73
+  missed / 2 unviable) and a pointer to the CI workflow as
+  the new ground truth. The `--baseline skip` flag itself is
+  NOT removed from the local recipe (see rationale above).
+
+- **`.planning/v31.0-MASTER-PLAN.md`** — Phase 31-E
+  master-plan items updated: `clippy --all-features` matrix
+  ticked (already in `ci.yml::ci-all-features` since P3 batch),
+  mutation-testing ticked (this batch), doc-coverage gate
+  ticked (already in `ci.yml::ci` since P3 batch), GPU nightly
+  smoke left as deferred (requires self-hosted GPU runner —
+  no workspace tooling exists for it). Phase 31-E status
+  flips from `Pending` to `✅ Mostly done`.
+
+- **`CHANGELOG.md`** — new `[Unreleased] / Added` entry
+  describing the workflow, the matrix, and the baseline
+  verification.
+
+### CI-only change (no Rust / no test delta)
+
+- No Rust code touched, so `just nextest` is unchanged:
+  **1452 passed, 40 ignored**.
+- No public API delta.
+- The mutation scan itself is a new artifact (`.mutants-out/`)
+  but the underlying tests are not new.
+
+### Why nightly + matrix, not per-PR
+
+A full `scheduler` mutation scan takes 30-60 min on 4-core
+ubuntu-latest (per the comment in `justfile` `mutants MODULE`).
+Gating every PR on that would add unacceptable latency. The
+nightly cadence plus a small fast module set (`sampling.rs`,
+`scheduler/policy`, `engine/cuda_graph.rs`) keeps the daily
+budget under ~15 min while still exercising three distinct
+mutation classes (arithmetic, control flow, bool flips). The
+manual `workflow_dispatch` trigger is the escape hatch for
+ad-hoc pre-release scans of the larger `scheduler/` tree.
+
+## Remaining open items (after P13)
 
 - **PERF-01** (continuous batching kernel) — deferred to v32+.
 - **CI-01** (sustained GPU / real-checkpoint CI) — deferred.
