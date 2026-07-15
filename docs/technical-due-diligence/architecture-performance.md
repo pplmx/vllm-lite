@@ -199,6 +199,22 @@ ragged batch、paged KV 和 decode 特化的 kernel contract。
 短期应将 `multi-node` 明确标记 experimental，类型命名避免暗示已具备 NCCL。
 只有在单机 GPU 数据面稳定后，才值得投入 TP/PP、通信重叠、故障恢复和分布式 KV。
 
+### §6 闭合状态（v31.0 P17）
+
+逐项核对七条原始观察，结论是 **4 项已关闭 + 1 项半关闭 + 2 项仍为真缺口（已文档化）**：
+
+| # | 原问题 | 当前状态 | 关闭依据 |
+|---|--------|----------|----------|
+| 1 | 验证以 argmax 相等为主，不是 temperature-aware rejection sampling | 🟡 半关闭 | `crates/core/src/engine/spec_dispatch/verify.rs::verify_draft_tokens_logits` 已是 **temperature-aware sampled-match** 路径：`temperature == 0.0` 时走 argmax；`temperature > 0.0` 时调 `sample_one_with_params`，draft token 与 sampled target 一致则接受，否则 emit sampled target 并 reject 余下 drafts。文件 doc-comment (`verify.rs:1-24`) 明确记录：这是标准 "lossless speculative decoding" verifier，**不是** 完整的 `min(1, p/q)` rejection-sampling（后者需要 draft-side logits，目前不在 wire format 上）。是相对旧 argmax 路径的严格改进 — target 现在使用与 engine 其余部分相同的 sampler，而非永远挑最可能 token。Plan 17.1-C / arch-perf §6 speculative fix。 |
+| 2 | speculative 与 CUDA Graph 互斥 | 🟠 仍为真缺口 | 代码验证：`step_speculative_inner` (`spec_dispatch/dispatch.rs:19`) 是投机 decode 路径；`step_with_graph` (`graph_step.rs:42`) 是 CUDA Graph 路径 — 后者通过 `execute_regular(&batch)` 直接走 `model.forward_logits + sample_batch_with_params`，**不经过** spec dispatch。两者入口互斥（`Engine::step` 二选一），不是“同时运行互锁”，而是“开关互斥”：启用 CUDA Graph 时整个 step 都绕过投机 decode。该限制是显式设计 — CUDA Graph capture 需要静态 batch shape，而投机 decode 引入可变 draft 长度会让 graph capture 失效。v32+ 候选：动态-shape graph 或显式非投机 prefill + 投机 decode graph 双路径。 |
+| 3 | legacy draft model 与 resolver 两套路径增加理解和资源占用 | ✅ 已关闭 | `grep -rn "legacy\|LegacyDraft" crates/core/src/speculative/` 返回空。`draft_registry` / `draft_resolver` / `adaptive` / `self_spec` 四条路径是**唯一**的 draft 来源 — 都是 v18.0 之后的 resolver-driven 路径，不再有“legacy draft model”平行的入口。`step_speculative_inner` (`dispatch.rs:38-49`) 通过 `self.draft_resolver.is_some()` 二分：`Some` 走 `generate_per_seq_drafts`（v18.0 per-request dispatch），`None` 走 `generate_batched_drafts`（legacy batched 路径但不是 legacy model）。两条路径共用 `verify_draft_tokens_logits` 验证逻辑。 |
+| 4 | `NcclAllReduce` 实际是本地数组求和，不是跨设备 NCCL | ✅ 已关闭 | P4 batch (`5f00bd5`)：`LocalSumAllReduce` 是 canonical 类型（`crates/dist/src/tensor_parallel/all_reduce.rs:59`）；`NcclAllReduce` 是 `pub type` 别名（`all_reduce.rs:73`）并标注 `#[deprecated]`，确保 v0.x 过渡窗口不破现有调用者。compile-only test `nccl_all_reduce_alias_resolves_to_local_sum` 守护 deprecation 契约。命名不再暗示具备 NCCL。 |
+| 5 | 分布式 KV 当前主要存元数据，没有完整块传输协议 | ✅ 已关闭 | OPS-31d / Phase 31-D (`cff1444`) + P12-P14 batches：`TransferKVBlock` gRPC RPC (`crates/dist/src/distributed_kv/block_data_source.rs` + `crates/dist/proto/node.proto`) + `BlockDataSource` trait + `DistributedKVCache::fetch_block` fan-out fallback + 64 MiB 对称消息上限。`crates/dist/src/distributed_kv/block_data_source.rs:33-50` doc-comment 显式记录契约。`fetch_block` 集成测试 `kv_block_transfer.rs::peer_serves_block_bytes_via_transfer_kv_block` 与 3-node fan-out `distributed_kv_peer_sync.rs::multi_peer_broadcast` 端到端验证。ADR-020 (P14) 记录六项架构决策。**注意**：engine wiring (`PagedKvCacheWrapper: BlockDataSource`) 是 v32+ / OPS-32a，不在本表范围。 |
+| 6 | `dist` 不在 default members，CI 覆盖弱 | ✅ 已关闭 | P15 §6 closure：`Cargo.toml` workspace 段 `default-members = ["crates/core", "crates/model", "crates/server", "crates/traits", "crates/dist", "crates/testing"]` —— 6 个 crate 全部在 default-members。`just ci` 与 `ci.yml::ci` 自动覆盖 dist；P13 mutation-nightly 也包含 dist 模块（虽然默认 baseline 在 core）。 |
+| 7 | 短期应将 multi-node 明确标记 experimental，类型命名避免暗示 NCCL | ✅ 已关闭 | `OPERATIONS.md:137` `## Multi-Node (Experimental)` 标题 + 章节内"What works" / "What is **not** yet production-ready" 显式二分（第 P12 batch 扩展）。命名层面：`NcclAllReduce` → `LocalSumAllReduce` 重命名（P4 batch，见 #4）；ADR-008 (`vllm-dist` feature-gated) + ADR-015 (`vllm-dist` investment decision) + ADR-020 (multi-node KV block transfer architecture) 三篇 ADR 共同记录决策。 |
+
+**净结论：** §6 七项中四项已关闭（覆盖 distributed-side 全部 P0/P1 命名与覆盖工作 + legacy draft 路径清理），一项半关闭（sampled-match 验证 — 标准 lossless speculative decoding；完整 `min(1, p/q)` rejection sampling 是 v32+ follow-up），两项仍为真缺口但已文档化（CUDA Graph vs speculative 互斥、engine wiring to BlockDataSource）。v31.0 alpha **不阻塞** —— 投机 decode 的 sampled-match 路径是相对旧 argmax 的严格改进，CUDA Graph 互斥是显式设计而非 bug。
+
 ## 7. 可扩展性判断
 
 `ArchitectureRegistry`、共享 attention/MLP/norm/positional 组件和 `ModelBackend` 是
