@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Perfection & Elegance
 status: in_progress
-last_updated: "2026-07-15T16:30:00.000Z"
-last_activity: 2026-07-15 — Technical due diligence P13
+last_updated: "2026-07-15T17:00:00.000Z"
+last_activity: 2026-07-15 — Technical due diligence P14
 follow-up batches: |-
-  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta); OPERATIONS.md "Multi-Node (Experimental)" expanded with 3-node snippet + TransferKVBlock wire-protocol spec (P12, doc-only — closes the remaining Phase 31-D master-plan items); mutation nightly CI wired in .github/workflows/mutation-nightly.yml with --baseline skip dropped after verifying it is unnecessary for the scanned modules under default features (P13, CI-only — closes one Phase 31-E master-plan item). P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half (checksums + provenance remain as a v32+ follow-up); P12 closed the Phase 31-D master-plan checkboxes (engine wiring to MemoryManager remains v32+ / OPS-32a); P13 closed the mutation-testing half of Phase 31-E (GPU nightly smoke remains deferred — requires self-hosted GPU runner).
+  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta); OPERATIONS.md "Multi-Node (Experimental)" expanded with 3-node snippet + TransferKVBlock wire-protocol spec (P12, doc-only — closes the remaining Phase 31-D master-plan items); mutation nightly CI wired in .github/workflows/mutation-nightly.yml with --baseline skip dropped after verifying it is unnecessary for the scanned modules under default features (P13, CI-only — closes one Phase 31-E master-plan item); ADR-020 captures the six OPS-31d architectural decisions (BlockDataSource trait, unary TransferKVBlock RPC, fan-out routing, 64 MiB limit, engine-integration deferral, legacy GetKVCache non-removal) as a permanent record for future maintainers (P14, docs-only). P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half (checksums + provenance remain as a v32+ follow-up); P12 closed the Phase 31-D master-plan checkboxes (engine wiring to MemoryManager remains v32+ / OPS-32a); P13 closed the mutation-testing half of Phase 31-E (GPU nightly smoke remains deferred — requires self-hosted GPU runner); P14 added ADR-020 (no master-plan item, but the OPS-31d architecture decisions were undocumented at the ADR level).
 progress:
   total_phases: 6
   completed_phases: 5
@@ -1286,7 +1286,111 @@ mutation classes (arithmetic, control flow, bool flips). The
 manual `workflow_dispatch` trigger is the escape hatch for
 ad-hoc pre-release scans of the larger `scheduler/` tree.
 
-## Remaining open items (after P13)
+## Technical Due Diligence — 2026-07-15 P14 follow-up batch
+
+Closed the documentation gap for the OPS-31d multi-node KV block
+transfer architecture. The protocol layer shipped in P12 (OPERATIONS.md
+expansion), but the underlying architectural choices — *why* fan-out
+over owner-routed, *why* unary over streaming, *why* a 64 MiB
+symmetric limit, *why* engine integration is deferred — were
+documented only in the phase plan (`.planning/phase-19/ops-31d-kv-block-transfer.md`)
+and the source code comments. Neither survives well: phase plans
+get archived; code comments answer "what" not "why". An ADR is the
+workspace convention for capturing these decisions (ADR-019's
+documentation-standards tier table makes this explicit), so the
+gap was real.
+
+### What changed
+
+- **`docs/adr/ADR-020-multi-node-kv-block-transfer.md`** — new
+  ADR (20th in the series) capturing the six architectural
+  decisions from OPS-31d:
+    1. `BlockDataSource` trait as the storage-agnostic,
+       async, object-safe abstraction over raw block bytes
+    2. Unary (not streaming) `TransferKVBlock` gRPC RPC, with
+       `num_tokens` reserved for future partial-block transfer
+    3. Fan-out fallback routing vs owner-routed (and why fan-out
+       wins for v0.1)
+    4. 64 MiB symmetric message limit (with the embedder-facing
+       warning that custom servers/clients must bump the same
+       limit)
+    5. Explicit deferral of engine integration (`PagedKvCacheWrapper
+       → MemoryManager`) to v32+ / OPS-32a — with the consequence
+       that the gRPC server returns `unavailable` for every block
+       transfer in the default engine build
+    6. Non-removal of the legacy `GetKVCache` RPC in this phase
+       (deferred to a dedicated cleanup phase before 1.0)
+  The ADR also documents the four alternatives that were
+  considered and rejected (owner-routed day-1, streaming RPCs day-1,
+  block bytes in `PutKVCache`, `GetKVCache(block_hash)` lookup)
+  with the rationale for the choices that shipped. Cross-references
+  the phase plan, the proto file, the OPERATIONS.md quickstart,
+  ADR-008 (`vllm-dist` feature-gated) and ADR-015 (`vllm-dist`
+  investment decision) as the prerequisite decisions.
+
+- **`.planning/v31.0-MASTER-PLAN.md`** — Phase 31-E target
+  bumped from "ADRs: 19" to "20 (ADR-020 multi-node KV block
+  transfer architecture added in P14)". The Quality Gates table
+  row now documents *why* the count moved, so future readers
+  can trace the addition back to this batch.
+
+- **`.planning/DOC-MAP.md`** — ADR-count reference updated
+  from "(19 records)" to "(20 records: ADR-001 … ADR-020)" so
+  the doc-authority matrix matches the filesystem.
+
+- **`README.md`** — `docs/adr/` link caption updated from
+  "(19 篇 ADR)" to "(20 篇 ADR)" so the README ADR count and the
+  filesystem agree.
+
+- **`CHANGELOG.md`** — new `[Unreleased] / Added` entry
+  describing the ADR and the four files touched in the batch.
+
+### Docs-only change (no Rust / no test / no CI delta)
+
+- No Rust code touched, so `just nextest` is unchanged:
+  **1452 passed, 40 ignored**.
+- No public API delta.
+- No CI delta (the mutation-nightly workflow from P13 is
+  unaffected).
+- Workspace real doc coverage holds at **67.93 %** (the ADR is
+  a long, mostly-prose document which nudges the ratio
+  marginally upward; re-measurement deferred to the next batch
+  that touches documentation code).
+
+### Why this batch and not a §6 stale-item closure
+
+The technical-due-diligence §6 (Feature 与依赖管理) has several
+items that became stale as the workspace evolved:
+
+- "`traits` 的 `kernels` 是空 feature" — actually a non-empty
+  cfg-gate feature (`kernels = []` in `Cargo.toml` is the syntax
+  for "no extra deps but feature exists as a cfg-gate"; the
+  `kernels` module IS gated by `#[cfg(feature = "kernels")]`).
+  Arguably closed by definition, not actionable.
+
+- "`server` 硬编码启用 core 的 `cuda-graph`" — `vllm-core`
+  default-features is explicitly disabled in `crates/server/Cargo.toml`,
+  and `cuda-graph` is a non-default feature. Closed.
+
+- "`dist` 不在 default-members" — `dist` is in workspace
+  `default-members` (and `members`). Closed.
+
+- "各 crate 的 `cuda`、`full`、`multi-node` 传播缺少统一
+  用户模型" — could be addressed by a feature matrix doc, but
+  ADR-020 (this batch) supersedes it for the multi-node side,
+  and the cuda/full story is captured in `docs/architecture.md`
+  §Feature Flags. Half-closed.
+
+A docs pass that marks these stale items closed in the due
+diligence doc is a legitimate P15 candidate but is low-priority
+compared to capturing the *active* architectural decisions that
+are currently only in phase-plan / source comments. ADR-020 ships
+first because it documents decisions that *future maintainers*
+will hit immediately when they touch the dist layer; the stale
+§6 items document decisions that have already been resolved
+correctly by the workspace.
+
+## Remaining open items (after P14)
 
 - **PERF-01** (continuous batching kernel) — deferred to v32+.
 - **CI-01** (sustained GPU / real-checkpoint CI) — deferred.
