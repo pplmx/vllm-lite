@@ -1,6 +1,6 @@
 //! `OpenAI` legacy Completions endpoint: `POST /v1/completions`. Prompt-string in, completion string out.
 use axum::{
-    Json,
+    Extension, Json,
     extract::State,
     response::{
         IntoResponse,
@@ -14,6 +14,7 @@ use tokio::sync::mpsc;
 use super::sampling_validation::{validate_completion_request_fields, validate_sampling_params};
 use super::types::{CompletionChoice, CompletionRequest, CompletionResponse, ErrorResponse, Usage};
 use crate::ApiState;
+use crate::security::correlation::CorrelationId;
 
 fn should_skip_token_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &str) -> bool {
     text.is_empty() || tokenizer.is_special_token(text)
@@ -45,6 +46,7 @@ fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &st
 /// future refactors that might break the link between the two branches.
 pub async fn completions(
     State(state): State<ApiState>,
+    Extension(correlation_id): Extension<CorrelationId>,
     Json(req): Json<CompletionRequest>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
     // API-01: reject OpenAI fields the engine does not yet honour
@@ -137,6 +139,12 @@ pub async fn completions(
             response_tx,
             seq_id_tx,
             finish_reason_tx: Some(finish_reason_tx),
+            // Production-readiness §6: forward the correlation id
+            // (same rationale as the chat handler). The engine run
+            // loop's `tracing::info_span!("engine.add_request",
+            // request_id)` attaches it to every synchronous log
+            // line in add_request and its callees.
+            request_id: Some(correlation_id.0.clone()),
         })
         .map_err(|e| match e {
             tokio::sync::mpsc::error::TrySendError::Full(_) => overload_response(),

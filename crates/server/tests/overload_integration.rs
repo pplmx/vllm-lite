@@ -38,6 +38,13 @@ fn router(state: ApiState) -> Router {
     Router::new()
         .route("/v1/chat/completions", post(chat_completions))
         .with_state(state)
+        // chat_completions requires `Extension<CorrelationId>`
+        // (P10 / production-readiness §6). Mount the same
+        // middleware the production router uses so tests exercise
+        // the real boundary.
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ))
 }
 
 fn chat_request_json() -> String {
@@ -127,6 +134,7 @@ async fn test_saturated_mailbox_returns_engine_overloaded_503() {
             response_tx,
             seq_id_tx: None,
             finish_reason_tx: None,
+            request_id: None,
         }) {
             Ok(()) => filled += 1,
             Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => break,

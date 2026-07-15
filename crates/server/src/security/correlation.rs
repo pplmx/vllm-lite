@@ -28,8 +28,14 @@ pub(crate) const REQUEST_ID_HEADER: &str = "X-Request-ID";
 /// must carry a single correlation id through HTTP → scheduler →
 /// token stream so operators can trace a request across the whole
 /// pipeline.
+///
+/// `pub` (not `pub(crate)`) so axum's `Extension<CorrelationId>`
+/// extractor can name it from public HTTP handlers like
+/// `openai::chat::chat_completions` — axum's
+/// `FromRequestParts` reflection requires the inner type to be
+/// reachable from outside the crate.
 #[derive(Debug, Clone)]
-pub(crate) struct CorrelationId(pub String);
+pub struct CorrelationId(pub String);
 
 /// `CorrelationIdMiddleware`. See the type definition for fields and behavior.
 #[derive(Debug, Clone)]

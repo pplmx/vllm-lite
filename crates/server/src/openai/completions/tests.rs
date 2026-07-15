@@ -5,6 +5,8 @@
 //! `engine_unavailable`). The handler is exercised without a live
 //! engine by relying on `test_fixtures::api_state`.
 use super::*;
+use crate::security::correlation::CorrelationId;
+use axum::Extension;
 
 fn create_test_state() -> crate::ApiState {
     crate::test_fixtures::api_state(vllm_model::config::Architecture::Qwen3)
@@ -24,7 +26,12 @@ async fn test_completions_empty_prompt() {
         stop: None,
     };
 
-    let result = completions(State(state), Json(req)).await;
+    let result = completions(
+        State(state),
+        Extension(CorrelationId("test-correlation-id".into())),
+        Json(req),
+    )
+    .await;
     assert!(result.is_err());
     let (status, _) = result.unwrap_err();
     assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
@@ -49,7 +56,12 @@ async fn test_completions_with_valid_max_tokens() {
     // error surfaces as 503 SERVICE_UNAVAILABLE with `engine_unavailable`
     // code (see `completions` handler) — distinguishable from a real
     // server-side bug, and safe for clients to retry.
-    let result = completions(State(state), Json(req)).await;
+    let result = completions(
+        State(state),
+        Extension(CorrelationId("test-correlation-id".into())),
+        Json(req),
+    )
+    .await;
     assert!(result.is_err());
     let (status, body) = result.unwrap_err();
     assert_eq!(status, axum::http::StatusCode::SERVICE_UNAVAILABLE);

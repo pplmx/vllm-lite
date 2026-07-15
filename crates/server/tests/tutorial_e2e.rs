@@ -45,6 +45,7 @@ fn test_tutorial_engine_lifecycle() {
             response_tx: token_tx,
             seq_id_tx: None,
             finish_reason_tx: None,
+            request_id: None,
         })
         .expect("engine mailbox should be open");
 

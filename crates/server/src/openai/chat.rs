@@ -6,7 +6,7 @@
 //! `types.rs` for request/response shapes.
 #![allow(clippy::module_name_repetitions)]
 use axum::{
-    Json,
+    Extension, Json,
     extract::State,
     response::{
         IntoResponse,
@@ -24,6 +24,7 @@ use super::types::{
     Usage,
 };
 use crate::ApiState;
+use crate::security::correlation::CorrelationId;
 
 fn should_skip_token_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &str) -> bool {
     text.is_empty() || tokenizer.is_special_token(text)
@@ -70,6 +71,7 @@ pub(crate) fn validate_chat_request(
 
 async fn handle_chat(
     state: &ApiState,
+    correlation_id: &str,
     req: ChatRequest,
 ) -> Result<ChatResponse, (axum::http::StatusCode, Json<ErrorResponse>)> {
     let start = std::time::Instant::now();
@@ -171,6 +173,12 @@ async fn handle_chat(
             // (or max_tokens) and we drop the oneshot on the floor.
             seq_id_tx: None,
             finish_reason_tx: Some(finish_reason_tx),
+            // Production-readiness §6: forward the correlation id
+            // so the engine run loop's `tracing::info_span!` can
+            // attach it to every synchronous log line in
+            // `add_request` and its callees (scheduler admission,
+            // KV allocation, prefix-cache lookup).
+            request_id: Some(correlation_id.to_string()),
         })
         .map_err(|e| match e {
             tokio::sync::mpsc::error::TrySendError::Full(_) => engine_overloaded_error(),
@@ -253,6 +261,7 @@ async fn handle_chat(
 /// payload types are plain `serde_json`-derived structs).
 pub async fn chat_completions(
     State(state): State<ApiState>,
+    Extension(correlation_id): Extension<CorrelationId>,
     Json(req): Json<ChatRequest>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
     // API-01: reject OpenAI fields the engine does not yet honour
@@ -261,10 +270,20 @@ pub async fn chat_completions(
     // does not fully apply them." Honest 400 > silent degradation.
     validate_chat_request_fields(&req)?;
 
+    // Production-readiness §6: the correlation_id middleware
+    // (mounted as the OUTERMOST layer in main.rs) installs a
+    // `CorrelationId` in request extensions for every request —
+    // honouring the client's X-Request-ID if well-formed, minting
+    // a fresh `<unix-nanos-hex>-<process-counter-hex>` id otherwise.
+    // We forward it into EngineMessage::AddRequest so the engine's
+    // tracing::info_span!("engine.add_request", request_id) attaches
+    // it to every synchronous log line in add_request and its
+    // callees (scheduler admission, KV allocation, prefix-cache
+    // lookup), enabling cross-layer log correlation.
     if req.stream.unwrap_or(false) {
-        stream_chat_completion(state, req).await
+        stream_chat_completion(state, &correlation_id.0, req).await
     } else {
-        non_stream_chat_completion(state, req).await
+        non_stream_chat_completion(state, &correlation_id.0, req).await
     }
 }
 
@@ -294,6 +313,7 @@ pub async fn chat_completions(
 #[allow(clippy::unused_async)]
 async fn stream_chat_completion(
     state: ApiState,
+    correlation_id: &str,
     req: ChatRequest,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
     let start = std::time::Instant::now();
@@ -371,6 +391,9 @@ async fn stream_chat_completion(
             response_tx,
             seq_id_tx: Some(seq_id_tx),
             finish_reason_tx: Some(finish_reason_tx),
+            // Production-readiness §6: forward the correlation id
+            // (same rationale as the non-streaming handler above).
+            request_id: Some(correlation_id.to_string()),
         })
         .map_err(|e| match e {
             tokio::sync::mpsc::error::TrySendError::Full(_) => engine_overloaded_error(),
@@ -621,9 +644,10 @@ impl Drop for CancelOnDrop {
 /// See [`handle_chat`] — same error contract.
 async fn non_stream_chat_completion(
     state: ApiState,
+    correlation_id: &str,
     req: ChatRequest,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
-    let response = handle_chat(&state, req).await?;
+    let response = handle_chat(&state, correlation_id, req).await?;
     Ok(Json(response).into_response())
 }
 

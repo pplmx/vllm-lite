@@ -35,7 +35,25 @@ impl Engine {
                         response_tx,
                         seq_id_tx,
                         finish_reason_tx,
+                        request_id,
                     } => {
+                        // Production-readiness §6 (日志与追踪): when an
+                        // HTTP handler forwards a `request_id`, enter a
+                        // `tracing::info_span!` so every engine-side
+                        // log line for this HTTP request carries the
+                        // same correlation id. The span is RAII-scoped
+                        // to the rest of this match arm — `add_request`
+                        // and its callees (scheduler admission, KV
+                        // allocation, prefix-cache lookup) all inherit
+                        // it. When `request_id` is `None` (test
+                        // fixtures, non-HTTP callers) the span still
+                        // enters with `request_id = None`, rendering
+                        // as `null` in the JSON span output.
+                        let _request_id_span = tracing::info_span!(
+                            "engine.add_request",
+                            request_id = request_id.as_deref(),
+                        );
+
                         // Production-readiness recommendation: when an
                         // HTTP handler sends an `seq_id_tx` oneshot,
                         // reply with the assigned seq_id so the

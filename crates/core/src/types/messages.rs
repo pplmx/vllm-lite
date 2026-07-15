@@ -36,11 +36,26 @@ pub enum EngineMessage {
     /// `max_tokens` — see
     /// `docs/technical-due-diligence/architecture-performance.md` §5.1.2
     /// and the v31.0 P4 follow-up batch.
+    ///
+    /// `request_id` is the correlation id minted (or forwarded) by
+    /// the HTTP boundary — see
+    /// `docs/technical-due-diligence/production-readiness.md` §6.
+    /// When `Some`, the engine run loop enters a
+    /// `tracing::info_span!("engine.add_request", request_id)`
+    /// around the synchronous `add_request` call so every
+    /// engine-side log line for this HTTP request carries the
+    /// same id, enabling cross-layer (HTTP → scheduler → engine)
+    /// log correlation. When `None` (test fixtures, non-HTTP
+    /// callers), the span still enters with `request_id = None`
+    /// and the field renders as `null` in the JSON span output.
     AddRequest {
         request: Request,
         response_tx: mpsc::Sender<TokenId>,
         seq_id_tx: Option<oneshot::Sender<SeqId>>,
         finish_reason_tx: Option<oneshot::Sender<vllm_traits::FinishReason>>,
+        /// Correlation id forwarded from the HTTP boundary; see
+        /// `request_id` field-level doc above.
+        request_id: Option<String>,
     },
     /// Cancel an in-flight or queued sequence identified by `seq_id`
     /// (the value returned from the engine when the request was
