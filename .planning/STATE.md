@@ -3,14 +3,10 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Perfection & Elegance
 status: in_progress
-last_updated: "2026-07-15T12:00:00.000Z"
-last_activity: 2026-07-15 — Technical due diligence P9 + P10
-follow-up batches: top_p honoured end-to-end (P9, 12 new
-tests); request_id propagated HTTP → engine via
-EngineMessage::AddRequest + tracing::info_span! (P10, 4 new
-tests in request_id_propagation.rs). P9 closed the
-architecture-performance §5.1.6 item; P10 closed the
-production-readiness §6 item.
+last_updated: "2026-07-15T13:30:00.000Z"
+last_activity: 2026-07-15 — Technical due diligence P11
+follow-up batches: |-
+  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta). P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half (checksums + provenance remain as a v32+ follow-up).
 progress:
   total_phases: 6
   completed_phases: 0
@@ -1051,7 +1047,72 @@ pass):
   bullet naming the crate.
 - Workspace real doc coverage: **67.93 %** (target 65 %).
 
-## Remaining open items (after P10)
+## Technical Due Diligence — 2026-07-15 P11 follow-up batch
+
+Closed one follow-up item from
+`docs/technical-due-diligence/engineering-quality.md` §7
+(MSRV 与可复现构建, last bullet: "release 生成 SBOM、校验和与
+构建 provenance"). This batch closes the **SBOM half**;
+checksums (`sha256sum`) and signed build provenance (SLSA /
+in-toto) remain as a separate follow-up — they were not
+attempted here because adding checksums to a release requires
+a downstream verification story (signature key handling,
+reproducible build attestation) that goes beyond a single CI
+step.
+
+### What changed
+
+- **`.github/workflows/release.yml`** — added a CycloneDX SBOM
+  step to the `build` job after binary packaging, via
+  [`anchore/sbom-action@v0`](https://github.com/marketplace/actions/anchore-sbom-action)
+  (`syft` under the hood). Each matrix target emits
+  `cyclonedx-json` SBOM into `artifacts/`, uploaded both as a
+  standalone workflow artifact (`sbom-<target>`) and as part
+  of the GitHub Release attachment glob (`artifacts/**/*` in
+  the `release` job). The `build` job now requests
+  `contents: write` + `actions: read` explicitly so the SBOM
+  step can both upload its artifact and contribute to the
+  Release attachments.
+- **`docs/RELEASE.md`** — added the missing **"Software Bill of
+  Materials"** section that the new workflow step references
+  ("see 'Software Bill of Materials below'"). The section
+  documents what the SBOM contains (every Rust crate in
+  `Cargo.lock`, vendored C libraries linked into the binary,
+  system libraries detected by syft's ELF/PE/Mach-O scanners),
+  how to download + inspect it locally with `gh release
+  download` + `jq`, and why downstream consumers in regulated
+  environments (SOC 2 / FedRAMP / air-gapped vendor review)
+  benefit. It also explicitly notes that checksums + signed
+  provenance are still missing so the doc can't drift.
+- **`CHANGELOG.md`** — new `[Unreleased] / Added` bullet
+  recording the SBOM wiring and pointing future readers at the
+  follow-up for checksums + provenance.
+
+### CI-only change (no test delta)
+
+- No Rust code touched, so `just ci` is unchanged in coverage:
+  `just nextest` still reports **1452 passed, 40 ignored**.
+- No public API delta (workflow YAML + markdown only).
+- Workspace real doc coverage holds at **67.93 %** (target 65 %);
+  the SBOM doc is a small additive section that nudges the
+  ratio marginally upward.
+
+### Why this batch and not the §7 checksum half
+
+The §7 bullet is "release 生成 SBOM、校验和与构建 provenance".
+Splitting into two batches keeps each PR reviewable:
+
+- **P11 (this batch): SBOM** — single new CI step, single new doc
+  section, zero cross-cutting concerns.
+- **P12 (next batch, when prioritized): checksums + provenance** —
+  needs a signature-key story (where does the maintainer key
+  live? how is it rotated?) and a reproducible-build posture
+  (the workspace today relies on Rust 1.88 + `--locked` for
+  Cargo.lock determinism, but the build env itself isn't
+  pinned to a specific image). Closing those is v32+ work
+  unless a downstream consumer asks for it in v0.1.
+
+## Remaining open items (after P11)
 
 - **PERF-01** (continuous batching kernel) — deferred to v32+.
 - **CI-01** (sustained GPU / real-checkpoint CI) — deferred.
@@ -1075,3 +1136,8 @@ pass):
   OTLP；不要仅添加依赖而没有 trace topology"). The workspace
   has no OTLP dependency; adding one is a v32+ non-goal pending
   a real OTLP backend (no CI-side collector). Tracking only.
+- **engineering-quality §7 checksums + provenance** — P11 closed
+  the SBOM half of §7. The remaining half (`sha256sum`
+  checksums + signed SLSA / in-toto provenance) is tracked as
+  a v32+ candidate — needs a signature-key story + reproducible
+  build posture before it can ship responsibly.
