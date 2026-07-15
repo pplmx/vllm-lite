@@ -162,6 +162,21 @@ ragged batch、paged KV 和 decode 特化的 kernel contract。
 - 逐项追平 OpenAI 语义并增加官方 SDK contract tests：成本中高、生态收益高。
 - 对 Batch API 返回 501/experimental，直到后台执行器完成；比保留假成功更安全。
 
+### §5 闭合状态（v31.0 P0–P9）
+
+上述五项主要偏差在 v31.0 期间已全部关闭：
+
+| # | 偏差 | 关闭批次 | 关键提交 / 文档 |
+|---|------|----------|----------------|
+| 1 | `top_p` / `n` / `stop` 字段未生效 | P6（`n`/`stop`）+ P9（`top_p`） | `5f00bd5` / `7a3e194`；`docs/reference/openai-compatibility.md` |
+| 2 | `finish_reason` 不能区分 stop / length | P4 | `5f00bd5`（finish_reason_tx） |
+| 3 | SSE `[DONE]` 与 JSON 拼在同一 data | P4 | `5f00bd5`（test_chat_streaming_done_is_separate_event） |
+| 4 | Batch API 创建 job 但无 worker 推进 | P1 | `5f232b9`（501 Not Implemented） |
+| 5 | 客户端断开不传播取消 | P1 | `b6a70cf`（cancel_propagation.rs） |
+
+本节保留为“原始问题清单 + 闭合追溯”，不要删除 — 后续字段（如 `seed` / `logprobs` /
+`tools`）若进入待评估状态，应在本节追加为新的主要偏差项而非重开旧项。
+
 ## 6. 投机解码与分布式
 
 ### 投机解码
