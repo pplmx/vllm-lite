@@ -95,6 +95,14 @@ pub async fn completions(
         request.sampling_params.temperature = temp;
     }
 
+    // Forward `top_p` to the engine (mirror of the chat handler).
+    // The engine's `sample_batch_with_params` honours `top_p` via
+    // nucleus sampling; the value is range-checked by
+    // `validate_completion_request_fields` earlier in this handler.
+    if let Some(top_p) = req.top_p {
+        request.sampling_params.top_p = top_p;
+    }
+
     // Reject sampling parameters the engine cannot honour (currently
     // beam_width > 1) BEFORE enqueuing — see `sampling_validation`.
     validate_sampling_params(&request.sampling_params)?;

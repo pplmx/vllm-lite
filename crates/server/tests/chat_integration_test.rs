@@ -9,7 +9,9 @@ use axum::{
     routing::post,
 };
 use http_body_util::BodyExt;
+use tokio::sync::Mutex;
 use tower::ServiceExt;
+use vllm_core::types::{EngineMessage, SamplingParams};
 use vllm_model::config::Architecture;
 use vllm_server::ApiState;
 use vllm_server::openai::chat::chat_completions;
@@ -427,5 +429,295 @@ async fn test_chat_accepts_empty_stop_array() {
         response.status(),
         StatusCode::OK,
         "empty stop array must be accepted (no-op)"
+    );
+}
+
+// ===== top_p forwarding tests =====
+//
+// Architecture-performance §5.1 + STATE.md P6 follow-up:
+// `top_p` is declared on `ChatRequest` and `CompletionRequest`. The
+// handler must forward the value to `Request::sampling_params.top_p`
+// so the engine's `sample_batch_with_params` honours it.
+//
+// These tests use a capturing mock engine (one slot) that records
+// the `sampling_params` from the first `AddRequest` it receives, then
+// asserts the field round-trips from JSON to engine-side state.
+
+/// Mock engine that captures the `SamplingParams` of the first
+/// `AddRequest` it receives, then replies with a single synthetic
+/// token so the handler completes. Returned as `(handle, captured)`
+/// where `captured` is an `Arc<Mutex<Option<SamplingParams>>>` —
+/// tests `await` on it after the response to inspect the forwarded
+/// value.
+fn spawn_capturing_mock_engine() -> (
+    vllm_server::api::EngineHandle,
+    tokio::task::JoinHandle<()>,
+    Arc<Mutex<Option<SamplingParams>>>,
+) {
+    let (engine_tx, mut engine_rx) = tokio::sync::mpsc::channel::<EngineMessage>(8);
+    let captured: Arc<Mutex<Option<SamplingParams>>> = Arc::new(Mutex::new(None));
+    let captured_clone = Arc::clone(&captured);
+    let handle = tokio::spawn(async move {
+        while let Some(msg) = engine_rx.recv().await {
+            match msg {
+                EngineMessage::AddRequest {
+                    request,
+                    response_tx,
+                    seq_id_tx,
+                    finish_reason_tx,
+                    ..
+                } => {
+                    if let Some(tx) = seq_id_tx {
+                        let _ = tx.send(1);
+                    }
+                    drop(finish_reason_tx);
+                    *captured_clone.lock().await = Some(request.sampling_params.clone());
+                    // TokenId is a type alias for u32 (see
+                    // `vllm_traits::types::TokenId`), so we send the
+                    // primitive directly rather than the old
+                    // `TokenId(10)` tuple-struct form.
+                    let _ = response_tx.send(10u32).await;
+                    break;
+                }
+                EngineMessage::Shutdown => break,
+                _ => {}
+            }
+        }
+    });
+    (engine_tx, handle, captured)
+}
+
+/// Build a minimal `ApiState` whose engine channel is wired to the
+/// capturing mock. The mock only handles one request, so each test
+/// needs its own state.
+fn state_with_capturing_engine() -> (
+    ApiState,
+    tokio::task::JoinHandle<()>,
+    Arc<Mutex<Option<SamplingParams>>>,
+) {
+    let (engine_tx, handle, captured) = spawn_capturing_mock_engine();
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    (state, handle, captured)
+}
+
+/// `top_p = 0.9` on the JSON request must land as
+/// `sampling_params.top_p = 0.9` on the engine side. This is the
+/// "happy path" — the engine honours it via nucleus sampling.
+#[tokio::test]
+async fn test_chat_forwards_top_p_to_engine() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "top_p": 0.9,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    assert!(
+        (params.top_p - 0.9).abs() < 1e-6,
+        "top_p must round-trip from JSON to SamplingParams; got {}",
+        params.top_p
+    );
+}
+
+/// `top_p` omitted on the request must leave the engine-side default
+/// (`1.0`, i.e. no nucleus filtering) untouched.
+#[tokio::test]
+async fn test_chat_omitted_top_p_uses_engine_default() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    assert_eq!(
+        params.top_p, 1.0,
+        "omitted top_p must leave engine default (1.0); got {}",
+        params.top_p
+    );
+}
+
+/// `top_p = 1.5` must be rejected with 400 BEFORE the engine sees
+/// the request — sampling guards exist in the validator, not the
+/// engine, so this also proves the request never reached the mock.
+#[tokio::test]
+async fn test_chat_rejects_top_p_above_one_with_400() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "top_p": 1.5,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(body["error"]["type"], "invalid_request_error");
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap_or("")
+            .contains("top_p"),
+        "error message must name top_p; got: {}",
+        body["error"]["message"]
+    );
+
+    // Validator must run BEFORE the engine is touched.
+    assert!(
+        captured.lock().await.is_none(),
+        "out-of-range top_p must be rejected at the HTTP boundary, \
+         not reach the engine"
+    );
+}
+
+/// `top_p = 0` is also out of range (would select zero tokens) and
+/// must be rejected with 400.
+#[tokio::test]
+async fn test_chat_rejects_top_p_zero_with_400() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "top_p": 0.0,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(
+        captured.lock().await.is_none(),
+        "top_p = 0 must be rejected at the HTTP boundary"
+    );
+}
+
+/// `top_p` must round-trip on the `/v1/completions` endpoint too —
+/// the field was added to `CompletionRequest` at the same time as
+/// the chat forwarding fix, and the engine should see the same value
+/// regardless of which endpoint produced the request.
+#[tokio::test]
+async fn test_completions_forwards_top_p_to_engine() {
+    use vllm_server::openai::completions::completions;
+    let (engine_tx, _handle, captured) = spawn_capturing_mock_engine();
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "top_p": 0.5,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    assert!(
+        (params.top_p - 0.5).abs() < 1e-6,
+        "top_p must round-trip on /v1/completions; got {}",
+        params.top_p
     );
 }
