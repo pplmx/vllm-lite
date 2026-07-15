@@ -25,7 +25,7 @@ jobs:
       matrix:
         rust: ["1.88"]  # MSRV; expand here when bumped
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust ${{ matrix.rust }}
         uses: dtolnay/rust-toolchain@stable
