@@ -954,13 +954,28 @@ Files touched:
 - **CI-01** (sustained GPU / real-checkpoint CI) — deferred.
 - **OpenAI compat: `seed` wire type** — still tracked as v0.2
   follow-up in `docs/reference/openai-compatibility.md`. (`top_p`
-  closed by this batch.)
-- **Phase 31-D: 2-node integration test** — not yet exercised
-  end-to-end; the unit tests for `TransferKVBlock` and
-  `DistributedKVCache::fetch_block` are in place but a 2-process
-  round-trip (start two nodes, route a prefix cache hit across
-  them) is still outstanding.
+  closed by P9.)
+- **Phase 31-D follow-up work (post-OPS-31d)** — `kv_block_transfer.rs`
+  integration tests already exercise real 2-node + 3-node gRPC
+  round-trips (`peer_serves_block_bytes_via_transfer_kv_block`,
+  `fan_out_returns_first_successful_peer`, etc.). Remaining items
+  per `ops-31d-kv-block-transfer.md` §7 are all v32+ non-goals
+  (MESI coherence, owner-routed peer fetch, streaming RPCs,
+  wire compression, block refcounting during transfer,
+  `PagedKvCacheWrapper: BlockDataSource`). Tracking only —
+  none block the v31.0 alpha.
 - **Phase 31-F (performance)** — `attn_factor` in paged/flash
   attention paths, `RopeScaling` config → Block wiring,
   `expand_kv` fused kernel, PagedKV host round-trip elimination
   all deferred.
+- **production-readiness §6 — request_id propagation to engine
+  spans** — `correlation_id_middleware` (P1) sets the X-Request-ID
+  header on the response and writes an audit row, but the value
+  is not carried into `EngineMessage::AddRequest` so tracing spans
+  inside `vllm_core::engine::run` cannot correlate engine log
+  lines with the originating HTTP request. Wiring this requires
+  a new `request_id: Option<String>` field on `AddRequest`,
+  updating all sites that construct it, and reading it from the
+  `CorrelationId` extension the middleware already installs.
+  Medium complexity; useful for cross-layer debugging once the
+  perf work resumes.
