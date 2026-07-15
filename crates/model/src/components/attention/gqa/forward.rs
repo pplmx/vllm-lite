@@ -17,6 +17,31 @@ use candle_core::{Module, Result, Tensor};
 use tracing::trace;
 
 impl GqaAttention {
+    /// Pre-scale Q by `attn_factor` (YaRN §3.3 attention-temperature scaling).
+    ///
+    /// Mathematically equivalent to applying `attn_factor` to the post-`Q@K^T`
+    /// logits: `(Q * attn_factor) @ K^T = attn_factor * (Q @ K^T)`, and the
+    /// lower-level attention functions (`paged_attention`, `tiled_attention`,
+    /// `GqaFlashAttention::forward`) then apply their internal `1/sqrt(d)`
+    /// scale. softmax is invariant to positive scalar multiplication, so the
+    /// final attention distribution equals `softmax(Q @ K^T * attn_factor /
+    /// sqrt(d))` — identical to the standard forward path's
+    /// `qk.affine(attn_factor / sqrt(d), 0.0)`.
+    ///
+    /// **No-op** when `attn_factor` is `None` or `Some(1.0)` (within
+    /// `f32::EPSILON`) — Q is returned unchanged, no allocation, no kernel
+    /// launch. This is the common case for non-YaRN models.
+    ///
+    /// Critical caveat: must scale by `attn_factor` only, never by
+    /// `attn_factor * base_scale` — the `1/sqrt(d)` factor is the
+    /// responsibility of the downstream attention function.
+    fn apply_attn_factor(&self, q: Tensor) -> Result<Tensor> {
+        match self.attn_factor {
+            Some(f) if (f - 1.0).abs() > f32::EPSILON => q.affine(f64::from(f), 0.0),
+            _ => Ok(q),
+        }
+    }
+
     /// Run the layer forward pass over the input.
     /// # Caution: No causal masking
     ///
@@ -63,6 +88,13 @@ impl GqaAttention {
         let q = q.transpose(1, 2)?.contiguous()?;
 
         if self.config.use_fused {
+            // Honour `attn_factor` (YaRN §3.3): pre-scale Q by `attn_factor`
+            // before delegating to `GqaFlashAttention::forward`, which applies
+            // its own `1/sqrt(d)` internally. Mathematically equivalent to the
+            // standard path's `qk.affine(attn_factor / sqrt(d), 0.0)` —
+            // softmax is invariant to positive scalar multiplication. No-op
+            // when `attn_factor` is `None` or `Some(1.0)`.
+            let q = self.apply_attn_factor(q)?;
             // H-11 #3 (attempted, reverted): removing `.contiguous()?` here broke
             // `Tensor::matmul(&attn_weights, &v_expanded)` inside `flash.forward`.
             // Even though flash internally calls `.transpose(2, 3)?.contiguous()?`
@@ -148,38 +180,47 @@ impl GqaAttention {
         Ok(o)
     }
 
-    /// Paged attention. **Does NOT honour `attn_factor`** — silently
-    /// scales by 1.0. The factor is not yet threaded through to the
-    /// paged kernel.
+    /// Paged attention. Honours `attn_factor` (YaRN §3.3
+    /// attention-temperature scaling) — Q is pre-scaled by `attn_factor`
+    /// before being passed to `paged_attention`, which applies its own
+    /// `1/sqrt(d)` internally. Mathematically equivalent to the standard
+    /// path's `qk.affine(attn_factor / sqrt(d), 0.0)`.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
     pub fn paged_attention_fn(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
-        let attn_output = paged_attention(q, k, v, self.num_heads, self.head_dim)?;
+        let q = self.apply_attn_factor(q.clone())?;
+        let attn_output = paged_attention(&q, k, v, self.num_heads, self.head_dim)?;
         let o = self.o_proj.forward(&attn_output)?;
         Ok(o)
     }
 
-    /// Tiled attention. **Does NOT honour `attn_factor`** — see
-    /// [`Self::paged_attention_fn`].
+    /// Tiled attention. Honours `attn_factor` (YaRN §3.3) — Q is
+    /// pre-scaled by `attn_factor` before `tiled_attention` applies its
+    /// internal `1/sqrt(d)`. See [`Self::paged_attention_fn`] for the
+    /// equivalence argument.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
     pub fn tiled_attention_fn(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
+        let q = self.apply_attn_factor(q.clone())?;
         let tile_size = self.config.tile_size.unwrap_or(16);
-        let attn_output = tiled_attention(q, k, v, self.num_heads, tile_size)?;
+        let attn_output = tiled_attention(&q, k, v, self.num_heads, tile_size)?;
         let o = self.o_proj.forward(&attn_output)?;
         Ok(o)
     }
 
-    /// Flash attention. **Does NOT honour `attn_factor`** — see
-    /// [`Self::paged_attention_fn`].
+    /// Flash attention. Honours `attn_factor` (YaRN §3.3) — Q is
+    /// pre-scaled by `attn_factor` before `GqaFlashAttention::forward`
+    /// applies its internal `1/sqrt(d)`. See [`Self::paged_attention_fn`]
+    /// for the equivalence argument.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
     pub fn flash_attention_fn(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
+        let q = self.apply_attn_factor(q.clone())?;
         let flash = GqaFlashAttention::new(self.num_heads, self.num_kv_heads, self.head_dim, true);
-        let attn_output = flash.forward(q, k, v)?;
+        let attn_output = flash.forward(&q, k, v)?;
         let batch_size = q.dims()[0];
         let seq_len = q.dims()[2];
         let attn_output = attn_output.transpose(1, 2)?;

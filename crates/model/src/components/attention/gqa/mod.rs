@@ -39,11 +39,14 @@ pub struct GqaAttention {
     q_norm: Option<LayerNorm>,
     k_norm: Option<LayerNorm>,
     /// YaRN attention-temperature scaling factor. When `Some(f)`,
-    /// attention scores in the standard `forward()` are additionally
-    /// divided by `f` before softmax. `None` or `Some(1.0)` = no scaling.
-    /// Currently only honoured by the standard forward path; paged/tiled/
-    /// flash attention paths silently ignore this value (documented
-    /// limitation; follow-up phase will thread it through).
+    /// attention scores are additionally divided by `f` before softmax
+    /// (YaRN §3.3 attention-temperature scaling). `None` or `Some(1.0)`
+    /// is a no-op (no allocation). Honoured by all four forward paths
+    /// (standard `forward()`, `paged_attention_fn`, `tiled_attention_fn`,
+    /// `flash_attention_fn`); pre-scaling Q by `attn_factor` in the
+    /// production paths is mathematically equivalent to the standard path's
+    /// `qk.affine(attn_factor / sqrt(d), 0.0)` via softmax's positive-
+    /// scalar invariance.
     pub attn_factor: Option<f32>,
 }
 
