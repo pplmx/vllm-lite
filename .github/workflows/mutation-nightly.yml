@@ -95,7 +95,7 @@ jobs:
           shared-key: "mutation-nightly"
 
       - name: Cache cargo-mutants binary
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-mutants
           key: cargo-mutants-27.1.0-${{ runner.os }}

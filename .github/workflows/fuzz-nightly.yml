@@ -29,7 +29,7 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
 
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/bin/
@@ -42,7 +42,7 @@ jobs:
             ${{ runner.os }}-fuzz-nightly-cargo-
 
       - name: Cache fuzz corpus
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: fuzz/corpus/${{ matrix.target }}
           key: fuzz-corpus-nightly-${{ matrix.target }}-${{ github.sha }}
