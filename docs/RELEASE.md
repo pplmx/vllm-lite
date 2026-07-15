@@ -80,17 +80,61 @@ echo "$VLLM_VERSION"   # → 0.1.0
 1. `meta` job: runs `release-manifest.sh`, exports the variables as
    job outputs, and uploads `target/release-manifest.env` as an
    artifact so the downstream jobs can `source` it.
-2. `build` job: cross-compiles `vllm-server` for the OS matrix and
+2. `build` job: cross-compiles `vllm-server` for the OS matrix,
    packages the binary named
-   `vllm-server-${{ needs.meta.outputs.version }}-${{ matrix.target }}`.
+   `vllm-server-${{ needs.meta.outputs.version }}-${{ matrix.target }}`,
+   and emits a CycloneDX SBOM per target (see "Software Bill of
+   Materials" below).
 3. `release` job: runs `git-cliff` to generate release notes and
-   creates the GitHub Release with the binary artifacts attached.
+   creates the GitHub Release with the binary + SBOM artifacts
+   attached.
 
 Docker build/push and Helm Chart packaging are not yet wired into
 `release.yml` (the due-diligence report flagged these as P1 — see
 the roadmap for when they'll land). The Dockerfile and Chart.yaml
 already accept the manifest fields via build args / `helm --set`
 so the wiring is mechanical once the GHCR secret is configured.
+
+## Software Bill of Materials
+
+Every GitHub Release attaches a CycloneDX JSON SBOM per build target,
+emitted by the `build` job via
+[`anchore/sbom-action`](https://github.com/marketplace/actions/anchore-sbom-action)
+(`syft` under the hood). Each SBOM file:
+
+- Lives next to the corresponding binary artifact
+  (`sbom-<target>.<ext>`, where the extension depends on the `format`
+  parameter; `cyclonedx-json` produces a `.cdx.json`).
+- Captures every Rust crate in `Cargo.lock`, vendored C libraries that
+  ended up linked into the binary, and any system libraries detected
+  by syft's ELF/PE/Mach-O scanners.
+- Is uploaded both as a standalone workflow artifact (`sbom-<target>`)
+  and as part of the GitHub Release attachment glob
+  (`artifacts/**/*` in the `release` job).
+
+**Verify a release locally:**
+
+```bash
+# Download the SBOM alongside the binary, then sanity-check it
+gh release download v0.1.0 -p 'sbom-x86_64-unknown-linux-gnu*'
+ls sbom-x86_64-unknown-linux-gnu.*
+jq '.components | length' sbom-x86_64-unknown-linux-gnu.cdx.json
+# → number of distinct packages syft detected
+
+# Cross-check a known crate
+jq '.components[] | select(.name == "tokio")' sbom-x86_64-unknown-linux-gnu.cdx.json
+```
+
+**Why this matters:** downstream consumers running vLLM-lite in
+regulated environments (SOC 2 / FedRAMP / air-gapped vendor review)
+frequently need an SBOM to satisfy their intake checklist. Emitting
+one per build target means the artifact is already in place — no
+post-release `cargo metadata` workaround needed.
+
+Checksums (`sha256sum`) and signed build provenance (SLSA / in-toto)
+are still missing from `release.yml`; they are tracked as a separate
+follow-up against `docs/technical-due-diligence/engineering-quality.md`
+§7.
 
 ## Why `0.1.0` (and not the internal milestone numbers)
 
