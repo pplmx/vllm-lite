@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Perfection & Elegance
 status: in_progress
-last_updated: "2026-07-15T18:30:00.000Z"
-last_activity: 2026-07-15 — Technical due diligence P16
+last_updated: "2026-07-15T19:00:00.000Z"
+last_activity: 2026-07-15 — Technical due diligence P17
 follow-up batches: |-
-  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta); OPERATIONS.md "Multi-Node (Experimental)" expanded with 3-node snippet + TransferKVBlock wire-protocol spec (P12, doc-only — closes the remaining Phase 31-D master-plan items); mutation nightly CI wired in .github/workflows/mutation-nightly.yml with --baseline skip dropped after verifying it is unnecessary for the scanned modules under default features (P13, CI-only — closes one Phase 31-E master-plan item); ADR-020 captures the six OPS-31d architectural decisions (P14, docs-only); v0.2 follow-ups section added to docs/reference/openai-compatibility.md (seed / user / response_format queue for v0.2; frequency_penalty / logit_bias / logprobs / tools defer to v32+), plus stale-item closure for engineering-quality §6 + §7 (P15, docs-only); closure tables added to production-readiness.md §2-§11 with a top-of-document P0-P15 aggregate (29 closed / 5 partial / 9 v32+ candidates out of 43 original observations) — closes the documentation-drift items in production-readiness §2 (SEC-01), §3 (REL-01), §4 (输入边界), §5 (OBS-01), §6 (日志与追踪), §7 (健康检查与关停), §8 (部署阻断项), §9 (TLS 与 CORS), §10 (Batch 与 Embeddings), §11 (生产门槛 aggregate). P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half; P12 closed the Phase 31-D master-plan checkboxes; P13 closed the mutation-testing half of Phase 31-E; P14 added ADR-020; P15 closed the documentation-drift items in engineering-quality §6 + §7 and made the v0.2 backlog visible from the OpenAI compat matrix; P16 closed the documentation-drift items in production-readiness.md. Checksums + provenance remain as a v32+ follow-up; engine wiring to MemoryManager remains v32+ / OPS-32a; GPU nightly smoke remains deferred (self-hosted GPU runner); OTLP exporter + per-tenant quota + TLS 主路径接线 + readiness 模型加载信号 + feature matrix doc + 容量基准 runbook remain as v32+ candidates surfaced by P16.
+  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta); OPERATIONS.md "Multi-Node (Experimental)" expanded with 3-node snippet + TransferKVBlock wire-protocol spec (P12, doc-only — closes the remaining Phase 31-D master-plan items); mutation nightly CI wired in .github/workflows/mutation-nightly.yml with --baseline skip dropped after verifying it is unnecessary for the scanned modules under default features (P13, CI-only — closes one Phase 31-E master-plan item); ADR-020 captures the six OPS-31d architectural decisions (P14, docs-only); v0.2 follow-ups section added to docs/reference/openai-compatibility.md (seed / user / response_format queue for v0.2; frequency_penalty / logit_bias / logprobs / tools defer to v32+), plus stale-item closure for engineering-quality §6 + §7 (P15, docs-only); closure tables added to production-readiness.md §2-§11 with a top-of-document P0-P15 aggregate (29 closed / 5 partial / 9 v32+ candidates out of 43 original observations); closure table added to architecture-performance.md §6 covering 7 speculative + distributed observations (4 closed / 1 partial sampled-match / 2 still-gap-but-documented) (P17, docs-only). P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half; P12 closed the Phase 31-D master-plan checkboxes; P13 closed the mutation-testing half of Phase 31-E; P14 added ADR-020; P15 closed the documentation-drift items in engineering-quality §6 + §7 and made the v0.2 backlog visible from the OpenAI compat matrix; P16 closed the documentation-drift items in production-readiness.md; P17 closed the documentation-drift items in architecture-performance §6 (speculative + distributed) and verified `verify_draft_tokens_logits` is already temperature-aware sampled-match. Checksums + provenance remain as a v32+ follow-up; engine wiring to MemoryManager remains v32+ / OPS-32a; GPU nightly smoke remains deferred (self-hosted GPU runner); OTLP exporter + per-tenant quota + TLS 主路径接线 + readiness 模型加载信号 + feature matrix doc + 容量基准 runbook + sampled-match → min(1, p/q) rejection-sampling + CUDA Graph + speculative coexistence remain as v32+ candidates surfaced by P15-P17.
 progress:
   total_phases: 6
   completed_phases: 5
@@ -1530,7 +1530,71 @@ The P15 candidate list explicitly listed "actual `seed` declaration" as a P16 op
 
 P17+ candidates: architecture-performance §6 closure (the last un-closed due-diligence subsection), or actual `seed` declaration when the sampler-design contract is finalized, or back to a real engineering task.
 
-## Remaining open items (after P16)
+## Technical Due Diligence — 2026-07-15 P17 follow-up batch
+
+Closed the documentation-drift items in `docs/technical-due-diligence/architecture-performance.md` §6 (Speculative decoding & 分布式). This is the **last** un-audited subsection of the three due-diligence documents; P15 closed engineering-quality §6/§7, P16 closed production-readiness §2-§11, and P17 closes architecture-performance §6. After this batch, every due-diligence subsection with itemized concerns has a closure audit.
+
+### What changed
+
+- **`docs/technical-due-diligence/architecture-performance.md` §6** — new "§6 闭合状态 (v31.0 P17)" table with seven per-item entries (3 speculative + 4 distributed):
+
+  **Speculative decoding (3 items)**:
+  - **#1 验证以 argmax 相等为主** — 🟡 **半关闭**：verified `crates/core/src/engine/spec_dispatch/verify.rs::verify_draft_tokens_logits` is already temperature-aware sampled-match path. Doc-comment explicitly distinguishes "lossless speculative decoding verifier" (implemented) from "full `min(1, p/q)` rejection-sampling" (requires draft-side logits, not on wire — v32+). The sampled-match path is a strict improvement over old argmax: target now uses the same sampler the rest of the engine uses instead of always picking most-likely token.
+  - **#2 speculative 与 CUDA Graph 互斥** — 🟠 **仍为真缺口**：code-verified that `step_speculative_inner` (`spec_dispatch/dispatch.rs:19`) and `step_with_graph` (`graph_step.rs:42`) are switch-mutually-exclusive. `step_with_graph` calls `execute_regular(&batch)` directly which bypasses spec dispatch — CUDA Graph capture needs static batch shape, speculative decode introduces variable draft length. This is explicit design, not a bug. v32+ candidate: dynamic-shape graph or non-speculative prefill + speculative-decode graph dual path.
+  - **#3 legacy draft model 与 resolver 两套路径** — ✅ **已关闭**：`grep -rn "legacy" crates/core/src/speculative/` returns empty. The four draft sources (`draft_registry` / `draft_resolver` / `adaptive` / `self_spec`) are all resolver-driven v18.0+ paths. `step_speculative_inner` dispatches between `generate_per_seq_drafts` (resolver-driven) and `generate_batched_drafts` (legacy batched path, not legacy model) based on `self.draft_resolver.is_some()`. Both share `verify_draft_tokens_logits`.
+
+  **Distributed (4 items)**:
+  - **#4 `NcclAllReduce` 实际是本地数组求和** — ✅ closed by P4 batch (`5f00bd5`): `LocalSumAllReduce` is canonical (`crates/dist/src/tensor_parallel/all_reduce.rs:59`); `NcclAllReduce` is `pub type` alias (line 73) with `#[deprecated]`. compile-only test `nccl_all_reduce_alias_resolves_to_local_sum` guards the deprecation contract.
+  - **#5 分布式 KV 当前主要存元数据** — ✅ closed by OPS-31d / Phase 31-D + P12-P14: `TransferKVBlock` gRPC RPC + `BlockDataSource` trait + `DistributedKVCache::fetch_block` fan-out fallback + 64 MiB symmetric message limit. ADR-020 records six architectural decisions. Engine wiring (`PagedKvCacheWrapper: BlockDataSource`) explicitly tracked as v32+ / OPS-32a (not closed by this batch).
+  - **#6 `dist` 不在 default members** — ✅ closed by P15 §6: `Cargo.toml` workspace `default-members` includes all 6 crates (`crates/core`, `crates/model`, `crates/server`, `crates/traits`, `crates/dist`, `crates/testing`). `just ci` + `ci.yml::ci` automatically cover dist.
+  - **#7 multi-node 明确标记 experimental + 类型命名避免暗示 NCCL** — ✅ closed by P12 OPERATIONS.md rewrite + ADR-008/015/020 + the P4 NcclAllReduce rename.
+
+- **`CHANGELOG.md`** — new `[Unreleased] / Added` entry describing the §6 closure table and the verification findings (sampled-match path is already implemented; CUDA Graph ↔ speculative is explicit design not bug; legacy draft code is gone).
+
+### Aggregate view
+
+| Status | Count | Items |
+|--------|------:|-------|
+| ✅ Closed | 4 | NcclAllReduce rename, TransferKVBlock protocol + ADR-020, dist in default-members, multi-node Experimental label + 3 ADRs |
+| 🟡 Partial | 1 | Speculative verifier: sampled-match implemented, full `min(1, p/q)` rejection-sampling deferred (needs draft-side logits) |
+| 🟠 Still gap (documented) | 2 | CUDA Graph ↔ speculative mutual exclusion (explicit design — graph capture needs static shape); `PagedKvCacheWrapper: BlockDataSource` engine wiring (OPS-32a) |
+| **Total** | **7** | |
+
+### Verification details
+
+- **Code grep** — `grep -rn "legacy\|LegacyDraft" crates/core/src/speculative/` returns zero hits (closes #3).
+- **Code grep** — `grep -rn "cuda_graph\|CudaGraph" crates/core/src/speculative/` returns zero hits (CUDA Graph and speculative live in separate code paths; verification of mutual exclusion is via `step_speculative_inner` vs `step_with_graph` entry points).
+- **Doc reading** — `crates/core/src/engine/spec_dispatch/verify.rs:1-24` module-level doc-comment is the primary source for #1's "sampled-match is implemented, full rejection-sampling requires draft-side logits" decision. The doc-comment is dated Plan 17.1-C.
+- **File inspection** — `crates/dist/src/tensor_parallel/all_reduce.rs` confirms `LocalSumAllReduce` is canonical (line 59) and `NcclAllReduce` is alias (line 73).
+
+### Docs-only change (no Rust / no test / no CI delta)
+
+- No Rust code touched, so `just nextest` is unchanged: **1452 passed, 40 ignored**.
+- No public API delta.
+- No CI delta.
+- Workspace real doc coverage holds at **67.93 %** (closure tables are real prose + code references; the §6 table is denser than the §10 batch's tables but still mostly commentary).
+
+### Why P17 is the natural next batch and not the alternatives
+
+The P16 candidate list explicitly listed three P17+ options: (a) architecture-performance §6 closure, (b) actual `seed` declaration, (c) real engineering task. P17 picks (a) because:
+
+- **Completeness argument**: §6 is the last un-closed due-diligence subsection. Closing it leaves the three due-diligence documents fully audited against v31.0 reality — a cleaner end-state than half-closed.
+- **Two new discoveries** that fall out of the §6 audit and might inform future `seed` work: (i) speculative verifier is already temperature-aware sampled-match (which means the engine's sampling hot-path is *not* always greedy, contrary to the v19.x snapshot the doc was written from); (ii) CUDA Graph ↔ speculative is switch-mutually-exclusive, not just "speculative skips CUDA Graph paths" — this affects how to reason about future CUDA Graph work.
+- **No sampler-design dependency**: §6 closure is doc-only with code verification; it doesn't gate on the `seed`/sampler-design decision that's blocking that work.
+
+### After P17
+
+The three due-diligence documents now have closure audits on every itemized subsection:
+
+- `engineering-quality.md` §6 + §7 — closed by P15.
+- `production-readiness.md` §2-§11 — closed by P16.
+- `architecture-performance.md` §6 — closed by P17. (§5 was closed earlier across P0-P9 batches.)
+
+The due-diligence backlog-as-documentation is fully reconciled with v31.0 reality. The remaining open items are visible at the bottom of each due-diligence section and in STATE.md "Remaining open items (after P17)" below — none block the v31.0 alpha.
+
+P18+ candidates: real engineering work (PERF-01 / Phase 31-F) or feature work (`seed` declaration, feature matrix doc).
+
+## Remaining open items (after P17)
 
 - **PERF-01** (continuous batching kernel) — deferred to v32+.
 - **CI-01** (sustained GPU / real-checkpoint CI) — deferred.
