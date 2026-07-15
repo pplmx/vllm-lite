@@ -11,7 +11,10 @@
 > This file is the single source of truth for what works against
 > `/v1/chat/completions`, `/v1/completions`, `/v1/models`, and
 > `/v1/embeddings`. Update the matrix when a field's status changes;
-> the CHANGELOG entry that flips a field must link here.
+> the CHANGELOG entry that flips a field must link here. The
+> "v0.2 follow-ups (planned)" section below splits the "Not declared"
+> rows into v0.2 candidates and v32+ deferrals so the backlog is
+> visible from this single document.
 
 ## `/v1/chat/completions`
 
@@ -111,6 +114,45 @@
 | `POST /v1/batches` | **501 Not Implemented** | Always returns 501 with code `server_error` + a documentation pointer. Per API-01 P1 fix — there is no background worker to advance `pending → in_progress → completed`. The handler still validates the request shape so callers get a clear distinction between "malformed" and "not implemented". |
 | `GET /v1/batches/{id}` | Wired (read-only) | Returns whatever state the job currently has |
 | `GET /v1/batches/{id}/results` | Wired (read-only) | Returns empty array for never-completed jobs |
+
+## v0.2 follow-ups (planned)
+
+The "Not declared" rows in the tables above split into two
+categories: fields queued for **v0.2** (the next minor) and
+fields deferred to **v32+** (the next major). The split
+follows OpenAI's field groupings — sampling knobs (cheaper to
+add) land in v0.2; structural features (tool calling, logprobs)
+require model-side work and defer to v32+.
+
+**v0.2 candidates** (declaration + HTTP-boundary validation;
+honoring depends on engine-side work):
+
+| Field | Type | Why v0.2 (and not v32+) |
+|-------|------|-------------------------|
+| `seed` | `Option<i64>` | OpenAI spec: "best effort to sample deterministically". Declaration is trivial; honoring requires seeding the sampler's RNG (currently unseeded — the sampler reads from `rand`'s thread-local RNG). The validation contract is the same as `top_p`: accept any integer (per OpenAI spec), forward to engine, log the seed so determinism is at least observable in trace logs. v32+ adds RNG seeding in `vllm_core::sampling`. |
+| `user` | `Option<String>` | User identifier for safety / abuse tracking. Declaration + pass-through to `tracing::info!(user = %req.user, ...)` is trivial; vllm-lite has no auth/persistence layer that would consume it. Honoring is a no-op until a downstream consumer (rate-limiter, audit log) subscribes. |
+| `response_format` | `Option<ResponseFormat>` | OpenAI's JSON-mode. Declaration + validation (only `{type: "text"}` and `{type: "json_object"}` accepted in v0.2; the JSON schema subset defers to v0.3 because it requires generating-grammar-constrained output) is small. Honoring requires the sampler to enforce `json_object` mode via a constrained-decoding hook — that hook is v32+ work. v0.2 accepts the field and forwards to the engine which currently treats it as a no-op. |
+
+**v32+ candidates** (deferred — require model-side work that the
+technical due diligence flags as out-of-scope for v0.x):
+
+| Field | Why v32+ |
+|-------|----------|
+| `frequency_penalty` / `presence_penalty` | Already implemented in `vllm_core::sampling::sample_batch_with_params` via `repeat_penalty` (P2 ARCH-02). Renaming the field on `SamplingParams` to `frequency_penalty`/`presence_penalty` and adding the OpenAI-style `-2.0..=2.0` validation is mechanical but the wire-type change is a public-API delta — tracked for v0.3. |
+| `logit_bias` | Requires a bias-map injection in the sampler's softmax step. Not implemented in the current sampling module. |
+| `logprobs` / `top_logprobs` | Requires the engine to return top-K logprobs per output token. Current `sample_batch_with_params` returns only the sampled token. |
+| `tools` / `tool_choice` | Tool-calling framework requires a grammar-constrained decoder (JSON-schema → grammar) and a per-request tool schema cache. Architecture-level work — v32+. |
+
+**Cross-references:**
+- The `seed` item is tracked under `.planning/STATE.md` "Remaining
+  open items" with the same `v0.2` tag; this section is the
+  user-facing view.
+- The `response_format` JSON-mode subset is not yet tracked in
+  STATE.md (added in P15 alongside this section).
+- The v0.3 `frequency_penalty` rename is the natural next step
+  after v0.2 ships — `repeat_penalty` is the implementation name,
+  OpenAI's is the wire name; the rename happens when the wire field
+  is added.
 
 ## Error contract
 
