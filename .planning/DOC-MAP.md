@@ -21,7 +21,7 @@
 | Operations / deploy | [`OPERATIONS.md`](../OPERATIONS.md) | README deploy section (link only) |
 | Active milestone | [`.planning/STATE.md`](./STATE.md) + [`v31.0-MASTER-PLAN.md`](./v31.0-MASTER-PLAN.md) | `.planning/ROADMAP.md`, `.planning/PROJECT.md` (headers only — bodies are historical) |
 | Agent dev guide | [`AGENTS.md`](../AGENTS.md) | `CLAUDE.md` (keep ≤100 lines quick ref) |
-| ADRs | [`docs/adr/`](../docs/adr/) (19 records) | README (count + link only) |
+| ADRs | [`docs/adr/`](../docs/adr/) (20 records: ADR-001 … ADR-020) | README (count + link only) |
 | Superpowers output | [`docs/superpowers/`](../docs/superpowers/) | User tutorial / architecture (link only) |
 | Dead public API audit | [`.planning/phase-12b/audit-report-v2.md`](./phase-12b/audit-report-v2.md) | `audit-report.md` (v1 — superseded) |
 
