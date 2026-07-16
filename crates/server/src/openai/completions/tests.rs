@@ -24,6 +24,7 @@ async fn test_completions_empty_prompt() {
         stream: None,
         n: None,
         stop: None,
+        user: None,
     };
 
     let result = completions(
@@ -49,6 +50,7 @@ async fn test_completions_with_valid_max_tokens() {
         stream: None,
         n: None,
         stop: None,
+        user: None,
     };
 
     // With no engine running, this will fail to send to engine

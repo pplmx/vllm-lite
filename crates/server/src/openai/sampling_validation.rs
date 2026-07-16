@@ -243,6 +243,7 @@ mod tests {
             stream: None,
             n,
             stop: None,
+            user: None,
         }
     }
 
@@ -256,6 +257,7 @@ mod tests {
             stream: None,
             n: None,
             stop,
+            user: None,
         }
     }
 
@@ -269,6 +271,7 @@ mod tests {
             stream: None,
             n: None,
             stop: None,
+            user: None,
         }
     }
 
@@ -330,6 +333,7 @@ mod tests {
             stream: None,
             n,
             stop: None,
+            user: None,
         }
     }
 
@@ -343,6 +347,7 @@ mod tests {
             stream: None,
             n: None,
             stop,
+            user: None,
         }
     }
 
@@ -356,6 +361,7 @@ mod tests {
             stream: None,
             n: None,
             stop: None,
+            user: None,
         }
     }
 

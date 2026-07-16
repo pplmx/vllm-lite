@@ -735,3 +735,192 @@ async fn test_completions_forwards_top_p_to_engine() {
         params.top_p
     );
 }
+
+// === P21 regression tests: `user` field declaration ===
+//
+// `user` is OpenAI's end-user identifier for safety / abuse tracking.
+// P21 declares the field on ChatRequest + CompletionRequest as
+// `Option<String>` with `#[serde(default)]` so omitting it is a no-op,
+// and threads it into the existing `tracing::info!` calls in the chat
+// handler. Honoring is a no-op until a downstream consumer (rate-
+// limiter, audit log) subscribes. These tests pin the wire-type
+// contract: the field is accepted when present, ignored when absent,
+// and never causes the handler to reject the request.
+
+/// A chat request with the `user` field set must be accepted by the
+/// handler (status 200) and reach the engine. Pre-fix the field was
+/// undeclared and serde rejected the request with a 400-class
+/// deserialization error.
+#[tokio::test]
+async fn test_chat_with_user_field_accepted_by_handler() {
+    let (state, _engine) = api_state_with_mock_engine(Architecture::Qwen3, vec![101, 102]);
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 1,
+        "user": "tenant-1234"
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "user field must not cause 4xx; pre-fix it was undeclared and rejected by serde"
+    );
+}
+
+/// Baseline: omitting the `user` field must continue to work (the
+/// field is `#[serde(default)]` → `None`). Pins the backward-
+/// compatible path so legacy clients are not broken.
+#[tokio::test]
+async fn test_chat_without_user_field_works_baseline() {
+    let (state, _engine) = api_state_with_mock_engine(Architecture::Qwen3, vec![101, 102]);
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 1
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+/// `/v1/completions` must also accept the `user` field (parallel to
+/// the chat path). The completion handler currently doesn't log the
+/// field — adding a tracing line there is deferred to avoid scope
+/// creep — but the wire-type contract must be symmetric.
+#[tokio::test]
+async fn test_completions_with_user_field_accepted_by_handler() {
+    use vllm_server::openai::completions::completions;
+    let (engine_tx, _handle, _captured) = spawn_capturing_mock_engine();
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 1,
+        "user": "tenant-1234"
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+/// Wire-type round-trip: a JSON body with `user` deserializes into a
+/// `ChatRequest` whose `user` field equals the original string; a JSON
+/// body without `user` deserializes into `user: None`. This pins the
+/// serde contract independently of any handler-level test (a future
+/// refactor that drops the `#[serde(default)]` annotation would fail
+/// here).
+#[tokio::test]
+async fn test_chat_user_field_wire_type_round_trip() {
+    use vllm_server::openai::types::{ChatMessage, ChatRequest, CompletionRequest};
+
+    // With user present.
+    let json_with = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "user": "tenant-1234"
+    })
+    .to_string();
+    let req: ChatRequest = serde_json::from_str(&json_with)
+        .expect("user field must round-trip from JSON to ChatRequest");
+    assert_eq!(
+        req.user.as_deref(),
+        Some("tenant-1234"),
+        "user must round-trip; got {:?}",
+        req.user
+    );
+
+    // Without user present.
+    let json_without = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}]
+    })
+    .to_string();
+    let req: ChatRequest =
+        serde_json::from_str(&json_without).expect("omitted user field must deserialize to None");
+    assert!(
+        req.user.is_none(),
+        "omitted user must default to None; got {:?}",
+        req.user
+    );
+
+    // CompletionRequest mirrors ChatRequest.
+    let completion_json = serde_json::json!({
+        "prompt": "Hello",
+        "user": "tenant-5678"
+    })
+    .to_string();
+    let req: CompletionRequest = serde_json::from_str(&completion_json)
+        .expect("user field must round-trip from JSON to CompletionRequest");
+    assert_eq!(
+        req.user.as_deref(),
+        Some("tenant-5678"),
+        "user must round-trip on /v1/completions; got {:?}",
+        req.user
+    );
+
+    // Reference unused-import guard: ChatMessage stays in scope so
+    // future test edits don't accidentally drop the import.
+    let _ = std::any::type_name::<ChatMessage>();
+}
