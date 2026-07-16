@@ -37,7 +37,7 @@
 | `logprobs` | (not declared) | **Not declared** | Rejected by serde |
 | `top_logprobs` | (not declared) | **Not declared** | Rejected by serde |
 | `tools` / `tool_choice` | (not declared) | **Not declared** | Rejected by serde |
-| `response_format` | (not declared) | **Not declared** | Rejected by serde |
+| `response_format` | `Option<ResponseFormat>` | **Wired (declaration + validation)** | Accepted on `ChatRequest` (NOT `CompletionRequest` — the legacy `/v1/completions` endpoint does not support this field per OpenAI spec). v0.2 declares the `ResponseFormat` enum with `Text` + `JsonObject` variants only; `json_schema` (the v0.3 constrained-decoding variant) is rejected at the serde layer (axum returns `422 Unprocessable Entity` for unknown enum variants). Honoring is a no-op — the engine does not enforce JSON syntax via a constrained-decoder hook. Pinned by `validate_chat_response_format` (a documentation-first no-op today; the hook for future strict checks). Threaded into `tracing::info!(response_format = ?req.response_format, ...)` log lines for observability. **Shipped in P22 (2026-07-16).** |
 | `user` | `Option<String>` | **Wired (tracing pass-through)** | Accepted on `ChatRequest` + `CompletionRequest`; per OpenAI spec there is no format/length validation. Threaded into the `tracing::info!(user = ?req.user, ...)` log lines in `openai::chat::{chat_completions, stream_chat_completion}` so downstream subscribers (rate-limiter, audit log) can pick it up. Honoring is a no-op today — vllm-lite has no auth/persistence layer that consumes it (P21 v0.2 follow-up). |
 
 ### Response (`ChatResponse` / `ChatChunk`)
@@ -132,7 +132,7 @@ honoring depends on engine-side work):
 |-------|------|-------------------------|
 | `seed` | `Option<i64>` | OpenAI spec: "best effort to sample deterministically". Declaration is trivial; honoring requires seeding the sampler's RNG (currently unseeded — the sampler reads from `rand`'s thread-local RNG). The validation contract is the same as `top_p`: accept any integer (per OpenAI spec), forward to engine, log the seed so determinism is at least observable in trace logs. v32+ adds RNG seeding in `vllm_core::sampling`. |
 | `user` | `Option<String>` | User identifier for safety / abuse tracking. Declaration + pass-through to `tracing::info!(user = ?req.user, ...)` is trivial; vllm-lite has no auth/persistence layer that would consume it. Honoring is a no-op until a downstream consumer (rate-limiter, audit log) subscribes. **Shipped in P21 (2026-07-16).** |
-| `response_format` | `Option<ResponseFormat>` | OpenAI's JSON-mode. Declaration + validation (only `{type: "text"}` and `{type: "json_object"}` accepted in v0.2; the JSON schema subset defers to v0.3 because it requires generating-grammar-constrained output) is small. Honoring requires the sampler to enforce `json_object` mode via a constrained-decoding hook — that hook is v32+ work. v0.2 accepts the field and forwards to the engine which currently treats it as a no-op. |
+| `response_format` | `Option<ResponseFormat>` | OpenAI's JSON-mode. Declaration + validation (only `{type: "text"}` and `{type: "json_object"}` accepted in v0.2; the JSON schema subset defers to v0.3 because it requires generating-grammar-constrained output) is small. Honoring requires the sampler to enforce `json_object` mode via a constrained-decoding hook — that hook is v32+ work. v0.2 accepts the field and forwards to the engine which currently treats it as a no-op. **Shipped in P22 (2026-07-16).** Note: P22 chose the minimal declaration-only approach — the field is declared on `ChatRequest`, validated via serde (with a `validate_chat_response_format` documentation-first hook), and threaded into `tracing::info!(response_format = ?req.response_format, ...)`. Engine-side forwarding is deferred to v0.3 / v32+ when the constrained-decoding hook lands. |
 
 **v32+ candidates** (deferred — require model-side work that the
 technical due diligence flags as out-of-scope for v0.x):
@@ -148,8 +148,10 @@ technical due diligence flags as out-of-scope for v0.x):
 - The `seed` item is tracked under `.planning/STATE.md` "Remaining
   open items" with the same `v0.2` tag; this section is the
   user-facing view.
-- The `response_format` JSON-mode subset is not yet tracked in
-  STATE.md (added in P15 alongside this section).
+- The `response_format` JSON-mode subset was closed by P22
+  (2026-07-16) — see the `Public-API delta` bullet in the
+  CHANGELOG and the STATE.md "v0.2 wire-type follow-ups" section
+  for the closing notes.
 - The v0.3 `frequency_penalty` rename is the natural next step
   after v0.2 ships — `repeat_penalty` is the implementation name,
   OpenAI's is the wire name; the rename happens when the wire field

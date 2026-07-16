@@ -98,6 +98,7 @@ async fn handle_chat(
     tracing::info!(
         request_id = %request_id,
         user = ?req.user,
+        response_format = ?req.response_format,
         prompt_tokens = prompt_tokens_len,
         "Request started"
     );
@@ -212,6 +213,7 @@ async fn handle_chat(
     tracing::info!(
         request_id = %request_id,
         user = ?req.user,
+        response_format = ?req.response_format,
         output_tokens = output_tokens_len,
         duration_ms = duration_ms,
         "Request completed"
@@ -331,6 +333,7 @@ async fn stream_chat_completion(
     tracing::info!(
         request_id = %request_id,
         user = ?req.user,
+        response_format = ?req.response_format,
         model = %req.model,
         prompt_tokens = prompt_tokens_len,
         "Streaming request started"

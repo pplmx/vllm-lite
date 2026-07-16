@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Perfection & Elegance
 status: in_progress
-last_updated: "2026-07-16T22:00:00.000Z"
-last_activity: 2026-07-16 — v0.2 wire-type follow-up P21 user field declaration + tracing pass-through
+last_updated: "2026-07-16T23:00:00.000Z"
+last_activity: 2026-07-16 — v0.2 wire-type follow-up P22 response_format declaration + serde-layer validation
 follow-up batches: |-
-  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta); OPERATIONS.md "Multi-Node (Experimental)" expanded with 3-node snippet + TransferKVBlock wire-protocol spec (P12, doc-only — closes the remaining Phase 31-D master-plan items); mutation nightly CI wired in .github/workflows/mutation-nightly.yml with --baseline skip dropped after verifying it is unnecessary for the scanned modules under default features (P13, CI-only — closes one Phase 31-E master-plan item); ADR-020 captures the six OPS-31d architectural decisions (P14, docs-only); v0.2 follow-ups section added to docs/reference/openai-compatibility.md (seed / user / response_format queue for v0.2; frequency_penalty / logit_bias / logprobs / tools defer to v32+), plus stale-item closure for engineering-quality §6 + §7 (P15, docs-only); closure tables added to production-readiness.md §2-§11 with a top-of-document P0-P15 aggregate (29 closed / 5 partial / 9 v32+ candidates out of 43 original observations); closure table added to architecture-performance.md §6 covering 7 speculative + distributed observations (4 closed / 1 partial sampled-match / 2 still-gap-but-documented) (P17, docs-only); `attn_factor` (YaRN §3.3 attention-temperature scaling) threaded through paged/tiled/flash attention paths via new `apply_attn_factor` helper that pre-scales Q by `attn_factor` (mathematically equivalent to standard path's `qk.affine(attn_factor / sqrt(d), 0.0)` via softmax's positive-scalar invariance; no-op when `attn_factor` is `None` or `Some(1.0)`) — closes Phase 31-F first item (P18, feat — 6 new tests, no public API signature change); `RopeScaling` (YaRN / Linear / Dynamic / Su) threaded end-to-end from `config.json["rope_scaling"]` through `ModelConfig::rope_scaling` (new field) → `From<&Qwen3Config> for ModelConfig` (preserved) → `factory::new_block` (forwarded) → `TransformerBlock::new_with_rope_scaling` / `new_with_weights_rope_scaling` (new constructors) → `RopeGqaAttention::new_with_rope_scaling` / `new_with_weights_rope_scaling` (new constructors) → `RoPE::new_with_scaling` (new helper) — closes Phase 31-F second item (P19, feat — 2 new tests, 1 flaky test removed; existing `new` / `new_with_weights` / `new_with_tp` constructors delegate to the scaling-aware variants with `None` for bit-for-bit backward compatibility); `RopeScaling` extended to the remaining RoPE-GQA architectures via `decoder_block::factory::new_block` / `block_from_weights` (shared Llama/Mistral factory) + `MixtralBlock::new` / `MixtralBlock::from_weights` — the same wire that P19 closed for Qwen3 now reaches Llama/Mistral/Mixtral checkpoints; the bare `RopeGqaAttention::new` / `new_with_weights` constructors remain in the public API as `None`-scaling aliases for backward compatibility but are no longer called by any workspace-internal factory. 4 new unit tests: `new_block_accepts_yarn_rope_scaling` + `new_block_accepts_none_rope_scaling` in `crates/model/src/components/decoder_block/factory.rs::tests`, and `test_mixtral_block_new_accepts_yarn_rope_scaling` + `test_mixtral_block_from_weights_accepts_yarn_rope_scaling` in `crates/model/src/mixtral/block/tests.rs`. (P20, feat — no public API signature change.) OpenAI `user` field declared on `ChatRequest` + `CompletionRequest` as `Option<String>` with `#[serde(default, skip_serializing_if = "Option::is_none")]`; chat handler threads `user = ?req.user` into the three existing `tracing::info!` log lines (`Request started` / `Request completed` / `Streaming request started`) so downstream subscribers can pick up the value without engine-side changes. Honoring is a no-op (no auth/persistence layer consumes the field today). 4 new integration tests in `crates/server/tests/chat_integration_test.rs`: `test_chat_with_user_field_accepted_by_handler`, `test_chat_without_user_field_works_baseline`, `test_completions_with_user_field_accepted_by_handler`, `test_chat_user_field_wire_type_round_trip`. `docs/reference/openai-compatibility.md` flipped both `user` rows from "Not declared" → "Wired (tracing pass-through)" and marked the field shipped in the v0.2 follow-ups section. (P21, feat — 2 new public-API fields: `ChatRequest::user`, `CompletionRequest::user`.) P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half; P12 closed the Phase 31-D master-plan checkboxes; P13 closed the mutation-testing half of Phase 31-E; P14 added ADR-020; P15 closed the documentation-drift items in engineering-quality §6 + §7 and made the v0.2 backlog visible from the OpenAI compat matrix; P16 closed the documentation-drift items in production-readiness.md; P17 closed the documentation-drift items in architecture-performance §6 and verified `verify_draft_tokens_logits` is already temperature-aware sampled-match; P18 closed the Phase 31-F `attn_factor in paged/flash attention paths` item; P19 closed the Phase 31-F `RopeScaling config → Block wiring` item for Qwen3; P20 closed the Phase 31-F `RopeScaling` follow-up for Llama/Mistral (shared decoder_block factory) and Mixtral; P21 closed the first v0.2 wire-type follow-up (`user` field). Checksums + provenance remain as a v32+ follow-up; engine wiring to MemoryManager remains v32+ / OPS-32a; GPU nightly smoke remains deferred (self-hosted GPU runner); OTLP exporter + per-tenant quota + TLS 主路径接线 + readiness 模型加载信号 + feature matrix doc + 容量基准 runbook + sampled-match → min(1, p/q) rejection-sampling + CUDA Graph + speculative coexistence remain as v32+ candidates; the remaining Phase 31-F items (expand_kv fused kernel, PagedKV host round-trip elimination) also remain v32+ candidates (very-high complexity); MLA RopeScaling is intentionally not wired (MLA is not in a production decoder per its own doc-comment).
+  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta); OPERATIONS.md "Multi-Node (Experimental)" expanded with 3-node snippet + TransferKVBlock wire-protocol spec (P12, doc-only — closes the remaining Phase 31-D master-plan items); mutation nightly CI wired in .github/workflows/mutation-nightly.yml with --baseline skip dropped after verifying it is unnecessary for the scanned modules under default features (P13, CI-only — closes one Phase 31-E master-plan item); ADR-020 captures the six OPS-31d architectural decisions (P14, docs-only); v0.2 follow-ups section added to docs/reference/openai-compatibility.md (seed / user / response_format queue for v0.2; frequency_penalty / logit_bias / logprobs / tools defer to v32+), plus stale-item closure for engineering-quality §6 + §7 (P15, docs-only); closure tables added to production-readiness.md §2-§11 with a top-of-document P0-P15 aggregate (29 closed / 5 partial / 9 v32+ candidates out of 43 original observations); closure table added to architecture-performance.md §6 covering 7 speculative + distributed observations (4 closed / 1 partial sampled-match / 2 still-gap-but-documented) (P17, docs-only); `attn_factor` (YaRN §3.3 attention-temperature scaling) threaded through paged/tiled/flash attention paths via new `apply_attn_factor` helper that pre-scales Q by `attn_factor` (mathematically equivalent to standard path's `qk.affine(attn_factor / sqrt(d), 0.0)` via softmax's positive-scalar invariance; no-op when `attn_factor` is `None` or `Some(1.0)`) — closes Phase 31-F first item (P18, feat — 6 new tests, no public API signature change); `RopeScaling` (YaRN / Linear / Dynamic / Su) threaded end-to-end from `config.json["rope_scaling"]` through `ModelConfig::rope_scaling` (new field) → `From<&Qwen3Config> for ModelConfig` (preserved) → `factory::new_block` (forwarded) → `TransformerBlock::new_with_rope_scaling` / `new_with_weights_rope_scaling` (new constructors) → `RopeGqaAttention::new_with_rope_scaling` / `new_with_weights_rope_scaling` (new constructors) → `RoPE::new_with_scaling` (new helper) — closes Phase 31-F second item (P19, feat — 2 new tests, 1 flaky test removed; existing `new` / `new_with_weights` / `new_with_tp` constructors delegate to the scaling-aware variants with `None` for bit-for-bit backward compatibility); `RopeScaling` extended to the remaining RoPE-GQA architectures via `decoder_block::factory::new_block` / `block_from_weights` (shared Llama/Mistral factory) + `MixtralBlock::new` / `MixtralBlock::from_weights` — the same wire that P19 closed for Qwen3 now reaches Llama/Mistral/Mixtral checkpoints; the bare `RopeGqaAttention::new` / `new_with_weights` constructors remain in the public API as `None`-scaling aliases for backward compatibility but are no longer called by any workspace-internal factory. 4 new unit tests: `new_block_accepts_yarn_rope_scaling` + `new_block_accepts_none_rope_scaling` in `crates/model/src/components/decoder_block/factory.rs::tests`, and `test_mixtral_block_new_accepts_yarn_rope_scaling` + `test_mixtral_block_from_weights_accepts_yarn_rope_scaling` in `crates/model/src/mixtral/block/tests.rs`. (P20, feat — no public API signature change.) OpenAI `user` field declared on `ChatRequest` + `CompletionRequest` as `Option<String>` with `#[serde(default, skip_serializing_if = "Option::is_none")]`; chat handler threads `user = ?req.user` into the three existing `tracing::info!` log lines (`Request started` / `Request completed` / `Streaming request started`) so downstream subscribers can pick up the value without engine-side changes. Honoring is a no-op (no auth/persistence layer consumes the field today). 4 new integration tests in `crates/server/tests/chat_integration_test.rs`: `test_chat_with_user_field_accepted_by_handler`, `test_chat_without_user_field_works_baseline`, `test_completions_with_user_field_accepted_by_handler`, `test_chat_user_field_wire_type_round_trip`. `docs/reference/openai-compatibility.md` flipped both `user` rows from "Not declared" → "Wired (tracing pass-through)" and marked the field shipped in the v0.2 follow-ups section. (P21, feat — 2 new public-API fields: `ChatRequest::user`, `CompletionRequest::user`.) OpenAI `response_format` declared on `ChatRequest` (NOT `CompletionRequest` — legacy endpoint doesn't support it per OpenAI spec) as `Option<ResponseFormat>` with `#[serde(default, skip_serializing_if = "Option::is_none")]`. New `ResponseFormat` enum in `crates/server/src/openai/types.rs` with `Text` + `JsonObject` variants using `#[serde(tag = "type", rename_all = "snake_case")]`; `{type: "json_schema"}` (v0.3 constrained-decoding variant) is rejected at the serde layer (axum returns `422 Unprocessable Entity` for unknown enum variants). New `validate_chat_response_format` no-op pass-through validator (documentation-first; hook for future strict checks) wired into `validate_chat_request_fields`. Chat handler threads `response_format = ?req.response_format` into the three existing `tracing::info!` log lines. Honoring is a no-op — no constrained-decoding hook yet (v0.3 / v32+). 6 new integration tests + 5 new unit tests. `docs/reference/openai-compatibility.md` flipped the chat `response_format` row from "Not declared" → "Wired (declaration + validation)" and marked the field shipped in the v0.2 follow-ups section. (P22, feat — 1 new public-API type: `ResponseFormat`; 1 new public-API field: `ChatRequest::response_format`.) P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half; P12 closed the Phase 31-D master-plan checkboxes; P13 closed the mutation-testing half of Phase 31-E; P14 added ADR-020; P15 closed the documentation-drift items in engineering-quality §6 + §7 and made the v0.2 backlog visible from the OpenAI compat matrix; P16 closed the documentation-drift items in production-readiness.md; P17 closed the documentation-drift items in architecture-performance §6 and verified `verify_draft_tokens_logits` is already temperature-aware sampled-match; P18 closed the Phase 31-F `attn_factor in paged/flash attention paths` item; P19 closed the Phase 31-F `RopeScaling config → Block wiring` item for Qwen3; P20 closed the Phase 31-F `RopeScaling` follow-up for Llama/Mistral (shared decoder_block factory) and Mixtral; P21 closed the first v0.2 wire-type follow-up (`user` field); P22 closed the second v0.2 wire-type follow-up (`response_format` field + `ResponseFormat` enum). The third and final v0.2 wire-type follow-up (`seed` field) remains — declaration is trivial but honoring requires RNG seeding in `vllm_core::sampling`. Checksums + provenance remain as a v32+ follow-up; engine wiring to MemoryManager remains v32+ / OPS-32a; GPU nightly smoke remains deferred (self-hosted GPU runner); OTLP exporter + per-tenant quota + TLS 主路径接线 + readiness 模型加载信号 + feature matrix doc + 容量基准 runbook + sampled-match → min(1, p/q) rejection-sampling + CUDA Graph + speculative coexistence remain as v32+ candidates; the remaining Phase 31-F items (expand_kv fused kernel, PagedKV host round-trip elimination) also remain v32+ candidates (very-high complexity); MLA RopeScaling is intentionally not wired (MLA is not in a production decoder per its own doc-comment).
 progress:
   total_phases: 6
   completed_phases: 5
@@ -2078,6 +2078,229 @@ The v0.2 wire-type backlog shrinks to two items:
 P22+ candidates: `response_format` declaration + validation
 (the next-smallest v0.2 work), `seed` declaration-only with
 honoring deferred to v32+, feature matrix doc (engineering-quality
+§6 #4), OTLP exporter (production-readiness §6), checksums +
+provenance (engineering-quality §7 second half), MLA RopeScaling
+(gated), or back to due-diligence drift closure if any items
+remain (none currently open).
+
+## v0.2 wire-type follow-ups — 2026-07-16 P22 batch
+
+Closed the second v0.2 wire-type follow-up listed in
+`docs/reference/openai-compatibility.md`: declaration + serde-layer
+validation of OpenAI's `response_format` field on
+`/v1/chat/completions`.
+
+### The gap
+
+OpenAI's `response_format` field is the JSON-mode selector. The
+OpenAI spec defines three variants: `{"type": "text"}` (default),
+`{"type": "json_object"}` (valid JSON output), and
+`{"type": "json_schema", "json_schema": {...}}` (structured
+JSON schema). Pre-fix, `ChatRequest` had no field for
+`response_format`, so serde silently rejected any request that
+included `"response_format": ...` in its JSON body — a contract
+violation flagged in the OpenAI compat matrix as "Not declared →
+Rejected by serde" and explicitly tracked as a v0.2 candidate in
+the matrix's "v0.2 follow-ups (planned)" section.
+
+The legacy `/v1/completions` endpoint does NOT support
+`response_format` per OpenAI spec; `CompletionRequest`
+intentionally does NOT declare the field. The legacy endpoint
+silently drops unknown fields (its permissive contract), so this
+is a wire-type asymmetry, not a bug.
+
+### The fix
+
+Two minimal wire-type additions + one documentation-first
+validator + tracing pass-through:
+
+- **`ResponseFormat` enum** in
+  `crates/server/src/openai/types.rs` with `Text` + `JsonObject`
+  variants. `#[serde(tag = "type", rename_all = "snake_case")]`
+  matches the OpenAI JSON shape 1:1 — clients send
+  `{"type": "text"}` / `{"type": "json_object"}` and serde
+  deserializes to the corresponding enum variant. The
+  `{type: "json_schema"}` variant is intentionally NOT declared;
+  serde rejects unknown variants at deserialization.
+- **`ChatRequest::response_format: Option<ResponseFormat>`** in
+  the same file with `#[serde(default,
+  skip_serializing_if = "Option::is_none")]`. `default` keeps
+  every existing client working (omitted field deserializes to
+  `None`); `skip_serializing_if` ensures the field is never
+  echoed in any response shape that accidentally re-serializes
+  the request type.
+- **`validate_chat_response_format`** in
+  `crates/server/src/openai/sampling_validation.rs` — a no-op
+  pass-through today that documents the v0.2 contract ("only Text
+  + JsonObject accepted") and provides a single hook point for
+  future strict checks (e.g. v0.3 `JsonObject` payload syntax
+  validation). Wired into `validate_chat_request_fields` so the
+  validator flow is parallel to `top_p` / `n` / `stop`.
+- **Tracing pass-through** in `openai::chat::chat_completions` +
+  `openai::chat::stream_chat_completion`. Three existing
+  `tracing::info!(...)` calls gained
+  `response_format = ?req.response_format` so downstream
+  subscribers (audit log, observability dashboards, future
+  constrained-decoding hooks) can pick the value up without any
+  engine-side changes.
+
+### What this batch explicitly does NOT do
+
+- **Honoring is a no-op.** The engine does not enforce JSON syntax
+  via a constrained-decoding hook. `JsonObject` is accepted as a
+  no-op pass-through (same as `Text` for the sampler). This is
+  v0.3 / v32+ work and is explicitly tracked in the OpenAI compat
+  matrix as a "constrained-decoding hook" follow-up.
+- **Engine-side forwarding.** P22 chose the minimal
+  declaration-only approach — the field is declared on
+  `ChatRequest`, validated via serde (with a
+  `validate_chat_response_format` documentation-first hook), and
+  threaded into `tracing::info!(response_format = ?req.response_format, ...)`.
+  Adding `response_format` to `SamplingParams` / `Request` would
+  require touching the public-API struct, updating the
+  `SamplingParams` builder, and a separate public-api-check entry
+  — deferred to v0.3 / v32+ when the constrained-decoding hook
+  lands and the field becomes meaningful at the engine layer.
+- **Response echo.** Per OpenAI spec, `response_format` is
+  request-only (the model produces text; the response shape is
+  the same regardless of `response_format`). The
+  `skip_serializing_if` ensures no response shape accidentally
+  serializes the field.
+
+### Test coverage
+
+11 new tests total (6 integration + 5 unit):
+
+- **`crates/server/tests/chat_integration_test.rs`** (6 tests):
+  - `test_chat_with_response_format_text_accepted_by_handler` —
+    `{"type": "text"}` accepted (equivalent to omitting the field).
+  - `test_chat_with_response_format_json_object_accepted_by_handler` —
+    `{"type": "json_object"}` accepted as a v0.2 pass-through.
+  - `test_chat_with_response_format_json_schema_rejected` — the
+    v0.3 variant is rejected with `422 Unprocessable Entity` (axum's
+    standard contract for deserialization failures; pinned by the
+    test).
+  - `test_chat_without_response_format_works_baseline` —
+    backward-compat: omitting the field continues to work.
+  - `test_chat_response_format_wire_type_round_trip` — pins the
+    serde contract independently of any handler-level test,
+    including `json_schema` deserialization failure.
+  - `test_completion_request_has_no_response_format_field` —
+    pins the wire-type asymmetry: `CompletionRequest` cannot be
+    constructed with a `response_format` field because the struct
+    doesn't have one.
+- **`crates/server/src/openai/sampling_validation.rs::tests`** (5 tests):
+  - `chat_response_format_none_passes_validation` — default path.
+  - `chat_response_format_text_passes_validation` — `Text` is
+    accepted.
+  - `chat_response_format_json_object_passes_validation` —
+    `JsonObject` is accepted as a v0.2 pass-through.
+  - `chat_request_with_response_format_text_passes_full_field_validation` —
+    integration with `validate_chat_request_fields`: a request
+    that has both `response_format = Text` and other valid fields
+    passes the full chat-request validator.
+  - `chat_request_with_response_format_json_object_passes_full_field_validation` —
+    same as above but with `JsonObject`.
+
+### Doc updates
+
+- `docs/reference/openai-compatibility.md`:
+  - Chat endpoint table: `response_format` row flipped from
+    "Not declared" → "Wired (declaration + validation)" with the
+    full P22 acceptance note (ChatRequest only, NOT
+    CompletionRequest; serde rejects json_schema with 422;
+    honoring is a no-op).
+  - v0.2 follow-ups section: `response_format` row marked
+    "**Shipped in P22 (2026-07-16).**"
+  - Cross-references section: `response_format` cross-ref updated
+    from "not yet tracked in STATE.md" to "closed by P22".
+- `CHANGELOG.md`: new `[Unreleased] > Fixed` bullet documenting
+  the contract violation + fix, and a new
+  `public-api: vllm-server added` bullet for the 1 new type + 1
+  new field per the public-api-check gate contract.
+
+### Test count
+
+- Workspace: **1479** tests pass (was 1468 after P21; +11 from
+  this batch).
+- vllm-server integration: `chat_integration_test.rs` grew by 6
+  tests; `sampling_validation::tests` grew by 5 unit tests.
+- `cargo nextest run --workspace --all-features --no-fail-fast`
+  exits 0; no flakes (the pre-existing
+  `test_radix_repeated_prefix_lookup_is_fast` flakiness from
+  cargo-test concurrency in the `prefix_cache` test module is
+  unrelated to P22; it failed once on a slow run but passed on
+  rerun).
+- `cargo fmt --all --check` passes.
+- `cargo clippy --all-targets --workspace --all-features -- -D
+  clippy::correctness -D clippy::suspicious -D clippy::perf`
+  introduces no new deny-tier warnings. Required one
+  `#[allow(clippy::missing_const_for_fn)]` on the no-op
+  `validate_chat_response_format` because clippy flags the
+  body as eligible for `const fn` (no runtime operations).
+  Comment explains: future validators will need runtime ops
+  (regex, format checks) and the signature should not change
+  when that happens; the `Json<T>` return type already precludes
+  `const fn` on stable Rust. Also fixed one
+  `clippy::uninlined_format_args` warning in the new integration
+  test (capture-style `format!("{}", x)` → inline-style
+  `format!("{x}")`).
+- `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items
+  --workspace --all-features` passes.
+- `bash .planning/phase-12e/check-public-api.sh --no-fail`
+  reports 1 new public-API type (`ResponseFormat`) + 1 new
+  public-API field (`ChatRequest::response_format`) in
+  `vllm-server` + the CHANGELOG `public-api: vllm-server added`
+  bullet, so the gate passes.
+- Workspace real doc coverage: **68.03 % → 68.06 %** (the
+  new doc-comments on `ResponseFormat` / `ChatRequest::response_format`
+  / `validate_chat_response_format` are full contract
+  documentation, not just field annotations).
+
+### Why P22 and not the alternatives
+
+The P21 follow-up list named seven P22+ options: `seed`
+declaration-only, `response_format` declaration + validation,
+feature matrix doc, MLA RopeScaling wiring (gated), OTLP
+exporter, checksums + provenance, due-diligence drift closure
+(none open). P22 chose `response_format` because:
+
+- **Clean scope** — 1 new enum + 1 wire-type field + 1 no-op
+  validator + tracing pass-through + 11 tests. Bounded and
+  verifiable in a single CI run.
+- **No sampler / kernel / contract decision required** — unlike
+  `seed` (RNG seeding design) or `frequency_penalty` rename
+  (public-API delta on `SamplingParams`), this is pure
+  declaration + serde-based validation + observability plumbing.
+- **Closes a real, documented contract violation** — the OpenAI
+  compat matrix explicitly flagged `response_format` as "Not
+  declared → Rejected by serde" and the v0.2 follow-ups section
+  was already written (by P15) listing the planned work.
+
+### After P22
+
+The v0.2 wire-type backlog shrinks to one item:
+
+- `seed` — declaration is trivial but honoring requires RNG
+  seeding in `vllm_core::sampling` (currently unseeded — the
+  sampler reads from `rand`'s thread-local RNG). The validation
+  contract (accept any integer per OpenAI spec) and the engine
+  contract (forward the value) are well-defined; the
+  engine-side seed usage is the open question. Could land
+  alongside a small sampler refactor, or as a `seed: Option<i64>`
+  declaration-only PR that mirrors P21's pattern but flags
+  "honoring deferred" in the doc.
+
+The v0.3 follow-ups (deferred from v0.2 by the P15 split):
+
+- `response_format` `JsonSchema` variant — requires a
+  grammar-constrained decoder.
+- `frequency_penalty` / `presence_penalty` rename — the
+  `repeat_penalty` field on `SamplingParams` becomes the OpenAI
+  wire-name pair; public-API delta.
+
+P23+ candidates: `seed` declaration-only (the last v0.2
+wire-type follow-up), feature matrix doc (engineering-quality
 §6 #4), OTLP exporter (production-readiness §6), checksums +
 provenance (engineering-quality §7 second half), MLA RopeScaling
 (gated), or back to due-diligence drift closure if any items

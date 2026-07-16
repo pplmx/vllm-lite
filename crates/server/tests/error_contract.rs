@@ -113,6 +113,7 @@ async fn chat_rejects_empty_model_with_400_and_invalid_request_code() {
         n: None,
         stop: None,
         user: None,
+        response_format: None,
     };
 
     let result = chat_completions(
@@ -148,6 +149,7 @@ async fn chat_returns_503_with_engine_unavailable_code_when_channel_closed() {
         n: None,
         stop: None,
         user: None,
+        response_format: None,
     };
 
     let result = chat_completions(

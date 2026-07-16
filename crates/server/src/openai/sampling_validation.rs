@@ -31,7 +31,7 @@
 use axum::{Json, http::StatusCode};
 use vllm_core::types::SamplingParams;
 
-use super::types::{ChatRequest, CompletionRequest, ErrorResponse};
+use super::types::{ChatRequest, CompletionRequest, ErrorResponse, ResponseFormat};
 
 /// Validate a `top_p` value from an HTTP request.
 ///
@@ -106,6 +106,48 @@ pub fn validate_sampling_params(
     Ok(())
 }
 
+/// Validate the `response_format` field on a chat request.
+///
+/// v0.2 accepts only [`ResponseFormat::Text`] and
+/// [`ResponseFormat::JsonObject`]. The `{type: "json_schema"}`
+/// variant (which would require a grammar-constrained decoder) is
+/// rejected at the **serde layer** because it is not a declared
+/// variant on [`ResponseFormat`] — the deserialization error surfaces
+/// as a 400 with serde's standard "unknown variant" message.
+///
+/// This function is a no-op pass-through today but exists for three
+/// reasons:
+///
+/// 1. **Documentation** — the function name + doc-comment make the
+///    "v0.2 accepts text + json_object only" contract explicit at
+///    the validator layer, not just at the type definition.
+/// 2. **Forward-compatibility** — if v0.3 ever adds stricter checks
+///    (e.g. format-specific syntax requirements), the hook is here.
+/// 3. **Pattern parity** — mirrors [`validate_chat_request_fields`]
+///    so handlers have a single call site for all request-level
+///    checks, and tracing/audit can find the validator by name.
+///
+/// # Errors
+///
+/// Currently infallible. Preserves the [`Result`] return type for
+/// forward-compatibility — if v0.3 adds strict checks (e.g.
+/// `JsonObject` payload must already contain a JSON example in the
+/// prompt), the validator would reject malformed usage here.
+///
+/// `#[allow(clippy::missing_const_for_fn)]` — clippy flags the
+/// body as eligible for `const fn` because it contains no runtime
+/// operations. We intentionally keep it non-`const` for
+/// forward-compatibility: future validators will need runtime
+/// operations (regex checks, format validation, etc.) and we don't
+/// want the signature to change when that happens. The `Json<T>`
+/// return type already precludes `const fn` on stable Rust.
+#[allow(clippy::missing_const_for_fn)]
+pub fn validate_chat_response_format(
+    _format: Option<&ResponseFormat>,
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    Ok(())
+}
+
 /// Reject chat-request fields the engine does not yet honour, and
 /// validate the ones it does.
 ///
@@ -134,6 +176,7 @@ pub fn validate_chat_request_fields(
     req: &ChatRequest,
 ) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
     validate_top_p(req.top_p)?;
+    validate_chat_response_format(req.response_format.as_ref())?;
     if let Some(n) = req.n
         && n != 1
     {
@@ -244,6 +287,7 @@ mod tests {
             n,
             stop: None,
             user: None,
+            response_format: None,
         }
     }
 
@@ -258,6 +302,7 @@ mod tests {
             n: None,
             stop,
             user: None,
+            response_format: None,
         }
     }
 
@@ -272,6 +317,7 @@ mod tests {
             n: None,
             stop: None,
             user: None,
+            response_format: None,
         }
     }
 
@@ -318,6 +364,75 @@ mod tests {
             body.error.message.contains("stop sequences"),
             "error message must mention stop sequences: got '{}'",
             body.error.message
+        );
+    }
+
+    // response_format validation tests (P22 v0.2 wire-type follow-up)
+
+    #[test]
+    fn chat_response_format_none_passes_validation() {
+        // Omitted / `None` is the default path; must pass.
+        validate_chat_response_format(None)
+            .expect("response_format = None must pass validation (default path)");
+    }
+
+    #[test]
+    fn chat_response_format_text_passes_validation() {
+        // `{type: "text"}` is the OpenAI default; explicitly setting
+        // it must pass with no validation errors.
+        validate_chat_response_format(Some(&ResponseFormat::Text))
+            .expect("response_format = Text must pass validation (OpenAI default)");
+    }
+
+    #[test]
+    fn chat_response_format_json_object_passes_validation() {
+        // `{type: "json_object"}` is accepted as a v0.2 declaration
+        // pass-through. Honoring is a no-op today (deferred to v0.3
+        // / v32+), but the wire-type contract accepts the value.
+        validate_chat_response_format(Some(&ResponseFormat::JsonObject))
+            .expect("response_format = JsonObject must pass validation (v0.2 pass-through)");
+    }
+
+    #[test]
+    fn chat_request_with_response_format_text_passes_full_field_validation() {
+        // Integration with `validate_chat_request_fields`: a request
+        // that has both `response_format = Text` and other valid
+        // fields must pass the full chat-request validator.
+        let req = ChatRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            response_format: Some(ResponseFormat::Text),
+        };
+        validate_chat_request_fields(&req)
+            .expect("chat request with response_format = Text must pass full field validation");
+    }
+
+    #[test]
+    fn chat_request_with_response_format_json_object_passes_full_field_validation() {
+        // Same as above but with `JsonObject` — verifies the
+        // validator flow is wired correctly for both accepted
+        // variants.
+        let req = ChatRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            response_format: Some(ResponseFormat::JsonObject),
+        };
+        validate_chat_request_fields(&req).expect(
+            "chat request with response_format = JsonObject must pass full field validation",
         );
     }
 
