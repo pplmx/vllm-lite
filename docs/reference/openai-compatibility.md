@@ -1,6 +1,6 @@
 # OpenAI API Compatibility Matrix
 
-> **Status (2026-07-16):** v0.x alpha. The matrix below lists every
+> **Status (2026-07-16, P23):** v0.x alpha. The matrix below lists every
 > field on the OpenAI request/response types that vLLM-lite exposes
 > over HTTP, and the current implementation status. Anything not
 > listed under "Wired" is either "Declared but not honoured" (silently
@@ -30,7 +30,7 @@
 | `stream` | `Option<bool>` | Wired | `true` → SSE; `false`/missing → unary |
 | `n` | `Option<i64>` | **Wired (validation)** | `n = 1` accepted (default); `n > 1` → `400 invalid_request_error` ("n > 1 is not supported…") |
 | `stop` | `Option<Vec<String>>` | **Wired (validation)** | `None` or empty array accepted; non-empty → `400 invalid_request_error` ("stop sequences are not yet honoured…") |
-| `seed` | (not declared) | **Not declared** | Rejected by serde |
+| `seed` | `Option<i64>` | **Wired (declaration + tracing pass-through)** | Accepted on `ChatRequest` + `CompletionRequest`; per OpenAI spec any `i64` is accepted (no range / sign validation, no NaN check). Threaded into the `tracing::info!(seed = ?req.seed, ...)` log lines in `openai::chat::{non_stream_chat_completion, stream_chat_completion}` so determinism is at least observable in trace logs. **Honoring is a no-op today** — the engine's sampler reads from `rand`'s thread-local RNG which is currently unseeded; same seed + same model + same prompt does NOT yet produce the same output. Engine-side RNG seeding is v32+ work. The wire-type contract is locked in now so the declaration-only PR doesn't regress to "rejected by serde". **Shipped in P23 (2026-07-16).** |
 | `frequency_penalty` | (not declared) | **Not declared** | Rejected by serde |
 | `presence_penalty` | (not declared) | **Not declared** | Rejected by serde |
 | `logit_bias` | (not declared) | **Not declared** | Rejected by serde |
@@ -80,7 +80,7 @@
 | `n` | `Option<i64>` | **Wired (validation)** | Same rejection as chat |
 | `stop` | `Option<Vec<String>>` | **Wired (validation)** | Same rejection as chat |
 | `top_p` | `Option<f32>` (0.0–1.0) | **Wired** | Same honouring + range check as chat (P9 follow-up) |
-| `seed` | (not declared) | **Not declared** | Rejected by serde |
+| `seed` | `Option<i64>` | **Wired (declaration)** | Accepted on `CompletionRequest` (P23 v0.2). Same contract as the chat endpoint — any `i64` is accepted per OpenAI spec, no range / sign validation, no NaN check. The completions handler does not currently log the field (deferred to avoid adding a new `tracing::info!` line — chat handler logs it). Downstream consumers subscribe via direct field access. Honoring is a no-op today — engine-side RNG seeding is v32+ work. |
 | `user` | `Option<String>` | **Wired (declaration)** | Accepted on `CompletionRequest` (P21 v0.2). Same contract as the chat endpoint — no format/length validation per OpenAI spec. The completions handler does not currently log the field (deferred to avoid adding a new `tracing::info!` line — chat handler logs it). Downstream consumers subscribe via direct field access. |
 | `logprobs` / `echo` / `suffix` / `best_of` | (not declared) | **Not declared** | Rejected by serde |
 
@@ -130,7 +130,7 @@ honoring depends on engine-side work):
 
 | Field | Type | Why v0.2 (and not v32+) |
 |-------|------|-------------------------|
-| `seed` | `Option<i64>` | OpenAI spec: "best effort to sample deterministically". Declaration is trivial; honoring requires seeding the sampler's RNG (currently unseeded — the sampler reads from `rand`'s thread-local RNG). The validation contract is the same as `top_p`: accept any integer (per OpenAI spec), forward to engine, log the seed so determinism is at least observable in trace logs. v32+ adds RNG seeding in `vllm_core::sampling`. |
+| `seed` | `Option<i64>` | OpenAI spec: "best effort to sample deterministically". Declaration is trivial; honoring requires seeding the sampler's RNG (currently unseeded — the sampler reads from `rand`'s thread-local RNG). The validation contract is the same as `top_p`: accept any integer (per OpenAI spec), forward to engine, log the seed so determinism is at least observable in trace logs. v32+ adds RNG seeding in `vllm_core::sampling`. **Shipped in P23 (2026-07-16)** as a declaration-only PR (mirrors P21 `user` + P22 `response_format` pattern); RNG seeding in v32+ will activate the determinism contract. |
 | `user` | `Option<String>` | User identifier for safety / abuse tracking. Declaration + pass-through to `tracing::info!(user = ?req.user, ...)` is trivial; vllm-lite has no auth/persistence layer that would consume it. Honoring is a no-op until a downstream consumer (rate-limiter, audit log) subscribes. **Shipped in P21 (2026-07-16).** |
 | `response_format` | `Option<ResponseFormat>` | OpenAI's JSON-mode. Declaration + validation (only `{type: "text"}` and `{type: "json_object"}` accepted in v0.2; the JSON schema subset defers to v0.3 because it requires generating-grammar-constrained output) is small. Honoring requires the sampler to enforce `json_object` mode via a constrained-decoding hook — that hook is v32+ work. v0.2 accepts the field and forwards to the engine which currently treats it as a no-op. **Shipped in P22 (2026-07-16).** Note: P22 chose the minimal declaration-only approach — the field is declared on `ChatRequest`, validated via serde (with a `validate_chat_response_format` documentation-first hook), and threaded into `tracing::info!(response_format = ?req.response_format, ...)`. Engine-side forwarding is deferred to v0.3 / v32+ when the constrained-decoding hook lands. |
 
@@ -145,9 +145,11 @@ technical due diligence flags as out-of-scope for v0.x):
 | `tools` / `tool_choice` | Tool-calling framework requires a grammar-constrained decoder (JSON-schema → grammar) and a per-request tool schema cache. Architecture-level work — v32+. |
 
 **Cross-references:**
-- The `seed` item is tracked under `.planning/STATE.md` "Remaining
-  open items" with the same `v0.2` tag; this section is the
-  user-facing view.
+- The `seed` item was tracked under `.planning/STATE.md` "Remaining
+  open items" with the same `v0.2` tag until P23 closed it
+  (2026-07-16) — see the `Public-API delta` bullet in the CHANGELOG
+  and the STATE.md "v0.2 wire-type follow-ups" section for the
+  closing notes.
 - The `response_format` JSON-mode subset was closed by P22
   (2026-07-16) — see the `Public-API delta` bullet in the
   CHANGELOG and the STATE.md "v0.2 wire-type follow-ups" section

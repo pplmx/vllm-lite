@@ -1197,3 +1197,298 @@ async fn test_completion_request_has_no_response_format_field() {
     // the chat endpoint even though it's not used here.
     let _ = std::any::type_name::<ResponseFormat>();
 }
+
+// === P23 regression tests: `seed` field declaration ===
+//
+// `seed` is OpenAI's "best effort determinism" knob — same seed +
+// same model + same prompt should produce the same output. P23
+// declares the field on `ChatRequest` + `CompletionRequest` as
+// `Option<i64>` with `#[serde(default)]` so omitting it is a no-op.
+// Honoring is a no-op today (the sampler is unseeded), but the
+// field flows through `tracing::info!(seed = ?req.seed, ...)` so
+// determinism is at least observable in trace logs. These tests
+// pin the wire-type contract: any `i64` (positive, negative, zero,
+// boundaries) is accepted by the HTTP boundary, and the field
+// defaults to `None` when omitted. v32+ will add RNG seeding and
+// can tighten the validation if needed.
+
+/// A chat request with the `seed` field set must be accepted by the
+/// handler (status 200). Pre-fix the field was undeclared and serde
+/// rejected the request with a 400-class deserialization error.
+#[tokio::test]
+async fn test_chat_with_seed_field_accepted_by_handler() {
+    let (state, _engine) = api_state_with_mock_engine(Architecture::Qwen3, vec![101, 102]);
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 1,
+        "seed": 42
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "seed field must not cause 4xx; pre-fix it was undeclared and rejected by serde"
+    );
+}
+
+/// Baseline: omitting the `seed` field must continue to work
+/// (the field is `#[serde(default)]` → `None`). Pins the backward-
+/// compatible path so legacy clients are not broken.
+#[tokio::test]
+async fn test_chat_without_seed_field_works_baseline() {
+    let (state, _engine) = api_state_with_mock_engine(Architecture::Qwen3, vec![101, 102]);
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 1
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "omitting seed field must continue to work (backward-compat baseline)"
+    );
+}
+
+/// `/v1/completions` (legacy endpoint) must also accept the `seed`
+/// field. Parallel to the P21 `user` declaration on this endpoint.
+#[tokio::test]
+async fn test_completions_with_seed_field_accepted_by_handler() {
+    use vllm_server::openai::completions::completions;
+    let (engine_tx, _handle, _captured) = spawn_capturing_mock_engine();
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 1,
+        "seed": 12345
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "seed field must be accepted on /v1/completions (parallel to /v1/chat/completions)"
+    );
+}
+
+/// Wire-type round-trip: a JSON body with `seed` deserializes into
+/// a `ChatRequest` whose `seed` field equals the original integer;
+/// a JSON body without `seed` deserializes into `seed: None`. Also
+/// pins the boundary cases (negative, zero, `i64::MIN`/`i64::MAX`)
+/// that the OpenAI spec requires us to accept. Catches any future
+/// refactor that drops the `#[serde(default)]` annotation or
+/// narrows the i64 range.
+#[tokio::test]
+async fn test_chat_seed_field_wire_type_round_trip() {
+    use vllm_server::openai::types::ChatRequest;
+
+    // Positive seed.
+    let json_with = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "seed": 42
+    })
+    .to_string();
+    let req: ChatRequest = serde_json::from_str(&json_with)
+        .expect("seed field must round-trip from JSON to ChatRequest");
+    assert_eq!(
+        req.seed,
+        Some(42),
+        "seed must round-trip; got {:?}",
+        req.seed
+    );
+
+    // Omitted field defaults to `None`.
+    let json_without = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}]
+    })
+    .to_string();
+    let req: ChatRequest =
+        serde_json::from_str(&json_without).expect("omitted seed field must deserialize to None");
+    assert!(
+        req.seed.is_none(),
+        "omitted seed must default to None; got {:?}",
+        req.seed
+    );
+
+    // Negative seed (OpenAI spec accepts any integer).
+    let json_negative = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "seed": -1
+    })
+    .to_string();
+    let req: ChatRequest = serde_json::from_str(&json_negative)
+        .expect("negative seed must deserialize (OpenAI spec accepts any integer)");
+    assert_eq!(req.seed, Some(-1));
+
+    // Zero seed (valid i64 — many RNG implementations accept seed=0).
+    let json_zero = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "seed": 0
+    })
+    .to_string();
+    let req: ChatRequest =
+        serde_json::from_str(&json_zero).expect("seed = 0 must deserialize (valid i64)");
+    assert_eq!(req.seed, Some(0));
+
+    // Boundary: i64::MIN and i64::MAX.
+    let json_min = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "seed": i64::MIN
+    })
+    .to_string();
+    let req: ChatRequest = serde_json::from_str(&json_min)
+        .expect("seed = i64::MIN must deserialize (no range validation per OpenAI spec)");
+    assert_eq!(req.seed, Some(i64::MIN));
+
+    let json_max = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "seed": i64::MAX
+    })
+    .to_string();
+    let req: ChatRequest = serde_json::from_str(&json_max)
+        .expect("seed = i64::MAX must deserialize (no range validation per OpenAI spec)");
+    assert_eq!(req.seed, Some(i64::MAX));
+}
+
+/// Wire-type round-trip on `CompletionRequest`: a JSON body with
+/// `seed` deserializes into a `CompletionRequest` whose `seed` field
+/// equals the original integer. Mirrors the chat test on the legacy
+/// endpoint.
+#[tokio::test]
+async fn test_completions_seed_field_wire_type_round_trip() {
+    use vllm_server::openai::types::CompletionRequest;
+
+    let json_with = serde_json::json!({
+        "prompt": "Hello",
+        "seed": 999
+    })
+    .to_string();
+    let req: CompletionRequest = serde_json::from_str(&json_with)
+        .expect("seed field must round-trip from JSON to CompletionRequest");
+    assert_eq!(
+        req.seed,
+        Some(999),
+        "seed must round-trip on /v1/completions; got {:?}",
+        req.seed
+    );
+
+    let json_without = serde_json::json!({
+        "prompt": "Hello"
+    })
+    .to_string();
+    let req: CompletionRequest = serde_json::from_str(&json_without)
+        .expect("omitted seed field must deserialize to None on /v1/completions");
+    assert!(
+        req.seed.is_none(),
+        "omitted seed must default to None on /v1/completions; got {:?}",
+        req.seed
+    );
+}
+
+/// Streaming chat completions must also accept the `seed` field
+/// without rejection — pins the contract that the SSE path mirrors
+/// the non-streaming path's wire-type acceptance (parity with the
+/// P21 `user` field and P22 `response_format` field).
+#[tokio::test]
+async fn test_chat_streaming_with_seed_field_accepted_by_handler() {
+    let (state, _engine) = api_state_with_mock_engine(Architecture::Qwen3, vec![101, 102]);
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 1,
+        "stream": true,
+        "seed": 7
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .header("accept", "text/event-stream")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "streaming chat must accept the seed field (parity with non-streaming path)"
+    );
+}

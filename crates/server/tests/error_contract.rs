@@ -114,6 +114,7 @@ async fn chat_rejects_empty_model_with_400_and_invalid_request_code() {
         stop: None,
         user: None,
         response_format: None,
+        seed: None,
     };
 
     let result = chat_completions(
@@ -150,6 +151,7 @@ async fn chat_returns_503_with_engine_unavailable_code_when_channel_closed() {
         stop: None,
         user: None,
         response_format: None,
+        seed: None,
     };
 
     let result = chat_completions(
@@ -228,6 +230,7 @@ async fn completions_rejects_empty_prompt_with_400() {
         n: None,
         stop: None,
         user: None,
+        seed: None,
     };
 
     let result = completions(
@@ -258,6 +261,7 @@ async fn completions_returns_503_with_engine_unavailable_code_when_channel_close
         n: None,
         stop: None,
         user: None,
+        seed: None,
     };
 
     let result = completions(
