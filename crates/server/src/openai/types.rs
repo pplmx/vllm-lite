@@ -97,6 +97,38 @@ pub struct ChatMessage {
     pub name: Option<String>,
 }
 
+/// Output format selector (OpenAI `response_format`).
+///
+/// Mirrors the OpenAI `response_format` field on `/v1/chat/completions`.
+/// Serializes as `{"type": "text"}` / `{"type": "json_object"}` via the
+/// `tag = "type"` attribute so the JSON shape matches upstream 1:1.
+///
+/// **v0.2 scope (P22)**: only the `Text` and `JsonObject` variants are
+/// accepted. The third OpenAI variant, `{type: "json_schema", ...}`,
+/// requires a grammar-constrained decoder and is explicitly deferred to
+/// v0.3 (see `docs/reference/openai-compatibility.md` v0.2 follow-ups).
+/// `serde` will reject a `json_schema` payload with a 400-class
+/// deserialization error; `validate_chat_response_format` provides an
+/// extra safety net for clients that send `{"type": "json_schema"}`
+/// with extra fields serde might tolerate.
+///
+/// **Honoring is a no-op today.** The engine's sampler does not enforce
+/// JSON syntax; `ResponseFormat::JsonObject` is accepted as a no-op
+/// pass-through (same as `Text` for the sampler). v0.3 + v32+ work
+/// (per the OpenAI compat matrix) adds a constrained-decoding hook.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ResponseFormat {
+    /// Default plain-text generation. Equivalent to omitting
+    /// `response_format` entirely.
+    Text,
+    /// JSON-object mode. The model is asked to produce valid JSON,
+    /// but vllm-lite does not currently constrain the sampler to
+    /// enforce JSON syntax. See the doc-comment above for the
+    /// v0.3 / v32+ constrained-decoding roadmap.
+    JsonObject,
+}
+
 /// Request body for chat completions endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatRequest {
@@ -125,6 +157,13 @@ pub struct ChatRequest {
     /// HTTP boundary.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user: Option<String>,
+    /// Output format selector (P22 v0.2 declaration; v0.3 / v32+
+    /// constrained-decoding roadmap). Only `Text` and `JsonObject`
+    /// are accepted today — `JsonSchema` requires a grammar-
+    /// constrained decoder and is deferred to v0.3. Honoring is a
+    /// no-op (see [`ResponseFormat`] doc-comment).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub response_format: Option<ResponseFormat>,
 }
 
 /// A choice in a chat completion response.

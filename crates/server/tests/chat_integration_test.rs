@@ -924,3 +924,276 @@ async fn test_chat_user_field_wire_type_round_trip() {
     // future test edits don't accidentally drop the import.
     let _ = std::any::type_name::<ChatMessage>();
 }
+
+// === P22 regression tests: `response_format` field declaration ===
+//
+// `response_format` is OpenAI's JSON-mode selector. P22 declares
+// the `ResponseFormat` enum (`Text` + `JsonObject` only) and adds
+// the field to `ChatRequest` (NOT `CompletionRequest` — the
+// legacy `/v1/completions` endpoint doesn't support it per OpenAI
+// spec). Honoring is a no-op today (no constrained-decoding hook).
+// These tests pin the wire-type contract: text + json_object are
+// accepted, json_schema is rejected at the serde layer with 400,
+// and the field defaults to `None` when omitted.
+
+/// `response_format = {"type": "text"}` must be accepted (this is the
+/// OpenAI default; explicit declaration should be equivalent to
+/// omission). Pre-fix the field was undeclared and serde rejected
+/// the request.
+#[tokio::test]
+async fn test_chat_with_response_format_text_accepted_by_handler() {
+    let (state, _engine) = api_state_with_mock_engine(Architecture::Qwen3, vec![101, 102]);
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 1,
+        "response_format": {"type": "text"}
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "response_format.text must not cause 4xx; pre-fix the field was undeclared"
+    );
+}
+
+/// `response_format = {"type": "json_object"}` must be accepted as a
+/// v0.2 declaration pass-through. Honoring is a no-op (no constrained-
+/// decoder hook yet) but the wire-type contract accepts the value.
+#[tokio::test]
+async fn test_chat_with_response_format_json_object_accepted_by_handler() {
+    let (state, _engine) = api_state_with_mock_engine(Architecture::Qwen3, vec![101, 102]);
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 1,
+        "response_format": {"type": "json_object"}
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "response_format.json_object must be accepted as a v0.2 pass-through (deferred honoring)"
+    );
+}
+
+/// `response_format = {"type": "json_schema"}` must be rejected —
+/// the v0.3 + constrained-decoding subset is not implemented. Serde
+/// rejects the unknown variant at deserialization; the handler
+/// never sees the request. Axum's `Json<T>` extractor returns
+/// `422 Unprocessable Entity` for deserialization failures (this is
+/// axum's standard contract — 422 means "syntactically valid JSON
+/// but semantically invalid input", which matches "unknown enum
+/// variant" precisely). This test pins the 4xx rejection: any
+/// non-2xx status proves the field was rejected at the wire
+/// boundary.
+#[tokio::test]
+async fn test_chat_with_response_format_json_schema_rejected() {
+    let state = vllm_server::test_fixtures::api_state(Architecture::Qwen3);
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 1,
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {"name": "response", "schema": {"type": "object"}}
+        }
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let status = response.status();
+    assert!(
+        status.is_client_error(),
+        "json_schema must be rejected with 4xx; got {status} (v0.3 work; not yet implemented in v0.2)",
+    );
+    // Pin the specific status for documentation: axum's Json extractor
+    // returns 422 (Unprocessable Entity) for deserialization failures.
+    // This is the axum-standard contract: 422 means "syntactically
+    // valid JSON but semantically invalid input" (unknown enum variant
+    // fits this definition precisely).
+    assert_eq!(
+        status,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "axum's Json<T> extractor returns 422 for unknown enum variants at deserialization"
+    );
+}
+
+/// Baseline: omitting `response_format` must continue to work (the
+/// field is `#[serde(default)]` → `None`). Pins the backward-
+/// compatible path so legacy clients are not broken.
+#[tokio::test]
+async fn test_chat_without_response_format_works_baseline() {
+    let (state, _engine) = api_state_with_mock_engine(Architecture::Qwen3, vec![101, 102]);
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 1
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+/// Wire-type round-trip: a JSON body with `response_format.text` /
+/// `response_format.json_object` deserializes to the corresponding
+/// `ResponseFormat` enum variant; a body without `response_format`
+/// deserializes to `None`; a body with an unknown variant fails to
+/// deserialize. Pins the serde contract independently of any
+/// handler-level test.
+#[tokio::test]
+async fn test_chat_response_format_wire_type_round_trip() {
+    use vllm_server::openai::types::{ChatRequest, ResponseFormat};
+
+    // `text` deserializes to `ResponseFormat::Text`.
+    let json_text = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "response_format": {"type": "text"}
+    })
+    .to_string();
+    let req: ChatRequest =
+        serde_json::from_str(&json_text).expect("response_format.text must round-trip from JSON");
+    assert_eq!(
+        req.response_format,
+        Some(ResponseFormat::Text),
+        "response_format.text must deserialize to ResponseFormat::Text; got {:?}",
+        req.response_format
+    );
+
+    // `json_object` deserializes to `ResponseFormat::JsonObject`.
+    let json_json_object = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "response_format": {"type": "json_object"}
+    })
+    .to_string();
+    let req: ChatRequest = serde_json::from_str(&json_json_object)
+        .expect("response_format.json_object must round-trip from JSON");
+    assert_eq!(
+        req.response_format,
+        Some(ResponseFormat::JsonObject),
+        "response_format.json_object must deserialize to ResponseFormat::JsonObject; got {:?}",
+        req.response_format
+    );
+
+    // Omitted field deserializes to `None`.
+    let json_omitted = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}]
+    })
+    .to_string();
+    let req: ChatRequest = serde_json::from_str(&json_omitted)
+        .expect("omitted response_format must deserialize to None");
+    assert!(
+        req.response_format.is_none(),
+        "omitted response_format must default to None; got {:?}",
+        req.response_format
+    );
+
+    // `json_schema` (the v0.3 variant) must fail to deserialize — the
+    // enum only declares Text + JsonObject, so serde rejects unknown
+    // variants at the wire boundary.
+    let json_schema = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "response_format": {"type": "json_schema"}
+    })
+    .to_string();
+    let result: Result<ChatRequest, _> = serde_json::from_str(&json_schema);
+    assert!(
+        result.is_err(),
+        "response_format.json_schema must fail to deserialize (v0.3 variant not yet declared); got Ok({:?})",
+        result.map(|_| "<request>")
+    );
+}
+
+/// `/v1/completions` (legacy endpoint) must NOT declare the
+/// `response_format` field at all — OpenAI spec does not support it
+/// on this endpoint. This test pins the wire-type asymmetry: a
+/// `CompletionRequest` cannot be constructed with a `response_format`
+/// field because the struct doesn't have one.
+#[tokio::test]
+async fn test_completion_request_has_no_response_format_field() {
+    use vllm_server::openai::types::{CompletionRequest, ResponseFormat};
+
+    // A JSON body with `response_format` sent to `/v1/completions`
+    // is silently ignored — serde's `deny_unknown_fields` is NOT set
+    // on `CompletionRequest` (matches OpenAI's permissive legacy
+    // endpoint contract: unknown fields are dropped, not 400'd).
+    // This pins the wire-type asymmetry: `ChatRequest` declares the
+    // field (P22), `CompletionRequest` does not (legacy spec).
+    let json = serde_json::json!({
+        "prompt": "Hello",
+        "response_format": {"type": "text"}
+    })
+    .to_string();
+    let req: CompletionRequest = serde_json::from_str(&json).expect(
+        "CompletionRequest should silently ignore unknown fields (legacy endpoint contract)",
+    );
+    assert_eq!(
+        req.prompt, "Hello",
+        "completion request parses prompt correctly; response_format is dropped on the legacy endpoint"
+    );
+
+    // Compile-time guard: the `ResponseFormat` type still exists for
+    // the chat endpoint even though it's not used here.
+    let _ = std::any::type_name::<ResponseFormat>();
+}
