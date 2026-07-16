@@ -8,6 +8,7 @@
 //! - decode input `[1, 64]` → output `[1, 64]`
 use super::*;
 use crate::config::{Architecture, ModelConfig};
+use crate::qwen3::config::{RopeScaling, RopeType};
 use candle_core::DType;
 
 fn tiny_config() -> ModelConfig {
@@ -34,6 +35,119 @@ fn tiny_config() -> ModelConfig {
         expert_intermediate_size: Some(128),
         has_qk_norm: false,
     }
+}
+
+fn tiny_config_with_yarn(rope_scaling: Option<RopeScaling>) -> ModelConfig {
+    let mut config = tiny_config();
+    config.rope_scaling = rope_scaling;
+    config
+}
+
+fn yarn_scaling(factor: f32, attn_factor: Option<f32>) -> RopeScaling {
+    RopeScaling {
+        rope_type: Some(RopeType::Yarn),
+        factor: Some(factor),
+        original_max_position_embeddings: Some(4096),
+        attn_factor,
+        partial_rotary_factor: None,
+        mrope_section: None,
+        short_factor: None,
+        long_factor: None,
+    }
+}
+
+// P20 regression: `MixtralBlock::new` must accept a `ModelConfig` whose
+// `rope_scaling` is `Some(...)` and forward the block to the inner
+// attention via `RopeGqaAttention::new_with_rope_scaling`. Pre-fix the
+// constructor used the bare `RopeGqaAttention::new` and silently dropped
+// the block — a YaRN-config Mixtral would produce numerically identical
+// output to a default Mixtral of the same shape. This test pins the
+// constructor signature so the regression can't recur.
+#[test]
+fn test_mixtral_block_new_accepts_yarn_rope_scaling() {
+    let config = tiny_config_with_yarn(Some(yarn_scaling(4.0, Some(0.5))));
+    let _block = MixtralBlock::new(&config, 0).expect(
+        "MixtralBlock::new must accept a ModelConfig with rope_scaling=Some(...) \
+         (P20 wiring: forwards to RopeGqaAttention::new_with_rope_scaling)",
+    );
+}
+
+#[test]
+fn test_mixtral_block_from_weights_accepts_yarn_rope_scaling() {
+    // P20 regression for the weight-loader path: `MixtralBlock::from_weights`
+    // must also thread `rope_scaling` to the attention. Pre-fix this called
+    // `RopeGqaAttention::new_with_weights` (bare) and silently dropped the
+    // block on every HF weight load with a YaRN config. The constructor
+    // signature is exercised here via the public API; a real round-trip
+    // forward pass would need a populated `HashMap<String, Tensor>` of
+    // expert weights which is out of scope for this smoke test.
+    let config = tiny_config_with_yarn(Some(yarn_scaling(4.0, Some(0.5))));
+    let device = candle_core::Device::Cpu;
+    let mut weights = std::collections::HashMap::new();
+    use candle_core::Tensor;
+    let format = |s: &str| format!("model.layers.0.{s}");
+    let hidden = config.hidden_size;
+    let dtype = DType::F32;
+    weights.insert(
+        format("self_attn.q_proj.weight"),
+        Tensor::zeros((hidden, hidden), dtype, &device).unwrap(),
+    );
+    weights.insert(
+        format("self_attn.k_proj.weight"),
+        Tensor::zeros(
+            (hidden, config.num_kv_heads * config.head_dim),
+            dtype,
+            &device,
+        )
+        .unwrap(),
+    );
+    weights.insert(
+        format("self_attn.v_proj.weight"),
+        Tensor::zeros(
+            (hidden, config.num_kv_heads * config.head_dim),
+            dtype,
+            &device,
+        )
+        .unwrap(),
+    );
+    weights.insert(
+        format("self_attn.o_proj.weight"),
+        Tensor::zeros((hidden, hidden), dtype, &device).unwrap(),
+    );
+    weights.insert(
+        format("input_layernorm.weight"),
+        Tensor::ones(hidden, dtype, &device).unwrap(),
+    );
+    weights.insert(
+        format("post_attention_layernorm.weight"),
+        Tensor::ones(hidden, dtype, &device).unwrap(),
+    );
+    // Gate + 4 experts with gate/up/down projections.
+    weights.insert(
+        format("block_sparse_moe.gate.weight"),
+        Tensor::zeros((config.num_experts.unwrap(), hidden), dtype, &device).unwrap(),
+    );
+    let expert_inter = config.expert_intermediate_size.unwrap();
+    for i in 0..config.num_experts.unwrap() {
+        weights.insert(
+            format(&format!("block_sparse_moe.experts.{i}.gate_proj.weight")),
+            Tensor::zeros((expert_inter, hidden), dtype, &device).unwrap(),
+        );
+        weights.insert(
+            format(&format!("block_sparse_moe.experts.{i}.up_proj.weight")),
+            Tensor::zeros((expert_inter, hidden), dtype, &device).unwrap(),
+        );
+        weights.insert(
+            format(&format!("block_sparse_moe.experts.{i}.down_proj.weight")),
+            Tensor::zeros((hidden, expert_inter), dtype, &device).unwrap(),
+        );
+    }
+
+    let _block = MixtralBlock::from_weights(&config, 0, &weights).expect(
+        "MixtralBlock::from_weights must accept a ModelConfig with \
+         rope_scaling=Some(...) (P20 wiring: forwards to \
+         RopeGqaAttention::new_with_weights_rope_scaling)",
+    );
 }
 
 #[test]
