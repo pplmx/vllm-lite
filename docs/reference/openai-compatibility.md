@@ -1,6 +1,6 @@
 # OpenAI API Compatibility Matrix
 
-> **Status (2026-07-15):** v0.x alpha. The matrix below lists every
+> **Status (2026-07-16):** v0.x alpha. The matrix below lists every
 > field on the OpenAI request/response types that vLLM-lite exposes
 > over HTTP, and the current implementation status. Anything not
 > listed under "Wired" is either "Declared but not honoured" (silently
@@ -38,7 +38,7 @@
 | `top_logprobs` | (not declared) | **Not declared** | Rejected by serde |
 | `tools` / `tool_choice` | (not declared) | **Not declared** | Rejected by serde |
 | `response_format` | (not declared) | **Not declared** | Rejected by serde |
-| `user` | (not declared) | **Not declared** | Rejected by serde |
+| `user` | `Option<String>` | **Wired (tracing pass-through)** | Accepted on `ChatRequest` + `CompletionRequest`; per OpenAI spec there is no format/length validation. Threaded into the `tracing::info!(user = ?req.user, ...)` log lines in `openai::chat::{chat_completions, stream_chat_completion}` so downstream subscribers (rate-limiter, audit log) can pick it up. Honoring is a no-op today — vllm-lite has no auth/persistence layer that consumes it (P21 v0.2 follow-up). |
 
 ### Response (`ChatResponse` / `ChatChunk`)
 
@@ -81,6 +81,7 @@
 | `stop` | `Option<Vec<String>>` | **Wired (validation)** | Same rejection as chat |
 | `top_p` | `Option<f32>` (0.0–1.0) | **Wired** | Same honouring + range check as chat (P9 follow-up) |
 | `seed` | (not declared) | **Not declared** | Rejected by serde |
+| `user` | `Option<String>` | **Wired (declaration)** | Accepted on `CompletionRequest` (P21 v0.2). Same contract as the chat endpoint — no format/length validation per OpenAI spec. The completions handler does not currently log the field (deferred to avoid adding a new `tracing::info!` line — chat handler logs it). Downstream consumers subscribe via direct field access. |
 | `logprobs` / `echo` / `suffix` / `best_of` | (not declared) | **Not declared** | Rejected by serde |
 
 ### Response (`CompletionResponse`)
@@ -130,7 +131,7 @@ honoring depends on engine-side work):
 | Field | Type | Why v0.2 (and not v32+) |
 |-------|------|-------------------------|
 | `seed` | `Option<i64>` | OpenAI spec: "best effort to sample deterministically". Declaration is trivial; honoring requires seeding the sampler's RNG (currently unseeded — the sampler reads from `rand`'s thread-local RNG). The validation contract is the same as `top_p`: accept any integer (per OpenAI spec), forward to engine, log the seed so determinism is at least observable in trace logs. v32+ adds RNG seeding in `vllm_core::sampling`. |
-| `user` | `Option<String>` | User identifier for safety / abuse tracking. Declaration + pass-through to `tracing::info!(user = %req.user, ...)` is trivial; vllm-lite has no auth/persistence layer that would consume it. Honoring is a no-op until a downstream consumer (rate-limiter, audit log) subscribes. |
+| `user` | `Option<String>` | User identifier for safety / abuse tracking. Declaration + pass-through to `tracing::info!(user = ?req.user, ...)` is trivial; vllm-lite has no auth/persistence layer that would consume it. Honoring is a no-op until a downstream consumer (rate-limiter, audit log) subscribes. **Shipped in P21 (2026-07-16).** |
 | `response_format` | `Option<ResponseFormat>` | OpenAI's JSON-mode. Declaration + validation (only `{type: "text"}` and `{type: "json_object"}` accepted in v0.2; the JSON schema subset defers to v0.3 because it requires generating-grammar-constrained output) is small. Honoring requires the sampler to enforce `json_object` mode via a constrained-decoding hook — that hook is v32+ work. v0.2 accepts the field and forwards to the engine which currently treats it as a no-op. |
 
 **v32+ candidates** (deferred — require model-side work that the

@@ -116,6 +116,15 @@ pub struct ChatRequest {
     pub n: Option<i64>,
     /// Stop sequences; generation halts when any is emitted.
     pub stop: Option<Vec<String>>,
+    /// Optional end-user identifier for safety / abuse tracking (P21 v0.2
+    /// wire-type declaration; honored as a tracing pass-through only —
+    /// vllm-lite has no auth/persistence layer that consumes it today).
+    /// Per OpenAI spec there is no format/length validation; any string
+    /// is accepted. Downstream consumers (rate-limiter, audit log) can
+    /// subscribe to the structured `tracing` field without changing the
+    /// HTTP boundary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
 }
 
 /// A choice in a chat completion response.
@@ -230,6 +239,11 @@ pub struct CompletionRequest {
     pub n: Option<i64>,
     /// Stop sequences.
     pub stop: Option<Vec<String>>,
+    /// Optional end-user identifier for safety / abuse tracking (P21 v0.2
+    /// wire-type declaration; honored as a tracing pass-through only).
+    /// See [`ChatRequest::user`] for the full contract.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
 }
 
 /// A single choice in a text-completion response. The `text` field
