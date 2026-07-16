@@ -288,6 +288,7 @@ mod tests {
             stop: None,
             user: None,
             response_format: None,
+            seed: None,
         }
     }
 
@@ -303,6 +304,7 @@ mod tests {
             stop,
             user: None,
             response_format: None,
+            seed: None,
         }
     }
 
@@ -318,6 +320,7 @@ mod tests {
             stop: None,
             user: None,
             response_format: None,
+            seed: None,
         }
     }
 
@@ -409,6 +412,7 @@ mod tests {
             stop: None,
             user: None,
             response_format: Some(ResponseFormat::Text),
+            seed: None,
         };
         validate_chat_request_fields(&req)
             .expect("chat request with response_format = Text must pass full field validation");
@@ -430,6 +434,7 @@ mod tests {
             stop: None,
             user: None,
             response_format: Some(ResponseFormat::JsonObject),
+            seed: None,
         };
         validate_chat_request_fields(&req).expect(
             "chat request with response_format = JsonObject must pass full field validation",
@@ -449,6 +454,7 @@ mod tests {
             n,
             stop: None,
             user: None,
+            seed: None,
         }
     }
 
@@ -463,6 +469,7 @@ mod tests {
             n: None,
             stop,
             user: None,
+            seed: None,
         }
     }
 
@@ -477,6 +484,7 @@ mod tests {
             n: None,
             stop: None,
             user: None,
+            seed: None,
         }
     }
 
@@ -580,5 +588,118 @@ mod tests {
         let err = validate_top_p(Some(f32::NAN)).expect_err("top_p = NaN must be rejected");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         assert!(err.1.0.error.message.contains("NaN"));
+    }
+
+    // P23 v0.2 wire-type follow-up: `seed` field declaration.
+    //
+    // `seed` per the OpenAI spec accepts any integer (the contract is
+    // "best effort to sample deterministically" — there is no range
+    // validation, no NaN check, no length cap). Honoring is a no-op
+    // today (the sampler is unseeded) so the only contract these tests
+    // pin is "the field flows through the validator without rejection".
+    // If v32+ adds engine-side RNG seeding and a tighter validation
+    // contract, these tests grow the new shape; for v0.2 the validator
+    // is intentionally permissive.
+
+    #[test]
+    fn chat_request_with_seed_none_passes_full_field_validation() {
+        // Baseline: omitted seed (None) is the default path; must
+        // pass `validate_chat_request_fields` unchanged.
+        let req = chat_request_with_n(None);
+        validate_chat_request_fields(&req).expect("seed = None must pass validation");
+    }
+
+    #[test]
+    fn chat_request_with_seed_positive_passes_full_field_validation() {
+        // OpenAI spec: any integer is accepted. A typical positive
+        // seed value must pass.
+        let mut req = chat_request_with_n(None);
+        req.seed = Some(42);
+        validate_chat_request_fields(&req).expect(
+            "chat with seed = Some(42) must pass validation (OpenAI spec accepts any integer)",
+        );
+    }
+
+    #[test]
+    fn chat_request_with_seed_negative_passes_full_field_validation() {
+        // Negative integers are valid i64 values per the OpenAI spec;
+        // we must not silently reject them.
+        let mut req = chat_request_with_n(None);
+        req.seed = Some(-1);
+        validate_chat_request_fields(&req).expect(
+            "chat with seed = Some(-1) must pass validation (any i64 is valid per OpenAI spec)",
+        );
+    }
+
+    #[test]
+    fn chat_request_with_seed_zero_passes_full_field_validation() {
+        // Zero is a valid i64 — many RNG implementations treat seed=0
+        // as a valid input (e.g. `rand::SeedableRng::seed_from_u64(0)`).
+        // Must not be silently rejected.
+        let mut req = chat_request_with_n(None);
+        req.seed = Some(0);
+        validate_chat_request_fields(&req)
+            .expect("chat with seed = Some(0) must pass validation (any i64 is valid)");
+    }
+
+    #[test]
+    fn chat_request_with_seed_i64_min_passes_full_field_validation() {
+        // Boundary: i64::MIN is the most-negative value; must not
+        // overflow or trigger a range check.
+        let mut req = chat_request_with_n(None);
+        req.seed = Some(i64::MIN);
+        validate_chat_request_fields(&req)
+            .expect("chat with seed = Some(i64::MIN) must pass validation (any i64 is valid)");
+    }
+
+    #[test]
+    fn chat_request_with_seed_i64_max_passes_full_field_validation() {
+        // Boundary: i64::MAX is the most-positive value; must not
+        // overflow or trigger a range check.
+        let mut req = chat_request_with_n(None);
+        req.seed = Some(i64::MAX);
+        validate_chat_request_fields(&req)
+            .expect("chat with seed = Some(i64::MAX) must pass validation (any i64 is valid)");
+    }
+
+    #[test]
+    fn completion_request_with_seed_some_passes_full_field_validation() {
+        // The completions endpoint accepts the same seed contract;
+        // mirror the chat test on `CompletionRequest`.
+        let req = CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: Some(42),
+        };
+        validate_completion_request_fields(&req).expect(
+            "completion with seed = Some(42) must pass validation (any i64 is valid per OpenAI spec)",
+        );
+    }
+
+    #[test]
+    fn completion_request_with_seed_none_passes_full_field_validation() {
+        // Baseline: omitted seed (None) is the default path on
+        // /v1/completions as well.
+        let req = CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: None,
+        };
+        validate_completion_request_fields(&req)
+            .expect("completion with seed = None must pass validation");
     }
 }

@@ -164,6 +164,22 @@ pub struct ChatRequest {
     /// no-op (see [`ResponseFormat`] doc-comment).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub response_format: Option<ResponseFormat>,
+    /// RNG seed for "best effort determinism" (P23 v0.2 wire-type
+    /// declaration). Per the OpenAI spec, if `seed` is set the system
+    /// will "best effort to sample deterministically" — same seed +
+    /// same model + same prompt should produce the same output. We
+    /// accept any `i64` per OpenAI spec (no range / sign validation).
+    ///
+    /// **Honoring is a no-op today** — vllm-lite's sampler reads from
+    /// `rand`'s thread-local RNG which is currently unseeded. The
+    /// value flows through the existing `tracing::info!(...)` log
+    /// lines as `seed = ?req.seed` so determinism is at least
+    /// observable in trace logs (e.g. for diagnosing "did the client
+    /// set a seed or not?"). Engine-side RNG seeding is v32+ work;
+    /// the wire-type contract is locked in now so the
+    /// declaration-only PR doesn't regress to "rejected by serde".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seed: Option<i64>,
 }
 
 /// A choice in a chat completion response.
@@ -283,6 +299,16 @@ pub struct CompletionRequest {
     /// See [`ChatRequest::user`] for the full contract.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user: Option<String>,
+    /// RNG seed for "best effort determinism" (P23 v0.2 wire-type
+    /// declaration). Same contract as [`ChatRequest::seed`]: per OpenAI
+    /// spec any `i64` is accepted; honoring is a no-op today (the
+    /// sampler is unseeded). The completions handler does not currently
+    /// log the field — adding a new `tracing::info!` line is deferred
+    /// to keep parity with the `user` field (the chat handler logs
+    /// both, the completions handler accepts both at the wire type but
+    /// does not log either).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seed: Option<i64>,
 }
 
 /// A single choice in a text-completion response. The `text` field
