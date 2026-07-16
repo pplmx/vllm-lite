@@ -84,7 +84,7 @@ impl TransformerBlock {
             k_norm_weight,
         ));
 
-        Self::new_with_weights(
+        Self::new_with_weights_rope_scaling(
             hidden_size,
             num_heads,
             num_kv_heads,
@@ -92,6 +92,8 @@ impl TransformerBlock {
             intermediate_size,
             theta,
             rms_norm_eps,
+            config.max_position_embeddings,
+            config.rope_scaling.as_ref(),
             has_qk_norm,
             layer_weights,
         )

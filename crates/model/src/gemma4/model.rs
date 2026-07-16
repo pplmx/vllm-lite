@@ -75,6 +75,7 @@ mod tests {
                 rope_theta: 10000.0,
                 partial_rotary_factor: 1.0,
             }],
+            rope_scaling: None,
             use_double_wide_mlp: false,
             num_experts: None,
             top_k_experts: None,

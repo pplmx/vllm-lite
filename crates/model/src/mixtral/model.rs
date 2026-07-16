@@ -78,6 +78,7 @@ mod tests {
             max_position_embeddings: 512,
             layer_types: vec![],
             rope_configs: vec![],
+            rope_scaling: None,
             use_double_wide_mlp: false,
             num_experts: Some(4),
             top_k_experts: Some(2),
