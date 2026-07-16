@@ -15,8 +15,9 @@ use crate::components::attention::paged_gqa::{
     compute_gqa_attention, prefill_continue_causal_mask, project_attention_output, read_decode_kv,
     write_prefill_kv,
 };
-use crate::components::positional::rope::RoPE;
+use crate::components::positional::rope::{RoPE, RopeScalingContext};
 use crate::paged_tensor::PagedKvCache;
+use crate::qwen3::config::RopeScaling;
 use candle_core::{Result, Tensor};
 
 #[derive(Debug)]
@@ -33,6 +34,10 @@ impl RopeGqaAttention {
     /// captures the `RoPE` base `theta` so [`Self::forward_prefill`] /
     /// [`Self::forward_decode`] can apply rotary embeddings before the
     /// attention matmul.
+    ///
+    /// **No long-context scaling**: uses a default `RoPE` (max_position =
+    /// 4096, `rope_type = Default`). For production configs that declare
+    /// a `rope_scaling` block, construct via [`Self::new_with_rope_scaling`].
     /// # Errors
     ///
     /// Returns `Err` if the inner `GqaAttention::new` weight load fails.
@@ -46,6 +51,46 @@ impl RopeGqaAttention {
         config: AttentionConfig,
         has_qk_norm: bool,
     ) -> Result<Self> {
+        Self::new_with_rope_scaling(
+            hidden_size,
+            num_heads,
+            num_kv_heads,
+            head_dim,
+            theta,
+            4096,
+            None,
+            vb,
+            config,
+            has_qk_norm,
+        )
+    }
+
+    /// Construct a `RopeGqaAttention` from a `VarBuilder` with an
+    /// optional long-context `RopeScaling` block.
+    ///
+    /// When `rope_scaling.is_some()`, the inner `RoPE` is built via
+    /// [`RoPE::new_with_scaling`] so the frequency table and
+    /// `attn_factor` actually reflect the config-declared scaling —
+    /// previously these were silently dropped because the bare
+    /// [`Self::new`] constructor hard-coded `RoPE::new(...)` with no
+    /// scaling fields. When `rope_scaling.is_none()`, the behaviour is
+    /// identical to [`Self::new`].
+    /// # Errors
+    ///
+    /// Returns `Err` if the inner `GqaAttention::new` weight load fails.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_rope_scaling(
+        hidden_size: usize,
+        num_heads: usize,
+        num_kv_heads: usize,
+        head_dim: usize,
+        theta: f32,
+        max_position: usize,
+        rope_scaling: Option<&RopeScaling>,
+        vb: Option<candle_nn::VarBuilder<'_>>,
+        config: AttentionConfig,
+        has_qk_norm: bool,
+    ) -> Result<Self> {
         let inner = SharedGqaAttention::new(
             hidden_size,
             num_heads,
@@ -55,13 +100,13 @@ impl RopeGqaAttention {
             config,
             has_qk_norm,
         )?;
-        // Default max_position = 4096 matches the workspace-wide default.
-        // Production configs that need YaRN/Linear/etc. scaling should
-        // construct via a future entry point that plumbs `RopeScaling`.
-        let rope = RoPE::new(head_dim, 4096, theta, inner.device());
+        let device = inner.device();
+        let rope = build_rope(head_dim, max_position, theta, device, rope_scaling);
         let mut inner = inner;
         // Plumb YaRN's attention-temperature scaling factor from the rope
-        // config into the underlying GqaAttention. Default (no scaling).
+        // config into the underlying GqaAttention. Non-None when the
+        // supplied `rope_scaling` declared an `attn_factor`; otherwise None
+        // and the attention forward paths treat the value as a no-op.
         inner.attn_factor = rope.attn_factor();
         Ok(Self { inner, rope })
     }
@@ -69,16 +114,65 @@ impl RopeGqaAttention {
     /// Construct a `RopeGqaAttention` from already-loaded projection tensors.
     /// Use this when sourcing weights from a non-HF checkpoint or when
     /// wiring weights from a custom loader.
+    ///
+    /// **No long-context scaling**. For production configs with a
+    /// `rope_scaling` block, use [`Self::new_with_weights_rope_scaling`].
     /// # Errors
     ///
     /// Returns `Err` if `GqaAttention::new_with_weights` fails (e.g.
     /// missing QK-norm weights when `has_qk_norm` is true).
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_weights(
         hidden_size: usize,
         num_heads: usize,
         num_kv_heads: usize,
         head_dim: usize,
         theta: f32,
+        q_weight: Tensor,
+        k_weight: Tensor,
+        v_weight: Tensor,
+        o_weight: Tensor,
+        config: AttentionConfig,
+        has_qk_norm: bool,
+        q_norm_weight: Option<Tensor>,
+        k_norm_weight: Option<Tensor>,
+    ) -> Result<Self> {
+        Self::new_with_weights_rope_scaling(
+            hidden_size,
+            num_heads,
+            num_kv_heads,
+            head_dim,
+            theta,
+            4096,
+            None,
+            q_weight,
+            k_weight,
+            v_weight,
+            o_weight,
+            config,
+            has_qk_norm,
+            q_norm_weight,
+            k_norm_weight,
+        )
+    }
+
+    /// Construct a `RopeGqaAttention` from already-loaded projection
+    /// tensors with an optional long-context `RopeScaling` block. See
+    /// [`Self::new_with_rope_scaling`] for the semantics of the scaling
+    /// argument.
+    /// # Errors
+    ///
+    /// Returns `Err` if `GqaAttention::new_with_weights` fails (e.g.
+    /// missing QK-norm weights when `has_qk_norm` is true).
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_weights_rope_scaling(
+        hidden_size: usize,
+        num_heads: usize,
+        num_kv_heads: usize,
+        head_dim: usize,
+        theta: f32,
+        max_position: usize,
+        rope_scaling: Option<&RopeScaling>,
         q_weight: Tensor,
         k_weight: Tensor,
         v_weight: Tensor,
@@ -102,7 +196,8 @@ impl RopeGqaAttention {
             q_norm_weight,
             k_norm_weight,
         )?;
-        let rope = RoPE::new(head_dim, 4096, theta, inner.device());
+        let device = inner.device();
+        let rope = build_rope(head_dim, max_position, theta, device, rope_scaling);
         let mut inner = inner;
         inner.attn_factor = rope.attn_factor();
         Ok(Self { inner, rope })
@@ -331,6 +426,28 @@ impl RopeGqaAttention {
         )?;
 
         self.inner.run_attention_fn(&q, &full_k, &full_v)
+    }
+}
+
+/// Build an `RoPE` from the supplied config + optional scaling block.
+///
+/// `rope_scaling == None` → default `RoPE::new` (no scaling).
+/// `rope_scaling == Some(r)` → `RoPE::new_with_scaling` so the
+/// `scaling_factor`, `rope_type`, `attn_factor`, and
+/// `original_max_position` fields are populated from the config.
+fn build_rope(
+    head_dim: usize,
+    max_position: usize,
+    theta: f32,
+    device: &candle_core::Device,
+    rope_scaling: Option<&RopeScaling>,
+) -> RoPE {
+    match rope_scaling {
+        Some(r) => {
+            let ctx = RopeScalingContext::from(r);
+            RoPE::new_with_scaling(head_dim, max_position, theta, device, ctx)
+        }
+        None => RoPE::new(head_dim, max_position, theta, device),
     }
 }
 

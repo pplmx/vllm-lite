@@ -39,6 +39,13 @@ pub struct ModelConfig {
     pub layer_types: Vec<LayerType>,
     /// Per-layer `RoPE` overrides (NTK scaling, `MRoPE` axes, etc.).
     pub rope_configs: Vec<RoPEConfig>,
+    /// Long-context `RoPE` scaling block (YaRN, Linear, Dynamic, Su).
+    /// `None` means default (no scaling). Populated from
+    /// `config.json["rope_scaling"]` in `from_config_json`, and
+    /// forwarded into `RopeGqaAttention::new_with_rope_scaling` so the
+    /// scaling actually reaches the RoPE inverse-frequency table and the
+    /// attention-temperature factor. See `qwen3::config::RopeScaling`.
+    pub rope_scaling: Option<crate::qwen3::config::RopeScaling>,
     /// Use the "double-wide" MLP variant (Phi-3 style).
     pub use_double_wide_mlp: bool,
     /// Number of experts for sparse `MoE` (`None` = dense model).
@@ -87,6 +94,7 @@ impl ModelConfig {
             max_position_embeddings: 512,
             layer_types: vec![],
             rope_configs: vec![],
+            rope_scaling: None,
             use_double_wide_mlp: false,
             num_experts: None,
             top_k_experts: None,
@@ -115,6 +123,7 @@ impl ModelConfig {
             max_position_embeddings: 512,
             layer_types: vec![],
             rope_configs: vec![],
+            rope_scaling: None,
             use_double_wide_mlp: false,
             num_experts: None,
             top_k_experts: None,
@@ -142,6 +151,7 @@ impl ModelConfig {
             max_position_embeddings: 2048,
             layer_types: vec![],
             rope_configs: vec![],
+            rope_scaling: None,
             use_double_wide_mlp: false,
             num_experts: None,
             top_k_experts: None,
@@ -169,6 +179,7 @@ impl ModelConfig {
             max_position_embeddings: 2048,
             layer_types: vec![],
             rope_configs: vec![],
+            rope_scaling: None,
             use_double_wide_mlp: false,
             num_experts: None,
             top_k_experts: None,
@@ -196,6 +207,7 @@ impl ModelConfig {
             max_position_embeddings: 32768,
             layer_types: vec![],
             rope_configs: vec![],
+            rope_scaling: None,
             use_double_wide_mlp: false,
             num_experts: None,
             top_k_experts: None,
@@ -223,6 +235,7 @@ impl ModelConfig {
             max_position_embeddings: 32768,
             layer_types: vec![],
             rope_configs: vec![],
+            rope_scaling: None,
             use_double_wide_mlp: false,
             num_experts: Some(8),
             top_k_experts: Some(2),
@@ -275,6 +288,16 @@ impl ModelConfig {
             .get("has_qk_norm")
             .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
+        // Long-context RoPE scaling block (YaRN / Linear / Dynamic / Su).
+        // Malformed values silently fall back to None — same conservative
+        // pattern used for other optional fields; the warning is logged
+        // once the engine attempts to use it (currently unreachable because
+        // the Qwen3 path is the only one that consumes the field, and a
+        // Qwen3 model with a malformed `rope_scaling` block will already
+        // fail to load via the dedicated `Qwen3Config::from_value` path).
+        let rope_scaling = value.get("rope_scaling").and_then(|v| {
+            serde_json::from_value::<crate::qwen3::config::RopeScaling>(v.clone()).ok()
+        });
 
         Ok(Self {
             architecture,
@@ -292,6 +315,7 @@ impl ModelConfig {
             max_position_embeddings,
             layer_types: vec![],
             rope_configs: vec![],
+            rope_scaling,
             use_double_wide_mlp: false,
             num_experts,
             top_k_experts,

@@ -78,6 +78,32 @@ impl RoPE {
         }
     }
 
+    /// Construct an `RoPE` populated with long-context scaling fields from
+    /// the supplied [`RopeScalingContext`]. Use this when the upstream
+    /// architecture config declares a non-default `rope_scaling` block
+    /// (YaRN, Linear, Dynamic, Su). The plain [`RoPE::new`] remains
+    /// available for backward compatibility with callers that don't have a
+    /// scaling config handy.
+    #[must_use]
+    pub fn new_with_scaling(
+        head_dim: usize,
+        max_position: usize,
+        theta: f32,
+        device: &candle_core::Device,
+        scaling: RopeScalingContext,
+    ) -> Self {
+        Self {
+            theta,
+            head_dim,
+            max_position,
+            scaling_factor: scaling.scaling_factor,
+            device: device.clone(),
+            rope_type: scaling.rope_type,
+            attn_factor: scaling.attn_factor,
+            original_max_position: scaling.original_max_position,
+        }
+    }
+
     /// Construct from a Qwen3 config, extracting `rope_scaling` fields
     /// (`rope_type`, `factor`, `attn_factor`, `original_max_position_embeddings`).
     #[must_use]

@@ -1,5 +1,6 @@
 //! `TransformerBlock` constructors: `new`, `new_with_tp` (feature-gated),
-//! `new_with_weights`.
+//! `new_with_weights`, plus scaling-aware variants `new_with_rope_scaling`
+//! and `new_with_weights_rope_scaling`.
 
 use super::TransformerBlock;
 use crate::components::AttentionConfig;
@@ -7,10 +8,16 @@ use crate::components::LnLayerNorm;
 use crate::components::RopeGqaDecoderBlock;
 use crate::components::SwiGLU;
 use crate::components::attention::RopeGqaAttention;
+use crate::qwen3::config::RopeScaling;
 use candle_core::{Result, Tensor};
 
 #[cfg(feature = "multi-node")]
 use vllm_dist::TensorParallelConfig;
+
+/// Default RoPE max position used when callers don't supply one (matches
+/// the workspace-wide default used by `RopeGqaAttention::new` /
+/// `new_with_weights`).
+const DEFAULT_MAX_POSITION: usize = 4096;
 
 impl TransformerBlock {
     #[allow(clippy::too_many_arguments)]
@@ -29,6 +36,44 @@ impl TransformerBlock {
         vb: Option<candle_nn::VarBuilder<'_>>,
         has_qk_norm: bool,
     ) -> Result<Self> {
+        Self::new_with_rope_scaling(
+            hidden_size,
+            num_heads,
+            num_kv_heads,
+            head_dim,
+            intermediate_size,
+            theta,
+            rms_norm_eps,
+            DEFAULT_MAX_POSITION,
+            None,
+            vb,
+            has_qk_norm,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    /// Construct a new instance with an optional long-context `RopeScaling`
+    /// block. When `rope_scaling.is_some()`, the scaling factors are
+    /// forwarded into the underlying `RopeGqaAttention` so they actually
+    /// reach the `RoPE` frequency table and the attention-temperature
+    /// factor. When `rope_scaling.is_none()`, the behaviour is identical
+    /// to [`Self::new`].
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
+    pub fn new_with_rope_scaling(
+        hidden_size: usize,
+        num_heads: usize,
+        num_kv_heads: usize,
+        head_dim: usize,
+        intermediate_size: usize,
+        theta: f32,
+        rms_norm_eps: f64,
+        max_position: usize,
+        rope_scaling: Option<&RopeScaling>,
+        vb: Option<candle_nn::VarBuilder<'_>>,
+        has_qk_norm: bool,
+    ) -> Result<Self> {
         let vb = vb.unwrap_or_else(|| {
             candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu)
         });
@@ -43,12 +88,14 @@ impl TransformerBlock {
         let post_attention_layernorm = LnLayerNorm::new(post_ln_weight, post_ln_bias, rms_norm_eps);
 
         let vb_attn = vb.pp("attn");
-        let attention = RopeGqaAttention::new(
+        let attention = RopeGqaAttention::new_with_rope_scaling(
             hidden_size,
             num_heads,
             num_kv_heads,
             head_dim,
             theta,
+            max_position,
+            rope_scaling,
             Some(vb_attn),
             AttentionConfig::default(),
             has_qk_norm,
@@ -94,12 +141,14 @@ impl TransformerBlock {
         let post_attention_layernorm = LnLayerNorm::new(post_ln_weight, post_ln_bias, rms_norm_eps);
 
         let vb_attn = vb.pp("attn");
-        let attention = RopeGqaAttention::new(
+        let attention = RopeGqaAttention::new_with_rope_scaling(
             hidden_size,
             num_heads,
             num_kv_heads,
             head_dim,
             theta,
+            DEFAULT_MAX_POSITION,
+            None,
             Some(vb_attn),
             AttentionConfig::default(),
             has_qk_norm,
@@ -129,6 +178,53 @@ impl TransformerBlock {
         intermediate_size: usize,
         theta: f32,
         rms_norm_eps: f64,
+        has_qk_norm: bool,
+        weights: Option<(
+            Option<Tensor>, // q_proj
+            Option<Tensor>, // k_proj
+            Option<Tensor>, // v_proj
+            Option<Tensor>, // o_proj
+            Option<Tensor>, // gate_proj
+            Option<Tensor>, // up_proj
+            Option<Tensor>, // down_proj
+            Option<Tensor>, // input_layernorm
+            Option<Tensor>, // post_attention_layernorm
+            Option<Tensor>, // q_norm
+            Option<Tensor>, // k_norm
+        )>,
+    ) -> Result<Self> {
+        Self::new_with_weights_rope_scaling(
+            hidden_size,
+            num_heads,
+            num_kv_heads,
+            head_dim,
+            intermediate_size,
+            theta,
+            rms_norm_eps,
+            DEFAULT_MAX_POSITION,
+            None,
+            has_qk_norm,
+            weights,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    /// Construct a new instance from already-loaded weight tensors with
+    /// an optional long-context `RopeScaling` block. See
+    /// [`Self::new_with_rope_scaling`] for the semantics.
+    /// # Errors
+    ///
+    /// Returns `Err` if any required tensor allocation or weight loading fails.
+    pub fn new_with_weights_rope_scaling(
+        hidden_size: usize,
+        num_heads: usize,
+        num_kv_heads: usize,
+        head_dim: usize,
+        intermediate_size: usize,
+        theta: f32,
+        rms_norm_eps: f64,
+        max_position: usize,
+        rope_scaling: Option<&RopeScaling>,
         has_qk_norm: bool,
         weights: Option<(
             Option<Tensor>, // q_proj
@@ -176,12 +272,14 @@ impl TransformerBlock {
         let post_attention_layernorm =
             LnLayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
 
-        let attention = RopeGqaAttention::new_with_weights(
+        let attention = RopeGqaAttention::new_with_weights_rope_scaling(
             hidden_size,
             num_heads,
             num_kv_heads,
             head_dim,
             theta,
+            max_position,
+            rope_scaling,
             q_w,
             k_w,
             v_w,

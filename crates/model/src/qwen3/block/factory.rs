@@ -15,7 +15,7 @@ pub fn new_block(
     config: &crate::config::ModelConfig,
     _layer_idx: usize,
 ) -> Result<TransformerBlock> {
-    TransformerBlock::new(
+    TransformerBlock::new_with_rope_scaling(
         config.hidden_size,
         config.num_heads,
         config.num_kv_heads,
@@ -23,6 +23,8 @@ pub fn new_block(
         config.intermediate_size,
         config.rope_theta,
         config.rms_norm_eps,
+        config.max_position_embeddings,
+        config.rope_scaling.as_ref(),
         None,
         config.has_qk_norm,
     )

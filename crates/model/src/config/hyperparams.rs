@@ -153,6 +153,11 @@ impl From<&Qwen3Config> for ModelConfig {
             sliding_window: None,
             layer_types: vec![],
             rope_configs: vec![],
+            // Forward YaRN/Linear/Dynamic/Su scaling block. Before P19
+            // this was silently dropped, leaving a Qwen3 config that
+            // declared `rope_scaling` indistinguishable from a default
+            // Qwen3 of the same shape at the engine boundary.
+            rope_scaling: config.rope_scaling.clone(),
             use_double_wide_mlp: false,
             num_experts: None,
             top_k_experts: None,
