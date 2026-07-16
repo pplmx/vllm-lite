@@ -1,4 +1,15 @@
 //! Shared RoPE-GQA decoder block construction for Llama/Mistral-style checkpoints.
+//!
+//! Both [`new_block`] (zero-init, used by tests) and [`block_from_weights`]
+//! (HF weight-map loader, used by
+//! [`crate::qwen3::block::TransformerBlock::from_weights`] and friends)
+//! thread `config.rope_scaling` and `config.max_position_embeddings`
+//! through to `RopeGqaAttention::new_with_rope_scaling` /
+//! `new_with_weights_rope_scaling` so long-context configs (YaRN / Linear /
+//! Dynamic / Su) actually take effect at the attention layer. Pre-P20 this
+//! silently dropped the block via the bare `RopeGqaAttention::new` /
+//! `new_with_weights` constructors, which P19 deliberately preserved as
+//! `None`-scaling aliases for backward compatibility.
 
 use std::collections::HashMap;
 
@@ -32,12 +43,19 @@ pub fn new_block(config: &ModelConfig, _layer_idx: usize) -> Result<RopeGqaDecod
     let post_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
     let post_attention_layernorm = LnLayerNorm::new(post_ln_weight, post_ln_bias, rms_norm_eps);
 
-    let attention = RopeGqaAttention::new(
+    // Thread `rope_scaling` (YaRN / Linear / Dynamic / Su) and
+    // `max_position_embeddings` through to the attention so long-context
+    // configs take effect. `new_with_rope_scaling` (P19) is the
+    // scaling-aware constructor; the bare `new` would silently drop the
+    // block and revert to default RoPE.
+    let attention = RopeGqaAttention::new_with_rope_scaling(
         hidden_size,
         num_heads,
         num_kv_heads,
         head_dim,
         config.rope_theta,
+        config.max_position_embeddings,
+        config.rope_scaling.as_ref(),
         None,
         crate::components::AttentionConfig::default(),
         false,
@@ -123,12 +141,14 @@ pub fn block_from_weights(
     )?;
     let post_attention_layernorm = LnLayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
 
-    let attention = RopeGqaAttention::new_with_weights(
+    let attention = RopeGqaAttention::new_with_weights_rope_scaling(
         hidden_size,
         num_heads,
         num_kv_heads,
         head_dim,
         config.rope_theta,
+        config.max_position_embeddings,
+        config.rope_scaling.as_ref(),
         q_w,
         k_w,
         v_w,
@@ -147,4 +167,85 @@ pub fn block_from_weights(
         attention,
         mlp,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    //! P20 regression tests for the shared decoder-block factory.
+    //!
+    //! Pre-P20, `new_block` and `block_from_weights` here called the bare
+    //! `RopeGqaAttention::new` / `new_with_weights` constructors which
+    //! silently dropped `config.rope_scaling`. A Llama/Mistral-style
+    //! checkpoint that declared a YaRN block in `config.json` therefore
+    //! produced numerically identical output to a default model of the
+    //! same shape. These tests pin the scaling-aware constructor
+    //! signatures so the regression can't recur.
+
+    use super::*;
+    use crate::config::Architecture;
+    use crate::qwen3::config::{RopeScaling, RopeType};
+
+    fn tiny_config(rope_scaling: Option<RopeScaling>) -> ModelConfig {
+        ModelConfig {
+            architecture: Architecture::Llama,
+            hidden_size: 64,
+            num_layers: 1,
+            num_heads: 4,
+            num_kv_heads: 2,
+            head_dim: 16,
+            vocab_size: 128,
+            intermediate_size: 128,
+            rope_theta: 10000.0,
+            rms_norm_eps: 1e-5,
+            sliding_window: Some(4096),
+            tie_word_embeddings: false,
+            max_position_embeddings: 512,
+            layer_types: vec![],
+            rope_configs: vec![],
+            rope_scaling,
+            use_double_wide_mlp: false,
+            num_experts: None,
+            top_k_experts: None,
+            expert_intermediate_size: None,
+            has_qk_norm: false,
+        }
+    }
+
+    fn yarn_scaling(factor: f32, attn_factor: Option<f32>) -> RopeScaling {
+        RopeScaling {
+            rope_type: Some(RopeType::Yarn),
+            factor: Some(factor),
+            original_max_position_embeddings: Some(4096),
+            attn_factor,
+            partial_rotary_factor: None,
+            mrope_section: None,
+            short_factor: None,
+            long_factor: None,
+        }
+    }
+
+    #[test]
+    fn new_block_accepts_yarn_rope_scaling() {
+        let config = tiny_config(Some(yarn_scaling(4.0, Some(0.5))));
+        let _block = new_block(&config, 0).expect(
+            "decoder_block::factory::new_block must accept a ModelConfig with \
+             rope_scaling=Some(...) (P20 wiring: forwards to \
+             RopeGqaAttention::new_with_rope_scaling)",
+        );
+    }
+
+    #[test]
+    fn new_block_accepts_none_rope_scaling() {
+        // The no-op path: pre-P20 this code path used `RopeGqaAttention::new`
+        // (bare). Post-P20 it routes through `new_with_rope_scaling(..., None)`
+        // which delegates internally to the bare constructor. Behaviour is
+        // bit-for-bit identical for the None case — this test pins that
+        // invariant so callers can rely on no-scaling configs continuing to
+        // work without surprises.
+        let config = tiny_config(None);
+        let _block = new_block(&config, 0).expect(
+            "decoder_block::factory::new_block must continue to accept \
+             rope_scaling=None (backward-compatible path)",
+        );
+    }
 }

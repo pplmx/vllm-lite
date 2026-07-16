@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Perfection & Elegance
 status: in_progress
-last_updated: "2026-07-16T20:00:00.000Z"
-last_activity: 2026-07-16 — Phase 31-F P19 RopeScaling config → Block wiring
+last_updated: "2026-07-16T21:00:00.000Z"
+last_activity: 2026-07-16 — Phase 31-F P20 RopeScaling → shared decoder_block factory + Mixtral block
 follow-up batches: |-
-  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta); OPERATIONS.md "Multi-Node (Experimental)" expanded with 3-node snippet + TransferKVBlock wire-protocol spec (P12, doc-only — closes the remaining Phase 31-D master-plan items); mutation nightly CI wired in .github/workflows/mutation-nightly.yml with --baseline skip dropped after verifying it is unnecessary for the scanned modules under default features (P13, CI-only — closes one Phase 31-E master-plan item); ADR-020 captures the six OPS-31d architectural decisions (P14, docs-only); v0.2 follow-ups section added to docs/reference/openai-compatibility.md (seed / user / response_format queue for v0.2; frequency_penalty / logit_bias / logprobs / tools defer to v32+), plus stale-item closure for engineering-quality §6 + §7 (P15, docs-only); closure tables added to production-readiness.md §2-§11 with a top-of-document P0-P15 aggregate (29 closed / 5 partial / 9 v32+ candidates out of 43 original observations); closure table added to architecture-performance.md §6 covering 7 speculative + distributed observations (4 closed / 1 partial sampled-match / 2 still-gap-but-documented) (P17, docs-only); `attn_factor` (YaRN §3.3 attention-temperature scaling) threaded through paged/tiled/flash attention paths via new `apply_attn_factor` helper that pre-scales Q by `attn_factor` (mathematically equivalent to standard path's `qk.affine(attn_factor / sqrt(d), 0.0)` via softmax's positive-scalar invariance; no-op when `attn_factor` is `None` or `Some(1.0)`) — closes Phase 31-F first item (P18, feat — 6 new tests, no public API signature change); `RopeScaling` (YaRN / Linear / Dynamic / Su) threaded end-to-end from `config.json["rope_scaling"]` through `ModelConfig::rope_scaling` (new field) → `From<&Qwen3Config> for ModelConfig` (preserved) → `factory::new_block` (forwarded) → `TransformerBlock::new_with_rope_scaling` / `new_with_weights_rope_scaling` (new constructors) → `RopeGqaAttention::new_with_rope_scaling` / `new_with_weights_rope_scaling` (new constructors) → `RoPE::new_with_scaling` (new helper) — closes Phase 31-F second item (P19, feat — 2 new tests, 1 flaky test removed; existing `new` / `new_with_weights` / `new_with_tp` constructors delegate to the scaling-aware variants with `None` for bit-for-bit backward compatibility). P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half; P12 closed the Phase 31-D master-plan checkboxes; P13 closed the mutation-testing half of Phase 31-E; P14 added ADR-020; P15 closed the documentation-drift items in engineering-quality §6 + §7 and made the v0.2 backlog visible from the OpenAI compat matrix; P16 closed the documentation-drift items in production-readiness.md; P17 closed the documentation-drift items in architecture-performance §6 and verified `verify_draft_tokens_logits` is already temperature-aware sampled-match; P18 closed the Phase 31-F `attn_factor in paged/flash attention paths` item; P19 closed the Phase 31-F `RopeScaling config → Block wiring` item. Checksums + provenance remain as a v32+ follow-up; engine wiring to MemoryManager remains v32+ / OPS-32a; GPU nightly smoke remains deferred (self-hosted GPU runner); OTLP exporter + per-tenant quota + TLS 主路径接线 + readiness 模型加载信号 + feature matrix doc + 容量基准 runbook + sampled-match → min(1, p/q) rejection-sampling + CUDA Graph + speculative coexistence remain as v32+ candidates; the remaining Phase 31-F items (expand_kv fused kernel, PagedKV host round-trip elimination) also remain v32+ candidates (very-high complexity).
+  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta); OPERATIONS.md "Multi-Node (Experimental)" expanded with 3-node snippet + TransferKVBlock wire-protocol spec (P12, doc-only — closes the remaining Phase 31-D master-plan items); mutation nightly CI wired in .github/workflows/mutation-nightly.yml with --baseline skip dropped after verifying it is unnecessary for the scanned modules under default features (P13, CI-only — closes one Phase 31-E master-plan item); ADR-020 captures the six OPS-31d architectural decisions (P14, docs-only); v0.2 follow-ups section added to docs/reference/openai-compatibility.md (seed / user / response_format queue for v0.2; frequency_penalty / logit_bias / logprobs / tools defer to v32+), plus stale-item closure for engineering-quality §6 + §7 (P15, docs-only); closure tables added to production-readiness.md §2-§11 with a top-of-document P0-P15 aggregate (29 closed / 5 partial / 9 v32+ candidates out of 43 original observations); closure table added to architecture-performance.md §6 covering 7 speculative + distributed observations (4 closed / 1 partial sampled-match / 2 still-gap-but-documented) (P17, docs-only); `attn_factor` (YaRN §3.3 attention-temperature scaling) threaded through paged/tiled/flash attention paths via new `apply_attn_factor` helper that pre-scales Q by `attn_factor` (mathematically equivalent to standard path's `qk.affine(attn_factor / sqrt(d), 0.0)` via softmax's positive-scalar invariance; no-op when `attn_factor` is `None` or `Some(1.0)`) — closes Phase 31-F first item (P18, feat — 6 new tests, no public API signature change); `RopeScaling` (YaRN / Linear / Dynamic / Su) threaded end-to-end from `config.json["rope_scaling"]` through `ModelConfig::rope_scaling` (new field) → `From<&Qwen3Config> for ModelConfig` (preserved) → `factory::new_block` (forwarded) → `TransformerBlock::new_with_rope_scaling` / `new_with_weights_rope_scaling` (new constructors) → `RopeGqaAttention::new_with_rope_scaling` / `new_with_weights_rope_scaling` (new constructors) → `RoPE::new_with_scaling` (new helper) — closes Phase 31-F second item (P19, feat — 2 new tests, 1 flaky test removed; existing `new` / `new_with_weights` / `new_with_tp` constructors delegate to the scaling-aware variants with `None` for bit-for-bit backward compatibility); `RopeScaling` extended to the remaining RoPE-GQA architectures via `decoder_block::factory::new_block` / `block_from_weights` (shared Llama/Mistral factory) + `MixtralBlock::new` / `MixtralBlock::from_weights` — the same wire that P19 closed for Qwen3 now reaches Llama/Mistral/Mixtral checkpoints; the bare `RopeGqaAttention::new` / `new_with_weights` constructors remain in the public API as `None`-scaling aliases for backward compatibility but are no longer called by any workspace-internal factory. 4 new unit tests: `new_block_accepts_yarn_rope_scaling` + `new_block_accepts_none_rope_scaling` in `crates/model/src/components/decoder_block/factory.rs::tests`, and `test_mixtral_block_new_accepts_yarn_rope_scaling` + `test_mixtral_block_from_weights_accepts_yarn_rope_scaling` in `crates/model/src/mixtral/block/tests.rs`. (P20, feat — no public API signature change.) P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half; P12 closed the Phase 31-D master-plan checkboxes; P13 closed the mutation-testing half of Phase 31-E; P14 added ADR-020; P15 closed the documentation-drift items in engineering-quality §6 + §7 and made the v0.2 backlog visible from the OpenAI compat matrix; P16 closed the documentation-drift items in production-readiness.md; P17 closed the documentation-drift items in architecture-performance §6 and verified `verify_draft_tokens_logits` is already temperature-aware sampled-match; P18 closed the Phase 31-F `attn_factor in paged/flash attention paths` item; P19 closed the Phase 31-F `RopeScaling config → Block wiring` item for Qwen3; P20 closed the Phase 31-F `RopeScaling` follow-up for Llama/Mistral (shared decoder_block factory) and Mixtral. Checksums + provenance remain as a v32+ follow-up; engine wiring to MemoryManager remains v32+ / OPS-32a; GPU nightly smoke remains deferred (self-hosted GPU runner); OTLP exporter + per-tenant quota + TLS 主路径接线 + readiness 模型加载信号 + feature matrix doc + 容量基准 runbook + sampled-match → min(1, p/q) rejection-sampling + CUDA Graph + speculative coexistence remain as v32+ candidates; the remaining Phase 31-F items (expand_kv fused kernel, PagedKV host round-trip elimination) also remain v32+ candidates (very-high complexity); MLA RopeScaling is intentionally not wired (MLA is not in a production decoder per its own doc-comment).
 progress:
   total_phases: 6
   completed_phases: 5
@@ -1707,3 +1707,207 @@ P19+ candidates: the remaining Phase 31-F items (`RopeScaling` audit across arch
   checksums + signed SLSA / in-toto provenance) is tracked as
   a v32+ candidate — needs a signature-key story + reproducible
   build posture before it can ship responsibly.
+
+## Phase 31-F — 2026-07-16 P20 follow-up batch
+
+Closed the Phase 31-F `RopeScaling config → Block wiring`
+**follow-up for non-Qwen3 architectures**. P19 closed the
+thread-through for the Qwen3-specific path (the
+`qwen3/block/factory::new_block` + `RopeGqaAttention::new_with_rope_scaling`
+chain) but explicitly noted "other architectures (Gemma4 /
+Mixtral / etc.) need a separate audit". This batch performs
+that audit + fix.
+
+### The gap
+
+Two more call sites continued to use the bare (non-scaling-aware)
+constructors and silently dropped the block on every HF weight
+load with a `rope_scaling` declaration:
+
+- **`crates/model/src/components/decoder_block/factory.rs`** —
+  the SHARED `new_block` / `block_from_weights` used by
+  Llama/Mistral-style checkpoints. Both called
+  `RopeGqaAttention::new` / `new_with_weights` with no
+  `max_position` / `rope_scaling` arguments, so the inner RoPE
+  was built via the default `RoPE::new(...)` constructor
+  (`scaling_factor = 1.0`, `attn_factor = None`) regardless of
+  what `config.json["rope_scaling"]` declared.
+- **`crates/model/src/mixtral/block.rs`** — `MixtralBlock::new`
+  + `MixtralBlock::from_weights`. Same pattern: the bare
+  constructors dropped `rope_scaling` on the floor.
+
+A Llama / Mistral / Mixtral checkpoint that declared a YaRN
+block in `config.json` therefore produced numerically
+identical output to a default model of the same shape at the
+engine boundary, regardless of what `rope_scaling` declared —
+the exact regression P19 fixed for Qwen3, still latent in two
+other architectures.
+
+### The fix
+
+Both call sites now thread `config.max_position_embeddings` +
+`config.rope_scaling.as_ref()` into the scaling-aware
+constructors introduced by P19:
+
+- `RopeGqaAttention::new` → `RopeGqaAttention::new_with_rope_scaling`
+  (`crates/model/src/components/decoder_block/factory.rs:55-69`,
+  `crates/model/src/mixtral/block.rs:53-69`)
+- `RopeGqaAttention::new_with_weights` → `RopeGqaAttention::new_with_weights_rope_scaling`
+  (`crates/model/src/components/decoder_block/factory.rs:126-144`,
+  `crates/model/src/mixtral/block.rs:147-163`)
+
+The bare constructors remain in the public API (P19 preserved
+them as `None`-scaling aliases for backward compatibility) —
+they are no longer called by any workspace-internal factory.
+Inline doc-comments on the new call sites explain the wiring
+contract and reference P19 for the constructor rationale.
+
+### Test coverage
+
+4 new unit tests pinning the wiring so the regression can't
+recur:
+
+- `crates/model/src/components/decoder_block/factory.rs::tests`:
+  - `new_block_accepts_yarn_rope_scaling` — builds a
+    `ModelConfig` with YaRN `rope_scaling` (`factor=4.0`,
+    `attn_factor=Some(0.5)`) and asserts
+    `decoder_block::factory::new_block(...)` returns `Ok(_)`.
+  - `new_block_accepts_none_rope_scaling` — pins the no-op
+    path: `rope_scaling=None` continues to work, exercising the
+    `new_with_rope_scaling(..., None)` delegation that mirrors
+    the bare `new(...)` behaviour bit-for-bit.
+- `crates/model/src/mixtral/block/tests.rs`:
+  - `test_mixtral_block_new_accepts_yarn_rope_scaling` —
+    YaRN config → `MixtralBlock::new(...)` returns `Ok(_)`.
+  - `test_mixtral_block_from_weights_accepts_yarn_rope_scaling` —
+    builds a populated `HashMap<String, Tensor>` of expert
+    weights (4 experts × gate/up/down + gate weight +
+    self_attn projections + input/post layernorms) and asserts
+    `MixtralBlock::from_weights(...)` returns `Ok(_)`. The
+    population is intentional — pre-fix this code path called
+    `RopeGqaAttention::new_with_weights` (bare) which would
+    silently drop the block on every HF weight load with a
+    YaRN config; the test pins the scaling-aware constructor
+    is now wired through.
+
+### Test count
+
+- Workspace: **1464** tests pass (was 1458 after P18 / +2 from
+  P19 / +4 from this batch).
+- vllm-model: 419 → 423 (+4 unit tests in this batch).
+- `cargo nextest run --workspace --all-features --no-fail-fast`
+  exits 0; no flakes.
+- `cargo fmt --all --check` passes.
+- `cargo clippy --all-targets -p vllm-model -- -D clippy::correctness -D clippy::suspicious -D clippy::perf`
+  introduces no new deny-tier warnings (the 67 warnings that
+  pre-existed in vllm-model tests are unrelated pedantic noise
+  — same count as before this batch).
+- `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --workspace --all-features`
+  passes (fixed one initial broken-intra-doc-link by correcting
+  the path to `crate::qwen3::block::TransformerBlock::from_weights`).
+- `bash .planning/phase-12e/check-public-api.sh --no-fail`
+  reports zero new public-API items in `vllm-model` (the diff
+  is the pre-existing P4 NcclAllReduce alias rename + a few
+  `impl` items that come along with it; all pre-P20).
+- Workspace real doc coverage: **unchanged at 67.93 %** (the
+  new docstrings are commentary + factory/test contracts,
+  marginal vs noise).
+
+### What this batch explicitly does NOT close
+
+The remaining Phase 31-F items stay v32+ candidates:
+
+- **`expand_kv` fused kernel** — deferred from v30
+  (very-high complexity). Needs custom GQA-broadcast matmul
+  kernel.
+- **PagedKV host round-trip elimination** — deferred from v30
+  (very-high complexity). Needs fused host-device KV access.
+
+The `RopeScaling` thread-through is now complete across the
+three production architectures in the workspace (Qwen3 via
+P19, Llama/Mistral + Mixtral via P20). The only architectures
+that don't honour `rope_scaling` are:
+
+- **Gemma4** — `crates/model/src/gemma4/block.rs` has its own
+  factory (`gemma4::block::new_block` at line 340) that does
+  not use `RopeGqaAttention` (Gemma4 uses its own attention
+  implementation per `architecture.md`). Out of scope for
+  this batch.
+- **MLA** (`crates/model/src/components/attention/mla.rs`) —
+  uses `RopeScalingContext::default()` in `forward()` and is
+  not wired into any production decoder (per its own
+  doc-comment: "Currently no production model architecture
+  uses `MlaAttention` directly; the path is exposed for
+  experimentation and benchmarking"). Threading `RopeScaling`
+  through MLA would be premature — no production caller
+  exists to exercise it.
+
+Both are explicit "exposed for experimentation" cases where
+the follow-up is gated on a real production user, not a
+missing wire.
+
+### Why P20 and not the v32+ candidates
+
+The P19 follow-up list named four P20+ options: (a) non-Qwen3
+RopeScaling audit, (b) `seed` declaration, (c) feature matrix
+doc, (d) `expand_kv` / PagedKV round-trip elimination
+(deferred — very-high complexity). P20 chose (a) because:
+
+- **Bounded scope** — 2 files × 2 call sites + 4 tests + 1
+  doc-comment update; verifiable in a single CI run.
+- **No sampler / kernel-design dependency** — unlike `seed`
+  (sampler rewrite needed) or `expand_kv` (custom kernel),
+  this is purely constructor signature plumbing that uses the
+  P19 scaling-aware constructors as-is.
+- **Closes a real contract violation** — same reasoning as
+  P19: users setting `rope_scaling` for YaRN silently got no
+  effect in production for Llama/Mistral/Mixtral checkpoints.
+- **Symmetry with P19** — leaving the Qwen3-only fix in
+  place while Llama/Mistral/Mixtral still drop the block
+  would have created a documentation trap (the CHANGELOG
+  would claim "fixed" but only for one architecture).
+
+P21+ candidates: `seed` declaration (still blocked on
+sampler design — see P15 reasoning); feature matrix doc
+(engineering-quality §6 #4); MLA RopeScaling wiring (gated
+on MLA production wiring); OTLP exporter (production-readiness
+§6); checksums + provenance (engineering-quality §7 second
+half); or back to due-diligence drift closure if any items
+remain (none currently open).
+
+## Remaining open items (after P20)
+
+- **PERF-01** (continuous batching kernel) — deferred to v32+.
+- **CI-01** (sustained GPU / real-checkpoint CI) — deferred.
+- **OpenAI compat: `seed` wire type** — still tracked as v0.2
+  follow-up in `docs/reference/openai-compatibility.md`.
+- **Phase 31-D follow-up work (post-OPS-31d)** — `kv_block_transfer.rs`
+  integration tests already exercise real 2-node + 3-node gRPC
+  round-trips. The master-plan checkboxes are closed (P12).
+  Remaining items per `ops-31d-kv-block-transfer.md` §7 are
+  still all v32+ non-goals: MESI coherence, owner-routed
+  peer fetch, streaming RPCs, wire compression, block
+  refcounting during transfer, **`PagedKvCacheWrapper: BlockDataSource`**
+  (the load-bearing engine-wiring piece — see P12 batch
+  section "What this batch explicitly does NOT close").
+  Tracking only — none block the v31.0 alpha.
+- **Phase 31-F (performance)** — P18 closed `attn_factor in
+  paged/flash attention paths`, P19 closed
+  `RopeScaling config → Block wiring` for Qwen3, P20 closed
+  the non-Qwen3 follow-up (Llama/Mistral shared factory +
+  Mixtral). Remaining: `expand_kv` fused kernel, PagedKV host
+  round-trip elimination — deferred to v32+ (very-high
+  complexity).
+- **production-readiness §6 OTLP follow-up** — the `info_span!`
+  work in P10 is the prerequisite for OTLP exporter wiring.
+  Tracking only.
+- **engineering-quality §7 checksums + provenance** — P11 closed
+  the SBOM half of §7. The remaining half is tracked as a v32+
+  candidate.
+- **engineering-quality §6 #4 feature matrix doc** — partially
+  covered by `docs/architecture.md` §Feature Flags but a full
+  matrix doc is still v0.2/32+ work.
+- **MLA RopeScaling wiring** — `crates/model/src/components/attention/mla.rs`
+  uses `RopeScalingContext::default()` in `forward()`. Gated on
+  MLA being wired into a production decoder (currently
+  experiment-only per its doc-comment).

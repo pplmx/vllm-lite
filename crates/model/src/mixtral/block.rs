@@ -50,12 +50,19 @@ impl MixtralBlock {
         let post_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
         let post_attention_layernorm = LnLayerNorm::new(post_ln_weight, post_ln_bias, rms_norm_eps);
 
-        let attention = RopeGqaAttention::new(
+        // Thread `rope_scaling` (YaRN / Linear / Dynamic / Su) and
+        // `max_position_embeddings` through to the attention so long-context
+        // configs take effect at the attention layer. `new_with_rope_scaling`
+        // (P19) is the scaling-aware constructor; the bare `new` would
+        // silently drop the block and revert to default RoPE.
+        let attention = RopeGqaAttention::new_with_rope_scaling(
             hidden_size,
             num_heads,
             num_kv_heads,
             head_dim,
             config.rope_theta,
+            config.max_position_embeddings,
+            config.rope_scaling.as_ref(),
             Some(vb.clone()),
             crate::components::AttentionConfig::default(),
             false,
@@ -141,12 +148,19 @@ impl MixtralBlock {
         let post_attention_layernorm =
             LnLayerNorm::new(post_attn_ln_w, post_attn_bias, rms_norm_eps);
 
-        let attention = RopeGqaAttention::new_with_weights(
+        // Thread `rope_scaling` (YaRN / Linear / Dynamic / Su) and
+        // `max_position_embeddings` through to the attention so long-context
+        // configs take effect. `new_with_weights_rope_scaling` (P19) is
+        // the scaling-aware weight-loader constructor; the bare
+        // `new_with_weights` would silently drop the block.
+        let attention = RopeGqaAttention::new_with_weights_rope_scaling(
             hidden_size,
             num_heads,
             num_kv_heads,
             head_dim,
             config.rope_theta,
+            config.max_position_embeddings,
+            config.rope_scaling.as_ref(),
             q_w,
             k_w,
             v_w,
