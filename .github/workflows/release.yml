@@ -164,6 +164,44 @@ jobs:
           artifact-name: sbom-${{ matrix.target }}
           upload-artifact: true
 
+      # Engineering-quality §7 (MSRV 与可复现构建) last bullet:
+      # "release 生成 SBOM、校验和与构建 provenance". P11 closed the
+      # SBOM half (the step above); this step closes the **checksums**
+      # half. After every artifact has landed in `artifacts/` (binary,
+      # SBOM, and any chart if the workspace ever moves it here), we
+      # compute SHA-256 over each file and write a single
+      # `SHA256SUMS` file in the standard two-column format
+      # (`<hash>  `) produced by `sha256sum -b`.
+      #
+      # The existing `Upload artifact` step below uploads the entire
+      # `artifacts/` directory, which now includes `SHA256SUMS` too;
+      # the `release` job's `artifacts/**/*` glob then attaches it
+      # to the GitHub Release automatically. No separate upload step
+      # is needed.
+      #
+      # **NOT** yet covered (v32+ candidates, tracked separately):
+      # - signed build provenance (SLSA / in-toto) — requires a
+      #   signature-key story (where does the maintainer key live,
+      #   how is it rotated?) and a reproducible-build posture
+      #   (the build env itself isn't pinned to a specific image
+      #   today, only the Rust toolchain via `rust-toolchain.toml`)
+      # - per-artifact sigstore signatures — same blocker
+      - name: Generate SHA256SUMS
+        shell: bash
+        run: |
+          cd artifacts
+          # Truncate (or create) the file; the loop below skips it
+          # so we never hash a half-written file or include it in
+          # its own digest.
+          : > SHA256SUMS
+          for f in *; do
+            [ "$f" = "SHA256SUMS" ] && continue
+            [ -f "$f" ] || continue
+            sha256sum "$f" >> SHA256SUMS
+          done
+          echo "----- SHA256SUMS -----"
+          cat SHA256SUMS
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
