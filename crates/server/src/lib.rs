@@ -17,8 +17,6 @@ pub use security::audit::AuditEvent;
 pub mod api;
 /// JWT and API-key authentication middleware.
 pub mod auth;
-/// Token-bucket admission control for overload protection.
-pub mod backpressure;
 /// CLI argument parsing and server bootstrap.
 pub mod cli;
 /// Server configuration (auth, TLS, model paths).
