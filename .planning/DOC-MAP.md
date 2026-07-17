@@ -35,7 +35,10 @@ MIGRATING.md           Upgrade notes
 docs/
   README.md            Doc index
   architecture.md      ★ Architecture single source of truth
-  adr/                 ADR-001 … ADR-019
+  adr/                 ADR-001 … ADR-020
+  reference/
+    openai-compatibility.md   OpenAI wire-type contract (what's honoured vs dropped)
+    feature-matrix.md         Per-crate Cargo features, cross-crate propagation, deployment combinations
   tutorial/            01-setup … 05-production
   perf/                v27 profiling notes + distilled baselines
   superpowers/         ★ Superpowers tool workspace (specs + plans)

@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v31.0
 milestone_name: Perfection & Elegance
 status: in_progress
-last_updated: "2026-07-16T23:30:00.000Z"
-last_activity: 2026-07-16 — v0.2 wire-type follow-up P23 seed field declaration (final v0.2 wire-type item closed)
+last_updated: "2026-07-17T10:00:00.000Z"
+last_activity: 2026-07-17 — engineering-quality §6 #4 closure P24 docs/reference/feature-matrix.md (feature model source of truth)
 follow-up batches: |-
-  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta); OPERATIONS.md "Multi-Node (Experimental)" expanded with 3-node snippet + TransferKVBlock wire-protocol spec (P12, doc-only — closes the remaining Phase 31-D master-plan items); mutation nightly CI wired in .github/workflows/mutation-nightly.yml with --baseline skip dropped after verifying it is unnecessary for the scanned modules under default features (P13, CI-only — closes one Phase 31-E master-plan item); ADR-020 captures the six OPS-31d architectural decisions (P14, docs-only); v0.2 follow-ups section added to docs/reference/openai-compatibility.md (seed / user / response_format queue for v0.2; frequency_penalty / logit_bias / logprobs / tools defer to v32+), plus stale-item closure for engineering-quality §6 + §7 (P15, docs-only); closure tables added to production-readiness.md §2-§11 with a top-of-document P0-P15 aggregate (29 closed / 5 partial / 9 v32+ candidates out of 43 original observations); closure table added to architecture-performance.md §6 covering 7 speculative + distributed observations (4 closed / 1 partial sampled-match / 2 still-gap-but-documented) (P17, docs-only); `attn_factor` (YaRN §3.3 attention-temperature scaling) threaded through paged/tiled/flash attention paths via new `apply_attn_factor` helper that pre-scales Q by `attn_factor` (mathematically equivalent to standard path's `qk.affine(attn_factor / sqrt(d), 0.0)` via softmax's positive-scalar invariance; no-op when `attn_factor` is `None` or `Some(1.0)`) — closes Phase 31-F first item (P18, feat — 6 new tests, no public API signature change); `RopeScaling` (YaRN / Linear / Dynamic / Su) threaded end-to-end from `config.json["rope_scaling"]` through `ModelConfig::rope_scaling` (new field) → `From<&Qwen3Config> for ModelConfig` (preserved) → `factory::new_block` (forwarded) → `TransformerBlock::new_with_rope_scaling` / `new_with_weights_rope_scaling` (new constructors) → `RopeGqaAttention::new_with_rope_scaling` / `new_with_weights_rope_scaling` (new constructors) → `RoPE::new_with_scaling` (new helper) — closes Phase 31-F second item (P19, feat — 2 new tests, 1 flaky test removed; existing `new` / `new_with_weights` / `new_with_tp` constructors delegate to the scaling-aware variants with `None` for bit-for-bit backward compatibility); `RopeScaling` extended to the remaining RoPE-GQA architectures via `decoder_block::factory::new_block` / `block_from_weights` (shared Llama/Mistral factory) + `MixtralBlock::new` / `MixtralBlock::from_weights` — the same wire that P19 closed for Qwen3 now reaches Llama/Mistral/Mixtral checkpoints; the bare `RopeGqaAttention::new` / `new_with_weights` constructors remain in the public API as `None`-scaling aliases for backward compatibility but are no longer called by any workspace-internal factory. 4 new unit tests: `new_block_accepts_yarn_rope_scaling` + `new_block_accepts_none_rope_scaling` in `crates/model/src/components/decoder_block/factory.rs::tests`, and `test_mixtral_block_new_accepts_yarn_rope_scaling` + `test_mixtral_block_from_weights_accepts_yarn_rope_scaling` in `crates/model/src/mixtral/block/tests.rs`. (P20, feat — no public API signature change.) OpenAI `user` field declared on `ChatRequest` + `CompletionRequest` as `Option<String>` with `#[serde(default, skip_serializing_if = "Option::is_none")]`; chat handler threads `user = ?req.user` into the three existing `tracing::info!` log lines (`Request started` / `Request completed` / `Streaming request started`) so downstream subscribers can pick up the value without engine-side changes. Honoring is a no-op (no auth/persistence layer consumes the field today). 4 new integration tests in `crates/server/tests/chat_integration_test.rs`: `test_chat_with_user_field_accepted_by_handler`, `test_chat_without_user_field_works_baseline`, `test_completions_with_user_field_accepted_by_handler`, `test_chat_user_field_wire_type_round_trip`. `docs/reference/openai-compatibility.md` flipped both `user` rows from "Not declared" → "Wired (tracing pass-through)" and marked the field shipped in the v0.2 follow-ups section. (P21, feat — 2 new public-API fields: `ChatRequest::user`, `CompletionRequest::user`.) OpenAI `response_format` declared on `ChatRequest` (NOT `CompletionRequest` — legacy endpoint doesn't support it per OpenAI spec) as `Option<ResponseFormat>` with `#[serde(default, skip_serializing_if = "Option::is_none")]`. New `ResponseFormat` enum in `crates/server/src/openai/types.rs` with `Text` + `JsonObject` variants using `#[serde(tag = "type", rename_all = "snake_case")]`; `{type: "json_schema"}` (v0.3 constrained-decoding variant) is rejected at the serde layer (axum returns `422 Unprocessable Entity` for unknown enum variants). New `validate_chat_response_format` no-op pass-through validator (documentation-first; hook for future strict checks) wired into `validate_chat_request_fields`. Chat handler threads `response_format = ?req.response_format` into the three existing `tracing::info!` log lines. Honoring is a no-op — no constrained-decoding hook yet (v0.3 / v32+). 6 new integration tests + 5 new unit tests. `docs/reference/openai-compatibility.md` flipped the chat `response_format` row from "Not declared" → "Wired (declaration + validation)" and marked the field shipped in the v0.2 follow-ups section. (P22, feat — 1 new public-API type: `ResponseFormat`; 1 new public-API field: `ChatRequest::response_format`.) OpenAI `seed` field declared on `ChatRequest` + `CompletionRequest` as `Option<i64>` with `#[serde(default, skip_serializing_if = "Option::is_none")]`; chat handler threads `seed = ?req.seed` into the three existing `tracing::info!` log lines (parity with the P21 `user` + P22 `response_format` observability plumbing); per OpenAI spec any `i64` is accepted (no range / sign validation, no NaN check). Honoring is a no-op — the engine's sampler reads from `rand`'s thread-local RNG which is currently unseeded; engine-side RNG seeding is v32+ work. 6 new integration tests in `crates/server/tests/chat_integration_test.rs`: `test_chat_with_seed_field_accepted_by_handler`, `test_chat_without_seed_field_works_baseline`, `test_completions_with_seed_field_accepted_by_handler`, `test_chat_seed_field_wire_type_round_trip` (covers positive, omitted, negative, zero, `i64::MIN`/`i64::MAX` boundary cases per OpenAI spec), `test_completions_seed_field_wire_type_round_trip`, `test_chat_streaming_with_seed_field_accepted_by_handler`. 8 new unit tests in `crates/server/src/openai/sampling_validation.rs::tests` (None / positive / negative / zero / `i64::MIN` / `i64::MAX` for chat + Some / None for completion). `docs/reference/openai-compatibility.md` flipped both `seed` rows from "Not declared" → "Wired (declaration + tracing pass-through)" and marked the field shipped in the v0.2 follow-ups section. (P23, feat — 2 new public-API fields: `ChatRequest::seed`, `CompletionRequest::seed`.) P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half; P12 closed the Phase 31-D master-plan checkboxes; P13 closed the mutation-testing half of Phase 31-E; P14 added ADR-020; P15 closed the documentation-drift items in engineering-quality §6 + §7 and made the v0.2 backlog visible from the OpenAI compat matrix; P16 closed the documentation-drift items in production-readiness.md; P17 closed the documentation-drift items in architecture-performance §6 and verified `verify_draft_tokens_logits` is already temperature-aware sampled-match; P18 closed the Phase 31-F `attn_factor in paged/flash attention paths` item; P19 closed the Phase 31-F `RopeScaling config → Block wiring` item for Qwen3; P20 closed the Phase 31-F `RopeScaling` follow-up for Llama/Mistral (shared decoder_block factory) and Mixtral; P21 closed the first v0.2 wire-type follow-up (`user` field); P22 closed the second v0.2 wire-type follow-up (`response_format` field + `ResponseFormat` enum); P23 closed the third and final v0.2 wire-type follow-up (`seed` field) — the v0.2 wire-type backlog is now fully closed. Checksums + provenance remain as a v32+ follow-up; engine wiring to MemoryManager remains v32+ / OPS-32a; GPU nightly smoke remains deferred (self-hosted GPU runner); OTLP exporter + per-tenant quota + TLS 主路径接线 + readiness 模型加载信号 + feature matrix doc + 容量基准 runbook + sampled-match → min(1, p/q) rejection-sampling + CUDA Graph + speculative coexistence remain as v32+ candidates; the remaining Phase 31-F items (expand_kv fused kernel, PagedKV host round-trip elimination) also remain v32+ candidates (very-high complexity); MLA RopeScaling is intentionally not wired (MLA is not in a production decoder per its own doc-comment).
+  top_p honoured end-to-end (P9, 12 new tests); request_id propagated HTTP → engine via EngineMessage::AddRequest + tracing::info_span! (P10, 4 new tests in request_id_propagation.rs); CycloneDX SBOM emitted per release target via anchore/sbom-action (P11, CI-only — no test delta); OPERATIONS.md "Multi-Node (Experimental)" expanded with 3-node snippet + TransferKVBlock wire-protocol spec (P12, doc-only — closes the remaining Phase 31-D master-plan items); mutation nightly CI wired in .github/workflows/mutation-nightly.yml with --baseline skip dropped after verifying it is unnecessary for the scanned modules under default features (P13, CI-only — closes one Phase 31-E master-plan item); ADR-020 captures the six OPS-31d architectural decisions (P14, docs-only); v0.2 follow-ups section added to docs/reference/openai-compatibility.md (seed / user / response_format queue for v0.2; frequency_penalty / logit_bias / logprobs / tools defer to v32+), plus stale-item closure for engineering-quality §6 + §7 (P15, docs-only); closure tables added to production-readiness.md §2-§11 with a top-of-document P0-P15 aggregate (29 closed / 5 partial / 9 v32+ candidates out of 43 original observations); closure table added to architecture-performance.md §6 covering 7 speculative + distributed observations (4 closed / 1 partial sampled-match / 2 still-gap-but-documented) (P17, docs-only); `attn_factor` (YaRN §3.3 attention-temperature scaling) threaded through paged/tiled/flash attention paths via new `apply_attn_factor` helper that pre-scales Q by `attn_factor` (mathematically equivalent to standard path's `qk.affine(attn_factor / sqrt(d), 0.0)` via softmax's positive-scalar invariance; no-op when `attn_factor` is `None` or `Some(1.0)`) — closes Phase 31-F first item (P18, feat — 6 new tests, no public API signature change); `RopeScaling` (YaRN / Linear / Dynamic / Su) threaded end-to-end from `config.json["rope_scaling"]` through `ModelConfig::rope_scaling` (new field) → `From<&Qwen3Config> for ModelConfig` (preserved) → `factory::new_block` (forwarded) → `TransformerBlock::new_with_rope_scaling` / `new_with_weights_rope_scaling` (new constructors) → `RopeGqaAttention::new_with_rope_scaling` / `new_with_weights_rope_scaling` (new constructors) → `RoPE::new_with_scaling` (new helper) — closes Phase 31-F second item (P19, feat — 2 new tests, 1 flaky test removed; existing `new` / `new_with_weights` / `new_with_tp` constructors delegate to the scaling-aware variants with `None` for bit-for-bit backward compatibility); `RopeScaling` extended to the remaining RoPE-GQA architectures via `decoder_block::factory::new_block` / `block_from_weights` (shared Llama/Mistral factory) + `MixtralBlock::new` / `MixtralBlock::from_weights` — the same wire that P19 closed for Qwen3 now reaches Llama/Mistral/Mixtral checkpoints; the bare `RopeGqaAttention::new` / `new_with_weights` constructors remain in the public API as `None`-scaling aliases for backward compatibility but are no longer called by any workspace-internal factory. 4 new unit tests: `new_block_accepts_yarn_rope_scaling` + `new_block_accepts_none_rope_scaling` in `crates/model/src/components/decoder_block/factory.rs::tests`, and `test_mixtral_block_new_accepts_yarn_rope_scaling` + `test_mixtral_block_from_weights_accepts_yarn_rope_scaling` in `crates/model/src/mixtral/block/tests.rs`. (P20, feat — no public API signature change.) OpenAI `user` field declared on `ChatRequest` + `CompletionRequest` as `Option<String>` with `#[serde(default, skip_serializing_if = "Option::is_none")]`; chat handler threads `user = ?req.user` into the three existing `tracing::info!` log lines (`Request started` / `Request completed` / `Streaming request started`) so downstream subscribers can pick up the value without engine-side changes. Honoring is a no-op (no auth/persistence layer consumes the field today). 4 new integration tests in `crates/server/tests/chat_integration_test.rs`: `test_chat_with_user_field_accepted_by_handler`, `test_chat_without_user_field_works_baseline`, `test_completions_with_user_field_accepted_by_handler`, `test_chat_user_field_wire_type_round_trip`. `docs/reference/openai-compatibility.md` flipped both `user` rows from "Not declared" → "Wired (tracing pass-through)" and marked the field shipped in the v0.2 follow-ups section. (P21, feat — 2 new public-API fields: `ChatRequest::user`, `CompletionRequest::user`.) OpenAI `response_format` declared on `ChatRequest` (NOT `CompletionRequest` — legacy endpoint doesn't support it per OpenAI spec) as `Option<ResponseFormat>` with `#[serde(default, skip_serializing_if = "Option::is_none")]`. New `ResponseFormat` enum in `crates/server/src/openai/types.rs` with `Text` + `JsonObject` variants using `#[serde(tag = "type", rename_all = "snake_case")]`; `{type: "json_schema"}` (v0.3 constrained-decoding variant) is rejected at the serde layer (axum returns `422 Unprocessable Entity` for unknown enum variants). New `validate_chat_response_format` no-op pass-through validator (documentation-first; hook for future strict checks) wired into `validate_chat_request_fields`. Chat handler threads `response_format = ?req.response_format` into the three existing `tracing::info!` log lines. Honoring is a no-op — no constrained-decoding hook yet (v0.3 / v32+). 6 new integration tests + 5 new unit tests. `docs/reference/openai-compatibility.md` flipped the chat `response_format` row from "Not declared" → "Wired (declaration + validation)" and marked the field shipped in the v0.2 follow-ups section. (P22, feat — 1 new public-API type: `ResponseFormat`; 1 new public-API field: `ChatRequest::response_format`.) OpenAI `seed` field declared on `ChatRequest` + `CompletionRequest` as `Option<i64>` with `#[serde(default, skip_serializing_if = "Option::is_none")]`; chat handler threads `seed = ?req.seed` into the three existing `tracing::info!` log lines (parity with the P21 `user` + P22 `response_format` observability plumbing); per OpenAI spec any `i64` is accepted (no range / sign validation, no NaN check). Honoring is a no-op — the engine's sampler reads from `rand`'s thread-local RNG which is currently unseeded; engine-side RNG seeding is v32+ work. 6 new integration tests in `crates/server/tests/chat_integration_test.rs`: `test_chat_with_seed_field_accepted_by_handler`, `test_chat_without_seed_field_works_baseline`, `test_completions_with_seed_field_accepted_by_handler`, `test_chat_seed_field_wire_type_round_trip` (covers positive, omitted, negative, zero, `i64::MIN`/`i64::MAX` boundary cases per OpenAI spec), `test_completions_seed_field_wire_type_round_trip`, `test_chat_streaming_with_seed_field_accepted_by_handler`. 8 new unit tests in `crates/server/src/openai/sampling_validation.rs::tests` (None / positive / negative / zero / `i64::MIN` / `i64::MAX` for chat + Some / None for completion). `docs/reference/openai-compatibility.md` flipped both `seed` rows from "Not declared" → "Wired (declaration + tracing pass-through)" and marked the field shipped in the v0.2 follow-ups section. (P23, feat — 2 new public-API fields: `ChatRequest::seed`, `CompletionRequest::seed`.) New `docs/reference/feature-matrix.md` adds the per-crate Cargo feature model (workspace layout + per-crate feature tables + cross-crate propagation map + recommended combinations for minimal dev / GPU prod / multi-node prod + how features interact with the build matrix) — closes the engineering-quality §6 #4 "feature matrix doc" follow-up that was marked "half-closed" since P15. `docs/architecture.md` §Feature Flags cross-links the new doc as the single source of truth and adds the previously-omitted `vllm-traits/candle` + `vllm-traits/kernels` rows (always-on via the core/model/server dep declarations). `docs/README.md` adds the new doc to "Start Here" + bumps the ADR count from 19 → 20 (the README had drifted from the filesystem since ADR-020 / P14). `.planning/DOC-MAP.md` adds a `reference/` sub-tree to the docs tree. (P24, docs-only — no Rust / no test / no public API delta.) P9 closed the architecture-performance §5.1.6 item; P10 closed the production-readiness §6 item; P11 closed the engineering-quality §7 SBOM half; P12 closed the Phase 31-D master-plan checkboxes; P13 closed the mutation-testing half of Phase 31-E; P14 added ADR-020; P15 closed the documentation-drift items in engineering-quality §6 + §7 and made the v0.2 backlog visible from the OpenAI compat matrix; P16 closed the documentation-drift items in production-readiness.md; P17 closed the documentation-drift items in architecture-performance §6 and verified `verify_draft_tokens_logits` is already temperature-aware sampled-match; P18 closed the Phase 31-F `attn_factor in paged/flash attention paths` item; P19 closed the Phase 31-F `RopeScaling config → Block wiring` item for Qwen3; P20 closed the Phase 31-F `RopeScaling` follow-up for Llama/Mistral (shared decoder_block factory) and Mixtral; P21 closed the first v0.2 wire-type follow-up (`user` field); P22 closed the second v0.2 wire-type follow-up (`response_format` field + `ResponseFormat` enum); P23 closed the third and final v0.2 wire-type follow-up (`seed` field) — the v0.2 wire-type backlog is now fully closed; P24 closed the engineering-quality §6 #4 "feature matrix doc" follow-up — the §6 closure table is now fully closed (4/4 items resolved, 1 of which is closed by P24 and 3 of which were closed by P15's verification). Checksums + provenance remain as a v32+ follow-up; engine wiring to MemoryManager remains v32+ / OPS-32a; GPU nightly smoke remains deferred (self-hosted GPU runner); OTLP exporter + per-tenant quota + TLS 主路径接线 + readiness 模型加载信号 + 容量基准 runbook + sampled-match → min(1, p/q) rejection-sampling + CUDA Graph + speculative coexistence remain as v32+ candidates; the remaining Phase 31-F items (expand_kv fused kernel, PagedKV host round-trip elimination) also remain v32+ candidates (very-high complexity); MLA RopeScaling is intentionally not wired (MLA is not in a production decoder per its own doc-comment).
 progress:
   total_phases: 6
   completed_phases: 5
@@ -2528,3 +2528,182 @@ provenance (engineering-quality §7 second half), MLA RopeScaling
 (gated), Phase 31-F follow-ups (`expand_kv` fused kernel +
 PagedKV host round-trip elimination — both very-high complexity),
 or back to due-diligence drift closure if any items open up.
+
+## Technical Due Diligence — 2026-07-17 P24 follow-up batch
+
+Closed the engineering-quality §6 #4 follow-up: **feature matrix
+doc**. P15's §6 closure table marked this item as "half-closed —
+partially covered by `docs/architecture.md` §Feature Flags but a
+full matrix doc is still v0.2/32+ work". P24 closes it by adding
+a single source of truth for the workspace's Cargo feature model,
+without adding or removing any feature flags.
+
+### The gap
+
+The workspace has 14 Cargo features spread across 5 crates
+(`vllm-traits`: 2, `vllm-core`: 2, `vllm-model`: 4, `vllm-server`:
+1, `vllm-testing`: 1; `vllm-dist` exposes none by design per
+ADR-008). Until P24 there was no single map answering:
+
+- What does each feature actually do (just the crate + 1-line
+  description in the architecture table)?
+- Which crate-level features enable which upstream deps (e.g.
+  `vllm-server/cuda-graph` → `vllm-core/cuda-graph` → `dep:vllm-model`)?
+- Which features are always-on via the dep declaration (e.g.
+  `vllm-traits/candle` is enabled by every consuming crate)?
+- What Cargo invocations produce the recommended deployment
+  shapes (minimal dev / GPU prod / multi-node prod)?
+- How does CI exercise the feature matrix (which tiers run
+  `--all-features`, which don't)?
+
+`docs/architecture.md` §Feature Flags had a 5-row table that
+covered the most common flags but:
+- Omitted `vllm-traits/candle` + `vllm-traits/kernels` (always-on
+  via the core/model/server dep declarations — the closure table
+  in P15 verified this, but a reader scanning the table would
+  miss them entirely).
+- Listed each flag once even when it exists on multiple crates
+  with subtly different semantics (e.g. `multi-node` on
+  `vllm-core`, `vllm-model`, `vllm-testing`).
+- Did not document cross-crate propagation.
+- Did not document what each feature enables in code (cargo dep
+  vs cfg-gated module).
+
+### The fix
+
+New single source of truth: **`docs/reference/feature-matrix.md`**.
+Five sections, each one closing a specific gap from the
+above list:
+
+1. **Workspace layout** — table of all 6 crates with their
+   feature counts. Lifts the "crates / features / purpose"
+   triple into one place so a reader can see at a glance that
+   `vllm-dist` exposes 0 features by design (cross-link to
+   ADR-008 for rationale).
+2. **Per-crate feature tables** — one table per crate, with
+   `Feature` / `Description` / `Enables` columns. The
+   `Enables` column distinguishes "cargo dep added" (e.g.
+   `cuda = ["candle-core/cuda", "candle-nn/cuda"]`) from
+   "cfg-gated module exposed" (e.g. `kernels = []` gates
+   `pub mod kernels` in `lib.rs`). Each table also lists
+   "Who enables this" — which downstream crates currently
+   enable the feature — so propagation is documented from
+   both sides.
+3. **Cross-crate propagation map** — 7 transitive edges
+   (`vllm-server/cuda-graph → vllm-core/cuda-graph →
+   vllm-model`, etc.) plus 4 always-on edges
+   (`vllm-core → vllm-traits/candle + kernels`, etc.).
+   Explicitly enumerates the mechanism for each edge
+   (the `features = [...]` dep declaration, the
+   `feature = ["dep:..."]` feature spec, or the
+   `optional = true` upgrade via `dep:` syntax).
+4. **Recommended combinations** — `cargo build` invocations
+   for minimal dev / GPU prod / multi-node prod, plus the
+   CI matrix the workspace actually exercises (default /
+   `--all-features` / GPU on CUDA runner / multi-node
+   tests). Each row lists the resulting enabled feature
+   set, so a reader can verify a given `cargo build`
+   invocation will or won't pull in `vllm-dist`.
+5. **How features interact with the build matrix** —
+   explains why `default = []` on every crate is the right
+   default, why `cargo machete` reports zero unused deps
+   despite the `gguf` / `vllm-dist` always-declared optional
+   deps, and why `cargo public-api` treats features as
+   orthogonal (the union of every enabled feature is in the
+   baseline).
+
+### Files touched
+
+- **`docs/reference/feature-matrix.md`** — new file, 219
+  lines including the 5 sections + a "Related documents"
+  cross-link list. Mirrors the structure of
+  `docs/reference/openai-compatibility.md` (the precedent for
+  a "single source of truth" reference doc in this workspace).
+- **`docs/architecture.md`** §Feature Flags — simplified the
+  one-row-per-flag summary to 7 rows (added `candle` + `kernels`
+  for `vllm-traits`, which the original 5-row table had
+  omitted) + a paragraph that cross-links to the new doc and
+  explicitly notes that "the matrix doc complements this
+  section and must be updated together with it when a feature
+  changes".
+- **`docs/README.md`** — added the new doc to the "Start Here"
+  table and bumped the ADR-count from 19 → 20 (the README had
+  drifted from the filesystem since ADR-020 / P14, even
+  though `.planning/DOC-MAP.md` was correct).
+- **`.planning/DOC-MAP.md`** — added a `reference/` sub-tree
+  to the user-facing docs tree so future maintainers can find
+  both reference docs (`openai-compatibility.md` +
+  `feature-matrix.md`) at a glance.
+- **`CHANGELOG.md`** — new `[Unreleased] > Fixed` bullet
+  documenting the matrix doc + the architecture/README/DOC-MAP
+  follow-on edits.
+
+### Doc-only change (no Rust / no test / no API delta)
+
+- No Rust code touched, so `just nextest` is unchanged:
+  **1468 passed, 40 skipped**.
+- No public API delta.
+- No CI delta.
+- Workspace real doc coverage: **unchanged at 67.93 %** (the
+  new doc is markdown, which `cargo doc` doesn't measure; the
+  existing in-code docstrings on each feature spec — the
+  `/// Enable CUDA-graph capture / replay through vllm-core.`
+  comments in `crates/server/Cargo.toml` — are unchanged).
+- `bash .planning/phase-12e/check-public-api.sh` exits 0
+  (no Rust code touched; the baseline is identical).
+- `cargo clippy --all-targets --workspace --all-features -- -D
+  clippy::correctness -D clippy::suspicious -D clippy::perf`
+  introduces no new deny-tier warnings.
+- `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+  --document-private-items --workspace --all-features` passes.
+
+### Why P24 and not the alternatives
+
+The P23 follow-up list named six P24+ options: feature matrix
+doc, OTLP exporter, checksums + provenance, MLA RopeScaling,
+Phase 31-F follow-ups (`expand_kv` + PagedKV round-trip),
+back to due-diligence drift closure (none open). P24 chose
+the feature matrix doc because:
+
+- **Closes a real, documented follow-up** — explicitly listed
+  as "half-closed" in the engineering-quality §6 closure
+  table since P15. Closing it removes the only stale item
+  from the §6 closure audit.
+- **Bounded scope** — 1 new doc + 3 small follow-on edits,
+  verifiable in a single CI run.
+- **No sampler / kernel / contract decision required** —
+  unlike OTLP exporter (needs collector + dependency
+  decision), checksums + provenance (needs signature-key
+  story), or `expand_kv` / PagedKV round-trip (very-high
+  complexity), this is pure documentation.
+- **Documentation-first** — the matrix doc is an authority
+  doc, not a tutorial; future maintainers will reference it
+  when adding a feature, similar to how
+  `openai-compatibility.md` is the authority for OpenAI wire
+  types.
+- **Improves discoverability** — the architecture summary
+  table previously omitted 2 of the 14 features (`candle` +
+  `kernels` on `vllm-traits`). A reader scanning the summary
+  would not know these features exist; the matrix doc makes
+  them visible.
+
+### After P24
+
+The engineering-quality §6 closure table is now **fully
+closed**: the 4 original items are all resolved (3 closed by
+P15's verification, 1 closed by P24's matrix doc). §7 has one
+remaining v32+ item (checksums + provenance) which is
+explicitly tracked as the next half-step after P11's SBOM.
+
+The remaining open items from P23 (OTLP exporter, checksums +
+provenance, MLA RopeScaling, Phase 31-F follow-ups) are
+unchanged by P24 — this batch is purely documentation.
+
+P25+ candidates: OTLP exporter (production-readiness §6,
+needs collector + dep decision), checksums + provenance
+(engineering-quality §7, needs signature-key story),
+MLA RopeScaling (gated on MLA production wiring),
+Phase 31-F follow-ups (`expand_kv` fused kernel +
+PagedKV host round-trip elimination — both very-high
+complexity), or back to due-diligence drift closure if any
+items open up.
