@@ -113,6 +113,14 @@ writes new tokens at global positions, applies rectangular causal mask).
 
 ## Feature Flags
 
+The high-level one-row-per-flag summary is below. **For per-crate
+detail, cross-crate propagation, and the recommended combinations
+for common deployment shapes, see
+[`docs/reference/feature-matrix.md`](./reference/feature-matrix.md)** —
+the single source of truth for the workspace's feature model. The
+matrix doc complements this section and must be updated together
+with it when a feature changes.
+
 | Flag | Crate | Description |
 |------|-------|-------------|
 | `cuda` | model | Candle CUDA backend |
@@ -120,6 +128,14 @@ writes new tokens at global positions, applies rectangular causal mask).
 | `cuda-graph` | core, server | CUDA Graph capture/replay |
 | `multi-node` | core, model, testing | Enable `vllm-dist` |
 | `full` | model | `cuda` + `gguf` |
+| `candle` | traits | Expose `candle-core` `Tensor` to `ModelBackend` (always-on via core/model/server dep) |
+| `kernels` | traits | Gate the CUDA-graph kernel module (always-on via core/model dep) |
+
+`vllm-dist` exposes **no Cargo features** itself — see
+[`ADR-008`](./adr/ADR-008-vllm-dist-feature-gated.md) for the
+rationale. `vllm-traits` has 2 additional features (`candle` +
+`kernels`) that the architecture summary table previously omitted; the
+new feature matrix doc closes that gap.
 
 ## Architecture Registry
 
