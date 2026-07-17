@@ -1,8 +1,8 @@
 //! Top-level axum router and the `/health` / `/v1/models` / `/metrics` handlers that aren't part of the `OpenAI` surface.
 //!
 //! `build_router` is the entry point called from `main.rs`; it wires
-//! every middleware (auth, RBAC, backpressure, correlation, audit) and
-//! the `OpenAI` sub-router under `/v1`.
+//! every middleware (correlation, audit, auth) and the `OpenAI`
+//! sub-router under `/v1`.
 use axum::{
     Json,
     extract::State,
