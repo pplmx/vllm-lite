@@ -83,11 +83,12 @@ echo "$VLLM_VERSION"   # → 0.1.0
 2. `build` job: cross-compiles `vllm-server` for the OS matrix,
    packages the binary named
    `vllm-server-${{ needs.meta.outputs.version }}-${{ matrix.target }}`,
-   and emits a CycloneDX SBOM per target (see "Software Bill of
-   Materials" below).
+   emits a CycloneDX SBOM per target (see "Software Bill of
+   Materials" below), and writes a `SHA256SUMS` file covering
+   every artifact in `artifacts/` (see "Checksums" below).
 3. `release` job: runs `git-cliff` to generate release notes and
-   creates the GitHub Release with the binary + SBOM artifacts
-   attached.
+   creates the GitHub Release with the binary + SBOM +
+   `SHA256SUMS` artifacts attached.
 
 Docker build/push and Helm Chart packaging are not yet wired into
 `release.yml` (the due-diligence report flagged these as P1 — see
@@ -131,10 +132,75 @@ frequently need an SBOM to satisfy their intake checklist. Emitting
 one per build target means the artifact is already in place — no
 post-release `cargo metadata` workaround needed.
 
-Checksums (`sha256sum`) and signed build provenance (SLSA / in-toto)
-are still missing from `release.yml`; they are tracked as a separate
-follow-up against `docs/technical-due-diligence/engineering-quality.md`
-§7.
+## Checksums
+
+Every GitHub Release attaches a `SHA256SUMS` file alongside the
+binary + SBOM, emitted by the `build` job's `Generate SHA256SUMS`
+step (mirrors the SBOM step's placement). The file uses the
+standard two-column `sha256sum` format:
+
+```text
+<64-hex-digit SHA-256 digest>  
+<64-hex-digit SHA-256 digest>   
+...
+```
+
+It covers every file in `artifacts/` at the moment the step runs
+— currently `vllm-server-<version>-<target>` (the binary),
+`sbom-<target>.cdx.json` (the SBOM), and the `SHA256SUMS` file
+itself (the loop skips it so the digest never includes a
+half-written version of itself). The file is uploaded as part of
+the `artifacts/` directory in the subsequent `Upload artifact`
+step, and the `release` job's `artifacts/**/*` glob attaches it
+to the GitHub Release automatically.
+
+**Verify a release locally:**
+
+```bash
+# Download the binary, SBOM, and SHA256SUMS together
+gh release download v0.1.0 \
+  -p 'vllm-server-0.1.0-*' \
+  -p 'sbom-*' \
+  -p SHA256SUMS
+
+# Recompute every digest; -c reads the file and compares against
+# the named files in the same directory.
+sha256sum -c SHA256SUMS
+# → "vllm-server-0.1.0-x86_64-unknown-linux-gnu: OK"
+# → "sbom-x86_64-unknown-linux-gnu.cdx.json: OK"
+
+# Spot-check a single file
+sha256sum vllm-server-0.1.0-x86_64-unknown-linux-gnu
+# Compare against the line in SHA256SUMS
+grep vllm-server-0.1.0-x86_64-unknown-linux-gnu SHA256SUMS
+```
+
+**Why this matters:** the GitHub Release UI's "asset checksums"
+panel only shows file sizes, not cryptographic digests — without
+a `SHA256SUMS` file, a downstream consumer has no built-in way to
+verify that the binary they downloaded matches the binary the
+release workflow produced. Combined with the SBOM, the checksums
+file gives a downstream consumer enough information to (a)
+verify the artifact wasn't tampered with in transit, (b) pin a
+specific binary by hash in their deployment manifests, and (c)
+cross-reference the SBOM against the exact bytes they
+received.
+
+**Not yet wired (v32+ candidates, tracked separately):**
+
+- **Signed build provenance (SLSA / in-toto attestation)** —
+  requires a signature-key story (where does the maintainer key
+  live? how is it rotated?) and a reproducible-build posture
+  (the build environment itself isn't pinned to a specific
+  image today, only the Rust toolchain via `rust-toolchain.toml`
+  + the `--locked` Cargo.lock). Closing both is non-trivial
+  work that crosses into operations policy.
+- **Per-artifact sigstore signatures** — same blocker as above
+  plus a sigstore-side key-management decision.
+
+These remain tracked as the engineering-quality §7 second-half
+follow-up; the SHA256SUMS wiring (this section) is the
+**first** half that lands without those dependencies.
 
 ## Why `0.1.0` (and not the internal milestone numbers)
 
