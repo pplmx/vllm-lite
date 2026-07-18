@@ -106,22 +106,15 @@ pub async fn completions(
     }
 
     // Forward `frequency_penalty` to the engine's existing
-    // `repeat_penalty` slot (P27 v0.3 wire-type follow-up). Mirrors
-    // the chat handler's wire-through so the legacy `/v1/completions`
-    // endpoint sees the same penalty behavior as the chat endpoint.
-    // The engine's `apply_repeat_penalty` divides logits at
-    // previously-seen token positions by `repeat_penalty`, which
-    // matches OpenAI's "halve logit on each repetition" semantics
-    // for `frequency_penalty >= 0` via the mapping
-    // `repeat_penalty = max(1.0, 1.0 + frequency_penalty)`. Negative
-    // values are clamped to `1.0` (no penalty) because the current
-    // `apply_repeat_penalty` flips the sign of negative logits when
-    // dividing by a value `< 1.0`, producing undefined ordering
-    // rather than a clean boost. See the `frequency_penalty` field
-    // doc-comment on `CompletionRequest` for the full v0.3 / v32+
-    // rationale.
+    // `repeat_penalty` slot (P27 v0.3 wire-type follow-up; P29
+    // closes the boost-semantics carve-out via the sign-aware
+    // engine refactor). Mirrors the chat handler's wire-through
+    // so the legacy `/v1/completions` endpoint sees the same
+    // penalty behavior (including the boost semantic for negative
+    // values). See the chat handler's matching block for the full
+    // rationale on `(1.0 + fp).max(1e-3)`.
     if let Some(fp) = req.frequency_penalty {
-        request.sampling_params.repeat_penalty = (1.0 + fp).max(1.0);
+        request.sampling_params.repeat_penalty = (1.0 + fp).max(1e-3);
     }
 
     // Forward `presence_penalty` to the engine's

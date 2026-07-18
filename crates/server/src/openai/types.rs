@@ -186,35 +186,30 @@ pub struct ChatRequest {
     /// response (more occurrences → larger penalty), negative values
     /// *encourage* repetition. The default is `0` (no penalty).
     ///
-    /// **Honoring is end-to-end** for non-negative values:
-    /// the chat handler maps `frequency_penalty` to the engine's
+    /// **Honoring is end-to-end** for the full OpenAI range
+    /// (P27 declaration + P29 sign-aware engine refactor). The
+    /// chat handler maps `frequency_penalty` to the engine's
     /// existing `SamplingParams::repeat_penalty` via
-    /// `repeat_penalty = max(1.0, 1.0 + frequency_penalty)`. The
+    /// `repeat_penalty = (1.0 + frequency_penalty).max(1e-3)`. The
     /// `apply_repeat_penalty` step in
     /// `vllm_core::sampling::sample_batch_with_params` (added by
-    /// ARCH-02) divides logits at previously-seen token positions by
-    /// `repeat_penalty`, which matches OpenAI's "halve logit on each
-    /// repetition" semantics for `frequency_penalty >= 0`.
-    ///
-    /// **Negative values are clamped to `1.0` (no penalty)** because
-    /// `repeat_penalty < 1.0` would invert the engine's logit-divide
-    /// math (boosting repetition) — that is the desired OpenAI
-    /// behaviour but the current `apply_repeat_penalty` flips the
-    /// sign of negative logits when dividing by a value `< 1.0`,
-    /// producing undefined ordering rather than a clean boost.
-    /// Surfacing the v0.3 / v32+ "boost" semantics requires either a
-    /// new `apply_repeat_boost` helper or a sign-aware refactor of
-    /// `apply_repeat_penalty`; either is mechanical but out of scope
-    /// for the declaration PR. The validator still rejects
-    /// `frequency_penalty < -2.0` (per OpenAI spec) so callers learn
-    /// about truly out-of-range values; the in-range negative case
-    /// silently degrades to "no penalty" rather than producing
-    /// garbage output.
+    /// ARCH-02; sign-aware refactor in P29) handles positive and
+    /// negative logits symmetrically:
+    ///   - logit >= 0: divide by `repeat_penalty`
+    ///   - logit < 0: multiply by `repeat_penalty`
+    /// This gives the OpenAI-spec behaviour for both
+    /// `frequency_penalty >= 0` (penalize: positive logits shrink,
+    /// negative logits grow more negative) and `frequency_penalty < 0`
+    /// (boost: positive logits grow, negative logits grow less
+    /// negative). The 1e-3 floor prevents divide-by-zero for
+    /// extreme negative `frequency_penalty` values (e.g. -1.0 →
+    /// `repeat_penalty = 0.0`); values floored to 1e-3 produce
+    /// maximum boost, which is the practical limit for the divisor
+    /// formulation.
     ///
     /// Threaded into the chat handler's `tracing::info!(...)` log
     /// lines as `frequency_penalty = ?req.frequency_penalty` so the
-    /// request's penalty settings are observable in trace logs even
-    /// when honoring is partially clamped.
+    /// request's penalty settings are observable in trace logs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frequency_penalty: Option<f32>,
     /// OpenAI presence penalty (v0.3 wire-type follow-up). Per the
@@ -377,10 +372,10 @@ pub struct CompletionRequest {
     /// per OpenAI spec the valid range is `[-2.0, 2.0]` (default
     /// `0`); the completions handler maps the field to the engine's
     /// `SamplingParams::repeat_penalty` via
-    /// `repeat_penalty = max(1.0, 1.0 + frequency_penalty)` so
-    /// non-negative values are honored end-to-end. Negative values
-    /// are silently clamped to `1.0` (no penalty) for the same
-    /// reason documented on [`ChatRequest::frequency_penalty`].
+    /// `repeat_penalty = (1.0 + frequency_penalty).max(1e-3)` (P29
+    /// sign-aware refactor). Negative values are honored end-to-end
+    /// for boost semantic; the 1e-3 floor prevents divide-by-zero
+    /// for extreme negative values.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frequency_penalty: Option<f32>,
     /// OpenAI presence penalty (v0.3 wire-type follow-up). See

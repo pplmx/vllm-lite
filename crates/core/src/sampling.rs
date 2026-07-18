@@ -268,12 +268,35 @@ pub fn sample_one_with_params(
     }
 }
 
-/// Divide the logit at each id present in `seen_tokens` by `penalty`.
+/// Adjust the logit at each id present in `seen_tokens` by the inverse of
+/// `penalty`, sign-aware so both positive and negative logits move in the
+/// correct direction.
 ///
 /// This is the standard "repeat penalty" trick used by llama.cpp, `HuggingFace`
 /// `transformers`, and most open-source inference engines: tokens that have
-/// already appeared are made less likely on subsequent steps. No-op when
+/// already appeared are made less likely on subsequent steps (penalty > 1)
+/// or *more* likely (penalty < 1, "boost" semantic). No-op when
 /// `penalty == 1.0`, `seen_tokens` is empty, or `logits` is empty.
+///
+/// **Sign-aware implementation (P29 v0.3 wire-type follow-up):** the
+/// helper handles positive and negative logits symmetrically so the
+/// penalty direction (penalize vs boost) is consistent regardless of
+/// the logit's sign:
+///
+/// - For `logit >= 0`: divide by `penalty`. Penalty > 1 reduces the
+///   logit (penalize); penalty < 1 increases the logit (boost).
+/// - For `logit < 0`: multiply by `penalty`. Penalty > 1 makes the
+///   logit more negative (penalize); penalty < 1 makes the logit
+///   less negative (boost).
+///
+/// The pre-P29 implementation used simple division for all logits,
+/// which has a sign-flip bug for negative logits and `penalty < 1`
+/// (dividing a negative logit by a value < 1.0 makes it *more*
+/// negative — the opposite of the desired boost direction). The
+/// chat handler's `max(1.0, 1.0 + frequency_penalty)` clamp existed
+/// to work around this bug for negative `frequency_penalty` values;
+/// the sign-aware refactor lets the handler forward the value
+/// verbatim.
 ///
 /// Out-of-range token ids are silently ignored. Duplicate entries in
 /// `seen_tokens` are deduped via an internal `HashSet`.
@@ -288,7 +311,11 @@ pub fn apply_repeat_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penalty
             && idx < logits.len()
             && seen.insert(token)
         {
-            logits[idx] /= penalty;
+            if logits[idx] >= 0.0 {
+                logits[idx] /= penalty;
+            } else {
+                logits[idx] *= penalty;
+            }
         }
     }
 }

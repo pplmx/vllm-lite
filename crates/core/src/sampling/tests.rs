@@ -164,6 +164,124 @@ fn test_repeat_penalty_no_effect_at_one() {
     assert!((logits[1] - 0.5).abs() < 1e-6);
 }
 
+// P29 v0.3 wire-type follow-up: sign-aware `apply_repeat_penalty`
+// implementation, enabling OpenAI `frequency_penalty` boost
+// semantics (negative values). The pre-P29 implementation used
+// simple division for all logits, which had a sign-flip bug for
+// negative logits with `penalty < 1.0` (dividing a negative logit
+// by a value < 1.0 makes it MORE negative — opposite of the boost
+// direction). These tests pin the corrected sign-aware behavior.
+
+#[test]
+fn test_repeat_penalty_penalizes_negative_logits() {
+    // Penalty > 1 (penalize): negative logits must become MORE
+    // negative (further from zero). Pre-P29 this would be wrong —
+    // dividing -5.0 by 2.0 gives -2.5 (boost, opposite of intended).
+    // Post-P29 multiplying -5.0 by 2.0 gives -10.0 (correct
+    // penalize direction).
+    let mut logits = vec![-5.0, -5.0, -5.0];
+    let seen = vec![1];
+    apply_repeat_penalty(&mut logits, &seen, 2.0);
+    assert!((logits[0] - -5.0).abs() < 1e-6, "logit at 0 untouched");
+    assert!(
+        (logits[1] - -10.0).abs() < 1e-6,
+        "logit at 1 must be -10.0 (penalized); got {}",
+        logits[1]
+    );
+    assert!((logits[2] - -5.0).abs() < 1e-6, "logit at 2 untouched");
+}
+
+#[test]
+fn test_repeat_penalty_boosts_negative_logits() {
+    // Penalty < 1 (boost): negative logits must become LESS
+    // negative (closer to zero). Pre-P29 this would be wrong —
+    // dividing -5.0 by 0.5 gives -10.0 (penalize, opposite of
+    // intended). Post-P29 multiplying -5.0 by 0.5 gives -2.5
+    // (correct boost direction). This is the v0.3 boost-semantic
+    // carve-out closed by P29.
+    let mut logits = vec![-5.0, -5.0, -5.0];
+    let seen = vec![1];
+    apply_repeat_penalty(&mut logits, &seen, 0.5);
+    assert!((logits[0] - -5.0).abs() < 1e-6, "logit at 0 untouched");
+    assert!(
+        (logits[1] - -2.5).abs() < 1e-6,
+        "logit at 1 must be -2.5 (boosted); got {}",
+        logits[1]
+    );
+    assert!((logits[2] - -5.0).abs() < 1e-6, "logit at 2 untouched");
+}
+
+#[test]
+fn test_repeat_penalty_penalizes_positive_logits_unchanged() {
+    // Sanity: penalty > 1 on positive logits must still DIVIDE
+    // (not multiply) — pins the postive-logit branch of the
+    // sign-aware implementation.
+    let mut logits = vec![4.0, 4.0, 4.0];
+    let seen = vec![1];
+    apply_repeat_penalty(&mut logits, &seen, 2.0);
+    assert!((logits[0] - 4.0).abs() < 1e-6);
+    assert!(
+        (logits[1] - 2.0).abs() < 1e-6,
+        "logit at 1 must be 2.0 (4.0 / 2.0); got {}",
+        logits[1]
+    );
+    assert!((logits[2] - 4.0).abs() < 1e-6);
+}
+
+#[test]
+fn test_repeat_penalty_boosts_positive_logits_unchanged() {
+    // Sanity: penalty < 1 on positive logits must still DIVIDE
+    // (not multiply) — pins the positive-logit branch.
+    let mut logits = vec![4.0, 4.0, 4.0];
+    let seen = vec![1];
+    apply_repeat_penalty(&mut logits, &seen, 0.5);
+    assert!((logits[0] - 4.0).abs() < 1e-6);
+    assert!(
+        (logits[1] - 8.0).abs() < 1e-6,
+        "logit at 1 must be 8.0 (4.0 / 0.5); got {}",
+        logits[1]
+    );
+    assert!((logits[2] - 4.0).abs() < 1e-6);
+}
+
+#[test]
+fn test_repeat_penalty_zero_logit_uses_positive_branch() {
+    // A logit of exactly 0.0 is treated as the "positive" branch
+    // (the implementation uses `logit >= 0.0`). Penalty > 1: 0 / 2 = 0
+    // (no change). Penalty < 1: 0 / 0.5 = 0 (no change). Either way
+    // zero logits stay zero — pins the boundary behavior.
+    let mut logits = vec![0.0, 0.0];
+    let seen = vec![0];
+    apply_repeat_penalty(&mut logits, &seen, 2.0);
+    assert!(logits[0].abs() < 1e-6, "zero logit stays zero under penalty > 1");
+    apply_repeat_penalty(&mut logits, &seen, 0.5);
+    assert!(logits[0].abs() < 1e-6, "zero logit stays zero under penalty < 1");
+}
+
+#[test]
+fn test_repeat_penalty_mixed_signs_handled_independently() {
+    // The sign-aware implementation must handle each logit
+    // independently based on its sign. With seen = [0, 1, 2] and
+    // penalty = 0.5 (boost):
+    //   - logit[0] = 4.0 (positive): 4.0 / 0.5 = 8.0 (boosted)
+    //   - logit[1] = -4.0 (negative): -4.0 * 0.5 = -2.0 (boosted, less negative)
+    //   - logit[2] = 0.0 (neutral): unchanged
+    let mut logits = vec![4.0, -4.0, 0.0];
+    let seen = vec![0, 1, 2];
+    apply_repeat_penalty(&mut logits, &seen, 0.5);
+    assert!(
+        (logits[0] - 8.0).abs() < 1e-6,
+        "positive logit at 0 must be boosted to 8.0; got {}",
+        logits[0]
+    );
+    assert!(
+        (logits[1] - -2.0).abs() < 1e-6,
+        "negative logit at 1 must be boosted to -2.0; got {}",
+        logits[1]
+    );
+    assert!(logits[2].abs() < 1e-6, "zero logit at 2 stays zero");
+}
+
 // `apply_presence_penalty` tests (P28 v0.3 wire-type follow-up —
 // presence_penalty engine wire-through).
 //
