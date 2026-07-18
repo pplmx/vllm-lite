@@ -103,6 +103,8 @@ async fn handle_chat(
         frequency_penalty = ?req.frequency_penalty,
         presence_penalty = ?req.presence_penalty,
         logit_bias_len = ?req.logit_bias.as_ref().map(|m| m.len()),
+        logprobs = ?req.logprobs,
+        top_logprobs = ?req.top_logprobs,
         prompt_tokens = prompt_tokens_len,
         "Request started"
     );
@@ -293,6 +295,8 @@ async fn handle_chat(
         frequency_penalty = ?req.frequency_penalty,
         presence_penalty = ?req.presence_penalty,
         logit_bias_len = ?req.logit_bias.as_ref().map(|m| m.len()),
+        logprobs = ?req.logprobs,
+        top_logprobs = ?req.top_logprobs,
         output_tokens = output_tokens_len,
         duration_ms = duration_ms,
         "Request completed"
@@ -417,6 +421,8 @@ async fn stream_chat_completion(
         frequency_penalty = ?req.frequency_penalty,
         presence_penalty = ?req.presence_penalty,
         logit_bias_len = ?req.logit_bias.as_ref().map(|m| m.len()),
+        logprobs = ?req.logprobs,
+        top_logprobs = ?req.top_logprobs,
         model = %req.model,
         prompt_tokens = prompt_tokens_len,
         "Streaming request started"

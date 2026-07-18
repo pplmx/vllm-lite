@@ -118,6 +118,8 @@ async fn chat_rejects_empty_model_with_400_and_invalid_request_code() {
         frequency_penalty: None,
         presence_penalty: None,
         logit_bias: None,
+        logprobs: None,
+        top_logprobs: None,
     };
 
     let result = chat_completions(
@@ -158,6 +160,8 @@ async fn chat_returns_503_with_engine_unavailable_code_when_channel_closed() {
         frequency_penalty: None,
         presence_penalty: None,
         logit_bias: None,
+        logprobs: None,
+        top_logprobs: None,
     };
 
     let result = chat_completions(
@@ -240,6 +244,7 @@ async fn completions_rejects_empty_prompt_with_400() {
         frequency_penalty: None,
         presence_penalty: None,
         logit_bias: None,
+        logprobs: None,
     };
 
     let result = completions(
@@ -274,6 +279,7 @@ async fn completions_returns_503_with_engine_unavailable_code_when_channel_close
         frequency_penalty: None,
         presence_penalty: None,
         logit_bias: None,
+        logprobs: None,
     };
 
     let result = completions(

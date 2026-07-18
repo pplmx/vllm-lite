@@ -2390,3 +2390,290 @@ async fn test_completions_forwards_logit_bias_to_engine() {
         );
     }
 }
+
+// P31 v0.3 wire-type follow-up: `logprobs` + `top_logprobs`
+// declaration + validation. Same pattern as the P21/P22/P23/P27/P28/
+// P29/P30 wire-through tests but with declaration-only honoring:
+// the engine wire-through is a no-op today (v32+ work), so the
+// captured `SamplingParams` is verified for the unchanged path
+// (no logprobs fields exist on `SamplingParams`) and the validator
+// behaviour is exercised end-to-end through the HTTP boundary.
+
+/// A chat request with `logprobs = true` + `top_logprobs = 5` must
+/// pass validation and reach the engine unchanged. Pins the v0.3
+/// declaration contract: the wire type accepts the fields and
+/// forwarding them to the engine is a no-op (no `logprobs` /
+/// `top_logprobs` field on `SamplingParams` today — v32+).
+#[tokio::test]
+async fn test_chat_with_logprobs_field_accepted_by_handler() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "logprobs": true,
+        "top_logprobs": 5,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "logprobs + top_logprobs must pass validation (in OpenAI-spec ranges)"
+    );
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    // Honoring is a no-op today — the engine's SamplingParams does
+    // not have a logprobs field (engine wire-through is v32+ work).
+    // The fact that the request reached the engine at all is the
+    // wire-type contract: pre-P31 it would have been rejected by
+    // serde ("unknown field `logprobs`").
+    assert!(
+        params.temperature.abs() < 1e-6,
+        "default temperature (greedy) must be unchanged"
+    );
+}
+
+/// Baseline: omitting both `logprobs` and `top_logprobs` must pass
+/// validation and reach the engine unchanged. Pins the default-path
+/// contract: pre-P31 this was the only working state.
+#[tokio::test]
+async fn test_chat_without_logprobs_field_works_baseline() {
+    let (state, _handle, _captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "omitted logprobs must continue to work (backward-compat baseline)"
+    );
+}
+
+/// `top_logprobs` outside the `[0, 20]` OpenAI-spec range must be
+/// rejected with `400 invalid_request_error`. Pins the validator
+/// contract.
+#[tokio::test]
+async fn test_chat_top_logprobs_out_of_range_returns_400() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "logprobs": true,
+        "top_logprobs": 21, // above OpenAI spec upper bound (20)
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "top_logprobs > 20 must be rejected with 400"
+    );
+
+    // Critical: when validation fails the request must NOT reach the
+    // engine. Otherwise a saturated engine could burn cycles on a
+    // known-bad request.
+    let captured = captured.lock().await;
+    assert!(
+        captured.is_none(),
+        "out-of-range top_logprobs must NOT reach the engine (captured is None)"
+    );
+}
+
+/// The cross-field rule (`top_logprobs` requires `logprobs = true`)
+/// must be enforced end-to-end. `top_logprobs = Some(5)` with
+/// `logprobs = false` is rejected with `400`.
+#[tokio::test]
+async fn test_chat_top_logprobs_without_logprobs_returns_400() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "logprobs": false,
+        "top_logprobs": 5, // cross-field rule: requires logprobs = true
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "top_logprobs + logprobs = false must be rejected with 400 (cross-field rule)"
+    );
+
+    let captured = captured.lock().await;
+    assert!(
+        captured.is_none(),
+        "cross-field rejection must NOT reach the engine (captured is None)"
+    );
+}
+
+/// The completions endpoint must also accept the `logprobs` field
+/// (legacy spec — `logprobs: int 0..=5`). Pins the cross-endpoint
+/// parity: same declaration pattern as `seed` / `user` /
+/// `frequency_penalty` / `presence_penalty` / `logit_bias`.
+#[tokio::test]
+async fn test_completions_with_logprobs_field_accepted_by_handler() {
+    use vllm_server::openai::completions::completions;
+    let (engine_tx, _handle, captured) = spawn_capturing_mock_engine();
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "logprobs": 3, // OpenAI-spec: int 0..=5
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "/v1/completions must accept logprobs in [0, 5] range"
+    );
+
+    let captured = captured.lock().await;
+    assert!(
+        captured.is_some(),
+        "in-range logprobs must reach the engine (captured is Some)"
+    );
+}
+
+/// Out-of-range completions `logprobs` (> 5) must be rejected with
+/// `400`. Pins the validator contract for the legacy endpoint.
+#[tokio::test]
+async fn test_completions_logprobs_out_of_range_returns_400() {
+    use vllm_server::openai::completions::completions;
+    let (engine_tx, _handle, captured) = spawn_capturing_mock_engine();
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "logprobs": 6, // above OpenAI spec upper bound (5)
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "/v1/completions logprobs > 5 must be rejected with 400"
+    );
+
+    let captured = captured.lock().await;
+    assert!(
+        captured.is_none(),
+        "out-of-range logprobs must NOT reach the engine (captured is None)"
+    );
+}

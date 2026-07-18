@@ -304,6 +304,117 @@ pub fn validate_logit_bias(
     Ok(())
 }
 
+/// Validate the `logprobs` + `top_logprobs` fields on a chat request
+/// (P31 v0.3 wire-type follow-up — declaration + validation).
+///
+/// Per OpenAI chat-completions spec:
+/// - `logprobs: bool` indicates whether to return the log probability
+///   of the sampled token. No range check on the bool itself.
+/// - `top_logprobs: int (0..=20)` specifies how many of the most
+///   likely tokens to return log probabilities for at each position.
+///   Out-of-range values are rejected with `400`.
+///
+/// **Cross-field rule:** `top_logprobs = Some(n)` requires
+/// `logprobs = true`. Per OpenAI spec, `top_logprobs` is only
+/// meaningful when `logprobs` is enabled — sending
+/// `top_logprobs = Some(5)` with `logprobs = false` (or omitted)
+/// would silently ignore the field, so the validator rejects the
+/// combination up front with `400 invalid_request_error`.
+///
+/// `None` / `None` and `Some(false)` / `None` both pass (the
+/// logprob path is opt-in). `Some(true)` / `None` passes (only
+/// return the sampled token's logprob). `Some(true)` /
+/// `Some(n)` for `n ∈ 0..=20` passes. `Some(true)` / `Some(n)` for
+/// `n > 20` rejects. `Some(_)` / `Some(n)` for `n > 20` rejects.
+/// `Some(_)` (logprobs != true) / `Some(n)` rejects the cross-field
+/// rule.
+///
+/// **Honoring note (P31):** the engine's `sample_batch_with_params`
+/// returns only the sampled token; changing the return type to
+/// include logprobs is a wire-breaking change for the engine
+/// boundary. Engine-side top-K logprob generation is v32+ work.
+/// The wire-type contract is locked in now so the declaration-only
+/// PR doesn't regress to "rejected by serde" for callers who
+/// already send the field.
+///
+/// # Errors
+///
+/// Returns `Err((StatusCode::BAD_REQUEST, …))` when any check fires.
+/// Error messages name the offending field so callers can adapt.
+pub fn validate_chat_logprobs(
+    logprobs: Option<bool>,
+    top_logprobs: Option<u32>,
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    const TOP_LOGPROBS_MAX: u32 = 20;
+    if let Some(n) = top_logprobs
+        && n > TOP_LOGPROBS_MAX
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                format!(
+                    "top_logprobs must be in the [0, 20] range per OpenAI spec (got {n})"
+                )
+                .as_str(),
+                "invalid_request_error",
+            )),
+        ));
+    }
+    if top_logprobs.is_some() && logprobs != Some(true) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "top_logprobs requires logprobs = true; OpenAI spec only honours top_logprobs when logprobs is enabled",
+                "invalid_request_error",
+            )),
+        ));
+    }
+    Ok(())
+}
+
+/// Validate the `logprobs` field on a completion request (P31 v0.3
+/// wire-type follow-up — declaration + validation).
+///
+/// Per OpenAI legacy-completions spec: `logprobs: int (0..=5)`
+/// specifying how many of the most likely tokens to return log
+/// probabilities for at each position. The completions endpoint's
+/// `logprobs` has a *different* type than the chat endpoint's
+/// `logprobs` (int 0-5 here vs bool on chat) — P31 preserves the
+/// spec types per endpoint rather than unifying behind a common
+/// representation.
+///
+/// `None` and `Some(0)` both pass (no logprobs requested — `0` is
+/// the OpenAI-spec "explicitly disabled" sentinel). `Some(1..=5)`
+/// passes. `Some(n > 5)` rejects with `400 invalid_request_error`.
+///
+/// **Honoring note (P31):** engine-side top-K logprob generation
+/// is v32+ work — same rationale as [`validate_chat_logprobs`].
+///
+/// # Errors
+///
+/// Returns `Err((StatusCode::BAD_REQUEST, …))` when the value is
+/// out of range.
+pub fn validate_completion_logprobs(
+    logprobs: Option<u32>,
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    const LOGPROBS_MAX: u32 = 5;
+    if let Some(n) = logprobs
+        && n > LOGPROBS_MAX
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                format!(
+                    "logprobs must be in the [0, 5] range per OpenAI spec (got {n})"
+                )
+                .as_str(),
+                "invalid_request_error",
+            )),
+        ));
+    }
+    Ok(())
+}
+
 /// Reject chat-request fields the engine does not yet honour, and
 /// validate the ones it does.
 ///
@@ -334,6 +445,11 @@ pub fn validate_logit_bias(
 ///   IDs are *not* validated — any `TokenId` is accepted, and
 ///   out-of-vocab IDs are silently ignored at sampling time
 ///   (matches OpenAI's server behaviour).
+/// - `logprobs` + `top_logprobs` — declared but not yet honoured
+///   (P31). Validates the OpenAI-spec range (`top_logprobs ∈
+///   0..=20`) and the cross-field rule (`top_logprobs = Some(_)` requires
+///   `logprobs = true`). Engine-side top-K logprob generation
+///   remains v32+ work.
 ///
 /// # Errors
 ///
@@ -348,6 +464,7 @@ pub fn validate_chat_request_fields(
     validate_penalty(req.frequency_penalty, "frequency_penalty")?;
     validate_penalty(req.presence_penalty, "presence_penalty")?;
     validate_logit_bias(req.logit_bias.as_ref())?;
+    validate_chat_logprobs(req.logprobs, req.top_logprobs)?;
     if let Some(n) = req.n
         && n != 1
     {
@@ -379,7 +496,7 @@ pub fn validate_chat_request_fields(
 /// Mirror of [`validate_chat_request_fields`] for the legacy
 /// `/v1/completions` endpoint. Same set of checks (`n != 1`,
 /// non-empty `stop`, out-of-range `top_p`, out-of-range penalties,
-/// out-of-range `logit_bias`).
+/// out-of-range `logit_bias`, out-of-range `logprobs`).
 ///
 /// # Errors
 ///
@@ -391,6 +508,7 @@ pub fn validate_completion_request_fields(
     validate_penalty(req.frequency_penalty, "frequency_penalty")?;
     validate_penalty(req.presence_penalty, "presence_penalty")?;
     validate_logit_bias(req.logit_bias.as_ref())?;
+    validate_completion_logprobs(req.logprobs)?;
     if let Some(n) = req.n
         && n != 1
     {
@@ -467,6 +585,8 @@ mod tests {
             frequency_penalty: None,
             presence_penalty: None,
             logit_bias: None,
+            logprobs: None,
+            top_logprobs: None,
         }
     }
 
@@ -486,6 +606,8 @@ mod tests {
             frequency_penalty: None,
             presence_penalty: None,
             logit_bias: None,
+            logprobs: None,
+            top_logprobs: None,
         }
     }
 
@@ -505,6 +627,8 @@ mod tests {
             frequency_penalty: None,
             presence_penalty: None,
             logit_bias: None,
+            logprobs: None,
+            top_logprobs: None,
         }
     }
 
@@ -600,6 +724,8 @@ mod tests {
             frequency_penalty: None,
             presence_penalty: None,
             logit_bias: None,
+            logprobs: None,
+            top_logprobs: None,
         };
         validate_chat_request_fields(&req)
             .expect("chat request with response_format = Text must pass full field validation");
@@ -625,6 +751,8 @@ mod tests {
             frequency_penalty: None,
             presence_penalty: None,
             logit_bias: None,
+            logprobs: None,
+            top_logprobs: None,
         };
         validate_chat_request_fields(&req).expect(
             "chat request with response_format = JsonObject must pass full field validation",
@@ -648,6 +776,7 @@ mod tests {
             frequency_penalty: None,
             presence_penalty: None,
             logit_bias: None,
+            logprobs: None,
         }
     }
 
@@ -666,6 +795,7 @@ mod tests {
             frequency_penalty: None,
             presence_penalty: None,
             logit_bias: None,
+            logprobs: None,
         }
     }
 
@@ -684,6 +814,7 @@ mod tests {
             frequency_penalty: None,
             presence_penalty: None,
             logit_bias: None,
+            logprobs: None,
         }
     }
 
@@ -879,6 +1010,7 @@ mod tests {
             frequency_penalty: None,
             presence_penalty: None,
             logit_bias: None,
+            logprobs: None,
         };
         validate_completion_request_fields(&req).expect(
             "completion with seed = Some(42) must pass validation (any i64 is valid per OpenAI spec)",
@@ -903,6 +1035,7 @@ mod tests {
             frequency_penalty: None,
             presence_penalty: None,
             logit_bias: None,
+            logprobs: None,
         };
         validate_completion_request_fields(&req)
             .expect("completion with seed = None must pass validation");
@@ -1147,6 +1280,121 @@ mod tests {
             .expect("token IDs are not validated; bias values only");
     }
 
+    // `validate_chat_logprobs` tests (P31 v0.3 wire-type follow-up).
+    // Per OpenAI chat-completions spec: `logprobs: bool` + `top_logprobs:
+    // int (0..=20)`. Cross-field rule: `top_logprobs = Some(_)` requires
+    // `logprobs = true`. Honoring is a no-op (engine-side top-K logprob
+    // generation is v32+ work).
+
+    #[test]
+    fn validate_chat_logprobs_both_none_passes() {
+        // The default-path case: neither field set, validator accepts.
+        validate_chat_logprobs(None, None).expect("(None, None) must pass");
+    }
+
+    #[test]
+    fn validate_chat_logprobs_false_none_passes() {
+        // logprobs = false explicitly disables logprobs; top_logprobs
+        // is irrelevant when logprobs is false. Validator accepts.
+        validate_chat_logprobs(Some(false), None)
+            .expect("(Some(false), None) must pass");
+    }
+
+    #[test]
+    fn validate_chat_logprobs_true_none_passes() {
+        // logprobs = true with no top_logprobs → only the sampled
+        // token's logprob is returned (per OpenAI spec). Validator
+        // accepts.
+        validate_chat_logprobs(Some(true), None)
+            .expect("(Some(true), None) must pass");
+    }
+
+    #[test]
+    fn validate_chat_logprobs_true_with_top_logprobs_in_range_passes() {
+        // logprobs = true + top_logprobs = Some(n) for n in 0..=20
+        // → top-N logprobs returned at each position. Validator
+        // accepts across the full range including 0 (the
+        // OpenAI-spec "explicitly disabled" sentinel for
+        // top_logprobs).
+        for n in [0u32, 1, 5, 10, 20] {
+            validate_chat_logprobs(Some(true), Some(n))
+                .expect("(Some(true), Some({n})) must pass");
+        }
+    }
+
+    #[test]
+    fn validate_chat_logprobs_top_logprobs_above_20_is_rejected() {
+        // Per OpenAI spec, top_logprobs > 20 is rejected. Validators
+        // must catch this up front so callers learn about the bad
+        // value before paying the cost of enqueuing the request.
+        for n in [21u32, 50, 100, u32::MAX] {
+            let err = validate_chat_logprobs(Some(true), Some(n))
+                .expect_err("(Some(true), Some({n})) must be rejected");
+            assert_eq!(err.0, StatusCode::BAD_REQUEST);
+            assert!(err.1.0.error.message.contains("top_logprobs"));
+        }
+    }
+
+    #[test]
+    fn validate_chat_logprobs_top_logprobs_without_logprobs_is_rejected() {
+        // Cross-field rule: top_logprobs = Some(_) requires
+        // logprobs = true. The other combinations must all be
+        // rejected because OpenAI only honours top_logprobs when
+        // logprobs is enabled.
+        let err = validate_chat_logprobs(None, Some(5))
+            .expect_err("(None, Some(5)) must be rejected (cross-field)");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("top_logprobs"));
+        assert!(err.1.0.error.message.contains("logprobs"));
+    }
+
+    #[test]
+    fn validate_chat_logprobs_top_logprobs_with_logprobs_false_is_rejected() {
+        // Cross-field rule also fires when logprobs is explicitly
+        // false (not just omitted).
+        let err = validate_chat_logprobs(Some(false), Some(5))
+            .expect_err("(Some(false), Some(5)) must be rejected (cross-field)");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    // `validate_completion_logprobs` tests (P31 v0.3 wire-type
+    // follow-up). Per OpenAI legacy-completions spec: `logprobs: int
+    // (0..=5)`. Honoring is a no-op (engine-side top-K logprob
+    // generation is v32+ work).
+
+    #[test]
+    fn validate_completion_logprobs_none_passes() {
+        validate_completion_logprobs(None).expect("None must pass");
+    }
+
+    #[test]
+    fn validate_completion_logprobs_zero_passes() {
+        // 0 is the OpenAI-spec "explicitly disabled" sentinel.
+        validate_completion_logprobs(Some(0)).expect("Some(0) must pass");
+    }
+
+    #[test]
+    fn validate_completion_logprobs_in_range_passes() {
+        // Full in-range sweep.
+        for n in [1u32, 2, 3, 4, 5] {
+            validate_completion_logprobs(Some(n))
+                .expect("Some({n}) must pass (in [0, 5])");
+        }
+    }
+
+    #[test]
+    fn validate_completion_logprobs_above_5_is_rejected() {
+        // Above OpenAI-spec upper bound. Out-of-range values are
+        // rejected up front so callers learn about the bad value
+        // before paying the cost of enqueuing the request.
+        for n in [6u32, 10, 100, u32::MAX] {
+            let err = validate_completion_logprobs(Some(n))
+                .expect_err("Some({n}) must be rejected (above 5)");
+            assert_eq!(err.0, StatusCode::BAD_REQUEST);
+            assert!(err.1.0.error.message.contains("logprobs"));
+        }
+    }
+
 
     // End-to-end: `validate_chat_request_fields` integration with
     // the penalty validators. Same shape as the P22 response_format
@@ -1256,6 +1504,8 @@ mod tests {
             frequency_penalty: Some(0.5),
             presence_penalty: Some(-0.5),
             logit_bias: None,
+            logprobs: None,
+            top_logprobs: None,
         };
         validate_chat_request_fields(&req)
             .expect("chat with both penalties set must pass full field validation");
@@ -1279,6 +1529,7 @@ mod tests {
             frequency_penalty: None,
             presence_penalty: None,
             logit_bias: None,
+            logprobs: None,
         };
         validate_completion_request_fields(&req)
             .expect("completion with frequency_penalty = None must pass");
@@ -1300,6 +1551,7 @@ mod tests {
             frequency_penalty: Some(1.0),
             presence_penalty: None,
             logit_bias: None,
+            logprobs: None,
         };
         validate_completion_request_fields(&req)
             .expect("completion with frequency_penalty = 1.0 must pass (in [-2.0, 2.0])");
@@ -1321,6 +1573,7 @@ mod tests {
             frequency_penalty: Some(3.0),
             presence_penalty: None,
             logit_bias: None,
+            logprobs: None,
         };
         let err = validate_completion_request_fields(&req)
             .expect_err("completion with frequency_penalty = 3.0 must be rejected");
@@ -1344,6 +1597,7 @@ mod tests {
             frequency_penalty: None,
             presence_penalty: Some(3.0),
             logit_bias: None,
+            logprobs: None,
         };
         let err = validate_completion_request_fields(&req)
             .expect_err("completion with presence_penalty = 3.0 must be rejected");
@@ -1420,6 +1674,7 @@ mod tests {
             frequency_penalty: None,
             presence_penalty: None,
             logit_bias: None,
+            logprobs: None,
         };
         validate_completion_request_fields(&req)
             .expect("completion with logit_bias = None must pass");
@@ -1443,6 +1698,7 @@ mod tests {
             frequency_penalty: None,
             presence_penalty: None,
             logit_bias: Some(bias),
+            logprobs: None,
         };
         validate_completion_request_fields(&req)
             .expect("completion with in-range logit_bias must pass");
@@ -1466,10 +1722,130 @@ mod tests {
             frequency_penalty: None,
             presence_penalty: None,
             logit_bias: Some(bias),
+            logprobs: None,
         };
         let err = validate_completion_request_fields(&req)
             .expect_err("completion with out-of-range logit_bias must be rejected");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         assert!(err.1.0.error.message.contains("logit_bias"));
+    }
+
+    // `validate_chat_request_fields` integration with logprobs +
+    // top_logprobs (P31 v0.3 wire-type follow-up).
+
+    fn chat_request_with_logprobs(
+        logprobs: Option<bool>,
+        top_logprobs: Option<u32>,
+    ) -> ChatRequest {
+        let mut req = chat_request_with_n(None);
+        req.logprobs = logprobs;
+        req.top_logprobs = top_logprobs;
+        req
+    }
+
+    #[test]
+    fn chat_request_with_logprobs_none_passes_field_validation() {
+        let req = chat_request_with_logprobs(None, None);
+        validate_chat_request_fields(&req).expect("chat with logprobs = None must pass");
+    }
+
+    #[test]
+    fn chat_request_with_logprobs_true_top_logprobs_in_range_passes_field_validation() {
+        let req = chat_request_with_logprobs(Some(true), Some(20));
+        validate_chat_request_fields(&req)
+            .expect("chat with logprobs = true + top_logprobs = 20 must pass");
+    }
+
+    #[test]
+    fn chat_request_with_top_logprobs_above_20_is_rejected() {
+        let req = chat_request_with_logprobs(Some(true), Some(21));
+        let err = validate_chat_request_fields(&req)
+            .expect_err("chat with top_logprobs > 20 must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("top_logprobs"));
+    }
+
+    #[test]
+    fn chat_request_with_top_logprobs_without_logprobs_true_is_rejected() {
+        // Cross-field rule: top_logprobs = Some(_) requires
+        // logprobs = true. The full validator must catch this
+        // up front.
+        let req = chat_request_with_logprobs(Some(false), Some(5));
+        let err = validate_chat_request_fields(&req)
+            .expect_err("chat with top_logprobs + logprobs = false must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("top_logprobs"));
+        assert!(err.1.0.error.message.contains("logprobs"));
+    }
+
+    // `validate_completion_request_fields` integration with
+    // logprobs (P31 v0.3 wire-type follow-up).
+
+    #[test]
+    fn completion_request_with_logprobs_none_passes_field_validation() {
+        let req = CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+            logprobs: None,
+        };
+        validate_completion_request_fields(&req)
+            .expect("completion with logprobs = None must pass");
+    }
+
+    #[test]
+    fn completion_request_with_logprobs_in_range_passes_field_validation() {
+        let req = CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+            logprobs: Some(5),
+        };
+        validate_completion_request_fields(&req)
+            .expect("completion with logprobs = 5 must pass (upper boundary)");
+    }
+
+    #[test]
+    fn completion_request_with_logprobs_above_5_is_rejected() {
+        let req = CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+            logprobs: Some(6),
+        };
+        let err = validate_completion_request_fields(&req)
+            .expect_err("completion with logprobs > 5 must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("logprobs"));
     }
 }
