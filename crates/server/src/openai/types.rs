@@ -132,6 +132,146 @@ pub enum ResponseFormat {
     JsonObject,
 }
 
+/// OpenAI tool type discriminator (P33 v0.x wire-type follow-up).
+///
+/// Per OpenAI chat-completions spec, the `type` field on a tool
+/// definition must currently be `"function"`. Future OpenAI API
+/// extensions (e.g. retrieval, code-interpreter) would add more
+/// variants; vllm-lite declares only the `Function` variant today
+/// because that's all OpenAI ships as of 2026. Future variants
+/// would be rejected at the serde layer (axum returns
+/// `422 Unprocessable Entity` for unknown enum variants).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolType {
+    /// Standard function-calling tool. The associated
+    /// `FunctionDefinition` carries the function name, description,
+    /// and JSON-Schema `parameters`.
+    Function,
+}
+
+/// OpenAI `tools[].function` definition (P33 v0.x wire-type follow-up).
+///
+/// Per OpenAI chat-completions spec: a function definition carries
+/// a required `name` plus optional `description` and `parameters`
+/// (JSON Schema describing the function's arguments).
+///
+/// `parameters` is a raw `serde_json::Value` rather than a typed
+/// JSON-Schema struct because:
+/// - OpenAI's spec is intentionally permissive about JSON Schema
+///   drafts (draft-04 through 2020-12 are all accepted server-side).
+/// - Modelling the full JSON Schema grammar would balloon the type
+///   definition (hundreds of variants for `$ref`, `oneOf`,
+///   `allOf`, `anyOf`, etc.) without giving vllm-lite any new
+///   capability — the engine doesn't process the schema today
+///   (grammar-constrained decoding is v32+ work).
+/// - Callers can round-trip the schema verbatim via JSON and
+///   `serde_json::Value` preserves byte-for-byte fidelity.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FunctionDefinition {
+    /// Function name. Used by the model to select which tool to
+    /// invoke and by `ToolChoice::Specific` to force a specific
+    /// function call. Per OpenAI spec, must match the regex
+    /// `^[a-zA-Z0-9_-]{1,64}$` — we do NOT enforce this today
+    /// (validator is permissive by design; honoring is v32+ work
+    /// so there's no engine-side caller to break).
+    pub name: String,
+    /// Optional human-readable description. The model uses this to
+    /// decide when to invoke the function.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Optional JSON Schema for the function's arguments. Stored
+    /// as `serde_json::Value` to preserve fidelity (see the
+    /// `FunctionDefinition` doc-comment for the rationale).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parameters: Option<serde_json::Value>,
+}
+
+/// OpenAI `tools[]` entry (P33 v0.x wire-type follow-up).
+///
+/// Per OpenAI chat-completions spec: each tool carries a `type`
+/// discriminator (currently only `"function"`) and a `function`
+/// payload. Future tool kinds (retrieval, code-interpreter, etc.)
+/// would add new `ToolType` variants.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Tool {
+    /// Tool-type discriminator. Currently only `Function` is
+    /// supported (see the `ToolType` doc-comment).
+    #[serde(rename = "type")]
+    pub kind: ToolType,
+    /// Function-specific payload (name + description + parameters).
+    pub function: FunctionDefinition,
+}
+
+/// OpenAI `tool_choice` mode discriminator (P33 v0.x wire-type follow-up).
+///
+/// Per OpenAI chat-completions spec the `tool_choice` parameter
+/// can be a string mode (`"none"` / `"auto"` / `"required"`) OR
+/// an object that names a specific tool. The string mode is
+/// captured by `ToolChoiceMode`; the object form by
+/// [`ToolChoice::Specific`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ToolChoiceMode {
+    /// The model must not call any tool. Equivalent to omitting
+    /// `tools` from the request (when paired with `tools = None`).
+    #[serde(rename = "none")]
+    None,
+    /// The model can choose between generating a message or
+    /// calling one or more tools. The default mode when `tools`
+    /// is non-empty and `tool_choice` is `None`.
+    #[serde(rename = "auto")]
+    Auto,
+    /// The model must call one or more tools. Per OpenAI spec, at
+    /// least one tool must be defined in `tools`; the validator
+    /// rejects the combination when `tools` is empty / `None`.
+    #[serde(rename = "required")]
+    Required,
+}
+
+/// OpenAI `tool_choice` object variant (P33 v0.x wire-type follow-up).
+///
+/// Per OpenAI chat-completions spec: the object form of
+/// `tool_choice` forces the model to call a specific named tool.
+/// The shape is `{"type": "function", "function": {"name": "..."}}`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ToolChoiceSpecific {
+    /// Type discriminator. Currently only `"function"` is supported
+    /// (mirrors [`ToolType`]).
+    #[serde(rename = "type")]
+    pub kind: ToolType,
+    /// The specific function to invoke.
+    pub function: ToolChoiceFunctionRef,
+}
+
+/// OpenAI `tool_choice.function` reference (P33 v0.x wire-type follow-up).
+///
+/// Carries only the function name; OpenAI doesn't accept a full
+/// function definition in `tool_choice` (the full definition lives
+/// in `tools[]`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ToolChoiceFunctionRef {
+    /// Name of the function to force-call. Must match the `name`
+    /// field of one of the entries in `ChatRequest::tools`.
+    pub name: String,
+}
+
+/// OpenAI `tool_choice` parameter (P33 v0.x wire-type follow-up).
+///
+/// `untagged` because the wire shape is "string OR object" —
+/// serde matches the first variant that parses. Order matters:
+/// the string modes (`None` / `Auto` / `Required`) are tried
+/// before the object form (`Specific`) so a bare `"auto"` string
+/// doesn't accidentally deserialize as
+/// `Specific { kind: Auto, ... }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ToolChoice {
+    /// String mode (`"none"` / `"auto"` / `"required"`).
+    Mode(ToolChoiceMode),
+    /// Object form (`{"type": "function", "function": {"name": "..."}}`).
+    Specific(ToolChoiceSpecific),
+}
+
 /// Request body for chat completions endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatRequest {
@@ -310,6 +450,61 @@ pub struct ChatRequest {
     /// lines as `top_logprobs = ?req.top_logprobs`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub top_logprobs: Option<u32>,
+    /// OpenAI `tools[]` (P33 v0.x wire-type follow-up —
+    /// declaration + validation). Per OpenAI chat-completions spec:
+    /// a list of tools the model may call. Currently only
+    /// function-calling tools are supported (see [`ToolType`]); the
+    /// `function.parameters` field is a JSON Schema stored as
+    /// `serde_json::Value` to preserve fidelity (see
+    /// [`FunctionDefinition`] for the rationale).
+    ///
+    /// **Honoring is a no-op** today — tool calling requires a
+    /// grammar-constrained decoder (JSON-schema → grammar) and a
+    /// per-request tool schema cache. Architecture-level work,
+    /// tracked as v32+. The wire-type contract is locked in now so
+    /// the declaration-only PR doesn't regress to "rejected by
+    /// serde" for callers who already send the field.
+    ///
+    /// Validated by `validate_chat_tool_choice` (cross-field rule:
+    /// `tool_choice = Some(Required)` or `tool_choice = Some(Specific)`
+    /// requires `tools` to be non-empty; `tool_choice =
+    /// Some(Specific{ function: { name: X } })` requires `tools`
+    /// to contain a function named `X`). Field names +
+    /// descriptions + parameters are *not* validated today —
+    /// honoring is v32+ work so there's no engine-side caller to
+    /// break.
+    ///
+    /// Threaded into the chat handler's `tracing::info!(...)` log
+    /// lines as `tools_len = ?req.tools.as_ref().map(|v| v.len())`
+    /// (count only, not the full array, to keep log lines bounded
+    /// for typical tool lists of up to ~10 entries).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<Tool>>,
+    /// OpenAI `tool_choice` (P33 v0.x wire-type follow-up —
+    /// declaration + validation). Per OpenAI chat-completions spec:
+    /// either a mode string (`"none"` / `"auto"` / `"required"`)
+    /// or an object (`{"type": "function", "function": {"name":
+    /// "..."}}`) that forces the model to call a specific tool.
+    /// Modeled via the [`ToolChoice`] enum with `#[serde(untagged)]`
+    /// so both forms round-trip 1:1.
+    ///
+    /// **Honoring is a no-op** today — same rationale as
+    /// [`ChatRequest::tools`]. Engine-side tool-calling is
+    /// v32+ work (grammar-constrained decoder + per-request tool
+    /// schema cache).
+    ///
+    /// Validated by `validate_chat_tool_choice` (see the
+    /// `tools` field doc-comment for the rule set). Field names
+    /// are *not* validated against the regex `^[a-zA-Z0-9_-]{1,64}$`
+    /// today — the validator is permissive by design until
+    /// honoring is wired.
+    ///
+    /// Threaded into the chat handler's `tracing::info!(...)` log
+    /// lines as `tool_choice = ?req.tool_choice` (Debug-printable
+    /// because `ToolChoice` derives `Debug`; the field is small
+    /// enough to log in full).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_choice: Option<ToolChoice>,
 }
 
 /// A choice in a chat completion response.

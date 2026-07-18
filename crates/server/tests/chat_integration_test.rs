@@ -3029,3 +3029,418 @@ async fn test_completions_echo_true_with_best_of_above_one_returns_400() {
         "echo=true + best_of=3 must NOT reach the engine (captured is None)"
     );
 }
+
+// P33 v0.x wire-type follow-up: `tools` + `tool_choice`
+// declaration + validation on the `/v1/chat/completions`
+// endpoint. Mirrors the P21/P22/P23/P27/P28/P29/P30/P31/P32
+// integration-test pattern. Engine honoring is a no-op today
+// (v32+ work — grammar-constrained decoder + per-request tool
+// schema cache); the tests pin the declaration + validation
+// contract end-to-end through the HTTP boundary.
+
+/// A chat request with `tools` defined (no `tool_choice`) must
+/// pass validation and reach the engine unchanged. Pins the
+/// baseline contract: pre-P33 this was rejected by serde.
+#[tokio::test]
+async fn test_chat_with_tools_only_accepted_by_handler() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "What's the weather in NYC?"}],
+        "tools": [{
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Get the current weather",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "location": {"type": "string"}
+                    },
+                    "required": ["location"]
+                }
+            }
+        }],
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "tools without tool_choice must pass validation"
+    );
+
+    let captured = captured.lock().await;
+    let _params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+}
+
+/// `tool_choice = "auto"` + `tools` defined must pass validation
+/// and reach the engine unchanged.
+#[tokio::test]
+async fn test_chat_with_tool_choice_auto_accepted_by_handler() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "What's the weather?"}],
+        "tools": [{
+            "type": "function",
+            "function": {"name": "get_weather"}
+        }],
+        "tool_choice": "auto",
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "tool_choice=auto + tools must pass validation"
+    );
+
+    let captured = captured.lock().await;
+    let _params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+}
+
+/// `tool_choice = "required"` + `tools` defined must pass
+/// validation.
+#[tokio::test]
+async fn test_chat_with_tool_choice_required_accepted_by_handler() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "What's the weather?"}],
+        "tools": [{
+            "type": "function",
+            "function": {"name": "get_weather"}
+        }],
+        "tool_choice": "required",
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "tool_choice=required + tools must pass validation"
+    );
+
+    let captured = captured.lock().await;
+    let _params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+}
+
+/// `tool_choice = {"type": "function", "function": {"name": "X"}}`
+/// + matching tool in `tools` must pass validation.
+#[tokio::test]
+async fn test_chat_with_tool_choice_specific_matching_accepted_by_handler() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Weather?"}],
+        "tools": [{
+            "type": "function",
+            "function": {"name": "get_weather"}
+        }, {
+            "type": "function",
+            "function": {"name": "get_time"}
+        }],
+        "tool_choice": {
+            "type": "function",
+            "function": {"name": "get_weather"}
+        },
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "tool_choice=specific with matching tool must pass validation"
+    );
+
+    let captured = captured.lock().await;
+    let _params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+}
+
+/// Baseline: omitting both `tools` and `tool_choice` must pass
+/// validation and reach the engine unchanged.
+#[tokio::test]
+async fn test_chat_without_tools_tool_choice_works_baseline() {
+    let (state, _handle, _captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "baseline (no tools, no tool_choice) must pass validation"
+    );
+}
+
+/// `tool_choice = "required"` WITHOUT `tools` must be rejected
+/// with 400. Pins the cross-field rule end-to-end.
+#[tokio::test]
+async fn test_chat_tool_choice_required_without_tools_returns_400() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "tool_choice": "required",
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "tool_choice=required without tools must be rejected with 400"
+    );
+
+    let captured = captured.lock().await;
+    assert!(
+        captured.is_none(),
+        "tool_choice=required without tools must NOT reach the engine (captured is None)"
+    );
+}
+
+/// `tool_choice = "required"` + `tools = []` (empty array) must
+/// be rejected. Per OpenAI spec, `required` requires at least one
+/// tool to be defined.
+#[tokio::test]
+async fn test_chat_tool_choice_required_with_empty_tools_returns_400() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "tools": [],
+        "tool_choice": "required",
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "tool_choice=required + empty tools must be rejected with 400"
+    );
+
+    let captured = captured.lock().await;
+    assert!(
+        captured.is_none(),
+        "tool_choice=required + empty tools must NOT reach the engine"
+    );
+}
+
+/// `tool_choice.function.name` that doesn't match any tool in
+/// `tools[]` must be rejected. Pins the cross-field rule end-to-end.
+#[tokio::test]
+async fn test_chat_tool_choice_specific_unknown_tool_returns_400() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "tools": [{
+            "type": "function",
+            "function": {"name": "get_time"}
+        }],
+        "tool_choice": {
+            "type": "function",
+            "function": {"name": "get_weather"}
+        },
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "tool_choice.function.name not matching any tool must be rejected with 400"
+    );
+
+    let captured = captured.lock().await;
+    assert!(
+        captured.is_none(),
+        "tool_choice with unknown tool name must NOT reach the engine"
+    );
+}
+
+/// `tool_choice = specific` WITHOUT `tools` must be rejected.
+#[tokio::test]
+async fn test_chat_tool_choice_specific_without_tools_returns_400() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "tool_choice": {
+            "type": "function",
+            "function": {"name": "get_weather"}
+        },
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "specific tool_choice without tools must be rejected with 400"
+    );
+
+    let captured = captured.lock().await;
+    assert!(
+        captured.is_none(),
+        "specific tool_choice without tools must NOT reach the engine"
+    );
+}
+
+/// `tool_choice = "none"` must always pass regardless of whether
+/// `tools` is defined or not. Per OpenAI spec, "none" means the
+/// model must not call any tool — `tools` may be absent or
+/// non-empty (the model just ignores the list).
+#[tokio::test]
+async fn test_chat_tool_choice_none_with_tools_accepted_by_handler() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "tools": [{
+            "type": "function",
+            "function": {"name": "get_weather"}
+        }],
+        "tool_choice": "none",
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "tool_choice=none + tools must pass validation (model just ignores the tools)"
+    );
+
+    let captured = captured.lock().await;
+    let _params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+}

@@ -89,6 +89,8 @@ fn create_test_request(model: &str, messages: Vec<ChatMessage>) -> ChatRequest {
         logit_bias: None,
         logprobs: None,
         top_logprobs: None,
+        tools: None,
+        tool_choice: None,
     }
 }
 
