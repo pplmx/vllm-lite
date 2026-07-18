@@ -270,6 +270,46 @@ pub struct ChatRequest {
     /// for typical maps of up to ~300 entries).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub logit_bias: Option<HashMap<TokenId, f32>>,
+    /// OpenAI logprobs flag (v0.3 wire-type follow-up). Per OpenAI
+    /// chat-completions spec: `logprobs: bool` indicates whether to
+    /// return the log probability of the sampled token. Default is
+    /// `false` (no logprobs returned).
+    ///
+    /// **Honoring is a no-op** today — the engine's
+    /// `sample_batch_with_params` returns only the sampled token;
+    /// changing the return type to include logprobs is a wire-
+    /// breaking change for the engine boundary. Documented as
+    /// v32+ work. The wire-type contract is locked in now so the
+    /// declaration-only PR doesn't regress to "rejected by serde"
+    /// for callers who already send the field.
+    ///
+    /// Validated by `validate_chat_logprobs` (no range check on
+    /// the bool itself; cross-field rule: `top_logprobs=Some` requires
+    /// `logprobs=true`).
+    ///
+    /// Threaded into the chat handler's `tracing::info!(...)` log
+    /// lines as `logprobs = ?req.logprobs` for parity with P21/P22/
+    /// P23/P27/P28/P29/P30 observability plumbing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logprobs: Option<bool>,
+    /// OpenAI top-logprobs count (v0.3 wire-type follow-up). Per
+    /// OpenAI chat-completions spec: an integer in the range
+    /// `0..=20` specifying how many of the most likely tokens to
+    /// return log probabilities for at each position. Only
+    /// meaningful when `logprobs = true`; the validator rejects
+    /// `top_logprobs = Some` with `logprobs = false`.
+    ///
+    /// **Honoring is a no-op** today (same rationale as
+    /// [`ChatRequest::logprobs`] — engine-side top-K logprob
+    /// generation is v32+ work).
+    ///
+    /// Validated by `validate_chat_logprobs` (range `0..=20`,
+    /// cross-field rule: requires `logprobs=true`).
+    ///
+    /// Threaded into the chat handler's `tracing::info!(...)` log
+    /// lines as `top_logprobs = ?req.top_logprobs`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub top_logprobs: Option<u32>,
 }
 
 /// A choice in a chat completion response.
@@ -435,6 +475,25 @@ pub struct CompletionRequest {
     /// not).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub logit_bias: Option<HashMap<TokenId, f32>>,
+    /// OpenAI logprobs count (v0.3 wire-type follow-up). Per OpenAI
+    /// legacy-completions spec: an integer in the range `0..=5`
+    /// specifying how many of the most likely tokens to return
+    /// log probabilities for at each position. The completions
+    /// endpoint's `logprobs` has a *different* type than the chat
+    /// endpoint's `logprobs` (int 0-5 here vs bool on chat) per
+    /// the OpenAI spec — P31 declares both with the correct types
+    /// rather than unifying behind a common representation.
+    ///
+    /// **Honoring is a no-op** today — same rationale as
+    /// [`ChatRequest::logprobs`]: engine-side top-K logprob
+    /// generation is v32+ work.
+    ///
+    /// Validated by `validate_completion_logprobs` (range `0..=5`).
+    /// The completions handler does not currently log the field
+    /// (parity with `seed` / `user` / `frequency_penalty` /
+    /// `presence_penalty` / `logit_bias` rationale).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logprobs: Option<u32>,
 }
 
 /// A single choice in a text-completion response. The `text` field
