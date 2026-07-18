@@ -15,6 +15,8 @@
 //! - `sample_batch_with_params` (per-sequence params, matches
 //!   legacy scalar `sample_batch`, empty params degrade to greedy)
 //! - `apply_repeat_penalty` (basic penalty, no-op at 1.0)
+//! - `apply_logit_bias` (basic bias, no-op on empty map, out-of-range
+//!   keys silently ignored, integrates with `sample_one_with_params`)
 //! - Property-based tests (proptest) in the sibling `prop_tests`
 //!   module: batch length preservation, greedy index bounds,
 //!   batched greedy matches per-row greedy, repeat-penalty no-op.
@@ -503,4 +505,209 @@ fn test_sample_one_with_params_empty_seen_is_no_op() {
         .build();
     let token = sample_one_with_params(&logits, &params, &[]);
     assert_eq!(token, 1);
+}
+
+// `apply_logit_bias` tests (P30 v0.3 wire-type follow-up —
+// `logit_bias` engine wire-through).
+//
+// Logit bias is the OpenAI `logit_bias` semantic: an additive bias
+// added to the logit of specific token IDs (keyed by token ID). Per
+// OpenAI spec the value range is [-100, 100]; out-of-vocab token IDs
+// are silently ignored (the engine doesn't have a vocabulary
+// bound here, so any token ID >= logits.len() is ignored). The bias
+// is additive, so positive values *increase* the probability of the
+// biased tokens and negative values *decrease* it — opposite of the
+// "presence_penalty" semantic (which subtracts from seen-token
+// logits). See the doc-comment on `apply_logit_bias` for the
+// implementation.
+
+#[test]
+fn test_logit_bias_basic() {
+    // With bias = {1: 1.0}, the logit at 1 is increased by 1.0
+    // (from 0.5 to 1.5). Logits at positions 0 and 2 are untouched.
+    let mut logits = vec![0.5, 0.5, 0.5];
+    let bias: std::collections::HashMap<TokenId, f32> =
+        std::collections::HashMap::from([(1, 1.0)]);
+    apply_logit_bias(&mut logits, &bias);
+    assert!((logits[0] - 0.5).abs() < 1e-6, "logit at 0 untouched");
+    assert!(
+        (logits[1] - 1.5).abs() < 1e-6,
+        "logit at 1 increased by 1.0 (0.5 → 1.5); got {}",
+        logits[1]
+    );
+    assert!((logits[2] - 0.5).abs() < 1e-6, "logit at 2 untouched");
+}
+
+#[test]
+fn test_logit_bias_negative_decreases_logit() {
+    // Negative bias = suppress the token (matches OpenAI spec:
+    // -100 suppresses a token completely, +100 guarantees sampling).
+    let mut logits = vec![0.5, 0.5, 0.5];
+    let bias: std::collections::HashMap<TokenId, f32> =
+        std::collections::HashMap::from([(1, -0.5)]);
+    apply_logit_bias(&mut logits, &bias);
+    assert!(
+        (logits[1] - 0.0).abs() < 1e-6,
+        "logit at 1 reduced by 0.5 (0.5 → 0.0); got {}",
+        logits[1]
+    );
+}
+
+#[test]
+fn test_logit_bias_empty_map_is_noop() {
+    // Empty map → no change. Pins the early-return branch.
+    let mut logits = vec![0.5, 0.5, 0.5];
+    let bias: std::collections::HashMap<TokenId, f32> = std::collections::HashMap::new();
+    apply_logit_bias(&mut logits, &bias);
+    assert!((logits[0] - 0.5).abs() < 1e-6);
+    assert!((logits[1] - 0.5).abs() < 1e-6);
+    assert!((logits[2] - 0.5).abs() < 1e-6);
+}
+
+#[test]
+fn test_logit_bias_empty_logits_is_noop() {
+    // Empty logits + non-empty bias → no panic, no effect (no token
+    // IDs to bias).
+    let mut logits: Vec<f32> = vec![];
+    let bias: std::collections::HashMap<TokenId, f32> =
+        std::collections::HashMap::from([(0, 1.0), (1, -1.0)]);
+    apply_logit_bias(&mut logits, &bias);
+    assert!(logits.is_empty());
+}
+
+#[test]
+fn test_logit_bias_out_of_range_keys_silently_ignored() {
+    // OpenAI spec: out-of-vocab token IDs are silently ignored.
+    // Token ID 99 is far beyond the logits length (3); it should
+    // have no effect. This matches the engine's actual runtime
+    // behavior (token IDs beyond vocab_size are also silently
+    // ignored during sampling).
+    let mut logits = vec![0.5, 0.5, 0.5];
+    let bias: std::collections::HashMap<TokenId, f32> =
+        std::collections::HashMap::from([(99, 100.0)]);
+    apply_logit_bias(&mut logits, &bias);
+    assert!((logits[0] - 0.5).abs() < 1e-6);
+    assert!((logits[1] - 0.5).abs() < 1e-6);
+    assert!((logits[2] - 0.5).abs() < 1e-6);
+}
+
+#[test]
+fn test_logit_bias_multiple_tokens_biased_independently() {
+    // Multiple biased tokens each get their own delta. The map
+    // iteration order is non-deterministic (HashMap) but the
+    // *result* is deterministic because each bias is additive and
+    // independent.
+    let mut logits = vec![0.5, 0.5, 0.5, 0.5];
+    let bias: std::collections::HashMap<TokenId, f32> =
+        std::collections::HashMap::from([(0, 1.0), (2, -0.5), (3, 2.0)]);
+    apply_logit_bias(&mut logits, &bias);
+    assert!(
+        (logits[0] - 1.5).abs() < 1e-6,
+        "logit at 0 increased by 1.0; got {}",
+        logits[0]
+    );
+    assert!(
+        (logits[1] - 0.5).abs() < 1e-6,
+        "logit at 1 untouched; got {}",
+        logits[1]
+    );
+    assert!(
+        (logits[2] - 0.0).abs() < 1e-6,
+        "logit at 2 reduced by 0.5; got {}",
+        logits[2]
+    );
+    assert!(
+        (logits[3] - 2.5).abs() < 1e-6,
+        "logit at 3 increased by 2.0; got {}",
+        logits[3]
+    );
+}
+
+#[test]
+fn test_logit_bias_does_not_affect_greedy_when_zero() {
+    // Zero bias should be a no-op even though the map is non-empty
+    // (covers the "bias map present but empty effect" case where a
+    // caller serialised an empty entry).
+    let mut logits = vec![0.5, 0.5, 0.5];
+    let bias: std::collections::HashMap<TokenId, f32> =
+        std::collections::HashMap::from([(1, 0.0)]);
+    apply_logit_bias(&mut logits, &bias);
+    assert!((logits[0] - 0.5).abs() < 1e-6);
+    assert!((logits[1] - 0.5).abs() < 1e-6);
+    assert!((logits[2] - 0.5).abs() < 1e-6);
+}
+
+#[test]
+fn test_sample_one_with_params_logit_bias_changes_argmax() {
+    // Integration test: logit_bias threaded through
+    // `sample_one_with_params` flips the argmax. With greedy
+    // sampling, `logits = [0.5, 0.5, 0.5]` is a tie and the fold
+    // initialises at index 0 (first wins). Applying bias = {2: 1.0}
+    // makes the logit at 2 = 1.5 — the new argmax is 2.
+    let logits = vec![0.5, 0.5, 0.5];
+    let bias: std::collections::HashMap<TokenId, f32> =
+        std::collections::HashMap::from([(2, 1.0)]);
+    let params = SamplingParams::builder()
+        .with_temperature(0.0)
+        .with_logit_bias(Some(bias))
+        .build();
+    let token = sample_one_with_params(&logits, &params, &[]);
+    assert_eq!(
+        token, 2,
+        "logit_bias on token 2 must flip greedy argmax from 0 → 2"
+    );
+}
+
+#[test]
+fn test_sample_one_with_params_logit_bias_none_is_noop() {
+    // No logit_bias set → no bias applied. Pins the `None` branch
+    // of the dispatch (matches `presence_penalty.abs() > f32::EPSILON`
+    // pattern but for the Option<HashMap> variant).
+    let logits = vec![0.5, 0.5, 0.5];
+    let params = SamplingParams::builder()
+        .with_temperature(0.0)
+        .build();
+    let token = sample_one_with_params(&logits, &params, &[]);
+    assert_eq!(token, 0, "no logit_bias → first argmax (0) wins");
+}
+
+#[test]
+fn test_sample_one_with_params_logit_bias_empty_map_is_noop() {
+    // Empty map (Some but no entries) → no bias applied. Pins the
+    // empty-map early-return branch inside `apply_logit_bias`.
+    let logits = vec![0.5, 0.5, 0.5];
+    let bias: std::collections::HashMap<TokenId, f32> = std::collections::HashMap::new();
+    let params = SamplingParams::builder()
+        .with_temperature(0.0)
+        .with_logit_bias(Some(bias))
+        .build();
+    let token = sample_one_with_params(&logits, &params, &[]);
+    assert_eq!(token, 0, "empty map → first argmax (0) wins");
+}
+
+#[test]
+fn test_logit_bias_combined_with_repeat_and_presence_penalties() {
+    // Verify the full pipeline order: repeat_penalty → presence_penalty
+    // → logit_bias → temperature → top-k → top-p → greedy. With
+    // greedy sampling and logit_bias flipping the argmax after the
+    // penalties, the final token should reflect the bias.
+    //
+    // Sequence: logits = [1.0, 0.5, 0.5], seen = [0].
+    //   - repeat_penalty=2.0: logit at 0 = 1.0/2 = 0.5 → tie at 0/1/2.
+    //   - presence_penalty=0.0: no-op.
+    //   - logit_bias={2: 1.0}: logit at 2 = 0.5 + 1.0 = 1.5 → argmax = 2.
+    let logits = vec![1.0, 0.5, 0.5];
+    let bias: std::collections::HashMap<TokenId, f32> =
+        std::collections::HashMap::from([(2, 1.0)]);
+    let params = SamplingParams::builder()
+        .with_temperature(0.0)
+        .with_repeat_penalty(2.0)
+        .with_presence_penalty(0.0)
+        .with_logit_bias(Some(bias))
+        .build();
+    let token = sample_one_with_params(&logits, &params, &[0]);
+    assert_eq!(
+        token, 2,
+        "combined penalties + logit_bias must yield argmax = 2"
+    );
 }

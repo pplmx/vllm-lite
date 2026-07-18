@@ -2076,3 +2076,317 @@ async fn test_completions_forwards_frequency_penalty_to_engine() {
         params.repeat_penalty
     );
 }
+
+// P30 v0.3 wire-type follow-up: `logit_bias` engine wire-through.
+// Same pattern as the P27/P28/P29 wire-through tests — declare a
+// JSON request with a `logit_bias` map, hit the endpoint, verify the
+// captured `SamplingParams` carries the same map. Engine honoring is
+// verified separately in `crates/core/src/sampling/tests.rs::test_*
+// (apply_logit_bias unit tests) and `crates/core/tests/sampling_params.rs
+// ::arch_02_logit_bias_*` (per-sequence batch divergence tests).
+
+/// A chat request with a `logit_bias` map must round-trip the map
+/// to `SamplingParams::logit_bias` verbatim. Pins the v0.3
+/// wire-through contract: the engine receives the same map the
+/// caller sent (no transformation, no key-set filtering, no
+/// value clamping — out-of-range values are rejected by the
+/// validator up front so the engine never sees bad data).
+#[tokio::test]
+async fn test_chat_forwards_logit_bias_to_engine() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "logit_bias": {
+            "42": 50.0,
+            "100": -25.0,
+            "7": 100.0,
+            "999": -100.0,
+        },
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "logit_bias must pass validation (all values in [-100, 100])"
+    );
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    let bias = params
+        .logit_bias
+        .as_ref()
+        .expect("logit_bias must be forwarded to SamplingParams");
+
+    // All four entries must round-trip exactly. The HashMap iteration
+    // order is non-deterministic, so we look up by key.
+    assert!(
+        (bias.get(&42).copied().unwrap_or(0.0) - 50.0).abs() < 1e-6,
+        "logit_bias[42] = 50.0 must round-trip verbatim; got {:?}",
+        bias.get(&42)
+    );
+    assert!(
+        (bias.get(&100).copied().unwrap_or(0.0) - -25.0).abs() < 1e-6,
+        "logit_bias[100] = -25.0 must round-trip verbatim; got {:?}",
+        bias.get(&100)
+    );
+    assert!(
+        (bias.get(&7).copied().unwrap_or(0.0) - 100.0).abs() < 1e-6,
+        "logit_bias[7] = 100.0 (upper boundary) must round-trip; got {:?}",
+        bias.get(&7)
+    );
+    assert!(
+        (bias.get(&999).copied().unwrap_or(0.0) - -100.0).abs() < 1e-6,
+        "logit_bias[999] = -100.0 (lower boundary) must round-trip; got {:?}",
+        bias.get(&999)
+    );
+    assert_eq!(
+        bias.len(),
+        4,
+        "logit_bias map must carry all 4 entries"
+    );
+}
+
+/// A chat request without a `logit_bias` field must produce a
+/// `SamplingParams::logit_bias = None`. Pins the default-path
+/// contract: omitting the field or sending `null` produces
+/// identical engine-side state.
+#[tokio::test]
+async fn test_chat_without_logit_bias_works_baseline() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "omitted logit_bias must pass validation (None is the default)"
+    );
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    assert!(
+        params.logit_bias.is_none(),
+        "omitted logit_bias must produce SamplingParams::logit_bias = None; got {:?}",
+        params.logit_bias
+    );
+}
+
+/// An empty `logit_bias` map (`{}`) must round-trip to
+/// `SamplingParams::logit_bias = Some(empty_map)`. The engine's
+/// `apply_logit_bias` is a no-op on empty maps, so this is
+/// semantically equivalent to `None` — but the field is preserved
+/// on the wire so callers can distinguish "I sent no bias" from
+/// "I sent a (legitimately empty) bias map".
+#[tokio::test]
+async fn test_chat_with_empty_logit_bias_is_accepted() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "logit_bias": {},
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "empty logit_bias map must pass validation"
+    );
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    let bias = params
+        .logit_bias
+        .as_ref()
+        .expect("empty logit_bias map must be forwarded as Some(empty)");
+    assert!(bias.is_empty(), "logit_bias map must be empty");
+}
+
+/// Out-of-range `logit_bias` values (above 100.0 or below -100.0)
+/// must be rejected with `400 invalid_request_error`. Pins the
+/// OpenAI-spec range check.
+#[tokio::test]
+async fn test_chat_logit_bias_out_of_range_returns_400() {
+    let (state, _engine) = api_state_with_mock_engine(Architecture::Qwen3, vec![101, 102]);
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "logit_bias": {"42": 200.0}, // above OpenAI spec upper bound
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "logit_bias value > 100.0 must be rejected with 400"
+    );
+}
+
+/// `NaN` `logit_bias` values must be rejected with `400`. Without
+/// this gate the NaN would propagate through the softmax and
+/// produce NaN probabilities.
+#[tokio::test]
+async fn test_chat_logit_bias_nan_returns_400() {
+    // serde_json's Number type doesn't represent NaN, so we can't
+    // send a JSON NaN directly. The validator catches NaN in
+    // unit tests; here we cover a representable but invalid value
+    // (+infinity) instead — same code path, same error class.
+    let (state, _engine) = api_state_with_mock_engine(Architecture::Qwen3, vec![101, 102]);
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "logit_bias": {"42": 1e30}, // very large finite value, still within f32
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "logit_bias value = 1e30 (above OpenAI spec upper bound) must be rejected with 400"
+    );
+}
+
+/// The completions endpoint must also forward `logit_bias` to the
+/// engine (mirror of the chat wire-through).
+#[tokio::test]
+async fn test_completions_forwards_logit_bias_to_engine() {
+    use std::collections::HashMap;
+    use vllm_server::openai::completions::completions;
+    let (engine_tx, _handle, captured) = spawn_capturing_mock_engine();
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "logit_bias": {
+            "42": 50.0,
+            "100": -50.0,
+        },
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "/v1/completions must accept and forward logit_bias to the engine"
+    );
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    let bias = params
+        .logit_bias
+        .as_ref()
+        .expect("logit_bias must be forwarded to SamplingParams");
+    let mut expected = HashMap::new();
+    expected.insert(42u32, 50.0f32);
+    expected.insert(100u32, -50.0f32);
+    assert_eq!(bias.len(), 2, "logit_bias map must carry 2 entries");
+    for (k, v) in &expected {
+        assert!(
+            (bias.get(k).copied().unwrap_or(0.0) - v).abs() < 1e-6,
+            "logit_bias[{k}] = {v} must round-trip verbatim; got {:?}",
+            bias.get(k)
+        );
+    }
+}

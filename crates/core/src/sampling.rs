@@ -237,6 +237,10 @@ pub fn sample_one_with_params(
         apply_presence_penalty(&mut logits, seen, params.presence_penalty);
     }
 
+    if let Some(ref bias) = params.logit_bias {
+        apply_logit_bias(&mut logits, bias);
+    }
+
     if params.temperature > 0.0 && (params.temperature - 1.0).abs() > f32::EPSILON {
         for l in &mut logits {
             *l /= params.temperature;
@@ -353,6 +357,51 @@ pub fn apply_presence_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penal
             && seen.insert(token)
         {
             logits[idx] -= penalty;
+        }
+    }
+}
+
+/// Add the bias at each entry in `bias` to the logit of the
+/// corresponding token ID (OpenAI `logit_bias` semantic).
+///
+/// Per OpenAI spec the bias is additive and per-token: positive
+/// values *increase* the probability of the biased tokens; negative
+/// values *decrease* it. Bias values are constrained to `[-100, 100]`
+/// by the validator on the HTTP layer; values outside that range
+/// are rejected with `400 invalid_request_error` so callers learn
+/// about truly out-of-range values up front rather than producing
+/// silently-extreme logits.
+///
+/// **Determinism:** `bias` is a `HashMap` whose iteration order is
+/// non-deterministic, but because each bias is *additive and
+/// independent per token*, the *final logits* are deterministic
+/// regardless of iteration order. So this helper preserves the
+/// determinism guarantee that `sample_one_with_params` requires
+/// (no other sampling primitive relies on iteration order).
+///
+/// **Difference from [`apply_repeat_penalty`] / [`apply_presence_penalty`]:**
+/// both `apply_repeat_penalty` and `apply_presence_penalty` are
+/// *automatic* — they bias every seen token. `apply_logit_bias` is
+/// *explicit* — the caller specifies exactly which token IDs to bias
+/// and by how much.
+///
+/// No-op when `bias` is empty or `logits` is empty. Out-of-range
+/// token ids (any ID `>= logits.len()`) are silently ignored
+/// (matches OpenAI's server behaviour; a bias on a non-vocab token
+/// is meaningless and would only consume compute).
+pub fn apply_logit_bias(
+    logits: &mut [f32],
+    bias: &std::collections::HashMap<TokenId, f32>,
+) {
+    if bias.is_empty() || logits.is_empty() {
+        return;
+    }
+
+    for (&token, &delta) in bias {
+        if let Ok(idx) = usize::try_from(token)
+            && idx < logits.len()
+        {
+            logits[idx] += delta;
         }
     }
 }

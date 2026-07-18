@@ -22,6 +22,8 @@
 //! the existing public API path.
 #![allow(clippy::module_name_repetitions)]
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::types::TokenId;
@@ -62,6 +64,32 @@ pub struct SamplingParams {
     /// new topics." See [`crate::sampling::apply_presence_penalty`]
     /// for the implementation.
     pub presence_penalty: f32,
+    /// Per-token logit bias (OpenAI `logit_bias` semantic): an additive
+    /// bias added to the logit of specific token IDs keyed by their ID.
+    /// Positive values *increase* the probability of the biased tokens;
+    /// negative values *decrease* it. `None` disables.
+    ///
+    /// Per OpenAI spec the bias values are constrained to the
+    /// `[-100, 100]` range; the validator on the HTTP layer rejects
+    /// out-of-range and non-finite values with `400`. Out-of-vocab
+    /// token IDs (any ID `>= logits.len()`) are silently ignored
+    /// at sampling time (matches OpenAI's server behaviour). The
+    /// iteration order of the `HashMap` is non-deterministic, but
+    /// because the bias is additive and independent per token, the
+    /// *final logits* are deterministic regardless of iteration
+    /// order — so determinism is preserved.
+    ///
+    /// **Difference from `presence_penalty`:** `presence_penalty` is
+    /// *automatic* — every distinct seen token gets the same bias.
+    /// `logit_bias` is *explicit* — the caller specifies exactly which
+    /// token IDs to bias and by how much. See
+    /// [`vllm_core::sampling::apply_logit_bias`] for the
+    /// implementation.
+    ///
+    /// [`vllm_core::sampling::apply_logit_bias`]:
+    ///     https://docs.rs/vllm-core/latest/vllm_core/sampling/fn.apply_logit_bias.html
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logit_bias: Option<HashMap<TokenId, f32>>,
     /// Beam width. `1` ⇒ greedy; `>1` enables beam search.
     pub beam_width: usize,
     /// Length penalty applied during beam search ranking.
@@ -79,6 +107,7 @@ impl Default for SamplingParams {
             top_p: 1.0,
             repeat_penalty: 1.0,
             presence_penalty: 0.0,
+            logit_bias: None,
             beam_width: 1,
             length_penalty: 0.6,
             max_retries: 0,
@@ -137,6 +166,21 @@ impl SamplingParamsBuilder {
         self.inner.presence_penalty = v;
         self
     }
+    /// Set [`SamplingParams::logit_bias`].
+    ///
+    /// Per-token additive bias map. Positive values *increase* the
+    /// probability of the biased tokens; negative values *decrease*
+    /// it. `None` disables. See the field doc-comment on
+    /// [`SamplingParams::logit_bias`] for the difference from
+    /// `presence_penalty` and the determinism guarantee.
+    #[must_use]
+    pub fn with_logit_bias(
+        mut self,
+        bias: Option<HashMap<TokenId, f32>>,
+    ) -> Self {
+        self.inner.logit_bias = bias;
+        self
+    }
     /// Set [`SamplingParams::beam_width`].
     #[must_use]
     pub const fn with_beam_width(mut self, v: usize) -> Self {
@@ -157,7 +201,7 @@ impl SamplingParamsBuilder {
     }
     /// Finalize the builder into a [`SamplingParams`].
     #[must_use]
-    pub const fn build(self) -> SamplingParams {
+    pub fn build(self) -> SamplingParams {
         self.inner
     }
 }
