@@ -129,6 +129,24 @@ pub async fn completions(
         request.sampling_params.presence_penalty = pp;
     }
 
+    // Forward `logit_bias` to the engine's new
+    // `SamplingParams::logit_bias` slot (P30 v0.3 wire-type
+    // follow-up — engine wire-through). Mirrors the chat handler
+    // so the legacy endpoint sees the same bias semantics. The
+    // engine's `apply_logit_bias` adds each map value to the logit
+    // at the corresponding token position before the temperature /
+    // top-k / top-p pipeline. Per OpenAI spec the values are
+    // constrained to the `[-100, 100]` range; the validator
+    // (`validate_completion_request_fields`) rejects NaN /
+    // ±infinity / out-of-range values with `400`, so we only need
+    // to forward the field here. The completions handler does not
+    // currently log the field (parity with the `seed` / `user` /
+    // `frequency_penalty` / `presence_penalty` fields — chat
+    // handler logs them, completions handler does not).
+    if let Some(ref lb) = req.logit_bias {
+        request.sampling_params.logit_bias = Some(lb.clone());
+    }
+
     // Reject sampling parameters the engine cannot honour (currently
     // beam_width > 1) BEFORE enqueuing — see `sampling_validation`.
     validate_sampling_params(&request.sampling_params)?;

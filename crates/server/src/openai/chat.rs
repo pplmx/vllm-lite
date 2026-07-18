@@ -102,6 +102,7 @@ async fn handle_chat(
         seed = ?req.seed,
         frequency_penalty = ?req.frequency_penalty,
         presence_penalty = ?req.presence_penalty,
+        logit_bias_len = ?req.logit_bias.as_ref().map(|m| m.len()),
         prompt_tokens = prompt_tokens_len,
         "Request started"
     );
@@ -201,6 +202,26 @@ async fn handle_chat(
         request.sampling_params.presence_penalty = pp;
     }
 
+    // Forward `logit_bias` to the engine's new
+    // `SamplingParams::logit_bias` slot (P30 v0.3 wire-type
+    // follow-up — engine wire-through). The engine's
+    // `apply_logit_bias` adds each map value to the logit at the
+    // corresponding token position before the temperature / top-k /
+    // top-p pipeline, matching OpenAI's "logit_bias" semantic
+    // (positive = increase probability, negative = decrease
+    // probability). Per OpenAI spec the values are constrained to
+    // the `[-100, 100]` range; the validator
+    // (`validate_chat_request_fields`) rejects NaN / ±infinity /
+    // out-of-range values with `400`, so we only need to forward
+    // the field here. Token IDs are *not* validated — any
+    // `TokenId` (which is a `u32`) is accepted, and out-of-vocab
+    // IDs are silently ignored at sampling time (matches OpenAI's
+    // server behaviour). The `apply_logit_bias` helper skips when
+    // the map is empty or `None`, so omitting the field is a no-op.
+    if let Some(ref lb) = req.logit_bias {
+        request.sampling_params.logit_bias = Some(lb.clone());
+    }
+
     // Reject sampling parameters the engine cannot honour (currently
     // beam_width > 1) BEFORE enqueuing — see `sampling_validation`.
     validate_sampling_params(&request.sampling_params)?;
@@ -271,6 +292,7 @@ async fn handle_chat(
         seed = ?req.seed,
         frequency_penalty = ?req.frequency_penalty,
         presence_penalty = ?req.presence_penalty,
+        logit_bias_len = ?req.logit_bias.as_ref().map(|m| m.len()),
         output_tokens = output_tokens_len,
         duration_ms = duration_ms,
         "Request completed"
@@ -394,6 +416,7 @@ async fn stream_chat_completion(
         seed = ?req.seed,
         frequency_penalty = ?req.frequency_penalty,
         presence_penalty = ?req.presence_penalty,
+        logit_bias_len = ?req.logit_bias.as_ref().map(|m| m.len()),
         model = %req.model,
         prompt_tokens = prompt_tokens_len,
         "Streaming request started"
@@ -464,6 +487,26 @@ async fn stream_chat_completion(
     // frequency-style).
     if let Some(pp) = req.presence_penalty {
         request.sampling_params.presence_penalty = pp;
+    }
+
+    // Forward `logit_bias` to the engine's new
+    // `SamplingParams::logit_bias` slot (P30 v0.3 wire-type
+    // follow-up — engine wire-through). The engine's
+    // `apply_logit_bias` adds each map value to the logit at the
+    // corresponding token position before the temperature / top-k /
+    // top-p pipeline, matching OpenAI's "logit_bias" semantic
+    // (positive = increase probability, negative = decrease
+    // probability). Per OpenAI spec the values are constrained to
+    // the `[-100, 100]` range; the validator
+    // (`validate_chat_request_fields`) rejects NaN / ±infinity /
+    // out-of-range values with `400`, so we only need to forward
+    // the field here. Token IDs are *not* validated — any
+    // `TokenId` (which is a `u32`) is accepted, and out-of-vocab
+    // IDs are silently ignored at sampling time (matches OpenAI's
+    // server behaviour). The `apply_logit_bias` helper skips when
+    // the map is empty or `None`, so omitting the field is a no-op.
+    if let Some(ref lb) = req.logit_bias {
+        request.sampling_params.logit_bias = Some(lb.clone());
     }
 
     // Reject sampling parameters the engine cannot honour (currently

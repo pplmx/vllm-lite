@@ -28,8 +28,11 @@
 //! caller learns about the bad value before paying the cost of
 //! enqueuing the request.
 
+use std::collections::HashMap;
+
 use axum::{Json, http::StatusCode};
 use vllm_core::types::SamplingParams;
+use vllm_traits::TokenId;
 
 use super::types::{ChatRequest, CompletionRequest, ErrorResponse, ResponseFormat};
 
@@ -230,6 +233,77 @@ pub fn validate_penalty(
     Ok(())
 }
 
+/// Validate the `logit_bias` field on a chat or completion request.
+///
+/// Per OpenAI spec the `logit_bias` map's values are constrained to
+/// the `[-100, 100]` range and must be finite (NaN / ±infinity are
+/// rejected). Token IDs are *not* validated — any `TokenId` (which
+/// is a `u32`) is accepted, and out-of-vocab IDs are silently ignored
+/// at sampling time (matches OpenAI's server behaviour). The map
+/// itself can be empty (which is a no-op) or have any number of
+/// entries.
+///
+/// **Why validate up front:** an extreme bias (e.g. `1e30`) would
+/// produce extreme logits that dominate the softmax and could
+/// cause numerical issues during sampling. The `[-100, 100]` range
+/// is wide enough to effectively guarantee or suppress any single
+/// token while keeping the logits bounded for the softmax
+/// computation.
+///
+/// # Errors
+///
+/// Returns `Err((StatusCode::BAD_REQUEST, …))` when any value is
+/// non-finite or out of range. The error message names the
+/// offending token ID and value so callers can adapt without
+/// reading the source.
+pub fn validate_logit_bias(
+    bias: Option<&HashMap<TokenId, f32>>,
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    const LOGIT_BIAS_MIN: f32 = -100.0;
+    const LOGIT_BIAS_MAX: f32 = 100.0;
+    if let Some(map) = bias {
+        for (&token_id, &value) in map {
+            if value.is_nan() {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ErrorResponse::new(
+                        format!(
+                            "logit_bias value for token {token_id} must be a finite number in the [-100, 100] interval (got NaN)"
+                        )
+                        .as_str(),
+                        "invalid_request_error",
+                    )),
+                ));
+            }
+            if !value.is_finite() {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ErrorResponse::new(
+                        format!(
+                            "logit_bias value for token {token_id} must be a finite number in the [-100, 100] interval (got {value})"
+                        )
+                        .as_str(),
+                        "invalid_request_error",
+                    )),
+                ));
+            }
+            if value < LOGIT_BIAS_MIN || value > LOGIT_BIAS_MAX {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ErrorResponse::new(
+                        format!(
+                            "logit_bias value for token {token_id} must be in the [-100, 100] interval per OpenAI spec (got {value})"
+                        )
+                        .as_str(),
+                        "invalid_request_error",
+                    )),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Reject chat-request fields the engine does not yet honour, and
 /// validate the ones it does.
 ///
@@ -254,6 +328,12 @@ pub fn validate_penalty(
 ///   `apply_repeat_penalty` mapping `(1.0 + value).max(1e-3)`,
 ///   P29; `presence_penalty` via the new `apply_presence_penalty`
 ///   helper, P28).
+/// - `logit_bias` — each map value must be in `[-100, 100]` and
+///   finite (per OpenAI spec). Honoring is end-to-end via the new
+///   `vllm_core::sampling::apply_logit_bias` helper (P30). Token
+///   IDs are *not* validated — any `TokenId` is accepted, and
+///   out-of-vocab IDs are silently ignored at sampling time
+///   (matches OpenAI's server behaviour).
 ///
 /// # Errors
 ///
@@ -267,6 +347,7 @@ pub fn validate_chat_request_fields(
     validate_chat_response_format(req.response_format.as_ref())?;
     validate_penalty(req.frequency_penalty, "frequency_penalty")?;
     validate_penalty(req.presence_penalty, "presence_penalty")?;
+    validate_logit_bias(req.logit_bias.as_ref())?;
     if let Some(n) = req.n
         && n != 1
     {
@@ -297,7 +378,8 @@ pub fn validate_chat_request_fields(
 ///
 /// Mirror of [`validate_chat_request_fields`] for the legacy
 /// `/v1/completions` endpoint. Same set of checks (`n != 1`,
-/// non-empty `stop`, out-of-range `top_p`, out-of-range penalties).
+/// non-empty `stop`, out-of-range `top_p`, out-of-range penalties,
+/// out-of-range `logit_bias`).
 ///
 /// # Errors
 ///
@@ -308,6 +390,7 @@ pub fn validate_completion_request_fields(
     validate_top_p(req.top_p)?;
     validate_penalty(req.frequency_penalty, "frequency_penalty")?;
     validate_penalty(req.presence_penalty, "presence_penalty")?;
+    validate_logit_bias(req.logit_bias.as_ref())?;
     if let Some(n) = req.n
         && n != 1
     {
@@ -383,6 +466,7 @@ mod tests {
             seed: None,
             frequency_penalty: None,
             presence_penalty: None,
+            logit_bias: None,
         }
     }
 
@@ -401,6 +485,7 @@ mod tests {
             seed: None,
             frequency_penalty: None,
             presence_penalty: None,
+            logit_bias: None,
         }
     }
 
@@ -419,6 +504,7 @@ mod tests {
             seed: None,
             frequency_penalty: None,
             presence_penalty: None,
+            logit_bias: None,
         }
     }
 
@@ -513,6 +599,7 @@ mod tests {
             seed: None,
             frequency_penalty: None,
             presence_penalty: None,
+            logit_bias: None,
         };
         validate_chat_request_fields(&req)
             .expect("chat request with response_format = Text must pass full field validation");
@@ -537,6 +624,7 @@ mod tests {
             seed: None,
             frequency_penalty: None,
             presence_penalty: None,
+            logit_bias: None,
         };
         validate_chat_request_fields(&req).expect(
             "chat request with response_format = JsonObject must pass full field validation",
@@ -559,6 +647,7 @@ mod tests {
             seed: None,
             frequency_penalty: None,
             presence_penalty: None,
+            logit_bias: None,
         }
     }
 
@@ -576,6 +665,7 @@ mod tests {
             seed: None,
             frequency_penalty: None,
             presence_penalty: None,
+            logit_bias: None,
         }
     }
 
@@ -593,6 +683,7 @@ mod tests {
             seed: None,
             frequency_penalty: None,
             presence_penalty: None,
+            logit_bias: None,
         }
     }
 
@@ -787,6 +878,7 @@ mod tests {
             seed: Some(42),
             frequency_penalty: None,
             presence_penalty: None,
+            logit_bias: None,
         };
         validate_completion_request_fields(&req).expect(
             "completion with seed = Some(42) must pass validation (any i64 is valid per OpenAI spec)",
@@ -810,6 +902,7 @@ mod tests {
             seed: None,
             frequency_penalty: None,
             presence_penalty: None,
+            logit_bias: None,
         };
         validate_completion_request_fields(&req)
             .expect("completion with seed = None must pass validation");
@@ -922,6 +1015,139 @@ mod tests {
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
     }
 
+    // `validate_logit_bias` tests (P30 v0.3 wire-type follow-up).
+    // Per OpenAI spec `logit_bias` values are constrained to the
+    // `[-100, 100]` range and must be finite. NaN / ±infinity /
+    // out-of-range values are rejected with 400 invalid_request_error.
+    // Token IDs are *not* validated (any `TokenId` is accepted, and
+    // out-of-vocab IDs are silently ignored at sampling time).
+
+    #[test]
+    fn validate_logit_bias_none_passes() {
+        // No map → no validation needed. Pins the `None` early-return
+        // branch (every other branch iterates the map).
+        validate_logit_bias(None).expect("None must pass");
+    }
+
+    #[test]
+    fn validate_logit_bias_empty_map_passes() {
+        // Empty map is a valid no-op request (caller may have
+        // serialised an empty object by accident — engine treats it
+        // as no bias).
+        let empty: HashMap<TokenId, f32> = HashMap::new();
+        validate_logit_bias(Some(&empty)).expect("empty map must pass");
+    }
+
+    #[test]
+    fn validate_logit_bias_zero_passes() {
+        // Zero bias on a valid token ID → valid no-op for that token.
+        let mut bias = HashMap::new();
+        bias.insert(42, 0.0);
+        validate_logit_bias(Some(&bias)).expect("zero bias must pass");
+    }
+
+    #[test]
+    fn validate_logit_bias_positive_in_range_passes() {
+        // Mid-range positive bias — typical "boost this token" use
+        // case.
+        let mut bias = HashMap::new();
+        bias.insert(42, 50.0);
+        bias.insert(100, 100.0); // upper boundary
+        validate_logit_bias(Some(&bias))
+            .expect("positive in-range bias must pass");
+    }
+
+    #[test]
+    fn validate_logit_bias_negative_in_range_passes() {
+        // Mid-range negative bias — typical "suppress this token"
+        // use case.
+        let mut bias = HashMap::new();
+        bias.insert(42, -50.0);
+        bias.insert(100, -100.0); // lower boundary
+        validate_logit_bias(Some(&bias))
+            .expect("negative in-range bias must pass");
+    }
+
+    #[test]
+    fn validate_logit_bias_above_upper_bound_is_rejected() {
+        // 100.0001 is just outside the OpenAI-spec upper bound.
+        // The validator must reject it so callers learn about
+        // out-of-range values up front rather than producing
+        // extreme logits that saturate the softmax.
+        let mut bias = HashMap::new();
+        bias.insert(42, 100.001);
+        let err = validate_logit_bias(Some(&bias))
+            .expect_err("above-upper-bound bias must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn validate_logit_bias_below_lower_bound_is_rejected() {
+        let mut bias = HashMap::new();
+        bias.insert(42, -100.001);
+        let err = validate_logit_bias(Some(&bias))
+            .expect_err("below-lower-bound bias must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn validate_logit_bias_nan_is_rejected() {
+        // NaN would propagate through the softmax and produce NaN
+        // probabilities, which would crash the sampler. Reject
+        // up front.
+        let mut bias = HashMap::new();
+        bias.insert(42, f32::NAN);
+        let err = validate_logit_bias(Some(&bias))
+            .expect_err("NaN bias must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn validate_logit_bias_positive_infinity_is_rejected() {
+        let mut bias = HashMap::new();
+        bias.insert(42, f32::INFINITY);
+        let err = validate_logit_bias(Some(&bias))
+            .expect_err("+inf bias must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn validate_logit_bias_negative_infinity_is_rejected() {
+        let mut bias = HashMap::new();
+        bias.insert(42, f32::NEG_INFINITY);
+        let err = validate_logit_bias(Some(&bias))
+            .expect_err("-inf bias must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn validate_logit_bias_first_invalid_value_is_rejected() {
+        // When multiple values are present, the validator must
+        // reject on the *first* invalid value it sees (fail-fast).
+        // Map iteration order is non-deterministic but the *first*
+        // invalid value (regardless of order) must trigger the
+        // rejection — pins the iter-and-check loop semantics.
+        let mut bias = HashMap::new();
+        bias.insert(42, 0.5); // valid
+        bias.insert(100, 1000.0); // INVALID: above upper bound
+        let err = validate_logit_bias(Some(&bias))
+            .expect_err("at least one invalid value must reject");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn validate_logit_bias_token_id_unconstrained() {
+        // Token IDs are *not* validated. Any `TokenId` (which is a
+        // `u32`) is accepted, and out-of-vocab IDs are silently
+        // ignored at sampling time. Pins the documented contract.
+        let mut bias = HashMap::new();
+        bias.insert(0, 1.0); // 0 might be a special token (BOS)
+        bias.insert(u32::MAX, 1.0); // definitely out of vocab
+        validate_logit_bias(Some(&bias))
+            .expect("token IDs are not validated; bias values only");
+    }
+
+
     // End-to-end: `validate_chat_request_fields` integration with
     // the penalty validators. Same shape as the P22 response_format
     // / P23 seed tests — verify the validator stack accepts valid
@@ -1029,6 +1255,7 @@ mod tests {
             seed: None,
             frequency_penalty: Some(0.5),
             presence_penalty: Some(-0.5),
+            logit_bias: None,
         };
         validate_chat_request_fields(&req)
             .expect("chat with both penalties set must pass full field validation");
@@ -1051,6 +1278,7 @@ mod tests {
             seed: None,
             frequency_penalty: None,
             presence_penalty: None,
+            logit_bias: None,
         };
         validate_completion_request_fields(&req)
             .expect("completion with frequency_penalty = None must pass");
@@ -1071,6 +1299,7 @@ mod tests {
             seed: None,
             frequency_penalty: Some(1.0),
             presence_penalty: None,
+            logit_bias: None,
         };
         validate_completion_request_fields(&req)
             .expect("completion with frequency_penalty = 1.0 must pass (in [-2.0, 2.0])");
@@ -1091,6 +1320,7 @@ mod tests {
             seed: None,
             frequency_penalty: Some(3.0),
             presence_penalty: None,
+            logit_bias: None,
         };
         let err = validate_completion_request_fields(&req)
             .expect_err("completion with frequency_penalty = 3.0 must be rejected");
@@ -1113,10 +1343,133 @@ mod tests {
             seed: None,
             frequency_penalty: None,
             presence_penalty: Some(3.0),
+            logit_bias: None,
         };
         let err = validate_completion_request_fields(&req)
             .expect_err("completion with presence_penalty = 3.0 must be rejected");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         assert!(err.1.0.error.message.contains("presence_penalty"));
+    }
+
+    // `validate_chat_request_fields` integration with logit_bias
+    // (P30 v0.3 wire-type follow-up).
+
+    fn chat_request_with_logit_bias(
+        bias: Option<HashMap<TokenId, f32>>,
+    ) -> ChatRequest {
+        let mut req = chat_request_with_n(None);
+        req.logit_bias = bias;
+        req
+    }
+
+    #[test]
+    fn chat_request_with_logit_bias_none_passes_field_validation() {
+        let req = chat_request_with_logit_bias(None);
+        validate_chat_request_fields(&req).expect("chat with logit_bias = None must pass");
+    }
+
+    #[test]
+    fn chat_request_with_logit_bias_in_range_passes_field_validation() {
+        let mut bias = HashMap::new();
+        bias.insert(42, 50.0);
+        bias.insert(100, -50.0);
+        let req = chat_request_with_logit_bias(Some(bias));
+        validate_chat_request_fields(&req)
+            .expect("chat with in-range logit_bias must pass");
+    }
+
+    #[test]
+    fn chat_request_with_logit_bias_out_of_range_is_rejected() {
+        let mut bias = HashMap::new();
+        bias.insert(42, 200.0); // above OpenAI spec upper bound
+        let req = chat_request_with_logit_bias(Some(bias));
+        let err = validate_chat_request_fields(&req)
+            .expect_err("chat with out-of-range logit_bias must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("logit_bias"));
+    }
+
+    #[test]
+    fn chat_request_with_logit_bias_nan_is_rejected() {
+        let mut bias = HashMap::new();
+        bias.insert(42, f32::NAN);
+        let req = chat_request_with_logit_bias(Some(bias));
+        let err = validate_chat_request_fields(&req)
+            .expect_err("chat with NaN logit_bias must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("logit_bias"));
+    }
+
+    // `validate_completion_request_fields` integration with logit_bias
+    // (P30 v0.3 wire-type follow-up).
+
+    #[test]
+    fn completion_request_with_logit_bias_none_passes_field_validation() {
+        // Mirror of the chat test. None is the default path.
+        let req = CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+        };
+        validate_completion_request_fields(&req)
+            .expect("completion with logit_bias = None must pass");
+    }
+
+    #[test]
+    fn completion_request_with_logit_bias_in_range_passes_field_validation() {
+        let mut bias = HashMap::new();
+        bias.insert(42, 100.0);
+        let req = CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: Some(bias),
+        };
+        validate_completion_request_fields(&req)
+            .expect("completion with in-range logit_bias must pass");
+    }
+
+    #[test]
+    fn completion_request_with_logit_bias_out_of_range_is_rejected() {
+        let mut bias = HashMap::new();
+        bias.insert(42, -200.0); // below OpenAI spec lower bound
+        let req = CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: Some(bias),
+        };
+        let err = validate_completion_request_fields(&req)
+            .expect_err("completion with out-of-range logit_bias must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("logit_bias"));
     }
 }

@@ -363,3 +363,69 @@ fn arch_02_presence_penalty_combined_with_repeat_penalty() {
         "combined repeat + presence penalty must suppress token 10 and emit token 3 (got {t})"
     );
 }
+
+#[test]
+fn arch_02_logit_bias_flips_argmax_in_greedy_sampling() {
+    use std::collections::HashMap;
+    use vllm_core::sampling::sample_one_with_params;
+
+    // Logit vector: token 0 has logit 1.0, token 1 has logit 2.0,
+    // token 2 has logit 0.5. Without bias, the argmax is token 1.
+    let logits = vec![1.0, 2.0, 0.5];
+    let mut bias = HashMap::new();
+    bias.insert(2, 5.0); // bump token 2 way up → new argmax
+
+    let params = SamplingParams::builder()
+        .with_temperature(0.0)
+        .with_logit_bias(Some(bias))
+        .build();
+    let t = sample_one_with_params(&logits, &params, &[]);
+    assert_eq!(
+        t, 2,
+        "logit_bias on token 2 must flip argmax from 1 → 2 (got {t})"
+    );
+}
+
+#[test]
+fn arch_02_logit_bias_per_sequence_divergence() {
+    use std::collections::HashMap;
+    use vllm_core::sampling::sample_batch_with_params;
+
+    // Two sequences with the same logits but different logit_bias
+    // maps. Sequence A biases token 0 (positive), sequence B biases
+    // token 2 (positive). Per-sequence divergence: A should emit
+    // token 0, B should emit token 2. Pins the per-sequence
+    // `SamplingParams::logit_bias` threading through
+    // `sample_batch_with_params`.
+    let logits_list = vec![vec![0.5, 0.5, 0.5], vec![0.5, 0.5, 0.5]];
+    let seen_tokens = vec![vec![], vec![]];
+
+    let mut bias_a = HashMap::new();
+    bias_a.insert(0, 1.0); // logit at 0 = 1.5 → argmax = 0
+
+    let mut bias_b = HashMap::new();
+    bias_b.insert(2, 1.0); // logit at 2 = 1.5 → argmax = 2
+
+    let params_list = vec![
+        SamplingParams::builder()
+            .with_temperature(0.0)
+            .with_logit_bias(Some(bias_a))
+            .build(),
+        SamplingParams::builder()
+            .with_temperature(0.0)
+            .with_logit_bias(Some(bias_b))
+            .build(),
+    ];
+
+    let tokens = sample_batch_with_params(&logits_list, &params_list, &seen_tokens);
+    assert_eq!(
+        tokens[0], 0,
+        "seq A with bias on token 0 must emit 0 (got {})",
+        tokens[0]
+    );
+    assert_eq!(
+        tokens[1], 2,
+        "seq B with bias on token 2 must emit 2 (got {})",
+        tokens[1]
+    );
+}

@@ -3,7 +3,10 @@
 //! These mirror the public `OpenAI` Chat Completions / Completions / Embeddings
 //! / Batch schemas 1:1. Field names and JSON casing match the upstream spec;
 //! renaming a field here is a breaking API change.
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
+use vllm_traits::TokenId;
 
 use crate::util::time::unix_now_secs;
 
@@ -238,6 +241,35 @@ pub struct ChatRequest {
     /// parity with P21/P22/P23/P27 observability plumbing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub presence_penalty: Option<f32>,
+    /// OpenAI logit bias (v0.3 wire-type follow-up). A map of token
+    /// IDs to additive bias values in the `[-100, 100]` range.
+    /// Positive values *increase* the probability of the biased
+    /// tokens; negative values *decrease* it.
+    ///
+    /// Per OpenAI spec the bias values are constrained to the
+    /// `[-100, 100]` range and must be finite; the validator on
+    /// `validate_chat_request_fields` rejects NaN / ±infinity /
+    /// out-of-range values with `400 invalid_request_error`. Any
+    /// token ID is accepted (out-of-vocab IDs are silently
+    /// ignored by the engine — matches OpenAI's server behaviour).
+    ///
+    /// **Honoring is end-to-end** via the new
+    /// `vllm_core::sampling::apply_logit_bias` helper (added by
+    /// P30): the chat handler forwards the map verbatim to
+    /// `SamplingParams::logit_bias`, and the sampler adds each
+    /// bias to the logit at the corresponding token position
+    /// before the temperature / top-k / top-p pipeline. The map
+    /// iteration order is non-deterministic (HashMap) but the
+    /// *final logits* are deterministic because each bias is
+    /// additive and independent per token — so determinism is
+    /// preserved.
+    ///
+    /// Threaded into the chat handler's `tracing::info!(...)` log
+    /// lines as `logit_bias_len = ?req.logit_bias.as_ref().map(|m| m.len())`
+    /// (count only, not the full map, to keep log lines bounded
+    /// for typical maps of up to ~300 entries).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logit_bias: Option<HashMap<TokenId, f32>>,
 }
 
 /// A choice in a chat completion response.
@@ -387,6 +419,22 @@ pub struct CompletionRequest {
     /// to `SamplingParams::presence_penalty`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub presence_penalty: Option<f32>,
+    /// OpenAI logit bias (v0.3 wire-type follow-up). See
+    /// [`ChatRequest::logit_bias`] for the full contract:
+    /// per OpenAI spec the valid range is `[-100, 100]` (default
+    /// no bias); the validator on
+    /// `validate_completion_request_fields` rejects NaN /
+    /// ±infinity / out-of-range values with `400`. Honoring is
+    /// end-to-end via the new
+    /// `vllm_core::sampling::apply_logit_bias` helper (added by
+    /// P30) — the completions handler forwards the map verbatim
+    /// to `SamplingParams::logit_bias`. The completions handler
+    /// does not currently log the field (parity with the
+    /// `seed` / `user` / `frequency_penalty` / `presence_penalty`
+    /// fields — chat handler logs them, completions handler does
+    /// not).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logit_bias: Option<HashMap<TokenId, f32>>,
 }
 
 /// A single choice in a text-completion response. The `text` field
