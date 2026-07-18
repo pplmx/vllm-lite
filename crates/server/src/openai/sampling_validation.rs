@@ -160,18 +160,21 @@ pub fn validate_chat_response_format(
 /// `frequency_penalty` this maps to `repeat_penalty = 1.0`; for
 /// `presence_penalty` this is the no-op default).
 ///
-/// **Honoring note (v0.3 declaration PR):** the engine's
-/// `apply_repeat_penalty` implements frequency-style semantics
-/// (penalty proportional to occurrence count). For
-/// `frequency_penalty >= 0` the chat / completions handlers map the
-/// field to `repeat_penalty = max(1.0, 1.0 + value)` so the
-/// penalty is honored end-to-end; negative `frequency_penalty`
-/// values are silently clamped to `1.0` (no penalty) because the
-/// current `apply_repeat_penalty` logit-divide math inverts the
-/// sign of negative logits when dividing by a value `< 1.0`,
-/// producing undefined ordering. `presence_penalty` is declared
-/// and validated here but not wired to the engine — it requires a
-/// new presence-aware penalty helper (v32+ work). See the
+/// **Honoring note (v0.3 declaration + P29 sign-aware engine):**
+/// the engine's `apply_repeat_penalty` implements frequency-style
+/// semantics (penalty proportional to occurrence count). The chat
+/// / completions handlers map `frequency_penalty` to
+/// `repeat_penalty = (1.0 + value).max(1e-3)`. For positive
+/// `frequency_penalty` the engine divides positive logits and
+/// multiplies negative logits by `repeat_penalty` (P29 sign-aware
+/// refactor), giving the correct "penalize repetition" semantic.
+/// For negative `frequency_penalty` (boost) the engine uses the
+/// same sign-aware multiply, giving the correct "boost repetition"
+/// semantic. The 1e-3 floor prevents divide-by-zero for extreme
+/// negative values (e.g. `frequency_penalty = -1.5` would otherwise
+/// produce `repeat_penalty = -0.5`). `presence_penalty` is honored
+/// end-to-end via the new `apply_presence_penalty` helper (P28).
+/// See the
 /// `frequency_penalty` / `presence_penalty` field doc-comments on
 /// [`ChatRequest`] for the full per-field rationale.
 ///
@@ -246,11 +249,11 @@ pub fn validate_penalty(
 ///   crash the sampler or silently produce garbage, so we reject
 ///   up front.
 /// - `frequency_penalty` / `presence_penalty` — must be in
-///   `[-2.0, 2.0]` and finite (per OpenAI spec). `frequency_penalty`
-///   is honored end-to-end for non-negative values (mapped to
-///   `repeat_penalty = max(1.0, 1.0 + value)`); `presence_penalty`
-///   is declared + validated but not honored (engine doesn't have
-///   presence-aware penalty math).
+///   `[-2.0, 2.0]` and finite (per OpenAI spec). Both fields are
+///   honored end-to-end (`frequency_penalty` via the sign-aware
+///   `apply_repeat_penalty` mapping `(1.0 + value).max(1e-3)`,
+///   P29; `presence_penalty` via the new `apply_presence_penalty`
+///   helper, P28).
 ///
 /// # Errors
 ///

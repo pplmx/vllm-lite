@@ -1592,8 +1592,73 @@ async fn test_chat_frequency_penalty_zero_means_no_penalty() {
 /// spec) but the wire-through path uses `max(1.0, 1.0 + value)` to
 /// avoid the logit-divide sign-flip bug in `apply_repeat_penalty` for
 /// `repeat_penalty < 1.0`. Pins the documented v0.3 limitation.
+/// P29 v0.3 wire-type follow-up: negative `frequency_penalty` values
+/// are forwarded verbatim (with a 1e-3 floor to prevent
+/// divide-by-zero at extreme negative values). Previously (P27)
+/// the chat handler clamped negative `frequency_penalty` to
+/// `repeat_penalty = 1.0` (no penalty) because the engine's
+/// `apply_repeat_penalty` used simple logit-division, which had a
+/// sign-flip bug for negative logits with `penalty < 1.0`. P29
+/// refactors `apply_repeat_penalty` to be sign-aware, so the
+/// wire-through can forward negative `frequency_penalty` verbatim
+/// (modulo the 1e-3 divide-by-zero floor) and produce the OpenAI
+/// "boost repetition" semantic.
+///
+/// Pins the new contract: `frequency_penalty = -0.5` on the JSON
+/// request must land as `SamplingParams::repeat_penalty = 0.5` on
+/// the engine side (a mid-range negative that produces a
+/// legitimate boost via the sign-aware multiply path).
 #[tokio::test]
-async fn test_chat_frequency_penalty_negative_is_clamped_to_no_penalty() {
+async fn test_chat_frequency_penalty_negative_is_forwarded_verbatim() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "frequency_penalty": -0.5,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "negative frequency_penalty must pass validation (in [-2.0, 2.0] range)"
+    );
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    // Mapping: repeat_penalty = max(1e-3, 1.0 + (-0.5)) = max(1e-3, 0.5) = 0.5
+    // The pre-P29 `max(1.0, ...)` clamp is removed; -0.5 produces
+    // a legitimate boost (sign-aware multiply on negative logits).
+    assert!(
+        (params.repeat_penalty - 0.5).abs() < 1e-6,
+        "frequency_penalty = -0.5 must round-trip to repeat_penalty = 0.5 (boost); got {}",
+        params.repeat_penalty
+    );
+}
+
+/// P29 v0.3 wire-type follow-up: extreme negative `frequency_penalty`
+/// values (≤ -1.0) are floored to `repeat_penalty = 1e-3` to
+/// prevent divide-by-zero in the engine (which would otherwise
+/// happen for positive logits under the divisor formulation).
+/// This is the practical limit for boost semantic — values at or
+/// below -1.0 produce maximum boost (1e-3 is a strong boost but
+/// avoids the infinity from `logit / 0.0`).
+#[tokio::test]
+async fn test_chat_frequency_penalty_extreme_negative_is_floored() {
     let (state, _handle, captured) = state_with_capturing_engine();
 
     let body = serde_json::json!({
@@ -1617,16 +1682,21 @@ async fn test_chat_frequency_penalty_negative_is_clamped_to_no_penalty() {
     assert_eq!(
         response.status(),
         StatusCode::OK,
-        "negative frequency_penalty must pass validation (in [-2.0, 2.0] range); the wire-through clamps to no-penalty"
+        "extreme negative frequency_penalty must pass validation (in [-2.0, 2.0] range)"
     );
 
     let captured = captured.lock().await;
     let params = captured
         .as_ref()
         .expect("capturing mock must have observed the AddRequest");
+    // Mapping: repeat_penalty = max(1e-3, 1.0 + (-1.5)) = max(1e-3, -0.5) = 1e-3
+    // The 1e-3 floor prevents divide-by-zero; the value is no
+    // longer clamped to 1.0 (P27 behavior) which would have
+    // silently degraded to "no penalty" instead of producing the
+    // legitimate maximum boost semantic.
     assert!(
-        (params.repeat_penalty - 1.0).abs() < 1e-6,
-        "negative frequency_penalty must clamp to repeat_penalty = 1.0; got {}",
+        (params.repeat_penalty - 1e-3).abs() < 1e-9,
+        "frequency_penalty = -1.5 must floor to repeat_penalty = 1e-3 (max boost); got {}",
         params.repeat_penalty
     );
 }

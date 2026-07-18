@@ -151,28 +151,37 @@ async fn handle_chat(
     }
 
     // Forward `frequency_penalty` to the engine's existing
-    // `repeat_penalty` slot (P27 v0.3 wire-type follow-up). The
-    // engine's `apply_repeat_penalty` divides logits at previously-
-    // seen token positions by `repeat_penalty`, which matches
-    // OpenAI's "halve logit on each repetition" semantics for
-    // `frequency_penalty >= 0` via the mapping
-    // `repeat_penalty = max(1.0, 1.0 + frequency_penalty)`.
-    // Negative values are clamped to `1.0` (no penalty) because
-    // `repeat_penalty < 1.0` would invert the engine's logit-divide
-    // math (boosting repetition) — that is the desired OpenAI
-    // behaviour but the current `apply_repeat_penalty` flips the
-    // sign of negative logits when dividing by a value `< 1.0`,
-    // producing undefined ordering rather than a clean boost.
-    // Surfacing the v0.3 / v32+ "boost" semantics requires either a
-    // new `apply_repeat_boost` helper or a sign-aware refactor of
-    // `apply_repeat_penalty`; either is mechanical but out of scope
-    // for the declaration PR. The validator still rejects
-    // `frequency_penalty < -2.0` (per OpenAI spec) so callers learn
-    // about truly out-of-range values; the in-range negative case
-    // silently degrades to "no penalty" rather than producing
-    // garbage output.
+    // `repeat_penalty` slot (P27 v0.3 wire-type follow-up; P29
+    // closes the boost-semantics carve-out via a sign-aware
+    // engine refactor). The engine's `apply_repeat_penalty`
+    // (P29 sign-aware) handles positive and negative logits
+    // symmetrically:
+    //   - logit >= 0: divide by `repeat_penalty`
+    //   - logit < 0: multiply by `repeat_penalty`
+    // This gives correct OpenAI-spec behaviour for both positive
+    // `frequency_penalty` (penalize repetition: divide positive
+    // logits by > 1, multiply negative logits by > 1 → both move
+    // AWAY from zero) and negative `frequency_penalty` (boost
+    // repetition: divide positive logits by < 1, multiply negative
+    // logits by < 1 → both move TOWARD zero). The mapping is
+    // `repeat_penalty = 1.0 + frequency_penalty` with a 1e-3
+    // floor to prevent divide-by-zero when the user requests
+    // extreme negative `frequency_penalty` (e.g. -1.0 → rp=0.0
+    // would divide positive logits by zero). The 1e-3 floor is
+    // the practical limit for boost semantic in the divisor
+    // formulation; values above the floor produce a legitimate
+    // boost via the sign-aware multiply path. Examples:
+    //   - frequency_penalty = 1.0 → repeat_penalty = 2.0 (penalize)
+    //   - frequency_penalty = 0.0 → repeat_penalty = 1.0 (no-op)
+    //   - frequency_penalty = -0.5 → repeat_penalty = 0.5 (boost)
+    //   - frequency_penalty = -1.0 → repeat_penalty = 0.001 (max boost; floored)
+    //   - frequency_penalty = -2.0 → repeat_penalty = 0.001 (also floored)
+    //
+    // P29 removes the P27-era `max(1.0, 1.0 + value)` clamp that
+    // silently degraded negative values to "no penalty" — the
+    // sign-aware engine can now handle them correctly.
     if let Some(fp) = req.frequency_penalty {
-        request.sampling_params.repeat_penalty = (1.0 + fp).max(1.0);
+        request.sampling_params.repeat_penalty = (1.0 + fp).max(1e-3);
     }
 
     // Forward `presence_penalty` to the engine's new
@@ -433,15 +442,17 @@ async fn stream_chat_completion(
     }
 
     // Forward `frequency_penalty` to the engine's
-    // `repeat_penalty` slot (P27 v0.3 wire-type follow-up). See
-    // the matching block in `non_stream_chat_completion` for the
-    // full rationale on the mapping
-    // `repeat_penalty = max(1.0, 1.0 + frequency_penalty)` and why
-    // negative values are clamped to `1.0`. The streaming variant
-    // mirrors the non-streaming wire-through so SSE clients see
-    // the same penalty behavior as unary clients.
+    // `repeat_penalty` slot (streaming variant; P27 declaration +
+    // P29 sign-aware engine refactor). See the matching block in
+    // `non_stream_chat_completion` for the full rationale on the
+    // mapping `(1.0 + fp).max(1e-3)` and why the 1e-3 floor is
+    // needed to prevent divide-by-zero at extreme negative values.
+    // The streaming variant mirrors the non-streaming wire-through
+    // so SSE clients see the same penalty behavior as unary
+    // clients (including the boost semantic for negative values
+    // now that the engine is sign-aware).
     if let Some(fp) = req.frequency_penalty {
-        request.sampling_params.repeat_penalty = (1.0 + fp).max(1.0);
+        request.sampling_params.repeat_penalty = (1.0 + fp).max(1e-3);
     }
 
     // Forward `presence_penalty` to the engine's
