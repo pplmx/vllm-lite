@@ -1673,14 +1673,19 @@ async fn test_chat_without_frequency_penalty_works_baseline() {
     );
 }
 
-/// `presence_penalty` is declared + validated but **not wired** to
-/// the engine today (presence-aware penalty math is v32+ work). The
-/// handler must accept the field, and `repeat_penalty` must remain
-/// at the engine default of `1.0` regardless of the presence_penalty
-/// value. This pins the "declaration + validation only, no engine
-/// side-effect" contract for v0.3.
+/// `presence_penalty` is **wired end-to-end** to the engine's
+/// `SamplingParams::presence_penalty` slot (P28 v0.3 wire-type
+/// follow-up — engine wire-through). Unlike `frequency_penalty`
+/// (which maps to `repeat_penalty` via a clamped `max(1.0, ...)`
+/// formula), `presence_penalty` is forwarded verbatim because the
+/// engine's `apply_presence_penalty` helper implements an *additive*
+/// bias (subtracting the penalty from each distinct seen-token's
+/// logit) that handles both positive (discourage) and negative
+/// (encourage) values correctly. Pins the v0.3 wire-through
+/// contract: `presence_penalty = 1.5` on the JSON request must land
+/// as `sampling_params.presence_penalty = 1.5` on the engine side.
 #[tokio::test]
-async fn test_chat_presence_penalty_accepted_but_not_wired() {
+async fn test_chat_forwards_presence_penalty_to_engine() {
     let (state, _handle, captured) = state_with_capturing_engine();
 
     let body = serde_json::json!({
@@ -1711,12 +1716,165 @@ async fn test_chat_presence_penalty_accepted_but_not_wired() {
     let params = captured
         .as_ref()
         .expect("capturing mock must have observed the AddRequest");
-    // presence_penalty is NOT wired → repeat_penalty stays at engine
-    // default 1.0.
     assert!(
-        (params.repeat_penalty - 1.0).abs() < 1e-6,
-        "presence_penalty must NOT affect repeat_penalty (declaration-only v0.3 contract); got {}",
-        params.repeat_penalty
+        (params.presence_penalty - 1.5).abs() < 1e-6,
+        "presence_penalty = 1.5 must round-trip to SamplingParams::presence_penalty = 1.5; got {}",
+        params.presence_penalty
+    );
+}
+
+/// Baseline: omitting `presence_penalty` must leave
+/// `sampling_params.presence_penalty` at the engine default of `0.0`
+/// (no penalty). Pins the backward-compatible path so legacy clients
+/// are not broken by the new field. Mirrors the parallel baseline
+/// for `frequency_penalty` (P27).
+#[tokio::test]
+async fn test_chat_without_presence_penalty_works_baseline() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "omitting presence_penalty must continue to work (backward-compat baseline)"
+    );
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    assert!(
+        params.presence_penalty.abs() < 1e-6,
+        "omitted presence_penalty must leave presence_penalty at engine default 0.0; got {}",
+        params.presence_penalty
+    );
+}
+
+/// Negative `presence_penalty` values must be forwarded verbatim
+/// (NOT clamped, unlike `frequency_penalty`). This is the key
+/// behavioural difference from `frequency_penalty`: the engine's
+/// `apply_presence_penalty` uses additive subtraction, so negative
+/// values cleanly *encourage* repetition (subtracting a negative =
+/// adding to the logit). `frequency_penalty`'s clamping workaround
+/// exists because `apply_repeat_penalty` uses logit division,
+/// which sign-flips negative logits; `apply_presence_penalty` has
+/// no such issue.
+#[tokio::test]
+async fn test_chat_presence_penalty_negative_is_forwarded_verbatim() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "presence_penalty": -1.0,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "negative presence_penalty must pass validation (in [-2.0, 2.0])"
+    );
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    assert!(
+        (params.presence_penalty - -1.0).abs() < 1e-6,
+        "negative presence_penalty must be forwarded verbatim (no clamp); got {}",
+        params.presence_penalty
+    );
+}
+
+/// `/v1/completions` (legacy endpoint) must also forward
+/// `presence_penalty` to the engine, mirroring the chat endpoint's
+/// wire-through. Pins the cross-endpoint parity contract.
+#[tokio::test]
+async fn test_completions_forwards_presence_penalty_to_engine() {
+    use vllm_server::openai::completions::completions;
+    let (engine_tx, _handle, captured) = spawn_capturing_mock_engine();
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "presence_penalty": 1.0,
+        "max_tokens": 1,
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "/v1/completions must accept and forward presence_penalty to the engine"
+    );
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    assert!(
+        (params.presence_penalty - 1.0).abs() < 1e-6,
+        "completions endpoint must also forward presence_penalty → SamplingParams.presence_penalty; got {}",
+        params.presence_penalty
     );
 }
 

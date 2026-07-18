@@ -247,3 +247,119 @@ fn arch_02_repeat_penalty_suppresses_seen_token() {
         "repeat_penalty must suppress the previously-seen token (got {t2})"
     );
 }
+
+// P28 v0.3 wire-type follow-up: presence_penalty engine wire-through.
+//
+// Pins the presence-style semantic end-to-end through
+// `sample_one_with_params`: presence_penalty = 1.0 with seen set
+// [10] must subtract 1.0 from the logit at 10, flipping the argmax
+// from 10 to 3 (the secondary peak).
+//
+// Uses a lower-level test (no Engine mock needed) — we call
+// `sample_one_with_params` directly to verify the helper is wired
+// into the sampling pipeline at the right point in the order
+// (repeat_penalty → presence_penalty → temperature → top_k → top_p).
+
+#[test]
+fn arch_02_presence_penalty_suppresses_seen_token_once_per_distinct_id() {
+    use vllm_core::sampling::sample_one_with_params;
+
+    // 32-token logit vector; token 10 is the strictly-highest peak
+    // (logit 2.0), token 3 is the secondary at logit 1.0 (strictly
+    // lower so the baseline argmax is unambiguously token 10).
+    let logits = vec![0.0f32; 32];
+    let mut logits = logits;
+    logits[10] = 2.0;
+    logits[3] = 1.0;
+
+    // Baseline: no presence_penalty → argmax is 10 (strictly
+    // highest).
+    let params_no_pp = SamplingParams::builder().with_temperature(0.0).build();
+    let t_baseline = sample_one_with_params(&logits, &params_no_pp, &[10]);
+    assert_eq!(
+        t_baseline, 10,
+        "baseline (presence_penalty = 0) must emit the primary peak"
+    );
+
+    // With presence_penalty = 1.0 on seen = [10], the logit at 10
+    // drops from 2.0 to 1.0. Token 3 still has 1.0. Tied → lowest
+    // index → token 3. Argmax flips from 10 to 3.
+    let params_pp = SamplingParams::builder()
+        .with_temperature(0.0)
+        .with_presence_penalty(1.0)
+        .build();
+    let t_pp = sample_one_with_params(&logits, &params_pp, &[10]);
+    assert_eq!(
+        t_pp, 3,
+        "presence_penalty = 1.0 on seen = [10] must suppress token 10 (got {t_pp})"
+    );
+
+    // Key behavioural difference from repeat_penalty: presence-style
+    // is per-distinct-id, not per-occurrence. With seen = [10, 10,
+    // 10, 10, 10] (5 occurrences), the penalty must still be
+    // subtracted ONCE (logit at 10 goes from 2.0 to 1.0, not to
+    // -3.0). The result must match the single-occurrence case.
+    let t_pp_repeated = sample_one_with_params(&logits, &params_pp, &[10, 10, 10, 10, 10]);
+    assert_eq!(
+        t_pp_repeated, 3,
+        "presence_penalty must subtract once per *distinct* id, not per occurrence (got {t_pp_repeated})"
+    );
+}
+
+#[test]
+fn arch_02_presence_penalty_negative_encourages_repetition() {
+    use vllm_core::sampling::sample_one_with_params;
+
+    // Two-token logit vector; token 0 is the secondary peak.
+    let logits = vec![1.0f32, 2.0];
+    let params = SamplingParams::builder()
+        .with_temperature(0.0)
+        .with_presence_penalty(-1.0) // encourage token 0
+        .build();
+
+    // Without presence_penalty, the argmax would be token 1
+    // (logit 2.0). With presence_penalty = -1.0 on seen = [0], the
+    // logit at 0 increases from 1.0 to 2.0 (subtracting -1.0 is the
+    // same as adding 1.0). Tied argmax → lowest index → token 0.
+    let t = sample_one_with_params(&logits, &params, &[0]);
+    assert_eq!(
+        t, 0,
+        "negative presence_penalty must encourage repetition by raising seen-token logits (got {t})"
+    );
+}
+
+#[test]
+fn arch_02_presence_penalty_combined_with_repeat_penalty() {
+    use vllm_core::sampling::sample_one_with_params;
+
+    // Logit vector: token 10 has logit 3.0, token 3 has logit 1.5.
+    let logits = vec![0.0f32; 32];
+    let mut logits = logits;
+    logits[10] = 3.0;
+    logits[3] = 1.5;
+
+    // With repeat_penalty = 2.0 (frequency-style) on seen = [10],
+    // the logit at 10 is halved from 3.0 to 1.5. Tied with token 3
+    // → lowest index → token 3. Argmax flips.
+    //
+    // Adding presence_penalty = 0.5 (presence-style) subtracts 0.5
+    // from the logit at 10 (the only distinct seen token), taking
+    // it from 1.5 to 1.0. Token 3 stays at 1.5. Argmax is now
+    // firmly token 3.
+    //
+    // This pins the ordering in `sample_one_with_params`:
+    // repeat_penalty FIRST (divide), then presence_penalty
+    // (subtract). Without this ordering, the test would still
+    // pass (both penalties suppress token 10 in the same direction)
+    // but the intermediate logits would differ.
+    let params = SamplingParams::builder()
+        .with_temperature(0.0)
+        .with_repeat_penalty(2.0)
+        .with_presence_penalty(0.5)
+        .build();
+    let t = sample_one_with_params(&logits, &params, &[10]);
+    assert_eq!(
+        t, 3,
+        "combined repeat + presence penalty must suppress token 10 and emit token 3 (got {t})"
+    );
+}

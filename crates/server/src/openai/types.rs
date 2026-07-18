@@ -223,25 +223,24 @@ pub struct ChatRequest {
     /// "seen?" check), negative values *encourage* presence of
     /// already-seen tokens. The default is `0` (no penalty).
     ///
-    /// **Honoring is a no-op today** — vllm-lite's
-    /// `apply_repeat_penalty` implements *frequency*-style semantics
-    /// (penalty proportional to occurrence count), not the
-    /// binary-presence semantics OpenAI's `presence_penalty` field
-    /// defines. Adding a presence-aware penalty step requires a new
-    /// helper (`apply_presence_penalty`) that adds
-    /// `presence_penalty` (when positive) to every seen-token logit
-    /// regardless of count, or subtracts it (when negative). That
-    /// helper is v32+ work — out of scope for the v0.3 declaration
-    /// PR. The validator rejects `presence_penalty < -2.0`,
-    /// `> 2.0`, `NaN`, or `±inf` per OpenAI spec, but the value is
-    /// currently not forwarded to the engine.
+    /// **Honoring is end-to-end** via the new
+    /// `vllm_core::sampling::apply_presence_penalty` helper (added
+    /// by P28): the chat handler forwards `presence_penalty` to the
+    /// engine's `SamplingParams::presence_penalty` slot, and the
+    /// helper subtracts the penalty from the logit of every
+    /// *distinct* seen token regardless of occurrence count —
+    /// matching OpenAI's presence-style semantic. Positive values
+    /// discourage repetition; negative values *encourage*
+    /// repetition (because subtracting a negative is the same as
+    /// adding). Unlike `frequency_penalty` (clamped via `max(1.0,
+    /// 1.0 + value)` to work around the `apply_repeat_penalty`
+    /// logit-divide sign-flip bug for negative values),
+    /// `presence_penalty` is an *additive* bias so the value is
+    /// forwarded verbatim — no clamping needed.
     ///
     /// Threaded into the chat handler's `tracing::info!(...)` log
-    /// lines as `presence_penalty = ?req.presence_penalty` so the
-    /// field is observable in trace logs even though honoring is
-    /// deferred. Clients that set `presence_penalty` today should
-    /// be aware that the sampler treats it as a no-op (the model
-    /// produces output as if `presence_penalty = 0`).
+    /// lines as `presence_penalty = ?req.presence_penalty` for
+    /// parity with P21/P22/P23/P27 observability plumbing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub presence_penalty: Option<f32>,
 }
@@ -387,11 +386,10 @@ pub struct CompletionRequest {
     /// OpenAI presence penalty (v0.3 wire-type follow-up). See
     /// [`ChatRequest::presence_penalty`] for the full contract:
     /// per OpenAI spec the valid range is `[-2.0, 2.0]` (default
-    /// `0`); honoring is a no-op today because the engine's
-    /// `apply_repeat_penalty` implements frequency-style
-    /// (count-proportional) semantics, not presence-style
-    /// (binary seen? check) semantics. A presence-aware penalty
-    /// helper is v32+ work.
+    /// `0`); honoring is end-to-end via the new
+    /// `vllm_core::sampling::apply_presence_penalty` helper (added
+    /// by P28). The completions handler forwards the value verbatim
+    /// to `SamplingParams::presence_penalty`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub presence_penalty: Option<f32>,
 }

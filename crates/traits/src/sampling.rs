@@ -29,8 +29,8 @@ use crate::types::TokenId;
 /// Per-request sampling configuration.
 ///
 /// Defaults are tuned for deterministic greedy decoding
-/// (`temperature = 0`, `top_p = 1`, `repeat_penalty = 1`, `beam_width = 1`);
-/// raise `temperature`, lower `top_p`, etc. for sampling.
+/// (`temperature = 0`, `top_p = 1`, `repeat_penalty = 1`, `presence_penalty = 0`,
+/// `beam_width = 1`); raise `temperature`, lower `top_p`, etc. for sampling.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SamplingParams {
     /// Sampling temperature. `0.0` selects greedy argmax; `1.0` is the
@@ -44,6 +44,24 @@ pub struct SamplingParams {
     /// Repeat penalty applied to logits at positions already seen in this
     /// sequence. `1.0` disables.
     pub repeat_penalty: f32,
+    /// Presence penalty (OpenAI `presence_penalty` semantic): a single
+    /// additive bias subtracted from the logit of every *distinct* token
+    /// already seen in this sequence, regardless of how many times it
+    /// appeared. Positive values discourage repetition (encourage new
+    /// topics); negative values *encourage* repetition. `0.0` disables.
+    ///
+    /// **Difference from `repeat_penalty`:** `repeat_penalty` is
+    /// *frequency-style* — it divides the logit by `repeat_penalty`
+    /// *once per occurrence*, so a token seen 3 times gets divided 3
+    /// times. `presence_penalty` is *presence-style* — it subtracts
+    /// `presence_penalty` from the logit once per *distinct* token, so
+    /// a token seen 3 times still only gets the penalty subtracted once.
+    /// This matches OpenAI's spec for `presence_penalty`: "Positive
+    /// values penalize new tokens based on whether they appear in the
+    /// prompt so far, increasing the model's likelihood to talk about
+    /// new topics." See [`crate::sampling::apply_presence_penalty`]
+    /// for the implementation.
+    pub presence_penalty: f32,
     /// Beam width. `1` ⇒ greedy; `>1` enables beam search.
     pub beam_width: usize,
     /// Length penalty applied during beam search ranking.
@@ -60,6 +78,7 @@ impl Default for SamplingParams {
             top_k: 0,
             top_p: 1.0,
             repeat_penalty: 1.0,
+            presence_penalty: 0.0,
             beam_width: 1,
             length_penalty: 0.6,
             max_retries: 0,
@@ -105,6 +124,17 @@ impl SamplingParamsBuilder {
     #[must_use]
     pub const fn with_repeat_penalty(mut self, v: f32) -> Self {
         self.inner.repeat_penalty = v;
+        self
+    }
+    /// Set [`SamplingParams::presence_penalty`].
+    ///
+    /// Positive values discourage repetition; negative values encourage
+    /// repetition. `0.0` disables. See the field doc-comment on
+    /// [`SamplingParams::presence_penalty`] for the difference from
+    /// `repeat_penalty`.
+    #[must_use]
+    pub const fn with_presence_penalty(mut self, v: f32) -> Self {
+        self.inner.presence_penalty = v;
         self
     }
     /// Set [`SamplingParams::beam_width`].
