@@ -148,6 +148,85 @@ pub fn validate_chat_response_format(
     Ok(())
 }
 
+/// Validate an OpenAI `frequency_penalty` or `presence_penalty` value.
+///
+/// Per the OpenAI API specification the valid range for both fields
+/// is `[-2.0, 2.0]`. Values outside that range are rejected with
+/// `400 invalid_request_error`; `NaN` is rejected (the sampler
+/// math is ill-defined); `±infinity` is rejected (the engine would
+/// either crash or silently saturate).
+///
+/// `None` is accepted (use the engine default of no penalty — for
+/// `frequency_penalty` this maps to `repeat_penalty = 1.0`; for
+/// `presence_penalty` this is the no-op default).
+///
+/// **Honoring note (v0.3 declaration PR):** the engine's
+/// `apply_repeat_penalty` implements frequency-style semantics
+/// (penalty proportional to occurrence count). For
+/// `frequency_penalty >= 0` the chat / completions handlers map the
+/// field to `repeat_penalty = max(1.0, 1.0 + value)` so the
+/// penalty is honored end-to-end; negative `frequency_penalty`
+/// values are silently clamped to `1.0` (no penalty) because the
+/// current `apply_repeat_penalty` logit-divide math inverts the
+/// sign of negative logits when dividing by a value `< 1.0`,
+/// producing undefined ordering. `presence_penalty` is declared
+/// and validated here but not wired to the engine — it requires a
+/// new presence-aware penalty helper (v32+ work). See the
+/// `frequency_penalty` / `presence_penalty` field doc-comments on
+/// [`ChatRequest`] for the full per-field rationale.
+///
+/// # Errors
+///
+/// Returns `Err((StatusCode::BAD_REQUEST, …))` when `value` is
+/// outside `[-2.0, 2.0]`, `NaN`, or `±infinity`. The error message
+/// names the field so callers can adapt without reading the source.
+pub fn validate_penalty(
+    value: Option<f32>,
+    field_name: &str,
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    const PENALTY_MIN: f32 = -2.0;
+    const PENALTY_MAX: f32 = 2.0;
+    if let Some(v) = value {
+        if v.is_nan() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    format!(
+                        "{field_name} must be a finite number in the [-2.0, 2.0] interval (got NaN)"
+                    )
+                    .as_str(),
+                    "invalid_request_error",
+                )),
+            ));
+        }
+        if !v.is_finite() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    format!(
+                        "{field_name} must be a finite number in the [-2.0, 2.0] interval (got {v})"
+                    )
+                    .as_str(),
+                    "invalid_request_error",
+                )),
+            ));
+        }
+        if v < PENALTY_MIN || v > PENALTY_MAX {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    format!(
+                        "{field_name} must be in the [-2.0, 2.0] interval per OpenAI spec (got {v})"
+                    )
+                    .as_str(),
+                    "invalid_request_error",
+                )),
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Reject chat-request fields the engine does not yet honour, and
 /// validate the ones it does.
 ///
@@ -166,6 +245,12 @@ pub fn validate_chat_response_format(
 ///   `sample_batch_with_params`; an out-of-range value would either
 ///   crash the sampler or silently produce garbage, so we reject
 ///   up front.
+/// - `frequency_penalty` / `presence_penalty` — must be in
+///   `[-2.0, 2.0]` and finite (per OpenAI spec). `frequency_penalty`
+///   is honored end-to-end for non-negative values (mapped to
+///   `repeat_penalty = max(1.0, 1.0 + value)`); `presence_penalty`
+///   is declared + validated but not honored (engine doesn't have
+///   presence-aware penalty math).
 ///
 /// # Errors
 ///
@@ -177,6 +262,8 @@ pub fn validate_chat_request_fields(
 ) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
     validate_top_p(req.top_p)?;
     validate_chat_response_format(req.response_format.as_ref())?;
+    validate_penalty(req.frequency_penalty, "frequency_penalty")?;
+    validate_penalty(req.presence_penalty, "presence_penalty")?;
     if let Some(n) = req.n
         && n != 1
     {
@@ -206,8 +293,8 @@ pub fn validate_chat_request_fields(
 /// and validate the ones it does.
 ///
 /// Mirror of [`validate_chat_request_fields`] for the legacy
-/// `/v1/completions` endpoint. Same three checks (`n != 1`,
-/// non-empty `stop`, out-of-range `top_p`).
+/// `/v1/completions` endpoint. Same set of checks (`n != 1`,
+/// non-empty `stop`, out-of-range `top_p`, out-of-range penalties).
 ///
 /// # Errors
 ///
@@ -216,6 +303,8 @@ pub fn validate_completion_request_fields(
     req: &CompletionRequest,
 ) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
     validate_top_p(req.top_p)?;
+    validate_penalty(req.frequency_penalty, "frequency_penalty")?;
+    validate_penalty(req.presence_penalty, "presence_penalty")?;
     if let Some(n) = req.n
         && n != 1
     {
@@ -289,6 +378,8 @@ mod tests {
             user: None,
             response_format: None,
             seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
         }
     }
 
@@ -305,6 +396,8 @@ mod tests {
             user: None,
             response_format: None,
             seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
         }
     }
 
@@ -321,6 +414,8 @@ mod tests {
             user: None,
             response_format: None,
             seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
         }
     }
 
@@ -413,6 +508,8 @@ mod tests {
             user: None,
             response_format: Some(ResponseFormat::Text),
             seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
         };
         validate_chat_request_fields(&req)
             .expect("chat request with response_format = Text must pass full field validation");
@@ -435,6 +532,8 @@ mod tests {
             user: None,
             response_format: Some(ResponseFormat::JsonObject),
             seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
         };
         validate_chat_request_fields(&req).expect(
             "chat request with response_format = JsonObject must pass full field validation",
@@ -455,6 +554,8 @@ mod tests {
             stop: None,
             user: None,
             seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
         }
     }
 
@@ -470,6 +571,8 @@ mod tests {
             stop,
             user: None,
             seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
         }
     }
 
@@ -485,6 +588,8 @@ mod tests {
             stop: None,
             user: None,
             seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
         }
     }
 
@@ -677,6 +782,8 @@ mod tests {
             stop: None,
             user: None,
             seed: Some(42),
+            frequency_penalty: None,
+            presence_penalty: None,
         };
         validate_completion_request_fields(&req).expect(
             "completion with seed = Some(42) must pass validation (any i64 is valid per OpenAI spec)",
@@ -698,8 +805,315 @@ mod tests {
             stop: None,
             user: None,
             seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
         };
         validate_completion_request_fields(&req)
             .expect("completion with seed = None must pass validation");
+    }
+
+    // P27 v0.3 wire-type follow-up: `frequency_penalty` +
+    // `presence_penalty` field declaration. Per OpenAI spec the
+    // valid range for both fields is `[-2.0, 2.0]` with finite
+    // values only (no NaN, no ±infinity). The validator rejects
+    // out-of-range / non-finite values with `400
+    // invalid_request_error`; honoring end-to-end is documented on
+    // the field doc-comments in `types.rs`.
+
+    // Standalone `validate_penalty` helper — covers the basic
+    // acceptance + rejection paths the helper enforces.
+
+    #[test]
+    fn validate_penalty_none_passes() {
+        // Omitted / `None` is the default path; must pass.
+        validate_penalty(None, "frequency_penalty")
+            .expect("penalty = None must pass (default path)");
+    }
+
+    #[test]
+    fn validate_penalty_zero_passes() {
+        // 0.0 is the OpenAI default and falls in the [-2.0, 2.0]
+        // interval; must pass.
+        validate_penalty(Some(0.0), "presence_penalty")
+            .expect("penalty = 0.0 must pass (OpenAI default)");
+    }
+
+    #[test]
+    fn validate_penalty_positive_in_range_passes() {
+        // A typical positive value (1.0) must pass.
+        validate_penalty(Some(1.0), "frequency_penalty")
+            .expect("penalty = 1.0 must pass (in [-2.0, 2.0] interval)");
+    }
+
+    #[test]
+    fn validate_penalty_negative_in_range_passes() {
+        // A typical negative value (-1.0) must pass. The validator
+        // accepts the full [-2.0, 2.0] interval per OpenAI spec;
+        // clamping to no-penalty is the handler's job (see the
+        // wire-through blocks in chat.rs / completions.rs).
+        validate_penalty(Some(-1.0), "presence_penalty")
+            .expect("penalty = -1.0 must pass (in [-2.0, 2.0] interval)");
+    }
+
+    #[test]
+    fn validate_penalty_lower_boundary_passes() {
+        // -2.0 is the inclusive lower bound per OpenAI spec.
+        validate_penalty(Some(-2.0), "frequency_penalty")
+            .expect("penalty = -2.0 must pass (inclusive lower bound)");
+    }
+
+    #[test]
+    fn validate_penalty_upper_boundary_passes() {
+        // 2.0 is the inclusive upper bound per OpenAI spec.
+        validate_penalty(Some(2.0), "presence_penalty")
+            .expect("penalty = 2.0 must pass (inclusive upper bound)");
+    }
+
+    #[test]
+    fn validate_penalty_above_upper_bound_is_rejected() {
+        // 2.5 is just outside the upper bound; must be rejected
+        // with 400. The error message must name the field so the
+        // caller can adapt.
+        let err = validate_penalty(Some(2.5), "frequency_penalty")
+            .expect_err("penalty = 2.5 must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("frequency_penalty"));
+        assert!(err.1.0.error.message.contains("[-2.0, 2.0]"));
+    }
+
+    #[test]
+    fn validate_penalty_below_lower_bound_is_rejected() {
+        // -2.5 is just outside the lower bound; must be rejected
+        // with 400.
+        let err = validate_penalty(Some(-2.5), "presence_penalty")
+            .expect_err("penalty = -2.5 must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("presence_penalty"));
+    }
+
+    #[test]
+    fn validate_penalty_nan_is_rejected() {
+        // NaN would make the sampler math ill-defined; the
+        // validator must reject it.
+        let err = validate_penalty(Some(f32::NAN), "frequency_penalty")
+            .expect_err("penalty = NaN must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("NaN"));
+    }
+
+    #[test]
+    fn validate_penalty_positive_infinity_is_rejected() {
+        // +infinity would saturate the engine's logit-divide math;
+        // the validator must reject it.
+        let err = validate_penalty(Some(f32::INFINITY), "presence_penalty")
+            .expect_err("penalty = +inf must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn validate_penalty_negative_infinity_is_rejected() {
+        // -infinity would also saturate the engine's logit-divide
+        // math; the validator must reject it.
+        let err = validate_penalty(Some(f32::NEG_INFINITY), "frequency_penalty")
+            .expect_err("penalty = -inf must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    // End-to-end: `validate_chat_request_fields` integration with
+    // the penalty validators. Same shape as the P22 response_format
+    // / P23 seed tests — verify the validator stack accepts valid
+    // penalty values and rejects invalid ones with the right error
+    // category.
+
+    fn chat_request_with_frequency_penalty(fp: Option<f32>) -> ChatRequest {
+        let mut req = chat_request_with_n(None);
+        req.frequency_penalty = fp;
+        req
+    }
+
+    fn chat_request_with_presence_penalty(pp: Option<f32>) -> ChatRequest {
+        let mut req = chat_request_with_n(None);
+        req.presence_penalty = pp;
+        req
+    }
+
+    #[test]
+    fn chat_request_with_frequency_penalty_none_passes_field_validation() {
+        let req = chat_request_with_frequency_penalty(None);
+        validate_chat_request_fields(&req).expect("chat with frequency_penalty = None must pass");
+    }
+
+    #[test]
+    fn chat_request_with_frequency_penalty_zero_passes_field_validation() {
+        let req = chat_request_with_frequency_penalty(Some(0.0));
+        validate_chat_request_fields(&req)
+            .expect("chat with frequency_penalty = 0.0 must pass (OpenAI default)");
+    }
+
+    #[test]
+    fn chat_request_with_frequency_penalty_positive_passes_field_validation() {
+        let req = chat_request_with_frequency_penalty(Some(1.0));
+        validate_chat_request_fields(&req)
+            .expect("chat with frequency_penalty = 1.0 must pass (in [-2.0, 2.0])");
+    }
+
+    #[test]
+    fn chat_request_with_frequency_penalty_negative_passes_field_validation() {
+        // Negative values are accepted by the validator (in the
+        // [-2.0, 2.0] range); the handler clamps them to no-penalty
+        // when forwarding to the engine, but the validator itself
+        // doesn't clamp.
+        let req = chat_request_with_frequency_penalty(Some(-1.5));
+        validate_chat_request_fields(&req)
+            .expect("chat with frequency_penalty = -1.5 must pass (in [-2.0, 2.0])");
+    }
+
+    #[test]
+    fn chat_request_with_frequency_penalty_out_of_range_is_rejected() {
+        let req = chat_request_with_frequency_penalty(Some(2.5));
+        let err = validate_chat_request_fields(&req)
+            .expect_err("chat with frequency_penalty = 2.5 must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("frequency_penalty"));
+    }
+
+    #[test]
+    fn chat_request_with_frequency_penalty_nan_is_rejected() {
+        let req = chat_request_with_frequency_penalty(Some(f32::NAN));
+        let err = validate_chat_request_fields(&req)
+            .expect_err("chat with frequency_penalty = NaN must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn chat_request_with_presence_penalty_none_passes_field_validation() {
+        let req = chat_request_with_presence_penalty(None);
+        validate_chat_request_fields(&req).expect("chat with presence_penalty = None must pass");
+    }
+
+    #[test]
+    fn chat_request_with_presence_penalty_positive_passes_field_validation() {
+        let req = chat_request_with_presence_penalty(Some(1.0));
+        validate_chat_request_fields(&req)
+            .expect("chat with presence_penalty = 1.0 must pass (in [-2.0, 2.0])");
+    }
+
+    #[test]
+    fn chat_request_with_presence_penalty_out_of_range_is_rejected() {
+        let req = chat_request_with_presence_penalty(Some(-2.5));
+        let err = validate_chat_request_fields(&req)
+            .expect_err("chat with presence_penalty = -2.5 must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("presence_penalty"));
+    }
+
+    #[test]
+    fn chat_request_with_both_penalties_set_passes_field_validation() {
+        // Both penalty fields set together must pass — the
+        // validator must accept independent penalties on the same
+        // request.
+        let req = ChatRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            response_format: None,
+            seed: None,
+            frequency_penalty: Some(0.5),
+            presence_penalty: Some(-0.5),
+        };
+        validate_chat_request_fields(&req)
+            .expect("chat with both penalties set must pass full field validation");
+    }
+
+    #[test]
+    fn completion_request_with_frequency_penalty_none_passes_field_validation() {
+        // Mirror of the chat test on `CompletionRequest`. Same
+        // contract: None is the default path; must pass.
+        let req = CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+        };
+        validate_completion_request_fields(&req)
+            .expect("completion with frequency_penalty = None must pass");
+    }
+
+    #[test]
+    fn completion_request_with_frequency_penalty_positive_passes_field_validation() {
+        let req = CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: None,
+            frequency_penalty: Some(1.0),
+            presence_penalty: None,
+        };
+        validate_completion_request_fields(&req)
+            .expect("completion with frequency_penalty = 1.0 must pass (in [-2.0, 2.0])");
+    }
+
+    #[test]
+    fn completion_request_with_frequency_penalty_out_of_range_is_rejected() {
+        let req = CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: None,
+            frequency_penalty: Some(3.0),
+            presence_penalty: None,
+        };
+        let err = validate_completion_request_fields(&req)
+            .expect_err("completion with frequency_penalty = 3.0 must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("frequency_penalty"));
+    }
+
+    #[test]
+    fn completion_request_with_presence_penalty_out_of_range_is_rejected() {
+        let req = CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: Some(3.0),
+        };
+        let err = validate_completion_request_fields(&req)
+            .expect_err("completion with presence_penalty = 3.0 must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("presence_penalty"));
     }
 }

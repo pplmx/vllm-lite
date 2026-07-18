@@ -1492,3 +1492,359 @@ async fn test_chat_streaming_with_seed_field_accepted_by_handler() {
         "streaming chat must accept the seed field (parity with non-streaming path)"
     );
 }
+
+// ====================================================================
+// P27 v0.3 wire-type follow-up: `frequency_penalty` + `presence_penalty`
+//
+// Same pattern as the P21/P22/P23 wire-type integration tests above.
+// The key behavioural difference from P21/P22/P23: `frequency_penalty`
+// is **honoured end-to-end** via the engine's existing `repeat_penalty`
+// slot (P2 ARCH-02). The chat handler maps
+// `frequency_penalty >= 0` to `repeat_penalty = max(1.0, 1.0 + value)`;
+// negative values are clamped to `1.0` (no penalty) because the current
+// `apply_repeat_penalty` logit-divide math inverts the sign of negative
+// logits when dividing by a value `< 1.0`. `presence_penalty` is
+// declared + validated but NOT wired (engine doesn't have
+// presence-aware penalty math — v32+ work).
+
+/// `frequency_penalty = 1.0` on the JSON request must land as
+/// `sampling_params.repeat_penalty = 2.0` on the engine side. Pins the
+/// v0.3 wire-through contract: non-negative frequency_penalty is
+/// honored end-to-end via the existing repeat_penalty slot.
+#[tokio::test]
+async fn test_chat_forwards_frequency_penalty_to_engine() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "frequency_penalty": 1.0,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    // Mapping: repeat_penalty = max(1.0, 1.0 + frequency_penalty) = max(1.0, 2.0) = 2.0
+    assert!(
+        (params.repeat_penalty - 2.0).abs() < 1e-6,
+        "frequency_penalty = 1.0 must round-trip to repeat_penalty = 2.0; got {}",
+        params.repeat_penalty
+    );
+}
+
+/// `frequency_penalty = 0.0` (OpenAI default) must land as
+/// `sampling_params.repeat_penalty = 1.0` (engine's "no penalty"
+/// default). Pins the default-path contract: omitting the field or
+/// sending 0 must produce identical engine-side state.
+#[tokio::test]
+async fn test_chat_frequency_penalty_zero_means_no_penalty() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "frequency_penalty": 0.0,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    assert!(
+        (params.repeat_penalty - 1.0).abs() < 1e-6,
+        "frequency_penalty = 0.0 must map to repeat_penalty = 1.0 (no penalty); got {}",
+        params.repeat_penalty
+    );
+}
+
+/// Negative `frequency_penalty` values must be **silently clamped** to
+/// `repeat_penalty = 1.0` (no penalty) by the chat handler — they pass
+/// the validator (which only enforces the [-2.0, 2.0] range per OpenAI
+/// spec) but the wire-through path uses `max(1.0, 1.0 + value)` to
+/// avoid the logit-divide sign-flip bug in `apply_repeat_penalty` for
+/// `repeat_penalty < 1.0`. Pins the documented v0.3 limitation.
+#[tokio::test]
+async fn test_chat_frequency_penalty_negative_is_clamped_to_no_penalty() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "frequency_penalty": -1.5,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "negative frequency_penalty must pass validation (in [-2.0, 2.0] range); the wire-through clamps to no-penalty"
+    );
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    assert!(
+        (params.repeat_penalty - 1.0).abs() < 1e-6,
+        "negative frequency_penalty must clamp to repeat_penalty = 1.0; got {}",
+        params.repeat_penalty
+    );
+}
+
+/// Baseline: omitting `frequency_penalty` must leave
+/// `repeat_penalty` at the engine default of `1.0` (no penalty).
+/// Pins the backward-compatible path so legacy clients are not
+/// broken by the new field.
+#[tokio::test]
+async fn test_chat_without_frequency_penalty_works_baseline() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "omitting frequency_penalty must continue to work (backward-compat baseline)"
+    );
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    assert!(
+        (params.repeat_penalty - 1.0).abs() < 1e-6,
+        "omitted frequency_penalty must leave repeat_penalty at engine default 1.0; got {}",
+        params.repeat_penalty
+    );
+}
+
+/// `presence_penalty` is declared + validated but **not wired** to
+/// the engine today (presence-aware penalty math is v32+ work). The
+/// handler must accept the field, and `repeat_penalty` must remain
+/// at the engine default of `1.0` regardless of the presence_penalty
+/// value. This pins the "declaration + validation only, no engine
+/// side-effect" contract for v0.3.
+#[tokio::test]
+async fn test_chat_presence_penalty_accepted_but_not_wired() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "presence_penalty": 1.5,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "presence_penalty must not cause 4xx; pre-fix it was undeclared and rejected by serde"
+    );
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    // presence_penalty is NOT wired → repeat_penalty stays at engine
+    // default 1.0.
+    assert!(
+        (params.repeat_penalty - 1.0).abs() < 1e-6,
+        "presence_penalty must NOT affect repeat_penalty (declaration-only v0.3 contract); got {}",
+        params.repeat_penalty
+    );
+}
+
+/// Out-of-range `frequency_penalty` must be rejected with `400` at
+/// the HTTP boundary (per OpenAI spec, [-2.0, 2.0]). Pins the
+/// validator path: bad values never reach the engine.
+#[tokio::test]
+async fn test_chat_frequency_penalty_out_of_range_returns_400() {
+    let (state, _handle, _captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "frequency_penalty": 3.0,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "frequency_penalty = 3.0 must be rejected with 400 (per OpenAI spec [-2.0, 2.0])"
+    );
+}
+
+/// Out-of-range `presence_penalty` must also be rejected with `400`.
+/// Parallel to the frequency_penalty range check.
+#[tokio::test]
+async fn test_chat_presence_penalty_out_of_range_returns_400() {
+    let (state, _handle, _captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "presence_penalty": -3.0,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "presence_penalty = -3.0 must be rejected with 400 (per OpenAI spec [-2.0, 2.0])"
+    );
+}
+
+/// `/v1/completions` (legacy endpoint) must also accept
+/// `frequency_penalty` and forward it to the engine, mirroring the
+/// chat endpoint's wire-through. Pins the cross-endpoint parity
+/// contract.
+#[tokio::test]
+async fn test_completions_forwards_frequency_penalty_to_engine() {
+    use vllm_server::openai::completions::completions;
+    let (engine_tx, _handle, captured) = spawn_capturing_mock_engine();
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "frequency_penalty": 1.0,
+        "max_tokens": 1,
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "/v1/completions must accept and forward frequency_penalty to the engine"
+    );
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    // Mapping: repeat_penalty = max(1.0, 1.0 + 1.0) = 2.0
+    assert!(
+        (params.repeat_penalty - 2.0).abs() < 1e-6,
+        "completions endpoint must also forward frequency_penalty → repeat_penalty; got {}",
+        params.repeat_penalty
+    );
+}

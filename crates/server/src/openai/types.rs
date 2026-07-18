@@ -180,6 +180,70 @@ pub struct ChatRequest {
     /// declaration-only PR doesn't regress to "rejected by serde".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seed: Option<i64>,
+    /// OpenAI frequency penalty (v0.3 wire-type follow-up). Per the
+    /// OpenAI API spec the valid range is `[-2.0, 2.0]`: positive
+    /// values penalise tokens that have already appeared in the
+    /// response (more occurrences → larger penalty), negative values
+    /// *encourage* repetition. The default is `0` (no penalty).
+    ///
+    /// **Honoring is end-to-end** for non-negative values:
+    /// the chat handler maps `frequency_penalty` to the engine's
+    /// existing `SamplingParams::repeat_penalty` via
+    /// `repeat_penalty = max(1.0, 1.0 + frequency_penalty)`. The
+    /// `apply_repeat_penalty` step in
+    /// `vllm_core::sampling::sample_batch_with_params` (added by
+    /// ARCH-02) divides logits at previously-seen token positions by
+    /// `repeat_penalty`, which matches OpenAI's "halve logit on each
+    /// repetition" semantics for `frequency_penalty >= 0`.
+    ///
+    /// **Negative values are clamped to `1.0` (no penalty)** because
+    /// `repeat_penalty < 1.0` would invert the engine's logit-divide
+    /// math (boosting repetition) — that is the desired OpenAI
+    /// behaviour but the current `apply_repeat_penalty` flips the
+    /// sign of negative logits when dividing by a value `< 1.0`,
+    /// producing undefined ordering rather than a clean boost.
+    /// Surfacing the v0.3 / v32+ "boost" semantics requires either a
+    /// new `apply_repeat_boost` helper or a sign-aware refactor of
+    /// `apply_repeat_penalty`; either is mechanical but out of scope
+    /// for the declaration PR. The validator still rejects
+    /// `frequency_penalty < -2.0` (per OpenAI spec) so callers learn
+    /// about truly out-of-range values; the in-range negative case
+    /// silently degrades to "no penalty" rather than producing
+    /// garbage output.
+    ///
+    /// Threaded into the chat handler's `tracing::info!(...)` log
+    /// lines as `frequency_penalty = ?req.frequency_penalty` so the
+    /// request's penalty settings are observable in trace logs even
+    /// when honoring is partially clamped.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frequency_penalty: Option<f32>,
+    /// OpenAI presence penalty (v0.3 wire-type follow-up). Per the
+    /// OpenAI API spec the valid range is `[-2.0, 2.0]`: positive
+    /// values penalise tokens that have appeared at all (binary
+    /// "seen?" check), negative values *encourage* presence of
+    /// already-seen tokens. The default is `0` (no penalty).
+    ///
+    /// **Honoring is a no-op today** — vllm-lite's
+    /// `apply_repeat_penalty` implements *frequency*-style semantics
+    /// (penalty proportional to occurrence count), not the
+    /// binary-presence semantics OpenAI's `presence_penalty` field
+    /// defines. Adding a presence-aware penalty step requires a new
+    /// helper (`apply_presence_penalty`) that adds
+    /// `presence_penalty` (when positive) to every seen-token logit
+    /// regardless of count, or subtracts it (when negative). That
+    /// helper is v32+ work — out of scope for the v0.3 declaration
+    /// PR. The validator rejects `presence_penalty < -2.0`,
+    /// `> 2.0`, `NaN`, or `±inf` per OpenAI spec, but the value is
+    /// currently not forwarded to the engine.
+    ///
+    /// Threaded into the chat handler's `tracing::info!(...)` log
+    /// lines as `presence_penalty = ?req.presence_penalty` so the
+    /// field is observable in trace logs even though honoring is
+    /// deferred. Clients that set `presence_penalty` today should
+    /// be aware that the sampler treats it as a no-op (the model
+    /// produces output as if `presence_penalty = 0`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presence_penalty: Option<f32>,
 }
 
 /// A choice in a chat completion response.
@@ -309,6 +373,27 @@ pub struct CompletionRequest {
     /// does not log either).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seed: Option<i64>,
+    /// OpenAI frequency penalty (v0.3 wire-type follow-up). See
+    /// [`ChatRequest::frequency_penalty`] for the full contract:
+    /// per OpenAI spec the valid range is `[-2.0, 2.0]` (default
+    /// `0`); the completions handler maps the field to the engine's
+    /// `SamplingParams::repeat_penalty` via
+    /// `repeat_penalty = max(1.0, 1.0 + frequency_penalty)` so
+    /// non-negative values are honored end-to-end. Negative values
+    /// are silently clamped to `1.0` (no penalty) for the same
+    /// reason documented on [`ChatRequest::frequency_penalty`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frequency_penalty: Option<f32>,
+    /// OpenAI presence penalty (v0.3 wire-type follow-up). See
+    /// [`ChatRequest::presence_penalty`] for the full contract:
+    /// per OpenAI spec the valid range is `[-2.0, 2.0]` (default
+    /// `0`); honoring is a no-op today because the engine's
+    /// `apply_repeat_penalty` implements frequency-style
+    /// (count-proportional) semantics, not presence-style
+    /// (binary seen? check) semantics. A presence-aware penalty
+    /// helper is v32+ work.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presence_penalty: Option<f32>,
 }
 
 /// A single choice in a text-completion response. The `text` field
