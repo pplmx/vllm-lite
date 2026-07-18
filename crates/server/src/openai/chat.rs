@@ -100,6 +100,8 @@ async fn handle_chat(
         user = ?req.user,
         response_format = ?req.response_format,
         seed = ?req.seed,
+        frequency_penalty = ?req.frequency_penalty,
+        presence_penalty = ?req.presence_penalty,
         prompt_tokens = prompt_tokens_len,
         "Request started"
     );
@@ -146,6 +148,34 @@ async fn handle_chat(
     // this line.
     if let Some(top_p) = req.top_p {
         request.sampling_params.top_p = top_p;
+    }
+
+    // Forward `frequency_penalty` to the engine's existing
+    // `repeat_penalty` slot (P27 v0.3 wire-type follow-up). The
+    // engine's `apply_repeat_penalty` divides logits at previously-
+    // seen token positions by `repeat_penalty`, which matches
+    // OpenAI's "halve logit on each repetition" semantics for
+    // `frequency_penalty >= 0` via the mapping
+    // `repeat_penalty = max(1.0, 1.0 + frequency_penalty)`.
+    // Negative values are clamped to `1.0` (no penalty) because
+    // `repeat_penalty < 1.0` would invert the engine's logit-divide
+    // math (boosting repetition) — that is the desired OpenAI
+    // behaviour but the current `apply_repeat_penalty` flips the
+    // sign of negative logits when dividing by a value `< 1.0`,
+    // producing undefined ordering rather than a clean boost.
+    // Surfacing the v0.3 / v32+ "boost" semantics requires either a
+    // new `apply_repeat_boost` helper or a sign-aware refactor of
+    // `apply_repeat_penalty`; either is mechanical but out of scope
+    // for the declaration PR. The validator still rejects
+    // `frequency_penalty < -2.0` (per OpenAI spec) so callers learn
+    // about truly out-of-range values; the in-range negative case
+    // silently degrades to "no penalty" rather than producing
+    // garbage output. The OpenAI `presence_penalty` field is
+    // declared + validated but NOT wired here — see the
+    // `presence_penalty` field doc-comment on `ChatRequest` for the
+    // v32+ presence-aware penalty roadmap.
+    if let Some(fp) = req.frequency_penalty {
+        request.sampling_params.repeat_penalty = (1.0 + fp).max(1.0);
     }
 
     // Reject sampling parameters the engine cannot honour (currently
@@ -216,6 +246,8 @@ async fn handle_chat(
         user = ?req.user,
         response_format = ?req.response_format,
         seed = ?req.seed,
+        frequency_penalty = ?req.frequency_penalty,
+        presence_penalty = ?req.presence_penalty,
         output_tokens = output_tokens_len,
         duration_ms = duration_ms,
         "Request completed"
@@ -337,6 +369,8 @@ async fn stream_chat_completion(
         user = ?req.user,
         response_format = ?req.response_format,
         seed = ?req.seed,
+        frequency_penalty = ?req.frequency_penalty,
+        presence_penalty = ?req.presence_penalty,
         model = %req.model,
         prompt_tokens = prompt_tokens_len,
         "Streaming request started"
@@ -372,6 +406,28 @@ async fn stream_chat_completion(
     let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
     if let Some(temp) = req.temperature {
         request.sampling_params.temperature = temp;
+    }
+
+    // Forward `top_p` to the engine (streaming variant). The non-
+    // streaming handler above does the same wire-through; this
+    // closes the parity gap for SSE clients so nucleus sampling is
+    // honored on streaming completions too. See `non_stream_chat_
+    // completion` for the full rationale on the engine's
+    // `sample_batch_with_params` honour path.
+    if let Some(top_p) = req.top_p {
+        request.sampling_params.top_p = top_p;
+    }
+
+    // Forward `frequency_penalty` to the engine's
+    // `repeat_penalty` slot (P27 v0.3 wire-type follow-up). See
+    // the matching block in `non_stream_chat_completion` for the
+    // full rationale on the mapping
+    // `repeat_penalty = max(1.0, 1.0 + frequency_penalty)` and why
+    // negative values are clamped to `1.0`. The streaming variant
+    // mirrors the non-streaming wire-through so SSE clients see
+    // the same penalty behavior as unary clients.
+    if let Some(fp) = req.frequency_penalty {
+        request.sampling_params.repeat_penalty = (1.0 + fp).max(1.0);
     }
 
     // Reject sampling parameters the engine cannot honour (currently

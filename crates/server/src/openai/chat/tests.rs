@@ -84,6 +84,8 @@ fn create_test_request(model: &str, messages: Vec<ChatMessage>) -> ChatRequest {
         user: None,
         response_format: None,
         seed: None,
+        frequency_penalty: None,
+        presence_penalty: None,
     }
 }
 

@@ -31,8 +31,8 @@
 | `n` | `Option<i64>` | **Wired (validation)** | `n = 1` accepted (default); `n > 1` → `400 invalid_request_error` ("n > 1 is not supported…") |
 | `stop` | `Option<Vec<String>>` | **Wired (validation)** | `None` or empty array accepted; non-empty → `400 invalid_request_error` ("stop sequences are not yet honoured…") |
 | `seed` | `Option<i64>` | **Wired (declaration + tracing pass-through)** | Accepted on `ChatRequest` + `CompletionRequest`; per OpenAI spec any `i64` is accepted (no range / sign validation, no NaN check). Threaded into the `tracing::info!(seed = ?req.seed, ...)` log lines in `openai::chat::{non_stream_chat_completion, stream_chat_completion}` so determinism is at least observable in trace logs. **Honoring is a no-op today** — the engine's sampler reads from `rand`'s thread-local RNG which is currently unseeded; same seed + same model + same prompt does NOT yet produce the same output. Engine-side RNG seeding is v32+ work. The wire-type contract is locked in now so the declaration-only PR doesn't regress to "rejected by serde". **Shipped in P23 (2026-07-16).** |
-| `frequency_penalty` | (not declared) | **Not declared** | Rejected by serde |
-| `presence_penalty` | (not declared) | **Not declared** | Rejected by serde |
+| `frequency_penalty` | `Option<f32>` (`-2.0`–`2.0`) | **Wired (declaration + validation + engine wire-through)** | Accepted on `ChatRequest`. Per OpenAI spec the valid range is `[-2.0, 2.0]`; the validator rejects NaN / ±infinity / out-of-range values with `400 invalid_request_error`. Honoring is end-to-end for non-negative values via the existing `SamplingParams::repeat_penalty` slot (P2 ARCH-02): the chat handler maps `frequency_penalty` to `repeat_penalty = max(1.0, 1.0 + frequency_penalty)` so positive penalties produce the OpenAI-spec "halve logit on each repetition" semantics. **Negative values are clamped to `repeat_penalty = 1.0` (no penalty)** because the current `apply_repeat_penalty` logit-divide math inverts the sign of negative logits when dividing by a value `< 1.0` — surfacing the OpenAI-spec "boost repetition" semantics requires either a new `apply_repeat_boost` helper or a sign-aware refactor of `apply_repeat_penalty` (v32+ work; the in-range negative case silently degrades to "no penalty" rather than producing garbage output). Threaded into the chat handler's `tracing::info!(...)` log lines as `frequency_penalty = ?req.frequency_penalty` so the request's penalty settings are observable in trace logs even when honoring is partially clamped. **Shipped in P27 (2026-07-18, v0.3 wire-type follow-up).** |
+| `presence_penalty` | `Option<f32>` (`-2.0`–`2.0`) | **Wired (declaration + validation)** | Accepted on `ChatRequest`. Per OpenAI spec the valid range is `[-2.0, 2.0]`; the validator rejects NaN / ±infinity / out-of-range values with `400 invalid_request_error`. **Honoring is a no-op today** — the engine's `apply_repeat_penalty` implements *frequency*-style semantics (penalty proportional to occurrence count), not the binary-presence semantics OpenAI's `presence_penalty` field defines. Adding a presence-aware penalty step requires a new helper (`apply_presence_penalty`) that adds `presence_penalty` (when positive) to every seen-token logit regardless of count, or subtracts it (when negative). That helper is v32+ work — out of scope for the v0.3 declaration PR. Threaded into the chat handler's `tracing::info!(...)` log lines as `presence_penalty = ?req.presence_penalty` so the field is observable in trace logs even though honoring is deferred. Clients that set `presence_penalty` today should be aware that the sampler treats it as a no-op. **Shipped in P27 (2026-07-18, v0.3 wire-type follow-up).** |
 | `logit_bias` | (not declared) | **Not declared** | Rejected by serde |
 | `logprobs` | (not declared) | **Not declared** | Rejected by serde |
 | `top_logprobs` | (not declared) | **Not declared** | Rejected by serde |
@@ -82,6 +82,8 @@
 | `top_p` | `Option<f32>` (0.0–1.0) | **Wired** | Same honouring + range check as chat (P9 follow-up) |
 | `seed` | `Option<i64>` | **Wired (declaration)** | Accepted on `CompletionRequest` (P23 v0.2). Same contract as the chat endpoint — any `i64` is accepted per OpenAI spec, no range / sign validation, no NaN check. The completions handler does not currently log the field (deferred to avoid adding a new `tracing::info!` line — chat handler logs it). Downstream consumers subscribe via direct field access. Honoring is a no-op today — engine-side RNG seeding is v32+ work. |
 | `user` | `Option<String>` | **Wired (declaration)** | Accepted on `CompletionRequest` (P21 v0.2). Same contract as the chat endpoint — no format/length validation per OpenAI spec. The completions handler does not currently log the field (deferred to avoid adding a new `tracing::info!` line — chat handler logs it). Downstream consumers subscribe via direct field access. |
+| `frequency_penalty` | `Option<f32>` (`-2.0`–`2.0`) | **Wired (declaration + validation + engine wire-through)** | Accepted on `CompletionRequest`. Same contract as the chat endpoint (see the chat table row above): OpenAI-spec range `[-2.0, 2.0]`; validator rejects NaN / ±infinity / out-of-range with `400`; non-negative values are forwarded to the engine via `repeat_penalty = max(1.0, 1.0 + value)` (negative values clamped to `1.0` for the same `apply_repeat_penalty` logit-divide sign-flip reason documented on the chat endpoint). The completions handler does not currently log the field — adding a new `tracing::info!` line is deferred to keep parity with the `seed` / `user` fields (chat handler logs them, completions handler accepts them at the wire type but does not log). **Shipped in P27 (2026-07-18).** |
+| `presence_penalty` | `Option<f32>` (`-2.0`–`2.0`) | **Wired (declaration + validation)** | Accepted on `CompletionRequest`. Same contract as the chat endpoint: OpenAI-spec range `[-2.0, 2.0]`; validator rejects NaN / ±infinity / out-of-range with `400`; **honoring is a no-op today** (engine doesn't have presence-aware penalty math — v32+ work). The completions handler does not currently log the field — same parity rationale as `seed` / `user` / `frequency_penalty` above. **Shipped in P27 (2026-07-18).** |
 | `logprobs` / `echo` / `suffix` / `best_of` | (not declared) | **Not declared** | Rejected by serde |
 
 ### Response (`CompletionResponse`)
@@ -139,9 +141,10 @@ technical due diligence flags as out-of-scope for v0.x):
 
 | Field | Why v32+ |
 |-------|----------|
-| `frequency_penalty` / `presence_penalty` | Already implemented in `vllm_core::sampling::sample_batch_with_params` via `repeat_penalty` (P2 ARCH-02). Renaming the field on `SamplingParams` to `frequency_penalty`/`presence_penalty` and adding the OpenAI-style `-2.0..=2.0` validation is mechanical but the wire-type change is a public-API delta — tracked for v0.3. |
 | `logit_bias` | Requires a bias-map injection in the sampler's softmax step. Not implemented in the current sampling module. |
 | `logprobs` / `top_logprobs` | Requires the engine to return top-K logprobs per output token. Current `sample_batch_with_params` returns only the sampled token. |
+| `presence_penalty` (honoring only — declaration shipped in P27) | The field is now accepted + validated on `ChatRequest` and `CompletionRequest` (P27, 2026-07-18) but the engine's `apply_repeat_penalty` implements *frequency*-style semantics (penalty proportional to occurrence count), not the binary-presence semantics OpenAI's `presence_penalty` field defines. Honoring requires a new helper (`apply_presence_penalty`) that adds `presence_penalty` to every seen-token logit regardless of count. v32+ work — out of scope for the v0.3 declaration PR. |
+| `frequency_penalty` boost semantics (negative values) | Honoring for non-negative values is shipped via the existing `repeat_penalty` slot (P27, 2026-07-18): the chat handler maps `frequency_penalty` to `repeat_penalty = max(1.0, 1.0 + value)`. Negative values are clamped to `1.0` (no penalty) because the current `apply_repeat_penalty` logit-divide math inverts the sign of negative logits when dividing by a value `< 1.0`. Surfacing the OpenAI-spec "boost repetition" semantics requires either a new `apply_repeat_boost` helper or a sign-aware refactor of `apply_repeat_penalty`; either is mechanical but out of scope for the declaration PR. v32+ work. |
 | `tools` / `tool_choice` | Tool-calling framework requires a grammar-constrained decoder (JSON-schema → grammar) and a per-request tool schema cache. Architecture-level work — v32+. |
 
 **Cross-references:**
@@ -154,10 +157,11 @@ technical due diligence flags as out-of-scope for v0.x):
   (2026-07-16) — see the `Public-API delta` bullet in the
   CHANGELOG and the STATE.md "v0.2 wire-type follow-ups" section
   for the closing notes.
-- The v0.3 `frequency_penalty` rename is the natural next step
-  after v0.2 ships — `repeat_penalty` is the implementation name,
-  OpenAI's is the wire name; the rename happens when the wire field
-  is added.
+- The v0.3 `frequency_penalty` + `presence_penalty` declarations
+  are shipped in P27 (2026-07-18) — `frequency_penalty` is honored
+  end-to-end via the existing `repeat_penalty` slot for non-negative
+  values; `presence_penalty` is declared + validated but a no-op
+  (presence-aware penalty math is v32+ work).
 
 ## Error contract
 

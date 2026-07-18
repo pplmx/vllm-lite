@@ -105,6 +105,27 @@ pub async fn completions(
         request.sampling_params.top_p = top_p;
     }
 
+    // Forward `frequency_penalty` to the engine's existing
+    // `repeat_penalty` slot (P27 v0.3 wire-type follow-up). Mirrors
+    // the chat handler's wire-through so the legacy `/v1/completions`
+    // endpoint sees the same penalty behavior as the chat endpoint.
+    // The engine's `apply_repeat_penalty` divides logits at
+    // previously-seen token positions by `repeat_penalty`, which
+    // matches OpenAI's "halve logit on each repetition" semantics
+    // for `frequency_penalty >= 0` via the mapping
+    // `repeat_penalty = max(1.0, 1.0 + frequency_penalty)`. Negative
+    // values are clamped to `1.0` (no penalty) because the current
+    // `apply_repeat_penalty` flips the sign of negative logits when
+    // dividing by a value `< 1.0`, producing undefined ordering
+    // rather than a clean boost. See the `frequency_penalty` field
+    // doc-comment on `CompletionRequest` for the full v0.3 / v32+
+    // rationale. `presence_penalty` is declared + validated but not
+    // wired (engine doesn't have presence-aware penalty math — v32+
+    // work).
+    if let Some(fp) = req.frequency_penalty {
+        request.sampling_params.repeat_penalty = (1.0 + fp).max(1.0);
+    }
+
     // Reject sampling parameters the engine cannot honour (currently
     // beam_width > 1) BEFORE enqueuing — see `sampling_validation`.
     validate_sampling_params(&request.sampling_params)?;
