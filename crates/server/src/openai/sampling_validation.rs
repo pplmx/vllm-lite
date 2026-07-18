@@ -34,7 +34,10 @@ use axum::{Json, http::StatusCode};
 use vllm_core::types::SamplingParams;
 use vllm_traits::TokenId;
 
-use super::types::{ChatRequest, CompletionRequest, ErrorResponse, ResponseFormat};
+use super::types::{
+    ChatRequest, CompletionRequest, ErrorResponse, ResponseFormat, Tool, ToolChoice,
+    ToolChoiceMode,
+};
 
 /// Validate a `top_p` value from an HTTP request.
 ///
@@ -495,6 +498,134 @@ pub fn validate_completion_meta(
     Ok(())
 }
 
+/// Validate the `tools` + `tool_choice` fields on a chat request
+/// (P33 v0.x wire-type follow-up — declaration + validation).
+///
+/// Per OpenAI chat-completions spec:
+/// - `tools: Vec<Tool>` — a list of function definitions the model
+///   may invoke. Each tool carries a `type` discriminator
+///   (currently only `"function"`) and a `function` payload (name +
+///   description + JSON-Schema parameters).
+/// - `tool_choice` — either a string mode (`"none"` / `"auto"` /
+///   `"required"`) or an object (`{"type": "function",
+///   "function": {"name": "..."}}`) that forces the model to call a
+///   specific tool.
+///
+/// **Cross-field rules** (rejected with `400 invalid_request_error`
+/// when violated):
+///
+/// 1. `tool_choice = Some(Required)` requires `tools` to be non-empty
+///    (otherwise the model can't satisfy the "must call a tool"
+///    constraint). Per OpenAI spec this is a request-shape error.
+///
+/// 2. `tool_choice = Some(Specific { function: { name: X } })`
+///    requires `tools` to be non-empty (otherwise there's no
+///    tool to call).
+///
+/// 3. `tool_choice = Some(Specific { function: { name: X } })`
+///    requires `tools` to contain a function named `X`. The
+///    validator looks up the name via a linear scan (typical
+///    tool lists are <10 entries; the cost is negligible).
+///
+/// 4. `tool_choice = Some(Specific)` AND the matching tool in
+///    `tools` carries an empty `name` field is rejected — an
+///    empty function name can't be referenced. (Actually the
+///    `Tool` type requires `name: String` so this is enforced at
+///    the type layer; we still emit a friendly 400 message via
+///    rule 3 if the caller sends `{"name": ""}` and references it
+///    in `tool_choice`.)
+///
+/// **What we explicitly do NOT validate today** (permissive by
+/// design — honoring is v32+ work so there's no engine-side
+/// caller to break):
+/// - Function name regex `^[a-zA-Z0-9_-]{1,64}$` (per OpenAI spec)
+/// - Description length limits
+/// - JSON Schema validity of the `parameters` field
+/// - Duplicate function names in `tools` (OpenAI rejects with a
+///   different error code; we silently accept the first match
+///   because the engine doesn't process the list today)
+///
+/// **Honoring note (P33):** engine-side tool calling requires a
+/// grammar-constrained decoder (JSON-schema → grammar) and a
+/// per-request tool schema cache. Architecture-level work,
+/// tracked as v32+. The wire-type contract is locked in now so
+/// the declaration-only PR doesn't regress to "rejected by serde"
+/// for callers who already send the fields.
+///
+/// # Errors
+///
+/// Returns `Err((StatusCode::BAD_REQUEST, …))` when any check
+/// fires. Error messages name the offending combination so callers
+/// can adapt without having to read the source.
+pub fn validate_chat_tool_choice(
+    tools: Option<&[Tool]>,
+    tool_choice: Option<&ToolChoice>,
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    let Some(choice) = tool_choice else {
+        // No tool_choice = no constraint to validate. tools can be
+        // any value (None / Some(empty) / Some(non-empty)) — the
+        // model just won't call any tool in the latter case.
+        return Ok(());
+    };
+    match choice {
+        ToolChoice::Mode(ToolChoiceMode::None) | ToolChoice::Mode(ToolChoiceMode::Auto) => {
+            // Both modes are valid with any `tools` shape:
+            // - "none" means the model must not call a tool —
+            //   `tools` may be empty / non-empty / absent (the
+            //   model just ignores the list).
+            // - "auto" means the model MAY call a tool — `tools`
+            //   empty means it'll never call one but the request
+            //   is still valid.
+            Ok(())
+        }
+        ToolChoice::Mode(ToolChoiceMode::Required) => {
+            // "required" must call at least one tool. If there
+            // are no tools, the model can't satisfy the
+            // constraint.
+            if tools.is_none_or(|t| t.is_empty()) {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ErrorResponse::new(
+                        "tool_choice = \"required\" requires tools to be non-empty; define at least one tool in tools[]",
+                        "invalid_request_error",
+                    )),
+                ));
+            }
+            Ok(())
+        }
+        ToolChoice::Specific(specific) => {
+            // Specific forces a call to a named function. The
+            // tool must be defined in `tools`.
+            let tools = match tools {
+                Some(t) if !t.is_empty() => t,
+                _ => {
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        Json(ErrorResponse::new(
+                            "tool_choice.function.name requires tools to be non-empty; define the named tool in tools[] first",
+                            "invalid_request_error",
+                        )),
+                    ));
+                }
+            };
+            let wanted = &specific.function.name;
+            if !tools.iter().any(|t| t.function.name == *wanted) {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ErrorResponse::new(
+                        format!(
+                            "tool_choice.function.name = \"{wanted}\" does not match any tool in tools[]; the named tool must be defined in tools[]"
+                        )
+                        .as_str(),
+                        "invalid_request_error",
+                    )),
+                ));
+            }
+            Ok(())
+        }
+    }
+}
+
 /// Reject chat-request fields the engine does not yet honour, and
 /// validate the ones it does.
 ///
@@ -530,6 +661,16 @@ pub fn validate_completion_meta(
 ///   0..=20`) and the cross-field rule (`top_logprobs = Some(_)` requires
 ///   `logprobs = true`). Engine-side top-K logprob generation
 ///   remains v32+ work.
+/// - `tools` + `tool_choice` — declared but not yet honoured
+///   (P33). Validates the cross-field rules with `tool_choice`:
+///   `tool_choice = Some(Required)` or `tool_choice = Some(Specific)`
+///   requires `tools` to be non-empty; `tool_choice = Some(Specific
+///   { function: { name: X } })` requires `tools` to contain a
+///   function named `X`. Field names + descriptions + parameters
+///   are *not* validated today (honoring is v32+ work so there's
+///   no engine-side caller to break). Engine-side tool calling
+///   (grammar-constrained decoder + per-request tool schema cache)
+///   remains v32+ work.
 ///
 /// # Errors
 ///
@@ -545,6 +686,7 @@ pub fn validate_chat_request_fields(
     validate_penalty(req.presence_penalty, "presence_penalty")?;
     validate_logit_bias(req.logit_bias.as_ref())?;
     validate_chat_logprobs(req.logprobs, req.top_logprobs)?;
+    validate_chat_tool_choice(req.tools.as_deref(), req.tool_choice.as_ref())?;
     if let Some(n) = req.n
         && n != 1
     {
@@ -619,6 +761,14 @@ pub fn validate_completion_request_fields(
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Test-only imports for types used in the tool-calling tests
+    // below. These types are not referenced in the lib code path
+    // (the validators reference them only through destructuring /
+    // type-position arguments), so importing them at the crate
+    // level would trigger an unused-imports warning.
+    use crate::openai::types::{
+        FunctionDefinition, ToolChoiceFunctionRef, ToolChoiceSpecific, ToolType,
+    };
 
     #[test]
     fn default_sampling_params_pass_validation() {
@@ -669,6 +819,8 @@ mod tests {
             logit_bias: None,
             logprobs: None,
             top_logprobs: None,
+            tools: None,
+            tool_choice: None,
         }
     }
 
@@ -690,6 +842,8 @@ mod tests {
             logit_bias: None,
             logprobs: None,
             top_logprobs: None,
+            tools: None,
+            tool_choice: None,
         }
     }
 
@@ -711,6 +865,8 @@ mod tests {
             logit_bias: None,
             logprobs: None,
             top_logprobs: None,
+            tools: None,
+            tool_choice: None,
         }
     }
 
@@ -808,6 +964,8 @@ mod tests {
             logit_bias: None,
             logprobs: None,
             top_logprobs: None,
+            tools: None,
+            tool_choice: None,
         };
         validate_chat_request_fields(&req)
             .expect("chat request with response_format = Text must pass full field validation");
@@ -835,6 +993,8 @@ mod tests {
             logit_bias: None,
             logprobs: None,
             top_logprobs: None,
+            tools: None,
+            tool_choice: None,
         };
         validate_chat_request_fields(&req).expect(
             "chat request with response_format = JsonObject must pass full field validation",
@@ -1603,6 +1763,8 @@ mod tests {
             logit_bias: None,
             logprobs: None,
             top_logprobs: None,
+            tools: None,
+            tool_choice: None,
         };
         validate_chat_request_fields(&req)
             .expect("chat with both penalties set must pass full field validation");
@@ -2194,5 +2356,358 @@ mod tests {
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         assert!(err.1.0.error.message.contains("echo"));
         assert!(err.1.0.error.message.contains("best_of"));
+    }
+
+    // P33 v0.x wire-type follow-up: `tools` + `tool_choice`
+    // declaration + validation on `/v1/chat/completions`. Same
+    // pattern as the P21/P22/P23/P27/P28/P29/P30/P31/P32 unit
+    // tests but for the tool-calling meta fields. Engine
+    // honoring is a no-op today (v32+ work — grammar-constrained
+    // decoder + per-request tool schema cache); the tests pin the
+    // declaration + validation contract end-to-end.
+
+    fn tool(name: &str) -> Tool {
+        Tool {
+            kind: ToolType::Function,
+            function: FunctionDefinition {
+                name: name.to_string(),
+                description: None,
+                parameters: None,
+            },
+        }
+    }
+
+    #[test]
+    fn validate_chat_tool_choice_none_choices_passes() {
+        // No tool_choice + no tools = valid baseline.
+        validate_chat_tool_choice(None, None).expect("baseline must pass");
+        // No tool_choice + some tools = valid (model just won't use them).
+        validate_chat_tool_choice(Some(&[tool("get_weather")]), None)
+            .expect("tools without tool_choice must pass");
+        // None mode + some tools = valid (model won't call any tool).
+        validate_chat_tool_choice(
+            Some(&[tool("get_weather")]),
+            Some(&ToolChoice::Mode(ToolChoiceMode::None)),
+        )
+        .expect("tool_choice=none must pass");
+        // None mode + no tools = valid.
+        validate_chat_tool_choice(None, Some(&ToolChoice::Mode(ToolChoiceMode::None)))
+            .expect("tool_choice=none + no tools must pass");
+    }
+
+    #[test]
+    fn validate_chat_tool_choice_auto_passes() {
+        // Auto + some tools = valid (model MAY call a tool).
+        validate_chat_tool_choice(
+            Some(&[tool("get_weather")]),
+            Some(&ToolChoice::Mode(ToolChoiceMode::Auto)),
+        )
+        .expect("tool_choice=auto + tools must pass");
+        // Auto + no tools = valid (model just won't call any).
+        validate_chat_tool_choice(None, Some(&ToolChoice::Mode(ToolChoiceMode::Auto)))
+            .expect("tool_choice=auto + no tools must pass");
+    }
+
+    #[test]
+    fn validate_chat_tool_choice_required_with_tools_passes() {
+        // Required + some tools = valid (model must call at least one).
+        validate_chat_tool_choice(
+            Some(&[tool("get_weather")]),
+            Some(&ToolChoice::Mode(ToolChoiceMode::Required)),
+        )
+        .expect("tool_choice=required + non-empty tools must pass");
+    }
+
+    #[test]
+    fn validate_chat_tool_choice_required_without_tools_is_rejected() {
+        // Required + no tools = rejected (model can't satisfy "must call").
+        let err = validate_chat_tool_choice(
+            None,
+            Some(&ToolChoice::Mode(ToolChoiceMode::Required)),
+        )
+        .expect_err("tool_choice=required + no tools must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("required"));
+        assert!(err.1.0.error.message.contains("tools"));
+    }
+
+    #[test]
+    fn validate_chat_tool_choice_required_with_empty_tools_is_rejected() {
+        // Required + Some(empty) = rejected.
+        let err = validate_chat_tool_choice(
+            Some(&[]),
+            Some(&ToolChoice::Mode(ToolChoiceMode::Required)),
+        )
+        .expect_err("tool_choice=required + empty tools must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn validate_chat_tool_choice_specific_with_matching_tool_passes() {
+        // Specific(name) + tools contains that name = valid.
+        let tools = vec![tool("get_weather"), tool("get_time")];
+        validate_chat_tool_choice(
+            Some(&tools),
+            Some(&ToolChoice::Specific(ToolChoiceSpecific {
+                kind: ToolType::Function,
+                function: ToolChoiceFunctionRef {
+                    name: "get_weather".to_string(),
+                },
+            })),
+        )
+        .expect("specific tool_choice with matching name must pass");
+    }
+
+    #[test]
+    fn validate_chat_tool_choice_specific_without_tools_is_rejected() {
+        let err = validate_chat_tool_choice(
+            None,
+            Some(&ToolChoice::Specific(ToolChoiceSpecific {
+                kind: ToolType::Function,
+                function: ToolChoiceFunctionRef {
+                    name: "get_weather".to_string(),
+                },
+            })),
+        )
+        .expect_err("specific tool_choice without tools must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("tools"));
+    }
+
+    #[test]
+    fn validate_chat_tool_choice_specific_with_empty_tools_is_rejected() {
+        let err = validate_chat_tool_choice(
+            Some(&[]),
+            Some(&ToolChoice::Specific(ToolChoiceSpecific {
+                kind: ToolType::Function,
+                function: ToolChoiceFunctionRef {
+                    name: "get_weather".to_string(),
+                },
+            })),
+        )
+        .expect_err("specific tool_choice with empty tools must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn validate_chat_tool_choice_specific_with_unknown_name_is_rejected() {
+        // Specific(name="get_weather") but tools has "get_time" = rejected.
+        let tools = vec![tool("get_time")];
+        let err = validate_chat_tool_choice(
+            Some(&tools),
+            Some(&ToolChoice::Specific(ToolChoiceSpecific {
+                kind: ToolType::Function,
+                function: ToolChoiceFunctionRef {
+                    name: "get_weather".to_string(),
+                },
+            })),
+        )
+        .expect_err("specific tool_choice with unknown name must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("get_weather"));
+    }
+
+    // Full chat_request validation integration tests for tools + tool_choice
+
+    #[test]
+    fn chat_request_with_tools_none_passes_field_validation() {
+        let req = ChatRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            response_format: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+            logprobs: None,
+            top_logprobs: None,
+            tools: None,
+            tool_choice: None,
+        };
+        validate_chat_request_fields(&req).expect("baseline must pass");
+    }
+
+    #[test]
+    fn chat_request_with_tools_only_passes_field_validation() {
+        let req = ChatRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            response_format: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+            logprobs: None,
+            top_logprobs: None,
+            tools: Some(vec![tool("get_weather")]),
+            tool_choice: None,
+        };
+        validate_chat_request_fields(&req)
+            .expect("tools without tool_choice must pass");
+    }
+
+    #[test]
+    fn chat_request_with_tool_choice_required_and_tools_passes_field_validation() {
+        let req = ChatRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            response_format: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+            logprobs: None,
+            top_logprobs: None,
+            tools: Some(vec![tool("get_weather")]),
+            tool_choice: Some(ToolChoice::Mode(ToolChoiceMode::Required)),
+        };
+        validate_chat_request_fields(&req)
+            .expect("required + tools must pass");
+    }
+
+    #[test]
+    fn chat_request_with_tool_choice_required_and_no_tools_is_rejected() {
+        let req = ChatRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            response_format: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+            logprobs: None,
+            top_logprobs: None,
+            tools: None,
+            tool_choice: Some(ToolChoice::Mode(ToolChoiceMode::Required)),
+        };
+        let err = validate_chat_request_fields(&req)
+            .expect_err("required + no tools must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("required"));
+    }
+
+    #[test]
+    fn chat_request_with_tool_choice_specific_and_matching_tool_passes_field_validation() {
+        let req = ChatRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            response_format: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+            logprobs: None,
+            top_logprobs: None,
+            tools: Some(vec![tool("get_weather"), tool("get_time")]),
+            tool_choice: Some(ToolChoice::Specific(ToolChoiceSpecific {
+                kind: ToolType::Function,
+                function: ToolChoiceFunctionRef {
+                    name: "get_weather".to_string(),
+                },
+            })),
+        };
+        validate_chat_request_fields(&req)
+            .expect("specific + matching tool must pass");
+    }
+
+    #[test]
+    fn chat_request_with_tool_choice_specific_and_unknown_tool_is_rejected() {
+        let req = ChatRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            response_format: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+            logprobs: None,
+            top_logprobs: None,
+            tools: Some(vec![tool("get_time")]),
+            tool_choice: Some(ToolChoice::Specific(ToolChoiceSpecific {
+                kind: ToolType::Function,
+                function: ToolChoiceFunctionRef {
+                    name: "get_weather".to_string(),
+                },
+            })),
+        };
+        let err = validate_chat_request_fields(&req)
+            .expect_err("specific + unknown tool must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("get_weather"));
+    }
+
+    #[test]
+    fn chat_request_with_tool_choice_specific_and_no_tools_is_rejected() {
+        let req = ChatRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            response_format: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+            logprobs: None,
+            top_logprobs: None,
+            tools: None,
+            tool_choice: Some(ToolChoice::Specific(ToolChoiceSpecific {
+                kind: ToolType::Function,
+                function: ToolChoiceFunctionRef {
+                    name: "get_weather".to_string(),
+                },
+            })),
+        };
+        let err = validate_chat_request_fields(&req)
+            .expect_err("specific + no tools must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("tools"));
     }
 }
