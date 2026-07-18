@@ -170,12 +170,26 @@ async fn handle_chat(
     // `frequency_penalty < -2.0` (per OpenAI spec) so callers learn
     // about truly out-of-range values; the in-range negative case
     // silently degrades to "no penalty" rather than producing
-    // garbage output. The OpenAI `presence_penalty` field is
-    // declared + validated but NOT wired here — see the
-    // `presence_penalty` field doc-comment on `ChatRequest` for the
-    // v32+ presence-aware penalty roadmap.
+    // garbage output.
     if let Some(fp) = req.frequency_penalty {
         request.sampling_params.repeat_penalty = (1.0 + fp).max(1.0);
+    }
+
+    // Forward `presence_penalty` to the engine's new
+    // `SamplingParams::presence_penalty` slot (P28 v0.3 wire-type
+    // follow-up — engine wire-through). The engine's
+    // `apply_presence_penalty` subtracts the penalty from the logit
+    // of every *distinct* seen token regardless of occurrence count,
+    // matching OpenAI's "presence_penalty" semantic (positive =
+    // discourage repetition, negative = encourage repetition). Unlike
+    // `frequency_penalty` (which uses a clamped `max(1.0, ...)` map
+    // because of the `apply_repeat_penalty` logit-divide sign-flip
+    // bug for negative values), `presence_penalty` is an additive
+    // bias so the value can be forwarded verbatim — no clamping
+    // needed. The `apply_presence_penalty` helper skips when
+    // `penalty == 0.0`, so omitting the field is a no-op.
+    if let Some(pp) = req.presence_penalty {
+        request.sampling_params.presence_penalty = pp;
     }
 
     // Reject sampling parameters the engine cannot honour (currently
@@ -428,6 +442,17 @@ async fn stream_chat_completion(
     // the same penalty behavior as unary clients.
     if let Some(fp) = req.frequency_penalty {
         request.sampling_params.repeat_penalty = (1.0 + fp).max(1.0);
+    }
+
+    // Forward `presence_penalty` to the engine's
+    // `SamplingParams::presence_penalty` slot (P28 v0.3
+    // wire-type follow-up — engine wire-through). Mirrors the
+    // non-streaming handler above; see that block for the full
+    // rationale on `apply_presence_penalty` and the difference
+    // from `apply_repeat_penalty` (presence-style vs
+    // frequency-style).
+    if let Some(pp) = req.presence_penalty {
+        request.sampling_params.presence_penalty = pp;
     }
 
     // Reject sampling parameters the engine cannot honour (currently

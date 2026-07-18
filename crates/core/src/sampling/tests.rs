@@ -164,6 +164,120 @@ fn test_repeat_penalty_no_effect_at_one() {
     assert!((logits[1] - 0.5).abs() < 1e-6);
 }
 
+// `apply_presence_penalty` tests (P28 v0.3 wire-type follow-up —
+// presence_penalty engine wire-through).
+//
+// Presence penalty is the OpenAI `presence_penalty` semantic: an
+// additive bias subtracted from the logit of every *distinct* token
+// already seen in the sequence, regardless of how many times it
+// appeared. Positive values discourage repetition (encourage new
+// topics); negative values encourage repetition. See the doc-comment
+// on `apply_presence_penalty` for the difference from
+// `apply_repeat_penalty`.
+
+#[test]
+fn test_presence_penalty_basic() {
+    // With presence_penalty=0.5 on seen=[1], the logit at 1 is
+    // reduced by 0.5 (from 0.5 to 0.0). Logits at positions 0 and 2
+    // are untouched.
+    let mut logits = vec![0.5, 0.5, 0.5];
+    let seen = vec![1];
+    apply_presence_penalty(&mut logits, &seen, 0.5);
+    assert!((logits[0] - 0.5).abs() < 1e-6, "logit at 0 untouched");
+    assert!((logits[1] - 0.0).abs() < 1e-6, "logit at 1 reduced by 0.5");
+    assert!((logits[2] - 0.5).abs() < 1e-6, "logit at 2 untouched");
+}
+
+#[test]
+fn test_presence_penalty_dedupes_seen_tokens() {
+    // Presence penalty is presence-style, not frequency-style: the
+    // penalty is subtracted ONCE per *distinct* id even when the id
+    // appears multiple times in `seen`. Here token 1 appears 3 times
+    // in `seen`, but the logit at 1 should only be reduced by 0.5
+    // (not by 1.5). This pins the presence/frequency semantic
+    // difference from `apply_repeat_penalty`.
+    let mut logits = vec![0.5, 0.5, 0.5];
+    let seen = vec![1, 1, 1];
+    apply_presence_penalty(&mut logits, &seen, 0.5);
+    assert!(
+        (logits[1] - 0.0).abs() < 1e-6,
+        "presence_penalty must subtract 0.5 once per distinct id, got {}",
+        logits[1]
+    );
+}
+
+#[test]
+fn test_presence_penalty_no_effect_at_zero() {
+    // 0.0 is the no-op default; logits must be untouched.
+    let mut logits = vec![0.5, 0.5];
+    let seen = vec![0];
+    apply_presence_penalty(&mut logits, &seen, 0.0);
+    assert!((logits[0] - 0.5).abs() < 1e-6);
+    assert!((logits[1] - 0.5).abs() < 1e-6);
+}
+
+#[test]
+fn test_presence_penalty_empty_seen_is_noop() {
+    // An empty `seen` slice means no tokens to penalize; logits must
+    // be untouched even when penalty != 0.0.
+    let mut logits = vec![0.5, 0.5, 0.5];
+    let seen: Vec<TokenId> = vec![];
+    apply_presence_penalty(&mut logits, &seen, 1.0);
+    assert!((logits[0] - 0.5).abs() < 1e-6);
+    assert!((logits[1] - 0.5).abs() < 1e-6);
+    assert!((logits[2] - 0.5).abs() < 1e-6);
+}
+
+#[test]
+fn test_presence_penalty_negative_encourages_repetition() {
+    // Negative presence_penalty *encourages* repetition by RAISING
+    // the logits of seen tokens (subtracting a negative is the same
+    // as adding). With penalty=-0.5 on seen=[1], the logit at 1 is
+    // increased from 0.5 to 1.0.
+    let mut logits = vec![0.5, 0.5, 0.5];
+    let seen = vec![1];
+    apply_presence_penalty(&mut logits, &seen, -0.5);
+    assert!((logits[0] - 0.5).abs() < 1e-6, "logit at 0 untouched");
+    assert!((logits[1] - 1.0).abs() < 1e-6, "logit at 1 raised by 0.5");
+    assert!((logits[2] - 0.5).abs() < 1e-6, "logit at 2 untouched");
+}
+
+#[test]
+fn test_presence_penalty_out_of_range_token_is_ignored() {
+    // A seen token id that exceeds the vocab size must be silently
+    // ignored (no panic, no out-of-bounds write). Mirrors the
+    // `apply_repeat_penalty` contract.
+    let mut logits = vec![0.5, 0.5];
+    let seen = vec![10u32]; // out of range for vocab_size=2 (TokenId is u32)
+    apply_presence_penalty(&mut logits, &seen, 0.5);
+    assert!((logits[0] - 0.5).abs() < 1e-6);
+    assert!((logits[1] - 0.5).abs() < 1e-6);
+}
+
+#[test]
+fn test_presence_penalty_combined_with_repeat_penalty() {
+    // When both penalties are active on the same seen token, the
+    // combined effect should be: logit /= repeat_penalty
+    // (frequency-style) then logit -= presence_penalty (presence-
+    // style). With logits[1] = 0.5, repeat_penalty=2.0,
+    // presence_penalty=0.1, the expected final logit at 1 is
+    // 0.5/2.0 - 0.1 = 0.15.
+    //
+    // This pins the ordering in `sample_one_with_params`:
+    // repeat_penalty first, then presence_penalty.
+    let mut logits = vec![0.5, 0.5, 0.5];
+    let seen = vec![1];
+    apply_repeat_penalty(&mut logits, &seen, 2.0);
+    apply_presence_penalty(&mut logits, &seen, 0.1);
+    assert!((logits[0] - 0.5).abs() < 1e-6);
+    assert!(
+        (logits[1] - 0.15).abs() < 1e-6,
+        "expected logit[1] = 0.5/2.0 - 0.1 = 0.15, got {}",
+        logits[1]
+    );
+    assert!((logits[2] - 0.5).abs() < 1e-6);
+}
+
 #[test]
 fn test_top_k_only_top_k_selected() {
     let logits = vec![0.1, 0.9, 0.3, 0.05, 0.05];

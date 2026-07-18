@@ -119,11 +119,21 @@ pub async fn completions(
     // dividing by a value `< 1.0`, producing undefined ordering
     // rather than a clean boost. See the `frequency_penalty` field
     // doc-comment on `CompletionRequest` for the full v0.3 / v32+
-    // rationale. `presence_penalty` is declared + validated but not
-    // wired (engine doesn't have presence-aware penalty math — v32+
-    // work).
+    // rationale.
     if let Some(fp) = req.frequency_penalty {
         request.sampling_params.repeat_penalty = (1.0 + fp).max(1.0);
+    }
+
+    // Forward `presence_penalty` to the engine's
+    // `SamplingParams::presence_penalty` slot (P28 v0.3
+    // wire-type follow-up — engine wire-through). Mirrors the
+    // chat handler so the legacy endpoint sees the same penalty
+    // behavior. Unlike `frequency_penalty` (clamped via `max(1.0,
+    // ...)` because of the logit-divide sign-flip bug for negative
+    // values), `presence_penalty` is an additive bias so the value
+    // is forwarded verbatim — no clamping needed.
+    if let Some(pp) = req.presence_penalty {
+        request.sampling_params.presence_penalty = pp;
     }
 
     // Reject sampling parameters the engine cannot honour (currently

@@ -233,6 +233,10 @@ pub fn sample_one_with_params(
         apply_repeat_penalty(&mut logits, seen, params.repeat_penalty);
     }
 
+    if params.presence_penalty.abs() > f32::EPSILON && !seen.is_empty() {
+        apply_presence_penalty(&mut logits, seen, params.presence_penalty);
+    }
+
     if params.temperature > 0.0 && (params.temperature - 1.0).abs() > f32::EPSILON {
         for l in &mut logits {
             *l /= params.temperature;
@@ -285,6 +289,43 @@ pub fn apply_repeat_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penalty
             && seen.insert(token)
         {
             logits[idx] /= penalty;
+        }
+    }
+}
+
+/// Subtract `penalty` from the logit of each *distinct* id present in
+/// `seen_tokens`, regardless of how many times each id appeared
+/// (OpenAI `presence_penalty` semantic).
+///
+/// **Difference from [`apply_repeat_penalty`]:** `apply_repeat_penalty`
+/// is *frequency-style* — divides the logit by `penalty` once per
+/// occurrence. `apply_presence_penalty` is *presence-style* —
+/// subtracts `penalty` from the logit of each distinct seen token
+/// exactly once, regardless of count. Per OpenAI's spec for
+/// `presence_penalty`: "Positive values penalize new tokens based on
+/// whether they appear in the prompt so far, increasing the model's
+/// likelihood to talk about new topics."
+///
+/// Negative values *encourage* repetition by raising the logits of
+/// seen tokens (because subtracting a negative is the same as
+/// adding). No-op when `penalty == 0.0`, `seen_tokens` is empty, or
+/// `logits` is empty.
+///
+/// Out-of-range token ids are silently ignored. Duplicate entries
+/// in `seen_tokens` are deduped via an internal `HashSet` so the
+/// penalty is applied exactly once per distinct id.
+pub fn apply_presence_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penalty: f32) {
+    if penalty.abs() < f32::EPSILON || seen_tokens.is_empty() || logits.is_empty() {
+        return;
+    }
+
+    let mut seen = std::collections::HashSet::new();
+    for &token in seen_tokens {
+        if let Ok(idx) = usize::try_from(token)
+            && idx < logits.len()
+            && seen.insert(token)
+        {
+            logits[idx] -= penalty;
         }
     }
 }
