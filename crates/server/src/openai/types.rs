@@ -494,6 +494,76 @@ pub struct CompletionRequest {
     /// `presence_penalty` / `logit_bias` rationale).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub logprobs: Option<u32>,
+    /// OpenAI `echo` flag (P32 v0.x wire-type follow-up — declaration
+    /// + validation). Per OpenAI legacy-completions spec: when `true`,
+    /// the response echoes the prompt back as a prefix to the
+    /// generated continuation in the `text` field (instead of just
+    /// returning the continuation). Default `false`.
+    ///
+    /// **Honoring is a no-op** today — engine would need to
+    /// prepend the prompt to `CompletionChoice.text` in the
+    /// streaming + non-streaming paths. Tracked as v32+ work
+    /// (mechanical, but adds a tokenizer dependency to the
+    /// response side). The wire-type contract is locked in now so
+    /// the declaration-only PR doesn't regress to "rejected by
+    /// serde" for callers who already send the field.
+    ///
+    /// Validated by `validate_completion_meta` (cross-field rule:
+    /// `echo = true` cannot coexist with `best_of > 1` per OpenAI
+    /// spec — best_of is meaningless when echoing because the
+    /// server picks the single highest-mean-logprob completion
+    /// without exposing logprobs, so the user has no way to
+    /// disambiguate which of N completions was selected).
+    ///
+    /// The completions handler does not currently log the field
+    /// (parity with the `seed` / `user` / `frequency_penalty` /
+    /// `presence_penalty` / `logit_bias` rationale — completions
+    /// handler accepts these at the wire type but does not log any
+    /// of them).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub echo: Option<bool>,
+    /// OpenAI `suffix` (P32 v0.x wire-type follow-up — declaration +
+    /// validation). Per OpenAI legacy-completions spec: a string that
+    /// comes after the inserted completion. Useful for code-completion
+    /// UIs that pre-fill the suffix (e.g. the closing `}` of a
+    /// function body) and want the model to fill only the gap.
+    /// Default `None`.
+    ///
+    /// **Honoring is a no-op** today — engine would need to append
+    /// the suffix to `CompletionChoice.text` in the response. Tracked
+    /// as v32+ work (mechanical). The wire-type contract is locked
+    /// in now so the declaration-only PR doesn't regress to "rejected
+    /// by serde" for callers who already send the field.
+    ///
+    /// Validated by `validate_completion_meta` (no range / length
+    /// check per OpenAI spec — any string is accepted). The
+    /// completions handler does not currently log the field (parity
+    /// with the rationale above).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suffix: Option<String>,
+    /// OpenAI `best_of` count (P32 v0.x wire-type follow-up —
+    /// declaration + validation). Per OpenAI legacy-completions spec:
+    /// an integer ≥ 1 specifying how many completions to generate
+    /// server-side, returning the "best" one (highest mean log
+    /// probability over the generated tokens). Default `1`.
+    ///
+    /// **Honoring is a no-op** today — engine would need to sample
+    /// `best_of` times (with the same prompt + sampling params),
+    /// rank by mean logprob, and return the single best. The
+    /// logprob-ranking primitive requires the same v32+ engine work
+    /// as the `logprobs` field (P31), so the two are co-dependent.
+    /// Tracked as v32+ work.
+    ///
+    /// Validated by `validate_completion_meta` (`>= 1` per OpenAI
+    /// spec, cross-field rule: `best_of > 1` cannot coexist with
+    /// `echo = true` because the user has no way to disambiguate
+    /// which of N completions was returned; also `best_of > 1`
+    /// cannot coexist with `n > 1` because each "best" is one of N
+    /// total — but `n > 1` is already rejected by the existing
+    /// validator). The completions handler does not currently log
+    /// the field (parity with the rationale above).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub best_of: Option<u32>,
 }
 
 /// A single choice in a text-completion response. The `text` field

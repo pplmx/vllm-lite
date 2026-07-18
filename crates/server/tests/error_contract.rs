@@ -245,6 +245,9 @@ async fn completions_rejects_empty_prompt_with_400() {
         presence_penalty: None,
         logit_bias: None,
         logprobs: None,
+        echo: None,
+        suffix: None,
+        best_of: None,
     };
 
     let result = completions(
@@ -280,6 +283,9 @@ async fn completions_returns_503_with_engine_unavailable_code_when_channel_close
         presence_penalty: None,
         logit_bias: None,
         logprobs: None,
+        echo: None,
+        suffix: None,
+        best_of: None,
     };
 
     let result = completions(

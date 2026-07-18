@@ -415,6 +415,86 @@ pub fn validate_completion_logprobs(
     Ok(())
 }
 
+/// Validate the `echo` + `suffix` + `best_of` fields on a completion
+/// request (P32 v0.x wire-type follow-up — declaration + validation).
+///
+/// Per OpenAI legacy-completions spec:
+/// - `echo: bool` (default `false`) — when `true`, the response
+///   echoes the prompt back as a prefix to the generated continuation.
+/// - `suffix: str` (default `None`) — a string appended after the
+///   inserted completion.
+/// - `best_of: int (>= 1)` (default `1`) — generates `best_of`
+///   completions server-side, returns the "best" by mean logprob.
+///
+/// Validation rules:
+/// - `best_of = Some(0)` rejects (`>= 1` per OpenAI spec).
+/// - **Cross-field rule:** `echo = true` cannot coexist with
+///   `best_of > 1` per OpenAI spec. Rationale: when `best_of > 1`
+///   the server samples multiple completions and returns the
+///   single highest-mean-logprob one; with `echo = true` the user
+///   would see `prompt + completion` but no logprob to
+///   disambiguate which of the N candidates was selected, which is
+///   a contract violation. We reject the combination up front with
+///   `400 invalid_request_error` so callers learn about the
+///   conflict before paying the cost of enqueuing.
+/// - `suffix` is unconstrained (any string is accepted per OpenAI
+///   spec). Token-length pre-validation against the model's
+///   context length is deferred to the existing context-length
+///   check (`prompt_tokens + suffix_tokens + max_tokens <= max_model_len`)
+///   if/when suffix honoring lands.
+///
+/// **Honoring note (P32):** all three fields are declaration-only
+/// today — the engine's sampler returns one completion per request
+/// and does not currently rank by mean logprob. Engine-side
+/// honoring requires:
+/// - `echo`: prepend the prompt to `CompletionChoice.text` in
+///   streaming + non-streaming paths (mechanical, but adds a
+///   tokenizer dependency to the response side).
+/// - `suffix`: append the suffix to `CompletionChoice.text`.
+/// - `best_of`: sample `best_of` times with the same prompt +
+///   sampling params, rank by mean logprob, return the single
+///   best. The logprob-ranking primitive requires the same v32+
+///   engine work as the `logprobs` field (P31), so the two are
+///   co-dependent.
+///
+/// All three are tracked as v32+ work. The wire-type contract is
+/// locked in now so the declaration-only PR doesn't regress to
+/// "rejected by serde" for callers who already send the fields.
+///
+/// # Errors
+///
+/// Returns `Err((StatusCode::BAD_REQUEST, …))` when any check fires.
+/// Error messages name the offending field so callers can adapt.
+pub fn validate_completion_meta(
+    echo: Option<bool>,
+    best_of: Option<u32>,
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    if let Some(n) = best_of
+        && n == 0
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "best_of must be >= 1 per OpenAI spec (got 0)",
+                "invalid_request_error",
+            )),
+        ));
+    }
+    if echo == Some(true)
+        && let Some(n) = best_of
+        && n > 1
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "echo = true is incompatible with best_of > 1 per OpenAI spec; the server picks one completion from N candidates by mean logprob and the user has no way to disambiguate which one (set best_of = 1 or echo = false)",
+                "invalid_request_error",
+            )),
+        ));
+    }
+    Ok(())
+}
+
 /// Reject chat-request fields the engine does not yet honour, and
 /// validate the ones it does.
 ///
@@ -496,7 +576,8 @@ pub fn validate_chat_request_fields(
 /// Mirror of [`validate_chat_request_fields`] for the legacy
 /// `/v1/completions` endpoint. Same set of checks (`n != 1`,
 /// non-empty `stop`, out-of-range `top_p`, out-of-range penalties,
-/// out-of-range `logit_bias`, out-of-range `logprobs`).
+/// out-of-range `logit_bias`, out-of-range `logprobs`,
+/// `echo = true && best_of > 1`, `best_of = 0`).
 ///
 /// # Errors
 ///
@@ -509,6 +590,7 @@ pub fn validate_completion_request_fields(
     validate_penalty(req.presence_penalty, "presence_penalty")?;
     validate_logit_bias(req.logit_bias.as_ref())?;
     validate_completion_logprobs(req.logprobs)?;
+    validate_completion_meta(req.echo, req.best_of)?;
     if let Some(n) = req.n
         && n != 1
     {
@@ -777,6 +859,9 @@ mod tests {
             presence_penalty: None,
             logit_bias: None,
             logprobs: None,
+            echo: None,
+            suffix: None,
+            best_of: None,
         }
     }
 
@@ -796,6 +881,9 @@ mod tests {
             presence_penalty: None,
             logit_bias: None,
             logprobs: None,
+            echo: None,
+            suffix: None,
+            best_of: None,
         }
     }
 
@@ -815,6 +903,9 @@ mod tests {
             presence_penalty: None,
             logit_bias: None,
             logprobs: None,
+            echo: None,
+            suffix: None,
+            best_of: None,
         }
     }
 
@@ -1011,6 +1102,9 @@ mod tests {
             presence_penalty: None,
             logit_bias: None,
             logprobs: None,
+            echo: None,
+            suffix: None,
+            best_of: None,
         };
         validate_completion_request_fields(&req).expect(
             "completion with seed = Some(42) must pass validation (any i64 is valid per OpenAI spec)",
@@ -1036,6 +1130,9 @@ mod tests {
             presence_penalty: None,
             logit_bias: None,
             logprobs: None,
+            echo: None,
+            suffix: None,
+            best_of: None,
         };
         validate_completion_request_fields(&req)
             .expect("completion with seed = None must pass validation");
@@ -1530,6 +1627,9 @@ mod tests {
             presence_penalty: None,
             logit_bias: None,
             logprobs: None,
+            echo: None,
+            suffix: None,
+            best_of: None,
         };
         validate_completion_request_fields(&req)
             .expect("completion with frequency_penalty = None must pass");
@@ -1552,6 +1652,9 @@ mod tests {
             presence_penalty: None,
             logit_bias: None,
             logprobs: None,
+            echo: None,
+            suffix: None,
+            best_of: None,
         };
         validate_completion_request_fields(&req)
             .expect("completion with frequency_penalty = 1.0 must pass (in [-2.0, 2.0])");
@@ -1574,6 +1677,9 @@ mod tests {
             presence_penalty: None,
             logit_bias: None,
             logprobs: None,
+            echo: None,
+            suffix: None,
+            best_of: None,
         };
         let err = validate_completion_request_fields(&req)
             .expect_err("completion with frequency_penalty = 3.0 must be rejected");
@@ -1598,6 +1704,9 @@ mod tests {
             presence_penalty: Some(3.0),
             logit_bias: None,
             logprobs: None,
+            echo: None,
+            suffix: None,
+            best_of: None,
         };
         let err = validate_completion_request_fields(&req)
             .expect_err("completion with presence_penalty = 3.0 must be rejected");
@@ -1675,6 +1784,9 @@ mod tests {
             presence_penalty: None,
             logit_bias: None,
             logprobs: None,
+            echo: None,
+            suffix: None,
+            best_of: None,
         };
         validate_completion_request_fields(&req)
             .expect("completion with logit_bias = None must pass");
@@ -1699,6 +1811,9 @@ mod tests {
             presence_penalty: None,
             logit_bias: Some(bias),
             logprobs: None,
+            echo: None,
+            suffix: None,
+            best_of: None,
         };
         validate_completion_request_fields(&req)
             .expect("completion with in-range logit_bias must pass");
@@ -1723,6 +1838,9 @@ mod tests {
             presence_penalty: None,
             logit_bias: Some(bias),
             logprobs: None,
+            echo: None,
+            suffix: None,
+            best_of: None,
         };
         let err = validate_completion_request_fields(&req)
             .expect_err("completion with out-of-range logit_bias must be rejected");
@@ -1798,6 +1916,9 @@ mod tests {
             presence_penalty: None,
             logit_bias: None,
             logprobs: None,
+            echo: None,
+            suffix: None,
+            best_of: None,
         };
         validate_completion_request_fields(&req)
             .expect("completion with logprobs = None must pass");
@@ -1820,6 +1941,9 @@ mod tests {
             presence_penalty: None,
             logit_bias: None,
             logprobs: Some(5),
+            echo: None,
+            suffix: None,
+            best_of: None,
         };
         validate_completion_request_fields(&req)
             .expect("completion with logprobs = 5 must pass (upper boundary)");
@@ -1842,10 +1966,233 @@ mod tests {
             presence_penalty: None,
             logit_bias: None,
             logprobs: Some(6),
+            echo: None,
+            suffix: None,
+            best_of: None,
         };
         let err = validate_completion_request_fields(&req)
             .expect_err("completion with logprobs > 5 must be rejected");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         assert!(err.1.0.error.message.contains("logprobs"));
+    }
+
+    // P32 v0.x wire-type follow-up: `echo` + `suffix` + `best_of`
+    // declaration + validation. Same pattern as the P21/P22/P23/P27/
+    // P28/P29/P30/P31 unit tests but for the legacy-completions
+    // metadata fields. Engine honoring is a no-op today (v32+
+    // work); the tests pin the declaration + validation contract
+    // end-to-end.
+
+    #[test]
+    fn completion_meta_all_none_passes() {
+        validate_completion_meta(None, None).expect("all-None meta must pass");
+    }
+
+    #[test]
+    fn completion_meta_echo_only_passes() {
+        validate_completion_meta(Some(true), None).expect("echo=true alone must pass");
+        validate_completion_meta(Some(false), None).expect("echo=false alone must pass");
+    }
+
+    #[test]
+    fn completion_meta_best_of_only_passes() {
+        validate_completion_meta(None, Some(1)).expect("best_of=1 must pass");
+        validate_completion_meta(None, Some(5)).expect("best_of=5 must pass");
+    }
+
+    #[test]
+    fn completion_meta_echo_false_with_best_of_passes() {
+        validate_completion_meta(Some(false), Some(5))
+            .expect("echo=false + best_of=5 must pass (no conflict)");
+    }
+
+    #[test]
+    fn completion_meta_best_of_zero_is_rejected() {
+        let err = validate_completion_meta(None, Some(0))
+            .expect_err("best_of=0 must be rejected (>= 1 per OpenAI spec)");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("best_of"));
+    }
+
+    #[test]
+    fn completion_meta_echo_true_with_best_of_one_passes() {
+        validate_completion_meta(Some(true), Some(1))
+            .expect("echo=true + best_of=1 must pass (no conflict)");
+    }
+
+    #[test]
+    fn completion_meta_echo_true_with_best_of_above_one_is_rejected() {
+        let err = validate_completion_meta(Some(true), Some(2))
+            .expect_err("echo=true + best_of=2 must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("echo"));
+        assert!(err.1.0.error.message.contains("best_of"));
+    }
+
+    #[test]
+    fn completion_meta_echo_true_with_best_of_five_is_rejected() {
+        let err = validate_completion_meta(Some(true), Some(5))
+            .expect_err("echo=true + best_of=5 must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    // `validate_completion_request_fields` integration tests for
+    // the new echo + suffix + best_of fields. Pins the wiring: the
+    // full validator chain rejects out-of-range + cross-field
+    // violations before the engine is touched.
+
+    #[test]
+    fn completion_request_with_echo_none_passes_field_validation() {
+        let req = CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+            logprobs: None,
+            echo: None,
+            suffix: None,
+            best_of: None,
+        };
+        validate_completion_request_fields(&req)
+            .expect("completion with echo=None + best_of=None must pass");
+    }
+
+    #[test]
+    fn completion_request_with_echo_true_passes_field_validation() {
+        let req = CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+            logprobs: None,
+            echo: Some(true),
+            suffix: None,
+            best_of: Some(1),
+        };
+        validate_completion_request_fields(&req)
+            .expect("completion with echo=true + best_of=1 must pass");
+    }
+
+    #[test]
+    fn completion_request_with_suffix_passes_field_validation() {
+        let req = CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+            logprobs: None,
+            echo: None,
+            suffix: Some("</body>".to_string()),
+            best_of: None,
+        };
+        validate_completion_request_fields(&req)
+            .expect("completion with suffix must pass (no range check)");
+    }
+
+    #[test]
+    fn completion_request_with_best_of_five_passes_field_validation() {
+        let req = CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+            logprobs: None,
+            echo: None,
+            suffix: None,
+            best_of: Some(5),
+        };
+        validate_completion_request_fields(&req)
+            .expect("completion with best_of=5 alone must pass");
+    }
+
+    #[test]
+    fn completion_request_with_best_of_zero_is_rejected() {
+        let req = CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+            logprobs: None,
+            echo: None,
+            suffix: None,
+            best_of: Some(0),
+        };
+        let err = validate_completion_request_fields(&req)
+            .expect_err("completion with best_of=0 must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("best_of"));
+    }
+
+    #[test]
+    fn completion_request_with_echo_true_and_best_of_above_one_is_rejected() {
+        let req = CompletionRequest {
+            model: None,
+            prompt: "hello".to_string(),
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+            logprobs: None,
+            echo: Some(true),
+            suffix: None,
+            best_of: Some(3),
+        };
+        let err = validate_completion_request_fields(&req)
+            .expect_err("echo=true + best_of=3 must be rejected (cross-field rule)");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("echo"));
+        assert!(err.1.0.error.message.contains("best_of"));
     }
 }

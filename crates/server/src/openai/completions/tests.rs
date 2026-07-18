@@ -30,6 +30,9 @@ async fn test_completions_empty_prompt() {
         presence_penalty: None,
         logit_bias: None,
         logprobs: None,
+        echo: None,
+        suffix: None,
+        best_of: None,
     };
 
     let result = completions(
@@ -61,6 +64,9 @@ async fn test_completions_with_valid_max_tokens() {
         presence_penalty: None,
         logit_bias: None,
         logprobs: None,
+        echo: None,
+        suffix: None,
+        best_of: None,
     };
 
     // With no engine running, this will fail to send to engine
