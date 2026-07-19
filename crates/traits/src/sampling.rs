@@ -97,6 +97,33 @@ pub struct SamplingParams {
     /// Reserved for the speculative-decoding fallback path. Currently unused
     /// by the default sampler.
     pub max_retries: u32,
+    /// Random seed for the sampling RNG (OpenAI `seed` semantic,
+    /// P34 v0.2 wire-type follow-up engine wire-through). When
+    /// `Some(seed)`, the sampler constructs a `StdRng::seed_from_u64`
+    /// for each sampling step so the same seed + same model + same
+    /// prompt produces the same output. When `None`, the sampler
+    /// reads from the thread-local default RNG (the pre-P34
+    /// behaviour).
+    ///
+    /// **Honouring is greedy-agnostic:** `temperature = 0` and
+    /// `top_p = 1.0` paths bypass the RNG entirely (deterministic
+    /// argmax) so the seed has no observable effect in those modes
+    /// — same argmax regardless of seed. `seed = Some(0)` is a valid
+    /// seed (NOT conflated with `None`).
+    ///
+    /// **Per-sequence independence:** `sample_batch_with_params`
+    /// builds a fresh `StdRng` per call to `sample_one_with_params`,
+    /// so each sequence's RNG state is independent even when they
+    /// share the same `seed` (they each re-seed from the same u64,
+    /// producing the same draws for the same logits — this is the
+    /// correct behaviour for OpenAI's per-request determinism
+    /// contract).
+    ///
+    /// OpenAI's `seed` field is `i64`; the HTTP layer does an
+    /// `as u64` cast (wrapping negatives) so any i64 is accepted
+    /// per spec.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seed: Option<u64>,
 }
 
 impl Default for SamplingParams {
@@ -111,6 +138,7 @@ impl Default for SamplingParams {
             beam_width: 1,
             length_penalty: 0.6,
             max_retries: 0,
+            seed: None,
         }
     }
 }
@@ -174,10 +202,7 @@ impl SamplingParamsBuilder {
     /// [`SamplingParams::logit_bias`] for the difference from
     /// `presence_penalty` and the determinism guarantee.
     #[must_use]
-    pub fn with_logit_bias(
-        mut self,
-        bias: Option<HashMap<TokenId, f32>>,
-    ) -> Self {
+    pub fn with_logit_bias(mut self, bias: Option<HashMap<TokenId, f32>>) -> Self {
         self.inner.logit_bias = bias;
         self
     }
@@ -197,6 +222,30 @@ impl SamplingParamsBuilder {
     #[must_use]
     pub const fn with_max_retries(mut self, v: u32) -> Self {
         self.inner.max_retries = v;
+        self
+    }
+    /// Set [`SamplingParams::seed`] to `Some(seed)`.
+    ///
+    /// When set, the sampler builds a `StdRng::seed_from_u64` for
+    /// each sampling step so the same seed + same model + same
+    /// prompt produces the same output (OpenAI `seed` semantic —
+    /// P34 v0.2 wire-type follow-up engine wire-through). See the
+    /// field doc-comment on [`SamplingParams::seed`] for the
+    /// greedy-bypass + per-sequence independence guarantees.
+    #[must_use]
+    pub const fn with_seed(mut self, seed: u64) -> Self {
+        self.inner.seed = Some(seed);
+        self
+    }
+    /// Explicitly clear [`SamplingParams::seed`] (set to `None`).
+    ///
+    /// Useful in tests where the builder default is `None` but a
+    /// downstream caller may have set a seed via a different code
+    /// path. With the default builder default of `None`, this is
+    /// rarely needed in production code.
+    #[must_use]
+    pub const fn with_seed_none(mut self) -> Self {
+        self.inner.seed = None;
         self
     }
     /// Finalize the builder into a [`SamplingParams`].

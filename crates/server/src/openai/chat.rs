@@ -224,6 +224,28 @@ async fn handle_chat(
         request.sampling_params.logit_bias = Some(lb.clone());
     }
 
+    // Forward `seed` to the engine's new `SamplingParams::seed` slot
+    // (P34 v0.2 wire-type follow-up — engine wire-through). OpenAI's
+    // `seed` is `i64`; we cast to `u64` via `as` (wrapping negatives
+    // per Rust's `i64 as u64` semantics). This is safe per OpenAI
+    // spec because the seed is "best effort" and the engine only
+    // uses it to seed the RNG — wrapping produces a deterministic
+    // but distinct RNG state for each distinct i64 input, which is
+    // exactly the contract the user asked for. The validator on the
+    // HTTP layer accepts any `i64` (no range / sign check per OpenAI
+    // spec) so we only need to copy the field here. The engine's
+    // `sample_one_with_params` reads `params.seed` once per call
+    // and builds a fresh `StdRng::seed_from_u64` when `Some(_)`
+    // — giving the OpenAI-spec "same seed + same model + same prompt
+    // → same output" contract end-to-end. Greedy paths
+    // (`temperature = 0` / `top_p = 1.0`) bypass the RNG entirely
+    // so the seed has no observable effect in those modes (also
+    // matches OpenAI's spec — seed is only "best effort"
+    // determinism for sampling, not for greedy).
+    if let Some(seed) = req.seed {
+        request.sampling_params.seed = Some(seed as u64);
+    }
+
     // Reject sampling parameters the engine cannot honour (currently
     // beam_width > 1) BEFORE enqueuing — see `sampling_validation`.
     validate_sampling_params(&request.sampling_params)?;
@@ -513,6 +535,28 @@ async fn stream_chat_completion(
     // the map is empty or `None`, so omitting the field is a no-op.
     if let Some(ref lb) = req.logit_bias {
         request.sampling_params.logit_bias = Some(lb.clone());
+    }
+
+    // Forward `seed` to the engine's new `SamplingParams::seed` slot
+    // (P34 v0.2 wire-type follow-up — engine wire-through). OpenAI's
+    // `seed` is `i64`; we cast to `u64` via `as` (wrapping negatives
+    // per Rust's `i64 as u64` semantics). This is safe per OpenAI
+    // spec because the seed is "best effort" and the engine only
+    // uses it to seed the RNG — wrapping produces a deterministic
+    // but distinct RNG state for each distinct i64 input, which is
+    // exactly the contract the user asked for. The validator on the
+    // HTTP layer accepts any `i64` (no range / sign check per OpenAI
+    // spec) so we only need to copy the field here. The engine's
+    // `sample_one_with_params` reads `params.seed` once per call
+    // and builds a fresh `StdRng::seed_from_u64` when `Some(_)`
+    // — giving the OpenAI-spec "same seed + same model + same prompt
+    // → same output" contract end-to-end. Greedy paths
+    // (`temperature = 0` / `top_p = 1.0`) bypass the RNG entirely
+    // so the seed has no observable effect in those modes (also
+    // matches OpenAI's spec — seed is only "best effort"
+    // determinism for sampling, not for greedy).
+    if let Some(seed) = req.seed {
+        request.sampling_params.seed = Some(seed as u64);
     }
 
     // Reject sampling parameters the engine cannot honour (currently

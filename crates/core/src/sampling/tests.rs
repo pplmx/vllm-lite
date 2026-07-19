@@ -17,6 +17,10 @@
 //! - `apply_repeat_penalty` (basic penalty, no-op at 1.0)
 //! - `apply_logit_bias` (basic bias, no-op on empty map, out-of-range
 //!   keys silently ignored, integrates with `sample_one_with_params`)
+//! - `seed` (P34 v0.2 wire-type follow-up engine wire-through):
+//!   determinism guarantee, `seed = 0` is valid, `seed = None`
+//!   falls back to thread RNG, per-sequence independence,
+//!   greedy paths bypass the RNG
 //! - Property-based tests (proptest) in the sibling `prop_tests`
 //!   module: batch length preservation, greedy index bounds,
 //!   batched greedy matches per-row greedy, repeat-penalty no-op.
@@ -66,53 +70,53 @@ fn test_greedy_large_vocab() {
 #[test]
 fn test_temperature_one_unchanged() {
     let logits = &[0.1, 0.5, 0.3];
-    let result = temperature_sample(logits, 1.0);
+    let result = temperature_sample(logits, 1.0, 0.5);
     assert!(result < 3);
 }
 
 #[test]
 fn test_temperature_zero_reverts_to_greedy() {
     let logits = &[0.1, 0.9, 0.3];
-    let result = temperature_sample(logits, 0.0);
+    let result = temperature_sample(logits, 0.0, 0.5);
     assert_eq!(result, 1);
 }
 
 #[test]
 fn test_temperature_very_small() {
     let logits = &[0.1, 0.9, 0.3];
-    let result = temperature_sample(logits, 0.01);
+    let result = temperature_sample(logits, 0.01, 0.5);
     assert!(result < 3);
 }
 
 #[test]
 fn test_temperature_very_large() {
     let logits = &[0.1, 0.9, 0.3];
-    let _result = temperature_sample(logits, 10.0);
+    let _result = temperature_sample(logits, 10.0, 0.5);
 }
 
 #[test]
 fn test_temperature_empty() {
-    let result = temperature_sample(&[], 1.0);
+    let result = temperature_sample(&[], 1.0, 0.5);
     assert_eq!(result, 0);
 }
 
 #[test]
 fn test_top_p_one_equals_greedy() {
     let logits = &[0.1, 0.9, 0.3];
-    let result = top_p_sample(logits, 1.0);
+    let result = top_p_sample(logits, 1.0, 0.5);
     assert_eq!(result, 1);
 }
 
 #[test]
 fn test_top_p_small() {
     let logits = &[0.9, 0.05, 0.05];
-    let result = top_p_sample(logits, 0.5);
+    let result = top_p_sample(logits, 0.5, 0.5);
     assert_eq!(result, 0);
 }
 
 #[test]
 fn test_top_p_empty() {
-    let result = top_p_sample(&[], 0.9);
+    let result = top_p_sample(&[], 0.9, 0.5);
     assert_eq!(result, 0);
 }
 
@@ -255,9 +259,15 @@ fn test_repeat_penalty_zero_logit_uses_positive_branch() {
     let mut logits = vec![0.0, 0.0];
     let seen = vec![0];
     apply_repeat_penalty(&mut logits, &seen, 2.0);
-    assert!(logits[0].abs() < 1e-6, "zero logit stays zero under penalty > 1");
+    assert!(
+        logits[0].abs() < 1e-6,
+        "zero logit stays zero under penalty > 1"
+    );
     apply_repeat_penalty(&mut logits, &seen, 0.5);
-    assert!(logits[0].abs() < 1e-6, "zero logit stays zero under penalty < 1");
+    assert!(
+        logits[0].abs() < 1e-6,
+        "zero logit stays zero under penalty < 1"
+    );
 }
 
 #[test]
@@ -401,14 +411,14 @@ fn test_presence_penalty_combined_with_repeat_penalty() {
 #[test]
 fn test_top_k_only_top_k_selected() {
     let logits = vec![0.1, 0.9, 0.3, 0.05, 0.05];
-    let result = top_k_sample(&logits, 2);
+    let result = top_k_sample(&logits, 2, 0.5);
     assert!(result == 1 || result == 2);
 }
 
 #[test]
 fn test_top_k_zero_no_effect() {
     let logits = vec![0.1, 0.9, 0.3];
-    let result = top_k_sample(&logits, 0);
+    let result = top_k_sample(&logits, 0, 0.5);
     assert_eq!(result, 1);
 }
 
@@ -526,8 +536,7 @@ fn test_logit_bias_basic() {
     // With bias = {1: 1.0}, the logit at 1 is increased by 1.0
     // (from 0.5 to 1.5). Logits at positions 0 and 2 are untouched.
     let mut logits = vec![0.5, 0.5, 0.5];
-    let bias: std::collections::HashMap<TokenId, f32> =
-        std::collections::HashMap::from([(1, 1.0)]);
+    let bias: std::collections::HashMap<TokenId, f32> = std::collections::HashMap::from([(1, 1.0)]);
     apply_logit_bias(&mut logits, &bias);
     assert!((logits[0] - 0.5).abs() < 1e-6, "logit at 0 untouched");
     assert!(
@@ -629,8 +638,7 @@ fn test_logit_bias_does_not_affect_greedy_when_zero() {
     // (covers the "bias map present but empty effect" case where a
     // caller serialised an empty entry).
     let mut logits = vec![0.5, 0.5, 0.5];
-    let bias: std::collections::HashMap<TokenId, f32> =
-        std::collections::HashMap::from([(1, 0.0)]);
+    let bias: std::collections::HashMap<TokenId, f32> = std::collections::HashMap::from([(1, 0.0)]);
     apply_logit_bias(&mut logits, &bias);
     assert!((logits[0] - 0.5).abs() < 1e-6);
     assert!((logits[1] - 0.5).abs() < 1e-6);
@@ -645,8 +653,7 @@ fn test_sample_one_with_params_logit_bias_changes_argmax() {
     // initialises at index 0 (first wins). Applying bias = {2: 1.0}
     // makes the logit at 2 = 1.5 — the new argmax is 2.
     let logits = vec![0.5, 0.5, 0.5];
-    let bias: std::collections::HashMap<TokenId, f32> =
-        std::collections::HashMap::from([(2, 1.0)]);
+    let bias: std::collections::HashMap<TokenId, f32> = std::collections::HashMap::from([(2, 1.0)]);
     let params = SamplingParams::builder()
         .with_temperature(0.0)
         .with_logit_bias(Some(bias))
@@ -664,9 +671,7 @@ fn test_sample_one_with_params_logit_bias_none_is_noop() {
     // of the dispatch (matches `presence_penalty.abs() > f32::EPSILON`
     // pattern but for the Option<HashMap> variant).
     let logits = vec![0.5, 0.5, 0.5];
-    let params = SamplingParams::builder()
-        .with_temperature(0.0)
-        .build();
+    let params = SamplingParams::builder().with_temperature(0.0).build();
     let token = sample_one_with_params(&logits, &params, &[]);
     assert_eq!(token, 0, "no logit_bias → first argmax (0) wins");
 }
@@ -697,8 +702,7 @@ fn test_logit_bias_combined_with_repeat_and_presence_penalties() {
     //   - presence_penalty=0.0: no-op.
     //   - logit_bias={2: 1.0}: logit at 2 = 0.5 + 1.0 = 1.5 → argmax = 2.
     let logits = vec![1.0, 0.5, 0.5];
-    let bias: std::collections::HashMap<TokenId, f32> =
-        std::collections::HashMap::from([(2, 1.0)]);
+    let bias: std::collections::HashMap<TokenId, f32> = std::collections::HashMap::from([(2, 1.0)]);
     let params = SamplingParams::builder()
         .with_temperature(0.0)
         .with_repeat_penalty(2.0)
@@ -709,5 +713,226 @@ fn test_logit_bias_combined_with_repeat_and_presence_penalties() {
     assert_eq!(
         token, 2,
         "combined penalties + logit_bias must yield argmax = 2"
+    );
+}
+
+// ============================================================================
+// P34: seed RNG seeding tests
+// ============================================================================
+//
+// The `seed` field on `SamplingParams` (P34 v0.2 wire-type follow-up engine
+// wire-through) gives the OpenAI-spec guarantee that the same seed + same
+// model + same prompt produces the same output. These tests pin that
+// contract at the sampler layer:
+//
+// 1. Determinism: same seed + same logits/params/seen → same token.
+// 2. Independence: different seeds (with otherwise identical inputs) →
+//    usually different tokens (sampled, but the sampler is per-call so
+//    the seeded RNG draws different random thresholds).
+// 3. `seed = None` falls back to thread RNG (no behaviour change vs.
+//    the pre-P34 default).
+// 4. `seed = Some(0)` is a valid seed (NOT treated as "unset"; matches
+//    OpenAI's "any integer" contract).
+// 5. Per-sequence independence in `sample_batch_with_params` (each
+//    sequence uses its own RNG seeded from its own `params.seed`).
+// 6. Greedy / `temperature = 0` paths bypass the RNG entirely (the
+//    seed has no observable effect — same argmax regardless of seed).
+
+/// Multi-logit distribution where greedy argmax is non-trivial and
+/// temperature sampling actually exercises the RNG (otherwise the test
+/// is degenerate — `temperature = 0` skips the RNG and any seed
+/// looks identical).
+const SEED_TEST_LOGITS: &[f32] = &[1.0, 2.0, 3.0, 4.0, 5.0];
+
+#[test]
+fn test_seed_determinism_same_seed_same_result() {
+    // Two SamplingParams with identical seed must produce identical
+    // tokens across two independent sample_one_with_params calls.
+    let logits = SEED_TEST_LOGITS;
+    let seen: &[TokenId] = &[];
+    let params_a = SamplingParams::builder()
+        .with_temperature(1.0)
+        .with_seed(42)
+        .build();
+    let params_b = SamplingParams::builder()
+        .with_temperature(1.0)
+        .with_seed(42)
+        .build();
+    let token_a = sample_one_with_params(logits, &params_a, seen);
+    let token_b = sample_one_with_params(logits, &params_b, seen);
+    assert_eq!(
+        token_a, token_b,
+        "same seed must produce the same sampled token (got {token_a} vs {token_b})"
+    );
+}
+
+#[test]
+fn test_seed_zero_is_valid_seed() {
+    // OpenAI spec accepts any i64; the i64 → u64 cast wraps negatives
+    // but never produces 0 for non-zero inputs. seed = 0 is a valid
+    // seed and must NOT be conflated with seed = None.
+    let logits = SEED_TEST_LOGITS;
+    let seen: &[TokenId] = &[];
+    let params_zero = SamplingParams::builder()
+        .with_temperature(1.0)
+        .with_seed(0)
+        .build();
+    let params_nonzero = SamplingParams::builder()
+        .with_temperature(1.0)
+        .with_seed(1)
+        .build();
+    let token_zero = sample_one_with_params(logits, &params_zero, seen);
+    let token_nonzero = sample_one_with_params(logits, &params_nonzero, seen);
+    // Both calls are deterministic; the two values are usually
+    // different (because the seeded RNG draws different thresholds
+    // from seed 0 vs seed 1). The contract is: seed=0 is honoured.
+    // We don't assert inequality (sampling could in principle pick
+    // the same token by chance) but we do assert both are valid
+    // vocab indices.
+    assert!(token_zero < logits.len() as TokenId);
+    assert!(token_nonzero < logits.len() as TokenId);
+}
+
+#[test]
+fn test_seed_none_falls_back_to_thread_rng() {
+    // seed = None must NOT crash and must NOT silently use a stale
+    // seeded RNG. Two calls with seed = None may produce different
+    // tokens (because the thread RNG advances), so we only assert
+    // that both calls return valid vocab indices — the test would
+    // fail loudly if the None branch were broken (e.g. panic or
+    // off-by-one).
+    let logits = SEED_TEST_LOGITS;
+    let seen: &[TokenId] = &[];
+    let params = SamplingParams::builder()
+        .with_temperature(1.0)
+        .with_seed_none()
+        .build();
+    let token = sample_one_with_params(logits, &params, seen);
+    assert!(
+        token < logits.len() as TokenId,
+        "seed = None must produce a valid vocab index (got {token})"
+    );
+}
+
+#[test]
+fn test_seed_different_seeds_diverge_in_distribution() {
+    // With the same logits + temperature + seen but different seeds,
+    // the sampler must draw different random thresholds (because
+    // each seed derives a fresh RNG state). We assert the two
+    // tokens are different — for SEED_TEST_LOGITS with T=1.0, the
+    // softmax is moderately peaked so two random draws almost
+    // certainly land on different tokens. If the seeded RNG is
+    // broken (e.g. reused across calls), this test catches it.
+    let logits = SEED_TEST_LOGITS;
+    let seen: &[TokenId] = &[];
+    let params_a = SamplingParams::builder()
+        .with_temperature(1.0)
+        .with_seed(42)
+        .build();
+    let params_b = SamplingParams::builder()
+        .with_temperature(1.0)
+        .with_seed(99)
+        .build();
+    let token_a = sample_one_with_params(logits, &params_a, seen);
+    let token_b = sample_one_with_params(logits, &params_b, seen);
+    assert_ne!(
+        token_a, token_b,
+        "different seeds must produce different sampled tokens for \
+         SEED_TEST_LOGITS at T=1.0 (got {token_a} for both — RNG is \
+         not being seeded correctly)"
+    );
+}
+
+#[test]
+fn test_seed_greedy_path_bypasses_rng() {
+    // temperature = 0 forces the greedy path which doesn't read
+    // from any RNG. The seed field is therefore irrelevant and
+    // the result is the deterministic argmax regardless of seed.
+    let logits = SEED_TEST_LOGITS;
+    let seen: &[TokenId] = &[];
+    let params_a = SamplingParams::builder()
+        .with_temperature(0.0)
+        .with_seed(42)
+        .build();
+    let params_b = SamplingParams::builder()
+        .with_temperature(0.0)
+        .with_seed(99)
+        .build();
+    let token_a = sample_one_with_params(logits, &params_a, seen);
+    let token_b = sample_one_with_params(logits, &params_b, seen);
+    assert_eq!(
+        token_a, token_b,
+        "greedy path (T=0) must yield argmax regardless of seed"
+    );
+    assert_eq!(
+        token_a, 4,
+        "greedy path must yield argmax = 4 for SEED_TEST_LOGITS"
+    );
+}
+
+#[test]
+fn test_seed_per_sequence_independence_in_batch() {
+    // `sample_batch_with_params` carries per-sequence SamplingParams.
+    // Each sequence must use its own RNG seeded from its own
+    // params.seed — NOT a shared RNG across sequences.
+    let logits_list = vec![SEED_TEST_LOGITS.to_vec(); 3];
+    let seen_list = vec![vec![]; 3];
+    let params_list = vec![
+        SamplingParams::builder()
+            .with_temperature(1.0)
+            .with_seed(42)
+            .build(),
+        SamplingParams::builder()
+            .with_temperature(1.0)
+            .with_seed(42)
+            .build(),
+        SamplingParams::builder()
+            .with_temperature(1.0)
+            .with_seed(99)
+            .build(),
+    ];
+    let tokens = sample_batch_with_params(&logits_list, &params_list, &seen_list);
+    assert_eq!(tokens.len(), 3);
+    // Sequence 0 and 1 share the same seed → must produce the same
+    // token. Sequence 2 has a different seed → must produce a
+    // different token from sequence 0/1.
+    assert_eq!(
+        tokens[0], tokens[1],
+        "sequences with the same seed must produce the same token \
+         (got {0} vs {1})",
+        tokens[0], tokens[1]
+    );
+    assert_ne!(
+        tokens[0], tokens[2],
+        "sequences with different seeds must produce different \
+         tokens (got {0} for both — RNG state is shared across \
+         sequences)",
+        tokens[0]
+    );
+}
+
+#[test]
+fn test_seed_top_p_path_uses_seeded_rng() {
+    // The seeded RNG must drive the top_p sampler too (not just
+    // temperature_sample). With T=1.0 and top_p < 1.0, the same
+    // seed must produce the same truncated-nucleus sample.
+    let logits = SEED_TEST_LOGITS;
+    let seen: &[TokenId] = &[];
+    let params_a = SamplingParams::builder()
+        .with_temperature(1.0)
+        .with_top_p(0.5)
+        .with_seed(42)
+        .build();
+    let params_b = SamplingParams::builder()
+        .with_temperature(1.0)
+        .with_top_p(0.5)
+        .with_seed(42)
+        .build();
+    let token_a = sample_one_with_params(logits, &params_a, seen);
+    let token_b = sample_one_with_params(logits, &params_b, seen);
+    assert_eq!(
+        token_a, token_b,
+        "top_p path must honour seed deterministically \
+         (got {token_a} vs {token_b})"
     );
 }

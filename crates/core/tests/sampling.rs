@@ -3,14 +3,14 @@ use vllm_core::sampling::{apply_repeat_penalty, sample_batch, top_k_sample};
 #[test]
 fn test_top_k_basic() {
     let logits = vec![0.1, 0.9, 0.3, 0.05, 0.05];
-    let result = top_k_sample(&logits, 2);
+    let result = top_k_sample(&logits, 2, 0.5);
     assert!(result == 1 || result == 2);
 }
 
 #[test]
 fn test_top_k_zero_no_effect() {
     let logits = vec![0.1, 0.9, 0.3];
-    let result = top_k_sample(&logits, 0);
+    let result = top_k_sample(&logits, 0, 0.5);
     assert_eq!(result, 1);
 }
 
