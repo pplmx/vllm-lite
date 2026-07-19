@@ -35,8 +35,7 @@ use vllm_core::types::SamplingParams;
 use vllm_traits::TokenId;
 
 use super::types::{
-    ChatRequest, CompletionRequest, ErrorResponse, ResponseFormat, Tool, ToolChoice,
-    ToolChoiceMode,
+    ChatRequest, CompletionRequest, ErrorResponse, ResponseFormat, Tool, ToolChoice, ToolChoiceMode,
 };
 
 /// Validate a `top_p` value from an HTTP request.
@@ -355,10 +354,8 @@ pub fn validate_chat_logprobs(
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse::new(
-                format!(
-                    "top_logprobs must be in the [0, 20] range per OpenAI spec (got {n})"
-                )
-                .as_str(),
+                format!("top_logprobs must be in the [0, 20] range per OpenAI spec (got {n})")
+                    .as_str(),
                 "invalid_request_error",
             )),
         ));
@@ -407,10 +404,7 @@ pub fn validate_completion_logprobs(
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse::new(
-                format!(
-                    "logprobs must be in the [0, 5] range per OpenAI spec (got {n})"
-                )
-                .as_str(),
+                format!("logprobs must be in the [0, 5] range per OpenAI spec (got {n})").as_str(),
                 "invalid_request_error",
             )),
         ));
@@ -1443,8 +1437,7 @@ mod tests {
         let mut bias = HashMap::new();
         bias.insert(42, 50.0);
         bias.insert(100, 100.0); // upper boundary
-        validate_logit_bias(Some(&bias))
-            .expect("positive in-range bias must pass");
+        validate_logit_bias(Some(&bias)).expect("positive in-range bias must pass");
     }
 
     #[test]
@@ -1454,8 +1447,7 @@ mod tests {
         let mut bias = HashMap::new();
         bias.insert(42, -50.0);
         bias.insert(100, -100.0); // lower boundary
-        validate_logit_bias(Some(&bias))
-            .expect("negative in-range bias must pass");
+        validate_logit_bias(Some(&bias)).expect("negative in-range bias must pass");
     }
 
     #[test]
@@ -1466,8 +1458,8 @@ mod tests {
         // extreme logits that saturate the softmax.
         let mut bias = HashMap::new();
         bias.insert(42, 100.001);
-        let err = validate_logit_bias(Some(&bias))
-            .expect_err("above-upper-bound bias must be rejected");
+        let err =
+            validate_logit_bias(Some(&bias)).expect_err("above-upper-bound bias must be rejected");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
     }
 
@@ -1475,8 +1467,8 @@ mod tests {
     fn validate_logit_bias_below_lower_bound_is_rejected() {
         let mut bias = HashMap::new();
         bias.insert(42, -100.001);
-        let err = validate_logit_bias(Some(&bias))
-            .expect_err("below-lower-bound bias must be rejected");
+        let err =
+            validate_logit_bias(Some(&bias)).expect_err("below-lower-bound bias must be rejected");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
     }
 
@@ -1487,8 +1479,7 @@ mod tests {
         // up front.
         let mut bias = HashMap::new();
         bias.insert(42, f32::NAN);
-        let err = validate_logit_bias(Some(&bias))
-            .expect_err("NaN bias must be rejected");
+        let err = validate_logit_bias(Some(&bias)).expect_err("NaN bias must be rejected");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
     }
 
@@ -1496,8 +1487,7 @@ mod tests {
     fn validate_logit_bias_positive_infinity_is_rejected() {
         let mut bias = HashMap::new();
         bias.insert(42, f32::INFINITY);
-        let err = validate_logit_bias(Some(&bias))
-            .expect_err("+inf bias must be rejected");
+        let err = validate_logit_bias(Some(&bias)).expect_err("+inf bias must be rejected");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
     }
 
@@ -1505,8 +1495,7 @@ mod tests {
     fn validate_logit_bias_negative_infinity_is_rejected() {
         let mut bias = HashMap::new();
         bias.insert(42, f32::NEG_INFINITY);
-        let err = validate_logit_bias(Some(&bias))
-            .expect_err("-inf bias must be rejected");
+        let err = validate_logit_bias(Some(&bias)).expect_err("-inf bias must be rejected");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
     }
 
@@ -1520,8 +1509,8 @@ mod tests {
         let mut bias = HashMap::new();
         bias.insert(42, 0.5); // valid
         bias.insert(100, 1000.0); // INVALID: above upper bound
-        let err = validate_logit_bias(Some(&bias))
-            .expect_err("at least one invalid value must reject");
+        let err =
+            validate_logit_bias(Some(&bias)).expect_err("at least one invalid value must reject");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
     }
 
@@ -1533,8 +1522,7 @@ mod tests {
         let mut bias = HashMap::new();
         bias.insert(0, 1.0); // 0 might be a special token (BOS)
         bias.insert(u32::MAX, 1.0); // definitely out of vocab
-        validate_logit_bias(Some(&bias))
-            .expect("token IDs are not validated; bias values only");
+        validate_logit_bias(Some(&bias)).expect("token IDs are not validated; bias values only");
     }
 
     // `validate_chat_logprobs` tests (P31 v0.3 wire-type follow-up).
@@ -1553,8 +1541,7 @@ mod tests {
     fn validate_chat_logprobs_false_none_passes() {
         // logprobs = false explicitly disables logprobs; top_logprobs
         // is irrelevant when logprobs is false. Validator accepts.
-        validate_chat_logprobs(Some(false), None)
-            .expect("(Some(false), None) must pass");
+        validate_chat_logprobs(Some(false), None).expect("(Some(false), None) must pass");
     }
 
     #[test]
@@ -1562,8 +1549,7 @@ mod tests {
         // logprobs = true with no top_logprobs → only the sampled
         // token's logprob is returned (per OpenAI spec). Validator
         // accepts.
-        validate_chat_logprobs(Some(true), None)
-            .expect("(Some(true), None) must pass");
+        validate_chat_logprobs(Some(true), None).expect("(Some(true), None) must pass");
     }
 
     #[test]
@@ -1574,8 +1560,7 @@ mod tests {
         // OpenAI-spec "explicitly disabled" sentinel for
         // top_logprobs).
         for n in [0u32, 1, 5, 10, 20] {
-            validate_chat_logprobs(Some(true), Some(n))
-                .expect("(Some(true), Some({n})) must pass");
+            validate_chat_logprobs(Some(true), Some(n)).expect("(Some(true), Some({n})) must pass");
         }
     }
 
@@ -1634,8 +1619,7 @@ mod tests {
     fn validate_completion_logprobs_in_range_passes() {
         // Full in-range sweep.
         for n in [1u32, 2, 3, 4, 5] {
-            validate_completion_logprobs(Some(n))
-                .expect("Some({n}) must pass (in [0, 5])");
+            validate_completion_logprobs(Some(n)).expect("Some({n}) must pass (in [0, 5])");
         }
     }
 
@@ -1651,7 +1635,6 @@ mod tests {
             assert!(err.1.0.error.message.contains("logprobs"));
         }
     }
-
 
     // End-to-end: `validate_chat_request_fields` integration with
     // the penalty validators. Same shape as the P22 response_format
@@ -1879,9 +1862,7 @@ mod tests {
     // `validate_chat_request_fields` integration with logit_bias
     // (P30 v0.3 wire-type follow-up).
 
-    fn chat_request_with_logit_bias(
-        bias: Option<HashMap<TokenId, f32>>,
-    ) -> ChatRequest {
+    fn chat_request_with_logit_bias(bias: Option<HashMap<TokenId, f32>>) -> ChatRequest {
         let mut req = chat_request_with_n(None);
         req.logit_bias = bias;
         req
@@ -1899,8 +1880,7 @@ mod tests {
         bias.insert(42, 50.0);
         bias.insert(100, -50.0);
         let req = chat_request_with_logit_bias(Some(bias));
-        validate_chat_request_fields(&req)
-            .expect("chat with in-range logit_bias must pass");
+        validate_chat_request_fields(&req).expect("chat with in-range logit_bias must pass");
     }
 
     #[test]
@@ -2421,11 +2401,9 @@ mod tests {
     #[test]
     fn validate_chat_tool_choice_required_without_tools_is_rejected() {
         // Required + no tools = rejected (model can't satisfy "must call").
-        let err = validate_chat_tool_choice(
-            None,
-            Some(&ToolChoice::Mode(ToolChoiceMode::Required)),
-        )
-        .expect_err("tool_choice=required + no tools must be rejected");
+        let err =
+            validate_chat_tool_choice(None, Some(&ToolChoice::Mode(ToolChoiceMode::Required)))
+                .expect_err("tool_choice=required + no tools must be rejected");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         assert!(err.1.0.error.message.contains("required"));
         assert!(err.1.0.error.message.contains("tools"));
@@ -2434,11 +2412,9 @@ mod tests {
     #[test]
     fn validate_chat_tool_choice_required_with_empty_tools_is_rejected() {
         // Required + Some(empty) = rejected.
-        let err = validate_chat_tool_choice(
-            Some(&[]),
-            Some(&ToolChoice::Mode(ToolChoiceMode::Required)),
-        )
-        .expect_err("tool_choice=required + empty tools must be rejected");
+        let err =
+            validate_chat_tool_choice(Some(&[]), Some(&ToolChoice::Mode(ToolChoiceMode::Required)))
+                .expect_err("tool_choice=required + empty tools must be rejected");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
     }
 
@@ -2556,8 +2532,7 @@ mod tests {
             tools: Some(vec![tool("get_weather")]),
             tool_choice: None,
         };
-        validate_chat_request_fields(&req)
-            .expect("tools without tool_choice must pass");
+        validate_chat_request_fields(&req).expect("tools without tool_choice must pass");
     }
 
     #[test]
@@ -2582,8 +2557,7 @@ mod tests {
             tools: Some(vec![tool("get_weather")]),
             tool_choice: Some(ToolChoice::Mode(ToolChoiceMode::Required)),
         };
-        validate_chat_request_fields(&req)
-            .expect("required + tools must pass");
+        validate_chat_request_fields(&req).expect("required + tools must pass");
     }
 
     #[test]
@@ -2608,8 +2582,8 @@ mod tests {
             tools: None,
             tool_choice: Some(ToolChoice::Mode(ToolChoiceMode::Required)),
         };
-        let err = validate_chat_request_fields(&req)
-            .expect_err("required + no tools must be rejected");
+        let err =
+            validate_chat_request_fields(&req).expect_err("required + no tools must be rejected");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         assert!(err.1.0.error.message.contains("required"));
     }
@@ -2641,8 +2615,7 @@ mod tests {
                 },
             })),
         };
-        validate_chat_request_fields(&req)
-            .expect("specific + matching tool must pass");
+        validate_chat_request_fields(&req).expect("specific + matching tool must pass");
     }
 
     #[test]
@@ -2705,8 +2678,8 @@ mod tests {
                 },
             })),
         };
-        let err = validate_chat_request_fields(&req)
-            .expect_err("specific + no tools must be rejected");
+        let err =
+            validate_chat_request_fields(&req).expect_err("specific + no tools must be rejected");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         assert!(err.1.0.error.message.contains("tools"));
     }

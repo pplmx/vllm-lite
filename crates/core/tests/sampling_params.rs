@@ -18,6 +18,7 @@
 
 use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
+use vllm_core::sampling::sample_batch_with_params;
 use vllm_core::types::Request;
 use vllm_traits::{BatchOutput, ModelBackend, Result, SamplingParams, SeqId, TokenId};
 
@@ -427,5 +428,73 @@ fn arch_02_logit_bias_per_sequence_divergence() {
         tokens[1], 2,
         "seq B with bias on token 2 must emit 2 (got {})",
         tokens[1]
+    );
+}
+
+// ============================================================================
+// P34: seed RNG seeding — sampling_params-level integration tests
+// ============================================================================
+//
+// The unit tests in `crates/core/src/sampling/tests.rs` pin the
+// sampler-internal determinism contract. These tests pin the same
+// contract at the `sample_batch_with_params` integration boundary
+// (the function the engine actually calls) so the chat / completions
+// handlers' seed wire-through is verified end-to-end without going
+// through the HTTP layer.
+
+/// P34 end-to-end: same seed + same logits/seen → same token,
+/// verified at the `sample_batch_with_params` boundary. This is the
+/// integration-level equivalent of
+/// `test_seed_determinism_same_seed_same_result` from the unit
+/// tests, and it's the contract the OpenAI `seed` wire-type relies
+/// on.
+#[test]
+fn arch_02_seed_determinism_end_to_end() {
+    // Same logits, same params (including seed), same seen — must
+    // produce identical tokens across two independent batch calls.
+    let logits_list = vec![vec![1.0, 2.0, 3.0, 4.0, 5.0]; 2];
+    let seen_tokens = vec![vec![]; 2];
+    let params_list = vec![
+        SamplingParams::builder()
+            .with_temperature(1.0)
+            .with_seed(42)
+            .build();
+        2
+    ];
+    let tokens_a = sample_batch_with_params(&logits_list, &params_list, &seen_tokens);
+    let tokens_b = sample_batch_with_params(&logits_list, &params_list, &seen_tokens);
+    assert_eq!(
+        tokens_a, tokens_b,
+        "same seed must produce identical batch output across calls \
+         (got {tokens_a:?} vs {tokens_b:?})"
+    );
+}
+
+/// P34 end-to-end: per-sequence independence at the batch level.
+/// Two sequences in the SAME batch with DIFFERENT seeds must
+/// produce DIFFERENT tokens (for a non-degenerate logit
+/// distribution). This pins the contract that the engine doesn't
+/// share RNG state across sequences.
+#[test]
+fn arch_02_seed_per_sequence_divergence_in_batch() {
+    let logits_list = vec![vec![1.0, 2.0, 3.0, 4.0, 5.0]; 2];
+    let seen_tokens = vec![vec![]; 2];
+    let params_list = vec![
+        SamplingParams::builder()
+            .with_temperature(1.0)
+            .with_seed(42)
+            .build(),
+        SamplingParams::builder()
+            .with_temperature(1.0)
+            .with_seed(99)
+            .build(),
+    ];
+    let tokens = sample_batch_with_params(&logits_list, &params_list, &seen_tokens);
+    assert_ne!(
+        tokens[0], tokens[1],
+        "sequences with different seeds in the same batch must \
+         produce different tokens (got {0} for both — RNG state \
+         is shared across sequences)",
+        tokens[0]
     );
 }

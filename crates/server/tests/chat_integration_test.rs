@@ -2155,11 +2155,7 @@ async fn test_chat_forwards_logit_bias_to_engine() {
         "logit_bias[999] = -100.0 (lower boundary) must round-trip; got {:?}",
         bias.get(&999)
     );
-    assert_eq!(
-        bias.len(),
-        4,
-        "logit_bias map must carry all 4 entries"
-    );
+    assert_eq!(bias.len(), 4, "logit_bias map must carry all 4 entries");
 }
 
 /// A chat request without a `logit_bias` field must produce a
@@ -3443,4 +3439,197 @@ async fn test_chat_tool_choice_none_with_tools_accepted_by_handler() {
     let _params = captured
         .as_ref()
         .expect("capturing mock must have observed the AddRequest");
+}
+
+// ============================================================================
+// P34: seed engine wire-through integration tests
+// ============================================================================
+//
+// The `seed` field was declared + validated + traced in P23 (v0.2 wire-type
+// follow-up declaration only). P34 closes the engine-side gap: `req.seed`
+// (an `i64` from the wire) is cast to `u64` and stored in
+// `SamplingParams::seed`, where `sample_one_with_params` reads it to seed
+// a fresh `StdRng::seed_from_u64`. These tests pin the end-to-end
+// handler→engine path so future refactors can't silently regress the
+// "same seed → same output" contract.
+
+// Note: `max_tokens = 1` forces a single decode step. Greedy paths
+// (`temperature = 0`) bypass the RNG so seed has no observable
+// effect; we therefore don't assert specific tokens — only that the
+// seed survives the wire-through intact.
+
+/// Forward `seed` (positive value) end-to-end from the chat handler
+/// to `SamplingParams::seed`. Mirrors the parallel wire-through
+/// tests for `presence_penalty` (P28) and `logit_bias` (P30).
+#[tokio::test]
+async fn test_chat_forwards_seed_to_engine() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "seed": 42_i64,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "seed must not cause 4xx; pre-fix it was undeclared and rejected by serde"
+    );
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    assert_eq!(
+        params.seed,
+        Some(42_u64),
+        "seed = 42 must round-trip to SamplingParams::seed = Some(42); got {:?}",
+        params.seed
+    );
+}
+
+/// Baseline: omitting `seed` must leave `sampling_params.seed` at
+/// `None` (no seeded RNG). Pins the backward-compatible path so
+/// legacy clients are not broken by the new wire-through. Mirrors
+/// the parallel baseline for `presence_penalty` (P28) and
+/// `logit_bias` (P30).
+#[tokio::test]
+async fn test_chat_without_seed_works_baseline() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "omitting seed must continue to work (backward-compat baseline)"
+    );
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    assert_eq!(
+        params.seed, None,
+        "omitted seed must leave SamplingParams::seed at None; got {:?}",
+        params.seed
+    );
+}
+
+/// Negative `seed` values must be forwarded verbatim via `as u64`
+/// cast (Rust's `i64 as u64` wrapping semantics). This pins the
+/// contract that OpenAI's "any integer" seed spec is honoured even
+/// for negative values — the engine still gets a deterministic but
+/// distinct RNG state.
+#[tokio::test]
+async fn test_chat_negative_seed_is_forwarded_via_u64_cast() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "seed": -1_i64,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "negative seed must not cause 4xx (OpenAI spec accepts any i64)"
+    );
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    assert_eq!(
+        params.seed,
+        Some(-1_i64 as u64),
+        "seed = -1 must round-trip to SamplingParams::seed = Some({}); got {:?}",
+        -1_i64 as u64,
+        params.seed
+    );
+}
+
+/// `seed = 0` is a valid seed (NOT conflated with `None`). Pins
+/// the OpenAI-spec "any integer" contract — `seed = 0` must
+/// produce `SamplingParams::seed = Some(0)` so the engine seeds
+/// the RNG with `StdRng::seed_from_u64(0)`.
+#[tokio::test]
+async fn test_chat_seed_zero_is_forwarded_as_some_zero() {
+    let (state, _handle, captured) = state_with_capturing_engine();
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "seed": 0_i64,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "seed = 0 must not be conflated with absent seed"
+    );
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    assert_eq!(
+        params.seed,
+        Some(0_u64),
+        "seed = 0 must round-trip to SamplingParams::seed = Some(0), not None; got {:?}",
+        params.seed
+    );
 }

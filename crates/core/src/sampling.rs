@@ -6,14 +6,52 @@
 //!
 //! Greedy decoding delegates to [`vllm_traits::argmax_logits`] — the
 //! local wrapper only adds the `tracing` instrumentation.
+//!
+//! **RNG seeding (P34 v0.2 wire-type follow-up engine wire-through):**
+//! the temperature / top-p samplers accept a precomputed
+//! `random_threshold: f32` parameter so the caller (today:
+//! [`sample_one_with_params`], tomorrow: any per-step orchestration
+//! that wants per-sequence RNG independence) controls RNG selection.
+//! `sample_one_with_params` reads `params.seed`: `Some(s)` builds a
+//! fresh `StdRng::seed_from_u64(s)` and draws one `f32`; `None` reads
+//! from the thread-local default RNG. Greedy paths bypass the RNG
+//! entirely so `seed` has no observable effect when `temperature = 0`
+//! or `top_p = 1.0`.
 #![allow(unused_variables)]
 
 use crate::types::TokenId;
 use tracing::trace;
 use vllm_traits::{SamplingParams, argmax_logits};
 
+/// Read one `f32` from the thread-local default RNG. Used when
+/// [`SamplingParams::seed`] is `None` (the pre-P34 default).
 fn random_f32() -> f32 {
     rand::random::<f32>()
+}
+
+/// Read one `f32` from a freshly-seeded `StdRng` (OpenAI `seed`
+/// semantic — P34 v0.2 wire-type follow-up engine wire-through).
+///
+/// `StdRng` is the same CSPRNG-quality generator `rand::random()`
+/// uses internally under the default `rand` 0.10 feature set, so
+/// the seeded and unseeded paths produce statistically-equivalent
+/// random sequences — only the seed source differs.
+fn random_f32_seeded(seed: u64) -> f32 {
+    use rand::RngExt;
+    use rand::SeedableRng;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+    rng.random::<f32>()
+}
+
+/// Decide which RNG to use based on `params.seed` and return one
+/// `f32` random threshold. This is the single point at which the
+/// sampler touches an RNG, so adding a new RNG source in the future
+/// only requires changing this helper.
+fn sample_random_threshold(seed: Option<u64>) -> f32 {
+    match seed {
+        Some(s) => random_f32_seeded(s),
+        None => random_f32(),
+    }
 }
 
 pub(crate) fn greedy_sample(logits: &[f32]) -> TokenId {
@@ -21,7 +59,11 @@ pub(crate) fn greedy_sample(logits: &[f32]) -> TokenId {
     argmax_logits(logits)
 }
 
-pub(crate) fn temperature_sample(logits: &[f32], temperature: f32) -> TokenId {
+pub(crate) fn temperature_sample(
+    logits: &[f32],
+    temperature: f32,
+    random_threshold: f32,
+) -> TokenId {
     trace!(
         vocab_size = logits.len(),
         temperature = temperature,
@@ -37,7 +79,6 @@ pub(crate) fn temperature_sample(logits: &[f32], temperature: f32) -> TokenId {
     let sum: f32 = exp.iter().sum();
     let probs: Vec<f32> = exp.iter().map(|x| x / sum).collect();
 
-    let random_threshold = random_f32();
     let mut cumsum = 0.0;
     for (i, &p) in probs.iter().enumerate() {
         cumsum += p;
@@ -48,7 +89,7 @@ pub(crate) fn temperature_sample(logits: &[f32], temperature: f32) -> TokenId {
     TokenId::try_from(probs.len() - 1).unwrap_or(0)
 }
 
-pub(crate) fn top_p_sample(logits: &[f32], top_p: f32) -> TokenId {
+pub(crate) fn top_p_sample(logits: &[f32], top_p: f32, random_threshold: f32) -> TokenId {
     trace!(vocab_size = logits.len(), top_p = top_p, "Top-p sampling");
     if top_p >= 1.0 || logits.is_empty() {
         return greedy_sample(logits);
@@ -81,7 +122,6 @@ pub(crate) fn top_p_sample(logits: &[f32], top_p: f32) -> TokenId {
         *p /= total;
     }
 
-    let random_threshold = random_f32();
     let mut cumsum = 0.0;
     for (i, &p) in probs.iter().enumerate() {
         cumsum += p;
@@ -93,7 +133,7 @@ pub(crate) fn top_p_sample(logits: &[f32], top_p: f32) -> TokenId {
 }
 
 #[must_use]
-pub fn top_k_sample(logits: &[f32], k: usize) -> TokenId {
+pub fn top_k_sample(logits: &[f32], k: usize, random_threshold: f32) -> TokenId {
     if k == 0 || logits.is_empty() {
         return greedy_sample(logits);
     }
@@ -113,7 +153,7 @@ pub fn top_k_sample(logits: &[f32], k: usize) -> TokenId {
         .map(|&v| if v >= threshold { v } else { f32::NEG_INFINITY })
         .collect();
 
-    temperature_sample(&masked, 1.0)
+    temperature_sample(&masked, 1.0, random_threshold)
 }
 
 /// Sample one token per row from a batch of per-sequence logits.
@@ -174,9 +214,9 @@ pub fn sample_batch(
             }
 
             if top_p < 1.0 {
-                top_p_sample(&logits, top_p)
+                top_p_sample(&logits, top_p, random_f32())
             } else if temperature > 0.0 {
-                temperature_sample(&logits, temperature)
+                temperature_sample(&logits, temperature, random_f32())
             } else {
                 greedy_sample(&logits)
             }
@@ -195,6 +235,18 @@ pub fn sample_batch(
 /// fix for ARCH-02 (technical due diligence) — previously the HTTP
 /// layer accepted `temperature` / `top_p` / `top_k` and the model
 /// layer always chose argmax, so the params silently had no effect.
+///
+/// **Per-sequence RNG independence (P34 v0.2 wire-type follow-up
+/// engine wire-through):** each call to [`sample_one_with_params`]
+/// reads ONE random threshold from either a fresh
+/// `StdRng::seed_from_u64(params.seed)` (when `params.seed.is_some()`)
+/// or the thread-local default RNG (when `params.seed.is_none()`).
+/// Two sequences that share the same `params.seed` therefore draw the
+/// SAME random threshold for the SAME logits — this is the correct
+/// behaviour for OpenAI's per-request determinism contract (same
+/// seed ⇒ same draws ⇒ same sampled token). The fresh-RNG-per-call
+/// pattern ensures per-sequence independence for sequences with
+/// DIFFERENT seeds: they don't share state.
 ///
 /// `params_list`, `seen_tokens`, and `logits_list` must have the same
 /// length. The returned `Vec<TokenId>` has length `logits_list.len()`.
@@ -221,6 +273,13 @@ pub fn sample_batch_with_params(
 ///
 /// Public for tests; production callers should use
 /// [`sample_batch_with_params`].
+///
+/// **RNG selection (P34 v0.2 wire-type follow-up engine wire-through):**
+/// `params.seed` is consulted exactly once per call. `Some(s)` reads
+/// from a fresh `StdRng::seed_from_u64(s)`; `None` reads from the
+/// thread-local default RNG. Greedy paths (`temperature = 0`,
+/// `top_p = 1.0`, `top_k = 0`) bypass the RNG entirely — `seed` has
+/// no observable effect in those modes.
 #[must_use]
 pub fn sample_one_with_params(
     logits: &[f32],
@@ -263,10 +322,18 @@ pub fn sample_one_with_params(
         }
     }
 
+    // RNG selection: read ONE random threshold per call, then pass it
+    // down. The greedy branch below never reads the threshold so the
+    // RNG draw is wasted but cheap — and keeping it unconditional
+    // means the seed determinism guarantee holds even when the user
+    // toggles sampling params between calls (the RNG state never
+    // changes based on temperature / top_p / top_k values).
+    let random_threshold = sample_random_threshold(params.seed);
+
     if params.top_p < 1.0 {
-        top_p_sample(&logits, params.top_p)
+        top_p_sample(&logits, params.top_p, random_threshold)
     } else if params.temperature > 0.0 {
-        temperature_sample(&logits, params.temperature)
+        temperature_sample(&logits, params.temperature, random_threshold)
     } else {
         greedy_sample(&logits)
     }
@@ -389,10 +456,7 @@ pub fn apply_presence_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penal
 /// token ids (any ID `>= logits.len()`) are silently ignored
 /// (matches OpenAI's server behaviour; a bias on a non-vocab token
 /// is meaningless and would only consume compute).
-pub fn apply_logit_bias(
-    logits: &mut [f32],
-    bias: &std::collections::HashMap<TokenId, f32>,
-) {
+pub fn apply_logit_bias(logits: &mut [f32], bias: &std::collections::HashMap<TokenId, f32>) {
     if bias.is_empty() || logits.is_empty() {
         return;
     }

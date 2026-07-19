@@ -147,6 +147,18 @@ pub async fn completions(
         request.sampling_params.logit_bias = Some(lb.clone());
     }
 
+    // Forward `seed` to the engine's `SamplingParams::seed` slot
+    // (P34 v0.2 wire-type follow-up — engine wire-through). Same
+    // `i64 as u64` cast rationale as the chat handler — see that
+    // file for the full discussion. The legacy completions handler
+    // does not currently log the seed field (parity with `user` /
+    // `frequency_penalty` / `presence_penalty` / `logit_bias` —
+    // chat handler logs them, completions handler accepts them at
+    // the wire type but does not log).
+    if let Some(seed) = req.seed {
+        request.sampling_params.seed = Some(seed as u64);
+    }
+
     // Reject sampling parameters the engine cannot honour (currently
     // beam_width > 1) BEFORE enqueuing — see `sampling_validation`.
     validate_sampling_params(&request.sampling_params)?;
