@@ -4,7 +4,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::metrics::MetricsSnapshot;
 use crate::types::request::Request;
-use vllm_traits::{SeqId, TokenId};
+use vllm_traits::{SampledToken, SeqId, TokenId};
 
 /// Messages the server sends to the engine over the
 /// [`crate::engine::Engine`] mailbox. The engine's
@@ -15,6 +15,12 @@ pub enum EngineMessage {
     /// Submit a new generation `request`. Tokens are streamed back to
     /// `response_tx` as they are produced; the channel is closed when the
     /// sequence finishes (either naturally or via cancellation).
+    ///
+    /// **P36 v0.3 wire-type follow-up engine wire-through:**
+    /// `response_tx` carries [`SampledToken`] (token + logprob +
+    /// top_logprobs) instead of a bare `TokenId` so the HTTP layer
+    /// can render OpenAI's `choices[].logprobs` shape without
+    /// re-running the softmax.
     ///
     /// `seq_id_tx` is optional. When supplied, the engine replies
     /// with the assigned [`SeqId`] once the request is admitted
@@ -50,7 +56,7 @@ pub enum EngineMessage {
     /// and the field renders as `null` in the JSON span output.
     AddRequest {
         request: Request,
-        response_tx: mpsc::Sender<TokenId>,
+        response_tx: mpsc::Sender<SampledToken>,
         seq_id_tx: Option<oneshot::Sender<SeqId>>,
         finish_reason_tx: Option<oneshot::Sender<vllm_traits::FinishReason>>,
         /// Correlation id forwarded from the HTTP boundary; see

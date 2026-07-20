@@ -20,7 +20,9 @@ use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
 use vllm_core::sampling::sample_batch_with_params;
 use vllm_core::types::Request;
-use vllm_traits::{BatchOutput, ModelBackend, Result, SamplingParams, SeqId, TokenId};
+use vllm_traits::{
+    BatchOutput, ModelBackend, Result, SampledToken, SamplingParams, SeqId, TokenId,
+};
 
 /// Mock whose `forward_logits` lights up one or two tokens per
 /// sequence based on the sequence's first prompt token (used as a key
@@ -69,7 +71,14 @@ impl ModelBackend for PerSeqPeakModel {
         // sensible (used by the speculative dispatcher).
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
-            next_tokens: vec![0; seq_ids.len()],
+            next_tokens: vec![
+                SampledToken {
+                    token: 0,
+                    logprob: 0.0,
+                    top_logprobs: vec![],
+                };
+                seq_ids.len()
+            ],
         })
     }
 
@@ -151,10 +160,10 @@ fn arch_02_greedy_per_sequence_uses_argmax() {
     // both expected tokens are present.
     let mut got: Vec<u32> = Vec::new();
     if let Ok(t) = rx1.try_recv() {
-        got.push(t);
+        got.push(t.token);
     }
     if let Ok(t) = rx2.try_recv() {
-        got.push(t);
+        got.push(t.token);
     }
     got.sort_unstable();
     assert_eq!(
@@ -196,10 +205,10 @@ fn arch_02_top_k_one_still_argmax_with_explicit_params() {
 
     let mut got: Vec<u32> = Vec::new();
     if let Ok(t) = rx1.try_recv() {
-        got.push(t);
+        got.push(t.token);
     }
     if let Ok(t) = rx2.try_recv() {
-        got.push(t);
+        got.push(t.token);
     }
     got.sort_unstable();
     assert_eq!(
@@ -235,7 +244,7 @@ fn arch_02_repeat_penalty_suppresses_seen_token() {
     // wins over secondary 3 (5.0 > 2.5). Expect 10.
     engine.step().expect("step ok");
     let t1 = rx1.try_recv().expect("first token");
-    assert_eq!(t1, 10, "prefill should emit the raw argmax (10)");
+    assert_eq!(t1.token, 10, "prefill should emit the raw argmax (10)");
 
     // Step 1: decode → mock maps prompt[0]=10 → peaks[0]=10,
     // secondary=3 → logits at 10 (5.0) and 3 (2.5). With
@@ -244,8 +253,9 @@ fn arch_02_repeat_penalty_suppresses_seen_token() {
     engine.step().expect("step ok");
     let t2 = rx1.try_recv().expect("second token");
     assert_ne!(
-        t2, 10,
-        "repeat_penalty must suppress the previously-seen token (got {t2})"
+        t2.token, 10,
+        "repeat_penalty must suppress the previously-seen token (got {})",
+        t2.token
     );
 }
 
@@ -278,7 +288,7 @@ fn arch_02_presence_penalty_suppresses_seen_token_once_per_distinct_id() {
     let params_no_pp = SamplingParams::builder().with_temperature(0.0).build();
     let t_baseline = sample_one_with_params(&logits, &params_no_pp, &[10]);
     assert_eq!(
-        t_baseline, 10,
+        t_baseline.token, 10,
         "baseline (presence_penalty = 0) must emit the primary peak"
     );
 
@@ -291,8 +301,9 @@ fn arch_02_presence_penalty_suppresses_seen_token_once_per_distinct_id() {
         .build();
     let t_pp = sample_one_with_params(&logits, &params_pp, &[10]);
     assert_eq!(
-        t_pp, 3,
-        "presence_penalty = 1.0 on seen = [10] must suppress token 10 (got {t_pp})"
+        t_pp.token, 3,
+        "presence_penalty = 1.0 on seen = [10] must suppress token 10 (got {})",
+        t_pp.token
     );
 
     // Key behavioural difference from repeat_penalty: presence-style
@@ -302,8 +313,9 @@ fn arch_02_presence_penalty_suppresses_seen_token_once_per_distinct_id() {
     // -3.0). The result must match the single-occurrence case.
     let t_pp_repeated = sample_one_with_params(&logits, &params_pp, &[10, 10, 10, 10, 10]);
     assert_eq!(
-        t_pp_repeated, 3,
-        "presence_penalty must subtract once per *distinct* id, not per occurrence (got {t_pp_repeated})"
+        t_pp_repeated.token, 3,
+        "presence_penalty must subtract once per *distinct* id, not per occurrence (got {})",
+        t_pp_repeated.token
     );
 }
 
@@ -324,8 +336,9 @@ fn arch_02_presence_penalty_negative_encourages_repetition() {
     // same as adding 1.0). Tied argmax → lowest index → token 0.
     let t = sample_one_with_params(&logits, &params, &[0]);
     assert_eq!(
-        t, 0,
-        "negative presence_penalty must encourage repetition by raising seen-token logits (got {t})"
+        t.token, 0,
+        "negative presence_penalty must encourage repetition by raising seen-token logits (got {})",
+        t.token
     );
 }
 
@@ -360,8 +373,9 @@ fn arch_02_presence_penalty_combined_with_repeat_penalty() {
         .build();
     let t = sample_one_with_params(&logits, &params, &[10]);
     assert_eq!(
-        t, 3,
-        "combined repeat + presence penalty must suppress token 10 and emit token 3 (got {t})"
+        t.token, 3,
+        "combined repeat + presence penalty must suppress token 10 and emit token 3 (got {})",
+        t.token
     );
 }
 
@@ -382,8 +396,9 @@ fn arch_02_logit_bias_flips_argmax_in_greedy_sampling() {
         .build();
     let t = sample_one_with_params(&logits, &params, &[]);
     assert_eq!(
-        t, 2,
-        "logit_bias on token 2 must flip argmax from 1 → 2 (got {t})"
+        t.token, 2,
+        "logit_bias on token 2 must flip argmax from 1 → 2 (got {})",
+        t.token
     );
 }
 
@@ -420,14 +435,14 @@ fn arch_02_logit_bias_per_sequence_divergence() {
 
     let tokens = sample_batch_with_params(&logits_list, &params_list, &seen_tokens);
     assert_eq!(
-        tokens[0], 0,
+        tokens[0].token, 0,
         "seq A with bias on token 0 must emit 0 (got {})",
-        tokens[0]
+        tokens[0].token
     );
     assert_eq!(
-        tokens[1], 2,
+        tokens[1].token, 2,
         "seq B with bias on token 2 must emit 2 (got {})",
-        tokens[1]
+        tokens[1].token
     );
 }
 
@@ -493,7 +508,7 @@ fn arch_02_seed_per_sequence_divergence_in_batch() {
     assert_ne!(
         tokens[0], tokens[1],
         "sequences with different seeds in the same batch must \
-         produce different tokens (got {0} for both — RNG state \
+         produce different tokens (got {0:?} for both — RNG state \
          is shared across sequences)",
         tokens[0]
     );

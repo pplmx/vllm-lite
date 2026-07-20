@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 
-use vllm_traits::{BlockId, SeqId, TokenId};
+use vllm_traits::{BlockId, SampledToken, SeqId};
 
 use crate::scheduler::observer::ObserverEvent;
 use crate::types::Status;
@@ -21,10 +21,18 @@ impl SchedulerEngine {
     ///
     /// Processes output tokens, updates sequence status, handles completions,
     /// and adds finished sequences to the prefix cache.
+    ///
+    /// **P36 v0.3 wire-type follow-up engine wire-through:**
+    /// `next_tokens` carries [`SampledToken`] (token + logprob +
+    /// top_logprobs) — only the `token` field is folded into the
+    /// running sequence; the logprob + top_logprobs travel out
+    /// through the engine's per-seq response channel alongside the
+    /// token so the HTTP layer can render OpenAI's
+    /// `choices[].logprobs` shape.
     pub fn update(
         &mut self,
         seq_ids: &[SeqId],
-        next_tokens: &[TokenId],
+        next_tokens: &[SampledToken],
         input_token_counts: &[usize],
     ) {
         let _span = tracing::info_span!(
@@ -40,9 +48,12 @@ impl SchedulerEngine {
             input_counts_len = input_token_counts.len(),
             "Scheduler update"
         );
-        for ((&seq_id, &token), &input_count) in
-            seq_ids.iter().zip(next_tokens).zip(input_token_counts)
+        for ((&seq_id, sampled), &input_count) in seq_ids
+            .iter()
+            .zip(next_tokens.iter())
+            .zip(input_token_counts)
         {
+            let token = sampled.token;
             let _token_span =
                 tracing::trace_span!("scheduler.decode_token", seq_id = seq_id, token = token)
                     .entered();

@@ -2,6 +2,7 @@ use std::sync::Arc;
 use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_core::scheduler::SchedulerEngine;
 use vllm_core::types::{Priority, Request, SchedulerConfig, Status};
+use vllm_traits::SampledToken;
 
 fn create_test_engine(config: SchedulerConfig, num_kv_blocks: usize) -> SchedulerEngine {
     let metrics = Arc::new(EnhancedMetricsCollector::new());
@@ -73,7 +74,15 @@ fn test_pd_separation_refactored() {
     );
 
     // Update to complete prefill
-    sched.update(&batch1.seq_ids, &[99], &[3]);
+    sched.update(
+        &batch1.seq_ids,
+        &[SampledToken {
+            token: 99,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &[3],
+    );
 
     // Now request 1 is decoding, add request 2
     sched.add_request(Request::new(2, vec![4, 5], 3));
@@ -105,7 +114,15 @@ fn test_process_finished_sequences() {
     sched.add_request(Request::new(1, vec![1, 2], 2)); // prompt_len=2, max_tokens=2
 
     let batch1 = sched.build_batch();
-    sched.update(&batch1.seq_ids, &[99], &[2]); // 2 tokens processed = prompt done
+    sched.update(
+        &batch1.seq_ids,
+        &[SampledToken {
+            token: 99,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &[2],
+    ); // 2 tokens processed = prompt done
 
     // Should move to finished
     let finished = sched.finished_sequences();
@@ -136,7 +153,15 @@ fn test_build_decode_batch_budget() {
     let mut sched = create_test_engine(config, 1024);
     sched.add_request(Request::new(1, vec![1], 5));
     let batch1 = sched.build_batch();
-    sched.update(&batch1.seq_ids, &[10], &[1]);
+    sched.update(
+        &batch1.seq_ids,
+        &[SampledToken {
+            token: 10,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &[1],
+    );
 
     // Add more requests while budget is limited
     for i in 2..=5 {
@@ -334,11 +359,14 @@ fn test_consecutive_decode_limit() {
     for _ in 0..3 {
         let batch = sched.build_batch();
         if !batch.is_empty() {
-            sched.update(
-                &batch.seq_ids,
-                &vec![1; batch.seq_ids.len()],
-                &vec![1; batch.seq_ids.len()],
-            );
+            let next_tokens: Vec<SampledToken> = (0..batch.seq_ids.len())
+                .map(|_| SampledToken {
+                    token: 1,
+                    logprob: 0.0,
+                    top_logprobs: vec![],
+                })
+                .collect();
+            sched.update(&batch.seq_ids, &next_tokens, &vec![1; batch.seq_ids.len()]);
         }
     }
 

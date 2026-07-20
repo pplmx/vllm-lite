@@ -74,7 +74,17 @@ impl ModelBackend for SlowModel {
         thread::sleep(self.delay);
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
-            next_tokens: seq_ids.iter().map(|_| self.return_token).collect(),
+            // P36: placeholder SampledToken (no logprob info on the
+            // legacy model-layer `forward` path; engine uses
+            // `forward_logits` + `sample_batch_with_params`).
+            next_tokens: seq_ids
+                .iter()
+                .map(|_| vllm_traits::SampledToken {
+                    token: self.return_token,
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                })
+                .collect(),
         })
     }
 
@@ -156,6 +166,13 @@ mod tests {
 
         let elapsed = start.elapsed();
         assert!(elapsed >= Duration::from_millis(50));
-        assert_eq!(output.next_tokens, vec![1]);
+        assert_eq!(
+            output.next_tokens,
+            vec![vllm_traits::SampledToken {
+                token: 1,
+                logprob: 0.0,
+                top_logprobs: Vec::new(),
+            }]
+        );
     }
 }

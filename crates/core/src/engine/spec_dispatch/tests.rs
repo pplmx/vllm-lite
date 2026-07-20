@@ -3,7 +3,7 @@
 use super::super::Engine;
 use crate::types::{Request, SchedulerConfig};
 use tokio::sync::mpsc as tokio_mpsc;
-use vllm_traits::{BatchOutput, ModelBackend, Result as ModelResult, SeqId, TokenId};
+use vllm_traits::{BatchOutput, ModelBackend, Result as ModelResult, SampledToken, SeqId, TokenId};
 
 /// A fake model that returns fixed tokens for both forward and `forward_logits`.
 #[derive(Clone)]
@@ -41,7 +41,14 @@ impl ModelBackend for FakeModel {
     ) -> ModelResult<BatchOutput> {
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
-            next_tokens: seq_ids.iter().map(|_| self.token_to_return).collect(),
+            next_tokens: seq_ids
+                .iter()
+                .map(|_| SampledToken {
+                    token: self.token_to_return,
+                    logprob: 0.0,
+                    top_logprobs: vec![],
+                })
+                .collect(),
         })
     }
 
@@ -264,7 +271,7 @@ fn test_logit_verification_exact_match() {
     engine.add_request(Request::new(1, vec![10, 20], 10), tx);
     let result = engine.step().unwrap();
     assert!(!result.is_empty());
-    assert_eq!(result[0].1, 42);
+    assert_eq!(result[0].1.token, 42);
     let _ = rx.try_recv().ok();
 }
 
@@ -281,7 +288,7 @@ fn test_kv_rollback_rejected_drafts() {
     engine.add_request(Request::new(1, vec![10, 20], 5), tx);
     let result = engine.step().unwrap();
     assert!(!result.is_empty());
-    assert_eq!(result[0].1, 42);
+    assert_eq!(result[0].1.token, 42);
 }
 
 /// Test Plan 17.1-E: Multi-token `input_count` is accepted by scheduler
@@ -296,10 +303,26 @@ fn test_scheduler_multi_token_update() {
     let id = scheduler.add_request(Request::new(1, vec![10, 20], 10));
     let _batch = scheduler.build_batch();
 
-    scheduler.update(&[id], &[100], &[3]);
+    scheduler.update(
+        &[id],
+        &[SampledToken {
+            token: 100,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &[3],
+    );
     assert_eq!(scheduler.running_count(), 1);
 
-    scheduler.update(&[id], &[101], &[0]);
+    scheduler.update(
+        &[id],
+        &[SampledToken {
+            token: 101,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &[0],
+    );
     assert_eq!(scheduler.running_count(), 1);
 }
 
@@ -329,10 +352,10 @@ fn test_speculative_step_produces_output() {
     engine.add_request(Request::new(1, vec![10, 20], 10), tx);
     let result = engine.step().unwrap();
     assert!(!result.is_empty());
-    assert_eq!(result[0].1, 42);
+    assert_eq!(result[0].1.token, 42);
 
     let received = rx.try_recv().ok();
-    assert_eq!(received, Some(42));
+    assert_eq!(received.map(|s| s.token), Some(42));
 }
 
 /// Integration test: speculative vs non-speculative equivalence
@@ -400,7 +423,14 @@ fn build_flat_logits_engine(nonzero: usize) -> Engine {
         ) -> ModelResult<BatchOutput> {
             Ok(BatchOutput {
                 seq_ids: seq_ids.to_vec(),
-                next_tokens: seq_ids.iter().map(|_| 0).collect(),
+                next_tokens: seq_ids
+                    .iter()
+                    .map(|_| SampledToken {
+                        token: 0,
+                        logprob: 0.0,
+                        top_logprobs: vec![],
+                    })
+                    .collect(),
             })
         }
 
@@ -510,9 +540,10 @@ fn verifier_accepts_high_prob_drafts_under_sampling() {
     let target_token =
         crate::engine::spec_dispatch::verify::test_only_sample_or_argmax(pos_logits, &params);
     assert!(
-        target_token < 4,
-        "sampled target token {target_token} fell outside the \
-         high-prob set; sampling path is not engaged"
+        target_token.token < 4,
+        "sampled target token {} fell outside the \
+         high-prob set; sampling path is not engaged",
+        target_token.token
     );
 }
 
@@ -564,12 +595,13 @@ fn verifier_rejects_low_prob_drafts_under_sampling() {
     let target_token =
         crate::engine::spec_dispatch::verify::test_only_sample_or_argmax(pos_logits, &params);
     assert!(
-        target_token < 2,
-        "sampled target token {target_token} fell outside the high-prob \
-         set; verifier is not respecting the target distribution"
+        target_token.token < 2,
+        "sampled target token {} fell outside the high-prob \
+         set; verifier is not respecting the target distribution",
+        target_token.token
     );
     assert_ne!(
-        target_token, 50,
+        target_token.token, 50,
         "verifier accepted an out-of-distribution draft token"
     );
 }
@@ -617,5 +649,5 @@ fn verifier_uses_argmax_when_temperature_is_zero() {
     // (first max wins). Draft token 1 is *also* argmax-tied, but the
     // argmax implementation picks the first one — so this test pins the
     // argmax contract under temperature == 0.
-    assert_eq!(target_token, 0);
+    assert_eq!(target_token.token, 0);
 }

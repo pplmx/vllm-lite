@@ -20,7 +20,7 @@ use crate::config::ModelConfig;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Device, Tensor};
 use candle_nn::{Embedding, Module};
-use vllm_traits::{BatchOutput, BlockId, ModelBackend, Result, SeqId, TokenId};
+use vllm_traits::{BatchOutput, BlockId, ModelBackend, Result, SampledToken, SeqId, TokenId};
 
 #[derive(Debug)]
 /// Generic decoder-only causal language model shell.
@@ -116,7 +116,18 @@ where
                 &positions[i],
                 prefill,
             )?;
-            greedy_sample_token(&logits, prefill)
+            let token = greedy_sample_token(&logits, prefill)?;
+            // P36: model-layer `forward` is the legacy greedy path; it
+            // populates the sampled token but leaves logprob/top_logprobs
+            // empty (the engine samples via sample_one_with_params
+            // anyway). Returning a placeholder SampledToken is safe
+            // because `forward` is no longer on the engine hot path —
+            // `forward_logits` + `sample_batch_with_params` is.
+            Ok(SampledToken {
+                token,
+                logprob: 0.0,
+                top_logprobs: Vec::new(),
+            })
         })
     }
 
@@ -199,7 +210,11 @@ where
         forward_batch(seq_ids, is_prefill, |i, prefill| {
             let tokens = &input_tokens[i];
             if tokens.is_empty() {
-                return Ok(0);
+                return Ok(SampledToken {
+                    token: TokenId::default(),
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                });
             }
 
             let hidden = embed_sequence(&self.embed_tokens, tokens, &self.device, prefill)?;
@@ -214,7 +229,16 @@ where
             let hidden = run_layers_upto(&self.layers, hidden, &mut ctx, upto_layer)?;
             let hidden = map_candle(self.norm.forward(&hidden))?;
             let logits = map_candle(self.lm_head.forward(&hidden))?;
-            greedy_sample_token(&logits, prefill)
+            let token = greedy_sample_token(&logits, prefill)?;
+            // See comment in the `forward` impl: model-layer
+            // `forward_to_layer` is a legacy path; populating token
+            // with placeholder logprob is safe because the engine
+            // uses `forward_logits` + `sample_batch_with_params`.
+            Ok(SampledToken {
+                token,
+                logprob: 0.0,
+                top_logprobs: Vec::new(),
+            })
         })
     }
 }

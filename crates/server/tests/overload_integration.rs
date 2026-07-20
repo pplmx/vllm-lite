@@ -127,7 +127,7 @@ async fn test_saturated_mailbox_returns_engine_overloaded_503() {
     // `Full`.
     let mut filled = 0usize;
     for _ in 0..1024 {
-        let (response_tx, _response_rx) = mpsc::channel::<vllm_traits::TokenId>(8);
+        let (response_tx, _response_rx) = mpsc::channel::<vllm_traits::SampledToken>(8);
         let req = vllm_core::types::Request::new(0, vec![1, 2, 3], 4);
         match state.engine_tx.try_send(EngineMessage::AddRequest {
             request: req,

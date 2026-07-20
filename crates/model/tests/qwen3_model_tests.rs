@@ -34,7 +34,7 @@ fn test_qwen3_model_forward_cpu() {
         )
         .unwrap();
     assert_eq!(output.next_tokens.len(), 1);
-    assert!(output.next_tokens[0] < 1000);
+    assert!(output.next_tokens[0].token < 1000);
 }
 
 #[test]
@@ -472,7 +472,7 @@ fn test_qwen3_decode_with_gqa_expanded_kv_cache() {
         .unwrap();
 
     assert_eq!(output.next_tokens.len(), 1);
-    assert!(output.next_tokens[0] < 1000);
+    assert!(output.next_tokens[0].token < 1000);
 }
 
 #[test]
@@ -516,7 +516,7 @@ fn test_qwen3_mixed_prefill_and_decode() {
             .unwrap();
 
         assert_eq!(output.next_tokens.len(), 1);
-        assert!(output.next_tokens[0] < 500);
+        assert!(output.next_tokens[0].token < 500);
     }
 }
 

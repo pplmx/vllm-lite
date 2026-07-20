@@ -6,7 +6,7 @@ use super::*;
 use crate::speculative::config::SpeculationConfig;
 use crate::speculative::verifier::DraftVerifier;
 use crate::types::{SeqId, TokenId};
-use vllm_traits::{BatchOutput, ModelBackend};
+use vllm_traits::{BatchOutput, ModelBackend, SampledToken};
 
 #[test]
 fn test_draft_layer_count_calculation() {
@@ -146,7 +146,11 @@ impl ModelBackend for StubSpecModel {
             seq_ids: seq_ids.to_vec(),
             next_tokens: seq_ids
                 .iter()
-                .map(|&id| TokenId::try_from(id * 10 + 1).unwrap_or(0))
+                .map(|&id| SampledToken {
+                    token: TokenId::try_from(id * 10 + 1).unwrap_or(0),
+                    logprob: 0.0,
+                    top_logprobs: vec![],
+                })
                 .collect(),
         })
     }
@@ -201,7 +205,14 @@ impl ModelBackend for TrackingModel {
         self.forward_called = true;
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
-            next_tokens: seq_ids.iter().map(|_| 42).collect(),
+            next_tokens: seq_ids
+                .iter()
+                .map(|_| SampledToken {
+                    token: 42,
+                    logprob: 0.0,
+                    top_logprobs: vec![],
+                })
+                .collect(),
         })
     }
 

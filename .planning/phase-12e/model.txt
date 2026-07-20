@@ -1261,6 +1261,8 @@ pub fn vllm_model::components::attention::rope_gqa::RopeGqaAttention::forward_pr
 pub fn vllm_model::components::attention::rope_gqa::RopeGqaAttention::forward_prefill(&self, &candle_core::tensor::Tensor, &mut vllm_model::paged_tensor::tensor_store::PagedKvCache, usize, &[usize], &[usize]) -> candle_core::error::Result<candle_core::tensor::Tensor>
 pub fn vllm_model::components::attention::rope_gqa::RopeGqaAttention::forward(&self, &candle_core::tensor::Tensor) -> candle_core::error::Result<candle_core::tensor::Tensor>
 pub fn vllm_model::components::attention::rope_gqa::RopeGqaAttention::new(usize, usize, usize, usize, f32, core::option::Option<candle_nn::var_builder::VarBuilder<'_>>, vllm_model::components::attention::util::AttentionConfig, bool) -> candle_core::error::Result<Self>
+pub fn vllm_model::components::attention::rope_gqa::RopeGqaAttention::new_with_rope_scaling(usize, usize, usize, usize, f32, usize, core::option::Option<&vllm_model::qwen3::RopeScaling>, core::option::Option<candle_nn::var_builder::VarBuilder<'_>>, vllm_model::components::attention::util::AttentionConfig, bool) -> candle_core::error::Result<Self>
+pub fn vllm_model::components::attention::rope_gqa::RopeGqaAttention::new_with_weights_rope_scaling(usize, usize, usize, usize, f32, usize, core::option::Option<&vllm_model::qwen3::RopeScaling>, candle_core::tensor::Tensor, candle_core::tensor::Tensor, candle_core::tensor::Tensor, candle_core::tensor::Tensor, vllm_model::components::attention::util::AttentionConfig, bool, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>) -> candle_core::error::Result<Self>
 pub fn vllm_model::components::attention::rope_gqa::RopeGqaAttention::new_with_weights(usize, usize, usize, usize, f32, candle_core::tensor::Tensor, candle_core::tensor::Tensor, candle_core::tensor::Tensor, candle_core::tensor::Tensor, vllm_model::components::attention::util::AttentionConfig, bool, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>) -> candle_core::error::Result<Self>
 pub fn vllm_model::components::attention::tiled_attention(&candle_core::tensor::Tensor, &candle_core::tensor::Tensor, &candle_core::tensor::Tensor, usize, usize) -> candle_core::error::Result<candle_core::tensor::Tensor>
 pub fn vllm_model::components::attention::util::AttentionConfig::clone(&self) -> vllm_model::components::attention::util::AttentionConfig
@@ -1348,6 +1350,7 @@ pub fn vllm_model::components::positional::rope::RoPE::fmt(&self, &mut core::fmt
 pub fn vllm_model::components::positional::rope::RoPE::forward(&self, &candle_core::tensor::Tensor, &candle_core::tensor::Tensor, i64) -> candle_core::error::Result<(candle_core::tensor::Tensor, candle_core::tensor::Tensor)>
 pub fn vllm_model::components::positional::rope::RoPE::forward_with_scaling(&self, &candle_core::tensor::Tensor, &candle_core::tensor::Tensor, i64) -> candle_core::error::Result<(candle_core::tensor::Tensor, candle_core::tensor::Tensor)>
 pub fn vllm_model::components::positional::rope::RoPE::new(usize, usize, f32, &candle_core::device::Device) -> Self
+pub fn vllm_model::components::positional::rope::RoPE::new_with_scaling(usize, usize, f32, &candle_core::device::Device, vllm_model::components::positional::rope::RopeScalingContext) -> Self
 pub fn vllm_model::components::positional::rope::RopeScalingContext::clone(&self) -> vllm_model::components::positional::rope::RopeScalingContext
 pub fn vllm_model::components::positional::rope::RopeScalingContext::default() -> Self
 pub fn vllm_model::components::positional::rope::RopeScalingContext::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -1525,6 +1528,7 @@ pub fn vllm_model::loader::builder::ModelLoader::architecture(&self) -> vllm_mod
 pub fn vllm_model::loader::builder::ModelLoaderBuilder::build(self) -> candle_core::error::Result<vllm_model::loader::builder::ModelLoader>
 pub fn vllm_model::loader::builder::ModelLoaderBuilder::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_model::loader::builder::ModelLoaderBuilder::with_model_dir(self, alloc::string::String) -> Self
+pub fn vllm_model::loader::builder::ModelLoader::capabilities(&self) -> core::option::Option<vllm_model::arch::capabilities::ArchCapabilities>
 pub fn vllm_model::loader::builder::ModelLoader::clone(&self) -> Self
 pub fn vllm_model::loader::builder::ModelLoader::config_json(&self) -> &serde_json::value::Value
 pub fn vllm_model::loader::builder::ModelLoader::device(&self) -> &candle_core::device::Device
@@ -1654,6 +1658,8 @@ pub fn vllm_model::qwen3::block::TransformerBlock::forward_prefill_continue(&sel
 pub fn vllm_model::qwen3::block::TransformerBlock::forward_prefill(&self, &candle_core::tensor::Tensor, &mut vllm_model::paged_tensor::tensor_store::PagedKvCache, usize, &[usize], &[usize]) -> candle_core::error::Result<candle_core::tensor::Tensor>
 pub fn vllm_model::qwen3::block::TransformerBlock::from_weights(&vllm_model::config::model_config::ModelConfig, usize, &std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>) -> candle_core::error::Result<Self>
 pub fn vllm_model::qwen3::block::TransformerBlock::new(usize, usize, usize, usize, usize, f32, f64, core::option::Option<candle_nn::var_builder::VarBuilder<'_>>, bool) -> candle_core::error::Result<Self>
+pub fn vllm_model::qwen3::block::TransformerBlock::new_with_rope_scaling(usize, usize, usize, usize, usize, f32, f64, usize, core::option::Option<&vllm_model::qwen3::RopeScaling>, core::option::Option<candle_nn::var_builder::VarBuilder<'_>>, bool) -> candle_core::error::Result<Self>
+pub fn vllm_model::qwen3::block::TransformerBlock::new_with_weights_rope_scaling(usize, usize, usize, usize, usize, f32, f64, usize, core::option::Option<&vllm_model::qwen3::RopeScaling>, bool, core::option::Option<(core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>)>) -> candle_core::error::Result<Self>
 pub fn vllm_model::qwen3::block::TransformerBlock::new_with_weights(usize, usize, usize, usize, usize, f32, f64, bool, core::option::Option<(core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>)>) -> candle_core::error::Result<Self>
 pub fn vllm_model::qwen3::config::AttentionType::clone(&self) -> vllm_model::qwen3::config::AttentionType
 pub fn vllm_model::qwen3::config::AttentionType::eq(&self, &vllm_model::qwen3::config::AttentionType) -> bool
@@ -2215,6 +2221,7 @@ pub vllm_model::config::model_config::ModelConfig::num_kv_heads: usize
 pub vllm_model::config::model_config::ModelConfig::num_layers: usize
 pub vllm_model::config::model_config::ModelConfig::rms_norm_eps: f64
 pub vllm_model::config::model_config::ModelConfig::rope_configs: alloc::vec::Vec<vllm_model::config::architecture::RoPEConfig>
+pub vllm_model::config::model_config::ModelConfig::rope_scaling: core::option::Option<vllm_model::qwen3::RopeScaling>
 pub vllm_model::config::model_config::ModelConfig::rope_theta: f32
 pub vllm_model::config::model_config::ModelConfig::sliding_window: core::option::Option<usize>
 pub vllm_model::config::model_config::ModelConfig::tie_word_embeddings: bool
@@ -2227,6 +2234,7 @@ pub vllm_model::config::ModelConfig::num_kv_heads: usize
 pub vllm_model::config::ModelConfig::num_layers: usize
 pub vllm_model::config::ModelConfig::rms_norm_eps: f64
 pub vllm_model::config::ModelConfig::rope_configs: alloc::vec::Vec<vllm_model::config::architecture::RoPEConfig>
+pub vllm_model::config::ModelConfig::rope_scaling: core::option::Option<vllm_model::qwen3::RopeScaling>
 pub vllm_model::config::ModelConfig::rope_theta: f32
 pub vllm_model::config::ModelConfig::sliding_window: core::option::Option<usize>
 pub vllm_model::config::ModelConfig::tie_word_embeddings: bool
@@ -2294,6 +2302,7 @@ pub vllm_model::ModelConfig::num_kv_heads: usize
 pub vllm_model::ModelConfig::num_layers: usize
 pub vllm_model::ModelConfig::rms_norm_eps: f64
 pub vllm_model::ModelConfig::rope_configs: alloc::vec::Vec<vllm_model::config::architecture::RoPEConfig>
+pub vllm_model::ModelConfig::rope_scaling: core::option::Option<vllm_model::qwen3::RopeScaling>
 pub vllm_model::ModelConfig::rope_theta: f32
 pub vllm_model::ModelConfig::sliding_window: core::option::Option<usize>
 pub vllm_model::ModelConfig::tie_word_embeddings: bool

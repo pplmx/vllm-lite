@@ -2,6 +2,7 @@ use tokio::sync::mpsc;
 use vllm_core::engine::Engine;
 use vllm_core::types::{Request, SchedulerConfig, SequencePackingConfig, TokenId};
 use vllm_testing::{ConstModel, IncrementModel, TestFixtures};
+use vllm_traits::SampledToken;
 
 #[test]
 fn test_continuous_batching_with_streaming() {
@@ -234,7 +235,11 @@ fn test_batch_full_new_request_waits() {
     let batch1 = engine.scheduler.build_batch();
     engine.scheduler.update(
         &batch1.seq_ids,
-        &[99],
+        &[SampledToken {
+            token: 99,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
         &[batch1.input_tokens.iter().map(std::vec::Vec::len).sum()],
     );
 
@@ -334,7 +339,11 @@ fn test_prefill_priority_under_decode_limit() {
     let batch1 = engine.scheduler.build_batch();
     engine.scheduler.update(
         &batch1.seq_ids,
-        &[99],
+        &[SampledToken {
+            token: 99,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
         &[batch1.input_tokens.iter().map(std::vec::Vec::len).sum()],
     );
 
@@ -408,7 +417,11 @@ fn test_sequence_state_transitions() {
 
     engine.scheduler.update(
         &batch1.seq_ids,
-        &[99],
+        &[SampledToken {
+            token: 99,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
         &[batch1.input_tokens.iter().map(std::vec::Vec::len).sum()],
     );
 

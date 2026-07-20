@@ -507,6 +507,59 @@ pub struct ChatRequest {
     pub tool_choice: Option<ToolChoice>,
 }
 
+/// Per-token logprob information rendered in chat completion responses
+/// when the request set `logprobs = true` (P36 v0.3 wire-type follow-up
+/// engine wire-through).
+///
+/// Mirrors the OpenAI spec's `choices[].logprobs.content[]` shape 1:1.
+/// `token` is the decoded string form (UTF-8 round-tripped from the
+/// sampled `TokenId`). `logprob` is the natural-log probability under
+/// the actual sampling distribution (post-filter: after
+/// `repeat_penalty`, `presence_penalty`, `logit_bias`, temperature
+/// scaling, `top_k`, and `top_p` nucleus cutoff). `bytes` is the
+/// UTF-8 byte representation of `token` (used by tokenizers that
+/// emit byte-level BPE markers; we emit the actual UTF-8 bytes of
+/// the decoded string per OpenAI's reference implementation).
+///
+/// `top_logprobs` is populated when the request also set
+/// `top_logprobs = Some(n)` — it contains the top-`n` most-likely
+/// alternative tokens at this position alongside their logprobs,
+/// sorted by logprob descending. `None` when the request did not ask
+/// for top-K logprobs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatLogprob {
+    /// Decoded token string.
+    pub token: String,
+    /// `ln(P(token))` under the actual sampling distribution.
+    pub logprob: f32,
+    /// UTF-8 byte representation of `token` (matches OpenAI's
+    /// reference serializer).
+    pub bytes: Option<Vec<u8>>,
+    /// Top-K alternative `(token, logprob)` pairs sorted by
+    /// `logprob` descending. `None` when the request did not ask
+    /// for top-K logprobs; `Some(vec![])` when asked but the
+    /// sampler produced zero finite-probability tokens (e.g. all
+    /// logits were `-inf`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub top_logprobs: Option<Vec<ChatLogprob>>,
+}
+
+/// Container for `ChatChoice::logprobs` (P36 v0.3 wire-type follow-up
+/// engine wire-through). `None` when the request did not ask for
+/// logprobs; `Some(container)` when `logprobs = true` was requested.
+///
+/// `content` is parallel to `ChatChoice::message.content` — one
+/// entry per generated token, in decoding order. The chat endpoint
+/// does not include the prompt tokens (those would appear in a
+/// separate `prompt_logprobs` field that OpenAI's chat API
+/// doesn't currently expose).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatChoiceLogprobs {
+    /// Per-generated-token logprob entries (parallel to the
+    /// assistant message's token sequence).
+    pub content: Vec<ChatLogprob>,
+}
+
 /// A choice in a chat completion response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChoice {
@@ -516,6 +569,14 @@ pub struct ChatChoice {
     pub message: ChatMessage,
     /// `"stop"`, `"length"`, or `"tool_calls"` (when the model invokes a tool).
     pub finish_reason: Option<String>,
+    /// Per-token logprob information (P36 v0.3 wire-type follow-up
+    /// engine wire-through). `None` unless the request set
+    /// `logprobs = true`. When the request set
+    /// `logprobs = true` but `top_logprobs = Some(0)` (or omitted),
+    /// `content` carries one entry per generated token with only
+    /// the sampled token's logprob (no `top_logprobs` sub-field).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logprobs: Option<ChatChoiceLogprobs>,
 }
 
 /// Response from chat completions endpoint.
@@ -564,6 +625,15 @@ pub struct ChatChunkChoice {
     pub delta: ChatMessage,
     /// Set on the final chunk; `None` on intermediate deltas.
     pub finish_reason: Option<String>,
+    /// Per-token logprob information for this chunk (P36 v0.3
+    /// wire-type follow-up engine wire-through). `None` unless
+    /// the request set `logprobs = true`. Each intermediate chunk
+    /// carries exactly one entry in `content` (the token emitted
+    /// on that chunk); the final chunk (the one with
+    /// `finish_reason`) carries zero entries because the
+    /// finish-reason chunk emits no token.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logprobs: Option<ChatChoiceLogprobs>,
 }
 
 /// A single chunk in a chat-completion SSE stream. The server emits
@@ -761,6 +831,58 @@ pub struct CompletionRequest {
     pub best_of: Option<u32>,
 }
 
+/// Per-token logprob information rendered in legacy text-completion
+/// responses when the request set `logprobs > 0` (P36 v0.3 wire-type
+/// follow-up engine wire-through).
+///
+/// Mirrors the OpenAI spec's `choices[].logprobs.top_logprobs[]`
+/// shape 1:1. `token` is the decoded string form, `logprob` is the
+/// natural-log probability under the actual sampling distribution
+/// (post-filter), `bytes` is the UTF-8 byte representation of
+/// `token`. Length is bounded by `SamplingParams::top_logprobs` (≤
+/// `ChatRequest::top_logprobs.unwrap_or(0)` for chat, ≤
+/// `CompletionRequest::logprobs.unwrap_or(0)` for legacy
+/// completions).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompletionLogprob {
+    /// Decoded token string.
+    pub token: String,
+    /// `ln(P(token))` under the actual sampling distribution.
+    pub logprob: f32,
+    /// UTF-8 byte representation of `token` (matches OpenAI's
+    /// reference serializer).
+    pub bytes: Option<Vec<u8>>,
+}
+
+/// Container for `CompletionChoice::logprobs` (P36 v0.3 wire-type
+/// follow-up engine wire-through). `None` when the request did not
+/// ask for logprobs; `Some(container)` when `logprobs > 0` was
+/// requested.
+///
+/// `tokens` / `token_logprobs` / `top_logprobs` are all parallel
+/// arrays of length `N` (the number of generated tokens). `tokens[i]`
+/// is the decoded string form of the `i`-th generated token;
+/// `token_logprobs[i]` is its logprob under the actual sampling
+/// distribution; `top_logprobs[i]` is the list of top-K alternatives
+/// at that position (each entry is a [`CompletionLogprob`]). When
+/// the request set `logprobs = Some(k)` with `k > 0`, each
+/// `top_logprobs[i]` has up to `k` entries; when `logprobs = Some(0)`,
+/// each `top_logprobs[i]` is an empty list (sampled-token logprobs
+/// are still emitted via `token_logprobs`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompletionChoiceLogprobs {
+    /// Decoded token strings (parallel to `token_logprobs` /
+    /// `top_logprobs`).
+    pub tokens: Vec<String>,
+    /// Per-generated-token logprobs under the actual sampling
+    /// distribution. Length matches `tokens`.
+    pub token_logprobs: Vec<f32>,
+    /// Per-generated-token top-K alternative logprob lists. Length
+    /// matches `tokens`; each inner list has at most `logprobs`
+    /// entries (≤ 5 per OpenAI spec).
+    pub top_logprobs: Vec<Vec<CompletionLogprob>>,
+}
+
 /// A single choice in a text-completion response. The `text` field
 /// holds the raw continuation (no chat-template rendering) for the
 /// legacy `/v1/completions` endpoint.
@@ -772,6 +894,15 @@ pub struct CompletionChoice {
     pub index: i32,
     /// Termination reason.
     pub finish_reason: Option<String>,
+    /// Per-token logprob information (P36 v0.3 wire-type follow-up
+    /// engine wire-through). `None` unless the request set
+    /// `logprobs = Some(n)` with `n > 0`. When the request set
+    /// `logprobs = Some(0)`, the container is `Some(empty)` —
+    /// sampling-emitted but no top-K alternatives — matching
+    /// OpenAI's behavior of including `tokens: []` /
+    /// `token_logprobs: []` even when `logprobs = 0`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logprobs: Option<CompletionChoiceLogprobs>,
 }
 
 /// Response from text completions endpoint.

@@ -1,156 +1,148 @@
 impl core::clone::Clone for vllm_traits::distributed::IdentityHasher
 impl core::clone::Clone for vllm_traits::distributed::XorShiftHasher
-impl core::clone::Clone for vllm_traits::kernels::CudaGraphConfig
-impl core::clone::Clone for vllm_traits::kernels::GraphExecutionError
-impl core::clone::Clone for vllm_traits::kernels::ModelGraphConfig
 impl core::clone::Clone for vllm_traits::model::StubModelBackend
+impl core::clone::Clone for vllm_traits::sampling::SampledToken
 impl core::clone::Clone for vllm_traits::sampling::SamplingParams
 impl core::clone::Clone for vllm_traits::sampling::SamplingParamsBuilder
 impl core::clone::Clone for vllm_traits::types::Batch
 impl core::clone::Clone for vllm_traits::types::BatchOutput
 impl core::clone::Clone for vllm_traits::types::BatchPhase
+impl core::clone::Clone for vllm_traits::types::FinishReason
 impl core::clone::Clone for vllm_traits::types::TensorParallelError
 impl core::cmp::Eq for vllm_traits::types::BatchPhase
+impl core::cmp::Eq for vllm_traits::types::FinishReason
+impl core::cmp::PartialEq for vllm_traits::sampling::SampledToken
 impl core::cmp::PartialEq for vllm_traits::types::BatchPhase
+impl core::cmp::PartialEq for vllm_traits::types::FinishReason
 impl core::convert::From<std::io::error::Error> for vllm_traits::model::ModelError
 impl core::default::Default for vllm_traits::distributed::IdentityHasher
 impl core::default::Default for vllm_traits::distributed::XorShiftHasher
-impl core::default::Default for vllm_traits::kernels::CudaGraphConfig
-impl core::default::Default for vllm_traits::kernels::ModelGraphConfig
 impl core::default::Default for vllm_traits::model::StubModelBackend
 impl core::default::Default for vllm_traits::sampling::SamplingParams
 impl core::default::Default for vllm_traits::sampling::SamplingParamsBuilder
 impl core::default::Default for vllm_traits::types::Batch
-impl core::error::Error for vllm_traits::kernels::GraphExecutionError
 impl core::error::Error for vllm_traits::model::ModelError
 impl core::error::Error for vllm_traits::types::TensorParallelError
 impl core::fmt::Debug for vllm_traits::distributed::IdentityHasher
 impl core::fmt::Debug for vllm_traits::distributed::XorShiftHasher
-impl core::fmt::Debug for vllm_traits::kernels::CudaGraphConfig
-impl core::fmt::Debug for vllm_traits::kernels::GraphExecutionError
-impl core::fmt::Debug for vllm_traits::kernels::ModelGraphConfig
 impl core::fmt::Debug for vllm_traits::model::ModelError
 impl core::fmt::Debug for vllm_traits::model::StubModelBackend
+impl core::fmt::Debug for vllm_traits::sampling::SampledToken
 impl core::fmt::Debug for vllm_traits::sampling::SamplingParams
 impl core::fmt::Debug for vllm_traits::sampling::SamplingParamsBuilder
 impl core::fmt::Debug for vllm_traits::types::Batch
 impl core::fmt::Debug for vllm_traits::types::BatchOutput
 impl core::fmt::Debug for vllm_traits::types::BatchPhase
+impl core::fmt::Debug for vllm_traits::types::FinishReason
 impl core::fmt::Debug for vllm_traits::types::TensorParallelError
-impl core::fmt::Display for vllm_traits::kernels::GraphExecutionError
 impl core::fmt::Display for vllm_traits::model::ModelError
 impl core::fmt::Display for vllm_traits::types::TensorParallelError
 impl core::marker::Copy for vllm_traits::distributed::IdentityHasher
 impl core::marker::Copy for vllm_traits::distributed::XorShiftHasher
 impl core::marker::Copy for vllm_traits::model::StubModelBackend
 impl core::marker::Copy for vllm_traits::types::BatchPhase
+impl core::marker::Copy for vllm_traits::types::FinishReason
 impl core::marker::Freeze for vllm_traits::distributed::IdentityHasher
 impl core::marker::Freeze for vllm_traits::distributed::XorShiftHasher
-impl core::marker::Freeze for vllm_traits::kernels::CudaGraphConfig
-impl core::marker::Freeze for vllm_traits::kernels::GraphExecutionError
-impl core::marker::Freeze for vllm_traits::kernels::ModelGraphConfig
 impl core::marker::Freeze for vllm_traits::model::ModelError
 impl core::marker::Freeze for vllm_traits::model::StubModelBackend
+impl core::marker::Freeze for vllm_traits::sampling::SampledToken
 impl core::marker::Freeze for vllm_traits::sampling::SamplingParams
 impl core::marker::Freeze for vllm_traits::sampling::SamplingParamsBuilder
 impl core::marker::Freeze for vllm_traits::types::Batch
 impl core::marker::Freeze for vllm_traits::types::BatchOutput
 impl core::marker::Freeze for vllm_traits::types::BatchPhase
+impl core::marker::Freeze for vllm_traits::types::FinishReason
 impl core::marker::Freeze for vllm_traits::types::TensorParallelError
 impl core::marker::Send for vllm_traits::distributed::IdentityHasher
 impl core::marker::Send for vllm_traits::distributed::XorShiftHasher
-impl core::marker::Send for vllm_traits::kernels::CudaGraphConfig
-impl core::marker::Send for vllm_traits::kernels::GraphExecutionError
-impl core::marker::Send for vllm_traits::kernels::ModelGraphConfig
 impl core::marker::Send for vllm_traits::model::ModelError
 impl core::marker::Send for vllm_traits::model::StubModelBackend
+impl core::marker::Send for vllm_traits::sampling::SampledToken
 impl core::marker::Send for vllm_traits::sampling::SamplingParams
 impl core::marker::Send for vllm_traits::sampling::SamplingParamsBuilder
 impl core::marker::Send for vllm_traits::types::Batch
 impl core::marker::Send for vllm_traits::types::BatchOutput
 impl core::marker::Send for vllm_traits::types::BatchPhase
+impl core::marker::Send for vllm_traits::types::FinishReason
 impl core::marker::Send for vllm_traits::types::TensorParallelError
+impl core::marker::StructuralPartialEq for vllm_traits::sampling::SampledToken
 impl core::marker::StructuralPartialEq for vllm_traits::types::BatchPhase
+impl core::marker::StructuralPartialEq for vllm_traits::types::FinishReason
 impl core::marker::Sync for vllm_traits::distributed::IdentityHasher
 impl core::marker::Sync for vllm_traits::distributed::XorShiftHasher
-impl core::marker::Sync for vllm_traits::kernels::CudaGraphConfig
-impl core::marker::Sync for vllm_traits::kernels::GraphExecutionError
-impl core::marker::Sync for vllm_traits::kernels::ModelGraphConfig
 impl core::marker::Sync for vllm_traits::model::ModelError
 impl core::marker::Sync for vllm_traits::model::StubModelBackend
+impl core::marker::Sync for vllm_traits::sampling::SampledToken
 impl core::marker::Sync for vllm_traits::sampling::SamplingParams
 impl core::marker::Sync for vllm_traits::sampling::SamplingParamsBuilder
 impl core::marker::Sync for vllm_traits::types::Batch
 impl core::marker::Sync for vllm_traits::types::BatchOutput
 impl core::marker::Sync for vllm_traits::types::BatchPhase
+impl core::marker::Sync for vllm_traits::types::FinishReason
 impl core::marker::Sync for vllm_traits::types::TensorParallelError
 impl core::marker::Unpin for vllm_traits::distributed::IdentityHasher
 impl core::marker::Unpin for vllm_traits::distributed::XorShiftHasher
-impl core::marker::Unpin for vllm_traits::kernels::CudaGraphConfig
-impl core::marker::Unpin for vllm_traits::kernels::GraphExecutionError
-impl core::marker::Unpin for vllm_traits::kernels::ModelGraphConfig
 impl core::marker::Unpin for vllm_traits::model::ModelError
 impl core::marker::Unpin for vllm_traits::model::StubModelBackend
+impl core::marker::Unpin for vllm_traits::sampling::SampledToken
 impl core::marker::Unpin for vllm_traits::sampling::SamplingParams
 impl core::marker::Unpin for vllm_traits::sampling::SamplingParamsBuilder
 impl core::marker::Unpin for vllm_traits::types::Batch
 impl core::marker::Unpin for vllm_traits::types::BatchOutput
 impl core::marker::Unpin for vllm_traits::types::BatchPhase
+impl core::marker::Unpin for vllm_traits::types::FinishReason
 impl core::marker::Unpin for vllm_traits::types::TensorParallelError
 impl core::marker::UnsafeUnpin for vllm_traits::distributed::IdentityHasher
 impl core::marker::UnsafeUnpin for vllm_traits::distributed::XorShiftHasher
-impl core::marker::UnsafeUnpin for vllm_traits::kernels::CudaGraphConfig
-impl core::marker::UnsafeUnpin for vllm_traits::kernels::GraphExecutionError
-impl core::marker::UnsafeUnpin for vllm_traits::kernels::ModelGraphConfig
 impl core::marker::UnsafeUnpin for vllm_traits::model::ModelError
 impl core::marker::UnsafeUnpin for vllm_traits::model::StubModelBackend
+impl core::marker::UnsafeUnpin for vllm_traits::sampling::SampledToken
 impl core::marker::UnsafeUnpin for vllm_traits::sampling::SamplingParams
 impl core::marker::UnsafeUnpin for vllm_traits::sampling::SamplingParamsBuilder
 impl core::marker::UnsafeUnpin for vllm_traits::types::Batch
 impl core::marker::UnsafeUnpin for vllm_traits::types::BatchOutput
 impl core::marker::UnsafeUnpin for vllm_traits::types::BatchPhase
+impl core::marker::UnsafeUnpin for vllm_traits::types::FinishReason
 impl core::marker::UnsafeUnpin for vllm_traits::types::TensorParallelError
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::distributed::IdentityHasher
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::distributed::XorShiftHasher
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::kernels::CudaGraphConfig
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::kernels::GraphExecutionError
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::kernels::ModelGraphConfig
 impl !core::panic::unwind_safe::RefUnwindSafe for vllm_traits::model::ModelError
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::model::StubModelBackend
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::sampling::SampledToken
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::sampling::SamplingParams
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::sampling::SamplingParamsBuilder
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::types::Batch
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::types::BatchOutput
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::types::BatchPhase
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::types::FinishReason
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_traits::types::TensorParallelError
 impl core::panic::unwind_safe::UnwindSafe for vllm_traits::distributed::IdentityHasher
 impl core::panic::unwind_safe::UnwindSafe for vllm_traits::distributed::XorShiftHasher
-impl core::panic::unwind_safe::UnwindSafe for vllm_traits::kernels::CudaGraphConfig
-impl core::panic::unwind_safe::UnwindSafe for vllm_traits::kernels::GraphExecutionError
-impl core::panic::unwind_safe::UnwindSafe for vllm_traits::kernels::ModelGraphConfig
 impl !core::panic::unwind_safe::UnwindSafe for vllm_traits::model::ModelError
 impl core::panic::unwind_safe::UnwindSafe for vllm_traits::model::StubModelBackend
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::sampling::SampledToken
 impl core::panic::unwind_safe::UnwindSafe for vllm_traits::sampling::SamplingParams
 impl core::panic::unwind_safe::UnwindSafe for vllm_traits::sampling::SamplingParamsBuilder
 impl core::panic::unwind_safe::UnwindSafe for vllm_traits::types::Batch
 impl core::panic::unwind_safe::UnwindSafe for vllm_traits::types::BatchOutput
 impl core::panic::unwind_safe::UnwindSafe for vllm_traits::types::BatchPhase
+impl core::panic::unwind_safe::UnwindSafe for vllm_traits::types::FinishReason
 impl core::panic::unwind_safe::UnwindSafe for vllm_traits::types::TensorParallelError
-impl<'de> serde_core::de::Deserialize<'de> for vllm_traits::kernels::CudaGraphConfig
-impl<'de> serde_core::de::Deserialize<'de> for vllm_traits::kernels::ModelGraphConfig
+impl<'de> serde_core::de::Deserialize<'de> for vllm_traits::sampling::SampledToken
 impl<'de> serde_core::de::Deserialize<'de> for vllm_traits::sampling::SamplingParams
 impl<'de> serde_core::de::Deserialize<'de> for vllm_traits::types::Batch
 impl<'de> serde_core::de::Deserialize<'de> for vllm_traits::types::BatchOutput
 impl<'de> serde_core::de::Deserialize<'de> for vllm_traits::types::BatchPhase
-impl serde_core::ser::Serialize for vllm_traits::kernels::CudaGraphConfig
-impl serde_core::ser::Serialize for vllm_traits::kernels::ModelGraphConfig
+impl<'de> serde_core::de::Deserialize<'de> for vllm_traits::types::FinishReason
+impl serde_core::ser::Serialize for vllm_traits::sampling::SampledToken
 impl serde_core::ser::Serialize for vllm_traits::sampling::SamplingParams
 impl serde_core::ser::Serialize for vllm_traits::types::Batch
 impl serde_core::ser::Serialize for vllm_traits::types::BatchOutput
 impl serde_core::ser::Serialize for vllm_traits::types::BatchPhase
+impl serde_core::ser::Serialize for vllm_traits::types::FinishReason
 impl vllm_traits::distributed::BlockHasher for vllm_traits::distributed::IdentityHasher
 impl vllm_traits::distributed::BlockHasher for vllm_traits::distributed::XorShiftHasher
-impl vllm_traits::kernels::CudaGraphConfig
 impl vllm_traits::model::ModelBackend for vllm_traits::model::StubModelBackend
 impl vllm_traits::model::ModelError
 impl vllm_traits::sampling::SamplingParams
@@ -158,13 +150,17 @@ impl vllm_traits::sampling::SamplingParamsBuilder
 impl vllm_traits::types::Batch
 #[non_exhaustive] pub enum vllm_traits::ModelError
 #[non_exhaustive] pub enum vllm_traits::model::ModelError
-pub const fn vllm_traits::sampling::SamplingParamsBuilder::build(self) -> vllm_traits::sampling::SamplingParams
 pub const fn vllm_traits::sampling::SamplingParamsBuilder::with_beam_width(self, usize) -> Self
 pub const fn vllm_traits::sampling::SamplingParamsBuilder::with_length_penalty(self, f32) -> Self
 pub const fn vllm_traits::sampling::SamplingParamsBuilder::with_max_retries(self, u32) -> Self
+pub const fn vllm_traits::sampling::SamplingParamsBuilder::with_presence_penalty(self, f32) -> Self
 pub const fn vllm_traits::sampling::SamplingParamsBuilder::with_repeat_penalty(self, f32) -> Self
+pub const fn vllm_traits::sampling::SamplingParamsBuilder::with_seed_none(self) -> Self
+pub const fn vllm_traits::sampling::SamplingParamsBuilder::with_seed(self, u64) -> Self
 pub const fn vllm_traits::sampling::SamplingParamsBuilder::with_temperature(self, f32) -> Self
 pub const fn vllm_traits::sampling::SamplingParamsBuilder::with_top_k(self, usize) -> Self
+pub const fn vllm_traits::sampling::SamplingParamsBuilder::with_top_logprobs_none(self) -> Self
+pub const fn vllm_traits::sampling::SamplingParamsBuilder::with_top_logprobs(self, u32) -> Self
 pub const fn vllm_traits::sampling::SamplingParamsBuilder::with_top_p(self, f32) -> Self
 pub const fn vllm_traits::types::Batch::empty() -> Self
 pub const fn vllm_traits::types::Batch::is_empty(&self) -> bool
@@ -172,18 +168,15 @@ pub const fn vllm_traits::types::Batch::len(&self) -> usize
 pub const vllm_traits::BLOCK_SIZE: usize
 pub const vllm_traits::types::BLOCK_SIZE: usize
 pub enum vllm_traits::BatchPhase
-pub enum vllm_traits::GraphExecutionError
-pub enum vllm_traits::kernels::GraphExecutionError
+pub enum vllm_traits::FinishReason
 pub enum vllm_traits::TensorParallelError
 pub enum vllm_traits::types::BatchPhase
+pub enum vllm_traits::types::FinishReason
 pub enum vllm_traits::types::TensorParallelError
 pub fn vllm_traits::argmax_logits(&[f32]) -> vllm_traits::types::TokenId
 pub fn vllm_traits::BlockHasher::hash_allocated_block(&self, vllm_traits::types::BlockId, u64, &[vllm_traits::types::TokenId]) -> u64
 pub fn vllm_traits::BlockHasher::hash_block(&self, u64, &[vllm_traits::types::TokenId]) -> u64
 pub fn vllm_traits::BlockHasher::name(&self) -> &'static str
-pub fn vllm_traits::CudaGraphExecutor::capture_all_graphs(&mut self) -> core::result::Result<(), vllm_traits::kernels::GraphExecutionError>
-pub fn vllm_traits::CudaGraphExecutor::execute(&self, &vllm_traits::types::Batch) -> core::result::Result<vllm_traits::types::BatchOutput, vllm_traits::kernels::GraphExecutionError>
-pub fn vllm_traits::CudaGraphExecutor::is_enabled(&self) -> bool
 pub fn vllm_traits::distributed::BlockHasher::hash_allocated_block(&self, vllm_traits::types::BlockId, u64, &[vllm_traits::types::TokenId]) -> u64
 pub fn vllm_traits::distributed::BlockHasher::hash_block(&self, u64, &[vllm_traits::types::TokenId]) -> u64
 pub fn vllm_traits::distributed::BlockHasher::name(&self) -> &'static str
@@ -199,22 +192,6 @@ pub fn vllm_traits::distributed::XorShiftHasher::fmt(&self, &mut core::fmt::Form
 pub fn vllm_traits::distributed::XorShiftHasher::hash_allocated_block(&self, vllm_traits::types::BlockId, u64, &[vllm_traits::types::TokenId]) -> u64
 pub fn vllm_traits::distributed::XorShiftHasher::hash_block(&self, u64, &[vllm_traits::types::TokenId]) -> u64
 pub fn vllm_traits::distributed::XorShiftHasher::name(&self) -> &'static str
-pub fn vllm_traits::kernels::CudaGraphConfig::clone(&self) -> vllm_traits::kernels::CudaGraphConfig
-pub fn vllm_traits::kernels::CudaGraphConfig::default() -> Self
-pub fn vllm_traits::kernels::CudaGraphConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
-pub fn vllm_traits::kernels::CudaGraphConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub fn vllm_traits::kernels::CudaGraphConfig::from_env() -> Self
-pub fn vllm_traits::kernels::CudaGraphConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
-pub fn vllm_traits::kernels::CudaGraphExecutor::capture_all_graphs(&mut self) -> core::result::Result<(), vllm_traits::kernels::GraphExecutionError>
-pub fn vllm_traits::kernels::CudaGraphExecutor::execute(&self, &vllm_traits::types::Batch) -> core::result::Result<vllm_traits::types::BatchOutput, vllm_traits::kernels::GraphExecutionError>
-pub fn vllm_traits::kernels::CudaGraphExecutor::is_enabled(&self) -> bool
-pub fn vllm_traits::kernels::GraphExecutionError::clone(&self) -> vllm_traits::kernels::GraphExecutionError
-pub fn vllm_traits::kernels::GraphExecutionError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub fn vllm_traits::kernels::ModelGraphConfig::clone(&self) -> vllm_traits::kernels::ModelGraphConfig
-pub fn vllm_traits::kernels::ModelGraphConfig::default() -> Self
-pub fn vllm_traits::kernels::ModelGraphConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
-pub fn vllm_traits::kernels::ModelGraphConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub fn vllm_traits::kernels::ModelGraphConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 pub fn vllm_traits::ModelBackend::embed(&mut self, &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
 pub fn vllm_traits::ModelBackend::forward_logits(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<alloc::vec::Vec<alloc::vec::Vec<f32>>>
 pub fn vllm_traits::ModelBackend::forward(&mut self, &[vllm_traits::types::SeqId], &[alloc::vec::Vec<vllm_traits::types::TokenId>], &[alloc::vec::Vec<usize>], &[alloc::vec::Vec<usize>], &[usize], &[bool]) -> vllm_traits::model::Result<vllm_traits::types::BatchOutput>
@@ -241,10 +218,17 @@ pub fn vllm_traits::model::StubModelBackend::forward_to_layer(&mut self, &[vllm_
 pub fn vllm_traits::model::StubModelBackend::num_heads(&self) -> usize
 pub fn vllm_traits::model::StubModelBackend::num_layers(&self) -> usize
 pub fn vllm_traits::sampling::argmax_logits(&[f32]) -> vllm_traits::types::TokenId
+pub fn vllm_traits::sampling::SampledToken::clone(&self) -> vllm_traits::sampling::SampledToken
+pub fn vllm_traits::sampling::SampledToken::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn vllm_traits::sampling::SampledToken::eq(&self, &vllm_traits::sampling::SampledToken) -> bool
+pub fn vllm_traits::sampling::SampledToken::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_traits::sampling::SampledToken::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn vllm_traits::sampling::SamplingParamsBuilder::build(self) -> vllm_traits::sampling::SamplingParams
 pub fn vllm_traits::sampling::SamplingParamsBuilder::clone(&self) -> vllm_traits::sampling::SamplingParamsBuilder
 pub fn vllm_traits::sampling::SamplingParamsBuilder::default() -> vllm_traits::sampling::SamplingParamsBuilder
 pub fn vllm_traits::sampling::SamplingParamsBuilder::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_traits::sampling::SamplingParams::builder() -> vllm_traits::sampling::SamplingParamsBuilder
+pub fn vllm_traits::sampling::SamplingParamsBuilder::with_logit_bias(self, core::option::Option<std::collections::hash::map::HashMap<vllm_traits::types::TokenId, f32>>) -> Self
 pub fn vllm_traits::sampling::SamplingParams::clone(&self) -> vllm_traits::sampling::SamplingParams
 pub fn vllm_traits::sampling::SamplingParams::default() -> Self
 pub fn vllm_traits::sampling::SamplingParams::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
@@ -266,36 +250,37 @@ pub fn vllm_traits::types::BatchPhase::eq(&self, &vllm_traits::types::BatchPhase
 pub fn vllm_traits::types::BatchPhase::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_traits::types::BatchPhase::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 pub fn vllm_traits::types::Batch::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+pub fn vllm_traits::types::FinishReason::clone(&self) -> vllm_traits::types::FinishReason
+pub fn vllm_traits::types::FinishReason::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn vllm_traits::types::FinishReason::eq(&self, &vllm_traits::types::FinishReason) -> bool
+pub fn vllm_traits::types::FinishReason::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_traits::types::FinishReason::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 pub fn vllm_traits::types::TensorParallelError::clone(&self) -> vllm_traits::types::TensorParallelError
 pub fn vllm_traits::types::TensorParallelError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub mod vllm_traits
 pub mod vllm_traits::distributed
-pub mod vllm_traits::kernels
 pub mod vllm_traits::model
 pub mod vllm_traits::sampling
 pub mod vllm_traits::types
 pub struct vllm_traits::Batch
 pub struct vllm_traits::BatchOutput
-pub struct vllm_traits::CudaGraphConfig
 pub struct vllm_traits::distributed::IdentityHasher
 pub struct vllm_traits::distributed::XorShiftHasher
 pub struct vllm_traits::IdentityHasher
-pub struct vllm_traits::kernels::CudaGraphConfig
-pub struct vllm_traits::kernels::ModelGraphConfig
-pub struct vllm_traits::ModelGraphConfig
 pub struct vllm_traits::model::StubModelBackend
+pub struct vllm_traits::SampledToken
 pub struct vllm_traits::SamplingParams
 pub struct vllm_traits::SamplingParamsBuilder
+pub struct vllm_traits::sampling::SampledToken
 pub struct vllm_traits::sampling::SamplingParams
 pub struct vllm_traits::sampling::SamplingParamsBuilder
 pub struct vllm_traits::StubModelBackend
 pub struct vllm_traits::types::Batch
 pub struct vllm_traits::types::BatchOutput
+pub struct vllm_traits::types::SampledToken
 pub struct vllm_traits::XorShiftHasher
 pub trait vllm_traits::BlockHasher: core::marker::Send + core::marker::Sync + core::fmt::Debug
-pub trait vllm_traits::CudaGraphExecutor: core::marker::Send
 pub trait vllm_traits::distributed::BlockHasher: core::marker::Send + core::marker::Sync + core::fmt::Debug
-pub trait vllm_traits::kernels::CudaGraphExecutor: core::marker::Send
 pub trait vllm_traits::ModelBackend: core::marker::Send + core::marker::Sync
 pub trait vllm_traits::model::ModelBackend: core::marker::Send + core::marker::Sync
 pub type vllm_traits::BlockId = usize
@@ -311,7 +296,7 @@ pub vllm_traits::Batch::is_prefill: alloc::vec::Vec<bool>
 pub vllm_traits::Batch::kv_block_ids: alloc::vec::Vec<alloc::vec::Vec<vllm_traits::types::BlockId>>
 pub vllm_traits::Batch::max_seq_len: usize
 pub vllm_traits::Batch::num_computed_tokens: alloc::vec::Vec<usize>
-pub vllm_traits::BatchOutput::next_tokens: alloc::vec::Vec<vllm_traits::types::TokenId>
+pub vllm_traits::BatchOutput::next_tokens: alloc::vec::Vec<vllm_traits::sampling::SampledToken>
 pub vllm_traits::BatchOutput::seq_ids: alloc::vec::Vec<vllm_traits::types::SeqId>
 pub vllm_traits::BatchPhase::Decode
 pub vllm_traits::BatchPhase::Mixed
@@ -321,49 +306,44 @@ pub vllm_traits::Batch::positions: alloc::vec::Vec<alloc::vec::Vec<usize>>
 pub vllm_traits::Batch::sampling_params: alloc::vec::Vec<vllm_traits::sampling::SamplingParams>
 pub vllm_traits::Batch::seq_ids: alloc::vec::Vec<vllm_traits::types::SeqId>
 pub vllm_traits::Batch::total_tokens: usize
-pub vllm_traits::CudaGraphConfig::batch_sizes: alloc::vec::Vec<usize>
-pub vllm_traits::CudaGraphConfig::enabled: bool
-pub vllm_traits::CudaGraphConfig::enable_graph_pooling: core::option::Option<bool>
-pub vllm_traits::CudaGraphConfig::model_config: vllm_traits::kernels::ModelGraphConfig
-pub vllm_traits::GraphExecutionError::CudaError(alloc::string::String)
-pub vllm_traits::GraphExecutionError::GraphCaptureFailed(alloc::string::String)
-pub vllm_traits::GraphExecutionError::GraphExecutionFailed(alloc::string::String)
-pub vllm_traits::GraphExecutionError::GraphNotFound(usize)
-pub vllm_traits::kernels::CudaGraphConfig::batch_sizes: alloc::vec::Vec<usize>
-pub vllm_traits::kernels::CudaGraphConfig::enabled: bool
-pub vllm_traits::kernels::CudaGraphConfig::enable_graph_pooling: core::option::Option<bool>
-pub vllm_traits::kernels::CudaGraphConfig::model_config: vllm_traits::kernels::ModelGraphConfig
-pub vllm_traits::kernels::GraphExecutionError::CudaError(alloc::string::String)
-pub vllm_traits::kernels::GraphExecutionError::GraphCaptureFailed(alloc::string::String)
-pub vllm_traits::kernels::GraphExecutionError::GraphExecutionFailed(alloc::string::String)
-pub vllm_traits::kernels::GraphExecutionError::GraphNotFound(usize)
-pub vllm_traits::kernels::ModelGraphConfig::capture_attention_separate: bool
-pub vllm_traits::kernels::ModelGraphConfig::max_seq_len: usize
-pub vllm_traits::kernels::ModelGraphConfig::num_kv_blocks: usize
+pub vllm_traits::FinishReason::Cancelled
+pub vllm_traits::FinishReason::Length
+pub vllm_traits::FinishReason::Stop
 pub vllm_traits::ModelError::Backend(alloc::string::String)
 pub vllm_traits::ModelError::Config(alloc::string::String)
 pub vllm_traits::ModelError::Io(std::io::error::Error)
 pub vllm_traits::ModelError::Message(alloc::string::String)
-pub vllm_traits::ModelGraphConfig::capture_attention_separate: bool
-pub vllm_traits::ModelGraphConfig::max_seq_len: usize
-pub vllm_traits::ModelGraphConfig::num_kv_blocks: usize
 pub vllm_traits::model::ModelError::Backend(alloc::string::String)
 pub vllm_traits::model::ModelError::Config(alloc::string::String)
 pub vllm_traits::model::ModelError::Io(std::io::error::Error)
 pub vllm_traits::model::ModelError::Message(alloc::string::String)
+pub vllm_traits::SampledToken::logprob: f32
+pub vllm_traits::SampledToken::token: vllm_traits::types::TokenId
+pub vllm_traits::SampledToken::top_logprobs: alloc::vec::Vec<(vllm_traits::types::TokenId, f32)>
 pub vllm_traits::SamplingParams::beam_width: usize
 pub vllm_traits::SamplingParams::length_penalty: f32
+pub vllm_traits::SamplingParams::logit_bias: core::option::Option<std::collections::hash::map::HashMap<vllm_traits::types::TokenId, f32>>
 pub vllm_traits::SamplingParams::max_retries: u32
+pub vllm_traits::SamplingParams::presence_penalty: f32
 pub vllm_traits::SamplingParams::repeat_penalty: f32
+pub vllm_traits::SamplingParams::seed: core::option::Option<u64>
 pub vllm_traits::SamplingParams::temperature: f32
 pub vllm_traits::SamplingParams::top_k: usize
+pub vllm_traits::SamplingParams::top_logprobs: core::option::Option<u32>
 pub vllm_traits::SamplingParams::top_p: f32
+pub vllm_traits::sampling::SampledToken::logprob: f32
+pub vllm_traits::sampling::SampledToken::token: vllm_traits::types::TokenId
+pub vllm_traits::sampling::SampledToken::top_logprobs: alloc::vec::Vec<(vllm_traits::types::TokenId, f32)>
 pub vllm_traits::sampling::SamplingParams::beam_width: usize
 pub vllm_traits::sampling::SamplingParams::length_penalty: f32
+pub vllm_traits::sampling::SamplingParams::logit_bias: core::option::Option<std::collections::hash::map::HashMap<vllm_traits::types::TokenId, f32>>
 pub vllm_traits::sampling::SamplingParams::max_retries: u32
+pub vllm_traits::sampling::SamplingParams::presence_penalty: f32
 pub vllm_traits::sampling::SamplingParams::repeat_penalty: f32
+pub vllm_traits::sampling::SamplingParams::seed: core::option::Option<u64>
 pub vllm_traits::sampling::SamplingParams::temperature: f32
 pub vllm_traits::sampling::SamplingParams::top_k: usize
+pub vllm_traits::sampling::SamplingParams::top_logprobs: core::option::Option<u32>
 pub vllm_traits::sampling::SamplingParams::top_p: f32
 pub vllm_traits::TensorParallelError::AllReduceFailed(alloc::string::String)
 pub vllm_traits::TensorParallelError::CudaError(alloc::string::String)
@@ -376,7 +356,7 @@ pub vllm_traits::types::Batch::is_prefill: alloc::vec::Vec<bool>
 pub vllm_traits::types::Batch::kv_block_ids: alloc::vec::Vec<alloc::vec::Vec<vllm_traits::types::BlockId>>
 pub vllm_traits::types::Batch::max_seq_len: usize
 pub vllm_traits::types::Batch::num_computed_tokens: alloc::vec::Vec<usize>
-pub vllm_traits::types::BatchOutput::next_tokens: alloc::vec::Vec<vllm_traits::types::TokenId>
+pub vllm_traits::types::BatchOutput::next_tokens: alloc::vec::Vec<vllm_traits::sampling::SampledToken>
 pub vllm_traits::types::BatchOutput::seq_ids: alloc::vec::Vec<vllm_traits::types::SeqId>
 pub vllm_traits::types::BatchPhase::Decode
 pub vllm_traits::types::BatchPhase::Mixed
@@ -386,6 +366,12 @@ pub vllm_traits::types::Batch::positions: alloc::vec::Vec<alloc::vec::Vec<usize>
 pub vllm_traits::types::Batch::sampling_params: alloc::vec::Vec<vllm_traits::sampling::SamplingParams>
 pub vllm_traits::types::Batch::seq_ids: alloc::vec::Vec<vllm_traits::types::SeqId>
 pub vllm_traits::types::Batch::total_tokens: usize
+pub vllm_traits::types::FinishReason::Cancelled
+pub vllm_traits::types::FinishReason::Length
+pub vllm_traits::types::FinishReason::Stop
+pub vllm_traits::types::SampledToken::logprob: f32
+pub vllm_traits::types::SampledToken::token: vllm_traits::types::TokenId
+pub vllm_traits::types::SampledToken::top_logprobs: alloc::vec::Vec<(vllm_traits::types::TokenId, f32)>
 pub vllm_traits::types::TensorParallelError::AllReduceFailed(alloc::string::String)
 pub vllm_traits::types::TensorParallelError::CudaError(alloc::string::String)
 pub vllm_traits::types::TensorParallelError::DeviceMismatch

@@ -14,7 +14,7 @@ use super::config::CudaGraphConfig;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use vllm_traits::kernels::{CudaGraphExecutor, GraphExecutionError};
-use vllm_traits::{Batch, BatchOutput};
+use vllm_traits::{Batch, BatchOutput, SampledToken, TokenId};
 
 /// Executor for managing CUDA Graph capture and execution
 ///
@@ -272,7 +272,24 @@ impl BatchCudaGraphExecutor {
 
         Ok(BatchOutput {
             seq_ids: batch.seq_ids.clone(),
-            next_tokens: vec![0u32; batch_size],
+            // P36: CUDA-Graph replay path returns a placeholder
+            // SampledToken per slot; the engine's
+            // `sample_batch_with_params` overwrites the logits-based
+            // sampling on the regular decode path. The CUDA-Graph
+            // path itself does not run `sample_one_with_params` —
+            // it only replays the captured kernel — so logprob /
+            // top_logprobs are necessarily empty here. Real
+            // sampling happens via `forward_logits` + the engine's
+            // sampler; CUDA-Graph replay is a hot-path optimization
+            // for the prefill-and-batch scheduling shape, not the
+            // final-token sample step.
+            next_tokens: (0..batch_size)
+                .map(|_| SampledToken {
+                    token: TokenId::default(),
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                })
+                .collect(),
         })
     }
 }

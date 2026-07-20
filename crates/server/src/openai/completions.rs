@@ -12,7 +12,10 @@ use std::convert::Infallible;
 use tokio::sync::mpsc;
 
 use super::sampling_validation::{validate_completion_request_fields, validate_sampling_params};
-use super::types::{CompletionChoice, CompletionRequest, CompletionResponse, ErrorResponse, Usage};
+use super::types::{
+    CompletionChoice, CompletionChoiceLogprobs, CompletionLogprob, CompletionRequest,
+    CompletionResponse, ErrorResponse, Usage,
+};
 use crate::ApiState;
 use crate::security::correlation::CorrelationId;
 
@@ -22,6 +25,66 @@ fn should_skip_token_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &s
 
 fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &str) -> String {
     tokenizer.clean_special_tokens(text)
+}
+
+/// Extract the bare [`TokenId`] sequence from a `Vec<SampledToken>`.
+/// Used when passing per-token data to the tokenizer (which only
+/// understands `&[u32]`); the `logprob` + `top_logprobs` fields are
+/// preserved separately for the `CompletionChoice::logprobs`
+/// rendering (P36 v0.3 wire-type follow-up engine wire-through).
+fn token_ids(sampled: &[vllm_traits::SampledToken]) -> Vec<vllm_traits::TokenId> {
+    sampled.iter().map(|s| s.token).collect()
+}
+
+/// Build the `CompletionChoiceLogprobs` payload (P36 v0.3 wire-type
+/// follow-up engine wire-through) from the engine's per-token
+/// `SampledToken` stream. Returns `None` when the request did not
+/// ask for logprobs (`req.logprobs.is_none()`).
+///
+/// When `req.logprobs = Some(0)`, returns `Some` with all-empty
+/// parallel arrays — OpenAI's spec keeps the container present (so
+/// clients can rely on `choices[0].logprobs` being non-null when
+/// the request mentioned `logprobs` at all) but with no top-K
+/// alternatives. The sampled-token logprobs are still populated via
+/// `token_logprobs` when `req.logprobs = Some(0)` because the
+/// engine's `sample_one_with_params` always populates `SampledToken::logprob`.
+fn build_completion_choice_logprobs(
+    tokenizer: &vllm_model::tokenizer::Tokenizer,
+    sampled: &[vllm_traits::SampledToken],
+    req_logprobs: Option<u32>,
+) -> Option<CompletionChoiceLogprobs> {
+    let top_n = req_logprobs?;
+    let tokens: Vec<String> = sampled
+        .iter()
+        .map(|s| tokenizer.decode(&[s.token]))
+        .collect();
+    let token_logprobs: Vec<f32> = sampled.iter().map(|s| s.logprob).collect();
+    let top_logprobs: Vec<Vec<CompletionLogprob>> = sampled
+        .iter()
+        .map(|s| {
+            if top_n == 0 || s.top_logprobs.is_empty() {
+                Vec::new()
+            } else {
+                s.top_logprobs
+                    .iter()
+                    .take(top_n as usize)
+                    .map(|&(tok, lp)| {
+                        let text = tokenizer.decode(&[tok]);
+                        CompletionLogprob {
+                            token: text.clone(),
+                            logprob: lp,
+                            bytes: Some(text.into_bytes()),
+                        }
+                    })
+                    .collect()
+            }
+        })
+        .collect();
+    Some(CompletionChoiceLogprobs {
+        tokens,
+        token_logprobs,
+        top_logprobs,
+    })
 }
 
 /// Apply OpenAI `echo` + `suffix` semantics to a generated
@@ -195,6 +258,21 @@ pub async fn completions(
         request.sampling_params.seed = Some(seed as u64);
     }
 
+    // Forward `logprobs` (legacy `/v1/completions`) to the engine's
+    // `SamplingParams::top_logprobs` slot (P36 v0.3 wire-type
+    // follow-up — engine wire-through). The legacy endpoint's
+    // `logprobs` is `Option<u32>` in the `0..=5` range; validation
+    // lives on the HTTP layer (`validate_completion_logprobs`).
+    // The engine's `sample_one_with_params` checks
+    // `params.top_logprobs.is_some()` and runs the partial top-K
+    // selection on the post-filter logits only when the request
+    // asked for top-K. When `logprobs = Some(0)` we forward as
+    // `Some(0)` so the engine still computes the sampled-token
+    // logprob (which `token_logprobs[]` then surfaces — OpenAI's
+    // legacy endpoint includes `token_logprobs` even at
+    // `logprobs = 0`).
+    request.sampling_params.top_logprobs = req.logprobs;
+
     // Reject sampling parameters the engine cannot honour (currently
     // beam_width > 1) BEFORE enqueuing — see `sampling_validation`.
     validate_sampling_params(&request.sampling_params)?;
@@ -315,8 +393,8 @@ pub async fn completions(
                             ))
                         }
                         Terminal::Streaming => match rx.recv().await {
-                            Some(token) => {
-                                let text = tokenizer.decode(&[token]);
+                            Some(sampled) => {
+                                let text = tokenizer.decode(&[sampled.token]);
                                 if should_skip_token_text(&tokenizer, &text) {
                                     return Some((
                                         Ok::<Event, Infallible>(Event::default().data("")),
@@ -406,8 +484,8 @@ pub async fn completions(
 
     // 非流式 - 返回普通 JSON
     let mut tokens = Vec::new();
-    while let Some(token) = response_rx.recv().await {
-        tokens.push(token);
+    while let Some(sampled) = response_rx.recv().await {
+        tokens.push(sampled);
     }
 
     // Engine sends the reason before closing the response channel, so
@@ -432,12 +510,19 @@ pub async fn completions(
     // tokenization — which is exactly what OpenAI's `echo` spec
     // requires: the response echoes the request body verbatim,
     // not a re-decoded token sequence).
-    let text = clean_completion_text(&state.tokenizer, &state.tokenizer.decode(&tokens));
+    let text = clean_completion_text(
+        &state.tokenizer,
+        &state.tokenizer.decode(&token_ids(&tokens)),
+    );
     let text = apply_completion_meta(text, &prompt, req.echo, req.suffix.as_deref());
     let choice = CompletionChoice {
         text,
         index: 0,
         finish_reason: Some(finish_reason),
+        // P36 v0.3 wire-type follow-up engine wire-through: render
+        // per-token logprobs (and top-K alternatives when the
+        // request asked) from the engine's SampledToken stream.
+        logprobs: build_completion_choice_logprobs(&state.tokenizer, &tokens, req.logprobs),
     };
 
     let usage = Usage::new(prompt_tokens_len, tokens.len());

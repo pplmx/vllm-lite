@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use vllm_traits::BatchPhase;
+use vllm_traits::{BatchPhase, SampledToken};
 
 use crate::metrics::EnhancedMetricsCollector;
 use crate::scheduler::engine::SchedulerEngine;
@@ -63,7 +63,15 @@ fn test_engine_update_sequence() {
     let _batch = engine.build_batch();
 
     // Simulate model output: one token generated
-    engine.update(&[id], &[100], &[3]); // 3 input tokens processed
+    engine.update(
+        &[id],
+        &[SampledToken {
+            token: 100,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &[3],
+    ); // 3 input tokens processed
 
     // The sequence should still be in running (not finished yet)
     assert_eq!(engine.running_count(), 1);
@@ -116,14 +124,30 @@ fn test_engine_prefix_cache_hit() {
 
     // Build batch and process
     let _batch = engine.build_batch();
-    engine.update(&[id1], &[100], &[5]);
+    engine.update(
+        &[id1],
+        &[SampledToken {
+            token: 100,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &[5],
+    );
 
     // Complete the sequence to add to cache
     // Update until max_tokens reached
     for i in 0..5 {
         // invariant: bounded by configured limit, cannot overflow at runtime.
         let next = u32::try_from(100 + i).expect("bounded test token");
-        engine.update(&[id1], &[next], &[0]);
+        engine.update(
+            &[id1],
+            &[SampledToken {
+                token: next,
+                logprob: 0.0,
+                top_logprobs: vec![],
+            }],
+            &[0],
+        );
     }
 
     // Add second request with same prefix

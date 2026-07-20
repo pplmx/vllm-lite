@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 use vllm_core::scheduler::{ObserverEvent, SchedulerEngine, SchedulerObserver, SchedulerObservers};
 use vllm_core::types::Request;
+use vllm_traits::SampledToken;
 
 #[derive(Clone)]
 struct TrackingObserver {
@@ -166,7 +167,15 @@ fn test_decoding_event() {
     let tokens = batch.input_tokens[0].clone();
     let counts = vec![tokens.len()];
 
-    engine.update(&[seq_id], &[42], &counts);
+    engine.update(
+        &[seq_id],
+        &[SampledToken {
+            token: 42,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &counts,
+    );
 
     let events = observer.get_events();
     let found = events.iter().any(|e| {
@@ -190,8 +199,24 @@ fn test_sequence_finished_event() {
     let seq_id = engine.add_request(Request::new(0, vec![1, 2], 2));
     let _ = engine.build_batch();
 
-    engine.update(&[seq_id], &[10], &[1]);
-    engine.update(&[seq_id], &[11], &[1]);
+    engine.update(
+        &[seq_id],
+        &[SampledToken {
+            token: 10,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &[1],
+    );
+    engine.update(
+        &[seq_id],
+        &[SampledToken {
+            token: 11,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &[1],
+    );
 
     let events = observer.get_events();
     let found = events.iter().any(|e| {

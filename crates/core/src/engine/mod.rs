@@ -19,7 +19,7 @@ use crate::speculative::registry::DraftModelRegistry;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, oneshot};
-use vllm_traits::{FinishReason, ModelBackend, SeqId, TokenId};
+use vllm_traits::{FinishReason, ModelBackend, SampledToken, SeqId};
 
 #[cfg(feature = "cuda-graph")]
 use vllm_traits::CudaGraphExecutor;
@@ -67,10 +67,16 @@ pub struct Engine {
     /// log/diagnostics; the structured error chain is on the originating
     /// request, this is just a convenience field for quick inspection.
     pub last_error: Option<String>,
-    /// Per-sequence mpsc senders for streaming generated tokens back to
-    /// requesters. Map keyed by [`SeqId`]; entries are removed when the
-    /// receiver is dropped. Visible to integration tests.
-    pub response_txs: HashMap<SeqId, mpsc::Sender<TokenId>>,
+    /// Per-sequence mpsc senders for streaming generated tokens back
+    /// to requesters. Map keyed by [`SeqId`]; entries are removed
+    /// when the receiver is dropped. Visible to integration tests.
+    ///
+    /// **P36 v0.3 wire-type follow-up engine wire-through:** the
+    /// sender carries [`SampledToken`] (token + logprob +
+    /// top_logprobs) instead of a bare `TokenId` so the HTTP layer
+    /// can render OpenAI's `choices[].logprobs` shape without
+    /// re-running the softmax.
+    pub response_txs: HashMap<SeqId, mpsc::Sender<SampledToken>>,
     /// Per-sequence oneshot senders for delivering the [`FinishReason`]
     /// that describes why the sequence stopped (`Length`, `Cancelled`,
     /// …). Populated by [`crate::engine::Engine::add_request`] (defined

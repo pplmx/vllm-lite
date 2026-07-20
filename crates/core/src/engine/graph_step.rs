@@ -14,7 +14,9 @@
 
 use crate::engine::Engine;
 use crate::error::Result;
-use vllm_traits::{SeqId, TokenId};
+#[cfg(feature = "cuda-graph")]
+use vllm_traits::TokenId;
+use vllm_traits::{SampledToken, SeqId};
 
 #[cfg(feature = "cuda-graph")]
 use tracing::trace;
@@ -39,7 +41,7 @@ impl Engine {
     /// Propagates any error from the underlying forward pass or graph
     /// executor (after first attempting the regular-step fallback when
     /// graph execution fails).
-    pub fn step_with_graph(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
+    pub fn step_with_graph(&mut self) -> Result<Vec<(SeqId, SampledToken)>> {
         let start = std::time::Instant::now();
         let graph_batch = self.scheduler.build_batch_with_graph();
         if graph_batch.batch_size() == 0 {
@@ -83,7 +85,11 @@ impl Engine {
     /// # Errors
     ///
     /// Propagates any error from the underlying [`Engine::step`] call.
-    pub fn step_with_graph(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
+    ///
+    /// **P36 v0.3 wire-type follow-up engine wire-through:** returns
+    /// `Vec<(SeqId, SampledToken)>` to mirror [`Engine::step`] (the
+    /// regular non-graph path that this delegates to).
+    pub fn step_with_graph(&mut self) -> Result<Vec<(SeqId, SampledToken)>> {
         tracing::warn!("CUDA Graph support not enabled, using regular step");
         self.step()
     }
@@ -159,7 +165,7 @@ impl Engine {
         output: BatchOutput,
         input_counts: Vec<usize>,
         start: std::time::Instant,
-    ) -> Vec<(SeqId, TokenId)> {
+    ) -> Vec<(SeqId, SampledToken)> {
         tracing::debug!(
             seq_ids = ?output.seq_ids,
             tokens = ?output.next_tokens,
@@ -167,22 +173,22 @@ impl Engine {
         );
 
         let mut results = Vec::new();
-        for (seq_id, token) in output.seq_ids.iter().zip(&output.next_tokens) {
+        for (seq_id, sampled) in output.seq_ids.iter().zip(output.next_tokens.iter()) {
             trace!(
                 seq_id = %seq_id,
-                token_id = %token,
+                token_id = %sampled.token,
                 "Token generated"
             );
-            tracing::debug!(seq_id = %seq_id, token = %token, "Sending token via channel");
+            tracing::debug!(seq_id = %seq_id, token = %sampled.token, "Sending token via channel");
             if let Some(tx) = self.response_txs.get(seq_id) {
-                let _ = tx.try_send(*token);
+                let _ = tx.try_send(sampled.clone());
             }
-            results.push((*seq_id, *token));
+            results.push((*seq_id, sampled.clone()));
         }
 
         let seq_ids: Vec<_> = results.iter().map(|(id, _)| *id).collect();
-        let tokens: Vec<_> = results.iter().map(|(_, t)| *t).collect();
-        self.scheduler.update(&seq_ids, &tokens, &input_counts);
+        let sampled: Vec<_> = results.iter().map(|(_, s)| s.clone()).collect();
+        self.scheduler.update(&seq_ids, &sampled, &input_counts);
 
         let finished = self.scheduler.finished_sequences();
         for seq in &finished {

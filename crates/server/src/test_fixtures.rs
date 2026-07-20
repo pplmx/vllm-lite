@@ -120,7 +120,16 @@ pub fn spawn_mock_engine(reply_tokens: Vec<TokenId>) -> (EngineHandle, JoinHandl
                     // engine (or extend this mock).
                     drop(finish_reason_tx);
                     for token in &reply_tokens {
-                        if response_tx.send(*token).await.is_err() {
+                        // P36: mock engine sends placeholder
+                        // SampledToken (no logprob info — tests
+                        // that care about logprobs use a real
+                        // engine).
+                        let sampled = vllm_traits::SampledToken {
+                            token: *token,
+                            logprob: 0.0,
+                            top_logprobs: Vec::new(),
+                        };
+                        if response_tx.send(sampled).await.is_err() {
                             break;
                         }
                     }

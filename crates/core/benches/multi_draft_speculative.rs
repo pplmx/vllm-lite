@@ -56,7 +56,17 @@ impl ModelBackend for BenchBackend {
             id_bias.wrapping_add(u32::try_from(n).expect("bounded bench counter")) % 32000;
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
-            next_tokens: seq_ids.iter().map(|_| token).collect(),
+            // P36: placeholder SampledToken (no logprob info on the
+            // legacy model-layer `forward` path; engine uses
+            // `forward_logits` + `sample_batch_with_params`).
+            next_tokens: seq_ids
+                .iter()
+                .map(|_| vllm_traits::SampledToken {
+                    token,
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                })
+                .collect(),
         })
     }
     fn forward_logits(

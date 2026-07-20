@@ -12,14 +12,28 @@
 //! 7. Records speculative metrics (efficiency, accuracy, per-request rates).
 
 use crate::error::Result;
-use vllm_traits::{BatchPhase, FinishReason, SeqId, TokenId};
+use vllm_traits::{BatchPhase, FinishReason, SampledToken, SeqId};
 
 impl crate::engine::Engine {
     /// Speculative decode step (called from `Engine::step` when speculative mode is on).
+    ///
+    /// **P36 v0.3 wire-type follow-up engine wire-through:** returns
+    /// `Vec<(SeqId, SampledToken)>`. Speculative-accepted draft
+    /// tokens carry a placeholder `SampledToken` with
+    /// `logprob = 0.0` + `top_logprobs = vec![]` (the logprob of an
+    /// accepted draft would require re-running the target forward
+    /// pass at each accepted position, which is non-trivial;
+    /// computed-logprob for speculative accepted tokens is deferred
+    /// to a future iteration). The bonus token (sampled by the
+    /// verifier) carries the full `SampledToken` from
+    /// `sample_one_with_params`. The HTTP handler detects the
+    /// placeholder via `logprob == 0.0 && top_logprobs.is_empty()`
+    /// and suppresses `ChatChoice::logprobs` output for any
+    /// sequence containing one.
     pub(crate) fn step_speculative_inner(
         &mut self,
         max_draft: usize,
-    ) -> Result<Vec<(SeqId, TokenId)>> {
+    ) -> Result<Vec<(SeqId, SampledToken)>> {
         let start = std::time::Instant::now();
         let batch = self.scheduler.build_batch();
         if batch.is_empty() {
@@ -63,22 +77,22 @@ impl crate::engine::Engine {
         // H-16 (PERF-05): pre-size `results` to the verified-sequence
         // count so the per-iteration push below does not reallocate.
         let mut results = Vec::with_capacity(verified.len());
-        for (seq_id, token) in &verified {
+        for (seq_id, sampled) in &verified {
             if let Some(tx) = self.response_txs.get(seq_id) {
-                let _ = tx.try_send(*token);
+                let _ = tx.try_send(sampled.clone());
             }
-            results.push((*seq_id, *token));
+            results.push((*seq_id, sampled.clone()));
         }
 
         // Multi-token scheduler input tracking (Plan 17.1-E)
         let seq_ids: Vec<SeqId> = results.iter().map(|(id, _)| *id).collect();
-        let tokens: Vec<TokenId> = results.iter().map(|(_, t)| *t).collect();
+        let sampled: Vec<SampledToken> = results.iter().map(|(_, s)| s.clone()).collect();
         // Build input_counts from accepted counts + 1 bonus token
         let input_counts: Vec<usize> = accepted_counts
             .iter()
             .map(|&accepted| accepted + 1) // accepted drafts + the target token
             .collect();
-        self.scheduler.update(&seq_ids, &tokens, &input_counts);
+        self.scheduler.update(&seq_ids, &sampled, &input_counts);
 
         // Track accuracy in adaptive decoder and record adjustment events
         if let Some(ref mut decoder) = self.adaptive_decoder {

@@ -4,7 +4,7 @@ use vllm_core::engine::Engine;
 use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_core::scheduler::{GraphBatch, SchedulerCudaGraphConfig, SchedulerEngine};
 use vllm_core::types::{Request, SchedulerConfig};
-use vllm_traits::{BatchOutput, ModelBackend, ModelError};
+use vllm_traits::{BatchOutput, ModelBackend, ModelError, SampledToken};
 
 fn create_test_engine(config: SchedulerConfig, num_kv_blocks: usize) -> SchedulerEngine {
     let metrics = Arc::new(EnhancedMetricsCollector::new());
@@ -39,7 +39,15 @@ fn test_decode_batch_can_use_graph() {
     assert!(!batch1.is_graph()); // First is prefill
     // Update to move to decode
     let seq_id = batch1.into_regular().seq_ids[0];
-    engine.update(&[seq_id], &[10], &[3]);
+    engine.update(
+        &[seq_id],
+        &[SampledToken {
+            token: 10,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &[3],
+    );
     // Second batch should be decode and could use graph
     let _batch2 = engine.build_batch_with_graph();
     // Note: Whether it's graph depends on batch size matching
@@ -102,7 +110,14 @@ fn test_end_to_end_engine_with_cuda_graph_config() {
         ) -> Result<BatchOutput, ModelError> {
             Ok(BatchOutput {
                 seq_ids: seq_ids.to_vec(),
-                next_tokens: seq_ids.iter().map(|_| 42u32).collect(),
+                next_tokens: seq_ids
+                    .iter()
+                    .map(|_| SampledToken {
+                        token: 42u32,
+                        logprob: 0.0,
+                        top_logprobs: vec![],
+                    })
+                    .collect(),
             })
         }
 
@@ -174,7 +189,14 @@ fn test_cuda_graph_disabled_when_feature_off() {
         ) -> Result<BatchOutput, ModelError> {
             Ok(BatchOutput {
                 seq_ids: seq_ids.to_vec(),
-                next_tokens: seq_ids.iter().map(|_| 42u32).collect(),
+                next_tokens: seq_ids
+                    .iter()
+                    .map(|_| SampledToken {
+                        token: 42u32,
+                        logprob: 0.0,
+                        top_logprobs: vec![],
+                    })
+                    .collect(),
             })
         }
 

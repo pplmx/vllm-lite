@@ -70,7 +70,13 @@ fn spawn_capturing_mock_engine() -> (
                     }
                     drop(finish_reason_tx);
                     *captured_clone.lock().await = request_id;
-                    let _ = response_tx.send(10u32).await;
+                    let _ = response_tx
+                        .send(vllm_traits::SampledToken {
+                            token: 10u32,
+                            logprob: 0.0,
+                            top_logprobs: vec![],
+                        })
+                        .await;
                     break;
                 }
                 EngineMessage::Shutdown => break,

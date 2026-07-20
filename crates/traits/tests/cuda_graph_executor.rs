@@ -102,7 +102,9 @@ fn execute_returns_batch_output_and_increments_counter() {
     };
     let out = exec.execute(&batch).expect("execute should succeed");
     let empty_seq_ids: Vec<u64> = vec![];
-    let empty_next_tokens: Vec<u32> = vec![];
+    // P36: BatchOutput::next_tokens is `Vec<SampledToken>` — the
+    // empty-batch case yields an empty `Vec<SampledToken>`.
+    let empty_next_tokens: Vec<vllm_traits::SampledToken> = vec![];
     assert_eq!(out.seq_ids, empty_seq_ids);
     assert_eq!(out.next_tokens, empty_next_tokens);
     assert_eq!(exec.executes(), 1);

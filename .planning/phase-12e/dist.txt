@@ -124,7 +124,7 @@ impl core::fmt::Debug for vllm_dist::pipeline::pipeline::PipelineParallelConfig
 impl core::fmt::Debug for vllm_dist::pipeline::stage::PipelineStageConfig
 impl core::fmt::Debug for vllm_dist::pipeline::stage::StageInput
 impl core::fmt::Debug for vllm_dist::pipeline::stage::StageOutput
-impl core::fmt::Debug for vllm_dist::tensor_parallel::all_reduce::NcclAllReduce
+impl core::fmt::Debug for vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce
 impl core::fmt::Debug for vllm_dist::tensor_parallel::all_reduce::ReduceOp
 impl core::fmt::Debug for vllm_dist::tensor_parallel::device_mesh::DeviceMesh
 impl core::fmt::Debug for vllm_dist::tensor_parallel::device_mesh::NodeMesh
@@ -192,7 +192,7 @@ impl core::marker::Freeze for vllm_dist::pipeline::pipeline::PipelineParallelCon
 impl core::marker::Freeze for vllm_dist::pipeline::stage::PipelineStageConfig
 impl core::marker::Freeze for vllm_dist::pipeline::stage::StageInput
 impl core::marker::Freeze for vllm_dist::pipeline::stage::StageOutput
-impl core::marker::Freeze for vllm_dist::tensor_parallel::all_reduce::NcclAllReduce
+impl core::marker::Freeze for vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce
 impl core::marker::Freeze for vllm_dist::tensor_parallel::all_reduce::ReduceOp
 impl core::marker::Freeze for vllm_dist::tensor_parallel::device_mesh::DeviceMesh
 impl core::marker::Freeze for vllm_dist::tensor_parallel::device_mesh::NodeMesh
@@ -233,7 +233,7 @@ impl core::marker::Send for vllm_dist::pipeline::pipeline::PipelineParallelConfi
 impl core::marker::Send for vllm_dist::pipeline::stage::PipelineStageConfig
 impl core::marker::Send for vllm_dist::pipeline::stage::StageInput
 impl core::marker::Send for vllm_dist::pipeline::stage::StageOutput
-impl core::marker::Send for vllm_dist::tensor_parallel::all_reduce::NcclAllReduce
+impl core::marker::Send for vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce
 impl core::marker::Send for vllm_dist::tensor_parallel::all_reduce::ReduceOp
 impl core::marker::Send for vllm_dist::tensor_parallel::device_mesh::DeviceMesh
 impl core::marker::Send for vllm_dist::tensor_parallel::device_mesh::NodeMesh
@@ -292,7 +292,7 @@ impl core::marker::Sync for vllm_dist::pipeline::pipeline::PipelineParallelConfi
 impl core::marker::Sync for vllm_dist::pipeline::stage::PipelineStageConfig
 impl core::marker::Sync for vllm_dist::pipeline::stage::StageInput
 impl core::marker::Sync for vllm_dist::pipeline::stage::StageOutput
-impl core::marker::Sync for vllm_dist::tensor_parallel::all_reduce::NcclAllReduce
+impl core::marker::Sync for vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce
 impl core::marker::Sync for vllm_dist::tensor_parallel::all_reduce::ReduceOp
 impl core::marker::Sync for vllm_dist::tensor_parallel::device_mesh::DeviceMesh
 impl core::marker::Sync for vllm_dist::tensor_parallel::device_mesh::NodeMesh
@@ -333,7 +333,7 @@ impl core::marker::Unpin for vllm_dist::pipeline::pipeline::PipelineParallelConf
 impl core::marker::Unpin for vllm_dist::pipeline::stage::PipelineStageConfig
 impl core::marker::Unpin for vllm_dist::pipeline::stage::StageInput
 impl core::marker::Unpin for vllm_dist::pipeline::stage::StageOutput
-impl core::marker::Unpin for vllm_dist::tensor_parallel::all_reduce::NcclAllReduce
+impl core::marker::Unpin for vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce
 impl core::marker::Unpin for vllm_dist::tensor_parallel::all_reduce::ReduceOp
 impl core::marker::Unpin for vllm_dist::tensor_parallel::device_mesh::DeviceMesh
 impl core::marker::Unpin for vllm_dist::tensor_parallel::device_mesh::NodeMesh
@@ -374,7 +374,7 @@ impl core::marker::UnsafeUnpin for vllm_dist::pipeline::pipeline::PipelineParall
 impl core::marker::UnsafeUnpin for vllm_dist::pipeline::stage::PipelineStageConfig
 impl core::marker::UnsafeUnpin for vllm_dist::pipeline::stage::StageInput
 impl core::marker::UnsafeUnpin for vllm_dist::pipeline::stage::StageOutput
-impl core::marker::UnsafeUnpin for vllm_dist::tensor_parallel::all_reduce::NcclAllReduce
+impl core::marker::UnsafeUnpin for vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce
 impl core::marker::UnsafeUnpin for vllm_dist::tensor_parallel::all_reduce::ReduceOp
 impl core::marker::UnsafeUnpin for vllm_dist::tensor_parallel::device_mesh::DeviceMesh
 impl core::marker::UnsafeUnpin for vllm_dist::tensor_parallel::device_mesh::NodeMesh
@@ -415,7 +415,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for vllm_dist::pipeline::pipeline::
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_dist::pipeline::stage::PipelineStageConfig
 impl !core::panic::unwind_safe::RefUnwindSafe for vllm_dist::pipeline::stage::StageInput
 impl !core::panic::unwind_safe::RefUnwindSafe for vllm_dist::pipeline::stage::StageOutput
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_dist::tensor_parallel::all_reduce::NcclAllReduce
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_dist::tensor_parallel::all_reduce::ReduceOp
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_dist::tensor_parallel::device_mesh::DeviceMesh
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_dist::tensor_parallel::device_mesh::NodeMesh
@@ -456,7 +456,7 @@ impl core::panic::unwind_safe::UnwindSafe for vllm_dist::pipeline::pipeline::Pip
 impl core::panic::unwind_safe::UnwindSafe for vllm_dist::pipeline::stage::PipelineStageConfig
 impl !core::panic::unwind_safe::UnwindSafe for vllm_dist::pipeline::stage::StageInput
 impl !core::panic::unwind_safe::UnwindSafe for vllm_dist::pipeline::stage::StageOutput
-impl core::panic::unwind_safe::UnwindSafe for vllm_dist::tensor_parallel::all_reduce::NcclAllReduce
+impl core::panic::unwind_safe::UnwindSafe for vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce
 impl core::panic::unwind_safe::UnwindSafe for vllm_dist::tensor_parallel::all_reduce::ReduceOp
 impl core::panic::unwind_safe::UnwindSafe for vllm_dist::tensor_parallel::device_mesh::DeviceMesh
 impl core::panic::unwind_safe::UnwindSafe for vllm_dist::tensor_parallel::device_mesh::NodeMesh
@@ -511,8 +511,8 @@ impl vllm_dist::grpc::GrpcState
 impl vllm_dist::grpc::node_service_client::NodeServiceClient<tonic::transport::channel::Channel>
 impl vllm_dist::pipeline::pipeline::PipelineParallel
 impl vllm_dist::pipeline::stage::PipelineStageConfig
-impl vllm_dist::tensor_parallel::all_reduce::AllReduce for vllm_dist::tensor_parallel::all_reduce::NcclAllReduce
-impl vllm_dist::tensor_parallel::all_reduce::NcclAllReduce
+impl vllm_dist::tensor_parallel::all_reduce::AllReduce for vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce
+impl vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce
 impl vllm_dist::tensor_parallel::device_mesh::DeviceMesh
 impl vllm_dist::tensor_parallel::device_mesh::NodeMesh
 impl vllm_dist::tensor_parallel::parallel_linear::ColumnParallelLinear
@@ -544,7 +544,7 @@ pub const fn vllm_dist::pipeline::pipeline::PipelineParallel::config(&self) -> &
 pub const fn vllm_dist::pipeline::stage::PipelineStageConfig::is_first_stage(&self) -> bool
 pub const fn vllm_dist::pipeline::stage::PipelineStageConfig::is_last_stage(&self) -> bool
 pub const fn vllm_dist::pipeline::stage::PipelineStageConfig::num_layers_in_stage(&self) -> usize
-pub const fn vllm_dist::tensor_parallel::all_reduce::NcclAllReduce::new(alloc::sync::Arc<vllm_dist::tensor_parallel::device_mesh::DeviceMesh>) -> Self
+pub const fn vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce::new(alloc::sync::Arc<vllm_dist::tensor_parallel::device_mesh::DeviceMesh>) -> Self
 pub const fn vllm_dist::tensor_parallel::device_mesh::DeviceMesh::is_first_rank(&self) -> bool
 pub const fn vllm_dist::tensor_parallel::device_mesh::DeviceMesh::is_last_rank(&self) -> bool
 pub const fn vllm_dist::tensor_parallel::device_mesh::NodeMesh::is_first_node(&self) -> bool
@@ -797,9 +797,9 @@ pub fn vllm_dist::tensor_parallel::all_reduce::AllReduce::all_reduce_inplace(&se
 pub fn vllm_dist::tensor_parallel::all_reduce::AllReduce::all_reduce(&self, &[f32], vllm_dist::tensor_parallel::all_reduce::ReduceOp) -> core::result::Result<alloc::vec::Vec<f32>, vllm_traits::types::TensorParallelError>
 pub fn vllm_dist::tensor_parallel::AllReduce::all_reduce_inplace(&self, &mut [f32], vllm_dist::tensor_parallel::all_reduce::ReduceOp) -> core::result::Result<(), vllm_traits::types::TensorParallelError>
 pub fn vllm_dist::tensor_parallel::AllReduce::all_reduce(&self, &[f32], vllm_dist::tensor_parallel::all_reduce::ReduceOp) -> core::result::Result<alloc::vec::Vec<f32>, vllm_traits::types::TensorParallelError>
-pub fn vllm_dist::tensor_parallel::all_reduce::NcclAllReduce::all_reduce_inplace(&self, &mut [f32], vllm_dist::tensor_parallel::all_reduce::ReduceOp) -> core::result::Result<(), vllm_traits::types::TensorParallelError>
-pub fn vllm_dist::tensor_parallel::all_reduce::NcclAllReduce::all_reduce(&self, &[f32], vllm_dist::tensor_parallel::all_reduce::ReduceOp) -> core::result::Result<alloc::vec::Vec<f32>, vllm_traits::types::TensorParallelError>
-pub fn vllm_dist::tensor_parallel::all_reduce::NcclAllReduce::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce::all_reduce_inplace(&self, &mut [f32], vllm_dist::tensor_parallel::all_reduce::ReduceOp) -> core::result::Result<(), vllm_traits::types::TensorParallelError>
+pub fn vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce::all_reduce(&self, &[f32], vllm_dist::tensor_parallel::all_reduce::ReduceOp) -> core::result::Result<alloc::vec::Vec<f32>, vllm_traits::types::TensorParallelError>
+pub fn vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_dist::tensor_parallel::all_reduce::ReduceOp::clone(&self) -> vllm_dist::tensor_parallel::all_reduce::ReduceOp
 pub fn vllm_dist::tensor_parallel::all_reduce::ReduceOp::eq(&self, &vllm_dist::tensor_parallel::all_reduce::ReduceOp) -> bool
 pub fn vllm_dist::tensor_parallel::all_reduce::ReduceOp::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -878,7 +878,7 @@ pub struct vllm_dist::grpc::PutKvCacheResponse
 pub struct vllm_dist::GrpcState
 pub struct vllm_dist::grpc::TransferKvBlockRequest
 pub struct vllm_dist::grpc::TransferKvBlockResponse
-pub struct vllm_dist::NcclAllReduce
+pub struct vllm_dist::LocalSumAllReduce
 pub struct vllm_dist::NodeId(pub usize)
 pub struct vllm_dist::NodeMesh
 pub struct vllm_dist::PeerClient
@@ -896,14 +896,14 @@ pub struct vllm_dist::pipeline::stage::StageOutput
 pub struct vllm_dist::RowParallelLinear
 pub struct vllm_dist::StageInput
 pub struct vllm_dist::StageOutput
-pub struct vllm_dist::tensor_parallel::all_reduce::NcclAllReduce
+pub struct vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce
 pub struct vllm_dist::tensor_parallel::ColumnParallelLinear
 pub struct vllm_dist::TensorParallelConfig
 pub struct vllm_dist::tensor_parallel::DeviceMesh
 pub struct vllm_dist::tensor_parallel::device_mesh::DeviceMesh
 pub struct vllm_dist::tensor_parallel::device_mesh::NodeMesh
+pub struct vllm_dist::tensor_parallel::LocalSumAllReduce
 pub struct vllm_dist::TensorParallelManager
-pub struct vllm_dist::tensor_parallel::NcclAllReduce
 pub struct vllm_dist::tensor_parallel::NodeMesh
 pub struct vllm_dist::tensor_parallel::parallel_linear::ColumnParallelLinear
 pub struct vllm_dist::tensor_parallel::parallel_linear::RowParallelLinear
@@ -924,8 +924,11 @@ pub trait vllm_dist::tensor_parallel::AllReduce: core::marker::Send + core::mark
 pub type vllm_dist::grpc::node_service_server::NodeServiceServer<T>::Error = core::convert::Infallible
 pub type vllm_dist::grpc::node_service_server::NodeServiceServer<T>::Future = core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<<vllm_dist::grpc::node_service_server::NodeServiceServer<T> as tower_service::Service<http::request::Request<B>>>::Response, <vllm_dist::grpc::node_service_server::NodeServiceServer<T> as tower_service::Service<http::request::Request<B>>>::Error>> + core::marker::Send)>>
 pub type vllm_dist::grpc::node_service_server::NodeServiceServer<T>::Response = http::response::Response<tonic::body::Body>
+pub type vllm_dist::NcclAllReduce = vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce
 pub type vllm_dist::pipeline::Result<T> = core::result::Result<T, vllm_dist::pipeline::PipelineError>
 pub type vllm_dist::Result<T> = core::result::Result<T, vllm_dist::pipeline::PipelineError>
+pub type vllm_dist::tensor_parallel::all_reduce::NcclAllReduce = vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce
+pub type vllm_dist::tensor_parallel::NcclAllReduce = vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce
 pub use vllm_dist::error::TensorParallelError
 pub use vllm_dist::TensorParallelError
 pub vllm_dist::CacheConfig::coherence_protocol: vllm_dist::distributed_kv::CoherenceProtocol

@@ -30,7 +30,7 @@ fn test_tutorial_engine_lifecycle() {
     let mut engine = Engine::new(StubModelBackend, None::<StubModelBackend>);
     // REL-01: bounded channel (mirrors production main.rs).
     let (msg_tx, msg_rx) = mpsc::channel::<EngineMessage>(256);
-    let (token_tx, mut token_rx) = mpsc::channel::<vllm_traits::TokenId>(64);
+    let (token_tx, mut token_rx) = mpsc::channel::<vllm_traits::SampledToken>(64);
 
     let handle = std::thread::spawn(move || {
         engine.run(msg_rx);
@@ -56,7 +56,7 @@ fn test_tutorial_engine_lifecycle() {
         .expect("runtime")
         .block_on(async { token_rx.recv().await })
         .expect("expected at least one token from StubModelBackend");
-    assert_eq!(token, 0);
+    assert_eq!(token.token, 0);
 
     // REL-01: `try_send` works in non-async context (this is a
     // regular `#[test]`). Mailbox has capacity 256 so the send

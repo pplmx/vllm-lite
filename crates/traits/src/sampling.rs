@@ -20,6 +20,16 @@
 //! `vllm_traits::sampling::SamplingParams` reads naturally and
 //! re-exporting through `vllm_core::types::SamplingParams` preserves
 //! the existing public API path.
+//!
+//! [`SampledToken`] (P36 v0.3 wire-type follow-up engine wire-through)
+//! carries the sampled `token` alongside its `logprob` under the
+//! post-temperature / post-top-k / post-top-p distribution, plus the
+//! top-K tokens (id, logprob) when `SamplingParams::top_logprobs.is_some()`.
+//! The sampler pair
+//! ([`crate::sampling::sample_one_with_params`],
+//! [`crate::sampling::sample_batch_with_params`]) returns
+//! `SampledToken` so the HTTP layer can render OpenAI's
+//! `choices[].logprobs` shape without re-running the softmax.
 #![allow(clippy::module_name_repetitions)]
 
 use std::collections::HashMap;
@@ -27,6 +37,43 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::types::TokenId;
+
+/// The result of one sample step (P36 v0.3 wire-type follow-up engine
+/// wire-through).
+///
+/// `token` is the sampled `TokenId`. `logprob` is `ln(P(token))` under
+/// the **post-filter** distribution (after `repeat_penalty` +
+/// `presence_penalty` + `logit_bias` + temperature scaling + `top_k`
+/// truncation + `top_p` nucleus cutoff). `logprob` is always populated
+/// (OpenAI's contract: the response carries the logprob of the sampled
+/// token even when `top_logprobs = 0`).
+///
+/// `top_logprobs` is empty when `SamplingParams::top_logprobs.is_none()`
+/// or `Some(0)`. Otherwise it contains the top-N tokens by
+/// post-filter probability, each alongside its `logprob`, sorted by
+/// `logprob` descending. N is bounded by the request's
+/// `top_logprobs` value (the sampled token appears in this slice iff
+/// it is among the top-N — OpenAI does not insert the sampled token
+/// at the head when it falls outside the top-N; instead it surfaces
+/// only via the parent `token` / `logprob` fields).
+///
+/// `logprob` is `-∞` when the sampled token's post-filter logit is
+/// `-∞` (e.g. masked by `top_k` truncation or driven to `-∞` by an
+/// extreme negative `presence_penalty` — the sampler only ever picks
+/// a token with finite logit in practice, but the contract guarantees
+/// finiteness through the JSON serializer).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SampledToken {
+    /// The sampled token ID.
+    pub token: TokenId,
+    /// `ln(P(token))` under the post-filter distribution. Always
+    /// populated; `-∞` when the post-filter logit for `token` is `-∞`.
+    pub logprob: f32,
+    /// Top-N `(token, logprob)` pairs sorted by `logprob` descending.
+    /// Empty when `SamplingParams::top_logprobs.is_none()` or
+    /// `Some(0)`. Length ≤ `SamplingParams::top_logprobs.unwrap_or(0)`.
+    pub top_logprobs: Vec<(TokenId, f32)>,
+}
 
 /// Per-request sampling configuration.
 ///
@@ -124,6 +171,31 @@ pub struct SamplingParams {
     /// per spec.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seed: Option<u64>,
+    /// OpenAI `top_logprobs` count (P36 v0.3 wire-type follow-up
+    /// engine wire-through): when `Some(n)`, the sampler computes the
+    /// top-`n` most-likely tokens at each sampling step and attaches
+    /// them to [`SampledToken::top_logprobs`] (sorted by logprob
+    /// descending, length ≤ `n`). When `None` or `Some(0)`, no top-K
+    /// computation runs — `SampledToken::top_logprobs` is empty and
+    /// only the sampled token's logprob is populated.
+    ///
+    /// Per OpenAI spec the chat endpoint's valid range is `0..=20`
+    /// and the legacy `/v1/completions` endpoint's range is `0..=5`;
+    /// validation happens on the HTTP layer (see
+    /// [`crate::sampling::validate_chat_logprobs`] /
+    /// [`crate::sampling::validate_completion_logprobs`] siblings in
+    /// `vllm_server::openai::sampling_validation`). The engine
+    /// itself accepts any `u32` — out-of-range values are the HTTP
+    /// layer's contract, not the sampler's.
+    ///
+    /// **Honoring is end-to-end when `Some(n)`:** the sampler runs a
+    /// partial top-K selection on the post-filter logits and emits
+    /// the `(token, logprob)` pairs alongside the sampled token.
+    /// When `None`, the sampler skips the top-K selection entirely
+    /// (no extra allocations, no second sort). This matches the
+    /// legacy behaviour and keeps the default-path overhead at zero.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub top_logprobs: Option<u32>,
 }
 
 impl Default for SamplingParams {
@@ -139,6 +211,7 @@ impl Default for SamplingParams {
             length_penalty: 0.6,
             max_retries: 0,
             seed: None,
+            top_logprobs: None,
         }
     }
 }
@@ -246,6 +319,30 @@ impl SamplingParamsBuilder {
     #[must_use]
     pub const fn with_seed_none(mut self) -> Self {
         self.inner.seed = None;
+        self
+    }
+    /// Set [`SamplingParams::top_logprobs`] to `Some(n)`.
+    ///
+    /// When `n > 0`, the sampler computes the top-`n` most-likely
+    /// tokens at each step and attaches them to
+    /// [`SampledToken::top_logprobs`]. When `n == 0`, this is
+    /// equivalent to `with_top_logprobs_none` — no top-K computation
+    /// runs. See the field-level doc-comment for the contract.
+    ///
+    /// (P36 v0.3 wire-type follow-up engine wire-through.)
+    #[must_use]
+    pub const fn with_top_logprobs(mut self, n: u32) -> Self {
+        self.inner.top_logprobs = Some(n);
+        self
+    }
+    /// Explicitly clear [`SamplingParams::top_logprobs`] (set to `None`).
+    ///
+    /// Useful in tests where the builder default is `None` but a
+    /// downstream caller may have set a value via a different code
+    /// path. Mirrors [`SamplingParamsBuilder::with_seed_none`].
+    #[must_use]
+    pub const fn with_top_logprobs_none(mut self) -> Self {
+        self.inner.top_logprobs = None;
         self
     }
     /// Finalize the builder into a [`SamplingParams`].

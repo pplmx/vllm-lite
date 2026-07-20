@@ -107,7 +107,15 @@ fn spawn_recording_mock_engine(
                     // `"stop"`.
                     drop(finish_reason_tx);
                     for token in &tokens {
-                        if response_tx.send(*token).await.is_err() {
+                        if response_tx
+                            .send(vllm_traits::SampledToken {
+                                token: *token,
+                                logprob: 0.0,
+                                top_logprobs: vec![],
+                            })
+                            .await
+                            .is_err()
+                        {
                             break;
                         }
                     }

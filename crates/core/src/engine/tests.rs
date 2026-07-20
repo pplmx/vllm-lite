@@ -30,15 +30,15 @@ fn test_engine_streaming() {
     // First step: prefill, should return at least 1 output (the generated token)
     let out = engine.step().unwrap();
     assert!(!out.is_empty());
-    assert_eq!(rx.try_recv().unwrap(), 42);
+    assert_eq!(rx.try_recv().unwrap().token, 42);
 
     // Keep stepping until done
     let mut steps = 0;
     while engine.has_pending() && steps < 10 {
         let out = engine.step().unwrap();
         if !out.is_empty() {
-            assert_eq!(out[0], (1, 42));
-            assert_eq!(rx.try_recv().unwrap(), 42);
+            assert_eq!(out[0].1.token, 42);
+            assert_eq!(rx.try_recv().unwrap().token, 42);
         }
         steps += 1;
     }
@@ -60,12 +60,12 @@ fn test_engine_multi_request() {
     engine.add_request(Request::new(2, vec![20], 3), tx2);
 
     engine.step().unwrap();
-    assert_eq!(rx1.try_recv().unwrap(), 10);
-    assert_eq!(rx2.try_recv().unwrap(), 10);
+    assert_eq!(rx1.try_recv().unwrap().token, 10);
+    assert_eq!(rx2.try_recv().unwrap().token, 10);
 
     engine.step().unwrap();
-    assert_eq!(rx1.try_recv().unwrap(), 10);
-    assert_eq!(rx2.try_recv().unwrap(), 10);
+    assert_eq!(rx1.try_recv().unwrap().token, 10);
+    assert_eq!(rx2.try_recv().unwrap().token, 10);
 
     assert!(!engine.has_pending());
 }
