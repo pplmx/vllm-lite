@@ -24,6 +24,42 @@ fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &st
     tokenizer.clean_special_tokens(text)
 }
 
+/// Apply OpenAI `echo` + `suffix` semantics to a generated
+/// completion text (P35 v0.x wire-type follow-up engine
+/// wire-through). This is the single authoritative point for the
+/// response-side text formatting; both the non-streaming and
+/// streaming paths call it so the contract stays in sync.
+///
+/// Per OpenAI legacy-completions spec:
+/// - `echo = true`: prepend the prompt to the generated
+///   continuation. The response `text` is `prompt + completion`.
+/// - `suffix = Some(_)`: append the suffix to the response `text`.
+///   The response `text` is `completion + suffix` (or `prompt +
+///   completion + suffix` when both are set).
+///
+/// Both flags are independent: `echo` only affects the prefix,
+/// `suffix` only affects the postfix. The continuation is always
+/// preserved verbatim between them. `echo = false` (or omitted)
+/// and `suffix = None` produce the pre-P35 behaviour (no prefix /
+/// no postfix), so legacy clients are unaffected.
+fn apply_completion_meta(
+    completion: String,
+    prompt: &str,
+    echo: Option<bool>,
+    suffix: Option<&str>,
+) -> String {
+    let mut out =
+        String::with_capacity(completion.len() + prompt.len() + suffix.map_or(0, str::len));
+    if echo == Some(true) {
+        out.push_str(prompt);
+    }
+    out.push_str(&completion);
+    if let Some(s) = suffix {
+        out.push_str(s);
+    }
+    out
+}
+
 /// OpenAI-compatible `/v1/completions` HTTP handler. Dispatches to streaming
 /// (SSE) or non-streaming based on `req.stream`.
 ///
@@ -239,15 +275,35 @@ pub async fn completions(
             EmitDoneSentinel,
             Done,
         }
+        // P35 v0.x wire-type follow-up engine wire-through: the
+        // streaming path threads `echo` + `suffix` through the SSE
+        // event stream. `echo = true` prepends the prompt to the
+        // FIRST non-empty text chunk (matches OpenAI's accumulator
+        // semantics — clients concatenate chunk `text` fields in
+        // order, so prefixing the first chunk puts the prompt at
+        // the start of the visible response). `suffix = Some(_)`
+        // puts the suffix into the FINAL chunk's `text` field (the
+        // chunk that carries `finish_reason`) — same accumulator
+        // reasoning: suffixing the final chunk puts the suffix at
+        // the end. The `first_chunk_sent` flag tracks whether we've
+        // already emitted the prompt-prefixed chunk; we set it on
+        // the first chunk that carries non-empty decoded text.
+        let prompt_text = prompt.clone();
+        let echo_flag = req.echo;
+        let suffix_text = req.suffix.clone();
         let stream = stream::unfold(
             (
                 response_rx,
                 cancel_guard.clone(),
                 Some(finish_reason_rx),
                 Terminal::Streaming,
+                false, // first_chunk_sent
             ),
-            move |(mut rx, cancel_guard, mut reason_rx_opt, mut terminal)| {
+            move |(mut rx, cancel_guard, mut reason_rx_opt, mut terminal, mut first_chunk_sent)| {
                 let tokenizer = tokenizer.clone();
+                let prompt_text = prompt_text.clone();
+                let echo_flag = echo_flag;
+                let suffix_text = suffix_text.clone();
                 async move {
                     match terminal {
                         Terminal::Done => None,
@@ -255,7 +311,7 @@ pub async fn completions(
                             terminal = Terminal::Done;
                             Some((
                                 Ok::<Event, Infallible>(Event::default().data("[DONE]")),
-                                (rx, cancel_guard, reason_rx_opt, terminal),
+                                (rx, cancel_guard, reason_rx_opt, terminal, first_chunk_sent),
                             ))
                         }
                         Terminal::Streaming => match rx.recv().await {
@@ -264,9 +320,30 @@ pub async fn completions(
                                 if should_skip_token_text(&tokenizer, &text) {
                                     return Some((
                                         Ok::<Event, Infallible>(Event::default().data("")),
-                                        (rx, cancel_guard, reason_rx_opt, terminal),
+                                        (
+                                            rx,
+                                            cancel_guard,
+                                            reason_rx_opt,
+                                            terminal,
+                                            first_chunk_sent,
+                                        ),
                                     ));
                                 }
+                                // echo=true on the FIRST non-empty
+                                // text chunk: prepend prompt.
+                                let text = if echo_flag == Some(true) && !first_chunk_sent {
+                                    first_chunk_sent = true;
+                                    let mut out =
+                                        String::with_capacity(prompt_text.len() + text.len());
+                                    out.push_str(&prompt_text);
+                                    out.push_str(&text);
+                                    out
+                                } else {
+                                    if !first_chunk_sent {
+                                        first_chunk_sent = true;
+                                    }
+                                    text
+                                };
                                 let chunk = serde_json::json!({
                                     "id": "cmpl-stream",
                                     "object": "text_completion",
@@ -278,7 +355,7 @@ pub async fn completions(
                                 let sse_payload = chunk.to_string();
                                 Some((
                                     Ok(Event::default().data(sse_payload)),
-                                    (rx, cancel_guard, reason_rx_opt, terminal),
+                                    (rx, cancel_guard, reason_rx_opt, terminal, first_chunk_sent),
                                 ))
                             }
                             None => {
@@ -295,11 +372,18 @@ pub async fn completions(
                                 // Natural completion — disarm so Drop
                                 // doesn't send a redundant CancelRequest.
                                 cancel_guard.disarm();
+                                // suffix lands on the final chunk's
+                                // text field (instead of the default
+                                // empty string). Clients concatenate
+                                // all chunk `text` fields in order,
+                                // so the suffix appears at the end
+                                // of the visible response.
+                                let text = suffix_text.clone().unwrap_or_default();
                                 let chunk = serde_json::json!({
                                     "id": "cmpl-stream",
                                     "object": "text_completion",
                                     "choices": [{
-                                        "text": "",
+                                        "text": text,
                                         "index": 0,
                                         "finish_reason": reason_string,
                                     }]
@@ -308,7 +392,7 @@ pub async fn completions(
                                 terminal = Terminal::EmitDoneSentinel;
                                 Some((
                                     Ok(Event::default().data(sse_payload)),
-                                    (rx, cancel_guard, reason_rx_opt, terminal),
+                                    (rx, cancel_guard, reason_rx_opt, terminal, first_chunk_sent),
                                 ))
                             }
                         },
@@ -337,7 +421,19 @@ pub async fn completions(
         Err(_) => "stop".to_string(),
     };
 
+    // P35 v0.x wire-type follow-up engine wire-through: apply
+    // OpenAI `echo` + `suffix` semantics to the generated
+    // continuation before serializing the response. `echo` is
+    // applied only when `Some(true)` — `Some(false)` and `None`
+    // both preserve the pre-P35 no-prefix behavior so legacy
+    // clients are unaffected. `suffix` is applied when
+    // `Some(_)`. The original `prompt` is still in scope from
+    // line 68 (it's the raw text the user submitted, before
+    // tokenization — which is exactly what OpenAI's `echo` spec
+    // requires: the response echoes the request body verbatim,
+    // not a re-decoded token sequence).
     let text = clean_completion_text(&state.tokenizer, &state.tokenizer.decode(&tokens));
+    let text = apply_completion_meta(text, &prompt, req.echo, req.suffix.as_deref());
     let choice = CompletionChoice {
         text,
         index: 0,
