@@ -3026,6 +3026,453 @@ async fn test_completions_echo_true_with_best_of_above_one_returns_400() {
     );
 }
 
+// ============================================================================
+// P35 v0.x wire-type follow-up: `echo` + `suffix` engine wire-through
+// ============================================================================
+//
+// P32 declared + validated `echo` and `suffix` on `CompletionRequest`. P35
+// closes the engine-side gap: the non-streaming handler now prepends
+// `prompt` to `CompletionChoice.text` when `echo = true` and appends
+// `suffix` to the same field when `suffix = Some(_)`. The streaming
+// handler does the same across the SSE event stream (echo prefix goes
+// onto the first text chunk; suffix postamble goes onto the natural-
+// completion chunk that carries `finish_reason`).
+//
+// `best_of` engine honoring remains v32+ work (depends on logprobs
+// ranking — P31 follow-up); these tests verify only `echo` + `suffix`
+// honoring via the `best_of = 1` default path that doesn't conflict.
+
+/// P35 wire-through (non-streaming): `echo = true` prepends the
+/// prompt to `choices[0].text`. Pins the OpenAI-spec "echo back the
+/// prompt as a prefix to the generated continuation" semantic.
+#[tokio::test]
+async fn test_completions_echo_true_prepends_prompt_to_text() {
+    use vllm_server::openai::completions::completions;
+    // Mock engine emits a single token (10); the empty tokenizer
+    // decodes token 10 to `"token_10 "`. After `clean_completion_text`
+    // the continuation is `"token_10"`. With `echo = true` the
+    // response text must be `"Hello" + "token_10"` (the exact
+    // prompt + the generated continuation).
+    let (engine_tx, _handle) = spawn_mock_engine(vec![10]);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "echo": true,
+        "best_of": 1,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "echo=true must pass validation"
+    );
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(body_str)
+        .unwrap_or_else(|e| panic!("response is not valid JSON: {e}; body: {body_str}"));
+    let text = parsed["choices"][0]["text"]
+        .as_str()
+        .expect("choices[0].text must be a string");
+    assert!(
+        text.starts_with("Hello"),
+        "echo=true must prepend prompt to text (text={text:?})"
+    );
+    assert!(
+        text.contains("token_10"),
+        "echo=true must still include the generated continuation (text={text:?})"
+    );
+}
+
+/// P35 wire-through (non-streaming): `echo = false` (or omitted)
+/// does NOT prepend the prompt. Pins the backward-compatible path
+/// so legacy clients are not broken by the new wire-through.
+#[tokio::test]
+async fn test_completions_echo_false_does_not_prepend_prompt() {
+    use vllm_server::openai::completions::completions;
+    let (engine_tx, _handle) = spawn_mock_engine(vec![10]);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "echo": false,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(body_str).unwrap();
+    let text = parsed["choices"][0]["text"]
+        .as_str()
+        .expect("choices[0].text must be a string");
+    assert!(
+        !text.contains("Hello"),
+        "echo=false must NOT include the prompt (text={text:?})"
+    );
+    assert!(
+        text.contains("token_10"),
+        "echo=false must still return the generated continuation (text={text:?})"
+    );
+}
+
+/// P35 wire-through (non-streaming): `suffix = Some("xyz")` appends
+/// the suffix to `choices[0].text`. Pins the OpenAI-spec
+/// "string that comes after the inserted completion" semantic.
+#[tokio::test]
+async fn test_completions_suffix_appends_to_text() {
+    use vllm_server::openai::completions::completions;
+    let (engine_tx, _handle) = spawn_mock_engine(vec![10]);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "suffix": "xyz",
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(body_str).unwrap();
+    let text = parsed["choices"][0]["text"]
+        .as_str()
+        .expect("choices[0].text must be a string");
+    assert!(
+        text.ends_with("xyz"),
+        "suffix=\"xyz\" must append to text (text={text:?})"
+    );
+    assert!(
+        text.contains("token_10"),
+        "suffix must still include the generated continuation (text={text:?})"
+    );
+}
+
+/// P35 wire-through (non-streaming): `echo = true` + `suffix =
+/// Some(_)` combines both — text starts with prompt AND ends with
+/// suffix AND contains the continuation.
+#[tokio::test]
+async fn test_completions_echo_and_suffix_combine() {
+    use vllm_server::openai::completions::completions;
+    let (engine_tx, _handle) = spawn_mock_engine(vec![10]);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "echo": true,
+        "suffix": "xyz",
+        "best_of": 1,
+        "max_tokens": 1,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(body_str).unwrap();
+    let text = parsed["choices"][0]["text"]
+        .as_str()
+        .expect("choices[0].text must be a string");
+    assert!(
+        text.starts_with("Hello"),
+        "echo+suffix must start with prompt (text={text:?})"
+    );
+    assert!(
+        text.ends_with("xyz"),
+        "echo+suffix must end with suffix (text={text:?})"
+    );
+    assert!(
+        text.contains("token_10"),
+        "echo+suffix must contain the continuation (text={text:?})"
+    );
+}
+
+/// P35 wire-through (streaming): `echo = true` puts the prompt into
+/// the FIRST text chunk's `text` field. The token-continuation chunks
+/// after the first one remain unchanged (no prompt prefix).
+#[tokio::test]
+async fn test_completions_streaming_echo_true_prepends_prompt_to_first_chunk() {
+    use vllm_server::openai::completions::completions;
+    // Two tokens so we get 2 distinct text chunks (token_10, token_20).
+    let (engine_tx, _handle) = spawn_mock_engine(vec![10, 20]);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "echo": true,
+        "best_of": 1,
+        "stream": true,
+        "max_tokens": 5,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+    // SSE: each event ends with `\n\n`. Parse only events that carry
+    // a `data:` payload — the [DONE] sentinel has no JSON.
+    let data_lines: Vec<&str> = body_str
+        .split("\n\n")
+        .filter_map(|event| event.lines().find(|l| l.starts_with("data: ")))
+        .filter_map(|l| l.strip_prefix("data: "))
+        .filter(|p| *p != "[DONE]" && !p.is_empty())
+        .collect();
+    assert!(
+        !data_lines.is_empty(),
+        "streaming response should carry at least one JSON chunk, body: {body_str}"
+    );
+    let first_parsed: serde_json::Value = serde_json::from_str(data_lines[0]).unwrap_or_else(|e| {
+        panic!(
+            "first chunk is not valid JSON: {e}; data: {}",
+            data_lines[0]
+        )
+    });
+    let first_text = first_parsed["choices"][0]["text"]
+        .as_str()
+        .expect("first chunk must carry choices[0].text as a string");
+    assert!(
+        first_text.starts_with("Hello"),
+        "streaming echo=true must prepend prompt to first chunk (first_text={first_text:?})"
+    );
+}
+
+/// P35 wire-through (streaming): `suffix = Some(_)` puts the
+/// suffix into the FINAL chunk's `text` field (the chunk that
+/// carries `finish_reason`). This matches OpenAI's accumulator
+/// semantics: clients concatenate all chunk `text` fields in
+/// order, so a suffix on the final chunk ends up at the end of
+/// the visible completion, with no need for callers to special-
+/// case "last non-empty text chunk" tracking.
+#[tokio::test]
+async fn test_completions_streaming_suffix_lands_on_final_chunk() {
+    use vllm_server::openai::completions::completions;
+    let (engine_tx, _handle) = spawn_mock_engine(vec![10, 20]);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "suffix": "xyz",
+        "stream": true,
+        "max_tokens": 5,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+    // Find the chunk that carries `finish_reason` — that's where
+    // the suffix lives. We skip the `[DONE]` sentinel (no JSON).
+    let mut finish_chunk_text: Option<String> = None;
+    for event in body_str.split("\n\n").filter(|e| !e.is_empty()) {
+        let data = event.lines().find_map(|l| l.strip_prefix("data: "));
+        if let Some(payload) = data
+            && payload != "[DONE]"
+            && !payload.is_empty()
+            && let Ok(parsed) = serde_json::from_str::<serde_json::Value>(payload)
+            && parsed["choices"][0]["finish_reason"].is_string()
+        {
+            finish_chunk_text = parsed["choices"][0]["text"].as_str().map(str::to_string);
+        }
+    }
+    let final_text =
+        finish_chunk_text.expect("streaming response must carry a finish_reason chunk");
+    assert_eq!(
+        final_text, "xyz",
+        "suffix=\"xyz\" must land on the finish_reason chunk's text field \
+         (got {final_text:?})"
+    );
+}
+
 // P33 v0.x wire-type follow-up: `tools` + `tool_choice`
 // declaration + validation on the `/v1/chat/completions`
 // endpoint. Mirrors the P21/P22/P23/P27/P28/P29/P30/P31/P32
