@@ -5,6 +5,8 @@
 //! `seq_id: u64 = 42`); `BLOCK_SIZE` is the paged-KV allocator's page size.
 use serde::{Deserialize, Serialize};
 
+pub use crate::sampling::SampledToken;
+
 use crate::sampling::SamplingParams;
 
 /// Compile-time constant: `size`. Tune via feature flags or env vars in production.
@@ -155,8 +157,13 @@ impl Default for Batch {
 pub struct BatchOutput {
     /// Identifiers of the sequences that produced these tokens (parallel to `next_tokens`).
     pub seq_ids: Vec<SeqId>,
-    /// Per-sequence next-token id emitted by the model.
-    pub next_tokens: Vec<TokenId>,
+    /// Per-sequence sampled tokens emitted by the model + sampler
+    /// (P36 v0.3 wire-type follow-up engine wire-through). Each
+    /// [`SampledToken`] carries the sampled `token` alongside its
+    /// `logprob` under the post-filter distribution and (when
+    /// `Batch.sampling_params[i].top_logprobs.is_some()`) the
+    /// top-K `(token, logprob)` pairs.
+    pub next_tokens: Vec<SampledToken>,
 }
 
 /// Error type for `TensorParallel`. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.

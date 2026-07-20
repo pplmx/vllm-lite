@@ -20,8 +20,8 @@ use tokio::sync::mpsc;
 use super::chat_template::{self, ChatTemplate};
 use super::sampling_validation::{validate_chat_request_fields, validate_sampling_params};
 use super::types::{
-    ChatChoice, ChatChunk, ChatChunkChoice, ChatMessage, ChatRequest, ChatResponse, ErrorResponse,
-    Usage,
+    ChatChoice, ChatChoiceLogprobs, ChatChunk, ChatChunkChoice, ChatLogprob, ChatMessage,
+    ChatRequest, ChatResponse, ErrorResponse, Usage,
 };
 use crate::ApiState;
 use crate::security::correlation::CorrelationId;
@@ -32,6 +32,73 @@ fn should_skip_token_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &s
 
 fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &str) -> String {
     tokenizer.clean_special_tokens(text)
+}
+
+/// Extract the bare [`TokenId`] sequence from a `Vec<SampledToken>`.
+/// Used when passing per-token data to the tokenizer (which only
+/// understands `&[u32]`); the `logprob` + `top_logprobs` fields are
+/// preserved separately for the `ChatChoice::logprobs` rendering.
+fn token_ids(sampled: &[vllm_traits::SampledToken]) -> Vec<vllm_traits::TokenId> {
+    sampled.iter().map(|s| s.token).collect()
+}
+
+/// Build the `ChatChoiceLogprobs` payload (P36 v0.3 wire-type
+/// follow-up engine wire-through) from the engine's per-token
+/// `SampledToken` stream. Returns `None` when the request did not
+/// ask for logprobs (`req.logprobs != Some(true)`).
+///
+/// The `tokenizer` is used to decode each `TokenId` to its UTF-8
+/// string form (`ChatLogprob::token`) and the matching byte
+/// representation (`ChatLogprob::bytes`). Special tokens are kept
+/// verbatim — the chat endpoint renders them in the response logprobs
+/// exactly as they appear (callers can post-filter if needed).
+///
+/// When `req.top_logprobs.is_none()` the per-entry `top_logprobs`
+/// sub-field is `None` (OpenAI's spec: only include it when the
+/// request asked). When `req.top_logprobs = Some(0)` the sub-field
+/// is `Some(vec![])` per token (request asked for top-K but capped
+/// to zero).
+fn build_chat_choice_logprobs(
+    tokenizer: &vllm_model::tokenizer::Tokenizer,
+    sampled: &[vllm_traits::SampledToken],
+    req_logprobs: Option<bool>,
+    req_top_logprobs: Option<u32>,
+) -> Option<ChatChoiceLogprobs> {
+    if req_logprobs != Some(true) {
+        return None;
+    }
+    let include_top = req_top_logprobs.map(|n| n > 0).unwrap_or(false);
+    let content: Vec<ChatLogprob> = sampled
+        .iter()
+        .map(|s| {
+            let token_text = tokenizer.decode(&[s.token]);
+            let bytes = Some(token_text.as_bytes().to_vec());
+            let top = if include_top && !s.top_logprobs.is_empty() {
+                Some(
+                    s.top_logprobs
+                        .iter()
+                        .map(|&(tok, lp)| ChatLogprob {
+                            token: tokenizer.decode(&[tok]),
+                            logprob: lp,
+                            bytes: Some(tokenizer.decode(&[tok]).into_bytes()),
+                            top_logprobs: None,
+                        })
+                        .collect(),
+                )
+            } else if include_top {
+                Some(Vec::new())
+            } else {
+                None
+            };
+            ChatLogprob {
+                token: token_text,
+                logprob: s.logprob,
+                bytes,
+                top_logprobs: top,
+            }
+        })
+        .collect();
+    Some(ChatChoiceLogprobs { content })
 }
 
 /// Build a model-ready prompt string from a list of chat `messages`, using
@@ -246,6 +313,16 @@ async fn handle_chat(
         request.sampling_params.seed = Some(seed as u64);
     }
 
+    // Forward `top_logprobs` to the engine's new
+    // `SamplingParams::top_logprobs` slot (P36 v0.3 wire-type
+    // follow-up — engine wire-through). The chat endpoint's valid
+    // range is `0..=20`; validation lives on the HTTP layer
+    // (`validate_chat_logprobs`). The engine's `sample_one_with_params`
+    // checks `params.top_logprobs.is_some()` and runs a partial
+    // top-K selection on the post-filter logits only when the request
+    // asked for top-K — the default-path overhead stays at zero.
+    request.sampling_params.top_logprobs = req.top_logprobs;
+
     // Reject sampling parameters the engine cannot honour (currently
     // beam_width > 1) BEFORE enqueuing — see `sampling_validation`.
     validate_sampling_params(&request.sampling_params)?;
@@ -287,8 +364,8 @@ async fn handle_chat(
         })?;
 
     let mut tokens = Vec::new();
-    while let Some(token) = response_rx.recv().await {
-        tokens.push(token);
+    while let Some(sampled) = response_rx.recv().await {
+        tokens.push(sampled);
     }
 
     // The engine sends the reason right before dropping
@@ -302,7 +379,7 @@ async fn handle_chat(
         Err(_) => "stop".to_string(),
     };
 
-    let raw_decode = state.tokenizer.decode(&tokens);
+    let raw_decode = state.tokenizer.decode(&token_ids(&tokens));
 
     let completion_text = clean_completion_text(&state.tokenizer, &raw_decode);
 
@@ -334,6 +411,15 @@ async fn handle_chat(
         // emitted from the engine-supplied FinishReason so the client
         // sees `"length"` when the sequence hit `max_tokens`.
         finish_reason: Some(finish_reason),
+        // P36 v0.3 wire-type follow-up engine wire-through: render
+        // per-token logprobs (and top-K alternatives when the
+        // request asked) from the engine's SampledToken stream.
+        logprobs: build_chat_choice_logprobs(
+            &state.tokenizer,
+            &tokens,
+            req.logprobs,
+            req.top_logprobs,
+        ),
     };
 
     let usage = Usage::new(prompt_tokens_len, tokens.len());
@@ -559,6 +645,16 @@ async fn stream_chat_completion(
         request.sampling_params.seed = Some(seed as u64);
     }
 
+    // Forward `top_logprobs` to the engine's new
+    // `SamplingParams::top_logprobs` slot (P36 v0.3 wire-type
+    // follow-up — engine wire-through). The chat endpoint's valid
+    // range is `0..=20`; validation lives on the HTTP layer
+    // (`validate_chat_logprobs`). The engine's `sample_one_with_params`
+    // checks `params.top_logprobs.is_some()` and runs a partial
+    // top-K selection on the post-filter logits only when the request
+    // asked for top-K — the default-path overhead stays at zero.
+    request.sampling_params.top_logprobs = req.top_logprobs;
+
     // Reject sampling parameters the engine cannot honour (currently
     // beam_width > 1) BEFORE enqueuing — see `sampling_validation`.
     validate_sampling_params(&request.sampling_params)?;
@@ -680,14 +776,22 @@ async fn stream_chat_completion(
                         ));
                     }
                     Terminal::Streaming => match rx.recv().await {
-                        Some(token) => {
-                            let text = tokenizer.decode(&[token]);
+                        Some(sampled) => {
+                            let text = tokenizer.decode(&[sampled.token]);
                             if should_skip_token_text(&tokenizer, &text) {
                                 return Some((
                                     Ok::<Event, Infallible>(Event::default().data("")),
                                     (rx, cancel_guard, reason_rx_opt, terminal),
                                 ));
                             }
+                            // P36 v0.3 wire-type follow-up engine
+                            // wire-through: each intermediate chunk
+                            // carries exactly one logprob entry (the
+                            // sampled token) when the request asked
+                            // for logprobs. The accumulator in
+                            // `ChatChoice::logprobs` is rebuilt on
+                            // the client side by concatenating every
+                            // chunk's `content[]` arrays.
                             let chunk = ChatChunk::new(
                                 "chatcmpl-stream".to_string(),
                                 model.clone(),
@@ -699,6 +803,12 @@ async fn stream_chat_completion(
                                         name: None,
                                     },
                                     finish_reason: None,
+                                    logprobs: build_chat_choice_logprobs(
+                                        &tokenizer,
+                                        std::slice::from_ref(&sampled),
+                                        req.logprobs,
+                                        req.top_logprobs,
+                                    ),
                                 },
                             );
                             let sse_payload = serde_json::to_string(&chunk)
@@ -737,6 +847,14 @@ async fn stream_chat_completion(
                                         name: None,
                                     },
                                     finish_reason: Some(reason_string.to_string()),
+                                    // Final chunk: no logprob entry
+                                    // (no token was sampled on this
+                                    // chunk — it just signals
+                                    // `finish_reason`). We omit the
+                                    // field entirely via the
+                                    // `skip_serializing_if` annotation
+                                    // so the JSON stays minimal.
+                                    logprobs: None,
                                 },
                             );
                             let sse_payload = serde_json::to_string(&chunk)

@@ -108,7 +108,8 @@ impl crate::engine::Engine {
 
                 match forward_result {
                     Ok(output) => {
-                        if let Some(&token) = output.next_tokens.first() {
+                        if let Some(sampled) = output.next_tokens.first() {
+                            let token = sampled.token;
                             draft_outputs[i].push(token);
                             current_tokens.push(token);
                             if let Some(&last_pos) = current_positions.last() {
@@ -212,7 +213,7 @@ impl crate::engine::Engine {
 
             // Distribute output tokens back to per-sequence drafts
             for (j, &seq_idx) in active_indices.iter().enumerate() {
-                let token = output.next_tokens.get(j).copied().unwrap_or(0);
+                let token = output.next_tokens.get(j).map_or(0, |sampled| sampled.token);
                 draft_outputs[seq_idx].push(token);
                 current_tokens[seq_idx].push(token);
                 let new_pos = current_positions[seq_idx].len();
@@ -233,6 +234,7 @@ impl crate::engine::Engine {
 /// depending on `params.temperature`, and a tie-break mismatch
 /// would silently change the accepted draft sequence under
 /// temperature == 0 when several logits share the maximum.
+#[allow(dead_code)] // historical export; the verifier now delegates to sample_one_with_params directly (P36)
 pub fn argmax(logits: &[f32]) -> TokenId {
     let mut best_idx = 0_usize;
     let mut best_val = f32::NEG_INFINITY;

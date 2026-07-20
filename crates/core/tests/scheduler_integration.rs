@@ -3,7 +3,7 @@ use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_core::scheduler::SchedulerEngine;
 use vllm_core::scheduler::policy::SjfPolicy;
 use vllm_core::types::{Request, SchedulerConfig};
-use vllm_traits::BatchPhase;
+use vllm_traits::{BatchPhase, SampledToken};
 
 fn create_test_engine(config: SchedulerConfig, num_kv_blocks: usize) -> SchedulerEngine {
     let metrics = Arc::new(EnhancedMetricsCollector::new());
@@ -26,7 +26,15 @@ fn test_scheduler_basic_flow() {
 
     // Simulate model forward
     let input_counts: Vec<usize> = batch.input_tokens.iter().map(std::vec::Vec::len).collect();
-    engine.update(&batch.seq_ids, &[99], &input_counts);
+    engine.update(
+        &batch.seq_ids,
+        &[SampledToken {
+            token: 99,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &input_counts,
+    );
 
     // Verify
     assert_eq!(engine.running_count(), 1);
@@ -67,7 +75,15 @@ fn test_scheduler_prefill_decode_separation() {
 
     // Complete prefill
     let input_counts: Vec<usize> = batch1.input_tokens.iter().map(std::vec::Vec::len).collect();
-    engine.update(&batch1.seq_ids, &[99], &input_counts);
+    engine.update(
+        &batch1.seq_ids,
+        &[SampledToken {
+            token: 99,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &input_counts,
+    );
 
     // Next batch should be decode (if we have running sequences)
     let batch2 = engine.build_batch();
@@ -116,7 +132,15 @@ fn test_scheduler_prefix_cache() {
     let id1 = engine.add_request(Request::new(0, vec![1, 2, 3], 10));
     let batch1 = engine.build_batch();
     let input_counts: Vec<usize> = batch1.input_tokens.iter().map(std::vec::Vec::len).collect();
-    engine.update(&batch1.seq_ids, &[99], &input_counts);
+    engine.update(
+        &batch1.seq_ids,
+        &[SampledToken {
+            token: 99,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &input_counts,
+    );
 
     // Continue until finished
     for i in 0..9 {
@@ -124,7 +148,15 @@ fn test_scheduler_prefix_cache() {
             break;
         }
         let next = u32::try_from(100 + i).expect("bounded test token");
-        engine.update(&[id1], &[next], &[0]);
+        engine.update(
+            &[id1],
+            &[SampledToken {
+                token: next,
+                logprob: 0.0,
+                top_logprobs: vec![],
+            }],
+            &[0],
+        );
     }
 
     // Add second request with overlapping prefix - different suffix
@@ -176,7 +208,15 @@ fn test_scheduler_concurrent_requests() {
             if !batch.is_empty() {
                 let input_counts: Vec<usize> =
                     batch.input_tokens.iter().map(std::vec::Vec::len).collect();
-                let next_tokens: Vec<u32> = batch.seq_ids.iter().map(|_| 99).collect();
+                let next_tokens: Vec<SampledToken> = batch
+                    .seq_ids
+                    .iter()
+                    .map(|_| SampledToken {
+                        token: 99,
+                        logprob: 0.0,
+                        top_logprobs: vec![],
+                    })
+                    .collect();
                 engine.update(&batch.seq_ids, &next_tokens, &input_counts);
             }
         }

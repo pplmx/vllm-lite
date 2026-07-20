@@ -9,7 +9,7 @@
 use crate::engine::Engine;
 use crate::types::Request;
 use tokio::sync::mpsc;
-use vllm_traits::{FinishReason, SeqId, TokenId};
+use vllm_traits::{FinishReason, SampledToken, SeqId};
 
 impl Engine {
     /// Returns `true` if the engine is considered healthy and ready to process
@@ -92,7 +92,12 @@ impl Engine {
     /// and other in-process callers that talk to the engine directly don't
     /// need it: when the response channel closes without a reason, the
     /// caller falls back to `"stop"`.
-    pub fn add_request(&mut self, req: Request, response_tx: mpsc::Sender<TokenId>) -> SeqId {
+    ///
+    /// **P36 v0.3 wire-type follow-up engine wire-through:**
+    /// `response_tx` carries [`SampledToken`] (token + logprob +
+    /// top_logprobs) instead of a bare `TokenId` so the HTTP layer
+    /// can render OpenAI's `choices[].logprobs` shape.
+    pub fn add_request(&mut self, req: Request, response_tx: mpsc::Sender<SampledToken>) -> SeqId {
         // Validate prompt is not empty
         if req.prompt.is_empty() {
             self.last_error = Some("prompt cannot be empty".to_string());

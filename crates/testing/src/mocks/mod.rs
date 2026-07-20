@@ -40,7 +40,17 @@ impl ModelBackend for StubModel {
     ) -> Result<BatchOutput> {
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
-            next_tokens: seq_ids.iter().map(|_| self.token).collect(),
+            // P36: placeholder SampledToken (no logprob info on the
+            // legacy model-layer `forward` path; engine uses
+            // `forward_logits` + `sample_batch_with_params`).
+            next_tokens: seq_ids
+                .iter()
+                .map(|_| vllm_traits::SampledToken {
+                    token: self.token,
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                })
+                .collect(),
         })
     }
 
@@ -114,11 +124,21 @@ impl ModelBackend for IncrementModel {
     ) -> Result<BatchOutput> {
         // invariant: stub test seq IDs are small (test fixture); truncation
         // is not reachable in practice.
+        // P36: placeholder SampledToken (no logprob info on the
+        // legacy model-layer `forward` path; engine uses
+        // `forward_logits` + `sample_batch_with_params`).
         #[allow(clippy::cast_possible_truncation)]
-        let tokens: Vec<TokenId> = seq_ids.iter().map(|id| *id as TokenId).collect();
+        let next_tokens: Vec<vllm_traits::SampledToken> = seq_ids
+            .iter()
+            .map(|id| vllm_traits::SampledToken {
+                token: *id as TokenId,
+                logprob: 0.0,
+                top_logprobs: Vec::new(),
+            })
+            .collect();
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
-            next_tokens: tokens,
+            next_tokens,
         })
     }
 
@@ -197,7 +217,17 @@ impl ModelBackend for ConstModel {
     ) -> Result<BatchOutput> {
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
-            next_tokens: seq_ids.iter().map(|_| self.return_token).collect(),
+            // P36: placeholder SampledToken (no logprob info on the
+            // legacy model-layer `forward` path; engine uses
+            // `forward_logits` + `sample_batch_with_params`).
+            next_tokens: seq_ids
+                .iter()
+                .map(|_| vllm_traits::SampledToken {
+                    token: self.return_token,
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                })
+                .collect(),
         })
     }
 
@@ -275,10 +305,17 @@ impl ModelBackend for FakeModel {
     ) -> Result<BatchOutput> {
         // invariant: stub test seq IDs are small; usize and u32 truncation are
         // bounded by vocab_size (a real tokenizer vocab size).
+        // P36: placeholder SampledToken (no logprob info on the
+        // legacy model-layer `forward` path; engine uses
+        // `forward_logits` + `sample_batch_with_params`).
         #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-        let next_tokens: Vec<TokenId> = seq_ids
+        let next_tokens: Vec<vllm_traits::SampledToken> = seq_ids
             .iter()
-            .map(|&id| ((id as usize) % self.vocab_size) as TokenId)
+            .map(|&id| vllm_traits::SampledToken {
+                token: ((id as usize) % self.vocab_size) as TokenId,
+                logprob: 0.0,
+                top_logprobs: Vec::new(),
+            })
             .collect();
 
         Ok(BatchOutput {
@@ -360,7 +397,17 @@ impl ModelBackend for NeverProgressModel {
     ) -> Result<BatchOutput> {
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
-            next_tokens: seq_ids.iter().map(|_| self.token).collect(),
+            // P36: placeholder SampledToken (no logprob info on the
+            // legacy model-layer `forward` path; engine uses
+            // `forward_logits` + `sample_batch_with_params`).
+            next_tokens: seq_ids
+                .iter()
+                .map(|_| vllm_traits::SampledToken {
+                    token: self.token,
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                })
+                .collect(),
         })
     }
 
@@ -429,7 +476,23 @@ mod tests {
                 &[true, true],
             )
             .unwrap();
-        assert_eq!(output.next_tokens, vec![1, 2]);
+        // P36: forward returns placeholder SampledToken (no logprob
+        // info on the legacy model-layer path).
+        assert_eq!(
+            output.next_tokens,
+            vec![
+                vllm_traits::SampledToken {
+                    token: 1,
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                },
+                vllm_traits::SampledToken {
+                    token: 2,
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                },
+            ]
+        );
     }
 
     #[test]
@@ -438,7 +501,14 @@ mod tests {
         let output = model
             .forward(&[1], &[vec![1]], &[vec![0]], &[vec![0]], &[0], &[true])
             .unwrap();
-        assert_eq!(output.next_tokens, vec![42]);
+        assert_eq!(
+            output.next_tokens,
+            vec![vllm_traits::SampledToken {
+                token: 42,
+                logprob: 0.0,
+                top_logprobs: Vec::new(),
+            }]
+        );
     }
 
     #[test]
@@ -454,7 +524,26 @@ mod tests {
                 &[true, true, true],
             )
             .unwrap();
-        assert_eq!(output.next_tokens, vec![1, 50, 99]);
+        assert_eq!(
+            output.next_tokens,
+            vec![
+                vllm_traits::SampledToken {
+                    token: 1,
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                },
+                vllm_traits::SampledToken {
+                    token: 50,
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                },
+                vllm_traits::SampledToken {
+                    token: 99,
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                },
+            ]
+        );
     }
 
     #[test]
@@ -470,7 +559,26 @@ mod tests {
                 &[true, true, true],
             )
             .unwrap();
-        assert_eq!(output.next_tokens, vec![777, 777, 777]);
+        assert_eq!(
+            output.next_tokens,
+            vec![
+                vllm_traits::SampledToken {
+                    token: 777,
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                },
+                vllm_traits::SampledToken {
+                    token: 777,
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                },
+                vllm_traits::SampledToken {
+                    token: 777,
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                },
+            ]
+        );
     }
 
     #[test]
@@ -479,7 +587,17 @@ mod tests {
         let output = model
             .forward(&[1], &[vec![1]], &[vec![0]], &[vec![0]], &[0], &[true])
             .unwrap();
-        assert_eq!(output.next_tokens, vec![1]);
+        assert_eq!(
+            output.next_tokens,
+            vec![vllm_traits::SampledToken {
+                // `StubModel::default()` returns `returning(1)` per
+                // the Default impl above; pin the matching token id
+                // here.
+                token: 1,
+                logprob: 0.0,
+                top_logprobs: Vec::new(),
+            }]
+        );
     }
 
     #[test]
@@ -495,6 +613,20 @@ mod tests {
                 &[true, true],
             )
             .unwrap();
-        assert_eq!(output.next_tokens, vec![42, 42]);
+        assert_eq!(
+            output.next_tokens,
+            vec![
+                vllm_traits::SampledToken {
+                    token: 42,
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                },
+                vllm_traits::SampledToken {
+                    token: 42,
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                },
+            ]
+        );
     }
 }

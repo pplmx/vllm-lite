@@ -289,7 +289,14 @@ impl ModelBackend for StubModel {
         _num_computed_tokens: &[usize],
         _is_prefill: &[bool],
     ) -> vllm_traits::Result<BatchOutput> {
-        let next_tokens: Vec<vllm_traits::TokenId> = seq_ids.iter().map(|_| 0).collect();
+        let next_tokens: Vec<vllm_traits::SampledToken> = seq_ids
+            .iter()
+            .map(|_| vllm_traits::SampledToken {
+                token: vllm_traits::TokenId::default(),
+                logprob: 0.0,
+                top_logprobs: Vec::new(),
+            })
+            .collect();
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
             next_tokens,

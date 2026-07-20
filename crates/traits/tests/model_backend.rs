@@ -1,17 +1,35 @@
 use vllm_traits::{
-    BLOCK_SIZE, Batch, BatchOutput, BatchPhase, ModelError, SamplingParams, SeqId, TokenId,
+    BLOCK_SIZE, Batch, BatchOutput, BatchPhase, ModelError, SampledToken, SamplingParams, SeqId,
+    TokenId,
 };
 
 #[test]
 fn test_batch_output_creation() {
     let output = BatchOutput {
         seq_ids: vec![1, 2, 3],
-        next_tokens: vec![10, 20, 30],
+        // P36: BatchOutput::next_tokens is `Vec<SampledToken>`.
+        next_tokens: vec![
+            SampledToken {
+                token: 10,
+                logprob: 0.0,
+                top_logprobs: Vec::new(),
+            },
+            SampledToken {
+                token: 20,
+                logprob: 0.0,
+                top_logprobs: Vec::new(),
+            },
+            SampledToken {
+                token: 30,
+                logprob: 0.0,
+                top_logprobs: Vec::new(),
+            },
+        ],
     };
     assert_eq!(output.seq_ids.len(), 3);
     assert_eq!(output.next_tokens.len(), 3);
     assert_eq!(output.seq_ids[0], 1);
-    assert_eq!(output.next_tokens[0], 10);
+    assert_eq!(output.next_tokens[0].token, 10);
 }
 
 #[test]

@@ -4,7 +4,7 @@ use vllm_core::engine::Engine;
 use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_core::scheduler::SchedulerEngine;
 use vllm_core::types::{Phase, Request, SchedulerConfig};
-use vllm_traits::{BatchOutput, ModelBackend, SeqId, TokenId};
+use vllm_traits::{BatchOutput, ModelBackend, SampledToken, SeqId, TokenId};
 
 struct TracingModel {
     sequence_to_return: Vec<TokenId>,
@@ -51,7 +51,11 @@ impl ModelBackend for TracingModel {
             } else {
                 151_643 // EOS
             };
-            next_tokens.push(token);
+            next_tokens.push(SampledToken {
+                token,
+                logprob: 0.0,
+                top_logprobs: vec![],
+            });
             eprintln!("  seq {seq_id} -> token {token}");
         }
 
@@ -123,10 +127,10 @@ fn test_engine_step_trace_prefill_then_decode() {
             Ok(outputs) => {
                 eprintln!("Step {} output: {:?}", step + 1, outputs);
                 for (_seq_id, token) in outputs {
-                    all_tokens.push(token);
+                    all_tokens.push(token.token);
                     // Try to receive from channel
                     while let Ok(t) = rx.try_recv() {
-                        eprintln!("Channel received token: {t}");
+                        eprintln!("Channel received token: {}", t.token);
                     }
                 }
             }
@@ -181,7 +185,15 @@ fn test_scheduler_batch_trace() {
         .iter()
         .map(std::vec::Vec::len)
         .collect::<Vec<_>>();
-    scheduler.update(&batch1.seq_ids, &[generated_token], &input_counts);
+    scheduler.update(
+        &batch1.seq_ids,
+        &[SampledToken {
+            token: generated_token,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &input_counts,
+    );
 
     eprintln!("\nAfter update 1:");
     eprintln!("  running count: {}", scheduler.running().len());

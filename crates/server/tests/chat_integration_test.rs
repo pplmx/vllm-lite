@@ -483,7 +483,13 @@ fn spawn_capturing_mock_engine() -> (
                     // `vllm_traits::types::TokenId`), so we send the
                     // primitive directly rather than the old
                     // `TokenId(10)` tuple-struct form.
-                    let _ = response_tx.send(10u32).await;
+                    let _ = response_tx
+                        .send(vllm_traits::SampledToken {
+                            token: 10u32,
+                            logprob: 0.0,
+                            top_logprobs: vec![],
+                        })
+                        .await;
                     break;
                 }
                 EngineMessage::Shutdown => break,
@@ -4078,5 +4084,523 @@ async fn test_chat_seed_zero_is_forwarded_as_some_zero() {
         Some(0_u64),
         "seed = 0 must round-trip to SamplingParams::seed = Some(0), not None; got {:?}",
         params.seed
+    );
+}
+
+// ============================================================================
+// P36 v0.3 wire-type follow-up engine wire-through: logprobs + top_logprobs
+// ============================================================================
+//
+// Engine wire-through for the v0.3 `logprobs` / `top_logprobs` fields
+// declared by P31 (chat `logprobs: Option<bool>` + `top_logprobs:
+// Option<u32>`, completions `logprobs: Option<u32>`). The engine now
+// emits `SampledToken { token, logprob, top_logprobs }` per step; the
+// HTTP layer renders the response-side `choices[].logprobs` shape from
+// that stream. These tests pin the contract end-to-end.
+//
+// Engine wire-through contract:
+// 1. `req.logprobs` (chat) / `req.logprobs` (completions) → `SamplingParams::top_logprobs`
+// 2. Engine emits `SampledToken` per step (mock sends placeholder
+//    values; production engine fills in real logprobs via
+//    `sample_one_with_params`'s `logprob_of_token` + `top_logprobs_of`
+//    helpers)
+// 3. Non-streaming chat: `choices[0].logprobs.content[]` carries one
+//    entry per generated token, each with `token` + `logprob` (and
+//    `top_logprobs[]` when `top_logprobs > 0`)
+// 4. Streaming chat: each intermediate chunk carries exactly one
+//    logprob entry (the sampled token); the final chunk carries none
+// 5. Non-streaming completions: `choices[0].logprobs` carries
+//    parallel `tokens[]` / `token_logprobs[]` / `top_logprobs[][]`
+//    arrays, one entry per generated token
+//
+// The mock engines below use deterministic placeholder logprob values
+// so the assertions are reproducible; production paths are
+// independently exercised by `crates/core/src/sampling/tests.rs`.
+
+/// Spawn a mock engine that captures the `SamplingParams` AND emits
+/// SampledToken values with a placeholder logprob + top_logprobs
+/// payload. P36 wire-through tests need both the forward direction
+/// (request → engine) and the reverse direction (engine → response
+/// shape) so the existing `spawn_capturing_mock_engine` is extended
+/// to actually emit a deterministic SampledToken stream.
+fn spawn_capturing_logprob_engine() -> (
+    vllm_server::api::EngineHandle,
+    tokio::task::JoinHandle<()>,
+    Arc<Mutex<Option<SamplingParams>>>,
+) {
+    let (engine_tx, mut engine_rx) = tokio::sync::mpsc::channel::<EngineMessage>(8);
+    let captured: Arc<Mutex<Option<SamplingParams>>> = Arc::new(Mutex::new(None));
+    let captured_clone = Arc::clone(&captured);
+    let handle = tokio::spawn(async move {
+        while let Some(msg) = engine_rx.recv().await {
+            match msg {
+                EngineMessage::AddRequest {
+                    request,
+                    response_tx,
+                    seq_id_tx,
+                    finish_reason_tx,
+                    ..
+                } => {
+                    if let Some(tx) = seq_id_tx {
+                        let _ = tx.send(1);
+                    }
+                    drop(finish_reason_tx);
+                    *captured_clone.lock().await = Some(request.sampling_params.clone());
+                    // Emit three tokens with deterministic logprob +
+                    // top_logprobs payloads. The values are placeholders
+                    // — the production engine fills these via
+                    // `sample_one_with_params`'s logprob helpers — but
+                    // the shape (token, logprob, top_logprobs[]) is
+                    // identical, so the HTTP layer's renderer exercises
+                    // the same code path.
+                    for (token, logprob) in [(10u32, -0.5f32), (20, -1.2), (30, -2.0)] {
+                        let sampled = vllm_traits::SampledToken {
+                            token,
+                            logprob,
+                            // Two top-K alternatives each (token IDs
+                            // and logprobs matching the OpenAI
+                            // shape).
+                            top_logprobs: vec![(11, -1.0), (12, -1.5)],
+                        };
+                        if response_tx.send(sampled).await.is_err() {
+                            break;
+                        }
+                    }
+                    break;
+                }
+                EngineMessage::Shutdown => break,
+                _ => {}
+            }
+        }
+    });
+    (engine_tx, handle, captured)
+}
+
+/// P36: chat `top_logprobs` field on the request must land as
+/// `SamplingParams::top_logprobs = Some(n)` on the engine side. The
+/// engine honours it by running a partial top-K selection on the
+/// post-filter logits (see `sample_one_with_params` in
+/// `crates/core/src/sampling.rs`).
+#[tokio::test]
+async fn test_chat_forwards_top_logprobs_to_engine() {
+    let (engine_tx, _handle, captured) = spawn_capturing_logprob_engine();
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/chat/completions", post(chat_completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "logprobs": true,
+        "top_logprobs": 5,
+        "max_tokens": 3,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    assert_eq!(
+        params.top_logprobs,
+        Some(5),
+        "top_logprobs = 5 must round-trip to SamplingParams::top_logprobs = Some(5); got {:?}",
+        params.top_logprobs
+    );
+}
+
+/// P36: chat `top_logprobs = 0` must still round-trip (engine still
+/// computes the sampled-token logprob via `sample_one_with_params`,
+/// only the top-K selection is skipped).
+#[tokio::test]
+async fn test_chat_top_logprobs_zero_round_trips() {
+    let (engine_tx, _handle, captured) = spawn_capturing_logprob_engine();
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/chat/completions", post(chat_completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "logprobs": true,
+        "top_logprobs": 0,
+        "max_tokens": 3,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    assert_eq!(
+        params.top_logprobs,
+        Some(0),
+        "top_logprobs = 0 must round-trip as Some(0) (NOT None — that would \
+         confuse the engine into thinking the request didn't ask for \
+         logprobs); got {:?}",
+        params.top_logprobs
+    );
+}
+
+/// P36: chat response `choices[0].logprobs.content[]` must carry one
+/// entry per generated token, each with `token` + `logprob` +
+/// `top_logprobs` (when `top_logprobs > 0`). End-to-end wire shape
+/// pins: the JSON serializer must produce the OpenAI-spec field
+/// names and the `content[]` array structure.
+#[tokio::test]
+async fn test_chat_response_logprobs_wire_shape() {
+    let (state, _handle) = vllm_server::test_fixtures::api_state_with_mock_engine(
+        Architecture::Qwen3,
+        vec![10, 20, 30],
+    );
+    let app = Router::new()
+        .route("/v1/chat/completions", post(chat_completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "logprobs": true,
+        "top_logprobs": 2,
+        "max_tokens": 3,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body();
+    let bytes = body.collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let choices = json.get("choices").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(choices.len(), 1);
+    let logprobs = choices[0]
+        .get("logprobs")
+        .expect("logprobs must be present when request asked for them");
+    let content = logprobs
+        .get("content")
+        .and_then(|v| v.as_array())
+        .expect("logprobs.content must be an array");
+    assert_eq!(
+        content.len(),
+        3,
+        "3 generated tokens → 3 content entries; got {}",
+        content.len()
+    );
+    for (i, entry) in content.iter().enumerate() {
+        assert!(entry.get("token").is_some(), "entry {} missing `token`", i);
+        assert!(
+            entry.get("logprob").is_some(),
+            "entry {} missing `logprob`",
+            i
+        );
+        assert!(
+            entry.get("top_logprobs").is_some(),
+            "entry {} missing `top_logprobs` (request asked for top_logprobs = 2)",
+            i
+        );
+    }
+}
+
+/// P36: chat response when `logprobs = false` (or omitted) must NOT
+/// carry a `logprobs` field at all — OpenAI's spec uses field
+/// absence to signal "logprobs were not requested". The
+/// `skip_serializing_if = "Option::is_none"` annotation on
+/// `ChatChoice::logprobs` handles this; this test pins it.
+#[tokio::test]
+async fn test_chat_response_omits_logprobs_when_not_requested() {
+    let (state, _handle) =
+        vllm_server::test_fixtures::api_state_with_mock_engine(Architecture::Qwen3, vec![10, 20]);
+    let app = Router::new()
+        .route("/v1/chat/completions", post(chat_completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 2,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body();
+    let bytes = body.collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let choices = json.get("choices").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(choices.len(), 1);
+    assert!(
+        choices[0].get("logprobs").is_none(),
+        "logprobs field MUST be absent when request did not ask for it; got: {}",
+        choices[0]
+    );
+}
+
+/// P36: completions `logprobs` field on the request must land as
+/// `SamplingParams::top_logprobs = Some(n)` on the engine side. Mirrors
+/// the chat test for the legacy endpoint.
+#[tokio::test]
+async fn test_completions_forwards_logprobs_to_engine() {
+    let (engine_tx, _handle, captured) = spawn_capturing_logprob_engine();
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route(
+            "/v1/completions",
+            post(vllm_server::openai::completions::completions),
+        )
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "logprobs": 3, // OpenAI-spec: int 0..=5
+        "max_tokens": 3,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let captured = captured.lock().await;
+    let params = captured
+        .as_ref()
+        .expect("capturing mock must have observed the AddRequest");
+    assert_eq!(
+        params.top_logprobs,
+        Some(3),
+        "logprobs = 3 must round-trip to SamplingParams::top_logprobs = Some(3); got {:?}",
+        params.top_logprobs
+    );
+}
+
+/// P36: completions response `choices[0].logprobs` must carry parallel
+/// `tokens[]` / `token_logprobs[]` / `top_logprobs[][]` arrays, one
+/// entry per generated token. Pins the OpenAI-spec wire shape for
+/// the legacy `/v1/completions` endpoint.
+#[tokio::test]
+async fn test_completions_response_logprobs_wire_shape() {
+    let (state, _handle) = vllm_server::test_fixtures::api_state_with_mock_engine(
+        Architecture::Qwen3,
+        vec![10, 20, 30],
+    );
+    let app = Router::new()
+        .route(
+            "/v1/completions",
+            post(vllm_server::openai::completions::completions),
+        )
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "logprobs": 2,
+        "max_tokens": 3,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body();
+    let bytes = body.collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let choices = json.get("choices").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(choices.len(), 1);
+    let logprobs = choices[0]
+        .get("logprobs")
+        .expect("logprobs must be present when request asked for them");
+    let tokens = logprobs
+        .get("tokens")
+        .and_then(|v| v.as_array())
+        .expect("logprobs.tokens must be an array");
+    let token_logprobs = logprobs
+        .get("token_logprobs")
+        .and_then(|v| v.as_array())
+        .expect("logprobs.token_logprobs must be an array");
+    let top_logprobs = logprobs
+        .get("top_logprobs")
+        .and_then(|v| v.as_array())
+        .expect("logprobs.top_logprobs must be an array");
+    assert_eq!(tokens.len(), 3);
+    assert_eq!(token_logprobs.len(), 3);
+    assert_eq!(top_logprobs.len(), 3);
+    for (i, tlp) in top_logprobs.iter().enumerate() {
+        let arr = tlp
+            .as_array()
+            .unwrap_or_else(|| panic!("top_logprobs[{}] must be an array", i));
+        assert!(
+            arr.len() <= 2,
+            "top_logprobs[{}] must have ≤ 2 entries (request asked for logprobs = 2); got {}",
+            i,
+            arr.len()
+        );
+    }
+}
+
+/// P36: completions response when `logprobs` is absent must NOT
+/// carry a `logprobs` field — same OpenAI-spec contract as the chat
+/// endpoint, applied to the legacy wire shape.
+#[tokio::test]
+async fn test_completions_response_omits_logprobs_when_not_requested() {
+    let (state, _handle) =
+        vllm_server::test_fixtures::api_state_with_mock_engine(Architecture::Qwen3, vec![10, 20]);
+    let app = Router::new()
+        .route(
+            "/v1/completions",
+            post(vllm_server::openai::completions::completions),
+        )
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 2,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body();
+    let bytes = body.collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let choices = json.get("choices").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(choices.len(), 1);
+    assert!(
+        choices[0].get("logprobs").is_none(),
+        "logprobs field MUST be absent when request did not ask for it; got: {}",
+        choices[0]
     );
 }

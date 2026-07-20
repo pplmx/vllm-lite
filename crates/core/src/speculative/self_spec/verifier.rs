@@ -55,7 +55,10 @@ impl<M: ModelBackend> DraftVerifier for SelfSpeculativeModel<M> {
                     )
                     .map_err(|e| VerifierError::DraftGeneration(e.to_string()))?;
 
-                let next_token = output.next_tokens.first().copied().unwrap_or(0);
+                let next_token = output
+                    .next_tokens
+                    .first()
+                    .map_or(0, |sampled| sampled.token);
                 draft_tokens.push(next_token);
                 current_tokens.push(next_token);
             }

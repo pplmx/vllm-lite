@@ -5,7 +5,7 @@
 use crate::error::Result;
 use crate::sampling::sample_batch_with_params;
 use crate::sync::lock_mutex;
-use vllm_traits::{BatchOutput, FinishReason, SeqId, TokenId};
+use vllm_traits::{BatchOutput, FinishReason, SampledToken, SeqId, TokenId};
 
 impl crate::engine::Engine {
     /// Regular (non-speculative) decode step.
@@ -23,7 +23,12 @@ impl crate::engine::Engine {
     /// `forward` is still available for callers (and tests) that want
     /// the legacy greedy path, but the engine's hot path no longer uses
     /// it.
-    pub(crate) fn step_regular(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
+    ///
+    /// **P36 v0.3 wire-type follow-up engine wire-through:** returns
+    /// `Vec<(SeqId, SampledToken)>` instead of `Vec<(SeqId, TokenId)>`
+    /// so the per-sequence response channel can carry the sampled
+    /// token's `logprob` + `top_logprobs` alongside the token itself.
+    pub(crate) fn step_regular(&mut self) -> Result<Vec<(SeqId, SampledToken)>> {
         let start = std::time::Instant::now();
         let batch = self.scheduler.build_batch();
         if batch.is_empty() {
@@ -98,7 +103,7 @@ impl crate::engine::Engine {
 
         tracing::debug!(
             output_tokens = output.next_tokens.len(),
-            first_output = output.next_tokens.first(),
+            first_output = output.next_tokens.first().map(|s| s.token),
             "Engine step: output tokens"
         );
 
@@ -108,12 +113,12 @@ impl crate::engine::Engine {
             .update(&batch.seq_ids, &output.next_tokens, &input_counts);
 
         let mut results = Vec::new();
-        for (seq_id, token) in batch.seq_ids.iter().zip(output.next_tokens.iter()) {
-            tracing::debug!(seq_id = %seq_id, token = %token, "Sending token to channel");
+        for (seq_id, sampled) in batch.seq_ids.iter().zip(output.next_tokens.iter()) {
+            tracing::debug!(seq_id = %seq_id, token = %sampled.token, "Sending token to channel");
             if let Some(tx) = self.response_txs.get(seq_id) {
-                let _ = tx.try_send(*token);
+                let _ = tx.try_send(sampled.clone());
             }
-            results.push((*seq_id, *token));
+            results.push((*seq_id, sampled.clone()));
         }
 
         let finished = self.scheduler.finished_sequences();
@@ -158,7 +163,11 @@ impl crate::engine::Engine {
     ///
     /// Returns `Err` if the operation fails.
     /// Run one scheduling step (regular or speculative depending on engine configuration).
-    pub fn step(&mut self) -> Result<Vec<(SeqId, TokenId)>> {
+    ///
+    /// **P36 v0.3 wire-type follow-up engine wire-through:** returns
+    /// `Vec<(SeqId, SampledToken)>` so callers can surface
+    /// per-token logprobs without re-running the softmax.
+    pub fn step(&mut self) -> Result<Vec<(SeqId, SampledToken)>> {
         if self.speculative_mode && self.draft_model.is_some() {
             let max_draft = self
                 .adaptive_decoder

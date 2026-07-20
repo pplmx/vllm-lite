@@ -140,7 +140,7 @@ fn test_model_single_token_batch() {
         .unwrap();
     assert_eq!(output.seq_ids.len(), 1);
     assert_eq!(output.next_tokens.len(), 1);
-    assert_eq!(output.next_tokens[0], 1);
+    assert_eq!(output.next_tokens[0].token, 1);
 }
 
 #[test]

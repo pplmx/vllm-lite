@@ -13,7 +13,7 @@ use crate::components::gated_delta::GatedDeltaState;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{DType, Device, Module, Tensor};
 use candle_nn::{Embedding, Linear};
-use vllm_traits::{BatchOutput, BlockId, ModelBackend, Result, SeqId, TokenId};
+use vllm_traits::{BatchOutput, BlockId, ModelBackend, Result, SampledToken, SeqId, TokenId};
 
 /// Config surface required by [`HybridLm`] for inference and `ModelBackend` metadata.
 pub trait HybridLmConfig: Clone {
@@ -128,7 +128,15 @@ where
                 &positions[i],
                 prefill,
             )?;
-            greedy_sample_token(&logits, prefill)
+            let token = greedy_sample_token(&logits, prefill)?;
+            // See comment in causal_lm::model::forward: model-layer
+            // legacy `forward` returns placeholder SampledToken
+            // (the engine uses `forward_logits` + sample_batch_with_params).
+            Ok(SampledToken {
+                token,
+                logprob: 0.0,
+                top_logprobs: Vec::new(),
+            })
         })
     }
 
@@ -229,7 +237,11 @@ where
         forward_batch(seq_ids, is_prefill, |i, prefill| {
             let tokens = &input_tokens[i];
             if tokens.is_empty() {
-                return Ok(0);
+                return Ok(SampledToken {
+                    token: TokenId::default(),
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                });
             }
 
             let hidden = embed_sequence(&self.embed_tokens, tokens, &self.device, prefill)?;
@@ -250,7 +262,14 @@ where
             let hidden = run_layers_upto(&self.layers, hidden, &mut ctx, upto_layer)?;
             let hidden = map_candle(self.norm.forward(&hidden))?;
             let logits = forward_lm_head(&self.embed_tokens, self.lm_head.as_ref(), &hidden)?;
-            greedy_sample_token(&logits, prefill)
+            let token = greedy_sample_token(&logits, prefill)?;
+            // See comment in causal_lm::model::forward_to_layer:
+            // placeholder SampledToken; engine uses forward_logits.
+            Ok(SampledToken {
+                token,
+                logprob: 0.0,
+                top_logprobs: Vec::new(),
+            })
         })
     }
 }

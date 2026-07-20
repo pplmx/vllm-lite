@@ -41,7 +41,7 @@ impl TestEngine {
             if let Ok(results) = self.engine.step() {
                 for (result_seq_id, token) in results {
                     if result_seq_id == seq_id {
-                        tokens.push(token);
+                        tokens.push(token.token);
                     }
                 }
             }

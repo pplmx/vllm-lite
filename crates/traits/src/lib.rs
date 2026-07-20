@@ -32,7 +32,7 @@ pub use distributed::{BlockHasher, IdentityHasher, XorShiftHasher};
 #[cfg(feature = "kernels")]
 pub use kernels::{CudaGraphConfig, CudaGraphExecutor, GraphExecutionError, ModelGraphConfig};
 pub use model::{ModelBackend, ModelError, Result, StubModelBackend};
-pub use sampling::{SamplingParams, SamplingParamsBuilder, argmax_logits};
+pub use sampling::{SampledToken, SamplingParams, SamplingParamsBuilder, argmax_logits};
 pub use types::{
     BLOCK_SIZE, Batch, BatchOutput, BatchPhase, BlockId, FinishReason, SeqId, TensorParallelError,
     TokenId,

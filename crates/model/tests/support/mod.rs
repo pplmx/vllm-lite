@@ -82,5 +82,5 @@ pub fn assert_forward_smoke<M: ModelBackend + ?Sized>(model: &mut M, vocab_size:
         )
         .expect("decode forward");
     assert_eq!(decode.next_tokens.len(), 1);
-    assert!(decode.next_tokens[0] < u32::try_from(vocab_size).expect("bounded vocab"));
+    assert!(decode.next_tokens[0].token < u32::try_from(vocab_size).expect("bounded vocab"));
 }

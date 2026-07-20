@@ -446,7 +446,10 @@ fn test_sample_batch_with_params_matches_scalar_api() {
 
     let with_params = sample_batch_with_params(&logits, &params, &seen);
     let scalar = sample_batch(&logits, 0.0, 1.0, 0, 1.0, &seen);
-    assert_eq!(with_params, scalar);
+    // `sample_batch` still returns `Vec<TokenId>` (legacy API); map
+    // both sides through `.token` so we can compare on equal footing.
+    let with_params_tokens: Vec<TokenId> = with_params.iter().map(|s| s.token).collect();
+    assert_eq!(with_params_tokens, scalar);
 }
 
 #[test]
@@ -457,7 +460,8 @@ fn test_sample_batch_with_params_greedy_default() {
     let seen = vec![vec![], vec![]];
     let params = vec![SamplingParams::default(); 2];
     let tokens = sample_batch_with_params(&logits, &params, &seen);
-    assert_eq!(tokens, vec![1, 0]);
+    let token_ids: Vec<TokenId> = tokens.iter().map(|s| s.token).collect();
+    assert_eq!(token_ids, vec![1, 0]);
 }
 
 #[test]
@@ -480,8 +484,8 @@ fn test_sample_batch_with_params_per_sequence_divergence() {
     // the contract under test is that both code paths produce a valid
     // token in [0, vocab). The deterministic case still equals argmax.
     assert_eq!(tokens.len(), 2);
-    assert_eq!(tokens[0], 1);
-    assert_eq!(tokens[1], 1);
+    assert_eq!(tokens[0].token, 1);
+    assert_eq!(tokens[1].token, 1);
 }
 
 #[test]
@@ -501,8 +505,11 @@ fn test_sample_batch_with_params_repeat_penalty_per_sequence() {
             .build(),
     ];
     let tokens = sample_batch_with_params(&logits, &params, &seen);
-    assert_ne!(tokens[0], 1, "penalty should suppress token 1 for seq 0");
-    assert_eq!(tokens[1], 0, "no penalty → first argmax wins");
+    assert_ne!(
+        tokens[0].token, 1,
+        "penalty should suppress token 1 for seq 0"
+    );
+    assert_eq!(tokens[1].token, 0, "no penalty → first argmax wins");
 }
 
 #[test]
@@ -514,7 +521,7 @@ fn test_sample_one_with_params_empty_seen_is_no_op() {
         .with_repeat_penalty(2.0)
         .build();
     let token = sample_one_with_params(&logits, &params, &[]);
-    assert_eq!(token, 1);
+    assert_eq!(token.token, 1);
 }
 
 // `apply_logit_bias` tests (P30 v0.3 wire-type follow-up —
@@ -660,7 +667,7 @@ fn test_sample_one_with_params_logit_bias_changes_argmax() {
         .build();
     let token = sample_one_with_params(&logits, &params, &[]);
     assert_eq!(
-        token, 2,
+        token.token, 2,
         "logit_bias on token 2 must flip greedy argmax from 0 → 2"
     );
 }
@@ -673,7 +680,7 @@ fn test_sample_one_with_params_logit_bias_none_is_noop() {
     let logits = vec![0.5, 0.5, 0.5];
     let params = SamplingParams::builder().with_temperature(0.0).build();
     let token = sample_one_with_params(&logits, &params, &[]);
-    assert_eq!(token, 0, "no logit_bias → first argmax (0) wins");
+    assert_eq!(token.token, 0, "no logit_bias → first argmax (0) wins");
 }
 
 #[test]
@@ -687,7 +694,7 @@ fn test_sample_one_with_params_logit_bias_empty_map_is_noop() {
         .with_logit_bias(Some(bias))
         .build();
     let token = sample_one_with_params(&logits, &params, &[]);
-    assert_eq!(token, 0, "empty map → first argmax (0) wins");
+    assert_eq!(token.token, 0, "empty map → first argmax (0) wins");
 }
 
 #[test]
@@ -711,7 +718,7 @@ fn test_logit_bias_combined_with_repeat_and_presence_penalties() {
         .build();
     let token = sample_one_with_params(&logits, &params, &[0]);
     assert_eq!(
-        token, 2,
+        token.token, 2,
         "combined penalties + logit_bias must yield argmax = 2"
     );
 }
@@ -762,7 +769,8 @@ fn test_seed_determinism_same_seed_same_result() {
     let token_b = sample_one_with_params(logits, &params_b, seen);
     assert_eq!(
         token_a, token_b,
-        "same seed must produce the same sampled token (got {token_a} vs {token_b})"
+        "same seed must produce the same sampled token (got {:?} vs {:?})",
+        token_a, token_b
     );
 }
 
@@ -789,8 +797,8 @@ fn test_seed_zero_is_valid_seed() {
     // We don't assert inequality (sampling could in principle pick
     // the same token by chance) but we do assert both are valid
     // vocab indices.
-    assert!(token_zero < logits.len() as TokenId);
-    assert!(token_nonzero < logits.len() as TokenId);
+    assert!(token_zero.token < logits.len() as TokenId);
+    assert!(token_nonzero.token < logits.len() as TokenId);
 }
 
 #[test]
@@ -809,8 +817,9 @@ fn test_seed_none_falls_back_to_thread_rng() {
         .build();
     let token = sample_one_with_params(logits, &params, seen);
     assert!(
-        token < logits.len() as TokenId,
-        "seed = None must produce a valid vocab index (got {token})"
+        token.token < logits.len() as TokenId,
+        "seed = None must produce a valid vocab index (got {})",
+        token.token
     );
 }
 
@@ -838,8 +847,9 @@ fn test_seed_different_seeds_diverge_in_distribution() {
     assert_ne!(
         token_a, token_b,
         "different seeds must produce different sampled tokens for \
-         SEED_TEST_LOGITS at T=1.0 (got {token_a} for both — RNG is \
-         not being seeded correctly)"
+         SEED_TEST_LOGITS at T=1.0 (got {:?} for both — RNG is \
+         not being seeded correctly)",
+        token_a
     );
 }
 
@@ -865,7 +875,7 @@ fn test_seed_greedy_path_bypasses_rng() {
         "greedy path (T=0) must yield argmax regardless of seed"
     );
     assert_eq!(
-        token_a, 4,
+        token_a.token, 4,
         "greedy path must yield argmax = 4 for SEED_TEST_LOGITS"
     );
 }
@@ -899,13 +909,13 @@ fn test_seed_per_sequence_independence_in_batch() {
     assert_eq!(
         tokens[0], tokens[1],
         "sequences with the same seed must produce the same token \
-         (got {0} vs {1})",
+         (got {0:?} vs {1:?})",
         tokens[0], tokens[1]
     );
     assert_ne!(
         tokens[0], tokens[2],
         "sequences with different seeds must produce different \
-         tokens (got {0} for both — RNG state is shared across \
+         tokens (got {0:?} for both — RNG state is shared across \
          sequences)",
         tokens[0]
     );
@@ -933,6 +943,7 @@ fn test_seed_top_p_path_uses_seeded_rng() {
     assert_eq!(
         token_a, token_b,
         "top_p path must honour seed deterministically \
-         (got {token_a} vs {token_b})"
+         (got {:?} vs {:?})",
+        token_a, token_b
     );
 }

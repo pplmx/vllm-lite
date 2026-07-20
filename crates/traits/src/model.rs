@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use crate::types::{BatchOutput, SeqId, TokenId};
+use crate::types::{BatchOutput, SampledToken, SeqId, TokenId};
 
 /// Error type for Model. Returned from every fallible public API; covers I/O, validation, and resource-limit failures. Use [`Result<T>`] alias in the same module.
 #[derive(Debug, thiserror::Error)]
@@ -165,7 +165,13 @@ impl ModelBackend for StubModelBackend {
     ) -> Result<BatchOutput> {
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
-            next_tokens: vec![0; seq_ids.len()],
+            next_tokens: (0..seq_ids.len())
+                .map(|_| SampledToken {
+                    token: TokenId::default(),
+                    logprob: 0.0,
+                    top_logprobs: Vec::new(),
+                })
+                .collect(),
         })
     }
 
@@ -250,7 +256,15 @@ mod tests {
             )
             .expect("stub forward should succeed");
         assert_eq!(output.seq_ids, vec![1, 2, 3]);
-        assert_eq!(output.next_tokens, vec![0, 0, 0]);
+        // P36: BatchOutput::next_tokens is `Vec<SampledToken>`.
+        let expected: Vec<SampledToken> = (0..3)
+            .map(|_| SampledToken {
+                token: TokenId::default(),
+                logprob: 0.0,
+                top_logprobs: Vec::new(),
+            })
+            .collect();
+        assert_eq!(output.next_tokens, expected);
     }
 
     #[test]
@@ -270,6 +284,13 @@ mod tests {
             // invariant: pre-conditions make this infallible at this call site.
             .expect("stub forward should succeed");
         assert_eq!(output.seq_ids, vec![1, 2, 3]);
-        assert_eq!(output.next_tokens, vec![0, 0, 0]);
+        let expected: Vec<SampledToken> = (0..3)
+            .map(|_| SampledToken {
+                token: TokenId::default(),
+                logprob: 0.0,
+                top_logprobs: Vec::new(),
+            })
+            .collect();
+        assert_eq!(output.next_tokens, expected);
     }
 }

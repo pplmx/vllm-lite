@@ -21,7 +21,7 @@
 
 use crate::types::TokenId;
 use tracing::trace;
-use vllm_traits::{SamplingParams, argmax_logits};
+use vllm_traits::{SampledToken, SamplingParams, argmax_logits};
 
 /// Read one `f32` from the thread-local default RNG. Used when
 /// [`SamplingParams::seed`] is `None` (the pre-P34 default).
@@ -52,6 +52,192 @@ fn sample_random_threshold(seed: Option<u64>) -> f32 {
         Some(s) => random_f32_seeded(s),
         None => random_f32(),
     }
+}
+
+/// Compute `log(softmax(logits)[token])` for a single token under
+/// the post-filter distribution.
+///
+/// Numerically stable: subtracts `max(logits)` before `exp` and
+/// `ln` so the intermediate `sum_exp` is bounded by `[0, vocab_size]`
+/// even for very-negative or very-positive logits. Returns `-∞` when
+/// the token's logit is `-∞` (e.g. masked by `top_k` truncation or
+/// driven to `-∞` by an extreme negative `presence_penalty`) — the
+/// JSON serializer will surface this as `null`, which OpenAI clients
+/// interpret as "this token was excluded from the sampling distribution".
+///
+/// `logits` is the FINAL post-filter logits (the same distribution
+/// the sampler draws from). Caller is responsible for applying
+/// temperature scaling, `top_k` masking, `top_p` nucleus cutoff, and
+/// the bias/penalty steps BEFORE this helper so the returned
+/// probability reflects the actual sampling distribution.
+#[allow(dead_code)] // exposed as part of the sampler API surface; currently called only by sample_one_with_params
+fn logprob_of_token(logits: &[f32], token: TokenId) -> f32 {
+    if logits.is_empty() {
+        return 0.0;
+    }
+    let max_val = logits.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    if !max_val.is_finite() {
+        // All logits are -inf (top_k zeroed everything). Return -inf
+        // for any token; the sampler would only reach this in a
+        // pathological edge case (e.g. all top-k values were NaN).
+        return f32::NEG_INFINITY;
+    }
+    let sum_exp: f32 = logits.iter().map(|x| (x - max_val).exp()).sum();
+    let log_sum_exp = max_val + sum_exp.ln();
+    let idx = match usize::try_from(token) {
+        Ok(i) => i.min(logits.len() - 1),
+        Err(_) => return f32::NEG_INFINITY,
+    };
+    if !logits[idx].is_finite() {
+        return f32::NEG_INFINITY;
+    }
+    logits[idx] - log_sum_exp
+}
+
+/// Compute the top-`n` `(token, logprob)` pairs under the
+/// post-filter distribution, sorted by `logprob` descending.
+///
+/// Returns an empty `Vec` when `n == 0` or `logits` is empty.
+/// Otherwise returns at most `n` pairs (fewer if the vocab is
+/// smaller than `n`). Each entry is `(TokenId, logprob)` where
+/// `logprob = log(softmax(logits)[token])` — computed via the same
+/// numerically-stable helper as [`logprob_of_token`] so the two
+/// helpers always agree on the logprob of any token that appears
+/// in both the sampled token's slot and the top-K list.
+///
+/// Used by [`sample_one_with_params`] when
+/// `SamplingParams::top_logprobs.is_some()` to populate
+/// [`SampledToken::top_logprobs`].
+#[allow(dead_code)] // exposed as part of the sampler API surface
+fn top_logprobs_of(logits: &[f32], n: u32) -> Vec<(TokenId, f32)> {
+    if n == 0 || logits.is_empty() {
+        return Vec::new();
+    }
+    let max_val = logits.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    if !max_val.is_finite() {
+        // All -inf — no token has finite probability; return empty.
+        return Vec::new();
+    }
+    let sum_exp: f32 = logits.iter().map(|x| (x - max_val).exp()).sum();
+    let log_sum_exp = max_val + sum_exp.ln();
+
+    // Partial sort: keep only the top-n by raw logit. After this the
+    // top-n entries by logit are also the top-n entries by
+    // post-filter probability (softmax is monotonic), so the
+    // logprob-of-each conversion is the only per-entry work left.
+    let n_usize = (n as usize).min(logits.len());
+    let mut indexed: Vec<(usize, f32)> = logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
+    // `select_nth_unstable_by` partitions so the n-th element is in
+    // its final sorted position; everything before it is ≤ it and
+    // everything after is ≥ it. We take the prefix `[..n_usize]`
+    // and sort it descending for the final ordering.
+    indexed.select_nth_unstable_by(n_usize - 1, |a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
+    });
+    indexed[..n_usize].sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
+    });
+
+    indexed[..n_usize]
+        .iter()
+        .map(|(i, v)| {
+            let lp = if v.is_finite() {
+                *v - log_sum_exp
+            } else {
+                f32::NEG_INFINITY
+            };
+            (TokenId::try_from(*i).unwrap_or(0), lp)
+        })
+        .collect()
+}
+
+/// Compute log-softmax of `logits` element-wise, returning one
+/// log-probability per token. Tokens with `-inf` logit keep `-inf`;
+/// an empty input returns an empty `Vec`; an input where every logit
+/// is `-inf` (e.g. top_k masked everything) returns a `Vec` of
+/// `-inf`s matching the input length.
+///
+/// Used by [`sample_one_with_params`] when no `top_p` cutoff is in
+/// effect (the sampling distribution is the full renormalized
+/// softmax over the post-filter logits).
+fn log_softmax(logits: &[f32]) -> Vec<f32> {
+    if logits.is_empty() {
+        return Vec::new();
+    }
+    let max_val = logits.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    if !max_val.is_finite() {
+        return vec![f32::NEG_INFINITY; logits.len()];
+    }
+    let sum_exp: f32 = logits.iter().map(|x| (x - max_val).exp()).sum();
+    let log_sum_exp = max_val + sum_exp.ln();
+    logits
+        .iter()
+        .map(|&x| {
+            if x.is_finite() {
+                x - log_sum_exp
+            } else {
+                f32::NEG_INFINITY
+            }
+        })
+        .collect()
+}
+
+/// Compute the log-probabilities under the post-`top_p` renormalized
+/// distribution. Tokens excluded by the nucleus cutoff get `-inf`;
+/// tokens in the cutoff get `ln(p_renormalized)`. Used by
+/// [`sample_one_with_params`] when `params.top_p < 1.0` so the
+/// sampled token's `logprob` reflects the *actual* sampling
+/// distribution (nucleus-constrained) rather than the
+/// un-renormalized softmax.
+fn renormalized_top_p_logprobs(logits: &[f32], top_p: f32) -> Vec<f32> {
+    if logits.is_empty() {
+        return Vec::new();
+    }
+
+    // Sort by raw logit descending — softmax is monotonic, so the
+    // top-K by logit is also the top-K by probability. Mirror the
+    // existing `top_p_sample` cutoff rule: include position `i`
+    // (zero-indexed) iff the cumulative probability up to and
+    // including `i` is `≤ top_p`; the first index that pushes
+    // cumsum over `top_p` becomes the exclusive upper bound.
+    let mut indexed: Vec<(usize, f32)> = logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
+    indexed.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
+    });
+
+    let max_val = indexed[0].1;
+    if !max_val.is_finite() {
+        return vec![f32::NEG_INFINITY; logits.len()];
+    }
+    let exp: Vec<f32> = indexed.iter().map(|(_, v)| (v - max_val).exp()).collect();
+    let sum: f32 = exp.iter().sum();
+    let mut probs: Vec<f32> = exp.iter().map(|x| x / sum).collect();
+
+    let mut cumsum = 0.0;
+    let mut cutoff = probs.len();
+    for (i, &p) in probs.iter().enumerate() {
+        cumsum += p;
+        if cumsum > top_p {
+            cutoff = i + 1;
+            break;
+        }
+    }
+    probs.truncate(cutoff);
+    let total: f32 = probs.iter().sum();
+
+    let mut logprobs = vec![f32::NEG_INFINITY; logits.len()];
+    for (i, p) in indexed[..cutoff].iter().zip(probs.iter()) {
+        let p_norm = if total > 0.0 { p / total } else { 0.0 };
+        logprobs[i.0] = if p_norm > 0.0 {
+            p_norm.ln()
+        } else {
+            f32::NEG_INFINITY
+        };
+    }
+    logprobs
 }
 
 pub(crate) fn greedy_sample(logits: &[f32]) -> TokenId {
@@ -249,7 +435,11 @@ pub fn sample_batch(
 /// DIFFERENT seeds: they don't share state.
 ///
 /// `params_list`, `seen_tokens`, and `logits_list` must have the same
-/// length. The returned `Vec<TokenId>` has length `logits_list.len()`.
+/// length. The returned `Vec<SampledToken>` has length
+/// `logits_list.len()`. Each [`SampledToken`] carries the sampled
+/// token alongside its `logprob` (and top-K logprobs when
+/// `params.top_logprobs.is_some()`) under the post-filter
+/// distribution (P36 v0.3 wire-type follow-up engine wire-through).
 ///
 /// Beam search (`beam_width > 1`) is not implemented here — callers
 /// must intercept those requests before they reach this function.
@@ -258,7 +448,7 @@ pub fn sample_batch_with_params(
     logits_list: &[Vec<f32>],
     params_list: &[SamplingParams],
     seen_tokens: &[Vec<TokenId>],
-) -> Vec<TokenId> {
+) -> Vec<SampledToken> {
     logits_list
         .iter()
         .zip(params_list.iter())
@@ -280,12 +470,20 @@ pub fn sample_batch_with_params(
 /// thread-local default RNG. Greedy paths (`temperature = 0`,
 /// `top_p = 1.0`, `top_k = 0`) bypass the RNG entirely — `seed` has
 /// no observable effect in those modes.
+///
+/// **Return type (P36 v0.3 wire-type follow-up engine wire-through):**
+/// returns a [`SampledToken`] carrying the sampled `token` alongside
+/// its `logprob` under the post-filter distribution and (when
+/// `params.top_logprobs.is_some()`) the top-K `(token, logprob)`
+/// pairs. The `logprob` and `top_logprobs` reflect the **actual
+/// sampling distribution** — for `top_p < 1.0` this is the
+/// nucleus-renormalized distribution, not the raw softmax.
 #[must_use]
 pub fn sample_one_with_params(
     logits: &[f32],
     params: &SamplingParams,
     seen: &[TokenId],
-) -> TokenId {
+) -> SampledToken {
     let mut logits = logits.to_vec();
 
     if (params.repeat_penalty - 1.0).abs() > f32::EPSILON && !seen.is_empty() {
@@ -330,12 +528,67 @@ pub fn sample_one_with_params(
     // changes based on temperature / top_p / top_k values).
     let random_threshold = sample_random_threshold(params.seed);
 
-    if params.top_p < 1.0 {
+    let token = if params.top_p < 1.0 {
         top_p_sample(&logits, params.top_p, random_threshold)
     } else if params.temperature > 0.0 {
         temperature_sample(&logits, params.temperature, random_threshold)
     } else {
         greedy_sample(&logits)
+    };
+
+    // Compute the log-probabilities under the ACTUAL sampling
+    // distribution (the same one the sampler drew `token` from).
+    // For `top_p < 1.0` this is the nucleus-renormalized
+    // distribution; otherwise it's the full log-softmax over the
+    // post-filter (post-bias/penalty/temperature/top-k) logits.
+    let sampling_logprobs = if params.top_p < 1.0 {
+        renormalized_top_p_logprobs(&logits, params.top_p)
+    } else {
+        log_softmax(&logits)
+    };
+
+    let logprob = sampling_logprobs
+        .get(
+            usize::try_from(token)
+                .unwrap_or(0)
+                .min(sampling_logprobs.len().saturating_sub(1)),
+        )
+        .copied()
+        .unwrap_or(f32::NEG_INFINITY);
+
+    let top_logprobs = match params.top_logprobs {
+        Some(n) if n > 0 => {
+            // Re-rank the sampling-distribution log-probs to pick the
+            // top-N. Uses the same partial-sort + suffix-sort idiom
+            // as `top_logprobs_of` but operates on pre-computed
+            // log-probs (so the values are exact copies of what
+            // `logprob` already used — guaranteed consistency).
+            let n_usize = (n as usize).min(sampling_logprobs.len());
+            let mut indexed: Vec<(usize, f32)> = sampling_logprobs
+                .iter()
+                .enumerate()
+                .map(|(i, &lp)| (i, lp))
+                .collect();
+            indexed.select_nth_unstable_by(n_usize - 1, |a, b| {
+                b.1.partial_cmp(&a.1)
+                    .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
+            });
+            indexed[..n_usize].sort_by(|a, b| {
+                b.1.partial_cmp(&a.1)
+                    .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
+            });
+            indexed[..n_usize]
+                .iter()
+                .map(|(i, lp)| (TokenId::try_from(*i).unwrap_or(0), *lp))
+                .collect()
+        }
+        _ => Vec::new(),
+    };
+
+    SampledToken {
+        token,
+        logprob,
+        top_logprobs,
     }
 }
 

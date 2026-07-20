@@ -730,7 +730,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::speculative::verifie
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::speculative::verifier::VerifierError
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::types::AdaptiveDraftConfig
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::types::AdaptiveDraftConfigBuilder
-impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::types::EngineMessage
+impl !core::panic::unwind_safe::RefUnwindSafe for vllm_core::types::EngineMessage
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::types::Phase
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::types::SchedulerConfigBuilder
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_core::types::Sequence
@@ -813,7 +813,7 @@ impl core::panic::unwind_safe::UnwindSafe for vllm_core::speculative::verifier::
 impl core::panic::unwind_safe::UnwindSafe for vllm_core::speculative::verifier::VerifierError
 impl core::panic::unwind_safe::UnwindSafe for vllm_core::types::AdaptiveDraftConfig
 impl core::panic::unwind_safe::UnwindSafe for vllm_core::types::AdaptiveDraftConfigBuilder
-impl core::panic::unwind_safe::UnwindSafe for vllm_core::types::EngineMessage
+impl !core::panic::unwind_safe::UnwindSafe for vllm_core::types::EngineMessage
 impl core::panic::unwind_safe::UnwindSafe for vllm_core::types::Phase
 impl core::panic::unwind_safe::UnwindSafe for vllm_core::types::SchedulerConfigBuilder
 impl core::panic::unwind_safe::UnwindSafe for vllm_core::types::Sequence
@@ -1077,7 +1077,7 @@ pub fn vllm_core::EngineBuilder::fmt(&self, &mut core::fmt::Formatter<'_>) -> co
 pub fn vllm_core::EngineBuilder::new(alloc::boxed::Box<dyn vllm_traits::model::ModelBackend>) -> Self
 pub fn vllm_core::EngineBuilder::with_config(self, vllm_core::SchedulerConfig) -> Self
 pub fn vllm_core::EngineBuilder::with_draft_model(self, alloc::boxed::Box<dyn vllm_traits::model::ModelBackend>) -> Self
-pub fn vllm_core::engine::Engine::add_request(&mut self, vllm_core::Request, tokio::sync::mpsc::bounded::Sender<vllm_traits::types::TokenId>) -> vllm_traits::types::SeqId
+pub fn vllm_core::engine::Engine::add_request(&mut self, vllm_core::Request, tokio::sync::mpsc::bounded::Sender<vllm_traits::sampling::SampledToken>) -> vllm_traits::types::SeqId
 pub fn vllm_core::engine::Engine::cancel_request(&mut self, vllm_traits::types::SeqId) -> bool
 pub fn vllm_core::engine::Engine::capture_cuda_graphs(&mut self) -> vllm_core::error::Result<()>
 pub fn vllm_core::engine::Engine::disable_adaptive_speculative(&mut self)
@@ -1091,8 +1091,8 @@ pub fn vllm_core::engine::Engine::new_boxed(alloc::boxed::Box<dyn vllm_traits::m
 pub fn vllm_core::engine::Engine::new<M: vllm_traits::model::ModelBackend + 'static>(M, core::option::Option<M>) -> Self
 pub fn vllm_core::engine::Engine::run(&mut self, tokio::sync::mpsc::bounded::Receiver<vllm_core::types::EngineMessage>)
 pub fn vllm_core::engine::Engine::set_draft_loader(&mut self, alloc::sync::Arc<dyn vllm_core::speculative::draft_resolver::DraftLoader>) -> bool
-pub fn vllm_core::engine::Engine::step(&mut self) -> vllm_core::error::Result<alloc::vec::Vec<(vllm_traits::types::SeqId, vllm_traits::types::TokenId)>>
-pub fn vllm_core::engine::Engine::step_with_graph(&mut self) -> vllm_core::error::Result<alloc::vec::Vec<(vllm_traits::types::SeqId, vllm_traits::types::TokenId)>>
+pub fn vllm_core::engine::Engine::step(&mut self) -> vllm_core::error::Result<alloc::vec::Vec<(vllm_traits::types::SeqId, vllm_traits::sampling::SampledToken)>>
+pub fn vllm_core::engine::Engine::step_with_graph(&mut self) -> vllm_core::error::Result<alloc::vec::Vec<(vllm_traits::types::SeqId, vllm_traits::sampling::SampledToken)>>
 pub fn vllm_core::engine::Engine::with_budget_boxed(alloc::boxed::Box<dyn vllm_traits::model::ModelBackend>, core::option::Option<alloc::boxed::Box<dyn vllm_traits::model::ModelBackend>>, alloc::vec::Vec<vllm_core::DraftSpec>, alloc::sync::Arc<vllm_core::speculative::memory_budget::MemoryBudget>, vllm_core::SchedulerConfig, usize, usize) -> Self
 pub fn vllm_core::engine::Engine::with_config_boxed(alloc::boxed::Box<dyn vllm_traits::model::ModelBackend>, core::option::Option<alloc::boxed::Box<dyn vllm_traits::model::ModelBackend>>, vllm_core::SchedulerConfig, usize, usize) -> Self
 pub fn vllm_core::engine::Engine::with_config<M: vllm_traits::model::ModelBackend + 'static>(M, core::option::Option<M>, vllm_core::SchedulerConfig, usize, usize) -> Self
@@ -1196,11 +1196,13 @@ pub fn vllm_core::Request::clone(&self) -> vllm_core::Request
 pub fn vllm_core::Request::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_core::Request::new(vllm_traits::types::SeqId, alloc::vec::Vec<vllm_traits::types::TokenId>, usize) -> Self
 pub fn vllm_core::Request::with_draft_model(self, impl core::convert::Into<vllm_core::speculative::DraftId>) -> Self
+pub fn vllm_core::sampling::apply_logit_bias(&mut [f32], &std::collections::hash::map::HashMap<vllm_traits::types::TokenId, f32>)
+pub fn vllm_core::sampling::apply_presence_penalty(&mut [f32], &[vllm_traits::types::TokenId], f32)
 pub fn vllm_core::sampling::apply_repeat_penalty(&mut [f32], &[vllm_traits::types::TokenId], f32)
 pub fn vllm_core::sampling::sample_batch(&[alloc::vec::Vec<f32>], f32, f32, usize, f32, &[alloc::vec::Vec<vllm_traits::types::TokenId>]) -> alloc::vec::Vec<vllm_traits::types::TokenId>
-pub fn vllm_core::sampling::sample_batch_with_params(&[alloc::vec::Vec<f32>], &[vllm_traits::sampling::SamplingParams], &[alloc::vec::Vec<vllm_traits::types::TokenId>]) -> alloc::vec::Vec<vllm_traits::types::TokenId>
-pub fn vllm_core::sampling::sample_one_with_params(&[f32], &vllm_traits::sampling::SamplingParams, &[vllm_traits::types::TokenId]) -> vllm_traits::types::TokenId
-pub fn vllm_core::sampling::top_k_sample(&[f32], usize) -> vllm_traits::types::TokenId
+pub fn vllm_core::sampling::sample_batch_with_params(&[alloc::vec::Vec<f32>], &[vllm_traits::sampling::SamplingParams], &[alloc::vec::Vec<vllm_traits::types::TokenId>]) -> alloc::vec::Vec<vllm_traits::sampling::SampledToken>
+pub fn vllm_core::sampling::sample_one_with_params(&[f32], &vllm_traits::sampling::SamplingParams, &[vllm_traits::types::TokenId]) -> vllm_traits::sampling::SampledToken
+pub fn vllm_core::sampling::top_k_sample(&[f32], usize, f32) -> vllm_traits::types::TokenId
 pub fn vllm_core::scheduler::batch_composer::BatchCompositionConfigBuilder::clone(&self) -> vllm_core::scheduler::batch_composer::BatchCompositionConfigBuilder
 pub fn vllm_core::scheduler::batch_composer::BatchCompositionConfigBuilder::default() -> vllm_core::scheduler::batch_composer::BatchCompositionConfigBuilder
 pub fn vllm_core::scheduler::batch_composer::BatchCompositionConfigBuilder::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -1257,7 +1259,7 @@ pub fn vllm_core::scheduler::engine::state::SchedulerEngine::register_observer(&
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::running(&self) -> alloc::vec::Vec<vllm_core::types::Sequence>
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::schedule(&mut self) -> core::option::Option<vllm_traits::types::Batch>
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::set_policy(&mut self, alloc::boxed::Box<dyn vllm_core::scheduler::policy::trait_def::SchedulingPolicy>)
-pub fn vllm_core::scheduler::engine::state::SchedulerEngine::update(&mut self, &[vllm_traits::types::SeqId], &[vllm_traits::types::TokenId], &[usize])
+pub fn vllm_core::scheduler::engine::state::SchedulerEngine::update(&mut self, &[vllm_traits::types::SeqId], &[vllm_traits::sampling::SampledToken], &[usize])
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::waiting_count(&self) -> usize
 pub fn vllm_core::scheduler::memory::allocator::BlockAllocator::allocate(&mut self, usize) -> core::option::Option<alloc::vec::Vec<vllm_traits::types::BlockId>>
 pub fn vllm_core::scheduler::memory::allocator::BlockAllocator::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -1760,9 +1762,10 @@ pub vllm_core::engine::Engine::draft_model: core::option::Option<alloc::sync::Ar
 pub vllm_core::engine::Engine::draft_registry: alloc::sync::Arc<vllm_core::speculative::registry::DraftModelRegistry>
 pub vllm_core::engine::Engine::draft_resolver: core::option::Option<alloc::sync::Arc<vllm_core::speculative::draft_resolver::DraftResolver>>
 pub vllm_core::engine::Engine::error_count: usize
+pub vllm_core::engine::Engine::finish_reason_txs: std::collections::hash::map::HashMap<vllm_traits::types::SeqId, tokio::sync::oneshot::Sender<vllm_traits::types::FinishReason>>
 pub vllm_core::engine::Engine::last_error: core::option::Option<alloc::string::String>
 pub vllm_core::engine::Engine::max_draft_tokens: usize
-pub vllm_core::engine::Engine::response_txs: std::collections::hash::map::HashMap<vllm_traits::types::SeqId, tokio::sync::mpsc::bounded::Sender<vllm_traits::types::TokenId>>
+pub vllm_core::engine::Engine::response_txs: std::collections::hash::map::HashMap<vllm_traits::types::SeqId, tokio::sync::mpsc::bounded::Sender<vllm_traits::sampling::SampledToken>>
 pub vllm_core::engine::Engine::scheduler: vllm_core::scheduler::engine::state::SchedulerEngine
 pub vllm_core::engine::Engine::speculative_mode: bool
 pub vllm_core::engine::Engine::target_model: alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::boxed::Box<dyn vllm_traits::model::ModelBackend>>>
@@ -1783,9 +1786,10 @@ pub vllm_core::EngineError::SeqNotFound::id: u64
 pub vllm_core::EngineError::Timeout
 pub vllm_core::EngineError::Timeout::ms: u64
 pub vllm_core::EngineError::Timeout::op: alloc::string::String
+pub vllm_core::Engine::finish_reason_txs: std::collections::hash::map::HashMap<vllm_traits::types::SeqId, tokio::sync::oneshot::Sender<vllm_traits::types::FinishReason>>
 pub vllm_core::Engine::last_error: core::option::Option<alloc::string::String>
 pub vllm_core::Engine::max_draft_tokens: usize
-pub vllm_core::Engine::response_txs: std::collections::hash::map::HashMap<vllm_traits::types::SeqId, tokio::sync::mpsc::bounded::Sender<vllm_traits::types::TokenId>>
+pub vllm_core::Engine::response_txs: std::collections::hash::map::HashMap<vllm_traits::types::SeqId, tokio::sync::mpsc::bounded::Sender<vllm_traits::sampling::SampledToken>>
 pub vllm_core::Engine::scheduler: vllm_core::scheduler::engine::state::SchedulerEngine
 pub vllm_core::engine::SleepPolicy::backoff_factor: f64
 pub vllm_core::engine::SleepPolicy::base_interval: u64
@@ -2147,8 +2151,13 @@ pub vllm_core::types::AdaptiveDraftConfig::max_draft_tokens: usize
 pub vllm_core::types::AdaptiveDraftConfig::min_draft_tokens: usize
 pub vllm_core::types::AdaptiveDraftConfig::target_acceptance_rate: f32
 pub vllm_core::types::EngineMessage::AddRequest
+pub vllm_core::types::EngineMessage::AddRequest::finish_reason_tx: core::option::Option<tokio::sync::oneshot::Sender<vllm_traits::types::FinishReason>>
+pub vllm_core::types::EngineMessage::AddRequest::request_id: core::option::Option<alloc::string::String>
 pub vllm_core::types::EngineMessage::AddRequest::request: vllm_core::Request
-pub vllm_core::types::EngineMessage::AddRequest::response_tx: tokio::sync::mpsc::bounded::Sender<vllm_traits::types::TokenId>
+pub vllm_core::types::EngineMessage::AddRequest::response_tx: tokio::sync::mpsc::bounded::Sender<vllm_traits::sampling::SampledToken>
+pub vllm_core::types::EngineMessage::AddRequest::seq_id_tx: core::option::Option<tokio::sync::oneshot::Sender<vllm_traits::types::SeqId>>
+pub vllm_core::types::EngineMessage::CancelRequest
+pub vllm_core::types::EngineMessage::CancelRequest::seq_id: vllm_traits::types::SeqId
 pub vllm_core::types::EngineMessage::GetEmbeddings
 pub vllm_core::types::EngineMessage::GetEmbeddings::input_tokens: alloc::vec::Vec<alloc::vec::Vec<vllm_traits::types::TokenId>>
 pub vllm_core::types::EngineMessage::GetEmbeddings::response_tx: tokio::sync::mpsc::unbounded::UnboundedSender<alloc::vec::Vec<alloc::vec::Vec<f32>>>

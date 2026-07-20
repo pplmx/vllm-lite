@@ -81,7 +81,7 @@ fn decode_token(
             &[false],
         )
         .expect("decode forward");
-    out.next_tokens[0]
+    out.next_tokens[0].token
 }
 
 fn decode_token_to_layer(
@@ -102,7 +102,7 @@ fn decode_token_to_layer(
             upto_layer,
         )
         .expect("decode forward_to_layer");
-    out.next_tokens[0]
+    out.next_tokens[0].token
 }
 
 /// Mirrors `SelfSpeculativeModel::generate_draft` single-sequence decode loop (Wave 4 / 5.4.4).

@@ -12,7 +12,9 @@ use vllm_core::speculative::{
     DraftId, DraftLoader, DraftModelRegistry, DraftRegistryError, DraftResolver, MemoryBudget,
     ResolvedDraft,
 };
-use vllm_traits::{BatchOutput, ModelBackend, ModelError, Result as ModelResult, SeqId, TokenId};
+use vllm_traits::{
+    BatchOutput, ModelBackend, ModelError, Result as ModelResult, SampledToken, SeqId, TokenId,
+};
 
 // ─────────────────────────── Stub Backend ────────────────────────────
 
@@ -64,7 +66,14 @@ impl ModelBackend for StubBackend {
         }
         // Deterministic output: one token per seq, value = self.id hash.
         let token: u32 = self.id.bytes().map(u32::from).sum();
-        let next_tokens = seq_ids.iter().map(|_| token).collect();
+        let next_tokens = seq_ids
+            .iter()
+            .map(|_| SampledToken {
+                token,
+                logprob: 0.0,
+                top_logprobs: vec![],
+            })
+            .collect();
         Ok(BatchOutput {
             seq_ids: seq_ids.to_vec(),
             next_tokens,

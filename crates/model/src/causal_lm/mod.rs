@@ -18,7 +18,7 @@ use crate::components::decoder_block::PagedDecoderBlock;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Device, Module, Tensor};
 use candle_nn::Embedding;
-use vllm_traits::{BatchOutput, ModelError, Result, SeqId, TokenId, argmax_logits};
+use vllm_traits::{BatchOutput, ModelError, Result, SampledToken, SeqId, TokenId, argmax_logits};
 
 /// Map candle errors into [`ModelError`] via `?`.
 pub(crate) fn map_candle<T>(result: candle_core::Result<T>) -> Result<T> {
@@ -87,7 +87,7 @@ pub(crate) fn forward_batch<F>(
     mut step: F,
 ) -> Result<BatchOutput>
 where
-    F: FnMut(usize, bool) -> Result<TokenId>,
+    F: FnMut(usize, bool) -> Result<SampledToken>,
 {
     if seq_ids.is_empty() {
         return Ok(BatchOutput {
