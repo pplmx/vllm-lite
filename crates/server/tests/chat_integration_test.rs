@@ -5401,31 +5401,6 @@ fn spawn_stop_mock_engine(
     (engine_tx, captured, handle)
 }
 
-fn state_with_stop_mock_engine(
-    per_seq_tokens: Vec<Vec<u32>>,
-) -> (
-    ApiState,
-    Arc<Mutex<Vec<usize>>>,
-    tokio::task::JoinHandle<()>,
-) {
-    let (engine_tx, captured, handle) = spawn_stop_mock_engine(per_seq_tokens);
-    let state = ApiState {
-        engine_tx,
-        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
-        architecture: Architecture::Qwen3,
-        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
-        auth: None,
-        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
-        health: Arc::new(std::sync::RwLock::new(
-            vllm_server::health::HealthChecker::new(true, true),
-        )),
-        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
-        max_model_len: None,
-        arch_capabilities: None,
-    };
-    (state, captured, handle)
-}
-
 // -----------------------------------------------------------------------------
 // TEST 1: chat single-token stop → finish_reason = "stop"
 // -----------------------------------------------------------------------------
@@ -5436,23 +5411,20 @@ async fn test_chat_stop_sequence_triggers_finish_reason_stop() {
     // finish_reason = "stop" in the response.
     //
     // Use a stop string whose BPE tokenization is exactly one token
-    // (a single punctuation char). Pre-compute the token ID via
-    // `state.tokenizer.encode` so the mock emits exactly that ID.
-    let (state, captured, _handle) = state_with_stop_mock_engine(vec![vec![10, 20, 30]]);
+    // (a single punctuation char). Pre-compute the token ID via a
+    // probe tokenizer so the mock emits exactly that ID.
+    let probe = vllm_model::tokenizer::Tokenizer::new();
     let stop_str = "."; // single BPE token in most tokenizers
-    let stop_tokens = state.tokenizer.encode(stop_str);
+    let stop_tokens = probe.encode(stop_str);
     assert!(
         !stop_tokens.is_empty(),
         "test fixture: stop string must tokenize to at least one token"
     );
     let stop_token = stop_tokens[0];
-    // Re-emit the mock with the actual stop token (replace token 30
-    // with the real stop token).
-    let (engine_tx, captured2, handle2) = spawn_stop_mock_engine(vec![vec![10, 20, stop_token]]);
-    let _ = (state, captured, _handle); // discard prior mock (already moved)
+    let (engine_tx, captured, handle) = spawn_stop_mock_engine(vec![vec![10, 20, stop_token]]);
     let state = ApiState {
         engine_tx,
-        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        tokenizer: Arc::new(probe),
         architecture: Architecture::Qwen3,
         batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
         auth: None,
@@ -5496,20 +5468,20 @@ async fn test_chat_stop_sequence_triggers_finish_reason_stop() {
         Some("stop"),
         "engine's FinishReason::Stop must surface as finish_reason=stop"
     );
-    let captured = captured2.lock().await;
+    let captured_guard = captured.lock().await;
     assert_eq!(
-        captured.len(),
+        captured_guard.len(),
         1,
         "exactly one AddRequest must reach the engine"
     );
-    let _ = handle2.await;
+    let _ = handle.await;
 }
 
 // -----------------------------------------------------------------------------
-// TEST 2: chat multi-token stop — only fires after BOTH tokens generated
+// TEST 2: chat stop sequence via probe tokenization
 // -----------------------------------------------------------------------------
 #[tokio::test]
-async fn test_chat_multi_token_stop_sequence_works() {
+async fn test_chat_stop_sequence_via_probe_tokenization_works() {
     // Mock emits tokens including the FULL multi-token stop at the end.
     // After both stop tokens are emitted, the mock sends Stop, which
     // the handler maps to finish_reason = "stop".
@@ -6241,14 +6213,10 @@ async fn test_chat_stop_with_max_tokens_stop_wins_when_earlier() {
     let stop_tokens = probe.encode(stop_str);
     assert!(!stop_tokens.is_empty());
     let stop_token = stop_tokens[0];
-    let tokens = vec![10u32, 20, stop_token];
-
-    let (state, _captured, _handle) = state_with_stop_mock_engine(vec![tokens]);
-    let _ = (state, _captured, _handle);
     let (engine_tx, captured, handle) = spawn_stop_mock_engine(vec![vec![10, 20, stop_token]]);
     let state = ApiState {
         engine_tx,
-        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        tokenizer: Arc::new(probe),
         architecture: Architecture::Qwen3,
         batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
         auth: None,

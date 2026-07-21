@@ -341,7 +341,10 @@ pub fn validate_stop_sequences(
                 )),
             ));
         }
-        if stops.iter().any(|s| s.is_empty() || s.chars().all(|c| matches!(c, ' ' | '\t'))) {
+        if stops
+            .iter()
+            .any(|s| s.is_empty() || s.chars().all(|c| matches!(c, ' ' | '\t')))
+        {
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse::new(
@@ -2786,8 +2789,8 @@ mod tests {
         // An empty-string stop is semantically a no-op (would never match
         // any generated text) — reject to give the caller a clear error.
         let stop: Option<Vec<String>> = Some(vec!["".to_string()]);
-        let err = validate_stop_sequences(&stop)
-            .expect_err("empty-string stop must be rejected (P38)");
+        let err =
+            validate_stop_sequences(&stop).expect_err("empty-string stop must be rejected (P38)");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         assert!(err.1.0.error.message.contains("stop"));
     }
