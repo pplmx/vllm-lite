@@ -413,7 +413,9 @@ pub fn validate_completion_logprobs(
 }
 
 /// Validate the `echo` + `suffix` + `best_of` fields on a completion
-/// request (P32 v0.x wire-type follow-up — declaration + validation).
+/// request (P32 v0.x wire-type follow-up — declaration + validation;
+/// P37 extends the validation with the `<= 20` upper bound to match
+/// OpenAI's spec).
 ///
 /// Per OpenAI legacy-completions spec:
 /// - `echo: bool` (default `false`) — when `true`, the response
@@ -425,6 +427,11 @@ pub fn validate_completion_logprobs(
 ///
 /// Validation rules:
 /// - `best_of = Some(0)` rejects (`>= 1` per OpenAI spec).
+/// - `best_of = Some(n > 20)` rejects (`<= 20` per OpenAI spec, P37
+///   extension). Rationale: protects the server from
+///   `N × max_tokens` inference cost explosion (one
+///   `best_of = 1_000_000` request could pin every scheduler
+///   sequence slot). Mirrors the OpenAI API's documented upper bound.
 /// - **Cross-field rule:** `echo = true` cannot coexist with
 ///   `best_of > 1` per OpenAI spec. Rationale: when `best_of > 1`
 ///   the server samples multiple completions and returns the
@@ -440,23 +447,16 @@ pub fn validate_completion_logprobs(
 ///   check (`prompt_tokens + suffix_tokens + max_tokens <= max_model_len`)
 ///   if/when suffix honoring lands.
 ///
-/// **Honoring note (P32):** all three fields are declaration-only
-/// today — the engine's sampler returns one completion per request
-/// and does not currently rank by mean logprob. Engine-side
-/// honoring requires:
-/// - `echo`: prepend the prompt to `CompletionChoice.text` in
-///   streaming + non-streaming paths (mechanical, but adds a
-///   tokenizer dependency to the response side).
-/// - `suffix`: append the suffix to `CompletionChoice.text`.
-/// - `best_of`: sample `best_of` times with the same prompt +
-///   sampling params, rank by mean logprob, return the single
-///   best. The logprob-ranking primitive requires the same v32+
-///   engine work as the `logprobs` field (P31), so the two are
-///   co-dependent.
-///
-/// All three are tracked as v32+ work. The wire-type contract is
-/// locked in now so the declaration-only PR doesn't regress to
-/// "rejected by serde" for callers who already send the fields.
+/// **Honoring note (P37):** `echo` and `suffix` are honored
+/// end-to-end since P35 via the `apply_completion_meta` helper in
+/// `crates/server/src/openai/completions.rs`. `best_of` is honored
+/// end-to-end since P37 via the `run_best_of` branch in the
+/// completions handler — the handler sends N parallel
+/// `EngineMessage::AddRequest` messages, collects N
+/// `Vec<SampledToken>` streams, ranks by mean logprob via
+/// `rank_by_mean_logprob`, and returns the chosen completion in a
+/// single JSON `choices[]` (matches OpenAI's contract: `best_of`
+/// returns ONE completion, not N).
 ///
 /// # Errors
 ///
@@ -473,6 +473,17 @@ pub fn validate_completion_meta(
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse::new(
                 "best_of must be >= 1 per OpenAI spec (got 0)",
+                "invalid_request_error",
+            )),
+        ));
+    }
+    if let Some(n) = best_of
+        && n > 20
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "best_of must be <= 20 per OpenAI spec (got 20 max; protects server from N × max_tokens cost explosion)",
                 "invalid_request_error",
             )),
         ));
@@ -2154,6 +2165,44 @@ mod tests {
             .expect_err("best_of=0 must be rejected (>= 1 per OpenAI spec)");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         assert!(err.1.0.error.message.contains("best_of"));
+    }
+
+    // P37 v0.x wire-type follow-up — engine wire-through: the
+    // validator now enforces a `<= 20` upper bound on `best_of`
+    // (matches OpenAI's spec; protects the server from
+    // N × max_tokens cost explosion). These tests pin the new
+    // boundary contract end-to-end.
+
+    #[test]
+    fn completion_meta_best_of_at_upper_bound_passes() {
+        validate_completion_meta(None, Some(20))
+            .expect("best_of=20 must pass (= OpenAI's upper bound, P37)");
+    }
+
+    #[test]
+    fn completion_meta_best_of_above_upper_bound_is_rejected() {
+        let err = validate_completion_meta(None, Some(21))
+            .expect_err("best_of=21 must be rejected (<= 20 per OpenAI spec, P37)");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("best_of"));
+        assert!(err.1.0.error.message.contains("20"));
+    }
+
+    #[test]
+    fn completion_meta_best_of_well_above_upper_bound_is_rejected() {
+        // Defensive check that very-large values don't somehow bypass
+        // the boundary check (regression guard for u32 overflow / etc.).
+        let err = validate_completion_meta(None, Some(1_000_000))
+            .expect_err("best_of=1_000_000 must be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("best_of"));
+    }
+
+    #[test]
+    fn completion_meta_best_of_at_upper_bound_with_echo_false_passes() {
+        // Boundary combination: max best_of + echo=false (allowed)
+        validate_completion_meta(Some(false), Some(20))
+            .expect("echo=false + best_of=20 must pass (no cross-field conflict)");
     }
 
     #[test]

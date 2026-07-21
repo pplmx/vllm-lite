@@ -87,6 +87,331 @@ fn build_completion_choice_logprobs(
     })
 }
 
+/// Rank N `best_of` candidates by mean logprob (P37 v0.x wire-type
+/// follow-up — engine wire-through helper for `best_of`).
+///
+/// Returns the index of the candidate with the highest mean logprob
+/// across its generated tokens. The mean is the simple arithmetic
+/// mean of per-token `SampledToken::logprob` values — matches
+/// OpenAI's "mean log probability" wording (length-normalized by
+/// design; OpenAI does not specify a length-penalty variant here).
+///
+/// **Tie-breaking:** when two candidates have equal mean logprob (to
+/// within `f32::EPSILON`), the one with the lower `seq_id` wins.
+/// `seq_id` is monotonically assigned by the scheduler in the order
+/// the engine admits the request, so the tie-break is deterministic
+/// across runs (no RNG dependency) — important for snapshot /
+/// regression testing.
+///
+/// **Defensive defaults:**
+/// - Empty input → returns `0` (no candidates to rank; caller should
+///   not reach this in practice because `best_of >= 1` is enforced
+///   by `validate_completion_meta`).
+/// - Candidate with zero generated tokens → mean logprob is `0.0`
+///   (sum is `0`, divide by `1` per OpenAI convention — empty
+///   completions are extremely rare but can occur if the engine
+///   emits a `finish_reason = length` before any sampled token
+///   reaches the HTTP layer).
+///
+/// Each candidate's `seq_id` is the index of its `Vec<SampledToken>`
+/// in the input slice — we use the slice index as the seq_id proxy
+/// because the candidates are admitted in order and we don't need
+/// the full SeqId for tie-breaking (any monotonically-increasing
+/// deterministic value works).
+fn rank_by_mean_logprob(candidates: &[Vec<vllm_traits::SampledToken>]) -> usize {
+    if candidates.is_empty() {
+        return 0;
+    }
+    candidates
+        .iter()
+        .enumerate()
+        .map(|(i, sampled)| {
+            let mean = if sampled.is_empty() {
+                0.0
+            } else {
+                let sum: f32 = sampled.iter().map(|s| s.logprob).sum();
+                sum / sampled.len() as f32
+            };
+            (i, mean)
+        })
+        // Highest mean logprob wins; ties broken by lowest seq_id
+        // (slice index, which is monotonically assigned per the
+        // engine's admission order).
+        .max_by(|(i_a, mean_a), (i_b, mean_b)| {
+            mean_a
+                .partial_cmp(mean_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| i_b.cmp(i_a)) // lower i wins on tie
+        })
+        .map(|(i, _)| i)
+        .unwrap_or(0)
+}
+
+/// Forward the legacy-completions request's sampling fields onto a
+/// fresh `vllm_core::types::Request` (P27/P28/P29/P30/P34/P36
+/// sampling-params wire-through; P37 reuses this for the
+/// `best_of` per-candidate requests so each candidate gets the
+/// exact same sampling config the user submitted).
+///
+/// The function is the single authoritative point for the
+/// legacy-endpoint → `SamplingParams` mapping; both the streaming
+/// and non-streaming paths in `completions()` call it, and the
+/// `best_of` path calls it N times (once per candidate). Keeping
+/// the mapping in one place means the contract stays in sync
+/// across all three paths.
+///
+/// Field-level rationale (see the chat handler for the long-form
+/// comments on each mapping):
+/// - `temperature`: forwarded verbatim.
+/// - `top_p`: forwarded verbatim (validator already range-checked).
+/// - `frequency_penalty`: maps to `repeat_penalty = (1.0 + fp).max(1e-3)`
+///   per P29's sign-aware engine refactor.
+/// - `presence_penalty`: forwarded verbatim (additive bias).
+/// - `logit_bias`: cloned verbatim (validator already bounds each value).
+/// - `seed`: `i64 as u64` cast (wraps negatives per OpenAI's i64 contract).
+/// - `logprobs`: forwarded verbatim to `top_logprobs` (the legacy
+///   endpoint's `logprobs` is `u32 0..=5`; the engine treats
+///   `Some(0)` as "compute sampled-token logprob only, no top-K").
+fn populate_completion_sampling_params(
+    request: &mut vllm_core::types::Request,
+    req: &CompletionRequest,
+) {
+    if let Some(temp) = req.temperature {
+        request.sampling_params.temperature = temp;
+    }
+    if let Some(top_p) = req.top_p {
+        request.sampling_params.top_p = top_p;
+    }
+    if let Some(fp) = req.frequency_penalty {
+        request.sampling_params.repeat_penalty = (1.0 + fp).max(1e-3);
+    }
+    if let Some(pp) = req.presence_penalty {
+        request.sampling_params.presence_penalty = pp;
+    }
+    if let Some(ref lb) = req.logit_bias {
+        request.sampling_params.logit_bias = Some(lb.clone());
+    }
+    if let Some(seed) = req.seed {
+        request.sampling_params.seed = Some(seed as u64);
+    }
+    request.sampling_params.top_logprobs = req.logprobs;
+}
+
+/// Spawn one of N parallel candidates for a `best_of` request
+/// (P37 v0.x wire-type follow-up — engine wire-through helper for
+/// `best_of`). Each candidate is an independent `EngineMessage::AddRequest`
+/// using the exact same prompt + sampling params the user submitted;
+/// the caller (`run_best_of`) ranks the N streams by mean logprob and
+/// returns the single best completion.
+///
+/// Returns the candidate's full token stream alongside its
+/// `FinishReason` so the caller can render the chosen completion's
+/// `finish_reason` in the response (matches OpenAI's contract:
+/// the response's `finish_reason` is the chosen candidate's, not
+/// the request's aggregate).
+///
+/// **Concurrency note:** the candidate is spawned via `tokio::spawn`
+/// so all N candidates run in parallel. Each carries its own clone
+/// of `ApiState` (cheap — all fields are `Arc`-wrapped) and its own
+/// clone of the prompt tokens. The engine's bounded mailbox
+/// (`engine_tx.try_send`) ensures a saturated engine surfaces as
+/// `503 engine_overloaded` rather than blocking the HTTP handler.
+///
+/// **Cancellation note:** each candidate is non-streaming-only (best_of
+/// never streams — see the validator's silence on `stream + best_of > 1`),
+/// so we don't need a `seq_id` round-trip — there is no client
+/// disconnect to propagate mid-flight. The candidate runs to natural
+/// completion (engine closes `response_tx` after the sequence
+/// finishes or hits `max_tokens`).
+async fn spawn_best_of_candidate(
+    state: ApiState,
+    req: CompletionRequest,
+    prompt_tokens: Vec<vllm_traits::TokenId>,
+    max_tokens: usize,
+    correlation_id: String,
+) -> Result<
+    (Vec<vllm_traits::SampledToken>, vllm_traits::FinishReason),
+    (axum::http::StatusCode, Json<ErrorResponse>),
+> {
+    let total_max = prompt_tokens.len() + max_tokens;
+    let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
+
+    populate_completion_sampling_params(&mut request, &req);
+    validate_sampling_params(&request.sampling_params)?;
+
+    let (response_tx, mut response_rx) = mpsc::channel(64);
+    let (finish_reason_tx, finish_reason_rx) = tokio::sync::oneshot::channel();
+
+    // REL-01: try_send surfaces saturation as 503 instead of blocking.
+    state
+        .engine_tx
+        .try_send(vllm_core::types::EngineMessage::AddRequest {
+            request,
+            response_tx,
+            seq_id_tx: None, // non-streaming — no client disconnect to propagate
+            finish_reason_tx: Some(finish_reason_tx),
+            request_id: Some(correlation_id),
+        })
+        .map_err(|e| match e {
+            tokio::sync::mpsc::error::TrySendError::Full(_) => overload_response(),
+            tokio::sync::mpsc::error::TrySendError::Closed(_) => unavailable_response(),
+        })?;
+
+    // Collect the candidate's full token stream.
+    let mut tokens = Vec::new();
+    while let Some(sampled) = response_rx.recv().await {
+        tokens.push(sampled);
+    }
+
+    // Engine sends the reason before closing the response channel,
+    // so this resolves immediately in the normal case. Fall back to
+    // `Stop` only when the oneshot was dropped without a value
+    // (e.g. engine panicked between the two steps).
+    let finish_reason = finish_reason_rx
+        .await
+        .unwrap_or(vllm_traits::FinishReason::Stop);
+    Ok((tokens, finish_reason))
+}
+
+/// Run the `best_of > 1` path (P37 v0.x wire-type follow-up —
+/// engine wire-through helper for `best_of`). Spawns N parallel
+/// candidates via [`spawn_best_of_candidate`], joins them, ranks
+/// by mean logprob via [`rank_by_mean_logprob`], and returns the
+/// single best completion in a JSON response (NOT SSE — `best_of`
+/// is non-streaming-only, matching OpenAI's contract).
+///
+/// **Streaming + best_of:** the caller (`completions()`) detects
+/// `stream = true && best_of > 1` and silently dispatches here
+/// without raising a 400. The OpenAI spec is intentionally
+/// permissive on this combination; the runtime behavior is what
+/// changes (the response shape becomes a single JSON document
+/// instead of an SSE event stream).
+///
+/// **Partial-failure semantics:** if any of the N candidates fails
+/// (engine error / overload / panic), we return the FIRST error
+/// observed and discard the other candidates' results. We do NOT
+/// issue `EngineMessage::CancelRequest` for the still-running
+/// candidates — they will run to natural completion and free their
+/// scheduler slots on their own. The cost of this simplification
+/// is bounded (each candidate runs at most `max_tokens` steps), and
+/// the alternative — per-candidate seq_id tracking + cancel — would
+/// add significant complexity for a corner case that should be rare
+/// in practice (a `best_of = 5` request where 4 of 5 candidates
+/// succeed is overwhelmingly the common path).
+///
+/// **Logprob interaction:** when `req.logprobs = Some(n)`, the
+/// **chosen** completion's per-token logprobs are rendered via
+/// [`build_completion_choice_logprobs`] (P36 helper). The other
+/// N-1 candidates' logprobs are discarded after ranking.
+///
+/// **Suffix interaction:** when `req.suffix = Some(_)`, the
+/// **chosen** completion's text has the suffix appended via
+/// [`apply_completion_meta`] (P35 helper).
+async fn run_best_of(
+    state: ApiState,
+    req: CompletionRequest,
+    prompt_tokens: Vec<vllm_traits::TokenId>,
+    prompt: String,
+    prompt_tokens_len: usize,
+    max_tokens: usize,
+    correlation_id: CorrelationId,
+) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    let n = req.best_of.unwrap_or(1) as usize;
+
+    // Spawn N candidates. Each task is independent and runs in
+    // parallel; we send all N `EngineMessage::AddRequest` messages
+    // to the engine mailbox in quick succession so the engine sees
+    // them as one batch (when N is small enough to fit the bounded
+    // mailbox capacity — REL-01 saturation surfaces as the first
+    // candidate's 503 try_send error, which we propagate below).
+    let mut handles = Vec::with_capacity(n);
+    for _ in 0..n {
+        let state = state.clone();
+        let req = req.clone();
+        let prompt_tokens = prompt_tokens.clone();
+        let correlation_id = correlation_id.0.clone();
+        let candidate = tokio::spawn(spawn_best_of_candidate(
+            state,
+            req,
+            prompt_tokens,
+            max_tokens,
+            correlation_id,
+        ));
+        handles.push(candidate);
+    }
+
+    // Join all candidates. First failure wins (the other candidates
+    // keep running in the background — see the partial-failure
+    // comment in the module doc above).
+    let mut candidates: Vec<Vec<vllm_traits::SampledToken>> = Vec::with_capacity(n);
+    let mut candidate_finish_reasons: Vec<vllm_traits::FinishReason> = Vec::with_capacity(n);
+    for handle in handles {
+        match handle.await {
+            Ok(Ok((tokens, finish_reason))) => {
+                candidates.push(tokens);
+                candidate_finish_reasons.push(finish_reason);
+            }
+            Ok(Err(e)) => return Err(e),
+            Err(e) => {
+                return Err((
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse::new(
+                        format!("best_of candidate task panicked: {e}").as_str(),
+                        "server_error",
+                    )),
+                ));
+            }
+        }
+    }
+
+    // Rank by mean logprob — the index of the chosen candidate is
+    // also the index into `candidate_finish_reasons`.
+    let best_idx = rank_by_mean_logprob(&candidates);
+    let best_tokens = &candidates[best_idx];
+    let best_finish_reason = &candidate_finish_reasons[best_idx];
+
+    // Apply echo + suffix to the chosen completion's text. The
+    // prompt is cloned once here (we move it into the formatter);
+    // the other N-1 candidates' texts are discarded (OpenAI's
+    // contract: `best_of` returns ONE completion, not N).
+    let text = clean_completion_text(
+        &state.tokenizer,
+        &state.tokenizer.decode(&token_ids(best_tokens)),
+    );
+    let text = apply_completion_meta(text, &prompt, req.echo, req.suffix.as_deref());
+
+    // Render the chosen completion's finish_reason per OpenAI's
+    // contract (same string mapping as the non-streaming single-shot
+    // path; see that branch for the full rationale).
+    let finish_reason_string = match best_finish_reason {
+        vllm_traits::FinishReason::Length => "length",
+        vllm_traits::FinishReason::Stop | vllm_traits::FinishReason::Cancelled => "stop",
+    };
+
+    let choice = CompletionChoice {
+        text,
+        index: 0,
+        finish_reason: Some(finish_reason_string.to_string()),
+        // P36 v0.3 wire-type follow-up engine wire-through: render
+        // per-token logprobs (and top-K alternatives when the
+        // request asked) from the chosen candidate's SampledToken
+        // stream. The other N-1 candidates' logprobs are discarded
+        // after ranking — matches OpenAI's "one completion, with
+        // its logprobs" contract.
+        logprobs: build_completion_choice_logprobs(&state.tokenizer, best_tokens, req.logprobs),
+    };
+
+    let usage = Usage::new(prompt_tokens_len, best_tokens.len());
+    let response = CompletionResponse::new(
+        format!("cmpl-{}", uuid::Uuid::new_v4()),
+        req.model.unwrap_or_else(|| "default".to_string()),
+        vec![choice],
+        usage,
+    );
+
+    Ok(Json(response).into_response())
+}
+
 /// Apply OpenAI `echo` + `suffix` semantics to a generated
 /// completion text (P35 v0.x wire-type follow-up engine
 /// wire-through). This is the single authoritative point for the
@@ -164,7 +489,11 @@ pub async fn completions(
     }
 
     let is_streaming = req.stream.unwrap_or(false);
-    let prompt = req.prompt;
+    // Clone the prompt so `req` remains whole for downstream sampling
+    // params forwarding + best_of per-candidate requests (P37).
+    // The clone is cheap (prompt is typically short) and avoids
+    // splitting the borrow on `req` after the sampling-params pass.
+    let prompt = req.prompt.clone();
     let prompt_tokens = state.tokenizer.encode(&prompt);
     let prompt_tokens_len = prompt_tokens.len();
     let max_tokens = usize::try_from(req.max_tokens.unwrap_or(100)).unwrap_or(100);
@@ -190,88 +519,44 @@ pub async fn completions(
         }
     }
 
+    // P37 v0.x wire-type follow-up — engine wire-through: `best_of`
+    // dispatch. When `best_of > 1`, spawn N parallel candidates via
+    // `run_best_of`, rank by mean logprob, and return the single
+    // best completion as a JSON response. The dispatch MUST happen
+    // BEFORE the single-shot `Request::new` (which moves
+    // `prompt_tokens`) so the per-candidate requests can reuse the
+    // tokenized prompt.
+    //
+    // **Streaming interaction:** when `stream = true` AND `best_of > 1`,
+    // we silently fall back to non-streaming (a single JSON response
+    // instead of an SSE event stream). OpenAI's API accepts the
+    // combination; the runtime behavior is what changes — the
+    // response shape becomes a non-streaming document because
+    // `best_of` requires ranking N candidates first.
+    if let Some(n) = req.best_of {
+        if n > 1 {
+            return run_best_of(
+                state,
+                req,
+                prompt_tokens,
+                prompt,
+                prompt_tokens_len,
+                max_tokens,
+                correlation_id,
+            )
+            .await;
+        }
+    }
+
     let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
 
-    if let Some(temp) = req.temperature {
-        request.sampling_params.temperature = temp;
-    }
-
-    // Forward `top_p` to the engine (mirror of the chat handler).
-    // The engine's `sample_batch_with_params` honours `top_p` via
-    // nucleus sampling; the value is range-checked by
-    // `validate_completion_request_fields` earlier in this handler.
-    if let Some(top_p) = req.top_p {
-        request.sampling_params.top_p = top_p;
-    }
-
-    // Forward `frequency_penalty` to the engine's existing
-    // `repeat_penalty` slot (P27 v0.3 wire-type follow-up; P29
-    // closes the boost-semantics carve-out via the sign-aware
-    // engine refactor). Mirrors the chat handler's wire-through
-    // so the legacy `/v1/completions` endpoint sees the same
-    // penalty behavior (including the boost semantic for negative
-    // values). See the chat handler's matching block for the full
-    // rationale on `(1.0 + fp).max(1e-3)`.
-    if let Some(fp) = req.frequency_penalty {
-        request.sampling_params.repeat_penalty = (1.0 + fp).max(1e-3);
-    }
-
-    // Forward `presence_penalty` to the engine's
-    // `SamplingParams::presence_penalty` slot (P28 v0.3
-    // wire-type follow-up — engine wire-through). Mirrors the
-    // chat handler so the legacy endpoint sees the same penalty
-    // behavior. Unlike `frequency_penalty` (clamped via `max(1.0,
-    // ...)` because of the logit-divide sign-flip bug for negative
-    // values), `presence_penalty` is an additive bias so the value
-    // is forwarded verbatim — no clamping needed.
-    if let Some(pp) = req.presence_penalty {
-        request.sampling_params.presence_penalty = pp;
-    }
-
-    // Forward `logit_bias` to the engine's new
-    // `SamplingParams::logit_bias` slot (P30 v0.3 wire-type
-    // follow-up — engine wire-through). Mirrors the chat handler
-    // so the legacy endpoint sees the same bias semantics. The
-    // engine's `apply_logit_bias` adds each map value to the logit
-    // at the corresponding token position before the temperature /
-    // top-k / top-p pipeline. Per OpenAI spec the values are
-    // constrained to the `[-100, 100]` range; the validator
-    // (`validate_completion_request_fields`) rejects NaN /
-    // ±infinity / out-of-range values with `400`, so we only need
-    // to forward the field here. The completions handler does not
-    // currently log the field (parity with the `seed` / `user` /
-    // `frequency_penalty` / `presence_penalty` fields — chat
-    // handler logs them, completions handler does not).
-    if let Some(ref lb) = req.logit_bias {
-        request.sampling_params.logit_bias = Some(lb.clone());
-    }
-
-    // Forward `seed` to the engine's `SamplingParams::seed` slot
-    // (P34 v0.2 wire-type follow-up — engine wire-through). Same
-    // `i64 as u64` cast rationale as the chat handler — see that
-    // file for the full discussion. The legacy completions handler
-    // does not currently log the seed field (parity with `user` /
-    // `frequency_penalty` / `presence_penalty` / `logit_bias` —
-    // chat handler logs them, completions handler accepts them at
-    // the wire type but does not log).
-    if let Some(seed) = req.seed {
-        request.sampling_params.seed = Some(seed as u64);
-    }
-
-    // Forward `logprobs` (legacy `/v1/completions`) to the engine's
-    // `SamplingParams::top_logprobs` slot (P36 v0.3 wire-type
-    // follow-up — engine wire-through). The legacy endpoint's
-    // `logprobs` is `Option<u32>` in the `0..=5` range; validation
-    // lives on the HTTP layer (`validate_completion_logprobs`).
-    // The engine's `sample_one_with_params` checks
-    // `params.top_logprobs.is_some()` and runs the partial top-K
-    // selection on the post-filter logits only when the request
-    // asked for top-K. When `logprobs = Some(0)` we forward as
-    // `Some(0)` so the engine still computes the sampled-token
-    // logprob (which `token_logprobs[]` then surfaces — OpenAI's
-    // legacy endpoint includes `token_logprobs` even at
-    // `logprobs = 0`).
-    request.sampling_params.top_logprobs = req.logprobs;
+    // Forward all sampling fields (P27/P28/P29/P30/P34/P36 wire-through).
+    // The `populate_completion_sampling_params` helper is the single
+    // authoritative point for the OpenAI → `SamplingParams` mapping;
+    // it is reused by the `best_of` per-candidate requests below so
+    // every candidate sees the exact same sampling config the user
+    // submitted. See the helper's doc-comment for field-level rationale.
+    populate_completion_sampling_params(&mut request, &req);
 
     // Reject sampling parameters the engine cannot honour (currently
     // beam_width > 1) BEFORE enqueuing — see `sampling_validation`.

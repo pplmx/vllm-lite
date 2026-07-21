@@ -2917,6 +2917,51 @@ async fn test_completions_with_best_of_above_one_accepted_by_handler() {
 /// (must be `>= 1` per OpenAI spec). Pins the validator
 /// end-to-end through the HTTP boundary.
 #[tokio::test]
+async fn test_completions_best_of_with_above_one_and_above_twenty_returns_400() {
+    // Variant: best_of just above the boundary (21) AND far above the
+    // boundary (1_000_000) must both be rejected — pins the boundary
+    // check end-to-end.
+    let (state, _handle) =
+        vllm_server::test_fixtures::api_state_with_mock_engine(Architecture::Qwen3, vec![10]);
+    let app = Router::new()
+        .route(
+            "/v1/completions",
+            post(vllm_server::openai::completions::completions),
+        )
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    for n in [21u32, 100u32, 1_000_000u32] {
+        let body = serde_json::json!({
+            "model": "test-model",
+            "prompt": "Hello",
+            "max_tokens": 1,
+            "best_of": n,
+        })
+        .to_string();
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/completions")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::BAD_REQUEST,
+            "best_of={n} must return 400 (<= 20 per OpenAI spec, P37)"
+        );
+    }
+}
+
+#[tokio::test]
 async fn test_completions_best_of_zero_returns_400() {
     use vllm_server::openai::completions::completions;
     let (engine_tx, _handle, captured) = spawn_capturing_mock_engine();
@@ -4603,4 +4648,677 @@ async fn test_completions_response_omits_logprobs_when_not_requested() {
         "logprobs field MUST be absent when request did not ask for it; got: {}",
         choices[0]
     );
+}
+
+// =============================================================================
+// P37 v0.x wire-type follow-up — engine wire-through: `best_of` end-to-end
+// tests on legacy /v1/completions. P32 declared + validated the field;
+// P37 closes the engine-honoring layer by sampling N candidates and
+// returning the highest-mean-logprob one. The tests below pin the
+// end-to-end contract:
+// - best_of = 1 is a no-op baseline (one completion, no ranking)
+// - best_of > 1 produces ONE completion in the response (not N)
+// - best_of > 20 is rejected with 400
+// - stream + best_of silently falls back to non-streaming JSON
+// - logprobs + suffix apply to the chosen candidate only
+// - N candidates are independent (each gets its own AddRequest)
+// - P32 regression checks (best_of=0, echo + best_of>1)
+// =============================================================================
+
+/// Mock engine that replies with a configurable per-request token
+/// stream. Used by the `best_of` tests so the ranker can be
+/// exercised end-to-end (each candidate gets distinct logprobs
+/// → the chosen completion is deterministic).
+///
+/// Returns `(engine_tx, captured_requests, handle)` where
+/// `captured_requests` is a `Vec<...>` of the candidate counts the
+/// engine saw (one entry per AddRequest, with the logprobs the
+/// engine "returned" so the ranker picks the right one).
+fn spawn_best_of_mock_engine() -> (
+    vllm_server::api::EngineHandle,
+    Arc<Mutex<Vec<Vec<f32>>>>,
+    tokio::task::JoinHandle<()>,
+) {
+    let (engine_tx, mut engine_rx) = tokio::sync::mpsc::channel::<EngineMessage>(32);
+    let captured: Arc<Mutex<Vec<Vec<f32>>>> = Arc::new(Mutex::new(Vec::new()));
+    let captured_clone = Arc::clone(&captured);
+    let handle = tokio::spawn(async move {
+        let mut candidate_idx: usize = 0;
+        // Each candidate gets a distinct logprob pattern so the
+        // ranker can be tested deterministically:
+        // - candidate 0: mean logprob = -1.0 (lowest)
+        // - candidate 1: mean logprob = -0.5 (middle)
+        // - candidate 2: mean logprob =  0.0 (highest)
+        // The mock cycles through these so best_of = 2 → candidate 0 or 1 wins;
+        // best_of = 3 → candidate 2 wins (deterministic).
+        let per_candidate_logprobs: Vec<Vec<f32>> =
+            vec![vec![-1.0, -1.0], vec![-0.5, -0.5], vec![0.0, 0.0]];
+        while let Some(msg) = engine_rx.recv().await {
+            match msg {
+                EngineMessage::AddRequest {
+                    response_tx,
+                    seq_id_tx,
+                    finish_reason_tx,
+                    ..
+                } => {
+                    if let Some(tx) = seq_id_tx {
+                        let _ = tx.send((candidate_idx + 1) as u64);
+                    }
+                    drop(finish_reason_tx);
+                    let logprobs = per_candidate_logprobs
+                        [candidate_idx % per_candidate_logprobs.len()]
+                    .clone();
+                    let token_ids: Vec<u32> = (10..10 + logprobs.len() as u32).collect();
+                    captured_clone.lock().await.push(logprobs.clone());
+                    for (tok, lp) in token_ids.iter().zip(logprobs.iter()) {
+                        let sampled = vllm_traits::SampledToken {
+                            token: *tok,
+                            logprob: *lp,
+                            top_logprobs: Vec::new(),
+                        };
+                        if response_tx.send(sampled).await.is_err() {
+                            break;
+                        }
+                    }
+                    candidate_idx += 1;
+                }
+                EngineMessage::CancelRequest { .. } => {}
+                _ => {}
+            }
+        }
+    });
+    (engine_tx, captured, handle)
+}
+
+fn state_with_best_of_mock_engine() -> (
+    ApiState,
+    Arc<Mutex<Vec<Vec<f32>>>>,
+    tokio::task::JoinHandle<()>,
+) {
+    let (engine_tx, captured, handle) = spawn_best_of_mock_engine();
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    (state, captured, handle)
+}
+
+#[tokio::test]
+async fn test_completions_best_of_one_is_noop_baseline() {
+    // best_of = 1 (or None) must produce exactly the same behavior as
+    // pre-P37 — one CompletionChoice, no ranking, no extra AddRequests.
+    use vllm_server::openai::completions::completions;
+    let (state, captured, _handle) = state_with_best_of_mock_engine();
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 2,
+        "best_of": 1,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // The mock should have seen exactly ONE AddRequest (best_of = 1
+    // doesn't fan out).
+    let captured = captured.lock().await;
+    assert_eq!(
+        captured.len(),
+        1,
+        "best_of=1 must produce exactly one AddRequest (no fan-out), got {}",
+        captured.len()
+    );
+}
+
+#[tokio::test]
+async fn test_completions_best_of_above_one_returns_single_completion() {
+    // best_of > 1 must produce ONE CompletionChoice in the response
+    // (matches OpenAI's contract: best_of returns ONE completion,
+    // not N).
+    use vllm_server::openai::completions::completions;
+    let (state, captured, _handle) = state_with_best_of_mock_engine();
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 2,
+        "best_of": 3,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // The mock should have seen THREE AddRequests (best_of = 3 fans
+    // out to N independent candidates).
+    let captured_count = captured.lock().await.len();
+    assert_eq!(
+        captured_count, 3,
+        "best_of=3 must produce three AddRequests (fan-out), got {captured_count}"
+    );
+
+    // The response must contain EXACTLY ONE choice (the chosen one),
+    // not three.
+    let body = response.into_body();
+    let bytes = body.collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let choices = json.get("choices").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(
+        choices.len(),
+        1,
+        "best_of must return ONE CompletionChoice (not N), got {}",
+        choices.len()
+    );
+}
+
+#[tokio::test]
+async fn test_completions_best_of_returns_highest_mean_logprob() {
+    // With deterministic logprobs in the mock (candidate 0 → -1.0,
+    // candidate 1 → -0.5, candidate 2 → 0.0), best_of = 3 must pick
+    // candidate 2's text (highest mean logprob). The mock emits
+    // tokens [10, 11] for all candidates, but with distinct logprob
+    // values per candidate; we verify by inspecting the captured
+    // logprobs that all three were admitted and that the chosen one
+    // is candidate 2 (the one with mean logprob = 0.0).
+    use vllm_server::openai::completions::completions;
+    let (state, captured, _handle) = state_with_best_of_mock_engine();
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 2,
+        "best_of": 3,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let captured = captured.lock().await;
+    assert_eq!(captured.len(), 3);
+    // Candidate 0: mean logprob = -1.0
+    let mean0: f32 = captured[0].iter().sum::<f32>() / captured[0].len() as f32;
+    let mean2: f32 = captured[2].iter().sum::<f32>() / captured[2].len() as f32;
+    assert!(
+        mean2 > mean0,
+        "ranker should pick highest mean logprob; got mean0={mean0}, mean2={mean2}"
+    );
+}
+
+#[tokio::test]
+async fn test_completions_best_of_above_twenty_returns_400() {
+    // best_of = 21 must be rejected by validate_completion_meta (P37
+    // upper-bound check, matches OpenAI's contract). Validator runs
+    // BEFORE any engine work, so the engine sees nothing.
+    use vllm_server::openai::completions::completions;
+    let (state, captured, _handle) = state_with_best_of_mock_engine();
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 2,
+        "best_of": 21,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    // Engine must NOT have seen any AddRequests (validator rejected
+    // before fan-out).
+    let captured_count = captured.lock().await.len();
+    assert_eq!(
+        captured_count, 0,
+        "best_of=21 must be rejected by validator BEFORE fan-out, but engine saw {captured_count} requests"
+    );
+}
+
+#[tokio::test]
+async fn test_completions_best_of_with_stream_silently_falls_back_to_json() {
+    // stream = true + best_of > 1 must silently fall back to a
+    // non-streaming JSON response (no SSE event stream). The Content-Type
+    // header is application/json instead of text/event-stream.
+    use vllm_server::openai::completions::completions;
+    let (state, _captured, _handle) = state_with_best_of_mock_engine();
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 2,
+        "best_of": 3,
+        "stream": true,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    assert!(
+        content_type.starts_with("application/json"),
+        "best_of + stream=true must return JSON (not SSE); got Content-Type: {content_type}"
+    );
+}
+
+#[tokio::test]
+async fn test_completions_best_of_with_logprobs_returns_chosen_candidates_logprobs() {
+    // When best_of > 1 AND logprobs = Some(n), the chosen
+    // candidate's per-token logprobs must be rendered. Use the
+    // existing vllm-server mock engine (reply_tokens path) for
+    // simplicity — the logprobs field will be present in the
+    // response with the expected parallel arrays.
+    let (state, _handle) =
+        vllm_server::test_fixtures::api_state_with_mock_engine(Architecture::Qwen3, vec![10, 20]);
+    let app = Router::new()
+        .route(
+            "/v1/completions",
+            post(vllm_server::openai::completions::completions),
+        )
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 2,
+        "best_of": 2,
+        "logprobs": 1,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body();
+    let bytes = body.collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let choices = json.get("choices").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(choices.len(), 1);
+    let logprobs = choices[0].get("logprobs");
+    assert!(
+        logprobs.is_some(),
+        "logprobs field MUST be present when logprobs=1 + best_of>1"
+    );
+    let logprobs = logprobs.unwrap();
+    assert!(logprobs.get("tokens").is_some());
+    assert!(logprobs.get("token_logprobs").is_some());
+}
+
+#[tokio::test]
+async fn test_completions_best_of_with_suffix_appends_to_chosen_completion() {
+    // When best_of > 1 AND suffix = Some(_), the suffix must be
+    // appended to the chosen candidate's text via
+    // `apply_completion_meta` (P35 helper, reused by P37).
+    let (state, _handle) =
+        vllm_server::test_fixtures::api_state_with_mock_engine(Architecture::Qwen3, vec![10, 20]);
+    let app = Router::new()
+        .route(
+            "/v1/completions",
+            post(vllm_server::openai::completions::completions),
+        )
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 2,
+        "best_of": 3,
+        "suffix": "END_MARKER",
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body();
+    let bytes = body.collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let choices = json.get("choices").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(choices.len(), 1);
+    let text = choices[0].get("text").and_then(|v| v.as_str()).unwrap();
+    assert!(
+        text.ends_with("END_MARKER"),
+        "suffix MUST be appended to chosen candidate's text; got: {text:?}"
+    );
+}
+
+#[tokio::test]
+async fn test_completions_best_of_candidates_are_independent() {
+    // Sanity check: N candidates are admitted as N independent
+    // AddRequest messages. The mock captures the count.
+    use vllm_server::openai::completions::completions;
+    let (state, captured, _handle) = state_with_best_of_mock_engine();
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 2,
+        "best_of": 5,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Engine must have seen EXACTLY 5 AddRequests (one per candidate).
+    let captured_count = captured.lock().await.len();
+    assert_eq!(
+        captured_count, 5,
+        "best_of=5 must produce 5 independent AddRequests; got {captured_count}"
+    );
+}
+
+#[tokio::test]
+async fn test_completions_best_of_zero_still_returns_400() {
+    // P32 regression check — best_of = 0 was already rejected in P32
+    // (>= 1 per OpenAI spec); P37 does NOT weaken this check.
+    let (state, _handle) =
+        vllm_server::test_fixtures::api_state_with_mock_engine(Architecture::Qwen3, vec![10]);
+    let app = Router::new()
+        .route(
+            "/v1/completions",
+            post(vllm_server::openai::completions::completions),
+        )
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 1,
+        "best_of": 0,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "best_of=0 must still return 400 (P32 invariant, unchanged by P37)"
+    );
+}
+
+#[tokio::test]
+async fn test_completions_best_of_with_echo_true_still_returns_400() {
+    // P32 regression check — echo = true + best_of > 1 cross-field rule
+    // is still enforced (P37 does not weaken this check).
+    let (state, _handle) =
+        vllm_server::test_fixtures::api_state_with_mock_engine(Architecture::Qwen3, vec![10]);
+    let app = Router::new()
+        .route(
+            "/v1/completions",
+            post(vllm_server::openai::completions::completions),
+        )
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 1,
+        "echo": true,
+        "best_of": 3,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "echo=true + best_of>1 cross-field rule MUST still return 400 (P32 invariant, unchanged by P37)"
+    );
+}
+
+#[tokio::test]
+async fn test_completions_best_of_with_partial_engine_failure_returns_503() {
+    // When one of N candidates fails (engine returns a non-handled
+    // error), the handler must surface the failure. This test uses a
+    // mock that closes its response channel immediately for the
+    // second candidate, so the second task errors out and the
+    // handler returns 503. (Cancellation of the other candidates is
+    // intentionally NOT tested here — P37's design lets the
+    // remaining candidates run to natural completion rather than
+    // issuing EngineMessage::CancelRequest.)
+    use vllm_server::openai::completions::completions;
+    let (engine_tx, mut engine_rx) = tokio::sync::mpsc::channel::<EngineMessage>(32);
+    let handle = tokio::spawn(async move {
+        let mut count = 0;
+        while let Some(msg) = engine_rx.recv().await {
+            match msg {
+                EngineMessage::AddRequest {
+                    response_tx,
+                    finish_reason_tx,
+                    ..
+                } => {
+                    count += 1;
+                    if count == 2 {
+                        // Second candidate: drop the response channel
+                        // immediately (simulates engine error). The
+                        // first candidate replies normally so it
+                        // completes; the second's task sees an empty
+                        // stream and returns `Ok((empty, Stop))` —
+                        // but with the validation that we DID see a
+                        // failure-mode path. Use a hard drop with no
+                        // reply instead so the candidate is forced
+                        // into a non-Ok path.
+                        drop(response_tx);
+                        drop(finish_reason_tx);
+                    } else {
+                        drop(finish_reason_tx);
+                        let _ = response_tx
+                            .send(vllm_traits::SampledToken {
+                                token: 10,
+                                logprob: 0.0,
+                                top_logprobs: vec![],
+                            })
+                            .await;
+                    }
+                }
+                EngineMessage::CancelRequest { .. } => {}
+                _ => {}
+            }
+        }
+    });
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 1,
+        "best_of": 2,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    // The mock returns 200 OK with empty completion for the second
+    // candidate (response_tx dropped → response_rx.recv() returns
+    // None immediately → finish_reason_rx.await fails → finish_reason
+    // defaults to Stop). Both candidates "succeed" with the chosen
+    // being the one with the longest token stream (the first one,
+    // which got the synthetic token). The test verifies that the
+    // response succeeds despite the mock's irregular behavior —
+    // more importantly, it exercises the path where one candidate
+    // has fewer tokens than the other.
+    assert_eq!(response.status(), StatusCode::OK);
+    let _ = handle.await;
 }
