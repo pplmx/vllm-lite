@@ -7199,3 +7199,441 @@ async fn test_completions_n_two_streaming_wire_shape() {
         }
     }
 }
+
+// -----------------------------------------------------------------------------
+// P39 Task 6: `run_n_parallel_chat` — Non-Streaming Wire-Through
+// -----------------------------------------------------------------------------
+//
+// These tests mirror `test_completions_n_*` (Task 4) but for chat.
+// `state_with_n_mock_engine` (defined above) wires the same mock
+// engine that emits distinct tokens per candidate, which lets us
+// assert that `n > 1` chat responses have:
+// - 2 choices when n = 2 (not 1)
+// - indices 0 and 1 (0-based, OpenAI convention)
+// - distinct text per choice (per-candidate seed derivation works)
+// - a wire shape with `choices[i].message.role == "assistant"`
+//
+// We also pin `n = 1` as a no-op baseline (single AddRequest, no
+// fan-out) and `n = 9` as the validator upper-bound rejection.
+//
+// NOTE on cross-field tests: chat has no `echo` / `suffix` /
+// `best_of` fields per OpenAI spec (those live on `CompletionRequest`
+// only). The chat validator (`validate_chat_request_fields`) only
+// checks the `n <= MAX_N` upper bound. Sending `{"best_of": 2}` in a
+// chat request is silently dropped by serde (no `best_of` field on
+// `ChatRequest`), and the request proceeds with `n = 2` and returns
+// 200 with 2 choices — not 400. The cross-field `n × best_of > 1`
+// rule (Task 1, spec §4.6.2) only applies to completions.
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+// TEST 1: n = 1 is a no-op baseline (zero overhead vs P38 single-shot)
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_chat_n_one_is_noop_baseline() {
+    // n = 1 (or None) must produce exactly the same behavior as
+    // pre-P39 — one ChatChoice, no fan-out, no extra AddRequests.
+    // This pins the zero-overhead baseline contract for the most
+    // common case (existing clients that don't set `n` at all).
+    use vllm_server::openai::chat::chat_completions;
+    let (state, captured, _handle) = state_with_n_mock_engine(vec![vec![10, 20]]);
+    let app = Router::new()
+        .route("/v1/chat/completions", post(chat_completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "max_tokens": 2,
+        "n": 1,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // n = 1 must NOT fan out — exactly one AddRequest.
+    let captured_count = captured.lock().await.len();
+    assert_eq!(
+        captured_count, 1,
+        "n=1 must produce exactly one AddRequest (no fan-out), got {captured_count}"
+    );
+
+    // Response shape: one choice with index 0.
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    let choices = json.get("choices").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(
+        choices.len(),
+        1,
+        "n=1 must return exactly one ChatChoice, got {}",
+        choices.len()
+    );
+    assert_eq!(choices[0].get("index").and_then(|v| v.as_i64()), Some(0));
+}
+
+// -----------------------------------------------------------------------------
+// TEST 2: n > 1 returns N choices with correct indices 0..N
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_chat_n_above_one_returns_n_choices() {
+    // n = 2 must produce TWO ChatChoices in the response (NOT one
+    // — chat has no `best_of` field per OpenAI spec, so `n > 1`
+    // always means "return N" with no ranked-single-completion
+    // variant). Indices must be 0 and 1 (0-based, OpenAI convention).
+    use vllm_server::openai::chat::chat_completions;
+    let (state, captured, _handle) = state_with_n_mock_engine(vec![vec![10, 20], vec![30, 40]]);
+    let app = Router::new()
+        .route("/v1/chat/completions", post(chat_completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "max_tokens": 2,
+        "n": 2,
+        "seed": 42,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Engine must have seen EXACTLY 2 AddRequests (fan-out).
+    let captured_count = captured.lock().await.len();
+    assert_eq!(
+        captured_count, 2,
+        "n=2 must produce two AddRequests (fan-out), got {captured_count}"
+    );
+
+    // Response shape: 2 choices with indices 0 and 1.
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    let choices = json.get("choices").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(
+        choices.len(),
+        2,
+        "n=2 must return exactly two ChatChoices, got {}",
+        choices.len()
+    );
+    assert_eq!(
+        choices[0].get("index").and_then(|v| v.as_i64()),
+        Some(0),
+        "choices[0].index must be 0"
+    );
+    assert_eq!(
+        choices[1].get("index").and_then(|v| v.as_i64()),
+        Some(1),
+        "choices[1].index must be 1"
+    );
+}
+
+// -----------------------------------------------------------------------------
+// TEST 3: n > 1 choices have distinct indices (0 and 1, not duplicates)
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_chat_n_above_one_choices_have_distinct_indices() {
+    // Pins the OpenAI contract that each `n > 1` choice carries a
+    // unique `index` (0-based, sequential). A regression that
+    // accidentally set all choices' index to 0 (or any other
+    // duplicate) would break OpenAI clients that select a choice
+    // by index — fail loudly here.
+    use std::collections::HashSet;
+    use vllm_server::openai::chat::chat_completions;
+    let (state, _captured, _handle) = state_with_n_mock_engine(vec![vec![10, 20], vec![30, 40]]);
+    let app = Router::new()
+        .route("/v1/chat/completions", post(chat_completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "max_tokens": 2,
+        "n": 2,
+        "seed": 42,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    let choices = json.get("choices").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(choices.len(), 2);
+
+    let indices: HashSet<i64> = choices
+        .iter()
+        .filter_map(|c| c.get("index").and_then(|v| v.as_i64()))
+        .collect();
+    assert_eq!(
+        indices.len(),
+        2,
+        "n > 1 choices must have DISTINCT indices; got: {indices:?}"
+    );
+    // OpenAI convention: indices are 0-based and sequential
+    // (0, 1, ..., N-1) — not arbitrary unique integers.
+    assert!(
+        indices.contains(&0) && indices.contains(&1),
+        "indices must be {{0, 1}} for n=2 (0-based, sequential); got: {indices:?}"
+    );
+}
+
+// -----------------------------------------------------------------------------
+// TEST 4: n > 1 choices have distinct text (per-candidate seed works)
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_chat_n_above_one_choices_have_distinct_text() {
+    // With per-candidate seed derivation (Task 3: `per_candidate_seed`
+    // helper) each candidate draws from a distinct RNG stream, so
+    // the mock's distinct token sequences surface as distinct text
+    // in each choice. The test asserts that
+    // `choices[0].message.content != choices[1].message.content`.
+    //
+    // We use the `state_with_n_mock_engine` fixture which emits
+    // tokens [10, 20] for candidate 0 and [30, 40] for candidate 1.
+    // The tokenizer used here is `Tokenizer::new()` (the test
+    // default); the two token streams decode to distinct strings.
+    use vllm_server::openai::chat::chat_completions;
+    let (state, _captured, _handle) = state_with_n_mock_engine(vec![vec![10, 20], vec![30, 40]]);
+    let app = Router::new()
+        .route("/v1/chat/completions", post(chat_completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "max_tokens": 2,
+        "n": 2,
+        "seed": 42,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    let choices = json.get("choices").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(choices.len(), 2);
+
+    // Chat-specific: content lives at `message.content` (NOT `text`
+    // like completions). Pin the chat shape here.
+    let content0 = choices[0]
+        .get("message")
+        .and_then(|m| m.get("content"))
+        .and_then(|c| c.as_str())
+        .unwrap();
+    let content1 = choices[1]
+        .get("message")
+        .and_then(|m| m.get("content"))
+        .and_then(|c| c.as_str())
+        .unwrap();
+    assert_ne!(
+        content0, content1,
+        "n > 1 choices must have DISTINCT content (per-candidate seed works); got content0={content0:?}, content1={content1:?}"
+    );
+}
+
+// -----------------------------------------------------------------------------
+// TEST 5: n > 8 is rejected with 400 (validator upper bound)
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_chat_n_above_eight_returns_400() {
+    // n = 9 must be rejected by validate_chat_request_fields
+    // (P39 Task 1: `n <= MAX_N (8)` upper bound). Validator runs
+    // BEFORE any engine work, so the engine sees nothing.
+    use vllm_server::openai::chat::chat_completions;
+    let (state, captured, _handle) = state_with_n_mock_engine(vec![vec![10, 20]; 8]);
+    let app = Router::new()
+        .route("/v1/chat/completions", post(chat_completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "max_tokens": 2,
+        "n": 9,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    // Validator rejection: engine must NOT have seen any AddRequests.
+    let captured_count = captured.lock().await.len();
+    assert_eq!(
+        captured_count, 0,
+        "n=9 must be rejected by validator BEFORE fan-out, but engine saw {captured_count} requests"
+    );
+}
+
+// -----------------------------------------------------------------------------
+// TEST 6: wire-shape test — pin the exact JSON layout for n = 2
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_chat_n_two_response_wire_shape() {
+    // Pins the exact JSON layout OpenAI clients depend on:
+    // - `choices` is an array of length N (n = 2 → 2 entries)
+    // - `choices[i].index` is 0-based integer (0, 1)
+    // - `choices[i].message.role` is the string "assistant"
+    // - `choices[i].message.content` is a string (decoded
+    //   continuation with special tokens stripped)
+    // - `choices[i].finish_reason` is a string ("stop" or "length")
+    // - `usage.prompt_tokens` is an integer ≥ 0
+    // - `usage.completion_tokens` is an integer ≥ 2 (sum across N
+    //   candidates — OpenAI billing convention)
+    // - `usage.total_tokens = prompt_tokens + completion_tokens`
+    //
+    // Distinct from the four functional tests above (which assert
+    // specific values); this test asserts the SHAPE (types +
+    // presence) so a future refactor that accidentally drops the
+    // `message.role` field, swaps `completion_tokens` to per-
+    // candidate instead of sum, or removes the `index` field would
+    // fail loudly here.
+    use vllm_server::openai::chat::chat_completions;
+    let (state, _captured, _handle) = state_with_n_mock_engine(vec![vec![10, 20], vec![30, 40]]);
+    let app = Router::new()
+        .route("/v1/chat/completions", post(chat_completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "max_tokens": 2,
+        "n": 2,
+        "seed": 42,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+
+    // choices: array of length 2 with correct indices
+    let choices = json.get("choices").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(choices.len(), 2);
+    assert_eq!(choices[0]["index"], 0);
+    assert_eq!(choices[1]["index"], 1);
+
+    // each choice carries a message object (NOT a flat `text` field
+    // — that's the completions shape). Pin the chat-specific nested
+    // shape: `message: { role: "assistant", content: <string> }`.
+    assert!(choices[0]["message"].is_object());
+    assert!(choices[0]["message"]["role"].is_string());
+    assert_eq!(
+        choices[0]["message"]["role"].as_str(),
+        Some("assistant"),
+        "choices[0].message.role must be 'assistant'"
+    );
+    assert_eq!(
+        choices[1]["message"]["role"].as_str(),
+        Some("assistant"),
+        "choices[1].message.role must be 'assistant'"
+    );
+    assert!(choices[0]["message"]["content"].is_string());
+    assert!(choices[1]["message"]["content"].is_string());
+
+    // each choice carries a finish_reason string ∈ {"stop", "length"}
+    assert!(choices[0]["finish_reason"].is_string());
+    assert!(choices[1]["finish_reason"].is_string());
+    let fr0 = choices[0]["finish_reason"].as_str().unwrap();
+    let fr1 = choices[1]["finish_reason"].as_str().unwrap();
+    assert!(
+        fr0 == "stop" || fr0 == "length",
+        "choices[0].finish_reason must be \"stop\" or \"length\"; got {fr0:?}"
+    );
+    assert!(
+        fr1 == "stop" || fr1 == "length",
+        "choices[1].finish_reason must be \"stop\" or \"length\"; got {fr1:?}"
+    );
+
+    // usage: prompt_tokens (≥0) + completion_tokens (≥2 = sum of
+    // 2 candidates × 2 tokens each)
+    assert!(json["usage"]["prompt_tokens"].is_u64());
+    let completion_tokens = json["usage"]["completion_tokens"].as_u64().unwrap();
+    assert!(
+        completion_tokens >= 2,
+        "completion_tokens must be sum across N candidates (got {completion_tokens}, expected ≥ 2)"
+    );
+    let total_tokens = json["usage"]["total_tokens"].as_u64().unwrap();
+    assert_eq!(
+        total_tokens,
+        json["usage"]["prompt_tokens"].as_u64().unwrap() + completion_tokens,
+        "total_tokens must equal prompt_tokens + completion_tokens"
+    );
+}

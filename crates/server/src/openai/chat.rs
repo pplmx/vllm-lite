@@ -101,6 +101,55 @@ fn build_chat_choice_logprobs(
     Some(ChatChoiceLogprobs { content })
 }
 
+/// Build a single [`ChatChoice`] from one candidate's
+/// `Vec<SampledToken>` + `FinishReason` (P39 v0.x wire-type follow-up
+/// — engine wire-through helper for `n`). Used by
+/// [`run_n_parallel_chat`] to assemble N choices after the
+/// per-candidate join; extracted as a pure function so the unit
+/// tests can pin the per-candidate assembly contract (index
+/// mapping, finish_reason string, role/content split) without
+/// needing a live engine channel.
+///
+/// **Pure-function contract (what the unit tests pin):**
+/// - `index` is forwarded verbatim as `i32` (matches OpenAI's
+///   `n > 1` convention).
+/// - `message.role` is always `"assistant"`.
+/// - `message.content` is the decoded + special-token-stripped
+///   continuation (same `clean_completion_text` call the single-
+///   shot path uses).
+/// - `finish_reason` maps `FinishReason::Length → "length"`,
+///   `FinishReason::Stop | Cancelled → "stop"` (the same mapping
+///   [`handle_chat`] uses — keeps chat + chat-n consistent).
+/// - `logprobs` is built via [`build_chat_choice_logprobs`] when
+///   the request asked for `logprobs = Some(true)`; otherwise
+///   `None` (matches the OpenAI spec: omit the field when the
+///   caller didn't ask).
+fn build_chat_choice(
+    tokenizer: &vllm_model::tokenizer::Tokenizer,
+    tokens: &[vllm_traits::SampledToken],
+    finish_reason: vllm_traits::FinishReason,
+    index: i32,
+    req_logprobs: Option<bool>,
+    req_top_logprobs: Option<u32>,
+) -> ChatChoice {
+    let raw_decode = tokenizer.decode(&token_ids(tokens));
+    let completion_text = clean_completion_text(tokenizer, &raw_decode);
+    let finish_reason_string = match finish_reason {
+        vllm_traits::FinishReason::Length => "length",
+        vllm_traits::FinishReason::Stop | vllm_traits::FinishReason::Cancelled => "stop",
+    };
+    ChatChoice {
+        index,
+        message: ChatMessage {
+            role: "assistant".to_string(),
+            content: completion_text,
+            name: None,
+        },
+        finish_reason: Some(finish_reason_string.to_string()),
+        logprobs: build_chat_choice_logprobs(tokenizer, tokens, req_logprobs, req_top_logprobs),
+    }
+}
+
 /// Build a model-ready prompt string from a list of chat `messages`, using
 /// the architecture-appropriate [`ChatTemplate`] (`ChatML`, Llama-2, etc.).
 ///
@@ -459,6 +508,290 @@ async fn handle_chat(
         format!("chatcmpl-{}", uuid::Uuid::new_v4()),
         req.model,
         vec![choice],
+        usage,
+    ))
+}
+
+/// Spawn one of N parallel candidates for an `n > 1` chat request
+/// (P39 v0.x wire-type follow-up — engine wire-through helper for
+/// `n`). Each candidate is an independent `EngineMessage::AddRequest`
+/// using the exact same prompt + sampling params the user submitted
+/// (except for the seed, which is derived deterministically via
+/// `per_candidate_seed(req.seed, candidate_index)` so each candidate
+/// draws from a distinct RNG stream — P34 per-sequence independence
+/// contract).
+///
+/// **Structural mirror of `super::completions::spawn_n_candidate`**:
+/// the completions variant operates on `CompletionRequest`; this
+/// variant operates on `ChatRequest`. Both share the same spawn +
+/// collect shape — submit `AddRequest`, drive `response_rx` to
+/// natural close, await `finish_reason_rx`. Chat-specific differences
+/// are isolated to the populator (chat uses inline forwarding of
+/// `temperature` / `top_p` / `frequency_penalty` / `presence_penalty`
+/// / `logit_bias` / `seed` / `top_logprobs` / `stop_token_sequences`
+/// into `SamplingParams`, plus the chat-only `per_candidate_seed`
+/// derivation).
+///
+/// **Why chat does not share `populate_completion_sampling_params`:**
+/// the chat path already does inline forwarding in [`handle_chat`]
+/// for historical reasons (predates the P32 populator split). To
+/// keep the single-shot path unchanged (Task 6 says "no scope
+/// creep"), this helper duplicates the populator's chat-specific
+/// field set rather than refactoring `handle_chat` to share it.
+///
+/// **Partial-failure semantics:** mirrors `spawn_n_candidate` — if
+/// any candidate fails (engine error / overload / panic), the first
+/// error wins and the other candidates' results are discarded. We
+/// do NOT issue `EngineMessage::CancelRequest` for the still-running
+/// candidates; they run to natural completion and free their
+/// scheduler slots on their own (per the P37 rationale; per-candidate
+/// seq_id tracking + cancel adds significant complexity for a corner
+/// case).
+async fn spawn_chat_n_candidate(
+    state: ApiState,
+    req: ChatRequest,
+    prompt_tokens: Vec<vllm_traits::TokenId>,
+    max_tokens: usize,
+    correlation_id: String,
+    candidate_index: usize,
+) -> Result<
+    (Vec<vllm_traits::SampledToken>, vllm_traits::FinishReason),
+    (axum::http::StatusCode, Json<ErrorResponse>),
+> {
+    let total_max = prompt_tokens.len() + max_tokens;
+    let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
+
+    // Chat inline forwarding of all sampling fields. Mirrors
+    // [`handle_chat`]'s populator block (lines 206-355) so every
+    // candidate honors the same field set the single-shot path
+    // does. The only P39-specific addition is `per_candidate_seed`
+    // for the seed field (candidate_index = 0 reduces to the
+    // pre-P39 `seed as u64` cast).
+    if let Some(temp) = req.temperature {
+        request.sampling_params.temperature = temp;
+    }
+    if let Some(top_p) = req.top_p {
+        request.sampling_params.top_p = top_p;
+    }
+    if let Some(fp) = req.frequency_penalty {
+        request.sampling_params.repeat_penalty = (1.0 + fp).max(1e-3);
+    }
+    if let Some(pp) = req.presence_penalty {
+        request.sampling_params.presence_penalty = pp;
+    }
+    if let Some(ref lb) = req.logit_bias {
+        request.sampling_params.logit_bias = Some(lb.clone());
+    }
+    // P39: per-candidate seed derivation (P34 per-sequence
+    // independence). Distinct seeds ⇒ distinct outputs even when
+    // the user submits one seed + n > 1.
+    request.sampling_params.seed =
+        super::completions::per_candidate_seed(req.seed, candidate_index);
+    request.sampling_params.top_logprobs = req.top_logprobs;
+
+    // P38 v0.3 wire-type engine wire-through: tokenize the user's
+    // stop strings at the HTTP boundary and forward as
+    // `SamplingParams::stop_token_sequences`. None and Some(empty)
+    // are both treated as "no stop check" (the engine skips the
+    // matches_stop_sequences call entirely in that case).
+    //
+    // Tokenization errors: if all stop strings tokenize to zero
+    // tokens, reject with 400 so the caller gets a clear error
+    // instead of a silent no-op. (Same semantics as the single-
+    // shot path in `handle_chat`.)
+    if let Some(stop) = req.stop.as_ref()
+        && !stop.is_empty()
+    {
+        let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
+            .iter()
+            .map(|s| state.tokenizer.encode(s))
+            .filter(|toks| !toks.is_empty())
+            .collect();
+        if tokenized.is_empty() {
+            return Err((
+                axum::http::StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "stop sequences tokenize to zero tokens (no tokenizable content)",
+                    "invalid_request_error",
+                )),
+            ));
+        }
+        request.sampling_params.stop_token_sequences = Some(tokenized);
+    }
+
+    validate_sampling_params(&request.sampling_params)?;
+
+    let (response_tx, mut response_rx) = mpsc::channel(64);
+    let (finish_reason_tx, finish_reason_rx) = tokio::sync::oneshot::channel();
+
+    // REL-01: try_send surfaces saturation as 503 instead of blocking.
+    state
+        .engine_tx
+        .try_send(vllm_core::types::EngineMessage::AddRequest {
+            request: Box::new(request),
+            response_tx,
+            seq_id_tx: None, // non-streaming — no client disconnect to propagate
+            finish_reason_tx: Some(finish_reason_tx),
+            request_id: Some(correlation_id),
+        })
+        .map_err(|e| match e {
+            tokio::sync::mpsc::error::TrySendError::Full(_) => engine_overloaded_error(),
+            tokio::sync::mpsc::error::TrySendError::Closed(_) => engine_unavailable_error(),
+        })?;
+
+    let mut tokens = Vec::new();
+    while let Some(sampled) = response_rx.recv().await {
+        tokens.push(sampled);
+    }
+
+    // Engine sends the reason before closing the response channel,
+    // so this resolves immediately in the normal case. Fall back to
+    // `Stop` only when the oneshot was dropped without a value
+    // (e.g. engine panicked between the two steps).
+    let finish_reason = finish_reason_rx
+        .await
+        .unwrap_or(vllm_traits::FinishReason::Stop);
+    Ok((tokens, finish_reason))
+}
+
+/// Run the `n > 1` path on `/v1/chat/completions` (P39 v0.x wire-type
+/// follow-up — engine wire-through helper for `n`). Spawns N parallel
+/// candidates via [`spawn_chat_n_candidate`] (passing `i in 0..n` as
+/// the `candidate_index`), joins them, and assembles ALL N
+/// completions into the response (NOT ranked — distinct from
+/// `best_of`'s "return ONE" semantics; chat does not have a `best_of`
+/// field per OpenAI spec).
+///
+/// **Structural mirror of `super::completions::run_n_parallel_completions`:**
+/// the completions variant assembles `Vec<CompletionChoice>` (each
+/// with `text`); this variant assembles `Vec<ChatChoice>` (each with
+/// `message: { role, content }`). The shape divergence is intentional
+/// and follows the OpenAI wire contract — chat responses nest the
+/// assistant's reply under `message`, completions expose it as a
+/// flat `text` field.
+///
+/// **Per-candidate seed derivation:** each candidate's seed is
+/// derived via `per_candidate_seed(req.seed, candidate_index)` (P39
+/// Task 3 helper, accessible via `super::completions::per_candidate_seed`)
+/// so the N streams produce distinct outputs (P34 per-sequence
+/// independence contract). Without per-candidate seed derivation,
+/// all N candidates would share the same seed and produce identical
+/// outputs for non-greedy sampling — defeats the purpose of
+/// `n > 1`.
+///
+/// **`usage.completion_tokens` = sum across N candidates.** Matches
+/// OpenAI's billing semantics — the client pays for N independent
+/// generated streams, so the usage token count is the sum.
+///
+/// **Streaming interaction:** `n > 1` + `stream = true` is handled
+/// by the streaming wire-through (Task 7), which uses a separate
+/// helper that interleaves N SSE channels. This helper is
+/// non-streaming-only — the `chat_completions` handler dispatches
+/// to the streaming helper first when `stream = true`.
+async fn run_n_parallel_chat(
+    state: ApiState,
+    req: ChatRequest,
+    prompt_tokens: Vec<vllm_traits::TokenId>,
+    prompt_tokens_len: usize,
+    max_tokens: usize,
+    correlation_id: &str,
+) -> Result<ChatResponse, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    let n = req.n.unwrap_or(1) as usize;
+
+    // Spawn N candidates. Each task is independent and runs in
+    // parallel; we send all N `EngineMessage::AddRequest` messages
+    // to the engine mailbox in quick succession so the engine sees
+    // them as one batch (when N is small enough to fit the bounded
+    // mailbox capacity — REL-01 saturation surfaces as the first
+    // candidate's 503 try_send error, which we propagate below).
+    //
+    // **Identical to `run_n_parallel_completions`'s spawn loop**
+    // — only the post-join assembly differs (ChatChoice has
+    // `message` instead of `text`). P39 passes `i in 0..n` as the
+    // `candidate_index` so each candidate gets a distinct
+    // per-candidate seed via `per_candidate_seed(seed, i)`.
+    let mut handles = Vec::with_capacity(n);
+    for i in 0..n {
+        let state = state.clone();
+        let req = req.clone();
+        let prompt_tokens = prompt_tokens.clone();
+        let correlation_id = correlation_id.to_string();
+        let candidate = tokio::spawn(spawn_chat_n_candidate(
+            state,
+            req,
+            prompt_tokens,
+            max_tokens,
+            correlation_id,
+            i,
+        ));
+        handles.push(candidate);
+    }
+
+    // Join all candidates. First failure wins (the other candidates
+    // keep running in the background — see the partial-failure
+    // comment in `spawn_chat_n_candidate`'s doc above).
+    //
+    // We carry BOTH the per-candidate `Vec<SampledToken>` AND its
+    // `FinishReason` through to the assembly step. Each candidate
+    // gets its own `ChatChoice` in the final response.
+    let mut candidates: Vec<Vec<vllm_traits::SampledToken>> = Vec::with_capacity(n);
+    let mut candidate_finish_reasons: Vec<vllm_traits::FinishReason> = Vec::with_capacity(n);
+    for handle in handles {
+        match handle.await {
+            Ok(Ok((tokens, finish_reason))) => {
+                candidates.push(tokens);
+                candidate_finish_reasons.push(finish_reason);
+            }
+            Ok(Err(e)) => return Err(e),
+            Err(e) => {
+                return Err((
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse::new(
+                        format!("n > 1 candidate task panicked: {e}").as_str(),
+                        "server_error",
+                    )),
+                ));
+            }
+        }
+    }
+
+    // Assemble N choices — one per candidate, in candidate order.
+    // Each `ChatChoice` carries:
+    // - `index`: 0-based candidate position (matches OpenAI's
+    //   convention for `n > 1` responses).
+    // - `message`: `{ role: "assistant", content }` — the decoded
+    //   continuation with special tokens stripped (matches the
+    //   single-shot path's `clean_completion_text` call).
+    // - `logprobs`: per-candidate `ChatChoiceLogprobs` when the
+    //   request asked for `logprobs = Some(true)` (P36 helper,
+    //   reused per-candidate).
+    // - `finish_reason`: per-candidate OpenAI string ("length" /
+    //   "stop"). Mirrors the single-shot mapping.
+    let choices: Vec<ChatChoice> = candidates
+        .iter()
+        .zip(candidate_finish_reasons.iter())
+        .enumerate()
+        .map(|(index, (tokens, finish_reason))| {
+            build_chat_choice(
+                &state.tokenizer,
+                tokens,
+                *finish_reason,
+                index as i32,
+                req.logprobs,
+                req.top_logprobs,
+            )
+        })
+        .collect();
+
+    // usage: completion_tokens = sum across N candidates (OpenAI
+    // billing convention — the client pays for N independent
+    // streams). total_tokens = prompt_tokens + sum-completion-tokens.
+    let total_completion_tokens: usize = candidates.iter().map(|c| c.len()).sum();
+    let usage = Usage::new(prompt_tokens_len, total_completion_tokens);
+    Ok(ChatResponse::new(
+        format!("chatcmpl-{}", uuid::Uuid::new_v4()),
+        req.model,
+        choices,
         usage,
     ))
 }
@@ -1021,6 +1354,70 @@ async fn non_stream_chat_completion(
     correlation_id: &str,
     req: ChatRequest,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    // P39 n > 1 dispatch (Task 6): when the user asks for `n > 1`,
+    // spawn N parallel candidates via [`run_n_parallel_chat`] and
+    // assemble all N `ChatChoice`s into the response. The validator
+    // has already rejected `n > MAX_N` (8) and `n < 1` (Task 1,
+    // spec §4.6.1) so we only fire this branch for valid `n > 1`.
+    //
+    // **Why pre-build `prompt_tokens` here:** every candidate shares
+    // the same prompt + sampling params (except for the seed, which
+    // is derived per-candidate inside the populator). Building the
+    // prompt + tokenizing once and forwarding `prompt_tokens` to N
+    // candidates is cheaper than asking each candidate to rebuild
+    // the prompt string + tokenize. The completions path does the
+    // same in the `completions()` handler (Task 4).
+    //
+    // **Why we still call [`handle_chat`] for `n = 1` / `None`:** the
+    // existing single-shot path is unchanged — `handle_chat` already
+    // does prompt-building + tokenization + context-length gating +
+    // engine submission + response assembly end-to-end. Refactoring
+    // it to share the prompt-building step would be a much larger
+    // diff; for Task 6 we only need `n > 1` to work, so we pay a
+    // small amount of duplication (prompt-building for n > 1 is
+    // ~45 lines) in exchange for zero churn on the dominant path.
+    if req.n.unwrap_or(1) > 1 {
+        let template = ChatTemplate::for_architecture(state.architecture);
+        let prompt = build_prompt_from_messages(template, &req.messages);
+        let prompt_tokens = state.tokenizer.encode(&prompt);
+        let prompt_tokens_len = prompt_tokens.len();
+        let max_tokens = usize::try_from(req.max_tokens.unwrap_or(100)).unwrap_or(100);
+        let total_max = prompt_tokens_len + max_tokens;
+
+        // Production-readiness §4: reject requests whose prompt +
+        // max_tokens would exceed the model's context length. Same
+        // gate `handle_chat` enforces on the single-shot path — we
+        // duplicate it here so `n > 1` gets a 400 (not a hung
+        // scheduler admission that dies on the first forward pass).
+        if let Some(max_model_len) = state.max_model_len {
+            if total_max > max_model_len {
+                let message = format!(
+                    "prompt_tokens ({prompt_tokens_len}) + max_tokens ({max_tokens}) \
+                     = {total_max} exceeds the model's context length ({max_model_len})"
+                );
+                return Err((
+                    axum::http::StatusCode::BAD_REQUEST,
+                    Json(ErrorResponse::with_code(
+                        &message,
+                        "invalid_request_error",
+                        "context_length_exceeded",
+                    )),
+                ));
+            }
+        }
+
+        let response = run_n_parallel_chat(
+            state,
+            req,
+            prompt_tokens,
+            prompt_tokens_len,
+            max_tokens,
+            correlation_id,
+        )
+        .await?;
+        return Ok(Json(response).into_response());
+    }
+
     let response = handle_chat(&state, correlation_id, req).await?;
     Ok(Json(response).into_response())
 }
