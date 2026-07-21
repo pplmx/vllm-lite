@@ -769,8 +769,7 @@ fn test_seed_determinism_same_seed_same_result() {
     let token_b = sample_one_with_params(logits, &params_b, seen);
     assert_eq!(
         token_a, token_b,
-        "same seed must produce the same sampled token (got {:?} vs {:?})",
-        token_a, token_b
+        "same seed must produce the same sampled token (got {token_a:?} vs {token_b:?})"
     );
 }
 
@@ -847,9 +846,8 @@ fn test_seed_different_seeds_diverge_in_distribution() {
     assert_ne!(
         token_a, token_b,
         "different seeds must produce different sampled tokens for \
-         SEED_TEST_LOGITS at T=1.0 (got {:?} for both — RNG is \
-         not being seeded correctly)",
-        token_a
+         SEED_TEST_LOGITS at T=1.0 (got {token_a:?} for both — RNG is \
+         not being seeded correctly)"
     );
 }
 
@@ -943,7 +941,6 @@ fn test_seed_top_p_path_uses_seeded_rng() {
     assert_eq!(
         token_a, token_b,
         "top_p path must honour seed deterministically \
-         (got {:?} vs {:?})",
-        token_a, token_b
+         (got {token_a:?} vs {token_b:?})"
     );
 }
