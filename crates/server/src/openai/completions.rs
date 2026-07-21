@@ -151,14 +151,16 @@ fn rank_by_mean_logprob(candidates: &[Vec<vllm_traits::SampledToken>]) -> usize 
 /// fresh `vllm_core::types::Request` (P27/P28/P29/P30/P34/P36
 /// sampling-params wire-through; P37 reuses this for the
 /// `best_of` per-candidate requests so each candidate gets the
-/// exact same sampling config the user submitted).
+/// exact same sampling config the user submitted; P39 parameterises
+/// the seed by `candidate_index` so each `n > 1` / `best_of > 1`
+/// candidate gets a distinct per-candidate seed).
 ///
 /// The function is the single authoritative point for the
 /// legacy-endpoint → `SamplingParams` mapping; both the streaming
 /// and non-streaming paths in `completions()` call it, and the
-/// `best_of` path calls it N times (once per candidate). Keeping
-/// the mapping in one place means the contract stays in sync
-/// across all three paths.
+/// `best_of` / `n > 1` paths call it N times (once per candidate).
+/// Keeping the mapping in one place means the contract stays in
+/// sync across all paths.
 ///
 /// Field-level rationale (see the chat handler for the long-form
 /// comments on each mapping):
@@ -168,7 +170,11 @@ fn rank_by_mean_logprob(candidates: &[Vec<vllm_traits::SampledToken>]) -> usize 
 ///   per P29's sign-aware engine refactor.
 /// - `presence_penalty`: forwarded verbatim (additive bias).
 /// - `logit_bias`: cloned verbatim (validator already bounds each value).
-/// - `seed`: `i64 as u64` cast (wraps negatives per OpenAI's i64 contract).
+/// - `seed`: P39 — applied via `per_candidate_seed(req.seed, candidate_index)`
+///   so each candidate gets `seed.wrapping_add(candidate_index as u64)`
+///   (deterministic + distinct). `candidate_index = 0` reduces to the
+///   pre-P39 behaviour (`seed as u64` cast). The single-shot path
+///   passes `0` so existing users see no behaviour change.
 /// - `logprobs`: forwarded verbatim to `top_logprobs` (the legacy
 ///   endpoint's `logprobs` is `u32 0..=5`; the engine treats
 ///   `Some(0)` as "compute sampled-token logprob only, no top-K").
@@ -182,6 +188,7 @@ fn populate_completion_sampling_params(
     request: &mut vllm_core::types::Request,
     req: &CompletionRequest,
     stop_token_sequences: Option<Vec<Vec<vllm_traits::TokenId>>>,
+    candidate_index: usize,
 ) {
     if let Some(temp) = req.temperature {
         request.sampling_params.temperature = temp;
@@ -198,19 +205,34 @@ fn populate_completion_sampling_params(
     if let Some(ref lb) = req.logit_bias {
         request.sampling_params.logit_bias = Some(lb.clone());
     }
-    if let Some(seed) = req.seed {
-        request.sampling_params.seed = Some(seed as u64);
-    }
+    // P39: per-candidate seed derivation. The populator is the
+    // single authoritative point for the OpenAI → SamplingParams
+    // mapping, so the i64 → u64 cast + `wrapping_add(index)` happens
+    // here (instead of after the populator) — keeps the cast chain
+    // in one place and lets the single-shot path opt out by passing
+    // `candidate_index = 0` (identity for `wrapping_add(0)`).
+    request.sampling_params.seed = per_candidate_seed(req.seed, candidate_index);
     request.sampling_params.top_logprobs = req.logprobs;
     request.sampling_params.stop_token_sequences = stop_token_sequences;
 }
 
-/// Spawn one of N parallel candidates for a `best_of` request
-/// (P37 v0.x wire-type follow-up — engine wire-through helper for
-/// `best_of`). Each candidate is an independent `EngineMessage::AddRequest`
-/// using the exact same prompt + sampling params the user submitted;
-/// the caller (`run_best_of`) ranks the N streams by mean logprob and
-/// returns the single best completion.
+/// Spawn one of N parallel candidates for an `n > 1` or
+/// `best_of > 1` request (P37 v0.x wire-type follow-up — engine
+/// wire-through helper for `best_of`; P39 rename + parameterise so
+/// the same helper powers `n > 1`). Each candidate is an
+/// independent `EngineMessage::AddRequest` using the exact same
+/// prompt + sampling params the user submitted; the caller
+/// (`run_best_of` ranks by mean logprob + returns ONE; `run_n_parallel_completions`
+/// collects all N — added in P39 Task 4) processes the N streams
+/// per its own contract.
+///
+/// Sampling params are identical across candidates EXCEPT for the
+/// seed, which is derived deterministically via
+/// `per_candidate_seed(seed, candidate_index)` (P39). Each candidate
+/// gets `seed.wrapping_add(candidate_index as u64)` so the N streams
+/// produce distinct outputs (matching P34's per-sequence independence
+/// contract; without per-candidate seed derivation all N candidates
+/// would receive the same seed and produce identical outputs).
 ///
 /// Returns the candidate's full token stream alongside its
 /// `FinishReason` so the caller can render the chosen completion's
@@ -225,18 +247,20 @@ fn populate_completion_sampling_params(
 /// (`engine_tx.try_send`) ensures a saturated engine surfaces as
 /// `503 engine_overloaded` rather than blocking the HTTP handler.
 ///
-/// **Cancellation note:** each candidate is non-streaming-only (best_of
-/// never streams — see the validator's silence on `stream + best_of > 1`),
-/// so we don't need a `seq_id` round-trip — there is no client
-/// disconnect to propagate mid-flight. The candidate runs to natural
-/// completion (engine closes `response_tx` after the sequence
-/// finishes or hits `max_tokens`).
-async fn spawn_best_of_candidate(
+/// **Cancellation note:** each candidate is non-streaming-only
+/// (best_of never streams — see the validator's silence on
+/// `stream + best_of > 1`; `n > 1` streaming uses a separate helper
+/// added in P39 Task 5), so we don't need a `seq_id` round-trip —
+/// there is no client disconnect to propagate mid-flight. The
+/// candidate runs to natural completion (engine closes
+/// `response_tx` after the sequence finishes or hits `max_tokens`).
+async fn spawn_n_candidate(
     state: ApiState,
     req: CompletionRequest,
     prompt_tokens: Vec<vllm_traits::TokenId>,
     max_tokens: usize,
     correlation_id: String,
+    candidate_index: usize,
 ) -> Result<
     (Vec<vllm_traits::SampledToken>, vllm_traits::FinishReason),
     (axum::http::StatusCode, Json<ErrorResponse>),
@@ -282,7 +306,10 @@ async fn spawn_best_of_candidate(
             None
         };
 
-    populate_completion_sampling_params(&mut request, &req, stop_token_sequences);
+    // P39: forward `candidate_index` so the populator derives the
+    // per-candidate seed. For `best_of` callers this is `i in 0..best_of`;
+    // for `n > 1` callers (Task 4) this is `i in 0..n`.
+    populate_completion_sampling_params(&mut request, &req, stop_token_sequences, candidate_index);
     validate_sampling_params(&request.sampling_params)?;
 
     let (response_tx, mut response_rx) = mpsc::channel(64);
@@ -336,11 +363,15 @@ pub(super) fn per_candidate_seed(seed: Option<i64>, candidate_index: usize) -> O
 }
 
 /// Run the `best_of > 1` path (P37 v0.x wire-type follow-up —
-/// engine wire-through helper for `best_of`). Spawns N parallel
-/// candidates via [`spawn_best_of_candidate`], joins them, ranks
-/// by mean logprob via [`rank_by_mean_logprob`], and returns the
-/// single best completion in a JSON response (NOT SSE — `best_of`
-/// is non-streaming-only, matching OpenAI's contract).
+/// engine wire-through helper for `best_of`; P39 renamed the
+/// underlying spawn helper from `spawn_best_of_candidate` to
+/// `spawn_n_candidate` + parameterised it by `candidate_index` so
+/// the same function powers `n > 1`). Spawns N parallel candidates
+/// via [`spawn_n_candidate`] (passing `i in 0..best_of` as the
+/// `candidate_index`), joins them, ranks by mean logprob via
+/// [`rank_by_mean_logprob`], and returns the single best completion
+/// in a JSON response (NOT SSE — `best_of` is non-streaming-only,
+/// matching OpenAI's contract).
 ///
 /// **Streaming + best_of:** the caller (`completions()`) detects
 /// `stream = true && best_of > 1` and silently dispatches here
@@ -386,18 +417,21 @@ async fn run_best_of(
     // them as one batch (when N is small enough to fit the bounded
     // mailbox capacity — REL-01 saturation surfaces as the first
     // candidate's 503 try_send error, which we propagate below).
+    // P39: pass `i` as `candidate_index` so each candidate gets a
+    // distinct per-candidate seed via `per_candidate_seed(seed, i)`.
     let mut handles = Vec::with_capacity(n);
-    for _ in 0..n {
+    for i in 0..n {
         let state = state.clone();
         let req = req.clone();
         let prompt_tokens = prompt_tokens.clone();
         let correlation_id = correlation_id.0.clone();
-        let candidate = tokio::spawn(spawn_best_of_candidate(
+        let candidate = tokio::spawn(spawn_n_candidate(
             state,
             req,
             prompt_tokens,
             max_tokens,
             correlation_id,
+            i,
         ));
         handles.push(candidate);
     }
@@ -617,7 +651,7 @@ pub async fn completions(
     // `SamplingParams::stop_token_sequences`. The populator stays a
     // pure function (no `ApiState` dependency), so the caller
     // tokenizes first and passes the pre-tokenized result in. Same
-    // pattern as `spawn_best_of_candidate` above so every candidate
+    // pattern as `spawn_n_candidate` above so every candidate
     // (and every streaming/non-streaming path) honors the user's
     // stop set end-to-end.
     let stop_token_sequences: Option<Vec<Vec<vllm_traits::TokenId>>> =
@@ -659,7 +693,10 @@ pub async fn completions(
     // it is reused by the `best_of` per-candidate requests below so
     // every candidate sees the exact same sampling config the user
     // submitted. See the helper's doc-comment for field-level rationale.
-    populate_completion_sampling_params(&mut request, &req, stop_token_sequences);
+    // P39: pass `candidate_index = 0` for the single-shot path —
+    // `per_candidate_seed(seed, 0)` is the identity, so existing
+    // single-shot users see no behaviour change.
+    populate_completion_sampling_params(&mut request, &req, stop_token_sequences, 0);
 
     // Reject sampling parameters the engine cannot honour (currently
     // beam_width > 1) BEFORE enqueuing — see `sampling_validation`.
