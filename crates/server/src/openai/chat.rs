@@ -323,6 +323,37 @@ async fn handle_chat(
     // asked for top-K — the default-path overhead stays at zero.
     request.sampling_params.top_logprobs = req.top_logprobs;
 
+    // P38 v0.3 wire-type engine wire-through: tokenize the user's
+    // stop strings at the HTTP boundary and forward as
+    // `SamplingParams::stop_token_sequences`. None and Some(empty)
+    // are both treated as "no stop check" (the engine skips the
+    // matches_stop_sequences call entirely in that case).
+    //
+    // Tokenization errors: if all stop strings tokenize to zero
+    // tokens (e.g. user passed only whitespace-only strings that
+    // slipped past the validator in unusual tokenizer edge cases),
+    // reject with 400 so the caller gets a clear error instead of
+    // a silent no-op.
+    if let Some(stop) = req.stop.as_ref()
+        && !stop.is_empty()
+    {
+        let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
+            .iter()
+            .map(|s| state.tokenizer.encode(s))
+            .filter(|toks| !toks.is_empty())
+            .collect();
+        if tokenized.is_empty() {
+            return Err((
+                axum::http::StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "stop sequences tokenize to zero tokens (no tokenizable content)",
+                    "invalid_request_error",
+                )),
+            ));
+        }
+        request.sampling_params.stop_token_sequences = Some(tokenized);
+    }
+
     // Reject sampling parameters the engine cannot honour (currently
     // beam_width > 1) BEFORE enqueuing — see `sampling_validation`.
     validate_sampling_params(&request.sampling_params)?;
@@ -654,6 +685,37 @@ async fn stream_chat_completion(
     // top-K selection on the post-filter logits only when the request
     // asked for top-K — the default-path overhead stays at zero.
     request.sampling_params.top_logprobs = req.top_logprobs;
+
+    // P38 v0.3 wire-type engine wire-through: tokenize the user's
+    // stop strings at the HTTP boundary and forward as
+    // `SamplingParams::stop_token_sequences`. None and Some(empty)
+    // are both treated as "no stop check" (the engine skips the
+    // matches_stop_sequences call entirely in that case).
+    //
+    // Tokenization errors: if all stop strings tokenize to zero
+    // tokens (e.g. user passed only whitespace-only strings that
+    // slipped past the validator in unusual tokenizer edge cases),
+    // reject with 400 so the caller gets a clear error instead of
+    // a silent no-op.
+    if let Some(stop) = req.stop.as_ref()
+        && !stop.is_empty()
+    {
+        let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
+            .iter()
+            .map(|s| state.tokenizer.encode(s))
+            .filter(|toks| !toks.is_empty())
+            .collect();
+        if tokenized.is_empty() {
+            return Err((
+                axum::http::StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "stop sequences tokenize to zero tokens (no tokenizable content)",
+                    "invalid_request_error",
+                )),
+            ));
+        }
+        request.sampling_params.stop_token_sequences = Some(tokenized);
+    }
 
     // Reject sampling parameters the engine cannot honour (currently
     // beam_width > 1) BEFORE enqueuing — see `sampling_validation`.
