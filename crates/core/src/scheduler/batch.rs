@@ -107,6 +107,36 @@ impl crate::engine::Engine {
             "Engine step: output tokens"
         );
 
+        // P38 v0.3 wire-type engine wire-through: per-sequence stop
+        // detection. For each sequence, check whether any pre-tokenized
+        // stop sequence in `batch.sampling_params[i].stop_token_sequences`
+        // is a suffix of the sequence's already-generated tokens
+        // (including the freshly-sampled one). If yes, finalize the
+        // sequence with `FinishReason::Stop` so the scheduler drops
+        // it from the next batch and the HTTP handler's
+        // `finish_reason_rx` resolves with Stop.
+        //
+        // **Order matters:** the matched token is emitted via
+        // `response_tx` below (the existing send loop runs AFTER this
+        // block). The engine emits the token BEFORE finalizing so the
+        // OpenAI response includes the matched stop text.
+        let mut newly_stopped: Vec<vllm_traits::SeqId> = Vec::new();
+        for (i, seq_id) in batch.seq_ids.iter().enumerate() {
+            let stops = match batch.sampling_params[i].stop_token_sequences.as_ref() {
+                Some(s) if !s.is_empty() => s,
+                _ => continue,
+            };
+            let seq = match self.scheduler.get_sequence(*seq_id) {
+                Some(s) => s,
+                None => continue,
+            };
+            let mut generated: Vec<vllm_traits::TokenId> = seq.tokens[seq.prompt_len..].to_vec();
+            generated.push(next_tokens[i].token);
+            if crate::sampling::matches_stop_sequences(&generated, stops) {
+                newly_stopped.push(*seq_id);
+            }
+        }
+
         let input_counts: Vec<usize> = batch.input_tokens.iter().map(std::vec::Vec::len).collect();
 
         self.scheduler
@@ -119,6 +149,15 @@ impl crate::engine::Engine {
                 let _ = tx.try_send(sampled.clone());
             }
             results.push((*seq_id, sampled.clone()));
+        }
+
+        // P38 v0.3 wire-type engine wire-through: finalize sequences
+        // whose freshly-sampled token completed a pre-tokenized
+        // `stop_token_sequences` match. The matched token was emitted
+        // above; this call drops the channel and signals Stop to the
+        // HTTP handler so the next `step` excludes the sequence.
+        for seq_id in &newly_stopped {
+            self.finalize_finished(*seq_id, FinishReason::Stop);
         }
 
         let finished = self.scheduler.finished_sequences();
