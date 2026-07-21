@@ -196,6 +196,35 @@ pub struct SamplingParams {
     /// legacy behaviour and keeps the default-path overhead at zero.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub top_logprobs: Option<u32>,
+    /// OpenAI `stop` sequences (P38 v0.3 wire-type engine wire-through):
+    /// pre-tokenized stop strings that the engine checks after every
+    /// sampled token. When any token sequence in this list is a
+    /// suffix of a sequence's already-generated tokens, the engine
+    /// finalizes that sequence with
+    /// [`vllm_traits::FinishReason::Stop`] and emits the matching
+    /// token to the HTTP layer (OpenAI convention — the matched
+    /// stop text is included in the response).
+    ///
+    /// `None` → no stop check (default-path overhead is zero —
+    /// the engine skips the `matches_stop_sequences` call entirely
+    /// when this is `None`).
+    ///
+    /// `Some(vec![])` → also a no-op (the HTTP-layer
+    /// `validate_stop_sequences` normalizes empty vectors to
+    /// `None` before forwarding; the engine treats both
+    /// identically).
+    ///
+    /// `Some(non_empty)` → check after every sampled token.
+    /// Pre-tokenized at the HTTP boundary via the model's BPE
+    /// tokenizer; the engine itself never touches the tokenizer.
+    ///
+    /// Per OpenAI spec, max 4 stop strings per request; each stop
+    /// string is tokenized to ≤ ~8 BPE tokens in practice.
+    /// Validation happens on the HTTP layer (see
+    /// `validate_stop_sequences` in
+    /// `vllm_server::openai::sampling_validation`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stop_token_sequences: Option<Vec<Vec<TokenId>>>,
 }
 
 impl Default for SamplingParams {
@@ -212,6 +241,7 @@ impl Default for SamplingParams {
             max_retries: 0,
             seed: None,
             top_logprobs: None,
+            stop_token_sequences: None,
         }
     }
 }
@@ -343,6 +373,33 @@ impl SamplingParamsBuilder {
     #[must_use]
     pub const fn with_top_logprobs_none(mut self) -> Self {
         self.inner.top_logprobs = None;
+        self
+    }
+    /// Set [`SamplingParams::stop_token_sequences`].
+    ///
+    /// OpenAI `stop` sequences, pre-tokenized at the HTTP boundary.
+    /// When `Some(seqs)`, the engine checks after every sampled
+    /// token whether any token sequence in `seqs` is a suffix of
+    /// the generated tokens and finalizes with
+    /// [`vllm_traits::FinishReason::Stop`] on match. When `None`,
+    /// no stop check runs (default-path overhead stays at zero).
+    ///
+    /// See the field-level doc on
+    /// [`SamplingParams::stop_token_sequences`] for the full
+    /// contract and validation rules.
+    #[must_use]
+    pub fn with_stop_token_sequences(mut self, seqs: Vec<Vec<TokenId>>) -> Self {
+        self.inner.stop_token_sequences = Some(seqs);
+        self
+    }
+
+    /// Clear [`SamplingParams::stop_token_sequences`] back to
+    /// `None`. Mirrors
+    /// [`SamplingParamsBuilder::with_seed_none`] and
+    /// [`SamplingParamsBuilder::with_top_logprobs_none`].
+    #[must_use]
+    pub fn with_stop_token_sequences_none(mut self) -> Self {
+        self.inner.stop_token_sequences = None;
         self
     }
     /// Finalize the builder into a [`SamplingParams`].
