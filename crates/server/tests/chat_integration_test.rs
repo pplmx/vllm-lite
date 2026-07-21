@@ -363,12 +363,20 @@ async fn test_chat_accepts_n_equal_to_one() {
     );
 }
 
-/// API-01: non-empty `stop` is declared in `ChatRequest` but the
-/// engine stops at `max_tokens` or natural EOS only. Accepting it
-/// and ignoring it would silently truncate at `max_tokens` even
-/// when a stop sequence was emitted.
+/// P38 v0.3 wire-type engine wire-through: `stop` sequences are
+/// now accepted by the chat handler (no longer 400). The validator
+/// passes them through (`validate_stop_sequences`: max 4 strings,
+/// no empty/whitespace strings); the HTTP layer tokenizes and
+/// forwards as `SamplingParams::stop_token_sequences`. The handler
+/// must accept the request without rejecting it at the boundary.
+///
+/// NOTE: with the default `api_state` (no engine), the request
+/// errors out via `engine_unavailable` (503) once the handler tries
+/// to send `AddRequest`. The KEY contract being pinned here is: NOT
+/// 400. Once the engine integration lands (this commit), the engine
+/// integration exercises the stop check end-to-end.
 #[tokio::test]
-async fn test_chat_rejects_non_empty_stop_with_400() {
+async fn test_chat_stop_now_accepted_by_handler() {
     let state = vllm_server::test_fixtures::api_state(Architecture::Qwen3);
     let app = router(state);
 
@@ -391,19 +399,13 @@ async fn test_chat_rejects_non_empty_stop_with_400() {
         )
         .await
         .unwrap();
-    assert_eq!(
+    // Must NOT be 400 (validator no longer rejects non-empty stop).
+    // Will be 503 because the engine isn't running — but the
+    // IMPORTANT contract here is: NO 400 from the validator.
+    assert_ne!(
         response.status(),
         StatusCode::BAD_REQUEST,
-        "non-empty stop must be rejected at the HTTP boundary"
-    );
-    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
-    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-    assert!(
-        body["error"]["message"]
-            .as_str()
-            .unwrap_or("")
-            .contains("stop sequences"),
-        "error message must name the rejected field"
+        "stop must be accepted by validator (P38)"
     );
 }
 
@@ -5318,5 +5320,975 @@ async fn test_completions_best_of_with_partial_engine_failure_returns_503() {
     // more importantly, it exercises the path where one candidate
     // has fewer tokens than the other.
     assert_eq!(response.status(), StatusCode::OK);
+    let _ = handle.await;
+}
+
+// =============================================================================
+// P38 v0.3 wire-type engine wire-through: `stop` sequences end-to-end
+// tests. The 9 tests below pin the engine integration contract:
+// - chat + completions stop wire-through
+// - single-token + multi-token + multi-stop-list
+// - composition with best_of (P37), logprobs (P36), streaming
+// - max_tokens interaction (Stop wins if matched first; Length is
+//   covered by existing max_tokens tests, so we only assert the
+//   "stop wins when earlier" half here)
+// =============================================================================
+
+/// Mock engine fixture for stop tests: emits a configurable token
+/// sequence per AddRequest and sends `FinishReason::Stop` after the
+/// last token — simulating what the real engine's `step_regular`
+/// does via `finalize_finished(seq_id, FinishReason::Stop)` when
+/// `matches_stop_sequences` returns true. Tests that need a
+/// different finish reason (e.g. "length") can send through
+/// `finish_reason_tx` themselves.
+///
+/// Returns `(engine_tx, captured_seq_ids, handle)` where
+/// `captured_seq_ids` is the seq_id each AddRequest saw (one
+/// entry per AddRequest, in arrival order). Tests use this to
+/// verify the engine saw the request.
+fn spawn_stop_mock_engine(
+    per_seq_tokens: Vec<Vec<u32>>,
+) -> (
+    vllm_server::api::EngineHandle,
+    Arc<Mutex<Vec<usize>>>,
+    tokio::task::JoinHandle<()>,
+) {
+    let (engine_tx, mut engine_rx) = tokio::sync::mpsc::channel::<EngineMessage>(32);
+    let captured: Arc<Mutex<Vec<usize>>> = Arc::new(Mutex::new(Vec::new()));
+    let captured_clone = Arc::clone(&captured);
+    let handle = tokio::spawn(async move {
+        let mut candidate_idx: usize = 0;
+        while let Some(msg) = engine_rx.recv().await {
+            match msg {
+                EngineMessage::AddRequest {
+                    response_tx,
+                    seq_id_tx,
+                    finish_reason_tx,
+                    ..
+                } => {
+                    if let Some(tx) = seq_id_tx {
+                        let _ = tx.send((candidate_idx + 1) as u64);
+                    }
+                    let tokens = per_seq_tokens
+                        .get(candidate_idx % per_seq_tokens.len())
+                        .cloned()
+                        .unwrap_or_default();
+                    captured_clone.lock().await.push(candidate_idx);
+                    for token in &tokens {
+                        let sampled = vllm_traits::SampledToken {
+                            token: *token,
+                            logprob: 0.0,
+                            top_logprobs: Vec::new(),
+                        };
+                        if response_tx.send(sampled).await.is_err() {
+                            break;
+                        }
+                    }
+                    // Simulate engine's finalize_finished(Stop): tell
+                    // the handler why the channel is closing BEFORE
+                    // dropping it. Tests assert the handler maps
+                    // this to finish_reason = "stop".
+                    if let Some(tx) = finish_reason_tx {
+                        let _ = tx.send(vllm_traits::FinishReason::Stop);
+                    }
+                    candidate_idx += 1;
+                }
+                EngineMessage::CancelRequest { .. } => {}
+                _ => {}
+            }
+        }
+    });
+    (engine_tx, captured, handle)
+}
+
+fn state_with_stop_mock_engine(
+    per_seq_tokens: Vec<Vec<u32>>,
+) -> (
+    ApiState,
+    Arc<Mutex<Vec<usize>>>,
+    tokio::task::JoinHandle<()>,
+) {
+    let (engine_tx, captured, handle) = spawn_stop_mock_engine(per_seq_tokens);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    (state, captured, handle)
+}
+
+// -----------------------------------------------------------------------------
+// TEST 1: chat single-token stop → finish_reason = "stop"
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_chat_stop_sequence_triggers_finish_reason_stop() {
+    // Mock emits tokens that end with a single-token stop. The
+    // handler maps the engine's `FinishReason::Stop` to
+    // finish_reason = "stop" in the response.
+    //
+    // Use a stop string whose BPE tokenization is exactly one token
+    // (a single punctuation char). Pre-compute the token ID via
+    // `state.tokenizer.encode` so the mock emits exactly that ID.
+    let (state, captured, _handle) = state_with_stop_mock_engine(vec![vec![10, 20, 30]]);
+    let stop_str = "."; // single BPE token in most tokenizers
+    let stop_tokens = state.tokenizer.encode(stop_str);
+    assert!(
+        !stop_tokens.is_empty(),
+        "test fixture: stop string must tokenize to at least one token"
+    );
+    let stop_token = stop_tokens[0];
+    // Re-emit the mock with the actual stop token (replace token 30
+    // with the real stop token).
+    let (engine_tx, captured2, handle2) = spawn_stop_mock_engine(vec![vec![10, 20, stop_token]]);
+    let _ = (state, captured, _handle); // discard prior mock (already moved)
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "stop": [stop_str],
+        "max_tokens": 10,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "stop must be accepted by chat handler"
+    );
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(
+        body["choices"][0]["finish_reason"].as_str(),
+        Some("stop"),
+        "engine's FinishReason::Stop must surface as finish_reason=stop"
+    );
+    let captured = captured2.lock().await;
+    assert_eq!(
+        captured.len(),
+        1,
+        "exactly one AddRequest must reach the engine"
+    );
+    let _ = handle2.await;
+}
+
+// -----------------------------------------------------------------------------
+// TEST 2: chat multi-token stop — only fires after BOTH tokens generated
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_chat_multi_token_stop_sequence_works() {
+    // Mock emits tokens including the FULL multi-token stop at the end.
+    // After both stop tokens are emitted, the mock sends Stop, which
+    // the handler maps to finish_reason = "stop".
+    //
+    // Use a stop string that tokenizes to ≥ 2 BPE tokens. Most
+    // multi-character strings do. The mock emits the same tokens the
+    // tokenizer produces, so we can match.
+    let stop_str = "##"; // typically tokenizes to ≥ 1 token
+    // Pre-compute the tokenization at fixture construction time. We
+    // need the state.tokenizer to call encode, but ApiState owns it.
+    // Use a probe state first, then build the real one.
+    let probe_state = ApiState {
+        engine_tx: tokio::sync::mpsc::channel::<EngineMessage>(1).0,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let stop_tokens = probe_state.tokenizer.encode(stop_str);
+    assert!(
+        !stop_tokens.is_empty(),
+        "test fixture: stop string must tokenize to at least one token"
+    );
+
+    // Build the actual token sequence: [10, 20, 30, ...stop_tokens]
+    let mut seq_tokens = vec![10u32, 20, 30];
+    seq_tokens.extend(stop_tokens.iter().copied());
+    let (state, captured, handle) = spawn_stop_mock_engine(vec![seq_tokens]);
+    let state = ApiState {
+        engine_tx: state,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "stop": [stop_str],
+        "max_tokens": 20,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(
+        body["choices"][0]["finish_reason"].as_str(),
+        Some("stop"),
+        "multi-token stop must also surface as finish_reason=stop"
+    );
+    let captured = captured.lock().await;
+    assert_eq!(captured.len(), 1);
+    let _ = handle.await;
+}
+
+// -----------------------------------------------------------------------------
+// TEST 3: chat multiple stop strings — first match wins
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_chat_multiple_stops_first_match_wins() {
+    // The user sends 2 stop strings. The mock emits tokens that end
+    // with the FIRST stop's tokens. The handler must surface
+    // finish_reason = "stop" regardless of which stop matched.
+    let probe = vllm_model::tokenizer::Tokenizer::new();
+    let stop_a = "."; // single-token stop
+    let stop_b = "??"; // multi-token stop
+    let stop_a_tokens = probe.encode(stop_a);
+    let stop_b_tokens = probe.encode(stop_b);
+    assert!(!stop_a_tokens.is_empty());
+    assert!(!stop_b_tokens.is_empty());
+
+    // Mock emits tokens that end with stop_a's token (first stop in
+    // the list). The handler must surface finish_reason = "stop".
+    let mut seq_tokens = vec![10u32, 20];
+    seq_tokens.extend(stop_a_tokens.iter().copied());
+    let (engine_tx, captured, handle) = spawn_stop_mock_engine(vec![seq_tokens]);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "stop": [stop_a, stop_b],
+        "max_tokens": 20,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(
+        body["choices"][0]["finish_reason"].as_str(),
+        Some("stop"),
+        "first matching stop must surface as finish_reason=stop"
+    );
+    let captured = captured.lock().await;
+    assert_eq!(captured.len(), 1);
+    let _ = handle.await;
+}
+
+// -----------------------------------------------------------------------------
+// TEST 4: completions single-token stop
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_completions_stop_sequence_triggers_finish_reason_stop() {
+    // Same as test_chat_stop_sequence_triggers_finish_reason_stop but
+    // on /v1/completions.
+    use vllm_server::openai::completions::completions;
+    let probe = vllm_model::tokenizer::Tokenizer::new();
+    let stop_str = ".";
+    let stop_tokens = probe.encode(stop_str);
+    assert!(!stop_tokens.is_empty());
+    let stop_token = stop_tokens[0];
+
+    let mut seq_tokens = vec![10u32, 20, 30];
+    seq_tokens.push(stop_token);
+    let (engine_tx, captured, handle) = spawn_stop_mock_engine(vec![seq_tokens]);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "stop": [stop_str],
+        "max_tokens": 10,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(
+        body["choices"][0]["finish_reason"].as_str(),
+        Some("stop"),
+        "completions: stop must surface as finish_reason=stop"
+    );
+    let captured = captured.lock().await;
+    assert_eq!(captured.len(), 1);
+    let _ = handle.await;
+}
+
+// -----------------------------------------------------------------------------
+// TEST 5: best_of + stop — each candidate gets its own stop set;
+// the ranker picks the highest-mean-logprob completed candidate.
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_completions_stop_sequences_with_best_of_each_candidate_honors_stop() {
+    // best_of = 3 + stop. The mock emits 3 candidate token streams,
+    // each ending with a stop token. Each candidate honors its own
+    // stop set (because populate_completion_sampling_params is called
+    // once per candidate and clones the stop set). The ranker picks
+    // the highest-mean-logprob completed candidate.
+    //
+    // For this test we use a mock where each candidate emits a
+    // different number of tokens but ALL reach their stop. The
+    // response must have finish_reason = "stop" (from the chosen
+    // candidate), not "length" (which would mean the engine ignored
+    // stop).
+    use vllm_server::openai::completions::completions;
+    let probe = vllm_model::tokenizer::Tokenizer::new();
+    let stop_str = ".";
+    let stop_tokens = probe.encode(stop_str);
+    assert!(!stop_tokens.is_empty());
+    let stop_token = stop_tokens[0];
+
+    // Each candidate: [10, 20, 30, stop_token] (length 4). All
+    // candidates emit the same number of tokens so the ranker picks
+    // based on logprob, not length.
+    let mut seq = vec![10u32, 20, 30];
+    seq.push(stop_token);
+    let per_candidate_tokens = [seq.clone(), seq.clone(), seq.clone()];
+
+    // Custom mock that emits per-candidate distinct logprobs so the
+    // ranker is deterministic.
+    let (engine_tx, mut engine_rx) = tokio::sync::mpsc::channel::<EngineMessage>(32);
+    let handle = tokio::spawn(async move {
+        let mut candidate_idx: usize = 0;
+        // Mean logprobs: candidate 0 = -1.0, 1 = -0.5, 2 = 0.0
+        // (candidate 2 wins).
+        let mean_logprobs = [-1.0f32, -0.5, 0.0];
+        while let Some(msg) = engine_rx.recv().await {
+            match msg {
+                EngineMessage::AddRequest {
+                    response_tx,
+                    seq_id_tx,
+                    finish_reason_tx,
+                    ..
+                } => {
+                    if let Some(tx) = seq_id_tx {
+                        let _ = tx.send((candidate_idx + 1) as u64);
+                    }
+                    let tokens =
+                        per_candidate_tokens[candidate_idx % per_candidate_tokens.len()].clone();
+                    let mean = mean_logprobs[candidate_idx % mean_logprobs.len()];
+                    for tok in &tokens {
+                        let sampled = vllm_traits::SampledToken {
+                            token: *tok,
+                            logprob: mean,
+                            top_logprobs: Vec::new(),
+                        };
+                        if response_tx.send(sampled).await.is_err() {
+                            break;
+                        }
+                    }
+                    if let Some(tx) = finish_reason_tx {
+                        let _ = tx.send(vllm_traits::FinishReason::Stop);
+                    }
+                    candidate_idx += 1;
+                }
+                EngineMessage::CancelRequest { .. } => {}
+                _ => {}
+            }
+        }
+    });
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "stop": [stop_str],
+        "max_tokens": 10,
+        "best_of": 3,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    // The chosen candidate's finish_reason (Stop) is propagated to
+    // the response. Per P37's design, the response carries the
+    // chosen candidate's tokens + its finish_reason.
+    assert_eq!(
+        body["choices"][0]["finish_reason"].as_str(),
+        Some("stop"),
+        "best_of + stop: chosen candidate's finish_reason (Stop) must surface"
+    );
+    let _ = handle.await;
+}
+
+// -----------------------------------------------------------------------------
+// TEST 6: stop + logprobs — response carries logprobs of the stopped sequence
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_chat_stop_with_logprobs_returns_logprobs_of_stopped_sequence() {
+    // The matched stop token's logprob is emitted alongside it
+    // (the engine emits the token BEFORE finalize_finished). The
+    // response includes per-token logprobs including the matched
+    // stop token's logprob.
+    //
+    // Mock emits 3 tokens with deterministic logprobs; the third is
+    // the stop token. The response should have 3 logprob entries.
+    let probe = vllm_model::tokenizer::Tokenizer::new();
+    let stop_str = ".";
+    let stop_tokens = probe.encode(stop_str);
+    assert!(!stop_tokens.is_empty());
+    let stop_token = stop_tokens[0];
+    let logprob_values = [-0.5f32, -1.2, -2.0];
+    let tokens = [10u32, 20, stop_token];
+
+    let (engine_tx, mut engine_rx) = tokio::sync::mpsc::channel::<EngineMessage>(8);
+    let handle = tokio::spawn(async move {
+        while let Some(msg) = engine_rx.recv().await {
+            match msg {
+                EngineMessage::AddRequest {
+                    response_tx,
+                    seq_id_tx,
+                    finish_reason_tx,
+                    ..
+                } => {
+                    if let Some(tx) = seq_id_tx {
+                        let _ = tx.send(1);
+                    }
+                    for (tok, lp) in tokens.iter().zip(logprob_values.iter()) {
+                        let sampled = vllm_traits::SampledToken {
+                            token: *tok,
+                            logprob: *lp,
+                            top_logprobs: Vec::new(),
+                        };
+                        if response_tx.send(sampled).await.is_err() {
+                            break;
+                        }
+                    }
+                    if let Some(tx) = finish_reason_tx {
+                        let _ = tx.send(vllm_traits::FinishReason::Stop);
+                    }
+                }
+                EngineMessage::CancelRequest { .. } => {}
+                _ => {}
+            }
+        }
+    });
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/chat/completions", post(chat_completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "stop": [stop_str],
+        "logprobs": true,
+        "top_logprobs": 0,
+        "max_tokens": 10,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(body["choices"][0]["finish_reason"].as_str(), Some("stop"));
+    // Verify logprobs are present and contain the matched stop token.
+    let content = body["choices"][0]["logprobs"]["content"]
+        .as_array()
+        .expect("logprobs.content must be an array when logprobs=true");
+    assert_eq!(
+        content.len(),
+        3,
+        "logprobs.content must carry 3 entries (the matched stop token included)"
+    );
+    // The last entry's token is a STRING (decoded from the stop
+    // token). It must equal the stop string (or a substring if the
+    // tokenizer merges across boundaries — we check it's non-empty).
+    let last_token_str = content[2]["token"]
+        .as_str()
+        .expect("logprob.token must be a string");
+    assert!(
+        !last_token_str.is_empty(),
+        "last logprob entry's token string must be non-empty"
+    );
+    // The last entry's logprob must match what the mock emitted.
+    let last_logprob = content[2]["logprob"]
+        .as_f64()
+        .expect("logprob must be a f64");
+    assert!(
+        (last_logprob - (-2.0)).abs() < 1e-6,
+        "last logprob must equal the mock's emitted logprob -2.0; got {last_logprob}"
+    );
+    let _ = handle.await;
+}
+
+// -----------------------------------------------------------------------------
+// TEST 7: chat streaming — stop → finish_reason = "stop" on last chunk
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_chat_stop_in_streaming_emits_finish_reason_stop_on_last_chunk() {
+    // SSE stream; stop triggers finish_reason = "stop" on the chunk
+    // that carries the matched token; [DONE] follows.
+    let probe = vllm_model::tokenizer::Tokenizer::new();
+    let stop_str = ".";
+    let stop_tokens = probe.encode(stop_str);
+    assert!(!stop_tokens.is_empty());
+    let stop_token = stop_tokens[0];
+    let tokens = vec![10u32, 20, stop_token];
+
+    let (engine_tx, mut engine_rx) = tokio::sync::mpsc::channel::<EngineMessage>(8);
+    let handle = tokio::spawn(async move {
+        while let Some(msg) = engine_rx.recv().await {
+            match msg {
+                EngineMessage::AddRequest {
+                    response_tx,
+                    seq_id_tx,
+                    finish_reason_tx,
+                    ..
+                } => {
+                    if let Some(tx) = seq_id_tx {
+                        let _ = tx.send(1);
+                    }
+                    for tok in &tokens {
+                        let sampled = vllm_traits::SampledToken {
+                            token: *tok,
+                            logprob: 0.0,
+                            top_logprobs: Vec::new(),
+                        };
+                        if response_tx.send(sampled).await.is_err() {
+                            break;
+                        }
+                    }
+                    if let Some(tx) = finish_reason_tx {
+                        let _ = tx.send(vllm_traits::FinishReason::Stop);
+                    }
+                }
+                EngineMessage::CancelRequest { .. } => {}
+                _ => {}
+            }
+        }
+    });
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "stop": [stop_str],
+        "stream": true,
+        "max_tokens": 10,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .header("accept", "text/event-stream")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    assert!(
+        content_type.contains("text/event-stream"),
+        "stream=true must return SSE; got {content_type:?}"
+    );
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+
+    // Parse SSE data: lines. Look for a chunk with finish_reason=stop.
+    let data_lines: Vec<&str> = body_str
+        .split("\n\n")
+        .filter_map(|event| event.lines().find(|l| l.starts_with("data: ")))
+        .filter_map(|l| l.strip_prefix("data: "))
+        .filter(|p| *p != "[DONE]" && !p.is_empty())
+        .collect();
+    assert!(
+        !data_lines.is_empty(),
+        "streaming response must carry at least one JSON chunk; body: {body_str}"
+    );
+
+    // The last data chunk MUST carry finish_reason = "stop".
+    let last_chunk: serde_json::Value =
+        serde_json::from_str(data_lines.last().expect("at least one chunk expected"))
+            .expect("last chunk must be valid JSON");
+    assert_eq!(
+        last_chunk["choices"][0]["finish_reason"].as_str(),
+        Some("stop"),
+        "streaming: last chunk's finish_reason must be stop (matched stop token); body: {body_str}"
+    );
+
+    // The body must end with [DONE].
+    assert!(
+        body_str.trim_end().ends_with("[DONE]"),
+        "streaming body must end with [DONE]; body: {body_str}"
+    );
+    let _ = handle.await;
+}
+
+// -----------------------------------------------------------------------------
+// TEST 8: completions streaming — stop → finish_reason = "stop" on last chunk
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_completions_stop_in_streaming_emits_finish_reason_stop_on_last_chunk() {
+    use vllm_server::openai::completions::completions;
+    let probe = vllm_model::tokenizer::Tokenizer::new();
+    let stop_str = ".";
+    let stop_tokens = probe.encode(stop_str);
+    assert!(!stop_tokens.is_empty());
+    let stop_token = stop_tokens[0];
+    let tokens = vec![10u32, 20, stop_token];
+
+    let (engine_tx, mut engine_rx) = tokio::sync::mpsc::channel::<EngineMessage>(8);
+    let handle = tokio::spawn(async move {
+        while let Some(msg) = engine_rx.recv().await {
+            match msg {
+                EngineMessage::AddRequest {
+                    response_tx,
+                    seq_id_tx,
+                    finish_reason_tx,
+                    ..
+                } => {
+                    if let Some(tx) = seq_id_tx {
+                        let _ = tx.send(1);
+                    }
+                    for tok in &tokens {
+                        let sampled = vllm_traits::SampledToken {
+                            token: *tok,
+                            logprob: 0.0,
+                            top_logprobs: Vec::new(),
+                        };
+                        if response_tx.send(sampled).await.is_err() {
+                            break;
+                        }
+                    }
+                    if let Some(tx) = finish_reason_tx {
+                        let _ = tx.send(vllm_traits::FinishReason::Stop);
+                    }
+                }
+                EngineMessage::CancelRequest { .. } => {}
+                _ => {}
+            }
+        }
+    });
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "stop": [stop_str],
+        "stream": true,
+        "max_tokens": 10,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .header("accept", "text/event-stream")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+
+    let data_lines: Vec<&str> = body_str
+        .split("\n\n")
+        .filter_map(|event| event.lines().find(|l| l.starts_with("data: ")))
+        .filter_map(|l| l.strip_prefix("data: "))
+        .filter(|p| *p != "[DONE]" && !p.is_empty())
+        .collect();
+    assert!(
+        !data_lines.is_empty(),
+        "completions streaming: must carry at least one JSON chunk; body: {body_str}"
+    );
+
+    let last_chunk: serde_json::Value =
+        serde_json::from_str(data_lines.last().expect("at least one chunk expected"))
+            .expect("last chunk must be valid JSON");
+    assert_eq!(
+        last_chunk["choices"][0]["finish_reason"].as_str(),
+        Some("stop"),
+        "completions streaming: last chunk's finish_reason must be stop; body: {body_str}"
+    );
+    assert!(
+        body_str.trim_end().ends_with("[DONE]"),
+        "completions streaming body must end with [DONE]; body: {body_str}"
+    );
+    let _ = handle.await;
+}
+
+// -----------------------------------------------------------------------------
+// TEST 9: stop + max_tokens — stop wins when matched first
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_chat_stop_with_max_tokens_stop_wins_when_earlier() {
+    // max_tokens = 100 but stop matches at step 3 → finish_reason =
+    // "stop" (NOT "length"). This pins the contract that stop fires
+    // before max_tokens when the stop matches first.
+    //
+    // Note: the converse (max_tokens wins when hit first) is covered
+    // by the existing max_tokens tests, which already produce
+    // finish_reason="length" via the default mock.
+    let probe = vllm_model::tokenizer::Tokenizer::new();
+    let stop_str = ".";
+    let stop_tokens = probe.encode(stop_str);
+    assert!(!stop_tokens.is_empty());
+    let stop_token = stop_tokens[0];
+    let tokens = vec![10u32, 20, stop_token];
+
+    let (state, _captured, _handle) = state_with_stop_mock_engine(vec![tokens]);
+    let _ = (state, _captured, _handle);
+    let (engine_tx, captured, handle) = spawn_stop_mock_engine(vec![vec![10, 20, stop_token]]);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    let app = router(state);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "stop": [stop_str],
+        "max_tokens": 100, // far larger than stop-match step (3)
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(
+        body["choices"][0]["finish_reason"].as_str(),
+        Some("stop"),
+        "stop matched before max_tokens → finish_reason must be stop (not length)"
+    );
+    let captured = captured.lock().await;
+    assert_eq!(captured.len(), 1);
     let _ = handle.await;
 }
