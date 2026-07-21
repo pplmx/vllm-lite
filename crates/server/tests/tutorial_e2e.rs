@@ -41,7 +41,7 @@ fn test_tutorial_engine_lifecycle() {
     // context. Mailbox capacity is 256 so the send succeeds.
     msg_tx
         .try_send(EngineMessage::AddRequest {
-            request: req,
+            request: Box::new(req),
             response_tx: token_tx,
             seq_id_tx: None,
             finish_reason_tx: None,

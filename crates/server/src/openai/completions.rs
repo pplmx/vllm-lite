@@ -246,7 +246,7 @@ async fn spawn_best_of_candidate(
     state
         .engine_tx
         .try_send(vllm_core::types::EngineMessage::AddRequest {
-            request,
+            request: Box::new(request),
             response_tx,
             seq_id_tx: None, // non-streaming — no client disconnect to propagate
             finish_reason_tx: Some(finish_reason_tx),
@@ -588,7 +588,7 @@ pub async fn completions(
     state
         .engine_tx
         .try_send(vllm_core::types::EngineMessage::AddRequest {
-            request,
+            request: Box::new(request),
             response_tx,
             seq_id_tx,
             finish_reason_tx: Some(finish_reason_tx),

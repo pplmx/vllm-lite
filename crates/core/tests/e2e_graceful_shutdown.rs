@@ -45,7 +45,7 @@ impl ShutdownEngine {
 
         self.msg_tx
             .try_send(EngineMessage::AddRequest {
-                request,
+                request: Box::new(request),
                 response_tx: tx,
                 seq_id_tx: None,
                 finish_reason_tx: None,
