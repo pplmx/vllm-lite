@@ -792,17 +792,11 @@ pub fn validate_completion_request_fields(
             )),
         ));
     }
-    if let Some(stop) = &req.stop
-        && !stop.is_empty()
-    {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new(
-                "stop sequences are not yet honoured; the engine stops at max_tokens or natural EOS only (omit stop or send an empty array)",
-                "invalid_request_error",
-            )),
-        ));
-    }
+    // P38 v0.3 wire-type engine wire-through: stop sequences are
+    // now accepted (tokenized + forwarded by populate_completion_sampling_params).
+    // Per-string validation lives in `validate_stop_sequences` (max 4
+    // strings, no empty/whitespace strings).
+    validate_stop_sequences(&req.stop)?;
     Ok(())
 }
 
