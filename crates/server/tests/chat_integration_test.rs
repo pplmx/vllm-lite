@@ -284,19 +284,22 @@ async fn test_chat_non_streaming_finish_reason_propagation() {
     );
 }
 
-/// API-01 (technical due diligence §5.1): `n > 1` is declared in
-/// `ChatRequest` but the engine emits exactly one completion per
-/// request. Silent acceptance + ignored field would be a contract
-/// violation — we return 400 invalid_request_error instead.
+/// API-01 (technical due diligence §5.1): `n > MAX_N` is rejected
+/// with 400 invalid_request_error. P39 narrows the rejection to
+/// `n > 8` (the scheduler-safe cap); `n = 2..=8` is honored
+/// end-to-end on the wire.
 #[tokio::test]
 async fn test_chat_rejects_n_greater_than_one_with_400() {
     let state = vllm_server::test_fixtures::api_state(Architecture::Qwen3);
     let app = router(state);
 
+    // Use n = 9 (above MAX_N = 8) so the validator still rejects
+    // it. n = 2..=8 is now accepted by the validator (and would
+    // hit the engine path; that's tested separately in P39 Task 6).
     let body = serde_json::json!({
         "model": "test-model",
         "messages": [{"role": "user", "content": "Hi"}],
-        "n": 2,
+        "n": 9,
         "max_tokens": 3,
     })
     .to_string();
@@ -315,7 +318,7 @@ async fn test_chat_rejects_n_greater_than_one_with_400() {
     assert_eq!(
         response.status(),
         StatusCode::BAD_REQUEST,
-        "n > 1 must be rejected at the HTTP boundary"
+        "n > MAX_N must be rejected at the HTTP boundary"
     );
     let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
     let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
@@ -324,8 +327,8 @@ async fn test_chat_rejects_n_greater_than_one_with_400() {
         body["error"]["message"]
             .as_str()
             .unwrap_or("")
-            .contains("n > 1"),
-        "error message must name the rejected field, got: {}",
+            .contains("exceeds maximum allowed value"),
+        "error message must name the new cap, got: {}",
         body["error"]["message"]
     );
 }
