@@ -7,7 +7,7 @@ use axum::{
         sse::{Event, Sse},
     },
 };
-use futures::stream;
+use futures::{future::join_all, stream};
 use std::convert::Infallible;
 use tokio::sync::mpsc;
 
@@ -708,12 +708,93 @@ async fn spawn_n_streaming_candidate(
     })
 }
 
+/// Build one `CancelOnDrop` guard per candidate seq_id (P39
+/// v0.x wire-type follow-up — T5 refactor: `n > 1` streaming
+/// helper).
+///
+/// Used in two places in [`stream_n_parallel_completions`]:
+///
+/// 1. **Happy path** — after all N `seq_id_rx`s resolve
+///    successfully, the returned `Vec<Arc<CancelOnDrop>>` is
+///    stored in the `stream::unfold` state so Drop on stream
+///    abandonment fires `EngineMessage::CancelRequest` for every
+///    in-flight sequence. Disarmed on natural completion so Drop
+///    is a no-op.
+/// 2. **Partial-failure cleanup** — when one or more candidates
+///    drop their `seq_id_tx` without sending (engine panic or
+///    similar), we collect the seq_ids we DID receive and build
+///    a transient vec of guards just to drop at the error-return
+///    site. The Drop path fires `CancelRequest` for each admitted
+///    sequence so we don't leak scheduler slots on a 503 path.
+///
+/// The guard's `Drop` impl returns early on `seq_id = 0` (the
+/// rejected-admission sentinel), so passing an `ids` vec with
+/// zero entries is safe — the Drop loop just no-ops for those.
+fn build_n_cancel_guards(
+    state: &ApiState,
+    seq_ids: &[vllm_traits::SeqId],
+) -> Vec<std::sync::Arc<crate::openai::chat::CancelOnDrop>> {
+    seq_ids
+        .iter()
+        .map(|&seq_id| {
+            std::sync::Arc::new(crate::openai::chat::CancelOnDrop {
+                engine_tx: state.engine_tx.clone(),
+                seq_id: std::sync::atomic::AtomicU64::new(seq_id),
+                fired: std::sync::atomic::AtomicBool::new(false),
+                request_id: format!(
+                    "cmpl_{}",
+                    uuid::Uuid::new_v4().to_string()[..8].to_uppercase()
+                ),
+            })
+        })
+        .collect()
+}
+
 /// Run the `n > 1` STREAMING path on the legacy `/v1/completions`
 /// endpoint (P39 v0.x wire-type follow-up — engine wire-through
 /// helper for `n` × `stream = true`). Spawns N parallel candidates
 /// via [`spawn_n_streaming_candidate`], interleaves their per-token
 /// streams into one SSE event stream, and emits `[DONE]` after all
 /// N finalize.
+///
+/// **Deviation from spec §4.3:** the spec sketches a
+/// `StreamingCandidateState` struct + `assemble_streaming_event
+/// (candidates: &[StreamingCandidateState]) -> serde_json::Value`
+/// helper that runs after every `select!` round across the N
+/// `response_rx` channels (one `select!` macro with N branches,
+/// one state vec, one helper call per round). This implementation
+/// instead uses an **arrival-order merge via forwarding tasks**:
+/// each candidate has a `tokio::spawn`'d forwarding task that
+/// pushes `NParallelSseEvent`s into a shared mpsc channel, and
+/// the SSE assemble loop (`stream::unfold` over the channel)
+/// emits one event per arrival. Why the deviation:
+///
+/// - **No head-of-line blocking.** A round-locked merge would
+///   inflate per-event latency to the slowest candidate — wasteful
+///   when one candidate finishes much later than the others.
+///   Arrival-order merge keeps per-event latency tight while still
+///   emitting every candidate's `index` + tokens across the stream.
+/// - **Simpler state machine.** The forwarding tasks own the
+///   per-candidate state machine (token loop → finalize → emit
+///   `Finished`); the assemble loop is a single `match` over the
+///   shared channel. No need to hand-roll a `select!` macro with N
+///   branches or maintain a `Vec<StreamingCandidateState>` between
+///   rounds.
+/// - **No separate `assemble_streaming_event` helper.** Event
+///   assembly is inlined in the `stream::unfold` closure (the two
+///   emit sites — per-token arrival + intermediate/terminal
+///   finish — are 4-5 lines each). Pulling them into a helper
+///   would add indirection without removing duplication.
+///
+/// The wire shape is preserved: token events carry ONE choice
+/// with `index + text` (per the spec's per-token emit),
+/// intermediate per-candidate finish events carry the just-
+/// finished candidate's `index + finish_reason` only, and the
+/// final consolidated event carries N choices with `finish_reason`
+/// each (per the spec's `assemble_streaming_event` close-of-stream
+/// behavior). The wire-shape tests in §4.9.4
+/// (`test_completions_n_two_streaming_wire_shape`) pin this
+/// contract.
 ///
 /// **Per-event shape:** `choices: [{index: usize, text: String,
 /// finish_reason?: String}, ...]` — one entry per candidate that
@@ -791,42 +872,93 @@ async fn stream_n_parallel_completions(
         candidate_channels.push(ch);
     }
 
-    // Block briefly until each engine-assigned seq_id arrives (see
-    // single-shot `stream_completion` for rationale on the 1 s cap).
-    let mut seq_ids: Vec<vllm_traits::SeqId> = Vec::with_capacity(n);
-    for ch in &mut candidate_channels {
-        let seq_id = match tokio::time::timeout(
-            std::time::Duration::from_secs(1),
-            ch.seq_id_rx
+    // Eagerly await all N engine-assigned seq_ids with a SHARED
+    // 1 s timeout (T5 refactor — Issue 1). The pre-refactor loop
+    // awaited each `seq_id_rx` sequentially with a fresh 1 s
+    // timeout per iteration, so the worst-case blocking time on a
+    // partial engine stall was N × 1 s before the handler 503'd
+    // (for n = 8 that's up to ~8 s of HTTP handler blocked).
+    //
+    // `join_all` over N `oneshot::Receiver`s racing against one
+    // shared `tokio::time::timeout` reduces worst-case to 1 × 1 s
+    // and processes results eagerly: each future carries its
+    // candidate index so we can build a `seq_ids` vec in any
+    // arrival order.
+    //
+    // **Partial-failure semantics:** if ANY candidate's
+    // `seq_id_rx` returns `Err` (engine dropped `seq_id_tx`
+    // without sending — panic or unexpected shutdown between
+    // AddRequest processing and the seq_id send), we build
+    // `CancelOnDrop` guards for the seq_ids we DID receive and
+    // drop them at the error-return site, so the Drop impl fires
+    // `EngineMessage::CancelRequest` for every admitted sequence.
+    // Without this cleanup, partial admission would leak the
+    // admitted sequences to the scheduler until max_tokens. The
+    // un-admitted candidates have `seq_id = 0` (rejected-
+    // admission sentinel); the guard's Drop impl returns early
+    // on `seq_id = 0` so they don't fire a wasted CancelRequest.
+    //
+    // **Shared-timeout fallback:** if the SHARED timeout fires
+    // before any candidate's seq_id arrives, we can't identify
+    // which admitted (the engine assigns seq_id synchronously
+    // inside `add_request` but we never read the result). This
+    // is the same best-effort cleanup path as the non-streaming
+    // `run_n_parallel_completions` partial-failure comment:
+    // admitted candidates run to natural max_tokens and free
+    // their scheduler slots on their own.
+    let seq_id_futures: Vec<_> = candidate_channels
+        .iter_mut()
+        .enumerate()
+        .map(|(idx, ch)| {
+            let rx = ch
+                .seq_id_rx
                 .take()
-                .expect("seq_id_rx is set by spawn_n_streaming_candidate"),
-        )
-        .await
-        {
-            Ok(Ok(id)) => id,
-            _ => return Err(unavailable_response()),
-        };
-        seq_ids.push(seq_id);
-    }
+                .expect("seq_id_rx is set by spawn_n_streaming_candidate");
+            async move { (idx, rx.await) }
+        })
+        .collect();
+
+    let join_result =
+        tokio::time::timeout(std::time::Duration::from_secs(1), join_all(seq_id_futures)).await;
+
+    let seq_ids: Vec<vllm_traits::SeqId> = match join_result {
+        Ok(results) => {
+            let mut ids: Vec<vllm_traits::SeqId> = vec![0; n];
+            let mut first_err_idx: Option<usize> = None;
+            for (idx, result) in results {
+                match result {
+                    Ok(seq_id) => ids[idx] = seq_id,
+                    Err(_) => {
+                        if first_err_idx.is_none() {
+                            first_err_idx = Some(idx);
+                        }
+                    }
+                }
+            }
+            if first_err_idx.is_some() {
+                // Partial admission: build guards for admitted
+                // candidates so Drop fires CancelRequest on the
+                // 503 return path. See the partial-failure
+                // comment above.
+                let admitted_ids: Vec<vllm_traits::SeqId> =
+                    ids.iter().copied().filter(|&id| id != 0).collect();
+                drop(build_n_cancel_guards(&state, &admitted_ids));
+                return Err(unavailable_response());
+            }
+            ids
+        }
+        Err(_elapsed) => {
+            // Shared timeout — see the fallback note above.
+            return Err(unavailable_response());
+        }
+    };
 
     // Build one CancelOnDrop guard per candidate. Drop on stream
     // abandonment → CancelRequest for each in-flight sequence (so
     // we don't leak scheduler slots). Disarmed on natural
     // completion so Drop is a no-op.
-    let cancel_guards: Vec<std::sync::Arc<crate::openai::chat::CancelOnDrop>> = seq_ids
-        .iter()
-        .map(|&seq_id| {
-            std::sync::Arc::new(crate::openai::chat::CancelOnDrop {
-                engine_tx: state.engine_tx.clone(),
-                seq_id: std::sync::atomic::AtomicU64::new(seq_id),
-                fired: std::sync::atomic::AtomicBool::new(false),
-                request_id: format!(
-                    "cmpl_{}",
-                    uuid::Uuid::new_v4().to_string()[..8].to_uppercase()
-                ),
-            })
-        })
-        .collect();
+    let cancel_guards: Vec<std::sync::Arc<crate::openai::chat::CancelOnDrop>> =
+        build_n_cancel_guards(&state, &seq_ids);
 
     // Shared SSE event channel: one forwarding task per candidate
     // pushes its tokens + final finish_reason into this channel; the
