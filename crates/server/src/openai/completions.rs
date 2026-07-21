@@ -319,6 +319,22 @@ async fn spawn_best_of_candidate(
     Ok((tokens, finish_reason))
 }
 
+/// Derive a deterministic per-candidate seed for `n > 1` / `best_of > 1`.
+///
+/// `None` propagates as `None` (the engine falls back to its thread-local
+/// default RNG, which is per-sequence independent per P34).
+///
+/// `Some(seed)` produces `Some((seed as u64).wrapping_add(candidate_index as u64))` —
+/// deterministic + distinct per candidate (avoids identical outputs when
+/// all candidates share the same seed). The `i64 → u64` cast via `as`
+/// matches P38's `populate_completion_sampling_params` convention
+/// (wraps negatives per OpenAI's i64 contract); the `wrapping_add`
+/// then operates on u64 for overflow-safe candidate differentiation.
+/// Matches P34's per-sequence independence contract.
+pub(super) fn per_candidate_seed(seed: Option<i64>, candidate_index: usize) -> Option<u64> {
+    seed.map(|s| (s as u64).wrapping_add(candidate_index as u64))
+}
+
 /// Run the `best_of > 1` path (P37 v0.x wire-type follow-up —
 /// engine wire-through helper for `best_of`). Spawns N parallel
 /// candidates via [`spawn_best_of_candidate`], joins them, ranks
