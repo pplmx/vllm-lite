@@ -946,14 +946,15 @@ fn test_seed_top_p_path_uses_seeded_rng() {
 }
 
 // =============================================================================
-// P38 v0.x wire-type follow-up — engine wire-through: `matches_stop_sequences`
-// helper tests. Pure-function unit tests; the helper is consumed by the
-// engine's `step_regular` loop after every sampled token. Pin the contract
-// end-to-end so future refactors (e.g. Aho-Corasick) trip the suite.
+// P38 v0.3 wire-type engine wire-through — engine wire-through:
+// `matches_stop_sequences` helper tests. Pure-function unit tests; the
+// helper is consumed by the engine's `step_regular` loop after every
+// sampled token. Pin the contract end-to-end so future refactors
+// (e.g. Aho-Corasick) trip the suite.
 // =============================================================================
 
 #[test]
-fn matches_stop_sequences_no_match_returns_false() {
+fn test_matches_stop_sequences_no_match_returns_false() {
     // Stop = "xyz" tokens [99], generated = [1, 2, 3] — no suffix match.
     let stops: Vec<Vec<u32>> = vec![vec![99]];
     let generated: Vec<u32> = vec![1, 2, 3];
@@ -961,7 +962,7 @@ fn matches_stop_sequences_no_match_returns_false() {
 }
 
 #[test]
-fn matches_stop_sequences_single_token_match_returns_true() {
+fn test_matches_stop_sequences_single_token_match_returns_true() {
     // Stop = [99] (1 token), generated = [1, 2, 99] — suffix matches.
     let stops: Vec<Vec<u32>> = vec![vec![99]];
     let generated: Vec<u32> = vec![1, 2, 99];
@@ -969,7 +970,7 @@ fn matches_stop_sequences_single_token_match_returns_true() {
 }
 
 #[test]
-fn matches_stop_sequences_multi_token_match_returns_true() {
+fn test_matches_stop_sequences_multi_token_match_returns_true() {
     // Stop = [10, 20, 30] (3 tokens), generated ends with [10, 20, 30].
     let stops: Vec<Vec<u32>> = vec![vec![10, 20, 30]];
     let generated: Vec<u32> = vec![1, 2, 3, 10, 20, 30];
@@ -977,7 +978,7 @@ fn matches_stop_sequences_multi_token_match_returns_true() {
 }
 
 #[test]
-fn matches_stop_sequences_partial_match_returns_false() {
+fn test_matches_stop_sequences_partial_match_returns_false() {
     // Stop = [10, 20, 30], generated ends with [10, 20] — only 2 of 3
     // stop tokens match. Must NOT trigger (we require the FULL suffix).
     let stops: Vec<Vec<u32>> = vec![vec![10, 20, 30]];
@@ -986,7 +987,7 @@ fn matches_stop_sequences_partial_match_returns_false() {
 }
 
 #[test]
-fn matches_stop_sequences_first_match_wins() {
+fn test_matches_stop_sequences_first_match_wins() {
     // Multiple stops; the FIRST one whose suffix matches wins (helper
     // returns true on first hit, doesn't care which one).
     let stops: Vec<Vec<u32>> = vec![vec![99], vec![88]];
@@ -1000,7 +1001,7 @@ fn matches_stop_sequences_first_match_wins() {
 }
 
 #[test]
-fn matches_stop_sequences_empty_stops_returns_false() {
+fn test_matches_stop_sequences_empty_stops_returns_false() {
     // `stops = vec![]` → never matches (helper loops over zero elements).
     let stops: Vec<Vec<u32>> = vec![];
     let generated: Vec<u32> = vec![1, 2, 3];
@@ -1008,9 +1009,22 @@ fn matches_stop_sequences_empty_stops_returns_false() {
 }
 
 #[test]
-fn matches_stop_sequences_stop_longer_than_generated_returns_false() {
+fn test_matches_stop_sequences_stop_longer_than_generated_returns_false() {
     // Stop = [1, 2, 3, 4, 5], generated has only 3 tokens — cannot match.
     let stops: Vec<Vec<u32>> = vec![vec![1, 2, 3, 4, 5]];
     let generated: Vec<u32> = vec![1, 2, 3];
     assert!(!matches_stop_sequences(&generated, &stops));
+}
+
+#[test]
+fn test_matches_stop_sequences_empty_generated_returns_false() {
+    // generated_tokens = &[] — every non-empty stop is "longer than
+    // generated", so the helper must return false for any non-empty
+    // stops and trivially false for empty stops. Defensive: pins the
+    // degenerate case where the engine might call with empty
+    // generated (e.g. before any token is sampled in a fresh seq).
+    let stops_nonempty: Vec<Vec<u32>> = vec![vec![1, 2, 3]];
+    let stops_empty: Vec<Vec<u32>> = vec![];
+    assert!(!matches_stop_sequences(&[], &stops_nonempty));
+    assert!(!matches_stop_sequences(&[], &stops_empty));
 }

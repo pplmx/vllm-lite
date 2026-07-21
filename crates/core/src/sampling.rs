@@ -723,19 +723,22 @@ pub fn apply_logit_bias(logits: &mut [f32], bias: &std::collections::HashMap<Tok
     }
 }
 
-/// P38 v0.x wire-type follow-up — engine wire-through helper for
+/// P38 v0.3 wire-type engine wire-through — engine wire-through helper for
 /// `stop` sequences. Returns `true` iff any token sequence in `stops`
 /// is a suffix of `generated_tokens`.
 ///
-/// **Complexity:** O(N × M) where N = `generated_tokens.len()` and
-/// M = sum(stop.len() for stop in stops). Both are tiny in practice:
-/// - `generated_tokens.len()` ≤ `max_tokens` (typical ≤ 4096)
+/// **Complexity:** O(M) where M = sum(stop.len() for stop in stops).
+/// The function checks exactly one suffix position per stop — it does
+/// NOT scan all `generated_tokens.len()` positions, so the size of
+/// the generated sequence does not factor into the per-step cost.
+/// Both inputs are tiny in practice:
 /// - `stops.len()` ≤ 4 (OpenAI spec upper bound, validated at HTTP layer)
 /// - each `stop.len()` ≤ ~8 tokens (typical BPE-tokenized stop strings)
 ///
-/// So the per-step cost is bounded by ~32 slice comparisons × max_tokens
-/// positions — well under 100 ns per step on a modern CPU. The check runs
-/// once per generated token in `step_regular`.
+/// So the per-step cost is bounded by ~32 token comparisons (4 stops ×
+/// 8 tokens, slice-eq is SIMD-accelerated) — well under 100 ns per
+/// step on a modern CPU. The check runs once per generated token in
+/// `step_regular`.
 ///
 /// **Empty / oversized stops:** an empty stop (`vec![]`) or a stop
 /// longer than `generated_tokens` is a no-op for that iteration. The
