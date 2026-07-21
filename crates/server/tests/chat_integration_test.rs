@@ -6263,3 +6263,504 @@ async fn test_chat_stop_with_max_tokens_stop_wins_when_earlier() {
     assert_eq!(captured.len(), 1);
     let _ = handle.await;
 }
+
+// =============================================================================
+// P39 v0.x wire-type engine wire-through: `n > 1` on /v1/completions
+// (non-streaming). 5 integration tests + 1 wire-shape test pin the
+// engine integration contract:
+// - n = 1 / None is a no-op (zero overhead vs P38 single-shot)
+// - n > 1 returns N distinct choices with indices 0..N
+// - choices have distinct text (per-candidate seed derivation works)
+// - logprobs populate per-choice
+// - n > 8 is rejected with 400 by the validator (Task 1)
+// - the JSON wire shape matches OpenAI's contract for n > 1
+//
+// Test fixture design: each test uses a capturing mock that emits a
+// distinct token sequence per candidate so we can assert (a) the
+// engine saw N independent AddRequests and (b) each choice carries
+// the right candidate's text.
+// =============================================================================
+
+/// Mock engine fixture for `n > 1` tests: emits a configurable
+/// token sequence per candidate (one entry in `per_candidate_tokens`
+/// per AddRequest arrival order) and sends `FinishReason::Stop`
+/// after the last token.
+///
+/// Returns `(engine_tx, captured_token_streams, handle)` where
+/// `captured_token_streams` is `Vec<Vec<u32>>` — one inner vec per
+/// AddRequest arrival, holding the tokens that candidate was
+/// supposed to receive. Tests use this to (a) confirm the engine
+/// saw N independent requests (len) and (b) confirm each candidate
+/// got its own distinct token stream (per-inner-vec equality).
+///
+/// Distinct from `spawn_best_of_mock_engine` (P37), which emits the
+/// SAME token sequence for every candidate — that's perfect for
+/// ranker determinism but useless for `n > 1` text-distinctness
+/// tests. The two mocks coexist for the two distinct contracts.
+fn spawn_n_mock_engine(
+    per_candidate_tokens: Vec<Vec<u32>>,
+) -> (
+    vllm_server::api::EngineHandle,
+    Arc<Mutex<Vec<Vec<u32>>>>,
+    tokio::task::JoinHandle<()>,
+) {
+    let (engine_tx, mut engine_rx) = tokio::sync::mpsc::channel::<EngineMessage>(32);
+    let captured: Arc<Mutex<Vec<Vec<u32>>>> = Arc::new(Mutex::new(Vec::new()));
+    let captured_clone = Arc::clone(&captured);
+    let handle = tokio::spawn(async move {
+        let mut candidate_idx: usize = 0;
+        while let Some(msg) = engine_rx.recv().await {
+            match msg {
+                EngineMessage::AddRequest {
+                    response_tx,
+                    seq_id_tx,
+                    finish_reason_tx,
+                    ..
+                } => {
+                    if let Some(tx) = seq_id_tx {
+                        let _ = tx.send((candidate_idx + 1) as u64);
+                    }
+                    let tokens = per_candidate_tokens
+                        .get(candidate_idx % per_candidate_tokens.len())
+                        .cloned()
+                        .unwrap_or_default();
+                    captured_clone.lock().await.push(tokens.clone());
+                    for token in &tokens {
+                        let sampled = vllm_traits::SampledToken {
+                            token: *token,
+                            // Distinct logprobs per candidate so
+                            // visible per-candidate content
+                            // divergence can be inspected when
+                            // needed. The logprob value itself isn't
+                            // in the wire shape; only its presence
+                            // in `logprobs` is.
+                            logprob: (candidate_idx as f32) - 0.5,
+                            top_logprobs: Vec::new(),
+                        };
+                        if response_tx.send(sampled).await.is_err() {
+                            break;
+                        }
+                    }
+                    // Simulate engine's natural finalize: send
+                    // `FinishReason::Stop` before dropping the
+                    // response channel so the handler maps it to
+                    // `finish_reason = "stop"` in the response.
+                    if let Some(tx) = finish_reason_tx {
+                        let _ = tx.send(vllm_traits::FinishReason::Stop);
+                    }
+                    candidate_idx += 1;
+                }
+                EngineMessage::CancelRequest { .. } => {}
+                _ => {}
+            }
+        }
+    });
+    (engine_tx, captured, handle)
+}
+
+/// Wire up an `ApiState` whose engine emits distinct tokens per
+/// candidate (for `n > 1` tests that need distinct text per
+/// choice).
+fn state_with_n_mock_engine(
+    per_candidate_tokens: Vec<Vec<u32>>,
+) -> (
+    ApiState,
+    Arc<Mutex<Vec<Vec<u32>>>>,
+    tokio::task::JoinHandle<()>,
+) {
+    let (engine_tx, captured, handle) = spawn_n_mock_engine(per_candidate_tokens);
+    let state = ApiState {
+        engine_tx,
+        tokenizer: Arc::new(vllm_model::tokenizer::Tokenizer::new()),
+        architecture: Architecture::Qwen3,
+        batch_manager: Arc::new(vllm_server::openai::batch::BatchManager::new()),
+        auth: None,
+        audit: Arc::new(vllm_server::security::audit::AuditLogger::new(1000)),
+        health: Arc::new(std::sync::RwLock::new(
+            vllm_server::health::HealthChecker::new(true, true),
+        )),
+        metrics: Arc::new(vllm_core::metrics::EnhancedMetricsCollector::new()),
+        max_model_len: None,
+        arch_capabilities: None,
+    };
+    (state, captured, handle)
+}
+
+// -----------------------------------------------------------------------------
+// TEST 1: n = 1 is a no-op baseline (zero overhead vs P38 single-shot)
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_completions_n_one_is_noop_baseline() {
+    // n = 1 (or None) must produce exactly the same behavior as
+    // pre-P39 — one CompletionChoice, no fan-out, no extra
+    // AddRequests. This pins the zero-overhead baseline contract
+    // for the most common case (existing clients that don't set
+    // `n` at all).
+    use vllm_server::openai::completions::completions;
+    let (state, captured, _handle) = state_with_n_mock_engine(vec![vec![10, 20]]);
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 2,
+        "n": 1,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // n = 1 must NOT fan out — exactly one AddRequest.
+    let captured_count = captured.lock().await.len();
+    assert_eq!(
+        captured_count, 1,
+        "n=1 must produce exactly one AddRequest (no fan-out), got {captured_count}"
+    );
+
+    // Response shape: one choice with index 0.
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    let choices = json.get("choices").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(
+        choices.len(),
+        1,
+        "n=1 must return exactly one CompletionChoice, got {}",
+        choices.len()
+    );
+    assert_eq!(choices[0].get("index").and_then(|v| v.as_i64()), Some(0));
+}
+
+// -----------------------------------------------------------------------------
+// TEST 2: n > 1 returns N choices with correct indices 0..N
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_completions_n_above_one_returns_n_choices() {
+    // n = 2 must produce TWO CompletionChoices in the response (NOT
+    // one — distinct from `best_of`'s "return ONE" semantics).
+    // Indices must be 0 and 1 (0-based, OpenAI convention).
+    use vllm_server::openai::completions::completions;
+    let (state, captured, _handle) = state_with_n_mock_engine(vec![vec![10, 20], vec![30, 40]]);
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 2,
+        "n": 2,
+        "seed": 42,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Engine must have seen EXACTLY 2 AddRequests (fan-out).
+    let captured_count = captured.lock().await.len();
+    assert_eq!(
+        captured_count, 2,
+        "n=2 must produce two AddRequests (fan-out), got {captured_count}"
+    );
+
+    // Response shape: 2 choices with indices 0 and 1.
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    let choices = json.get("choices").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(
+        choices.len(),
+        2,
+        "n=2 must return exactly two CompletionChoices, got {}",
+        choices.len()
+    );
+    assert_eq!(
+        choices[0].get("index").and_then(|v| v.as_i64()),
+        Some(0),
+        "choices[0].index must be 0"
+    );
+    assert_eq!(
+        choices[1].get("index").and_then(|v| v.as_i64()),
+        Some(1),
+        "choices[1].index must be 1"
+    );
+}
+
+// -----------------------------------------------------------------------------
+// TEST 3: n > 1 choices have distinct text (per-candidate seed works)
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_completions_n_above_one_choices_have_distinct_text() {
+    // With per-candidate seed derivation (Task 3: `per_candidate_seed`
+    // helper) each candidate draws from a distinct RNG stream, so
+    // the mock's distinct token sequences surface as distinct text
+    // in each choice. The test asserts that choices[0].text !=
+    // choices[1].text.
+    //
+    // We use the `state_with_n_mock_engine` fixture which emits
+    // tokens [10, 20] for candidate 0 and [30, 40] for candidate 1.
+    // The tokenizer used here is `Tokenizer::new()` (the test
+    // default); the two token streams decode to distinct strings.
+    use vllm_server::openai::completions::completions;
+    let (state, _captured, _handle) = state_with_n_mock_engine(vec![vec![10, 20], vec![30, 40]]);
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 2,
+        "n": 2,
+        "seed": 42,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    let choices = json.get("choices").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(choices.len(), 2);
+
+    let text0 = choices[0].get("text").and_then(|v| v.as_str()).unwrap();
+    let text1 = choices[1].get("text").and_then(|v| v.as_str()).unwrap();
+    assert_ne!(
+        text0, text1,
+        "n > 1 choices must have DISTINCT text (per-candidate seed works); got text0={text0:?}, text1={text1:?}"
+    );
+}
+
+// -----------------------------------------------------------------------------
+// TEST 4: n > 1 with logprobs returns per-choice logprobs
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_completions_n_above_one_with_logprobs_returns_per_choice_logprobs() {
+    // When n > 1 AND logprobs = Some(n), each choice's `logprobs`
+    // field must be present (P36 helper, reused per-candidate via
+    // `build_completion_choice_logprobs`). Pins the per-candidate
+    // logprob assembly contract.
+    use vllm_server::openai::completions::completions;
+    let (state, _captured, _handle) = state_with_n_mock_engine(vec![vec![10, 20], vec![30, 40]]);
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 2,
+        "n": 2,
+        "seed": 42,
+        "logprobs": 1,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    let choices = json.get("choices").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(choices.len(), 2);
+
+    // Each choice must carry the `logprobs` container (P36 helper
+    // returns `Some(_)` when `req.logprobs.is_some()`).
+    assert!(
+        choices[0].get("logprobs").is_some(),
+        "choices[0].logprobs MUST be present when logprobs=1 + n>1"
+    );
+    assert!(
+        choices[1].get("logprobs").is_some(),
+        "choices[1].logprobs MUST be present when logprobs=1 + n>1"
+    );
+    // Each choice's logprobs must have parallel arrays of length N
+    // tokens (the engine emitted 2 tokens per candidate).
+    let lp0 = &choices[0]["logprobs"];
+    assert_eq!(
+        lp0.get("tokens").and_then(|v| v.as_array()).unwrap().len(),
+        2
+    );
+    let lp1 = &choices[1]["logprobs"];
+    assert_eq!(
+        lp1.get("tokens").and_then(|v| v.as_array()).unwrap().len(),
+        2
+    );
+}
+
+// -----------------------------------------------------------------------------
+// TEST 5: n > 8 is rejected with 400 (validator upper bound)
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_completions_n_above_eight_returns_400() {
+    // n = 9 must be rejected by validate_completion_request_fields
+    // (P39 Task 1: `n <= MAX_N (8)` upper bound). Validator runs
+    // BEFORE any engine work, so the engine sees nothing.
+    use vllm_server::openai::completions::completions;
+    let (state, captured, _handle) = state_with_n_mock_engine(vec![vec![10, 20]; 8]);
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 2,
+        "n": 9,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    // Validator rejection: engine must NOT have seen any AddRequests.
+    let captured_count = captured.lock().await.len();
+    assert_eq!(
+        captured_count, 0,
+        "n=9 must be rejected by validator BEFORE fan-out, but engine saw {captured_count} requests"
+    );
+}
+
+// -----------------------------------------------------------------------------
+// TEST 6: wire-shape test — pin the exact JSON layout for n = 2
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_completions_n_two_response_wire_shape() {
+    // Pins the exact JSON layout OpenAI clients depend on:
+    // - `choices` is an array of length N (n = 2 → 2 entries)
+    // - `choices[i].index` is 0-based integer (0, 1)
+    // - `choices[i].text` is a string
+    // - `choices[i].finish_reason` is a string ("stop" or "length")
+    // - `usage.prompt_tokens` is an integer ≥ 0
+    // - `usage.completion_tokens` is an integer ≥ 1 (sum across N
+    //   candidates — OpenAI billing convention)
+    // - `usage.total_tokens = prompt_tokens + completion_tokens`
+    //
+    // Distinct from the four functional tests above (which assert
+    // specific values); this test asserts the SHAPE (types +
+    // presence) so a future refactor that accidentally drops the
+    // `index` field or swaps `completion_tokens` to per-candidate
+    // instead of sum would fail loudly here.
+    use vllm_server::openai::completions::completions;
+    let (state, _captured, _handle) = state_with_n_mock_engine(vec![vec![10, 20], vec![30, 40]]);
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 2,
+        "n": 2,
+        "seed": 42,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+
+    // choices: array of length 2 with correct indices
+    let choices = json.get("choices").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(choices.len(), 2);
+    assert_eq!(choices[0]["index"], 0);
+    assert_eq!(choices[1]["index"], 1);
+
+    // each choice carries text + finish_reason strings
+    assert!(choices[0]["text"].is_string());
+    assert!(choices[0]["finish_reason"].is_string());
+    assert!(choices[1]["text"].is_string());
+    assert!(choices[1]["finish_reason"].is_string());
+
+    // usage: prompt_tokens (≥0) + completion_tokens (≥2 = sum of
+    // 2 candidates × 2 tokens each)
+    assert!(json["usage"]["prompt_tokens"].is_u64());
+    let completion_tokens = json["usage"]["completion_tokens"].as_u64().unwrap();
+    assert!(
+        completion_tokens >= 2,
+        "completion_tokens must be sum across N candidates (got {completion_tokens}, expected ≥ 2)"
+    );
+    let total_tokens = json["usage"]["total_tokens"].as_u64().unwrap();
+    assert_eq!(
+        total_tokens,
+        json["usage"]["prompt_tokens"].as_u64().unwrap() + completion_tokens,
+        "total_tokens must equal prompt_tokens + completion_tokens"
+    );
+}

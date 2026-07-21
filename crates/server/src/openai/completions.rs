@@ -362,6 +362,178 @@ pub(super) fn per_candidate_seed(seed: Option<i64>, candidate_index: usize) -> O
     seed.map(|s| (s as u64).wrapping_add(candidate_index as u64))
 }
 
+/// Run the `n > 1` path on the legacy `/v1/completions` endpoint
+/// (P39 v0.x wire-type follow-up — engine wire-through helper for
+/// `n`). Spawns N parallel candidates via [`spawn_n_candidate`]
+/// (passing `i in 0..n` as the `candidate_index`), joins them, and
+/// assembles ALL N completions into the response (NOT ranked —
+/// distinct from `best_of`'s "return ONE" semantics).
+///
+/// **Structural mirror of [`run_best_of`]:** both spawn N candidates
+/// the same way; the difference is the post-join step:
+/// - `run_best_of` calls [`rank_by_mean_logprob`] and returns the
+///   SINGLE best candidate's text in a one-element `choices` vec.
+/// - `run_n_parallel_completions` (this function) returns ALL N
+///   candidates' texts in an N-element `choices` vec, with each
+///   choice's `index` set to its candidate position (0..N).
+///
+/// **Per-candidate seed derivation:** each candidate's seed is
+/// derived via `per_candidate_seed(req.seed, candidate_index)` so
+/// the N streams produce distinct outputs (P34 per-sequence
+/// independence contract; without per-candidate seed derivation,
+/// all N candidates would share the same seed and produce identical
+/// outputs for non-greedy sampling — defeats the purpose of
+/// `n > 1`).
+///
+/// **`usage.completion_tokens` = sum across N candidates.** Matches
+/// OpenAI's billing semantics — the client pays for N independent
+/// generated streams, so the usage token count is the sum (each
+/// candidate's per-token cost is fully accounted for).
+///
+/// **`echo` / `suffix` interaction:** the validator already rejects
+/// `n > 1 × echo = true` and `n > 1 × suffix = Some(_)` (Task 1,
+/// spec §4.6.2), so this helper does NOT call
+/// `apply_completion_meta`. Each choice's text is the raw
+/// continuation only — `clean_completion_text` handles the special-
+/// token stripping; the prefix/suffix are intentionally omitted.
+///
+/// **Partial-failure semantics:** mirrors [`run_best_of`]. If any of
+/// the N candidates fails (engine error / overload / panic), the
+/// first error wins and the other candidates' results are
+/// discarded. We do NOT issue `EngineMessage::CancelRequest` for
+/// the still-running candidates — they run to natural completion
+/// and free their scheduler slots on their own (per the P37
+/// rationale; the alternative — per-candidate seq_id tracking +
+/// cancel — adds significant complexity for a corner case).
+///
+/// **Streaming interaction:** `n > 1` + `stream = true` is handled
+/// by the streaming wire-through (Task 5), which uses a separate
+/// helper that interleaves N SSE channels. This helper is
+/// non-streaming-only — the `completions()` handler dispatches to
+/// the streaming helper first when `stream = true`.
+async fn run_n_parallel_completions(
+    state: ApiState,
+    req: CompletionRequest,
+    prompt_tokens: Vec<vllm_traits::TokenId>,
+    prompt: String,
+    prompt_tokens_len: usize,
+    max_tokens: usize,
+    correlation_id: CorrelationId,
+) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    let n = req.n.unwrap_or(1) as usize;
+
+    // Spawn N candidates. Each task is independent and runs in
+    // parallel; we send all N `EngineMessage::AddRequest` messages
+    // to the engine mailbox in quick succession so the engine sees
+    // them as one batch (when N is small enough to fit the bounded
+    // mailbox capacity — REL-01 saturation surfaces as the first
+    // candidate's 503 try_send error, which we propagate below).
+    //
+    // **Identical to `run_best_of`'s spawn loop** — only the
+    // post-join assembly differs. P39 passes `i in 0..n` as the
+    // `candidate_index` so each candidate gets a distinct
+    // per-candidate seed via `per_candidate_seed(seed, i)`.
+    let mut handles = Vec::with_capacity(n);
+    for i in 0..n {
+        let state = state.clone();
+        let req = req.clone();
+        let prompt_tokens = prompt_tokens.clone();
+        let correlation_id = correlation_id.0.clone();
+        let candidate = tokio::spawn(spawn_n_candidate(
+            state,
+            req,
+            prompt_tokens,
+            max_tokens,
+            correlation_id,
+            i,
+        ));
+        handles.push(candidate);
+    }
+
+    // Join all candidates. First failure wins (the other candidates
+    // keep running in the background — see the partial-failure
+    // comment in the module doc above).
+    //
+    // We carry BOTH the per-candidate `Vec<SampledToken>` AND its
+    // `FinishReason` through to the assembly step. `best_of` only
+    // needs the single best candidate's pair; `n > 1` needs all N.
+    let mut candidates: Vec<Vec<vllm_traits::SampledToken>> = Vec::with_capacity(n);
+    let mut candidate_finish_reasons: Vec<vllm_traits::FinishReason> = Vec::with_capacity(n);
+    for handle in handles {
+        match handle.await {
+            Ok(Ok((tokens, finish_reason))) => {
+                candidates.push(tokens);
+                candidate_finish_reasons.push(finish_reason);
+            }
+            Ok(Err(e)) => return Err(e),
+            Err(e) => {
+                return Err((
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse::new(
+                        format!("n > 1 candidate task panicked: {e}").as_str(),
+                        "server_error",
+                    )),
+                ));
+            }
+        }
+    }
+
+    // Assemble N choices — one per candidate, in candidate order.
+    // Each choice carries:
+    // - `index`: 0-based candidate position (matches OpenAI's
+    //   convention for `n > 1` responses).
+    // - `text`: the decoded continuation with special tokens
+    //   stripped (echo / suffix intentionally omitted — see the
+    //   module doc above for the validator's cross-field rules).
+    // - `logprobs`: per-candidate `CompletionChoiceLogprobs` when
+    //   the request asked for `logprobs = Some(n)` (P36 helper,
+    //   reused per-candidate).
+    // - `finish_reason`: per-candidate OpenAI string ("length" /
+    //   "stop"). Mirrors the single-shot mapping.
+    let choices: Vec<CompletionChoice> = candidates
+        .iter()
+        .zip(candidate_finish_reasons.iter())
+        .enumerate()
+        .map(|(index, (tokens, finish_reason))| {
+            let text = clean_completion_text(
+                &state.tokenizer,
+                &state.tokenizer.decode(&token_ids(tokens)),
+            );
+            let finish_reason_string = match finish_reason {
+                vllm_traits::FinishReason::Length => "length",
+                vllm_traits::FinishReason::Stop | vllm_traits::FinishReason::Cancelled => "stop",
+            };
+            CompletionChoice {
+                index: index as i32,
+                text,
+                logprobs: build_completion_choice_logprobs(&state.tokenizer, tokens, req.logprobs),
+                finish_reason: Some(finish_reason_string.to_string()),
+            }
+        })
+        .collect();
+
+    // usage: completion_tokens = sum across N candidates (OpenAI
+    // billing convention — the client pays for N independent
+    // streams). total_tokens = prompt_tokens + sum-completion-tokens.
+    let total_completion_tokens: usize = candidates.iter().map(|c| c.len()).sum();
+    let usage = Usage::new(prompt_tokens_len, total_completion_tokens);
+    let response = CompletionResponse::new(
+        format!("cmpl-{}", uuid::Uuid::new_v4()),
+        req.model.unwrap_or_else(|| "default".to_string()),
+        choices,
+        usage,
+    );
+
+    // The `prompt` parameter is unused in the non-streaming
+    // assembly (echo is rejected by the validator when n > 1, so we
+    // never need to prepend it). It's kept in the signature for
+    // symmetry with `run_best_of` / `completions()` so the call
+    // site reads uniformly.
+    let _ = prompt;
+
+    Ok(Json(response).into_response())
+}
+
 /// Run the `best_of > 1` path (P37 v0.x wire-type follow-up —
 /// engine wire-through helper for `best_of`; P39 renamed the
 /// underlying spawn helper from `spawn_best_of_candidate` to
@@ -632,6 +804,38 @@ pub async fn completions(
     if let Some(n) = req.best_of {
         if n > 1 {
             return run_best_of(
+                state,
+                req,
+                prompt_tokens,
+                prompt,
+                prompt_tokens_len,
+                max_tokens,
+                correlation_id,
+            )
+            .await;
+        }
+    }
+
+    // P39 v0.x wire-type follow-up — engine wire-through: `n > 1`
+    // dispatch. When `n > 1`, spawn N parallel candidates via
+    // `run_n_parallel_completions` and assemble ALL N into the
+    // response (NOT ranked — distinct from `best_of`'s "return
+    // ONE" semantics). The dispatch happens BEFORE the single-shot
+    // `Request::new` (which moves `prompt_tokens`) so the
+    // per-candidate requests can reuse the tokenized prompt.
+    //
+    // **`n = 1` / `n = None` short-circuit:** the `if n > 1` guard
+    // means we only enter this branch when the user explicitly
+    // asked for multiple candidates. Existing single-shot users
+    // (the dominant case) see zero behavioural change — the
+    // `n = None` default and `n = Some(1)` both fall through to the
+    // existing P38 single-shot path. The validator's `n <= 8` upper
+    // bound (Task 1, spec §4.6.1) + `n > 1 × echo / suffix /
+    // best_of` cross-field rejects (Tasks 1 + 3) run BEFORE this
+    // code so the dispatch only fires for valid `n > 1` requests.
+    if let Some(n) = req.n {
+        if n > 1 {
+            return run_n_parallel_completions(
                 state,
                 req,
                 prompt_tokens,
