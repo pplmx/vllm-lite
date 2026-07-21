@@ -944,3 +944,73 @@ fn test_seed_top_p_path_uses_seeded_rng() {
          (got {token_a:?} vs {token_b:?})"
     );
 }
+
+// =============================================================================
+// P38 v0.x wire-type follow-up — engine wire-through: `matches_stop_sequences`
+// helper tests. Pure-function unit tests; the helper is consumed by the
+// engine's `step_regular` loop after every sampled token. Pin the contract
+// end-to-end so future refactors (e.g. Aho-Corasick) trip the suite.
+// =============================================================================
+
+#[test]
+fn matches_stop_sequences_no_match_returns_false() {
+    // Stop = "xyz" tokens [99], generated = [1, 2, 3] — no suffix match.
+    let stops: Vec<Vec<u32>> = vec![vec![99]];
+    let generated: Vec<u32> = vec![1, 2, 3];
+    assert!(!matches_stop_sequences(&generated, &stops));
+}
+
+#[test]
+fn matches_stop_sequences_single_token_match_returns_true() {
+    // Stop = [99] (1 token), generated = [1, 2, 99] — suffix matches.
+    let stops: Vec<Vec<u32>> = vec![vec![99]];
+    let generated: Vec<u32> = vec![1, 2, 99];
+    assert!(matches_stop_sequences(&generated, &stops));
+}
+
+#[test]
+fn matches_stop_sequences_multi_token_match_returns_true() {
+    // Stop = [10, 20, 30] (3 tokens), generated ends with [10, 20, 30].
+    let stops: Vec<Vec<u32>> = vec![vec![10, 20, 30]];
+    let generated: Vec<u32> = vec![1, 2, 3, 10, 20, 30];
+    assert!(matches_stop_sequences(&generated, &stops));
+}
+
+#[test]
+fn matches_stop_sequences_partial_match_returns_false() {
+    // Stop = [10, 20, 30], generated ends with [10, 20] — only 2 of 3
+    // stop tokens match. Must NOT trigger (we require the FULL suffix).
+    let stops: Vec<Vec<u32>> = vec![vec![10, 20, 30]];
+    let generated: Vec<u32> = vec![1, 2, 10, 20];
+    assert!(!matches_stop_sequences(&generated, &stops));
+}
+
+#[test]
+fn matches_stop_sequences_first_match_wins() {
+    // Multiple stops; the FIRST one whose suffix matches wins (helper
+    // returns true on first hit, doesn't care which one).
+    let stops: Vec<Vec<u32>> = vec![vec![99], vec![88]];
+    let generated_a: Vec<u32> = vec![1, 2, 99];
+    let generated_b: Vec<u32> = vec![1, 2, 88];
+    assert!(matches_stop_sequences(&generated_a, &stops));
+    assert!(matches_stop_sequences(&generated_b, &stops));
+    // Neither matches: stop sequences don't appear as suffixes.
+    let generated_c: Vec<u32> = vec![1, 2, 3];
+    assert!(!matches_stop_sequences(&generated_c, &stops));
+}
+
+#[test]
+fn matches_stop_sequences_empty_stops_returns_false() {
+    // `stops = vec![]` → never matches (helper loops over zero elements).
+    let stops: Vec<Vec<u32>> = vec![];
+    let generated: Vec<u32> = vec![1, 2, 3];
+    assert!(!matches_stop_sequences(&generated, &stops));
+}
+
+#[test]
+fn matches_stop_sequences_stop_longer_than_generated_returns_false() {
+    // Stop = [1, 2, 3, 4, 5], generated has only 3 tokens — cannot match.
+    let stops: Vec<Vec<u32>> = vec![vec![1, 2, 3, 4, 5]];
+    let generated: Vec<u32> = vec![1, 2, 3];
+    assert!(!matches_stop_sequences(&generated, &stops));
+}

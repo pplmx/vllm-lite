@@ -723,6 +723,46 @@ pub fn apply_logit_bias(logits: &mut [f32], bias: &std::collections::HashMap<Tok
     }
 }
 
+/// P38 v0.x wire-type follow-up — engine wire-through helper for
+/// `stop` sequences. Returns `true` iff any token sequence in `stops`
+/// is a suffix of `generated_tokens`.
+///
+/// **Complexity:** O(N × M) where N = `generated_tokens.len()` and
+/// M = sum(stop.len() for stop in stops). Both are tiny in practice:
+/// - `generated_tokens.len()` ≤ `max_tokens` (typical ≤ 4096)
+/// - `stops.len()` ≤ 4 (OpenAI spec upper bound, validated at HTTP layer)
+/// - each `stop.len()` ≤ ~8 tokens (typical BPE-tokenized stop strings)
+///
+/// So the per-step cost is bounded by ~32 slice comparisons × max_tokens
+/// positions — well under 100 ns per step on a modern CPU. The check runs
+/// once per generated token in `step_regular`.
+///
+/// **Empty / oversized stops:** an empty stop (`vec![]`) or a stop
+/// longer than `generated_tokens` is a no-op for that iteration. The
+/// HTTP-layer `validate_stop_sequences` rejects empty-string stops
+/// (which would tokenize to either zero or one token) so this function
+/// doesn't need to handle "stop that can never match" specially.
+///
+/// Takes `&[u32]` rather than `&[vllm_traits::TokenId]` because
+/// `TokenId` is `pub type TokenId = u32` and this helper lives in
+/// `vllm_core::sampling` without a `vllm_traits` import. The
+/// `SamplingParams::stop_token_sequences` field uses
+/// `Vec<Vec<TokenId>>` for public-API ergonomics; the caller converts
+/// via deref coercion at the call site.
+#[must_use]
+pub fn matches_stop_sequences(generated_tokens: &[u32], stops: &[Vec<u32>]) -> bool {
+    for stop in stops {
+        if stop.is_empty() || stop.len() > generated_tokens.len() {
+            continue;
+        }
+        let start = generated_tokens.len() - stop.len();
+        if &generated_tokens[start..] == stop.as_slice() {
+            return true;
+        }
+    }
+    false
+}
+
 // Unit tests are extracted to `tests.rs` and `prop_tests.rs` to keep
 // this file under the 800-line soft cap. See those siblings for the
 // test surface (greedy / temperature / top-k / top-p / sample_batch /
