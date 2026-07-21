@@ -172,9 +172,16 @@ fn rank_by_mean_logprob(candidates: &[Vec<vllm_traits::SampledToken>]) -> usize 
 /// - `logprobs`: forwarded verbatim to `top_logprobs` (the legacy
 ///   endpoint's `logprobs` is `u32 0..=5`; the engine treats
 ///   `Some(0)` as "compute sampled-token logprob only, no top-K").
+/// - `stop_token_sequences`: forwarded verbatim from the caller. The
+///   caller tokenizes the user's `stop` strings via `state.tokenizer.encode`
+///   before invoking this helper — the populator itself stays a pure
+///   function with no `ApiState` dependency. `None` and `Some(vec![])`
+///   are both treated as "no stop check" (the engine skips
+///   `matches_stop_sequences` entirely in that case).
 fn populate_completion_sampling_params(
     request: &mut vllm_core::types::Request,
     req: &CompletionRequest,
+    stop_token_sequences: Option<Vec<Vec<vllm_traits::TokenId>>>,
 ) {
     if let Some(temp) = req.temperature {
         request.sampling_params.temperature = temp;
@@ -195,6 +202,7 @@ fn populate_completion_sampling_params(
         request.sampling_params.seed = Some(seed as u64);
     }
     request.sampling_params.top_logprobs = req.logprobs;
+    request.sampling_params.stop_token_sequences = stop_token_sequences;
 }
 
 /// Spawn one of N parallel candidates for a `best_of` request
@@ -236,7 +244,45 @@ async fn spawn_best_of_candidate(
     let total_max = prompt_tokens.len() + max_tokens;
     let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
 
-    populate_completion_sampling_params(&mut request, &req);
+    // P38 v0.3 wire-type engine wire-through: tokenize the user's
+    // stop strings at the HTTP boundary and forward as
+    // `SamplingParams::stop_token_sequences`. The populator stays a
+    // pure function (no `ApiState` dependency), so the caller
+    // tokenizes first and passes the pre-tokenized result in.
+    let stop_token_sequences: Option<Vec<Vec<vllm_traits::TokenId>>> =
+        if let Some(stop) = req.stop.as_ref() {
+            if !stop.is_empty() {
+                let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
+                    .iter()
+                    .map(|s| state.tokenizer.encode(s))
+                    .filter(|toks| !toks.is_empty())
+                    .collect();
+                if tokenized.is_empty() {
+                    // All stop strings tokenized to zero tokens. The
+                    // validator catches most cases but some BPE
+                    // tokenizers produce zero tokens for unusual
+                    // inputs; log a warning and skip stop
+                    // wire-through for this request rather than
+                    // fail it (best-effort degradation — the chat
+                    // path returns 400 instead because its inline
+                    // forwarding returns `Result`; the asymmetry is
+                    // intentional, see spec §4.3).
+                    tracing::warn!(
+                        stop_count = stop.len(),
+                        "All stop sequences tokenized to zero tokens; skipping stop wire-through"
+                    );
+                    None
+                } else {
+                    Some(tokenized)
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+    populate_completion_sampling_params(&mut request, &req, stop_token_sequences);
     validate_sampling_params(&request.sampling_params)?;
 
     let (response_tx, mut response_rx) = mpsc::channel(64);
@@ -550,13 +596,54 @@ pub async fn completions(
 
     let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
 
-    // Forward all sampling fields (P27/P28/P29/P30/P34/P36 wire-through).
+    // P38 v0.3 wire-type engine wire-through: tokenize the user's
+    // stop strings at the HTTP boundary and forward as
+    // `SamplingParams::stop_token_sequences`. The populator stays a
+    // pure function (no `ApiState` dependency), so the caller
+    // tokenizes first and passes the pre-tokenized result in. Same
+    // pattern as `spawn_best_of_candidate` above so every candidate
+    // (and every streaming/non-streaming path) honors the user's
+    // stop set end-to-end.
+    let stop_token_sequences: Option<Vec<Vec<vllm_traits::TokenId>>> =
+        if let Some(stop) = req.stop.as_ref() {
+            if !stop.is_empty() {
+                let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
+                    .iter()
+                    .map(|s| state.tokenizer.encode(s))
+                    .filter(|toks| !toks.is_empty())
+                    .collect();
+                if tokenized.is_empty() {
+                    // All stop strings tokenized to zero tokens. The
+                    // validator catches most cases but some BPE
+                    // tokenizers produce zero tokens for unusual
+                    // inputs; log a warning and skip stop
+                    // wire-through for this request rather than
+                    // fail it (best-effort degradation — the chat
+                    // path returns 400 instead because its inline
+                    // forwarding returns `Result`; the asymmetry is
+                    // intentional, see spec §4.3).
+                    tracing::warn!(
+                        stop_count = stop.len(),
+                        "All stop sequences tokenized to zero tokens; skipping stop wire-through"
+                    );
+                    None
+                } else {
+                    Some(tokenized)
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+    // Forward all sampling fields (P27/P28/P29/P30/P34/P36/P38 wire-through).
     // The `populate_completion_sampling_params` helper is the single
     // authoritative point for the OpenAI → `SamplingParams` mapping;
     // it is reused by the `best_of` per-candidate requests below so
     // every candidate sees the exact same sampling config the user
     // submitted. See the helper's doc-comment for field-level rationale.
-    populate_completion_sampling_params(&mut request, &req);
+    populate_completion_sampling_params(&mut request, &req, stop_token_sequences);
 
     // Reject sampling parameters the engine cannot honour (currently
     // beam_width > 1) BEFORE enqueuing — see `sampling_validation`.
