@@ -55,16 +55,16 @@ pub enum EngineMessage {
     /// callers), the span still enters with `request_id = None`
     /// and the field renders as `null` in the JSON span output.
     AddRequest {
-        // P38 large_enum_variant clippy fix: `Request` is now wrapped in
-        // `Box<Request>` because P36's `SampledToken` wire-breaking
-        // signature change (carrying token + logprob + top_logprobs)
-        // inflated `Request` past the 248-byte `large_enum_variant`
-        // threshold. Other `EngineMessage` variants are ≤ 64 bytes; boxing
-        // brings this variant down to pointer-sized so the enum's total
-        // size is dominated by the largest *small* variant. Construction
-        // sites wrap the local `request` in `Box::new(request)`.
-        // Public API surface is unchanged: `Request` is consumed by value
-        // at construction; callers never read `.request` after.
+        /// P38 large_enum_variant clippy fix: `Request` is now wrapped in
+        /// `Box<Request>` because P36's `SampledToken` wire-breaking
+        /// signature change (carrying token + logprob + top_logprobs)
+        /// inflated `Request` past the 248-byte `large_enum_variant`
+        /// threshold. Other `EngineMessage` variants are ≤ 64 bytes; boxing
+        /// brings this variant down to pointer-sized so the enum's total
+        /// size is dominated by the largest *small* variant. Construction
+        /// sites wrap the local `request` in `Box::new(request)`.
+        /// Public API surface is unchanged: `Request` is consumed by value
+        /// at construction; callers never read `.request` after.
         request: Box<Request>,
         response_tx: mpsc::Sender<SampledToken>,
         seq_id_tx: Option<oneshot::Sender<SeqId>>,

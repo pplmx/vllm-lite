@@ -4403,16 +4403,14 @@ async fn test_chat_response_logprobs_wire_shape() {
         content.len()
     );
     for (i, entry) in content.iter().enumerate() {
-        assert!(entry.get("token").is_some(), "entry {} missing `token`", i);
+        assert!(entry.get("token").is_some(), "entry {i} missing `token`");
         assert!(
             entry.get("logprob").is_some(),
-            "entry {} missing `logprob`",
-            i
+            "entry {i} missing `logprob`"
         );
         assert!(
             entry.get("top_logprobs").is_some(),
-            "entry {} missing `top_logprobs` (request asked for top_logprobs = 2)",
-            i
+            "entry {i} missing `top_logprobs` (request asked for top_logprobs = 2)"
         );
     }
 }
@@ -4592,7 +4590,7 @@ async fn test_completions_response_logprobs_wire_shape() {
     for (i, tlp) in top_logprobs.iter().enumerate() {
         let arr = tlp
             .as_array()
-            .unwrap_or_else(|| panic!("top_logprobs[{}] must be an array", i));
+            .unwrap_or_else(|| panic!("top_logprobs[{i}] must be an array"));
         assert!(
             arr.len() <= 2,
             "top_logprobs[{}] must have ≤ 2 entries (request asked for logprobs = 2); got {}",
