@@ -162,3 +162,67 @@ fn test_rank_by_mean_logprob_length_normalized() {
     ];
     assert_eq!(rank_by_mean_logprob(&candidates), 1);
 }
+
+// =============================================================================
+// P39 v0.x wire-type engine wire-through — unit tests for
+// `per_candidate_seed`. Pin the helper's contract end-to-end so future
+// refactors (e.g. switching to a non-wrapping variant) trip the suite.
+// =============================================================================
+
+#[test]
+fn test_per_candidate_seed_none_propagates_none() {
+    // `seed = None` must propagate as `None` so the engine falls
+    // back to its thread-local default RNG (per-sequence independent
+    // per P34).
+    assert_eq!(per_candidate_seed(None, 0), None);
+    assert_eq!(per_candidate_seed(None, 5), None);
+}
+
+#[test]
+fn test_per_candidate_seed_zero_index_is_identity() {
+    // Candidate 0 must see the seed verbatim — `wrapping_add(0)` is
+    // a no-op. Pinned for both a positive seed and `0`.
+    assert_eq!(per_candidate_seed(Some(42), 0), Some(42));
+    assert_eq!(per_candidate_seed(Some(0), 0), Some(0));
+}
+
+#[test]
+fn test_per_candidate_seed_wraps_on_overflow() {
+    // `-1i64 as u64 = u64::MAX = 18446744073709551615` (the
+    // negative reinterprets to the largest u64). `+ 1` wraps to `0`,
+    // `+ 2` wraps to `1` — pinning the overflow-safe `wrapping_add`
+    // semantics. (Note: `i64::MAX as u64 = 2^63 - 1`, so adding 1
+    // does NOT wrap there; we use `-1` to actually reach `u64::MAX`.)
+    assert_eq!(per_candidate_seed(Some(-1), 1), Some(0));
+    assert_eq!(per_candidate_seed(Some(-1), 2), Some(1));
+}
+
+#[test]
+fn test_per_candidate_seed_distinguishes_candidates() {
+    // Each candidate must receive a DISTINCT seed even when the
+    // user submits one seed — otherwise all N candidates produce
+    // identical outputs, defeating the point of `n > 1`.
+    let s0 = per_candidate_seed(Some(42), 0).unwrap();
+    let s1 = per_candidate_seed(Some(42), 1).unwrap();
+    let s2 = per_candidate_seed(Some(42), 2).unwrap();
+    assert_ne!(s0, s1);
+    assert_ne!(s1, s2);
+    assert_ne!(s0, s2);
+}
+
+#[test]
+fn test_per_candidate_seed_negative_i64_wraps_to_u64() {
+    // `i64::MIN as u64` wraps via the `as` cast to 9223372036854775808
+    // (= 2^63; i.e. `i64::MIN` reinterpreted as the high bit of u64).
+    // The helper's `wrapping_add` then operates on the u64 view, so
+    // candidate 0 sees the raw two's-complement reinterpretation.
+    let min = i64::MIN;
+    let s = per_candidate_seed(Some(min), 0).unwrap();
+    assert_eq!(s, i64::MIN as u64); // 9223372036854775808
+    // + 1 yields 9223372036854775809 (still no wrap; wrap happens
+    // when we cross `u64::MAX = 2^64 - 1`).
+    assert_eq!(
+        per_candidate_seed(Some(min), 1),
+        Some(9_223_372_036_854_775_809)
+    );
+}
