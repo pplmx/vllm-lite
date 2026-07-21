@@ -7637,3 +7637,217 @@ async fn test_chat_n_two_response_wire_shape() {
         "total_tokens must equal prompt_tokens + completion_tokens"
     );
 }
+
+// -----------------------------------------------------------------------------
+// TEST 7 (P39 Task 7): n > 1 + stream = true → SSE events carry N indices
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_chat_n_above_one_streaming_emits_n_choices_per_event() {
+    // P39 Task 7: when `n > 1` AND `stream = true`, the chat handler
+    // must dispatch to `stream_n_parallel_chat` (not the single-shot
+    // path). The SSE event stream must carry choices with `index`
+    // 0..N across the events (one per candidate, interleaved).
+    //
+    // Pinning contract:
+    // - The first event must carry at least one choice (with index 0
+    //   or 1 — arrival-order merge doesn't guarantee ordering).
+    // - Across ALL events (excluding [DONE]), indices 0 and 1 must
+    //   both appear (proves both candidates contributed).
+    // - The body must end with [DONE] (SSE sentinel).
+    //
+    // The wire-shape per event is `choices: [{index, delta, ...}]`
+    // — chat-shape delta field instead of the completions `text`
+    // field. The test pins the chat-specific shape via the
+    // `choices[i].delta` field (must be an object, optionally with
+    // `role` / `content` keys).
+    use std::collections::HashSet;
+    use vllm_server::openai::chat::chat_completions;
+    let (state, _captured, _handle) = state_with_n_mock_engine(vec![vec![10, 20], vec![30, 40]]);
+    let app = Router::new()
+        .route("/v1/chat/completions", post(chat_completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "max_tokens": 2,
+        "n": 2,
+        "seed": 42,
+        "stream": true,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .header("accept", "text/event-stream")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    assert!(
+        content_type.contains("text/event-stream"),
+        "n=2 + stream=true must return SSE; got Content-Type: {content_type:?}"
+    );
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+
+    // Parse SSE data: lines. Skip [DONE] sentinel and empty payloads.
+    let data_lines: Vec<&str> = body_str
+        .split("\n\n")
+        .filter_map(|event| event.lines().find(|l| l.starts_with("data: ")))
+        .filter_map(|l| l.strip_prefix("data: "))
+        .filter(|p| *p != "[DONE]" && !p.is_empty())
+        .collect();
+    assert!(
+        !data_lines.is_empty(),
+        "n=2 + stream=true must carry at least one JSON chunk; body: {body_str}"
+    );
+
+    let events: Vec<serde_json::Value> = data_lines
+        .iter()
+        .map(|p| serde_json::from_str(p).expect("each SSE chunk must be valid JSON"))
+        .collect();
+
+    // First event must have at least one choice (locks the streaming
+    // path: it produced at least one chunk before [DONE]).
+    let first_choices = events[0]["choices"].as_array().unwrap();
+    assert!(
+        !first_choices.is_empty(),
+        "first SSE event must carry at least one choice; got event: {}",
+        events[0]
+    );
+
+    // Across all events, indices 0 and 1 must both appear — proves
+    // both candidates contributed to the interleaved SSE stream.
+    let indices: HashSet<u64> = events
+        .iter()
+        .flat_map(|e| e["choices"].as_array().cloned().unwrap_or_default())
+        .filter_map(|c| c["index"].as_u64())
+        .collect();
+    assert!(
+        indices.contains(&0),
+        "indices across SSE events must include 0 (candidate 0); got: {indices:?}"
+    );
+    assert!(
+        indices.contains(&1),
+        "indices across SSE events must include 1 (candidate 1); got: {indices:?}"
+    );
+
+    // Body must end with [DONE] sentinel.
+    assert!(
+        body_str.trim_end().ends_with("[DONE]"),
+        "n=2 + stream=true body must end with [DONE]; body: {body_str}"
+    );
+}
+
+// -----------------------------------------------------------------------------
+// TEST 8 (P39 Task 7): n > 1 + stream = true → final event has finish_reason per index
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_chat_n_above_one_streaming_final_event_has_finish_reason_per_index() {
+    // P39 Task 7: the FINAL SSE event (the chunk immediately
+    // preceding [DONE]) must carry `finish_reason` for EACH of the
+    // N candidates (OpenAI contract: the response's `finish_reason`
+    // is the chosen candidate's, but for n > 1 the response carries
+    // N choices so each must surface its own finish_reason).
+    //
+    // Pinning contract:
+    // - The last JSON chunk (before [DONE]) has a `choices` array
+    //   with N entries.
+    // - Each entry has a non-null `finish_reason` string ∈
+    //   {"stop", "length"}.
+    use vllm_server::openai::chat::chat_completions;
+    let (state, _captured, _handle) = state_with_n_mock_engine(vec![vec![10, 20], vec![30, 40]]);
+    let app = Router::new()
+        .route("/v1/chat/completions", post(chat_completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "max_tokens": 2,
+        "n": 2,
+        "seed": 42,
+        "stream": true,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .header("accept", "text/event-stream")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+
+    // Parse SSE data: lines. Skip [DONE] sentinel.
+    let data_lines: Vec<&str> = body_str
+        .split("\n\n")
+        .filter_map(|event| event.lines().find(|l| l.starts_with("data: ")))
+        .filter_map(|l| l.strip_prefix("data: "))
+        .filter(|p| *p != "[DONE]" && !p.is_empty())
+        .collect();
+    assert!(
+        !data_lines.is_empty(),
+        "n=2 + stream=true must carry at least one JSON chunk; body: {body_str}"
+    );
+
+    // The last JSON chunk (immediately before [DONE]) must carry
+    // finish_reason for each of the N candidates.
+    let last_chunk: serde_json::Value =
+        serde_json::from_str(data_lines.last().expect("at least one chunk expected"))
+            .expect("last chunk must be valid JSON");
+    let last_choices = last_chunk["choices"]
+        .as_array()
+        .expect("last chunk must have choices");
+    assert_eq!(
+        last_choices.len(),
+        2,
+        "last SSE chunk must carry N=2 choices (one per candidate); got {}",
+        last_choices.len()
+    );
+
+    // Every choice in the last chunk must have a non-null
+    // finish_reason ∈ {"stop", "length"}.
+    let finish_reasons: Vec<String> = last_choices
+        .iter()
+        .filter_map(|c| c["finish_reason"].as_str().map(String::from))
+        .collect();
+    assert_eq!(
+        finish_reasons.len(),
+        2,
+        "every choice in the last SSE chunk must carry a finish_reason; got: {last_choices:?}"
+    );
+    for r in &finish_reasons {
+        assert!(
+            r == "stop" || r == "length",
+            "finish_reason must be \"stop\" or \"length\"; got: {r:?}"
+        );
+    }
+}
