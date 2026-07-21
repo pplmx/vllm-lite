@@ -226,3 +226,76 @@ fn test_per_candidate_seed_negative_i64_wraps_to_u64() {
         Some(9_223_372_036_854_775_809)
     );
 }
+
+// =============================================================================
+// P39 v0.x wire-type engine wire-through — unit tests for
+// `populate_completion_sampling_params` with the new `candidate_index`
+// parameter. Pin the contract that the populator applies
+// `per_candidate_seed(req.seed, candidate_index)` when forwarding
+// `req.seed → SamplingParams::seed` (P39 Task 3).
+// =============================================================================
+
+fn test_completion_request_with_seed(seed: Option<i64>) -> CompletionRequest {
+    // Minimal CompletionRequest for populator-level tests. Only `seed`
+    // is meaningful; the populator ignores every other `None` field.
+    CompletionRequest {
+        model: None,
+        prompt: String::new(),
+        temperature: None,
+        top_p: None,
+        max_tokens: None,
+        stream: None,
+        n: None,
+        stop: None,
+        user: None,
+        seed,
+        frequency_penalty: None,
+        presence_penalty: None,
+        logit_bias: None,
+        logprobs: None,
+        echo: None,
+        suffix: None,
+        best_of: None,
+    }
+}
+
+#[test]
+fn test_populate_completion_sampling_params_applies_per_candidate_seed() {
+    // P39: per-candidate seed derivation lives inside the populator
+    // (Task 3 chose this over mutating `req.seed` before calling the
+    // populator — see the helper's doc comment for the rationale).
+    // This test pins the contract end-to-end:
+    // - candidate_index = 0 → identity (`wrapping_add(0)` is a no-op).
+    // - candidate_index = i > 0 → `seed.wrapping_add(i as u64)`.
+    // - seed = None → propagates as `None` regardless of `candidate_index`.
+    use vllm_core::types::Request;
+
+    // Case 1: candidate_index = 0 → seed forwarded verbatim (identity).
+    let mut request = Request::new(0, vec![1, 2, 3], 100);
+    let req = test_completion_request_with_seed(Some(42));
+    populate_completion_sampling_params(&mut request, &req, None, 0);
+    assert_eq!(request.sampling_params.seed, Some(42));
+
+    // Case 2: candidate_index = 2 → 42.wrapping_add(2) = 44.
+    let mut request = Request::new(0, vec![1, 2, 3], 100);
+    populate_completion_sampling_params(&mut request, &req, None, 2);
+    assert_eq!(request.sampling_params.seed, Some(44));
+
+    // Case 3: candidate_index = 5 → 42.wrapping_add(5) = 47.
+    let mut request = Request::new(0, vec![1, 2, 3], 100);
+    populate_completion_sampling_params(&mut request, &req, None, 5);
+    assert_eq!(request.sampling_params.seed, Some(47));
+
+    // Case 4: seed = None → propagates as None regardless of
+    // candidate_index (so the engine falls back to its thread-local
+    // default RNG, which is per-sequence independent per P34).
+    let req_no_seed = test_completion_request_with_seed(None);
+    for i in [0_usize, 1, 5, 100] {
+        let mut request = Request::new(0, vec![1, 2, 3], 100);
+        populate_completion_sampling_params(&mut request, &req_no_seed, None, i);
+        assert_eq!(
+            request.sampling_params.seed, None,
+            "seed=None must propagate as None for candidate_index={i}"
+        );
+    }
+}
