@@ -38,6 +38,12 @@ use super::types::{
     ChatRequest, CompletionRequest, ErrorResponse, ResponseFormat, Tool, ToolChoice, ToolChoiceMode,
 };
 
+/// Maximum value of `n` accepted on chat + completions endpoints.
+/// 8 is the practical scheduler-safe cap (vs OpenAI's nominal 128):
+/// each candidate pays full inference cost (unlike `best_of` which
+/// returns ONE ranked completion), so N must stay bounded.
+pub(crate) const MAX_N: i64 = 8;
+
 /// Validate a `top_p` value from an HTTP request.
 ///
 /// Per the OpenAI API specification the valid range is `(0, 1]`:
@@ -686,10 +692,12 @@ pub fn validate_chat_tool_choice(
 /// validate the ones it does.
 ///
 /// Currently rejects:
-/// - `n != 1` — the engine emits exactly one completion per request.
-///   OpenAI's `n` would generate `n` independent completions in
-///   parallel; we have no equivalent path. `None` and `Some(1)` are
-///   both accepted (the latter is the default).
+/// - `n < 1` or `n > MAX_N` (P39) — `n` must be in `1..=8`. The cap
+///   protects the scheduler: each candidate pays full inference
+///   cost (unlike `best_of` which returns ONE ranked completion),
+///   so N must stay bounded. `None` and `Some(1..=MAX_N)` are both
+///   accepted; `n > 1` is honored end-to-end on the wire (P39
+///   engine wire-through).
 /// - non-empty `stop` — the engine stops at `max_tokens` or natural
 ///   EOS only. Accepting `stop` and ignoring it would silently
 ///   truncate at `max_tokens` even when a stop sequence was emitted,
@@ -743,16 +751,29 @@ pub fn validate_chat_request_fields(
     validate_logit_bias(req.logit_bias.as_ref())?;
     validate_chat_logprobs(req.logprobs, req.top_logprobs)?;
     validate_chat_tool_choice(req.tools.as_deref(), req.tool_choice.as_ref())?;
-    if let Some(n) = req.n
-        && n != 1
-    {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new(
-                "n > 1 is not supported in this build; the engine emits exactly one completion per request (omit n or set n = 1)",
-                "invalid_request_error",
-            )),
-        ));
+    // P39: `n <= MAX_N`. Cap protects the scheduler — each candidate
+    // pays full inference cost (unlike `best_of` which returns ONE
+    // ranked completion), so N must stay bounded.
+    if let Some(n) = req.n {
+        if n < 1 {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "n must be a positive integer (n >= 1)",
+                    "invalid_request_error",
+                )),
+            ));
+        }
+        if n > MAX_N {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    format!("n = {n} exceeds maximum allowed value of {MAX_N} (n = 1..={MAX_N})")
+                        .as_str(),
+                    "invalid_request_error",
+                )),
+            ));
+        }
     }
     // P38 v0.3 wire-type engine wire-through: stop sequences are
     // now accepted (tokenized + forwarded by the chat handler's
@@ -767,10 +788,12 @@ pub fn validate_chat_request_fields(
 /// and validate the ones it does.
 ///
 /// Mirror of [`validate_chat_request_fields`] for the legacy
-/// `/v1/completions` endpoint. Same set of checks (`n != 1`,
+/// `/v1/completions` endpoint. Same set of checks (`n ∈ 1..=MAX_N`,
 /// non-empty `stop`, out-of-range `top_p`, out-of-range penalties,
 /// out-of-range `logit_bias`, out-of-range `logprobs`,
-/// `echo = true && best_of > 1`, `best_of = 0`).
+/// `echo = true && best_of > 1`, `best_of = 0`). P39 adds the
+/// `n <= MAX_N` cap + cross-field rules for `n > 1` × `echo`,
+/// `n > 1` × `suffix`, `n > 1` × `best_of > 1`.
 ///
 /// # Errors
 ///
@@ -784,16 +807,64 @@ pub fn validate_completion_request_fields(
     validate_logit_bias(req.logit_bias.as_ref())?;
     validate_completion_logprobs(req.logprobs)?;
     validate_completion_meta(req.echo, req.best_of)?;
+    // P39: `n <= MAX_N`. Cap protects the scheduler — each candidate
+    // pays full inference cost, so N must stay bounded.
+    if let Some(n) = req.n {
+        if n < 1 {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "n must be a positive integer (n >= 1)",
+                    "invalid_request_error",
+                )),
+            ));
+        }
+        if n > MAX_N {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    format!("n = {n} exceeds maximum allowed value of {MAX_N} (n = 1..={MAX_N})")
+                        .as_str(),
+                    "invalid_request_error",
+                )),
+            ));
+        }
+    }
+    // P39: `n > 1` is incompatible with `echo`, `suffix`, and
+    // `best_of > 1` per OpenAI spec — these apply to a SINGLE
+    // completion. Cross-field rejections.
     if let Some(n) = req.n
-        && n != 1
+        && n > 1
     {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new(
-                "n > 1 is not supported in this build; the engine emits exactly one completion per request (omit n or set n = 1)",
-                "invalid_request_error",
-            )),
-        ));
+        if req.echo == Some(true) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "echo = true is not compatible with n > 1 (echo applies to a single completion)",
+                    "invalid_request_error",
+                )),
+            ));
+        }
+        if req.suffix.is_some() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "suffix is not compatible with n > 1 (suffix applies to a single completion)",
+                    "invalid_request_error",
+                )),
+            ));
+        }
+        if let Some(b) = req.best_of
+            && b > 1
+        {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "best_of > 1 is not compatible with n > 1 per OpenAI spec; both produce multiple candidates but with different semantics (best_of returns 1 ranked, n returns N unranked) and combining them is undefined (set best_of = 1 or n = 1)",
+                    "invalid_request_error",
+                )),
+            ));
+        }
     }
     // P38 v0.3 wire-type engine wire-through: stop sequences are
     // now accepted (tokenized + forwarded by populate_completion_sampling_params).
@@ -929,14 +1000,18 @@ mod tests {
 
     #[test]
     fn chat_request_n_two_is_rejected_with_400() {
-        let req = chat_request_with_n(Some(2));
-        let err = validate_chat_request_fields(&req).expect_err("n = 2 must be rejected");
+        // P39: `n > MAX_N` (8) is rejected with the new
+        // "exceeds maximum allowed value" message. The pre-P39
+        // blanket `n > 1` rejection is gone (n = 2..=8 is now
+        // honored end-to-end on the wire).
+        let req = chat_request_with_n(Some(MAX_N + 1));
+        let err = validate_chat_request_fields(&req).expect_err("n > MAX_N must be rejected");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         let body = err.1.0;
         assert_eq!(body.error.error_type, "invalid_request_error");
         assert!(
-            body.error.message.contains("n > 1"),
-            "error message must mention n > 1: got '{}'",
+            body.error.message.contains("exceeds maximum allowed value"),
+            "error message must mention the new cap; got '{}'",
             body.error.message
         );
     }
@@ -1086,11 +1161,20 @@ mod tests {
 
     #[test]
     fn completion_request_n_two_is_rejected_with_400() {
-        let req = completion_request_with_n(Some(2));
-        let err = validate_completion_request_fields(&req).expect_err("n = 2 must be rejected");
+        // P39: `n > MAX_N` (8) is rejected with the new
+        // "exceeds maximum allowed value" message. The pre-P39
+        // blanket `n > 1` rejection is gone (n = 2..=8 is now
+        // honored end-to-end on the wire).
+        let req = completion_request_with_n(Some(MAX_N + 1));
+        let err = validate_completion_request_fields(&req).expect_err("n > MAX_N must be rejected");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         let body = err.1.0;
         assert_eq!(body.error.error_type, "invalid_request_error");
+        assert!(
+            body.error.message.contains("exceeds maximum allowed value"),
+            "error message must mention the new cap; got '{}'",
+            body.error.message
+        );
     }
 
     // top_p validation tests — covers both the standalone
@@ -2805,5 +2889,122 @@ mod tests {
             .expect_err("whitespace-only stop must be rejected (P38)");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         assert!(err.1.0.error.message.contains("stop"));
+    }
+
+    // =============================================================================
+    // P39 v0.x wire-type follow-up — engine wire-through: `n` validator
+    // tightening. New `MAX_N = 8` upper bound + cross-field rules
+    // (`n > 1` × `echo = true`, `n > 1` × `suffix = Some(_)`,
+    // `n > 1` × `best_of > 1`).
+    // =============================================================================
+
+    fn sample_chat_request_with_n(n: i64) -> ChatRequest {
+        let mut req = chat_request_with_n(None);
+        req.n = Some(n);
+        req
+    }
+
+    fn sample_completion_request_with_n(n: i64) -> CompletionRequest {
+        let mut req = completion_request_with_n(None);
+        req.n = Some(n);
+        req
+    }
+
+    #[test]
+    fn test_chat_n_at_upper_bound_passes() {
+        let req = sample_chat_request_with_n(MAX_N);
+        validate_chat_request_fields(&req).expect("n = MAX_N must pass");
+    }
+
+    #[test]
+    fn test_chat_n_above_upper_bound_is_rejected() {
+        let req = sample_chat_request_with_n(MAX_N + 1);
+        let err = validate_chat_request_fields(&req).unwrap_err();
+        assert!(
+            err.1
+                .0
+                .error
+                .message
+                .contains(&format!("exceeds maximum allowed value of {MAX_N}")),
+            "error message must name the cap; got: {}",
+            err.1.0.error.message
+        );
+    }
+
+    #[test]
+    fn test_chat_n_well_above_upper_bound_is_rejected() {
+        let req = sample_chat_request_with_n(1_000);
+        assert!(validate_chat_request_fields(&req).is_err());
+    }
+
+    #[test]
+    fn test_chat_n_negative_still_rejected() {
+        let req = sample_chat_request_with_n(-1);
+        let err = validate_chat_request_fields(&req).unwrap_err();
+        assert!(err.1.0.error.message.contains("n") || err.1.0.error.message.contains("positive"));
+    }
+
+    #[test]
+    fn test_chat_n_zero_still_rejected() {
+        let req = sample_chat_request_with_n(0);
+        assert!(validate_chat_request_fields(&req).is_err());
+    }
+
+    #[test]
+    fn test_completions_n_at_upper_bound_passes() {
+        let req = sample_completion_request_with_n(MAX_N);
+        validate_completion_request_fields(&req).expect("n = MAX_N must pass");
+    }
+
+    #[test]
+    fn test_completions_n_above_upper_bound_is_rejected() {
+        let req = sample_completion_request_with_n(MAX_N + 1);
+        let err = validate_completion_request_fields(&req).unwrap_err();
+        assert!(
+            err.1
+                .0
+                .error
+                .message
+                .contains(&format!("exceeds maximum allowed value of {MAX_N}")),
+            "error message must name the cap; got: {}",
+            err.1.0.error.message
+        );
+    }
+
+    #[test]
+    fn test_completions_n_with_echo_true_returns_400() {
+        let mut req = sample_completion_request_with_n(2);
+        req.echo = Some(true);
+        let err = validate_completion_request_fields(&req).unwrap_err();
+        assert!(err.1.0.error.message.contains("echo"));
+        assert!(err.1.0.error.message.contains("n > 1"));
+    }
+
+    #[test]
+    fn test_completions_n_with_suffix_returns_400() {
+        let mut req = sample_completion_request_with_n(2);
+        req.suffix = Some("}\n".to_string());
+        let err = validate_completion_request_fields(&req).unwrap_err();
+        assert!(err.1.0.error.message.contains("suffix"));
+        assert!(err.1.0.error.message.contains("n > 1"));
+    }
+
+    #[test]
+    fn test_completions_n_with_best_of_returns_400() {
+        // Cross-field rule: n > 1 + best_of > 1 must be rejected.
+        // Pinned so future refactors don't drop it.
+        let mut req = sample_completion_request_with_n(2);
+        req.best_of = Some(2);
+        let err = validate_completion_request_fields(&req).unwrap_err();
+        assert!(
+            err.1.0.error.message.contains("best_of"),
+            "error message must name best_of; got: {}",
+            err.1.0.error.message
+        );
+        assert!(
+            err.1.0.error.message.contains("n"),
+            "error message must name n; got: {}",
+            err.1.0.error.message
+        );
     }
 }
