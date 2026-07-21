@@ -306,6 +306,54 @@ pub fn validate_logit_bias(
     Ok(())
 }
 
+/// Validate `stop` per OpenAI spec (P38 v0.x wire-type follow-up
+/// — engine wire-through). Pin the spec-level rules:
+///
+/// - `None` → pass (default; no stop check)
+/// - `Some(vec![])` → pass (normalized to `None` at the populate
+///   layer; the engine treats both identically)
+/// - `Some(non_empty)` → reject if `len() > 4` (OpenAI spec upper
+///   bound; protects the server from unbounded stop-list sizes)
+/// - `Some(non_empty)` → reject if any element is empty (`""`) or
+///   whitespace-only (`"   "`); such stops would tokenize to zero
+///   tokens in most BPE tokenizers and never match, which is
+///   silently broken. The validator surfaces this as 400.
+///
+/// **Tokenization happens in the populate helper** because the
+/// validator runs BEFORE the tokenizer is acquired (chat +
+/// completions validators are pure functions over `&ChatRequest`
+/// / `&CompletionRequest`).
+///
+/// # Errors
+///
+/// Returns `Err((StatusCode::BAD_REQUEST, Json<ErrorResponse>))`
+/// when any check fires.
+pub fn validate_stop_sequences(
+    stop: &Option<Vec<String>>,
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    if let Some(stops) = stop {
+        if stops.len() > 4 {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "stop sequences exceed OpenAI spec upper bound (max 4)",
+                    "invalid_request_error",
+                )),
+            ));
+        }
+        if stops.iter().any(|s| s.is_empty() || s.chars().all(|c| matches!(c, ' ' | '\t'))) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse::new(
+                    "stop sequences cannot contain empty or whitespace-only strings (would tokenize to zero tokens)",
+                    "invalid_request_error",
+                )),
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Validate the `logprobs` + `top_logprobs` fields on a chat request
 /// (P31 v0.3 wire-type follow-up — declaration + validation).
 ///
@@ -907,20 +955,6 @@ mod tests {
         validate_chat_request_fields(&req).expect("empty stop array must pass");
     }
 
-    #[test]
-    fn chat_request_non_empty_stop_is_rejected() {
-        let req = chat_request_with_stop(Some(vec!["\n".to_string()]));
-        let err = validate_chat_request_fields(&req).expect_err("non-empty stop must be rejected");
-        assert_eq!(err.0, StatusCode::BAD_REQUEST);
-        let body = err.1.0;
-        assert_eq!(body.error.error_type, "invalid_request_error");
-        assert!(
-            body.error.message.contains("stop sequences"),
-            "error message must mention stop sequences: got '{}'",
-            body.error.message
-        );
-    }
-
     // response_format validation tests (P22 v0.2 wire-type follow-up)
 
     #[test]
@@ -1030,28 +1064,6 @@ mod tests {
         }
     }
 
-    fn completion_request_with_stop(stop: Option<Vec<String>>) -> CompletionRequest {
-        CompletionRequest {
-            model: None,
-            prompt: "hello".to_string(),
-            temperature: None,
-            top_p: None,
-            max_tokens: None,
-            stream: None,
-            n: None,
-            stop,
-            user: None,
-            seed: None,
-            frequency_penalty: None,
-            presence_penalty: None,
-            logit_bias: None,
-            logprobs: None,
-            echo: None,
-            suffix: None,
-            best_of: None,
-        }
-    }
-
     fn completion_request_with_top_p(top_p: Option<f32>) -> CompletionRequest {
         CompletionRequest {
             model: None,
@@ -1087,16 +1099,6 @@ mod tests {
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         let body = err.1.0;
         assert_eq!(body.error.error_type, "invalid_request_error");
-    }
-
-    #[test]
-    fn completion_request_non_empty_stop_is_rejected() {
-        let req = completion_request_with_stop(Some(vec!["END".to_string()]));
-        let err =
-            validate_completion_request_fields(&req).expect_err("non-empty stop must be rejected");
-        assert_eq!(err.0, StatusCode::BAD_REQUEST);
-        let body = err.1.0;
-        assert!(body.error.message.contains("stop sequences"));
     }
 
     // top_p validation tests — covers both the standalone
@@ -2731,5 +2733,85 @@ mod tests {
             validate_chat_request_fields(&req).expect_err("specific + no tools must be rejected");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         assert!(err.1.0.error.message.contains("tools"));
+    }
+
+    // =============================================================================
+    // P38 v0.x wire-type follow-up — engine wire-through: `validate_stop_sequences`
+    // helper tests. Pin the new validator contract (max 4 strings, no empty
+    // strings) end-to-end through the helper signature. Replaces the old
+    // "non-empty stop → 400" rejection tests with "stop is now accepted".
+    // =============================================================================
+
+    #[test]
+    fn test_stop_validation_none_passes() {
+        // OpenAI spec: omitting `stop` entirely (None) is the default and
+        // must always pass.
+        validate_stop_sequences(&None).expect("None must pass (default; P38)");
+    }
+
+    #[test]
+    fn test_stop_validation_empty_vec_passes() {
+        // OpenAI spec: an explicit `stop: []` is equivalent to None and
+        // must pass. The HTTP wire-through normalizes this to `None` at
+        // the populate layer.
+        let stop: Option<Vec<String>> = Some(vec![]);
+        validate_stop_sequences(&stop).expect("empty vec must pass (P38)");
+    }
+
+    #[test]
+    fn test_stop_validation_single_string_passes() {
+        let stop: Option<Vec<String>> = Some(vec!["\n\n".to_string()]);
+        validate_stop_sequences(&stop).expect("single-string stop must pass (P38)");
+    }
+
+    #[test]
+    fn test_stop_validation_max_4_strings_passes() {
+        // 4 stops is the OpenAI spec upper bound — must pass.
+        let stop: Option<Vec<String>> = Some(vec![
+            "a".to_string(),
+            "b".to_string(),
+            "c".to_string(),
+            "d".to_string(),
+        ]);
+        validate_stop_sequences(&stop).expect("4-stop vec must pass (OpenAI upper bound, P38)");
+    }
+
+    #[test]
+    fn test_stop_validation_more_than_4_strings_returns_400() {
+        // 5 stops exceeds the OpenAI upper bound — reject.
+        let stop: Option<Vec<String>> = Some(vec![
+            "a".to_string(),
+            "b".to_string(),
+            "c".to_string(),
+            "d".to_string(),
+            "e".to_string(),
+        ]);
+        let err = validate_stop_sequences(&stop)
+            .expect_err("5-stop vec must be rejected (>4 per OpenAI spec, P38)");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("stop"));
+    }
+
+    #[test]
+    fn test_stop_validation_empty_string_returns_400() {
+        // An empty-string stop is semantically a no-op (would never match
+        // any generated text) — reject to give the caller a clear error.
+        let stop: Option<Vec<String>> = Some(vec!["".to_string()]);
+        let err = validate_stop_sequences(&stop)
+            .expect_err("empty-string stop must be rejected (P38)");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("stop"));
+    }
+
+    #[test]
+    fn test_stop_validation_string_with_only_whitespace_returns_400() {
+        // A whitespace-only stop tokenizes to zero tokens in many BPE
+        // tokenizers (a no-op that would never match) — reject to give
+        // the caller a clear error.
+        let stop: Option<Vec<String>> = Some(vec!["   ".to_string()]);
+        let err = validate_stop_sequences(&stop)
+            .expect_err("whitespace-only stop must be rejected (P38)");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.0.error.message.contains("stop"));
     }
 }
