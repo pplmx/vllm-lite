@@ -534,6 +534,515 @@ async fn run_n_parallel_completions(
     Ok(Json(response).into_response())
 }
 
+/// One candidate's streaming channels (P39 v0.x wire-type follow-up
+/// — engine wire-through helper for `n > 1` streaming). Returned by
+/// [`spawn_n_streaming_candidate`] and consumed by the SSE loop in
+/// [`stream_n_parallel_completions`].
+///
+/// The struct owns the receiver halves so the caller can drive the
+/// per-candidate stream independently. The `response_rx` yields
+/// `SampledToken` values one at a time; `finish_reason_rx` yields
+/// the final `FinishReason` just before `response_tx` is dropped by
+/// the engine (P38 API-01 contract); `seq_id_rx` yields the
+/// engine-assigned `SeqId` for cancellation on client disconnect
+/// (P37 production-readiness §4 — same pattern as the single-shot
+/// `stream_completion`).
+struct StreamingCandidateChannels {
+    index: usize,
+    response_rx: mpsc::Receiver<vllm_traits::SampledToken>,
+    finish_reason_rx: Option<tokio::sync::oneshot::Receiver<vllm_traits::FinishReason>>,
+    seq_id_rx: Option<tokio::sync::oneshot::Receiver<vllm_traits::SeqId>>,
+}
+
+/// Internal event flowing from the per-candidate forwarding tasks
+/// into the SSE assemble loop (P39 v0.x wire-type follow-up —
+/// streaming engine wire-through for `n > 1`).
+///
+/// Each candidate contributes one `Token` event per generated
+/// token (in arrival order across candidates — mpsc preserves
+/// arrival order at the receiver). When the candidate's
+/// `response_rx` closes, the forwarding task emits one `Finished`
+/// event carrying the `FinishReason` learned from the
+/// `finish_reason_rx` oneshot (the engine sends the reason just
+/// before dropping `response_tx`, per P38 API-01).
+#[derive(Debug)]
+enum NParallelSseEvent {
+    Token {
+        index: usize,
+        token: vllm_traits::SampledToken,
+    },
+    Finished {
+        index: usize,
+        finish_reason: vllm_traits::FinishReason,
+    },
+}
+
+/// State for the `stream::unfold` loop in
+/// [`stream_n_parallel_completions`]. Owns the shared
+/// `mpsc::Receiver<NParallelSseEvent>`, the tokenizer (for decoding
+/// each token), the per-candidate `FinishReason` accumulator, and
+/// the cancel guards (one per candidate — P37 production-readiness
+/// §4 — dropped automatically if the SSE stream is abandoned, which
+/// fires `EngineMessage::CancelRequest` for each in-flight candidate).
+struct NParallelStreamingState {
+    rx: mpsc::Receiver<NParallelSseEvent>,
+    tokenizer: std::sync::Arc<vllm_model::tokenizer::Tokenizer>,
+    /// `finish_reasons[i]` = `Some(reason)` once candidate `i` has
+    /// emitted its `Finished` event; `None` while still active.
+    /// Used to assemble the final SSE event once ALL N candidates
+    /// have finalized (when every entry is `Some`).
+    finish_reasons: Vec<Option<vllm_traits::FinishReason>>,
+    cancel_guards: Vec<std::sync::Arc<crate::openai::chat::CancelOnDrop>>,
+    terminal: NParallelTerminal,
+}
+
+#[derive(Debug)]
+enum NParallelTerminal {
+    Streaming,
+    EmitDoneSentinel,
+    Done,
+}
+
+/// Spawn one of N parallel streaming candidates for an `n > 1`
+/// request (P39 v0.x wire-type follow-up — engine wire-through
+/// helper for `n > 1` STREAMING). Mirrors [`spawn_n_candidate`]'s
+/// setup (build `Request`, tokenize stop sequences, populate
+/// sampling params via `populate_completion_sampling_params` with
+/// the `candidate_index` for per-candidate seed derivation, validate
+/// sampling params, then `try_send` the `EngineMessage::AddRequest`)
+/// but DOES NOT collect the per-token stream — returns the receiver
+/// channels so the SSE loop can drive the per-candidate streams
+/// concurrently.
+///
+/// **Why a separate helper:** [`spawn_n_candidate`] is non-streaming
+/// only — it loops over `response_rx.recv().await` to completion
+/// before returning. For streaming we need to keep `response_rx`
+/// alive across many `SSE` events (one per token) without joining
+/// the candidate prematurely. The split mirrors how P37's
+/// `stream_completion` inlines its own setup inside the SSE
+/// closure: we extract the setup into a helper so it can be called
+/// N times in a loop for the parallel case.
+///
+/// **No `tokio::spawn` here:** the function returns immediately
+/// after `try_send` — it does NOT await `response_rx`, so calling
+/// it N times in a tight loop is fine (no head-of-line blocking).
+/// The caller spawns one forwarding task per candidate that drives
+/// the per-candidate stream into a shared SSE event channel.
+///
+/// **`seq_id_tx` is set:** unlike the non-streaming
+/// [`spawn_n_candidate`] (which passes `None`), this helper sets
+/// `seq_id_tx = Some(_)` so the caller can recover the
+/// engine-assigned `SeqId` for cancellation on client disconnect
+/// (P37 production-readiness §4). The caller awaits `seq_id_rx`
+/// with a 1 s timeout after spawning all N (matches the
+/// single-shot `stream_completion` pattern).
+async fn spawn_n_streaming_candidate(
+    state: ApiState,
+    req: CompletionRequest,
+    prompt_tokens: Vec<vllm_traits::TokenId>,
+    max_tokens: usize,
+    correlation_id: String,
+    candidate_index: usize,
+) -> Result<StreamingCandidateChannels, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    let total_max = prompt_tokens.len() + max_tokens;
+    let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
+
+    // P38 v0.3 wire-type engine wire-through: tokenize the user's
+    // stop strings at the HTTP boundary and forward as
+    // `SamplingParams::stop_token_sequences`. Identical to
+    // `spawn_n_candidate`'s setup so every candidate honors the
+    // user's stop set end-to-end.
+    let stop_token_sequences: Option<Vec<Vec<vllm_traits::TokenId>>> =
+        if let Some(stop) = req.stop.as_ref() {
+            if !stop.is_empty() {
+                let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
+                    .iter()
+                    .map(|s| state.tokenizer.encode(s))
+                    .filter(|toks| !toks.is_empty())
+                    .collect();
+                if tokenized.is_empty() {
+                    tracing::warn!(
+                        stop_count = stop.len(),
+                        "All stop sequences tokenized to zero tokens; skipping stop wire-through"
+                    );
+                    None
+                } else {
+                    Some(tokenized)
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+    // P39: per-candidate seed derivation (identical to
+    // `spawn_n_candidate`).
+    populate_completion_sampling_params(&mut request, &req, stop_token_sequences, candidate_index);
+    validate_sampling_params(&request.sampling_params)?;
+
+    let (response_tx, response_rx) = mpsc::channel(64);
+    let (finish_reason_tx, finish_reason_rx) = tokio::sync::oneshot::channel();
+    let (seq_id_tx, seq_id_rx) = tokio::sync::oneshot::channel();
+
+    // REL-01: try_send surfaces saturation as 503 instead of blocking.
+    state
+        .engine_tx
+        .try_send(vllm_core::types::EngineMessage::AddRequest {
+            request: Box::new(request),
+            response_tx,
+            seq_id_tx: Some(seq_id_tx), // streaming — propagate client disconnect
+            finish_reason_tx: Some(finish_reason_tx),
+            request_id: Some(correlation_id),
+        })
+        .map_err(|e| match e {
+            tokio::sync::mpsc::error::TrySendError::Full(_) => overload_response(),
+            tokio::sync::mpsc::error::TrySendError::Closed(_) => unavailable_response(),
+        })?;
+
+    Ok(StreamingCandidateChannels {
+        index: candidate_index,
+        response_rx,
+        finish_reason_rx: Some(finish_reason_rx),
+        seq_id_rx: Some(seq_id_rx),
+    })
+}
+
+/// Run the `n > 1` STREAMING path on the legacy `/v1/completions`
+/// endpoint (P39 v0.x wire-type follow-up — engine wire-through
+/// helper for `n` × `stream = true`). Spawns N parallel candidates
+/// via [`spawn_n_streaming_candidate`], interleaves their per-token
+/// streams into one SSE event stream, and emits `[DONE]` after all
+/// N finalize.
+///
+/// **Per-event shape:** `choices: [{index: usize, text: String,
+/// finish_reason?: String}, ...]` — one entry per candidate that
+/// produced a new token OR just finalized in this round. Events
+/// are emitted on a per-token-arrival basis (arrival-order merge —
+/// whichever candidate's token arrives first gets emitted first).
+/// This is intentionally simple: it satisfies the wire-shape tests
+/// (indices 0..N appear across events; final event carries
+/// `finish_reason` for each index) without imposing a
+/// round-locking barrier that would inflate per-event latency when
+/// one candidate is slower than the others.
+///
+/// **Final event:** when ALL N candidates have emitted their
+/// `Finished` event, the SSE loop emits ONE event with the full
+/// `choices` array (length N) where each entry carries the
+/// candidate's `finish_reason` (mapped from
+/// [`vllm_traits::FinishReason`] → OpenAI string per the same
+/// mapping used by `run_n_parallel_completions` /
+/// `stream_completion`). Immediately after that event, `[DONE]` is
+/// emitted and the stream closes.
+///
+/// **`apply_completion_meta` is NOT called** — the validator
+/// already rejects `n > 1 × echo / suffix` (Task 1, spec §4.6.2),
+/// so there's no prefix/suffix to apply. The `text` field on each
+/// chunk is the raw decoded token only, mirroring the single-shot
+/// `stream_completion` pattern (the chat-equivalent would carry
+/// `delta.content` here but completions use the legacy `text` shape).
+///
+/// **Cancellation:** each candidate gets its own `CancelOnDrop`
+/// guard keyed on the engine-assigned `SeqId` (P37
+/// production-readiness §4). If the SSE stream is abandoned (client
+/// disconnect), all guards Drop simultaneously and fire
+/// `EngineMessage::CancelRequest` for each in-flight candidate — so
+/// we don't leak scheduler slots on half-read streams. On natural
+/// completion, all guards are disarmed via
+/// [`crate::openai::chat::CancelOnDrop::disarm`] so the Drop impl
+/// is a no-op.
+///
+/// **Seq-id round-trip:** after spawning all N candidates we await
+/// each `seq_id_rx` with a 1 s timeout (matches the single-shot
+/// `stream_completion` pattern in `completions()`). On timeout /
+/// error we return 503 `engine_unavailable` — the engine failed to
+/// admit the candidate in time, so we can't safely proceed.
+async fn stream_n_parallel_completions(
+    state: ApiState,
+    req: CompletionRequest,
+    prompt_tokens: Vec<vllm_traits::TokenId>,
+    _prompt: String,
+    max_tokens: usize,
+    correlation_id: CorrelationId,
+) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    let n = req.n.unwrap_or(1) as usize;
+
+    // Spawn N streaming candidates. Each call returns immediately
+    // (no awaiting of `response_rx`) so the loop fires all N
+    // `EngineMessage::AddRequest` messages in quick succession — the
+    // engine sees them as a batch (when N is small enough to fit
+    // the bounded mailbox capacity; REL-01 saturation surfaces as
+    // the first candidate's 503 try_send error).
+    let mut candidate_channels: Vec<StreamingCandidateChannels> = Vec::with_capacity(n);
+    for i in 0..n {
+        let state = state.clone();
+        let req = req.clone();
+        let prompt_tokens = prompt_tokens.clone();
+        let correlation_id_inner = correlation_id.0.clone();
+        let ch = spawn_n_streaming_candidate(
+            state,
+            req,
+            prompt_tokens,
+            max_tokens,
+            correlation_id_inner,
+            i,
+        )
+        .await?;
+        candidate_channels.push(ch);
+    }
+
+    // Block briefly until each engine-assigned seq_id arrives (see
+    // single-shot `stream_completion` for rationale on the 1 s cap).
+    let mut seq_ids: Vec<vllm_traits::SeqId> = Vec::with_capacity(n);
+    for ch in &mut candidate_channels {
+        let seq_id = match tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            ch.seq_id_rx
+                .take()
+                .expect("seq_id_rx is set by spawn_n_streaming_candidate"),
+        )
+        .await
+        {
+            Ok(Ok(id)) => id,
+            _ => return Err(unavailable_response()),
+        };
+        seq_ids.push(seq_id);
+    }
+
+    // Build one CancelOnDrop guard per candidate. Drop on stream
+    // abandonment → CancelRequest for each in-flight sequence (so
+    // we don't leak scheduler slots). Disarmed on natural
+    // completion so Drop is a no-op.
+    let cancel_guards: Vec<std::sync::Arc<crate::openai::chat::CancelOnDrop>> = seq_ids
+        .iter()
+        .map(|&seq_id| {
+            std::sync::Arc::new(crate::openai::chat::CancelOnDrop {
+                engine_tx: state.engine_tx.clone(),
+                seq_id: std::sync::atomic::AtomicU64::new(seq_id),
+                fired: std::sync::atomic::AtomicBool::new(false),
+                request_id: format!(
+                    "cmpl_{}",
+                    uuid::Uuid::new_v4().to_string()[..8].to_uppercase()
+                ),
+            })
+        })
+        .collect();
+
+    // Shared SSE event channel: one forwarding task per candidate
+    // pushes its tokens + final finish_reason into this channel; the
+    // SSE assemble loop below drains it. mpsc preserves arrival
+    // order at the receiver, so the assembled SSE stream reflects
+    // actual engine emission order across candidates.
+    let (sse_tx, sse_rx) = mpsc::channel::<NParallelSseEvent>(64);
+
+    // Spawn one forwarding task per candidate. Each task drains its
+    // candidate's `response_rx`, emitting one `NParallelSseEvent::Token`
+    // per sampled token, then one `NParallelSseEvent::Finished` with
+    // the candidate's `FinishReason` once the channel closes (and
+    // the `finish_reason_rx` oneshot resolves). Drop of `sse_tx`
+    // happens after the loop (below) so the receiver can detect
+    // completion when all N forwarding tasks finish.
+    for mut ch in candidate_channels {
+        let sse_tx = sse_tx.clone();
+        let candidate_index = ch.index;
+        tokio::spawn(async move {
+            while let Some(token) = ch.response_rx.recv().await {
+                if sse_tx
+                    .send(NParallelSseEvent::Token {
+                        index: candidate_index,
+                        token,
+                    })
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+            }
+            // response_rx closed → engine signaled end-of-stream.
+            // The engine sends the finish_reason just before
+            // dropping response_tx (P38 API-01), so this resolves
+            // immediately in the normal case. Fall back to `Stop`
+            // when the oneshot was dropped without a value (engine
+            // panic between the two steps).
+            let fr = match ch.finish_reason_rx.take() {
+                Some(frx) => frx.await.unwrap_or(vllm_traits::FinishReason::Stop),
+                None => vllm_traits::FinishReason::Stop,
+            };
+            let _ = sse_tx
+                .send(NParallelSseEvent::Finished {
+                    index: candidate_index,
+                    finish_reason: fr,
+                })
+                .await;
+        });
+    }
+    // Drop the original sender so the SSE assemble loop's receiver
+    // returns `None` once all N forwarding tasks complete (natural
+    // closure path — defensive; we don't rely on it because the
+    // terminal-state machine handles `Done` explicitly).
+    drop(sse_tx);
+
+    // SSE assemble loop. Reads `NParallelSseEvent`s from the shared
+    // channel and emits one `Event` per token arrival + one final
+    // event when all N candidates have finalized, then `[DONE]`.
+    //
+    // **Why arrival-order rather than round-locked:** a true
+    // round-locked merge (`join_all` over the N active `response_rx`s
+    // per round) would inflate per-event latency to the slowest
+    // candidate — wasteful when one candidate finishes much later
+    // than the others. Arrival-order merge (one event per token
+    // arrival, interleaved via mpsc ordering) keeps per-event
+    // latency tight while still satisfying the wire-shape contract
+    // (every candidate contributes its `index` + tokens across the
+    // stream; final event carries `finish_reason` per index).
+    let tokenizer = state.tokenizer.clone();
+    let stream = stream::unfold(
+        NParallelStreamingState {
+            rx: sse_rx,
+            tokenizer,
+            finish_reasons: vec![None; n],
+            cancel_guards,
+            terminal: NParallelTerminal::Streaming,
+        },
+        move |mut state| async move {
+            match state.terminal {
+                NParallelTerminal::Done => None,
+                NParallelTerminal::EmitDoneSentinel => {
+                    state.terminal = NParallelTerminal::Done;
+                    Some((
+                        Ok::<Event, Infallible>(Event::default().data("[DONE]")),
+                        state,
+                    ))
+                }
+                NParallelTerminal::Streaming => match state.rx.recv().await {
+                    Some(NParallelSseEvent::Token { index, token }) => {
+                        // Per-token arrival: emit one event with a
+                        // single choice carrying this candidate's
+                        // decoded text + index. Same shape as the
+                        // single-shot `stream_completion` chunk —
+                        // just narrower (1 choice per event instead
+                        // of 1).
+                        let text = state.tokenizer.decode(&[token.token]);
+                        let choice = if should_skip_token_text(&state.tokenizer, &text) {
+                            // Special-token / empty text — emit
+                            // `text: ""` so the chunk's wire shape
+                            // (always `choices: [{index, text}]`)
+                            // stays stable; clients can ignore
+                            // empty-text chunks. Mirrors the
+                            // single-shot path's behaviour.
+                            serde_json::json!({"index": index, "text": ""})
+                        } else {
+                            serde_json::json!({"index": index, "text": text})
+                        };
+                        let chunk = serde_json::json!({
+                            "id": "cmpl-stream",
+                            "object": "text_completion",
+                            "choices": [choice],
+                        });
+                        Some((Ok(Event::default().data(chunk.to_string())), state))
+                    }
+                    Some(NParallelSseEvent::Finished {
+                        index,
+                        finish_reason,
+                    }) => {
+                        // Candidate `index` just finalized. Record
+                        // its finish_reason and decide whether to
+                        // emit an intermediate (this-candidate-only)
+                        // finish event or the consolidated final
+                        // event (all N finish_reasons).
+                        state.finish_reasons[index] = Some(finish_reason);
+                        let all_done = state.finish_reasons.iter().all(|r| r.is_some());
+                        let reason_string = match finish_reason {
+                            vllm_traits::FinishReason::Length => "length",
+                            vllm_traits::FinishReason::Stop
+                            | vllm_traits::FinishReason::Cancelled => "stop",
+                        };
+                        if all_done {
+                            // Final event: emit ONE chunk with all
+                            // N choices, each carrying its
+                            // `finish_reason`. This is the
+                            // OpenAI-spec close-of-stream signal
+                            // for n > 1 — clients know all N
+                            // streams have terminated. We then
+                            // transition to EmitDoneSentinel so
+                            // the next iteration emits [DONE].
+                            //
+                            // Disarm all cancel guards BEFORE
+                            // emitting so the Drop on stream
+                            // abandonment doesn't fire redundant
+                            // CancelRequests for already-finalized
+                            // candidates.
+                            for guard in &state.cancel_guards {
+                                guard.disarm();
+                            }
+                            let choices: Vec<serde_json::Value> = state
+                                .finish_reasons
+                                .iter()
+                                .enumerate()
+                                .map(|(i, fr)| {
+                                    let reason = fr.unwrap_or(vllm_traits::FinishReason::Stop);
+                                    let reason_str = match reason {
+                                        vllm_traits::FinishReason::Length => "length",
+                                        vllm_traits::FinishReason::Stop
+                                        | vllm_traits::FinishReason::Cancelled => "stop",
+                                    };
+                                    serde_json::json!({
+                                        "index": i,
+                                        "finish_reason": reason_str,
+                                    })
+                                })
+                                .collect();
+                            let chunk = serde_json::json!({
+                                "id": "cmpl-stream",
+                                "object": "text_completion",
+                                "choices": choices,
+                            });
+                            state.terminal = NParallelTerminal::EmitDoneSentinel;
+                            Some((Ok(Event::default().data(chunk.to_string())), state))
+                        } else {
+                            // Intermediate finish event: this
+                            // candidate just finalized but the
+                            // others are still streaming. Emit a
+                            // narrow chunk carrying only this
+                            // candidate's `finish_reason` so the
+                            // client can track per-candidate
+                            // termination (OpenAI doesn't define
+                            // this strictly, but it's useful for
+                            // long-running n > 1 streams where
+                            // candidates finish at different
+                            // rates).
+                            let chunk = serde_json::json!({
+                                "id": "cmpl-stream",
+                                "object": "text_completion",
+                                "choices": [{
+                                    "index": index,
+                                    "finish_reason": reason_string,
+                                }],
+                            });
+                            Some((Ok(Event::default().data(chunk.to_string())), state))
+                        }
+                    }
+                    None => {
+                        // All forwarding tasks dropped their senders
+                        // without sending a Finished event for every
+                        // candidate — this is a defensive path
+                        // (shouldn't happen in practice because the
+                        // Finished event always follows the last
+                        // Token event before response_rx closes).
+                        // Disarm guards and terminate cleanly.
+                        for guard in &state.cancel_guards {
+                            guard.disarm();
+                        }
+                        None
+                    }
+                },
+            }
+        },
+    );
+
+    Ok(Sse::new(Box::pin(stream)).into_response())
+}
+
 /// Run the `best_of > 1` path (P37 v0.x wire-type follow-up —
 /// engine wire-through helper for `best_of`; P39 renamed the
 /// underlying spawn helper from `spawn_best_of_candidate` to
@@ -818,11 +1327,12 @@ pub async fn completions(
 
     // P39 v0.x wire-type follow-up — engine wire-through: `n > 1`
     // dispatch. When `n > 1`, spawn N parallel candidates via
-    // `run_n_parallel_completions` and assemble ALL N into the
-    // response (NOT ranked — distinct from `best_of`'s "return
-    // ONE" semantics). The dispatch happens BEFORE the single-shot
-    // `Request::new` (which moves `prompt_tokens`) so the
-    // per-candidate requests can reuse the tokenized prompt.
+    // `run_n_parallel_completions` (non-streaming) or
+    // `stream_n_parallel_completions` (streaming) and assemble ALL
+    // N into the response (NOT ranked — distinct from `best_of`'s
+    // "return ONE" semantics). The dispatch happens BEFORE the
+    // single-shot `Request::new` (which moves `prompt_tokens`) so
+    // the per-candidate requests can reuse the tokenized prompt.
     //
     // **`n = 1` / `n = None` short-circuit:** the `if n > 1` guard
     // means we only enter this branch when the user explicitly
@@ -833,18 +1343,40 @@ pub async fn completions(
     // bound (Task 1, spec §4.6.1) + `n > 1 × echo / suffix /
     // best_of` cross-field rejects (Tasks 1 + 3) run BEFORE this
     // code so the dispatch only fires for valid `n > 1` requests.
+    //
+    // **Streaming interaction:** when `is_streaming = true` AND
+    // `n > 1`, dispatch to `stream_n_parallel_completions` (P39
+    // Task 5) which spawns N streaming candidates and interleaves
+    // their per-token streams into ONE SSE event stream. Each event
+    // carries `choices: [{index, text?}, ...]` per token arrival;
+    // the final event carries `finish_reason` for each index;
+    // `[DONE]` follows after all N finalize. The non-streaming
+    // helper (`run_n_parallel_completions`, Task 4) is unchanged
+    // and still powers `n > 1 + stream = false`.
     if let Some(n) = req.n {
         if n > 1 {
-            return run_n_parallel_completions(
-                state,
-                req,
-                prompt_tokens,
-                prompt,
-                prompt_tokens_len,
-                max_tokens,
-                correlation_id,
-            )
-            .await;
+            return if is_streaming {
+                stream_n_parallel_completions(
+                    state,
+                    req,
+                    prompt_tokens,
+                    prompt,
+                    max_tokens,
+                    correlation_id,
+                )
+                .await
+            } else {
+                run_n_parallel_completions(
+                    state,
+                    req,
+                    prompt_tokens,
+                    prompt,
+                    prompt_tokens_len,
+                    max_tokens,
+                    correlation_id,
+                )
+                .await
+            };
         }
     }
 
