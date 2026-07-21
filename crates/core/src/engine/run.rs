@@ -69,7 +69,7 @@ impl Engine {
                         // dropping the token response channel, so the
                         // HTTP layer can emit the OpenAI-correct
                         // `finish_reason` instead of hardcoding `"stop"`.
-                        let seq_id = self.add_request(request, response_tx);
+                        let seq_id = self.add_request(*request, response_tx);
                         if let Some(tx) = finish_reason_tx {
                             self.finish_reason_txs.insert(seq_id, tx);
                         }

@@ -344,7 +344,7 @@ async fn handle_chat(
     state
         .engine_tx
         .try_send(vllm_core::types::EngineMessage::AddRequest {
-            request,
+            request: Box::new(request),
             response_tx,
             // Non-streaming handler doesn't need a seq_id
             // round-trip; the request runs to natural completion
@@ -677,7 +677,7 @@ async fn stream_chat_completion(
     state
         .engine_tx
         .try_send(vllm_core::types::EngineMessage::AddRequest {
-            request,
+            request: Box::new(request),
             response_tx,
             seq_id_tx: Some(seq_id_tx),
             finish_reason_tx: Some(finish_reason_tx),
