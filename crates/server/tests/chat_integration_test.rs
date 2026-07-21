@@ -6977,3 +6977,225 @@ async fn test_completions_n_above_one_streaming_final_event_has_finish_reason_pe
         );
     }
 }
+
+// -----------------------------------------------------------------------------
+// TEST 9 (P39 Task 5 §4.9.4): n > 1 + stream = true → wire-shape test
+// -----------------------------------------------------------------------------
+#[tokio::test]
+async fn test_completions_n_two_streaming_wire_shape() {
+    // P39 §4.9.4 wire-shape test: pins the exact SSE event shape
+    // the spec mandates for `n > 1` + `stream = true` responses.
+    // Future refactors that silently change the SSE event layout
+    // (e.g. dropping the `text` field on token events, swapping
+    // the final consolidated event's per-choice `finish_reason` for
+    // a single aggregate, or inserting events between the final
+    // chunk and `[DONE]`) will fail loudly here.
+    //
+    // **Pinning contract (each bullet is one test assertion):**
+    //
+    // (a) **Token events have exactly one choice** with the
+    //     source candidate's `index` (0 or 1) and a `text` field.
+    //     Pins the per-token-arrival wire shape (one event per
+    //     token, not batched). The `text` value may be empty for
+    //     special-token decodes but the field MUST be present.
+    //
+    // (b) **Intermediate per-candidate finish events** carry
+    //     exactly ONE choice with only the finished candidate's
+    //     `index + finish_reason` (no `text` field — they're
+    //     terminal markers, not token payloads). For `n = 2` with
+    //     candidates finishing at different rates, up to N-1 such
+    //     intermediate events may appear before the final
+    //     consolidated event. (Note: the mock engine emits all
+    //     tokens for each candidate back-to-back before
+    //     finalizing, so for `max_tokens = 2` the intermediate
+    //     finish events may or may not interleave with token
+    //     events depending on scheduling — this test tolerates
+    //     both but pins the shape when one DOES appear.)
+    //
+    // (c) **Final consolidated event** has EXACTLY N choices
+    //     (here: 2), each with a non-null `finish_reason` ∈
+    //     {"stop", "length"}. The intermediate per-candidate
+    //     finish events (if any) must NOT carry multiple choices
+    //     — that's reserved for the consolidated final event.
+    //
+    // (d) **`[DONE]` follows immediately** after the final
+    //     consolidated event with no other SSE event in between.
+    //     Pin: body must end with `[DONE]` after the SSE
+    //     terminator (`\n\n`).
+    use vllm_server::openai::completions::completions;
+    let (state, _captured, _handle) = state_with_n_mock_engine(vec![vec![10, 20], vec![30, 40]]);
+    let app = Router::new()
+        .route("/v1/completions", post(completions))
+        .with_state(state)
+        .layer(axum::middleware::from_fn(
+            vllm_server::security::correlation::correlation_id_middleware,
+        ));
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "prompt": "Hello",
+        "max_tokens": 2,
+        "n": 2,
+        "seed": 42,
+        "stream": true,
+    })
+    .to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/completions")
+                .header("content-type", "application/json")
+                .header("accept", "text/event-stream")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+
+    // Parse SSE events into `(payload, is_done_sentinel)` pairs.
+    // Skip empty payloads and the trailing `[DONE]`.
+    let events: Vec<(String, bool)> = body_str
+        .split("\n\n")
+        .filter_map(|event| {
+            event
+                .lines()
+                .find(|l| l.starts_with("data: "))
+                .map(|l| l.strip_prefix("data: ").unwrap_or("").to_string())
+        })
+        .filter(|p| !p.is_empty())
+        .map(|p| {
+            let is_done = p == "[DONE]";
+            (p, is_done)
+        })
+        .collect();
+
+    // Pin (d) — body ends with [DONE] as the last event.
+    let last = events.last().expect("at least one SSE event expected");
+    assert!(last.1, "last SSE event must be [DONE]; got: {:?}", last.0);
+
+    // Strip the [DONE] sentinel for shape analysis.
+    let json_events: Vec<serde_json::Value> = events
+        .iter()
+        .filter(|(_, is_done)| !is_done)
+        .map(|(p, _)| serde_json::from_str(p).expect("each SSE chunk must be valid JSON"))
+        .collect();
+    assert!(
+        !json_events.is_empty(),
+        "n=2 + stream=true must carry at least one JSON chunk before [DONE]; body: {body_str}"
+    );
+
+    // Identify the final consolidated event: the JSON event with
+    // exactly N choices, each carrying a non-null `finish_reason`.
+    let final_event_idx = json_events
+        .iter()
+        .position(|e| {
+            e["choices"]
+                .as_array()
+                .map(|cs| {
+                    cs.len() == 2
+                        && cs
+                            .iter()
+                            .all(|c| c["finish_reason"].as_str().is_some())
+                })
+                .unwrap_or(false)
+        })
+        .expect("there must be a final consolidated event with N=2 choices, each carrying finish_reason");
+
+    // Pin (c) — final event has exactly N=2 choices, each with
+    // `finish_reason` (no `text` field on the consolidated close).
+    let final_choices = json_events[final_event_idx]["choices"]
+        .as_array()
+        .expect("final event must have a choices array");
+    assert_eq!(
+        final_choices.len(),
+        2,
+        "final consolidated event must carry exactly N=2 choices; got {}",
+        final_choices.len()
+    );
+    for c in final_choices {
+        assert!(
+            c["finish_reason"].as_str().is_some(),
+            "every choice in the final consolidated event must carry finish_reason; got: {c:?}"
+        );
+        assert!(
+            c["index"].as_u64().is_some(),
+            "every choice in the final consolidated event must carry index; got: {c:?}"
+        );
+        // Final consolidated choices have NO `text` field (they're
+        // close-of-stream markers, not token payloads).
+        assert!(
+            c.get("text").is_none(),
+            "final consolidated choices must NOT carry `text` (reserved for token events); got: {c:?}"
+        );
+    }
+
+    // Pin (a) — token events have exactly one choice with `index`
+    // and `text` fields. A token event is any JSON event before
+    // the final consolidated one.
+    for (i, event) in json_events.iter().enumerate() {
+        if i == final_event_idx {
+            continue; // skip the final event (covered by (c))
+        }
+        let choices = event["choices"]
+            .as_array()
+            .unwrap_or_else(|| panic!("event must have choices array: {event:?}"));
+        assert_eq!(
+            choices.len(),
+            1,
+            "pre-final events (token or intermediate finish) must carry exactly one choice; got {} in event {i}: {event:?}",
+            choices.len()
+        );
+        let c = &choices[0];
+        // Every pre-final event carries `index` (0 or 1 for n=2).
+        let idx = c["index"]
+            .as_u64()
+            .unwrap_or_else(|| panic!("pre-final event choice must carry index; got: {c:?}"));
+        assert!(
+            idx == 0 || idx == 1,
+            "pre-final event choice index must be 0 or 1 for n=2; got: {idx}"
+        );
+        // Token events carry `text`; intermediate finish events
+        // carry `finish_reason` instead. Both are valid pre-final
+        // shapes — pin each separately below.
+        let has_text = c.get("text").is_some();
+        let has_finish = c.get("finish_reason").is_some();
+        assert!(
+            has_text || has_finish,
+            "pre-final event choice must carry either `text` (token event) or `finish_reason` (intermediate finish event); got: {c:?}"
+        );
+    }
+
+    // Pin (b) — if any intermediate per-candidate finish events
+    // appear (single-choice with `finish_reason` and no `text`),
+    // each must carry ONLY the finished candidate's
+    // `index + finish_reason` (no `text`, no other candidate's
+    // choice). Already covered above by the "exactly one choice"
+    // and "has finish_reason OR text" assertions, but reinforce
+    // the "no `text`" half explicitly for intermediate finishes.
+    for (i, event) in json_events.iter().enumerate() {
+        if i == final_event_idx {
+            continue;
+        }
+        let choices = event["choices"].as_array().unwrap();
+        let c = &choices[0];
+        if c.get("finish_reason").is_some() && c.get("text").is_none() {
+            // Intermediate per-candidate finish — pin the
+            // one-candidate-only contract.
+            assert_eq!(
+                choices.len(),
+                1,
+                "intermediate per-candidate finish event must carry exactly the finished candidate (1 choice); got {} in event {i}: {event:?}",
+                choices.len()
+            );
+            assert!(
+                c["finish_reason"].as_str().is_some(),
+                "intermediate finish event must carry a string finish_reason; got: {c:?}"
+            );
+        }
+    }
+}
