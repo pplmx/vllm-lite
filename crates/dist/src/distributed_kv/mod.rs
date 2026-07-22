@@ -3,10 +3,12 @@
 //! Activated by `--features multi-node`. Re-exports the wire types from
 //! `protocol` and the in-process cache implementation from `cache`.
 pub mod block_data_source;
+pub mod block_sink;
 pub mod cache;
 pub mod protocol;
 
 pub use block_data_source::{BlockDataSource, FetchError, MAX_BLOCK_TRANSFER_BYTES};
+pub use block_sink::{BlockSink, MockBlockSink, WriteError};
 pub use cache::DistributedKVCache;
 pub use protocol::{CacheMessage, CacheOperation, NodeId};
 

@@ -12,8 +12,8 @@ pub mod tensor_parallel;
 pub mod types;
 
 pub use distributed_kv::{
-    BlockDataSource, CacheConfig, CacheMessage, DistributedKVCache, FetchError,
-    MAX_BLOCK_TRANSFER_BYTES, NodeId,
+    BlockDataSource, BlockSink, CacheConfig, CacheMessage, DistributedKVCache, FetchError,
+    MAX_BLOCK_TRANSFER_BYTES, MockBlockSink, NodeId, WriteError,
 };
 pub use error::{GrpcError, PipelineError, TensorParallelError};
 pub use grpc::{GrpcState, start_grpc_server_with_listener};
