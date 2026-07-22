@@ -139,10 +139,10 @@ impl PagedKvCache {
     /// Borrow the per-layer block-hash map for `layer_idx`.
     ///
     /// `block_hashes[layer]` maps `hash → block_id` for all blocks
-    /// ever written to that layer. Used by
-    /// [`crate::paged_kv_cache_wrapper`] (multi-node feature) for
-    /// the `BlockDataSource::has_block` witness check (layer 0 as
-    /// the canonical existence proof).
+    /// ever written to that layer. Used by the multi-node
+    /// `paged_kv_cache_wrapper` module (gated by `#[cfg(feature =
+    /// "multi-node")]`) for the `BlockDataSource::has_block`
+    /// witness check (layer 0 as the canonical existence proof).
     ///
     /// Returns `None` if `layer_idx >= num_layers`.
     #[must_use]
