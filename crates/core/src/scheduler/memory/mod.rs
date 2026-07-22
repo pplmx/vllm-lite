@@ -92,6 +92,13 @@ pub struct MemoryManager {
     /// nodes can observe activity.
     #[cfg(feature = "multi-node")]
     distributed_kv: Option<Arc<DistributedKVCache>>,
+    /// Optional `BlockDataSource` that produces the actual K/V tensor
+    /// bytes when a peer requests them via `TransferKVBlock`. Set via
+    /// `EngineBuilder::with_paged_kv_cache(...)` (which constructs a
+    /// `PagedKvCacheWrapper` from the loader's `Arc<PagedKvCache>` and
+    /// passes it through here). Phase 41 OPS-32a second-half.
+    #[cfg(feature = "multi-node")]
+    block_data_source: Option<Arc<dyn vllm_dist::BlockDataSource + Send + Sync>>,
     /// Content hasher used to compute the value side of
     /// `DistributedKVCache::put`. Default is
     /// [`vllm_traits::IdentityHasher`] (collapses every block to its
@@ -130,6 +137,8 @@ impl MemoryManager {
             preemption_manager: PreemptionManager::new(config),
             #[cfg(feature = "multi-node")]
             distributed_kv: None,
+            #[cfg(feature = "multi-node")]
+            block_data_source: None,
             #[cfg(feature = "multi-node")]
             hasher: Arc::new(IdentityHasher),
             #[cfg(feature = "multi-node")]
@@ -179,6 +188,45 @@ impl MemoryManager {
     #[cfg(feature = "multi-node")]
     pub fn set_block_hasher(&mut self, hasher: Arc<dyn BlockHasher>) {
         self.hasher = hasher;
+    }
+
+    /// Wire a `BlockDataSource` into the memory coordinator (Phase 41
+    /// OPS-32a second-half). Called once during engine construction
+    /// (via `EngineBuilder::with_paged_kv_cache` → `Engine::set_paged_kv_cache`
+    /// → `SchedulerEngine::set_block_data_source` → here) so that
+    /// subsequent gRPC `TransferKVBlock` calls can resolve to real
+    /// K/V bytes.
+    #[cfg(feature = "multi-node")]
+    #[must_use]
+    pub fn with_block_data_source(
+        mut self,
+        source: Arc<dyn vllm_dist::BlockDataSource + Send + Sync>,
+    ) -> Self {
+        self.block_data_source = Some(source);
+        self
+    }
+
+    /// Install a `BlockDataSource` after construction. Equivalent to
+    /// [`Self::with_block_data_source`] but usable when the manager is
+    /// already owned by another struct (the post-construction setter
+    /// used by `SchedulerEngine::set_block_data_source`).
+    #[cfg(feature = "multi-node")]
+    pub fn set_block_data_source(
+        &mut self,
+        source: Arc<dyn vllm_dist::BlockDataSource + Send + Sync>,
+    ) {
+        self.block_data_source = Some(source);
+    }
+
+    /// Returns a clone of the wired `BlockDataSource` (or `None`).
+    /// The gRPC server bootstrap (`crates/server/src/bootstrap/grpc.rs`)
+    /// uses this to populate `start_grpc_server_with_listener`'s
+    /// `block_data_source` parameter without going through the
+    /// engine.
+    #[cfg(feature = "multi-node")]
+    #[must_use]
+    pub fn block_data_source(&self) -> Option<Arc<dyn vllm_dist::BlockDataSource + Send + Sync>> {
+        self.block_data_source.as_ref().map(Arc::clone)
     }
 
     /// Borrow the active [`vllm_traits::BlockHasher`].
