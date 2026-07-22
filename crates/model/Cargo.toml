@@ -19,6 +19,9 @@ memmap2 = "0.9"
 tokenizers = "0.23"
 gguf = { version = "0.1", optional = true }
 tracing = { workspace = true }
+bytemuck = { version = "1", features = ["derive"] }
+async-trait = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"], optional = true }
 
 [dev-dependencies]
 tempfile = "3"
@@ -45,7 +48,7 @@ harness = false
 default = []
 cuda = ["candle-core/cuda", "candle-nn/cuda"]
 gguf = ["dep:gguf"]
-multi-node = ["dep:vllm-dist"]
+multi-node = ["dep:vllm-dist", "dep:async-trait", "dep:tokio"]
 full = ["cuda", "gguf"]
 
 [lints]
