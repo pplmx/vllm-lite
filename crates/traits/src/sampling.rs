@@ -25,9 +25,8 @@
 //! carries the sampled `token` alongside its `logprob` under the
 //! post-temperature / post-top-k / post-top-p distribution, plus the
 //! top-K tokens (id, logprob) when `SamplingParams::top_logprobs.is_some()`.
-//! The sampler pair
-//! ([`crate::sampling::sample_one_with_params`],
-//! [`crate::sampling::sample_batch_with_params`]) returns
+//! The sampler pair in `vllm_core::sampling`
+//! (`sample_one_with_params` / `sample_batch_with_params`) returns
 //! `SampledToken` so the HTTP layer can render OpenAI's
 //! `choices[].logprobs` shape without re-running the softmax.
 #![allow(clippy::module_name_repetitions)]
@@ -108,7 +107,7 @@ pub struct SamplingParams {
     /// This matches OpenAI's spec for `presence_penalty`: "Positive
     /// values penalize new tokens based on whether they appear in the
     /// prompt so far, increasing the model's likelihood to talk about
-    /// new topics." See [`crate::sampling::apply_presence_penalty`]
+    /// new topics." See `vllm_core::sampling::apply_presence_penalty`
     /// for the implementation.
     pub presence_penalty: f32,
     /// Per-token logit bias (OpenAI `logit_bias` semantic): an additive
@@ -181,11 +180,10 @@ pub struct SamplingParams {
     ///
     /// Per OpenAI spec the chat endpoint's valid range is `0..=20`
     /// and the legacy `/v1/completions` endpoint's range is `0..=5`;
-    /// validation happens on the HTTP layer (see
-    /// [`crate::sampling::validate_chat_logprobs`] /
-    /// [`crate::sampling::validate_completion_logprobs`] siblings in
-    /// `vllm_server::openai::sampling_validation`). The engine
-    /// itself accepts any `u32` — out-of-range values are the HTTP
+    /// validation happens on the HTTP layer (see the
+    /// `validate_chat_logprobs` / `validate_completion_logprobs`
+    /// siblings in `vllm_server::openai::sampling_validation`).
+    /// The engine itself accepts any `u32` — out-of-range values are the HTTP
     /// layer's contract, not the sampler's.
     ///
     /// **Honoring is end-to-end when `Some(n)`:** the sampler runs a
@@ -201,7 +199,7 @@ pub struct SamplingParams {
     /// sampled token. When any token sequence in this list is a
     /// suffix of a sequence's already-generated tokens, the engine
     /// finalizes that sequence with
-    /// [`vllm_traits::FinishReason::Stop`] and emits the matching
+    /// [`crate::FinishReason::Stop`] and emits the matching
     /// token to the HTTP layer (OpenAI convention — the matched
     /// stop text is included in the response).
     ///
@@ -381,7 +379,7 @@ impl SamplingParamsBuilder {
     /// When `Some(seqs)`, the engine checks after every sampled
     /// token whether any token sequence in `seqs` is a suffix of
     /// the generated tokens and finalizes with
-    /// [`vllm_traits::FinishReason::Stop`] on match. When `None`,
+    /// [`crate::FinishReason::Stop`] on match. When `None`,
     /// no stop check runs (default-path overhead stays at zero).
     ///
     /// See the field-level doc on

@@ -7,23 +7,24 @@
 //!
 //! ## Multi-node cache coherence
 //!
-//! When a [`vllm_dist::DistributedKVCache`] is wired in via
-//! [`MemoryManager::with_distributed_kv`] (or the corresponding setter),
-//! `allocate` / `free` write through it. The cache key is the block id
-//! and the cache value is the per-block hash computed by the
-//! [`vllm_traits::BlockHasher`] (a chain hash that depends on the
-//! previous block's hash and the tokens stored in this block — see
-//! [`MemoryManager::record_block_tokens`]).
+//! All items in this section require the `multi-node` Cargo feature.
+//! When a `vllm_dist::DistributedKVCache` is wired in via
+//! `MemoryManager::with_distributed_kv` (or the corresponding setter
+//! `set_distributed_kv`), `allocate` / `free` write through it. The
+//! cache key is the block id and the cache value is the per-block hash
+//! computed by the `vllm_traits::BlockHasher` (a chain hash that depends
+//! on the previous block's hash and the tokens stored in this block —
+//! see `MemoryManager::record_block_tokens`).
 //!
 //! For backward compatibility, `allocate` writes a deterministic
 //! placeholder hash that depends only on the block id (no tokens).
 //! The scheduler can overwrite this with a content-derived hash via
-//! [`MemoryManager::record_block_tokens`] once it knows the tokens for
+//! `MemoryManager::record_block_tokens` once it knows the tokens for
 //! the block.
 //!
 //! ### Cross-node prefix lookup
 //!
-//! [`MemoryManager::lookup_distributed_prefix`] computes the chain
+//! `MemoryManager::lookup_distributed_prefix` computes the chain
 //! hash for each block of a prompt and asks the cache. The cache's
 //! `lookup_prefix` returns the longest matched prefix length; this is
 //! what the scheduler surfaces to operators / metrics consumers
