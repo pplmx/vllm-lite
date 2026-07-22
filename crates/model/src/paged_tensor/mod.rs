@@ -15,3 +15,6 @@ pub use quant::{
 };
 pub use quantization::{QuantizedTensor, dequantize, quantize};
 pub use tensor_store::PagedKvCache;
+
+#[cfg(feature = "multi-node")]
+pub use paged_kv_cache_wrapper::PagedKvCacheWrapper;
