@@ -118,6 +118,24 @@ async fn main() -> Result<()> {
 
     bootstrap::engine::configure_speculative(&app_config, &mut engine);
 
+    // Phase 41 OPS-32a second-half: when multi-node is enabled, spawn
+    // the gRPC server that answers `TransferKVBlock` calls with real
+    // K/V bytes from the engine's wired `PagedKvCache`. The bootstrap
+    // is a no-op on single-node builds (the function returns Ok("")
+    // and the gRPC submodule compiles to nothing without the
+    // `multi-node` Cargo feature).
+    if app_config.server.multi_node.enabled {
+        let node_id =
+            bootstrap::grpc::spawn_multi_node_grpc_server(&engine, &app_config.server.multi_node)
+                .await
+                .context("failed to spawn multi-node gRPC server")?;
+        tracing::info!(
+            node_id,
+            bind_addr = %app_config.server.multi_node.bind_addr,
+            "Multi-node KV block transfer enabled"
+        );
+    }
+
     // REL-01 (technical due diligence): use a bounded mailbox so a
     // flood of HTTP requests fails fast with `503 engine_overloaded`
     // instead of building an unbounded backlog. The default capacity

@@ -20,6 +20,7 @@ path = "src/bin/vllm.rs"
 vllm-core = { path = "../core", default-features = false }
 vllm-traits = { path = "../traits", features = ["candle"] }
 vllm-model = { path = "../model" }
+vllm-dist = { path = "../dist", optional = true }
 candle-core = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "time", "io-util", "fs", "net", "signal"] }
 axum = { version = "0.8", features = ["tokio", "macros"] }
@@ -56,7 +57,7 @@ cuda-graph = ["vllm-core/cuda-graph"]
 # Off by default so single-node deployments don't pull in the gRPC
 # server types. When on, the engine builder path is selected in
 # `bootstrap/engine.rs` when `server.multi_node.enabled = true`.
-multi-node = ["vllm-core/multi-node", "vllm-model/multi-node"]
+multi-node = ["dep:vllm-dist", "vllm-core/multi-node", "vllm-model/multi-node"]
 
 [lints]
 workspace = true
