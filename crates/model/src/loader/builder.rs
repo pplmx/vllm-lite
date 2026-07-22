@@ -205,6 +205,29 @@ impl ModelLoader {
         &self.inner.config_json
     }
 
+    /// Returns a clone of the loader-owned `PagedKvCache` for multi-node
+    /// wiring (Phase 41 OPS-32a second-half).
+    ///
+    /// Currently returns `None` — the `PagedKvCache` lives inside the
+    /// model backend's attention components after `load_model()`, not
+    /// on the loader. Wiring the cache through here requires either
+    /// (a) extracting it from the loaded model backend via a new
+    /// trait method or (b) having the loader construct it independently
+    /// before model construction. Both are P42 follow-up work; for now
+    /// the bootstrap's builder-path engine construction works but
+    /// `with_paged_kv_cache` is skipped (the engine ends up with no
+    /// `BlockDataSource`, which means the gRPC server bootstrap will
+    /// refuse to start). Single-node deployments (the default) are
+    /// unaffected.
+    #[cfg(feature = "multi-node")]
+    #[must_use]
+    pub const fn paged_kv_cache_clone(
+        &self,
+    ) -> Option<std::sync::Arc<crate::paged_tensor::PagedKvCache>> {
+        // TODO(P42): wire the actual cache through. See method docs.
+        None
+    }
+
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.

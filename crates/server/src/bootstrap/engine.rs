@@ -1,10 +1,16 @@
 // crates/server/src/bootstrap/engine.rs
 //
 // Engine construction: loader → model → optional draft model → Engine.
-// Three construction paths are supported (chosen by config):
-//   1. `with_budget_boxed`  — VRAM budget + draft specs (v18.0 path)
-//   2. `with_drafts_boxed`  — draft specs only (v18.0 path, no budget)
-//   3. `new_boxed`          — legacy path, no speculative config
+// Four construction paths are supported (chosen by config):
+//   0. `EngineBuilder`       — multi-node path (Phase 41 OPS-32a second-half)
+//   1. `with_budget_boxed`   — VRAM budget + draft specs (v18.0 path)
+//   2. `with_drafts_boxed`   — draft specs only (v18.0 path, no budget)
+//   3. `new_boxed`           — legacy path, no speculative config
+//
+// The `EngineBuilder` path is selected when
+// `app_config.server.multi_node.enabled` is true so the engine wires
+// the `PagedKvCache` through `EngineBuilder::with_paged_kv_cache`.
+// All other paths are preserved for backward compatibility.
 //
 // Also includes `configure_speculative` which wires adaptive or vanilla
 // speculative decoding onto a freshly constructed engine.
@@ -18,6 +24,7 @@ use anyhow::{Context, Result};
 use candle_core::Device;
 use std::sync::Arc;
 use vllm_core::engine::Engine;
+use vllm_core::engine::EngineBuilder;
 use vllm_core::types::{AdaptiveDraftConfig, SchedulerConfig};
 use vllm_model::loader::ModelLoader;
 use vllm_server::{cli, config::AppConfig};
@@ -64,6 +71,38 @@ pub fn build_engine(
         None
     };
 
+    // Phase 41 OPS-32a second-half: when multi-node is enabled, route
+    // through the `EngineBuilder` so the engine wires the
+    // `PagedKvCacheWrapper` through `Engine::set_paged_kv_cache`.
+    let engine = if app_config.server.multi_node.enabled {
+        tracing::info!("Constructing Engine via EngineBuilder (multi-node path, Phase 41)");
+        let mut builder = EngineBuilder::new(model);
+        if let Some(d) = draft_model {
+            builder = builder.with_draft_model(d);
+        }
+        builder = builder
+            .with_config(SchedulerConfig::default())
+            .with_num_kv_blocks(app_config.engine.num_kv_blocks)
+            .with_max_draft_tokens(app_config.engine.max_draft_tokens);
+        #[cfg(feature = "multi-node")]
+        if let Some(cache) = loader.paged_kv_cache_clone() {
+            builder = builder.with_paged_kv_cache(cache);
+        }
+        builder.build()
+    } else {
+        build_engine_legacy(model, draft_model, app_config)?
+    };
+
+    Ok((engine, loader, device))
+}
+
+/// Legacy engine construction paths preserved for backward compatibility
+/// (selected when `app_config.server.multi_node.enabled` is `false`).
+fn build_engine_legacy(
+    model: Box<dyn vllm_traits::ModelBackend>,
+    draft_model: Option<Box<dyn vllm_traits::ModelBackend>>,
+    app_config: &AppConfig,
+) -> Result<Engine> {
     // v18.0: build the engine using with_budget_boxed / with_drafts_boxed when
     // the server config declares a VRAM budget or external draft specs. The
     // legacy new_boxed path is preserved for backward compatibility.
@@ -120,7 +159,7 @@ pub fn build_engine(
         Engine::new_boxed(model, draft_model)
     };
 
-    Ok((engine, loader, device))
+    Ok(engine)
 }
 
 /// Wire optional speculative-decoding knobs onto a freshly constructed engine.

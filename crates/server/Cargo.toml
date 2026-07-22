@@ -52,6 +52,11 @@ tempfile = "3"
 # Enable CUDA-graph capture/replay through vllm-core. Off by default so
 # minimal deployments don't pull in the GPU-side graph types.
 cuda-graph = ["vllm-core/cuda-graph"]
+# Enable multi-node KV block transfer (Phase 41 OPS-32a second-half).
+# Off by default so single-node deployments don't pull in the gRPC
+# server types. When on, the engine builder path is selected in
+# `bootstrap/engine.rs` when `server.multi_node.enabled = true`.
+multi-node = ["vllm-core/multi-node", "vllm-model/multi-node"]
 
 [lints]
 workspace = true
