@@ -105,6 +105,11 @@ pub enum MetricsError {
     /// A `Mutex`/`RwLock` guard was poisoned by a panic while held.
     #[error("metrics exporter lock poisoned")]
     LockPoisoned,
+    /// OpenTelemetry (OTLP) exporter reported an error. Only constructible
+    /// when the `opentelemetry` feature is enabled.
+    #[cfg(feature = "opentelemetry")]
+    #[error("otlp exporter error: {0}")]
+    Otlp(String),
 }
 
 /// Convert any `std::sync::PoisonError<T>` into [`MetricsError::LockPoisoned`].
@@ -115,6 +120,10 @@ impl<T> From<std::sync::PoisonError<T>> for MetricsError {
 }
 
 pub use prometheus::PrometheusExporter;
+
+#[cfg(feature = "opentelemetry")]
+pub use otlp::{OtlpConfig, OtlpError, OtlpProtocol};
+// OtlpExporter + OtlpExporterBuilder re-exported in T3 once they exist.
 
 #[cfg(test)]
 mod tests {
