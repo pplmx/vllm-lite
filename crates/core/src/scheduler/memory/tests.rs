@@ -430,3 +430,65 @@ fn test_memory_manager_lookup_distributed_prefix_round_trip_with_record() {
     assert_eq!(result.matched_blocks, 2);
     assert_eq!(result.matched_tokens, 2 * BLOCK_SIZE);
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// block_data_source tests (P41 T3). The field + setters/getter live
+// in `mod.rs::impl MemoryManager` above.
+// ──────────────────────────────────────────────────────────────────────
+
+#[cfg(feature = "multi-node")]
+#[test]
+fn memory_manager_with_block_data_source_stores_it() {
+    use vllm_dist::distributed_kv::block_data_source::MockBlockDataSource;
+    let source: Arc<dyn vllm_dist::BlockDataSource + Send + Sync> =
+        Arc::new(MockBlockDataSource::new());
+    let mgr = MemoryManager::new(SchedulerConfig::default(), 4)
+        .with_block_data_source(Arc::clone(&source));
+    let retrieved = mgr.block_data_source().expect("source stored");
+    assert!(Arc::ptr_eq(&retrieved, &source));
+}
+
+#[cfg(feature = "multi-node")]
+#[test]
+fn memory_manager_default_has_no_block_data_source() {
+    let mgr = MemoryManager::new(SchedulerConfig::default(), 4);
+    assert!(mgr.block_data_source().is_none());
+}
+
+#[cfg(feature = "multi-node")]
+#[test]
+fn memory_manager_set_block_data_source_replaces_existing() {
+    use vllm_dist::distributed_kv::block_data_source::MockBlockDataSource;
+    let source1: Arc<dyn vllm_dist::BlockDataSource + Send + Sync> =
+        Arc::new(MockBlockDataSource::new());
+    let source2: Arc<dyn vllm_dist::BlockDataSource + Send + Sync> =
+        Arc::new(MockBlockDataSource::new());
+    let mut mgr = MemoryManager::new(SchedulerConfig::default(), 4);
+    mgr.set_block_data_source(source1);
+    mgr.set_block_data_source(Arc::clone(&source2));
+    let retrieved = mgr.block_data_source().unwrap();
+    assert!(
+        Arc::ptr_eq(&retrieved, &source2),
+        "second setter should replace the first"
+    );
+}
+
+#[cfg(feature = "multi-node")]
+#[test]
+fn memory_manager_block_data_source_clone_is_independent() {
+    use vllm_dist::distributed_kv::block_data_source::MockBlockDataSource;
+    let source: Arc<dyn vllm_dist::BlockDataSource + Send + Sync> =
+        Arc::new(MockBlockDataSource::new());
+    let mgr = MemoryManager::new(SchedulerConfig::default(), 4)
+        .with_block_data_source(Arc::clone(&source));
+    let c1 = mgr.block_data_source().unwrap();
+    let c2 = mgr.block_data_source().unwrap();
+    assert!(
+        Arc::ptr_eq(&c1, &c2),
+        "two getter calls should return Arc-clones of the same source"
+    );
+    assert!(
+        Arc::ptr_eq(&c1, &source),
+        "both clones should point to the originally-stored source"
+    );
+}
