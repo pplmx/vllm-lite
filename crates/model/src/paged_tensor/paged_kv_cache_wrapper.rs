@@ -56,9 +56,7 @@ fn read_block_bytes(cache: &PagedKvCache, block_id: usize) -> Result<Vec<u8>, Fe
         return Err(FetchError::NotFound(block_id as u64));
     }
     let num_layers = cache.num_layers();
-    let mut bytes = Vec::with_capacity(
-        num_layers * 2 * cache.num_blocks_count_per_layer() * 4,
-    );
+    let mut bytes = Vec::with_capacity(num_layers * 2 * cache.num_blocks_count_per_layer() * 4);
     for layer_idx in 0..num_layers {
         let (k, v) = cache
             .read_layer_block(layer_idx, block_id)
@@ -69,10 +67,7 @@ fn read_block_bytes(cache: &PagedKvCache, block_id: usize) -> Result<Vec<u8>, Fe
         // contract). The quantization scale is per-layer.
         let (k_out, v_out) = if cache.quantized {
             let scale = cache.get_scale(layer_idx);
-            (
-                dequantize_f32(&k, scale),
-                dequantize_f32(&v, scale),
-            )
+            (dequantize_f32(&k, scale), dequantize_f32(&v, scale))
         } else {
             (k, v)
         };
@@ -164,7 +159,9 @@ mod tests {
         // Build a quantized cache (quantized=true).
         let mut cache = PagedKvCache::new(2, 2, 4, 4, Device::Cpu, true).expect("cache");
         let k = Tensor::from_slice(
-            &[100.0f32, -100.0, 100.0, -100.0, 100.0, -100.0, 100.0, -100.0],
+            &[
+                100.0f32, -100.0, 100.0, -100.0, 100.0, -100.0, 100.0, -100.0,
+            ],
             (1, 2, 4),
             &Device::Cpu,
         )
