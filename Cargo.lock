@@ -3842,6 +3842,7 @@ dependencies = [
  "crossbeam",
  "dashmap",
  "metrics",
+ "parking_lot",
  "proptest",
  "rand 0.10.1",
  "serde",

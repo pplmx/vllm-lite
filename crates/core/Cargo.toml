@@ -15,10 +15,11 @@ crossbeam = { workspace = true }
 tracing = { workspace = true }
 metrics = { workspace = true }
 dashmap = { workspace = true }
+parking_lot = { workspace = true, optional = true }
 
 [features]
 cuda-graph = ["dep:vllm-model"]
-multi-node = ["dep:vllm-dist", "dep:vllm-model", "vllm-model/multi-node"]
+multi-node = ["dep:vllm-dist", "dep:vllm-model", "vllm-model/multi-node", "dep:parking_lot"]
 
 [dependencies.vllm-model]
 path = "../model"

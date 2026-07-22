@@ -18,6 +18,7 @@ prost = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
+parking_lot = { workspace = true }
 
 [dependencies.vllm-traits]
 path = "../traits"

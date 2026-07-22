@@ -360,8 +360,13 @@ fn engine_builder_with_paged_kv_cache_wires_wrapper_to_memory_manager() {
     let cache = Arc::new(
         PagedKvCache::new(2, 2, 4, 4, candle_core::Device::Cpu, false).expect("small cache"),
     );
+    // P42: `set_paged_kv_cache` requires unique Arc ownership
+    // (it wraps the cache in `Arc<Mutex<PagedKvCache>>` for both
+    // the engine's diagnostic accessor and the wrapper's `inner`).
+    // We move the cache into the builder so there's only one strong
+    // reference at `.build()` time.
     let mut engine = EngineBuilder::new(target)
-        .with_paged_kv_cache(Arc::clone(&cache))
+        .with_paged_kv_cache(cache)
         .build();
 
     // The wrapper getter should now produce a BlockDataSource.
@@ -380,11 +385,17 @@ fn engine_builder_with_paged_kv_cache_wires_wrapper_to_memory_manager() {
     );
     // The wrapper should be usable as a BlockDataSource trait object.
     let _trait_obj: Arc<dyn BlockDataSource + Send + Sync> = wrapper;
-    // The original cache is also retained for diagnostics / direct reads.
+    // P42: `paged_kv_cache()` returns `Arc<Mutex<PagedKvCache>>`. The
+    // returned Arc should be the same one held by the wrapper's
+    // `inner` — both the engine and the wrapper hold an Arc to the
+    // same Mutex, so `Arc::strong_count` should be >= 2.
     let stored_cache = engine
         .paged_kv_cache()
         .expect("paged_kv_cache() must be Some when wired in");
-    assert!(Arc::ptr_eq(&stored_cache, &cache));
+    assert!(
+        Arc::strong_count(&stored_cache) >= 2,
+        "engine + wrapper should both hold an Arc to the cache"
+    );
 }
 
 #[cfg(feature = "multi-node")]

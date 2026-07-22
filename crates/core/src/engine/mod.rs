@@ -108,15 +108,21 @@ pub struct Engine {
     #[cfg(feature = "multi-node")]
     distributed_kv: Option<Arc<DistributedKVCache>>,
     /// Optional `PagedKvCache` for multi-node KV block byte transfer
-    /// (Phase 41 OPS-32a second-half). Set via
+    /// (Phase 41 OPS-32a second-half; P42 receiver-side). Set via
     /// [`crate::engine::EngineBuilder::with_paged_kv_cache`] which
     /// also constructs the wrapper and threads it to
     /// [`crate::scheduler::memory::MemoryManager::block_data_source`].
     /// The engine stores both the cache (so callers can introspect or
     /// feed it) and the wrapper (so the server bootstrap can hand it
     /// to the gRPC server without re-constructing).
+    ///
+    /// Wrapped in `Arc<Mutex<>>` (P42) so the wrapper can write
+    /// (`write_block`) while the engine still holds its own Arc for
+    /// diagnostics / future read paths. The two Arcs share the same
+    /// Mutex so a write through one is visible to reads through the
+    /// other.
     #[cfg(feature = "multi-node")]
-    paged_kv_cache: Option<Arc<vllm_model::paged_tensor::PagedKvCache>>,
+    paged_kv_cache: Option<Arc<parking_lot::Mutex<vllm_model::paged_tensor::PagedKvCache>>>,
     /// Cached `BlockDataSource` wrapper produced by
     /// [`crate::engine::Engine::set_paged_kv_cache`] so
     /// `crates/server/src/bootstrap/engine.rs` can hand it to the gRPC
