@@ -122,8 +122,7 @@ impl<T> From<std::sync::PoisonError<T>> for MetricsError {
 pub use prometheus::PrometheusExporter;
 
 #[cfg(feature = "opentelemetry")]
-pub use otlp::{OtlpConfig, OtlpError, OtlpProtocol};
-// OtlpExporter + OtlpExporterBuilder re-exported in T3 once they exist.
+pub use otlp::{OtlpConfig, OtlpError, OtlpExporter, OtlpExporterBuilder, OtlpProtocol};
 
 #[cfg(test)]
 mod tests {

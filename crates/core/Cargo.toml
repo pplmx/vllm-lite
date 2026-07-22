@@ -21,6 +21,7 @@ opentelemetry_sdk = { workspace = true, optional = true }
 opentelemetry-otlp = { workspace = true, optional = true }
 opentelemetry-semantic-conventions = { workspace = true, optional = true }
 tracing-opentelemetry = { workspace = true, optional = true }
+uuid = { workspace = true }
 
 [features]
 cuda-graph = ["dep:vllm-model"]
