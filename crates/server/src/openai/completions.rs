@@ -27,7 +27,7 @@ fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &st
     tokenizer.clean_special_tokens(text)
 }
 
-/// Extract the bare [`TokenId`] sequence from a `Vec<SampledToken>`.
+/// Extract the bare [`vllm_traits::TokenId`] sequence from a `Vec<SampledToken>`.
 /// Used when passing per-token data to the tokenizer (which only
 /// understands `&[u32]`); the `logprob` + `top_logprobs` fields are
 /// preserved separately for the `CompletionChoice::logprobs`

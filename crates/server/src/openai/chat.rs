@@ -34,7 +34,7 @@ fn clean_completion_text(tokenizer: &vllm_model::tokenizer::Tokenizer, text: &st
     tokenizer.clean_special_tokens(text)
 }
 
-/// Extract the bare [`TokenId`] sequence from a `Vec<SampledToken>`.
+/// Extract the bare [`vllm_traits::TokenId`] sequence from a `Vec<SampledToken>`.
 /// Used when passing per-token data to the tokenizer (which only
 /// understands `&[u32]`); the `logprob` + `top_logprobs` fields are
 /// preserved separately for the `ChatChoice::logprobs` rendering.
@@ -848,7 +848,7 @@ pub async fn chat_completions(
 
 /// Per-candidate channel handles returned by
 /// [`spawn_chat_n_streaming_candidate`]. Mirrors the
-/// [`super::completions::StreamingCandidateChannels`] struct used
+/// `super::completions::StreamingCandidateChannels` struct used
 /// by the completions parallel-streaming helper — the chat
 /// variant is identical in shape, just used by the chat SSE
 /// assembly loop instead of the completions SSE assembly loop.
@@ -1061,7 +1061,7 @@ async fn spawn_chat_n_streaming_candidate(
 /// Build one `CancelOnDrop` guard per candidate seq_id (P39
 /// v0.x wire-type follow-up — chat `n > 1` streaming helper).
 ///
-/// Mirrors [`super::completions::build_n_cancel_guards`]; the
+/// Mirrors `super::completions::build_n_cancel_guards`; the
 /// chat variant exists separately because the chat `request_id`
 /// prefix differs (`chatcmpl-` for chat, `cmpl_` for completions
 /// per the OpenAI convention — chat responses use `chatcmpl-…`,

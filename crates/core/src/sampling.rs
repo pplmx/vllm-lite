@@ -10,7 +10,7 @@
 //! **RNG seeding (P34 v0.2 wire-type follow-up engine wire-through):**
 //! the temperature / top-p samplers accept a precomputed
 //! `random_threshold: f32` parameter so the caller (today:
-//! [`sample_one_with_params`], tomorrow: any per-step orchestration
+//! `sample_one_with_params`, tomorrow: any per-step orchestration
 //! that wants per-sequence RNG independence) controls RNG selection.
 //! `sample_one_with_params` reads `params.seed`: `Some(s)` builds a
 //! fresh `StdRng::seed_from_u64(s)` and draws one `f32`; `None` reads
