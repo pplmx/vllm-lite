@@ -141,7 +141,7 @@ impl SchedulerEngine {
     /// (Phase 41 OPS-32a second-half).
     ///
     /// Mirrors [`Self::set_distributed_kv`] — used by
-    /// [`crate::engine::Engine::set_paged_kv_cache`] to thread the
+    /// `Engine::set_paged_kv_cache` (private) to thread the
     /// `PagedKvCacheWrapper` from the engine down to the memory layer so
     /// every subsequent gRPC `TransferKVBlock` call resolves to the
     /// wrapper.

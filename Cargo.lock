@@ -3915,6 +3915,7 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "vllm-core",
+ "vllm-dist",
  "vllm-model",
  "vllm-traits",
 ]
