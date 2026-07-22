@@ -4,6 +4,7 @@
 //! `HashMap`-backed `DistributedKVCache` used by tests and embedded builds.
 #![allow(clippy::module_name_repetitions)]
 use super::block_data_source::{BlockDataSource, FetchError};
+use super::block_sink::BlockSink;
 use super::{CacheConfig, CacheMessage, NodeId};
 use crate::error::GrpcError;
 use crate::grpc_client::PeerClient;
@@ -27,6 +28,16 @@ pub struct DistributedKVCache {
     /// Without this, [`Self::fetch_block`] can only satisfy requests
     /// via remote peers. Phase 31-D OPS-31d.
     block_data_source: Option<Arc<dyn BlockDataSource>>,
+    /// Optional sink for receiver-side install. When `Some` AND
+    /// [`Self::install_on_fetch`] is `true`, every successful
+    /// `fetch_block` (peer or local source) hands the bytes to the
+    /// sink so the local cache ends up populated. P42 receiver-side
+    /// closing of the multi-node KV block transfer loop.
+    block_sink: Option<Arc<dyn BlockSink>>,
+    /// Toggle for the auto-install behavior. Default `true` (closed
+    /// loop is the vLLM-equivalent UX). Tests + diagnostics can opt
+    /// out via [`Self::with_install_on_fetch`].
+    install_on_fetch: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -75,6 +86,8 @@ impl DistributedKVCache {
             stats: RwLock::new(CacheStats::default()),
             peer_clients: None,
             block_data_source: None,
+            block_sink: None,
+            install_on_fetch: true,
         }
     }
 
@@ -86,6 +99,25 @@ impl DistributedKVCache {
     #[must_use]
     pub fn with_block_data_source(mut self, source: Arc<dyn BlockDataSource>) -> Self {
         self.block_data_source = Some(source);
+        self
+    }
+
+    /// Attach a [`BlockSink`] so every successful `fetch_block`
+    /// installs the bytes into the local cache (subject to
+    /// [`Self::with_install_on_fetch`] toggle). P42 receiver-side
+    /// closure of the multi-node KV block transfer loop.
+    #[must_use]
+    pub fn with_block_sink(mut self, sink: Arc<dyn BlockSink>) -> Self {
+        self.block_sink = Some(sink);
+        self
+    }
+
+    /// Toggle auto-install behavior. Default `true`. Set to `false`
+    /// for tests that want to verify `fetch_block`'s wire shape
+    /// without triggering side effects.
+    #[must_use]
+    pub fn with_install_on_fetch(mut self, enable: bool) -> Self {
+        self.install_on_fetch = enable;
         self
     }
 
@@ -355,7 +387,7 @@ impl DistributedKVCache {
                 };
                 match result {
                     Ok(resp) if resp.chain_hash == expected_hash => {
-                        return Ok(resp.data);
+                        return self.maybe_install(block_id, resp.data).await;
                     }
                     Ok(resp) => {
                         tracing::warn!(
@@ -380,7 +412,8 @@ impl DistributedKVCache {
 
         // Step 3: fall back to the local source.
         if let Some(source) = self.block_data_source.as_ref() {
-            return source.fetch_block(block_id).await;
+            let bytes = source.fetch_block(block_id).await?;
+            return self.maybe_install(block_id, bytes).await;
         }
 
         // Step 4: nothing worked.
@@ -388,6 +421,34 @@ impl DistributedKVCache {
             Err(FetchError::NoPeers)
         } else {
             Err(FetchError::AllPeersFailed(peers.len()))
+        }
+    }
+
+    /// P42: hand the bytes to the configured [`BlockSink`] (if any)
+    /// when `install_on_fetch` is enabled. Best-effort — a sink
+    /// failure is logged as a warning but does NOT cause the
+    /// fetch to fail (the bytes were correctly retrieved from the
+    /// peer; installing them is a local cache concern, not a
+    /// transport correctness concern).
+    ///
+    /// This is the "close the loop" path: receiver pulls a block
+    /// from a peer once, then has it locally for subsequent
+    /// `has_block` / `read_layer_block` calls without a remote RPC.
+    async fn maybe_install(&self, block_id: u64, bytes: Vec<u8>) -> Result<Vec<u8>, FetchError> {
+        let sink = match (self.install_on_fetch, self.block_sink.as_ref()) {
+            (true, Some(sink)) => sink,
+            _ => return Ok(bytes),
+        };
+        match sink.write_block(block_id, &bytes).await {
+            Ok(()) => Ok(bytes),
+            Err(e) => {
+                tracing::warn!(
+                    block_id,
+                    error = %e,
+                    "BlockSink install failed; returning bytes anyway"
+                );
+                Ok(bytes)
+            }
         }
     }
 
@@ -789,5 +850,119 @@ mod tests {
             matches!(result, Err(FetchError::NotFound(7))),
             "expected NotFound(7) from source; got {result:?}"
         );
+    }
+
+    // --- fetch_block install_on_fetch (P42 T4) ---
+    //
+    // These tests use a custom `RecordingBlockSink` (an in-test
+    // BlockSink impl that records every `write_block` call) so we
+    // can assert the auto-install behavior end-to-end without
+    // pulling in the `vllm-model` dependency.
+
+    use crate::distributed_kv::block_sink::BlockSink as _BlockSinkTrait;
+    use crate::distributed_kv::block_sink::WriteError;
+
+    #[derive(Debug, Default)]
+    struct RecordingBlockSink {
+        calls: parking_lot::Mutex<Vec<(u64, usize)>>,
+        return_error: bool,
+    }
+
+    impl RecordingBlockSink {
+        fn call_count(&self) -> usize {
+            self.calls.lock().len()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl _BlockSinkTrait for RecordingBlockSink {
+        async fn write_block(&self, block_id: u64, bytes: &[u8]) -> Result<(), WriteError> {
+            if self.return_error {
+                return Err(WriteError::SinkUnavailable);
+            }
+            self.calls.lock().push((block_id, bytes.len()));
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn fetch_block_installs_into_sink_when_install_on_fetch_default() {
+        // install_on_fetch defaults to true, so a fetch with a wired
+        // sink should trigger exactly one write_block call.
+        use crate::distributed_kv::block_data_source::MockBlockDataSource;
+        let mut source = MockBlockDataSource::new();
+        source.insert(7, vec![0xCA, 0xFE, 0xBA, 0xBE]);
+
+        let sink = Arc::new(RecordingBlockSink::default());
+        let cache = DistributedKVCache::new(CacheConfig::new(NodeId(0), 1))
+            .with_block_data_source(Arc::new(source))
+            .with_block_sink(Arc::clone(&sink) as Arc<dyn _BlockSinkTrait>);
+        cache.put(7, 0xABCD);
+
+        let bytes = cache.fetch_block(7).await.expect("fetch ok");
+        assert_eq!(bytes, vec![0xCA, 0xFE, 0xBA, 0xBE]);
+        assert_eq!(sink.call_count(), 1, "auto-install must write to sink");
+    }
+
+    #[tokio::test]
+    async fn fetch_block_does_not_install_when_no_sink_wired() {
+        // No sink → fetch returns bytes but doesn't try to install.
+        use crate::distributed_kv::block_data_source::MockBlockDataSource;
+        let mut source = MockBlockDataSource::new();
+        source.insert(7, vec![0x11, 0x22]);
+
+        let cache = DistributedKVCache::new(CacheConfig::new(NodeId(0), 1))
+            .with_block_data_source(Arc::new(source));
+        cache.put(7, 0xABCD);
+
+        let bytes = cache.fetch_block(7).await.expect("fetch ok");
+        assert_eq!(bytes, vec![0x11, 0x22]);
+        // No sink to assert against — the test passes if fetch
+        // succeeds without panicking on a None sink.
+    }
+
+    #[tokio::test]
+    async fn fetch_block_does_not_install_when_install_on_fetch_disabled() {
+        // install_on_fetch=false is the explicit opt-out.
+        use crate::distributed_kv::block_data_source::MockBlockDataSource;
+        let mut source = MockBlockDataSource::new();
+        source.insert(7, vec![0x33, 0x44]);
+
+        let sink = Arc::new(RecordingBlockSink::default());
+        let cache = DistributedKVCache::new(CacheConfig::new(NodeId(0), 1))
+            .with_block_data_source(Arc::new(source))
+            .with_block_sink(Arc::clone(&sink) as Arc<dyn _BlockSinkTrait>)
+            .with_install_on_fetch(false);
+        cache.put(7, 0xABCD);
+
+        let bytes = cache.fetch_block(7).await.expect("fetch ok");
+        assert_eq!(bytes, vec![0x33, 0x44]);
+        assert_eq!(
+            sink.call_count(),
+            0,
+            "install_on_fetch=false must skip sink.write_block"
+        );
+    }
+
+    #[tokio::test]
+    async fn fetch_block_returns_bytes_even_when_sink_fails() {
+        // Best-effort: sink failure does not break fetch.
+        use crate::distributed_kv::block_data_source::MockBlockDataSource;
+        let mut source = MockBlockDataSource::new();
+        source.insert(7, vec![0x55, 0x66, 0x77]);
+
+        let mut sink = RecordingBlockSink::default();
+        sink.return_error = true;
+        let sink = Arc::new(sink);
+        let cache = DistributedKVCache::new(CacheConfig::new(NodeId(0), 1))
+            .with_block_data_source(Arc::new(source))
+            .with_block_sink(Arc::clone(&sink) as Arc<dyn _BlockSinkTrait>);
+        cache.put(7, 0xABCD);
+
+        let bytes = cache
+            .fetch_block(7)
+            .await
+            .expect("fetch ok despite sink err");
+        assert_eq!(bytes, vec![0x55, 0x66, 0x77]);
     }
 }

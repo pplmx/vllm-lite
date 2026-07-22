@@ -25,6 +25,9 @@ path = "../traits"
 [build-dependencies]
 tonic-prost-build = "0.14"
 
+[dev-dependencies]
+parking_lot = { workspace = true }
+
 [lints]
 workspace = true
 

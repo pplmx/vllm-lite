@@ -3860,6 +3860,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "candle-core",
+ "parking_lot",
  "prost",
  "thiserror 2.0.18",
  "tokio",
