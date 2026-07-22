@@ -1,7 +1,7 @@
 # ADR-020: Multi-Node KV Block Transfer Architecture
 
 **Date:** 2026-07-15
-**Status:** Accepted (protocol layer shipped in Phase 31-D / OPS-31d; wrapper shipped in v31.0 P40; engine plumbing shipped in v31.0 P41; receiver-side `write_kv_batch` deferred to P42+)
+**Status:** Accepted (protocol layer shipped in Phase 31-D / OPS-31d; wrapper shipped in v31.0 P40; engine plumbing shipped in v31.0 P41; receiver-side `BlockSink` shipped in v31.0 P42; 31-G complete)
 **Context version:** v31.0
 
 ## Context
