@@ -7,6 +7,8 @@ mod distributed_kv;
 mod draft_management;
 mod graph_step;
 mod lifecycle;
+#[cfg(feature = "multi-node")]
+mod paged_kv_cache;
 mod run;
 mod spec_dispatch;
 
@@ -105,6 +107,22 @@ pub struct Engine {
     /// own the cache for the engine's lifetime.
     #[cfg(feature = "multi-node")]
     distributed_kv: Option<Arc<DistributedKVCache>>,
+    /// Optional `PagedKvCache` for multi-node KV block byte transfer
+    /// (Phase 41 OPS-32a second-half). Set via
+    /// [`crate::engine::EngineBuilder::with_paged_kv_cache`] which
+    /// also constructs the wrapper and threads it to
+    /// [`crate::scheduler::memory::MemoryManager::block_data_source`].
+    /// The engine stores both the cache (so callers can introspect or
+    /// feed it) and the wrapper (so the server bootstrap can hand it
+    /// to the gRPC server without re-constructing).
+    #[cfg(feature = "multi-node")]
+    paged_kv_cache: Option<Arc<vllm_model::paged_tensor::PagedKvCache>>,
+    /// Cached `BlockDataSource` wrapper produced by
+    /// [`crate::engine::Engine::set_paged_kv_cache`] so
+    /// `crates/server/src/bootstrap/engine.rs` can hand it to the gRPC
+    /// server's `start_grpc_server_with_listener` without re-constructing.
+    #[cfg(feature = "multi-node")]
+    paged_kv_cache_wrapper: Option<Arc<dyn vllm_dist::BlockDataSource + Send + Sync>>,
     /// Optional adaptive speculative decoder that tunes the draft-token
     /// budget based on observed acceptance rates.
     pub adaptive_decoder: Option<AdaptiveSpeculativeDecoder>,
@@ -149,6 +167,16 @@ impl std::fmt::Debug for Engine {
         dbg.field(
             "distributed_kv",
             &self.distributed_kv.as_ref().map(Arc::strong_count),
+        );
+        #[cfg(feature = "multi-node")]
+        dbg.field(
+            "paged_kv_cache",
+            &self.paged_kv_cache.as_ref().map(Arc::strong_count),
+        );
+        #[cfg(feature = "multi-node")]
+        dbg.field(
+            "paged_kv_cache_wrapper",
+            &self.paged_kv_cache_wrapper.as_ref().map(Arc::strong_count),
         );
         dbg.finish_non_exhaustive()
     }

@@ -3827,6 +3827,7 @@ name = "vllm-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "candle-core",
  "criterion",
  "crossbeam",
  "dashmap",
