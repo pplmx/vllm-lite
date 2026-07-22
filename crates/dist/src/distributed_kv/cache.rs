@@ -33,7 +33,13 @@ pub struct DistributedKVCache {
     /// `fetch_block` (peer or local source) hands the bytes to the
     /// sink so the local cache ends up populated. P42 receiver-side
     /// closing of the multi-node KV block transfer loop.
-    block_sink: Option<Arc<dyn BlockSink>>,
+    ///
+    /// Stored behind a `parking_lot::Mutex` so the server bootstrap
+    /// can install it post-construction (after the
+    /// `DistributedKVCache` has already been installed on the
+    /// engine — the bootstrap holds an `Arc<DistributedKVCache>`,
+    /// not `DistributedKVCache`).
+    block_sink: parking_lot::Mutex<Option<Arc<dyn BlockSink>>>,
     /// Toggle for the auto-install behavior. Default `true` (closed
     /// loop is the vLLM-equivalent UX). Tests + diagnostics can opt
     /// out via [`Self::with_install_on_fetch`].
@@ -86,7 +92,7 @@ impl DistributedKVCache {
             stats: RwLock::new(CacheStats::default()),
             peer_clients: None,
             block_data_source: None,
-            block_sink: None,
+            block_sink: parking_lot::Mutex::new(None),
             install_on_fetch: true,
         }
     }
@@ -106,10 +112,26 @@ impl DistributedKVCache {
     /// installs the bytes into the local cache (subject to
     /// [`Self::with_install_on_fetch`] toggle). P42 receiver-side
     /// closure of the multi-node KV block transfer loop.
+    ///
+    /// Builder-style (consumes `self`). For post-construction wiring
+    /// (e.g. server bootstrap holding only an `Arc<DistributedKVCache>`),
+    /// use [`Self::install_block_sink`].
     #[must_use]
-    pub fn with_block_sink(mut self, sink: Arc<dyn BlockSink>) -> Self {
-        self.block_sink = Some(sink);
+    pub fn with_block_sink(self, sink: Arc<dyn BlockSink>) -> Self {
+        *self.block_sink.lock() = Some(sink);
         self
+    }
+
+    /// Late-bind a [`BlockSink`] without consuming `self`. P42 server
+    /// bootstrap uses this to wire the engine's `PagedKvCacheWrapper`
+    /// as the cache's sink after the cache has already been installed
+    /// on the engine.
+    ///
+    /// Replaces any previously installed sink. Does NOT touch
+    /// `install_on_fetch` — that's a config flag set at construction
+    /// via [`Self::with_install_on_fetch`] (defaults to `true`).
+    pub fn install_block_sink(&self, sink: Arc<dyn BlockSink>) {
+        *self.block_sink.lock() = Some(sink);
     }
 
     /// Toggle auto-install behavior. Default `true`. Set to `false`
@@ -435,9 +457,13 @@ impl DistributedKVCache {
     /// from a peer once, then has it locally for subsequent
     /// `has_block` / `read_layer_block` calls without a remote RPC.
     async fn maybe_install(&self, block_id: u64, bytes: Vec<u8>) -> Result<Vec<u8>, FetchError> {
-        let sink = match (self.install_on_fetch, self.block_sink.as_ref()) {
-            (true, Some(sink)) => sink,
-            _ => return Ok(bytes),
+        let sink = if self.install_on_fetch {
+            self.block_sink.lock().as_ref().cloned()
+        } else {
+            None
+        };
+        let Some(sink) = sink else {
+            return Ok(bytes);
         };
         match sink.write_block(block_id, &bytes).await {
             Ok(()) => Ok(bytes),
@@ -964,5 +990,64 @@ mod tests {
             .await
             .expect("fetch ok despite sink err");
         assert_eq!(bytes, vec![0x55, 0x66, 0x77]);
+    }
+
+    #[tokio::test]
+    async fn install_block_sink_wires_sink_post_construction() {
+        // P42 T5: `install_block_sink` is the post-construction
+        // setter used by the server bootstrap. After calling it,
+        // `fetch_block` must auto-install into the late-bound sink.
+        use crate::distributed_kv::block_data_source::MockBlockDataSource;
+        let mut source = MockBlockDataSource::new();
+        source.insert(7, vec![0xAB, 0xCD]);
+
+        let cache = DistributedKVCache::new(CacheConfig::new(NodeId(0), 1))
+            .with_block_data_source(Arc::new(source));
+        cache.put(7, 0xABCD);
+
+        // Late-bind the sink (no `with_block_sink` builder call).
+        let sink = Arc::new(RecordingBlockSink::default());
+        cache.install_block_sink(Arc::clone(&sink) as Arc<dyn _BlockSinkTrait>);
+
+        let bytes = cache.fetch_block(7).await.expect("fetch ok");
+        assert_eq!(bytes, vec![0xAB, 0xCD]);
+        assert_eq!(
+            sink.call_count(),
+            1,
+            "late-bound sink must receive write_block on fetch"
+        );
+    }
+
+    #[tokio::test]
+    async fn install_block_sink_replaces_previously_wired_sink() {
+        // P42 T5: a second `install_block_sink` call must replace
+        // the first (bootstrap may re-wire on engine rebuild).
+        use crate::distributed_kv::block_data_source::MockBlockDataSource;
+        let mut source = MockBlockDataSource::new();
+        source.insert(7, vec![0xEF, 0xBE]);
+
+        let first = Arc::new(RecordingBlockSink::default());
+        let second = Arc::new(RecordingBlockSink::default());
+
+        let cache = DistributedKVCache::new(CacheConfig::new(NodeId(0), 1))
+            .with_block_data_source(Arc::new(source))
+            .with_block_sink(Arc::clone(&first) as Arc<dyn _BlockSinkTrait>);
+        cache.put(7, 0xABCD);
+
+        // Replace the first sink with the second.
+        cache.install_block_sink(Arc::clone(&second) as Arc<dyn _BlockSinkTrait>);
+
+        let bytes = cache.fetch_block(7).await.expect("fetch ok");
+        assert_eq!(bytes, vec![0xEF, 0xBE]);
+        assert_eq!(
+            first.call_count(),
+            0,
+            "replaced sink must not receive writes"
+        );
+        assert_eq!(
+            second.call_count(),
+            1,
+            "new sink must receive write_block after install"
+        );
     }
 }

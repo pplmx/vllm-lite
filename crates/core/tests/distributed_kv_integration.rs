@@ -225,3 +225,35 @@ fn engine_scheduler_lookup_distributed_prefix_partial_match() {
     assert_eq!(result.matched_tokens, BLOCK_SIZE);
     assert_eq!(result.hasher_name, "xorshift");
 }
+
+#[test]
+fn engine_distributed_kv_cache_accessor_returns_some_when_wired() {
+    // P42 T5: the server bootstrap calls `engine.distributed_kv_cache()`
+    // to obtain the `Arc<DistributedKVCache>` it then wires with
+    // `install_block_sink`. Verify the accessor returns the same Arc
+    // that was handed to the builder.
+    let cache = make_cache();
+    let cache_for_engine = Arc::clone(&cache);
+    let engine = EngineBuilder::new(Box::new(StubModelBackend::default()))
+        .with_distributed_kv(cache_for_engine)
+        .build();
+    let observed = engine
+        .distributed_kv_cache()
+        .expect("cache installed → accessor must return Some");
+    assert!(
+        Arc::ptr_eq(&observed, &cache),
+        "engine.distributed_kv_cache() must return the same Arc"
+    );
+}
+
+#[test]
+fn engine_without_distributed_kv_returns_none_for_cache_accessor() {
+    // P42 T5: the accessor must return None when no cache is wired,
+    // so the server bootstrap can short-circuit the install step.
+    let engine: vllm_core::engine::Engine =
+        EngineBuilder::new(Box::new(StubModelBackend::default())).build();
+    assert!(
+        engine.distributed_kv_cache().is_none(),
+        "no cache installed → accessor must return None"
+    );
+}

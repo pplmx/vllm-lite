@@ -61,4 +61,20 @@ impl crate::engine::Engine {
     pub fn distributed_kv_stats(&self) -> Option<vllm_dist::distributed_kv::cache::CacheStats> {
         self.distributed_kv.as_ref().map(|c| c.stats())
     }
+
+    /// Returns the wired [`vllm_dist::DistributedKVCache`] (or
+    /// `None`). P42 — used by the server bootstrap to call
+    /// [`vllm_dist::DistributedKVCache::install_block_sink`] on the
+    /// cache so every subsequent `fetch_block` from a peer installs
+    /// the received bytes into the local cache.
+    ///
+    /// Only available with `multi-node` — call sites must be gated
+    /// (mirrors the `paged_kv_cache` accessor, which also has no
+    /// non-multi-node stub because the return type references a
+    /// multi-node-only dep).
+    #[cfg(feature = "multi-node")]
+    #[must_use]
+    pub fn distributed_kv_cache(&self) -> Option<Arc<vllm_dist::DistributedKVCache>> {
+        self.distributed_kv.as_ref().map(Arc::clone)
+    }
 }

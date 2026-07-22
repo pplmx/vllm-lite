@@ -41,17 +41,16 @@ pub struct PagedKvCacheWrapper {
 impl PagedKvCacheWrapper {
     /// Wrap a `PagedKvCache` for both sender (`BlockDataSource`) and
     /// receiver (`BlockSink`) use. Takes unique ownership of the
-    /// input `Arc<PagedKvCache>`.
+    /// input `Arc<PagedKvCache>` and stores it inside a
+    /// `parking_lot::Mutex` for concurrent access.
     ///
     /// # Panics
     ///
-    /// Panics if `inner` is not the sole strong reference (i.e. the
-    /// caller is sharing the `Arc<PagedKvCache>` with another
-    /// consumer). The engine bootstrap is structured so the wrapper
-    /// is the sole owner; tests construct a fresh `Arc` for the
-    /// wrapper. If a future refactor wants to share the cache, it
-    /// must switch to `Arc<Mutex<PagedKvCache>>` and update this
-    /// signature.
+    /// Panics if `inner` is not the sole strong reference. Tests
+    /// construct a fresh `Arc` for the wrapper, so this is fine.
+    /// The production path uses [`Self::from_arc_mutex`] (which
+    /// takes a pre-wrapped `Arc<Mutex<PagedKvCache>>` so the engine
+    /// can hold its own `Arc<Mutex<PagedKvCache>>` for diagnostics).
     #[must_use]
     pub fn new(inner: Arc<PagedKvCache>) -> Self {
         let cache = Arc::try_unwrap(inner)
@@ -59,6 +58,16 @@ impl PagedKvCacheWrapper {
         Self {
             inner: Arc::new(Mutex::new(cache)),
         }
+    }
+
+    /// Construct a wrapper from a pre-wrapped
+    /// `Arc<parking_lot::Mutex<PagedKvCache>>`. The production path —
+    /// the engine bootstrap calls this so the engine itself can hold
+    /// its own `Arc<Mutex<PagedKvCache>>` for diagnostics / future
+    /// read paths.
+    #[must_use]
+    pub fn from_arc_mutex(inner: Arc<Mutex<PagedKvCache>>) -> Self {
+        Self { inner }
     }
 
     /// Accessor for the underlying `Arc<Mutex<PagedKvCache>>`. Used
