@@ -28,6 +28,36 @@ impl PagedKvCacheWrapper {
     pub fn inner(&self) -> &PagedKvCache {
         &self.inner
     }
+
+    /// Verify that the chain-hash for `block_id` at layer 0 matches
+    /// `expected_chain_hash`. Returns `true` on match, `false` on
+    /// mismatch (block not found at layer 0 OR hash mismatch).
+    ///
+    /// Layer 0 is the canonical existence witness: every
+    /// `PagedKvCache::write_kv` writes to all layers symmetrically,
+    /// so layer 0 is a sound existence check (the same invariant
+    /// `BlockDataSource::has_block` relies on).
+    ///
+    /// This is a defense-in-depth check on top of OPS-31d's
+    /// wire-layer hash verification. Useful for:
+    /// - Receiver-side end-to-end tests (P42 candidate)
+    /// - Operator-driven diagnostics (does the local cache have the
+    ///   block the peer claims it sent?)
+    /// - Future OPS-32e failure-recovery retry loop
+    ///
+    /// Pure read — no allocation, no I/O.
+    #[must_use]
+    pub fn verify_chain_hash(&self, block_id: u64, expected_chain_hash: u64) -> bool {
+        let Ok(block_id_us) = usize::try_from(block_id) else {
+            return false;
+        };
+        match self.inner.block_hashes_for_layer(0) {
+            Some(layer_hashes) => layer_hashes
+                .iter()
+                .any(|(hash, bid)| *bid == block_id_us && *hash == expected_chain_hash),
+            None => false,
+        }
+    }
 }
 
 #[async_trait]
@@ -179,5 +209,47 @@ mod tests {
         // values depend on the quantization round-trip.
         assert!(as_f32.iter().any(|&x| x != 0.0));
         assert!(as_f32.iter().all(|&x| x.is_finite()));
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // verify_chain_hash tests (P41 T2). The helper itself is in the
+    // impl block above. Uses `write_layer_block` (P41 T1) to fully
+    // populate the block, so the chain hash is deterministic and
+    // computable from the input K data.
+    // ──────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn verify_chain_hash_returns_true_for_written_block() {
+        let n = 2 * BLOCK_SIZE * 4; // num_heads=2, BLOCK_SIZE=16, head_dim=4
+        let k: Vec<f32> = (0..n).map(|i| i as f32 * 0.25 + 0.5).collect();
+        let v: Vec<f32> = (0..n).map(|i| i as f32 * 1.5).collect();
+
+        let mut cache_mut = Arc::try_unwrap(small_cache()).expect("unique Arc owner");
+        cache_mut
+            .write_layer_block(0, 2, &k, &v)
+            .expect("write_layer_block");
+        let expected_hash = PagedKvCache::compute_block_hash_from_slice(&k);
+
+        let wrapper = PagedKvCacheWrapper::new(Arc::new(cache_mut));
+        assert!(wrapper.verify_chain_hash(2, expected_hash));
+    }
+
+    #[test]
+    fn verify_chain_hash_returns_false_for_mismatch() {
+        let n = 2 * BLOCK_SIZE * 4;
+        let k: Vec<f32> = (0..n).map(|i| i as f32 * 0.25 + 0.5).collect();
+        let v: Vec<f32> = (0..n).map(|i| i as f32 * 1.5).collect();
+
+        let mut cache_mut = Arc::try_unwrap(small_cache()).expect("unique Arc owner");
+        cache_mut
+            .write_layer_block(0, 2, &k, &v)
+            .expect("write_layer_block");
+        let actual_hash = PagedKvCache::compute_block_hash_from_slice(&k);
+
+        let wrapper = PagedKvCacheWrapper::new(Arc::new(cache_mut));
+        // Pass a wrong hash → must return false even though block 2 exists.
+        assert!(!wrapper.verify_chain_hash(2, actual_hash.wrapping_add(1)));
+        // Pass an unknown block → must return false.
+        assert!(!wrapper.verify_chain_hash(99, actual_hash));
     }
 }
