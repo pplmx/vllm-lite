@@ -143,7 +143,7 @@ init; the binary does not currently expose it. If you just want to
 ship a single-node binary, **stop reading here** — the rest of this
 section only matters for embedders building multi-node deployments.
 
-### What works (Phase 31-D / OPS-31d, v0.1+)
+### What works (Phase 31-D / OPS-31d, v0.1+; v31.0 P40)
 
 - Cross-node `(block_id, chain_hash)` replication over gRPC
   (`CacheMessage::Put` / `Invalidate`).
@@ -155,20 +155,28 @@ section only matters for embedders building multi-node deployments.
   every peer, accept the first response whose `chain_hash`
   matches the local `value_hash`, fall back to the local
   `BlockDataSource` if every peer fails.
+- **`PagedKvCacheWrapper` (v31.0 P40)** — production
+  `BlockDataSource` impl backed by `Arc<PagedKvCache>`. Lives in
+  `vllm_model::paged_tensor` and is available under
+  `--features multi-node`. Wire it directly into a
+  `DistributedKVCache::with_block_data_source(...)` or a
+  `GrpcState::with_block_data_source(...)` to serve real KV
+  tensor bytes via `TransferKVBlock` — closes OPS-32a's first
+  half. End-to-end coverage in
+  `crates/model/tests/paged_kv_cache_wrapper_e2e.rs`.
 
 ### What is **not** yet production-ready
 
-- **Engine integration (the load-bearing piece)** — the
-  `BlockDataSource` trait and `TransferKVBlock` handler exist,
-  but no `PagedKvCacheWrapper` wires them through
-  `MemoryManager` yet. Without that wrapper, the gRPC server
-  answers `Status::unavailable("TransferKVBlock called but no
-  BlockDataSource wired in")` for every block transfer. The
-  integration tests in `crates/dist/tests/kv_block_transfer.rs`
-  use an in-memory `MockBlockDataSource`; production wiring
-  lands in v32+ (OPS-32a). Until then, multi-node replication
-  works for `(block_id, chain_hash)` *intent* but actual block
-  bytes stay local-only in the default engine build.
+- **Engine integration of the wrapper (v32+ / P41+)** — the
+  `PagedKvCacheWrapper` exists (P40) but is not yet plumbed
+  through `MemoryManager`. Today, a server must wire the wrapper
+  manually via
+  `DistributedKVCache::with_block_data_source(...)` before
+  calling `start_grpc_server_with_listener`; the engine
+  constructor doesn't take a `PagedKvCache`. Closes OPS-32a's
+  second half. Until this ships, multi-node block transfer
+  requires manual wiring — embedders using the binary
+  (`vllm` CLI) do not yet get multi-node KV reuse out of the box.
 - **Smart owner-based routing** — fan-out is fine for 2–4 nodes
   but degrades quadratically; v32+ will track the block owner via
   the directory-coherence protocol and route the `TransferKVBlock`
@@ -214,9 +222,10 @@ assert_eq!(cache.peer_client_count(), 2);
 
 ### Verify it works
 
-The integration tests in `crates/dist/tests/` exercise both
-the intent loop and the block-transfer loop end-to-end on a
-local in-process gRPC pair (no real network needed):
+The integration tests in `crates/dist/tests/` and
+`crates/model/tests/` exercise both the intent loop and the
+block-transfer loop end-to-end on a local in-process gRPC pair
+(no real network needed):
 
 ```bash
 # Peer-sync (intent loop) — 2-node + 3-node + single-node
@@ -225,6 +234,10 @@ cargo test -p vllm-dist --test distributed_kv_peer_sync
 # Block transfer — fan-out fallback, hash verification,
 # above-default message sizes (5 MiB round-trip)
 cargo test -p vllm-dist --test kv_block_transfer
+
+# Wrapper end-to-end — real PagedKvCache → wrapper → TransferKVBlock
+# → bytes back. Proves P40 ships a working production BlockDataSource.
+cargo test -p vllm-model --features multi-node --test paged_kv_cache_wrapper_e2e
 ```
 
 `multi_peer_broadcast` is the 3-node test: it spawns two servers
