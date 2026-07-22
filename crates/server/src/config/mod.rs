@@ -20,6 +20,7 @@
 mod auth;
 mod cors;
 mod engine;
+mod multi_node;
 mod server;
 
 use serde::{Deserialize, Serialize};
@@ -63,6 +64,7 @@ pub struct ConfigValidationErrors(pub Vec<ConfigValidationError>);
 pub use auth::AuthConfig;
 pub use cors::CorsConfigFile;
 pub use engine::{DraftSpecConfig, EngineConfig};
+pub use multi_node::MultiNodeConfig;
 pub use server::{ServerConfig, is_loopback_address};
 
 /// Top-level server configuration. Composes the three independent

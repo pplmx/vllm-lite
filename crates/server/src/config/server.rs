@@ -3,6 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::MultiNodeConfig;
+
 /// HTTP server section: bind address, TCP port, log level, optional
 /// structured-log directory. Constructed either from YAML/JSON via
 /// [`super::AppConfig::load`] or programmatically via `ServerConfig::default()`.
@@ -32,6 +34,13 @@ pub struct ServerConfig {
     /// Set to `0` to skip the wait entirely (mostly useful for tests).
     #[serde(default = "default_shutdown_drain_grace_secs")]
     pub shutdown_drain_grace_secs: u64,
+    /// Multi-node KV block transfer config (Phase 41 OPS-32a second-half).
+    /// When [`MultiNodeConfig::enabled`] is `true`, the server constructs
+    /// a `PagedKvCacheWrapper` and starts a gRPC server that answers
+    /// `TransferKVBlock` calls with real K/V bytes from the local cache.
+    /// Default is `enabled: false` (single-node).
+    #[serde(default)]
+    pub multi_node: MultiNodeConfig,
 }
 
 impl Default for ServerConfig {
@@ -42,6 +51,7 @@ impl Default for ServerConfig {
             log_level: default_log_level(),
             log_dir: None,
             shutdown_drain_grace_secs: default_shutdown_drain_grace_secs(),
+            multi_node: MultiNodeConfig::default(),
         }
     }
 }
