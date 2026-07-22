@@ -153,6 +153,99 @@ impl PagedKvCache {
     ) -> Option<&std::collections::HashMap<u64, usize>> {
         self.block_hashes.get(layer_idx)
     }
+
+    /// Write per-layer K and V tensors for a single block
+    /// (P41, the receiver-side counterpart of `read_layer_block`).
+    ///
+    /// `k` and `v` are flat `[f32; num_heads * BLOCK_SIZE * head_dim]`
+    /// row-major slices in the same layout `read_layer_block`
+    /// returns. The byte-level round-trip is bit-exact.
+    ///
+    /// Used by the receiver side of multi-node KV block transfer
+    /// (P42 candidate) — the wire-shape bytes from
+    /// `PagedKvCacheWrapper::fetch_block` feed back through this
+    /// helper into the local cache.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if `layer_idx >= num_layers`, `block_id >=
+    /// num_blocks`, or `k.len() != v.len() != num_heads * BLOCK_SIZE
+    /// * head_dim`.
+    #[allow(dead_code)] // reachable under --features multi-node when P42 wires the receiver-side write_kv_batch
+    pub(crate) fn write_layer_block(
+        &mut self,
+        layer_idx: usize,
+        block_id: usize,
+        k: &[f32],
+        v: &[f32],
+    ) -> Result<()> {
+        if layer_idx >= self.num_layers {
+            return Err(candle_core::Error::msg(format!(
+                "layer_idx {layer_idx} out of bounds for {} layers",
+                self.num_layers
+            )));
+        }
+        let num_blocks = self.num_blocks();
+        if block_id >= num_blocks {
+            return Err(candle_core::Error::msg(format!(
+                "block_id {block_id} out of bounds for {num_blocks} blocks"
+            )));
+        }
+        let expected_len = self.num_blocks_count_per_layer();
+        if k.len() != expected_len {
+            return Err(candle_core::Error::msg(format!(
+                "k length {} does not match expected {expected_len}",
+                k.len()
+            )));
+        }
+        if v.len() != expected_len {
+            return Err(candle_core::Error::msg(format!(
+                "v length {} does not match expected {expected_len}",
+                v.len()
+            )));
+        }
+
+        // Use Tensor::from_slice + slice_assign so the underlying candle
+        // storage keeps the same on-device layout as `write_kv`. The
+        // shape `[1, num_heads, BLOCK_SIZE, head_dim]` matches the
+        // block-level slot in `key_cache[layer_idx]` /
+        // `value_cache[layer_idx]`.
+        let k_tensor = Tensor::from_slice(
+            k,
+            (1, self.num_heads, self.block_size, self.head_dim),
+            &self.device,
+        )?;
+        let v_tensor = Tensor::from_slice(
+            v,
+            (1, self.num_heads, self.block_size, self.head_dim),
+            &self.device,
+        )?;
+        self.key_cache[layer_idx] = self.key_cache[layer_idx].slice_assign(
+            &[
+                block_id..block_id + 1,
+                0..self.num_heads,
+                0..self.block_size,
+                0..self.head_dim,
+            ],
+            &k_tensor,
+        )?;
+        self.value_cache[layer_idx] = self.value_cache[layer_idx].slice_assign(
+            &[
+                block_id..block_id + 1,
+                0..self.num_heads,
+                0..self.block_size,
+                0..self.head_dim,
+            ],
+            &v_tensor,
+        )?;
+
+        // Update block_hashes using the same hash function `write_kv`
+        // uses, so peers that ask `has_block` or `verify_chain_hash`
+        // see the same hash as the original sender.
+        let hash = Self::compute_block_hash_from_slice(k);
+        self.block_hashes[layer_idx].insert(hash, block_id);
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -226,5 +319,55 @@ mod tests {
         let cache = small_cache(); // 4 blocks
         let result = cache.read_layer_block(0, 99);
         assert!(result.is_err());
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // write_layer_block tests (P41 T1, the receiver-side counterpart of
+    // read_layer_block). The helper itself is in mod.rs above.
+    // ──────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn write_layer_block_round_trip_via_read_layer_block() {
+        let mut cache = small_cache();
+        let n = 2 * BLOCK_SIZE * 4; // num_heads=2, BLOCK_SIZE=16, head_dim=4
+        let k: Vec<f32> = (0..n).map(|i| i as f32 * 0.5).collect();
+        let v: Vec<f32> = (0..n).map(|i| i as f32 * 1.5 + 100.0).collect();
+        cache
+            .write_layer_block(1, 2, &k, &v)
+            .expect("write_layer_block");
+        let (k_out, v_out) = cache.read_layer_block(1, 2).expect("read_layer_block");
+        assert_eq!(k_out, k, "K round-trip must be bit-exact");
+        assert_eq!(v_out, v, "V round-trip must be bit-exact");
+    }
+
+    #[test]
+    fn write_layer_block_returns_err_for_oob_layer() {
+        let mut cache = small_cache(); // 2 layers
+        let n = 2 * BLOCK_SIZE * 4;
+        let result = cache.write_layer_block(99, 0, &[0.0; 128], &[0.0; 128]);
+        assert!(result.is_err(), "layer_idx >= num_layers must fail");
+    }
+
+    #[test]
+    fn write_layer_block_returns_err_for_oob_block() {
+        let mut cache = small_cache(); // 4 blocks
+        let result = cache.write_layer_block(0, 999, &[0.0; 128], &[0.0; 128]);
+        assert!(result.is_err(), "block_id >= num_blocks must fail");
+    }
+
+    #[test]
+    fn write_layer_block_returns_err_for_k_length_mismatch() {
+        let mut cache = small_cache();
+        // K shorter than expected by 1 element.
+        let result = cache.write_layer_block(0, 0, &[0.0; 5], &[0.0; 128]);
+        assert!(result.is_err(), "K length mismatch must fail");
+    }
+
+    #[test]
+    fn write_layer_block_returns_err_for_v_length_mismatch() {
+        let mut cache = small_cache();
+        // V longer than expected.
+        let result = cache.write_layer_block(0, 0, &[0.0; 128], &[0.0; 200]);
+        assert!(result.is_err(), "V length mismatch must fail");
     }
 }
