@@ -9,23 +9,63 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use parking_lot::Mutex;
 
 use super::tensor_store::PagedKvCache;
-use vllm_dist::{BlockDataSource, FetchError};
+use vllm_dist::{BlockDataSource, BlockSink, FetchError, WriteError};
 
+/// Production `BlockDataSource` (sender) + `BlockSink` (receiver)
+/// impl backed by a `PagedKvCache`.
+///
+/// The cache is held inside a `parking_lot::Mutex` so both the
+/// sender path (`fetch_block` / `has_block` / `verify_chain_hash`)
+/// and the receiver path (`write_block`) can share a single
+/// underlying `PagedKvCache` without aliasing `&mut self` issues.
+/// `parking_lot::Mutex` is preferred over `tokio::sync::Mutex` here
+/// because the hot path is sync (candle tensor work) wrapped in
+/// `block_in_place`; the async-only mutex would add overhead without
+/// any contention benefit since writes are short-lived.
+///
+/// **Construction contract**: `PagedKvCacheWrapper::new` requires
+/// unique ownership of the input `Arc<PagedKvCache>`. The
+/// `PagedKvCache` itself isn't `Clone`, so we can't share the
+/// underlying data across multiple wrappers — the engine bootstrap
+/// passes its sole `Arc<PagedKvCache>` to the wrapper and goes
+/// through the wrapper for all subsequent access. This invariant is
+/// enforced at construction time via `Arc::try_unwrap`.
 #[derive(Clone, Debug)]
 pub struct PagedKvCacheWrapper {
-    inner: Arc<PagedKvCache>,
+    inner: Arc<Mutex<PagedKvCache>>,
 }
 
 impl PagedKvCacheWrapper {
+    /// Wrap a `PagedKvCache` for both sender (`BlockDataSource`) and
+    /// receiver (`BlockSink`) use. Takes unique ownership of the
+    /// input `Arc<PagedKvCache>`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `inner` is not the sole strong reference (i.e. the
+    /// caller is sharing the `Arc<PagedKvCache>` with another
+    /// consumer). The engine bootstrap is structured so the wrapper
+    /// is the sole owner; tests construct a fresh `Arc` for the
+    /// wrapper. If a future refactor wants to share the cache, it
+    /// must switch to `Arc<Mutex<PagedKvCache>>` and update this
+    /// signature.
     #[must_use]
-    pub const fn new(inner: Arc<PagedKvCache>) -> Self {
-        Self { inner }
+    pub fn new(inner: Arc<PagedKvCache>) -> Self {
+        let cache = Arc::try_unwrap(inner)
+            .expect("PagedKvCacheWrapper::new requires unique Arc<PagedKvCache> ownership");
+        Self {
+            inner: Arc::new(Mutex::new(cache)),
+        }
     }
 
+    /// Accessor for the underlying `Arc<Mutex<PagedKvCache>>`. Used
+    /// by diagnostics and the engine bootstrap to share the same
+    /// Mutex (and therefore the same data) with another owner.
     #[must_use]
-    pub fn inner(&self) -> &PagedKvCache {
+    pub fn inner(&self) -> &Arc<Mutex<PagedKvCache>> {
         &self.inner
     }
 
@@ -40,7 +80,7 @@ impl PagedKvCacheWrapper {
     ///
     /// This is a defense-in-depth check on top of OPS-31d's
     /// wire-layer hash verification. Useful for:
-    /// - Receiver-side end-to-end tests (P42 candidate)
+    /// - Receiver-side end-to-end tests (P42)
     /// - Operator-driven diagnostics (does the local cache have the
     ///   block the peer claims it sent?)
     /// - Future OPS-32e failure-recovery retry loop
@@ -51,7 +91,8 @@ impl PagedKvCacheWrapper {
         let Ok(block_id_us) = usize::try_from(block_id) else {
             return false;
         };
-        match self.inner.block_hashes_for_layer(0) {
+        let cache = self.inner.lock();
+        match cache.block_hashes_for_layer(0) {
             Some(layer_hashes) => layer_hashes
                 .iter()
                 .any(|(hash, bid)| *bid == block_id_us && *hash == expected_chain_hash),
@@ -64,8 +105,11 @@ impl PagedKvCacheWrapper {
 impl BlockDataSource for PagedKvCacheWrapper {
     async fn fetch_block(&self, block_id: u64) -> Result<Vec<u8>, FetchError> {
         let block_id_us = usize::try_from(block_id).map_err(|_| FetchError::NotFound(block_id))?;
-        let cache = Arc::clone(&self.inner);
-        tokio::task::block_in_place(move || read_block_bytes(&cache, block_id_us))
+        let cache_lock = Arc::clone(&self.inner);
+        tokio::task::block_in_place(move || {
+            let cache = cache_lock.lock();
+            read_block_bytes(&cache, block_id_us)
+        })
     }
 
     async fn has_block(&self, block_id: u64) -> bool {
@@ -75,9 +119,45 @@ impl BlockDataSource for PagedKvCacheWrapper {
         // Layer 0 is the canonical existence witness: every write_kv
         // touches all layers symmetrically, so if layer 0 has it, all
         // layers do.
-        self.inner
+        let cache = self.inner.lock();
+        cache
             .block_hashes_for_layer(0)
             .is_some_and(|layer_hashes| layer_hashes.values().any(|&bid| bid == block_id_us))
+    }
+}
+
+#[async_trait]
+impl BlockSink for PagedKvCacheWrapper {
+    /// P42 receiver-side install. Symmetric to `fetch_block`:
+    /// - converts `block_id: u64` → `usize` (returning `OutOfRange`
+    ///   if it can't fit — the sink can't tell what `usize::MAX`
+    ///   means, but the caller asked for it)
+    /// - delegates the candle-touching work to `block_in_place`
+    ///   so the inner `Mutex` lock is held only for the duration of
+    ///   the synchronous tensor write.
+    ///
+    /// `PagedKvCache::write_block_bytes` (T1) does all the per-layer
+    /// dispatch + `block_hashes` updates, so `write_block` is a thin
+    /// shim that converts the cache's `candle_core::Error` to a typed
+    /// `WriteError`.
+    async fn write_block(&self, block_id: u64, bytes: &[u8]) -> Result<(), WriteError> {
+        let block_id_us =
+            usize::try_from(block_id).map_err(|_| WriteError::OutOfRange { block_id })?;
+        let cache_lock = Arc::clone(&self.inner);
+        tokio::task::block_in_place(move || {
+            let mut cache = cache_lock.lock();
+            // Pre-check the OOB case so the error variant is correct.
+            // The cache's own bounds check returns a candle error
+            // we'd otherwise map to InvalidBytes; the wrapper layer
+            // distinguishes "block can't fit" from "bytes are wrong
+            // length" because they're different client-side mistakes.
+            if block_id_us >= cache.num_blocks() {
+                return Err(WriteError::OutOfRange {
+                    block_id: block_id_us as u64,
+                });
+            }
+            write_block_bytes_inner(&mut cache, block_id_us, bytes)
+        })
     }
 }
 
@@ -105,6 +185,25 @@ fn read_block_bytes(cache: &PagedKvCache, block_id: usize) -> Result<Vec<u8>, Fe
         bytes.extend_from_slice(bytemuck::cast_slice(&v_out));
     }
     Ok(bytes)
+}
+
+/// P42 receiver-side counterpart of `read_block_bytes`. Returns a
+/// `WriteError::InvalidBytes` if `bytes.len()` doesn't match the
+/// cache's expected shape, with `expected` filled in from the
+/// cache's metadata.
+fn write_block_bytes_inner(
+    cache: &mut PagedKvCache,
+    block_id: usize,
+    bytes: &[u8],
+) -> Result<(), WriteError> {
+    let expected = cache.num_layers() * 2 * cache.num_blocks_count_per_layer() * 4;
+    cache
+        .write_block_bytes(block_id, bytes)
+        .map_err(|_| WriteError::InvalidBytes {
+            block_id: block_id as u64,
+            expected,
+            actual: bytes.len(),
+        })
 }
 
 /// Inverse of `PagedKvCache::write_kv`'s quantization step:
@@ -251,5 +350,104 @@ mod tests {
         assert!(!wrapper.verify_chain_hash(2, actual_hash.wrapping_add(1)));
         // Pass an unknown block → must return false.
         assert!(!wrapper.verify_chain_hash(99, actual_hash));
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // BlockSink impl tests (P42 T3). Round-trip via `write_block` →
+    // `read_layer_block` (which is the same wire-shape path that
+    // `fetch_block` produces in production) and verify the hash
+    // recomputation in `write_layer_block` lights up
+    // `verify_chain_hash`.
+    // ──────────────────────────────────────────────────────────────────────
+
+    fn make_sink_test_bytes(num_layers: usize, per_layer_f32s: usize, seed: u32) -> Vec<u8> {
+        // Same LCG as the tensor_store tests so we can assert
+        // round-trip equality across the crate.
+        let mut state = seed.wrapping_add(1);
+        let total = num_layers * 2 * per_layer_f32s;
+        let mut bytes = Vec::with_capacity(total * 4);
+        for _ in 0..total {
+            state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+            #[allow(clippy::cast_possible_truncation)]
+            let f = (state as f32) * 1e-9;
+            bytes.extend_from_slice(&f.to_le_bytes());
+        }
+        bytes
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn write_block_round_trip_via_read_layer_block_is_bit_exact() {
+        let cache = small_cache(); // 2 layers, 2 heads, head_dim 4, 4 blocks
+        let num_layers = cache.num_layers();
+        let per_layer_f32s = cache.num_blocks_count_per_layer();
+
+        // Build the wire bytes the same way `fetch_block` would:
+        // [K_layer_0][V_layer_0][K_layer_1][V_layer_1].
+        let bytes = make_sink_test_bytes(num_layers, per_layer_f32s, 0xCAFE_F00D);
+
+        // Move the cache into the wrapper (sole owner). Subsequent
+        // readback goes through `wrapper.inner().lock()`.
+        let wrapper = PagedKvCacheWrapper::new(cache);
+        wrapper.write_block(1, &bytes).await.expect("write_block");
+
+        // Read back via the same per-layer read API the sender uses.
+        // Scope the lock so it drops before verify_chain_hash below
+        // (parking_lot::Mutex isn't reentrant).
+        {
+            let cache_lock = wrapper.inner().lock();
+            for layer_idx in 0..num_layers {
+                let (k_out, v_out) = cache_lock
+                    .read_layer_block(layer_idx, 1)
+                    .expect("read_layer_block");
+                let offset = layer_idx * 2 * per_layer_f32s;
+                let k_in: &[f32] =
+                    bytemuck::cast_slice(&bytes[offset * 4..(offset + per_layer_f32s) * 4]);
+                let v_in: &[f32] = bytemuck::cast_slice(
+                    &bytes[(offset + per_layer_f32s) * 4..(offset + 2 * per_layer_f32s) * 4],
+                );
+                assert_eq!(k_out, k_in, "K round-trip bit-exact (layer {layer_idx})");
+                assert_eq!(v_out, v_in, "V round-trip bit-exact (layer {layer_idx})");
+            }
+        }
+        // The K slice we serialized via the LCG matches what
+        // `write_layer_block` recomputed the hash over — that's the
+        // exact hash stored in `block_hashes` and the one
+        // `verify_chain_hash` reads back.
+        let layer_0_k: &[f32] = bytemuck::cast_slice(&bytes[..per_layer_f32s * 4]);
+        let lcg_hash = PagedKvCache::compute_block_hash_from_slice(layer_0_k);
+        assert!(
+            wrapper.verify_chain_hash(1, lcg_hash),
+            "verify_chain_hash must reflect the bytes written via BlockSink"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn write_block_returns_invalid_bytes_for_wrong_length() {
+        let wrapper = PagedKvCacheWrapper::new(small_cache());
+        let wrong = vec![0u8; 100]; // not a multiple of (num_layers * 2 * 128 * 4)
+        let result = wrapper.write_block(0, &wrong).await;
+        match result {
+            Err(WriteError::InvalidBytes {
+                block_id,
+                expected: _,
+                actual,
+            }) => {
+                assert_eq!(block_id, 0);
+                assert_eq!(actual, 100);
+            }
+            other => panic!("expected InvalidBytes, got {other:?}"),
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn write_block_returns_out_of_range_for_oversize_block_id() {
+        let wrapper = PagedKvCacheWrapper::new(small_cache()); // 4 blocks
+        let valid_len = 2 * 2 * 2 * BLOCK_SIZE * 4 * 4; // num_layers * 2 * per_layer_f32s * 4
+        let valid = vec![0u8; valid_len];
+        let result = wrapper.write_block(99, &valid).await;
+        match result {
+            Err(WriteError::OutOfRange { block_id }) => assert_eq!(block_id, 99),
+            other => panic!("expected OutOfRange, got {other:?}"),
+        }
     }
 }
