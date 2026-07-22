@@ -66,6 +66,18 @@ crossbeam = "0.8"
 # profiling instead, or pprof's ProfilerGuard API for manual integration.
 pprof = { version = "0.15", default-features = false, features = ["flamegraph"] }
 
+# === OpenTelemetry (P43) ===
+# Push-based OTLP metrics + traces exporter. Opt-in via the `opentelemetry`
+# feature on `vllm-core`. Versions aligned to the 0.32 / 0.33 release line
+# as of mid-2026.
+opentelemetry = "0.32"
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.32", features = ["grpc-tonic", "metrics"] }
+opentelemetry-semantic-conventions = "0.32"
+tracing-opentelemetry = "0.33"
+opentelemetry-proto = { version = "0.32", features = ["gen-tonic"] }
+uuid = { version = "1", features = ["v4"] }
+
 # === Workspace lint policy ===
 # Tiers:
 #   deny  - breaks CI (`just clippy`)

@@ -17,6 +17,9 @@
 #![allow(clippy::write_with_newline)]
 mod prometheus;
 
+#[cfg(feature = "opentelemetry")]
+mod otlp;
+
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
