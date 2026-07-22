@@ -18,7 +18,7 @@ dashmap = { workspace = true }
 
 [features]
 cuda-graph = ["dep:vllm-model"]
-multi-node = ["dep:vllm-dist"]
+multi-node = ["dep:vllm-dist", "dep:vllm-model", "vllm-model/multi-node"]
 
 [dependencies.vllm-model]
 path = "../model"
@@ -29,6 +29,7 @@ path = "../dist"
 optional = true
 
 [dev-dependencies]
+candle-core = { workspace = true }
 criterion = "0.8"
 proptest = { workspace = true }
 vllm-testing = { path = "../testing" }

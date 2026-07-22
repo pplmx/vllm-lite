@@ -344,3 +344,55 @@ fn test_engine_builder_sleep_policy_override() {
     assert_eq!(engine.sleep_policy.base_interval, 0);
     assert_eq!(engine.sleep_policy.max_interval, 0);
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// `EngineBuilder::with_paged_kv_cache` tests (P41 T4). The engine-
+// side plumbing lives in `engine/paged_kv_cache.rs` and the builder
+// method in `engine/ctor/builder.rs`.
+// ──────────────────────────────────────────────────────────────────────
+
+#[cfg(feature = "multi-node")]
+#[test]
+fn engine_builder_with_paged_kv_cache_wires_wrapper_to_memory_manager() {
+    use vllm_dist::BlockDataSource;
+    use vllm_model::paged_tensor::PagedKvCache;
+    let target: Box<dyn ModelBackend> = Box::new(StubModel::default());
+    let cache = Arc::new(
+        PagedKvCache::new(2, 2, 4, 4, candle_core::Device::Cpu, false).expect("small cache"),
+    );
+    let mut engine = EngineBuilder::new(target)
+        .with_paged_kv_cache(Arc::clone(&cache))
+        .build();
+
+    // The wrapper getter should now produce a BlockDataSource.
+    let wrapper = engine
+        .paged_kv_cache_wrapper()
+        .expect("paged_kv_cache_wrapper must be Some when wired in");
+    // Confirm the wrapper is wired all the way through to MemoryManager.
+    let memory_source = engine
+        .scheduler
+        .memory_mut()
+        .block_data_source()
+        .expect("MemoryManager must hold the wired BlockDataSource");
+    assert!(
+        Arc::ptr_eq(&wrapper, &memory_source),
+        "Engine's stored wrapper must match the one threaded to MemoryManager"
+    );
+    // The wrapper should be usable as a BlockDataSource trait object.
+    let _trait_obj: Arc<dyn BlockDataSource + Send + Sync> = wrapper;
+    // The original cache is also retained for diagnostics / direct reads.
+    let stored_cache = engine
+        .paged_kv_cache()
+        .expect("paged_kv_cache() must be Some when wired in");
+    assert!(Arc::ptr_eq(&stored_cache, &cache));
+}
+
+#[cfg(feature = "multi-node")]
+#[test]
+fn engine_without_with_paged_kv_cache_has_no_wrapper() {
+    let target: Box<dyn ModelBackend> = Box::new(StubModel::default());
+    let mut engine = EngineBuilder::new(target).build();
+    assert!(engine.paged_kv_cache_wrapper().is_none());
+    assert!(engine.paged_kv_cache().is_none());
+    assert!(engine.scheduler.memory_mut().block_data_source().is_none());
+}
