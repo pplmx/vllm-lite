@@ -17,6 +17,9 @@ use vllm_traits::CudaGraphExecutor;
 #[cfg(feature = "multi-node")]
 use vllm_dist::DistributedKVCache;
 
+#[cfg(feature = "multi-node")]
+use vllm_model::paged_tensor::PagedKvCache;
+
 /// Builder for [`Engine`] with named methods for all optional fields.
 ///
 /// # Example
@@ -54,12 +57,20 @@ pub struct EngineBuilder {
     /// [`MemoryManager`]: crate::scheduler::memory::MemoryManager
     #[cfg(feature = "multi-node")]
     distributed_kv: Option<Arc<DistributedKVCache>>,
+    /// Caller-supplied `PagedKvCache` for multi-node KV block byte
+    /// transfer (Phase 41 OPS-32a second-half). When set, the builder
+    /// constructs a `PagedKvCacheWrapper` and threads it through
+    /// `Engine::set_paged_kv_cache` → `SchedulerEngine::set_block_data_source`
+    /// → `MemoryManager::block_data_source` at build time so subsequent
+    /// gRPC `TransferKVBlock` calls resolve to the wrapper.
+    #[cfg(feature = "multi-node")]
+    paged_kv_cache: Option<Arc<PagedKvCache>>,
 }
 
 impl std::fmt::Debug for EngineBuilder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EngineBuilder")
-            .field("target_model", &"<dyn ModelBackend>")
+        let mut dbg = f.debug_struct("EngineBuilder");
+        dbg.field("target_model", &"<dyn ModelBackend>")
             .field(
                 "draft_model",
                 &self.draft_model.as_ref().map(|_| "<dyn ModelBackend>"),
@@ -72,8 +83,18 @@ impl std::fmt::Debug for EngineBuilder {
                 "draft_resolver",
                 &self.draft_resolver.as_ref().map(Arc::strong_count),
             )
-            .field("sleep_policy", &self.sleep_policy)
-            .finish()
+            .field("sleep_policy", &self.sleep_policy);
+        #[cfg(feature = "multi-node")]
+        dbg.field(
+            "distributed_kv",
+            &self.distributed_kv.as_ref().map(Arc::strong_count),
+        );
+        #[cfg(feature = "multi-node")]
+        dbg.field(
+            "paged_kv_cache",
+            &self.paged_kv_cache.as_ref().map(Arc::strong_count),
+        );
+        dbg.finish()
     }
 }
 
@@ -101,6 +122,8 @@ impl EngineBuilder {
             cuda_graph_executor: None,
             #[cfg(feature = "multi-node")]
             distributed_kv: None,
+            #[cfg(feature = "multi-node")]
+            paged_kv_cache: None,
         }
     }
 
@@ -187,6 +210,21 @@ impl EngineBuilder {
         self
     }
 
+    /// Wire a `PagedKvCache` into the engine for multi-node KV block
+    /// replication (Phase 41 OPS-32a second-half).
+    ///
+    /// Constructs the `PagedKvCacheWrapper` internally and threads it
+    /// through `Engine::set_paged_kv_cache` at `.build()` time so every
+    /// subsequent gRPC `TransferKVBlock` call resolves to the wrapper.
+    /// Mirrors [`Self::with_distributed_kv`] (which wires the metadata
+    /// cache).
+    #[must_use]
+    #[cfg(feature = "multi-node")]
+    pub fn with_paged_kv_cache(mut self, cache: Arc<PagedKvCache>) -> Self {
+        self.paged_kv_cache = Some(cache);
+        self
+    }
+
     /// Build the [`Engine`]. Equivalent to calling `Engine::with_config_boxed(...)`
     /// then setting the optional fields directly.
     #[must_use]
@@ -211,6 +249,9 @@ impl EngineBuilder {
         {
             if let Some(cache) = self.distributed_kv {
                 engine.set_distributed_kv(cache);
+            }
+            if let Some(cache) = self.paged_kv_cache {
+                engine.set_paged_kv_cache(cache);
             }
         }
         engine

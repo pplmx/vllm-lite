@@ -137,6 +137,24 @@ impl SchedulerEngine {
         self.memory.set_distributed_kv(cache);
     }
 
+    /// Propagate a `BlockDataSource` to the underlying [`MemoryManager`]
+    /// (Phase 41 OPS-32a second-half).
+    ///
+    /// Mirrors [`Self::set_distributed_kv`] — used by
+    /// [`crate::engine::Engine::set_paged_kv_cache`] to thread the
+    /// `PagedKvCacheWrapper` from the engine down to the memory layer so
+    /// every subsequent gRPC `TransferKVBlock` call resolves to the
+    /// wrapper.
+    ///
+    /// Idempotent — re-installing just replaces the source reference.
+    #[cfg(feature = "multi-node")]
+    pub fn set_block_data_source(
+        &mut self,
+        source: Arc<dyn vllm_dist::BlockDataSource + Send + Sync>,
+    ) {
+        self.memory.set_block_data_source(source);
+    }
+
     /// Mutable accessor for the per-sequence chain cursors
     /// (see `super::state::SchedulerEngine::chain_cursors`).
     ///

@@ -108,6 +108,10 @@ impl Engine {
             cuda_graph,
             #[cfg(feature = "multi-node")]
             distributed_kv: None,
+            #[cfg(feature = "multi-node")]
+            paged_kv_cache: None,
+            #[cfg(feature = "multi-node")]
+            paged_kv_cache_wrapper: None,
             adaptive_decoder: None,
             draft_registry: Arc::new(DraftModelRegistry::new()),
             draft_resolver: None,
