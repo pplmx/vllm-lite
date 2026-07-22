@@ -143,7 +143,7 @@ init; the binary does not currently expose it. If you just want to
 ship a single-node binary, **stop reading here** — the rest of this
 section only matters for embedders building multi-node deployments.
 
-### What works (Phase 31-D / OPS-31d, v0.1+; v31.0 P40)
+### What works (Phase 31-D / OPS-31d, v0.1+; v31.0 P40 + P41)
 
 - Cross-node `(block_id, chain_hash)` replication over gRPC
   (`CacheMessage::Put` / `Invalidate`).
@@ -164,19 +164,33 @@ section only matters for embedders building multi-node deployments.
   tensor bytes via `TransferKVBlock` — closes OPS-32a's first
   half. End-to-end coverage in
   `crates/model/tests/paged_kv_cache_wrapper_e2e.rs`.
+- **Engine-level plumbing (v31.0 P41)** — when the server is
+  built with `--features multi-node` and `server.multi_node.enabled`
+  is `true` in the config, the bootstrap selects the
+  `EngineBuilder` path that wires the wrapper through
+  `EngineBuilder::with_paged_kv_cache` →
+  `Engine::set_paged_kv_cache` →
+  `SchedulerEngine::set_block_data_source` →
+  `MemoryManager::block_data_source` at startup, and
+  `bootstrap::grpc::spawn_multi_node_grpc_server` then spawns the
+  gRPC server that answers `TransferKVBlock` calls with real
+  bytes from the wrapper. Closes OPS-32a's second half — embedders
+  using the binary (`vllm-server`) now get multi-node KV reuse out
+  of the box, gated by the standard feature + config flags.
+- **`PagedKvCacheWrapper::verify_chain_hash` (v31.0 P41)** —
+  defense-in-depth read-only helper for receiver-side diagnostics
+  (does the local cache have the block the peer claims it sent?).
+  No allocation, no I/O; usable from tests + ops tooling.
 
 ### What is **not** yet production-ready
 
-- **Engine integration of the wrapper (v32+ / P41+)** — the
-  `PagedKvCacheWrapper` exists (P40) but is not yet plumbed
-  through `MemoryManager`. Today, a server must wire the wrapper
-  manually via
-  `DistributedKVCache::with_block_data_source(...)` before
-  calling `start_grpc_server_with_listener`; the engine
-  constructor doesn't take a `PagedKvCache`. Closes OPS-32a's
-  second half. Until this ships, multi-node block transfer
-  requires manual wiring — embedders using the binary
-  (`vllm` CLI) do not yet get multi-node KV reuse out of the box.
+- **Receiver-side `write_kv_batch` (v32+ / P42+)** — the
+  gRPC server now serves `TransferKVBlock` from real cache bytes
+  (P41), but the receiver-side write path that consumes the
+  transferred block is still stubbed (P42 follow-up).
+  `PagedKvCache::write_layer_block` (P41) provides the helper
+  that P42 will compose; the gRPC handler update + 2-node
+  e2e test land in P42.
 - **Smart owner-based routing** — fan-out is fine for 2–4 nodes
   but degrades quadratically; v32+ will track the block owner via
   the directory-coherence protocol and route the `TransferKVBlock`
