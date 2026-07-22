@@ -246,6 +246,64 @@ impl PagedKvCache {
         self.block_hashes[layer_idx].insert(hash, block_id);
         Ok(())
     }
+
+    /// Write all layers of a single block from a wire-shape byte
+    /// slice. P42 receiver-side counterpart of
+    /// [`PagedKvCacheWrapper::fetch_block`](super::paged_kv_cache_wrapper::PagedKvCacheWrapper::fetch_block).
+    ///
+    /// The wire format produced by the sender's `fetch_block` is:
+    /// ```text
+    /// [K_layer_0 f32s][V_layer_0 f32s][K_layer_1 f32s][V_layer_1 f32s]...
+    /// ```
+    /// with each `K`/`V` segment of length `num_heads * BLOCK_SIZE *
+    /// head_dim` f32 values. Sender dequantizes to f32 before
+    /// serializing, so the receiver always sees f32 regardless of
+    /// the sender's `quantized` flag.
+    ///
+    /// Named `write_block_bytes` (not `write_kv_batch`) to avoid a
+    /// name clash with the token-batched
+    /// [`Self::write_kv_batch`] in `buffer.rs` (which writes a
+    /// single (layer, block, token_offset) slot during a forward
+    /// pass). The receiver-side semantics differ fundamentally: this
+    /// installs a whole block of bytes across all layers; the
+    /// `buffer.rs` variant updates one token slice per call.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if `block_id >= num_blocks`, if `bytes.len()`
+    /// does not match `num_layers * 2 * num_heads * BLOCK_SIZE *
+    /// head_dim * 4`, or if any inner `write_layer_block` call
+    /// fails (which itself only fails on bounds errors that this
+    /// caller already pre-validated).
+    #[allow(dead_code)] // reachable under --features multi-node via PagedKvCacheWrapper: BlockSink (P42 T3)
+    pub fn write_block_bytes(&mut self, block_id: usize, bytes: &[u8]) -> Result<()> {
+        let num_blocks = self.num_blocks();
+        if block_id >= num_blocks {
+            return Err(candle_core::Error::msg(format!(
+                "block_id {block_id} out of bounds for {num_blocks} blocks"
+            )));
+        }
+        let per_layer_f32s = self.num_blocks_count_per_layer();
+        let per_layer_bytes = per_layer_f32s * 4;
+        let expected_bytes = self.num_layers * 2 * per_layer_bytes;
+        if bytes.len() != expected_bytes {
+            return Err(candle_core::Error::msg(format!(
+                "bytes length {} does not match expected {expected_bytes} (= {} layers * 2 (K+V) * {per_layer_f32s} f32 * 4 bytes/f32)",
+                bytes.len(),
+                self.num_layers
+            )));
+        }
+
+        for layer_idx in 0..self.num_layers {
+            let offset = layer_idx * 2 * per_layer_bytes;
+            let k_bytes = &bytes[offset..offset + per_layer_bytes];
+            let v_bytes = &bytes[offset + per_layer_bytes..offset + 2 * per_layer_bytes];
+            let k: &[f32] = bytemuck::cast_slice(k_bytes);
+            let v: &[f32] = bytemuck::cast_slice(v_bytes);
+            self.write_layer_block(layer_idx, block_id, k, v)?;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -369,5 +427,104 @@ mod tests {
         // V longer than expected.
         let result = cache.write_layer_block(0, 0, &[0.0; 128], &[0.0; 200]);
         assert!(result.is_err(), "V length mismatch must fail");
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // write_block_bytes tests (P42 T1). Round-trips non-zero data via the
+    // wire shape produced by PagedKvCacheWrapper::fetch_block, then
+    // verifies the receiver-side read returns identical bytes.
+    // ──────────────────────────────────────────────────────────────────────
+
+    fn make_wire_bytes(num_layers: usize, per_layer_f32s: usize, seed: u32) -> Vec<u8> {
+        // Build [K_layer_0, V_layer_0, ..., K_layer_N, V_layer_N] using
+        // a deterministic LCG so we can assert round-trip equality.
+        let mut state = seed.wrapping_add(1);
+        let total = num_layers * 2 * per_layer_f32s;
+        let mut bytes = Vec::with_capacity(total * 4);
+        for _ in 0..total {
+            // LCG step (Numerical Recipes constants). Deterministic
+            // enough for round-trip equality; we don't care about
+            // statistical quality.
+            state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+            #[allow(clippy::cast_possible_truncation)]
+            let f = (state as f32) * 1e-9;
+            bytes.extend_from_slice(&f.to_le_bytes());
+        }
+        bytes
+    }
+
+    #[test]
+    fn write_block_bytes_round_trip_is_bit_exact() {
+        let mut cache = small_cache(); // 2 layers, 4 blocks, per_layer_f32s = 2*16*4 = 128
+        let per_layer_f32s = cache.num_blocks_count_per_layer();
+        let bytes = make_wire_bytes(cache.num_layers, per_layer_f32s, 0xDEAD_BEEF);
+        cache
+            .write_block_bytes(1, &bytes)
+            .expect("write_block_bytes");
+        // Each (layer, block=1) should now match what we serialized.
+        for layer_idx in 0..cache.num_layers() {
+            let (k_out, v_out) = cache.read_layer_block(layer_idx, 1).expect("read");
+            let offset = layer_idx * 2 * per_layer_f32s;
+            let k_in: &[f32] =
+                bytemuck::cast_slice(&bytes[offset * 4..(offset + per_layer_f32s) * 4]);
+            let v_in: &[f32] = bytemuck::cast_slice(
+                &bytes[(offset + per_layer_f32s) * 4..(offset + 2 * per_layer_f32s) * 4],
+            );
+            assert_eq!(
+                k_out, k_in,
+                "K round-trip must be bit-exact (layer {layer_idx})"
+            );
+            assert_eq!(
+                v_out, v_in,
+                "V round-trip must be bit-exact (layer {layer_idx})"
+            );
+        }
+    }
+
+    #[test]
+    fn write_block_bytes_returns_err_for_oob_block() {
+        let mut cache = small_cache(); // 4 blocks
+        let per_layer_f32s = cache.num_blocks_count_per_layer();
+        let bytes = make_wire_bytes(cache.num_layers, per_layer_f32s, 0);
+        let result = cache.write_block_bytes(99, &bytes);
+        assert!(result.is_err(), "block_id >= num_blocks must fail");
+    }
+
+    #[test]
+    fn write_block_bytes_returns_err_for_bytes_too_short() {
+        let mut cache = small_cache();
+        // Short by 16 bytes (one f32).
+        let mut bytes = make_wire_bytes(cache.num_layers, cache.num_blocks_count_per_layer(), 0);
+        bytes.truncate(bytes.len() - 16);
+        let result = cache.write_block_bytes(0, &bytes);
+        assert!(result.is_err(), "bytes.len() short of expected must fail");
+    }
+
+    #[test]
+    fn write_block_bytes_returns_err_for_bytes_too_long() {
+        let mut cache = small_cache();
+        let mut bytes = make_wire_bytes(cache.num_layers, cache.num_blocks_count_per_layer(), 0);
+        bytes.extend_from_slice(&[0u8; 16]); // Long by 16 bytes.
+        let result = cache.write_block_bytes(0, &bytes);
+        assert!(result.is_err(), "bytes.len() over expected must fail");
+    }
+
+    #[test]
+    fn write_block_bytes_works_for_single_layer_cache() {
+        // 1 layer, 1 head, head_dim 2, 2 blocks. Pinned the
+        // num_layers=1 fast path so the layer-loop boundary doesn't
+        // accidentally assume num_layers >= 2.
+        let mut cache =
+            PagedKvCache::new(1, 1, 2, 2, Device::Cpu, false).expect("single-layer cache");
+        let per_layer_f32s = cache.num_blocks_count_per_layer(); // 1*16*2 = 32
+        let bytes = make_wire_bytes(cache.num_layers, per_layer_f32s, 0xCAFE_F00D);
+        cache
+            .write_block_bytes(0, &bytes)
+            .expect("write_block_bytes");
+        let (k_out, v_out) = cache.read_layer_block(0, 0).expect("read");
+        let k_in: &[f32] = bytemuck::cast_slice(&bytes[..per_layer_f32s * 4]);
+        let v_in: &[f32] = bytemuck::cast_slice(&bytes[per_layer_f32s * 4..]);
+        assert_eq!(k_out, k_in, "single-layer K must round-trip bit-exact");
+        assert_eq!(v_out, v_in, "single-layer V must round-trip bit-exact");
     }
 }
