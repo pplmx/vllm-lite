@@ -22,7 +22,7 @@ use tokio::net::TcpListener;
 use tokio::time::sleep;
 use vllm_dist::distributed_kv::block_data_source::BlockDataSource;
 use vllm_dist::distributed_kv::protocol::NodeId;
-use vllm_dist::{start_grpc_server_with_listener, CacheConfig, DistributedKVCache};
+use vllm_dist::{CacheConfig, DistributedKVCache, start_grpc_server_with_listener};
 use vllm_model::paged_tensor::PagedKvCacheWrapper;
 use vllm_traits::BLOCK_SIZE;
 
@@ -31,8 +31,7 @@ const TARGET_BLOCK_ID: u64 = 1;
 
 fn small_cache() -> Arc<vllm_model::paged_tensor::PagedKvCache> {
     Arc::new(
-        vllm_model::paged_tensor::PagedKvCache::new(2, 2, 4, 4, Device::Cpu, false)
-            .expect("cache"),
+        vllm_model::paged_tensor::PagedKvCache::new(2, 2, 4, 4, Device::Cpu, false).expect("cache"),
     )
 }
 
@@ -43,8 +42,7 @@ async fn real_paged_kv_cache_bytes_round_trip_via_wrapper() {
     let sender_kv: Arc<vllm_model::paged_tensor::PagedKvCache> = {
         // Arc::try_unwrap requires a unique owner; small_cache() returns a fresh Arc
         // so we can unwrap for the write_kv mutation.
-        let mut cache_mut =
-            Arc::try_unwrap(sender_kv_arc).expect("unique Arc owner for write");
+        let mut cache_mut = Arc::try_unwrap(sender_kv_arc).expect("unique Arc owner for write");
         let k = Tensor::from_slice(
             &[42.0f32, 43.0, 44.0, 45.0, 46.0, 47.0, 48.0, 49.0],
             (1, 2, 4),
@@ -57,8 +55,7 @@ async fn real_paged_kv_cache_bytes_round_trip_via_wrapper() {
             .expect("write");
         Arc::new(cache_mut)
     };
-    let wrapper: Arc<dyn BlockDataSource> =
-        Arc::new(PagedKvCacheWrapper::new(sender_kv));
+    let wrapper: Arc<dyn BlockDataSource> = Arc::new(PagedKvCacheWrapper::new(sender_kv));
 
     // Sender's DistributedKVCache owns the chain_hash for the wrapper's served blocks.
     // `transfer_kv_block` reads `distributed_kv.get(block_id)` to populate the wire
@@ -94,9 +91,7 @@ async fn real_paged_kv_cache_bytes_round_trip_via_wrapper() {
     // Receiver: connects to sender, mirrors the chain_hash, then fetches.
     let mut receiver_dist =
         DistributedKVCache::new(CacheConfig::new(NodeId(1), 2).with_peer_urls(vec![url]));
-    receiver_dist
-        .connect_peers()
-        .expect("connect_peers ok");
+    receiver_dist.connect_peers().expect("connect_peers ok");
     receiver_dist.put(TARGET_BLOCK_ID, SENTINEL_HASH);
 
     let bytes = receiver_dist
