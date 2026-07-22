@@ -135,6 +135,24 @@ impl PagedKvCache {
     pub(crate) const fn num_blocks_count_per_layer(&self) -> usize {
         self.num_heads * self.block_size * self.head_dim
     }
+
+    /// Borrow the per-layer block-hash map for `layer_idx`.
+    ///
+    /// `block_hashes[layer]` maps `hash → block_id` for all blocks
+    /// ever written to that layer. Used by
+    /// [`crate::paged_kv_cache_wrapper`] (multi-node feature) for
+    /// the `BlockDataSource::has_block` witness check (layer 0 as
+    /// the canonical existence proof).
+    ///
+    /// Returns `None` if `layer_idx >= num_layers`.
+    #[must_use]
+    #[allow(dead_code)] // reachable under --features multi-node via PagedKvCacheWrapper (P40 T3)
+    pub(crate) fn block_hashes_for_layer(
+        &self,
+        layer_idx: usize,
+    ) -> Option<&std::collections::HashMap<u64, usize>> {
+        self.block_hashes.get(layer_idx)
+    }
 }
 
 #[cfg(test)]
