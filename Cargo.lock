@@ -3864,6 +3864,8 @@ dependencies = [
 name = "vllm-model"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "bytemuck",
  "candle-core",
  "candle-nn",
  "criterion",
@@ -3877,6 +3879,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokenizers 0.23.1",
+ "tokio",
  "tracing",
  "vllm-dist",
  "vllm-testing",

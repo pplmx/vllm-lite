@@ -126,6 +126,15 @@ impl PagedKvCache {
         let v_flat: Vec<f32> = v_block.flatten_all()?.to_vec1()?;
         Ok((k_flat, v_flat))
     }
+
+    /// Number of f32 elements per (layer, block) pair: `num_heads *
+    /// block_size * head_dim`. Used by the multi-node wrapper for
+    /// buffer sizing in `fetch_block`.
+    #[must_use]
+    #[allow(dead_code)] // reachable under --features multi-node via PagedKvCacheWrapper (P40 T2)
+    pub(crate) const fn num_blocks_count_per_layer(&self) -> usize {
+        self.num_heads * self.block_size * self.head_dim
+    }
 }
 
 #[cfg(test)]

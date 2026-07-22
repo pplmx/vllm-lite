@@ -7,6 +7,9 @@ pub mod quant;
 pub mod quantization;
 pub mod tensor_store;
 
+#[cfg(feature = "multi-node")]
+pub mod paged_kv_cache_wrapper;
+
 pub use quant::{
     AWQQuantization, GPTQQuantization, QuantizationConfig, QuantizationType, QuantizedWeights,
 };
