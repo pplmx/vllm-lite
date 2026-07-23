@@ -10,10 +10,12 @@
 //! scaling fields in the config (`rope_scaling.rope_type`,
 //! `rope_scaling.factor`, `rope_scaling.attn_factor`,
 //! `rope_scaling.original_max_position_embeddings`) are captured into
-//! the struct. [`RoPE::apply_with_scaling`] and [`RoPE::forward`] both
-//! honour them — `forward` delegates to `forward_with_scaling` so the
-//! scaling is never silently dropped. [`RoPE::apply`] also accepts an
-//! explicit scaling context via the `RopeScalingContext` it carries.
+//! the struct. [`RoPE::apply`], [`RoPE::forward`], and
+//! [`RoPE::apply_with_scaling`] all honour the configured scaling —
+//! `apply` and `forward` delegate to the scaling-aware free functions so
+//! the scaling is never silently dropped when a scaled RoPE is used
+//! through the convenience methods. The free [`apply_rope`] function
+//! remains scaling-free for callers that pass `theta` directly.
 //!
 //! The free [`apply_rope`] function remains scaling-free for callers
 //! that pass `theta` directly (`rope_gqa`, mla, gemma4 attention modules).
@@ -141,14 +143,17 @@ impl RoPE {
 
     /// Run the operation (see signature for params and return type).
     ///
-    /// **Does not apply any long-context scaling.** Use
-    /// [`RoPE::apply_with_scaling`] when the config declares
-    /// `rope_scaling.rope_type` other than `default`.
+    /// Honours any long-context scaling configured via `new_with_scaling`
+    /// / `new_with_config`. For a `RoPE` created with `new` (the default,
+    /// no scaling) the result is identical to the free [`apply_rope`]
+    /// function — `apply_rope_with_scaling` falls through to
+    /// `compute_inv_freq_default` when `rope_type` is `Default` and
+    /// `scaling_factor` is `1.0`.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
     pub fn apply(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
-        apply_rope(x, positions, self.theta)
+        apply_rope_with_scaling(x, positions, self.theta, self.scaling_ctx())
     }
 
     /// Long-context-aware variant of [`RoPE::apply`].

@@ -451,6 +451,27 @@ fn test_forward_honours_scaling() -> Result<()> {
     Ok(())
 }
 
+/// Regression test: `apply` must honour scaling configuration, just like
+/// `forward` (pre-fix both silently dropped scaling).
+#[test]
+fn test_apply_honours_scaling() -> Result<()> {
+    let device = Device::Cpu;
+    let rope = scaled_rope(RopeType::Yarn, 4.0);
+
+    let q = Tensor::randn(0.0f32, 1.0, (1, 4, 4, 64), &device)?;
+    let positions: Vec<i64> = vec![0, 1, 2, 3];
+
+    let out_apply = rope.apply(&q, &positions)?;
+    let out_scaled = rope.apply_with_scaling(&q, &positions)?;
+
+    let diff = (&out_apply - &out_scaled)?.abs()?.max_all()?.to_scalar::<f32>()?;
+    assert!(
+        diff < 1e-5,
+        "apply (Yarn) should match apply_with_scaling (diff = {diff})"
+    );
+    Ok(())
+}
+
 // === Dynamic NTK scaling ===
 
 fn dynamic_rope(scaling_factor: f32, orig_max: usize) -> RoPE {
