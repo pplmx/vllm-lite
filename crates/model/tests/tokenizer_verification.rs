@@ -111,7 +111,7 @@ mod tests {
             let decoded = tokenizer.decode(&tokens);
 
             if !decoded.trim().to_lowercase().contains(&text.to_lowercase()) {
-                failed.push((text.to_string(), tokens, decoded.clone()));
+                failed.push(((*text).to_string(), tokens, decoded.clone()));
             }
         }
 

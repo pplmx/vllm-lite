@@ -22,8 +22,7 @@ fn make_cache() -> Arc<DistributedKVCache> {
 #[test]
 fn engine_without_distributed_kv_reports_disabled() {
     // Default EngineBuilder path: no cache installed.
-    let engine: vllm_core::engine::Engine =
-        EngineBuilder::new(Box::new(StubModelBackend::default())).build();
+    let engine: vllm_core::engine::Engine = EngineBuilder::new(Box::new(StubModelBackend)).build();
     assert!(
         !engine.distributed_kv_enabled(),
         "default EngineBuilder must not install a distributed KV cache"
@@ -38,7 +37,7 @@ fn engine_without_distributed_kv_reports_disabled() {
 fn engine_with_distributed_kv_reports_enabled() {
     // Builder path: cache installed via with_distributed_kv.
     let cache = make_cache();
-    let engine = EngineBuilder::new(Box::new(StubModelBackend::default()))
+    let engine = EngineBuilder::new(Box::new(StubModelBackend))
         .with_distributed_kv(cache)
         .build();
     assert!(
@@ -57,7 +56,7 @@ fn engine_distributed_kv_stats_reflect_cache_state() {
     let miss = cache.get(99);
     assert!(miss.is_none(), "miss path bumps the misses counter");
 
-    let engine = EngineBuilder::new(Box::new(StubModelBackend::default()))
+    let engine = EngineBuilder::new(Box::new(StubModelBackend))
         .with_distributed_kv(Arc::clone(&cache))
         .build();
     let stats = engine
@@ -75,10 +74,10 @@ fn multiple_engines_can_share_a_cache_via_arc() {
     let cache = make_cache();
     let cache_for_engine_2 = Arc::clone(&cache);
 
-    let engine_1 = EngineBuilder::new(Box::new(StubModelBackend::default()))
+    let engine_1 = EngineBuilder::new(Box::new(StubModelBackend))
         .with_distributed_kv(Arc::clone(&cache))
         .build();
-    let engine_2 = EngineBuilder::new(Box::new(StubModelBackend::default()))
+    let engine_2 = EngineBuilder::new(Box::new(StubModelBackend))
         .with_distributed_kv(cache_for_engine_2)
         .build();
 
@@ -100,7 +99,7 @@ fn engine_propagates_distributed_kv_to_scheduler_memory_manager() {
     //      step loop makes for every prefill).
     //   3. Asserting the cache's `updates` counter moved.
     let cache = make_cache();
-    let mut engine = EngineBuilder::new(Box::new(StubModelBackend::default()))
+    let mut engine = EngineBuilder::new(Box::new(StubModelBackend))
         .with_num_kv_blocks(64)
         .with_distributed_kv(Arc::clone(&cache))
         .build();
@@ -141,7 +140,7 @@ fn engine_scheduler_lookup_distributed_prefix_round_trip() {
     use vllm_traits::{TokenId, XorShiftHasher};
 
     let cache = make_cache();
-    let mut engine = EngineBuilder::new(Box::new(StubModelBackend::default()))
+    let mut engine = EngineBuilder::new(Box::new(StubModelBackend))
         .with_num_kv_blocks(64)
         .with_distributed_kv(Arc::clone(&cache))
         .build();
@@ -193,7 +192,7 @@ fn engine_scheduler_lookup_distributed_prefix_partial_match() {
     use vllm_traits::{TokenId, XorShiftHasher};
 
     let cache = make_cache();
-    let mut engine = EngineBuilder::new(Box::new(StubModelBackend::default()))
+    let mut engine = EngineBuilder::new(Box::new(StubModelBackend))
         .with_num_kv_blocks(64)
         .with_distributed_kv(Arc::clone(&cache))
         .build();
@@ -234,7 +233,7 @@ fn engine_distributed_kv_cache_accessor_returns_some_when_wired() {
     // that was handed to the builder.
     let cache = make_cache();
     let cache_for_engine = Arc::clone(&cache);
-    let engine = EngineBuilder::new(Box::new(StubModelBackend::default()))
+    let engine = EngineBuilder::new(Box::new(StubModelBackend))
         .with_distributed_kv(cache_for_engine)
         .build();
     let observed = engine
@@ -250,8 +249,7 @@ fn engine_distributed_kv_cache_accessor_returns_some_when_wired() {
 fn engine_without_distributed_kv_returns_none_for_cache_accessor() {
     // P42 T5: the accessor must return None when no cache is wired,
     // so the server bootstrap can short-circuit the install step.
-    let engine: vllm_core::engine::Engine =
-        EngineBuilder::new(Box::new(StubModelBackend::default())).build();
+    let engine: vllm_core::engine::Engine = EngineBuilder::new(Box::new(StubModelBackend)).build();
     assert!(
         engine.distributed_kv_cache().is_none(),
         "no cache installed → accessor must return None"

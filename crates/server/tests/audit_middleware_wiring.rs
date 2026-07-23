@@ -1,4 +1,4 @@
-//! audit_middleware wiring test.
+//! `audit_middleware` wiring test.
 //!
 //! Production-readiness recommendation: every request should leave a
 //! trail in the audit ring buffer so operators can read it via
@@ -9,7 +9,7 @@
 //! drops the layer fails CI.
 //!
 //! We verify three invariants against a real axum router built the
-//! same way `main.rs` builds it (correlation_id outermost, audit
+//! same way `main.rs` builds it (`correlation_id` outermost, audit
 //! below it):
 //!
 //! 1. A successful (200) request produces exactly one audit event
@@ -46,8 +46,8 @@ async fn ok() -> &'static str {
 }
 
 /// Mirrors the production stack from `main.rs` for the layers we
-/// care about: correlation_id (outermost) → audit_middleware
-/// (below, sees every request including the ones correlation_id
+/// care about: `correlation_id` (outermost) → `audit_middleware`
+/// (below, sees every request including the ones `correlation_id`
 /// stamped) → handler. We omit body-limit and auth because the audit
 /// wiring doesn't depend on either — those are guarded by their own
 /// integration tests (`body_limit_wiring.rs`, `admin_gating.rs`).

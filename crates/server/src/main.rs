@@ -264,7 +264,7 @@ async fn main() -> Result<()> {
     let max_model_len = loader
         .config_json()
         .get("max_position_embeddings")
-        .and_then(|v| v.as_u64())
+        .and_then(serde_json::value::Value::as_u64)
         .and_then(|n| usize::try_from(n).ok());
 
     // Production-readiness §10: read capability flags so

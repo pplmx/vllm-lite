@@ -14,7 +14,7 @@
 //! `/v1/chat/completions` request, then drops the response body
 //! BEFORE consuming the second token. The handler's
 //! `CancelOnDrop` guard fires, the mock engine receives a
-//! `CancelRequest { seq_id }` with the same seq_id it assigned
+//! `CancelRequest { seq_id }` with the same `seq_id` it assigned
 //! in `AddRequest`, and we assert that's the only cancel that
 //! arrived (no redundant cancels for naturally-completed streams).
 
@@ -78,8 +78,8 @@ fn router(state: ApiState) -> Router {
 
 /// Spawn a mock engine that records every `CancelRequest`
 /// `seq_id` it sees and replies to `AddRequest` with a synthetic
-/// seq_id + a stream of tokens. Returns the engine handle and a
-/// shared vec of recorded cancel seq_ids.
+/// `seq_id` + a stream of tokens. Returns the engine handle and a
+/// shared vec of recorded cancel `seq_ids`.
 fn spawn_recording_mock_engine(
     tokens: Vec<TokenId>,
 ) -> (EngineHandle, Arc<tokio::sync::Mutex<Vec<u64>>>) {

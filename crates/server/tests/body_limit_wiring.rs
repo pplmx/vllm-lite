@@ -1,4 +1,4 @@
-//! body_size_limit wiring test.
+//! `body_size_limit` wiring test.
 //!
 //! Production-readiness input-boundary protection: the body limit
 //! middleware (see `security::size_limit`) was added in v1 but never
@@ -20,11 +20,11 @@
 //!    handler bound to it; the request body is below the 1 MiB
 //!    default and must pass the body-limit layer.
 //! 2. A request whose body exceeds the 1 MiB limit is rejected
-//!    with HTTP 413 PAYLOAD_TOO_LARGE before reaching any
+//!    with HTTP 413 `PAYLOAD_TOO_LARGE` before reaching any
 //!    handler. We POST 2 MiB and assert 413.
 //! 3. The 413 response still carries the `X-Request-ID` header,
 //!    proving the body-limit layer sits *below* the
-//!    correlation_id middleware (rejected requests are still
+//!    `correlation_id` middleware (rejected requests are still
 //!    traceable).
 
 #![cfg(test)]
@@ -53,9 +53,9 @@ async fn stub_handler(body: axum::body::Bytes) -> Result<&'static str, StatusCod
 
 /// Mirrors the production router stack from `main.rs`:
 /// `correlation_id_middleware` (outermost) → `body_size_limit`
-/// (1 MiB default) → handler. Auth and OpenAI handlers are out of
+/// (1 MiB default) → handler. Auth and `OpenAI` handlers are out of
 /// scope for this test — we only verify that the body-limit layer
-/// is mounted at the correct position relative to correlation_id.
+/// is mounted at the correct position relative to `correlation_id`.
 fn build_app() -> Router {
     let inner = Router::new().route("/stub", post(stub_handler));
     // Apply body limit first (innermost of the two layers), then

@@ -8,7 +8,7 @@
 //! `ok` — orchestrators saw an "OK" pod that was actually rejecting
 //! requests, so HPA + PDB decisions were made on stale data.
 //!
-//! The fix wires the ready_handler to the live mailbox:
+//! The fix wires the `ready_handler` to the live mailbox:
 //! `len = max_capacity - capacity`, and readiness flips to
 //! `NotReady` once the fill ratio crosses 90 %.
 //!
@@ -17,7 +17,7 @@
 //! 1. Empty mailbox → `status: ok`, HTTP 200, fill ratio 0.
 //! 2. After draining all messages (filling and then consuming from
 //!    the receiver) → fill ratio returns to 0, status `ok`.
-//! 3. Saturating the mailbox (capacity = 2, fill with 2 AddRequests
+//! 3. Saturating the mailbox (capacity = 2, fill with 2 `AddRequests`
 //!    that the mock engine never drains) → fill ratio 1.0,
 //!    status `not_ready`, HTTP 503.
 

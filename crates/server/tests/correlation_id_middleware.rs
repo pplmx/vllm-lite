@@ -1,4 +1,4 @@
-//! correlation_id_middleware wiring test.
+//! `correlation_id_middleware` wiring test.
 //!
 //! Production-readiness recommendation 6: thread a single correlation
 //! id (the `X-Request-ID` header) through every HTTP request so

@@ -4168,11 +4168,11 @@ async fn test_chat_seed_zero_is_forwarded_as_some_zero() {
 // independently exercised by `crates/core/src/sampling/tests.rs`.
 
 /// Spawn a mock engine that captures the `SamplingParams` AND emits
-/// SampledToken values with a placeholder logprob + top_logprobs
+/// `SampledToken` values with a placeholder logprob + `top_logprobs`
 /// payload. P36 wire-through tests need both the forward direction
 /// (request → engine) and the reverse direction (engine → response
 /// shape) so the existing `spawn_capturing_mock_engine` is extended
-/// to actually emit a deterministic SampledToken stream.
+/// to actually emit a deterministic `SampledToken` stream.
 fn spawn_capturing_logprob_engine() -> (
     vllm_server::api::EngineHandle,
     tokio::task::JoinHandle<()>,
@@ -4675,7 +4675,7 @@ async fn test_completions_response_omits_logprobs_when_not_requested() {
 ///
 /// Returns `(engine_tx, captured_requests, handle)` where
 /// `captured_requests` is a `Vec<...>` of the candidate counts the
-/// engine saw (one entry per AddRequest, with the logprobs the
+/// engine saw (one entry per `AddRequest`, with the logprobs the
 /// engine "returned" so the ranker picks the right one).
 fn spawn_best_of_mock_engine() -> (
     vllm_server::api::EngineHandle,
@@ -5338,7 +5338,7 @@ async fn test_completions_best_of_with_partial_engine_failure_returns_503() {
 // =============================================================================
 
 /// Mock engine fixture for stop tests: emits a configurable token
-/// sequence per AddRequest and sends `FinishReason::Stop` after the
+/// sequence per `AddRequest` and sends `FinishReason::Stop` after the
 /// last token — simulating what the real engine's `step_regular`
 /// does via `finalize_finished(seq_id, FinishReason::Stop)` when
 /// `matches_stop_sequences` returns true. Tests that need a
@@ -5346,8 +5346,8 @@ async fn test_completions_best_of_with_partial_engine_failure_returns_503() {
 /// `finish_reason_tx` themselves.
 ///
 /// Returns `(engine_tx, captured_seq_ids, handle)` where
-/// `captured_seq_ids` is the seq_id each AddRequest saw (one
-/// entry per AddRequest, in arrival order). Tests use this to
+/// `captured_seq_ids` is the `seq_id` each `AddRequest` saw (one
+/// entry per `AddRequest`, in arrival order). Tests use this to
 /// verify the engine saw the request.
 fn spawn_stop_mock_engine(
     per_seq_tokens: Vec<Vec<u32>>,
@@ -6283,12 +6283,12 @@ async fn test_chat_stop_with_max_tokens_stop_wins_when_earlier() {
 
 /// Mock engine fixture for `n > 1` tests: emits a configurable
 /// token sequence per candidate (one entry in `per_candidate_tokens`
-/// per AddRequest arrival order) and sends `FinishReason::Stop`
+/// per `AddRequest` arrival order) and sends `FinishReason::Stop`
 /// after the last token.
 ///
 /// Returns `(engine_tx, captured_token_streams, handle)` where
 /// `captured_token_streams` is `Vec<Vec<u32>>` — one inner vec per
-/// AddRequest arrival, holding the tokens that candidate was
+/// `AddRequest` arrival, holding the tokens that candidate was
 /// supposed to receive. Tests use this to (a) confirm the engine
 /// saw N independent requests (len) and (b) confirm each candidate
 /// got its own distinct token stream (per-inner-vec equality).
@@ -6442,7 +6442,10 @@ async fn test_completions_n_one_is_noop_baseline() {
         "n=1 must return exactly one CompletionChoice, got {}",
         choices.len()
     );
-    assert_eq!(choices[0].get("index").and_then(|v| v.as_i64()), Some(0));
+    assert_eq!(
+        choices[0].get("index").and_then(serde_json::Value::as_i64),
+        Some(0)
+    );
 }
 
 // -----------------------------------------------------------------------------
@@ -6501,12 +6504,12 @@ async fn test_completions_n_above_one_returns_n_choices() {
         choices.len()
     );
     assert_eq!(
-        choices[0].get("index").and_then(|v| v.as_i64()),
+        choices[0].get("index").and_then(serde_json::Value::as_i64),
         Some(0),
         "choices[0].index must be 0"
     );
     assert_eq!(
-        choices[1].get("index").and_then(|v| v.as_i64()),
+        choices[1].get("index").and_then(serde_json::Value::as_i64),
         Some(1),
         "choices[1].index must be 1"
     );
@@ -7096,13 +7099,12 @@ async fn test_completions_n_two_streaming_wire_shape() {
         .position(|e| {
             e["choices"]
                 .as_array()
-                .map(|cs| {
+                .is_some_and(|cs| {
                     cs.len() == 2
                         && cs
                             .iter()
                             .all(|c| c["finish_reason"].as_str().is_some())
                 })
-                .unwrap_or(false)
         })
         .expect("there must be a final consolidated event with N=2 choices, each carrying finish_reason");
 
@@ -7281,7 +7283,10 @@ async fn test_chat_n_one_is_noop_baseline() {
         "n=1 must return exactly one ChatChoice, got {}",
         choices.len()
     );
-    assert_eq!(choices[0].get("index").and_then(|v| v.as_i64()), Some(0));
+    assert_eq!(
+        choices[0].get("index").and_then(serde_json::Value::as_i64),
+        Some(0)
+    );
 }
 
 // -----------------------------------------------------------------------------
@@ -7341,12 +7346,12 @@ async fn test_chat_n_above_one_returns_n_choices() {
         choices.len()
     );
     assert_eq!(
-        choices[0].get("index").and_then(|v| v.as_i64()),
+        choices[0].get("index").and_then(serde_json::Value::as_i64),
         Some(0),
         "choices[0].index must be 0"
     );
     assert_eq!(
-        choices[1].get("index").and_then(|v| v.as_i64()),
+        choices[1].get("index").and_then(serde_json::Value::as_i64),
         Some(1),
         "choices[1].index must be 1"
     );
@@ -7400,7 +7405,7 @@ async fn test_chat_n_above_one_choices_have_distinct_indices() {
 
     let indices: HashSet<i64> = choices
         .iter()
-        .filter_map(|c| c.get("index").and_then(|v| v.as_i64()))
+        .filter_map(|c| c.get("index").and_then(serde_json::Value::as_i64))
         .collect();
     assert_eq!(
         indices.len(),

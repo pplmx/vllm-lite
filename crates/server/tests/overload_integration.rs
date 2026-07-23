@@ -7,7 +7,7 @@
 //!
 //! Pattern:
 //! 1. Build an `api_state_with_mock_engine` (the mock engine drains
-//!    messages but doesn't reply to the AddRequest — so messages
+//!    messages but doesn't reply to the `AddRequest` — so messages
 //!    accumulate in the mailbox).
 //! 2. Fill the mailbox beyond capacity by sending N `AddRequest`s
 //!    directly.

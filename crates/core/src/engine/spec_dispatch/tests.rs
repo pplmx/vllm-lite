@@ -572,7 +572,7 @@ fn verifier_rejects_low_prob_drafts_under_sampling() {
         model
             .forward_logits(
                 &[seq_id],
-                &[verify_tokens.clone()],
+                &[verify_tokens],
                 &[verify_positions],
                 &[vec![0_usize; 1]],
                 &[0_usize],
@@ -630,7 +630,7 @@ fn verifier_uses_argmax_when_temperature_is_zero() {
         model
             .forward_logits(
                 &[seq_id],
-                &[verify_tokens.clone()],
+                &[verify_tokens],
                 &[verify_positions],
                 &[vec![0_usize; 1]],
                 &[0_usize],

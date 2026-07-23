@@ -45,7 +45,7 @@ fn engine_scheduler_metrics_is_arc_shared() {
     // Invariant: cloning yields an Arc pointing at the same allocation
     // (this is the property main.rs relies on to share the collector
     // between the worker thread and the HTTP /metrics handler).
-    let metrics_b = engine.scheduler.metrics.clone();
+    let metrics_b = engine.scheduler.metrics;
 
     assert!(
         Arc::ptr_eq(&metrics_a, &metrics_b),
@@ -78,8 +78,8 @@ fn distinct_engines_get_distinct_collectors() {
     let engine_a = Engine::new(StubModelBackend, None::<StubModelBackend>);
     let engine_b = Engine::new(StubModelBackend, None::<StubModelBackend>);
 
-    let metrics_a = engine_a.scheduler.metrics.clone();
-    let metrics_b = engine_b.scheduler.metrics.clone();
+    let metrics_a = engine_a.scheduler.metrics;
+    let metrics_b = engine_b.scheduler.metrics;
 
     assert!(
         !Arc::ptr_eq(&metrics_a, &metrics_b),

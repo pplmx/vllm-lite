@@ -191,7 +191,7 @@ fn prefix_cache_hit_returns_same_block_ids_after_first_completion() {
     );
 }
 
-/// ARCH-01 unit-level regression: MemoryManager::release_blocks
+/// ARCH-01 unit-level regression: `MemoryManager::release_blocks`
 /// must NOT free a block whose refcount is still positive. We
 /// allocate a block, record it twice (simulating two owners), then
 /// release once — the allocator's free list must be untouched.

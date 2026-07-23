@@ -2,7 +2,7 @@
 //! hot path.
 //!
 //! Background (technical due diligence): prior to this fix, the HTTP
-//! layer accepted `temperature` / `top_p` / `top_k` from the OpenAI
+//! layer accepted `temperature` / `top_p` / `top_k` from the `OpenAI`
 //! request and stored them on the `Request`, but the engine always
 //! called `model.forward`, which chose the next token greedily inside
 //! the model layer. The parameters were silently dropped. This file
@@ -461,7 +461,7 @@ fn arch_02_logit_bias_per_sequence_divergence() {
 /// verified at the `sample_batch_with_params` boundary. This is the
 /// integration-level equivalent of
 /// `test_seed_determinism_same_seed_same_result` from the unit
-/// tests, and it's the contract the OpenAI `seed` wire-type relies
+/// tests, and it's the contract the `OpenAI` `seed` wire-type relies
 /// on.
 #[test]
 fn arch_02_seed_determinism_end_to_end() {

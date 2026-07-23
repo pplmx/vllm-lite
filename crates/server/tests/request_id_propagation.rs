@@ -1,4 +1,4 @@
-//! HTTP → engine request_id propagation (production-readiness §6).
+//! HTTP → engine `request_id` propagation (production-readiness §6).
 //!
 //! `correlation_id_middleware` (P1 batch) mints or honours an
 //! `X-Request-ID` header and installs a [`CorrelationId`] extension

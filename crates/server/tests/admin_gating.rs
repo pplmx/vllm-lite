@@ -38,7 +38,7 @@ use vllm_server::debug;
 use vllm_server::health::HealthChecker;
 use vllm_server::openai::batch::BatchManager;
 
-/// Build an `ApiState` with optional admin auth. The engine_tx is a
+/// Build an `ApiState` with optional admin auth. The `engine_tx` is a
 /// stub that immediately drops incoming messages — handlers under
 /// test reach `require_admin` before they touch the channel, so the
 /// stub never affects the test outcome.
