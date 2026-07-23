@@ -175,7 +175,7 @@ impl crate::engine::Engine {
     /// `Vec<(SeqId, SampledToken)>` so callers can surface
     /// per-token logprobs without re-running the softmax.
     pub fn step(&mut self) -> Result<Vec<(SeqId, SampledToken)>> {
-        if self.speculative_mode && self.draft_model.is_some() {
+        if self.speculative_mode && (self.draft_model.is_some() || self.draft_resolver.is_some()) {
             let max_draft = self
                 .adaptive_decoder
                 .as_ref()
