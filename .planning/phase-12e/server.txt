@@ -15,6 +15,7 @@ impl core::clone::Clone for vllm_server::config::ConfigValidationError
 impl core::clone::Clone for vllm_server::config::CorsConfigFile
 impl core::clone::Clone for vllm_server::config::DraftSpecConfig
 impl core::clone::Clone for vllm_server::config::EngineConfig
+impl core::clone::Clone for vllm_server::config::MultiNodeConfig
 impl core::clone::Clone for vllm_server::config::ServerConfig
 impl core::clone::Clone for vllm_server::health::HealthStatus
 impl core::clone::Clone for vllm_server::openai::batch::types::BatchEndpoint
@@ -87,6 +88,7 @@ impl core::default::Default for vllm_server::cli::LogLevel
 impl core::default::Default for vllm_server::config::AppConfig
 impl core::default::Default for vllm_server::config::CorsConfigFile
 impl core::default::Default for vllm_server::config::EngineConfig
+impl core::default::Default for vllm_server::config::MultiNodeConfig
 impl core::default::Default for vllm_server::config::ServerConfig
 impl core::default::Default for vllm_server::health::HealthChecker
 impl core::default::Default for vllm_server::openai::batch::manager::BatchManager
@@ -113,6 +115,7 @@ impl core::fmt::Debug for vllm_server::config::ConfigValidationErrors
 impl core::fmt::Debug for vllm_server::config::CorsConfigFile
 impl core::fmt::Debug for vllm_server::config::DraftSpecConfig
 impl core::fmt::Debug for vllm_server::config::EngineConfig
+impl core::fmt::Debug for vllm_server::config::MultiNodeConfig
 impl core::fmt::Debug for vllm_server::config::ServerConfig
 impl core::fmt::Debug for vllm_server::debug::AuditDumpResponse
 impl core::fmt::Debug for vllm_server::debug::KvCacheDumpResponse
@@ -204,6 +207,7 @@ impl core::marker::Freeze for vllm_server::config::ConfigValidationErrors
 impl core::marker::Freeze for vllm_server::config::CorsConfigFile
 impl core::marker::Freeze for vllm_server::config::DraftSpecConfig
 impl core::marker::Freeze for vllm_server::config::EngineConfig
+impl core::marker::Freeze for vllm_server::config::MultiNodeConfig
 impl core::marker::Freeze for vllm_server::config::ServerConfig
 impl core::marker::Freeze for vllm_server::debug::AuditDumpResponse
 impl core::marker::Freeze for vllm_server::debug::KvCacheDumpResponse
@@ -279,6 +283,7 @@ impl core::marker::Send for vllm_server::config::ConfigValidationErrors
 impl core::marker::Send for vllm_server::config::CorsConfigFile
 impl core::marker::Send for vllm_server::config::DraftSpecConfig
 impl core::marker::Send for vllm_server::config::EngineConfig
+impl core::marker::Send for vllm_server::config::MultiNodeConfig
 impl core::marker::Send for vllm_server::config::ServerConfig
 impl core::marker::Send for vllm_server::debug::AuditDumpResponse
 impl core::marker::Send for vllm_server::debug::KvCacheDumpResponse
@@ -367,6 +372,7 @@ impl core::marker::Sync for vllm_server::config::ConfigValidationErrors
 impl core::marker::Sync for vllm_server::config::CorsConfigFile
 impl core::marker::Sync for vllm_server::config::DraftSpecConfig
 impl core::marker::Sync for vllm_server::config::EngineConfig
+impl core::marker::Sync for vllm_server::config::MultiNodeConfig
 impl core::marker::Sync for vllm_server::config::ServerConfig
 impl core::marker::Sync for vllm_server::debug::AuditDumpResponse
 impl core::marker::Sync for vllm_server::debug::KvCacheDumpResponse
@@ -442,6 +448,7 @@ impl core::marker::Unpin for vllm_server::config::ConfigValidationErrors
 impl core::marker::Unpin for vllm_server::config::CorsConfigFile
 impl core::marker::Unpin for vllm_server::config::DraftSpecConfig
 impl core::marker::Unpin for vllm_server::config::EngineConfig
+impl core::marker::Unpin for vllm_server::config::MultiNodeConfig
 impl core::marker::Unpin for vllm_server::config::ServerConfig
 impl core::marker::Unpin for vllm_server::debug::AuditDumpResponse
 impl core::marker::Unpin for vllm_server::debug::KvCacheDumpResponse
@@ -517,6 +524,7 @@ impl core::marker::UnsafeUnpin for vllm_server::config::ConfigValidationErrors
 impl core::marker::UnsafeUnpin for vllm_server::config::CorsConfigFile
 impl core::marker::UnsafeUnpin for vllm_server::config::DraftSpecConfig
 impl core::marker::UnsafeUnpin for vllm_server::config::EngineConfig
+impl core::marker::UnsafeUnpin for vllm_server::config::MultiNodeConfig
 impl core::marker::UnsafeUnpin for vllm_server::config::ServerConfig
 impl core::marker::UnsafeUnpin for vllm_server::debug::AuditDumpResponse
 impl core::marker::UnsafeUnpin for vllm_server::debug::KvCacheDumpResponse
@@ -592,6 +600,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::config::ConfigVali
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::config::CorsConfigFile
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::config::DraftSpecConfig
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::config::EngineConfig
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::config::MultiNodeConfig
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::config::ServerConfig
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::debug::AuditDumpResponse
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_server::debug::KvCacheDumpResponse
@@ -667,6 +676,7 @@ impl core::panic::unwind_safe::UnwindSafe for vllm_server::config::ConfigValidat
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::config::CorsConfigFile
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::config::DraftSpecConfig
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::config::EngineConfig
+impl core::panic::unwind_safe::UnwindSafe for vllm_server::config::MultiNodeConfig
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::config::ServerConfig
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::debug::AuditDumpResponse
 impl core::panic::unwind_safe::UnwindSafe for vllm_server::debug::KvCacheDumpResponse
@@ -732,6 +742,7 @@ impl<'de> serde_core::de::Deserialize<'de> for vllm_server::config::AppConfig
 impl<'de> serde_core::de::Deserialize<'de> for vllm_server::config::CorsConfigFile
 impl<'de> serde_core::de::Deserialize<'de> for vllm_server::config::DraftSpecConfig
 impl<'de> serde_core::de::Deserialize<'de> for vllm_server::config::EngineConfig
+impl<'de> serde_core::de::Deserialize<'de> for vllm_server::config::MultiNodeConfig
 impl<'de> serde_core::de::Deserialize<'de> for vllm_server::config::ServerConfig
 impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::batch::types::BatchResponse
 impl<'de> serde_core::de::Deserialize<'de> for vllm_server::openai::batch::types::BatchResultItem
@@ -773,6 +784,7 @@ impl serde_core::ser::Serialize for vllm_server::config::AppConfig
 impl serde_core::ser::Serialize for vllm_server::config::CorsConfigFile
 impl serde_core::ser::Serialize for vllm_server::config::DraftSpecConfig
 impl serde_core::ser::Serialize for vllm_server::config::EngineConfig
+impl serde_core::ser::Serialize for vllm_server::config::MultiNodeConfig
 impl serde_core::ser::Serialize for vllm_server::config::ServerConfig
 impl serde_core::ser::Serialize for vllm_server::debug::AuditDumpResponse
 impl serde_core::ser::Serialize for vllm_server::debug::KvCacheDumpResponse
@@ -985,6 +997,11 @@ pub fn vllm_server::config::EngineConfig::deserialize<__D>(__D) -> core::result:
 pub fn vllm_server::config::EngineConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::config::EngineConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 pub fn vllm_server::config::is_loopback_address(&str) -> bool
+pub fn vllm_server::config::MultiNodeConfig::clone(&self) -> vllm_server::config::MultiNodeConfig
+pub fn vllm_server::config::MultiNodeConfig::default() -> Self
+pub fn vllm_server::config::MultiNodeConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn vllm_server::config::MultiNodeConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_server::config::MultiNodeConfig::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 pub fn vllm_server::config::ServerConfig::clone(&self) -> vllm_server::config::ServerConfig
 pub fn vllm_server::config::ServerConfig::default() -> Self
 pub fn vllm_server::config::ServerConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
@@ -1056,6 +1073,7 @@ pub fn vllm_server::openai::sampling_validation::validate_completion_request_fie
 pub fn vllm_server::openai::sampling_validation::validate_logit_bias(core::option::Option<&std::collections::hash::map::HashMap<vllm_traits::types::TokenId, f32>>) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub fn vllm_server::openai::sampling_validation::validate_penalty(core::option::Option<f32>, &str) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub fn vllm_server::openai::sampling_validation::validate_sampling_params(&vllm_traits::sampling::SamplingParams) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
+pub fn vllm_server::openai::sampling_validation::validate_stop_sequences(&core::option::Option<alloc::vec::Vec<alloc::string::String>>) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub fn vllm_server::openai::sampling_validation::validate_top_p(core::option::Option<f32>) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub fn vllm_server::openai::types::ChatChoice::clone(&self) -> vllm_server::openai::types::ChatChoice
 pub fn vllm_server::openai::types::ChatChoice::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
@@ -1281,6 +1299,7 @@ pub struct vllm_server::config::ConfigValidationErrors(pub alloc::vec::Vec<vllm_
 pub struct vllm_server::config::CorsConfigFile
 pub struct vllm_server::config::DraftSpecConfig
 pub struct vllm_server::config::EngineConfig
+pub struct vllm_server::config::MultiNodeConfig
 pub struct vllm_server::config::ServerConfig
 pub struct vllm_server::debug::AuditDumpResponse
 pub struct vllm_server::debug::KvCacheDumpResponse
@@ -1433,9 +1452,13 @@ pub vllm_server::config::EngineConfig::max_waiting_batches: usize
 pub vllm_server::config::EngineConfig::num_kv_blocks: usize
 pub vllm_server::config::EngineConfig::tensor_parallel_size: usize
 pub vllm_server::config::EngineConfig::vram_budget_bytes: core::option::Option<u64>
+pub vllm_server::config::MultiNodeConfig::bind_addr: alloc::string::String
+pub vllm_server::config::MultiNodeConfig::enabled: bool
+pub vllm_server::config::MultiNodeConfig::node_id: core::option::Option<alloc::string::String>
 pub vllm_server::config::ServerConfig::host: alloc::string::String
 pub vllm_server::config::ServerConfig::log_dir: core::option::Option<alloc::string::String>
 pub vllm_server::config::ServerConfig::log_level: alloc::string::String
+pub vllm_server::config::ServerConfig::multi_node: vllm_server::config::MultiNodeConfig
 pub vllm_server::config::ServerConfig::port: u16
 pub vllm_server::config::ServerConfig::shutdown_drain_grace_secs: u64
 pub vllm_server::debug::AuditDumpResponse::cap: usize

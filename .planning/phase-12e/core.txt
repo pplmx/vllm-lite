@@ -1199,6 +1199,7 @@ pub fn vllm_core::Request::with_draft_model(self, impl core::convert::Into<vllm_
 pub fn vllm_core::sampling::apply_logit_bias(&mut [f32], &std::collections::hash::map::HashMap<vllm_traits::types::TokenId, f32>)
 pub fn vllm_core::sampling::apply_presence_penalty(&mut [f32], &[vllm_traits::types::TokenId], f32)
 pub fn vllm_core::sampling::apply_repeat_penalty(&mut [f32], &[vllm_traits::types::TokenId], f32)
+pub fn vllm_core::sampling::matches_stop_sequences(&[u32], &[alloc::vec::Vec<u32>]) -> bool
 pub fn vllm_core::sampling::sample_batch(&[alloc::vec::Vec<f32>], f32, f32, usize, f32, &[alloc::vec::Vec<vllm_traits::types::TokenId>]) -> alloc::vec::Vec<vllm_traits::types::TokenId>
 pub fn vllm_core::sampling::sample_batch_with_params(&[alloc::vec::Vec<f32>], &[vllm_traits::sampling::SamplingParams], &[alloc::vec::Vec<vllm_traits::types::TokenId>]) -> alloc::vec::Vec<vllm_traits::sampling::SampledToken>
 pub fn vllm_core::sampling::sample_one_with_params(&[f32], &vllm_traits::sampling::SamplingParams, &[vllm_traits::types::TokenId]) -> vllm_traits::sampling::SampledToken
@@ -2152,8 +2153,8 @@ pub vllm_core::types::AdaptiveDraftConfig::min_draft_tokens: usize
 pub vllm_core::types::AdaptiveDraftConfig::target_acceptance_rate: f32
 pub vllm_core::types::EngineMessage::AddRequest
 pub vllm_core::types::EngineMessage::AddRequest::finish_reason_tx: core::option::Option<tokio::sync::oneshot::Sender<vllm_traits::types::FinishReason>>
+pub vllm_core::types::EngineMessage::AddRequest::request: alloc::boxed::Box<vllm_core::Request>
 pub vllm_core::types::EngineMessage::AddRequest::request_id: core::option::Option<alloc::string::String>
-pub vllm_core::types::EngineMessage::AddRequest::request: vllm_core::Request
 pub vllm_core::types::EngineMessage::AddRequest::response_tx: tokio::sync::mpsc::bounded::Sender<vllm_traits::sampling::SampledToken>
 pub vllm_core::types::EngineMessage::AddRequest::seq_id_tx: core::option::Option<tokio::sync::oneshot::Sender<vllm_traits::types::SeqId>>
 pub vllm_core::types::EngineMessage::CancelRequest

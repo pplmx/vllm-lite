@@ -69,6 +69,7 @@ impl core::convert::From<std::io::error::Error> for vllm_dist::error::GrpcError
 impl core::convert::From<tonic::status::Status> for vllm_dist::distributed_kv::block_data_source::FetchError
 impl core::convert::From<tonic::transport::error::Error> for vllm_dist::error::GrpcError
 impl core::default::Default for vllm_dist::distributed_kv::block_data_source::MockBlockDataSource
+impl core::default::Default for vllm_dist::distributed_kv::block_sink::MockBlockSink
 impl core::default::Default for vllm_dist::distributed_kv::cache::CacheStats
 impl core::default::Default for vllm_dist::distributed_kv::CacheConfig
 impl core::default::Default for vllm_dist::distributed_kv::protocol::NodeId
@@ -89,10 +90,13 @@ impl core::default::Default for vllm_dist::grpc::TransferKvBlockResponse
 impl core::default::Default for vllm_dist::pipeline::pipeline::PipelineParallel
 impl core::default::Default for vllm_dist::pipeline::pipeline::PipelineParallelConfig
 impl core::error::Error for vllm_dist::distributed_kv::block_data_source::FetchError
+impl core::error::Error for vllm_dist::distributed_kv::block_sink::WriteError
 impl core::error::Error for vllm_dist::error::GrpcError
 impl core::error::Error for vllm_dist::pipeline::PipelineError
 impl core::fmt::Debug for vllm_dist::distributed_kv::block_data_source::FetchError
 impl core::fmt::Debug for vllm_dist::distributed_kv::block_data_source::MockBlockDataSource
+impl core::fmt::Debug for vllm_dist::distributed_kv::block_sink::MockBlockSink
+impl core::fmt::Debug for vllm_dist::distributed_kv::block_sink::WriteError
 impl core::fmt::Debug for vllm_dist::distributed_kv::cache::CacheStats
 impl core::fmt::Debug for vllm_dist::distributed_kv::CacheConfig
 impl core::fmt::Debug for vllm_dist::distributed_kv::cache::DistributedKVCache
@@ -133,6 +137,7 @@ impl core::fmt::Debug for vllm_dist::tensor_parallel::parallel_linear::RowParall
 impl core::fmt::Debug for vllm_dist::tensor_parallel::parallel_linear::TensorParallelManager
 impl core::fmt::Debug for vllm_dist::types::TensorParallelConfig
 impl core::fmt::Display for vllm_dist::distributed_kv::block_data_source::FetchError
+impl core::fmt::Display for vllm_dist::distributed_kv::block_sink::WriteError
 impl core::fmt::Display for vllm_dist::error::GrpcError
 impl core::fmt::Display for vllm_dist::pipeline::PipelineError
 impl core::hash::Hash for vllm_dist::distributed_kv::protocol::NodeId
@@ -161,6 +166,8 @@ impl core::marker::Copy for vllm_dist::grpc::TransferKvBlockRequest
 impl core::marker::Copy for vllm_dist::tensor_parallel::all_reduce::ReduceOp
 impl core::marker::Freeze for vllm_dist::distributed_kv::block_data_source::FetchError
 impl core::marker::Freeze for vllm_dist::distributed_kv::block_data_source::MockBlockDataSource
+impl core::marker::Freeze for vllm_dist::distributed_kv::block_sink::MockBlockSink
+impl core::marker::Freeze for vllm_dist::distributed_kv::block_sink::WriteError
 impl core::marker::Freeze for vllm_dist::distributed_kv::cache::CacheStats
 impl core::marker::Freeze for vllm_dist::distributed_kv::CacheConfig
 impl !core::marker::Freeze for vllm_dist::distributed_kv::cache::DistributedKVCache
@@ -202,6 +209,8 @@ impl core::marker::Freeze for vllm_dist::tensor_parallel::parallel_linear::Tenso
 impl core::marker::Freeze for vllm_dist::types::TensorParallelConfig
 impl core::marker::Send for vllm_dist::distributed_kv::block_data_source::FetchError
 impl core::marker::Send for vllm_dist::distributed_kv::block_data_source::MockBlockDataSource
+impl core::marker::Send for vllm_dist::distributed_kv::block_sink::MockBlockSink
+impl core::marker::Send for vllm_dist::distributed_kv::block_sink::WriteError
 impl core::marker::Send for vllm_dist::distributed_kv::cache::CacheStats
 impl core::marker::Send for vllm_dist::distributed_kv::CacheConfig
 impl core::marker::Send for vllm_dist::distributed_kv::cache::DistributedKVCache
@@ -261,6 +270,8 @@ impl core::marker::StructuralPartialEq for vllm_dist::grpc::TransferKvBlockRespo
 impl core::marker::StructuralPartialEq for vllm_dist::tensor_parallel::all_reduce::ReduceOp
 impl core::marker::Sync for vllm_dist::distributed_kv::block_data_source::FetchError
 impl core::marker::Sync for vllm_dist::distributed_kv::block_data_source::MockBlockDataSource
+impl core::marker::Sync for vllm_dist::distributed_kv::block_sink::MockBlockSink
+impl core::marker::Sync for vllm_dist::distributed_kv::block_sink::WriteError
 impl core::marker::Sync for vllm_dist::distributed_kv::cache::CacheStats
 impl core::marker::Sync for vllm_dist::distributed_kv::CacheConfig
 impl core::marker::Sync for vllm_dist::distributed_kv::cache::DistributedKVCache
@@ -302,6 +313,8 @@ impl core::marker::Sync for vllm_dist::tensor_parallel::parallel_linear::TensorP
 impl core::marker::Sync for vllm_dist::types::TensorParallelConfig
 impl core::marker::Unpin for vllm_dist::distributed_kv::block_data_source::FetchError
 impl core::marker::Unpin for vllm_dist::distributed_kv::block_data_source::MockBlockDataSource
+impl core::marker::Unpin for vllm_dist::distributed_kv::block_sink::MockBlockSink
+impl core::marker::Unpin for vllm_dist::distributed_kv::block_sink::WriteError
 impl core::marker::Unpin for vllm_dist::distributed_kv::cache::CacheStats
 impl core::marker::Unpin for vllm_dist::distributed_kv::CacheConfig
 impl core::marker::Unpin for vllm_dist::distributed_kv::cache::DistributedKVCache
@@ -343,6 +356,8 @@ impl core::marker::Unpin for vllm_dist::tensor_parallel::parallel_linear::Tensor
 impl core::marker::Unpin for vllm_dist::types::TensorParallelConfig
 impl core::marker::UnsafeUnpin for vllm_dist::distributed_kv::block_data_source::FetchError
 impl core::marker::UnsafeUnpin for vllm_dist::distributed_kv::block_data_source::MockBlockDataSource
+impl core::marker::UnsafeUnpin for vllm_dist::distributed_kv::block_sink::MockBlockSink
+impl core::marker::UnsafeUnpin for vllm_dist::distributed_kv::block_sink::WriteError
 impl core::marker::UnsafeUnpin for vllm_dist::distributed_kv::cache::CacheStats
 impl core::marker::UnsafeUnpin for vllm_dist::distributed_kv::CacheConfig
 impl core::marker::UnsafeUnpin for vllm_dist::distributed_kv::cache::DistributedKVCache
@@ -384,6 +399,8 @@ impl core::marker::UnsafeUnpin for vllm_dist::tensor_parallel::parallel_linear::
 impl core::marker::UnsafeUnpin for vllm_dist::types::TensorParallelConfig
 impl !core::panic::unwind_safe::RefUnwindSafe for vllm_dist::distributed_kv::block_data_source::FetchError
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_dist::distributed_kv::block_data_source::MockBlockDataSource
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_dist::distributed_kv::block_sink::MockBlockSink
+impl core::panic::unwind_safe::RefUnwindSafe for vllm_dist::distributed_kv::block_sink::WriteError
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_dist::distributed_kv::cache::CacheStats
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_dist::distributed_kv::CacheConfig
 impl !core::panic::unwind_safe::RefUnwindSafe for vllm_dist::distributed_kv::cache::DistributedKVCache
@@ -425,6 +442,8 @@ impl !core::panic::unwind_safe::RefUnwindSafe for vllm_dist::tensor_parallel::pa
 impl core::panic::unwind_safe::RefUnwindSafe for vllm_dist::types::TensorParallelConfig
 impl !core::panic::unwind_safe::UnwindSafe for vllm_dist::distributed_kv::block_data_source::FetchError
 impl core::panic::unwind_safe::UnwindSafe for vllm_dist::distributed_kv::block_data_source::MockBlockDataSource
+impl core::panic::unwind_safe::UnwindSafe for vllm_dist::distributed_kv::block_sink::MockBlockSink
+impl core::panic::unwind_safe::UnwindSafe for vllm_dist::distributed_kv::block_sink::WriteError
 impl core::panic::unwind_safe::UnwindSafe for vllm_dist::distributed_kv::cache::CacheStats
 impl core::panic::unwind_safe::UnwindSafe for vllm_dist::distributed_kv::CacheConfig
 impl !core::panic::unwind_safe::UnwindSafe for vllm_dist::distributed_kv::cache::DistributedKVCache
@@ -502,6 +521,8 @@ impl<T> vllm_dist::grpc::node_service_client::NodeServiceClient<T> where T: toni
 impl<T> vllm_dist::grpc::node_service_server::NodeServiceServer<T>
 impl vllm_dist::distributed_kv::block_data_source::BlockDataSource for vllm_dist::distributed_kv::block_data_source::MockBlockDataSource
 impl vllm_dist::distributed_kv::block_data_source::MockBlockDataSource
+impl vllm_dist::distributed_kv::block_sink::BlockSink for vllm_dist::distributed_kv::block_sink::MockBlockSink
+impl vllm_dist::distributed_kv::block_sink::MockBlockSink
 impl vllm_dist::distributed_kv::CacheConfig
 impl vllm_dist::distributed_kv::cache::DistributedKVCache
 impl vllm_dist::distributed_kv::protocol::CacheMessage
@@ -538,6 +559,7 @@ pub async fn vllm_dist::grpc::start_grpc_server(alloc::string::String, &str, cor
 pub async fn vllm_dist::grpc::start_grpc_server_with_listener(alloc::string::String, tokio::net::tcp::listener::TcpListener, core::option::Option<alloc::sync::Arc<vllm_dist::distributed_kv::cache::DistributedKVCache>>, core::option::Option<alloc::sync::Arc<dyn vllm_dist::distributed_kv::block_data_source::BlockDataSource>>) -> core::result::Result<(), vllm_dist::error::GrpcError>
 pub async fn vllm_dist::start_grpc_server_with_listener(alloc::string::String, tokio::net::tcp::listener::TcpListener, core::option::Option<alloc::sync::Arc<vllm_dist::distributed_kv::cache::DistributedKVCache>>, core::option::Option<alloc::sync::Arc<dyn vllm_dist::distributed_kv::block_data_source::BlockDataSource>>) -> core::result::Result<(), vllm_dist::error::GrpcError>
 pub const fn vllm_dist::distributed_kv::cache::DistributedKVCache::peers_connected(&self) -> bool
+pub const fn vllm_dist::distributed_kv::cache::DistributedKVCache::with_install_on_fetch(self, bool) -> Self
 pub const fn vllm_dist::distributed_kv::protocol::NodeId::index(&self) -> usize
 pub const fn vllm_dist::distributed_kv::protocol::NodeId::new(usize) -> Self
 pub const fn vllm_dist::pipeline::pipeline::PipelineParallel::config(&self) -> &vllm_dist::pipeline::pipeline::PipelineParallelConfig
@@ -557,11 +579,13 @@ pub const vllm_dist::grpc::node_service_server::NodeServiceServer<T>::NAME: &'st
 pub const vllm_dist::grpc::node_service_server::SERVICE_NAME: &str
 pub const vllm_dist::MAX_BLOCK_TRANSFER_BYTES: usize
 pub enum vllm_dist::distributed_kv::block_data_source::FetchError
+pub enum vllm_dist::distributed_kv::block_sink::WriteError
 pub enum vllm_dist::distributed_kv::CacheOperation
 pub enum vllm_dist::distributed_kv::CoherenceProtocol
 pub enum vllm_dist::distributed_kv::FetchError
 pub enum vllm_dist::distributed_kv::InvalidationStrategy
 pub enum vllm_dist::distributed_kv::protocol::CacheOperation
+pub enum vllm_dist::distributed_kv::WriteError
 pub enum vllm_dist::error::GrpcError
 pub enum vllm_dist::error::PipelineError
 pub enum vllm_dist::FetchError
@@ -571,10 +595,12 @@ pub enum vllm_dist::pipeline::PipelineError
 pub enum vllm_dist::ReduceOp
 pub enum vllm_dist::tensor_parallel::all_reduce::ReduceOp
 pub enum vllm_dist::tensor_parallel::ReduceOp
+pub enum vllm_dist::WriteError
 pub fn vllm_dist::AllReduce::all_reduce_inplace(&self, &mut [f32], vllm_dist::tensor_parallel::all_reduce::ReduceOp) -> core::result::Result<(), vllm_traits::types::TensorParallelError>
 pub fn vllm_dist::AllReduce::all_reduce(&self, &[f32], vllm_dist::tensor_parallel::all_reduce::ReduceOp) -> core::result::Result<alloc::vec::Vec<f32>, vllm_traits::types::TensorParallelError>
 pub fn vllm_dist::BlockDataSource::fetch_block<'life0, 'async_trait>(&'life0 self, u64) -> core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<alloc::vec::Vec<u8>, vllm_dist::distributed_kv::block_data_source::FetchError>> + core::marker::Send + 'async_trait)>> where Self: 'async_trait, 'life0: 'async_trait
 pub fn vllm_dist::BlockDataSource::has_block<'life0, 'async_trait>(&'life0 self, u64) -> core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = bool> + core::marker::Send + 'async_trait)>> where Self: 'async_trait, 'life0: 'async_trait
+pub fn vllm_dist::BlockSink::write_block<'life0, 'life1, 'async_trait>(&'life0 self, u64, &'life1 [u8]) -> core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<(), vllm_dist::distributed_kv::block_sink::WriteError>> + core::marker::Send + 'async_trait)>> where Self: 'async_trait, 'life0: 'async_trait, 'life1: 'async_trait
 pub fn vllm_dist::distributed_kv::block_data_source::BlockDataSource::fetch_block<'life0, 'async_trait>(&'life0 self, u64) -> core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<alloc::vec::Vec<u8>, vllm_dist::distributed_kv::block_data_source::FetchError>> + core::marker::Send + 'async_trait)>> where Self: 'async_trait, 'life0: 'async_trait
 pub fn vllm_dist::distributed_kv::block_data_source::BlockDataSource::has_block<'life0, 'async_trait>(&'life0 self, u64) -> core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = bool> + core::marker::Send + 'async_trait)>> where Self: 'async_trait, 'life0: 'async_trait
 pub fn vllm_dist::distributed_kv::BlockDataSource::fetch_block<'life0, 'async_trait>(&'life0 self, u64) -> core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<alloc::vec::Vec<u8>, vllm_dist::distributed_kv::block_data_source::FetchError>> + core::marker::Send + 'async_trait)>> where Self: 'async_trait, 'life0: 'async_trait
@@ -588,6 +614,13 @@ pub fn vllm_dist::distributed_kv::block_data_source::MockBlockDataSource::fmt(&s
 pub fn vllm_dist::distributed_kv::block_data_source::MockBlockDataSource::has_block<'life0, 'async_trait>(&'life0 self, u64) -> core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = bool> + core::marker::Send + 'async_trait)>> where Self: 'async_trait, 'life0: 'async_trait
 pub fn vllm_dist::distributed_kv::block_data_source::MockBlockDataSource::insert(&mut self, u64, alloc::vec::Vec<u8>)
 pub fn vllm_dist::distributed_kv::block_data_source::MockBlockDataSource::new() -> Self
+pub fn vllm_dist::distributed_kv::block_sink::BlockSink::write_block<'life0, 'life1, 'async_trait>(&'life0 self, u64, &'life1 [u8]) -> core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<(), vllm_dist::distributed_kv::block_sink::WriteError>> + core::marker::Send + 'async_trait)>> where Self: 'async_trait, 'life0: 'async_trait, 'life1: 'async_trait
+pub fn vllm_dist::distributed_kv::block_sink::MockBlockSink::default() -> vllm_dist::distributed_kv::block_sink::MockBlockSink
+pub fn vllm_dist::distributed_kv::block_sink::MockBlockSink::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_dist::distributed_kv::block_sink::MockBlockSink::new() -> Self
+pub fn vllm_dist::distributed_kv::block_sink::MockBlockSink::write_block<'life0, 'life1, 'async_trait>(&'life0 self, u64, &'life1 [u8]) -> core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<(), vllm_dist::distributed_kv::block_sink::WriteError>> + core::marker::Send + 'async_trait)>> where Self: 'async_trait, 'life0: 'async_trait, 'life1: 'async_trait
+pub fn vllm_dist::distributed_kv::BlockSink::write_block<'life0, 'life1, 'async_trait>(&'life0 self, u64, &'life1 [u8]) -> core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<(), vllm_dist::distributed_kv::block_sink::WriteError>> + core::marker::Send + 'async_trait)>> where Self: 'async_trait, 'life0: 'async_trait, 'life1: 'async_trait
+pub fn vllm_dist::distributed_kv::block_sink::WriteError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_dist::distributed_kv::cache::CacheStats::clone(&self) -> vllm_dist::distributed_kv::cache::CacheStats
 pub fn vllm_dist::distributed_kv::cache::CacheStats::default() -> vllm_dist::distributed_kv::cache::CacheStats
 pub fn vllm_dist::distributed_kv::cache::CacheStats::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -600,6 +633,7 @@ pub fn vllm_dist::distributed_kv::cache::DistributedKVCache::connect_peers(&mut 
 pub fn vllm_dist::distributed_kv::cache::DistributedKVCache::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_dist::distributed_kv::cache::DistributedKVCache::get(&self, u64) -> core::option::Option<u64>
 pub fn vllm_dist::distributed_kv::cache::DistributedKVCache::handle_message(&self, &vllm_dist::distributed_kv::protocol::CacheMessage) -> core::option::Option<vllm_dist::distributed_kv::protocol::CacheMessage>
+pub fn vllm_dist::distributed_kv::cache::DistributedKVCache::install_block_sink(&self, alloc::sync::Arc<dyn vllm_dist::distributed_kv::block_sink::BlockSink>)
 pub fn vllm_dist::distributed_kv::cache::DistributedKVCache::invalidate(&self, u64)
 pub fn vllm_dist::distributed_kv::cache::DistributedKVCache::lookup_prefix(&self, &[u64]) -> usize
 pub fn vllm_dist::distributed_kv::cache::DistributedKVCache::new(vllm_dist::distributed_kv::CacheConfig) -> Self
@@ -608,6 +642,7 @@ pub fn vllm_dist::distributed_kv::cache::DistributedKVCache::peer_urls(&self) ->
 pub fn vllm_dist::distributed_kv::cache::DistributedKVCache::put(&self, u64, u64)
 pub fn vllm_dist::distributed_kv::cache::DistributedKVCache::stats(&self) -> vllm_dist::distributed_kv::cache::CacheStats
 pub fn vllm_dist::distributed_kv::cache::DistributedKVCache::with_block_data_source(self, alloc::sync::Arc<dyn vllm_dist::distributed_kv::block_data_source::BlockDataSource>) -> Self
+pub fn vllm_dist::distributed_kv::cache::DistributedKVCache::with_block_sink(self, alloc::sync::Arc<dyn vllm_dist::distributed_kv::block_sink::BlockSink>) -> Self
 pub fn vllm_dist::distributed_kv::CoherenceProtocol::clone(&self) -> vllm_dist::distributed_kv::CoherenceProtocol
 pub fn vllm_dist::distributed_kv::CoherenceProtocol::eq(&self, &vllm_dist::distributed_kv::CoherenceProtocol) -> bool
 pub fn vllm_dist::distributed_kv::CoherenceProtocol::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -830,6 +865,7 @@ pub fn vllm_dist::types::TensorParallelConfig::new(usize, usize, alloc::vec::Vec
 pub mod vllm_dist
 pub mod vllm_dist::distributed_kv
 pub mod vllm_dist::distributed_kv::block_data_source
+pub mod vllm_dist::distributed_kv::block_sink
 pub mod vllm_dist::distributed_kv::cache
 pub mod vllm_dist::distributed_kv::protocol
 pub mod vllm_dist::error
@@ -850,12 +886,14 @@ pub struct vllm_dist::CacheMessage
 pub struct vllm_dist::ColumnParallelLinear
 pub struct vllm_dist::DeviceMesh
 pub struct vllm_dist::distributed_kv::block_data_source::MockBlockDataSource
+pub struct vllm_dist::distributed_kv::block_sink::MockBlockSink
 pub struct vllm_dist::DistributedKVCache
 pub struct vllm_dist::distributed_kv::cache::CacheStats
 pub struct vllm_dist::distributed_kv::CacheConfig
 pub struct vllm_dist::distributed_kv::cache::DistributedKVCache
 pub struct vllm_dist::distributed_kv::CacheMessage
 pub struct vllm_dist::distributed_kv::DistributedKVCache
+pub struct vllm_dist::distributed_kv::MockBlockSink
 pub struct vllm_dist::distributed_kv::NodeId(pub usize)
 pub struct vllm_dist::distributed_kv::protocol::CacheMessage
 pub struct vllm_dist::distributed_kv::protocol::NodeId(pub usize)
@@ -879,6 +917,7 @@ pub struct vllm_dist::GrpcState
 pub struct vllm_dist::grpc::TransferKvBlockRequest
 pub struct vllm_dist::grpc::TransferKvBlockResponse
 pub struct vllm_dist::LocalSumAllReduce
+pub struct vllm_dist::MockBlockSink
 pub struct vllm_dist::NodeId(pub usize)
 pub struct vllm_dist::NodeMesh
 pub struct vllm_dist::PeerClient
@@ -913,8 +952,11 @@ pub struct vllm_dist::tensor_parallel::TensorParallelManager
 pub struct vllm_dist::types::TensorParallelConfig
 pub trait vllm_dist::AllReduce: core::marker::Send + core::marker::Sync + core::fmt::Debug
 pub trait vllm_dist::BlockDataSource: core::marker::Send + core::marker::Sync + core::fmt::Debug
+pub trait vllm_dist::BlockSink: core::marker::Send + core::marker::Sync + core::fmt::Debug
 pub trait vllm_dist::distributed_kv::block_data_source::BlockDataSource: core::marker::Send + core::marker::Sync + core::fmt::Debug
 pub trait vllm_dist::distributed_kv::BlockDataSource: core::marker::Send + core::marker::Sync + core::fmt::Debug
+pub trait vllm_dist::distributed_kv::block_sink::BlockSink: core::marker::Send + core::marker::Sync + core::fmt::Debug
+pub trait vllm_dist::distributed_kv::BlockSink: core::marker::Send + core::marker::Sync + core::fmt::Debug
 pub trait vllm_dist::grpc::node_service_server::NodeService: core::marker::Send + core::marker::Sync + 'static
 pub trait vllm_dist::pipeline::PipelineStage: core::marker::Send + core::marker::Sync + core::fmt::Debug
 pub trait vllm_dist::PipelineStage: core::marker::Send + core::marker::Sync + core::fmt::Debug
@@ -955,6 +997,15 @@ pub vllm_dist::distributed_kv::block_data_source::FetchError::NotFound(u64)
 pub vllm_dist::distributed_kv::block_data_source::FetchError::SourceUnavailable
 pub vllm_dist::distributed_kv::block_data_source::FetchError::Transport(tonic::status::Status)
 pub vllm_dist::distributed_kv::block_data_source::MockBlockDataSource::blocks: std::collections::hash::map::HashMap<u64, alloc::vec::Vec<u8>>
+pub vllm_dist::distributed_kv::block_sink::MockBlockSink::force_invalid_bytes: bool
+pub vllm_dist::distributed_kv::block_sink::MockBlockSink::force_out_of_range: bool
+pub vllm_dist::distributed_kv::block_sink::WriteError::InvalidBytes
+pub vllm_dist::distributed_kv::block_sink::WriteError::InvalidBytes::actual: usize
+pub vllm_dist::distributed_kv::block_sink::WriteError::InvalidBytes::block_id: u64
+pub vllm_dist::distributed_kv::block_sink::WriteError::InvalidBytes::expected: usize
+pub vllm_dist::distributed_kv::block_sink::WriteError::OutOfRange
+pub vllm_dist::distributed_kv::block_sink::WriteError::OutOfRange::block_id: u64
+pub vllm_dist::distributed_kv::block_sink::WriteError::SinkUnavailable
 pub vllm_dist::distributed_kv::cache::CacheStats::hits: u64
 pub vllm_dist::distributed_kv::cache::CacheStats::invalidations: u64
 pub vllm_dist::distributed_kv::cache::CacheStats::misses: u64
@@ -1002,6 +1053,8 @@ pub vllm_dist::distributed_kv::FetchError::Transport(tonic::status::Status)
 pub vllm_dist::distributed_kv::InvalidationStrategy::NoInvalidation
 pub vllm_dist::distributed_kv::InvalidationStrategy::WriteInvalidate
 pub vllm_dist::distributed_kv::InvalidationStrategy::WriteUpdate
+pub vllm_dist::distributed_kv::MockBlockSink::force_invalid_bytes: bool
+pub vllm_dist::distributed_kv::MockBlockSink::force_out_of_range: bool
 pub vllm_dist::distributed_kv::protocol::CacheMessage::destination: vllm_dist::distributed_kv::protocol::NodeId
 pub vllm_dist::distributed_kv::protocol::CacheMessage::id: u64
 pub vllm_dist::distributed_kv::protocol::CacheMessage::operation: vllm_dist::distributed_kv::protocol::CacheOperation
@@ -1024,6 +1077,13 @@ pub vllm_dist::distributed_kv::protocol::CacheOperation::Write
 pub vllm_dist::distributed_kv::protocol::CacheOperation::Write::key: u64
 pub vllm_dist::distributed_kv::protocol::CacheOperation::Write::requester: vllm_dist::distributed_kv::protocol::NodeId
 pub vllm_dist::distributed_kv::protocol::CacheOperation::Write::value_hash: u64
+pub vllm_dist::distributed_kv::WriteError::InvalidBytes
+pub vllm_dist::distributed_kv::WriteError::InvalidBytes::actual: usize
+pub vllm_dist::distributed_kv::WriteError::InvalidBytes::block_id: u64
+pub vllm_dist::distributed_kv::WriteError::InvalidBytes::expected: usize
+pub vllm_dist::distributed_kv::WriteError::OutOfRange
+pub vllm_dist::distributed_kv::WriteError::OutOfRange::block_id: u64
+pub vllm_dist::distributed_kv::WriteError::SinkUnavailable
 pub vllm_dist::error::GrpcError::Bind(std::io::error::Error)
 pub vllm_dist::error::GrpcError::Transport(tonic::transport::error::Error)
 pub vllm_dist::error::PipelineError::DeviceError(alloc::string::String)
@@ -1081,6 +1141,8 @@ pub vllm_dist::grpc::TransferKvBlockResponse::block_id: u64
 pub vllm_dist::grpc::TransferKvBlockResponse::chain_hash: u64
 pub vllm_dist::grpc::TransferKvBlockResponse::data: alloc::vec::Vec<u8>
 pub vllm_dist::grpc::TransferKvBlockResponse::num_tokens: u32
+pub vllm_dist::MockBlockSink::force_invalid_bytes: bool
+pub vllm_dist::MockBlockSink::force_out_of_range: bool
 pub vllm_dist::NodeMesh::global_rank: usize
 pub vllm_dist::NodeMesh::global_world_size: usize
 pub vllm_dist::NodeMesh::local_world_size: usize
@@ -1183,3 +1245,10 @@ pub vllm_dist::tensor_parallel::ReduceOp::Sum
 pub vllm_dist::types::TensorParallelConfig::device_ids: alloc::vec::Vec<usize>
 pub vllm_dist::types::TensorParallelConfig::rank: usize
 pub vllm_dist::types::TensorParallelConfig::world_size: usize
+pub vllm_dist::WriteError::InvalidBytes
+pub vllm_dist::WriteError::InvalidBytes::actual: usize
+pub vllm_dist::WriteError::InvalidBytes::block_id: u64
+pub vllm_dist::WriteError::InvalidBytes::expected: usize
+pub vllm_dist::WriteError::OutOfRange
+pub vllm_dist::WriteError::OutOfRange::block_id: u64
+pub vllm_dist::WriteError::SinkUnavailable

@@ -229,6 +229,8 @@ pub fn vllm_traits::sampling::SamplingParamsBuilder::default() -> vllm_traits::s
 pub fn vllm_traits::sampling::SamplingParamsBuilder::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_traits::sampling::SamplingParams::builder() -> vllm_traits::sampling::SamplingParamsBuilder
 pub fn vllm_traits::sampling::SamplingParamsBuilder::with_logit_bias(self, core::option::Option<std::collections::hash::map::HashMap<vllm_traits::types::TokenId, f32>>) -> Self
+pub fn vllm_traits::sampling::SamplingParamsBuilder::with_stop_token_sequences_none(self) -> Self
+pub fn vllm_traits::sampling::SamplingParamsBuilder::with_stop_token_sequences(self, alloc::vec::Vec<alloc::vec::Vec<vllm_traits::types::TokenId>>) -> Self
 pub fn vllm_traits::sampling::SamplingParams::clone(&self) -> vllm_traits::sampling::SamplingParams
 pub fn vllm_traits::sampling::SamplingParams::default() -> Self
 pub fn vllm_traits::sampling::SamplingParams::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
@@ -327,6 +329,7 @@ pub vllm_traits::SamplingParams::max_retries: u32
 pub vllm_traits::SamplingParams::presence_penalty: f32
 pub vllm_traits::SamplingParams::repeat_penalty: f32
 pub vllm_traits::SamplingParams::seed: core::option::Option<u64>
+pub vllm_traits::SamplingParams::stop_token_sequences: core::option::Option<alloc::vec::Vec<alloc::vec::Vec<vllm_traits::types::TokenId>>>
 pub vllm_traits::SamplingParams::temperature: f32
 pub vllm_traits::SamplingParams::top_k: usize
 pub vllm_traits::SamplingParams::top_logprobs: core::option::Option<u32>
@@ -341,6 +344,7 @@ pub vllm_traits::sampling::SamplingParams::max_retries: u32
 pub vllm_traits::sampling::SamplingParams::presence_penalty: f32
 pub vllm_traits::sampling::SamplingParams::repeat_penalty: f32
 pub vllm_traits::sampling::SamplingParams::seed: core::option::Option<u64>
+pub vllm_traits::sampling::SamplingParams::stop_token_sequences: core::option::Option<alloc::vec::Vec<alloc::vec::Vec<vllm_traits::types::TokenId>>>
 pub vllm_traits::sampling::SamplingParams::temperature: f32
 pub vllm_traits::sampling::SamplingParams::top_k: usize
 pub vllm_traits::sampling::SamplingParams::top_logprobs: core::option::Option<u32>
