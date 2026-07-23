@@ -21,6 +21,7 @@ opentelemetry_sdk = { workspace = true, optional = true }
 opentelemetry-otlp = { workspace = true, optional = true }
 opentelemetry-semantic-conventions = { workspace = true, optional = true }
 tracing-opentelemetry = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true, features = ["env-filter"] }
 uuid = { workspace = true }
 
 [features]
@@ -32,6 +33,7 @@ opentelemetry = [
     "dep:opentelemetry-otlp",
     "dep:opentelemetry-semantic-conventions",
     "dep:tracing-opentelemetry",
+    "dep:tracing-subscriber",
 ]
 
 [dependencies.vllm-model]

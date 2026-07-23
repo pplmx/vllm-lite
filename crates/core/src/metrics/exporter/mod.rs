@@ -18,7 +18,7 @@
 mod prometheus;
 
 #[cfg(feature = "opentelemetry")]
-mod otlp;
+pub(crate) mod otlp;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

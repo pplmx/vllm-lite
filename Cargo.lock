@@ -4182,6 +4182,8 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-opentelemetry",
+ "tracing-subscriber",
+ "uuid",
  "vllm-dist",
  "vllm-model",
  "vllm-testing",
