@@ -340,6 +340,7 @@ pub struct ChatRequest {
     /// negative logits symmetrically:
     ///   - logit >= 0: divide by `repeat_penalty`
     ///   - logit < 0: multiply by `repeat_penalty`
+    ///
     /// This gives the OpenAI-spec behaviour for both
     /// `frequency_penalty >= 0` (penalize: positive logits shrink,
     /// negative logits grow more negative) and `frequency_penalty < 0`
