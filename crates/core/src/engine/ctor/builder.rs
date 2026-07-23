@@ -87,6 +87,14 @@ impl std::fmt::Debug for EngineBuilder {
                 &self.draft_resolver.as_ref().map(Arc::strong_count),
             )
             .field("sleep_policy", &self.sleep_policy);
+        #[cfg(feature = "cuda-graph")]
+        dbg.field(
+            "cuda_graph_executor",
+            &self
+                .cuda_graph_executor
+                .as_ref()
+                .map(|_| "<dyn CudaGraphExecutor>"),
+        );
         #[cfg(feature = "multi-node")]
         dbg.field(
             "distributed_kv",
