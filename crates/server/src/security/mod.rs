@@ -1,13 +1,21 @@
 //! Public API surface of the security subsystem: re-exports the JWT, RBAC, audit, TLS, CORS, and size-limit modules under one namespace.
 //!
 //! Mounted into the server's axum router via `security::install_middleware`.
+/// Structured audit logging: in-memory ring buffer + `/debug/audit` export.
 pub mod audit;
+/// Audit-logging request-layer middleware.
 pub mod audit_middleware;
+/// Request correlation ID assignment and propagation.
 pub mod correlation;
+/// CORS middleware with explicit allowlist (no wildcard).
 pub mod cors;
+/// JWT validation and auth middleware.
 pub mod jwt;
+/// Role-based access control middleware.
 pub mod rbac;
+/// Request body size-limit enforcement.
 pub mod size_limit;
+/// TLS configuration and certificate loading.
 pub mod tls;
 
 pub use audit::AuditLogger;
