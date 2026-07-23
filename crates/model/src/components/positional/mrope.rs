@@ -26,6 +26,12 @@ pub struct MRoPE {
 }
 
 impl MRoPE {
+    /// Construct a new `MRoPE` with explicit parameters.
+    ///
+    /// `sections` defines the size of each rotary section (e.g. `[85, 85, 86]`
+    /// for a 256-dim head split into temporal / height / width axes).
+    /// `partial_rotary_factor` controls what fraction of the head dimension
+    /// is rotated (typically 0.25 for Qwen3.5-VL).
     #[must_use]
     pub const fn new(
         dim: usize,
@@ -41,6 +47,9 @@ impl MRoPE {
         }
     }
 
+    /// Build an `MRoPE` from a Qwen3 config, extracting `mrope_section`
+    /// and `partial_rotary_factor` from `rope_parameters`. Falls back to
+    /// evenly-split thirds when no sections are specified.
     #[must_use]
     pub fn from_config(config: &Qwen3Config) -> Self {
         let rope_params = config.rope_parameters();

@@ -13,6 +13,7 @@ pub struct LnLayerNorm {
 }
 
 impl LnLayerNorm {
+    /// Construct a new `LnLayerNorm` from pre-loaded weight, bias, and epsilon.
     #[must_use]
     pub const fn new(weight: Tensor, bias: Tensor, eps: f64) -> Self {
         Self { weight, bias, eps }

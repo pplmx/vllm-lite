@@ -200,36 +200,43 @@ impl GqaAttention {
         }
     }
 
+    /// Number of query attention heads.
     #[must_use]
     pub const fn num_heads(&self) -> usize {
         self.num_heads
     }
 
+    /// Number of key/value attention heads (shared via GQA grouping).
     #[must_use]
     pub const fn num_kv_heads(&self) -> usize {
         self.num_kv_heads
     }
 
+    /// Dimensionality of each attention head.
     #[must_use]
     pub const fn head_dim(&self) -> usize {
         self.head_dim
     }
 
+    /// Access the output projection linear layer.
     #[must_use]
     pub(crate) const fn o_proj_linear(&self) -> &Linear {
         &self.o_proj
     }
 
+    /// Whether query-layer-norm (QK-norm) is enabled.
     #[must_use]
     pub const fn has_q_norm(&self) -> bool {
         self.q_norm.is_some()
     }
 
+    /// Whether key-layer-norm (QK-norm) is enabled.
     #[must_use]
     pub const fn has_k_norm(&self) -> bool {
         self.k_norm.is_some()
     }
 
+    /// The attention configuration (tile size, fusion flag).
     #[must_use]
     pub const fn config(&self) -> &AttentionConfig {
         &self.config

@@ -71,25 +71,25 @@ impl SSMHarmonicSSMLayer {
         Ok((delta, b.clone(), c.clone(), x_conv))
     }
 
-    /// Run the operation (see signature for params and return type).
-    /// # Errors
-    ///
-    /// Returns `Err` if the operation fails.
+    /// Inner (expanded) dimension used by this layer.
     #[must_use]
     pub const fn d_inner(&self) -> usize {
         self.d_inner
     }
 
+    /// SSM state dimension used by this layer.
     #[must_use]
     pub const fn d_state(&self) -> usize {
         self.d_state
     }
 
+    /// Access the `A_log` (state transition) tensor.
     #[must_use]
     pub const fn a_log(&self) -> &Tensor {
         &self.a_log
     }
 
+    /// Access the `dt_bias` (step-size bias) tensor.
     #[must_use]
     pub const fn dt_bias(&self) -> &Tensor {
         &self.dt_bias

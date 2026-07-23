@@ -59,6 +59,10 @@ pub struct RoPE {
 }
 
 impl RoPE {
+    /// Construct a new `RoPE` with default (unscaled) scaling.
+    ///
+    /// Use [`RoPE::new_with_scaling`] when long-context scaling fields
+    /// (`YaARN`, Linear, Dynamic, Su) are available from the architecture config.
     #[must_use]
     pub fn new(
         head_dim: usize,
@@ -125,6 +129,8 @@ impl RoPE {
         }
     }
 
+    /// Long-context scaling factor (e.g. 4.0 for 4× context extension).
+    /// `1.0` when no scaling is configured.
     #[must_use]
     pub const fn scaling_factor(&self) -> f32 {
         self.scaling_factor
@@ -515,6 +521,15 @@ fn apply_rope_with_inv_freq(query: &Tensor, positions: &[i64], inv_freq: &[f32])
     result.transpose(1, 2)
 }
 
+/// Precompute a static `(cos, sin)` cache for every `[position, dim]` pair.
+///
+/// Returns a flat `Vec` of length `seq_len * head_dim / 2`, indexed as
+/// `cache[pos * head_dim/2 + i]` for position `pos` and frequency index `i`.
+/// Each entry is `(cos(angle), sin(angle))` where
+/// `angle = pos * theta^(-2i/head_dim)` — the standard RoPE formula.
+///
+/// For `pos = 0` every angle is 0, so the cache yields `(1.0, 0.0)` (identity
+/// rotation), which is the expected behaviour for the first token.
 #[must_use]
 pub fn precompute_rope_cache(seq_len: usize, head_dim: usize, theta: f32) -> Vec<(f32, f32)> {
     // invariant: `seq_len` and `head_dim/2` are model-architecture constants

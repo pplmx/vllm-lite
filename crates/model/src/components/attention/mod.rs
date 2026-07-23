@@ -7,14 +7,19 @@
 //! `paged_attention`, `tiled_attention`, `AttentionConfig`) live in
 //! the `util` module and are re-exported here for convenience.
 
+/// Flash attention v1 reference implementation.
 pub mod flash;
 /// flash_attention_v3: flash attention v3 module.
 pub mod flash_attention_v3;
+/// Grouped-Query Attention (GQA): shared KV heads across query head groups.
 pub mod gqa;
+/// Multi-head Latent Attention (MLA) for DeepSeek-style compression.
 pub mod mla;
+/// Paged GQA: KV-cache stored in physical blocks with indirection.
 pub mod paged_gqa;
+/// RoPE-wrapped GQA attention for Qwen3/Qwen3.5 (adds QK-norm + RoPE).
 pub mod rope_gqa;
-/// util: shared attention utilities (expand_kv, causal_mask, paged/tiled attention).
+/// Shared attention utilities (expand_kv, causal_mask, paged/tiled attention).
 pub mod util;
 
 pub use flash_attention_v3::{

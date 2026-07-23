@@ -81,21 +81,25 @@ impl SSMLayer {
         Ok((delta, b.clone(), c.clone(), x_conv))
     }
 
+    /// Inner (expanded) dimension used by this layer.
     #[must_use]
     pub const fn d_inner(&self) -> usize {
         self.d_inner
     }
 
+    /// SSM state dimension used by this layer.
     #[must_use]
     pub const fn d_state(&self) -> usize {
         self.d_state
     }
 
+    /// Access the `A_log` (state transition) linear projection.
     #[must_use]
     pub const fn a_log(&self) -> &Linear {
         &self.a_log
     }
 
+    /// Access the `D` (residual) linear projection.
     #[must_use]
     pub const fn d_linear(&self) -> &Linear {
         &self.d

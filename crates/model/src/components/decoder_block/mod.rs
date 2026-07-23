@@ -6,6 +6,7 @@
 //!
 //! [`TransformerBlock`]: crate::components::block::TransformerBlock
 
+/// Factory functions for constructing decoder blocks from config or weights.
 pub mod factory;
 
 use crate::components::LnLayerNorm;
@@ -26,6 +27,7 @@ pub struct RopeGqaDecoderBlock {
 }
 
 impl RopeGqaDecoderBlock {
+    /// Construct a decoder block from pre-built layer-norm, attention, and MLP components.
     #[must_use]
     pub const fn new(
         input_layernorm: LnLayerNorm,
