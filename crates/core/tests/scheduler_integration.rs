@@ -225,3 +225,61 @@ fn test_scheduler_concurrent_requests() {
     // Should have processed some requests
     assert!(engine.running_count() > 0 || engine.waiting_count() > 0 || !engine.has_pending());
 }
+
+#[test]
+fn test_finish_sequence_excludes_from_future_batches() {
+    // Regression test for a bug where stop-sequence-matched sequences
+    // were finalized via `finalize_finished` (dropping the response
+    // channel + sending FinishReason::Stop) but were NOT marked as
+    // `Finished` in the scheduler. Without the status change + block
+    // release, the sequence lingered in `running` (status still
+    // `Decoding`) and was re-included in every subsequent `build_batch`,
+    // wasting compute on tokens the client never sees and leaking KV
+    // blocks until `max_tokens` was eventually hit.
+    let config = SchedulerConfig::default();
+    let mut engine = create_test_engine(config, 1024);
+
+    // max_tokens well above prompt_len so update() does NOT finish
+    // the sequence via the max_tokens path.
+    engine.add_request(Request::new(0, vec![1, 2, 3], 100));
+
+    // Build batch (prefill), process it — sequence transitions to
+    // Decoding and stays in running.
+    let batch = engine.build_batch();
+    assert!(!batch.is_empty());
+    let input_counts: Vec<usize> = batch.input_tokens.iter().map(std::vec::Vec::len).collect();
+    engine.update(
+        &batch.seq_ids,
+        &[SampledToken {
+            token: 42,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &input_counts,
+    );
+
+    // update() did NOT finish the sequence (max_tokens=100 >> 4 tokens).
+    assert_eq!(engine.running_count(), 1);
+    assert!(engine.get_sequence(1).is_some());
+
+    // Simulate a stop-sequence match.
+    engine.finish_sequence(1);
+
+    // The sequence must be excluded from running so build_batch
+    // doesn't re-schedule it.
+    assert_eq!(engine.running_count(), 0);
+    assert!(engine.get_sequence(1).is_none());
+
+    // build_batch must not re-schedule the finished sequence. Before
+    // the fix, it would have appeared here again.
+    let next_batch = engine.build_batch();
+    assert!(
+        next_batch.is_empty(),
+        "finish_sequence must exclude the sequence from future batches"
+    );
+
+    // The finished sequence is in the finished set (not silently lost).
+    let finished = engine.finished_sequences();
+    assert_eq!(finished.len(), 1);
+    assert_eq!(finished[0].id, 1);
+}

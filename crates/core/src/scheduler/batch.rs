@@ -156,8 +156,17 @@ impl crate::engine::Engine {
         // whose freshly-sampled token completed a pre-tokenized
         // `stop_token_sequences` match. The matched token was emitted
         // above; this call drops the channel and signals Stop to the
-        // HTTP handler so the next `step` excludes the sequence.
+        // HTTP handler.
+        //
+        // `finish_sequence` marks the sequence as `Finished` in the
+        // scheduler (releasing KV blocks + moving it to `self.finished`)
+        // so the next `build_batch` excludes it. Without this, the
+        // sequence lingers in `running` (status still `Decoding`) and
+        // gets re-scheduled on every subsequent step — the model keeps
+        // generating tokens that are silently dropped because the
+        // response channel was removed.
         for seq_id in &newly_stopped {
+            self.scheduler.finish_sequence(*seq_id);
             self.finalize_finished(*seq_id, FinishReason::Stop);
         }
 

@@ -169,4 +169,31 @@ impl SchedulerEngine {
 
         self.running.retain(|s| s.status != Status::Finished);
     }
+
+    /// Mark a sequence as finished due to an external completion
+    /// condition (e.g. a matched stop-sequence), releasing its KV
+    /// blocks and moving it to the finished set.
+    ///
+    /// `update` only finalizes sequences that hit `max_tokens`; stop-
+    /// matched sequences are detected separately in the engine's step
+    /// loop and must be finalized here so they don't linger in `running`
+    /// (status still `Decoding`). Without this, the sequence would be
+    /// re-included in every subsequent batch — wasting compute on
+    /// tokens the client will never see and leaking KV cache blocks
+    /// until `max_tokens` is eventually reached.
+    pub fn finish_sequence(&mut self, seq_id: SeqId) {
+        // invariant: position search is bounded by running.len(), which
+        // is capped at config.max_running (256 default).
+        let Some(idx) = self.running.iter().position(|s| s.id == seq_id) else {
+            return;
+        };
+        let mut seq = self.running.remove(idx);
+        seq.status = Status::Finished;
+        self.observers.dispatch(&ObserverEvent::SequenceFinished {
+            seq_id: seq.id,
+            total_tokens: seq.tokens.len(),
+        });
+        self.memory.release_blocks(seq.kv_blocks.as_ref());
+        self.finished.push(seq);
+    }
 }
