@@ -178,3 +178,60 @@ fn test_validate_draft_spec_unique_ids_ok() {
     ];
     assert!(config.validate().is_ok());
 }
+
+// ─────────────────── P43 T5: observability config tests ───────────────────
+
+#[cfg(feature = "opentelemetry")]
+#[test]
+fn app_config_parses_otlp_section() {
+    let yaml = r#"
+server:
+  port: 8000
+observability:
+  otlp:
+    enabled: true
+    endpoint: "http://collector:4317"
+    metrics_export_interval_secs: 15
+    trace_sampling_ratio: 0.5
+"#;
+    let cfg: AppConfig = serde_saphyr::from_str(yaml).expect("yaml parses");
+    assert!(cfg.observability.otlp.enabled);
+    assert_eq!(cfg.observability.otlp.endpoint, "http://collector:4317");
+    assert_eq!(
+        cfg.observability.otlp.metrics_export_interval_secs,
+        15
+    );
+    assert!(
+        (cfg.observability.otlp.trace_sampling_ratio - 0.5).abs() < f64::EPSILON
+    );
+}
+
+#[cfg(feature = "opentelemetry")]
+#[test]
+fn app_config_defaults_otlp_disabled_when_section_missing() {
+    let yaml = r#"
+server:
+  port: 8000
+"#;
+    let cfg: AppConfig = serde_saphyr::from_str(yaml).expect("yaml parses");
+    assert!(!cfg.observability.otlp.enabled);
+    assert_eq!(
+        cfg.observability.otlp.endpoint,
+        "http://localhost:4317"
+    );
+    assert_eq!(
+        cfg.observability.otlp.metrics_export_interval_secs,
+        30
+    );
+}
+
+#[cfg(feature = "opentelemetry")]
+#[test]
+fn app_config_default_has_observability_section() {
+    let cfg = AppConfig::default();
+    assert!(!cfg.observability.otlp.enabled);
+    assert_eq!(
+        cfg.observability.otlp.service_name,
+        "vllm-lite"
+    );
+}

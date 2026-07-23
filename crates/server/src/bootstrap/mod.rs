@@ -14,4 +14,6 @@
 
 pub mod engine;
 pub mod grpc;
+#[cfg(feature = "opentelemetry")]
+pub mod observability;
 pub mod tokenizer;

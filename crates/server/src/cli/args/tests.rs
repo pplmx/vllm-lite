@@ -336,3 +336,58 @@ fn test_to_app_config_with_log_dir() {
 
     assert_eq!(config.server.log_dir, Some("/var/log/vllm".to_string()));
 }
+
+// ─────────────────── P43 T5: --otlp-endpoint CLI override ───────────────────
+
+#[cfg(feature = "opentelemetry")]
+#[test]
+fn test_otlp_endpoint_defaults_to_none() {
+    let cli = CliArgs::parse_from(["vllm-server", "-m", "/test/model"]);
+    assert!(cli.otlp_endpoint.is_none());
+}
+
+#[cfg(feature = "opentelemetry")]
+#[test]
+fn test_otlp_endpoint_long_flag() {
+    let cli = CliArgs::parse_from([
+        "vllm-server",
+        "-m",
+        "/test/model",
+        "--otlp-endpoint",
+        "http://otlp-collector:4317",
+    ]);
+    assert_eq!(
+        cli.otlp_endpoint,
+        Some("http://otlp-collector:4317".to_string())
+    );
+}
+
+#[cfg(feature = "opentelemetry")]
+#[test]
+fn test_to_app_config_otlp_endpoint_overrides_yaml() {
+    let cli = CliArgs::parse_from([
+        "vllm-server",
+        "-m",
+        "/test/model",
+        "--otlp-endpoint",
+        "http://otlp-collector:4317",
+    ]);
+    let config = cli.to_app_config();
+
+    // --otlp-endpoint implicitly enables OTLP and overrides the endpoint.
+    assert!(config.observability.otlp.enabled);
+    assert_eq!(
+        config.observability.otlp.endpoint,
+        "http://otlp-collector:4317"
+    );
+}
+
+#[cfg(feature = "opentelemetry")]
+#[test]
+fn test_to_app_config_otlp_endpoint_no_override_when_not_set() {
+    let cli = CliArgs::parse_from(["vllm-server", "-m", "/test/model"]);
+    let config = cli.to_app_config();
+
+    // Without --otlp-endpoint, OTLP stays disabled (default).
+    assert!(!config.observability.otlp.enabled);
+}

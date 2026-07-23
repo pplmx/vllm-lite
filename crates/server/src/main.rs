@@ -47,6 +47,36 @@ async fn main() -> Result<()> {
     }
 
     let log_dir = app_config.server.log_dir.as_ref().map(PathBuf::from);
+
+    // P43 T5: when the `opentelemetry` feature is enabled *and* OTLP is
+    // enabled in config, initialise tracing with the OTLP bridge instead of
+    // the default `logging::init_logging`. The `OtlpGuard` returned here
+    // flushes pending spans on drop (graceful shutdown).
+    //
+    // When OTLP is disabled (or the feature is off), fall through to the
+    // existing `logging::init_logging` path — console + optional JSON file.
+    #[cfg(feature = "opentelemetry")]
+    let _otlp_guard: Option<vllm_core::tracing_init::OtlpGuard> = if app_config.observability.otlp.enabled {
+        use tracing_subscriber::EnvFilter;
+        let env_filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new(&app_config.server.log_level));
+        match vllm_core::tracing_init::init_tracing_with_otlp(env_filter, app_config.observability.otlp.clone()) {
+            Ok(guard) => Some(guard),
+            Err(e) => {
+                // Subscriber may already be initialised (e.g. a prior call
+                // raced). Warn and continue without the OTLP span bridge;
+                // the metrics exporter still runs independently.
+                logging::init_logging(log_dir, &app_config.server.log_level);
+                tracing::warn!(error = %e, "OTLP tracing init failed; continuing without OTLP span bridge");
+                None
+            }
+        }
+    } else {
+        logging::init_logging(log_dir, &app_config.server.log_level);
+        None
+    };
+
+    #[cfg(not(feature = "opentelemetry"))]
     logging::init_logging(log_dir, &app_config.server.log_level);
 
     tracing::info!("Starting vllm-lite");
@@ -155,7 +185,24 @@ async fn main() -> Result<()> {
     // surfaces the same source of truth.
     let metrics_collector = engine.scheduler.metrics.clone();
 
-    // Production-readiness recommendation (graceful shutdown): keep
+    // P43 T5: spawn the OTLP metrics background task if enabled. The
+    // `OtlpGuard` from `init_tracing_with_otlp` (above) handles span flushing
+    // on shutdown; this handle aborts the metrics polling task. Both are
+    // dropped at the end of `main` via the `#[cfg]` guards below.
+    #[cfg(feature = "opentelemetry")]
+    let _otlp_handle: Option<bootstrap::observability::OtlpHandle> =
+        bootstrap::observability::spawn_otlp_exporter(
+            metrics_collector.clone(),
+            app_config.observability.otlp.clone(),
+        )
+        .map_err(|e| {
+            tracing::warn!(error = %e, "OTLP exporter spawn failed; continuing without OTLP metrics");
+            e
+        })
+        .ok()
+        .flatten();
+
+    // Production-readliness recommendation (graceful shutdown): keep
     // the engine worker's JoinHandle so we can wait for it to exit
     // AFTER sending `EngineMessage::Shutdown`. Without this, the
     // process exits immediately after the HTTP server returns and

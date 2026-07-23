@@ -31,19 +31,44 @@ pub enum OtlpProtocol {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OtlpConfig {
     /// Master switch — when `false`, the bootstrap skips OTLP entirely.
+    #[serde(default)]
     pub enabled: bool,
     /// OTLP collector endpoint (gRPC). Default: `"http://localhost:4317"`.
+    #[serde(default = "OtlpConfig::default_endpoint")]
     pub endpoint: String,
     /// ``OTel`` `service.name` resource attribute.
+    #[serde(default = "OtlpConfig::default_service_name")]
     pub service_name: String,
     /// `OTel` `service.version` resource attribute (synced from the release manifest).
+    #[serde(default = "OtlpConfig::default_service_version")]
     pub service_version: String,
     /// Metrics export interval in seconds. Default: `30`.
+    #[serde(default = "OtlpConfig::default_metrics_export_interval_secs")]
     pub metrics_export_interval_secs: u64,
     /// Trace sampling ratio in `[0.0, 1.0]`. Default: `1.0` (always sample).
+    #[serde(default = "OtlpConfig::default_trace_sampling_ratio")]
     pub trace_sampling_ratio: f64,
     /// OTLP transport protocol. Default: `Grpc`.
+    #[serde(default)]
     pub protocol: OtlpProtocol,
+}
+
+impl OtlpConfig {
+    fn default_endpoint() -> String {
+        "http://localhost:4317".to_string()
+    }
+    fn default_service_name() -> String {
+        "vllm-lite".to_string()
+    }
+    fn default_service_version() -> String {
+        env!("CARGO_PKG_VERSION").to_string()
+    }
+    const fn default_metrics_export_interval_secs() -> u64 {
+        30
+    }
+    const fn default_trace_sampling_ratio() -> f64 {
+        1.0
+    }
 }
 
 impl Default for OtlpConfig {

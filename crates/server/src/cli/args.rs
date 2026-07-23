@@ -116,6 +116,14 @@ pub struct CliArgs {
 
     #[command(flatten)]
     config: ConfigArgs,
+
+    /// OTLP collector endpoint override (e.g. `http://localhost:4317`).
+    /// When set, enables the OTLP exporter and overrides the
+    /// `observability.otlp.endpoint` YAML setting. Only available when the
+    /// `opentelemetry` Cargo feature is enabled.
+    #[cfg(feature = "opentelemetry")]
+    #[arg(long, env = "VLLM_OTLP_ENDPOINT")]
+    pub otlp_endpoint: Option<String>,
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -244,6 +252,15 @@ impl CliArgs {
             .log_dir
             .as_ref()
             .map(|p| p.to_string_lossy().to_string());
+
+        // P43 T5: --otlp-endpoint overrides the YAML `observability.otlp`
+        // section and implicitly enables the exporter. Only compiled when
+        // the `opentelemetry` feature is on the server crate.
+        #[cfg(feature = "opentelemetry")]
+        if let Some(endpoint) = self.otlp_endpoint.as_ref() {
+            config.observability.otlp.enabled = true;
+            config.observability.otlp.endpoint = endpoint.clone();
+        }
 
         config
     }

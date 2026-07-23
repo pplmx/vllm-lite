@@ -10,6 +10,8 @@
 //! - `server` — `ServerConfig` (bind address, port, log level)
 //! - `engine` — `EngineConfig` + `DraftSpecConfig` (scheduler tuning, draft specs)
 //! - `auth` — `AuthConfig` + `resolve_api_keys` (API keys + rate limit)
+//! - `observability` — `ObservabilityConfig` (OTLP exporter settings, gated
+//!   behind the `opentelemetry` Cargo feature)
 
 // `ConfigXxx` / `AppConfig` / `ServerConfig` etc. are intentional public
 // API names — re-exported across the workspace and consumed by
@@ -21,6 +23,8 @@ mod auth;
 mod cors;
 mod engine;
 mod multi_node;
+#[cfg(feature = "opentelemetry")]
+mod observability;
 mod server;
 
 use serde::{Deserialize, Serialize};
@@ -65,6 +69,8 @@ pub use auth::AuthConfig;
 pub use cors::CorsConfigFile;
 pub use engine::{DraftSpecConfig, EngineConfig};
 pub use multi_node::MultiNodeConfig;
+#[cfg(feature = "opentelemetry")]
+pub use observability::ObservabilityConfig;
 pub use server::{ServerConfig, is_loopback_address};
 
 /// Top-level server configuration. Composes the three independent
@@ -88,6 +94,13 @@ pub struct AppConfig {
     /// `cors.allow_origins` in the YAML/JSON config.
     #[serde(default)]
     pub cors: CorsConfigFile,
+    /// Observability configuration (OTLP exporter). Defaults to
+    /// `ObservabilityConfig::default()` (OTLP disabled). Override via the
+    /// `observability` section of the server YAML or the `--otlp-endpoint`
+    /// CLI flag. Only present when the `opentelemetry` Cargo feature is enabled.
+    #[cfg(feature = "opentelemetry")]
+    #[serde(default)]
+    pub observability: ObservabilityConfig,
 }
 
 impl Default for AppConfig {
@@ -98,6 +111,8 @@ impl Default for AppConfig {
             engine: EngineConfig::default(),
             auth: AuthConfig::default(),
             cors: CorsConfigFile::default(),
+            #[cfg(feature = "opentelemetry")]
+            observability: ObservabilityConfig::default(),
         }
     }
 }

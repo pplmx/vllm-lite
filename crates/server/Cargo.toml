@@ -58,6 +58,12 @@ cuda-graph = ["vllm-core/cuda-graph"]
 # server types. When on, the engine builder path is selected in
 # `bootstrap/engine.rs` when `server.multi_node.enabled = true`.
 multi-node = ["dep:vllm-dist", "vllm-core/multi-node", "vllm-model/multi-node"]
+# Opt-in OpenTelemetry (OTLP) metrics + traces exporter (P43). Enables the
+# `opentelemetry` feature on `vllm-core`, the `bootstrap/observability`
+# module, the `--otlp-endpoint` CLI flag, and the `observability` YAML config
+# section. Off by default so single-node deployments don't pull in the OTel
+# dependency tree.
+opentelemetry = ["vllm-core/opentelemetry"]
 
 [lints]
 workspace = true
