@@ -73,6 +73,7 @@ pub struct LocalSumAllReduce {
 pub type NcclAllReduce = LocalSumAllReduce;
 
 impl LocalSumAllReduce {
+    /// Create a new all-reduce backed by the given device mesh.
     #[must_use]
     pub const fn new(mesh: Arc<DeviceMesh>) -> Self {
         Self { mesh }

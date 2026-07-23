@@ -24,6 +24,7 @@ pub struct PipelineStageConfig {
 }
 
 impl PipelineStageConfig {
+    /// Compute the layer range for `stage_id` within a `num_stages`-way split of `num_layers`.
     #[must_use]
     pub fn new(stage_id: usize, num_stages: usize, num_layers: usize, device: Device) -> Self {
         let layers_per_stage = num_layers.div_ceil(num_stages);
@@ -40,16 +41,19 @@ impl PipelineStageConfig {
         }
     }
 
+    /// Number of model layers hosted by this stage (`layer_end - layer_start`).
     #[must_use]
     pub const fn num_layers_in_stage(&self) -> usize {
         self.layer_end - self.layer_start
     }
 
+    /// Returns `true` when this is the first stage (stage 0).
     #[must_use]
     pub const fn is_first_stage(&self) -> bool {
         self.stage_id == 0
     }
 
+    /// Returns `true` when this is the last stage (highest stage id).
     #[must_use]
     pub const fn is_last_stage(&self) -> bool {
         self.stage_id == self.num_stages - 1

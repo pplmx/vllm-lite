@@ -72,6 +72,8 @@ impl Default for CacheConfig {
 }
 
 impl CacheConfig {
+    /// Create a config for `node_id` within a cluster of `num_nodes`, using the
+    /// default invalidation strategy and zero replication below 2 nodes.
     #[must_use]
     pub fn new(node_id: NodeId, num_nodes: usize) -> Self {
         Self {

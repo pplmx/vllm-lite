@@ -50,6 +50,7 @@ pub struct GrpcState {
 }
 
 impl GrpcState {
+    /// Create the initial state for a node identified by `node_id`, with no peers or caches attached.
     #[must_use]
     pub fn new(node_id: String) -> Self {
         Self {
@@ -77,6 +78,7 @@ impl GrpcState {
         self
     }
 
+    /// Add `peer` to the cluster member list if not already present.
     pub async fn add_peer(&self, peer: String) {
         let mut peers = self.peers.write().await;
         if !peers.contains(&peer) {
@@ -86,6 +88,7 @@ impl GrpcState {
         drop(peers);
     }
 
+    /// Remove `peer` from the cluster member list.
     pub async fn remove_peer(&self, peer: &str) {
         let mut peers = self.peers.write().await;
         peers.retain(|p| p != peer);
@@ -101,10 +104,12 @@ pub(crate) struct NodeServiceImpl {
 }
 
 impl NodeServiceImpl {
+    /// Wrap `state` into a gRPC service handler.
     pub const fn new(state: GrpcState) -> Self {
         Self { state }
     }
 
+    /// Consume `self` and produce the tonic `NodeServiceServer` handle.
     pub fn into_service(self) -> node_service_server::NodeServiceServer<Self> {
         node_service_server::NodeServiceServer::new(self)
     }

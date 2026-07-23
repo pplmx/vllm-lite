@@ -43,16 +43,19 @@ impl DeviceMesh {
         })
     }
 
+    /// Returns `true` when this is the first rank (rank 0).
     #[must_use]
     pub const fn is_first_rank(&self) -> bool {
         self.rank == 0
     }
 
+    /// Returns `true` when this is the last rank (highest rank index).
     #[must_use]
     pub const fn is_last_rank(&self) -> bool {
         self.rank == self.world_size - 1
     }
 
+    /// Physical GPU device ID for this rank.
     #[must_use]
     pub fn local_device_id(&self) -> usize {
         self.device_ids[self.rank]
@@ -115,16 +118,19 @@ impl NodeMesh {
         })
     }
 
+    /// Returns `true` when this is the first node (node_rank 0).
     #[must_use]
     pub const fn is_first_node(&self) -> bool {
         self.node_rank == 0
     }
 
+    /// Returns `true` when this is the last node (highest node index).
     #[must_use]
     pub const fn is_last_node(&self) -> bool {
         self.node_rank == self.num_nodes - 1
     }
 
+    /// Return the gRPC URLs of all peer nodes in the cluster.
     #[must_use]
     pub fn peers(&self) -> Vec<String> {
         let mut peers = Vec::new();

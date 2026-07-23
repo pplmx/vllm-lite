@@ -20,6 +20,7 @@ pub struct ColumnParallelLinear {
 }
 
 impl ColumnParallelLinear {
+    /// Create a column-parallel linear layer splitting `output_size` across the mesh.
     pub fn new(
         input_size: usize,
         output_size: usize,

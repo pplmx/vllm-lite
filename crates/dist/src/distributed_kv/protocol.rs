@@ -8,11 +8,13 @@
 pub struct NodeId(pub usize);
 
 impl NodeId {
+    /// Create a new node identifier from a raw integer.
     #[must_use]
     pub const fn new(id: usize) -> Self {
         Self(id)
     }
 
+    /// Return the raw integer index backing this identifier.
     #[must_use]
     pub const fn index(&self) -> usize {
         self.0
@@ -87,6 +89,7 @@ impl CacheMessage {
         }
     }
 
+    /// Build a read request message for `key` from `from` to `to`.
     #[must_use]
     pub fn read_request(key: u64, from: NodeId, to: NodeId) -> Self {
         Self::new(
@@ -99,6 +102,7 @@ impl CacheMessage {
         )
     }
 
+    /// Build an invalidate message for `key` from `from` to `to`.
     #[must_use]
     pub fn invalidate(key: u64, from: NodeId, to: NodeId) -> Self {
         Self::new(
@@ -111,6 +115,7 @@ impl CacheMessage {
         )
     }
 
+    /// Build an update message carrying `hash` for `key` from `from` to `to`.
     #[must_use]
     pub fn update(key: u64, hash: u64, from: NodeId, to: NodeId) -> Self {
         Self::new(
