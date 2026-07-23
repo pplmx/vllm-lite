@@ -454,9 +454,9 @@ async fn handle_chat(
     // for backwards compatibility.
     let finish_reason = match finish_reason_rx.await {
         Ok(vllm_traits::FinishReason::Length) => "length".to_string(),
-        Ok(vllm_traits::FinishReason::Stop) => "stop".to_string(),
-        Ok(vllm_traits::FinishReason::Cancelled) => "stop".to_string(),
-        Err(_) => "stop".to_string(),
+        Ok(vllm_traits::FinishReason::Stop) | Ok(vllm_traits::FinishReason::Cancelled) | Err(_) => {
+            "stop".to_string()
+        }
     };
 
     let raw_decode = state.tokenizer.decode(&token_ids(&tokens));

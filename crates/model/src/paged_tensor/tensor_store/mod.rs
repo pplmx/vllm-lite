@@ -168,9 +168,9 @@ impl PagedKvCache {
     ///
     /// # Errors
     ///
-    /// Returns `Err` if `layer_idx >= num_layers`, `block_id >=
-    /// num_blocks`, or `k.len() != v.len() != num_heads * BLOCK_SIZE
-    /// * head_dim`.
+    /// Returns `Err` if `layer_idx >= num_layers`, `block_id` >=
+    /// `num_blocks`, or `k.len() != v.len()` is not equal to
+    /// `num_heads * BLOCK_SIZE * head_dim`.
     #[allow(dead_code)] // reachable under --features multi-node when P42 wires the receiver-side write_kv_batch
     pub(crate) fn write_layer_block(
         &mut self,

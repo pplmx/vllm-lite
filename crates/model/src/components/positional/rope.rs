@@ -288,7 +288,7 @@ pub fn apply_rope_with_scaling(
     scaling: RopeScalingContext,
 ) -> Result<Tensor> {
     let inv_freq = match scaling.rope_type {
-        RopeType::Default => compute_inv_freq_default(query, theta),
+        RopeType::Default | RopeType::Other => compute_inv_freq_default(query, theta),
         RopeType::Linear => compute_inv_freq_linear(query, theta, scaling.scaling_factor),
         RopeType::Yarn => compute_inv_freq_yarn(query, theta, scaling.scaling_factor),
         RopeType::Dynamic => {
@@ -302,7 +302,6 @@ pub fn apply_rope_with_scaling(
             )
         }
         RopeType::Su => compute_inv_freq_su(query, theta, &scaling),
-        RopeType::Other => compute_inv_freq_default(query, theta),
     };
     apply_rope_with_inv_freq(query, positions, &inv_freq)
 }
