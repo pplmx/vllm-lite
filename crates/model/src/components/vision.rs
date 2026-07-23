@@ -17,6 +17,7 @@ pub struct VisionConfig {
 }
 
 impl VisionConfig {
+    /// Create a config with the given image and patch sizes, using default embed_dim (768) and depth (12).
     #[must_use]
     pub const fn new(image_size: usize, patch_size: usize) -> Self {
         Self {
@@ -27,6 +28,7 @@ impl VisionConfig {
         }
     }
 
+    /// Number of non-overlapping patches in the image grid.
     #[must_use]
     pub const fn num_patches(&self) -> usize {
         (self.image_size / self.patch_size).pow(2)

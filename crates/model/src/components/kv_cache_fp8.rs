@@ -21,6 +21,7 @@ pub enum KvCacheDtype {
 }
 
 impl KvCacheDtype {
+    /// Storage size in bytes for one element of this dtype (1, 2, or 4).
     #[must_use]
     pub const fn bytes_per_element(&self) -> usize {
         match self {
@@ -30,6 +31,7 @@ impl KvCacheDtype {
         }
     }
 
+    /// Memory footprint relative to fp32 (1.0 = no savings, 2.0 = halved).
     #[must_use]
     pub const fn memory_reduction_ratio(&self) -> f32 {
         match self {
@@ -47,6 +49,7 @@ pub struct Fp8Quantizer {
 }
 
 impl Fp8Quantizer {
+    /// Create a quantizer that stores KV-cache data in the given dtype.
     #[must_use]
     pub const fn new(dtype: KvCacheDtype) -> Self {
         Self { dtype }

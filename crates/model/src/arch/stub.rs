@@ -192,6 +192,7 @@ pub(crate) struct StubBlockWrapper {
 }
 
 impl StubBlockWrapper {
+    /// Derive the wrapper's inner dimensions from a [`ModelConfig`].
     pub const fn new(config: &ModelConfig) -> Self {
         Self {
             inner_dim: config.head_dim * config.num_heads,
@@ -275,6 +276,7 @@ pub(crate) struct StubModel {
 }
 
 impl StubModel {
+    /// Construct a stub model with the given config, device, and KV-block count.
     pub const fn new(config: ModelConfig, device: Device, num_kv_blocks: usize) -> Self {
         Self {
             config,

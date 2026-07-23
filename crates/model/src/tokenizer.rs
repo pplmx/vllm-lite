@@ -34,6 +34,7 @@ pub struct Tokenizer {
 }
 
 impl Tokenizer {
+    /// Create a fallback tokenizer with the Qwen3 default vocabulary (no HF backend).
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -86,6 +87,7 @@ impl Tokenizer {
         })
     }
 
+    /// Encode `text` into token IDs using the HF tokenizer, or an ASCII fallback if none is loaded.
     #[must_use]
     pub fn encode(&self, text: &str) -> Vec<u32> {
         if let Some(ref tokenizer) = self.inner
@@ -100,6 +102,7 @@ impl Tokenizer {
             .collect()
     }
 
+    /// Decode token IDs back to text via the HF tokenizer, or an ASCII placeholder if none is loaded.
     #[must_use]
     pub fn decode(&self, tokens: &[u32]) -> String {
         if let Some(ref tokenizer) = self.inner
@@ -114,21 +117,25 @@ impl Tokenizer {
         })
     }
 
+    /// Return the vocabulary size (number of token IDs).
     #[must_use]
     pub const fn vocab_size(&self) -> usize {
         self.vocab_size
     }
 
+    /// Return the list of special tokens (e.g. `<|im_start|>`, `<|im_end|>`).
     #[must_use]
     pub fn special_tokens(&self) -> &[String] {
         &self.special_tokens
     }
 
+    /// Returns `true` if `text` matches one of the registered special tokens.
     #[must_use]
     pub fn is_special_token(&self, text: &str) -> bool {
         self.special_tokens.iter().any(|t| t.as_str() == text)
     }
 
+    /// Strip all special tokens from `text` and return the trimmed remainder.
     #[must_use]
     pub fn clean_special_tokens(&self, text: &str) -> String {
         let mut result = text.to_string();
@@ -138,6 +145,7 @@ impl Tokenizer {
         result.trim().to_string()
     }
 
+    /// Return the model name parsed from the tokenizer config, if available.
     #[must_use]
     pub fn model_name(&self) -> Option<String> {
         self.model_name.clone()
