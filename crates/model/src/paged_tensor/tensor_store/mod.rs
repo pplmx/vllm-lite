@@ -401,7 +401,6 @@ mod tests {
     #[test]
     fn write_layer_block_returns_err_for_oob_layer() {
         let mut cache = small_cache(); // 2 layers
-        let n = 2 * BLOCK_SIZE * 4;
         let result = cache.write_layer_block(99, 0, &[0.0; 128], &[0.0; 128]);
         assert!(result.is_err(), "layer_idx >= num_layers must fail");
     }

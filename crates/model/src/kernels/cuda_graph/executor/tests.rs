@@ -207,7 +207,7 @@ fn test_trait_dispatch_via_cuda_graph_executor() {
     // dispatch wiring is correct.
     use vllm_traits::CudaGraphExecutor;
 
-    let mut executor = BatchCudaGraphExecutor::new(CudaGraphConfig {
+    let executor = BatchCudaGraphExecutor::new(CudaGraphConfig {
         enabled: true,
         batch_sizes: vec![1, 2],
         ..Default::default()
