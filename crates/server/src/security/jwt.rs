@@ -183,6 +183,7 @@ pub struct JwtValidator {
 }
 
 impl JwtValidator {
+    /// Wrap the given JWT config into a stateless validator.
     #[must_use]
     pub const fn new(config: JwtConfig) -> Self {
         Self { config }
@@ -290,6 +291,7 @@ pub struct JwtAuthMiddleware {
 }
 
 impl JwtAuthMiddleware {
+    /// Create a JWT auth middleware from the given config.
     #[must_use]
     pub fn new(config: JwtConfig) -> Self {
         Self {

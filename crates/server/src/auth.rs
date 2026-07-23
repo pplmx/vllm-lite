@@ -57,6 +57,7 @@ impl RateLimiter {
 }
 
 impl AuthMiddleware {
+    /// Create an auth + rate-limiting middleware for the given API keys.
     #[must_use]
     pub fn new(api_keys: Vec<String>, max_requests: usize, window_secs: u64) -> Self {
         Self {

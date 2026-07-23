@@ -112,6 +112,7 @@ impl AuditLogger {
         );
     }
 
+    /// Append an audit event for an API request (user, action, resource, result).
     pub async fn log_api_request(
         &self,
         user_id: Option<&str>,
@@ -133,10 +134,12 @@ impl AuditLogger {
         .await;
     }
 
+    /// Return a clone of all recorded audit events (oldest-first).
     pub async fn get_events(&self) -> Vec<AuditEvent> {
         self.events.read().await.clone()
     }
 
+    /// Remove all recorded audit events.
     pub async fn clear(&self) {
         self.events.write().await.clear();
     }

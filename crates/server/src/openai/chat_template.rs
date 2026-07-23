@@ -18,6 +18,7 @@ pub enum ChatTemplate {
 }
 
 impl ChatTemplate {
+    /// Select the appropriate chat template based on the model architecture.
     #[must_use]
     pub const fn for_architecture(arch: Architecture) -> Self {
         match arch {

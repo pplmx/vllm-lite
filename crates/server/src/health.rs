@@ -10,11 +10,13 @@ pub enum HealthStatus {
 }
 
 impl HealthStatus {
+    /// Returns `true` when the status is `Ok`.
     #[must_use]
     pub const fn is_ok(&self) -> bool {
         matches!(self, Self::Ok)
     }
 
+    /// Return the kebab-case string representation (`"ok"`, `"not_ready"`, `"unhealthy"`).
     #[must_use]
     pub const fn as_str(&self) -> &'static str {
         match self {
@@ -44,6 +46,7 @@ pub struct HealthChecker {
 }
 
 impl HealthChecker {
+    /// Create a health checker with the given liveness and readiness flags.
     #[must_use]
     pub const fn new(alive: bool, ready: bool) -> Self {
         Self { alive, ready }

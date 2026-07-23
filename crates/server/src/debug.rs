@@ -96,6 +96,7 @@ pub struct MetricsSnapshotResponse {
     pub cuda_graph_hit_rate: f64,
 }
 
+/// Admin-only endpoint: return a JSON snapshot of key metrics counters and gauges.
 #[allow(clippy::unused_async)]
 pub async fn metrics_snapshot(
     State(state): State<ApiState>,
@@ -192,6 +193,7 @@ pub struct KvCacheDumpResponse {
     pub prefix_cache_hit_rate: f64,
 }
 
+/// Admin-only endpoint: dump KV-cache block allocation and metadata as JSON.
 pub async fn kv_cache_dump(
     State(state): State<ApiState>,
     headers: axum::http::HeaderMap,
@@ -260,6 +262,7 @@ pub struct AuditDumpResponse {
 
 const AUDIT_DUMP_DEFAULT_CAP: usize = 1000;
 
+/// Admin-only endpoint: return the most recent audit events (newest-first).
 pub async fn audit_dump(State(state): State<ApiState>, headers: axum::http::HeaderMap) -> Response {
     if let Err(response) = require_admin(&state, &headers) {
         return response;
@@ -288,6 +291,7 @@ pub async fn audit_dump(State(state): State<ApiState>, headers: axum::http::Head
     .into_response()
 }
 
+/// Admin-only endpoint: report the current tracing/observability configuration.
 #[allow(clippy::unused_async)]
 pub async fn trace_status(
     State(state): State<ApiState>,
