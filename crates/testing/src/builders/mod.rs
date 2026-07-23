@@ -11,6 +11,7 @@ pub struct RequestBuilder {
 }
 
 impl RequestBuilder {
+    /// Create a new builder for the given sequence ID.
     #[must_use]
     pub const fn new(seq_id: SeqId) -> Self {
         Self {
@@ -20,18 +21,21 @@ impl RequestBuilder {
         }
     }
 
+    /// Replace the prompt token list for this request.
     #[must_use]
     pub fn with_prompt(mut self, tokens: Vec<TokenId>) -> Self {
         self.tokens = tokens;
         self
     }
 
+    /// Set the `max_tokens` generation cap for this request.
     #[must_use]
     pub const fn with_max_tokens(mut self, max: usize) -> Self {
         self.max_tokens = max;
         self
     }
 
+    /// Consume the builder and produce the final `(seq_id, tokens, max_tokens)` tuple.
     #[must_use]
     pub fn build(self) -> (SeqId, Vec<TokenId>, usize) {
         (self.seq_id, self.tokens, self.max_tokens)
@@ -50,6 +54,7 @@ pub struct BatchBuilder {
 }
 
 impl BatchBuilder {
+    /// Create an empty builder. Use `add_sequence` to populate it.
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -62,6 +67,7 @@ impl BatchBuilder {
         }
     }
 
+    /// Add a sequence to the batch with its token list and prefill/decode flag.
     #[must_use]
     pub fn add_sequence(mut self, seq_id: SeqId, tokens: Vec<TokenId>, prefill: bool) -> Self {
         let pos = tokens.len();
@@ -74,6 +80,7 @@ impl BatchBuilder {
         self
     }
 
+    /// Consume the builder and produce the final [`Batch`] value.
     #[must_use]
     pub fn build(self) -> Batch {
         let total_tokens: usize = self.input_tokens.iter().map(std::vec::Vec::len).sum();

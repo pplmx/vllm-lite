@@ -39,30 +39,35 @@ impl Default for RequestConfig {
 }
 
 impl RequestConfig {
+    /// Set the minimum prompt token count for generated requests.
     #[must_use]
     pub const fn min_tokens(mut self, n: usize) -> Self {
         self.min_tokens = n;
         self
     }
 
+    /// Set the maximum prompt token count for generated requests.
     #[must_use]
     pub const fn max_tokens(mut self, n: usize) -> Self {
         self.max_tokens = n;
         self
     }
 
+    /// Set the lower bound on per-request `max_tokens` generation cap.
     #[must_use]
     pub const fn min_max_tokens(mut self, n: usize) -> Self {
         self.min_max_tokens = n;
         self
     }
 
+    /// Set the upper bound on per-request `max_tokens` generation cap.
     #[must_use]
     pub const fn max_max_tokens(mut self, n: usize) -> Self {
         self.max_max_tokens = n;
         self
     }
 
+    /// Set the default sampling temperature for generated requests.
     #[must_use]
     pub const fn temperature(mut self, t: f32) -> Self {
         self.temperature = t;

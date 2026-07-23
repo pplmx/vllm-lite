@@ -22,6 +22,7 @@ impl Default for StubModel {
 }
 
 impl StubModel {
+    /// Create a stub that always returns `token`.
     #[must_use]
     pub const fn returning(token: TokenId) -> Self {
         Self { token }
@@ -199,6 +200,7 @@ pub struct ConstModel {
 }
 
 impl ConstModel {
+    /// Create a const model that always returns `return_token`.
     #[must_use]
     pub const fn new(return_token: TokenId) -> Self {
         Self { return_token }
@@ -287,6 +289,7 @@ pub struct FakeModel {
 }
 
 impl FakeModel {
+    /// Create a fake model with the given vocabulary size.
     #[must_use]
     pub const fn new(vocab_size: usize) -> Self {
         Self { vocab_size }
@@ -380,6 +383,7 @@ pub(crate) struct NeverProgressModel {
 }
 
 impl NeverProgressModel {
+    /// Create a model that stalls on every forward call with the given return token.
     pub const fn new(token: TokenId) -> Self {
         Self { token }
     }

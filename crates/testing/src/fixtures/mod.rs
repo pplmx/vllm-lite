@@ -12,11 +12,13 @@ use crate::mocks::IncrementModel;
 pub struct TestFixtures;
 
 impl TestFixtures {
+    /// Return the project-wide default scheduler configuration.
     #[must_use]
     pub fn default_scheduler_config() -> SchedulerConfig {
         SchedulerConfig::default()
     }
 
+    /// Return a scheduler config tuned for small-batch tests (max 2 sequences, 100 tokens).
     #[must_use]
     pub fn small_batch_config() -> SchedulerConfig {
         SchedulerConfig {
@@ -35,6 +37,7 @@ impl TestFixtures {
         }
     }
 
+    /// Return a scheduler config that stresses memory limits (max 1 sequence, 1 token batch).
     #[must_use]
     pub fn oom_scenario_config() -> SchedulerConfig {
         SchedulerConfig {

@@ -34,30 +34,35 @@ impl Default for TestHarnessConfig {
 }
 
 impl TestHarnessConfig {
+    /// Set the number of KV-cache blocks allocated to the test scheduler.
     #[must_use]
     pub const fn kv_blocks(mut self, n: usize) -> Self {
         self.kv_blocks = n;
         self
     }
 
+    /// Set the maximum batch size the test scheduler may produce.
     #[must_use]
     pub const fn max_batch_size(mut self, n: usize) -> Self {
         self.max_batch_size = n;
         self
     }
 
+    /// Enable or disable prefix-cache sharing across requests.
     #[must_use]
     pub const fn enable_prefix_cache(mut self, enabled: bool) -> Self {
         self.enable_prefix_cache = enabled;
         self
     }
 
+    /// Enable or disable dynamic-batch heuristics.
     #[must_use]
     pub const fn enable_dynamic_batching(mut self, enabled: bool) -> Self {
         self.enable_dynamic_batching = enabled;
         self
     }
 
+    /// Consume the config and produce a [`SchedulerConfig`] suitable for the test scheduler.
     #[must_use]
     pub fn into_scheduler_config(self) -> SchedulerConfig {
         SchedulerConfig::new(
