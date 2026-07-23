@@ -13,7 +13,7 @@
 //!
 //! ## Design constraints (Phase 31-D / P42)
 //!
-//! - **Async**: matches the [`BlockDataSource`] shape so it can be
+//! - **Async**: matches the [`BlockDataSource`][crate::distributed_kv::block_data_source::BlockDataSource] shape so it can be
 //!   wired into the same async-driven `DistributedKVCache::fetch_block`
 //!   hot path without spawning extra tasks.
 //! - **Object-safe**: `Arc<dyn BlockSink>` is the canonical storage
@@ -98,6 +98,7 @@ pub enum WriteError {
 /// separate test binaries and can't see the library's `#[cfg(test)]`
 /// items. Production code MUST NOT use this type; it's only a test
 /// helper.
+#[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Default)]
 pub struct MockBlockSink {
     /// When `true`, `write_block` returns

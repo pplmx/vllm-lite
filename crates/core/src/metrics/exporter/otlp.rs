@@ -6,11 +6,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use opentelemetry::metrics::{Counter, Gauge, UpDownCounter};
 use opentelemetry::KeyValue;
+use opentelemetry::metrics::{Counter, Gauge, UpDownCounter};
 use opentelemetry_otlp::{MetricExporter, WithExportConfig};
-use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
 use opentelemetry_sdk::Resource;
+use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
 use opentelemetry_semantic_conventions::attribute as semattr;
 use serde::{Deserialize, Serialize};
 use tokio::time::interval;
@@ -95,7 +95,9 @@ impl OtlpConfig {
     /// or outside `[0.0, 1.0]`, `metrics_export_interval_secs` is zero, or
     /// `endpoint` is empty or whitespace-only.
     pub fn validate(&self) -> Result<(), OtlpError> {
-        if !self.trace_sampling_ratio.is_finite() || !(0.0..=1.0).contains(&self.trace_sampling_ratio) {
+        if !self.trace_sampling_ratio.is_finite()
+            || !(0.0..=1.0).contains(&self.trace_sampling_ratio)
+        {
             return Err(OtlpError::Config(format!(
                 "trace_sampling_ratio = {} is out of range [0.0, 1.0]",
                 self.trace_sampling_ratio
@@ -137,27 +139,127 @@ enum InstrumentKind {
 }
 
 const SCHEMA_MAP: &[(&str, &str, InstrumentKind, &str)] = &[
-    ("cuda_graph_hits_total", "cuda.graph.hits", InstrumentKind::Counter, "{hit}"),
-    ("cuda_graph_misses_total", "cuda.graph.misses", InstrumentKind::Counter, "{miss}"),
-    ("speculative_adjustments_total", "speculative.adjustments", InstrumentKind::Counter, "{adjustment}"),
-    ("requests_total", "requests", InstrumentKind::Counter, "{request}"),
-    ("draft_resolutions_external_total", "draft.resolutions.external", InstrumentKind::Counter, "{resolution}"),
-    ("draft_resolutions_self_spec_total", "draft.resolutions.self_spec", InstrumentKind::Counter, "{resolution}"),
-    ("draft_resolutions_none_total", "draft.resolutions.none", InstrumentKind::Counter, "{resolution}"),
-    ("draft_load_failures_total", "draft.load.failures", InstrumentKind::Counter, "{failure}"),
-    ("draft_runtime_errors_total", "draft.runtime.errors", InstrumentKind::Counter, "{error}"),
-    ("packing_efficiency", "packing.efficiency", InstrumentKind::Gauge, "{ratio}"),
-    ("speculative_acceptance_rate", "speculative.acceptance_rate", InstrumentKind::Gauge, "{ratio}"),
-    ("speculative_efficiency", "speculative.efficiency", InstrumentKind::Gauge, "{ratio}"),
-    ("throughput_speedup_ratio", "throughput.speedup_ratio", InstrumentKind::Gauge, "{ratio}"),
-    ("speculative_per_request_count", "speculative.per_request_count", InstrumentKind::Gauge, "{sequence}"),
-    ("request_queue_depth", "request.queue_depth", InstrumentKind::UpDownCounter, "{request}"),
-    ("active_sequences", "active.sequences", InstrumentKind::UpDownCounter, "{sequence}"),
-    ("gpu_memory_used_bytes", "gpu.memory.used", InstrumentKind::UpDownCounter, "By"),
-    ("gpu_memory_total_bytes", "gpu.memory.total", InstrumentKind::UpDownCounter, "By"),
+    (
+        "cuda_graph_hits_total",
+        "cuda.graph.hits",
+        InstrumentKind::Counter,
+        "{hit}",
+    ),
+    (
+        "cuda_graph_misses_total",
+        "cuda.graph.misses",
+        InstrumentKind::Counter,
+        "{miss}",
+    ),
+    (
+        "speculative_adjustments_total",
+        "speculative.adjustments",
+        InstrumentKind::Counter,
+        "{adjustment}",
+    ),
+    (
+        "requests_total",
+        "requests",
+        InstrumentKind::Counter,
+        "{request}",
+    ),
+    (
+        "draft_resolutions_external_total",
+        "draft.resolutions.external",
+        InstrumentKind::Counter,
+        "{resolution}",
+    ),
+    (
+        "draft_resolutions_self_spec_total",
+        "draft.resolutions.self_spec",
+        InstrumentKind::Counter,
+        "{resolution}",
+    ),
+    (
+        "draft_resolutions_none_total",
+        "draft.resolutions.none",
+        InstrumentKind::Counter,
+        "{resolution}",
+    ),
+    (
+        "draft_load_failures_total",
+        "draft.load.failures",
+        InstrumentKind::Counter,
+        "{failure}",
+    ),
+    (
+        "draft_runtime_errors_total",
+        "draft.runtime.errors",
+        InstrumentKind::Counter,
+        "{error}",
+    ),
+    (
+        "packing_efficiency",
+        "packing.efficiency",
+        InstrumentKind::Gauge,
+        "{ratio}",
+    ),
+    (
+        "speculative_acceptance_rate",
+        "speculative.acceptance_rate",
+        InstrumentKind::Gauge,
+        "{ratio}",
+    ),
+    (
+        "speculative_efficiency",
+        "speculative.efficiency",
+        InstrumentKind::Gauge,
+        "{ratio}",
+    ),
+    (
+        "throughput_speedup_ratio",
+        "throughput.speedup_ratio",
+        InstrumentKind::Gauge,
+        "{ratio}",
+    ),
+    (
+        "speculative_per_request_count",
+        "speculative.per_request_count",
+        InstrumentKind::Gauge,
+        "{sequence}",
+    ),
+    (
+        "request_queue_depth",
+        "request.queue_depth",
+        InstrumentKind::UpDownCounter,
+        "{request}",
+    ),
+    (
+        "active_sequences",
+        "active.sequences",
+        InstrumentKind::UpDownCounter,
+        "{sequence}",
+    ),
+    (
+        "gpu_memory_used_bytes",
+        "gpu.memory.used",
+        InstrumentKind::UpDownCounter,
+        "By",
+    ),
+    (
+        "gpu_memory_total_bytes",
+        "gpu.memory.total",
+        InstrumentKind::UpDownCounter,
+        "By",
+    ),
     ("is_leader", "is_leader", InstrumentKind::Gauge, "{bool}"),
-    ("inflight_requests", "inflight.requests", InstrumentKind::UpDownCounter, "{request}"),
-    ("scheduler_queue_size", "scheduler.queue_size", InstrumentKind::UpDownCounter, "{request}"),
+    (
+        "inflight_requests",
+        "inflight.requests",
+        InstrumentKind::UpDownCounter,
+        "{request}",
+    ),
+    (
+        "scheduler_queue_size",
+        "scheduler.queue_size",
+        InstrumentKind::UpDownCounter,
+        "{request}",
+    ),
 ];
 
 /// Bundled instruments for the schema map. One entry per Prometheus metric.
@@ -190,7 +292,10 @@ impl std::fmt::Debug for OtlpExporter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OtlpExporter")
             .field("config", &self.inner.config)
-            .field("collector_strong_count", &Arc::strong_count(&self.inner.collector))
+            .field(
+                "collector_strong_count",
+                &Arc::strong_count(&self.inner.collector),
+            )
             .finish()
     }
 }
@@ -204,7 +309,10 @@ impl OtlpExporter {
     ///
     /// Returns [`OtlpError::Config`] if the configuration is invalid, or
     /// [`OtlpError::Builder`] if the metric exporter cannot be constructed.
-    pub fn new(collector: Arc<EnhancedMetricsCollector>, config: OtlpConfig) -> Result<Self, OtlpError> {
+    pub fn new(
+        collector: Arc<EnhancedMetricsCollector>,
+        config: OtlpConfig,
+    ) -> Result<Self, OtlpError> {
         config.validate()?;
 
         let metric_exporter = MetricExporter::builder()
@@ -221,7 +329,10 @@ impl OtlpExporter {
             .with_attributes([
                 KeyValue::new(semattr::SERVICE_NAME, config.service_name.clone()),
                 KeyValue::new(semattr::SERVICE_VERSION, config.service_version.clone()),
-                KeyValue::new(semattr::SERVICE_INSTANCE_ID, uuid::Uuid::new_v4().to_string()),
+                KeyValue::new(
+                    semattr::SERVICE_INSTANCE_ID,
+                    uuid::Uuid::new_v4().to_string(),
+                ),
                 KeyValue::new("host.arch", std::env::consts::ARCH),
             ])
             .build();
@@ -232,7 +343,11 @@ impl OtlpExporter {
             .build();
 
         Ok(Self {
-            inner: Arc::new(OtlpExporterInner { collector, config, provider }),
+            inner: Arc::new(OtlpExporterInner {
+                collector,
+                config,
+                provider,
+            }),
         })
     }
 
@@ -262,9 +377,7 @@ impl OtlpExporter {
                     InstrumentKind::Counter => {
                         Instrument::Counter(meter.u64_counter(*otel_name).build())
                     }
-                    InstrumentKind::Gauge => {
-                        Instrument::Gauge(meter.f64_gauge(*otel_name).build())
-                    }
+                    InstrumentKind::Gauge => Instrument::Gauge(meter.f64_gauge(*otel_name).build()),
                     InstrumentKind::UpDownCounter => {
                         Instrument::UpDownCounter(meter.i64_up_down_counter(*otel_name).build())
                     }
@@ -273,7 +386,9 @@ impl OtlpExporter {
             })
             .collect();
 
-        let mut ticker = interval(Duration::from_secs(self.inner.config.metrics_export_interval_secs));
+        let mut ticker = interval(Duration::from_secs(
+            self.inner.config.metrics_export_interval_secs,
+        ));
         // Skip the immediate first tick so the first export happens after
         // `interval`, not at t=0 (gives the engine time to record data).
         ticker.tick().await;
@@ -297,11 +412,26 @@ impl OtlpExporter {
             // Overlay the draft metrics snapshot (5 counters not in the
             // atomic-field path).
             let draft = self.inner.collector.draft_metrics_snapshot();
-            by_name.insert("draft_resolutions_external_total".into(), draft.resolutions_external_total as f64);
-            by_name.insert("draft_resolutions_self_spec_total".into(), draft.resolutions_self_spec_total as f64);
-            by_name.insert("draft_resolutions_none_total".into(), draft.resolutions_none_total as f64);
-            by_name.insert("draft_load_failures_total".into(), draft.load_failures_total as f64);
-            by_name.insert("draft_runtime_errors_total".into(), draft.runtime_errors_total as f64);
+            by_name.insert(
+                "draft_resolutions_external_total".into(),
+                draft.resolutions_external_total as f64,
+            );
+            by_name.insert(
+                "draft_resolutions_self_spec_total".into(),
+                draft.resolutions_self_spec_total as f64,
+            );
+            by_name.insert(
+                "draft_resolutions_none_total".into(),
+                draft.resolutions_none_total as f64,
+            );
+            by_name.insert(
+                "draft_load_failures_total".into(),
+                draft.load_failures_total as f64,
+            );
+            by_name.insert(
+                "draft_runtime_errors_total".into(),
+                draft.runtime_errors_total as f64,
+            );
 
             for (prom_name, inst) in &instruments {
                 let value = by_name.get(*prom_name).copied().unwrap_or(0.0);
@@ -344,7 +474,10 @@ impl OtlpExporterBuilder {
     /// inject a metrics collector, then `.build()`.
     #[must_use]
     pub const fn new(config: OtlpConfig) -> Self {
-        Self { collector: None, config }
+        Self {
+            collector: None,
+            config,
+        }
     }
 
     /// Inject a metrics collector. Returns `self` for chaining.
@@ -386,19 +519,28 @@ mod tests {
 
     #[test]
     fn otlp_config_rejects_negative_sampling_ratio() {
-        let cfg = OtlpConfig { trace_sampling_ratio: -0.1, ..OtlpConfig::default() };
+        let cfg = OtlpConfig {
+            trace_sampling_ratio: -0.1,
+            ..OtlpConfig::default()
+        };
         assert!(matches!(cfg.validate(), Err(OtlpError::Config(_))));
     }
 
     #[test]
     fn otlp_config_rejects_above_one_sampling_ratio() {
-        let cfg = OtlpConfig { trace_sampling_ratio: 1.5, ..OtlpConfig::default() };
+        let cfg = OtlpConfig {
+            trace_sampling_ratio: 1.5,
+            ..OtlpConfig::default()
+        };
         assert!(matches!(cfg.validate(), Err(OtlpError::Config(_))));
     }
 
     #[test]
     fn otlp_config_rejects_zero_metrics_interval() {
-        let cfg = OtlpConfig { metrics_export_interval_secs: 0, ..OtlpConfig::default() };
+        let cfg = OtlpConfig {
+            metrics_export_interval_secs: 0,
+            ..OtlpConfig::default()
+        };
         assert!(matches!(cfg.validate(), Err(OtlpError::Config(_))));
     }
 
@@ -449,5 +591,3 @@ mod tests {
         }
     }
 }
-
-

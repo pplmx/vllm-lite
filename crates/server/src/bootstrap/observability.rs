@@ -53,10 +53,7 @@ impl OtlpHandle {
     /// Returns `true` if the background task is still running.
     #[must_use]
     pub fn is_running(&self) -> bool {
-        self
-            .task
-            .as_ref()
-            .is_some_and(|t| !t.is_finished())
+        self.task.as_ref().is_some_and(|t| !t.is_finished())
     }
 }
 

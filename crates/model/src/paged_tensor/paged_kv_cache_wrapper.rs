@@ -66,7 +66,7 @@ impl PagedKvCacheWrapper {
     /// its own `Arc<Mutex<PagedKvCache>>` for diagnostics / future
     /// read paths.
     #[must_use]
-    pub fn from_arc_mutex(inner: Arc<Mutex<PagedKvCache>>) -> Self {
+    pub const fn from_arc_mutex(inner: Arc<Mutex<PagedKvCache>>) -> Self {
         Self { inner }
     }
 
@@ -74,7 +74,7 @@ impl PagedKvCacheWrapper {
     /// by diagnostics and the engine bootstrap to share the same
     /// Mutex (and therefore the same data) with another owner.
     #[must_use]
-    pub fn inner(&self) -> &Arc<Mutex<PagedKvCache>> {
+    pub const fn inner(&self) -> &Arc<Mutex<PagedKvCache>> {
         &self.inner
     }
 

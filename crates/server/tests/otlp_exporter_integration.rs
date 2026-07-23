@@ -74,7 +74,8 @@ async fn otlp_collector_unreachable_does_not_crash_exporter() {
         metrics_export_interval_secs: 1,
         ..OtlpConfig::default()
     };
-    let exporter = OtlpExporter::new(collector, cfg).expect("exporter builds even with bad endpoint");
+    let exporter =
+        OtlpExporter::new(collector, cfg).expect("exporter builds even with bad endpoint");
     let run_clone = exporter.clone();
     let task = tokio::spawn(async move { run_clone.run().await });
     tokio::time::sleep(Duration::from_millis(1500)).await;
@@ -107,7 +108,10 @@ async fn otlp_config_validation_rejects_bad_sampling_ratio() {
     };
 
     let result = OtlpExporter::new(collector, cfg);
-    assert!(result.is_err(), "exporter should reject invalid sampling ratio");
+    assert!(
+        result.is_err(),
+        "exporter should reject invalid sampling ratio"
+    );
 }
 
 /// `OtlpTraceService` receives trace requests when the tracing bridge

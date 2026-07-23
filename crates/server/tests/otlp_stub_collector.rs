@@ -6,17 +6,17 @@
 
 use std::sync::{Arc, Mutex};
 
-use opentelemetry_proto::tonic::collector::metrics::v1::{
-    ExportMetricsServiceRequest, ExportMetricsServiceResponse,
-};
 use opentelemetry_proto::tonic::collector::metrics::v1::metrics_service_server::{
     MetricsService, MetricsServiceServer,
 };
-use opentelemetry_proto::tonic::collector::trace::v1::{
-    ExportTraceServiceRequest, ExportTraceServiceResponse,
+use opentelemetry_proto::tonic::collector::metrics::v1::{
+    ExportMetricsServiceRequest, ExportMetricsServiceResponse,
 };
 use opentelemetry_proto::tonic::collector::trace::v1::trace_service_server::{
     TraceService, TraceServiceServer,
+};
+use opentelemetry_proto::tonic::collector::trace::v1::{
+    ExportTraceServiceRequest, ExportTraceServiceResponse,
 };
 use tonic::{Request, Response, Status};
 
@@ -64,7 +64,11 @@ impl MetricsService for StubMetricsService {
         &self,
         request: Request<ExportMetricsServiceRequest>,
     ) -> Result<Response<ExportMetricsServiceResponse>, Status> {
-        self.recorded.metrics.lock().unwrap().push(request.into_inner());
+        self.recorded
+            .metrics
+            .lock()
+            .unwrap()
+            .push(request.into_inner());
         Ok(Response::new(ExportMetricsServiceResponse {
             partial_success: None,
         }))
@@ -82,7 +86,11 @@ impl TraceService for StubTraceService {
         &self,
         request: Request<ExportTraceServiceRequest>,
     ) -> Result<Response<ExportTraceServiceResponse>, Status> {
-        self.recorded.traces.lock().unwrap().push(request.into_inner());
+        self.recorded
+            .traces
+            .lock()
+            .unwrap()
+            .push(request.into_inner());
         Ok(Response::new(ExportTraceServiceResponse {
             partial_success: None,
         }))
@@ -120,9 +128,7 @@ pub async fn spawn_stub_collector() -> (RecordedExport, String) {
         Server::builder()
             .add_service(MetricsServiceServer::new(metrics))
             .add_service(TraceServiceServer::new(traces))
-            .serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(
-                listener,
-            ))
+            .serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(listener))
             .await
             .expect("stub collector server");
     });

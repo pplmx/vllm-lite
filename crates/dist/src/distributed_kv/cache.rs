@@ -138,7 +138,7 @@ impl DistributedKVCache {
     /// for tests that want to verify `fetch_block`'s wire shape
     /// without triggering side effects.
     #[must_use]
-    pub fn with_install_on_fetch(mut self, enable: bool) -> Self {
+    pub const fn with_install_on_fetch(mut self, enable: bool) -> Self {
         self.install_on_fetch = enable;
         self
     }

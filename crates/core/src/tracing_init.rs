@@ -1,15 +1,15 @@
 //! Tracing-subscriber bootstrap with optional OpenTelemetry bridge.
 //! Gated by the `opentelemetry` feature on `vllm-core`.
 
-use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
+use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::{SpanExporter, WithExportConfig};
-use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider};
 use opentelemetry_sdk::Resource;
+use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider};
 use opentelemetry_semantic_conventions::attribute as semattr;
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::EnvFilter;
 
 use crate::metrics::exporter::otlp::{OtlpConfig, OtlpError};
 
@@ -88,7 +88,9 @@ impl OtlpGuard {
         Self { provider: None }
     }
     const fn enabled(provider: SdkTracerProvider) -> Self {
-        Self { provider: Some(provider) }
+        Self {
+            provider: Some(provider),
+        }
     }
 
     /// Returns `true` if OTLP tracing was initialised (drop will flush).
@@ -140,7 +142,11 @@ mod tests {
     fn otlp_config_enabled_with_zero_sampling_ratio_is_allowed() {
         // Sampling 0.0 is in-range (always off). Used for "disable tracing
         // but keep metrics" deployments.
-        let cfg = OtlpConfig { trace_sampling_ratio: 0.0, enabled: true, ..OtlpConfig::default() };
+        let cfg = OtlpConfig {
+            trace_sampling_ratio: 0.0,
+            enabled: true,
+            ..OtlpConfig::default()
+        };
         assert!(cfg.validate().is_ok());
     }
 }

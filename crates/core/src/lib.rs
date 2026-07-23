@@ -27,13 +27,13 @@ pub(crate) mod routing;
 pub mod sampling;
 /// Continuous-batching scheduler, KV allocator, and prefix cache.
 pub mod scheduler;
+/// Speculative decoding registry, draft models, and verification.
+pub mod speculative;
+pub(crate) mod sync;
 /// Tracing bootstrap with optional `OTel` bridge (gated behind the `opentelemetry`
 /// feature).
 #[cfg(feature = "opentelemetry")]
 pub mod tracing_init;
-/// Speculative decoding registry, draft models, and verification.
-pub mod speculative;
-pub(crate) mod sync;
 /// Scheduler request types, priorities, and configuration.
 pub mod types;
 

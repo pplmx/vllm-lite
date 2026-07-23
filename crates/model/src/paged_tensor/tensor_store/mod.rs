@@ -249,7 +249,7 @@ impl PagedKvCache {
 
     /// Write all layers of a single block from a wire-shape byte
     /// slice. P42 receiver-side counterpart of
-    /// [`PagedKvCacheWrapper::fetch_block`](super::paged_kv_cache_wrapper::PagedKvCacheWrapper::fetch_block).
+    /// `vllm_dist::BlockSink::fetch_block`.
     ///
     /// The wire format produced by the sender's `fetch_block` is:
     /// ```text

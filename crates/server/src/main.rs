@@ -56,11 +56,18 @@ async fn main() -> Result<()> {
     // When OTLP is disabled (or the feature is off), fall through to the
     // existing `logging::init_logging` path — console + optional JSON file.
     #[cfg(feature = "opentelemetry")]
-    let _otlp_guard: Option<vllm_core::tracing_init::OtlpGuard> = if app_config.observability.otlp.enabled {
+    let _otlp_guard: Option<vllm_core::tracing_init::OtlpGuard> = if app_config
+        .observability
+        .otlp
+        .enabled
+    {
         use tracing_subscriber::EnvFilter;
         let env_filter = EnvFilter::try_from_default_env()
             .unwrap_or_else(|_| EnvFilter::new(&app_config.server.log_level));
-        match vllm_core::tracing_init::init_tracing_with_otlp(env_filter, app_config.observability.otlp.clone()) {
+        match vllm_core::tracing_init::init_tracing_with_otlp(
+            env_filter,
+            app_config.observability.otlp.clone(),
+        ) {
             Ok(guard) => Some(guard),
             Err(e) => {
                 // Subscriber may already be initialised (e.g. a prior call
