@@ -97,48 +97,46 @@ pub fn spawn_mock_engine(reply_tokens: Vec<TokenId>) -> (EngineHandle, JoinHandl
     let handle = tokio::spawn(async move {
         let mut next_seq_id: u64 = 1;
         while let Some(msg) = engine_rx.recv().await {
-            match msg {
-                EngineMessage::AddRequest {
-                    response_tx,
-                    seq_id_tx,
-                    finish_reason_tx,
-                    ..
-                } => {
-                    // Reply with a synthetic seq_id so chat
-                    // handlers that wait for the round-trip
-                    // don't time out in tests.
-                    let seq_id = next_seq_id;
-                    next_seq_id += 1;
-                    if let Some(tx) = seq_id_tx {
-                        let _ = tx.send(seq_id);
-                    }
-                    // Mock engine never sends a finish reason —
-                    // dropping the oneshot causes the handler's
-                    // `reason_rx.await` to resolve to `Err`, which
-                    // our code maps to `"stop"`. Tests that care
-                    // about the exact reason should use a real
-                    // engine (or extend this mock).
-                    drop(finish_reason_tx);
-                    for token in &reply_tokens {
-                        // P36: mock engine sends placeholder
-                        // SampledToken (no logprob info — tests
-                        // that care about logprobs use a real
-                        // engine).
-                        let sampled = vllm_traits::SampledToken {
-                            token: *token,
-                            logprob: 0.0,
-                            top_logprobs: Vec::new(),
-                        };
-                        if response_tx.send(sampled).await.is_err() {
-                            break;
-                        }
+            if let EngineMessage::AddRequest {
+                response_tx,
+                seq_id_tx,
+                finish_reason_tx,
+                ..
+            } = msg
+            {
+                // Reply with a synthetic seq_id so chat
+                // handlers that wait for the round-trip
+                // don't time out in tests.
+                let seq_id = next_seq_id;
+                next_seq_id += 1;
+                if let Some(tx) = seq_id_tx {
+                    let _ = tx.send(seq_id);
+                }
+                // Mock engine never sends a finish reason —
+                // dropping the oneshot causes the handler's
+                // `reason_rx.await` to resolve to `Err`, which
+                // our code maps to `"stop"`. Tests that care
+                // about the exact reason should use a real
+                // engine (or extend this mock).
+                drop(finish_reason_tx);
+                for token in &reply_tokens {
+                    // P36: mock engine sends placeholder
+                    // SampledToken (no logprob info — tests
+                    // that care about logprobs use a real
+                    // engine).
+                    let sampled = vllm_traits::SampledToken {
+                        token: *token,
+                        logprob: 0.0,
+                        top_logprobs: Vec::new(),
+                    };
+                    if response_tx.send(sampled).await.is_err() {
+                        break;
                     }
                 }
-                // No-op in the mock engine — production engines would
-                // drop the sequence here. Other EngineMessage variants
-                // are also no-ops in the mock.
-                _ => {}
             }
+            // No-op in the mock engine — production engines would
+            // drop the sequence here. Other EngineMessage variants
+            // are also no-ops in the mock.
         }
     });
     (engine_tx, handle)
