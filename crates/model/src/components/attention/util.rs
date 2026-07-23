@@ -31,38 +31,6 @@ impl AttentionConfig {
             use_fused,
         }
     }
-
-    /// Returns a builder for configuring this type with the documented field defaults.
-    /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
-    #[allow(dead_code)]
-    pub(crate) fn builder() -> AttentionConfigBuilder {
-        AttentionConfigBuilder::default()
-    }
-}
-
-/// Builder for [`AttentionConfig`].
-#[derive(Debug, Clone, Default)]
-#[allow(dead_code)]
-pub(crate) struct AttentionConfigBuilder {
-    inner: AttentionConfig,
-}
-
-impl AttentionConfigBuilder {
-    #[allow(dead_code)]
-    pub const fn with_tile_size(mut self, v: Option<usize>) -> Self {
-        self.inner.tile_size = v;
-        self
-    }
-    #[allow(dead_code)]
-    pub const fn with_use_fused(mut self, v: bool) -> Self {
-        self.inner.use_fused = v;
-        self
-    }
-    /// build: build the [`AttentionConfig`].
-    #[allow(dead_code)]
-    pub const fn build(self) -> AttentionConfig {
-        self.inner
-    }
 }
 
 /// Expand a grouped-query-attention KV tensor along the head axis so it

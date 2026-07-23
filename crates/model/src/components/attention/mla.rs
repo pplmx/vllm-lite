@@ -113,7 +113,6 @@ impl MlaAttention {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
-    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
     pub(crate) fn split_q(
         &self,
         q_compressed: &Tensor,
@@ -131,26 +130,10 @@ impl MlaAttention {
         Ok((q_nope, q_rope))
     }
 
-    /// Run the operation (see signature for params and return type).
+    /// Reshape a flat K tensor into `[batch, seq, kv_heads, v_head_dim]`.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
-    #[allow(dead_code)]
-    pub(crate) fn concat_q_nope_rope(&self, q_nope: &Tensor, q_rope: &Tensor) -> Result<Tensor> {
-        let q = Tensor::cat(&[q_nope, q_rope], 2)?;
-        let batch_size = q.dims()[0];
-        let seq_len = q.dims()[1];
-        let head_dim = self.qk_nope_dim + self.qk_rope_dim;
-        let q = q.reshape((batch_size, seq_len, self.num_heads, head_dim))?;
-        let q = q.transpose(1, 2)?;
-        q.contiguous()
-    }
-
-    /// Run the operation (see signature for params and return type).
-    /// # Errors
-    ///
-    /// Returns `Err` if the operation fails.
-    #[allow(dead_code)]
     pub(crate) fn reshape_k(
         &self,
         k_flat: &Tensor,
@@ -162,11 +145,10 @@ impl MlaAttention {
         k.contiguous()
     }
 
-    /// Run the operation (see signature for params and return type).
+    /// Reshape a flat V tensor into `[batch, seq, kv_heads, v_head_dim]`.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
-    #[allow(dead_code)]
     pub(crate) fn reshape_v(
         &self,
         v_flat: &Tensor,
@@ -335,5 +317,24 @@ impl MlaAttention {
             head_dim,
             config,
         })
+    }
+}
+
+#[cfg(test)]
+impl MlaAttention {
+    /// Concatenate `q_nope` and `q_rope` along the feature axis and
+    /// reshape into `[batch, seq, heads, head_dim]`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if any underlying tensor operation fails.
+    pub(crate) fn concat_q_nope_rope(&self, q_nope: &Tensor, q_rope: &Tensor) -> Result<Tensor> {
+        let q = Tensor::cat(&[q_nope, q_rope], 2)?;
+        let batch_size = q.dims()[0];
+        let seq_len = q.dims()[1];
+        let head_dim = self.qk_nope_dim + self.qk_rope_dim;
+        let q = q.reshape((batch_size, seq_len, self.num_heads, head_dim))?;
+        let q = q.transpose(1, 2)?;
+        q.contiguous()
     }
 }

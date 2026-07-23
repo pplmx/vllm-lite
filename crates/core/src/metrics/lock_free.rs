@@ -138,20 +138,6 @@ impl LockFreeMetrics {
         let _ = self.batch_size_sender.try_send(size);
     }
 
-    /// Mark the start of a request: increment the in-flight counter so health
-    /// probes can see concurrent load.
-    #[allow(dead_code)] // test-only helper; reachable under cfg(test) only
-    pub(crate) fn record_request_start(&self) {
-        self.requests_in_flight.fetch_add(1, Ordering::Relaxed);
-    }
-
-    /// Mark the end of a request: decrement the in-flight counter. Must be
-    /// paired with every `record_request_start` call.
-    #[allow(dead_code)]
-    pub(crate) fn record_request_end(&self) {
-        self.requests_in_flight.fetch_sub(1, Ordering::Relaxed);
-    }
-
     /// Snapshot the absolute KV-cache utilization. Both values are stored as
     /// separate atomics; the percentage is computed at `snapshot()` time.
     pub fn record_kv_cache_usage(&self, used: u64, total: u64) {
@@ -169,25 +155,6 @@ impl LockFreeMetrics {
     /// regardless of hit/miss).
     pub fn record_prefix_cache_request(&self) {
         self.prefix_cache_requests.fetch_add(1, Ordering::Relaxed);
-    }
-
-    /// Add `count` to the lifetime prefill-tokens counter.
-    #[allow(dead_code)]
-    pub(crate) fn record_prefill_tokens(&self, count: u64) {
-        self.prefill_tokens.fetch_add(count, Ordering::Relaxed);
-    }
-
-    /// Add `count` to the lifetime decode-tokens counter.
-    #[allow(dead_code)]
-    pub(crate) fn record_decode_tokens(&self, count: u64) {
-        self.decode_tokens.fetch_add(count, Ordering::Relaxed);
-    }
-
-    /// Record a scheduler-wait-time sample in milliseconds. Dropped if the
-    /// channel is full.
-    #[allow(dead_code)]
-    pub(crate) fn record_scheduler_wait_time(&self, ms: f64) {
-        let _ = self.scheduler_wait_sender.try_send(ms);
     }
 
     /// Total number of requests served since start.
@@ -338,6 +305,35 @@ impl Default for LockFreeMetrics {
 
 /// Trait implemented by every metrics backend (lock-free, enhanced, prometheus). Provides `snapshot()` and `reset()` for periodic export.
 pub type MetricsCollector = LockFreeMetrics;
+
+#[cfg(test)]
+impl LockFreeMetrics {
+    /// Mark the start of a request: increment the in-flight counter.
+    pub(crate) fn record_request_start(&self) {
+        self.requests_in_flight.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Mark the end of a request: decrement the in-flight counter.
+    pub(crate) fn record_request_end(&self) {
+        self.requests_in_flight.fetch_sub(1, Ordering::Relaxed);
+    }
+
+    /// Add `count` to the lifetime prefill-tokens counter.
+    pub(crate) fn record_prefill_tokens(&self, count: u64) {
+        self.prefill_tokens.fetch_add(count, Ordering::Relaxed);
+    }
+
+    /// Add `count` to the lifetime decode-tokens counter.
+    pub(crate) fn record_decode_tokens(&self, count: u64) {
+        self.decode_tokens.fetch_add(count, Ordering::Relaxed);
+    }
+
+    /// Record a scheduler-wait-time sample in milliseconds. Dropped if the
+    /// channel is full.
+    pub(crate) fn record_scheduler_wait_time(&self, ms: f64) {
+        let _ = self.scheduler_wait_sender.try_send(ms);
+    }
+}
 
 // Unit tests are extracted to `tests.rs` (sibling) to keep this
 // metrics module under the 800-line soft cap. The sibling covers:
