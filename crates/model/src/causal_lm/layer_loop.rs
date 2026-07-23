@@ -197,15 +197,8 @@ mod tests {
         };
         let full_out = run_layers(&layers, hidden.clone(), &mut full_ctx).unwrap();
 
-        let mut chunked_cache = PagedKvCache::new(
-            1,
-            config.num_heads,
-            config.head_dim,
-            32,
-            device.clone(),
-            false,
-        )
-        .unwrap();
+        let mut chunked_cache =
+            PagedKvCache::new(1, config.num_heads, config.head_dim, 32, device, false).unwrap();
         let chunk1 = hidden.narrow(1, 0, 3).unwrap();
         let pos1: Vec<usize> = (0..3).collect();
         let mut ctx1 = LayerCtx {

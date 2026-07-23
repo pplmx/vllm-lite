@@ -295,7 +295,7 @@ mod tests {
             .forward_prefill(&x, &mut full_cache, 0, &block_ids, &positions)
             .unwrap();
 
-        let mut chunked_cache = PagedKvCache::new(1, 4, 16, 32, device.clone(), false).unwrap();
+        let mut chunked_cache = PagedKvCache::new(1, 4, 16, 32, device, false).unwrap();
         let chunk1 = x.narrow(1, 0, 3).unwrap();
         let pos1: Vec<usize> = (0..3).collect();
         block

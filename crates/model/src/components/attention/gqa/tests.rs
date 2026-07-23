@@ -248,7 +248,7 @@ fn test_gqa_attention_tiled_attention_output_shape() {
 
 #[test]
 fn test_gqa_attention_new_creation() -> Result<()> {
-    let _device = candle_core::Device::Cpu;
+    let _ = candle_core::Device::Cpu;
     let attn = GqaAttention::new(256, 8, 2, 32, None, AttentionConfig::default(), false)?;
     assert_eq!(attn.num_heads(), 8);
     assert_eq!(attn.num_kv_heads(), 2);
@@ -258,7 +258,7 @@ fn test_gqa_attention_new_creation() -> Result<()> {
 
 #[test]
 fn test_gqa_attention_num_heads_accessors() {
-    let _device = candle_core::Device::Cpu;
+    let _ = candle_core::Device::Cpu;
     let attn = GqaAttention::new(512, 16, 4, 32, None, AttentionConfig::default(), false).unwrap();
     assert_eq!(attn.num_heads(), 16);
     assert_eq!(attn.num_kv_heads(), 4);
@@ -266,7 +266,7 @@ fn test_gqa_attention_num_heads_accessors() {
 
 #[test]
 fn test_gqa_attention_head_dim_accessors() {
-    let _device = candle_core::Device::Cpu;
+    let _ = candle_core::Device::Cpu;
     let attn = GqaAttention::new(256, 4, 2, 64, None, AttentionConfig::default(), false).unwrap();
     assert_eq!(attn.head_dim(), 64);
 }
@@ -376,7 +376,7 @@ fn test_gqa_attention_tiled_attention_shape() -> Result<()> {
 
 #[test]
 fn test_gqa_attention_single_q_head() -> Result<()> {
-    let _device = candle_core::Device::Cpu;
+    let _ = candle_core::Device::Cpu;
     let attn = GqaAttention::new(64, 1, 1, 64, None, AttentionConfig::default(), false)?;
     assert_eq!(attn.num_heads(), 1);
     assert_eq!(attn.num_kv_heads(), 1);
@@ -385,7 +385,7 @@ fn test_gqa_attention_single_q_head() -> Result<()> {
 
 #[test]
 fn test_gqa_attention_matching_heads() -> Result<()> {
-    let _device = candle_core::Device::Cpu;
+    let _ = candle_core::Device::Cpu;
     let attn = GqaAttention::new(256, 4, 4, 64, None, AttentionConfig::default(), false)?;
     assert_eq!(attn.num_heads(), attn.num_kv_heads());
     Ok(())
@@ -393,7 +393,7 @@ fn test_gqa_attention_matching_heads() -> Result<()> {
 
 #[test]
 fn test_gqa_attention_small_head_dim() -> Result<()> {
-    let _device = candle_core::Device::Cpu;
+    let _ = candle_core::Device::Cpu;
     let attn = GqaAttention::new(64, 2, 1, 32, None, AttentionConfig::default(), false)?;
     assert_eq!(attn.head_dim(), 32);
     Ok(())
@@ -401,7 +401,7 @@ fn test_gqa_attention_small_head_dim() -> Result<()> {
 
 #[test]
 fn test_gqa_attention_large_head_dim() -> Result<()> {
-    let _device = candle_core::Device::Cpu;
+    let _ = candle_core::Device::Cpu;
     let attn = GqaAttention::new(512, 4, 2, 128, None, AttentionConfig::default(), false)?;
     assert_eq!(attn.head_dim(), 128);
     Ok(())
