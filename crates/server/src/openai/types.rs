@@ -248,7 +248,7 @@ pub struct ToolChoiceSpecific {
 /// Carries only the function name; OpenAI doesn't accept a full
 /// function definition in `tool_choice` (the full definition lives
 /// in `tools[]`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolChoiceFunctionRef {
     /// Name of the function to force-call. Must match the `name`
     /// field of one of the entries in `ChatRequest::tools`.
