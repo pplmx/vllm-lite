@@ -73,7 +73,7 @@ where
             block_ids,
             positions,
             is_prefill,
-            &mut *self.kv_cache.lock(),
+            &mut self.kv_cache.lock(),
         )
     }
 
@@ -175,7 +175,7 @@ where
                 &self.norm,
                 &self.device,
                 self.config.hidden_size,
-                &mut *self.kv_cache.lock(),
+                &mut self.kv_cache.lock(),
                 input_tokens,
                 positions,
             )
@@ -229,7 +229,7 @@ where
             let hidden = embed_sequence(&self.embed_tokens, tokens, &self.device, prefill)?;
             let mut kv_cache = self.kv_cache.lock();
             let mut ctx = LayerCtx {
-                kv_cache: &mut *kv_cache,
+                kv_cache: &mut kv_cache,
                 block_ids: &kv_block_ids[i],
                 positions: &positions[i],
                 num_computed_tokens: num_computed_tokens[i],

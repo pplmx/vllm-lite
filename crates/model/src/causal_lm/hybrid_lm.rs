@@ -93,7 +93,7 @@ where
 
         let mut kv_cache = self.kv_cache.lock();
         let mut ctx = LayerCtx {
-            kv_cache: &mut *kv_cache,
+            kv_cache: &mut kv_cache,
             block_ids,
             positions,
             num_computed_tokens,
@@ -207,7 +207,7 @@ where
 
             let mut kv_cache = self.kv_cache.lock();
             let mut ctx = LayerCtx {
-                kv_cache: &mut *kv_cache,
+                kv_cache: &mut kv_cache,
                 block_ids: &block_ids,
                 positions: &positions,
                 num_computed_tokens: 0,
@@ -264,7 +264,7 @@ where
 
             let mut kv_cache = self.kv_cache.lock();
             let mut ctx = LayerCtx {
-                kv_cache: &mut *kv_cache,
+                kv_cache: &mut kv_cache,
                 block_ids: &kv_block_ids[i],
                 positions: &positions[i],
                 num_computed_tokens: num_computed_tokens[i],
