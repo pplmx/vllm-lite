@@ -114,9 +114,9 @@ impl MlaKvCache {
                     .unsqueeze(0)?;
             self.cache[layer] = self.cache[layer].slice_assign(
                 &[
-                    start_block..start_block + 1,
-                    0..self.block_size,
-                    0..kv_lora_rank,
+                    start_block..=start_block,
+                    0..=self.block_size - 1,
+                    0..=kv_lora_rank - 1,
                 ],
                 &block_tensor,
             )?;
@@ -160,9 +160,9 @@ impl MlaKvCache {
                     .unsqueeze(0)?;
             self.cache[layer] = self.cache[layer].slice_assign(
                 &[
-                    block_idx..block_idx + 1,
-                    0..self.block_size,
-                    0..kv_lora_rank,
+                    block_idx..=block_idx,
+                    0..=self.block_size - 1,
+                    0..=kv_lora_rank - 1,
                 ],
                 &block_tensor,
             )?;

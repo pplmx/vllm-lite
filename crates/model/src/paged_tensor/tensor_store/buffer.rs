@@ -221,19 +221,19 @@ impl PagedKvCache {
 
         self.key_cache[layer_idx] = self.key_cache[layer_idx].slice_assign(
             &[
-                block_id..block_id + 1,
-                0..self.num_heads,
-                0..self.block_size,
-                0..self.head_dim,
+                block_id..=block_id,
+                0..=self.num_heads - 1,
+                0..=self.block_size - 1,
+                0..=self.head_dim - 1,
             ],
             &updated_key_block,
         )?;
         self.value_cache[layer_idx] = self.value_cache[layer_idx].slice_assign(
             &[
-                block_id..block_id + 1,
-                0..self.num_heads,
-                0..self.block_size,
-                0..self.head_dim,
+                block_id..=block_id,
+                0..=self.num_heads - 1,
+                0..=self.block_size - 1,
+                0..=self.head_dim - 1,
             ],
             &updated_value_block,
         )?;
