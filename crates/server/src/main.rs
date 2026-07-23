@@ -406,10 +406,10 @@ async fn main() -> Result<()> {
     //    the thread. Cap at 10s so a stuck engine can't pin the
     //    process forever; operators can `SIGKILL` if that's
     //    needed.
+    const ENGINE_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
     if let Err(e) = engine_shutdown_tx.blocking_send(EngineMessage::Shutdown) {
         tracing::warn!(error = %e, "engine shutdown send failed");
     }
-    const ENGINE_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
     let join_start = std::time::Instant::now();
     // `JoinHandle::join()` is blocking; we wrap it with a
     // background timeout thread so the main thread can still log
