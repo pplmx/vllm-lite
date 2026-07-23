@@ -323,6 +323,7 @@ impl LockFreeMetrics {
 }
 
 impl LockFreeMetrics {
+    /// Create a new lock-free metrics store with the default capacity (1024).
     #[must_use]
     pub fn new() -> Self {
         Self::with_capacity(1024)

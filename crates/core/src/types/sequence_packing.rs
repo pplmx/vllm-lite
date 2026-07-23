@@ -40,21 +40,25 @@ pub struct SequencePackingConfigBuilder {
 }
 
 impl SequencePackingConfigBuilder {
+    /// Enable or disable sequence packing.
     #[must_use]
     pub const fn with_enabled(mut self, v: bool) -> Self {
         self.inner.enabled = v;
         self
     }
+    /// Set the target number of sequences to pack into a batch.
     #[must_use]
     pub const fn with_target_batch_size(mut self, v: usize) -> Self {
         self.inner.target_batch_size = v;
         self
     }
+    /// Set the maximum number of sequences in a packed batch.
     #[must_use]
     pub const fn with_max_batch_size(mut self, v: usize) -> Self {
         self.inner.max_batch_size = v;
         self
     }
+    /// Set the similarity threshold for grouping sequences into a batch.
     #[must_use]
     pub const fn with_similarity_threshold(mut self, v: f32) -> Self {
         self.inner.similarity_threshold = v;

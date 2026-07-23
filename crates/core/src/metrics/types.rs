@@ -14,6 +14,7 @@ pub enum MetricType {
 }
 
 impl MetricType {
+    /// Return the metric name regardless of variant.
     #[must_use]
     pub fn name(&self) -> &str {
         match self {
@@ -77,17 +78,20 @@ pub struct MetricLabels {
 }
 
 impl MetricLabels {
+    /// Create an empty label set.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Add a `(key, value)` label pair.
     #[must_use]
     pub fn with<K: Into<String>, V: Into<String>>(mut self, key: K, value: V) -> Self {
         self.labels.push((key.into(), value.into()));
         self
     }
 
+    /// Return the labels as a slice of `(key, value)` pairs.
     #[must_use]
     pub fn as_slice(&self) -> &[(String, String)] {
         &self.labels

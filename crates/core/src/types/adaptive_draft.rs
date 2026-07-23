@@ -52,36 +52,43 @@ pub struct AdaptiveDraftConfigBuilder {
 }
 
 impl AdaptiveDraftConfigBuilder {
+    /// Set the minimum number of draft tokens per step.
     #[must_use]
     pub const fn with_min_draft_tokens(mut self, v: usize) -> Self {
         self.inner.min_draft_tokens = v;
         self
     }
+    /// Set the maximum number of draft tokens per step.
     #[must_use]
     pub const fn with_max_draft_tokens(mut self, v: usize) -> Self {
         self.inner.max_draft_tokens = v;
         self
     }
+    /// Set the target acceptance rate for draft tokens (0.0–1.0).
     #[must_use]
     pub const fn with_target_acceptance_rate(mut self, v: f32) -> Self {
         self.inner.target_acceptance_rate = v;
         self
     }
+    /// Set the moving-average window size for accuracy tracking.
     #[must_use]
     pub const fn with_accuracy_window_size(mut self, v: usize) -> Self {
         self.inner.accuracy_window_size = v;
         self
     }
+    /// Set the step size for adjusting draft count based on acceptance rate.
     #[must_use]
     pub const fn with_adjustment_step(mut self, v: usize) -> Self {
         self.inner.adjustment_step = v;
         self
     }
+    /// Set the number of cooldown steps after an adjustment before re-evaluating.
     #[must_use]
     pub const fn with_cooldown_steps(mut self, v: usize) -> Self {
         self.inner.cooldown_steps = v;
         self
     }
+    /// Set the EMA smoothing factor (0.0–1.0) for the acceptance-rate tracker.
     #[must_use]
     pub const fn with_ewma_alpha(mut self, v: f32) -> Self {
         self.inner.ewma_alpha = v;

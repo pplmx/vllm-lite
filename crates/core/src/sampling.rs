@@ -318,6 +318,7 @@ pub(crate) fn top_p_sample(logits: &[f32], top_p: f32, random_threshold: f32) ->
     TokenId::try_from(indexed[probs.len() - 1].0).unwrap_or(0)
 }
 
+/// Sample from the top-`k` logits using a uniform random threshold for tie-breaking.
 #[must_use]
 pub fn top_k_sample(logits: &[f32], k: usize, random_threshold: f32) -> TokenId {
     if k == 0 || logits.is_empty() {

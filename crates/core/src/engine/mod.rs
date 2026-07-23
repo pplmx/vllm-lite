@@ -230,6 +230,7 @@ impl SleepPolicy {
         clippy::cast_sign_loss,
         clippy::cast_possible_wrap
     )]
+    /// Return the wait duration (ms) before the next scheduler tick, extending backoff when idle.
     pub fn next_interval(&mut self, has_work: bool) -> u64 {
         if has_work {
             self.consecutive_idle = 0;
