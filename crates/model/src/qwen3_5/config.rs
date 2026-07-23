@@ -13,18 +13,6 @@ pub(crate) struct GdnLinearConfig {
 }
 
 impl GdnLinearConfig {
-    /// HF Qwen3.5 production defaults (e.g. Qwen3.5-397B-A17B `text_config`).
-    #[allow(dead_code)]
-    pub const fn production_defaults() -> Self {
-        Self {
-            num_k_heads: 16,
-            num_v_heads: 64,
-            key_head_dim: 128,
-            value_head_dim: 128,
-            conv_kernel_size: 4,
-        }
-    }
-
     /// Zero-init fallback when no explicit GDN fields are present in config.
     #[allow(clippy::similar_names)]
     pub fn legacy_heuristic(hidden_size: usize) -> Self {

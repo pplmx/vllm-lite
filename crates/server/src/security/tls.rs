@@ -53,19 +53,6 @@ impl TlsConfig {
         }
     }
 
-    /// Enable mutual TLS by recording `ca_cert_path` (PEM bundle of
-    /// trusted client CAs) and flipping `mtls = true`.
-    #[must_use]
-    // Used only by unit tests in `tls/tests.rs`; rustc emits a dead-code
-    // warning during non-test builds even though the symbol is reachable
-    // under `cfg(test)`. The annotation is intentional.
-    #[allow(dead_code)]
-    pub(crate) fn with_ca_cert(mut self, ca_cert_path: impl Into<String>) -> Self {
-        self.ca_cert_path = Some(ca_cert_path.into());
-        self.mtls = true;
-        self
-    }
-
     /// Load the PEM files referenced by this config and assemble a
     /// rustls [`ServerConfig`] ready to wrap the axum listener.
     ///
@@ -123,6 +110,19 @@ impl TlsConfig {
         Ok(config)
     }
 }
+
+#[cfg(test)]
+impl TlsConfig {
+    /// Enable mutual TLS by recording `ca_cert_path` (PEM bundle of
+    /// trusted client CAs) and flipping `mtls = true`.
+    #[must_use]
+    pub(crate) fn with_ca_cert(mut self, ca_cert_path: impl Into<String>) -> Self {
+        self.ca_cert_path = Some(ca_cert_path.into());
+        self.mtls = true;
+        self
+    }
+}
+
 // Unit tests are extracted to `tests.rs` (sibling) to keep this TLS
 // config module under the 800-line soft cap. They cover the basic
 // `TlsConfig::new` / `with_ca_cert` builder chain and the v22.0
