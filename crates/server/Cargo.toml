@@ -48,6 +48,9 @@ tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 hyper = "1"
 tempfile = "3"
+opentelemetry-proto = { workspace = true }
+tokio-stream = { workspace = true }
+tonic = { workspace = true }
 
 [features]
 # Enable CUDA-graph capture/replay through vllm-core. Off by default so
