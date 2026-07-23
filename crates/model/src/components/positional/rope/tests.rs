@@ -421,6 +421,36 @@ fn test_forward_with_scaling_matches_apply_with_scaling() -> Result<()> {
     Ok(())
 }
 
+/// Regression test: `forward` must honour scaling configuration.
+/// Pre-fix, `forward` was hardcoded to `apply_rope` (non-scaling), so a
+/// scaled RoPE (e.g. YaRN) passed to `forward` silently dropped the
+/// long-context correction. Post-fix, `forward` delegates to
+/// `apply_rope_with_scaling`, so the output should match
+/// `forward_with_scaling` for a scaled RoPE.
+#[test]
+fn test_forward_honours_scaling() -> Result<()> {
+    let device = Device::Cpu;
+    let rope = scaled_rope(RopeType::Yarn, 4.0);
+
+    let q = Tensor::randn(0.0f32, 1.0, (1, 4, 4, 64), &device)?;
+    let k = Tensor::randn(0.0f32, 1.0, (1, 4, 4, 64), &device)?;
+
+    let (q_fwd, k_fwd) = rope.forward(&q, &k, 0)?;
+    let (q_scaled, k_scaled) = rope.forward_with_scaling(&q, &k, 0)?;
+
+    let q_diff = (&q_fwd - &q_scaled)?.abs()?.max_all()?.to_scalar::<f32>()?;
+    let k_diff = (&k_fwd - &k_scaled)?.abs()?.max_all()?.to_scalar::<f32>()?;
+    assert!(
+        q_diff < 1e-5,
+        "forward (Yarn) should match forward_with_scaling (q diff = {q_diff})"
+    );
+    assert!(
+        k_diff < 1e-5,
+        "forward (Yarn) should match forward_with_scaling (k diff = {k_diff})"
+    );
+    Ok(())
+}
+
 // === Dynamic NTK scaling ===
 
 fn dynamic_rope(scaling_factor: f32, orig_max: usize) -> RoPE {
