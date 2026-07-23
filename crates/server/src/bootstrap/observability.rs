@@ -51,6 +51,10 @@ impl std::fmt::Debug for OtlpHandle {
 
 impl OtlpHandle {
     /// Returns `true` if the background task is still running.
+    ///
+    /// Retained as part of the `OtlpHandle` public surface for callers that
+    /// want to query exporter liveness; currently unused internally.
+    #[allow(dead_code)]
     #[must_use]
     pub fn is_running(&self) -> bool {
         self.task.as_ref().is_some_and(|t| !t.is_finished())
