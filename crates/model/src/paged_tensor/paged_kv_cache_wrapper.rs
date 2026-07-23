@@ -377,7 +377,7 @@ mod tests {
         let total = num_layers * 2 * per_layer_f32s;
         let mut bytes = Vec::with_capacity(total * 4);
         for _ in 0..total {
-            state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
             #[allow(clippy::cast_possible_truncation)]
             let f = (state as f32) * 1e-9;
             bytes.extend_from_slice(&f.to_le_bytes());

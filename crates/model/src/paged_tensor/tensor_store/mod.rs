@@ -444,7 +444,7 @@ mod tests {
             // LCG step (Numerical Recipes constants). Deterministic
             // enough for round-trip equality; we don't care about
             // statistical quality.
-            state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
             #[allow(clippy::cast_possible_truncation)]
             let f = (state as f32) * 1e-9;
             bytes.extend_from_slice(&f.to_le_bytes());

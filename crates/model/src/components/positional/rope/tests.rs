@@ -331,7 +331,7 @@ fn test_new_with_config_extracts_yarn_fields() {
     use serde_json::json;
 
     let cfg: Qwen3Config = serde_json::from_value(json!({
-        "rope_theta": 1000000.0,
+        "rope_theta": 1_000_000.0,
         "max_position_embeddings": 32768,
         "hidden_size": 4096,
         "num_attention_heads": 32,
