@@ -137,6 +137,34 @@ jobs:
       - name: Doc check (all features)
         run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --workspace --all-features
 
+  ci-otlp:
+    name: CI (opentelemetry feature)
+    # Opt-in feature gate (P43). Off by default so single-node deployments
+    # don't pull the OTel dependency tree. This job ensures the feature
+    # compiles + tests pass on every PR.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo (Swatinem rust-cache)
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: "."
+          shared-key: "ci-otlp"
+
+      - name: Build
+        run: cargo build -p vllm-core --features opentelemetry && cargo build -p vllm-server --features opentelemetry
+
+      - name: Test
+        run: |
+          cargo test -p vllm-core --features opentelemetry --lib
+          cargo test -p vllm-server --features opentelemetry --test otlp_exporter_integration
+          cargo test -p vllm-server --features opentelemetry --lib config  # config + cli tests
+
   matrix-test:
     name: Matrix Test (${{ matrix.rust }})
     runs-on: ubuntu-latest

@@ -51,6 +51,73 @@ Key Prometheus metrics (via `/metrics`):
 
 Grafana dashboard templates: see `docs/` and deployment manifests in `k8s/`.
 
+### OTLP Observability (P43)
+
+Push engine metrics + tracing spans to any OpenTelemetry-compatible collector
+(Jaeger, Tempo, Datadog, Honeycomb). Opt-in via the `--features opentelemetry`
+Cargo flag and the `observability.otlp` YAML section.
+
+**Enable via YAML config:**
+
+```yaml
+observability:
+  otlp:
+    enabled: true
+    endpoint: "http://localhost:4317"
+    metrics_export_interval_secs: 30
+    trace_sampling_ratio: 1.0
+```
+
+**Or via CLI override (implicitly enables OTLP):**
+
+```bash
+cargo run --features opentelemetry -- -m /path/to/model --otlp-endpoint http://localhost:4317
+```
+
+**Collector examples (Docker one-liners):**
+
+```bash
+# Jaeger (all-in-one: OTLP gRPC + UI on :4317 / :16686)
+docker run -d --name jaeger -p 4317:4317 -p 16686:16686 jaegertracing/all-in-one:latest
+
+# Tempo (OTLP gRPC on :4317; pair with Loki + Grafana for traces)
+docker run -d --name tempo -p 4317:4317 grafana/tempo:latest
+
+# Datadog Agent (OTLP gRPC on :4317; auto-forwards to Datadog)
+docker run -d --name datadog-agent \
+  -e DD_API_KEY=$DATADOG_API_KEY \
+  -p 4317:4317 \
+  gcr.io/datadoghq/agent:latest
+
+# Honeycomb (OTLP gRPC; set your API key)
+docker run -d --name honeycomb \
+  -e HONEYCOMB_API_KEY=$HONEYCOMB_API_KEY \
+  -p 4317:4317 \
+  otel/opentelemetry-collector-contrib:latest
+```
+
+**Verify it works:**
+
+1. Start a collector (e.g. Jaeger all-in-one).
+2. Start the server with `--features opentelemetry -- --otlp-endpoint http://localhost:4317`.
+3. Send a request:
+   ```bash
+   curl -X POST http://localhost:8000/v1/chat/completions \
+     -H "Content-Type: application/json" \
+     -d '{"model":"test","messages":[{"role":"user","content":"Hello"}]}'
+   ```
+4. Open `http://localhost:16686` → see the trace.
+
+**Troubleshooting:**
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| No metrics in collector | `observability.otlp.enabled: false` | Enable OTLP or use `--otlp-endpoint` |
+| No traces | `tracing-subscriber` already initialised | OTLP init races with `logging::init_logging` — ensure no prior subscriber call |
+| `Connection refused` | Collector not running or wrong endpoint | Check `observability.otlp.endpoint` and firewall |
+| High cardinality warnings | `trace_sampling_ratio: 1.0` in production | Lower sampling ratio or use head-based sampling |
+| `log_dir` not working | OTLP replaces `logging::init_logging` | v32 follow-up: OTLP + JSON file logging bridge |
+
 ## Configuration
 
 Priority order: CLI flags > environment variables > YAML config file.

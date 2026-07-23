@@ -29,9 +29,9 @@ evidence). The `fuzz/` directory is excluded from the workspace.
 | Crate | Purpose | Features |
 |-------|---------|----------|
 | `vllm-traits` | Type traits, sampling helpers, gRPC types, CUDA graph kernel types | 2 |
-| `vllm-core` | Engine actor, scheduler, sampling, paged-KV | 2 |
+| `vllm-core` | Engine actor, scheduler, sampling, paged-KV | 3 |
 | `vllm-model` | Model architectures (Llama, Qwen3, Mixtral, …), checkpoint loading | 4 |
-| `vllm-server` | HTTP API (`axum`), OpenAI compatibility, security middleware | 1 |
+| `vllm-server` | HTTP API (`axum`), OpenAI compatibility, security middleware | 2 |
 | `vllm-dist` | gRPC server + peer client, distributed KV cache | 0 |
 | `vllm-testing` | Shared test fixtures (mock engines, deterministic helpers) | 1 |
 
@@ -63,6 +63,7 @@ ship without GPU types or the multi-node stack.
 |---------|-------------|---------|
 | `cuda-graph` | Enable CUDA Graph capture / replay for batched decode steps. Gates the `engine::cuda_graph` module + `CudaGraphExecutor` re-export. | `dep:vllm-model` (optional dep upgraded to required when this feature is on). |
 | `multi-node` | Enable the multi-node KV block transfer stack (`BlockDataSource` trait, distributed cache types). | `dep:vllm-dist` (optional dep upgraded to required when this feature is on). |
+| `opentelemetry` | Opt-in OTLP push-based metrics + traces exporter (P43). Gates `metrics/exporter/otlp` + `tracing_init`. | 5 OTel deps (`opentelemetry`, `opentelemetry_sdk`, `opentelemetry-otlp`, `opentelemetry-semantic-conventions`, `tracing-opentelemetry`). |
 
 **Who enables these**:
 - `vllm-server` → `vllm-core/cuda-graph` (the only server-side feature).
@@ -93,18 +94,19 @@ candle build is the baseline).
   `crates/model/Cargo.toml` explicitly ignores `gguf` to silence
   the false positive.
 
-### `vllm-server` (1 feature)
+### `vllm-server` (2 features)
 
 The HTTP API. **Has a `default = []` feature** — minimal deployments
-ship without GPU graph types.
+ship without GPU graph types or the OTel dependency tree.
 
 | Feature | Description | Enables |
 |---------|-------------|---------|
 | `cuda-graph` | Allow the HTTP layer to enable CUDA Graph capture through `vllm-core`. Off by default so minimal deployments don't pull in the GPU-side graph types. | `vllm-core/cuda-graph`. |
+| `opentelemetry` | Opt-in OTLP metrics + traces exporter (P43). Gates `bootstrap/observability`, the `--otlp-endpoint` CLI flag, and the `observability` YAML config section. | `vllm-core/opentelemetry`. |
 
-**Who enables this**: the production `vllm-server` binary, when the
-operator opts in via `cargo build -p vllm-server --features cuda-graph`.
-There is no CLI flag yet (see engineering-quality §6 #4 follow-up).
+**Who enables these**: the production `vllm-server` binary, when the
+operator opts in via `cargo build -p vllm-server --features cuda-graph`
+or `--features opentelemetry`.
 
 ### `vllm-dist` (0 features)
 
@@ -139,6 +141,7 @@ on crate `B`.
 | Enabled on | Implies on | Crate | Mechanism |
 |------------|------------|-------|-----------|
 | `vllm-server/cuda-graph` | `vllm-core/cuda-graph` | core | `cuda-graph = ["vllm-core/cuda-graph"]` in `crates/server/Cargo.toml`. |
+| `vllm-server/opentelemetry` | `vllm-core/opentelemetry` | core | `opentelemetry = ["vllm-core/opentelemetry"]` in `crates/server/Cargo.toml`. |
 | `vllm-core/cuda-graph` | `vllm-model` (always) | model | `cuda-graph = ["dep:vllm-model"]` — `vllm-model` is the optional dep, the feature forces it on. |
 | `vllm-core/multi-node` | `vllm-dist` (always) | dist | `multi-node = ["dep:vllm-dist"]` — `vllm-dist` is the optional dep, the feature forces it on. |
 | `vllm-model/multi-node` | `vllm-dist` (always) | dist | Same shape as core's `multi-node`. |
@@ -222,6 +225,7 @@ materialized in every crate that declares it.
 |------|---------|-------------|
 | Default | `just nextest` (= `cargo nextest run --workspace`) | minimal build |
 | All-features | `cargo clippy --all-targets --workspace --all-features` | every feature on every crate |
+| OTLP | `cargo test -p vllm-server --features opentelemetry --test otlp_exporter_integration` | `vllm-core/opentelemetry` + `vllm-server/opentelemetry` (P43 `ci-otlp` job) |
 | GPU all-features | `cargo build --workspace --all-features` on a CUDA runner | same as production GPU build above, plus `cuda-graph` on every crate that exposes it |
 | Multi-node tests | `cargo test -p vllm-dist` | requires `--features vllm-core/multi-node,vllm-testing/multi-node`; CI runs this implicitly because `vllm-dist` declares no features itself and the tests request the propagation |
 
@@ -262,6 +266,7 @@ end-to-end coverage for feature interactions.
 - [`docs/adr/ADR-008`](../adr/ADR-008-vllm-dist-feature-gating.md) —
   the decision that `vllm-dist` exposes no features itself (always
   pulled in by `multi-node` on a consumer).
+- [`docs/adr/ADR-021`](../adr/ADR-021-otlp-exporter.md) — the OTLP exporter architectural decision (P43).
 - [`docs/adr/ADR-015`](../adr/ADR-015-vllm-dist-investment.md) —
   the broader "vllm-dist is worth investing in" decision (prerequisite
   for ADR-008).
