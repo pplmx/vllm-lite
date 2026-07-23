@@ -89,6 +89,48 @@ fn test_precompute_rope_cache_values() {
 }
 
 #[test]
+fn test_precompute_rope_cache_correct_formula() {
+    // Verify the RoPE formula: angle = pos * theta^(-2i/d).
+    // At position 0, every angle must be 0 → cos=1, sin=0.
+    let cache = precompute_rope_cache(4, 64, 10000.0);
+    for i in 0..32 {
+        let (cos, sin) = cache[i]; // first seq position (pos=0)
+        assert!(
+            (cos - 1.0).abs() < 1e-6,
+            "cos(angle) should be 1.0 at pos=0, dim={i}"
+        );
+        assert!(
+            sin.abs() < 1e-6,
+            "sin(angle) should be 0.0 at pos=0, dim={i}"
+        );
+    }
+
+    // At position 1, dim 0: angle = 1.0 * theta^0 = 1.0
+    let (cos0, sin0) = cache[32]; // pos=1, i=0
+    assert!(
+        (cos0 - 1.0_f32.cos()).abs() < 1e-6 && (sin0 - 1.0_f32.sin()).abs() < 1e-6,
+        "pos=1, dim=0: expected (cos(1.0), sin(1.0)), got ({cos0}, {sin0})"
+    );
+
+    // Cross-check against compute_inv_freq_for_head_dim + manual angle.
+    let head_dim = 64;
+    let theta: f32 = 10000.0;
+    let inv_freq: Vec<f32> = (0..head_dim / 2)
+        .map(|i| theta.powf(-2.0 * (i as f32) / (head_dim as f32)))
+        .collect();
+    for pos in 0..4 {
+        for i in 0..head_dim / 2 {
+            let angle = (pos as f32) * inv_freq[i];
+            let (cos, sin) = cache[pos * head_dim / 2 + i];
+            assert!(
+                (cos - angle.cos()).abs() < 1e-5 && (sin - angle.sin()).abs() < 1e-5,
+                "pos={pos}, dim={i}: expected (cos({angle}), sin({angle})), got ({cos}, {sin})"
+            );
+        }
+    }
+}
+
+#[test]
 fn test_rope_creation() {
     let device = Device::Cpu;
     let rope = RoPE::new(128, 2048, 10000.0, &device);

@@ -517,11 +517,17 @@ fn apply_rope_with_inv_freq(query: &Tensor, positions: &[i64], inv_freq: &[f32])
 
 #[must_use]
 pub fn precompute_rope_cache(seq_len: usize, head_dim: usize, theta: f32) -> Vec<(f32, f32)> {
+    // invariant: `seq_len` and `head_dim/2` are model-architecture constants
+    // (e.g. 4096 × 64); the nested loop is O(seq_len * head_dim) ≈ 262 KI
+    // iterations at the largest supported context — well within cache-friendly
+    // territory and negligible compared to the attention kernels that consume
+    // the cache.
     let mut cache = Vec::with_capacity(seq_len * head_dim / 2);
     for pos in 0..seq_len {
         for i in 0..head_dim / 2 {
-            let freq = (pos as f32).powf(-2.0 * (i as f32) / (head_dim as f32)) * theta;
-            cache.push((freq.cos(), freq.sin()));
+            // Standard RoPE: angle[pos][i] = pos * theta^(-2i/d)
+            let angle = (pos as f32) * theta.powf(-2.0 * (i as f32) / (head_dim as f32));
+            cache.push((angle.cos(), angle.sin()));
         }
     }
     cache
