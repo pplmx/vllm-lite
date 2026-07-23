@@ -1733,9 +1733,9 @@ pub async fn completions(
                                 let reason_string = if let Some(rx) = reason_rx_opt.take() {
                                     match rx.await {
                                         Ok(vllm_traits::FinishReason::Length) => "length",
-                                        Ok(vllm_traits::FinishReason::Stop) => "stop",
-                                        Ok(vllm_traits::FinishReason::Cancelled) => "stop",
-                                        Err(_) => "stop",
+                                        Ok(vllm_traits::FinishReason::Stop)
+                                        | Ok(vllm_traits::FinishReason::Cancelled)
+                                        | Err(_) => "stop",
                                     }
                                 } else {
                                     "stop"

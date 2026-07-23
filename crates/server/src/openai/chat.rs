@@ -1873,8 +1873,7 @@ async fn stream_chat_completion(
     let seq_id: vllm_traits::SeqId =
         match tokio::time::timeout(std::time::Duration::from_secs(1), seq_id_rx).await {
             Ok(Ok(id)) => id,
-            Ok(Err(_)) => return Err(engine_unavailable_error()),
-            Err(_) => return Err(engine_unavailable_error()),
+            Ok(Err(_)) | Err(_) => return Err(engine_unavailable_error()),
         };
     // If the engine rejected admission (empty prompt), `seq_id`
     // is the sentinel 0. We still stream — the engine closes the
@@ -2000,9 +1999,9 @@ async fn stream_chat_completion(
                             let reason_string = if let Some(rx) = reason_rx_opt.take() {
                                 match rx.await {
                                     Ok(vllm_traits::FinishReason::Length) => "length",
-                                    Ok(vllm_traits::FinishReason::Stop) => "stop",
-                                    Ok(vllm_traits::FinishReason::Cancelled) => "stop",
-                                    Err(_) => "stop",
+                                    Ok(vllm_traits::FinishReason::Stop)
+                                    | Ok(vllm_traits::FinishReason::Cancelled)
+                                    | Err(_) => "stop",
                                 }
                             } else {
                                 "stop"
