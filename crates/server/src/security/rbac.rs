@@ -9,7 +9,7 @@
 //! client-supplied `X-User-Role` request header, which let any caller
 //! claim `admin` and reach `/metrics`, `/admin/*`, etc. without a
 //! valid API key. As of the v31.0 P4 follow-up batch the role must
-//! come from the [`AuthenticatedRole`] request extension, which can
+//! come from the `AuthenticatedRole` request extension, which can
 //! only be inserted by server-side middleware (JWT claim extraction,
 //! or a future role-aware auth path). Headers are no longer consulted
 //! at any decision point. See `docs/technical-due-diligence/production-readiness.md`

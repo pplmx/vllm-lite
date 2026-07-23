@@ -5,7 +5,7 @@
 //! degrade to greedy decoding, which is a contract violation for any
 //! caller that explicitly asked for beam search.
 //!
-//! This module exposes [`validate_sampling_params`], which every
+//! This module exposes `validate_sampling_params`, which every
 //! handler must call before constructing an `EngineMessage::AddRequest`.
 //! The OpenAI request types do not currently expose `beam_width` (the
 //! upstream OpenAI API doesn't either), so this check is
@@ -13,7 +13,7 @@
 //! addition. When a misconfigured request does arrive, it gets a
 //! `400 invalid_request_error` instead of a degraded response.
 //!
-//! [`validate_chat_request_fields`] and [`validate_completion_request_fields`]
+//! `validate_chat_request_fields` and `validate_completion_request_fields`
 //! reject OpenAI request fields that are declared on the wire types
 //! but not yet honoured by the engine (architecture-performance §5.1
 //! "API-01: OpenAI 兼容是部分兼容"). The accepted path is honest
@@ -134,7 +134,7 @@ pub fn validate_sampling_params(
 ///    the validator layer, not just at the type definition.
 /// 2. **Forward-compatibility** — if v0.3 ever adds stricter checks
 ///    (e.g. format-specific syntax requirements), the hook is here.
-/// 3. **Pattern parity** — mirrors [`validate_chat_request_fields`]
+/// 3. **Pattern parity** — mirrors `validate_chat_request_fields`
 ///    so handlers have a single call site for all request-level
 ///    checks, and tracing/audit can find the validator by name.
 ///
@@ -787,7 +787,7 @@ pub fn validate_chat_request_fields(
 /// Reject completion-request fields the engine does not yet honour,
 /// and validate the ones it does.
 ///
-/// Mirror of [`validate_chat_request_fields`] for the legacy
+/// Mirror of `validate_chat_request_fields` for the legacy
 /// `/v1/completions` endpoint. Same set of checks (`n ∈ 1..=MAX_N`,
 /// non-empty `stop`, out-of-range `top_p`, out-of-range penalties,
 /// out-of-range `logit_bias`, out-of-range `logprobs`,
