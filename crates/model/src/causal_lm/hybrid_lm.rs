@@ -4,6 +4,7 @@
 //! an optional LM head with tied-embedding fallback.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use super::{
     LayerAuxMut, LayerCtx, embed_sequence, forward_batch, greedy_sample_token, logits_to_vector,
@@ -13,6 +14,7 @@ use crate::components::gated_delta::GatedDeltaState;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{DType, Device, Module, Tensor};
 use candle_nn::{Embedding, Linear};
+use parking_lot::Mutex;
 use vllm_traits::{BatchOutput, BlockId, ModelBackend, Result, SampledToken, SeqId, TokenId};
 
 /// Config surface required by [`HybridLm`] for inference and `ModelBackend` metadata.
@@ -31,7 +33,7 @@ pub struct HybridLm<B, Norm, C> {
     pub(crate) layers: Vec<B>,
     pub(crate) norm: Norm,
     pub(crate) lm_head: Option<Linear>,
-    pub(crate) kv_cache: PagedKvCache,
+    pub(crate) kv_cache: Arc<Mutex<PagedKvCache>>,
     gdn_states: HashMap<SeqId, Vec<Option<GatedDeltaState>>>,
     device: Device,
 }
@@ -48,7 +50,7 @@ where
         layers: Vec<B>,
         norm: Norm,
         lm_head: Option<Linear>,
-        kv_cache: PagedKvCache,
+        kv_cache: Arc<Mutex<PagedKvCache>>,
         device: Device,
     ) -> Self {
         Self {
@@ -89,8 +91,9 @@ where
             .entry(seq_id)
             .or_insert_with(|| vec![None; num_layers]);
 
+        let mut kv_cache = self.kv_cache.lock();
         let mut ctx = LayerCtx {
-            kv_cache: &mut self.kv_cache,
+            kv_cache: &mut *kv_cache,
             block_ids,
             positions,
             num_computed_tokens,
@@ -101,6 +104,13 @@ where
         let hidden = map_candle(self.norm.forward(&hidden))?;
         let logits = forward_lm_head(&self.embed_tokens, self.lm_head.as_ref(), &hidden)?;
         Ok((logits, 0))
+    }
+
+    /// Returns a clone of the shared `Arc<Mutex<PagedKvCache>>` for
+    /// multi-node KV block transfer wiring (Phase 41 OPS-32a second-half).
+    #[must_use]
+    pub fn paged_kv_cache(&self) -> Arc<Mutex<PagedKvCache>> {
+        Arc::clone(&self.kv_cache)
     }
 }
 
@@ -195,8 +205,9 @@ where
                 .get_mut(&EMBED_SEQ_ID)
                 .expect("embed gdn states");
 
+            let mut kv_cache = self.kv_cache.lock();
             let mut ctx = LayerCtx {
-                kv_cache: &mut self.kv_cache,
+                kv_cache: &mut *kv_cache,
                 block_ids: &block_ids,
                 positions: &positions,
                 num_computed_tokens: 0,
@@ -251,8 +262,9 @@ where
                 .entry(seq_ids[i])
                 .or_insert_with(|| vec![None; num_layers]);
 
+            let mut kv_cache = self.kv_cache.lock();
             let mut ctx = LayerCtx {
-                kv_cache: &mut self.kv_cache,
+                kv_cache: &mut *kv_cache,
                 block_ids: &kv_block_ids[i],
                 positions: &positions[i],
                 num_computed_tokens: num_computed_tokens[i],

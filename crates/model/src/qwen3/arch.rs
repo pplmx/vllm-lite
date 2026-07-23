@@ -4,9 +4,12 @@ use crate::arch::{ArchCapabilities, Architecture};
 use crate::causal_lm::BlockWrapper;
 use crate::components::TransformerBlock;
 use crate::config::ModelConfig;
+use crate::paged_tensor::PagedKvCache;
 use crate::qwen3::config::Qwen3Config;
 use candle_core::{Device, Result, Tensor};
+use parking_lot::Mutex;
 use std::collections::HashMap;
+use std::sync::Arc;
 use vllm_traits::ModelBackend;
 
 use super::block::TransformerBlock as Qwen3Block;
@@ -68,11 +71,12 @@ impl Architecture for Qwen3Architecture {
         weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
         kv_quantization: bool,
-    ) -> Result<Box<dyn ModelBackend>> {
+    ) -> Result<(Box<dyn ModelBackend>, Option<Arc<Mutex<PagedKvCache>>>)> {
         let qwen_config = Qwen3Config::from(config);
         let model =
             Qwen3Model::from_weights(qwen_config, device, weights, num_kv_blocks, kv_quantization)?;
-        Ok(Box::new(model))
+        let kv_cache = model.paged_kv_cache();
+        Ok((Box::new(model), Some(kv_cache)))
     }
 }
 

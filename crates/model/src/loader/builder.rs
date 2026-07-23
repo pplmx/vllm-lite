@@ -5,12 +5,14 @@
 //! tokenizer, KV blocks, model config, and architecture selection.
 #![allow(clippy::module_name_repetitions)]
 use candle_core::{Device, Result, Tensor};
+use parking_lot::Mutex;
 use std::path::Path;
 use std::sync::Arc;
 
 use crate::arch::{ARCHITECTURE_REGISTRY, ArchCapabilities, register_all_archs};
 use crate::config::Architecture as ConfigArchitecture;
 use crate::config::ModelConfig;
+use crate::paged_tensor::PagedKvCache;
 
 #[derive(Debug)]
 /// Builder for `ModelLoader`. Use `with_*` methods to override defaults, then call `.build()` to produce the final value.
@@ -113,6 +115,10 @@ struct ModelLoaderInner {
     kv_quantization: bool,
     allow_stub: bool,
     config_json: serde_json::Value,
+    /// Cached `PagedKvCache` extracted from `create_model` (Phase 41
+    /// OPS-32a second-half). Set once during `load()`; read by
+    /// `paged_kv_cache_clone()`.
+    kv_cache: Mutex<Option<Arc<Mutex<PagedKvCache>>>>,
 }
 
 impl ModelLoaderInner {
@@ -136,6 +142,7 @@ impl ModelLoaderInner {
             kv_quantization,
             allow_stub,
             config_json,
+            kv_cache: Mutex::new(None),
         })
     }
 }
@@ -152,6 +159,7 @@ impl ModelLoader {
                 kv_quantization: false,
                 allow_stub: false,
                 config_json: serde_json::Value::Null,
+                kv_cache: Mutex::new(None),
             }),
         }
     }
@@ -206,26 +214,18 @@ impl ModelLoader {
     }
 
     /// Returns a clone of the loader-owned `PagedKvCache` for multi-node
-    /// wiring (Phase 41 OPS-32a second-half).
+    /// KV block transfer wiring (Phase 41 OPS-32a second-half).
     ///
-    /// Currently returns `None` — the `PagedKvCache` lives inside the
-    /// model backend's attention components after `load_model()`, not
-    /// on the loader. Wiring the cache through here requires either
-    /// (a) extracting it from the loaded model backend via a new
-    /// trait method or (b) having the loader construct it independently
-    /// before model construction. Both are P42 follow-up work; for now
-    /// the bootstrap's builder-path engine construction works but
-    /// `with_paged_kv_cache` is skipped (the engine ends up with no
-    /// `BlockDataSource`, which means the gRPC server bootstrap will
-    /// refuse to start). Single-node deployments (the default) are
-    /// unaffected.
+    /// The cache is captured from `Architecture::create_model()` during
+    /// `load()` and stored in `ModelLoaderInner::kv_cache`. The model
+    /// backend and the `EngineBuilder` share the same
+    /// `Arc<Mutex<PagedKvCache>>` via `Arc::clone`, so both read/write
+    /// the same underlying data. Returns `None` if `load()` has not
+    /// been called or the architecture has no paged KV cache (e.g. stubs).
     #[cfg(feature = "multi-node")]
     #[must_use]
-    pub const fn paged_kv_cache_clone(
-        &self,
-    ) -> Option<std::sync::Arc<crate::paged_tensor::PagedKvCache>> {
-        // TODO(P42): wire the actual cache through. See method docs.
-        None
+    pub fn paged_kv_cache_clone(&self) -> Option<Arc<Mutex<crate::paged_tensor::PagedKvCache>>> {
+        self.inner.kv_cache.lock().clone()
     }
 
     /// # Errors
@@ -316,13 +316,17 @@ impl ModelLoader {
         let weights = self.load_weights()?;
         let weights = arch.remap_weights(weights);
 
-        arch.create_model(
+        let (backend, kv_cache) = arch.create_model(
             config,
             self.inner.device.clone(),
             weights,
             self.inner.num_kv_blocks,
             self.inner.kv_quantization,
-        )
+        )?;
+        if let Some(cache) = kv_cache {
+            *self.inner.kv_cache.lock() = Some(cache);
+        }
+        Ok(backend)
     }
 
     /// Load the target language model and return its backend.

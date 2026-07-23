@@ -5,12 +5,14 @@
 //! and the Registry for dynamic registration.
 
 use candle_core::{Device, Result, Tensor};
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
 use vllm_traits::ModelBackend;
 
 use crate::components::TransformerBlock;
 use crate::config::ModelConfig;
+use crate::paged_tensor::PagedKvCache;
 
 pub mod capabilities;
 pub mod registry;
@@ -41,6 +43,9 @@ pub trait Architecture: Send + Sync + 'static {
     ) -> Result<Box<dyn TransformerBlock>>;
 
     /// Construct a model from the parsed config and checkpoint.
+    ///
+    /// Returns `(backend, kv_cache)` where `kv_cache` is `Some(Arc<Mutex<PagedKvCache>>)`
+    /// for architectures with paged KV cache integration, or `None` for stubs.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -51,7 +56,7 @@ pub trait Architecture: Send + Sync + 'static {
         weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
         kv_quantization: bool,
-    ) -> Result<Box<dyn ModelBackend>>;
+    ) -> Result<(Box<dyn ModelBackend>, Option<Arc<Mutex<PagedKvCache>>>)>;
 
     fn remap_weights(&self, weights: HashMap<String, Tensor>) -> HashMap<String, Tensor> {
         weights
@@ -98,7 +103,7 @@ impl Architecture for UnknownArchitecture {
         _weights: HashMap<String, Tensor>,
         _num_kv_blocks: usize,
         _kv_quantization: bool,
-    ) -> Result<Box<dyn ModelBackend>> {
+    ) -> Result<(Box<dyn ModelBackend>, Option<Arc<Mutex<PagedKvCache>>>)> {
         Err(candle_core::Error::msg(
             "UnknownArchitecture: cannot create model backend",
         ))

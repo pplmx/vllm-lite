@@ -30,7 +30,9 @@ use crate::components::decoder_block::PagedDecoderBlock;
 use crate::config::ModelConfig;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Device, Result, Tensor};
+use parking_lot::Mutex;
 use std::collections::HashMap;
+use std::sync::Arc;
 use vllm_traits::ModelBackend;
 use vllm_traits::types::BatchOutput;
 
@@ -173,8 +175,11 @@ impl Architecture for StubArchitecture {
         _weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
         _kv_quantization: bool,
-    ) -> Result<Box<dyn ModelBackend>> {
-        Ok(Box::new(StubModel::new(config, device, num_kv_blocks)))
+    ) -> Result<(Box<dyn ModelBackend>, Option<Arc<Mutex<PagedKvCache>>>)> {
+        Ok((
+            Box::new(StubModel::new(config, device, num_kv_blocks)),
+            None,
+        ))
     }
 }
 

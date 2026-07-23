@@ -35,21 +35,19 @@ impl crate::engine::Engine {
     /// Crate-internal — embedders go through
     /// [`crate::engine::EngineBuilder::with_paged_kv_cache`].
     #[cfg(feature = "multi-node")]
-    pub(crate) fn set_paged_kv_cache(&mut self, cache: Arc<PagedKvCache>) {
-        // Wrap the cache in a Mutex. Both the engine and the wrapper
-        // will hold an `Arc<Mutex<PagedKvCache>>` pointing at the same
-        // data; either can lock to read/write. This requires the input
-        // Arc to be uniquely owned (which the builder ensures by
-        // taking the cache from `EngineBuilder::paged_kv_cache`).
-        let cache_lock = Arc::new(Mutex::new(
-            Arc::try_unwrap(cache)
-                .expect("PagedKvCache must be uniquely owned at Engine::set_paged_kv_cache time"),
-        ));
+    pub(crate) fn set_paged_kv_cache(&mut self, cache: Arc<Mutex<PagedKvCache>>) {
+        // The cache arrives pre-wrapped in `Arc<Mutex<>>` (the model layer
+        // yields `Arc<Mutex<PagedKvCache>>` from `Architecture::create_model`
+        // and stores it in `ModelLoader::paged_kv_cache_clone`). The
+        // engine and the `PagedKvCacheWrapper` both hold an `Arc` to the
+        // same `Mutex`: the engine for diagnostics/read paths, the wrapper
+        // for the gRPC `TransferKVBlock` read/write paths. No `try_unwrap`
+        // is needed since the cache is shared (not uniquely owned).
         let wrapper: Arc<dyn BlockDataSource + Send + Sync> = Arc::new(
-            vllm_model::paged_tensor::PagedKvCacheWrapper::from_arc_mutex(Arc::clone(&cache_lock)),
+            vllm_model::paged_tensor::PagedKvCacheWrapper::from_arc_mutex(Arc::clone(&cache)),
         );
         self.scheduler.set_block_data_source(Arc::clone(&wrapper));
-        self.paged_kv_cache = Some(cache_lock);
+        self.paged_kv_cache = Some(cache);
         self.paged_kv_cache_wrapper = Some(wrapper);
     }
 

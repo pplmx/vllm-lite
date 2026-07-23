@@ -20,6 +20,8 @@ use crate::config::ModelConfig;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Device, Tensor};
 use candle_nn::{Embedding, Module};
+use parking_lot::Mutex;
+use std::sync::Arc;
 use vllm_traits::{BatchOutput, BlockId, ModelBackend, Result, SampledToken, SeqId, TokenId};
 
 #[derive(Debug)]
@@ -30,7 +32,7 @@ pub struct CausalLm<B, Norm, Head> {
     layers: Vec<B>,
     norm: Norm,
     lm_head: Head,
-    kv_cache: PagedKvCache,
+    kv_cache: Arc<Mutex<PagedKvCache>>,
     device: Device,
     embed_through_layers: bool,
 }
@@ -71,8 +73,15 @@ where
             block_ids,
             positions,
             is_prefill,
-            &mut self.kv_cache,
+            &mut *self.kv_cache.lock(),
         )
+    }
+
+    /// Returns a clone of the shared `Arc<Mutex<PagedKvCache>>` for
+    /// multi-node KV block transfer wiring (Phase 41 OPS-32a second-half).
+    #[must_use]
+    pub fn paged_kv_cache(&self) -> Arc<Mutex<PagedKvCache>> {
+        Arc::clone(&self.kv_cache)
     }
 }
 
@@ -166,7 +175,7 @@ where
                 &self.norm,
                 &self.device,
                 self.config.hidden_size,
-                &mut self.kv_cache,
+                &mut *self.kv_cache.lock(),
                 input_tokens,
                 positions,
             )
@@ -218,8 +227,9 @@ where
             }
 
             let hidden = embed_sequence(&self.embed_tokens, tokens, &self.device, prefill)?;
+            let mut kv_cache = self.kv_cache.lock();
             let mut ctx = LayerCtx {
-                kv_cache: &mut self.kv_cache,
+                kv_cache: &mut *kv_cache,
                 block_ids: &kv_block_ids[i],
                 positions: &positions[i],
                 num_computed_tokens: num_computed_tokens[i],

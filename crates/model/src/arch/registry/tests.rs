@@ -41,7 +41,10 @@ impl Architecture for TestArch {
         _weights: HashMap<String, candle_core::Tensor>,
         _num_kv_blocks: usize,
         _kv_quantization: bool,
-    ) -> candle_core::Result<Box<dyn vllm_traits::ModelBackend>> {
+    ) -> candle_core::Result<(
+        Box<dyn vllm_traits::ModelBackend>,
+        Option<Arc<parking_lot::Mutex<crate::paged_tensor::PagedKvCache>>>,
+    )> {
         Err(candle_core::Error::Msg("test arch has no model".into()))
     }
 }

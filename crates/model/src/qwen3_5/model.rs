@@ -16,6 +16,8 @@ use crate::qwen3_5::config::{GdnLinearConfig, LayerType, parse_layer_types};
 use crate::qwen3_5::weights::load_hybrid_weights;
 use candle_core::{DType, Device, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, LayerNorm, VarBuilder};
+use parking_lot::Mutex;
+use std::sync::Arc;
 
 /// `Qwen35HybridModel`. See the type definition for fields and behavior.
 pub type Qwen35HybridModel = HybridLm<HybridBlock, LayerNorm, Qwen3Config>;
@@ -88,14 +90,14 @@ impl Qwen35HybridModel {
             VarBuilder::zeros(DType::F32, &device),
         )?;
 
-        let kv_cache = PagedKvCache::new(
+        let kv_cache = Arc::new(Mutex::new(PagedKvCache::new(
             config.num_hidden_layers(),
             config.num_key_value_heads(),
             config.head_dim(),
             num_kv_blocks,
             device.clone(),
             kv_quantization,
-        )?;
+        )?));
 
         Ok(Self::from_parts(
             config,

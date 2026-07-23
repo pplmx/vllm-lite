@@ -15,6 +15,9 @@ use vllm_traits::ModelBackend;
 use vllm_traits::CudaGraphExecutor;
 
 #[cfg(feature = "multi-node")]
+use parking_lot::Mutex;
+
+#[cfg(feature = "multi-node")]
 use vllm_dist::DistributedKVCache;
 
 #[cfg(feature = "multi-node")]
@@ -64,7 +67,7 @@ pub struct EngineBuilder {
     /// → `MemoryManager::block_data_source` at build time so subsequent
     /// gRPC `TransferKVBlock` calls resolve to the wrapper.
     #[cfg(feature = "multi-node")]
-    paged_kv_cache: Option<Arc<PagedKvCache>>,
+    paged_kv_cache: Option<Arc<Mutex<PagedKvCache>>>,
 }
 
 impl std::fmt::Debug for EngineBuilder {
@@ -213,14 +216,16 @@ impl EngineBuilder {
     /// Wire a `PagedKvCache` into the engine for multi-node KV block
     /// replication (Phase 41 OPS-32a second-half).
     ///
-    /// Constructs the `PagedKvCacheWrapper` internally and threads it
+    /// Takes the cache pre-wrapped in `Arc<Mutex<PagedKvCache>>` (the shape
+    /// yielded by `Architecture::create_model` via `ModelLoader::paged_kv_cache_clone`)
+    /// and threads it — along with a `PagedKvCacheWrapper` constructed from it —
     /// through `Engine::set_paged_kv_cache` at `.build()` time so every
     /// subsequent gRPC `TransferKVBlock` call resolves to the wrapper.
     /// Mirrors [`Self::with_distributed_kv`] (which wires the metadata
     /// cache).
     #[must_use]
     #[cfg(feature = "multi-node")]
-    pub fn with_paged_kv_cache(mut self, cache: Arc<PagedKvCache>) -> Self {
+    pub fn with_paged_kv_cache(mut self, cache: Arc<Mutex<PagedKvCache>>) -> Self {
         self.paged_kv_cache = Some(cache);
         self
     }

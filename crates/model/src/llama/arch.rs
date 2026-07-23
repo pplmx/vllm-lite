@@ -4,8 +4,11 @@ use crate::arch::{ArchCapabilities, Architecture};
 use crate::causal_lm::BlockWrapper;
 use crate::components::TransformerBlock;
 use crate::config::ModelConfig;
+use crate::paged_tensor::PagedKvCache;
 use candle_core::{Device, Result, Tensor};
+use parking_lot::Mutex;
 use std::collections::HashMap;
+use std::sync::Arc;
 use vllm_traits::ModelBackend;
 
 use super::block::block_from_weights;
@@ -67,10 +70,11 @@ impl Architecture for LlamaArchitecture {
         weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
         kv_quantization: bool,
-    ) -> Result<Box<dyn ModelBackend>> {
+    ) -> Result<(Box<dyn ModelBackend>, Option<Arc<Mutex<PagedKvCache>>>)> {
         let model =
             LlamaModel::from_weights(config, device, weights, num_kv_blocks, kv_quantization)?;
-        Ok(Box::new(model))
+        let kv_cache = model.paged_kv_cache();
+        Ok((Box::new(model), Some(kv_cache)))
     }
 }
 

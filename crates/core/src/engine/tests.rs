@@ -354,17 +354,17 @@ fn test_engine_builder_sleep_policy_override() {
 #[cfg(feature = "multi-node")]
 #[test]
 fn engine_builder_with_paged_kv_cache_wires_wrapper_to_memory_manager() {
+    use parking_lot::Mutex;
     use vllm_dist::BlockDataSource;
     use vllm_model::paged_tensor::PagedKvCache;
     let target: Box<dyn ModelBackend> = Box::new(StubModel::default());
-    let cache = Arc::new(
+    // `set_paged_kv_cache` takes a pre-wrapped `Arc<Mutex<PagedKvCache>>`
+    // (the shape yielded by `ModelLoader::paged_kv_cache_clone` / the
+    // model layer's `create_model`). The engine and the wrapper both
+    // hold an `Arc` to the same `Mutex`, so `strong_count` >= 2.
+    let cache = Arc::new(Mutex::new(
         PagedKvCache::new(2, 2, 4, 4, candle_core::Device::Cpu, false).expect("small cache"),
-    );
-    // P42: `set_paged_kv_cache` requires unique Arc ownership
-    // (it wraps the cache in `Arc<Mutex<PagedKvCache>>` for both
-    // the engine's diagnostic accessor and the wrapper's `inner`).
-    // We move the cache into the builder so there's only one strong
-    // reference at `.build()` time.
+    ));
     let mut engine = EngineBuilder::new(target)
         .with_paged_kv_cache(cache)
         .build();

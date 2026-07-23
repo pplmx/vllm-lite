@@ -7,6 +7,7 @@
 //! on the `ModelBackend` trait surface.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use super::CausalLm;
 use crate::components::decoder_block::PagedDecoderBlock;
@@ -15,6 +16,7 @@ use crate::config::ModelConfig;
 use crate::paged_tensor::PagedKvCache;
 use candle_core::{Device, Result as CandleResult, Tensor};
 use candle_nn::{Embedding, Linear, VarBuilder};
+use parking_lot::Mutex;
 
 impl<B> CausalLm<B, LnLayerNorm, Linear>
 where
@@ -55,14 +57,14 @@ where
         let vb = VarBuilder::zeros(candle_core::DType::F32, &device);
         let lm_head = candle_nn::linear(hidden_size, vocab_size, vb.pp("lm_head"))?;
 
-        let kv_cache = PagedKvCache::new(
+        let kv_cache = Arc::new(Mutex::new(PagedKvCache::new(
             num_layers,
             config.num_heads,
             config.head_dim,
             num_kv_blocks,
             device.clone(),
             kv_quantization,
-        )?;
+        )?));
 
         Ok(Self {
             config,
@@ -125,14 +127,14 @@ where
             config.tie_word_embeddings,
         )?;
 
-        let kv_cache = PagedKvCache::new(
+        let kv_cache = Arc::new(Mutex::new(PagedKvCache::new(
             num_layers,
             config.num_heads,
             config.head_dim,
             num_kv_blocks,
             device.clone(),
             kv_quantization,
-        )?;
+        )?));
 
         Ok(Self {
             config,
@@ -185,14 +187,14 @@ where
         let vb = VarBuilder::zeros(candle_core::DType::F32, &device);
         let lm_head = candle_nn::linear(hidden_size, vocab_size, vb.pp("lm_head"))?;
 
-        let kv_cache = PagedKvCache::new(
+        let kv_cache = Arc::new(Mutex::new(PagedKvCache::new(
             num_layers,
             config.num_heads,
             config.head_dim,
             num_kv_blocks,
             device.clone(),
             kv_quantization,
-        )?;
+        )?));
 
         Ok(Self {
             config,
@@ -250,14 +252,14 @@ where
             config.tie_word_embeddings,
         )?;
 
-        let kv_cache = PagedKvCache::new(
+        let kv_cache = Arc::new(Mutex::new(PagedKvCache::new(
             num_layers,
             config.num_heads,
             config.head_dim,
             num_kv_blocks,
             device.clone(),
             kv_quantization,
-        )?;
+        )?));
 
         Ok(Self {
             config,
