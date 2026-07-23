@@ -1040,3 +1040,106 @@ fn test_scheduler_config_rejects_invalid_ratio() {
         SequencePackingConfig::default(),
     );
 }
+
+/// Regression test for stop-sequence detection in `step_regular`.
+///
+/// Verifies that when a generated token completes a `stop_token_sequences`
+/// match, the sequence is finalized with `FinishReason::Stop` and excluded
+/// from future batches. This exercises the shared `finalize_stop_sequences`
+/// helper through the full `Engine::step` path (not just `SchedulerEngine::finish_sequence`).
+#[test]
+fn test_stop_sequence_finalizes_with_stop_reason() {
+    use tokio::sync::oneshot;
+    use vllm_traits::FinishReason;
+
+    let config = SchedulerConfig::default();
+    let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
+
+    let (tx, mut rx) = mpsc::channel(64);
+    let (finish_tx, mut finish_rx) = oneshot::channel::<FinishReason>();
+
+    // IncrementModel: generated token = last prompt token (3).
+    // stop_token_sequences = [[3]] → matches after prefill.
+    let mut req = Request::new(1, vec![1, 2, 3], 100);
+    req.sampling_params.stop_token_sequences = Some(vec![vec![3]]);
+    let seq_id = engine.add_request(req, tx);
+    engine.finish_reason_txs.insert(seq_id, finish_tx);
+
+    engine.step().unwrap();
+
+    // The sequence must be finished (not lingering in running).
+    assert_eq!(engine.scheduler.running_count(), 0);
+    // The matched token (3) was emitted before the channel was dropped.
+    assert_eq!(rx.try_recv().unwrap().token, 3);
+    // FinishReason::Stop was delivered (not Length, not nothing).
+    assert_eq!(finish_rx.try_recv().unwrap(), FinishReason::Stop);
+    // No more work.
+    assert!(!engine.has_pending());
+}
+
+/// Verifies that stop sequences don't trigger prematurely — if the generated
+/// token doesn't match, the sequence continues normally.
+#[test]
+fn test_stop_sequence_does_not_trigger_on_non_match() {
+    let config = SchedulerConfig::default();
+    let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
+
+    let (tx, mut rx) = mpsc::channel(64);
+
+    // IncrementModel generates token 3 (last prompt token). Stop sequence
+    // is [42] which won't match. Sequence should continue running.
+    let mut req = Request::new(1, vec![1, 2, 3], 100);
+    req.sampling_params.stop_token_sequences = Some(vec![vec![42]]);
+    let _ = engine.add_request(req, tx);
+
+    engine.step().unwrap();
+
+    // Token 3 was generated and emitted.
+    assert_eq!(rx.try_recv().unwrap().token, 3);
+    // Sequence is still running (not finished).
+    assert_eq!(engine.scheduler.running_count(), 1);
+    assert!(engine.has_pending());
+}
+
+/// Verifies multi-token stop sequences work: a stop sequence spanning
+/// multiple generated tokens is detected correctly.
+#[test]
+fn test_multi_token_stop_sequence() {
+    use tokio::sync::oneshot;
+    use vllm_traits::FinishReason;
+
+    let config = SchedulerConfig::default();
+    let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
+
+    let (tx, mut rx) = mpsc::channel(64);
+    let (finish_tx, mut finish_rx) = oneshot::channel::<FinishReason>();
+
+    // IncrementModel: prompt=[1,2,3] → generates 3 each step.
+    // stop_token_sequences = [[3, 3]] → needs two consecutive 3s.
+    // Step 1 (prefill): generates 3 → [3]. No match (need [3,3]).
+    // Step 2 (decode):  generates 3 → [3, 3]. Match!
+    let mut req = Request::new(1, vec![1, 2, 3], 100);
+    req.sampling_params.stop_token_sequences = Some(vec![vec![3, 3]]);
+    let seq_id = engine.add_request(req, tx);
+    engine.finish_reason_txs.insert(seq_id, finish_tx);
+
+    // Step 1: prefill, generates 3. Stop check: [3] vs [3,3] → no match.
+    engine.step().unwrap();
+    assert_eq!(rx.try_recv().unwrap().token, 3);
+    assert_eq!(
+        engine.scheduler.running_count(),
+        1,
+        "should still be running after step 1"
+    );
+
+    // Step 2: decode, generates 3. Stop check: [3, 3] vs [3, 3] → match!
+    engine.step().unwrap();
+    assert_eq!(rx.try_recv().unwrap().token, 3);
+    assert_eq!(
+        engine.scheduler.running_count(),
+        0,
+        "should be finished after step 2"
+    );
+    assert_eq!(finish_rx.try_recv().unwrap(), FinishReason::Stop);
+    assert!(!engine.has_pending());
+}

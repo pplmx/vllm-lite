@@ -9,7 +9,7 @@
 use crate::engine::Engine;
 use crate::types::Request;
 use tokio::sync::mpsc;
-use vllm_traits::{FinishReason, SampledToken, SeqId};
+use vllm_traits::{Batch, FinishReason, SampledToken, SeqId, TokenId};
 
 impl Engine {
     /// Returns `true` if the engine is considered healthy and ready to process
@@ -28,6 +28,50 @@ impl Engine {
     /// stored value.
     pub fn get_last_error(&self) -> Option<&str> {
         self.last_error.as_deref()
+    }
+
+    /// Check every sequence in `batch.seq_ids` for a matched
+    /// `stop_token_sequences` suffix and finalize matches with
+    /// [`FinishReason::Stop`].
+    ///
+    /// **Must be called after `scheduler.update()`** so `seq.tokens`
+    /// includes the freshly generated token(s), and **after the token-send
+    /// loop** so the matched token reaches the client before the response
+    /// channel is dropped.
+    ///
+    /// The check uses the full `seq.tokens[prompt_len..]` slice (not just
+    /// the current step's token) so stop sequences that span step
+    /// boundaries are caught. For each match, `finish_sequence` marks the
+    /// sequence finished in the scheduler (releasing KV blocks) and
+    /// [`Self::finalize_finished`] delivers `FinishReason::Stop` to the
+    /// HTTP handler.
+    ///
+    /// Extracted from `step_regular` so all three step paths — regular
+    /// (`batch.rs`), speculative (`spec_dispatch/dispatch.rs`), and
+    /// CUDA-graph (`graph_step.rs`) — share identical stop-detection
+    /// logic. Pre-fix, only `step_regular` performed this check; the other
+    /// two silently ignored `stop_token_sequences`, generating tokens past
+    /// the stop point until `max_tokens` was hit.
+    pub(crate) fn finalize_stop_sequences(&mut self, batch: &Batch) -> Vec<SeqId> {
+        let mut newly_stopped: Vec<SeqId> = Vec::new();
+        for (i, seq_id) in batch.seq_ids.iter().enumerate() {
+            let stops = match batch.sampling_params[i].stop_token_sequences.as_ref() {
+                Some(s) if !s.is_empty() => s,
+                _ => continue,
+            };
+            let Some(seq) = self.scheduler.get_sequence(*seq_id) else {
+                continue;
+            };
+            let generated: Vec<TokenId> = seq.tokens[seq.prompt_len..].to_vec();
+            if crate::sampling::matches_stop_sequences(&generated, stops) {
+                newly_stopped.push(*seq_id);
+            }
+        }
+        for seq_id in &newly_stopped {
+            self.scheduler.finish_sequence(*seq_id);
+            self.finalize_finished(*seq_id, FinishReason::Stop);
+        }
+        newly_stopped
     }
 
     /// Notify any registered handler of the [`FinishReason`] for `seq_id`,

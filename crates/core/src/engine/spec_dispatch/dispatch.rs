@@ -94,6 +94,12 @@ impl crate::engine::Engine {
             .collect();
         self.scheduler.update(&seq_ids, &sampled, &input_counts);
 
+        // P38 v0.3 wire-type engine wire-through: stop-sequence
+        // finalization. Must run after `scheduler.update` (so
+        // `seq.tokens` includes the new tokens) and after the token-send
+        // loop above (so matched tokens reach the client).
+        self.finalize_stop_sequences(&batch);
+
         // Track accuracy in adaptive decoder and record adjustment events
         if let Some(ref mut decoder) = self.adaptive_decoder {
             let total_draft: usize = draft_outputs.iter().map(std::vec::Vec::len).sum();
@@ -129,8 +135,10 @@ impl crate::engine::Engine {
         let finished = self.scheduler.finished_sequences();
         for seq in &finished {
             // Tell the handler the sequence stopped, then drop the
-            // matching token channel. See `lifecycle::finalize_finished`
-            // for the rationale.
+            // matching token channel. Sequences finalized above via
+            // `finalize_stop_sequences` already had their txs removed
+            // (idempotent `remove` → no-op), so this second pass only
+            // affects max_tokens completions.
             self.finalize_finished(seq.id, FinishReason::Length);
             self.scheduler.metrics.remove_per_request(seq.id);
         }

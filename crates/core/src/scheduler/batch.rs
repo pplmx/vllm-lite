@@ -109,35 +109,6 @@ impl crate::engine::Engine {
             "Engine step: output tokens"
         );
 
-        // P38 v0.3 wire-type engine wire-through: per-sequence stop
-        // detection. For each sequence, check whether any pre-tokenized
-        // stop sequence in `batch.sampling_params[i].stop_token_sequences`
-        // is a suffix of the sequence's already-generated tokens
-        // (including the freshly-sampled one). If yes, finalize the
-        // sequence with `FinishReason::Stop` so the scheduler drops
-        // it from the next batch and the HTTP handler's
-        // `finish_reason_rx` resolves with Stop.
-        //
-        // **Order matters:** the matched token is emitted via
-        // `response_tx` below (the existing send loop runs AFTER this
-        // block). The engine emits the token BEFORE finalizing so the
-        // OpenAI response includes the matched stop text.
-        let mut newly_stopped: Vec<vllm_traits::SeqId> = Vec::new();
-        for (i, seq_id) in batch.seq_ids.iter().enumerate() {
-            let stops = match batch.sampling_params[i].stop_token_sequences.as_ref() {
-                Some(s) if !s.is_empty() => s,
-                _ => continue,
-            };
-            let Some(seq) = self.scheduler.get_sequence(*seq_id) else {
-                continue;
-            };
-            let mut generated: Vec<vllm_traits::TokenId> = seq.tokens[seq.prompt_len..].to_vec();
-            generated.push(next_tokens[i].token);
-            if crate::sampling::matches_stop_sequences(&generated, stops) {
-                newly_stopped.push(*seq_id);
-            }
-        }
-
         let input_counts: Vec<usize> = batch.input_tokens.iter().map(std::vec::Vec::len).collect();
 
         self.scheduler
@@ -152,34 +123,21 @@ impl crate::engine::Engine {
             results.push((*seq_id, sampled.clone()));
         }
 
-        // P38 v0.3 wire-type engine wire-through: finalize sequences
-        // whose freshly-sampled token completed a pre-tokenized
-        // `stop_token_sequences` match. The matched token was emitted
-        // above; this call drops the channel and signals Stop to the
-        // HTTP handler.
-        //
-        // `finish_sequence` marks the sequence as `Finished` in the
-        // scheduler (releasing KV blocks + moving it to `self.finished`)
-        // so the next `build_batch` excludes it. Without this, the
-        // sequence lingers in `running` (status still `Decoding`) and
-        // gets re-scheduled on every subsequent step — the model keeps
-        // generating tokens that are silently dropped because the
-        // response channel was removed.
-        for seq_id in &newly_stopped {
-            self.scheduler.finish_sequence(*seq_id);
-            self.finalize_finished(*seq_id, FinishReason::Stop);
-        }
+        // P38 v0.3 wire-type engine wire-through: stop-sequence
+        // finalization. Runs after `scheduler.update` (so `seq.tokens`
+        // includes the new token) and after the token-send loop above
+        // (so the matched token reaches the client before the channel
+        // is dropped). Matched sequences get `FinishReason::Stop`.
+        self.finalize_stop_sequences(&batch);
 
         let finished = self.scheduler.finished_sequences();
         for seq in &finished {
             tracing::debug!(seq_id = seq.id, "Sequence finished");
             // Tell the handler *why* the channel is closing before
-            // dropping it. Today the only path that sets
-            // `Status::Finished` is the `seq.tokens.len() >=
-            // seq.max_tokens` check in `scheduler/engine/update.rs`, so
-            // the honest reason is `Length`. If EOS detection is added
-            // later, the scheduler will need to carry a per-sequence
-            // reason and this call site should switch to it.
+            // dropping it. Sequences finalized above via
+            // `finalize_stop_sequences` already had their txs removed
+            // (idempotent `remove` → no-op), so this second pass only
+            // affects max_tokens completions.
             self.finalize_finished(seq.id, FinishReason::Length);
         }
         self.scheduler.clear_finished();

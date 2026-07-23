@@ -48,7 +48,7 @@ impl Engine {
             return Ok(vec![]);
         }
 
-        let (output, batch) = match graph_batch {
+        let (output, batch, input_counts) = match graph_batch {
             crate::scheduler::GraphBatch::Graph(prepared) => {
                 let batch = prepared.batch;
                 let input_counts: Vec<usize> =
@@ -64,17 +64,17 @@ impl Engine {
                 } else {
                     self.execute_regular(&batch)?
                 };
-                (output, input_counts)
+                (output, batch, input_counts)
             }
             crate::scheduler::GraphBatch::Regular(batch) => {
                 let input_counts: Vec<usize> =
                     batch.input_tokens.iter().map(std::vec::Vec::len).collect();
                 let output = self.execute_regular(&batch)?;
-                (output, input_counts)
+                (output, batch, input_counts)
             }
         };
 
-        Ok(self.process_output(output, batch, start))
+        Ok(self.process_output(output, batch, input_counts, start))
     }
 
     #[cfg(not(feature = "cuda-graph"))]
@@ -168,6 +168,7 @@ impl Engine {
     fn process_output(
         &mut self,
         output: BatchOutput,
+        batch: vllm_traits::Batch,
         input_counts: Vec<usize>,
         start: std::time::Instant,
     ) -> Vec<(SeqId, SampledToken)> {
@@ -195,11 +196,19 @@ impl Engine {
         let sampled: Vec<_> = results.iter().map(|(_, s)| s.clone()).collect();
         self.scheduler.update(&seq_ids, &sampled, &input_counts);
 
+        // P38 v0.3 wire-type engine wire-through: stop-sequence
+        // finalization. Must run after `scheduler.update` (so
+        // `seq.tokens` includes the new token) and after the token-send
+        // loop above (so the matched token reaches the client).
+        self.finalize_stop_sequences(&batch);
+
         let finished = self.scheduler.finished_sequences();
         for seq in &finished {
             // Tell the handler the sequence stopped, then drop the
-            // matching token channel. See `lifecycle::finalize_finished`
-            // for the rationale.
+            // matching token channel. Sequences finalized above via
+            // `finalize_stop_sequences` already had their txs removed
+            // (idempotent `remove` → no-op), so this second pass only
+            // affects max_tokens completions.
             self.finalize_finished(seq.id, FinishReason::Length);
         }
         self.scheduler.clear_finished();
