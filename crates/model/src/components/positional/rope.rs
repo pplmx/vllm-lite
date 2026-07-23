@@ -10,10 +10,13 @@
 //! scaling fields in the config (`rope_scaling.rope_type`,
 //! `rope_scaling.factor`, `rope_scaling.attn_factor`,
 //! `rope_scaling.original_max_position_embeddings`) are captured into
-//! the struct. Use [`RoPE::apply_with_scaling`] to honour them; the
-//! plain [`RoPE::apply`] / free [`apply_rope`] remain scaling-free
-//! for backward compatibility with callers that pass `theta` directly
-//! (`rope_gqa`, mla, gemma4 attention modules).
+//! the struct. [`RoPE::apply_with_scaling`] and [`RoPE::forward`] both
+//! honour them — `forward` delegates to `forward_with_scaling` so the
+//! scaling is never silently dropped. [`RoPE::apply`] also accepts an
+//! explicit scaling context via the `RopeScalingContext` it carries.
+//!
+//! The free [`apply_rope`] function remains scaling-free for callers
+//! that pass `theta` directly (`rope_gqa`, mla, gemma4 attention modules).
 //!
 //! Supported algorithms (selected by `RopeType`):
 //! - `Default` — no scaling (current behaviour, preserved).
@@ -180,13 +183,21 @@ impl RoPE {
     }
 
     /// Run the layer forward pass over the input.
+    ///
+    /// Delegates to [`Self::forward_with_scaling`] so that long-context
+    /// scaling (if configured via `new_with_scaling` / `new_with_config`)
+    /// is honoured. For a `RoPE` created with `new` (the default,
+    /// no scaling) the result is identical to the previous direct
+    /// `apply_rope` call — `apply_rope_with_scaling` falls through to
+    /// `compute_inv_freq_default` when `rope_type` is `Default` and
+    /// `scaling_factor` is `1.0`.
     /// # Errors
     ///
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, q: &Tensor, k: &Tensor, position: i64) -> Result<(Tensor, Tensor)> {
         let positions: Vec<i64> = (0..q.dim(1)? as i64).map(|i| position + i).collect();
-        let q_out = apply_rope(q, &positions, self.theta)?;
-        let k_out = apply_rope(k, &positions, self.theta)?;
+        let q_out = apply_rope_with_scaling(q, &positions, self.theta, self.scaling_ctx())?;
+        let k_out = apply_rope_with_scaling(k, &positions, self.theta, self.scaling_ctx())?;
         Ok((q_out, k_out))
     }
 
