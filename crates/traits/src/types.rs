@@ -31,9 +31,9 @@ pub enum BatchPhase {
 
 /// Why a generation request stopped.
 ///
-/// Mirrors the OpenAI `finish_reason` semantics for the cases vLLM-lite
+/// Mirrors the `OpenAI` `finish_reason` semantics for the cases vLLM-lite
 /// can actually produce today. The HTTP layer in `vllm-server` maps
-/// these to the corresponding OpenAI string values
+/// these to the corresponding `OpenAI` string values
 /// (`"stop"` / `"length"`).
 ///
 /// `Cancelled` is emitted when the request was aborted by

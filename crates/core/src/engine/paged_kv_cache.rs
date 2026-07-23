@@ -27,8 +27,8 @@ impl crate::engine::Engine {
     /// wrapper.
     ///
     /// The cache is wrapped in `Arc<Mutex<PagedKvCache>>` so both the
-    /// engine (for diagnostics) and the wrapper (for the BlockDataSource
-    /// + BlockSink implementations) share the same underlying data.
+    /// engine (for diagnostics) and the wrapper (for the `BlockDataSource`
+    /// + `BlockSink` implementations) share the same underlying data.
     /// The `Mutex` is required because `PagedKvCache::write_block_bytes`
     /// takes `&mut self` for `slice_assign` on the candle tensors.
     ///

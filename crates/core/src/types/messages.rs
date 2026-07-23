@@ -18,15 +18,15 @@ pub enum EngineMessage {
     ///
     /// **P36 v0.3 wire-type follow-up engine wire-through:**
     /// `response_tx` carries [`SampledToken`] (token + logprob +
-    /// top_logprobs) instead of a bare `TokenId` so the HTTP layer
-    /// can render OpenAI's `choices[].logprobs` shape without
+    /// `top_logprobs`) instead of a bare `TokenId` so the HTTP layer
+    /// can render `OpenAI`'s `choices[].logprobs` shape without
     /// re-running the softmax.
     ///
     /// `seq_id_tx` is optional. When supplied, the engine replies
     /// with the assigned [`SeqId`] once the request is admitted
     /// (or with a sentinel `0` if admission was rejected, e.g.
     /// empty prompt). Streaming HTTP handlers use this to learn
-    /// the seq_id so they can send [`EngineMessage::CancelRequest`]
+    /// the `seq_id` so they can send [`EngineMessage::CancelRequest`]
     /// if the client disconnects mid-stream — otherwise the
     /// engine would keep generating tokens for a caller that has
     /// already gone away.
@@ -34,7 +34,7 @@ pub enum EngineMessage {
     /// `finish_reason_tx` is optional. When supplied, the engine
     /// sends the [`vllm_traits::FinishReason`] describing why the
     /// sequence stopped (length cap, cancellation, etc.) **before**
-    /// dropping `response_tx`. The HTTP layer maps this to OpenAI's
+    /// dropping `response_tx`. The HTTP layer maps this to `OpenAI`'s
     /// `finish_reason` (`"length"`, `"stop"`, etc.). Pre-fix, the
     /// channel close alone signalled completion and the HTTP layer
     /// hardcoded `finish_reason = "stop"` for every response, even
@@ -55,9 +55,9 @@ pub enum EngineMessage {
     /// callers), the span still enters with `request_id = None`
     /// and the field renders as `null` in the JSON span output.
     AddRequest {
-        /// P38 large_enum_variant clippy fix: `Request` is now wrapped in
+        /// P38 `large_enum_variant` clippy fix: `Request` is now wrapped in
         /// `Box<Request>` because P36's `SampledToken` wire-breaking
-        /// signature change (carrying token + logprob + top_logprobs)
+        /// signature change (carrying token + logprob + `top_logprobs`)
         /// inflated `Request` past the 248-byte `large_enum_variant`
         /// threshold. Other `EngineMessage` variants are ≤ 64 bytes; boxing
         /// brings this variant down to pointer-sized so the enum's total

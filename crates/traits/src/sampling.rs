@@ -27,7 +27,7 @@
 //! top-K tokens (id, logprob) when `SamplingParams::top_logprobs.is_some()`.
 //! The sampler pair in `vllm_core::sampling`
 //! (`sample_one_with_params` / `sample_batch_with_params`) returns
-//! `SampledToken` so the HTTP layer can render OpenAI's
+//! `SampledToken` so the HTTP layer can render `OpenAI`'s
 //! `choices[].logprobs` shape without re-running the softmax.
 #![allow(clippy::module_name_repetitions)]
 
@@ -44,7 +44,7 @@ use crate::types::TokenId;
 /// the **post-filter** distribution (after `repeat_penalty` +
 /// `presence_penalty` + `logit_bias` + temperature scaling + `top_k`
 /// truncation + `top_p` nucleus cutoff). `logprob` is always populated
-/// (OpenAI's contract: the response carries the logprob of the sampled
+/// (`OpenAI`'s contract: the response carries the logprob of the sampled
 /// token even when `top_logprobs = 0`).
 ///
 /// `top_logprobs` is empty when `SamplingParams::top_logprobs.is_none()`
@@ -52,7 +52,7 @@ use crate::types::TokenId;
 /// post-filter probability, each alongside its `logprob`, sorted by
 /// `logprob` descending. N is bounded by the request's
 /// `top_logprobs` value (the sampled token appears in this slice iff
-/// it is among the top-N — OpenAI does not insert the sampled token
+/// it is among the top-N — `OpenAI` does not insert the sampled token
 /// at the head when it falls outside the top-N; instead it surfaces
 /// only via the parent `token` / `logprob` fields).
 ///
@@ -92,7 +92,7 @@ pub struct SamplingParams {
     /// Repeat penalty applied to logits at positions already seen in this
     /// sequence. `1.0` disables.
     pub repeat_penalty: f32,
-    /// Presence penalty (OpenAI `presence_penalty` semantic): a single
+    /// Presence penalty (`OpenAI` `presence_penalty` semantic): a single
     /// additive bias subtracted from the logit of every *distinct* token
     /// already seen in this sequence, regardless of how many times it
     /// appeared. Positive values discourage repetition (encourage new
@@ -104,22 +104,22 @@ pub struct SamplingParams {
     /// times. `presence_penalty` is *presence-style* — it subtracts
     /// `presence_penalty` from the logit once per *distinct* token, so
     /// a token seen 3 times still only gets the penalty subtracted once.
-    /// This matches OpenAI's spec for `presence_penalty`: "Positive
+    /// This matches `OpenAI`'s spec for `presence_penalty`: "Positive
     /// values penalize new tokens based on whether they appear in the
     /// prompt so far, increasing the model's likelihood to talk about
     /// new topics." See `vllm_core::sampling::apply_presence_penalty`
     /// for the implementation.
     pub presence_penalty: f32,
-    /// Per-token logit bias (OpenAI `logit_bias` semantic): an additive
+    /// Per-token logit bias (`OpenAI` `logit_bias` semantic): an additive
     /// bias added to the logit of specific token IDs keyed by their ID.
     /// Positive values *increase* the probability of the biased tokens;
     /// negative values *decrease* it. `None` disables.
     ///
-    /// Per OpenAI spec the bias values are constrained to the
+    /// Per `OpenAI` spec the bias values are constrained to the
     /// `[-100, 100]` range; the validator on the HTTP layer rejects
     /// out-of-range and non-finite values with `400`. Out-of-vocab
     /// token IDs (any ID `>= logits.len()`) are silently ignored
-    /// at sampling time (matches OpenAI's server behaviour). The
+    /// at sampling time (matches `OpenAI`'s server behaviour). The
     /// iteration order of the `HashMap` is non-deterministic, but
     /// because the bias is additive and independent per token, the
     /// *final logits* are deterministic regardless of iteration
@@ -143,7 +143,7 @@ pub struct SamplingParams {
     /// Reserved for the speculative-decoding fallback path. Currently unused
     /// by the default sampler.
     pub max_retries: u32,
-    /// Random seed for the sampling RNG (OpenAI `seed` semantic,
+    /// Random seed for the sampling RNG (`OpenAI` `seed` semantic,
     /// P34 v0.2 wire-type follow-up engine wire-through). When
     /// `Some(seed)`, the sampler constructs a `StdRng::seed_from_u64`
     /// for each sampling step so the same seed + same model + same
@@ -162,15 +162,15 @@ pub struct SamplingParams {
     /// so each sequence's RNG state is independent even when they
     /// share the same `seed` (they each re-seed from the same u64,
     /// producing the same draws for the same logits — this is the
-    /// correct behaviour for OpenAI's per-request determinism
+    /// correct behaviour for `OpenAI`'s per-request determinism
     /// contract).
     ///
-    /// OpenAI's `seed` field is `i64`; the HTTP layer does an
+    /// `OpenAI`'s `seed` field is `i64`; the HTTP layer does an
     /// `as u64` cast (wrapping negatives) so any i64 is accepted
     /// per spec.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seed: Option<u64>,
-    /// OpenAI `top_logprobs` count (P36 v0.3 wire-type follow-up
+    /// `OpenAI` `top_logprobs` count (P36 v0.3 wire-type follow-up
     /// engine wire-through): when `Some(n)`, the sampler computes the
     /// top-`n` most-likely tokens at each sampling step and attaches
     /// them to [`SampledToken::top_logprobs`] (sorted by logprob
@@ -178,7 +178,7 @@ pub struct SamplingParams {
     /// computation runs — `SampledToken::top_logprobs` is empty and
     /// only the sampled token's logprob is populated.
     ///
-    /// Per OpenAI spec the chat endpoint's valid range is `0..=20`
+    /// Per `OpenAI` spec the chat endpoint's valid range is `0..=20`
     /// and the legacy `/v1/completions` endpoint's range is `0..=5`;
     /// validation happens on the HTTP layer (see the
     /// `validate_chat_logprobs` / `validate_completion_logprobs`
@@ -194,13 +194,13 @@ pub struct SamplingParams {
     /// legacy behaviour and keeps the default-path overhead at zero.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub top_logprobs: Option<u32>,
-    /// OpenAI `stop` sequences (P38 v0.3 wire-type engine wire-through):
+    /// `OpenAI` `stop` sequences (P38 v0.3 wire-type engine wire-through):
     /// pre-tokenized stop strings that the engine checks after every
     /// sampled token. When any token sequence in this list is a
     /// suffix of a sequence's already-generated tokens, the engine
     /// finalizes that sequence with
     /// [`crate::FinishReason::Stop`] and emits the matching
-    /// token to the HTTP layer (OpenAI convention — the matched
+    /// token to the HTTP layer (`OpenAI` convention — the matched
     /// stop text is included in the response).
     ///
     /// `None` → no stop check (default-path overhead is zero —
@@ -216,7 +216,7 @@ pub struct SamplingParams {
     /// Pre-tokenized at the HTTP boundary via the model's BPE
     /// tokenizer; the engine itself never touches the tokenizer.
     ///
-    /// Per OpenAI spec, max 4 stop strings per request; each stop
+    /// Per `OpenAI` spec, max 4 stop strings per request; each stop
     /// string is tokenized to ≤ ~8 BPE tokens in practice.
     /// Validation happens on the HTTP layer (see
     /// `validate_stop_sequences` in
@@ -329,7 +329,7 @@ impl SamplingParamsBuilder {
     ///
     /// When set, the sampler builds a `StdRng::seed_from_u64` for
     /// each sampling step so the same seed + same model + same
-    /// prompt produces the same output (OpenAI `seed` semantic —
+    /// prompt produces the same output (`OpenAI` `seed` semantic —
     /// P34 v0.2 wire-type follow-up engine wire-through). See the
     /// field doc-comment on [`SamplingParams::seed`] for the
     /// greedy-bypass + per-sequence independence guarantees.
@@ -375,7 +375,7 @@ impl SamplingParamsBuilder {
     }
     /// Set [`SamplingParams::stop_token_sequences`].
     ///
-    /// OpenAI `stop` sequences, pre-tokenized at the HTTP boundary.
+    /// `OpenAI` `stop` sequences, pre-tokenized at the HTTP boundary.
     /// When `Some(seqs)`, the engine checks after every sampled
     /// token whether any token sequence in `seqs` is a suffix of
     /// the generated tokens and finalizes with

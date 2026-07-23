@@ -76,10 +76,10 @@ impl crate::engine::Engine {
                     std::slice::from_ref(&batch.num_computed_tokens[i]),
                     std::slice::from_ref(&batch.is_prefill[i]),
                 )?;
-                let sampled = logits
-                    .first()
-                    .map(|pos_logits| sample_or_argmax(pos_logits, &params))
-                    .unwrap_or_else(|| placeholder_sampled(0));
+                let sampled = logits.first().map_or_else(
+                    || placeholder_sampled(0),
+                    |pos_logits| sample_or_argmax(pos_logits, &params),
+                );
                 results.push((*seq_id, sampled));
                 accepted_counts.push(0);
                 continue;

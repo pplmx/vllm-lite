@@ -161,7 +161,7 @@ impl EvictionPolicy {
     ///
     /// ARCH-01 (technical due diligence): the previous implementation
     /// returned `()` and the caller had no way to know which blocks
-    /// could be freed. That forced the caller (MemoryManager) to free
+    /// could be freed. That forced the caller (`MemoryManager`) to free
     /// every released block unconditionally, which corrupted shared
     /// prefix-cache entries: if sequence A finishes and inserts its
     /// blocks into the prefix cache, the very next sequence reusing

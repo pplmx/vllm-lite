@@ -118,7 +118,7 @@ impl NodeMesh {
         })
     }
 
-    /// Returns `true` when this is the first node (node_rank 0).
+    /// Returns `true` when this is the first node (`node_rank` 0).
     #[must_use]
     pub const fn is_first_node(&self) -> bool {
         self.node_rank == 0

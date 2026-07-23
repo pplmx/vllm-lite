@@ -22,6 +22,11 @@ pub use capabilities::ArchCapabilities;
 pub use registry::{ARCHITECTURE_REGISTRY, ArchitectureRegistry, register_all_archs};
 pub use stub::StubArchitecture;
 
+/// Return type of [`Architecture::create_model`].
+///
+/// The backend plus an optional shared paged KV cache handle.
+pub type ModelAndKv = Result<(Box<dyn ModelBackend>, Option<Arc<Mutex<PagedKvCache>>>)>;
+
 /// Architecture: architecture trait.
 pub trait Architecture: Send + Sync + 'static {
     fn name(&self) -> &'static str;
@@ -56,7 +61,7 @@ pub trait Architecture: Send + Sync + 'static {
         weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
         kv_quantization: bool,
-    ) -> Result<(Box<dyn ModelBackend>, Option<Arc<Mutex<PagedKvCache>>>)>;
+    ) -> ModelAndKv;
 
     fn remap_weights(&self, weights: HashMap<String, Tensor>) -> HashMap<String, Tensor> {
         weights

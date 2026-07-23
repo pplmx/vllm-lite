@@ -75,8 +75,8 @@ pub struct Engine {
     ///
     /// **P36 v0.3 wire-type follow-up engine wire-through:** the
     /// sender carries [`SampledToken`] (token + logprob +
-    /// top_logprobs) instead of a bare `TokenId` so the HTTP layer
-    /// can render OpenAI's `choices[].logprobs` shape without
+    /// `top_logprobs`) instead of a bare `TokenId` so the HTTP layer
+    /// can render `OpenAI`'s `choices[].logprobs` shape without
     /// re-running the softmax.
     pub response_txs: HashMap<SeqId, mpsc::Sender<SampledToken>>,
     /// Per-sequence oneshot senders for delivering the [`FinishReason`]

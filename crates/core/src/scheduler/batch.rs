@@ -126,9 +126,8 @@ impl crate::engine::Engine {
                 Some(s) if !s.is_empty() => s,
                 _ => continue,
             };
-            let seq = match self.scheduler.get_sequence(*seq_id) {
-                Some(s) => s,
-                None => continue,
+            let Some(seq) = self.scheduler.get_sequence(*seq_id) else {
+                continue;
             };
             let mut generated: Vec<vllm_traits::TokenId> = seq.tokens[seq.prompt_len..].to_vec();
             generated.push(next_tokens[i].token);

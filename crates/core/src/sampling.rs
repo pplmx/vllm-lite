@@ -29,7 +29,7 @@ fn random_f32() -> f32 {
     rand::random::<f32>()
 }
 
-/// Read one `f32` from a freshly-seeded `StdRng` (OpenAI `seed`
+/// Read one `f32` from a freshly-seeded `StdRng` (`OpenAI` `seed`
 /// semantic — P34 v0.2 wire-type follow-up engine wire-through).
 ///
 /// `StdRng` is the same CSPRNG-quality generator `rand::random()`
@@ -62,7 +62,7 @@ fn sample_random_threshold(seed: Option<u64>) -> f32 {
 /// even for very-negative or very-positive logits. Returns `-∞` when
 /// the token's logit is `-∞` (e.g. masked by `top_k` truncation or
 /// driven to `-∞` by an extreme negative `presence_penalty`) — the
-/// JSON serializer will surface this as `null`, which OpenAI clients
+/// JSON serializer will surface this as `null`, which `OpenAI` clients
 /// interpret as "this token was excluded from the sampling distribution".
 ///
 /// `logits` is the FINAL post-filter logits (the same distribution
@@ -156,7 +156,7 @@ fn top_logprobs_of(logits: &[f32], n: u32) -> Vec<(TokenId, f32)> {
 /// Compute log-softmax of `logits` element-wise, returning one
 /// log-probability per token. Tokens with `-inf` logit keep `-inf`;
 /// an empty input returns an empty `Vec`; an input where every logit
-/// is `-inf` (e.g. top_k masked everything) returns a `Vec` of
+/// is `-inf` (e.g. `top_k` masked everything) returns a `Vec` of
 /// `-inf`s matching the input length.
 ///
 /// Used by [`sample_one_with_params`] when no `top_p` cutoff is in
@@ -430,7 +430,7 @@ pub fn sample_batch(
 /// or the thread-local default RNG (when `params.seed.is_none()`).
 /// Two sequences that share the same `params.seed` therefore draw the
 /// SAME random threshold for the SAME logits — this is the correct
-/// behaviour for OpenAI's per-request determinism contract (same
+/// behaviour for `OpenAI`'s per-request determinism contract (same
 /// seed ⇒ same draws ⇒ same sampled token). The fresh-RNG-per-call
 /// pattern ensures per-sequence independence for sequences with
 /// DIFFERENT seeds: they don't share state.
@@ -647,13 +647,13 @@ pub fn apply_repeat_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penalty
 
 /// Subtract `penalty` from the logit of each *distinct* id present in
 /// `seen_tokens`, regardless of how many times each id appeared
-/// (OpenAI `presence_penalty` semantic).
+/// (`OpenAI` `presence_penalty` semantic).
 ///
 /// **Difference from [`apply_repeat_penalty`]:** `apply_repeat_penalty`
 /// is *frequency-style* — divides the logit by `penalty` once per
 /// occurrence. `apply_presence_penalty` is *presence-style* —
 /// subtracts `penalty` from the logit of each distinct seen token
-/// exactly once, regardless of count. Per OpenAI's spec for
+/// exactly once, regardless of count. Per `OpenAI`'s spec for
 /// `presence_penalty`: "Positive values penalize new tokens based on
 /// whether they appear in the prompt so far, increasing the model's
 /// likelihood to talk about new topics."
@@ -683,9 +683,9 @@ pub fn apply_presence_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penal
 }
 
 /// Add the bias at each entry in `bias` to the logit of the
-/// corresponding token ID (OpenAI `logit_bias` semantic).
+/// corresponding token ID (`OpenAI` `logit_bias` semantic).
 ///
-/// Per OpenAI spec the bias is additive and per-token: positive
+/// Per `OpenAI` spec the bias is additive and per-token: positive
 /// values *increase* the probability of the biased tokens; negative
 /// values *decrease* it. Bias values are constrained to `[-100, 100]`
 /// by the validator on the HTTP layer; values outside that range
@@ -708,7 +708,7 @@ pub fn apply_presence_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penal
 ///
 /// No-op when `bias` is empty or `logits` is empty. Out-of-range
 /// token ids (any ID `>= logits.len()`) are silently ignored
-/// (matches OpenAI's server behaviour; a bias on a non-vocab token
+/// (matches `OpenAI`'s server behaviour; a bias on a non-vocab token
 /// is meaningless and would only consume compute).
 pub fn apply_logit_bias(logits: &mut [f32], bias: &std::collections::HashMap<TokenId, f32>) {
     if bias.is_empty() || logits.is_empty() {
@@ -728,12 +728,12 @@ pub fn apply_logit_bias(logits: &mut [f32], bias: &std::collections::HashMap<Tok
 /// `stop` sequences. Returns `true` iff any token sequence in `stops`
 /// is a suffix of `generated_tokens`.
 ///
-/// **Complexity:** O(M) where M = sum(stop.len() for stop in stops).
+/// **Complexity:** O(M) where M = `sum(stop.len()` for stop in stops).
 /// The function checks exactly one suffix position per stop — it does
 /// NOT scan all `generated_tokens.len()` positions, so the size of
 /// the generated sequence does not factor into the per-step cost.
 /// Both inputs are tiny in practice:
-/// - `stops.len()` ≤ 4 (OpenAI spec upper bound, validated at HTTP layer)
+/// - `stops.len()` ≤ 4 (`OpenAI` spec upper bound, validated at HTTP layer)
 /// - each `stop.len()` ≤ ~8 tokens (typical BPE-tokenized stop strings)
 ///
 /// So the per-step cost is bounded by ~32 token comparisons (4 stops ×

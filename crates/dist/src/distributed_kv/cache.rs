@@ -247,9 +247,8 @@ impl DistributedKVCache {
         let mut first_miss = None;
 
         {
-            let mut cache = match self.local_cache.write() {
-                Ok(g) => g,
-                Err(_) => return 0,
+            let Ok(mut cache) = self.local_cache.write() else {
+                return 0;
             };
             for (i, &key) in keys.iter().enumerate() {
                 match cache.get_mut(&key) {

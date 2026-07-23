@@ -25,7 +25,7 @@
 //!   decides how to interpret it (e.g. `PagedKvCache::write_block_bytes`
 //!   parses the wire layout per-layer).
 //! - **Errors are recoverable**: `WriteError::InvalidBytes` (wrong
-//!   length) and `WriteError::OutOfRange` (block_id can't fit) are
+//!   length) and `WriteError::OutOfRange` (`block_id` can't fit) are
 //!   deterministic client-side mistakes; the caller may choose to
 //!   treat them as `Status::internal` on the gRPC side or just log.
 

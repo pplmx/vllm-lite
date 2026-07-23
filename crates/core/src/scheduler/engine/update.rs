@@ -24,10 +24,10 @@ impl SchedulerEngine {
     ///
     /// **P36 v0.3 wire-type follow-up engine wire-through:**
     /// `next_tokens` carries [`SampledToken`] (token + logprob +
-    /// top_logprobs) — only the `token` field is folded into the
-    /// running sequence; the logprob + top_logprobs travel out
+    /// `top_logprobs`) — only the `token` field is folded into the
+    /// running sequence; the logprob + `top_logprobs` travel out
     /// through the engine's per-seq response channel alongside the
-    /// token so the HTTP layer can render OpenAI's
+    /// token so the HTTP layer can render `OpenAI`'s
     /// `choices[].logprobs` shape.
     pub fn update(
         &mut self,
