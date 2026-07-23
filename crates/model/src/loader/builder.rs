@@ -192,7 +192,7 @@ impl ModelLoader {
 
     /// Return the capability flags for the detected architecture.
     ///
-    /// Production-readiness §10: callers (e.g. the OpenAI embeddings
+    /// Production-readiness §10: callers (e.g. the `OpenAI` embeddings
     /// handler) consult this to refuse requests on architectures that
     /// don't support a given capability rather than silently
     /// returning meaningless data (e.g. all-zero embeddings from a
@@ -219,9 +219,9 @@ impl ModelLoader {
     /// The cache is captured from `Architecture::create_model()` during
     /// `load()` and stored in `ModelLoaderInner::kv_cache`. The model
     /// backend and the `EngineBuilder` share the same
-    /// `Arc<Mutex<`PagedKvCache`>>` via `Arc::clone`, so both read/write
+    /// `Arc<Mutex<PagedKvCache>>` via `Arc::clone`, so both read/write
     /// the same underlying data. Returns `None` if `load()` has not
-    /// been called or the architecture has no paged `KV` cache (e.g. stubs).
+    /// been called or the architecture has no paged KV cache (e.g. stubs).
     #[cfg(feature = "multi-node")]
     #[must_use]
     pub fn paged_kv_cache_clone(&self) -> Option<Arc<Mutex<crate::paged_tensor::PagedKvCache>>> {
