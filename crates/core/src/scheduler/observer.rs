@@ -114,6 +114,7 @@ impl std::fmt::Debug for SchedulerObservers {
 }
 
 impl SchedulerObservers {
+    /// Create a new empty `SchedulerObservers` registry.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -146,6 +147,9 @@ impl SchedulerObservers {
         Ok(())
     }
 
+    /// Dispatch an `ObserverEvent` to all registered observers.
+    /// Panics in individual observers are caught and silenced so one
+    /// faulty subscriber can't crash the scheduler.
     pub fn dispatch(&self, event: &ObserverEvent) {
         use std::panic::AssertUnwindSafe;
         if let Ok(observers) = self.observers.read() {

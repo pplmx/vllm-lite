@@ -15,11 +15,16 @@ pub enum RejectionStrategy {
 }
 
 impl RejectionStrategy {
+    /// Create a token-level rejection strategy (the default — each token
+    /// is accepted independently based on its probability ratio).
     #[must_use]
     pub const fn new_token_level() -> Self {
         Self::TokenLevel
     }
 
+    /// Create a block-level rejection strategy. Draft tokens are accepted
+    /// in blocks of `block_size`; a block is rejected if *any* token in it
+    /// fails the acceptance criterion.
     #[must_use]
     pub fn new_block_level(block_size: usize) -> Self {
         Self::BlockLevel {
@@ -27,6 +32,12 @@ impl RejectionStrategy {
         }
     }
 
+    /// Decide whether to accept a draft token given the draft and target
+    /// model probabilities.
+    ///
+    /// - `TokenLevel` accepts when `target_prob >= draft_prob`.
+    /// - `BlockLevel` uses a strict `>` comparison (block rejection
+    ///   semantics: one fail rejects the whole block).
     #[must_use]
     pub fn should_accept(&self, draft_prob: f32, target_prob: f32) -> bool {
         match self {
@@ -35,6 +46,9 @@ impl RejectionStrategy {
         }
     }
 
+    /// Minimum probability ratio for a token to be accepted without
+    /// re-sampling. Used as a numerical-stability floor in the
+    /// acceptance sampler.
     #[must_use]
     pub const fn acceptance_threshold(&self) -> f32 {
         match self {

@@ -6,6 +6,7 @@
 //! request validation, model forward errors, scheduler timeouts, and
 //! resource exhaustion (e.g. KV-cache blocks, draft memory budget).
 
+/// Error recovery strategies and helpers for graceful degradation.
 pub mod recovery;
 
 /// Top-level engine error type. Every public API in `vllm-core` returns `Result<T, EngineError>`. Variants cover model load, scheduler, sampling, KV-cache, and tokenizer failures; see the enum definition for the full list.

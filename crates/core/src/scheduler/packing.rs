@@ -51,6 +51,7 @@ pub struct SequencePacker {
 }
 
 impl SequencePacker {
+    /// Create a new `SequencePacker` with the given packing configuration.
     #[must_use]
     pub const fn new(config: SequencePackingConfig) -> Self {
         Self { config }

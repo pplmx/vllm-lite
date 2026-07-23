@@ -94,6 +94,8 @@ impl AdaptiveDraftConfigBuilder {
         self.inner.ewma_alpha = v;
         self
     }
+    /// Builder-style setter for the deadband threshold below which
+    /// acceptance-rate changes are ignored (avoids thrashing).
     #[must_use]
     pub const fn with_deadband_threshold(mut self, v: f32) -> Self {
         self.inner.deadband_threshold = v;
