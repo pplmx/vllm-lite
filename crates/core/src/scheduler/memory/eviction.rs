@@ -182,13 +182,10 @@ impl EvictionPolicy {
     pub fn release_blocks(&mut self, blocks: &[BlockId]) -> Vec<BlockId> {
         let mut freed = Vec::new();
         for &block in blocks {
-            let decremented_to_zero = match self.block_ref_count.get_mut(&block) {
-                Some(count) => {
-                    *count = count.saturating_sub(1);
-                    *count == 0
-                }
-                None => true, // Already at 0 (or never recorded); still safe to free.
-            };
+            let decremented_to_zero = self.block_ref_count.get_mut(&block).map_or(true, |count| {
+                *count = count.saturating_sub(1);
+                *count == 0
+            });
             if decremented_to_zero {
                 self.block_ref_count.remove(&block);
                 self.block_access_order.retain(|&b| b != block);
