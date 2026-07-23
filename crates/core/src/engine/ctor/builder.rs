@@ -166,25 +166,6 @@ impl EngineBuilder {
         self
     }
 
-    /// Set an optional adaptive speculative decoder.
-    #[must_use]
-    // Used only by `ctor/builder/tests.rs`; `pub(crate)` is sufficient but
-    // rustc emits a dead-code warning during non-test builds because the
-    // symbol is reachable only under `cfg(test)`. Allow is intentional.
-    #[allow(dead_code)]
-    pub(crate) fn with_adaptive_decoder(mut self, decoder: AdaptiveSpeculativeDecoder) -> Self {
-        self.adaptive_decoder = Some(decoder);
-        self
-    }
-
-    /// Set an optional per-request draft resolver (v18+).
-    #[must_use]
-    #[allow(dead_code)]
-    pub(crate) fn with_draft_resolver(mut self, resolver: Arc<DraftResolver>) -> Self {
-        self.draft_resolver = Some(resolver);
-        self
-    }
-
     /// Override the sleep policy.
     #[must_use]
     pub const fn with_sleep_policy(mut self, policy: SleepPolicy) -> Self {
@@ -268,5 +249,22 @@ impl EngineBuilder {
             }
         }
         engine
+    }
+}
+
+#[cfg(test)]
+impl EngineBuilder {
+    /// Set an optional adaptive speculative decoder.
+    #[must_use]
+    pub(crate) fn with_adaptive_decoder(mut self, decoder: AdaptiveSpeculativeDecoder) -> Self {
+        self.adaptive_decoder = Some(decoder);
+        self
+    }
+
+    /// Set an optional per-request draft resolver (v18+).
+    #[must_use]
+    pub(crate) fn with_draft_resolver(mut self, resolver: Arc<DraftResolver>) -> Self {
+        self.draft_resolver = Some(resolver);
+        self
     }
 }

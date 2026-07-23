@@ -81,7 +81,6 @@ impl DraftAccuracyTracker {
 
     /// Get the EWMA-smoothed acceptance rate
     #[must_use]
-    #[allow(dead_code)]
     pub(crate) fn acceptance_rate_ewma(&self) -> f32 {
         self.smoothed_rate.unwrap_or(0.0)
     }

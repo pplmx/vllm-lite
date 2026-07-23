@@ -289,29 +289,6 @@ impl DraftModelRegistry {
         Ok(bytes)
     }
 
-    /// Estimated total VRAM footprint reserved for this draft in the budget.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err` if the operation fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
-    /// Zero for `Unloaded` drafts.
-    #[allow(dead_code)]
-    pub(crate) fn draft_reserved_bytes(&self, id: &DraftId) -> Result<u64, DraftRegistryError> {
-        // invariant: lock is only held for synchronous field access; no panic possible while holding.
-        let guard = self.drafts.read()?;
-        let bytes = match guard.get(id) {
-            None => return Err(DraftRegistryError::UnknownDraftId(id.clone())),
-            Some(DraftState::Unloaded(_)) => 0,
-            Some(DraftState::Loaded(loaded)) => loaded.spec.estimated_total_bytes(),
-        };
-        drop(guard);
-        Ok(bytes)
-    }
-
     /// # Panics
     ///
     /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
@@ -349,5 +326,32 @@ impl DraftModelRegistry {
     /// Access the shared memory budget.
     pub const fn memory_budget(&self) -> &Arc<crate::speculative::memory_budget::MemoryBudget> {
         &self.budget
+    }
+}
+
+#[cfg(test)]
+impl DraftModelRegistry {
+    /// Estimated total VRAM footprint reserved for this draft in the budget.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the operation fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a required invariant is violated (e.g. a `None` value is
+    /// force-unwrapped or an out-of-bounds index is used).
+    /// Zero for `Unloaded` drafts.
+    pub(crate) fn draft_reserved_bytes(&self, id: &DraftId) -> Result<u64, DraftRegistryError> {
+        // invariant: lock is only held for synchronous field access; no panic
+        // possible while holding.
+        let guard = self.drafts.read()?;
+        let bytes = match guard.get(id) {
+            None => return Err(DraftRegistryError::UnknownDraftId(id.clone())),
+            Some(DraftState::Unloaded(_)) => 0,
+            Some(DraftState::Loaded(loaded)) => loaded.spec.estimated_total_bytes(),
+        };
+        drop(guard);
+        Ok(bytes)
     }
 }
