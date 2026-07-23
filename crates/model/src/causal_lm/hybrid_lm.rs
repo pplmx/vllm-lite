@@ -91,16 +91,18 @@ where
             .entry(seq_id)
             .or_insert_with(|| vec![None; num_layers]);
 
-        let mut kv_cache = self.kv_cache.lock();
-        let mut ctx = LayerCtx {
-            kv_cache: &mut kv_cache,
-            block_ids,
-            positions,
-            num_computed_tokens,
-            is_prefill,
-            aux: Some(LayerAuxMut::Gdn(gdn_states)),
+        let hidden = {
+            let mut kv_cache = self.kv_cache.lock();
+            let mut ctx = LayerCtx {
+                kv_cache: &mut kv_cache,
+                block_ids,
+                positions,
+                num_computed_tokens,
+                is_prefill,
+                aux: Some(LayerAuxMut::Gdn(gdn_states)),
+            };
+            run_layers(&self.layers, hidden, &mut ctx)?
         };
-        let hidden = run_layers(&self.layers, hidden, &mut ctx)?;
         let hidden = map_candle(self.norm.forward(&hidden))?;
         let logits = forward_lm_head(&self.embed_tokens, self.lm_head.as_ref(), &hidden)?;
         Ok((logits, 0))
@@ -205,16 +207,18 @@ where
                 .get_mut(&EMBED_SEQ_ID)
                 .expect("embed gdn states");
 
-            let mut kv_cache = self.kv_cache.lock();
-            let mut ctx = LayerCtx {
-                kv_cache: &mut kv_cache,
-                block_ids: &block_ids,
-                positions: &positions,
-                num_computed_tokens: 0,
-                is_prefill: true,
-                aux: Some(LayerAuxMut::Gdn(gdn_states)),
+            let hidden = {
+                let mut kv_cache = self.kv_cache.lock();
+                let mut ctx = LayerCtx {
+                    kv_cache: &mut kv_cache,
+                    block_ids: &block_ids,
+                    positions: &positions,
+                    num_computed_tokens: 0,
+                    is_prefill: true,
+                    aux: Some(LayerAuxMut::Gdn(gdn_states)),
+                };
+                run_layers(&self.layers, hidden, &mut ctx)?
             };
-            let hidden = run_layers(&self.layers, hidden, &mut ctx)?;
             let hidden = map_candle(self.norm.forward(&hidden))?;
             let pooled = map_candle(hidden.mean(0)?.flatten_all()?.to_vec1::<f32>())?;
             embeddings.push(pooled);
@@ -262,16 +266,18 @@ where
                 .entry(seq_ids[i])
                 .or_insert_with(|| vec![None; num_layers]);
 
-            let mut kv_cache = self.kv_cache.lock();
-            let mut ctx = LayerCtx {
-                kv_cache: &mut kv_cache,
-                block_ids: &kv_block_ids[i],
-                positions: &positions[i],
-                num_computed_tokens: num_computed_tokens[i],
-                is_prefill: prefill,
-                aux: Some(LayerAuxMut::Gdn(gdn_states)),
+            let hidden = {
+                let mut kv_cache = self.kv_cache.lock();
+                let mut ctx = LayerCtx {
+                    kv_cache: &mut kv_cache,
+                    block_ids: &kv_block_ids[i],
+                    positions: &positions[i],
+                    num_computed_tokens: num_computed_tokens[i],
+                    is_prefill: prefill,
+                    aux: Some(LayerAuxMut::Gdn(gdn_states)),
+                };
+                run_layers_upto(&self.layers, hidden, &mut ctx, upto_layer)?
             };
-            let hidden = run_layers_upto(&self.layers, hidden, &mut ctx, upto_layer)?;
             let hidden = map_candle(self.norm.forward(&hidden))?;
             let logits = forward_lm_head(&self.embed_tokens, self.lm_head.as_ref(), &hidden)?;
             let token = greedy_sample_token(&logits, prefill)?;

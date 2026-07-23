@@ -227,16 +227,18 @@ where
             }
 
             let hidden = embed_sequence(&self.embed_tokens, tokens, &self.device, prefill)?;
-            let mut kv_cache = self.kv_cache.lock();
-            let mut ctx = LayerCtx {
-                kv_cache: &mut kv_cache,
-                block_ids: &kv_block_ids[i],
-                positions: &positions[i],
-                num_computed_tokens: num_computed_tokens[i],
-                is_prefill: prefill,
-                aux: None,
+            let hidden = {
+                let mut kv_cache = self.kv_cache.lock();
+                let mut ctx = LayerCtx {
+                    kv_cache: &mut kv_cache,
+                    block_ids: &kv_block_ids[i],
+                    positions: &positions[i],
+                    num_computed_tokens: num_computed_tokens[i],
+                    is_prefill: prefill,
+                    aux: None,
+                };
+                run_layers_upto(&self.layers, hidden, &mut ctx, upto_layer)?
             };
-            let hidden = run_layers_upto(&self.layers, hidden, &mut ctx, upto_layer)?;
             let hidden = map_candle(self.norm.forward(&hidden))?;
             let logits = map_candle(self.lm_head.forward(&hidden))?;
             let token = greedy_sample_token(&logits, prefill)?;
