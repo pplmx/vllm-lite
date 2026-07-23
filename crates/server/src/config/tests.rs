@@ -204,10 +204,10 @@ observability:
 #[cfg(feature = "opentelemetry")]
 #[test]
 fn app_config_defaults_otlp_disabled_when_section_missing() {
-    let yaml = r#"
+    let yaml = r"
 server:
   port: 8000
-"#;
+";
     let cfg: AppConfig = serde_saphyr::from_str(yaml).expect("yaml parses");
     assert!(!cfg.observability.otlp.enabled);
     assert_eq!(cfg.observability.otlp.endpoint, "http://localhost:4317");

@@ -28,6 +28,7 @@ use serde::{Deserialize, Serialize};
 /// explicitly lists at least one origin.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::derivable_impls)]
+#[derive(Default)]
 pub struct CorsConfigFile {
     /// Origins allowed by `Access-Control-Allow-Origin`. Empty =
     /// closed (no browser-direct access).
@@ -50,17 +51,6 @@ pub struct CorsConfigFile {
     /// this combination.
     #[serde(default)]
     pub allow_credentials: bool,
-}
-
-impl Default for CorsConfigFile {
-    fn default() -> Self {
-        Self {
-            allow_origins: Vec::new(),
-            allow_methods: Vec::new(),
-            allow_headers: Vec::new(),
-            allow_credentials: false,
-        }
-    }
 }
 
 impl CorsConfigFile {

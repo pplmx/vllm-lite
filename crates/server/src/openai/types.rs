@@ -100,14 +100,14 @@ pub struct ChatMessage {
     pub name: Option<String>,
 }
 
-/// Output format selector (OpenAI `response_format`).
+/// Output format selector (`OpenAI` `response_format`).
 ///
-/// Mirrors the OpenAI `response_format` field on `/v1/chat/completions`.
+/// Mirrors the `OpenAI` `response_format` field on `/v1/chat/completions`.
 /// Serializes as `{"type": "text"}` / `{"type": "json_object"}` via the
 /// `tag = "type"` attribute so the JSON shape matches upstream 1:1.
 ///
 /// **v0.2 scope (P22)**: only the `Text` and `JsonObject` variants are
-/// accepted. The third OpenAI variant, `{type: "json_schema", ...}`,
+/// accepted. The third `OpenAI` variant, `{type: "json_schema", ...}`,
 /// requires a grammar-constrained decoder and is explicitly deferred to
 /// v0.3 (see `docs/reference/openai-compatibility.md` v0.2 follow-ups).
 /// `serde` will reject a `json_schema` payload with a 400-class
@@ -118,7 +118,7 @@ pub struct ChatMessage {
 /// **Honoring is a no-op today.** The engine's sampler does not enforce
 /// JSON syntax; `ResponseFormat::JsonObject` is accepted as a no-op
 /// pass-through (same as `Text` for the sampler). v0.3 + v32+ work
-/// (per the OpenAI compat matrix) adds a constrained-decoding hook.
+/// (per the `OpenAI` compat matrix) adds a constrained-decoding hook.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ResponseFormat {
@@ -132,13 +132,13 @@ pub enum ResponseFormat {
     JsonObject,
 }
 
-/// OpenAI tool type discriminator (P33 v0.x wire-type follow-up).
+/// `OpenAI` tool type discriminator (P33 v0.x wire-type follow-up).
 ///
-/// Per OpenAI chat-completions spec, the `type` field on a tool
-/// definition must currently be `"function"`. Future OpenAI API
+/// Per `OpenAI` chat-completions spec, the `type` field on a tool
+/// definition must currently be `"function"`. Future `OpenAI` API
 /// extensions (e.g. retrieval, code-interpreter) would add more
 /// variants; vllm-lite declares only the `Function` variant today
-/// because that's all OpenAI ships as of 2026. Future variants
+/// because that's all `OpenAI` ships as of 2026. Future variants
 /// would be rejected at the serde layer (axum returns
 /// `422 Unprocessable Entity` for unknown enum variants).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -150,15 +150,15 @@ pub enum ToolType {
     Function,
 }
 
-/// OpenAI `tools[].function` definition (P33 v0.x wire-type follow-up).
+/// `OpenAI` `tools[].function` definition (P33 v0.x wire-type follow-up).
 ///
-/// Per OpenAI chat-completions spec: a function definition carries
+/// Per `OpenAI` chat-completions spec: a function definition carries
 /// a required `name` plus optional `description` and `parameters`
 /// (JSON Schema describing the function's arguments).
 ///
 /// `parameters` is a raw `serde_json::Value` rather than a typed
 /// JSON-Schema struct because:
-/// - OpenAI's spec is intentionally permissive about JSON Schema
+/// - `OpenAI`'s spec is intentionally permissive about JSON Schema
 ///   drafts (draft-04 through 2020-12 are all accepted server-side).
 /// - Modelling the full JSON Schema grammar would balloon the type
 ///   definition (hundreds of variants for `$ref`, `oneOf`,
@@ -167,11 +167,11 @@ pub enum ToolType {
 ///   (grammar-constrained decoding is v32+ work).
 /// - Callers can round-trip the schema verbatim via JSON and
 ///   `serde_json::Value` preserves byte-for-byte fidelity.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FunctionDefinition {
     /// Function name. Used by the model to select which tool to
     /// invoke and by `ToolChoice::Specific` to force a specific
-    /// function call. Per OpenAI spec, must match the regex
+    /// function call. Per `OpenAI` spec, must match the regex
     /// `^[a-zA-Z0-9_-]{1,64}$` — we do NOT enforce this today
     /// (validator is permissive by design; honoring is v32+ work
     /// so there's no engine-side caller to break).
@@ -187,13 +187,13 @@ pub struct FunctionDefinition {
     pub parameters: Option<serde_json::Value>,
 }
 
-/// OpenAI `tools[]` entry (P33 v0.x wire-type follow-up).
+/// `OpenAI` `tools[]` entry (P33 v0.x wire-type follow-up).
 ///
-/// Per OpenAI chat-completions spec: each tool carries a `type`
+/// Per `OpenAI` chat-completions spec: each tool carries a `type`
 /// discriminator (currently only `"function"`) and a `function`
 /// payload. Future tool kinds (retrieval, code-interpreter, etc.)
 /// would add new `ToolType` variants.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Tool {
     /// Tool-type discriminator. Currently only `Function` is
     /// supported (see the `ToolType` doc-comment).
@@ -203,9 +203,9 @@ pub struct Tool {
     pub function: FunctionDefinition,
 }
 
-/// OpenAI `tool_choice` mode discriminator (P33 v0.x wire-type follow-up).
+/// `OpenAI` `tool_choice` mode discriminator (P33 v0.x wire-type follow-up).
 ///
-/// Per OpenAI chat-completions spec the `tool_choice` parameter
+/// Per `OpenAI` chat-completions spec the `tool_choice` parameter
 /// can be a string mode (`"none"` / `"auto"` / `"required"`) OR
 /// an object that names a specific tool. The string mode is
 /// captured by `ToolChoiceMode`; the object form by
@@ -221,19 +221,19 @@ pub enum ToolChoiceMode {
     /// is non-empty and `tool_choice` is `None`.
     #[serde(rename = "auto")]
     Auto,
-    /// The model must call one or more tools. Per OpenAI spec, at
+    /// The model must call one or more tools. Per `OpenAI` spec, at
     /// least one tool must be defined in `tools`; the validator
     /// rejects the combination when `tools` is empty / `None`.
     #[serde(rename = "required")]
     Required,
 }
 
-/// OpenAI `tool_choice` object variant (P33 v0.x wire-type follow-up).
+/// `OpenAI` `tool_choice` object variant (P33 v0.x wire-type follow-up).
 ///
-/// Per OpenAI chat-completions spec: the object form of
+/// Per `OpenAI` chat-completions spec: the object form of
 /// `tool_choice` forces the model to call a specific named tool.
 /// The shape is `{"type": "function", "function": {"name": "..."}}`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolChoiceSpecific {
     /// Type discriminator. Currently only `"function"` is supported
     /// (mirrors [`ToolType`]).
@@ -243,9 +243,9 @@ pub struct ToolChoiceSpecific {
     pub function: ToolChoiceFunctionRef,
 }
 
-/// OpenAI `tool_choice.function` reference (P33 v0.x wire-type follow-up).
+/// `OpenAI` `tool_choice.function` reference (P33 v0.x wire-type follow-up).
 ///
-/// Carries only the function name; OpenAI doesn't accept a full
+/// Carries only the function name; `OpenAI` doesn't accept a full
 /// function definition in `tool_choice` (the full definition lives
 /// in `tools[]`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -255,7 +255,7 @@ pub struct ToolChoiceFunctionRef {
     pub name: String,
 }
 
-/// OpenAI `tool_choice` parameter (P33 v0.x wire-type follow-up).
+/// `OpenAI` `tool_choice` parameter (P33 v0.x wire-type follow-up).
 ///
 /// `untagged` because the wire shape is "string OR object" —
 /// serde matches the first variant that parses. Order matters:
@@ -263,7 +263,7 @@ pub struct ToolChoiceFunctionRef {
 /// before the object form (`Specific`) so a bare `"auto"` string
 /// doesn't accidentally deserialize as
 /// `Specific { kind: Auto, ... }`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ToolChoice {
     /// String mode (`"none"` / `"auto"` / `"required"`).
@@ -294,7 +294,7 @@ pub struct ChatRequest {
     /// Optional end-user identifier for safety / abuse tracking (P21 v0.2
     /// wire-type declaration; honored as a tracing pass-through only —
     /// vllm-lite has no auth/persistence layer that consumes it today).
-    /// Per OpenAI spec there is no format/length validation; any string
+    /// Per `OpenAI` spec there is no format/length validation; any string
     /// is accepted. Downstream consumers (rate-limiter, audit log) can
     /// subscribe to the structured `tracing` field without changing the
     /// HTTP boundary.
@@ -308,10 +308,10 @@ pub struct ChatRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub response_format: Option<ResponseFormat>,
     /// RNG seed for "best effort determinism" (P23 v0.2 wire-type
-    /// declaration). Per the OpenAI spec, if `seed` is set the system
+    /// declaration). Per the `OpenAI` spec, if `seed` is set the system
     /// will "best effort to sample deterministically" — same seed +
     /// same model + same prompt should produce the same output. We
-    /// accept any `i64` per OpenAI spec (no range / sign validation).
+    /// accept any `i64` per `OpenAI` spec (no range / sign validation).
     ///
     /// **Honoring is a no-op today** — vllm-lite's sampler reads from
     /// `rand`'s thread-local RNG which is currently unseeded. The
@@ -323,13 +323,13 @@ pub struct ChatRequest {
     /// declaration-only PR doesn't regress to "rejected by serde".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seed: Option<i64>,
-    /// OpenAI frequency penalty (v0.3 wire-type follow-up). Per the
-    /// OpenAI API spec the valid range is `[-2.0, 2.0]`: positive
+    /// `OpenAI` frequency penalty (v0.3 wire-type follow-up). Per the
+    /// `OpenAI` API spec the valid range is `[-2.0, 2.0]`: positive
     /// values penalise tokens that have already appeared in the
     /// response (more occurrences → larger penalty), negative values
     /// *encourage* repetition. The default is `0` (no penalty).
     ///
-    /// **Honoring is end-to-end** for the full OpenAI range
+    /// **Honoring is end-to-end** for the full `OpenAI` range
     /// (P27 declaration + P29 sign-aware engine refactor). The
     /// chat handler maps `frequency_penalty` to the engine's
     /// existing `SamplingParams::repeat_penalty` via
@@ -356,8 +356,8 @@ pub struct ChatRequest {
     /// request's penalty settings are observable in trace logs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frequency_penalty: Option<f32>,
-    /// OpenAI presence penalty (v0.3 wire-type follow-up). Per the
-    /// OpenAI API spec the valid range is `[-2.0, 2.0]`: positive
+    /// `OpenAI` presence penalty (v0.3 wire-type follow-up). Per the
+    /// `OpenAI` API spec the valid range is `[-2.0, 2.0]`: positive
     /// values penalise tokens that have appeared at all (binary
     /// "seen?" check), negative values *encourage* presence of
     /// already-seen tokens. The default is `0` (no penalty).
@@ -368,7 +368,7 @@ pub struct ChatRequest {
     /// engine's `SamplingParams::presence_penalty` slot, and the
     /// helper subtracts the penalty from the logit of every
     /// *distinct* seen token regardless of occurrence count —
-    /// matching OpenAI's presence-style semantic. Positive values
+    /// matching `OpenAI`'s presence-style semantic. Positive values
     /// discourage repetition; negative values *encourage*
     /// repetition (because subtracting a negative is the same as
     /// adding). Unlike `frequency_penalty` (clamped via `max(1.0,
@@ -382,17 +382,17 @@ pub struct ChatRequest {
     /// parity with P21/P22/P23/P27 observability plumbing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub presence_penalty: Option<f32>,
-    /// OpenAI logit bias (v0.3 wire-type follow-up). A map of token
+    /// `OpenAI` logit bias (v0.3 wire-type follow-up). A map of token
     /// IDs to additive bias values in the `[-100, 100]` range.
     /// Positive values *increase* the probability of the biased
     /// tokens; negative values *decrease* it.
     ///
-    /// Per OpenAI spec the bias values are constrained to the
+    /// Per `OpenAI` spec the bias values are constrained to the
     /// `[-100, 100]` range and must be finite; the validator on
     /// `validate_chat_request_fields` rejects NaN / ±infinity /
     /// out-of-range values with `400 invalid_request_error`. Any
     /// token ID is accepted (out-of-vocab IDs are silently
-    /// ignored by the engine — matches OpenAI's server behaviour).
+    /// ignored by the engine — matches `OpenAI`'s server behaviour).
     ///
     /// **Honoring is end-to-end** via the new
     /// `vllm_core::sampling::apply_logit_bias` helper (added by
@@ -400,7 +400,7 @@ pub struct ChatRequest {
     /// `SamplingParams::logit_bias`, and the sampler adds each
     /// bias to the logit at the corresponding token position
     /// before the temperature / top-k / top-p pipeline. The map
-    /// iteration order is non-deterministic (HashMap) but the
+    /// iteration order is non-deterministic (`HashMap`) but the
     /// *final logits* are deterministic because each bias is
     /// additive and independent per token — so determinism is
     /// preserved.
@@ -411,7 +411,7 @@ pub struct ChatRequest {
     /// for typical maps of up to ~300 entries).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub logit_bias: Option<HashMap<TokenId, f32>>,
-    /// OpenAI logprobs flag (v0.3 wire-type follow-up). Per OpenAI
+    /// `OpenAI` logprobs flag (v0.3 wire-type follow-up). Per `OpenAI`
     /// chat-completions spec: `logprobs: bool` indicates whether to
     /// return the log probability of the sampled token. Default is
     /// `false` (no logprobs returned).
@@ -433,8 +433,8 @@ pub struct ChatRequest {
     /// P23/P27/P28/P29/P30 observability plumbing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub logprobs: Option<bool>,
-    /// OpenAI top-logprobs count (v0.3 wire-type follow-up). Per
-    /// OpenAI chat-completions spec: an integer in the range
+    /// `OpenAI` top-logprobs count (v0.3 wire-type follow-up). Per
+    /// `OpenAI` chat-completions spec: an integer in the range
     /// `0..=20` specifying how many of the most likely tokens to
     /// return log probabilities for at each position. Only
     /// meaningful when `logprobs = true`; the validator rejects
@@ -451,8 +451,8 @@ pub struct ChatRequest {
     /// lines as `top_logprobs = ?req.top_logprobs`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub top_logprobs: Option<u32>,
-    /// OpenAI `tools[]` (P33 v0.x wire-type follow-up —
-    /// declaration + validation). Per OpenAI chat-completions spec:
+    /// `OpenAI` `tools[]` (P33 v0.x wire-type follow-up —
+    /// declaration + validation). Per `OpenAI` chat-completions spec:
     /// a list of tools the model may call. Currently only
     /// function-calling tools are supported (see [`ToolType`]); the
     /// `function.parameters` field is a JSON Schema stored as
@@ -481,8 +481,8 @@ pub struct ChatRequest {
     /// for typical tool lists of up to ~10 entries).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<Tool>>,
-    /// OpenAI `tool_choice` (P33 v0.x wire-type follow-up —
-    /// declaration + validation). Per OpenAI chat-completions spec:
+    /// `OpenAI` `tool_choice` (P33 v0.x wire-type follow-up —
+    /// declaration + validation). Per `OpenAI` chat-completions spec:
     /// either a mode string (`"none"` / `"auto"` / `"required"`)
     /// or an object (`{"type": "function", "function": {"name":
     /// "..."}}`) that forces the model to call a specific tool.
@@ -512,7 +512,7 @@ pub struct ChatRequest {
 /// when the request set `logprobs = true` (P36 v0.3 wire-type follow-up
 /// engine wire-through).
 ///
-/// Mirrors the OpenAI spec's `choices[].logprobs.content[]` shape 1:1.
+/// Mirrors the `OpenAI` spec's `choices[].logprobs.content[]` shape 1:1.
 /// `token` is the decoded string form (UTF-8 round-tripped from the
 /// sampled `TokenId`). `logprob` is the natural-log probability under
 /// the actual sampling distribution (post-filter: after
@@ -520,7 +520,7 @@ pub struct ChatRequest {
 /// scaling, `top_k`, and `top_p` nucleus cutoff). `bytes` is the
 /// UTF-8 byte representation of `token` (used by tokenizers that
 /// emit byte-level BPE markers; we emit the actual UTF-8 bytes of
-/// the decoded string per OpenAI's reference implementation).
+/// the decoded string per `OpenAI`'s reference implementation).
 ///
 /// `top_logprobs` is populated when the request also set
 /// `top_logprobs = Some(n)` — it contains the top-`n` most-likely
@@ -533,7 +533,7 @@ pub struct ChatLogprob {
     pub token: String,
     /// `ln(P(token))` under the actual sampling distribution.
     pub logprob: f32,
-    /// UTF-8 byte representation of `token` (matches OpenAI's
+    /// UTF-8 byte representation of `token` (matches `OpenAI`'s
     /// reference serializer).
     pub bytes: Option<Vec<u8>>,
     /// Top-K alternative `(token, logprob)` pairs sorted by
@@ -552,7 +552,7 @@ pub struct ChatLogprob {
 /// `content` is parallel to `ChatChoice::message.content` — one
 /// entry per generated token, in decoding order. The chat endpoint
 /// does not include the prompt tokens (those would appear in a
-/// separate `prompt_logprobs` field that OpenAI's chat API
+/// separate `prompt_logprobs` field that `OpenAI`'s chat API
 /// doesn't currently expose).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChoiceLogprobs {
@@ -639,7 +639,7 @@ pub struct ChatChunkChoice {
 
 /// A single chunk in a chat-completion SSE stream. The server emits
 /// one `ChatChunk` per generated token, followed by a final chunk
-/// with `finish_reason = Some("stop")` and the OpenAI sentinel
+/// with `finish_reason = Some("stop")` and the `OpenAI` sentinel
 /// `"[DONE]"` appended to the SSE payload.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChunk {
@@ -696,7 +696,7 @@ pub struct CompletionRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user: Option<String>,
     /// RNG seed for "best effort determinism" (P23 v0.2 wire-type
-    /// declaration). Same contract as [`ChatRequest::seed`]: per OpenAI
+    /// declaration). Same contract as [`ChatRequest::seed`]: per `OpenAI`
     /// spec any `i64` is accepted; honoring is a no-op today (the
     /// sampler is unseeded). The completions handler does not currently
     /// log the field — adding a new `tracing::info!` line is deferred
@@ -705,9 +705,9 @@ pub struct CompletionRequest {
     /// does not log either).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seed: Option<i64>,
-    /// OpenAI frequency penalty (v0.3 wire-type follow-up). See
+    /// `OpenAI` frequency penalty (v0.3 wire-type follow-up). See
     /// [`ChatRequest::frequency_penalty`] for the full contract:
-    /// per OpenAI spec the valid range is `[-2.0, 2.0]` (default
+    /// per `OpenAI` spec the valid range is `[-2.0, 2.0]` (default
     /// `0`); the completions handler maps the field to the engine's
     /// `SamplingParams::repeat_penalty` via
     /// `repeat_penalty = (1.0 + frequency_penalty).max(1e-3)` (P29
@@ -716,18 +716,18 @@ pub struct CompletionRequest {
     /// for extreme negative values.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frequency_penalty: Option<f32>,
-    /// OpenAI presence penalty (v0.3 wire-type follow-up). See
+    /// `OpenAI` presence penalty (v0.3 wire-type follow-up). See
     /// [`ChatRequest::presence_penalty`] for the full contract:
-    /// per OpenAI spec the valid range is `[-2.0, 2.0]` (default
+    /// per `OpenAI` spec the valid range is `[-2.0, 2.0]` (default
     /// `0`); honoring is end-to-end via the new
     /// `vllm_core::sampling::apply_presence_penalty` helper (added
     /// by P28). The completions handler forwards the value verbatim
     /// to `SamplingParams::presence_penalty`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub presence_penalty: Option<f32>,
-    /// OpenAI logit bias (v0.3 wire-type follow-up). See
+    /// `OpenAI` logit bias (v0.3 wire-type follow-up). See
     /// [`ChatRequest::logit_bias`] for the full contract:
-    /// per OpenAI spec the valid range is `[-100, 100]` (default
+    /// per `OpenAI` spec the valid range is `[-100, 100]` (default
     /// no bias); the validator on
     /// `validate_completion_request_fields` rejects NaN /
     /// ±infinity / out-of-range values with `400`. Honoring is
@@ -741,13 +741,13 @@ pub struct CompletionRequest {
     /// not).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub logit_bias: Option<HashMap<TokenId, f32>>,
-    /// OpenAI logprobs count (v0.3 wire-type follow-up). Per OpenAI
+    /// `OpenAI` logprobs count (v0.3 wire-type follow-up). Per `OpenAI`
     /// legacy-completions spec: an integer in the range `0..=5`
     /// specifying how many of the most likely tokens to return
     /// log probabilities for at each position. The completions
     /// endpoint's `logprobs` has a *different* type than the chat
     /// endpoint's `logprobs` (int 0-5 here vs bool on chat) per
-    /// the OpenAI spec — P31 declares both with the correct types
+    /// the `OpenAI` spec — P31 declares both with the correct types
     /// rather than unifying behind a common representation.
     ///
     /// **Honoring is a no-op** today — same rationale as
@@ -760,8 +760,8 @@ pub struct CompletionRequest {
     /// `presence_penalty` / `logit_bias` rationale).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub logprobs: Option<u32>,
-    /// OpenAI `echo` flag (P32 v0.x wire-type follow-up — declaration
-    /// + validation). Per OpenAI legacy-completions spec: when `true`,
+    /// `OpenAI` `echo` flag (P32 v0.x wire-type follow-up — declaration
+    /// + validation). Per `OpenAI` legacy-completions spec: when `true`,
     /// the response echoes the prompt back as a prefix to the
     /// generated continuation in the `text` field (instead of just
     /// returning the continuation). Default `false`.
@@ -775,8 +775,8 @@ pub struct CompletionRequest {
     /// serde" for callers who already send the field.
     ///
     /// Validated by `validate_completion_meta` (cross-field rule:
-    /// `echo = true` cannot coexist with `best_of > 1` per OpenAI
-    /// spec — best_of is meaningless when echoing because the
+    /// `echo = true` cannot coexist with `best_of > 1` per `OpenAI`
+    /// spec — `best_of` is meaningless when echoing because the
     /// server picks the single highest-mean-logprob completion
     /// without exposing logprobs, so the user has no way to
     /// disambiguate which of N completions was selected).
@@ -788,8 +788,8 @@ pub struct CompletionRequest {
     /// of them).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub echo: Option<bool>,
-    /// OpenAI `suffix` (P32 v0.x wire-type follow-up — declaration +
-    /// validation). Per OpenAI legacy-completions spec: a string that
+    /// `OpenAI` `suffix` (P32 v0.x wire-type follow-up — declaration +
+    /// validation). Per `OpenAI` legacy-completions spec: a string that
     /// comes after the inserted completion. Useful for code-completion
     /// UIs that pre-fill the suffix (e.g. the closing `}` of a
     /// function body) and want the model to fill only the gap.
@@ -802,13 +802,13 @@ pub struct CompletionRequest {
     /// by serde" for callers who already send the field.
     ///
     /// Validated by `validate_completion_meta` (no range / length
-    /// check per OpenAI spec — any string is accepted). The
+    /// check per `OpenAI` spec — any string is accepted). The
     /// completions handler does not currently log the field (parity
     /// with the rationale above).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub suffix: Option<String>,
-    /// OpenAI `best_of` count (P32 v0.x wire-type follow-up —
-    /// declaration + validation). Per OpenAI legacy-completions spec:
+    /// `OpenAI` `best_of` count (P32 v0.x wire-type follow-up —
+    /// declaration + validation). Per `OpenAI` legacy-completions spec:
     /// an integer ≥ 1 specifying how many completions to generate
     /// server-side, returning the "best" one (highest mean log
     /// probability over the generated tokens). Default `1`.
@@ -820,7 +820,7 @@ pub struct CompletionRequest {
     /// as the `logprobs` field (P31), so the two are co-dependent.
     /// Tracked as v32+ work.
     ///
-    /// Validated by `validate_completion_meta` (`>= 1` per OpenAI
+    /// Validated by `validate_completion_meta` (`>= 1` per `OpenAI`
     /// spec, cross-field rule: `best_of > 1` cannot coexist with
     /// `echo = true` because the user has no way to disambiguate
     /// which of N completions was returned; also `best_of > 1`
@@ -836,7 +836,7 @@ pub struct CompletionRequest {
 /// responses when the request set `logprobs > 0` (P36 v0.3 wire-type
 /// follow-up engine wire-through).
 ///
-/// Mirrors the OpenAI spec's `choices[].logprobs.top_logprobs[]`
+/// Mirrors the `OpenAI` spec's `choices[].logprobs.top_logprobs[]`
 /// shape 1:1. `token` is the decoded string form, `logprob` is the
 /// natural-log probability under the actual sampling distribution
 /// (post-filter), `bytes` is the UTF-8 byte representation of
@@ -850,7 +850,7 @@ pub struct CompletionLogprob {
     pub token: String,
     /// `ln(P(token))` under the actual sampling distribution.
     pub logprob: f32,
-    /// UTF-8 byte representation of `token` (matches OpenAI's
+    /// UTF-8 byte representation of `token` (matches `OpenAI`'s
     /// reference serializer).
     pub bytes: Option<Vec<u8>>,
 }
@@ -880,7 +880,7 @@ pub struct CompletionChoiceLogprobs {
     pub token_logprobs: Vec<f32>,
     /// Per-generated-token top-K alternative logprob lists. Length
     /// matches `tokens`; each inner list has at most `logprobs`
-    /// entries (≤ 5 per OpenAI spec).
+    /// entries (≤ 5 per `OpenAI` spec).
     pub top_logprobs: Vec<Vec<CompletionLogprob>>,
 }
 
@@ -900,7 +900,7 @@ pub struct CompletionChoice {
     /// `logprobs = Some(n)` with `n > 0`. When the request set
     /// `logprobs = Some(0)`, the container is `Some(empty)` —
     /// sampling-emitted but no top-K alternatives — matching
-    /// OpenAI's behavior of including `tokens: []` /
+    /// `OpenAI`'s behavior of including `tokens: []` /
     /// `token_logprobs: []` even when `logprobs = 0`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub logprobs: Option<CompletionChoiceLogprobs>,

@@ -20,7 +20,7 @@ use crate::openai::types::ErrorResponse;
 /// The honest options are:
 ///   1. Return `200 OK` and silently leave the job stuck (current
 ///      behaviour — the technical due diligence calls this out as
-///      misleadingly compatible with the OpenAI Batch API).
+///      misleadingly compatible with the `OpenAI` Batch API).
 ///   2. Return `501 Not Implemented` so SDKs and operators see an
 ///      explicit, machine-readable "this endpoint exists but the
 ///      server does not implement it" signal.

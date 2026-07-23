@@ -42,7 +42,7 @@ fn token_ids(sampled: &[vllm_traits::SampledToken]) -> Vec<vllm_traits::TokenId>
 /// ask for logprobs (`req.logprobs.is_none()`).
 ///
 /// When `req.logprobs = Some(0)`, returns `Some` with all-empty
-/// parallel arrays — OpenAI's spec keeps the container present (so
+/// parallel arrays — `OpenAI`'s spec keeps the container present (so
 /// clients can rely on `choices[0].logprobs` being non-null when
 /// the request mentioned `logprobs` at all) but with no top-K
 /// alternatives. The sampled-token logprobs are still populated via
@@ -93,8 +93,8 @@ fn build_completion_choice_logprobs(
 /// Returns the index of the candidate with the highest mean logprob
 /// across its generated tokens. The mean is the simple arithmetic
 /// mean of per-token `SampledToken::logprob` values — matches
-/// OpenAI's "mean log probability" wording (length-normalized by
-/// design; OpenAI does not specify a length-penalty variant here).
+/// `OpenAI`'s "mean log probability" wording (length-normalized by
+/// design; `OpenAI` does not specify a length-penalty variant here).
 ///
 /// **Tie-breaking:** when two candidates have equal mean logprob (to
 /// within `f32::EPSILON`), the one with the lower `seq_id` wins.
@@ -108,15 +108,15 @@ fn build_completion_choice_logprobs(
 ///   not reach this in practice because `best_of >= 1` is enforced
 ///   by `validate_completion_meta`).
 /// - Candidate with zero generated tokens → mean logprob is `0.0`
-///   (sum is `0`, divide by `1` per OpenAI convention — empty
+///   (sum is `0`, divide by `1` per `OpenAI` convention — empty
 ///   completions are extremely rare but can occur if the engine
 ///   emits a `finish_reason = length` before any sampled token
 ///   reaches the HTTP layer).
 ///
 /// Each candidate's `seq_id` is the index of its `Vec<SampledToken>`
-/// in the input slice — we use the slice index as the seq_id proxy
+/// in the input slice — we use the slice index as the `seq_id` proxy
 /// because the candidates are admitted in order and we don't need
-/// the full SeqId for tie-breaking (any monotonically-increasing
+/// the full `SeqId` for tie-breaking (any monotonically-increasing
 /// deterministic value works).
 fn rank_by_mean_logprob(candidates: &[Vec<vllm_traits::SampledToken>]) -> usize {
     if candidates.is_empty() {
@@ -143,8 +143,7 @@ fn rank_by_mean_logprob(candidates: &[Vec<vllm_traits::SampledToken>]) -> usize 
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| i_b.cmp(i_a)) // lower i wins on tie
         })
-        .map(|(i, _)| i)
-        .unwrap_or(0)
+        .map_or(0, |(i, _)| i)
 }
 
 /// Forward the legacy-completions request's sampling fields onto a
@@ -236,7 +235,7 @@ fn populate_completion_sampling_params(
 ///
 /// Returns the candidate's full token stream alongside its
 /// `FinishReason` so the caller can render the chosen completion's
-/// `finish_reason` in the response (matches OpenAI's contract:
+/// `finish_reason` in the response (matches `OpenAI`'s contract:
 /// the response's `finish_reason` is the chosen candidate's, not
 /// the request's aggregate).
 ///
@@ -248,7 +247,7 @@ fn populate_completion_sampling_params(
 /// `503 engine_overloaded` rather than blocking the HTTP handler.
 ///
 /// **Cancellation note:** each candidate is non-streaming-only
-/// (best_of never streams — see the validator's silence on
+/// (`best_of` never streams — see the validator's silence on
 /// `stream + best_of > 1`; `n > 1` streaming uses a separate helper
 /// added in P39 Task 5), so we don't need a `seq_id` round-trip —
 /// there is no client disconnect to propagate mid-flight. The
@@ -275,7 +274,9 @@ async fn spawn_n_candidate(
     // tokenizes first and passes the pre-tokenized result in.
     let stop_token_sequences: Option<Vec<Vec<vllm_traits::TokenId>>> =
         if let Some(stop) = req.stop.as_ref() {
-            if !stop.is_empty() {
+            if stop.is_empty() {
+                None
+            } else {
                 let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
                     .iter()
                     .map(|s| state.tokenizer.encode(s))
@@ -299,8 +300,6 @@ async fn spawn_n_candidate(
                 } else {
                     Some(tokenized)
                 }
-            } else {
-                None
             }
         } else {
             None
@@ -355,7 +354,7 @@ async fn spawn_n_candidate(
 /// deterministic + distinct per candidate (avoids identical outputs when
 /// all candidates share the same seed). The `i64 → u64` cast via `as`
 /// matches P38's `populate_completion_sampling_params` convention
-/// (wraps negatives per OpenAI's i64 contract); the `wrapping_add`
+/// (wraps negatives per `OpenAI`'s i64 contract); the `wrapping_add`
 /// then operates on u64 for overflow-safe candidate differentiation.
 /// Matches P34's per-sequence independence contract.
 pub(super) fn per_candidate_seed(seed: Option<i64>, candidate_index: usize) -> Option<u64> {
@@ -386,7 +385,7 @@ pub(super) fn per_candidate_seed(seed: Option<i64>, candidate_index: usize) -> O
 /// `n > 1`).
 ///
 /// **`usage.completion_tokens` = sum across N candidates.** Matches
-/// OpenAI's billing semantics — the client pays for N independent
+/// `OpenAI`'s billing semantics — the client pays for N independent
 /// generated streams, so the usage token count is the sum (each
 /// candidate's per-token cost is fully accounted for).
 ///
@@ -403,7 +402,7 @@ pub(super) fn per_candidate_seed(seed: Option<i64>, candidate_index: usize) -> O
 /// discarded. We do NOT issue `EngineMessage::CancelRequest` for
 /// the still-running candidates — they run to natural completion
 /// and free their scheduler slots on their own (per the P37
-/// rationale; the alternative — per-candidate seq_id tracking +
+/// rationale; the alternative — per-candidate `seq_id` tracking +
 /// cancel — adds significant complexity for a corner case).
 ///
 /// **Streaming interaction:** `n > 1` + `stream = true` is handled
@@ -654,7 +653,9 @@ async fn spawn_n_streaming_candidate(
     // user's stop set end-to-end.
     let stop_token_sequences: Option<Vec<Vec<vllm_traits::TokenId>>> =
         if let Some(stop) = req.stop.as_ref() {
-            if !stop.is_empty() {
+            if stop.is_empty() {
+                None
+            } else {
                 let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
                     .iter()
                     .map(|s| state.tokenizer.encode(s))
@@ -669,8 +670,6 @@ async fn spawn_n_streaming_candidate(
                 } else {
                     Some(tokenized)
                 }
-            } else {
-                None
             }
         } else {
             None
@@ -708,7 +707,7 @@ async fn spawn_n_streaming_candidate(
     })
 }
 
-/// Build one `CancelOnDrop` guard per candidate seq_id (P39
+/// Build one `CancelOnDrop` guard per candidate `seq_id` (P39
 /// v0.x wire-type follow-up — T5 refactor: `n > 1` streaming
 /// helper).
 ///
@@ -722,7 +721,7 @@ async fn spawn_n_streaming_candidate(
 ///    is a no-op.
 /// 2. **Partial-failure cleanup** — when one or more candidates
 ///    drop their `seq_id_tx` without sending (engine panic or
-///    similar), we collect the seq_ids we DID receive and build
+///    similar), we collect the `seq_ids` we DID receive and build
 ///    a transient vec of guards just to drop at the error-return
 ///    site. The Drop path fires `CancelRequest` for each admitted
 ///    sequence so we don't leak scheduler slots on a 503 path.
@@ -811,7 +810,7 @@ fn build_n_cancel_guards(
 /// `Finished` event, the SSE loop emits ONE event with the full
 /// `choices` array (length N) where each entry carries the
 /// candidate's `finish_reason` (mapped from
-/// [`vllm_traits::FinishReason`] → OpenAI string per the same
+/// [`vllm_traits::FinishReason`] → `OpenAI` string per the same
 /// mapping used by `run_n_parallel_completions` /
 /// `stream_completion`). Immediately after that event, `[DONE]` is
 /// emitted and the stream closes.
@@ -1184,11 +1183,11 @@ async fn stream_n_parallel_completions(
 /// `candidate_index`), joins them, ranks by mean logprob via
 /// [`rank_by_mean_logprob`], and returns the single best completion
 /// in a JSON response (NOT SSE — `best_of` is non-streaming-only,
-/// matching OpenAI's contract).
+/// matching `OpenAI`'s contract).
 ///
-/// **Streaming + best_of:** the caller (`completions()`) detects
+/// **Streaming + `best_of`:** the caller (`completions()`) detects
 /// `stream = true && best_of > 1` and silently dispatches here
-/// without raising a 400. The OpenAI spec is intentionally
+/// without raising a 400. The `OpenAI` spec is intentionally
 /// permissive on this combination; the runtime behavior is what
 /// changes (the response shape becomes a single JSON document
 /// instead of an SSE event stream).
@@ -1200,7 +1199,7 @@ async fn stream_n_parallel_completions(
 /// candidates — they will run to natural completion and free their
 /// scheduler slots on their own. The cost of this simplification
 /// is bounded (each candidate runs at most `max_tokens` steps), and
-/// the alternative — per-candidate seq_id tracking + cancel — would
+/// the alternative — per-candidate `seq_id` tracking + cancel — would
 /// add significant complexity for a corner case that should be rare
 /// in practice (a `best_of = 5` request where 4 of 5 candidates
 /// succeed is overwhelmingly the common path).
@@ -1321,13 +1320,13 @@ async fn run_best_of(
     Ok(Json(response).into_response())
 }
 
-/// Apply OpenAI `echo` + `suffix` semantics to a generated
+/// Apply `OpenAI` `echo` + `suffix` semantics to a generated
 /// completion text (P35 v0.x wire-type follow-up engine
 /// wire-through). This is the single authoritative point for the
 /// response-side text formatting; both the non-streaming and
 /// streaming paths call it so the contract stays in sync.
 ///
-/// Per OpenAI legacy-completions spec:
+/// Per `OpenAI` legacy-completions spec:
 /// - `echo = true`: prepend the prompt to the generated
 ///   continuation. The response `text` is `prompt + completion`.
 /// - `suffix = Some(_)`: append the suffix to the response `text`.
@@ -1524,7 +1523,9 @@ pub async fn completions(
     // stop set end-to-end.
     let stop_token_sequences: Option<Vec<Vec<vllm_traits::TokenId>>> =
         if let Some(stop) = req.stop.as_ref() {
-            if !stop.is_empty() {
+            if stop.is_empty() {
+                None
+            } else {
                 let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
                     .iter()
                     .map(|s| state.tokenizer.encode(s))
@@ -1548,8 +1549,6 @@ pub async fn completions(
                 } else {
                     Some(tokenized)
                 }
-            } else {
-                None
             }
         } else {
             None
@@ -1665,7 +1664,7 @@ pub async fn completions(
         let stream = stream::unfold(
             (
                 response_rx,
-                cancel_guard.clone(),
+                cancel_guard,
                 Some(finish_reason_rx),
                 Terminal::Streaming,
                 false, // first_chunk_sent
@@ -1685,8 +1684,8 @@ pub async fn completions(
                                 (rx, cancel_guard, reason_rx_opt, terminal, first_chunk_sent),
                             ))
                         }
-                        Terminal::Streaming => match rx.recv().await {
-                            Some(sampled) => {
+                        Terminal::Streaming => {
+                            if let Some(sampled) = rx.recv().await {
                                 let text = tokenizer.decode(&[sampled.token]);
                                 if should_skip_token_text(&tokenizer, &text) {
                                     return Some((
@@ -1728,13 +1727,14 @@ pub async fn completions(
                                     Ok(Event::default().data(sse_payload)),
                                     (rx, cancel_guard, reason_rx_opt, terminal, first_chunk_sent),
                                 ))
-                            }
-                            None => {
+                            } else {
                                 let reason_string = if let Some(rx) = reason_rx_opt.take() {
                                     match rx.await {
                                         Ok(vllm_traits::FinishReason::Length) => "length",
-                                        Ok(vllm_traits::FinishReason::Stop)
-                                        | Ok(vllm_traits::FinishReason::Cancelled)
+                                        Ok(
+                                            vllm_traits::FinishReason::Stop
+                                            | vllm_traits::FinishReason::Cancelled,
+                                        )
                                         | Err(_) => "stop",
                                     }
                                 } else {
@@ -1766,7 +1766,7 @@ pub async fn completions(
                                     (rx, cancel_guard, reason_rx_opt, terminal, first_chunk_sent),
                                 ))
                             }
-                        },
+                        }
                     }
                 }
             },
@@ -1787,7 +1787,7 @@ pub async fn completions(
     // (e.g. engine panicked between the two steps).
     let finish_reason = match finish_reason_rx.await {
         Ok(vllm_traits::FinishReason::Length) => "length".to_string(),
-        Ok(vllm_traits::FinishReason::Stop) | Ok(vllm_traits::FinishReason::Cancelled) | Err(_) => {
+        Ok(vllm_traits::FinishReason::Stop | vllm_traits::FinishReason::Cancelled) | Err(_) => {
             "stop".to_string()
         }
     };

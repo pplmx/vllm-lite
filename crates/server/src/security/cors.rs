@@ -49,7 +49,7 @@ use tower_http::cors::{Any, CorsLayer};
 /// (CORS preflights pass through but no `Access-Control-Allow-Origin`
 /// header is emitted, so browser-direct callers will be blocked at
 /// the browser level).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CorsConfig {
     /// Origins allowed by the `Access-Control-Allow-Origin` header.
     /// Empty = closed (server-to-server SDKs only). The values are
@@ -68,20 +68,6 @@ pub struct CorsConfig {
     /// `*` here so this can safely be set to `true` once the
     /// operator opts in.
     pub allow_credentials: bool,
-}
-
-impl Default for CorsConfig {
-    fn default() -> Self {
-        Self {
-            // Closed by default — server-to-server SDKs are the
-            // dominant use case and don't need CORS at all.
-            // Browser-direct callers must list origins explicitly.
-            allow_origins: Vec::new(),
-            allow_methods: Vec::new(),
-            allow_headers: Vec::new(),
-            allow_credentials: false,
-        }
-    }
 }
 
 /// Apply a CORS layer built from `config` to `router`.
@@ -112,9 +98,10 @@ pub fn with_cors(router: Router, config: CorsConfig) -> Router {
     let origins: Vec<_> = config
         .allow_origins
         .iter()
-        .filter_map(|s| match axum::http::HeaderValue::from_str(s) {
-            Ok(v) => Some(v),
-            Err(_) => {
+        .filter_map(|s| {
+            if let Ok(v) = axum::http::HeaderValue::from_str(s) {
+                Some(v)
+            } else {
                 tracing::warn!(
                     origin = %s,
                     "CORS: dropping malformed origin (not a valid header value)"
@@ -132,9 +119,10 @@ pub fn with_cors(router: Router, config: CorsConfig) -> Router {
     let methods: Vec<_> = config
         .allow_methods
         .iter()
-        .filter_map(|s| match axum::http::Method::from_str(s) {
-            Ok(m) => Some(m),
-            Err(_) => {
+        .filter_map(|s| {
+            if let Ok(m) = axum::http::Method::from_str(s) {
+                Some(m)
+            } else {
                 tracing::warn!(
                     method = %s,
                     "CORS: dropping malformed method"
@@ -143,18 +131,19 @@ pub fn with_cors(router: Router, config: CorsConfig) -> Router {
             }
         })
         .collect();
-    if !methods.is_empty() {
-        layer = layer.allow_methods(methods);
-    } else {
+    if methods.is_empty() {
         layer = layer.allow_methods(Any);
+    } else {
+        layer = layer.allow_methods(methods);
     }
 
     let headers: Vec<_> = config
         .allow_headers
         .iter()
-        .filter_map(|s| match HeaderName::from_str(s) {
-            Ok(h) => Some(h),
-            Err(_) => {
+        .filter_map(|s| {
+            if let Ok(h) = HeaderName::from_str(s) {
+                Some(h)
+            } else {
                 tracing::warn!(
                     header = %s,
                     "CORS: dropping malformed header name"
@@ -163,10 +152,10 @@ pub fn with_cors(router: Router, config: CorsConfig) -> Router {
             }
         })
         .collect();
-    if !headers.is_empty() {
-        layer = layer.allow_headers(headers);
-    } else {
+    if headers.is_empty() {
         layer = layer.allow_headers(Any);
+    } else {
+        layer = layer.allow_headers(headers);
     }
 
     if config.allow_credentials {

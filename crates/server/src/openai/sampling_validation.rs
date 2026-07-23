@@ -39,14 +39,14 @@ use super::types::{
 };
 
 /// Maximum value of `n` accepted on chat + completions endpoints.
-/// 8 is the practical scheduler-safe cap (vs OpenAI's nominal 128):
+/// 8 is the practical scheduler-safe cap (vs `OpenAI`'s nominal 128):
 /// each candidate pays full inference cost (unlike `best_of` which
 /// returns ONE ranked completion), so N must stay bounded.
 pub(crate) const MAX_N: i64 = 8;
 
 /// Validate a `top_p` value from an HTTP request.
 ///
-/// Per the OpenAI API specification the valid range is `(0, 1]`:
+/// Per the `OpenAI` API specification the valid range is `(0, 1]`:
 /// `top_p = 0` would select zero tokens, `top_p > 1` is undefined
 /// (the nucleus set would include more than the full vocabulary),
 /// and `NaN` would make the math ill-defined.
@@ -98,7 +98,7 @@ pub fn validate_top_p(top_p: Option<f32>) -> Result<(), (StatusCode, Json<ErrorR
 /// # Errors
 ///
 /// Returns `Err((StatusCode::BAD_REQUEST, …))` when
-/// `params.beam_width > 1`. The OpenAI API does not expose beam
+/// `params.beam_width > 1`. The `OpenAI` API does not expose beam
 /// search, so this is currently a no-op for HTTP callers; if a
 /// future API field surfaces `beam_width`, callers will get a
 /// clear 400 instead of silent greedy fallback.
@@ -130,7 +130,7 @@ pub fn validate_sampling_params(
 /// reasons:
 ///
 /// 1. **Documentation** — the function name + doc-comment make the
-///    "v0.2 accepts text + json_object only" contract explicit at
+///    "v0.2 accepts text + `json_object` only" contract explicit at
 ///    the validator layer, not just at the type definition.
 /// 2. **Forward-compatibility** — if v0.3 ever adds stricter checks
 ///    (e.g. format-specific syntax requirements), the hook is here.
@@ -159,9 +159,9 @@ pub fn validate_chat_response_format(
     Ok(())
 }
 
-/// Validate an OpenAI `frequency_penalty` or `presence_penalty` value.
+/// Validate an `OpenAI` `frequency_penalty` or `presence_penalty` value.
 ///
-/// Per the OpenAI API specification the valid range for both fields
+/// Per the `OpenAI` API specification the valid range for both fields
 /// is `[-2.0, 2.0]`. Values outside that range are rejected with
 /// `400 invalid_request_error`; `NaN` is rejected (the sampler
 /// math is ill-defined); `±infinity` is rejected (the engine would
@@ -225,7 +225,7 @@ pub fn validate_penalty(
                 )),
             ));
         }
-        if v < PENALTY_MIN || v > PENALTY_MAX {
+        if !(PENALTY_MIN..=PENALTY_MAX).contains(&v) {
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse::new(
@@ -243,11 +243,11 @@ pub fn validate_penalty(
 
 /// Validate the `logit_bias` field on a chat or completion request.
 ///
-/// Per OpenAI spec the `logit_bias` map's values are constrained to
+/// Per `OpenAI` spec the `logit_bias` map's values are constrained to
 /// the `[-100, 100]` range and must be finite (NaN / ±infinity are
 /// rejected). Token IDs are *not* validated — any `TokenId` (which
 /// is a `u32`) is accepted, and out-of-vocab IDs are silently ignored
-/// at sampling time (matches OpenAI's server behaviour). The map
+/// at sampling time (matches `OpenAI`'s server behaviour). The map
 /// itself can be empty (which is a no-op) or have any number of
 /// entries.
 ///
@@ -295,7 +295,7 @@ pub fn validate_logit_bias(
                     )),
                 ));
             }
-            if value < LOGIT_BIAS_MIN || value > LOGIT_BIAS_MAX {
+            if !(LOGIT_BIAS_MIN..=LOGIT_BIAS_MAX).contains(&value) {
                 return Err((
                     StatusCode::BAD_REQUEST,
                     Json(ErrorResponse::new(
@@ -312,13 +312,13 @@ pub fn validate_logit_bias(
     Ok(())
 }
 
-/// Validate `stop` per OpenAI spec (P38 v0.x wire-type follow-up
+/// Validate `stop` per `OpenAI` spec (P38 v0.x wire-type follow-up
 /// — engine wire-through). Pin the spec-level rules:
 ///
 /// - `None` → pass (default; no stop check)
 /// - `Some(vec![])` → pass (normalized to `None` at the populate
 ///   layer; the engine treats both identically)
-/// - `Some(non_empty)` → reject if `len() > 4` (OpenAI spec upper
+/// - `Some(non_empty)` → reject if `len() > 4` (`OpenAI` spec upper
 ///   bound; protects the server from unbounded stop-list sizes)
 /// - `Some(non_empty)` → reject if any element is empty (`""`) or
 ///   whitespace-only (`"   "`); such stops would tokenize to zero
@@ -366,7 +366,7 @@ pub fn validate_stop_sequences(
 /// Validate the `logprobs` + `top_logprobs` fields on a chat request
 /// (P31 v0.3 wire-type follow-up — declaration + validation).
 ///
-/// Per OpenAI chat-completions spec:
+/// Per `OpenAI` chat-completions spec:
 /// - `logprobs: bool` indicates whether to return the log probability
 ///   of the sampled token. No range check on the bool itself.
 /// - `top_logprobs: int (0..=20)` specifies how many of the most
@@ -374,7 +374,7 @@ pub fn validate_stop_sequences(
 ///   Out-of-range values are rejected with `400`.
 ///
 /// **Cross-field rule:** `top_logprobs = Some(n)` requires
-/// `logprobs = true`. Per OpenAI spec, `top_logprobs` is only
+/// `logprobs = true`. Per `OpenAI` spec, `top_logprobs` is only
 /// meaningful when `logprobs` is enabled — sending
 /// `top_logprobs = Some(5)` with `logprobs = false` (or omitted)
 /// would silently ignore the field, so the validator rejects the
@@ -432,7 +432,7 @@ pub fn validate_chat_logprobs(
 /// Validate the `logprobs` field on a completion request (P31 v0.3
 /// wire-type follow-up — declaration + validation).
 ///
-/// Per OpenAI legacy-completions spec: `logprobs: int (0..=5)`
+/// Per `OpenAI` legacy-completions spec: `logprobs: int (0..=5)`
 /// specifying how many of the most likely tokens to return log
 /// probabilities for at each position. The completions endpoint's
 /// `logprobs` has a *different* type than the chat endpoint's
@@ -472,9 +472,9 @@ pub fn validate_completion_logprobs(
 /// Validate the `echo` + `suffix` + `best_of` fields on a completion
 /// request (P32 v0.x wire-type follow-up — declaration + validation;
 /// P37 extends the validation with the `<= 20` upper bound to match
-/// OpenAI's spec).
+/// `OpenAI`'s spec).
 ///
-/// Per OpenAI legacy-completions spec:
+/// Per `OpenAI` legacy-completions spec:
 /// - `echo: bool` (default `false`) — when `true`, the response
 ///   echoes the prompt back as a prefix to the generated continuation.
 /// - `suffix: str` (default `None`) — a string appended after the
@@ -483,14 +483,14 @@ pub fn validate_completion_logprobs(
 ///   completions server-side, returns the "best" by mean logprob.
 ///
 /// Validation rules:
-/// - `best_of = Some(0)` rejects (`>= 1` per OpenAI spec).
-/// - `best_of = Some(n > 20)` rejects (`<= 20` per OpenAI spec, P37
+/// - `best_of = Some(0)` rejects (`>= 1` per `OpenAI` spec).
+/// - `best_of = Some(n > 20)` rejects (`<= 20` per `OpenAI` spec, P37
 ///   extension). Rationale: protects the server from
 ///   `N × max_tokens` inference cost explosion (one
 ///   `best_of = 1_000_000` request could pin every scheduler
-///   sequence slot). Mirrors the OpenAI API's documented upper bound.
+///   sequence slot). Mirrors the `OpenAI` API's documented upper bound.
 /// - **Cross-field rule:** `echo = true` cannot coexist with
-///   `best_of > 1` per OpenAI spec. Rationale: when `best_of > 1`
+///   `best_of > 1` per `OpenAI` spec. Rationale: when `best_of > 1`
 ///   the server samples multiple completions and returns the
 ///   single highest-mean-logprob one; with `echo = true` the user
 ///   would see `prompt + completion` but no logprob to
@@ -498,7 +498,7 @@ pub fn validate_completion_logprobs(
 ///   a contract violation. We reject the combination up front with
 ///   `400 invalid_request_error` so callers learn about the
 ///   conflict before paying the cost of enqueuing.
-/// - `suffix` is unconstrained (any string is accepted per OpenAI
+/// - `suffix` is unconstrained (any string is accepted per `OpenAI`
 ///   spec). Token-length pre-validation against the model's
 ///   context length is deferred to the existing context-length
 ///   check (`prompt_tokens + suffix_tokens + max_tokens <= max_model_len`)
@@ -512,7 +512,7 @@ pub fn validate_completion_logprobs(
 /// `EngineMessage::AddRequest` messages, collects N
 /// `Vec<SampledToken>` streams, ranks by mean logprob via
 /// `rank_by_mean_logprob`, and returns the chosen completion in a
-/// single JSON `choices[]` (matches OpenAI's contract: `best_of`
+/// single JSON `choices[]` (matches `OpenAI`'s contract: `best_of`
 /// returns ONE completion, not N).
 ///
 /// # Errors
@@ -563,7 +563,7 @@ pub fn validate_completion_meta(
 /// Validate the `tools` + `tool_choice` fields on a chat request
 /// (P33 v0.x wire-type follow-up — declaration + validation).
 ///
-/// Per OpenAI chat-completions spec:
+/// Per `OpenAI` chat-completions spec:
 /// - `tools: Vec<Tool>` — a list of function definitions the model
 ///   may invoke. Each tool carries a `type` discriminator
 ///   (currently only `"function"`) and a `function` payload (name +
@@ -578,7 +578,7 @@ pub fn validate_completion_meta(
 ///
 /// 1. `tool_choice = Some(Required)` requires `tools` to be non-empty
 ///    (otherwise the model can't satisfy the "must call a tool"
-///    constraint). Per OpenAI spec this is a request-shape error.
+///    constraint). Per `OpenAI` spec this is a request-shape error.
 ///
 /// 2. `tool_choice = Some(Specific { function: { name: X } })`
 ///    requires `tools` to be non-empty (otherwise there's no
@@ -600,10 +600,10 @@ pub fn validate_completion_meta(
 /// **What we explicitly do NOT validate today** (permissive by
 /// design — honoring is v32+ work so there's no engine-side
 /// caller to break):
-/// - Function name regex `^[a-zA-Z0-9_-]{1,64}$` (per OpenAI spec)
+/// - Function name regex `^[a-zA-Z0-9_-]{1,64}$` (per `OpenAI` spec)
 /// - Description length limits
 /// - JSON Schema validity of the `parameters` field
-/// - Duplicate function names in `tools` (OpenAI rejects with a
+/// - Duplicate function names in `tools` (`OpenAI` rejects with a
 ///   different error code; we silently accept the first match
 ///   because the engine doesn't process the list today)
 ///
@@ -630,7 +630,7 @@ pub fn validate_chat_tool_choice(
         return Ok(());
     };
     match choice {
-        ToolChoice::Mode(ToolChoiceMode::None) | ToolChoice::Mode(ToolChoiceMode::Auto) => {
+        ToolChoice::Mode(ToolChoiceMode::None | ToolChoiceMode::Auto) => {
             // Both modes are valid with any `tools` shape:
             // - "none" means the model must not call a tool —
             //   `tools` may be empty / non-empty / absent (the
@@ -709,17 +709,17 @@ pub fn validate_chat_tool_choice(
 ///   crash the sampler or silently produce garbage, so we reject
 ///   up front.
 /// - `frequency_penalty` / `presence_penalty` — must be in
-///   `[-2.0, 2.0]` and finite (per OpenAI spec). Both fields are
+///   `[-2.0, 2.0]` and finite (per `OpenAI` spec). Both fields are
 ///   honored end-to-end (`frequency_penalty` via the sign-aware
 ///   `apply_repeat_penalty` mapping `(1.0 + value).max(1e-3)`,
 ///   P29; `presence_penalty` via the new `apply_presence_penalty`
 ///   helper, P28).
 /// - `logit_bias` — each map value must be in `[-100, 100]` and
-///   finite (per OpenAI spec). Honoring is end-to-end via the new
+///   finite (per `OpenAI` spec). Honoring is end-to-end via the new
 ///   `vllm_core::sampling::apply_logit_bias` helper (P30). Token
 ///   IDs are *not* validated — any `TokenId` is accepted, and
 ///   out-of-vocab IDs are silently ignored at sampling time
-///   (matches OpenAI's server behaviour).
+///   (matches `OpenAI`'s server behaviour).
 /// - `logprobs` + `top_logprobs` — declared but not yet honoured
 ///   (P31). Validates the OpenAI-spec range (`top_logprobs ∈
 ///   0..=20`) and the cross-field rule (`top_logprobs = Some(_)` requires
@@ -2872,7 +2872,7 @@ mod tests {
     fn test_stop_validation_empty_string_returns_400() {
         // An empty-string stop is semantically a no-op (would never match
         // any generated text) — reject to give the caller a clear error.
-        let stop: Option<Vec<String>> = Some(vec!["".to_string()]);
+        let stop: Option<Vec<String>> = Some(vec![String::new()]);
         let err =
             validate_stop_sequences(&stop).expect_err("empty-string stop must be rejected (P38)");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
@@ -2941,7 +2941,7 @@ mod tests {
     fn test_chat_n_negative_still_rejected() {
         let req = sample_chat_request_with_n(-1);
         let err = validate_chat_request_fields(&req).unwrap_err();
-        assert!(err.1.0.error.message.contains("n") || err.1.0.error.message.contains("positive"));
+        assert!(err.1.0.error.message.contains('n') || err.1.0.error.message.contains("positive"));
     }
 
     #[test]
@@ -3002,7 +3002,7 @@ mod tests {
             err.1.0.error.message
         );
         assert!(
-            err.1.0.error.message.contains("n"),
+            err.1.0.error.message.contains('n'),
             "error message must name n; got: {}",
             err.1.0.error.message
         );

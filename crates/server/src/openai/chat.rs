@@ -54,7 +54,7 @@ fn token_ids(sampled: &[vllm_traits::SampledToken]) -> Vec<vllm_traits::TokenId>
 /// exactly as they appear (callers can post-filter if needed).
 ///
 /// When `req.top_logprobs.is_none()` the per-entry `top_logprobs`
-/// sub-field is `None` (OpenAI's spec: only include it when the
+/// sub-field is `None` (`OpenAI`'s spec: only include it when the
 /// request asked). When `req.top_logprobs = Some(0)` the sub-field
 /// is `Some(vec![])` per token (request asked for top-K but capped
 /// to zero).
@@ -67,7 +67,7 @@ fn build_chat_choice_logprobs(
     if req_logprobs != Some(true) {
         return None;
     }
-    let include_top = req_top_logprobs.map(|n| n > 0).unwrap_or(false);
+    let include_top = req_top_logprobs.is_some_and(|n| n > 0);
     let content: Vec<ChatLogprob> = sampled
         .iter()
         .map(|s| {
@@ -107,11 +107,11 @@ fn build_chat_choice_logprobs(
 /// [`run_n_parallel_chat`] to assemble N choices after the
 /// per-candidate join; extracted as a pure function so the unit
 /// tests can pin the per-candidate assembly contract (index
-/// mapping, finish_reason string, role/content split) without
+/// mapping, `finish_reason` string, role/content split) without
 /// needing a live engine channel.
 ///
 /// **Pure-function contract (what the unit tests pin):**
-/// - `index` is forwarded verbatim as `i32` (matches OpenAI's
+/// - `index` is forwarded verbatim as `i32` (matches `OpenAI`'s
 ///   `n > 1` convention).
 /// - `message.role` is always `"assistant"`.
 /// - `message.content` is the decoded + special-token-stripped
@@ -122,7 +122,7 @@ fn build_chat_choice_logprobs(
 ///   [`handle_chat`] uses — keeps chat + chat-n consistent).
 /// - `logprobs` is built via [`build_chat_choice_logprobs`] when
 ///   the request asked for `logprobs = Some(true)`; otherwise
-///   `None` (matches the OpenAI spec: omit the field when the
+///   `None` (matches the `OpenAI` spec: omit the field when the
 ///   caller didn't ask).
 fn build_chat_choice(
     tokenizer: &vllm_model::tokenizer::Tokenizer,
@@ -454,7 +454,7 @@ async fn handle_chat(
     // for backwards compatibility.
     let finish_reason = match finish_reason_rx.await {
         Ok(vllm_traits::FinishReason::Length) => "length".to_string(),
-        Ok(vllm_traits::FinishReason::Stop) | Ok(vllm_traits::FinishReason::Cancelled) | Err(_) => {
+        Ok(vllm_traits::FinishReason::Stop | vllm_traits::FinishReason::Cancelled) | Err(_) => {
             "stop".to_string()
         }
     };
@@ -545,7 +545,7 @@ async fn handle_chat(
 /// do NOT issue `EngineMessage::CancelRequest` for the still-running
 /// candidates; they run to natural completion and free their
 /// scheduler slots on their own (per the P37 rationale; per-candidate
-/// seq_id tracking + cancel adds significant complexity for a corner
+/// `seq_id` tracking + cancel adds significant complexity for a corner
 /// case).
 async fn spawn_chat_n_candidate(
     state: ApiState,
@@ -660,13 +660,13 @@ async fn spawn_chat_n_candidate(
 /// the `candidate_index`), joins them, and assembles ALL N
 /// completions into the response (NOT ranked — distinct from
 /// `best_of`'s "return ONE" semantics; chat does not have a `best_of`
-/// field per OpenAI spec).
+/// field per `OpenAI` spec).
 ///
 /// **Structural mirror of `super::completions::run_n_parallel_completions`:**
 /// the completions variant assembles `Vec<CompletionChoice>` (each
 /// with `text`); this variant assembles `Vec<ChatChoice>` (each with
 /// `message: { role, content }`). The shape divergence is intentional
-/// and follows the OpenAI wire contract — chat responses nest the
+/// and follows the `OpenAI` wire contract — chat responses nest the
 /// assistant's reply under `message`, completions expose it as a
 /// flat `text` field.
 ///
@@ -680,7 +680,7 @@ async fn spawn_chat_n_candidate(
 /// `n > 1`.
 ///
 /// **`usage.completion_tokens` = sum across N candidates.** Matches
-/// OpenAI's billing semantics — the client pays for N independent
+/// `OpenAI`'s billing semantics — the client pays for N independent
 /// generated streams, so the usage token count is the sum.
 ///
 /// **Streaming interaction:** `n > 1` + `stream = true` is handled
@@ -1058,13 +1058,13 @@ async fn spawn_chat_n_streaming_candidate(
     })
 }
 
-/// Build one `CancelOnDrop` guard per candidate seq_id (P39
+/// Build one `CancelOnDrop` guard per candidate `seq_id` (P39
 /// v0.x wire-type follow-up — chat `n > 1` streaming helper).
 ///
 /// Mirrors `super::completions::build_n_cancel_guards`; the
 /// chat variant exists separately because the chat `request_id`
 /// prefix differs (`chatcmpl-` for chat, `cmpl_` for completions
-/// per the OpenAI convention — chat responses use `chatcmpl-…`,
+/// per the `OpenAI` convention — chat responses use `chatcmpl-…`,
 /// completions responses use `cmpl-…`).
 ///
 /// Used in two places in [`stream_n_parallel_chat`]:
@@ -1077,7 +1077,7 @@ async fn spawn_chat_n_streaming_candidate(
 ///    is a no-op.
 /// 2. **Partial-failure cleanup** — when one or more candidates
 ///    drop their `seq_id_tx` without sending (engine panic or
-///    similar), we collect the seq_ids we DID receive and build
+///    similar), we collect the `seq_ids` we DID receive and build
 ///    a transient vec of guards just to drop at the error-return
 ///    site. The Drop path fires `CancelRequest` for each admitted
 ///    sequence so we don't leak scheduler slots on a 503 path.
@@ -1156,7 +1156,7 @@ fn build_chat_n_cancel_guards(
 /// String}, ...]` — one entry per candidate that produced a new
 /// token OR just finalized in this round. The FIRST event of
 /// each candidate's stream carries `delta: { role: "assistant"
-/// }` (no `content`) per the OpenAI chat streaming convention;
+/// }` (no `content`) per the `OpenAI` chat streaming convention;
 /// subsequent events carry `delta: { content: text }` only.
 /// Events are emitted on a per-token-arrival basis
 /// (arrival-order merge — whichever candidate's token arrives
@@ -1171,7 +1171,7 @@ fn build_chat_n_cancel_guards(
 /// `Finished` event, the SSE loop emits ONE event with the full
 /// `choices` array (length N) where each entry carries the
 /// candidate's `finish_reason` (mapped from
-/// [`vllm_traits::FinishReason`] → OpenAI string per the same
+/// [`vllm_traits::FinishReason`] → `OpenAI` string per the same
 /// mapping used by `run_n_parallel_chat` /
 /// `stream_chat_completion`). Immediately after that event,
 /// `[DONE]` is emitted and the stream closes.
@@ -1919,7 +1919,7 @@ async fn stream_chat_completion(
     let stream = stream::unfold(
         (
             response_rx,
-            cancel_guard.clone(),
+            cancel_guard,
             Some(finish_reason_rx),
             Terminal::Streaming,
         ),
@@ -1933,7 +1933,7 @@ async fn stream_chat_completion(
                     Terminal::Done => {
                         // Stream fully terminated on the previous
                         // call; close the HTTP body now.
-                        return None;
+                        None
                     }
                     Terminal::EmitDoneSentinel => {
                         // Final chunk already emitted with the real
@@ -1941,13 +1941,13 @@ async fn stream_chat_completion(
                         // as its own SSE event so strict clients can
                         // detect end-of-stream.
                         terminal = Terminal::Done;
-                        return Some((
+                        Some((
                             Ok::<Event, Infallible>(Event::default().data("[DONE]")),
                             (rx, cancel_guard, reason_rx_opt, terminal),
-                        ));
+                        ))
                     }
-                    Terminal::Streaming => match rx.recv().await {
-                        Some(sampled) => {
+                    Terminal::Streaming => {
+                        if let Some(sampled) = rx.recv().await {
                             let text = tokenizer.decode(&[sampled.token]);
                             if should_skip_token_text(&tokenizer, &text) {
                                 return Some((
@@ -1988,8 +1988,7 @@ async fn stream_chat_completion(
                                 Ok(Event::default().data(sse_payload)),
                                 (rx, cancel_guard, reason_rx_opt, terminal),
                             ))
-                        }
-                        None => {
+                        } else {
                             // Channel closed by the engine. Block on
                             // the reason oneshot — the engine sends
                             // the reason before closing the channel,
@@ -1999,8 +1998,10 @@ async fn stream_chat_completion(
                             let reason_string = if let Some(rx) = reason_rx_opt.take() {
                                 match rx.await {
                                     Ok(vllm_traits::FinishReason::Length) => "length",
-                                    Ok(vllm_traits::FinishReason::Stop)
-                                    | Ok(vllm_traits::FinishReason::Cancelled)
+                                    Ok(
+                                        vllm_traits::FinishReason::Stop
+                                        | vllm_traits::FinishReason::Cancelled,
+                                    )
                                     | Err(_) => "stop",
                                 }
                             } else {
@@ -2044,7 +2045,7 @@ async fn stream_chat_completion(
                                 (rx, cancel_guard, reason_rx_opt, terminal),
                             ))
                         }
-                    },
+                    }
                 }
             }
         },
@@ -2061,14 +2062,14 @@ async fn stream_chat_completion(
 }
 
 /// Drop guard that sends `EngineMessage::CancelRequest` for its
-/// captured seq_id when the last strong reference is dropped,
+/// captured `seq_id` when the last strong reference is dropped,
 /// unless [`CancelOnDrop::disarm`] has been called.
 ///
 /// Production-readiness recommendation: when an SSE client
 /// disconnects mid-stream, axum drops the response stream;
 /// without a guard, the engine keeps generating tokens for a
 /// caller that has already gone away, wasting GPU cycles and
-/// holding KV blocks until natural completion or max_tokens.
+/// holding KV blocks until natural completion or `max_tokens`.
 pub(crate) struct CancelOnDrop {
     pub(crate) engine_tx: crate::api::EngineHandle,
     pub(crate) seq_id: std::sync::atomic::AtomicU64,

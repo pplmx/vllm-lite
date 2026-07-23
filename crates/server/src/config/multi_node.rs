@@ -75,11 +75,11 @@ mod tests {
 
     #[test]
     fn round_trip_yaml_parses_back() {
-        let yaml = r#"
+        let yaml = r"
             enabled: true
             node_id: my-node-01
             bind_addr: 127.0.0.1:60000
-        "#;
+        ";
         let cfg: MultiNodeConfig = serde_saphyr::from_str(yaml).expect("parse");
         assert!(cfg.enabled);
         assert_eq!(cfg.node_id.as_deref(), Some("my-node-01"));
