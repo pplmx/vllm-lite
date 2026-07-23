@@ -1649,7 +1649,8 @@ mod tests {
         // OpenAI-spec "explicitly disabled" sentinel for
         // top_logprobs).
         for n in [0u32, 1, 5, 10, 20] {
-            validate_chat_logprobs(Some(true), Some(n)).expect("(Some(true), Some({n})) must pass");
+            validate_chat_logprobs(Some(true), Some(n))
+                .unwrap_or_else(|_| panic!("(Some(true), Some({n})) must pass"));
         }
     }
 
@@ -1660,7 +1661,7 @@ mod tests {
         // value before paying the cost of enqueuing the request.
         for n in [21u32, 50, 100, u32::MAX] {
             let err = validate_chat_logprobs(Some(true), Some(n))
-                .expect_err("(Some(true), Some({n})) must be rejected");
+                .expect_err(&format!("(Some(true), Some({n})) must be rejected"));
             assert_eq!(err.0, StatusCode::BAD_REQUEST);
             assert!(err.1.0.error.message.contains("top_logprobs"));
         }
@@ -1708,7 +1709,8 @@ mod tests {
     fn validate_completion_logprobs_in_range_passes() {
         // Full in-range sweep.
         for n in [1u32, 2, 3, 4, 5] {
-            validate_completion_logprobs(Some(n)).expect("Some({n}) must pass (in [0, 5])");
+            validate_completion_logprobs(Some(n))
+                .unwrap_or_else(|_| panic!("Some({n}) must pass (in [0, 5])"));
         }
     }
 
@@ -1719,7 +1721,7 @@ mod tests {
         // before paying the cost of enqueuing the request.
         for n in [6u32, 10, 100, u32::MAX] {
             let err = validate_completion_logprobs(Some(n))
-                .expect_err("Some({n}) must be rejected (above 5)");
+                .expect_err(&format!("Some({n}) must be rejected (above 5)"));
             assert_eq!(err.0, StatusCode::BAD_REQUEST);
             assert!(err.1.0.error.message.contains("logprobs"));
         }
