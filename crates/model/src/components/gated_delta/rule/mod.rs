@@ -6,11 +6,11 @@
 //!
 //! Module layout:
 //!
-//! - [`self`] (`mod.rs`) — `GatedDeltaNet` struct + construction + getters
-//! - [`kernels`] — pure tensor helpers (l2 normalise, qkv split, kv head repeat)
-//! - [`conv`] — causal convolution (prefill + incremental) + state update
-//! - [`recurrent`] — gated-delta single step + recurrent scan
-//! - [`forward`] — `GatedDeltaNet::forward` / `forward_prefill` / `forward_decode`
+//! - `self` (`mod.rs`) — `GatedDeltaNet` struct + construction + getters
+//! - `kernels` — pure tensor helpers (l2 normalise, qkv split, kv head repeat)
+//! - `conv` — causal convolution (prefill + incremental) + state update
+//! - `recurrent` — gated-delta single step + recurrent scan
+//! - `forward` — `GatedDeltaNet::forward` / `forward_prefill` / `forward_decode`
 //!
 //! Tests live in the sibling `tests.rs` and exercise the public surface
 //! (`l2_normalize` unit length, `gated_delta_recurrent` output shape,
