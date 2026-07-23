@@ -667,3 +667,190 @@ fn test_su_missing_orig_max_falls_back_to_default() -> Result<()> {
     );
     Ok(())
 }
+
+// === absolute formula cross-checks for long-context scaling ===
+//
+// The differential tests above only assert that scaling *changes* the
+// output. These tests cross-validate each algorithm's *numerical* formula
+// against an independent derivation straight from the defining math
+// (using `compute_inv_freq_for_head_dim` as the trusted inv_freq table).
+// They guard against regressions in the theta-adjustment / scale /
+// boundary logic — a wrong long-context formula silently corrupts
+// extended-context output.
+
+/// `YaARN` / `NTK`: `theta' = theta * scale^(d/(d-2))`, then the standard
+/// `inv_freq[i] = theta'^(-2i/d)`. `compute_inv_freq_for_head_dim` is the
+/// trusted reference for the `inv_freq` table; the check validates the
+/// theta-adjustment exponent and multiplication.
+#[test]
+fn test_compute_inv_freq_yarn_impl_matches_theta_adjustment() {
+    let head_dim = 64;
+    let theta = 10_000.0_f32;
+    let scale = 4.0_f32;
+    let d = head_dim as f32;
+
+    // Independent reference: theta' = theta * scale^(d/(d-2)).
+    let expected_theta = theta * scale.powf(d / (d - 2.0));
+    let expected = compute_inv_freq_for_head_dim(head_dim, expected_theta);
+    let actual = compute_inv_freq_yarn_impl(head_dim, theta, scale);
+
+    assert_eq!(
+        actual.len(),
+        expected.len(),
+        "inv_freq length must be head_dim/2"
+    );
+    for (i, (a, e)) in actual.iter().zip(&expected).enumerate() {
+        assert!(
+            (a - e).abs() < 1e-5,
+            "dim {i}: YaRN inv_freq {a} != expected {e} (theta'={expected_theta})"
+        );
+    }
+
+    // scale > 1 => theta' > theta => inv_freq must shrink at every dim
+    // *except* i=0, where inv_freq = theta^0 == theta'^0 == 1.0 by
+    // definition (the base frequency of the first dim is always 1.0).
+    let default_inv = compute_inv_freq_for_head_dim(head_dim, theta);
+    for (i, (a, dflt)) in actual.iter().zip(&default_inv).enumerate() {
+        if i == 0 {
+            assert!(
+                (a - 1.0).abs() < 1e-6 && (dflt - 1.0).abs() < 1e-6,
+                "dim 0 must be theta^0 == 1.0 ({a}, {dflt})"
+            );
+            continue;
+        }
+        assert!(
+            a < dflt,
+            "scale>1 should lower inv_freq at dim {i} ({a} vs default {dflt})"
+        );
+    }
+
+    // scale == 1.0 is a no-op (1.0^exp == 1.0).
+    let noop = compute_inv_freq_yarn_impl(head_dim, theta, 1.0);
+    for (a, e) in noop.iter().zip(&default_inv) {
+        assert!((a - e).abs() < 1e-6, "scale=1.0 must be a no-op");
+    }
+}
+
+/// Linear: `inv_freq'[i] = inv_freq[i] / scaling_factor`.
+#[test]
+fn test_compute_inv_freq_linear_divides_by_scale() -> Result<()> {
+    let device = Device::Cpu;
+    let head_dim = 64;
+    let q = Tensor::ones((1, 1, 1, head_dim), DType::F32, &device)?;
+    let theta = 10_000.0_f32;
+    let scale = 2.0_f32;
+
+    let default_inv = compute_inv_freq_for_head_dim(head_dim, theta);
+    let expected: Vec<f32> = default_inv.iter().map(|f| f / scale).collect();
+    let actual = compute_inv_freq_linear(&q, theta, scale);
+
+    assert_eq!(actual.len(), expected.len());
+    for (i, (a, e)) in actual.iter().zip(&expected).enumerate() {
+        assert!(
+            (a - e).abs() < 1e-6,
+            "dim {i}: linear inv_freq {a} != expected {e}"
+        );
+    }
+
+    // factor == 1.0 returns the default table unchanged.
+    let noop = compute_inv_freq_linear(&q, theta, 1.0);
+    for (a, e) in noop.iter().zip(&default_inv) {
+        assert!((a - e).abs() < 1e-6, "factor=1.0 must be a no-op");
+    }
+    Ok(())
+}
+
+/// Dynamic NTK: `scale = factor * (cur/orig) - (factor - 1)`, then it
+/// delegates to the `YaARN` impl. Validates the dynamic scale formula and
+/// the boundary fallback to the default table when `cur <= orig_max`.
+#[test]
+fn test_compute_inv_freq_dynamic_delegates_to_yarn_impl() -> Result<()> {
+    let device = Device::Cpu;
+    let head_dim = 64;
+    let q = Tensor::ones((1, 1, 1, head_dim), DType::F32, &device)?;
+    let theta = 10_000.0_f32;
+    let factor = 4.0_f32;
+    let orig_max = 1024;
+    let cur_seq_len = 2048; // > orig_max
+
+    // Independent dynamic scale: factor*(cur/orig)-(factor-1).
+    let dynamic_scale = factor.mul_add(cur_seq_len as f32 / orig_max as f32, -(factor - 1.0));
+    assert!(dynamic_scale > 1.0, "cur > orig must yield scale > 1.0");
+    let expected = compute_inv_freq_yarn_impl(head_dim, theta, dynamic_scale);
+    let actual = compute_inv_freq_dynamic(&q, theta, factor, Some(orig_max), cur_seq_len);
+
+    assert_eq!(actual.len(), expected.len());
+    for (i, (a, e)) in actual.iter().zip(&expected).enumerate() {
+        assert!(
+            (a - e).abs() < 1e-5,
+            "dim {i}: dynamic {a} != YaARN impl {e} (scale={dynamic_scale})"
+        );
+    }
+
+    // Boundary: cur <= orig_max must fall back to the default table.
+    let fallback = compute_inv_freq_dynamic(&q, theta, factor, Some(orig_max), orig_max);
+    let default_inv = compute_inv_freq_for_head_dim(head_dim, theta);
+    for (a, e) in fallback.iter().zip(&default_inv) {
+        assert!(
+            (a - e).abs() < 1e-6,
+            "cur <= orig must use the default inv_freq"
+        );
+    }
+    Ok(())
+}
+
+/// Su: `boundary` = first dim whose base wavelength `2π/inv_freq[i]` exceeds
+/// `orig_max`; dims `< boundary` use `short_factor`, dims `>= boundary` use
+/// `long_factor`, each as `inv_freq[i] / factor`. Validates the boundary
+/// computation and the per-dim factor application.
+#[test]
+fn test_compute_inv_freq_su_applies_boundary_and_factors() {
+    let device = Device::Cpu;
+    let head_dim = 64;
+    let half_dim = head_dim / 2;
+    let theta = 10_000.0_f32;
+    let orig_max = 8192;
+
+    let short_factor: Vec<f32> = (0..half_dim)
+        .map(|i| 0.01f32.mul_add(i as f32, 1.0))
+        .collect();
+    let long_factor: Vec<f32> = (0..half_dim)
+        .map(|i| 0.02f32.mul_add(i as f32, 2.0))
+        .collect();
+    let ctx = RopeScalingContext {
+        rope_type: RopeType::Su,
+        scaling_factor: 1.0,
+        attn_factor: None,
+        original_max_position: Some(orig_max),
+        short_factor: Some(short_factor.clone()),
+        long_factor: Some(long_factor.clone()),
+    };
+
+    let q = Tensor::ones((1, 1, 1, head_dim), DType::F32, &device).unwrap();
+    let base_inv = compute_inv_freq_for_head_dim(head_dim, theta);
+
+    // Independent boundary: first i where 2π/inv_freq[i] > orig_max.
+    let boundary = (0..half_dim)
+        .find(|&i| 2.0 * std::f32::consts::PI / base_inv[i] > orig_max as f32)
+        .unwrap_or(half_dim);
+
+    let expected: Vec<f32> = (0..half_dim)
+        .map(|i| {
+            let factor = if i < boundary {
+                short_factor[i]
+            } else {
+                long_factor[i]
+            };
+            base_inv[i] / factor
+        })
+        .collect();
+
+    let actual = compute_inv_freq_su(&q, theta, &ctx);
+    assert_eq!(actual.len(), expected.len());
+    for (i, (a, e)) in actual.iter().zip(&expected).enumerate() {
+        assert!(
+            (a - e).abs() < 1e-6,
+            "dim {i}: Su inv_freq {a} != expected {e} (boundary={boundary}, i<boundary uses short)"
+        );
+    }
+}
