@@ -398,7 +398,10 @@ fn compute_inv_freq_dynamic(
         return compute_inv_freq_for_head_dim(head_dim, theta);
     }
     let factor = scaling_factor;
-    let dynamic_scale = factor * (cur_seq_len as f32 / orig_max as f32) - (factor - 1.0);
+    // Fused multiply-add: equivalent to `factor * (cur/orig) - (factor - 1.0)`
+    // but computed with a single rounding (more accurate) and silences
+    // `clippy::suboptimal_flops`.
+    let dynamic_scale = factor.mul_add(cur_seq_len as f32 / orig_max as f32, -(factor - 1.0));
     // dynamic_scale is guaranteed >= 1.0 by the cur > orig_max branch
     compute_inv_freq_yarn_impl(head_dim, theta, dynamic_scale)
 }
