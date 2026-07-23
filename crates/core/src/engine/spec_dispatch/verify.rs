@@ -191,7 +191,7 @@ const fn placeholder_sampled(token: TokenId) -> SampledToken {
 /// the tests need to drive the sampler directly without a full engine
 /// step to keep the assertions deterministic.
 #[doc(hidden)]
-#[allow(dead_code)] // only consumed by `engine::spec_dispatch::tests`
+#[cfg(test)]
 pub fn test_only_sample_or_argmax(logits: &[f32], params: &SamplingParams) -> SampledToken {
     sample_or_argmax(logits, params)
 }

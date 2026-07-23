@@ -4152,8 +4152,8 @@ async fn test_chat_seed_zero_is_forwarded_as_some_zero() {
 // 1. `req.logprobs` (chat) / `req.logprobs` (completions) → `SamplingParams::top_logprobs`
 // 2. Engine emits `SampledToken` per step (mock sends placeholder
 //    values; production engine fills in real logprobs via
-//    `sample_one_with_params`'s `logprob_of_token` + `top_logprobs_of`
-//    helpers)
+//    `sample_one_with_params` (inline log-softmax + top-N partial
+//    sort)
 // 3. Non-streaming chat: `choices[0].logprobs.content[]` carries one
 //    entry per generated token, each with `token` + `logprob` (and
 //    `top_logprobs[]` when `top_logprobs > 0`)
