@@ -1,8 +1,6 @@
 //! OpenTelemetry (OTLP) push-based exporter — gated by the `opentelemetry`
 //! feature on `vllm-core`. Streams engine metrics + tracing spans to any
-//! OTel-compatible collector (Jaeger / Tempo / Datadog / Honeycomb / etc.).
-
-#![cfg(feature = "opentelemetry")]
+//! `OTel`-compatible collector (Jaeger / Tempo / Datadog / Honeycomb / etc.).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -36,9 +34,9 @@ pub struct OtlpConfig {
     pub enabled: bool,
     /// OTLP collector endpoint (gRPC). Default: `"http://localhost:4317"`.
     pub endpoint: String,
-    /// OTel `service.name` resource attribute.
+    /// ``OTel`` `service.name` resource attribute.
     pub service_name: String,
-    /// OTel `service.version` resource attribute (synced from the release manifest).
+    /// `OTel` `service.version` resource attribute (synced from the release manifest).
     pub service_version: String,
     /// Metrics export interval in seconds. Default: `30`.
     pub metrics_export_interval_secs: u64,
@@ -65,6 +63,12 @@ impl Default for OtlpConfig {
 impl OtlpConfig {
     /// Validate field ranges. Returns `Err(OtlpError::Config)` for any
     /// out-of-range value. Safe to call repeatedly.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OtlpError::Config`] if `trace_sampling_ratio` is not finite
+    /// or outside `[0.0, 1.0]`, `metrics_export_interval_secs` is zero, or
+    /// `endpoint` is empty or whitespace-only.
     pub fn validate(&self) -> Result<(), OtlpError> {
         if !self.trace_sampling_ratio.is_finite() || !(0.0..=1.0).contains(&self.trace_sampling_ratio) {
             return Err(OtlpError::Config(format!(
@@ -98,7 +102,7 @@ pub enum OtlpError {
 }
 
 /// Schema mapping: `(prometheus_name, otel_name, InstrumentKind, unit)`.
-/// `InstrumentKind` is a private tag because the OTel Counter/Gauge types
+/// `InstrumentKind` is a private tag because the `OTel` Counter/Gauge types
 /// are not nameable across `Option<>` in a const table.
 #[derive(Debug, Clone, Copy)]
 enum InstrumentKind {
@@ -141,7 +145,7 @@ enum Instrument {
 /// Push-based OTLP metrics exporter. Holds an `EnhancedMetricsCollector`
 /// reference + an OTLP `SdkMeterProvider`; `run()` polls the collector every
 /// `config.metrics_export_interval_secs` and records each value into the
-/// corresponding OTel instrument. The `PeriodicReader` flushes on each tick.
+/// corresponding `OTel` instrument. The `PeriodicReader` flushes on each tick.
 ///
 /// Internally `Arc`-wrapped so the bootstrap can clone + share between the
 /// spawned background task (caller of `run`) and the shutdown path (caller
@@ -170,6 +174,11 @@ impl OtlpExporter {
     /// Build the exporter. Constructs the `SdkMeterProvider` with an OTLP
     /// `MetricExporter` targeting `config.endpoint`. The caller must call
     /// `.run()` to start the polling loop.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OtlpError::Config`] if the configuration is invalid, or
+    /// [`OtlpError::Builder`] if the metric exporter cannot be constructed.
     pub fn new(collector: Arc<EnhancedMetricsCollector>, config: OtlpConfig) -> Result<Self, OtlpError> {
         config.validate()?;
 
@@ -204,13 +213,19 @@ impl OtlpExporter {
 
     /// Return the underlying meter provider so the caller can install
     /// `tracing-opentelemetry` on top of the same exporter.
+    #[must_use]
     pub fn meter_provider(&self) -> &SdkMeterProvider {
         &self.inner.provider
     }
 
     /// Background task body. Polls the collector and records each metric
-    /// into the OTel instrument. Returns on cancellation; the caller is
+    /// into the `OTel` instrument. Returns on cancellation; the caller is
     /// expected to `shutdown()` the exporter to flush.
+    ///
+    /// # Errors
+    ///
+    /// This function currently does not return `Err`, but the signature
+    /// reserves the ability to propagate export failures in future revisions.
     pub async fn run(&self) -> Result<(), OtlpError> {
         use opentelemetry::metrics::MeterProvider as _;
         let meter = self.inner.provider.meter("vllm-lite");
@@ -277,6 +292,11 @@ impl OtlpExporter {
 
     /// Flush pending metrics synchronously. Called by the bootstrap on
     /// shutdown.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OtlpError::Export`] if the meter provider cannot shut down
+    /// within the configured timeout.
     pub fn shutdown(&self) -> Result<(), OtlpError> {
         self.inner
             .provider
@@ -295,15 +315,27 @@ pub struct OtlpExporterBuilder {
 }
 
 impl OtlpExporterBuilder {
-    pub fn new(config: OtlpConfig) -> Self {
+    /// Create a builder with the given config. Use `.collector()` to
+    /// inject a metrics collector, then `.build()`.
+    #[must_use]
+    pub const fn new(config: OtlpConfig) -> Self {
         Self { collector: None, config }
     }
 
+    /// Inject a metrics collector. Returns `self` for chaining.
+    #[must_use]
     pub fn collector(mut self, collector: Arc<EnhancedMetricsCollector>) -> Self {
         self.collector = Some(collector);
         self
     }
 
+    /// Build the exporter.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OtlpError::Builder`] if no collector was set, or
+    /// [`OtlpError::Config`] / [`OtlpError::Builder`] if the exporter
+    /// cannot be constructed.
     pub fn build(self) -> Result<OtlpExporter, OtlpError> {
         let collector = self
             .collector
@@ -353,7 +385,7 @@ mod tests {
     #[test]
     fn metric_schema_mapping_covers_prometheus_metrics() {
         // Pins the contract: every Prometheus metric exposed by
-        // PrometheusExporter has an OTel counterpart in SCHEMA_MAP.
+        // PrometheusExporter has an `OTel` counterpart in SCHEMA_MAP.
         // If PrometheusExporter adds a new metric, this test fails until
         // the schema map is updated.
         let prometheus_names = [
@@ -387,7 +419,7 @@ mod tests {
         for name in prometheus_names {
             assert!(
                 SCHEMA_MAP.iter().any(|(p, _, _, _)| *p == name),
-                "Prometheus metric {name} has no OTel counterpart in SCHEMA_MAP"
+                "Prometheus metric {name} has no `OTel` counterpart in SCHEMA_MAP"
             );
         }
     }

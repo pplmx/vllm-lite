@@ -1,8 +1,6 @@
 //! Tracing-subscriber bootstrap with optional OpenTelemetry bridge.
 //! Gated by the `opentelemetry` feature on `vllm-core`.
 
-#![cfg(feature = "opentelemetry")]
-
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
 use opentelemetry_otlp::{SpanExporter, WithExportConfig};
@@ -15,10 +13,17 @@ use tracing_subscriber::EnvFilter;
 
 use crate::metrics::exporter::otlp::{OtlpConfig, OtlpError};
 
-/// Initialise `tracing-subscriber` with the requested `EnvFilter` and,
-/// when `config.enabled = true`, add a `tracing-opentelemetry` layer
-/// that bridges every `tracing::info_span!` to an OTel span. The returned
+/// Initialise `tracing-subscriber` with the requested `EnvFilter`.
+///
+/// When `config.enabled = true`, adds a `tracing-opentelemetry` layer
+/// that bridges every `tracing::info_span!` to an `OTel` span. The returned
 /// `OtlpGuard` flushes pending spans on drop (graceful shutdown).
+///
+/// # Errors
+///
+/// Returns [`OtlpError::Config`] if the configuration is invalid, or
+/// [`OtlpError::Builder`] if the subscriber or span exporter cannot be
+/// initialised (e.g., the tracing subscriber has already been initialised).
 pub fn init_tracing_with_otlp(
     env_filter: EnvFilter,
     config: OtlpConfig,
@@ -79,15 +84,16 @@ pub struct OtlpGuard {
 }
 
 impl OtlpGuard {
-    fn disabled() -> Self {
+    const fn disabled() -> Self {
         Self { provider: None }
     }
-    fn enabled(provider: SdkTracerProvider) -> Self {
+    const fn enabled(provider: SdkTracerProvider) -> Self {
         Self { provider: Some(provider) }
     }
 
     /// Returns `true` if OTLP tracing was initialised (drop will flush).
-    pub fn is_enabled(&self) -> bool {
+    #[must_use]
+    pub const fn is_enabled(&self) -> bool {
         self.provider.is_some()
     }
 }
