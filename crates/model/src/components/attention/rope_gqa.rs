@@ -442,13 +442,15 @@ fn build_rope(
     device: &candle_core::Device,
     rope_scaling: Option<&RopeScaling>,
 ) -> RoPE {
-    match rope_scaling {
-        Some(r) => {
-            let ctx = RopeScalingContext::from(r);
-            RoPE::new_with_scaling(head_dim, max_position, theta, device, ctx)
-        }
-        None => RoPE::new(head_dim, max_position, theta, device),
-    }
+    rope_scaling.map_or(RoPE::new(head_dim, max_position, theta, device), |r| {
+        RoPE::new_with_scaling(
+            head_dim,
+            max_position,
+            theta,
+            device,
+            RopeScalingContext::from(r),
+        )
+    })
 }
 
 // Unit tests are extracted to `tests.rs` (sibling) to keep this

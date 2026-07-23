@@ -48,10 +48,7 @@ fn random_f32_seeded(seed: u64) -> f32 {
 /// sampler touches an RNG, so adding a new RNG source in the future
 /// only requires changing this helper.
 fn sample_random_threshold(seed: Option<u64>) -> f32 {
-    match seed {
-        Some(s) => random_f32_seeded(s),
-        None => random_f32(),
-    }
+    seed.map_or_else(random_f32, random_f32_seeded)
 }
 
 /// Compute `log(softmax(logits)[token])` for a single token under
