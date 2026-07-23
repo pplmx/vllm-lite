@@ -464,7 +464,10 @@ fn test_apply_honours_scaling() -> Result<()> {
     let out_apply = rope.apply(&q, &positions)?;
     let out_scaled = rope.apply_with_scaling(&q, &positions)?;
 
-    let diff = (&out_apply - &out_scaled)?.abs()?.max_all()?.to_scalar::<f32>()?;
+    let diff = (&out_apply - &out_scaled)?
+        .abs()?
+        .max_all()?
+        .to_scalar::<f32>()?;
     assert!(
         diff < 1e-5,
         "apply (Yarn) should match apply_with_scaling (diff = {diff})"
