@@ -644,7 +644,7 @@ pub fn validate_chat_tool_choice(
             // "required" must call at least one tool. If there
             // are no tools, the model can't satisfy the
             // constraint.
-            if tools.is_none_or(|t| t.is_empty()) {
+            if tools.is_none_or(<[Tool]>::is_empty) {
                 return Err((
                     StatusCode::BAD_REQUEST,
                     Json(ErrorResponse::new(

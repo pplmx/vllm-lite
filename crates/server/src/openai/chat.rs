@@ -218,7 +218,7 @@ async fn handle_chat(
         seed = ?req.seed,
         frequency_penalty = ?req.frequency_penalty,
         presence_penalty = ?req.presence_penalty,
-        logit_bias_len = ?req.logit_bias.as_ref().map(|m| m.len()),
+        logit_bias_len = ?req.logit_bias.as_ref().map(std::collections::HashMap::len),
         logprobs = ?req.logprobs,
         top_logprobs = ?req.top_logprobs,
         prompt_tokens = prompt_tokens_len,
@@ -473,7 +473,7 @@ async fn handle_chat(
         seed = ?req.seed,
         frequency_penalty = ?req.frequency_penalty,
         presence_penalty = ?req.presence_penalty,
-        logit_bias_len = ?req.logit_bias.as_ref().map(|m| m.len()),
+        logit_bias_len = ?req.logit_bias.as_ref().map(std::collections::HashMap::len),
         logprobs = ?req.logprobs,
         top_logprobs = ?req.top_logprobs,
         output_tokens = output_tokens_len,
@@ -786,7 +786,7 @@ async fn run_n_parallel_chat(
     // usage: completion_tokens = sum across N candidates (OpenAI
     // billing convention — the client pays for N independent
     // streams). total_tokens = prompt_tokens + sum-completion-tokens.
-    let total_completion_tokens: usize = candidates.iter().map(|c| c.len()).sum();
+    let total_completion_tokens: usize = candidates.iter().map(Vec::len).sum();
     let usage = Usage::new(prompt_tokens_len, total_completion_tokens);
     Ok(ChatResponse::new(
         format!("chatcmpl-{}", uuid::Uuid::new_v4()),
@@ -1477,7 +1477,7 @@ async fn stream_n_parallel_chat(
                             // only) finish event or the consolidated
                             // final event (all N finish_reasons).
                             state.finish_reasons[index] = Some(finish_reason);
-                            let all_done = state.finish_reasons.iter().all(|r| r.is_some());
+                            let all_done = state.finish_reasons.iter().all(Option::is_some);
                             let reason_string = match finish_reason {
                                 vllm_traits::FinishReason::Length => "length",
                                 vllm_traits::FinishReason::Stop
@@ -1631,7 +1631,7 @@ async fn stream_chat_completion(
         seed = ?req.seed,
         frequency_penalty = ?req.frequency_penalty,
         presence_penalty = ?req.presence_penalty,
-        logit_bias_len = ?req.logit_bias.as_ref().map(|m| m.len()),
+        logit_bias_len = ?req.logit_bias.as_ref().map(std::collections::HashMap::len),
         logprobs = ?req.logprobs,
         top_logprobs = ?req.top_logprobs,
         model = %req.model,

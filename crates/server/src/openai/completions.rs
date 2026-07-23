@@ -515,7 +515,7 @@ async fn run_n_parallel_completions(
     // usage: completion_tokens = sum across N candidates (OpenAI
     // billing convention — the client pays for N independent
     // streams). total_tokens = prompt_tokens + sum-completion-tokens.
-    let total_completion_tokens: usize = candidates.iter().map(|c| c.len()).sum();
+    let total_completion_tokens: usize = candidates.iter().map(Vec::len).sum();
     let usage = Usage::new(prompt_tokens_len, total_completion_tokens);
     let response = CompletionResponse::new(
         format!("cmpl-{}", uuid::Uuid::new_v4()),
@@ -1083,7 +1083,7 @@ async fn stream_n_parallel_completions(
                         // finish event or the consolidated final
                         // event (all N finish_reasons).
                         state.finish_reasons[index] = Some(finish_reason);
-                        let all_done = state.finish_reasons.iter().all(|r| r.is_some());
+                        let all_done = state.finish_reasons.iter().all(Option::is_some);
                         let reason_string = match finish_reason {
                             vllm_traits::FinishReason::Length => "length",
                             vllm_traits::FinishReason::Stop
