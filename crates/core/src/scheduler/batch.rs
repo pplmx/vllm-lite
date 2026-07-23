@@ -55,7 +55,9 @@ impl crate::engine::Engine {
         // ARCH-02: switch from `model.forward` (greedy internally) to
         // `model.forward_logits` + engine-side sampling. The per-seq
         // params now ride along on `Batch`.
-        let (next_tokens, logits_per_seq) = {
+        // Acquire the model lock only for the forward pass; release it
+        // before sampling so other workers can access the model.
+        let (logits_list, vocab_size) = {
             let mut model = lock_mutex(&self.target_model)?;
             let logits_list = model.forward_logits(
                 &batch.seq_ids,
@@ -66,35 +68,35 @@ impl crate::engine::Engine {
                 &batch.is_prefill,
             )?;
             let vocab_size = model.vocab_size();
-            // forward_logits returns one Vec<f32> per sequence. For
-            // decode each is 1 * vocab; for prefill each is
-            // num_prompt_tokens * vocab. The "next" token always comes
-            // from the last position's logits.
-            let per_seq: Vec<Vec<f32>> = logits_list
-                .iter()
-                .map(|seq_logits| {
-                    let start = seq_logits.len().saturating_sub(vocab_size);
-                    seq_logits[start..].to_vec()
-                })
-                .collect();
-            // Gather seen tokens (already-generated portion of each
-            // sequence) so `repeat_penalty` can penalise them. Prefill
-            // yields an empty seen-set, which makes repeat-penalty a
-            // no-op as expected.
-            let seen_tokens: Vec<Vec<TokenId>> = batch
-                .seq_ids
-                .iter()
-                .map(|sid| {
-                    self.scheduler
-                        .get_sequence(*sid)
-                        .map(|s| s.tokens[s.prompt_len..].to_vec())
-                        .unwrap_or_default()
-                })
-                .collect();
-            let next_tokens =
-                sample_batch_with_params(&per_seq, &batch.sampling_params, &seen_tokens);
-            (next_tokens, per_seq)
+            (logits_list, vocab_size)
         };
+        // forward_logits returns one Vec<f32> per sequence. For
+        // decode each is 1 * vocab; for prefill each is
+        // num_prompt_tokens * vocab. The "next" token always comes
+        // from the last position's logits.
+        let per_seq: Vec<Vec<f32>> = logits_list
+            .iter()
+            .map(|seq_logits| {
+                let start = seq_logits.len().saturating_sub(vocab_size);
+                seq_logits[start..].to_vec()
+            })
+            .collect();
+        // Gather seen tokens (already-generated portion of each
+        // sequence) so `repeat_penalty` can penalise them. Prefill
+        // yields an empty seen-set, which makes repeat-penalty a
+        // no-op as expected.
+        let seen_tokens: Vec<Vec<TokenId>> = batch
+            .seq_ids
+            .iter()
+            .map(|sid| {
+                self.scheduler
+                    .get_sequence(*sid)
+                    .map(|s| s.tokens[s.prompt_len..].to_vec())
+                    .unwrap_or_default()
+            })
+            .collect();
+        let next_tokens = sample_batch_with_params(&per_seq, &batch.sampling_params, &seen_tokens);
+        let logits_per_seq = per_seq;
 
         let output = BatchOutput {
             seq_ids: batch.seq_ids.clone(),

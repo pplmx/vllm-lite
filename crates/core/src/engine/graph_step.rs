@@ -109,17 +109,22 @@ impl Engine {
         );
 
         let start = std::time::Instant::now();
+        // Acquire the model lock only for the forward pass; release it
+        // before sampling so other workers can access the model.
         let result: Result<BatchOutput> = (|| {
-            let mut model = lock_mutex(&self.target_model)?;
-            let logits_list = model.forward_logits(
-                &batch.seq_ids,
-                &batch.input_tokens,
-                &batch.positions,
-                &batch.kv_block_ids,
-                &batch.num_computed_tokens,
-                &batch.is_prefill,
-            )?;
-            let vocab_size = model.vocab_size();
+            let (logits_list, vocab_size) = {
+                let mut model = lock_mutex(&self.target_model)?;
+                let logits_list = model.forward_logits(
+                    &batch.seq_ids,
+                    &batch.input_tokens,
+                    &batch.positions,
+                    &batch.kv_block_ids,
+                    &batch.num_computed_tokens,
+                    &batch.is_prefill,
+                )?;
+                let vocab_size = model.vocab_size();
+                (logits_list, vocab_size)
+            };
             let per_seq: Vec<Vec<f32>> = logits_list
                 .iter()
                 .map(|seq_logits| {
