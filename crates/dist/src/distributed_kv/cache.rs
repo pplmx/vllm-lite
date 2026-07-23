@@ -378,57 +378,11 @@ impl DistributedKVCache {
         // to verify, so the call is a no-op miss.
         let expected_hash = self.get(block_id).ok_or(FetchError::NotFound(block_id))?;
 
-        // Step 2: fan-out to peers (if any).
-        let peers: Vec<PeerClient> = self
-            .peer_clients
-            .as_ref()
-            .map(|c| c.iter().cloned().collect())
-            .unwrap_or_default();
-
-        if !peers.is_empty() {
-            // Use tokio::task::JoinSet to fan out across peers
-            // without adding a `futures` crate dependency.
-            let mut join_set = tokio::task::JoinSet::new();
-            for client in &peers {
-                let client = client.clone();
-                join_set.spawn(async move {
-                    (
-                        client.url().to_string(),
-                        client.fetch_block(block_id, expected_hash).await,
-                    )
-                });
-            }
-            while let Some(joined) = join_set.join_next().await {
-                let (url, result) = match joined {
-                    Ok(pair) => pair,
-                    Err(e) => {
-                        tracing::warn!(error = %e, "peer fetch task failed to join");
-                        continue;
-                    }
-                };
-                match result {
-                    Ok(resp) if resp.chain_hash == expected_hash => {
-                        return self.maybe_install(block_id, resp.data).await;
-                    }
-                    Ok(resp) => {
-                        tracing::warn!(
-                            peer = %url,
-                            block_id,
-                            expected = expected_hash,
-                            actual = resp.chain_hash,
-                            "peer returned block bytes with mismatched chain_hash"
-                        );
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            peer = %url,
-                            block_id,
-                            error = %e,
-                            "peer fetch_block failed"
-                        );
-                    }
-                }
-            }
+        // Step 2: fan-out to peers (if any). The first peer returning
+        // bytes with a matching chain_hash wins; on success we install
+        // the bytes via the P42 sink before returning them.
+        if let Some(bytes) = self.fetch_from_peers(block_id, expected_hash).await {
+            return self.maybe_install(block_id, bytes).await;
         }
 
         // Step 3: fall back to the local source.
@@ -438,10 +392,87 @@ impl DistributedKVCache {
         }
 
         // Step 4: nothing worked.
+        Err(self.fetch_failure_error())
+    }
+
+    /// Fan out `fetch_block` across all configured peers in parallel.
+    ///
+    /// Queries every peer via [`PeerClient::fetch_block`] and returns the
+    /// bytes from the first response whose `chain_hash` matches
+    /// `expected_hash`. Mismatched hashes and transport errors are logged
+    /// and skipped — only the first matching response is returned.
+    ///
+    /// Returns `None` when there are no configured peers or every peer
+    /// failed (mismatched hash, transport error, or task panic). The
+    /// caller then falls through to the local-source fallback or the
+    /// final error.
+    ///
+    /// Uses `tokio::task::JoinSet` to fan out without adding a `futures`
+    /// crate dependency.
+    async fn fetch_from_peers(&self, block_id: u64, expected_hash: u64) -> Option<Vec<u8>> {
+        let peers: Vec<PeerClient> = self
+            .peer_clients
+            .as_ref()
+            .map(|c| c.iter().cloned().collect())
+            .unwrap_or_default();
         if peers.is_empty() {
-            Err(FetchError::NoPeers)
-        } else {
-            Err(FetchError::AllPeersFailed(peers.len()))
+            return None;
+        }
+
+        let mut join_set = tokio::task::JoinSet::new();
+        for client in &peers {
+            let client = client.clone();
+            join_set.spawn(async move {
+                (
+                    client.url().to_string(),
+                    client.fetch_block(block_id, expected_hash).await,
+                )
+            });
+        }
+
+        while let Some(joined) = join_set.join_next().await {
+            let (url, result) = match joined {
+                Ok(pair) => pair,
+                Err(e) => {
+                    tracing::warn!(error = %e, "peer fetch task failed to join");
+                    continue;
+                }
+            };
+            match result {
+                Ok(resp) if resp.chain_hash == expected_hash => return Some(resp.data),
+                Ok(resp) => {
+                    tracing::warn!(
+                        peer = %url,
+                        block_id,
+                        expected = expected_hash,
+                        actual = resp.chain_hash,
+                        "peer returned block bytes with mismatched chain_hash"
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        peer = %url,
+                        block_id,
+                        error = %e,
+                        "peer fetch_block failed"
+                    );
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Build the [`FetchError`] for a failed [`Self::fetch_block`] based on
+    /// whether any peers are configured.
+    ///
+    /// Returns [`FetchError::AllPeersFailed`] with the peer count when
+    /// peers were present but every one failed; [`FetchError::NoPeers`]
+    /// when there are no peers and no local source to fall back to.
+    fn fetch_failure_error(&self) -> FetchError {
+        match &self.peer_clients {
+            Some(clients) if !clients.is_empty() => FetchError::AllPeersFailed(clients.len()),
+            _ => FetchError::NoPeers,
         }
     }
 
