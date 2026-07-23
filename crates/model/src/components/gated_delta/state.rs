@@ -27,21 +27,26 @@ pub struct GatedDeltaConfig {
 }
 
 impl GatedDeltaConfig {
+    /// Total key-projection dimension: `num_k_heads * key_head_dim`.
     #[must_use]
     pub const fn key_dim(&self) -> usize {
         self.num_k_heads * self.key_head_dim
     }
 
+    /// Total value-projection dimension: `num_v_heads * value_head_dim`.
     #[must_use]
     pub const fn value_dim(&self) -> usize {
         self.num_v_heads * self.value_head_dim
     }
 
+    /// Combined QKV projection dimension: `2 * key_dim + value_dim`.
     #[must_use]
     pub const fn qkv_proj_dim(&self) -> usize {
         2 * self.key_dim() + self.value_dim()
     }
 
+    /// Width of the causal conv state buffer: `conv_kernel_size - 1`
+    /// (saturating at 0 for a 1-tap conv).
     #[must_use]
     pub const fn conv_state_width(&self) -> usize {
         self.conv_kernel_size.saturating_sub(1)

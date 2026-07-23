@@ -54,6 +54,8 @@ pub struct GatedDeltaNet {
 }
 
 impl GatedDeltaNet {
+    /// Construct a `GatedDeltaNet` from pre-built components (used when
+    /// loading weights from a non-HF checkpoint or custom loader).
     #[allow(clippy::too_many_arguments)]
     #[must_use]
     pub const fn from_components(
@@ -82,11 +84,13 @@ impl GatedDeltaNet {
         }
     }
 
+    /// Access the `a_log` (state-transition matrix) tensor.
     #[must_use]
     pub const fn a_log(&self) -> &Tensor {
         &self.a_log
     }
 
+    /// Access the `dt_bias` (step-size bias) tensor.
     #[must_use]
     pub const fn dt_bias(&self) -> &Tensor {
         &self.dt_bias
