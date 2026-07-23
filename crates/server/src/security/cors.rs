@@ -79,6 +79,9 @@ pub struct CorsConfig {
 /// in via `CorsConfig::allow_origins` only when you actually need
 /// browser-direct access.
 pub fn with_cors(router: Router, config: CorsConfig) -> Router {
+    use axum::http::header::HeaderName;
+    use std::str::FromStr;
+
     let mut layer = CorsLayer::new();
 
     if config.allow_origins.is_empty() {
@@ -93,8 +96,6 @@ pub fn with_cors(router: Router, config: CorsConfig) -> Router {
     // values are dropped with a warning-equivalent (we log via
     // `tracing::warn` so an operator scanning the boot log can
     // spot a typo).
-    use axum::http::header::HeaderName;
-    use std::str::FromStr;
     let origins: Vec<_> = config
         .allow_origins
         .iter()
