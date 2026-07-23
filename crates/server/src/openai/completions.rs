@@ -1787,9 +1787,9 @@ pub async fn completions(
     // (e.g. engine panicked between the two steps).
     let finish_reason = match finish_reason_rx.await {
         Ok(vllm_traits::FinishReason::Length) => "length".to_string(),
-        Ok(vllm_traits::FinishReason::Stop) => "stop".to_string(),
-        Ok(vllm_traits::FinishReason::Cancelled) => "stop".to_string(),
-        Err(_) => "stop".to_string(),
+        Ok(vllm_traits::FinishReason::Stop) | Ok(vllm_traits::FinishReason::Cancelled) | Err(_) => {
+            "stop".to_string()
+        }
     };
 
     // P35 v0.x wire-type follow-up engine wire-through: apply

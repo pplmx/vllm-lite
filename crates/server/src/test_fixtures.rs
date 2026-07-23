@@ -134,10 +134,9 @@ pub fn spawn_mock_engine(reply_tokens: Vec<TokenId>) -> (EngineHandle, JoinHandl
                         }
                     }
                 }
-                EngineMessage::CancelRequest { .. } => {
-                    // No-op in the mock engine — production
-                    // engines would drop the sequence here.
-                }
+                // No-op in the mock engine — production engines would
+                // drop the sequence here. Other EngineMessage variants
+                // are also no-ops in the mock.
                 _ => {}
             }
         }
