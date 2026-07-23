@@ -1,7 +1,7 @@
 //! `PagedKV` buffer operations: `write_kv`, `write_kv_batch`, `read_kv`, and the layer-aware batched variants.
 //!
 //! These are the only entry points attention layers should call to
-//! mutate or read the KV cache. Block-level accounting is handled by
+//! mutate or read the `KV` cache. Block-level accounting is handled by
 //! the pool (`pool.rs`); this file is pure read/write logic.
 //!
 //! Tests for these methods live in `tests.rs` (sibling file) to keep this
@@ -244,7 +244,7 @@ impl PagedKvCache {
         Ok(())
     }
 
-    /// Read cached K/V from the paged KV cache for a given sequence.
+    /// Read cached K/V from the paged `KV` cache for a given sequence.
     /// # Errors
     ///
     /// Returns `Err` if reading or parsing the source fails.

@@ -43,7 +43,7 @@ impl TextConfig {
         self.intermediate_size.unwrap_or(11008)
     }
 
-    /// RoPE base frequency; defaults to 10_000 when unset.
+    /// `RoPE` base frequency; defaults to 10_000 when unset.
     #[must_use]
     pub fn rope_theta(&self) -> f32 {
         self.rope_theta.unwrap_or(10000.0)

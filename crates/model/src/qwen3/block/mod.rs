@@ -2,7 +2,7 @@
 //!
 //! Supports both the standard GQA variant and the MLA variant
 //! (`qwen3/mla_attention.rs`). Each block reads from / writes to the
-//! paged KV cache through `AttentionConfig`.
+//! paged `KV` cache through `AttentionConfig`.
 //!
 //! Module layout:
 //!
@@ -28,7 +28,7 @@ use candle_core::{Result, Tensor};
 use std::ops::Deref;
 
 #[derive(Debug)]
-/// Qwen3 decoder layer wrapping the shared RoPE-GQA block.
+/// Qwen3 decoder layer wrapping the shared `RoPE`-GQA block.
 pub struct TransformerBlock(RopeGqaDecoderBlock);
 
 impl Deref for TransformerBlock {

@@ -35,7 +35,7 @@ impl RopeGqaAttention {
     /// [`Self::forward_decode`] can apply rotary embeddings before the
     /// attention matmul.
     ///
-    /// **No long-context scaling**: uses a default `RoPE` (max_position =
+    /// **No long-context scaling**: uses a default `RoPE` (`max_position` =
     /// 4096, `rope_type = Default`). For production configs that declare
     /// a `rope_scaling` block, construct via [`Self::new_with_rope_scaling`].
     /// # Errors
@@ -311,7 +311,7 @@ impl RopeGqaAttention {
     ///
     /// # Errors
     ///
-    /// Returns `Err` if projection, RoPE, KV read/write, or attention fails.
+    /// Returns `Err` if projection, `RoPE`, KV read/write, or attention fails.
     pub fn forward_prefill_continue(
         &self,
         x: &Tensor,
@@ -442,15 +442,18 @@ fn build_rope(
     device: &candle_core::Device,
     rope_scaling: Option<&RopeScaling>,
 ) -> RoPE {
-    rope_scaling.map_or(RoPE::new(head_dim, max_position, theta, device), |r| {
-        RoPE::new_with_scaling(
-            head_dim,
-            max_position,
-            theta,
-            device,
-            RopeScalingContext::from(r),
-        )
-    })
+    rope_scaling.map_or_else(
+        || RoPE::new(head_dim, max_position, theta, device),
+        |r| {
+            RoPE::new_with_scaling(
+                head_dim,
+                max_position,
+                theta,
+                device,
+                RopeScalingContext::from(r),
+            )
+        },
+    )
 }
 
 // Unit tests are extracted to `tests.rs` (sibling) to keep this

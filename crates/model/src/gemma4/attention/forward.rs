@@ -7,7 +7,7 @@
 //! - `Self::forward_full` / `Self::forward_sliding` — non-paged paths,
 //!   delegate to `gqa_attention`
 //! - `Self::forward_prefill` / `Self::forward_decode` — paged paths that
-//!   read/write KV through `PagedKvCache`
+//!   read/write `KV` through `PagedKvCache`
 
 use candle_core::{Result, Tensor};
 use tracing::trace;
@@ -57,7 +57,7 @@ impl Gemma4Attention {
     /// Chunked-prefill continuation: attend over the cached prefix plus new tokens.
     /// # Errors
     ///
-    /// Returns `Err` if projection, RoPE, KV read/write, or attention fails.
+    /// Returns `Err` if projection, `RoPE`, `KV` read/write, or attention fails.
     pub fn forward_prefill_continue(
         &self,
         x: &Tensor,

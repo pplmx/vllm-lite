@@ -59,7 +59,7 @@ impl Qwen3Config {
             .unwrap_or(32)
     }
 
-    /// KV head count with `text_config` and canonical fallbacks.
+    /// `KV` head count with `text_config` and canonical fallbacks.
     #[must_use]
     pub fn num_key_value_heads(&self) -> usize {
         self.num_key_value_heads
@@ -79,7 +79,7 @@ impl Qwen3Config {
             .unwrap_or(11008)
     }
 
-    /// RoPE base frequency with `text_config` and canonical fallbacks.
+    /// `RoPE` base frequency with `text_config` and canonical fallbacks.
     #[must_use]
     pub fn rope_theta(&self) -> f32 {
         self.rope_theta
@@ -121,13 +121,13 @@ impl Qwen3Config {
         self.has_qk_norm.unwrap_or(false)
     }
 
-    /// Optional YaRN / linear RoPE scaling parameters from the checkpoint.
+    /// Optional YaRN / linear `RoPE` scaling parameters from the checkpoint.
     #[must_use]
     pub const fn rope_scaling(&self) -> Option<&super::super::rope::RopeScaling> {
         self.rope_scaling.as_ref()
     }
 
-    /// Optional extended RoPE parameter block from the checkpoint.
+    /// Optional extended `RoPE` parameter block from the checkpoint.
     #[must_use]
     pub const fn rope_parameters(&self) -> Option<&super::super::rope::RopeParameters> {
         self.rope_parameters.as_ref()

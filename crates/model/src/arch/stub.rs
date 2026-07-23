@@ -2,7 +2,7 @@
 //! `detect()` but whose full implementation is not yet shipped.
 //!
 //! Replaces four near-identical stubs (gemma3, llama4, phi4,
-//! mistral_small) that previously each carried their own ~250-line
+//! `mistral_small`) that previously each carried their own ~250-line
 //! `arch.rs` file. The unified struct is parameterised by:
 //!
 //! - `name` — the wire-format name (e.g. `"gemma3"`, `"phi4"`,
@@ -41,7 +41,7 @@ use vllm_traits::types::BatchOutput;
 pub type StubDetectFn = fn(&serde_json::Value) -> bool;
 
 /// Unified stub `Architecture` covering all currently-stubbed model
-/// families (gemma3, llama4, phi4, mistral_small).
+/// families (gemma3, llama4, phi4, `mistral_small`).
 #[derive(Debug, Clone, Copy)]
 pub struct StubArchitecture {
     name: &'static str,

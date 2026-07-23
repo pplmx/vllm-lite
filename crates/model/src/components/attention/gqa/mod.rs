@@ -38,9 +38,9 @@ pub struct GqaAttention {
     config: AttentionConfig,
     q_norm: Option<LayerNorm>,
     k_norm: Option<LayerNorm>,
-    /// YaRN attention-temperature scaling factor. When `Some(f)`,
+    /// `YaRN` attention-temperature scaling factor. When `Some(f)`,
     /// attention scores are additionally divided by `f` before softmax
-    /// (YaRN §3.3 attention-temperature scaling). `None` or `Some(1.0)`
+    /// (`YaRN` §3.3 attention-temperature scaling). `None` or `Some(1.0)`
     /// is a no-op (no allocation). Honoured by all four forward paths
     /// (standard `forward()`, `paged_attention_fn`, `tiled_attention_fn`,
     /// `flash_attention_fn`); pre-scaling Q by `attn_factor` in the

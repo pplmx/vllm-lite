@@ -1,4 +1,4 @@
-//! MLA-specific compressed KV cache (separate from paged tensor store).
+//! MLA-specific compressed `KV` cache (separate from paged tensor store).
 
 #![allow(dead_code)]
 
@@ -14,7 +14,7 @@ pub(crate) struct MlaKvCache {
 }
 
 impl MlaKvCache {
-    /// Allocate a new `MlaKvCache` with the given layer count, KV-rank, block size, and block count on `device`.
+    /// Allocate a new `MlaKvCache` with the given layer count, `KV`-rank, block size, and block count on `device`.
     pub fn new(
         num_layers: usize,
         kv_lora_rank: usize,
@@ -50,8 +50,8 @@ impl MlaKvCache {
     /// using `Tensor::slice_assign` so memory allocation is proportional
     /// to the slice being written, not the entire cache layer. The
     /// previous implementation flattened the whole `num_blocks *
-    /// block_size * kv_lora_rank` buffer per token, then re-built the
-    /// layer Tensor — `O(num_blocks * block_size * kv_lora_rank)`
+    /// `block_size` * kv_lora_rank` buffer per token, then re-built the
+    /// layer Tensor — `O(num_blocks * `block_size` * kv_lora_rank)`
     /// allocation per write. The new path is `O(seq_len * kv_lora_rank)`.
     pub fn write_compressed(
         &mut self,
@@ -173,7 +173,7 @@ impl MlaKvCache {
         Ok(())
     }
 
-    /// Read `seq_len` tokens of compressed KV data from `layer` starting at `start_pos`, spanning cache blocks.
+    /// Read `seq_len` tokens of compressed `KV` data from `layer` starting at `start_pos`, spanning cache blocks.
     pub fn read_compressed(
         &self,
         layer: usize,
@@ -211,7 +211,7 @@ impl MlaKvCache {
         Tensor::cat(&parts, 0)?.unsqueeze(0)
     }
 
-    /// Return the number of tokens stored in each KV-cache block.
+    /// Return the number of tokens stored in each `KV`-cache block.
     pub const fn block_size(&self) -> usize {
         self.block_size
     }

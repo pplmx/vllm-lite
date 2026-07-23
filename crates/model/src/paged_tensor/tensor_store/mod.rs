@@ -1,7 +1,7 @@
-//! Paged tensor store: physical KV cache backing store, block pool, and layout helpers.
+//! Paged tensor store: physical `KV` cache backing store, block pool, and layout helpers.
 //!
 //! `PagedKvCache` is the public facade re-exported from this module.
-//! Sub-modules: `buffer` (KV read/write operations), `layout` (block
+//! Sub-modules: `buffer` (`KV` read/write operations), `layout` (block
 //! hashes + scale layout), `pool` (block free-list).
 
 // crates/model/src/paged_tensor/tensor_store/mod.rs
@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use candle_core::{DType, Device, Result, Tensor};
 
 #[derive(Debug)]
-/// Physical paged KV cache backing store for attention layers.
+/// Physical paged `KV` cache backing store for attention layers.
 ///
 /// Stores per-layer K/V tensors in fixed-size blocks (`BLOCK_SIZE` tokens per
 /// block). Attention paths call [`Self::write_kv`] / [`Self::read_kv`] during
@@ -87,7 +87,7 @@ impl PagedKvCache {
     ///
     /// Returns `(K_bytes, V_bytes)` flattened in the same row-major
     /// layout as the on-disk block written by `write_kv`: shape
-    /// `[num_heads, block_size, head_dim]`. Used by the multi-node
+    /// `[`num_heads`, `block_size`, `head_dim`]`. Used by the multi-node
     /// `PagedKvCacheWrapper` to serialize a block for cross-node
     /// transfer; the receiver feeds the bytes back into
     /// `write_kv_batch`.
@@ -128,7 +128,7 @@ impl PagedKvCache {
     }
 
     /// Number of f32 elements per (layer, block) pair: `num_heads *
-    /// block_size * head_dim`. Used by the multi-node wrapper for
+    /// `block_size` * head_dim`. Used by the multi-node wrapper for
     /// buffer sizing in `fetch_block`.
     #[must_use]
     #[allow(dead_code)] // reachable under --features multi-node via PagedKvCacheWrapper (P40 T2)
@@ -157,11 +157,11 @@ impl PagedKvCache {
     /// Write per-layer K and V tensors for a single block
     /// (P41, the receiver-side counterpart of `read_layer_block`).
     ///
-    /// `k` and `v` are flat `[f32; num_heads * BLOCK_SIZE * head_dim]`
+    /// `k` and `v` are flat `[f32; `num_heads` * BLOCK_SIZE * `head_dim`]`
     /// row-major slices in the same layout `read_layer_block`
     /// returns. The byte-level round-trip is bit-exact.
     ///
-    /// Used by the receiver side of multi-node KV block transfer
+    /// Used by the receiver side of multi-node `KV` block transfer
     /// (P42 candidate) — the wire-shape bytes from
     /// `PagedKvCacheWrapper::fetch_block` feed back through this
     /// helper into the local cache.
@@ -271,8 +271,8 @@ impl PagedKvCache {
     /// # Errors
     ///
     /// Returns `Err` if `block_id >= num_blocks`, if `bytes.len()`
-    /// does not match `num_layers * 2 * num_heads * BLOCK_SIZE *
-    /// head_dim * 4`, or if any inner `write_layer_block` call
+    /// does not match `num_layers * 2 * `num_heads` * BLOCK_SIZE *
+    /// `head_dim` * 4`, or if any inner `write_layer_block` call
     /// fails (which itself only fails on bounds errors that this
     /// caller already pre-validated).
     #[allow(dead_code)] // reachable under --features multi-node via PagedKvCacheWrapper: BlockSink (P42 T3)
@@ -389,7 +389,7 @@ mod tests {
         let mut cache = small_cache();
         let n = 2 * BLOCK_SIZE * 4; // num_heads=2, BLOCK_SIZE=16, head_dim=4
         let k: Vec<f32> = (0..n).map(|i| i as f32 * 0.5).collect();
-        let v: Vec<f32> = (0..n).map(|i| i as f32 * 1.5 + 100.0).collect();
+        let v: Vec<f32> = (0..n).map(|i| (i as f32).mul_add(1.5, 100.0)).collect();
         cache
             .write_layer_block(1, 2, &k, &v)
             .expect("write_layer_block");

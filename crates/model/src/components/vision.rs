@@ -17,7 +17,7 @@ pub struct VisionConfig {
 }
 
 impl VisionConfig {
-    /// Create a config with the given image and patch sizes, using default embed_dim (768) and depth (12).
+    /// Create a config with the given image and patch sizes, using default `embed_dim` (768) and depth (12).
     #[must_use]
     pub const fn new(image_size: usize, patch_size: usize) -> Self {
         Self {
@@ -41,7 +41,7 @@ impl VisionConfig {
 /// Splits an input image into non-overlapping `patch_size × patch_size`
 /// patches (RGB channels flattened per patch), then linearly projects
 /// each patch into the model's `embed_dim`. The result is a sequence
-/// of `(num_patches, embed_dim)` token embeddings ready for the
+/// of ``(num_patches, embed_dim)`` token embeddings ready for the
 /// transformer stack.
 ///
 /// Input shape to [`forward`](PatchEmbed::forward) is expected to be

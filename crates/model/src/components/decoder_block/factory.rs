@@ -5,7 +5,7 @@
 //! [`crate::qwen3::block::TransformerBlock::from_weights`] and friends)
 //! thread `config.rope_scaling` and `config.max_position_embeddings`
 //! through to `RopeGqaAttention::new_with_rope_scaling` /
-//! `new_with_weights_rope_scaling` so long-context configs (YaRN / Linear /
+//! `new_with_weights_rope_scaling` so long-context configs (`YaRN` / Linear /
 //! Dynamic / Su) actually take effect at the attention layer. Pre-P20 this
 //! silently dropped the block via the bare `RopeGqaAttention::new` /
 //! `new_with_weights` constructors, which P19 deliberately preserved as

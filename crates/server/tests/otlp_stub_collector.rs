@@ -21,7 +21,7 @@ use opentelemetry_proto::tonic::collector::trace::v1::{
 use tonic::{Request, Response, Status};
 
 /// Shared record of all export requests received by the stub collector.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct RecordedExport {
     /// Every `ExportMetricsServiceRequest` received.
     pub metrics: Arc<Mutex<Vec<ExportMetricsServiceRequest>>>,
@@ -54,6 +54,7 @@ impl RecordedExport {
 }
 
 /// Stub OTLP `MetricsService` — records every request for assertion.
+#[derive(Debug)]
 pub struct StubMetricsService {
     pub recorded: RecordedExport,
 }
@@ -76,6 +77,7 @@ impl MetricsService for StubMetricsService {
 }
 
 /// Stub OTLP `TraceService` — records every request for assertion.
+#[derive(Debug)]
 pub struct StubTraceService {
     pub recorded: RecordedExport,
 }

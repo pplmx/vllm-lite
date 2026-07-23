@@ -1,4 +1,4 @@
-//! Rotary Position Embedding (RoPE): precompute sin/cos cache and apply rotation to query/key tensors.
+//! Rotary Position Embedding (`RoPE`): precompute sin/cos cache and apply rotation to query/key tensors.
 //!
 //! The cache shape is `(max_seq_len, head_dim/2)`; `apply_rope` mutates
 //! the input tensor in-place when possible. `MRoPE` (multi-modal `RoPE`
@@ -13,7 +13,7 @@
 //! the struct. Use [`RoPE::apply_with_scaling`] to honour them; the
 //! plain [`RoPE::apply`] / free [`apply_rope`] remain scaling-free
 //! for backward compatibility with callers that pass `theta` directly
-//! (rope_gqa, mla, gemma4 attention modules).
+//! (`rope_gqa`, mla, gemma4 attention modules).
 //!
 //! Supported algorithms (selected by `RopeType`):
 //! - `Default` — no scaling (current behaviour, preserved).
@@ -22,7 +22,7 @@
 //!   scale^(d/(d-2)). High-frequency dims barely change; low-frequency
 //!   dims compress to fit longer contexts. This is the "global NTK"
 //!   approximation used by many open-source implementations; the
-//!   attention-scaling half of YaRN (`attn_factor`) is **stored** on
+//!   attention-scaling half of `YaARN` (`attn_factor`) is **stored** on
 //!   the struct so the attention layer can pick it up, but is not
 //!   applied inside `apply_rope` (that lives in the attention kernel).
 //! - `Dynamic`, `Su`, `Other` — fall through to Default for now;
@@ -51,10 +51,10 @@ pub struct RoPE {
     pub(crate) device: candle_core::Device,
     /// Which long-context algorithm to apply (default = no scaling).
     pub(crate) rope_type: RopeType,
-    /// Attention-scaling factor for YaRN; consumed by the attention
+    /// Attention-scaling factor for `YaARN`; consumed by the attention
     /// layer, not by `apply_rope` itself.
     pub(crate) attn_factor: Option<f32>,
-    /// Original context length the scaling was tuned for (YaRN).
+    /// Original context length the scaling was tuned for (`YaARN`).
     pub(crate) original_max_position: Option<usize>,
 }
 
@@ -81,7 +81,7 @@ impl RoPE {
     /// Construct an `RoPE` populated with long-context scaling fields from
     /// the supplied [`RopeScalingContext`]. Use this when the upstream
     /// architecture config declares a non-default `rope_scaling` block
-    /// (YaRN, Linear, Dynamic, Su). The plain [`RoPE::new`] remains
+    /// (`YaARN`, Linear, Dynamic, Su). The plain [`RoPE::new`] remains
     /// available for backward compatibility with callers that don't have a
     /// scaling config handy.
     #[must_use]
@@ -201,7 +201,7 @@ impl RoPE {
     }
 
     /// `attn_factor` accessor — read by attention layers to apply
-    /// YaRN's attention-temperature scaling.
+    /// `YaARN`'s attention-temperature scaling.
     #[must_use]
     pub const fn attn_factor(&self) -> Option<f32> {
         self.attn_factor
@@ -227,9 +227,9 @@ pub struct RopeScalingContext {
     pub scaling_factor: f32,
     pub attn_factor: Option<f32>,
     pub original_max_position: Option<usize>,
-    /// Su RoPE per-dim factor for high-frequency dims.
+    /// Su `RoPE` per-dim factor for high-frequency dims.
     pub short_factor: Option<Vec<f32>>,
-    /// Su RoPE per-dim factor for low-frequency dims.
+    /// Su `RoPE` per-dim factor for low-frequency dims.
     pub long_factor: Option<Vec<f32>>,
 }
 
@@ -309,7 +309,7 @@ pub fn apply_rope_with_scaling(
 /// Default inverse-frequency table for a given `theta`.
 ///
 /// `inv_freq[i] = theta ^ (-2i / d)` for `i in 0..head_dim/2`.
-/// This is the standard RoPE formula unchanged from `apply_rope`.
+/// This is the standard `RoPE` formula unchanged from `apply_rope`.
 fn compute_inv_freq_default(query: &Tensor, theta: f32) -> Vec<f32> {
     let (_batch, _seq_len, _num_heads, head_dim) = query.dims4().expect("dims4");
     compute_inv_freq_for_head_dim(head_dim, theta)
@@ -329,15 +329,15 @@ fn compute_inv_freq_linear(query: &Tensor, theta: f32, scaling_factor: f32) -> V
     inv_freq.into_iter().map(|f| f / scaling_factor).collect()
 }
 
-/// YaRN-style NTK-aware inverse-frequency table.
+/// `YaARN`-style NTK-aware inverse-frequency table.
 ///
 /// Adjusts `theta` by a global factor `scale^(d/(d-2))` so that:
 /// - high-frequency dims (small `i`) keep their original wavelength,
 /// - low-frequency dims (large `i`) compress to fit longer contexts.
 ///
-/// This is the "global NTK" approximation of YaRN — see the [YaRN
+/// This is the "global NTK" approximation of `YaARN` — see the [`YaARN`
 /// paper](https://arxiv.org/abs/2309.00071) §3.3. The attention-scaling
-/// half of YaRN (`attn_factor`) is **not** applied here; that lives in
+/// half of `YaARN` (`attn_factor`) is **not** applied here; that lives in
 /// the attention kernel and is exposed via `RoPE::attn_factor()`.
 fn compute_inv_freq_yarn(query: &Tensor, theta: f32, scaling_factor: f32) -> Vec<f32> {
     let (_, _, _, head_dim) = query.dims4().expect("dims4");
@@ -347,8 +347,8 @@ fn compute_inv_freq_yarn(query: &Tensor, theta: f32, scaling_factor: f32) -> Vec
     compute_inv_freq_yarn_impl(head_dim, theta, scaling_factor)
 }
 
-/// Core YaRN NTK formula. `scaling_factor` must be > 1.0 (caller's
-/// responsibility to check). Used by both YaRN (with the config-declared
+/// Core `YaARN` NTK formula. `scaling_factor` must be > 1.0 (caller's
+/// responsibility to check). Used by both `YaARN` (with the config-declared
 /// scale) and Dynamic NTK (with a recomputed scale per forward).
 fn compute_inv_freq_yarn_impl(head_dim: usize, theta: f32, scaling_factor: f32) -> Vec<f32> {
     // NTK-by-parts / global NTK correction: theta' = theta * scale^(d/(d-2))
@@ -360,17 +360,17 @@ fn compute_inv_freq_yarn_impl(head_dim: usize, theta: f32, scaling_factor: f32) 
     compute_inv_freq_for_head_dim(head_dim, new_theta)
 }
 
-/// HF Transformers / YaRN-style Dynamic NTK scaling.
+/// HF Transformers / `YaARN`-style Dynamic NTK scaling.
 ///
 /// At each forward, recompute the scaling factor based on the current
 /// sequence length:
 ///
 /// ```text
-/// scale = max(1, factor × (cur / orig_max) - (factor - 1))
+/// scale = max(1, factor × (cur / `orig_max`) - (factor - 1))
 /// ```
 ///
-/// If `cur_seq_len <= orig_max`, fall back to the default inv_freq table
-/// (no scaling). Otherwise apply the YaRN NTK formula with the
+/// If `cur_seq_len <= orig_max`, fall back to the default `inv_freq` table
+/// (no scaling). Otherwise apply the `YaARN` NTK formula with the
 /// dynamic `scale`.
 ///
 /// This matches the implementation in HF Transformers
@@ -397,19 +397,19 @@ fn compute_inv_freq_dynamic(
     compute_inv_freq_yarn_impl(head_dim, theta, dynamic_scale)
 }
 
-/// Su RoPE: per-dimension scaling using `short_factor` (high-frequency
+/// Su `RoPE`: per-dimension scaling using `short_factor` (high-frequency
 /// dims) and `long_factor` (low-frequency dims).
 ///
-/// Per Su et al. 2024 ("RoPE in any precision"). The algorithm:
+/// Per Su et al. 2024 ("`RoPE` in any precision"). The algorithm:
 ///
-/// 1. Compute the default inv_freq: `inv_freq[i] = 1 / theta^(2i/d)`.
+/// 1. Compute the default `inv_freq`: `inv_freq[i] = 1 / theta^(2i/d)`.
 /// 2. Compute `boundary` = smallest `i` such that the *base* wavelength
-///    `2π / inv_freq[i]` exceeds `original_max_position_embeddings`.
+///    ``2π / inv_freq[i]`` exceeds `original_max_position_embeddings`.
 /// 3. For each `i < boundary`: `inv_freq[i] /= short_factor[i]` (default 1.0).
 /// 4. For each `i >= boundary`: `inv_freq[i] /= long_factor[i]` (default 1.0).
 ///
 /// Boundary calculation ignores the actual factors — it depends only on
-/// the base inv_freq and `orig_max`, matching the HF reference impl.
+/// the base `inv_freq` and `orig_max`, matching the HF reference impl.
 ///
 /// Falls back to Default when `original_max_position` is None.
 fn compute_inv_freq_su(query: &Tensor, theta: f32, scaling: &RopeScalingContext) -> Vec<f32> {
@@ -450,7 +450,7 @@ fn compute_inv_freq_su(query: &Tensor, theta: f32, scaling: &RopeScalingContext)
 /// Derive the current sequence length from a positions slice.
 ///
 /// Used by scaling algorithms that need to know how long the current
-/// forward pass is (Dynamic NTK, Su RoPE).
+/// forward pass is (Dynamic NTK, Su `RoPE`).
 ///
 /// Assumes positions are typically contiguous from 0; for non-contiguous
 /// positions, returns `max(positions) + 1` (overestimate, but conservative

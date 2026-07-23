@@ -65,7 +65,7 @@ where
         }
     }
 
-    /// Run the forward pass with the paged KV cache enabled.
+    /// Run the forward pass with the paged `KV` cache enabled.
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
@@ -107,7 +107,7 @@ where
     }
 
     /// Returns a clone of the shared `Arc<Mutex<PagedKvCache>>` for
-    /// multi-node KV block transfer wiring (Phase 41 OPS-32a second-half).
+    /// multi-node `KV` block transfer wiring (Phase 41 OPS-32a second-half).
     #[must_use]
     pub fn paged_kv_cache(&self) -> Arc<Mutex<PagedKvCache>> {
         Arc::clone(&self.kv_cache)

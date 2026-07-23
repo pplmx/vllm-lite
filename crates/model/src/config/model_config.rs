@@ -43,7 +43,7 @@ pub struct ModelConfig {
     /// `None` means default (no scaling). Populated from
     /// `config.json["rope_scaling"]` in `from_config_json`, and
     /// forwarded into `RopeGqaAttention::new_with_rope_scaling` so the
-    /// scaling actually reaches the RoPE inverse-frequency table and the
+    /// scaling actually reaches the `RoPE` inverse-frequency table and the
     /// attention-temperature factor. See `qwen3::config::RopeScaling`.
     pub rope_scaling: Option<crate::qwen3::config::RopeScaling>,
     /// Use the "double-wide" MLP variant (Phi-3 style).

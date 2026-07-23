@@ -17,7 +17,7 @@ use candle_core::{Module, Result, Tensor};
 use tracing::trace;
 
 impl GqaAttention {
-    /// Pre-scale Q by `attn_factor` (YaRN §3.3 attention-temperature scaling).
+    /// Pre-scale Q by `attn_factor` (`YaRN` §3.3 attention-temperature scaling).
     ///
     /// Mathematically equivalent to applying `attn_factor` to the post-`Q@K^T`
     /// logits: `(Q * attn_factor) @ K^T = attn_factor * (Q @ K^T)`, and the
@@ -180,7 +180,7 @@ impl GqaAttention {
         Ok(o)
     }
 
-    /// Paged attention. Honours `attn_factor` (YaRN §3.3
+    /// Paged attention. Honours `attn_factor` (`YaRN` §3.3
     /// attention-temperature scaling) — Q is pre-scaled by `attn_factor`
     /// before being passed to `paged_attention`, which applies its own
     /// `1/sqrt(d)` internally. Mathematically equivalent to the standard
@@ -195,7 +195,7 @@ impl GqaAttention {
         Ok(o)
     }
 
-    /// Tiled attention. Honours `attn_factor` (YaRN §3.3) — Q is
+    /// Tiled attention. Honours `attn_factor` (`YaRN` §3.3) — Q is
     /// pre-scaled by `attn_factor` before `tiled_attention` applies its
     /// internal `1/sqrt(d)`. See [`Self::paged_attention_fn`] for the
     /// equivalence argument.
@@ -210,7 +210,7 @@ impl GqaAttention {
         Ok(o)
     }
 
-    /// Flash attention. Honours `attn_factor` (YaRN §3.3) — Q is
+    /// Flash attention. Honours `attn_factor` (`YaRN` §3.3) — Q is
     /// pre-scaled by `attn_factor` before `GqaFlashAttention::forward`
     /// applies its internal `1/sqrt(d)`. See [`Self::paged_attention_fn`]
     /// for the equivalence argument.

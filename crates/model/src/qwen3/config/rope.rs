@@ -94,11 +94,11 @@ pub struct RopeScaling {
     /// `MRoPE` axis section sizes (temporal / height / width).
     #[serde(default)]
     pub mrope_section: Option<Vec<usize>>,
-    /// Su RoPE per-dim factor for high-frequency dims (length head_dim/2).
+    /// Su `RoPE` per-dim factor for high-frequency dims (length `head_dim`/2).
     /// Used only when `rope_type == Su`; ignored otherwise.
     #[serde(default)]
     pub short_factor: Option<Vec<f32>>,
-    /// Su RoPE per-dim factor for low-frequency dims (length head_dim/2).
+    /// Su `RoPE` per-dim factor for low-frequency dims (length `head_dim`/2).
     /// Used only when `rope_type == Su`; ignored otherwise.
     #[serde(default)]
     pub long_factor: Option<Vec<f32>>,

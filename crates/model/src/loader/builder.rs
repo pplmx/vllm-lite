@@ -2,7 +2,7 @@
 //!
 //! Format detection is automatic: safetensors (single or sharded),
 //! GGUF (with `Q4_K_M` dequantization to FP16). The builder wires the
-//! tokenizer, KV blocks, model config, and architecture selection.
+//! tokenizer, `KV` blocks, model config, and architecture selection.
 #![allow(clippy::module_name_repetitions)]
 use candle_core::{Device, Result, Tensor};
 use parking_lot::Mutex;
@@ -21,9 +21,9 @@ pub struct ModelLoaderBuilder {
     device: Device,
     /// Checkpoint directory (required before `build`).
     model_dir: Option<String>,
-    /// KV-cache block count (default 1024 if unset).
+    /// `KV`-cache block count (default 1024 if unset).
     num_kv_blocks: Option<usize>,
-    /// Whether to enable FP8 KV-cache quantization (default false).
+    /// Whether to enable FP8 `KV`-cache quantization (default false).
     kv_quantization: Option<bool>,
     /// Allow loading stub architectures (Gemma3, Llama4, Phi4) that don't perform real inference.
     allow_stub: bool,
@@ -49,14 +49,14 @@ impl ModelLoaderBuilder {
         self
     }
 
-    /// Set the number of paged KV blocks to allocate at load time.
+    /// Set the number of paged `KV` blocks to allocate at load time.
     #[must_use]
     pub const fn with_kv_blocks(mut self, num_kv_blocks: usize) -> Self {
         self.num_kv_blocks = Some(num_kv_blocks);
         self
     }
 
-    /// Enable or disable FP8 KV-cache quantization for loaded models.
+    /// Enable or disable FP8 `KV`-cache quantization for loaded models.
     #[must_use]
     pub const fn with_kv_quantization(mut self, enabled: bool) -> Self {
         self.kv_quantization = Some(enabled);
@@ -214,14 +214,14 @@ impl ModelLoader {
     }
 
     /// Returns a clone of the loader-owned `PagedKvCache` for multi-node
-    /// KV block transfer wiring (Phase 41 OPS-32a second-half).
+    /// `KV` block transfer wiring (Phase 41 OPS-32a second-half).
     ///
     /// The cache is captured from `Architecture::create_model()` during
     /// `load()` and stored in `ModelLoaderInner::kv_cache`. The model
     /// backend and the `EngineBuilder` share the same
-    /// `Arc<Mutex<PagedKvCache>>` via `Arc::clone`, so both read/write
+    /// `Arc<Mutex<`PagedKvCache`>>` via `Arc::clone`, so both read/write
     /// the same underlying data. Returns `None` if `load()` has not
-    /// been called or the architecture has no paged KV cache (e.g. stubs).
+    /// been called or the architecture has no paged `KV` cache (e.g. stubs).
     #[cfg(feature = "multi-node")]
     #[must_use]
     pub fn paged_kv_cache_clone(&self) -> Option<Arc<Mutex<crate::paged_tensor::PagedKvCache>>> {

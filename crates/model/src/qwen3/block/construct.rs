@@ -14,7 +14,7 @@ use candle_core::{Result, Tensor};
 #[cfg(feature = "multi-node")]
 use vllm_dist::TensorParallelConfig;
 
-/// Default RoPE max position used when callers don't supply one (matches
+/// Default `RoPE` max position used when callers don't supply one (matches
 /// the workspace-wide default used by `RopeGqaAttention::new` /
 /// `new_with_weights`).
 const DEFAULT_MAX_POSITION: usize = 4096;
