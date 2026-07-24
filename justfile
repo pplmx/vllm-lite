@@ -28,6 +28,42 @@ nextest-fast:
 nextest-all:
     cargo nextest run --release --workspace --all-features --run-ignored all --no-fail-fast
 
+# Run the full GPU integration test suite with multi-GPU acceleration.
+# Auto-detects GPU count and distributes tests across all available GPUs:
+#   - Rust tests via nextest hash partitioning (CUDA_VISIBLE_DEVICES per partition)
+#   - Model loading tests in parallel (one model per GPU)
+#   - Tensor parallel tests scaling to the GPU count (2, 4, then 8-way)
+# Requires: release binary at ./target/release/vllm-server, models in /models/
+# Usage: just gpu-test [phase]   (phase = 1|2|3|4|5|all, default: all)
+gpu-test PHASE="all":
+    scripts/gpu_integration_test.sh "{{PHASE}}"
+
+# Run nextest tests distributed across all GPUs for maximum throughput.
+# Uses nextest --partition hash to split the workspace test suite across
+# N GPUs, each with CUDA_VISIBLE_DEVICES set to a distinct physical GPU.
+# Example: just nextest-gpu  (auto-detects GPU count)
+nextest-gpu:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    NUM_GPUS=$(nvidia-smi --query-gpu=count --format=csv,noheader 2>/dev/null | head -1 || echo "0")
+    if [ "$NUM_GPUS" -lt 2 ]; then
+        echo "Only $NUM_GPUS GPU(s) available; falling back to sequential nextest"
+        cargo nextest run --workspace --all-features --no-fail-fast
+        exit 0
+    fi
+    echo "Distributing nextest across $NUM_GPUS GPUs..."
+    pids=()
+    for i in $(seq 0 $((NUM_GPUS - 1))); do
+        CUDA_VISIBLE_DEVICES=$i cargo nextest run --workspace --all-features \
+            --partition "hash:$(($i + 1))/$NUM_GPUS" --no-fail-fast &
+        pids+=($!)
+    done
+    fail=0
+    for pid in "${pids[@]}"; do
+        wait "$pid" || fail=1
+    done
+    exit $fail
+
 # On-disk checkpoint integration tests (ignored by default in `just nextest`)
 nextest-checkpoint:
     cargo nextest run -p vllm-model --all-features --no-fail-fast -P checkpoint \

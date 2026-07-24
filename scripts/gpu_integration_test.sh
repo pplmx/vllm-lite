@@ -80,13 +80,43 @@ check_prereqs() {
 run_rust_tests() {
     print_header "Phase 1: Rust Tests (CUDA + Multi-node Features)"
 
-    # Tests that don't require GPU (scheduler, metrics, etc.)
-    info "Running workspace tests with all features..."
-    if cargo nextest run --workspace --all-features --no-fail-fast 2>&1 \
-        | tee "$RESULTS_DIR/phase1_rust.log"; then
-        pass "Rust workspace tests (CPU + CUDA path)"
+    # CUDA-aware parallel test distribution:
+    # When multiple GPUs are available, split the workspace test suite
+    # across them using nextest's hash partitioning. Each partition runs
+    # with CUDA_VISIBLE_DEVICES set so cuda_if_available(0) in the code
+    # maps to a distinct physical GPU. Non-CUDA tests run on CPU
+    # regardless, so this is safe for mixed CPU/GPU test suites.
+    if [ "$NUM_GPUS" -ge 2 ]; then
+        info "Distributing workspace tests across $NUM_GPUS GPUs (multi-GPU acceleration)..."
+        local pids=()
+        local partition_failed=0
+        for i in $(seq 0 $((NUM_GPUS - 1))); do
+            (
+                export CUDA_VISIBLE_DEVICES=$i
+                cargo nextest run --workspace --all-features \
+                    --partition "hash:$(($i + 1))/$NUM_GPUS" \
+                    --no-fail-fast 2>&1 | tee "$RESULTS_DIR/phase1_rust_gpu${i}.log"
+            ) &
+            pids+=($!)
+        done
+        for pid in "${pids[@]}"; do
+            if ! wait "$pid"; then
+                partition_failed=1
+            fi
+        done
+        if [ "$partition_failed" -eq 0 ]; then
+            pass "Rust workspace tests across $NUM_GPUS GPUs (parallel)"
+        else
+            fail "Rust workspace tests across $NUM_GPUS GPUs (parallel)"
+        fi
     else
-        fail "Rust workspace tests (CPU + CUDA path)"
+        info "Running workspace tests (single GPU, no distribution)..."
+        if cargo nextest run --workspace --all-features --no-fail-fast 2>&1 \
+            | tee "$RESULTS_DIR/phase1_rust.log"; then
+            pass "Rust workspace tests (CPU + CUDA path)"
+        else
+            fail "Rust workspace tests (CPU + CUDA path)"
+        fi
     fi
 
     # CUDA Graph integration tests
@@ -214,16 +244,26 @@ test_model() {
 }
 
 run_single_gpu_tests() {
-    print_header "Phase 2: Single-GPU Model Tests ($NUM_GPUS GPUs available)"
+    print_header "Phase 2: Single-GPU Model Tests ($NUM_GPUS GPUs available, parallel)"
 
-    # Test small models on GPU 0
-    test_model "/models/Qwen3-0.6B" "Qwen3-0.6B" 18000 0
-    test_model "/models/Qwen2.5-0.5B-Instruct" "Qwen2.5-0.5B" 18001 1
-    test_model "/models/Qwen3.5-0.8B" "Qwen3.5-0.8B" 18002 2
-
-    # Test larger model if we have enough memory
+    # Run all model tests in parallel — each on its own GPU.
+    # This reduces wall-clock time from sum(sequential) to max(parallel).
     if [ "$NUM_GPUS" -ge 4 ]; then
-        test_model "/models/DeepSeek-R1-0528-Qwen3-8B" "DeepSeek-R1-Qwen3-8B" 18003 3
+        info "Launching 4 model tests in parallel (GPUs 0-3)..."
+        test_model "/models/Qwen3-0.6B" "Qwen3-0.6B" 18000 0 &
+        test_model "/models/Qwen2.5-0.5B-Instruct" "Qwen2.5-0.5B" 18001 1 &
+        test_model "/models/Qwen3.5-0.8B" "Qwen3.5-0.8B" 18002 2 &
+        test_model "/models/DeepSeek-R1-0528-Qwen3-8B" "DeepSeek-R1-Qwen3-8B" 18003 3 &
+        wait
+    elif [ "$NUM_GPUS" -ge 3 ]; then
+        info "Launching 3 model tests in parallel (GPUs 0-2)..."
+        test_model "/models/Qwen3-0.6B" "Qwen3-0.6B" 18000 0 &
+        test_model "/models/Qwen2.5-0.5B-Instruct" "Qwen2.5-0.5B" 18001 1 &
+        test_model "/models/Qwen3.5-0.8B" "Qwen3.5-0.8B" 18002 2 &
+        wait
+    else
+        info "Launching model tests sequentially (single GPU available)..."
+        test_model "/models/Qwen3-0.6B" "Qwen3-0.6B" 18000 0
     fi
 }
 
@@ -318,6 +358,48 @@ run_multi_gpu_tests() {
             fail "4-way tensor parallel server failed to start"
         fi
     fi
+
+    # Test with 8 GPUs (full multi-GPU tensor parallel) if available
+    if [ "$NUM_GPUS" -ge 8 ]; then
+        info "Testing 8-way tensor parallel with Qwen3-0.6B..."
+        CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 "$RELEASE_BIN" \
+            --model "/models/Qwen3-0.6B" \
+            --port 18012 \
+            --host 127.0.0.1 \
+            --kv-blocks 16384 \
+            --log-level info \
+            --tensor-parallel-size 8 \
+            > "$RESULTS_DIR/tp8.log" 2>&1 &
+
+        local PID8=$!
+        local READY8=0
+        for i in $(seq 1 120); do
+            if curl -s "http://127.0.0.1:18012/health" > /dev/null 2>&1; then
+                READY8=1; break
+            fi
+            if ! kill -0 $PID8 2>/dev/null; then
+                fail "TP=8 server crashed"; break
+            fi
+            sleep 0.5
+        done
+
+        if [ $READY8 -eq 1 ]; then
+            pass "8-way tensor parallel server started"
+            local RESP=$(curl -s -X POST \
+                "http://127.0.0.1:18012/v1/chat/completions" \
+                -H "Content-Type: application/json" \
+                -d '{"model":"Qwen3-0.6B","messages":[{"role":"user","content":"Explain quantum entanglement"}],"max_tokens":20}')
+            if echo "$RESP" | grep -q '"content"'; then
+                pass "8-way tensor parallel inference successful"
+            else
+                fail "8-way tensor parallel inference failed"
+            fi
+            curl -s "http://127.0.0.1:18012/shutdown" > /dev/null 2>&1 || true
+            wait $PID8 2>/dev/null || true
+        else
+            fail "8-way tensor parallel server failed to start"
+        fi
+    fi
 }
 
 # ── Phase 4: CUDA Graph verification ──
@@ -370,8 +452,9 @@ run_cuda_graph_tests() {
 run_distributed_kv_tests() {
     print_header "Phase 5: Distributed KV Cache Tests"
 
+    # multi-node feature is defined on vllm-core/vllm-model, not vllm-dist
     info "Running distributed KV peer sync tests..."
-    if cargo nextest run -p vllm-dist --features multi-node \
+    if cargo nextest run --workspace --features "vllm-core/multi-node,vllm-model/multi-node" \
         --test distributed_kv_peer_sync \
         --no-fail-fast 2>&1 | tee "$RESULTS_DIR/phase5_dist.log"; then
         pass "Distributed KV peer sync tests"
@@ -380,7 +463,7 @@ run_distributed_kv_tests() {
     fi
 
     info "Running KV block transfer tests..."
-    if cargo nextest run -p vllm-dist --features multi-node \
+    if cargo nextest run --workspace --features "vllm-core/multi-node,vllm-model/multi-node" \
         --test kv_block_transfer \
         --no-fail-fast 2>&1 | tee "$RESULTS_DIR/phase5_kv.log"; then
         pass "KV block transfer tests"
