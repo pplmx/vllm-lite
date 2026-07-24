@@ -60,11 +60,13 @@ pub struct LocalSumAllReduce {
     mesh: Arc<DeviceMesh>,
 }
 
-/// **Deprecated**: misleadingly suggests an NCCL backend that does not
-/// exist in v0.x. This alias points at [`LocalSumAllReduce`], which is
-/// the honest name for the current single-process reducer. New code
-/// should use [`LocalSumAllReduce`] directly; existing callers will
-/// keep compiling but will see a `deprecated` lint.
+/// **Deprecated**: alias for [`LocalSumAllReduce`].
+///
+/// Misleadingly suggests an NCCL backend that does not exist in v0.x.
+/// This alias points at [`LocalSumAllReduce`], which is the honest name
+/// for the current single-process reducer. New code should use
+/// [`LocalSumAllReduce`] directly; existing callers will keep compiling
+/// but will see a `deprecated` lint.
 #[deprecated(
     since = "0.1.0",
     note = "NcclAllReduce was misleadingly named — it never called NCCL. \

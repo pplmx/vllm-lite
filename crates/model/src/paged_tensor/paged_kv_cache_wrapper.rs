@@ -330,7 +330,10 @@ mod tests {
     #[test]
     fn verify_chain_hash_returns_true_for_written_block() {
         let n = 2 * BLOCK_SIZE * 4; // num_heads=2, BLOCK_SIZE=16, head_dim=4
-        let k: Vec<f32> = (0..n).map(|i| i as f32 * 0.25 + 0.5).collect();
+        // mul_add: silences clippy::suboptimal_flops; bit-identical for
+        // these values (0.25 and 0.5 are exact powers of 2). See
+        // rope.rs:417-419 for the same pattern in production code.
+        let k: Vec<f32> = (0..n).map(|i| (i as f32).mul_add(0.25, 0.5)).collect();
         let v: Vec<f32> = (0..n).map(|i| i as f32 * 1.5).collect();
 
         let mut cache_mut = Arc::try_unwrap(small_cache()).expect("unique Arc owner");
@@ -346,7 +349,10 @@ mod tests {
     #[test]
     fn verify_chain_hash_returns_false_for_mismatch() {
         let n = 2 * BLOCK_SIZE * 4;
-        let k: Vec<f32> = (0..n).map(|i| i as f32 * 0.25 + 0.5).collect();
+        // mul_add: silences clippy::suboptimal_flops; bit-identical for
+        // these values (0.25 and 0.5 are exact powers of 2). See
+        // rope.rs:417-419 for the same pattern in production code.
+        let k: Vec<f32> = (0..n).map(|i| (i as f32).mul_add(0.25, 0.5)).collect();
         let v: Vec<f32> = (0..n).map(|i| i as f32 * 1.5).collect();
 
         let mut cache_mut = Arc::try_unwrap(small_cache()).expect("unique Arc owner");

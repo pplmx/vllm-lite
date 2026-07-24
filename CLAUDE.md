@@ -23,3 +23,17 @@ vLLM-lite is a lightweight LLM inference engine written in Rust, implementing ke
 - `parking_lot::Mutex` for all scheduler/engine paths (no `std::sync::Mutex` poison checks)
 - `std::sync::LazyLock` for lazy initialization (Rust 1.80+)
 - All public errors are typed `thiserror::Error` enums; no `Box<dyn Error>` in public APIs
+
+## Agent skills
+
+### Issue tracker
+
+Issues tracked as GitHub issues in `github.com/pplmx/vllm-lite` via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical triage roles mapped to the default label strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context — one `CONTEXT.md` (created lazily by `/domain-modeling`) plus `docs/adr/` at the repo root. See `docs/agents/domain.md`.
