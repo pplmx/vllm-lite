@@ -130,7 +130,7 @@ async fn otlp_traces_arrive_at_stub_collector() {
 
     let env_filter = EnvFilter::new("info");
     let _guard =
-        vllm_core::tracing_init::init_tracing_with_otlp(env_filter, cfg).expect("tracing init");
+        vllm_core::tracing_init::init_tracing_with_otlp(env_filter, &cfg).expect("tracing init");
 
     // Emit a span — the tracing-opentelemetry layer bridges it to an OTLP span.
     // The span is recorded when dropped after creation.

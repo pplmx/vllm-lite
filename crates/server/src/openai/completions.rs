@@ -1286,7 +1286,7 @@ async fn run_best_of(
         &state.tokenizer,
         &state.tokenizer.decode(&token_ids(best_tokens)),
     );
-    let text = apply_completion_meta(text, &prompt, req.echo, req.suffix.as_deref());
+    let text = apply_completion_meta(&text, &prompt, req.echo, req.suffix.as_deref());
 
     // Render the chosen completion's finish_reason per OpenAI's
     // contract (same string mapping as the non-streaming single-shot
@@ -1339,7 +1339,7 @@ async fn run_best_of(
 /// and `suffix = None` produce the pre-P35 behaviour (no prefix /
 /// no postfix), so legacy clients are unaffected.
 fn apply_completion_meta(
-    completion: String,
+    completion: &str,
     prompt: &str,
     echo: Option<bool>,
     suffix: Option<&str>,
@@ -1349,7 +1349,7 @@ fn apply_completion_meta(
     if echo == Some(true) {
         out.push_str(prompt);
     }
-    out.push_str(&completion);
+    out.push_str(completion);
     if let Some(s) = suffix {
         out.push_str(s);
     }
@@ -1807,7 +1807,7 @@ pub async fn completions(
         &state.tokenizer,
         &state.tokenizer.decode(&token_ids(&tokens)),
     );
-    let text = apply_completion_meta(text, &prompt, req.echo, req.suffix.as_deref());
+    let text = apply_completion_meta(&text, &prompt, req.echo, req.suffix.as_deref());
     let choice = CompletionChoice {
         text,
         index: 0,

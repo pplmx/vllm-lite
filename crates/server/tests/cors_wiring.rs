@@ -39,7 +39,7 @@ async fn ping() -> &'static str {
     "pong"
 }
 
-fn build_app(config: CorsConfig) -> Router {
+fn build_app(config: &CorsConfig) -> Router {
     with_cors(Router::new().route("/ping", get(ping)), config)
 }
 
@@ -56,7 +56,7 @@ fn preflight_request(origin: &str) -> HttpRequest<Body> {
 
 #[tokio::test]
 async fn closed_default_emits_no_allow_origin() {
-    let app = build_app(CorsConfig::default());
+    let app = build_app(&CorsConfig::default());
     let req = preflight_request("https://app.example.com");
     let resp = app.oneshot(req).await.expect("response");
 
@@ -79,7 +79,7 @@ async fn explicit_allowlist_emits_matching_origin() {
     config.allow_origins = vec!["https://app.example.com".to_string()];
     config.allow_methods = vec!["GET".to_string(), "POST".to_string()];
     config.allow_headers = vec!["content-type".to_string()];
-    let app = build_app(config);
+    let app = build_app(&config);
 
     let req = preflight_request("https://app.example.com");
     let resp = app.oneshot(req).await.expect("response");
@@ -110,7 +110,7 @@ async fn explicit_allowlist_emits_matching_origin() {
 async fn origin_not_in_allowlist_is_dropped() {
     let mut config = CorsConfig::default();
     config.allow_origins = vec!["https://allowed.example.com".to_string()];
-    let app = build_app(config);
+    let app = build_app(&config);
 
     let req = preflight_request("https://attacker.example.com");
     let resp = app.oneshot(req).await.expect("response");

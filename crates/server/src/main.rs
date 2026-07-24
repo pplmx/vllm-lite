@@ -66,7 +66,7 @@ async fn main() -> Result<()> {
             .unwrap_or_else(|_| EnvFilter::new(&app_config.server.log_level));
         match vllm_core::tracing_init::init_tracing_with_otlp(
             env_filter,
-            app_config.observability.otlp.clone(),
+            &app_config.observability.otlp,
         ) {
             Ok(guard) => Some(guard),
             Err(e) => {
@@ -377,7 +377,7 @@ async fn main() -> Result<()> {
     // the YAML config. The default keeps server-to-server SDKs
     // unaffected while forcing browser-direct callers to list
     // exact origins (no `*` + credentials anti-pattern).
-    app = vllm_server::security::cors::with_cors(app, app_config.cors.into_runtime());
+    app = vllm_server::security::cors::with_cors(app, &app_config.cors.into_runtime());
 
     let addr = format!("{}:{}", app_config.server.host, app_config.server.port);
     let listener = tokio::net::TcpListener::bind(&addr)

@@ -78,7 +78,7 @@ pub struct CorsConfig {
 /// request would have succeeded. This is the safe default — opt
 /// in via `CorsConfig::allow_origins` only when you actually need
 /// browser-direct access.
-pub fn with_cors(router: Router, config: CorsConfig) -> Router {
+pub fn with_cors(router: Router, config: &CorsConfig) -> Router {
     use axum::http::header::HeaderName;
     use std::str::FromStr;
 
@@ -185,6 +185,6 @@ mod tests {
         // Building the layer must succeed even with no origins
         // — the closed state is a valid configuration, not an
         // error condition.
-        let _ = with_cors(Router::new(), CorsConfig::default());
+        let _ = with_cors(Router::new(), &CorsConfig::default());
     }
 }

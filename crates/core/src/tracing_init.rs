@@ -26,7 +26,7 @@ use crate::metrics::exporter::otlp::{OtlpConfig, OtlpError};
 /// initialised (e.g., the tracing subscriber has already been initialised).
 pub fn init_tracing_with_otlp(
     env_filter: EnvFilter,
-    config: OtlpConfig,
+    config: &OtlpConfig,
 ) -> Result<OtlpGuard, OtlpError> {
     config.validate()?;
 
