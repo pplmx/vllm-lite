@@ -61,7 +61,7 @@ async-trait = "0.1"
 crossbeam = "0.8"
 
 # Git hooks (dev tool — auto-installs .husky/ hooks on first build)
-husky-rs = "0.3"
+husky-rs = { git = "https://github.com/pplmx/husky-rs", branch = "prek" }
 
 # Profiling (dev-only; v27.0 H-7)
 # Note: pprof 0.15's `criterion` feature pins criterion 0.5, which conflicts
