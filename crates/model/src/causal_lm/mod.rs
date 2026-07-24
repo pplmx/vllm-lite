@@ -62,7 +62,11 @@ pub(crate) fn greedy_sample_token(logits: &Tensor, is_prefill: bool) -> Result<T
     // `vllm_traits::argmax_logits` helper rather than calling
     // `tensor.argmax(...)` here — keeps the greedy core logic in one
     // place across the workspace.
-    let logits_vec = map_candle(logits.to_vec1::<f32>())?;
+    // flatten_all() guarantees rank-1 before to_vec1(); see logits_to_vector
+    // for the full rationale (Candle squeeze(dim) is a no-op on non-size-1
+    // dims, so chained squeezes may leave a residual rank-2 [1, vocab] tensor).
+    let logits_flat = map_candle(logits.flatten_all())?;
+    let logits_vec = map_candle(logits_flat.to_vec1::<f32>())?;
     Ok(argmax_logits(&logits_vec))
 }
 
@@ -78,7 +82,15 @@ pub(crate) fn logits_to_vector(logits: &Tensor, is_prefill: bool) -> Result<Vec<
             .map_err(ModelError::from)?
     };
 
-    map_candle(logits.to_vec1())
+    // Use flatten_all() before to_vec1() to guarantee rank-1 regardless of
+    // how many squeeze calls above actually reduced the rank. Candle's
+    // squeeze(dim) on a dimension with size > 1 is a no-op (returns the same
+    // tensor), so chained squeezes may leave a residual rank-2 tensor like
+    // [1, vocab_size] that to_vec1() rejects with "unexpected rank".
+    // Since each call processes exactly one sequence, elem_count == vocab_size.
+    map_candle(logits.flatten_all())?
+        .to_vec1()
+        .map_err(ModelError::from)
 }
 
 pub(crate) fn forward_batch<F>(
