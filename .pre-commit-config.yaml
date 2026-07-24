@@ -1,4 +1,10 @@
 fail_fast: false
+default_install_hook_types:
+    - pre-commit
+    - commit-msg
+    - pre-push
+default_stages:
+    - pre-commit
 repos:
     # Built-in file hygiene checks. Cheap; safe to run unconditionally.
     - repo: builtin
