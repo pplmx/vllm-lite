@@ -7,7 +7,7 @@
 //!     `Qwen3Model::new_with_tp`
 //!   - Cross-GPU KV cache consistency checks
 //!
-//! These tests are `#[ignore]` by default — they require GPU hardware.
+//! These tests are `#[ignore = "requires CUDA GPU hardware"]` by default — they require GPU hardware.
 //! Run on a machine with N GPUs:
 //!   `cargo nextest run` --run-ignored all -p vllm-model \
 //!     --test `cuda_multi_gpu` --features "cuda,multi-node"
@@ -56,7 +56,7 @@ fn cuda_device_for_partition() -> Device {
 // ─────────────────────────────────────────────────────────────────
 
 #[test]
-#[ignore]
+#[ignore = "requires CUDA GPU hardware"]
 fn cuda_qwen3_prefill_forward() {
     // Test: model loads on CUDA and produces output during prefill.
     let device = cuda_device_for_partition();
@@ -93,7 +93,7 @@ fn cuda_qwen3_prefill_forward() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "requires CUDA GPU hardware"]
 fn cuda_qwen3_decode_forward() {
     // Test: model produces output during decode (single token, no prefill).
     let device = cuda_device_for_partition();
@@ -122,7 +122,7 @@ fn cuda_qwen3_decode_forward() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "requires CUDA GPU hardware"]
 fn cuda_qwen3_multi_sequence_prefill() {
     // Test: batched prefill with 4 sequences on CUDA.
     let device = cuda_device_for_partition();
@@ -155,7 +155,7 @@ fn cuda_qwen3_multi_sequence_prefill() {
 // ─────────────────────────────────────────────────────────────────
 
 #[test]
-#[ignore]
+#[ignore = "requires CUDA GPU hardware"]
 fn cuda_visible_devices_respected() {
     // When distributed across GPUs via nextest partitioning,
     // CUDA_VISIBLE_DEVICES should be set to a single device.
@@ -191,7 +191,7 @@ mod tensor_parallel {
     use vllm_dist::TensorParallelConfig;
 
     #[test]
-    #[ignore]
+    #[ignore = "requires CUDA GPU hardware"]
     fn cuda_tensor_parallel_2gpu_constructs() {
         // Verify that new_with_tp succeeds with a 2-GPU config.
         let config = small_qwen3_config();
@@ -213,7 +213,7 @@ mod tensor_parallel {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "requires CUDA GPU hardware"]
     fn cuda_tensor_parallel_4gpu_constructs() {
         let config = small_qwen3_config();
         let tp_config = TensorParallelConfig::new(4, 0, vec![0, 1, 2, 3]);
@@ -226,7 +226,7 @@ mod tensor_parallel {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "requires CUDA GPU hardware"]
     fn cuda_tensor_parallel_8gpu_constructs() {
         // Full 8-GPU tensor parallel construction.
         let config = small_qwen3_config();
@@ -241,7 +241,7 @@ mod tensor_parallel {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "requires CUDA GPU hardware"]
     fn cuda_tensor_parallel_invalid_config_rejected() {
         // world_size=0 should be rejected.
         let tp_config = TensorParallelConfig::new(0, 0, vec![]);
@@ -261,7 +261,7 @@ mod tensor_parallel {
 // ─────────────────────────────────────────────────────────────────
 
 #[test]
-#[ignore]
+#[ignore = "requires CUDA GPU hardware"]
 fn cuda_forward_logits_match_prefill_and_decode() {
     // Verify that logits from prefill and decode modes are consistent:
     // the output tensor should have the correct shape (vocab_size).
