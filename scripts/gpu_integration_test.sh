@@ -101,7 +101,8 @@ run_rust_tests() {
 
     # Distributed KV cache tests
     info "Running distributed KV cache tests..."
-    if cargo nextest run -p vllm-dist --features multi-node \
+    # vllm-dist doesn't have 'multi-node' feature; it's enabled on vllm-core/vllm-model
+    if cargo nextest run --workspace --features "vllm-core/multi-node,vllm-model/multi-node" \
         --no-fail-fast 2>&1 | tee "$RESULTS_DIR/phase1_dist.log"; then
         pass "Distributed KV cache tests"
     else
