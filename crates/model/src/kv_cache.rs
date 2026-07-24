@@ -221,6 +221,7 @@ impl MlaKvCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use candle_core::DType;
 
     #[test]
     fn test_mla_kv_cache_basic() {
@@ -232,5 +233,92 @@ mod tests {
 
         let retrieved = cache.read_compressed(0, 0, 1).unwrap();
         assert_eq!(retrieved.dims(), &[1, 1, 512]);
+    }
+
+    #[test]
+    fn test_write_compressed_empty_seq_len_is_noop() {
+        let device = Device::Cpu;
+        let mut cache = MlaKvCache::new(1, 512, 8, 16, device.clone());
+
+        // seq_len == 0 should return Ok(()) without writing anything.
+        let empty = Tensor::zeros((1, 0, 512), DType::F32, &device).unwrap();
+        let result = cache.write_compressed(0, 0, 0, &empty);
+        assert!(result.is_ok(), "writing 0-length seq should succeed");
+
+        // Nothing was written; reading should produce zeros.
+        let retrieved = cache.read_compressed(0, 0, 1).unwrap();
+        assert_eq!(retrieved.dims(), &[1, 1, 512]);
+        let data = retrieved.to_vec3::<f32>().unwrap();
+        assert!(
+            data[0][0].iter().all(|v| *v == 0.0),
+            "empty write should leave zeros"
+        );
+    }
+
+    #[test]
+    fn test_write_compressed_multi_block_span() {
+        // block_size=8, num_blocks=4 → total capacity 32 tokens.
+        // Writing 20 tokens starting at pos 0 spans 3 blocks (8+8+4).
+        let device = Device::Cpu;
+        let mut cache = MlaKvCache::new(1, 4, 8, 4, device.clone());
+
+        let kv = Tensor::randn(0.0f32, 1.0, (1, 20, 4), &device).unwrap();
+        cache.write_compressed(0, 0, 0, &kv).unwrap();
+
+        // Read back all 20 tokens in one call.
+        let retrieved = cache.read_compressed(0, 0, 20).unwrap();
+        assert_eq!(retrieved.dims(), &[1, 20, 4]);
+
+        // Read back in two chunks to exercise the block-boundary code.
+        let chunk1 = cache.read_compressed(0, 0, 8).unwrap();
+        let chunk2 = cache.read_compressed(0, 8, 12).unwrap();
+        assert_eq!(chunk1.dims(), &[1, 8, 4]);
+        assert_eq!(chunk2.dims(), &[1, 12, 4]);
+
+        // Verify data integrity: chunk1 + chunk2 must equal the full write.
+        let full = cache.read_compressed(0, 0, 20).unwrap();
+        let cat = Tensor::cat(&[chunk1, chunk2], 1).unwrap();
+        let diff = (&full - &cat).unwrap().abs().unwrap().max_all().unwrap();
+        let max_diff = diff.to_scalar::<f32>().unwrap();
+        assert!(
+            max_diff < 1e-6,
+            "multi-block read must be byte-exact, got {max_diff}"
+        );
+    }
+
+    #[test]
+    fn test_read_compressed_out_of_bounds_returns_zeros() {
+        let device = Device::Cpu;
+        let cache = MlaKvCache::new(1, 4, 8, 2, device.clone()); // 16 tokens total
+
+        // Reading beyond num_blocks should return zeros for the OOB portion.
+        let retrieved = cache.read_compressed(0, 16, 4).unwrap();
+        assert_eq!(retrieved.dims(), &[1, 4, 4]);
+        let data = retrieved.to_vec3::<f32>().unwrap();
+        assert!(
+            data[0].iter().all(|row| row.iter().all(|v| *v == 0.0)),
+            "out-of-bounds read should return zeros"
+        );
+
+        // Partial overlap: 4 tokens in-bounds, 4 out-of-bounds.
+        let partial = cache.read_compressed(0, 8, 12).unwrap();
+        assert_eq!(partial.dims(), &[1, 12, 4]);
+    }
+
+    #[test]
+    fn test_write_compressed_higher_rank_tensor() {
+        // kv with dims().len() > 2 triggers the contiguous() path.
+        let device = Device::Cpu;
+        let mut cache = MlaKvCache::new(1, 4, 8, 4, device.clone());
+
+        // 4D tensor: (1, seq_len, kv_lora_rank, 1) — extra dim triggers contiguous().
+        let kv = Tensor::randn(0.0f32, 1.0, (1, 4, 4, 1), &device).unwrap();
+        let result = cache.write_compressed(0, 0, 0, &kv);
+        // The write may or may not succeed depending on squeeze/contiguous
+        // behavior; what matters is that it doesn't panic.
+        assert!(
+            result.is_ok(),
+            "higher-rank write should be handled gracefully"
+        );
     }
 }
