@@ -177,7 +177,7 @@ fn cuda_visible_devices_respected() {
                 );
             }
         }
-        _ => panic!("expected CUDA device, got {:?}", device),
+        _ => panic!("expected CUDA device, got {device:?}"),
     }
 }
 
