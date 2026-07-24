@@ -760,8 +760,8 @@ pub struct CompletionRequest {
     /// `presence_penalty` / `logit_bias` rationale).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub logprobs: Option<u32>,
-    /// `OpenAI` `echo` flag (P32 v0.x wire-type follow-up — declaration
-    /// + validation). Per `OpenAI` legacy-completions spec: when `true`,
+    /// `OpenAI` `echo` flag (P32 v0.x wire-type follow-up + validation).
+    /// Per `OpenAI` legacy-completions spec: when `true`,
     /// the response echoes the prompt back as a prefix to the
     /// generated continuation in the `text` field (instead of just
     /// returning the continuation). Default `false`.

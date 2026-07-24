@@ -1,12 +1,12 @@
 //! Context-length validation wiring test.
 //!
-//! Production-readiness §4: tokenization after the fact, the chat
-//! + completions handlers compare `prompt_tokens + max_tokens`
-//! against the model's `max_position_embeddings` and return
-//! `400 context_length_exceeded` (OpenAI-compatible error code)
-//! when the request would exceed the limit. Without this gate a
-//! 10× oversize prompt can exhaust KV blocks before any
-//! application-level validation runs.
+//! Production-readiness §4: tokenization after the fact, the chat and
+//! completions handlers compare `prompt_tokens + max_tokens` against
+//! the model's `max_position_embeddings` and return `400
+//! context_length_exceeded` (OpenAI-compatible error code) when the
+//! request would exceed the limit. Without this gate a 10× oversize
+//! prompt can exhaust KV blocks before any application-level
+//! validation runs.
 //!
 //! Three invariants are checked:
 //!

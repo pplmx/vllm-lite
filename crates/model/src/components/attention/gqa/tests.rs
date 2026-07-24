@@ -721,11 +721,11 @@ fn paged_attention_fn_attn_factor_one_is_noop() -> Result<()> {
     let (q, k, v) = build_random_qkv()?;
 
     attn.attn_factor = None;
-    let out_none = attn.paged_attention_fn(&q, &k, &v)?;
+    let out_no_factor = attn.paged_attention_fn(&q, &k, &v)?;
     attn.attn_factor = Some(1.0);
-    let out_one = attn.paged_attention_fn(&q, &k, &v)?;
+    let out_unit_factor = attn.paged_attention_fn(&q, &k, &v)?;
 
-    let diff = (&out_none - &out_one)?
+    let diff = (&out_no_factor - &out_unit_factor)?
         .abs()?
         .max_all()?
         .to_scalar::<f32>()?;
@@ -763,11 +763,11 @@ fn tiled_attention_fn_attn_factor_one_is_noop() -> Result<()> {
     let (q, k, v) = build_random_qkv()?;
 
     attn.attn_factor = None;
-    let out_none = attn.tiled_attention_fn(&q, &k, &v)?;
+    let out_no_factor = attn.tiled_attention_fn(&q, &k, &v)?;
     attn.attn_factor = Some(1.0);
-    let out_one = attn.tiled_attention_fn(&q, &k, &v)?;
+    let out_unit_factor = attn.tiled_attention_fn(&q, &k, &v)?;
 
-    let diff = (&out_none - &out_one)?
+    let diff = (&out_no_factor - &out_unit_factor)?
         .abs()?
         .max_all()?
         .to_scalar::<f32>()?;
@@ -805,11 +805,11 @@ fn flash_attention_fn_attn_factor_one_is_noop() -> Result<()> {
     let (q, k, v) = build_random_qkv()?;
 
     attn.attn_factor = None;
-    let out_none = attn.flash_attention_fn(&q, &k, &v)?;
+    let out_no_factor = attn.flash_attention_fn(&q, &k, &v)?;
     attn.attn_factor = Some(1.0);
-    let out_one = attn.flash_attention_fn(&q, &k, &v)?;
+    let out_unit_factor = attn.flash_attention_fn(&q, &k, &v)?;
 
-    let diff = (&out_none - &out_one)?
+    let diff = (&out_no_factor - &out_unit_factor)?
         .abs()?
         .max_all()?
         .to_scalar::<f32>()?;
