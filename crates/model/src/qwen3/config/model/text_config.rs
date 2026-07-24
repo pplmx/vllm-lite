@@ -55,7 +55,7 @@ impl TextConfig {
         self.max_position_embeddings.unwrap_or(8192)
     }
 
-    /// RMSNorm epsilon; defaults to 1e-6 when unset.
+    /// `RMSNorm` epsilon; defaults to 1e-6 when unset.
     #[must_use]
     pub fn rms_norm_eps(&self) -> f32 {
         self.rms_norm_eps.unwrap_or(1e-6)

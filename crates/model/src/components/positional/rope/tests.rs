@@ -593,7 +593,7 @@ fn test_su_with_identity_factors_matches_default() -> Result<()> {
         long_factor: Some(vec![1.0; 32]),
     };
     let out_default = rope_default.apply_with_scaling(&q, &positions)?;
-    let out_su = apply_rope_with_scaling(&q, &positions, 10000.0, ctx)?;
+    let out_su = apply_rope_with_scaling(&q, &positions, 10000.0, &ctx)?;
 
     let diff = (&out_default - &out_su)?
         .abs()?
@@ -625,7 +625,7 @@ fn test_su_short_factor_modifies_high_freq_dims() -> Result<()> {
         long_factor: Some(vec![1.0; 32]),
     };
     let out_default = rope_default.apply_with_scaling(&q, &positions)?;
-    let out_su = apply_rope_with_scaling(&q, &positions, 10000.0, ctx)?;
+    let out_su = apply_rope_with_scaling(&q, &positions, 10000.0, &ctx)?;
 
     let diff = (&out_default - &out_su)?
         .abs()?
@@ -657,7 +657,7 @@ fn test_su_long_factor_modifies_low_freq_dims() -> Result<()> {
         long_factor: Some(long_factor),
     };
     let out_default = rope_default.apply_with_scaling(&q, &positions)?;
-    let out_su = apply_rope_with_scaling(&q, &positions, 10000.0, ctx)?;
+    let out_su = apply_rope_with_scaling(&q, &positions, 10000.0, &ctx)?;
 
     let diff = (&out_default - &out_su)?
         .abs()?
@@ -710,7 +710,7 @@ fn test_su_missing_orig_max_falls_back_to_default() -> Result<()> {
     };
     let rope_default = RoPE::new(64, 4096, 10000.0, &device);
     let out_default = rope_default.apply_with_scaling(&q, &positions)?;
-    let out_su = apply_rope_with_scaling(&q, &positions, 10000.0, ctx)?;
+    let out_su = apply_rope_with_scaling(&q, &positions, 10000.0, &ctx)?;
     let diff = (&out_default - &out_su)?
         .abs()?
         .max_all()?

@@ -450,7 +450,7 @@ fn build_rope(
                 max_position,
                 theta,
                 device,
-                RopeScalingContext::from(r),
+                &RopeScalingContext::from(r),
             )
         },
     )

@@ -99,7 +99,7 @@ impl RoPE {
         max_position: usize,
         theta: f32,
         device: &candle_core::Device,
-        scaling: RopeScalingContext,
+        scaling: &RopeScalingContext,
     ) -> Self {
         Self {
             theta,
@@ -153,7 +153,7 @@ impl RoPE {
     ///
     /// Returns `Err` if the operation fails.
     pub fn apply(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
-        apply_rope_with_scaling(x, positions, self.theta, self.scaling_ctx())
+        apply_rope_with_scaling(x, positions, self.theta, &self.scaling_ctx())
     }
 
     /// Long-context-aware variant of [`RoPE::apply`].
@@ -169,7 +169,7 @@ impl RoPE {
     ///
     /// Returns `Err` if the candle operation fails.
     pub fn apply_with_scaling(&self, x: &Tensor, positions: &[i64]) -> Result<Tensor> {
-        apply_rope_with_scaling(x, positions, self.theta, self.scaling_ctx())
+        apply_rope_with_scaling(x, positions, self.theta, &self.scaling_ctx())
     }
 
     /// Bundle the scaling-related fields for passing to the free function.
@@ -201,8 +201,8 @@ impl RoPE {
     /// Returns `Err` if any tensor operation fails (shape mismatch, out-of-memory, dtype incompatibility, or kernel error).
     pub fn forward(&self, q: &Tensor, k: &Tensor, position: i64) -> Result<(Tensor, Tensor)> {
         let positions: Vec<i64> = (0..q.dim(1)? as i64).map(|i| position + i).collect();
-        let q_out = apply_rope_with_scaling(q, &positions, self.theta, self.scaling_ctx())?;
-        let k_out = apply_rope_with_scaling(k, &positions, self.theta, self.scaling_ctx())?;
+        let q_out = apply_rope_with_scaling(q, &positions, self.theta, &self.scaling_ctx())?;
+        let k_out = apply_rope_with_scaling(k, &positions, self.theta, &self.scaling_ctx())?;
         Ok((q_out, k_out))
     }
 
@@ -217,8 +217,8 @@ impl RoPE {
         position: i64,
     ) -> Result<(Tensor, Tensor)> {
         let positions: Vec<i64> = (0..q.dim(1)? as i64).map(|i| position + i).collect();
-        let q_out = apply_rope_with_scaling(q, &positions, self.theta, self.scaling_ctx())?;
-        let k_out = apply_rope_with_scaling(k, &positions, self.theta, self.scaling_ctx())?;
+        let q_out = apply_rope_with_scaling(q, &positions, self.theta, &self.scaling_ctx())?;
+        let k_out = apply_rope_with_scaling(k, &positions, self.theta, &self.scaling_ctx())?;
         Ok((q_out, k_out))
     }
 
@@ -307,7 +307,7 @@ pub fn apply_rope_with_scaling(
     query: &Tensor,
     positions: &[i64],
     theta: f32,
-    scaling: RopeScalingContext,
+    scaling: &RopeScalingContext,
 ) -> Result<Tensor> {
     let inv_freq = match scaling.rope_type {
         RopeType::Default | RopeType::Other => compute_inv_freq_default(query, theta),
@@ -323,7 +323,7 @@ pub fn apply_rope_with_scaling(
                 cur_seq_len,
             )
         }
-        RopeType::Su => compute_inv_freq_su(query, theta, &scaling),
+        RopeType::Su => compute_inv_freq_su(query, theta, scaling),
     };
     apply_rope_with_inv_freq(query, positions, &inv_freq)
 }
@@ -486,7 +486,7 @@ pub(super) fn derive_seq_len(positions: &[i64]) -> usize {
         .iter()
         .copied()
         .max()
-        .map_or(0, |m| (m + 1) as usize)
+        .map_or(0, |m| usize::try_from(m + 1).unwrap_or(0))
 }
 
 fn compute_inv_freq_for_head_dim(head_dim: usize, theta: f32) -> Vec<f32> {
@@ -545,7 +545,7 @@ fn apply_rope_with_inv_freq(query: &Tensor, positions: &[i64], inv_freq: &[f32])
 /// Returns a flat `Vec` of length `seq_len * head_dim / 2`, indexed as
 /// `cache[pos * head_dim/2 + i]` for position `pos` and frequency index `i`.
 /// Each entry is `(cos(angle), sin(angle))` where
-/// `angle = pos * theta^(-2i/head_dim)` — the standard RoPE formula.
+/// `angle = pos * theta^(-2i/head_dim)` — the standard `RoPE` formula.
 ///
 /// For `pos = 0` every angle is 0, so the cache yields `(1.0, 0.0)` (identity
 /// rotation), which is the expected behaviour for the first token.

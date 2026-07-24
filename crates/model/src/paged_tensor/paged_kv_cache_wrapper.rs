@@ -101,13 +101,11 @@ impl PagedKvCacheWrapper {
             return false;
         };
         let cache = self.inner.lock();
-        cache
-            .block_hashes_for_layer(0)
-            .map_or(false, |layer_hashes| {
-                layer_hashes
-                    .iter()
-                    .any(|(hash, bid)| *bid == block_id_us && *hash == expected_chain_hash)
-            })
+        cache.block_hashes_for_layer(0).is_some_and(|layer_hashes| {
+            layer_hashes
+                .iter()
+                .any(|(hash, bid)| *bid == block_id_us && *hash == expected_chain_hash)
+        })
     }
 }
 

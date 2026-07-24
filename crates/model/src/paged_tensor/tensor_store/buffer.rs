@@ -24,6 +24,7 @@ impl PagedKvCache {
     /// # Errors
     ///
     /// Returns `Err` if the operation fails.
+    #[allow(clippy::range_minus_one)]
     pub fn write_kv_batch(
         &mut self,
         layer_idx: usize,
@@ -99,6 +100,7 @@ impl PagedKvCache {
     ///
     /// Returns `Err` if the operation fails.
     #[allow(clippy::too_many_lines)] // KV-cache write path: bound checks + reshape + slice_assign in one linear sequence
+    #[allow(clippy::range_minus_one)]
     pub fn write_kv(
         &mut self,
         layer_idx: usize,

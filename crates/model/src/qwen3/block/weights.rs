@@ -1,4 +1,4 @@
-//! `TransformerBlock::from_weights` — build a layer from a HuggingFace
+//! `TransformerBlock::from_weights` — build a layer from a `HuggingFace`
 //! weight map. Looks up each component's tensor by convention
 //! (`model.layers.{idx}.self_attn.q_proj.weight`, etc.) and delegates
 //! to [`super::TransformerBlock::new_with_weights`].

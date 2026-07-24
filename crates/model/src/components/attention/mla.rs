@@ -199,7 +199,7 @@ impl MlaAttention {
             &q_rope_4d,
             positions,
             10000.0,
-            RopeScalingContext::default(),
+            &RopeScalingContext::default(),
         )?;
         let q_rope_rotated =
             q_rope_rotated_4d.reshape((batch_size, seq_len, self.num_heads * self.qk_rope_dim))?;

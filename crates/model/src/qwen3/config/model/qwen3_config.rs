@@ -99,7 +99,7 @@ impl Qwen3Config {
             .unwrap_or(8192)
     }
 
-    /// RMSNorm epsilon as `f64` with `text_config` and canonical fallbacks.
+    /// `RMSNorm` epsilon as `f64` with `text_config` and canonical fallbacks.
     #[must_use]
     pub fn rms_norm_eps(&self) -> f64 {
         f64::from(
@@ -115,13 +115,13 @@ impl Qwen3Config {
         self.tie_word_embeddings.unwrap_or(false)
     }
 
-    /// Whether Q/K projections apply RMSNorm before attention; defaults to false.
+    /// Whether Q/K projections apply `RMSNorm` before attention; defaults to false.
     #[must_use]
     pub fn has_qk_norm(&self) -> bool {
         self.has_qk_norm.unwrap_or(false)
     }
 
-    /// Optional YaRN / linear `RoPE` scaling parameters from the checkpoint.
+    /// Optional `YaRN` / linear `RoPE` scaling parameters from the checkpoint.
     #[must_use]
     pub const fn rope_scaling(&self) -> Option<&super::super::rope::RopeScaling> {
         self.rope_scaling.as_ref()

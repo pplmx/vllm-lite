@@ -127,9 +127,9 @@ impl PagedKvCache {
         Ok((k_flat, v_flat))
     }
 
-    /// Number of f32 elements per (layer, block) pair: `num_heads *
-    /// `block_size` * head_dim`. Used by the multi-node wrapper for
-    /// buffer sizing in `fetch_block`.
+    /// Number of f32 elements per (layer, block) pair:
+    /// `num_heads * block_size * head_dim`. Used by the multi-node
+    /// wrapper for buffer sizing in `fetch_block`.
     #[must_use]
     #[allow(dead_code)] // reachable under --features multi-node via PagedKvCacheWrapper (P40 T2)
     pub(crate) const fn num_blocks_count_per_layer(&self) -> usize {
@@ -157,7 +157,7 @@ impl PagedKvCache {
     /// Write per-layer K and V tensors for a single block
     /// (P41, the receiver-side counterpart of `read_layer_block`).
     ///
-    /// `k` and `v` are flat `[f32; `num_heads` * BLOCK_SIZE * `head_dim`]`
+    /// `k` and `v` are flat `[f32; num_heads * BLOCK_SIZE * head_dim]`
     /// row-major slices in the same layout `read_layer_block`
     /// returns. The byte-level round-trip is bit-exact.
     ///
@@ -172,6 +172,7 @@ impl PagedKvCache {
     /// `num_blocks`, or `k.len() != v.len()` is not equal to
     /// `num_heads * BLOCK_SIZE * head_dim`.
     #[allow(dead_code)] // reachable under --features multi-node when P42 wires the receiver-side write_kv_batch
+    #[allow(clippy::range_minus_one)]
     pub(crate) fn write_layer_block(
         &mut self,
         layer_idx: usize,

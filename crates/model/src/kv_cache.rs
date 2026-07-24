@@ -49,10 +49,11 @@ impl MlaKvCache {
     /// PERF-01 (v22.0): writes incrementally into the destination layer
     /// using `Tensor::slice_assign` so memory allocation is proportional
     /// to the slice being written, not the entire cache layer. The
-    /// previous implementation flattened the whole `num_blocks *
-    /// `block_size` * kv_lora_rank` buffer per token, then re-built the
-    /// layer Tensor — `O(num_blocks * `block_size` * kv_lora_rank)`
+    /// previous implementation flattened the whole
+    /// `num_blocks * block_size * kv_lora_rank` buffer per token, then
+    /// re-built the layer Tensor — `O(num_blocks * block_size * kv_lora_rank)`
     /// allocation per write. The new path is `O(seq_len * kv_lora_rank)`.
+    #[allow(clippy::range_minus_one)]
     pub fn write_compressed(
         &mut self,
         layer: usize,

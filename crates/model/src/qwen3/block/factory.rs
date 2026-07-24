@@ -1,6 +1,9 @@
 //! Free factory functions used by the qwen3 model + tests: `new_block`
 //! (zero-init constructor for tests) and `block_from_weights`
 //! (HuggingFace weight-map loader, used by [`super::TransformerBlock::from_weights`]).
+//!
+//! Both functions are `pub` within the crate — the `factory` module is
+//! `pub(crate)` so `pub` suffices for crate-internal visibility.
 
 use std::collections::HashMap;
 
@@ -30,7 +33,7 @@ pub fn new_block(
     )
 }
 
-pub(crate) fn block_from_weights(
+pub fn block_from_weights(
     config: &crate::config::ModelConfig,
     layer_idx: usize,
     weights: &HashMap<String, Tensor>,

@@ -225,7 +225,7 @@ fn test_mla_rope_application() {
     let positions: Vec<i64> = vec![0, 1, 2, 3];
 
     let q_rope_rotated =
-        apply_rope_with_scaling(&q_rope, &positions, 10000.0, RopeScalingContext::default())
+        apply_rope_with_scaling(&q_rope, &positions, 10000.0, &RopeScalingContext::default())
             .unwrap();
 
     assert_eq!(q_rope_rotated.dims(), q_rope.dims());
@@ -420,9 +420,9 @@ fn test_mla_rope_affects_different_positions() {
     let pos2: Vec<i64> = vec![10, 11];
 
     let q_rope_rotated1 =
-        apply_rope_with_scaling(&q_rope, &pos1, 10000.0, RopeScalingContext::default()).unwrap();
+        apply_rope_with_scaling(&q_rope, &pos1, 10000.0, &RopeScalingContext::default()).unwrap();
     let q_rope_rotated2 =
-        apply_rope_with_scaling(&q_rope, &pos2, 10000.0, RopeScalingContext::default()).unwrap();
+        apply_rope_with_scaling(&q_rope, &pos2, 10000.0, &RopeScalingContext::default()).unwrap();
 
     let diff = (&q_rope_rotated1 - &q_rope_rotated2)
         .unwrap()
