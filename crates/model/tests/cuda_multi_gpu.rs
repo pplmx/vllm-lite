@@ -9,14 +9,14 @@
 //!
 //! These tests are `#[ignore]` by default — they require GPU hardware.
 //! Run on a machine with N GPUs:
-//!   cargo nextest run --run-ignored all -p vllm-model \
-//!     --test cuda_multi_gpu --features "cuda,multi-node"
+//!   `cargo nextest run` --run-ignored all -p vllm-model \
+//!     --test `cuda_multi_gpu` --features "cuda,multi-node"
 //!
 //! For multi-GPU distribution, combine with nextest partitioning so
 //! each partition runs on a distinct `CUDA_VISIBLE_DEVICES`:
 //!   for i in $(seq 0 7); do
-//!     CUDA_VISIBLE_DEVICES=$i cargo nextest run --run-ignored all \
-//!       -p vllm-model --test cuda_multi_gpu \
+//!     `CUDA_VISIBLE_DEVICES`=$i `cargo nextest run` --run-ignored all \
+//!       -p vllm-model --test `cuda_multi_gpu` \
 //!       --features "cuda,multi-node" --partition "hash:$(($i+1))/8" &
 //!   done
 #![cfg(feature = "cuda")]

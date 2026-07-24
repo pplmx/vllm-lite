@@ -39,7 +39,7 @@ pub struct ModelConfig {
     pub layer_types: Vec<LayerType>,
     /// Per-layer `RoPE` overrides (NTK scaling, `MRoPE` axes, etc.).
     pub rope_configs: Vec<RoPEConfig>,
-    /// Long-context `RoPE` scaling block (YaRN, Linear, Dynamic, Su).
+    /// Long-context `RoPE` scaling block (`YaRN`, `Linear`, `Dynamic`, `Su`).
     /// `None` means default (no scaling). Populated from
     /// `config.json["rope_scaling"]` in `from_config_json`, and
     /// forwarded into `RopeGqaAttention::new_with_rope_scaling` so the

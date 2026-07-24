@@ -423,10 +423,10 @@ fn test_forward_with_scaling_matches_apply_with_scaling() -> Result<()> {
 
 /// Regression test: `forward` must honour scaling configuration.
 /// Pre-fix, `forward` was hardcoded to `apply_rope` (non-scaling), so a
-/// scaled RoPE (e.g. YaRN) passed to `forward` silently dropped the
+/// scaled `RoPE` (e.g. `YaRN`) passed to `forward` silently dropped the
 /// long-context correction. Post-fix, `forward` delegates to
 /// `apply_rope_with_scaling`, so the output should match
-/// `forward_with_scaling` for a scaled RoPE.
+/// `forward_with_scaling` for a scaled `RoPE`.
 #[test]
 fn test_forward_honours_scaling() -> Result<()> {
     let device = Device::Cpu;

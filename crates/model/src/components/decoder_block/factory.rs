@@ -176,7 +176,7 @@ mod tests {
     //! Pre-P20, `new_block` and `block_from_weights` here called the bare
     //! `RopeGqaAttention::new` / `new_with_weights` constructors which
     //! silently dropped `config.rope_scaling`. A Llama/Mistral-style
-    //! checkpoint that declared a YaRN block in `config.json` therefore
+    //! checkpoint that declared a `YaRN` block in `config.json` therefore
     //! produced numerically identical output to a default model of the
     //! same shape. These tests pin the scaling-aware constructor
     //! signatures so the regression can't recur.

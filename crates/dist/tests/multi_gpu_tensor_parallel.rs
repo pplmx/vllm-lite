@@ -12,11 +12,11 @@
 //! suite with fast, deterministic, distributable Rust coverage.
 //!
 //! Run with:
-//!   cargo nextest run -p vllm-dist --test multi_gpu_tensor_parallel
+//!   `cargo nextest run` -p vllm-dist --test `multi_gpu_tensor_parallel`
 //!
 //! When distributed across GPUs via nextest partitioning, each test
 //! partition validates a disjoint subset of the GPU-count matrix.
-//! The tensor_parallel module is always compiled in vllm-dist (not
+//! The `tensor_parallel` module is always compiled in vllm-dist (not
 //! feature-gated), so these tests run without --features.
 
 use std::sync::Arc;
@@ -379,7 +379,7 @@ fn manager_shares_mesh_and_all_reduce() -> Result<(), TensorParallelError> {
 // GPU distribution awareness — tests that adapt to CUDA_VISIBLE_DEVICES
 // ─────────────────────────────────────────────────────────────────
 
-/// Detect the number of visible GPUs from the CUDA_VISIBLE_DEVICES
+/// Detect the number of visible GPUs from the `CUDA_VISIBLE_DEVICES`
 /// environment variable, falling back to 0 if unset or empty.
 fn visible_gpu_count() -> usize {
     match std::env::var("CUDA_VISIBLE_DEVICES") {

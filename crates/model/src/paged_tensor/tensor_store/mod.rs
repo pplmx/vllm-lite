@@ -87,7 +87,7 @@ impl PagedKvCache {
     ///
     /// Returns `(K_bytes, V_bytes)` flattened in the same row-major
     /// layout as the on-disk block written by `write_kv`: shape
-    /// `[`num_heads`, `block_size`, `head_dim`]`. Used by the multi-node
+    /// `(num_heads, block_size, head_dim)`. Used by the multi-node
     /// `PagedKvCacheWrapper` to serialize a block for cross-node
     /// transfer; the receiver feeds the bytes back into
     /// `write_kv_batch`.
@@ -264,7 +264,7 @@ impl PagedKvCache {
     /// Named `write_block_bytes` (not `write_kv_batch`) to avoid a
     /// name clash with the token-batched
     /// [`Self::write_kv_batch`] in `buffer.rs` (which writes a
-    /// single (layer, block, token_offset) slot during a forward
+    /// single (`layer`, `block`, `token_offset`) slot during a forward
     /// pass). The receiver-side semantics differ fundamentally: this
     /// installs a whole block of bytes across all layers; the
     /// `buffer.rs` variant updates one token slice per call.
@@ -272,8 +272,8 @@ impl PagedKvCache {
     /// # Errors
     ///
     /// Returns `Err` if `block_id >= num_blocks`, if `bytes.len()`
-    /// does not match `num_layers * 2 * `num_heads` * BLOCK_SIZE *
-    /// `head_dim` * 4`, or if any inner `write_layer_block` call
+    /// does not match `num_layers * 2 * num_heads * BLOCK_SIZE *
+    /// head_dim * 4`, or if any inner `write_layer_block` call
     /// fails (which itself only fails on bounds errors that this
     /// caller already pre-validated).
     #[allow(dead_code)] // reachable under --features multi-node via PagedKvCacheWrapper: BlockSink (P42 T3)
