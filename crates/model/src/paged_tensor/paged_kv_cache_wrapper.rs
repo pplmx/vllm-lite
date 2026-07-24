@@ -178,21 +178,22 @@ fn read_block_bytes(cache: &PagedKvCache, block_id: usize) -> Result<Vec<u8>, Fe
     let num_layers = cache.num_layers();
     let mut bytes = Vec::with_capacity(num_layers * 2 * cache.num_blocks_count_per_layer() * 4);
     for layer_idx in 0..num_layers {
-        let (k, v) = cache
+        let (mut k, mut v) = cache
             .read_layer_block(layer_idx, block_id)
             .map_err(|_| FetchError::NotFound(block_id as u64))?;
         // When quantized, the source writes symmetric int8 values
         // divided by `scale`; we dequantize here so the receiver
         // gets f32 bytes (matches `write_kv_batch`'s f32 input
         // contract). The quantization scale is per-layer.
-        let (k_out, v_out) = if cache.quantized {
+        // Dequantize in-place on the owned Vec<f32> to avoid a
+        // per-layer intermediate allocation in the multi-node hot path.
+        if cache.quantized {
             let scale = cache.get_scale(layer_idx);
-            (dequantize_f32(&k, scale), dequantize_f32(&v, scale))
-        } else {
-            (k, v)
-        };
-        bytes.extend_from_slice(bytemuck::cast_slice(&k_out));
-        bytes.extend_from_slice(bytemuck::cast_slice(&v_out));
+            k.iter_mut().for_each(|x| *x *= scale);
+            v.iter_mut().for_each(|x| *x *= scale);
+        }
+        bytes.extend_from_slice(bytemuck::cast_slice(&k));
+        bytes.extend_from_slice(bytemuck::cast_slice(&v));
     }
     Ok(bytes)
 }
@@ -214,12 +215,6 @@ fn write_block_bytes_inner(
             expected,
             actual: bytes.len(),
         })
-}
-
-/// Inverse of `PagedKvCache::write_kv`'s quantization step:
-/// multiply each int8-encoded f32 by the layer's scale.
-fn dequantize_f32(data: &[f32], scale: f32) -> Vec<f32> {
-    data.iter().map(|&x| x * scale).collect()
 }
 
 #[cfg(test)]
