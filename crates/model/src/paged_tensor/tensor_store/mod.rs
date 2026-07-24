@@ -1,21 +1,19 @@
-//! Paged tensor store: physical `KV` cache backing store, block pool, and layout helpers.
+//! Paged tensor store: physical `KV` cache backing store, hash/scale layout, and pool helpers.
 //!
 //! `PagedKvCache` is the public facade re-exported from this module.
 //! Sub-modules: `buffer` (`KV` read/write operations), `layout` (block
-//! hashes + scale layout), `pool` (block free-list).
+//! hashes + scale layout).
 
 // crates/model/src/paged_tensor/tensor_store/mod.rs
 //
 // Facade for the paged tensor store subsystem. Sub-modules:
 // - `buffer` — PagedKvCache write/read operations on the K/V buffer.
 // - `layout` — PagedKvCache hash, scale, and block-size layout helpers.
-// - `pool`   — `CacheBlock` and `KvCachePool` block-allocator types.
 
 pub use vllm_traits::BLOCK_SIZE;
 
 mod buffer;
 mod layout;
-mod pool;
 
 use std::collections::HashMap;
 
