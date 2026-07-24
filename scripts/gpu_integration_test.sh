@@ -138,6 +138,39 @@ run_rust_tests() {
     else
         fail "Distributed KV cache tests"
     fi
+
+    # CUDA model inference tests (Rust, #[ignore] by default)
+    # Distributed across all GPUs via nextest partitioning — each
+    # partition gets CUDA_VISIBLE_DEVICES set to a distinct physical GPU.
+    # This replaces shell-based server+HTTP testing with direct Rust API
+    # coverage for model loading, prefill/decode, and tensor-parallel
+    # construction.
+    if [ "$NUM_GPUS" -ge 2 ]; then
+        info "Running CUDA model inference Rust tests across $NUM_GPUS GPUs..."
+        local cuda_pids=()
+        local cuda_failed=0
+        for i in $(seq 0 $((NUM_GPUS - 1))); do
+            (
+                export CUDA_VISIBLE_DEVICES=$i
+                cargo nextest run --run-ignored all -p vllm-model \
+                    --features "cuda,multi-node" \
+                    --test cuda_multi_gpu \
+                    --partition "hash:$(($i + 1))/$NUM_GPUS" \
+                    --no-fail-fast 2>&1 | tee "$RESULTS_DIR/phase1_cuda_model_gpu${i}.log"
+            ) &
+            cuda_pids+=($!)
+        done
+        for pid in "${cuda_pids[@]}"; do
+            if ! wait "$pid"; then
+                cuda_failed=1
+            fi
+        done
+        if [ "$cuda_failed" -eq 0 ]; then
+            pass "CUDA model inference Rust tests across $NUM_GPUS GPUs (parallel)"
+        else
+            fail "CUDA model inference Rust tests across $NUM_GPUS GPUs (parallel)"
+        fi
+    fi
 }
 
 # ── Phase 2: Single-GPU model loading + inference ──
