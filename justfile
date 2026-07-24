@@ -3,12 +3,14 @@ default:
     @just --list
 
 init:
+    uv tool install prek
     uv tool install rumdl
     uv tool install ruff
     uv tool install rust-just
     # Install git hooks via husky-rs (set core.hooksPath to .husky)
     cargo build -p vllm-server 2>/dev/null
     git config core.hooksPath .husky
+    @echo "Hooks installed. prek available: run 'prek run --all-files' to test."
 
 # Build release binary
 build:
