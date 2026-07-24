@@ -95,7 +95,7 @@ jobs:
           shared-key: "mutation-nightly"
 
       - name: Cache cargo-mutants binary
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-mutants
           key: cargo-mutants-27.1.0-${{ runner.os }}
@@ -148,7 +148,7 @@ jobs:
 
       - name: Upload mutation artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mutants-out-${{ matrix.module.path }}
           path: .mutants-out/
