@@ -73,14 +73,16 @@ fn test_qwen3_model_forward_qk_norm() {
 
 #[test]
 fn test_qwen3_model_custom_head_dim() {
-    // Qwen3-0.6B: hidden=1024, heads=16, head_dim=128 (not 1024/16=64)
+    // Custom head_dim=128 differs from the default 512/8=64, verifying the
+    // explicit head_dim config path. Model kept small to avoid nextest CPU
+    // contention timeouts.
     let config = Qwen3Config {
         vocab_size: Some(1000),
-        hidden_size: Some(1024),
+        hidden_size: Some(512),
         num_hidden_layers: Some(2),
-        num_attention_heads: Some(16),
-        num_key_value_heads: Some(8),
-        intermediate_size: Some(3072),
+        num_attention_heads: Some(8),
+        num_key_value_heads: Some(4),
+        intermediate_size: Some(1024),
         head_dim: Some(128),
         has_qk_norm: Some(true),
         ..Default::default()
