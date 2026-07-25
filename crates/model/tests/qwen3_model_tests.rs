@@ -1,6 +1,6 @@
+use candle_core::Device;
 use vllm_model::qwen3::Qwen3Model;
 use vllm_model::qwen3::config::Qwen3Config;
-use vllm_testing::device::gpu_or_cpu;
 use vllm_traits::ModelBackend;
 
 #[test]
@@ -15,7 +15,7 @@ fn test_qwen3_model_forward_cpu() {
         ..Default::default()
     };
 
-    let device = gpu_or_cpu();
+    let device = Device::Cpu;
     let mut model = Qwen3Model::new(config, device, 1024).unwrap();
 
     // Test forward with single token
@@ -51,7 +51,7 @@ fn test_qwen3_model_forward_qk_norm() {
         ..Default::default()
     };
 
-    let device = gpu_or_cpu();
+    let device = Device::Cpu;
     let mut model = Qwen3Model::new(config, device, 1024).unwrap();
 
     let kv_block_ids = vec![vec![0usize]];
@@ -74,8 +74,7 @@ fn test_qwen3_model_forward_qk_norm() {
 #[test]
 fn test_qwen3_model_custom_head_dim() {
     // Custom head_dim=128 differs from the default 512/8=64, verifying the
-    // explicit head_dim config path. Model kept small to avoid nextest CPU
-    // contention timeouts.
+    // explicit head_dim config path. Model kept small to avoid CPU timeout.
     let config = Qwen3Config {
         vocab_size: Some(1000),
         hidden_size: Some(512),
@@ -88,7 +87,7 @@ fn test_qwen3_model_custom_head_dim() {
         ..Default::default()
     };
 
-    let device = gpu_or_cpu();
+    let device = Device::Cpu;
     let mut model = Qwen3Model::new(config, device, 1024).unwrap();
 
     let kv_block_ids = vec![vec![0usize]];
@@ -120,7 +119,7 @@ fn test_qwen3_model_batch_forward() {
         ..Default::default()
     };
 
-    let device = gpu_or_cpu();
+    let device = Device::Cpu;
     let mut model = Qwen3Model::new(config, device, 1024).unwrap();
 
     // Test with batch size 3
@@ -158,7 +157,7 @@ fn test_embed_single_text() {
         ..Default::default()
     };
 
-    let device = gpu_or_cpu();
+    let device = Device::Cpu;
     let mut model = Qwen3Model::new(config, device, 1024).unwrap();
 
     let input_tokens = vec![vec![1u32, 2, 3, 4, 5]];
@@ -182,7 +181,7 @@ fn test_embed_batch() {
         ..Default::default()
     };
 
-    let device = gpu_or_cpu();
+    let device = Device::Cpu;
     let mut model = Qwen3Model::new(config, device, 1024).unwrap();
 
     let input_tokens = vec![vec![1u32, 2, 3], vec![4u32, 5, 6, 7, 8], vec![9u32, 10]];
@@ -208,7 +207,7 @@ fn test_embed_empty_tokens() {
         ..Default::default()
     };
 
-    let device = gpu_or_cpu();
+    let device = Device::Cpu;
     let mut model = Qwen3Model::new(config, device, 1024).unwrap();
 
     let input_tokens = vec![vec![]];
@@ -223,7 +222,7 @@ fn test_embed_empty_tokens() {
 #[test]
 fn test_qwen3_decode_mode_with_gqa() {
     // GQA: 8 attention heads, 4 KV heads (2:1 ratio), custom head_dim=128
-    // (default would be 512/8=64, so custom path is verified).
+    // (default would be 512/8=64, so the custom path is verified).
     let config = Qwen3Config {
         vocab_size: Some(1000),
         hidden_size: Some(512),
@@ -235,7 +234,7 @@ fn test_qwen3_decode_mode_with_gqa() {
         ..Default::default()
     };
 
-    let device = gpu_or_cpu();
+    let device = Device::Cpu;
     let mut model = Qwen3Model::new(config, device, 1024).unwrap();
 
     let seq_ids = vec![1u64];
@@ -271,7 +270,7 @@ fn test_qwen3_decode_then_continue() {
         ..Default::default()
     };
 
-    let device = gpu_or_cpu();
+    let device = Device::Cpu;
     let mut model = Qwen3Model::new(config, device, 1024).unwrap();
 
     let block_ids = vec![vec![0usize]];
@@ -307,7 +306,7 @@ fn test_qwen3_kv_cache_gqa_dimensions() {
         ..Default::default()
     };
 
-    let device = gpu_or_cpu();
+    let device = Device::Cpu;
     let mut model = Qwen3Model::new(config, device, 8).unwrap();
 
     let seq_ids = vec![1u64, 2u64];
@@ -345,7 +344,7 @@ fn test_qwen3_decode_logits_2d_shape() {
         ..Default::default()
     };
 
-    let device = gpu_or_cpu();
+    let device = Device::Cpu;
     let mut model = Qwen3Model::new(config, device, 1024).unwrap();
 
     let _ = [1u64];
@@ -379,7 +378,7 @@ fn test_qwen3_prefill_logits_3d_shape() {
         ..Default::default()
     };
 
-    let device = gpu_or_cpu();
+    let device = Device::Cpu;
     let mut model = Qwen3Model::new(config, device, 1024).unwrap();
 
     let (logits, _hidden_token) = model
@@ -412,7 +411,7 @@ fn test_qwen3_decode_sequential_generation() {
         ..Default::default()
     };
 
-    let device = gpu_or_cpu();
+    let device = Device::Cpu;
     let mut model = Qwen3Model::new(config, device, 32).unwrap();
 
     let block_size = 8;
@@ -450,7 +449,7 @@ fn test_qwen3_decode_sequential_generation() {
 
 #[test]
 fn test_qwen3_decode_with_gqa_expanded_kv_cache() {
-    // GQA expansion: 8 attention heads, 4 KV heads, custom head_dim=128,
+    // GQA expansion: 8 attn heads, 4 KV heads, custom head_dim=128,
     // 3 layers to exercise KV cache across multiple blocks.
     let config = Qwen3Config {
         vocab_size: Some(1000),
@@ -463,7 +462,7 @@ fn test_qwen3_decode_with_gqa_expanded_kv_cache() {
         ..Default::default()
     };
 
-    let device = gpu_or_cpu();
+    let device = Device::Cpu;
     let mut model = Qwen3Model::new(config, device, 16).unwrap();
 
     let output = model
@@ -494,7 +493,7 @@ fn test_qwen3_mixed_prefill_and_decode() {
         ..Default::default()
     };
 
-    let device = gpu_or_cpu();
+    let device = Device::Cpu;
     let mut model = Qwen3Model::new(config, device, 16).unwrap();
 
     let _ = model
@@ -539,7 +538,7 @@ fn test_forward_logits_decode_mode() {
         ..Default::default()
     };
 
-    let device = gpu_or_cpu();
+    let device = Device::Cpu;
     let mut model = Qwen3Model::new(config, device, 8).unwrap();
 
     let result = model
