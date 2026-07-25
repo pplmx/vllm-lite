@@ -4725,7 +4725,6 @@ fn spawn_best_of_mock_engine() -> (
                     }
                     candidate_idx += 1;
                 }
-                EngineMessage::CancelRequest { .. } => {}
                 _ => {}
             }
         }
@@ -5269,7 +5268,6 @@ async fn test_completions_best_of_with_partial_engine_failure_returns_503() {
                             .await;
                     }
                 }
-                EngineMessage::CancelRequest { .. } => {}
                 _ => {}
             }
         }
@@ -5396,7 +5394,6 @@ fn spawn_stop_mock_engine(
                     }
                     candidate_idx += 1;
                 }
-                EngineMessage::CancelRequest { .. } => {}
                 _ => {}
             }
         }
@@ -5772,7 +5769,6 @@ async fn test_completions_stop_sequences_with_best_of_each_candidate_honors_stop
                     }
                     candidate_idx += 1;
                 }
-                EngineMessage::CancelRequest { .. } => {}
                 _ => {}
             }
         }
@@ -5878,7 +5874,6 @@ async fn test_chat_stop_with_logprobs_returns_logprobs_of_stopped_sequence() {
                         let _ = tx.send(vllm_traits::FinishReason::Stop);
                     }
                 }
-                EngineMessage::CancelRequest { .. } => {}
                 _ => {}
             }
         }
@@ -5999,7 +5994,6 @@ async fn test_chat_stop_in_streaming_emits_finish_reason_stop_on_last_chunk() {
                         let _ = tx.send(vllm_traits::FinishReason::Stop);
                     }
                 }
-                EngineMessage::CancelRequest { .. } => {}
                 _ => {}
             }
         }
@@ -6123,7 +6117,6 @@ async fn test_completions_stop_in_streaming_emits_finish_reason_stop_on_last_chu
                         let _ = tx.send(vllm_traits::FinishReason::Stop);
                     }
                 }
-                EngineMessage::CancelRequest { .. } => {}
                 _ => {}
             }
         }
@@ -6350,7 +6343,6 @@ fn spawn_n_mock_engine(
                     }
                     candidate_idx += 1;
                 }
-                EngineMessage::CancelRequest { .. } => {}
                 _ => {}
             }
         }
