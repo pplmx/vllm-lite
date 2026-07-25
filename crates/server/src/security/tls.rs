@@ -13,10 +13,11 @@ use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::rustls::server::WebPkiClientVerifier;
 use tokio_rustls::rustls::{self, ServerConfig};
 
-/// Errors raised during TLS configuration load or handshake. Each
-/// variant carries the underlying error context as a `String` so
-/// startup logs surface the exact PEM file or handshake failure
-/// without exposing raw filesystem paths to the client.
+/// Errors raised during TLS configuration load or handshake.
+///
+/// Each variant carries the underlying error context as a `String` so startup
+/// logs surface the exact PEM file or handshake failure without exposing raw
+/// filesystem paths to the client.
 #[derive(Debug, Error)]
 pub enum TlsError {
     #[error("Failed to read certificate: {0}")]
@@ -29,10 +30,10 @@ pub enum TlsError {
     HandshakeFailed(String),
 }
 
-/// TLS configuration: PEM-encoded server certificate + private key,
-/// plus optional CA bundle for client-certificate verification. Plain
-/// TLS is selected when `mtls = false`; calling `TlsConfig::with_ca_cert`
-/// flips the flag and installs the CA path for mTLS.
+/// TLS configuration: PEM-encoded server certificate + private key + optional CA bundle.
+///
+/// Plain TLS is selected when `mtls = false`; calling `TlsConfig::with_ca_cert`
+/// flips the flag and installs the CA path for mTLS (client-certificate verification).
 #[derive(Debug)]
 pub struct TlsConfig {
     pub cert_path: String,

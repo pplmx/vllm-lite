@@ -1,6 +1,6 @@
-#![allow(clippy::module_name_repetitions)]
-//! Metrics collection and export
-/// Time-series metrics collector (enhanced per-request metrics).
+#![allow(clippy::module_name_repetitions, clippy::too_long_first_doc_paragraph)]
+//! Metrics collection and export.
+/// Per-request metrics collector with enhanced timers and counters.
 pub mod collector;
 /// Metrics export backends (Prometheus, in-memory).
 pub mod exporter;

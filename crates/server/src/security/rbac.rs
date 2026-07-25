@@ -26,9 +26,9 @@ use axum::{
 use serde_json::json;
 use std::sync::Arc;
 
-/// Authenticated identity tier. Strict ordering:
-/// `Admin > Operator > User > Anonymous`. Each variant maps to a
-/// fixed capability set in `RbacMiddleware::check_permission` —
+/// Authenticated identity tier with strict ordering: Admin > Operator > User > Anonymous.
+///
+/// Each variant maps to a fixed capability set in `RbacMiddleware::check_permission`;
 /// `Admin` is the only role allowed to call `manage_*` actions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
@@ -103,11 +103,12 @@ impl Role {
 #[derive(Debug, Clone, Copy)]
 pub struct AuthenticatedRole(pub Role);
 
-/// RBAC middleware. Holds the default role for requests with no role
-/// extension installed (always `Anonymous` in production — the only
-/// way to bypass `Anonymous` is for upstream middleware to insert
-/// [`AuthenticatedRole`]) and the (role → permitted actions) table
-/// consulted by `Self::check_permission`.
+/// RBAC middleware holding default role and (role → permitted actions) table.
+///
+/// The default role for requests with no role extension is always `Anonymous`
+/// in production — the only way to bypass `Anonymous` is for upstream middleware
+/// to insert [`AuthenticatedRole`]. The action table is consulted by
+/// `Self::check_permission`.
 #[derive(Debug)]
 pub struct RbacMiddleware {
     /// Role assigned to requests missing an [`AuthenticatedRole`] extension.

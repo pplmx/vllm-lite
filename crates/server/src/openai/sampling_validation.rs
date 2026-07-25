@@ -469,10 +469,10 @@ pub fn validate_completion_logprobs(
     Ok(())
 }
 
-/// Validate the `echo` + `suffix` + `best_of` fields on a completion
-/// request (P32 v0.x wire-type follow-up — declaration + validation;
-/// P37 extends the validation with the `<= 20` upper bound to match
-/// `OpenAI`'s spec).
+/// Validate `echo`, `suffix`, and `best_of` fields on a completion request.
+///
+/// P32 v0.x wire-type follow-up — declaration + validation; P37 extends the
+/// validation with the `<= 20` upper bound to match `OpenAI`'s spec.
 ///
 /// Per `OpenAI` legacy-completions spec:
 /// - `echo: bool` (default `false`) — when `true`, the response

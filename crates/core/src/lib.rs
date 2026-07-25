@@ -30,8 +30,9 @@ pub mod scheduler;
 /// Speculative decoding registry, draft models, and verification.
 pub mod speculative;
 pub(crate) mod sync;
-/// Tracing bootstrap with optional `OTel` bridge (gated behind the `opentelemetry`
-/// feature).
+/// Tracing bootstrap with optional `OTel` bridge.
+///
+/// Gated behind the `opentelemetry` feature.
 #[cfg(feature = "opentelemetry")]
 pub mod tracing_init;
 /// Scheduler request types, priorities, and configuration.

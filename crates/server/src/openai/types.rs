@@ -614,9 +614,9 @@ impl ChatResponse {
     }
 }
 
-/// A single choice inside an SSE [`ChatChunk`]. The `delta` carries
-/// only the partial message text emitted on this chunk — typically
-/// the `role` on the first chunk and `content` on subsequent chunks,
+/// A single choice inside an SSE [`ChatChunk`] carrying partial message deltas.
+///
+/// Typically the `role` on the first chunk and `content` on subsequent chunks,
 /// mirroring the `OpenAI` streaming protocol.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChunkChoice {
@@ -637,10 +637,10 @@ pub struct ChatChunkChoice {
     pub logprobs: Option<ChatChoiceLogprobs>,
 }
 
-/// A single chunk in a chat-completion SSE stream. The server emits
-/// one `ChatChunk` per generated token, followed by a final chunk
-/// with `finish_reason = Some("stop")` and the `OpenAI` sentinel
-/// `"[DONE]"` appended to the SSE payload.
+/// A single chunk in a chat-completion SSE stream, one per generated token.
+///
+/// Followed by a final chunk with `finish_reason = Some("stop")` and the
+/// `OpenAI` sentinel `"[DONE]"` appended to the SSE payload.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatChunk {
     /// Stream identifier (shared across all chunks in the same response).

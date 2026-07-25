@@ -1,3 +1,4 @@
+#![allow(clippy::too_long_first_doc_paragraph)]
 //! vLLM server crate - HTTP API server for LLM inference
 
 use std::sync::Arc;
@@ -15,11 +16,11 @@ pub use security::audit::AuditEvent;
 
 /// HTTP route handlers and engine channel bridge.
 pub mod api;
-/// JWT and API-key authentication middleware.
+/// JWT and API-key auth middleware.
 pub mod auth;
-/// CLI argument parsing and server bootstrap.
+/// CLI args and server bootstrap.
 pub mod cli;
-/// Server configuration (auth, TLS, model paths).
+/// Server configuration: auth, TLS, model paths.
 pub mod config;
 /// Debug and diagnostic endpoints.
 pub mod debug;

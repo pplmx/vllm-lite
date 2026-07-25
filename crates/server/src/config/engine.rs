@@ -3,11 +3,11 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Configuration entry for one external draft model used in
-/// speculative decoding. Listed under [`EngineConfig::draft_specs`]
-/// and resolved lazily at first use — the server does **not** load
-/// weights at startup; the actual loader is selected via the
-/// `architecture` hint.
+/// Configuration entry for one external draft model used in speculative decoding.
+///
+/// Listed under [`EngineConfig::draft_specs`] and resolved lazily at first use —
+/// the server does **not** load weights at startup; the actual loader is selected
+/// via the `architecture` hint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DraftSpecConfig {
     /// Unique identifier used at runtime to reference this draft.
@@ -29,10 +29,10 @@ const fn default_draft_layers() -> usize {
     4
 }
 
-/// Engine configuration: scheduler tuning, speculative-decoding
-/// parameters, and pre-declared draft-model specs. All fields have
-/// safe defaults via `#[serde(default = ...)]`; minimal configs only
-/// need to override the few values that differ from the default.
+/// Engine configuration: scheduler tuning, speculative-decoding params, draft-model specs.
+///
+/// All fields have safe defaults via `#[serde(default = ...)]`; minimal configs
+/// only need to override the few values that differ from the default.
 #[allow(clippy::derivable_impls)]
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct EngineConfig {

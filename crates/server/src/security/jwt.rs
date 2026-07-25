@@ -25,10 +25,10 @@ use tokio::sync::RwLock;
 #[cfg(test)]
 mod tests;
 
-/// Errors raised during JWT validation. Every variant maps to a
-/// distinct failure mode so callers (auth middleware, batch job
-/// validation) can branch on the specific cause rather than parsing
-/// a single error message string.
+/// Errors raised during JWT validation, each mapping to a distinct failure mode.
+///
+/// Callers (auth middleware, batch job validation) can branch on the specific
+/// cause rather than parsing a single error message string.
 #[derive(Debug, Error)]
 pub enum JwtError {
     #[error("Invalid token format: {0}")]
@@ -78,10 +78,11 @@ pub struct Claims {
     pub extra: HashMap<String, serde_json::Value>,
 }
 
-/// JWT verification configuration. Either `secret` (for HMAC HS256)
-/// or `public_key_pem` (for RS*/ES*) must be set — the validator
-/// refuses to start without one. Issuer and audience defaults are
-/// `"vllm"` / `"vllm-api"` and can be overridden via the builder
+/// JWT verification configuration: HMAC secret or RSA/EC public key.
+///
+/// Either `secret` (for HMAC HS256) or `public_key_pem` (for RS*/ES*) must be
+/// set — the validator refuses to start without one. Issuer and audience
+/// defaults are `"vllm"` / `"vllm-api"` and can be overridden via the builder
 /// methods.
 #[derive(Debug, Clone)]
 pub struct JwtConfig {
@@ -173,9 +174,10 @@ const ASYMMETRIC_ALGORITHMS: &[Algorithm] = &[
     Algorithm::ES384,
 ];
 
-/// JWT validator. Wraps a [`JwtConfig`] and exposes a single
-/// `validate(token) -> Result<Claims, JwtError>` method that performs
-/// algorithm allowlist check + signature verification + standard
+/// JWT validator wrapping [`JwtConfig`] with algorithm + signature + claim checks.
+///
+/// Exposes a single `validate(token) -> Result<Claims, JwtError>` method that
+/// performs algorithm allowlist check, signature verification, and standard
 /// claim validation.
 #[derive(Debug)]
 pub struct JwtValidator {

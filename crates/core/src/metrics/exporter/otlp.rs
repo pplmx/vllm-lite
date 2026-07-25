@@ -269,10 +269,12 @@ enum Instrument {
     UpDownCounter(UpDownCounter<i64>),
 }
 
-/// Push-based OTLP metrics exporter. Holds an `EnhancedMetricsCollector`
-/// reference + an OTLP `SdkMeterProvider`; `run()` polls the collector every
-/// `config.metrics_export_interval_secs` and records each value into the
-/// corresponding `OTel` instrument. The `PeriodicReader` flushes on each tick.
+/// Push-based OTLP metrics exporter polling the collector and exporting via OTel.
+///
+/// Holds an `EnhancedMetricsCollector` reference + an OTLP `SdkMeterProvider`;
+/// `run()` polls the collector every `config.metrics_export_interval_secs` and
+/// records each value into the corresponding `OTel` instrument. The
+/// `PeriodicReader` flushes on each tick.
 ///
 /// Internally `Arc`-wrapped so the bootstrap can clone + share between the
 /// spawned background task (caller of `run`) and the shutdown path (caller

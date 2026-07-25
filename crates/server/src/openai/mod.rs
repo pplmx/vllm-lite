@@ -1,9 +1,9 @@
 //! OpenAI-API compatible surface: chat completions, completions,
 //! embeddings, models, and the async batch endpoint.
 //!
-//! Sub-routers mounted under `/v1` from the top-level `api.rs`.
-//! Streaming responses use SSE (server-sent events) for chat + completions.
-/// Async batch API endpoint (create/get/list batches).
+//! Sub-routers mounted under `/v1` from the top-level `api.rs`. Streaming
+//! responses use SSE (server-sent events) for chat + completions.
+/// Async batch API: create, get, list.
 pub mod batch;
 /// Chat completions (streaming + non-streaming) with conversational state.
 pub mod chat;

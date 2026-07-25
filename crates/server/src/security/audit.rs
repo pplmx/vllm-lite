@@ -30,10 +30,11 @@ pub struct AuditEvent {
     pub user_agent: Option<String>,
 }
 
-/// Bounded in-memory ring buffer of [`AuditEvent`]s. Each `log_*`
-/// call also emits a structured `tracing` event at INFO (success) or
-/// WARN (failure) level. The oldest event is evicted once the buffer
-/// exceeds `max_events`.
+/// Bounded in-memory ring buffer of [`AuditEvent`]s with structured tracing.
+///
+/// Each `log_*` call also emits a structured `tracing` event at INFO (success)
+/// or WARN (failure) level. The oldest event is evicted once the buffer exceeds
+/// `max_events`.
 #[derive(Debug)]
 pub struct AuditLogger {
     events: Arc<RwLock<Vec<AuditEvent>>>,

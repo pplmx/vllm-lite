@@ -84,10 +84,11 @@ impl Default for CorrelationIdMiddleware {
     }
 }
 
-/// Axum middleware: ensure every request carries an `X-Request-ID`
-/// header (forwarding the client's value if present and well-formed,
-/// minting a fresh id otherwise), echo it on the response, and log
-/// the request lifecycle with the id attached.
+/// Axum middleware ensuring every request carries an `X-Request-ID` header.
+///
+/// Forwards the client's value if present and well-formed, mints a fresh id
+/// otherwise, echoes it on the response, and logs the request lifecycle with
+/// the id attached.
 pub async fn correlation_id_middleware(request: Request, next: Next) -> Response {
     let middleware = CorrelationIdMiddleware::new();
 

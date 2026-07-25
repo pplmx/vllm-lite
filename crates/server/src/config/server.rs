@@ -5,9 +5,10 @@ use serde::{Deserialize, Serialize};
 
 use super::MultiNodeConfig;
 
-/// HTTP server section: bind address, TCP port, log level, optional
-/// structured-log directory. Constructed either from YAML/JSON via
-/// [`super::AppConfig::load`] or programmatically via `ServerConfig::default()`.
+/// HTTP server section: bind address, TCP port, log level, structured-log directory.
+///
+/// Constructed either from YAML/JSON via [`super::AppConfig::load`] or
+/// programmatically via `ServerConfig::default()`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::derivable_impls)]
 pub struct ServerConfig {
@@ -72,9 +73,10 @@ const fn default_shutdown_drain_grace_secs() -> u64 {
     5
 }
 
-/// SEC-01 (technical due diligence): classify a bind address as loopback
-/// or non-loopback so the server can warn (or refuse) to start when it
-/// would expose the inference API to the network without authentication.
+/// SEC-01: classify a bind address as loopback or non-loopback.
+///
+/// The server can warn (or refuse) to start when it would expose the inference
+/// API to the network without authentication.
 ///
 /// The classification is intentionally conservative:
 /// - `127.0.0.0/8`, `::1`, `localhost`, and empty values are loopback.

@@ -1,4 +1,4 @@
-#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::module_name_repetitions, clippy::too_long_first_doc_paragraph)]
 //! Attention: submodules for grouped-query, multi-head latent, and
 //! paged/tiled attention primitives, plus shared utilities.
 //!
@@ -9,11 +9,11 @@
 
 /// Flash attention v1 reference implementation.
 pub mod flash;
-/// flash_attention_v3: flash attention v3 module.
+/// Flash attention v3 module.
 pub mod flash_attention_v3;
-/// Grouped-Query Attention (GQA): shared KV heads across query head groups.
+/// Grouped-Query Attention: shared KV heads across query head groups.
 pub mod gqa;
-/// Multi-head Latent Attention (MLA) for DeepSeek-style compression.
+/// Multi-head Latent Attention: DeepSeek-style KV compression.
 pub mod mla;
 /// Paged GQA: KV-cache stored in physical blocks with indirection.
 pub mod paged_gqa;

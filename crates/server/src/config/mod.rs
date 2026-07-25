@@ -57,10 +57,11 @@ pub enum ConfigValidationError {
     ShutdownDrainGraceTooLarge,
 }
 
-/// Aggregated list of [`ConfigValidationError`]s returned by
-/// [`AppConfig::validate`]. Always carries every violation found in
-/// one pass rather than failing on the first; the inner `Vec` is
-/// `pub` so callers can pattern-match or render their own summary.
+/// Aggregated list of [`ConfigValidationError`]s returned by [`AppConfig::validate`].
+///
+/// Always carries every violation found in one pass rather than failing on the
+/// first; the inner `Vec` is `pub` so callers can pattern-match or render their
+/// own summary.
 #[derive(Debug, thiserror::Error)]
 #[error("config validation failed: {0:?}")]
 pub struct ConfigValidationErrors(pub Vec<ConfigValidationError>);
@@ -73,10 +74,11 @@ pub use multi_node::MultiNodeConfig;
 pub use observability::ObservabilityConfig;
 pub use server::{ServerConfig, is_loopback_address};
 
-/// Top-level server configuration. Composes the three independent
-/// sections ([`ServerConfig`], [`EngineConfig`], [`AuthConfig`]) that
-/// are loaded as a single YAML/JSON document and validated together
-/// at startup. See [`AppConfig::load`] for the loading precedence and
+/// Top-level server configuration composing three independent sections.
+///
+/// Composes [`ServerConfig`], [`EngineConfig`], and [`AuthConfig`] that are
+/// loaded as a single YAML/JSON document and validated together at startup.
+/// See [`AppConfig::load`] for the loading precedence and
 /// [`AppConfig::validate`] for the invariant check.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(clippy::derivable_impls)]
