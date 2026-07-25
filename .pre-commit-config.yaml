@@ -23,7 +23,7 @@ repos:
 
     # Conventional commit messages (commit-msg hook).
     - repo: https://github.com/commitizen-tools/commitizen
-      rev: v4.16.4
+      rev: v4.16.5
       hooks:
           - id: commitizen
           - id: commitizen-branch
@@ -31,9 +31,10 @@ repos:
 
     # Markdown lint + format.
     - repo: https://github.com/rvben/rumdl-pre-commit
-      rev: v0.2.24
+      rev: v0.2.43
       hooks:
-          - id: rumdl # Lint + auto-fix, fails if unfixable issues remain
+          - id: rumdl
+            args: [--fix]
           - id: rumdl-fmt # Pure format, always exits 0
 
     # Rust toolchain checks — pre-commit local-only.
