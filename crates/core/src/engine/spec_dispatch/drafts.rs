@@ -160,8 +160,8 @@ impl crate::engine::Engine {
         };
 
         // Per-sequence state tracking: current input tokens and positions
-        let mut current_tokens: Vec<Vec<TokenId>> = batch.input_tokens.to_vec();
-        let mut current_positions: Vec<Vec<usize>> = batch.positions.to_vec();
+        let mut current_tokens: Vec<Vec<TokenId>> = batch.input_tokens.clone();
+        let mut current_positions: Vec<Vec<usize>> = batch.positions.clone();
 
         for pos in 0..max_draft {
             // Build per-position batch

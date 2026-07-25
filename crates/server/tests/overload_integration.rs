@@ -137,8 +137,10 @@ async fn test_saturated_mailbox_returns_engine_overloaded_503() {
             request_id: None,
         }) {
             Ok(()) => filled += 1,
-            Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => break,
-            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => break,
+            Err(
+                tokio::sync::mpsc::error::TrySendError::Full(_)
+                | tokio::sync::mpsc::error::TrySendError::Closed(_),
+            ) => break,
         }
     }
     assert!(

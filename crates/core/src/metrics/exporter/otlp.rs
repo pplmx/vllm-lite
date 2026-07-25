@@ -269,7 +269,7 @@ enum Instrument {
     UpDownCounter(UpDownCounter<i64>),
 }
 
-/// Push-based OTLP metrics exporter polling the collector and exporting via OTel.
+/// Push-based OTLP metrics exporter polling the collector and exporting via `OTel`.
 ///
 /// Holds an `EnhancedMetricsCollector` reference + an OTLP `SdkMeterProvider`;
 /// `run()` polls the collector every `config.metrics_export_interval_secs` and

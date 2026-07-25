@@ -93,8 +93,7 @@ fn test_precompute_rope_cache_correct_formula() {
     // Verify the RoPE formula: angle = pos * theta^(-2i/d).
     // At position 0, every angle must be 0 → cos=1, sin=0.
     let cache = precompute_rope_cache(4, 64, 10000.0);
-    for i in 0..32 {
-        let (cos, sin) = cache[i]; // first seq position (pos=0)
+    for (i, &(cos, sin)) in cache.iter().enumerate().take(32) {
         assert!(
             (cos - 1.0).abs() < 1e-6,
             "cos(angle) should be 1.0 at pos=0, dim={i}"
