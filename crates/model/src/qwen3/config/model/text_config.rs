@@ -7,7 +7,7 @@
 use super::TextConfig;
 
 impl TextConfig {
-    /// Vocabulary size; defaults to 151_936 when unset.
+    /// Vocabulary size; defaults to `151_936` when unset.
     #[must_use]
     pub fn vocab_size(&self) -> usize {
         self.vocab_size.unwrap_or(151_936)
@@ -37,13 +37,13 @@ impl TextConfig {
         self.num_key_value_heads.unwrap_or(32)
     }
 
-    /// MLP intermediate (FFN) width; defaults to 11_008 when unset.
+    /// MLP intermediate (FFN) width; defaults to `11_008` when unset.
     #[must_use]
     pub fn intermediate_size(&self) -> usize {
         self.intermediate_size.unwrap_or(11008)
     }
 
-    /// `RoPE` base frequency; defaults to 10_000 when unset.
+    /// `RoPE` base frequency; defaults to `10_000` when unset.
     #[must_use]
     pub fn rope_theta(&self) -> f32 {
         self.rope_theta.unwrap_or(10000.0)

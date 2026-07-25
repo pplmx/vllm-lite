@@ -289,7 +289,7 @@ mod tests {
     #[test]
     fn test_read_compressed_out_of_bounds_returns_zeros() {
         let device = Device::Cpu;
-        let cache = MlaKvCache::new(1, 4, 8, 2, device.clone()); // 16 tokens total
+        let cache = MlaKvCache::new(1, 4, 8, 2, device); // 16 tokens total
 
         // Reading beyond num_blocks should return zeros for the OOB portion.
         let retrieved = cache.read_compressed(0, 16, 4).unwrap();
