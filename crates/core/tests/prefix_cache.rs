@@ -257,11 +257,12 @@ fn test_radix_repeated_prefix_lookup_is_fast() {
     }
     let elapsed = start.elapsed();
 
-    // Threshold is deliberately generous (200ms) to avoid flakiness under
-    // CI load — the machine may be running 1800+ tests in parallel. A real
-    // regression (e.g. O(n²) lookup) would still take seconds, not 200ms.
+    // Threshold is deliberately generous (500ms) to avoid flakiness under
+    // CI load — the machine may be running 1800+ tests in parallel nextest
+    // partitions. A real regression (e.g. O(n²) lookup) would still take
+    // seconds, not 500ms.
     assert!(
-        elapsed.as_millis() < 200,
+        elapsed.as_millis() < 500,
         "Radix prefix lookups should stay fast: {elapsed:?}"
     );
 }
