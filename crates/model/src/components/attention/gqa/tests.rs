@@ -847,35 +847,6 @@ fn gpu_device() -> candle_core::Device {
 }
 
 #[cfg(feature = "cuda")]
-fn build_random_attn_cuda() -> Result<GqaAttention> {
-    let device = gpu_device();
-    let num_heads = 4;
-    let num_kv_heads = 4;
-    let head_dim = 32;
-    let hidden_size = num_heads * head_dim;
-
-    let q_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
-    let k_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
-    let v_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
-    let o_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
-
-    GqaAttention::new_with_weights(
-        hidden_size,
-        num_heads,
-        num_kv_heads,
-        head_dim,
-        q_w,
-        k_w,
-        v_w,
-        o_w,
-        AttentionConfig::default(),
-        false,
-        None,
-        None,
-    )
-}
-
-#[cfg(feature = "cuda")]
 #[test]
 #[cfg_attr(not(feature = "cuda"), ignore = "requires the 'cuda' feature")]
 fn test_gqa_attention_forward_output_shape_cuda() {
