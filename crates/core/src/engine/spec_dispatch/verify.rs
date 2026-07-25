@@ -149,28 +149,18 @@ impl crate::engine::Engine {
     }
 }
 
-/// Pick a token from `logits` using `params`: argmax for greedy
-/// (`temperature == 0.0`), `sample_one_with_params` otherwise. Thin
-/// indirection so the verifier doesn't sprinkle the same `if`
-/// everywhere. Returns a full [`SampledToken`] (P36 v0.3 wire-type
-/// follow-up engine wire-through).
+/// Pick a token from `logits` using `params`. Thin indirection so the
+/// verifier doesn't sprinkle the same `if` everywhere. Returns a full
+/// [`SampledToken`] (P36 v0.3 wire-type engine wire-through).
+///
+/// `sample_one_with_params` handles both paths internally:
+/// - Greedy (`T == 0.0`): short-circuits to argmax for T=0, populates
+///   logprob correctly. The verifier only uses `.token` for accept/reject
+///   on greedy; logprobs are surfaced by the regular non-speculative path.
+/// - Sampling (`T > 0.0`): short-circuits on `repeat_penalty == 1.0` (the
+///   default), so an empty seen-token list is fine.
 fn sample_or_argmax(logits: &[f32], params: &SamplingParams) -> SampledToken {
-    if params.temperature <= 0.0 {
-        // Greedy path: synthesize a SampledToken with logprob=0.0
-        // placeholder (the verifier only uses `.token` for the
-        // accept/reject comparison on greedy; logprobs are surfaced
-        // by the regular non-speculative path which calls
-        // `sample_one_with_params` directly). For the bonus token
-        // we do want a real logprob, so recompute via
-        // `sample_one_with_params` (which short-circuits to
-        // argmax_logits for T=0 anyway and populates the logprob
-        // correctly).
-        sample_one_with_params(logits, params, &[])
-    } else {
-        // Empty seen-token list is fine: `sample_one_with_params`
-        // short-circuits on `repeat_penalty == 1.0` (the default).
-        sample_one_with_params(logits, params, &[])
-    }
+    sample_one_with_params(logits, params, &[])
 }
 
 /// Placeholder [`SampledToken`] for speculative-accepted draft tokens
