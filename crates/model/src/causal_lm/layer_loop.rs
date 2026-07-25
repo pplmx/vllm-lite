@@ -135,7 +135,7 @@ mod tests {
     fn test_run_layers_matches_paged_decoder_block() {
         let config = ModelConfig::test_tiny();
         let device = Device::Cpu;
-        let layer = new_block(&config, 0).unwrap();
+        let layer = new_block(&config, 0, Device::Cpu).unwrap();
         let layers = vec![layer];
         let mut kv_cache = PagedKvCache::new(
             1,

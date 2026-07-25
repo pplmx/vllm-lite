@@ -24,7 +24,9 @@ impl LlamaModel {
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(config: ModelConfig, device: Device, num_kv_blocks: usize) -> CandleResult<Self> {
-        Self::new_rms(config, device, num_kv_blocks, false, new_block)
+        Self::new_rms(config, device.clone(), num_kv_blocks, false, |c, idx| {
+            new_block(c, idx, device.clone())
+        })
     }
 
     /// Build from weights.

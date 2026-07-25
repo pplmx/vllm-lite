@@ -32,7 +32,7 @@ use candle_nn::{Embedding, VarBuilder};
 fn test_forward_with_paged_kv_prefill_and_decode() {
     let config = ModelConfig::test_tiny();
     let device = Device::Cpu;
-    let layer = new_block(&config, 0).unwrap();
+    let layer = new_block(&config, 0, Device::Cpu).unwrap();
     let layers = vec![layer];
 
     let vocab = config.vocab_size;

@@ -18,7 +18,7 @@ mod tests {
     #[test]
     fn test_llama_block_forward_shape() {
         let config = test_config();
-        let block = new_block(&config, 0).unwrap();
+        let block = new_block(&config, 0, Device::Cpu).unwrap();
 
         let input = Tensor::ones((2, 10, config.hidden_size), DType::F32, &Device::Cpu).unwrap();
         let output = block.forward(&input).unwrap();
@@ -29,7 +29,7 @@ mod tests {
     #[test]
     fn test_llama_block_single_token() {
         let config = test_config();
-        let block = new_block(&config, 0).unwrap();
+        let block = new_block(&config, 0, Device::Cpu).unwrap();
 
         let input = Tensor::ones((1, 1, config.hidden_size), DType::F32, &Device::Cpu).unwrap();
         let output = block.forward(&input).unwrap();
@@ -42,7 +42,7 @@ mod tests {
         let config = test_config();
 
         for batch_size in [1usize, 2, 4] {
-            let block = new_block(&config, 0).unwrap();
+            let block = new_block(&config, 0, Device::Cpu).unwrap();
             let input = Tensor::ones(
                 (batch_size, 5, config.hidden_size),
                 DType::F32,
@@ -58,7 +58,7 @@ mod tests {
     #[ignore = "slow integration test - run with --ignored for full model validation"]
     fn test_llama_block_full_size() {
         let config = ModelConfig::llama_7b();
-        let block = new_block(&config, 0).unwrap();
+        let block = new_block(&config, 0, Device::Cpu).unwrap();
 
         let input = Tensor::ones((2, 10, 4096), DType::F32, &Device::Cpu).unwrap();
         let output = block.forward(&input).unwrap();

@@ -17,7 +17,7 @@ use crate::components::LnLayerNorm;
 use crate::components::SwiGLU;
 use crate::components::attention::RopeGqaAttention;
 use crate::config::ModelConfig;
-use candle_core::{Result, Tensor};
+use candle_core::{Device, Result, Tensor};
 
 use super::RopeGqaDecoderBlock;
 
@@ -25,7 +25,11 @@ use super::RopeGqaDecoderBlock;
 /// # Errors
 ///
 /// Returns `Err` if any required tensor allocation or weight loading fails.
-pub fn new_block(config: &ModelConfig, _layer_idx: usize) -> Result<RopeGqaDecoderBlock> {
+pub fn new_block(
+    config: &ModelConfig,
+    _layer_idx: usize,
+    device: Device,
+) -> Result<RopeGqaDecoderBlock> {
     let hidden_size = config.hidden_size;
     let num_heads = config.num_heads;
     let num_kv_heads = config.num_kv_heads;
@@ -227,7 +231,7 @@ mod tests {
     #[test]
     fn new_block_accepts_yarn_rope_scaling() {
         let config = tiny_config(Some(yarn_scaling(4.0, Some(0.5))));
-        let _block = new_block(&config, 0).expect(
+        let _block = new_block(&config, 0, Device::Cpu).expect(
             "decoder_block::factory::new_block must accept a ModelConfig with \
              rope_scaling=Some(...) (P20 wiring: forwards to \
              RopeGqaAttention::new_with_rope_scaling)",
@@ -243,7 +247,7 @@ mod tests {
         // invariant so callers can rely on no-scaling configs continuing to
         // work without surprises.
         let config = tiny_config(None);
-        let _block = new_block(&config, 0).expect(
+        let _block = new_block(&config, 0, Device::Cpu).expect(
             "decoder_block::factory::new_block must continue to accept \
              rope_scaling=None (backward-compatible path)",
         );
