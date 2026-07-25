@@ -178,7 +178,7 @@ impl Engine {
             "process_output: received model output"
         );
 
-        let mut results = Vec::new();
+        let mut results = Vec::with_capacity(output.seq_ids.len());
         for (seq_id, sampled) in output.seq_ids.iter().zip(output.next_tokens.iter()) {
             trace!(
                 seq_id = %seq_id,
