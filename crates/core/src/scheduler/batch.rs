@@ -100,7 +100,7 @@ impl crate::engine::Engine {
 
         let output = BatchOutput {
             seq_ids: batch.seq_ids.clone(),
-            next_tokens: next_tokens.clone(),
+            next_tokens,
         };
 
         tracing::debug!(
