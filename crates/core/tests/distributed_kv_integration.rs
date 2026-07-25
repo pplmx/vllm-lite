@@ -125,6 +125,8 @@ fn engine_propagates_distributed_kv_to_scheduler_memory_manager() {
 
 #[test]
 fn engine_scheduler_lookup_distributed_prefix_round_trip() {
+    const BLOCK_SIZE: usize = 16;
+
     // Phase 19 OPS-05b3 — verify the scheduler-level
     // `lookup_distributed_prefix` end-to-end through the engine.
     //

@@ -34,6 +34,8 @@ use vllm_server::{ApiState, api, auth, cli, debug, health::HealthChecker, loggin
 #[tokio::main]
 #[allow(clippy::too_many_lines)] // server bootstrap: linear startup sequence with no natural decomposition
 async fn main() -> Result<()> {
+    const ENGINE_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
     let cli = cli::CliArgs::parse();
     let app_config = cli.to_app_config();
 
@@ -406,7 +408,6 @@ async fn main() -> Result<()> {
     //    the thread. Cap at 10s so a stuck engine can't pin the
     //    process forever; operators can `SIGKILL` if that's
     //    needed.
-    const ENGINE_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
     if let Err(e) = engine_shutdown_tx.blocking_send(EngineMessage::Shutdown) {
         tracing::warn!(error = %e, "engine shutdown send failed");
     }

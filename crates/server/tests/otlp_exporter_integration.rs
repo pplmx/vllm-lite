@@ -118,9 +118,9 @@ async fn otlp_config_validation_rejects_bad_sampling_ratio() {
 /// is initialised via `init_tracing_with_otlp`.
 #[tokio::test]
 async fn otlp_traces_arrive_at_stub_collector() {
-    let (recorded, url) = spawn_stub_collector().await;
-
     use tracing_subscriber::EnvFilter;
+
+    let (recorded, url) = spawn_stub_collector().await;
     let cfg = OtlpConfig {
         enabled: true,
         endpoint: url,
