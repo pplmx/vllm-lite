@@ -8,6 +8,10 @@
 // `reset_stats` are public API surface on `PreemptionManager`. The
 // scheduler engine wires them when it adopts the preemption-driven
 // admission path; current uses bypass them.
+//!
+//! `allow(dead_code)` is intentional: `record_preemption`, `record_rejection`,
+//! and `reset_stats` are public API surface tested in isolation but not yet
+//! called from the scheduler tick loop (planned for admission-path wiring).
 #![allow(dead_code)]
 
 use crate::types::{SchedulerConfig, Sequence, Status};

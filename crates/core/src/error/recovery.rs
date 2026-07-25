@@ -1,6 +1,9 @@
 // crates/core/src/error/recovery.rs
 //! Error recovery management
-
+//!
+//! This module is a planned feature scaffold: types are tested but not yet
+//! wired into the engine error path. `allow(dead_code)` is intentional until
+//! the engine integration lands (tracked as future work).
 #![allow(dead_code)]
 
 use crate::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
@@ -63,39 +66,6 @@ impl Default for RecoveryConfig {
             retry_base_delay: Duration::from_millis(100),
             default_circuit_breaker: CircuitBreakerConfig::default(),
         }
-    }
-}
-
-impl RecoveryConfig {
-    /// Returns a builder for configuring this type with the documented field defaults.
-    /// Use `with_*(...)` to override individual fields, then `build()` to produce the type.
-    pub fn builder() -> RecoveryConfigBuilder {
-        RecoveryConfigBuilder::default()
-    }
-}
-
-/// Builder for [`RecoveryConfig`].
-#[derive(Debug, Clone, Default)]
-pub(crate) struct RecoveryConfigBuilder {
-    inner: RecoveryConfig,
-}
-
-impl RecoveryConfigBuilder {
-    pub const fn with_retry_attempts(mut self, v: usize) -> Self {
-        self.inner.retry_attempts = v;
-        self
-    }
-    pub const fn with_retry_base_delay(mut self, v: Duration) -> Self {
-        self.inner.retry_base_delay = v;
-        self
-    }
-    pub const fn with_default_circuit_breaker(mut self, v: CircuitBreakerConfig) -> Self {
-        self.inner.default_circuit_breaker = v;
-        self
-    }
-    /// build: build the [`RecoveryConfig`].
-    pub const fn build(self) -> RecoveryConfig {
-        self.inner
     }
 }
 

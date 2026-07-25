@@ -17,7 +17,6 @@
 //! from the thread-local default RNG. Greedy paths bypass the RNG
 //! entirely so `seed` has no observable effect when `temperature = 0`
 //! or `top_p = 1.0`.
-#![allow(unused_variables)]
 
 use crate::types::TokenId;
 use tracing::trace;
