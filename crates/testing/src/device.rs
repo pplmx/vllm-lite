@@ -37,6 +37,7 @@ use candle_core::Device;
 /// ```
 #[cfg(feature = "cuda")]
 #[must_use]
+#[allow(clippy::module_name_repetitions)]
 pub fn gpu_device() -> Device {
     Device::cuda_if_available(0).expect("CUDA device must be available for gpu_device() tests")
 }
@@ -48,6 +49,7 @@ pub fn gpu_device() -> Device {
 /// returns an actual CUDA device instead.
 #[cfg(not(feature = "cuda"))]
 #[must_use]
+#[allow(clippy::module_name_repetitions)]
 pub fn gpu_device() -> Device {
     Device::Cpu
 }

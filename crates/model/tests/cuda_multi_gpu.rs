@@ -47,8 +47,11 @@ fn small_qwen3_config() -> Qwen3Config {
 /// `CUDA_VISIBLE_DEVICES=$i cargo nextest run --partition hash:$(($i+1))/8`,
 /// this function returns device 0 (which maps to the physical GPU
 /// assigned to this partition).
+///
+/// Delegates to [`vllm_testing::gpu_device`] for a single source of truth
+/// across all GPU test code.
 fn cuda_device_for_partition() -> Device {
-    Device::cuda_if_available(0).expect("CUDA device must be available for cuda_multi_gpu tests")
+    vllm_testing::gpu_device()
 }
 
 // ─────────────────────────────────────────────────────────────────
