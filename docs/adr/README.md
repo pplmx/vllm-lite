@@ -29,6 +29,11 @@ decisions in vllm-lite.
 
 - [ADR-008](ADR-008-vllm-dist-feature-gated.md) — vllm-dist feature-gated
 - [ADR-015](ADR-015-vllm-dist-investment-decision.md) — vllm-dist investment vs deprecation
+- [ADR-020](ADR-020-multi-node-kv-block-transfer.md) — Multi-node KV block transfer
+
+### Observability
+
+- [ADR-021](ADR-021-otlp-exporter.md) — OTLP metrics + traces exporter
 
 ### Scheduling
 
@@ -52,7 +57,7 @@ decisions in vllm-lite.
 
 Each ADR follows the format:
 
-```
+```text
 # ADR-NNN: Title
 
 **Date:** YYYY-MM-DD
