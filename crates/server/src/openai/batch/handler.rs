@@ -44,6 +44,10 @@ use crate::openai::types::ErrorResponse;
 /// because the Batch API executor is not yet implemented. The
 /// request is validated for shape but never persisted; callers
 /// should retry after the executor ships.
+///
+/// Must be `async` for axum 0.8 `Handler` trait compatibility.
+/// The body returns immediately without `.await` (all work is synchronous).
+#[allow(clippy::unused_async)]
 pub async fn create_batch(
     State(_state): State<ApiState>,
     Json(_req): Json<SimpleBatchRequest>,

@@ -32,6 +32,10 @@ const READY_MAILBOX_FILL_RATIO: f64 = 0.90;
 /// while holding the write lock; vLLM-lite treats that as a fatal
 /// error and the process aborts on the spot, so propagation here
 /// is the correct behaviour.
+///
+/// Must be `async` for axum 0.8 `Handler` trait — the function
+/// body contains no `.await` points because all work is synchronous.
+#[allow(clippy::unused_async)]
 pub async fn health_handler(State(state): State<ApiState>) -> Response {
     // invariant: lock is only held for synchronous field access; no panic possible while holding.
     let status = state.health.read().unwrap().check_liveness();
@@ -68,6 +72,10 @@ pub async fn health_handler(State(state): State<ApiState>) -> Response {
 ///
 /// Panics if `state.health.read()` returns a poisoned `RwLock`;
 /// see [`health_handler`] for the rationale.
+///
+/// Must be `async` for axum 0.8 `Handler` trait — the function
+/// body contains no `.await` points (all work is synchronous).
+#[allow(clippy::unused_async)]
 pub async fn ready_handler(State(state): State<ApiState>) -> Response {
     let static_status = state.health.read().unwrap().check_readiness();
 

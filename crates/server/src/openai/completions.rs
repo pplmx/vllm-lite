@@ -635,6 +635,11 @@ enum NParallelTerminal {
 /// (P37 production-readiness §4). The caller awaits `seq_id_rx`
 /// with a 1 s timeout after spawning all N (matches the
 /// single-shot `stream_completion` pattern).
+///
+/// Declared `async` for caller compatibility (all callers use `.await`).
+/// The body is synchronous today but may require async engine submission
+/// or tokenizer operations in the future.
+#[allow(clippy::unused_async)]
 async fn spawn_n_streaming_candidate(
     state: ApiState,
     req: CompletionRequest,
