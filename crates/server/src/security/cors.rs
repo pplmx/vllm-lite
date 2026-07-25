@@ -100,15 +100,16 @@ pub fn with_cors(router: Router, config: &CorsConfig) -> Router {
         .allow_origins
         .iter()
         .filter_map(|s| {
-            if let Ok(v) = axum::http::HeaderValue::from_str(s) {
-                Some(v)
-            } else {
-                tracing::warn!(
-                    origin = %s,
-                    "CORS: dropping malformed origin (not a valid header value)"
-                );
-                None
-            }
+            axum::http::HeaderValue::from_str(s).map_or_else(
+                |_| {
+                    tracing::warn!(
+                        origin = %s,
+                        "CORS: dropping malformed origin (not a valid header value)"
+                    );
+                    None
+                },
+                Some,
+            )
         })
         .collect();
     layer = layer.allow_origin(origins);
@@ -121,15 +122,16 @@ pub fn with_cors(router: Router, config: &CorsConfig) -> Router {
         .allow_methods
         .iter()
         .filter_map(|s| {
-            if let Ok(m) = axum::http::Method::from_str(s) {
-                Some(m)
-            } else {
-                tracing::warn!(
-                    method = %s,
-                    "CORS: dropping malformed method"
-                );
-                None
-            }
+            axum::http::Method::from_str(s).map_or_else(
+                |_| {
+                    tracing::warn!(
+                        method = %s,
+                        "CORS: dropping malformed method"
+                    );
+                    None
+                },
+                Some,
+            )
         })
         .collect();
     if methods.is_empty() {
@@ -142,15 +144,16 @@ pub fn with_cors(router: Router, config: &CorsConfig) -> Router {
         .allow_headers
         .iter()
         .filter_map(|s| {
-            if let Ok(h) = HeaderName::from_str(s) {
-                Some(h)
-            } else {
-                tracing::warn!(
-                    header = %s,
-                    "CORS: dropping malformed header name"
-                );
-                None
-            }
+            HeaderName::from_str(s).map_or_else(
+                |_| {
+                    tracing::warn!(
+                        header = %s,
+                        "CORS: dropping malformed header name"
+                    );
+                    None
+                },
+                Some,
+            )
         })
         .collect();
     if headers.is_empty() {
