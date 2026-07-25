@@ -1386,6 +1386,14 @@ pub async fn completions(
     Extension(correlation_id): Extension<CorrelationId>,
     Json(req): Json<CompletionRequest>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    // Terminal state machine for SSE streaming: Streaming → EmitDoneSentinel → Done.
+    // Must be declared before any statements — Rust hoists items to scope start.
+    enum Terminal {
+        Streaming,
+        EmitDoneSentinel,
+        Done,
+    }
+
     // API-01: reject OpenAI fields the engine does not yet honour
     // BEFORE doing any work. Mirror of chat.rs:
     // `validate_chat_request_fields`. Honest 400 > silent degradation.
@@ -1645,11 +1653,6 @@ pub async fn completions(
         // `chat.rs` — final chunk carries the real `finish_reason`
         // and `[DONE]` is a separate SSE event. See
         // `docs/technical-due-diligence/architecture-performance.md` §5.1.3.
-        enum Terminal {
-            Streaming,
-            EmitDoneSentinel,
-            Done,
-        }
         // P35 v0.x wire-type follow-up engine wire-through: the
         // streaming path threads `echo` + `suffix` through the SSE
         // event stream. `echo = true` prepends the prompt to the

@@ -1619,6 +1619,14 @@ async fn stream_chat_completion(
     correlation_id: &str,
     req: ChatRequest,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    // Terminal state machine for SSE streaming: Streaming → EmitDoneSentinel → Done.
+    // Must be declared before any statements — Rust hoists items to scope start.
+    enum Terminal {
+        Streaming,
+        EmitDoneSentinel,
+        Done,
+    }
+
     let start = std::time::Instant::now();
     let request_id = format!(
         "req_{}",
@@ -1915,11 +1923,6 @@ async fn stream_chat_completion(
     // reason BEFORE dropping the response channel — so by the time
     // `rx.recv()` returns `None`, the reason is already in the oneshot
     // and `reason_rx.await` resolves immediately.
-    enum Terminal {
-        Streaming,
-        EmitDoneSentinel,
-        Done,
-    }
 
     let stream = stream::unfold(
         (

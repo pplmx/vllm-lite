@@ -192,6 +192,8 @@ fn engine_scheduler_lookup_distributed_prefix_partial_match() {
     use std::sync::Arc;
     use vllm_traits::{TokenId, XorShiftHasher};
 
+    const BLOCK_SIZE: usize = 16;
+
     let cache = make_cache();
     let mut engine = EngineBuilder::new(Box::new(StubModelBackend))
         .with_num_kv_blocks(64)
@@ -203,7 +205,6 @@ fn engine_scheduler_lookup_distributed_prefix_partial_match() {
         .memory_mut()
         .set_block_hasher(Arc::new(XorShiftHasher));
 
-    const BLOCK_SIZE: usize = 16;
     let prompt: Vec<TokenId> = (0..(2 * BLOCK_SIZE))
         .map(|i| (i + 300) as TokenId)
         .collect();

@@ -81,10 +81,10 @@ fn test_mixtral_block_from_weights_accepts_yarn_rope_scaling() {
     // signature is exercised here via the public API; a real round-trip
     // forward pass would need a populated `HashMap<String, Tensor>` of
     // expert weights which is out of scope for this smoke test.
+    use candle_core::Tensor;
     let config = tiny_config_with_yarn(Some(yarn_scaling(4.0, Some(0.5))));
     let device = candle_core::Device::Cpu;
     let mut weights = std::collections::HashMap::new();
-    use candle_core::Tensor;
     let format = |s: &str| format!("model.layers.0.{s}");
     let hidden = config.hidden_size;
     let dtype = DType::F32;
