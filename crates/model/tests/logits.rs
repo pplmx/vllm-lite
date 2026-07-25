@@ -1,8 +1,9 @@
-use candle_core::{Device, Tensor};
+use candle_core::Tensor;
+use vllm_testing::device::gpu_or_cpu;
 
 #[test]
 fn test_logits_extraction_1d() {
-    let device = Device::Cpu;
+    let device = gpu_or_cpu();
 
     // Simulate logits: [batch=1, seq=1, vocab=5]
     // Values: [[0.1, 0.5, 0.3, 0.8, 0.2]]
@@ -26,7 +27,7 @@ fn test_logits_extraction_1d() {
 
 #[test]
 fn test_logits_extraction_multiple_tokens() {
-    let device = Device::Cpu;
+    let device = gpu_or_cpu();
 
     // Simulate logits: [batch=1, seq=3, vocab=4]
     // Last token (index 2): [0.1, 0.9, 0.2, 0.3] -> max at index 1
@@ -53,7 +54,7 @@ fn test_logits_extraction_multiple_tokens() {
 
 #[test]
 fn test_logits_extraction_batch() {
-    let device = Device::Cpu;
+    let device = gpu_or_cpu();
 
     // Simulate logits: [batch=2, seq=1, vocab=3]
     // Batch 0: [0.5, 0.1, 0.2] -> max at 0
@@ -75,7 +76,7 @@ fn test_logits_extraction_batch() {
 #[test]
 fn test_wrong_dimension_argmax() {
     // This test demonstrates the bug we fixed
-    let device = Device::Cpu;
+    let device = gpu_or_cpu();
 
     // logits: [batch=1, seq=3, vocab=4]
     let logits_data = vec![

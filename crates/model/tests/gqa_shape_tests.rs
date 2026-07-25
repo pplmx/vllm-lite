@@ -1,8 +1,9 @@
-//! Tests for GQA tensor shape handling
+//! Tests for GQA tensor shape handling.
 //!
 //! These tests verify that `expand_kv` correctly handles GQA head count mismatches.
 
-use candle_core::{Device, Tensor};
+use candle_core::Tensor;
+use vllm_testing::device::gpu_or_cpu;
 
 /// Helper function to test `expand_kv`
 fn test_expand_kv(
@@ -35,7 +36,7 @@ fn test_expand_kv(
 #[test]
 fn test_expand_kv_gqa_qwen25_config() {
     // Qwen2.5-0.5B: num_heads=14, num_kv_heads=2
-    let device = Device::Cpu;
+    let device = gpu_or_cpu();
     let kv = Tensor::zeros(
         (1usize, 10usize, 2usize, 64usize),
         candle_core::DType::F32,
@@ -62,7 +63,7 @@ fn test_expand_kv_gqa_qwen25_config() {
 #[test]
 fn test_expand_kv_gqa_qwen3_config() {
     // Qwen3-0.6B: num_heads=16, num_kv_heads=8
-    let device = Device::Cpu;
+    let device = gpu_or_cpu();
     let kv = Tensor::zeros(
         (1usize, 10usize, 8usize, 64usize),
         candle_core::DType::F32,
@@ -89,7 +90,7 @@ fn test_expand_kv_gqa_qwen3_config() {
 #[test]
 fn test_expand_kv_no_expansion_needed() {
     // MHA case: num_heads == num_kv_heads
-    let device = Device::Cpu;
+    let device = gpu_or_cpu();
     let kv = Tensor::zeros(
         (1usize, 10usize, 8usize, 64usize),
         candle_core::DType::F32,
@@ -112,7 +113,7 @@ fn test_expand_kv_no_expansion_needed() {
 #[test]
 fn test_expand_kv_non_divisible() {
     // Edge case: num_heads=10, num_kv_heads=3 (10 % 3 != 0)
-    let device = Device::Cpu;
+    let device = gpu_or_cpu();
     let kv = Tensor::zeros(
         (1usize, 5usize, 3usize, 64usize),
         candle_core::DType::F32,

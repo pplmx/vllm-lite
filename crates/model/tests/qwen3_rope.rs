@@ -1,11 +1,12 @@
 //! `RoPE` unit tests (pure tensor math, no checkpoint).
+use vllm_testing::device::gpu_or_cpu;
 
 #[test]
 fn test_qwen3_rope_position_encoding() {
-    use candle_core::{Device, Tensor};
+    use candle_core::Tensor;
     use vllm_model::components::positional::apply_rope;
 
-    let device = Device::Cpu;
+    let device = gpu_or_cpu();
     let head_dim = 128;
     let theta = 1_000_000.0f32;
 
@@ -62,10 +63,10 @@ fn test_qwen3_rope_position_encoding() {
 
 #[test]
 fn test_qwen3_rope_consistency_and_norm() {
-    use candle_core::{Device, Tensor};
+    use candle_core::Tensor;
     use vllm_model::components::positional::apply_rope;
 
-    let device = Device::Cpu;
+    let device = gpu_or_cpu();
     let head_dim = 128;
     let theta = 1_000_000.0f32;
 

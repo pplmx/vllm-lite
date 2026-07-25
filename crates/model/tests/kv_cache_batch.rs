@@ -1,9 +1,10 @@
-use candle_core::{DType, Device, Result, Tensor};
+use candle_core::{DType, Result, Tensor};
 use vllm_model::paged_tensor::PagedKvCache;
+use vllm_testing::device::gpu_or_cpu;
 
 #[test]
 fn test_write_kv_batch_basic() -> Result<()> {
-    let device = Device::Cpu;
+    let device = gpu_or_cpu();
     let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone(), false)?;
 
     // Create batch of 4 tokens
@@ -22,7 +23,7 @@ fn test_write_kv_batch_basic() -> Result<()> {
 
 #[test]
 fn test_write_kv_batch_multiple_blocks() -> Result<()> {
-    let device = Device::Cpu;
+    let device = gpu_or_cpu();
     let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone(), false)?;
 
     // Write 32 tokens across 2 blocks
@@ -39,7 +40,7 @@ fn test_write_kv_batch_multiple_blocks() -> Result<()> {
 
 #[test]
 fn test_write_kv_batch_dimension_mismatch() -> Result<()> {
-    let device = Device::Cpu;
+    let device = gpu_or_cpu();
     let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone(), false)?;
 
     let k_batch = Tensor::ones((1, 4, 2, 4), DType::F32, &device)?;
@@ -53,7 +54,7 @@ fn test_write_kv_batch_dimension_mismatch() -> Result<()> {
 
 #[test]
 fn test_write_kv_batch_wrong_head_dim() -> Result<()> {
-    let device = Device::Cpu;
+    let device = gpu_or_cpu();
     let mut cache = PagedKvCache::new(1, 2, 4, 4, device.clone(), false)?;
 
     let k_batch = Tensor::ones((1, 4, 2, 8), DType::F32, &device)?;
