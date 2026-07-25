@@ -345,7 +345,7 @@ fn compute_inv_freq_default(query: &Tensor, theta: f32) -> Vec<f32> {
 fn compute_inv_freq_linear(query: &Tensor, theta: f32, scaling_factor: f32) -> Vec<f32> {
     let (_batch, _seq_len, _num_heads, head_dim) = query.dims4().expect("dims4");
     let inv_freq = compute_inv_freq_for_head_dim(head_dim, theta);
-    if scaling_factor == 1.0 {
+    if (scaling_factor - 1.0).abs() < f32::EPSILON {
         return inv_freq;
     }
     inv_freq.into_iter().map(|f| f / scaling_factor).collect()
@@ -363,7 +363,7 @@ fn compute_inv_freq_linear(query: &Tensor, theta: f32, scaling_factor: f32) -> V
 /// the attention kernel and is exposed via `RoPE::attn_factor()`.
 fn compute_inv_freq_yarn(query: &Tensor, theta: f32, scaling_factor: f32) -> Vec<f32> {
     let (_, _, _, head_dim) = query.dims4().expect("dims4");
-    if scaling_factor == 1.0 {
+    if (scaling_factor - 1.0).abs() < f32::EPSILON {
         return compute_inv_freq_for_head_dim(head_dim, theta);
     }
     compute_inv_freq_yarn_impl(head_dim, theta, scaling_factor)
@@ -410,7 +410,7 @@ fn compute_inv_freq_dynamic(
         // Without orig_max, Dynamic cannot decide. Default to Default.
         return compute_inv_freq_for_head_dim(head_dim, theta);
     };
-    if cur_seq_len <= orig_max || scaling_factor == 1.0 {
+    if cur_seq_len <= orig_max || (scaling_factor - 1.0).abs() < f32::EPSILON {
         return compute_inv_freq_for_head_dim(head_dim, theta);
     }
     let factor = scaling_factor;

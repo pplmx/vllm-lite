@@ -598,8 +598,8 @@ async fn test_chat_omitted_top_p_uses_engine_default() {
     let params = captured
         .as_ref()
         .expect("capturing mock must have observed the AddRequest");
-    assert_eq!(
-        params.top_p, 1.0,
+    assert!(
+        (params.top_p - 1.0).abs() < f32::EPSILON,
         "omitted top_p must leave engine default (1.0); got {}",
         params.top_p
     );
