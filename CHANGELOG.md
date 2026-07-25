@@ -1,5 +1,7 @@
 # 📋 Changelog
 
+<!-- markdownlint-disable-file MD013 -->
+
 <p align="center">
   <img src="https://img.shields.io/badge/Keep%20a%20Changelog-1.0.0-blue.svg?style=flat-square" alt="Keep a Changelog">
   <img src="https://img.shields.io/badge/Semantic%20Versioning-2.0.0-green.svg?style=flat-square" alt="Semantic Versioning">
@@ -548,8 +550,6 @@
     - Implemented full weight loading for Qwen3.5 Mamba models
     - Supports fallback for embed_tokens and lm_head weight names
     - Supports tied embeddings (tie_word_embeddings)
-
-### Changed
 
 - **Performance Optimization (v27.0)** — profile-driven speedups across attention + cache + scheduler:
     - **Measurement infrastructure**: 4 new model-layer criterion benches (GQA, MLA, FlashAttn, PagedKV); runtime CUDA detection so benches run real qwen3-7B dimensions on GPU and tiny smoke test on CPU + eprintln warning. `just bench-model` / `just bench-model-one BENCH` for invocation.
@@ -1241,9 +1241,6 @@ Refs: `docs/superpowers/specs/2026-06-26-wave5-benchmark-suite.md`
 - INT8 quantization support in KV Cache
 - Forward pass with tiled attention strategy
 - Comprehensive test suite for tiled attention
-
-### Changed
-
 - Improved documentation structure (README.md, docs/README.md, ROADMAP.md)
 - Added detailed development roadmap
 
