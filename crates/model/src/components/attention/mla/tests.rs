@@ -409,6 +409,7 @@ fn test_mla_deterministic() {
 // ─────────────────────────────────────────────────────────────────
 
 /// Configuration matching DeepSeek-V2-style MLA dimensions.
+#[cfg(feature = "cuda")]
 fn small_mla_config() -> (usize, usize, usize, usize, usize, usize, usize, usize) {
     // (hidden_size, num_heads, num_kv_heads, q_lora_rank, kv_lora_rank, qk_nope_dim, qk_rope_dim, v_head_dim)
     // q_lora_rank MUST equal num_heads * (qk_nope_dim + qk_rope_dim) for split_q to work.
