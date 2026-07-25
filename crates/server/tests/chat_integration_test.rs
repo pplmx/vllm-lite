@@ -4697,35 +4697,32 @@ fn spawn_best_of_mock_engine() -> (
         let per_candidate_logprobs: Vec<Vec<f32>> =
             vec![vec![-1.0, -1.0], vec![-0.5, -0.5], vec![0.0, 0.0]];
         while let Some(msg) = engine_rx.recv().await {
-            match msg {
-                EngineMessage::AddRequest {
-                    response_tx,
-                    seq_id_tx,
-                    finish_reason_tx,
-                    ..
-                } => {
-                    if let Some(tx) = seq_id_tx {
-                        let _ = tx.send((candidate_idx + 1) as u64);
-                    }
-                    drop(finish_reason_tx);
-                    let logprobs = per_candidate_logprobs
-                        [candidate_idx % per_candidate_logprobs.len()]
-                    .clone();
-                    let token_ids: Vec<u32> = (10..10 + logprobs.len() as u32).collect();
-                    captured_clone.lock().await.push(logprobs.clone());
-                    for (tok, lp) in token_ids.iter().zip(logprobs.iter()) {
-                        let sampled = vllm_traits::SampledToken {
-                            token: *tok,
-                            logprob: *lp,
-                            top_logprobs: Vec::new(),
-                        };
-                        if response_tx.send(sampled).await.is_err() {
-                            break;
-                        }
-                    }
-                    candidate_idx += 1;
+            if let EngineMessage::AddRequest {
+                response_tx,
+                seq_id_tx,
+                finish_reason_tx,
+                ..
+            } = msg
+            {
+                if let Some(tx) = seq_id_tx {
+                    let _ = tx.send((candidate_idx + 1) as u64);
                 }
-                _ => {}
+                drop(finish_reason_tx);
+                let logprobs =
+                    per_candidate_logprobs[candidate_idx % per_candidate_logprobs.len()].clone();
+                let token_ids: Vec<u32> = (10..10 + logprobs.len() as u32).collect();
+                captured_clone.lock().await.push(logprobs.clone());
+                for (tok, lp) in token_ids.iter().zip(logprobs.iter()) {
+                    let sampled = vllm_traits::SampledToken {
+                        token: *tok,
+                        logprob: *lp,
+                        top_logprobs: Vec::new(),
+                    };
+                    if response_tx.send(sampled).await.is_err() {
+                        break;
+                    }
+                }
+                candidate_idx += 1;
             }
         }
     });
@@ -5238,37 +5235,35 @@ async fn test_completions_best_of_with_partial_engine_failure_returns_503() {
     let handle = tokio::spawn(async move {
         let mut count = 0;
         while let Some(msg) = engine_rx.recv().await {
-            match msg {
-                EngineMessage::AddRequest {
-                    response_tx,
-                    finish_reason_tx,
-                    ..
-                } => {
-                    count += 1;
-                    if count == 2 {
-                        // Second candidate: drop the response channel
-                        // immediately (simulates engine error). The
-                        // first candidate replies normally so it
-                        // completes; the second's task sees an empty
-                        // stream and returns `Ok((empty, Stop))` —
-                        // but with the validation that we DID see a
-                        // failure-mode path. Use a hard drop with no
-                        // reply instead so the candidate is forced
-                        // into a non-Ok path.
-                        drop(response_tx);
-                        drop(finish_reason_tx);
-                    } else {
-                        drop(finish_reason_tx);
-                        let _ = response_tx
-                            .send(vllm_traits::SampledToken {
-                                token: 10,
-                                logprob: 0.0,
-                                top_logprobs: vec![],
-                            })
-                            .await;
-                    }
+            if let EngineMessage::AddRequest {
+                response_tx,
+                finish_reason_tx,
+                ..
+            } = msg
+            {
+                count += 1;
+                if count == 2 {
+                    // Second candidate: drop the response channel
+                    // immediately (simulates engine error). The
+                    // first candidate replies normally so it
+                    // completes; the second's task sees an empty
+                    // stream and returns `Ok((empty, Stop))` —
+                    // but with the validation that we DID see a
+                    // failure-mode path. Use a hard drop with no
+                    // reply instead so the candidate is forced
+                    // into a non-Ok path.
+                    drop(response_tx);
+                    drop(finish_reason_tx);
+                } else {
+                    drop(finish_reason_tx);
+                    let _ = response_tx
+                        .send(vllm_traits::SampledToken {
+                            token: 10,
+                            logprob: 0.0,
+                            top_logprobs: vec![],
+                        })
+                        .await;
                 }
-                _ => {}
             }
         }
     });
@@ -5360,41 +5355,39 @@ fn spawn_stop_mock_engine(
     let handle = tokio::spawn(async move {
         let mut candidate_idx: usize = 0;
         while let Some(msg) = engine_rx.recv().await {
-            match msg {
-                EngineMessage::AddRequest {
-                    response_tx,
-                    seq_id_tx,
-                    finish_reason_tx,
-                    ..
-                } => {
-                    if let Some(tx) = seq_id_tx {
-                        let _ = tx.send((candidate_idx + 1) as u64);
-                    }
-                    let tokens = per_seq_tokens
-                        .get(candidate_idx % per_seq_tokens.len())
-                        .cloned()
-                        .unwrap_or_default();
-                    captured_clone.lock().await.push(candidate_idx);
-                    for token in &tokens {
-                        let sampled = vllm_traits::SampledToken {
-                            token: *token,
-                            logprob: 0.0,
-                            top_logprobs: Vec::new(),
-                        };
-                        if response_tx.send(sampled).await.is_err() {
-                            break;
-                        }
-                    }
-                    // Simulate engine's finalize_finished(Stop): tell
-                    // the handler why the channel is closing BEFORE
-                    // dropping it. Tests assert the handler maps
-                    // this to finish_reason = "stop".
-                    if let Some(tx) = finish_reason_tx {
-                        let _ = tx.send(vllm_traits::FinishReason::Stop);
-                    }
-                    candidate_idx += 1;
+            if let EngineMessage::AddRequest {
+                response_tx,
+                seq_id_tx,
+                finish_reason_tx,
+                ..
+            } = msg
+            {
+                if let Some(tx) = seq_id_tx {
+                    let _ = tx.send((candidate_idx + 1) as u64);
                 }
-                _ => {}
+                let tokens = per_seq_tokens
+                    .get(candidate_idx % per_seq_tokens.len())
+                    .cloned()
+                    .unwrap_or_default();
+                captured_clone.lock().await.push(candidate_idx);
+                for token in &tokens {
+                    let sampled = vllm_traits::SampledToken {
+                        token: *token,
+                        logprob: 0.0,
+                        top_logprobs: Vec::new(),
+                    };
+                    if response_tx.send(sampled).await.is_err() {
+                        break;
+                    }
+                }
+                // Simulate engine's finalize_finished(Stop): tell
+                // the handler why the channel is closing BEFORE
+                // dropping it. Tests assert the handler maps
+                // this to finish_reason = "stop".
+                if let Some(tx) = finish_reason_tx {
+                    let _ = tx.send(vllm_traits::FinishReason::Stop);
+                }
+                candidate_idx += 1;
             }
         }
     });
@@ -5741,35 +5734,33 @@ async fn test_completions_stop_sequences_with_best_of_each_candidate_honors_stop
         // (candidate 2 wins).
         let mean_logprobs = [-1.0f32, -0.5, 0.0];
         while let Some(msg) = engine_rx.recv().await {
-            match msg {
-                EngineMessage::AddRequest {
-                    response_tx,
-                    seq_id_tx,
-                    finish_reason_tx,
-                    ..
-                } => {
-                    if let Some(tx) = seq_id_tx {
-                        let _ = tx.send((candidate_idx + 1) as u64);
-                    }
-                    let tokens =
-                        per_candidate_tokens[candidate_idx % per_candidate_tokens.len()].clone();
-                    let mean = mean_logprobs[candidate_idx % mean_logprobs.len()];
-                    for tok in &tokens {
-                        let sampled = vllm_traits::SampledToken {
-                            token: *tok,
-                            logprob: mean,
-                            top_logprobs: Vec::new(),
-                        };
-                        if response_tx.send(sampled).await.is_err() {
-                            break;
-                        }
-                    }
-                    if let Some(tx) = finish_reason_tx {
-                        let _ = tx.send(vllm_traits::FinishReason::Stop);
-                    }
-                    candidate_idx += 1;
+            if let EngineMessage::AddRequest {
+                response_tx,
+                seq_id_tx,
+                finish_reason_tx,
+                ..
+            } = msg
+            {
+                if let Some(tx) = seq_id_tx {
+                    let _ = tx.send((candidate_idx + 1) as u64);
                 }
-                _ => {}
+                let tokens =
+                    per_candidate_tokens[candidate_idx % per_candidate_tokens.len()].clone();
+                let mean = mean_logprobs[candidate_idx % mean_logprobs.len()];
+                for tok in &tokens {
+                    let sampled = vllm_traits::SampledToken {
+                        token: *tok,
+                        logprob: mean,
+                        top_logprobs: Vec::new(),
+                    };
+                    if response_tx.send(sampled).await.is_err() {
+                        break;
+                    }
+                }
+                if let Some(tx) = finish_reason_tx {
+                    let _ = tx.send(vllm_traits::FinishReason::Stop);
+                }
+                candidate_idx += 1;
             }
         }
     });
@@ -5850,31 +5841,29 @@ async fn test_chat_stop_with_logprobs_returns_logprobs_of_stopped_sequence() {
     let (engine_tx, mut engine_rx) = tokio::sync::mpsc::channel::<EngineMessage>(8);
     let handle = tokio::spawn(async move {
         while let Some(msg) = engine_rx.recv().await {
-            match msg {
-                EngineMessage::AddRequest {
-                    response_tx,
-                    seq_id_tx,
-                    finish_reason_tx,
-                    ..
-                } => {
-                    if let Some(tx) = seq_id_tx {
-                        let _ = tx.send(1);
-                    }
-                    for (tok, lp) in tokens.iter().zip(logprob_values.iter()) {
-                        let sampled = vllm_traits::SampledToken {
-                            token: *tok,
-                            logprob: *lp,
-                            top_logprobs: Vec::new(),
-                        };
-                        if response_tx.send(sampled).await.is_err() {
-                            break;
-                        }
-                    }
-                    if let Some(tx) = finish_reason_tx {
-                        let _ = tx.send(vllm_traits::FinishReason::Stop);
+            if let EngineMessage::AddRequest {
+                response_tx,
+                seq_id_tx,
+                finish_reason_tx,
+                ..
+            } = msg
+            {
+                if let Some(tx) = seq_id_tx {
+                    let _ = tx.send(1);
+                }
+                for (tok, lp) in tokens.iter().zip(logprob_values.iter()) {
+                    let sampled = vllm_traits::SampledToken {
+                        token: *tok,
+                        logprob: *lp,
+                        top_logprobs: Vec::new(),
+                    };
+                    if response_tx.send(sampled).await.is_err() {
+                        break;
                     }
                 }
-                _ => {}
+                if let Some(tx) = finish_reason_tx {
+                    let _ = tx.send(vllm_traits::FinishReason::Stop);
+                }
             }
         }
     });
@@ -5970,31 +5959,29 @@ async fn test_chat_stop_in_streaming_emits_finish_reason_stop_on_last_chunk() {
     let (engine_tx, mut engine_rx) = tokio::sync::mpsc::channel::<EngineMessage>(8);
     let handle = tokio::spawn(async move {
         while let Some(msg) = engine_rx.recv().await {
-            match msg {
-                EngineMessage::AddRequest {
-                    response_tx,
-                    seq_id_tx,
-                    finish_reason_tx,
-                    ..
-                } => {
-                    if let Some(tx) = seq_id_tx {
-                        let _ = tx.send(1);
-                    }
-                    for tok in &tokens {
-                        let sampled = vllm_traits::SampledToken {
-                            token: *tok,
-                            logprob: 0.0,
-                            top_logprobs: Vec::new(),
-                        };
-                        if response_tx.send(sampled).await.is_err() {
-                            break;
-                        }
-                    }
-                    if let Some(tx) = finish_reason_tx {
-                        let _ = tx.send(vllm_traits::FinishReason::Stop);
+            if let EngineMessage::AddRequest {
+                response_tx,
+                seq_id_tx,
+                finish_reason_tx,
+                ..
+            } = msg
+            {
+                if let Some(tx) = seq_id_tx {
+                    let _ = tx.send(1);
+                }
+                for tok in &tokens {
+                    let sampled = vllm_traits::SampledToken {
+                        token: *tok,
+                        logprob: 0.0,
+                        top_logprobs: Vec::new(),
+                    };
+                    if response_tx.send(sampled).await.is_err() {
+                        break;
                     }
                 }
-                _ => {}
+                if let Some(tx) = finish_reason_tx {
+                    let _ = tx.send(vllm_traits::FinishReason::Stop);
+                }
             }
         }
     });
@@ -6093,31 +6080,29 @@ async fn test_completions_stop_in_streaming_emits_finish_reason_stop_on_last_chu
     let (engine_tx, mut engine_rx) = tokio::sync::mpsc::channel::<EngineMessage>(8);
     let handle = tokio::spawn(async move {
         while let Some(msg) = engine_rx.recv().await {
-            match msg {
-                EngineMessage::AddRequest {
-                    response_tx,
-                    seq_id_tx,
-                    finish_reason_tx,
-                    ..
-                } => {
-                    if let Some(tx) = seq_id_tx {
-                        let _ = tx.send(1);
-                    }
-                    for tok in &tokens {
-                        let sampled = vllm_traits::SampledToken {
-                            token: *tok,
-                            logprob: 0.0,
-                            top_logprobs: Vec::new(),
-                        };
-                        if response_tx.send(sampled).await.is_err() {
-                            break;
-                        }
-                    }
-                    if let Some(tx) = finish_reason_tx {
-                        let _ = tx.send(vllm_traits::FinishReason::Stop);
+            if let EngineMessage::AddRequest {
+                response_tx,
+                seq_id_tx,
+                finish_reason_tx,
+                ..
+            } = msg
+            {
+                if let Some(tx) = seq_id_tx {
+                    let _ = tx.send(1);
+                }
+                for tok in &tokens {
+                    let sampled = vllm_traits::SampledToken {
+                        token: *tok,
+                        logprob: 0.0,
+                        top_logprobs: Vec::new(),
+                    };
+                    if response_tx.send(sampled).await.is_err() {
+                        break;
                     }
                 }
-                _ => {}
+                if let Some(tx) = finish_reason_tx {
+                    let _ = tx.send(vllm_traits::FinishReason::Stop);
+                }
             }
         }
     });
@@ -6303,47 +6288,45 @@ fn spawn_n_mock_engine(
     let handle = tokio::spawn(async move {
         let mut candidate_idx: usize = 0;
         while let Some(msg) = engine_rx.recv().await {
-            match msg {
-                EngineMessage::AddRequest {
-                    response_tx,
-                    seq_id_tx,
-                    finish_reason_tx,
-                    ..
-                } => {
-                    if let Some(tx) = seq_id_tx {
-                        let _ = tx.send((candidate_idx + 1) as u64);
-                    }
-                    let tokens = per_candidate_tokens
-                        .get(candidate_idx % per_candidate_tokens.len())
-                        .cloned()
-                        .unwrap_or_default();
-                    captured_clone.lock().await.push(tokens.clone());
-                    for token in &tokens {
-                        let sampled = vllm_traits::SampledToken {
-                            token: *token,
-                            // Distinct logprobs per candidate so
-                            // visible per-candidate content
-                            // divergence can be inspected when
-                            // needed. The logprob value itself isn't
-                            // in the wire shape; only its presence
-                            // in `logprobs` is.
-                            logprob: (candidate_idx as f32) - 0.5,
-                            top_logprobs: Vec::new(),
-                        };
-                        if response_tx.send(sampled).await.is_err() {
-                            break;
-                        }
-                    }
-                    // Simulate engine's natural finalize: send
-                    // `FinishReason::Stop` before dropping the
-                    // response channel so the handler maps it to
-                    // `finish_reason = "stop"` in the response.
-                    if let Some(tx) = finish_reason_tx {
-                        let _ = tx.send(vllm_traits::FinishReason::Stop);
-                    }
-                    candidate_idx += 1;
+            if let EngineMessage::AddRequest {
+                response_tx,
+                seq_id_tx,
+                finish_reason_tx,
+                ..
+            } = msg
+            {
+                if let Some(tx) = seq_id_tx {
+                    let _ = tx.send((candidate_idx + 1) as u64);
                 }
-                _ => {}
+                let tokens = per_candidate_tokens
+                    .get(candidate_idx % per_candidate_tokens.len())
+                    .cloned()
+                    .unwrap_or_default();
+                captured_clone.lock().await.push(tokens.clone());
+                for token in &tokens {
+                    let sampled = vllm_traits::SampledToken {
+                        token: *token,
+                        // Distinct logprobs per candidate so
+                        // visible per-candidate content
+                        // divergence can be inspected when
+                        // needed. The logprob value itself isn't
+                        // in the wire shape; only its presence
+                        // in `logprobs` is.
+                        logprob: (candidate_idx as f32) - 0.5,
+                        top_logprobs: Vec::new(),
+                    };
+                    if response_tx.send(sampled).await.is_err() {
+                        break;
+                    }
+                }
+                // Simulate engine's natural finalize: send
+                // `FinishReason::Stop` before dropping the
+                // response channel so the handler maps it to
+                // `finish_reason = "stop"` in the response.
+                if let Some(tx) = finish_reason_tx {
+                    let _ = tx.send(vllm_traits::FinishReason::Stop);
+                }
+                candidate_idx += 1;
             }
         }
     });

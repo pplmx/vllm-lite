@@ -284,7 +284,7 @@ fn column_parallel_forward_8gpu() -> Result<(), TensorParallelError> {
     //       = 0.1 * (16384 * sum(0..63) + 8128 * 64)
     //       = 0.1 * (16384 * 2016 + 520192)
     //       = 0.1 * 33550336 = 3355033.6
-    let expected_total: f32 = 0.1 * (16384.0 * 2016.0 + 520192.0);
+    let expected_total: f32 = 0.1 * 16384.0f32.mul_add(2016.0, 520192.0);
     for v in &output {
         assert!(
             (v - expected_total).abs() < 1.0,
