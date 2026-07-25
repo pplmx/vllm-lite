@@ -75,10 +75,12 @@ async fn closed_default_emits_no_allow_origin() {
 
 #[tokio::test]
 async fn explicit_allowlist_emits_matching_origin() {
-    let mut config = CorsConfig::default();
-    config.allow_origins = vec!["https://app.example.com".to_string()];
-    config.allow_methods = vec!["GET".to_string(), "POST".to_string()];
-    config.allow_headers = vec!["content-type".to_string()];
+    let config = CorsConfig {
+        allow_origins: vec!["https://app.example.com".to_string()],
+        allow_methods: vec!["GET".to_string(), "POST".to_string()],
+        allow_headers: vec!["content-type".to_string()],
+        ..Default::default()
+    };
     let app = build_app(&config);
 
     let req = preflight_request("https://app.example.com");
@@ -108,8 +110,10 @@ async fn explicit_allowlist_emits_matching_origin() {
 
 #[tokio::test]
 async fn origin_not_in_allowlist_is_dropped() {
-    let mut config = CorsConfig::default();
-    config.allow_origins = vec!["https://allowed.example.com".to_string()];
+    let config = CorsConfig {
+        allow_origins: vec!["https://allowed.example.com".to_string()],
+        ..Default::default()
+    };
     let app = build_app(&config);
 
     let req = preflight_request("https://attacker.example.com");

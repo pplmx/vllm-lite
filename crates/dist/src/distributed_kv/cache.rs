@@ -1007,8 +1007,10 @@ mod tests {
         let mut source = MockBlockDataSource::new();
         source.insert(7, vec![0x55, 0x66, 0x77]);
 
-        let mut sink = RecordingBlockSink::default();
-        sink.return_error = true;
+        let sink = RecordingBlockSink {
+            return_error: true,
+            ..Default::default()
+        };
         let sink = Arc::new(sink);
         let cache = DistributedKVCache::new(CacheConfig::new(NodeId(0), 1))
             .with_block_data_source(Arc::new(source))
