@@ -66,7 +66,7 @@ fn yarn_scaling(factor: f32, attn_factor: Option<f32>) -> RopeScaling {
 #[test]
 fn test_mixtral_block_new_accepts_yarn_rope_scaling() {
     let config = tiny_config_with_yarn(Some(yarn_scaling(4.0, Some(0.5))));
-    let _block = MixtralBlock::new(&config, 0).expect(
+    let _block = MixtralBlock::new(&config, 0, Device::Cpu).expect(
         "MixtralBlock::new must accept a ModelConfig with rope_scaling=Some(...) \
          (P20 wiring: forwards to RopeGqaAttention::new_with_rope_scaling)",
     );
@@ -154,7 +154,7 @@ fn test_mixtral_block_from_weights_accepts_yarn_rope_scaling() {
 fn test_mixtral_block_prefill_then_decode() {
     let config = tiny_config();
     let device = candle_core::Device::Cpu;
-    let block = MixtralBlock::new(&config, 0).unwrap();
+    let block = MixtralBlock::new(&config, 0, Device::Cpu).unwrap();
     let mut kv_cache = PagedKvCache::new(1, 4, 16, 8, device.clone(), false).unwrap();
 
     let x = Tensor::ones((1, 4, 64), DType::F32, &device).unwrap();
@@ -176,7 +176,7 @@ fn test_mixtral_block_prefill_then_decode() {
 fn test_mixtral_block_prefill_continue_matches_full_prefill() {
     let config = tiny_config();
     let device = candle_core::Device::Cpu;
-    let block = MixtralBlock::new(&config, 0).unwrap();
+    let block = MixtralBlock::new(&config, 0, Device::Cpu).unwrap();
 
     let seq_len = 6usize;
     let x = Tensor::ones((1, seq_len, 64), DType::F32, &device).unwrap();

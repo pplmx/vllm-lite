@@ -9,7 +9,7 @@ use crate::config::{LayerType, ModelConfig, RoPEConfig};
 use crate::gemma4::attention::Gemma4Attention;
 use crate::gemma4::mlp::GeGLU;
 use crate::paged_tensor::PagedKvCache;
-use candle_core::{Result, Tensor};
+use candle_core::{Device, Result, Tensor};
 
 #[derive(Debug)]
 /// Block abstraction for Gemma4. Groups a contiguous range of work (e.g. one transformer layer, one pipeline stage).
@@ -337,8 +337,8 @@ impl PagedDecoderBlock for Gemma4Block {
 ///
 /// Returns `Err` if any required tensor allocation or weight loading fails.
 /// Build a zero-initialized Gemma4 block for `CausalLm::new_rms`.
-pub fn new_block(config: &ModelConfig, layer_idx: usize) -> Result<Gemma4Block> {
-    let vb = candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu);
+pub fn new_block(config: &ModelConfig, layer_idx: usize, device: Device) -> Result<Gemma4Block> {
+    let vb = candle_nn::VarBuilder::zeros(candle_core::DType::F32, &device);
     Gemma4Block::new(config, layer_idx, vb)
 }
 

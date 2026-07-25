@@ -25,7 +25,13 @@ impl Gemma4Model {
         num_kv_blocks: usize,
         kv_quantization: bool,
     ) -> CandleResult<Self> {
-        Self::new_rms(config, device, num_kv_blocks, kv_quantization, new_block)
+        Self::new_rms(
+            config,
+            device.clone(),
+            num_kv_blocks,
+            kv_quantization,
+            |c, idx| new_block(c, idx, device.clone()),
+        )
     }
 
     /// Build from weights.

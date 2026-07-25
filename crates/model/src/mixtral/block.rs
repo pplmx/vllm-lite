@@ -9,7 +9,7 @@ use crate::components::decoder_block::PagedDecoderBlock;
 use crate::config::ModelConfig;
 use crate::mixtral::sparse_moe::MixtralSparseMoe;
 use crate::paged_tensor::PagedKvCache;
-use candle_core::{Result, Tensor};
+use candle_core::{Device, Result, Tensor};
 use candle_nn::VarBuilder;
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ impl MixtralBlock {
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
-    pub fn new(config: &ModelConfig, _layer_idx: usize) -> Result<Self> {
+    pub fn new(config: &ModelConfig, _layer_idx: usize, device: Device) -> Result<Self> {
         let hidden_size = config.hidden_size;
         let num_heads = config.num_heads;
         let num_kv_heads = config.num_kv_heads;
@@ -39,8 +39,7 @@ impl MixtralBlock {
             .unwrap_or(config.intermediate_size);
         let top_k = config.top_k_experts.unwrap_or(2);
 
-        let vb = VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu);
-        let device = candle_core::Device::Cpu;
+        let vb = VarBuilder::zeros(candle_core::DType::F32, &device);
 
         let input_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
         let input_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;

@@ -27,10 +27,10 @@ impl MixtralModel {
     ) -> CandleResult<Self> {
         Self::new_with_block_fn(
             config,
-            device,
+            device.clone(),
             num_kv_blocks,
             kv_quantization,
-            MixtralBlock::new,
+            |c, idx| MixtralBlock::new(c, idx, device.clone()),
         )
     }
 
