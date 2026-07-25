@@ -37,8 +37,6 @@ pub fn new_block(
     let intermediate_size = config.intermediate_size;
     let rms_norm_eps = config.rms_norm_eps;
 
-    let device = candle_core::Device::Cpu;
-
     let input_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
     let input_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
     let input_layernorm = LnLayerNorm::new(input_ln_weight, input_ln_bias, rms_norm_eps);
