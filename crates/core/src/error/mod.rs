@@ -107,19 +107,17 @@ impl EngineError {
     /// No-op for variants that don't carry per-request context.
     /// Returns the modified error so callers can chain: `err.with_request_id(id)?`.
     #[must_use]
-    pub const fn with_request_id(self, request_id: u64) -> Self {
+    pub const fn with_request_id(self, _request_id: u64) -> Self {
         // Currently, no variant carries optional request_id — this is a no-op
         // hook for future per-variant additions. Kept as a stable API so
         // adding structured context later is non-breaking.
-        let _ = request_id;
         self
     }
 
     /// Attach a `seq_id` to this error for log correlation.
     /// Same semantics as [`Self::with_request_id`].
     #[must_use]
-    pub const fn with_seq_id(self, seq_id: u64) -> Self {
-        let _ = seq_id;
+    pub const fn with_seq_id(self, _seq_id: u64) -> Self {
         self
     }
 }
