@@ -167,10 +167,9 @@ mod tests {
     #[test]
     fn test_run_layers_transformer_block_chunked_prefill() {
         use crate::qwen3::block::factory::new_block;
-
         let config = ModelConfig::test_tiny();
         let device = Device::Cpu;
-        let layer = new_block(&config, 0).unwrap();
+        let layer = new_block(&config, 0, &device).unwrap();
         let layers = vec![layer];
 
         let seq_len = 6usize;

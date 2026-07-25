@@ -17,6 +17,7 @@ use candle_core::{Result, Tensor};
 pub fn new_block(
     config: &crate::config::ModelConfig,
     _layer_idx: usize,
+    device: &candle_core::Device,
 ) -> Result<TransformerBlock> {
     TransformerBlock::new_with_rope_scaling(
         config.hidden_size,
@@ -28,6 +29,7 @@ pub fn new_block(
         config.rms_norm_eps,
         config.max_position_embeddings,
         config.rope_scaling.as_ref(),
+        device.clone(),
         None,
         config.has_qk_norm,
     )

@@ -9,7 +9,7 @@ use crate::components::RopeGqaDecoderBlock;
 use crate::components::SwiGLU;
 use crate::components::attention::RopeGqaAttention;
 use crate::qwen3::config::RopeScaling;
-use candle_core::{Result, Tensor};
+use candle_core::{Device, Result, Tensor};
 
 #[cfg(feature = "multi-node")]
 use vllm_dist::TensorParallelConfig;
@@ -33,6 +33,7 @@ impl TransformerBlock {
         intermediate_size: usize,
         theta: f32,
         rms_norm_eps: f64,
+        device: Device,
         vb: Option<candle_nn::VarBuilder<'_>>,
         has_qk_norm: bool,
     ) -> Result<Self> {
@@ -46,6 +47,7 @@ impl TransformerBlock {
             rms_norm_eps,
             DEFAULT_MAX_POSITION,
             None,
+            device,
             vb,
             has_qk_norm,
         )
@@ -71,13 +73,12 @@ impl TransformerBlock {
         rms_norm_eps: f64,
         max_position: usize,
         rope_scaling: Option<&RopeScaling>,
+        device: Device,
         vb: Option<candle_nn::VarBuilder<'_>>,
         has_qk_norm: bool,
     ) -> Result<Self> {
-        let vb = vb.unwrap_or_else(|| {
-            candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu)
-        });
-        let device = candle_core::Device::Cpu;
+        let vb =
+            vb.unwrap_or_else(|| candle_nn::VarBuilder::zeros(candle_core::DType::F32, &device));
 
         let input_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
         let input_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
@@ -126,11 +127,11 @@ impl TransformerBlock {
         intermediate_size: usize,
         theta: f32,
         rms_norm_eps: f64,
+        device: Device,
         _tp_config: Option<TensorParallelConfig>,
         has_qk_norm: bool,
     ) -> Result<Self> {
-        let vb = candle_nn::VarBuilder::zeros(candle_core::DType::F32, &candle_core::Device::Cpu);
-        let device = candle_core::Device::Cpu;
+        let vb = candle_nn::VarBuilder::zeros(candle_core::DType::F32, &device);
 
         let input_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
         let input_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;

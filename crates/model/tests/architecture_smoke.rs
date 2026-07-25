@@ -42,6 +42,7 @@ fn block_forward_smoke(case: &ArchSmokeCase) {
                 config.intermediate_size,
                 config.rope_theta,
                 config.rms_norm_eps,
+                device.clone(),
                 None,
                 false,
             )

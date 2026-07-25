@@ -26,9 +26,13 @@ impl Qwen3Model {
     #[allow(clippy::needless_pass_by_value)]
     pub fn new(config: Qwen3Config, device: Device, num_kv_blocks: usize) -> CandleResult<Self> {
         let model_config = ModelConfig::from(&config);
-        Self::new_with_block_fn(model_config, device, num_kv_blocks, false, |c, idx| {
-            new_block(c, idx)
-        })
+        Self::new_with_block_fn(
+            model_config,
+            device.clone(),
+            num_kv_blocks,
+            false,
+            |c, idx| new_block(c, idx, &device),
+        )
         .map(|m| m.with_embed_through_layers(true))
     }
 

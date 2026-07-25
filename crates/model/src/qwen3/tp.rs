@@ -20,18 +20,25 @@ pub(crate) fn new_with_tp(
     let tp = tp_config;
     let has_qk_norm = model_config.has_qk_norm;
 
-    Qwen3Model::new_with_block_fn(model_config, device, num_kv_blocks, false, move |c, _| {
-        TransformerBlock::new_with_tp(
-            c.hidden_size,
-            c.num_heads,
-            c.num_kv_heads,
-            c.head_dim,
-            c.intermediate_size,
-            c.rope_theta,
-            c.rms_norm_eps,
-            tp.clone(),
-            has_qk_norm,
-        )
-    })
+    Qwen3Model::new_with_block_fn(
+        model_config,
+        device.clone(),
+        num_kv_blocks,
+        false,
+        move |c, _| {
+            TransformerBlock::new_with_tp(
+                c.hidden_size,
+                c.num_heads,
+                c.num_kv_heads,
+                c.head_dim,
+                c.intermediate_size,
+                c.rope_theta,
+                c.rms_norm_eps,
+                device.clone(),
+                tp.clone(),
+                has_qk_norm,
+            )
+        },
+    )
     .map(|m| m.with_embed_through_layers(true))
 }
