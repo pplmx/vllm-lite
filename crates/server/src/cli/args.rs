@@ -259,7 +259,7 @@ impl CliArgs {
         #[cfg(feature = "opentelemetry")]
         if let Some(endpoint) = self.otlp_endpoint.as_ref() {
             config.observability.otlp.enabled = true;
-            config.observability.otlp.endpoint = endpoint.clone();
+            config.observability.otlp.endpoint.clone_from(endpoint);
         }
 
         config
