@@ -4309,6 +4309,7 @@ dependencies = [
 name = "vllm-testing"
 version = "0.1.0"
 dependencies = [
+ "candle-core",
  "criterion",
  "proptest",
  "rand 0.10.2",

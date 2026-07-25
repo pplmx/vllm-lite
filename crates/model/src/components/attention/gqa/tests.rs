@@ -840,3 +840,158 @@ fn flash_attention_fn_attn_factor_changes_output() -> Result<()> {
     );
     Ok(())
 }
+
+#[cfg(feature = "cuda")]
+fn gpu_device() -> candle_core::Device {
+    vllm_testing::gpu_device()
+}
+
+#[cfg(feature = "cuda")]
+fn build_random_attn_cuda() -> Result<GqaAttention> {
+    let device = gpu_device();
+    let num_heads = 4;
+    let num_kv_heads = 4;
+    let head_dim = 32;
+    let hidden_size = num_heads * head_dim;
+
+    let q_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
+    let k_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
+    let v_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
+    let o_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device)?;
+
+    GqaAttention::new_with_weights(
+        hidden_size,
+        num_heads,
+        num_kv_heads,
+        head_dim,
+        q_w,
+        k_w,
+        v_w,
+        o_w,
+        AttentionConfig::default(),
+        false,
+        None,
+        None,
+    )
+}
+
+#[cfg(feature = "cuda")]
+#[test]
+#[cfg_attr(not(feature = "cuda"), ignore = "requires the 'cuda' feature")]
+fn test_gqa_attention_forward_output_shape_cuda() {
+    let device = gpu_device();
+    let num_heads = 4;
+    let num_kv_heads = 4;
+    let head_dim = 32;
+    let batch_size = 1;
+    let seq_len = 8;
+    let hidden_size = num_heads * head_dim;
+
+    let q_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device).unwrap();
+    let k_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device).unwrap();
+    let v_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device).unwrap();
+    let o_w = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &device).unwrap();
+
+    let attention = GqaAttention::new_with_weights(
+        hidden_size,
+        num_heads,
+        num_kv_heads,
+        head_dim,
+        q_w,
+        k_w,
+        v_w,
+        o_w,
+        AttentionConfig::default(),
+        false,
+        None,
+        None,
+    )
+    .unwrap();
+
+    let x = Tensor::randn(0.0f32, 1.0, (batch_size, seq_len, hidden_size), &device).unwrap();
+    let output = attention.forward(&x).unwrap();
+
+    assert_eq!(output.dims(), &[batch_size, seq_len, hidden_size]);
+    // Verify the output is on the same device as the input.
+    assert!(matches!(output.device(), candle_core::Device::Cuda(_)));
+}
+
+#[cfg(feature = "cuda")]
+#[test]
+#[cfg_attr(not(feature = "cuda"), ignore = "requires the 'cuda' feature")]
+fn test_gqa_attention_forward_matches_cpu_cuda()
+-> std::result::Result<(), Box<dyn std::error::Error>> {
+    // Verify that GQA attention produces the same output on CPU and CUDA
+    // (within numerical tolerance). This catches device-specific bugs like
+    // MatMulUnexpectedStriding that only manifest on GPU.
+    let device = gpu_device();
+    let num_heads = 4;
+    let num_kv_heads = 4;
+    let head_dim = 32;
+    let batch_size = 1;
+    let seq_len = 8;
+    let hidden_size = num_heads * head_dim;
+
+    // Build identical weights on both devices.
+    let cpu_device = candle_core::Device::Cpu;
+    let q_w_cpu = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &cpu_device).unwrap();
+    let k_w_cpu = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &cpu_device).unwrap();
+    let v_w_cpu = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &cpu_device).unwrap();
+    let o_w_cpu = Tensor::randn(0.0f32, 1.0, (hidden_size, hidden_size), &cpu_device).unwrap();
+
+    let attn_cpu = GqaAttention::new_with_weights(
+        hidden_size,
+        num_heads,
+        num_kv_heads,
+        head_dim,
+        q_w_cpu.clone(),
+        k_w_cpu.clone(),
+        v_w_cpu.clone(),
+        o_w_cpu.clone(),
+        AttentionConfig::default(),
+        false,
+        None,
+        None,
+    )
+    .unwrap();
+
+    let attn_cuda = GqaAttention::new_with_weights(
+        hidden_size,
+        num_heads,
+        num_kv_heads,
+        head_dim,
+        q_w_cpu.to_device(&device).unwrap(),
+        k_w_cpu.to_device(&device).unwrap(),
+        v_w_cpu.to_device(&device).unwrap(),
+        o_w_cpu.to_device(&device).unwrap(),
+        AttentionConfig::default(),
+        false,
+        None,
+        None,
+    )
+    .unwrap();
+
+    let x_cpu =
+        Tensor::randn(0.0f32, 1.0, (batch_size, seq_len, hidden_size), &cpu_device).unwrap();
+    let x_cuda = x_cpu.to_device(&device).unwrap();
+
+    let out_cpu = attn_cpu.forward(&x_cpu).unwrap();
+    let out_cuda = attn_cuda.forward(&x_cuda).unwrap();
+
+    // Compare outputs.
+    let diff = (&out_cuda.to_device(&cpu_device).unwrap() - &out_cpu)?
+        .abs()?
+        .max_all()?
+        .to_scalar::<f32>()
+        .unwrap();
+    // CPU vs CUDA matmul/softmax use different floating-point accumulation
+    // orders; with random weights (std=1.0) the max diff is ~0.002 in f32.
+    // 1e-2 is the standard tolerance for cross-device f32 comparison —
+    // the real bug-detection threshold is an *exact* match failure
+    // (e.g. MatMulUnexpectedStriding would produce NaN or a panic).
+    assert!(
+        diff < 1e-2,
+        "GQA attention CPU vs CUDA output mismatch (max diff = {diff})"
+    );
+    Ok(())
+}

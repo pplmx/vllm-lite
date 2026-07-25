@@ -57,6 +57,11 @@ pub mod request_factory;
 pub mod slow_model;
 pub mod utils;
 
+/// Re-export the GPU-first device helpers at the crate root for ergonomic
+/// access from integration tests across crates.
+pub mod device;
+pub use device::{cuda_available, gpu_device, gpu_or_cpu};
+
 // Curated top-level re-exports of the most-used test utilities.
 // Modules remain accessible via direct path (`vllm_testing::builders::*`)
 // for less-common exports that don't warrant top-level ergonomics.

@@ -16,9 +16,34 @@ init:
 build:
     cargo build --release
 
-# Run tests with nextest (skips #[ignore] tests by default; one checkpoint smoke remains)
+# Run tests with nextest (skips #[ignore] slow tests)
+# GPU-first: when CUDA is available, distributes tests across all GPUs
+# via nextest hash partitioning (CUDA_VISIBLE_DEVICES per partition).
+# Falls back to sequential CPU execution when no GPU is present.
 nextest:
-    cargo nextest run --workspace --all-features --no-fail-fast
+    #!/usr/bin/env bash
+    set -euo pipefail
+    NUM_GPUS=$(nvidia-smi --query-gpu=count --format=csv,noheader 2>/dev/null | head -1 || echo "0")
+    if [ "$NUM_GPUS" -ge 2 ]; then
+        echo "Distributing nextest across $NUM_GPUS GPUs (GPU-first)..."
+        pids=()
+        for i in $(seq 0 $((NUM_GPUS - 1))); do
+            CUDA_VISIBLE_DEVICES=$i cargo nextest run --workspace --all-features \
+                --partition "hash:$(($i + 1))/$NUM_GPUS" --no-fail-fast &
+            pids+=($!)
+        done
+        fail=0
+        for pid in "${pids[@]}"; do
+            wait "$pid" || fail=1
+        done
+        exit $fail
+    elif [ "$NUM_GPUS" -eq 1 ]; then
+        echo "Single GPU detected; running nextest with CUDA feature..."
+        CUDA_VISIBLE_DEVICES=0 cargo nextest run --workspace --all-features --no-fail-fast
+    else
+        echo "No GPUs detected; falling back to CPU nextest..."
+        cargo nextest run --workspace --all-features --no-fail-fast
+    fi
 
 # Faster local loop: no checkpoint smoke, fail-fast, default features only
 nextest-fast:

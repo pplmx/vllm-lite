@@ -399,6 +399,171 @@ fn test_mla_deterministic() {
     assert!(max_diff < 1e-5);
 }
 
+// ─────────────────────────────────────────────────────────────────
+// CUDA tests — exercise MLA attention on GPU.
+//
+// MLA's `new()` accepts a `VarBuilder` that controls weight device.
+// By constructing the VarBuilder on a CUDA device, all linear layers
+// (q_proj, kv_proj, k_decompress, v_decompress, o_proj) are allocated
+// on GPU, exercising the full CUDA forward path.
+// ─────────────────────────────────────────────────────────────────
+
+/// Configuration matching DeepSeek-V2-style MLA dimensions.
+fn small_mla_config() -> (usize, usize, usize, usize, usize, usize, usize, usize) {
+    // (hidden_size, num_heads, num_kv_heads, q_lora_rank, kv_lora_rank, qk_nope_dim, qk_rope_dim, v_head_dim)
+    // q_lora_rank MUST equal num_heads * (qk_nope_dim + qk_rope_dim) for split_q to work.
+    // v_head_dim MUST equal qk_nope_dim for the attention output concat to match o_proj input.
+    let num_heads = 4;
+    let qk_nope_dim = 32;
+    let qk_rope_dim = 16;
+    let v_head_dim = qk_nope_dim; // v_head_dim matches qk_nope_dim
+    let q_lora_rank = num_heads * (qk_nope_dim + qk_rope_dim); // 4 * 48 = 192
+    let kv_lora_rank = 64;
+    (
+        512,
+        num_heads,
+        num_heads,
+        q_lora_rank,
+        kv_lora_rank,
+        qk_nope_dim,
+        qk_rope_dim,
+        v_head_dim,
+    )
+}
+
+#[cfg(feature = "cuda")]
+#[test]
+#[cfg_attr(not(feature = "cuda"), ignore = "requires the 'cuda' feature")]
+fn test_mla_attention_forward_cuda() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    // Verify that MLA attention produces the correct output shape on CUDA.
+    // This catches device-specific bugs like MatMulUnexpectedStriding that
+    // only manifest on GPU (CPU handles strided tensors natively).
+    let device = vllm_testing::gpu_device();
+    let (
+        hidden_size,
+        num_heads,
+        num_kv_heads,
+        q_lora_rank,
+        kv_lora_rank,
+        qk_nope_dim,
+        qk_rope_dim,
+        v_head_dim,
+    ) = small_mla_config();
+
+    let vb = candle_nn::VarBuilder::zeros(candle_core::DType::F32, &device);
+
+    let attn = MlaAttention::new(
+        hidden_size,
+        num_heads,
+        num_kv_heads,
+        q_lora_rank,
+        kv_lora_rank,
+        qk_nope_dim,
+        qk_rope_dim,
+        v_head_dim,
+        Some(vb),
+        AttentionConfig::default(),
+    )?;
+
+    let batch_size = 1;
+    let seq_len = 8;
+    let x = Tensor::randn(0.0f32, 1.0, (batch_size, seq_len, hidden_size), &device)?;
+    let positions: Vec<i64> = vec![0, 1, 2, 3, 4, 5, 6, 7];
+
+    let output = attn.forward(&x, &positions)?;
+
+    assert_eq!(output.dims(), &[batch_size, seq_len, hidden_size]);
+    assert!(
+        matches!(output.device(), candle_core::Device::Cuda(_)),
+        "output should be on CUDA"
+    );
+    Ok(())
+}
+
+#[cfg(feature = "cuda")]
+#[test]
+#[cfg_attr(not(feature = "cuda"), ignore = "requires the 'cuda' feature")]
+fn test_mla_attention_forward_matches_cpu_cuda()
+-> std::result::Result<(), Box<dyn std::error::Error>> {
+    // Verify that MLA attention produces the same output on CPU and CUDA
+    // (within numerical tolerance). This catches device-specific bugs like
+    // MatMulUnexpectedStriding that only manifest on GPU.
+    let (
+        hidden_size,
+        num_heads,
+        num_kv_heads,
+        q_lora_rank,
+        kv_lora_rank,
+        qk_nope_dim,
+        qk_rope_dim,
+        v_head_dim,
+    ) = small_mla_config();
+    let batch_size = 1;
+    let seq_len = 8;
+
+    // Build identical weights on both devices using a seeded VarBuilder.
+    let cpu_device = candle_core::Device::Cpu;
+    let cuda_device = vllm_testing::gpu_device();
+
+    let vb_cpu = candle_nn::VarBuilder::zeros(candle_core::DType::F32, &cpu_device);
+    let vb_cuda = candle_nn::VarBuilder::zeros(candle_core::DType::F32, &cuda_device);
+
+    let attn_cpu = MlaAttention::new(
+        hidden_size,
+        num_heads,
+        num_kv_heads,
+        q_lora_rank,
+        kv_lora_rank,
+        qk_nope_dim,
+        qk_rope_dim,
+        v_head_dim,
+        Some(vb_cpu),
+        AttentionConfig::default(),
+    )?;
+
+    let attn_cuda = MlaAttention::new(
+        hidden_size,
+        num_heads,
+        num_kv_heads,
+        q_lora_rank,
+        kv_lora_rank,
+        qk_nope_dim,
+        qk_rope_dim,
+        v_head_dim,
+        Some(vb_cuda),
+        AttentionConfig::default(),
+    )?;
+
+    let positions: Vec<i64> = vec![0, 1, 2, 3, 4, 5, 6, 7];
+
+    // Use zeros for deterministic comparison (VarBuilder::zeros = all-zero weights).
+    let x = Tensor::zeros(
+        (batch_size, seq_len, hidden_size),
+        candle_core::DType::F32,
+        &cpu_device,
+    )?;
+    let x_cuda = Tensor::zeros(
+        (batch_size, seq_len, hidden_size),
+        candle_core::DType::F32,
+        &cuda_device,
+    )?;
+
+    let out_cpu = attn_cpu.forward(&x, &positions)?;
+    let out_cuda = attn_cuda.forward(&x_cuda, &positions)?;
+
+    // With zero weights, outputs should be exactly zero (no randomness from weights).
+    let diff = (&out_cuda.to_device(&cpu_device)? - &out_cpu)?
+        .abs()?
+        .max_all()?
+        .to_scalar::<f32>()
+        .unwrap();
+    assert!(
+        diff < 1e-3,
+        "MLA attention CPU vs CUDA output mismatch (max diff = {diff})"
+    );
+    Ok(())
+}
+
 #[test]
 fn test_mla_rope_affects_different_positions() {
     use crate::components::positional::rope::{RopeScalingContext, apply_rope_with_scaling};

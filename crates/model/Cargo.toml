@@ -47,7 +47,7 @@ harness = false
 
 [features]
 default = []
-cuda = ["candle-core/cuda", "candle-nn/cuda"]
+cuda = ["candle-core/cuda", "candle-nn/cuda", "vllm-testing/cuda"]
 gguf = ["dep:gguf"]
 multi-node = ["dep:vllm-dist", "dep:async-trait", "dep:tokio"]
 full = ["cuda", "gguf"]
