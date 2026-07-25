@@ -152,8 +152,7 @@ fn engine_scheduler_lookup_distributed_prefix_round_trip() {
         .memory_mut()
         .set_block_hasher(Arc::new(XorShiftHasher));
 
-    // Build a 2-block prompt (BLOCK_SIZE = 16).
-    const BLOCK_SIZE: usize = 16;
+    // Build a 2-block prompt.
     let prompt: Vec<TokenId> = (0..(2 * BLOCK_SIZE))
         .map(|i| (i + 200) as TokenId)
         .collect();
