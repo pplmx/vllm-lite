@@ -18,8 +18,6 @@
 //! `crates/server/src/draft_loader.rs`). There are no speculative-only
 //! mock backends in this module.
 
-#![allow(clippy::type_complexity, clippy::iter_cloned_collect)]
-
 mod dispatch;
 mod drafts;
 mod verify;

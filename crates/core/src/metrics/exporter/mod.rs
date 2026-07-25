@@ -14,7 +14,6 @@
 // crates/core/src/metrics/exporter/mod.rs
 // Prometheus text format requires explicit LF line terminators; explicit `\n` in
 // `write!` calls is clearer than `writeln!` for this protocol.
-#![allow(clippy::write_with_newline)]
 mod prometheus;
 
 #[cfg(feature = "opentelemetry")]
