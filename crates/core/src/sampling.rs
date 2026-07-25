@@ -608,7 +608,10 @@ pub fn apply_presence_penalty(logits: &mut [f32], seen_tokens: &[TokenId], penal
 /// token ids (any ID `>= logits.len()`) are silently ignored
 /// (matches `OpenAI`'s server behaviour; a bias on a non-vocab token
 /// is meaningless and would only consume compute).
-pub fn apply_logit_bias(logits: &mut [f32], bias: &std::collections::HashMap<TokenId, f32>) {
+pub fn apply_logit_bias<S: std::hash::BuildHasher>(
+    logits: &mut [f32],
+    bias: &std::collections::HashMap<TokenId, f32, S>,
+) {
     if bias.is_empty() || logits.is_empty() {
         return;
     }

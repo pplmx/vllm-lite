@@ -264,8 +264,8 @@ pub fn validate_penalty(
 /// non-finite or out of range. The error message names the
 /// offending token ID and value so callers can adapt without
 /// reading the source.
-pub fn validate_logit_bias(
-    bias: Option<&HashMap<TokenId, f32>>,
+pub fn validate_logit_bias<S: std::hash::BuildHasher>(
+    bias: Option<&HashMap<TokenId, f32, S>>,
 ) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
     const LOGIT_BIAS_MIN: f32 = -100.0;
     const LOGIT_BIAS_MAX: f32 = 100.0;
@@ -1499,7 +1499,8 @@ mod tests {
     fn validate_logit_bias_none_passes() {
         // No map → no validation needed. Pins the `None` early-return
         // branch (every other branch iterates the map).
-        validate_logit_bias(None).expect("None must pass");
+        validate_logit_bias::<std::collections::hash_map::RandomState>(None)
+            .expect("None must pass");
     }
 
     #[test]
