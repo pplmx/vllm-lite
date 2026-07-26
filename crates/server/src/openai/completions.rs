@@ -264,8 +264,12 @@ async fn spawn_n_candidate(
     (Vec<vllm_traits::SampledToken>, vllm_traits::FinishReason),
     (axum::http::StatusCode, Json<ErrorResponse>),
 > {
-    let total_max = prompt_tokens.len() + max_tokens;
-    let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
+    // `max_tokens` is the upper bound on *generated* tokens (prompt not
+    // included), matching the OpenAI API semantics and the `Request`
+    // documentation. The engine's completion check subtracts `prompt_len`
+    // internally, so we pass `max_tokens` directly — no need to add
+    // `prompt_tokens.len()` as the previous workaround did.
+    let mut request = vllm_core::types::Request::new(0, prompt_tokens, max_tokens);
 
     // P38 v0.3 wire-type engine wire-through: tokenize the user's
     // stop strings at the HTTP boundary and forward as
@@ -655,8 +659,9 @@ async fn spawn_n_streaming_candidate(
     correlation_id: String,
     candidate_index: usize,
 ) -> Result<StreamingCandidateChannels, (axum::http::StatusCode, Json<ErrorResponse>)> {
-    let total_max = prompt_tokens.len() + max_tokens;
-    let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
+    // `max_tokens` is the upper bound on *generated* tokens — pass it
+    // directly to the engine (see `spawn_n_candidate` for rationale).
+    let mut request = vllm_core::types::Request::new(0, prompt_tokens, max_tokens);
 
     // P38 v0.3 wire-type engine wire-through: tokenize the user's
     // stop strings at the HTTP boundary and forward as
@@ -1509,7 +1514,7 @@ pub async fn completions(
         }
     }
 
-    let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
+    let mut request = vllm_core::types::Request::new(0, prompt_tokens, max_tokens);
 
     // P38 v0.3 wire-type engine wire-through: tokenize the user's
     // stop strings at the HTTP boundary and forward as

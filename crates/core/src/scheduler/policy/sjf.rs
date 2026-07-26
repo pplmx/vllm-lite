@@ -32,7 +32,13 @@ impl Default for SjfPolicy {
 
 impl SchedulingPolicy for SjfPolicy {
     fn compute_priority(&self, seq: &Sequence, _ctx: &SchedulingContext) -> PriorityScore {
-        let remaining_tokens = seq.max_tokens.saturating_sub(seq.tokens.len());
+        // `max_tokens` is the upper bound on *generated* tokens (prompt not
+        // included), so remaining work = max_tokens - already-generated
+        // (tokens.len() - prompt_len). Using saturating_sub on both subtractions
+        // guards against drift where prompt_len > tokens.len().
+        let remaining_tokens = seq
+            .max_tokens
+            .saturating_sub(seq.tokens.len().saturating_sub(seq.prompt_len));
         let user_priority = u64::from(seq.priority.0);
         // invariant: user_priority and remaining_tokens are bounded; f32
         // precision loss is acceptable for the SJF score. The f32 score is
@@ -87,8 +93,8 @@ mod tests {
             running_count: 0,
             memory_pressure: 0.0,
         };
-        let seq1 = make_sequence(1, 10, 100); // 90 tokens remaining
-        let seq2 = make_sequence(2, 10, 60); // 50 tokens remaining
+        let seq1 = make_sequence(1, 10, 100); // 100 generated tokens remaining
+        let seq2 = make_sequence(2, 10, 60); // 60 generated tokens remaining
 
         let priority1 = policy.compute_priority(&seq1, &ctx);
         let priority2 = policy.compute_priority(&seq2, &ctx);

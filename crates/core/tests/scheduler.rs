@@ -110,8 +110,8 @@ fn test_process_finished_sequences() {
     let config = SchedulerConfig::default();
     let mut sched = create_test_engine(config, 1024);
 
-    // Add request with max_tokens = prompt_len (should finish after prefill)
-    sched.add_request(Request::new(1, vec![1, 2], 2)); // prompt_len=2, max_tokens=2
+    // Add request with max_tokens = 0 (should finish after prefill, no generated tokens)
+    sched.add_request(Request::new(1, vec![1, 2], 0)); // prompt_len=2, max_tokens=0
 
     let batch1 = sched.build_batch();
     sched.update(

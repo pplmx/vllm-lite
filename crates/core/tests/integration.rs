@@ -24,34 +24,22 @@ fn test_continuous_batching_with_streaming() {
     let (tx1, mut rx1) = mpsc::channel(64);
     let (tx2, mut rx2) = mpsc::channel(64);
 
-    // req1: prompt=2, max_tokens=4 -> total 4 tokens, finishes in step 3
-    // req2: prompt=3, max_tokens=5 -> total 5 tokens, finishes in step 4
-    engine.add_request(Request::new(1, vec![10, 20], 4), tx1);
-    engine.add_request(Request::new(2, vec![30, 40, 50], 5), tx2);
+    // req1: prompt=2, max_tokens=2 -> 2 generated, total 4 tokens, finishes in step 2
+    // req2: prompt=3, max_tokens=2 -> 2 generated, total 5 tokens, finishes in step 2
+    engine.add_request(Request::new(1, vec![10, 20], 2), tx1);
+    engine.add_request(Request::new(2, vec![30, 40, 50], 2), tx2);
 
     // Step 1: both prefill
-    // After: req1=3 tokens, req2=4 tokens
+    // After: req1=3 tokens (1 generated), req2=4 tokens (1 generated)
     engine.step().unwrap();
     assert!(rx1.try_recv().is_ok(), "req1 should get token in step 1");
     assert!(rx2.try_recv().is_ok(), "req2 should get token in step 1");
 
     // Step 2: both decode
-    // After: req1=4 tokens (finished), req2=5 tokens
+    // After: req1=4 tokens (2 generated, finished), req2=5 tokens (2 generated, finished)
     engine.step().unwrap();
-    assert!(rx2.try_recv().is_ok(), "req2 should get token in step 2");
 
-    // After step 2, req1 is finished and its channel is disconnected
-    // Don't try to receive from rx1 anymore
-
-    // Step 3: req2 only (req1 finished)
-    // After: req2=6 tokens > max_tokens(5), but this is the step where it finishes
-    // Actually: 5 tokens = finished, so after step 2 req2 already has 5 tokens
-    // Wait, let me recount:
-    // Step 1: prompt + 1 = 3 + 1 = 4 tokens (req2)
-    // Step 2: 4 + 1 = 5 tokens (req2) = max_tokens(5) -> finished!
-
-    // So after step 2, both should be finished?
-    // Let me check has_pending...
+    // After step 2, both requests should be finished
     assert!(!engine.has_pending(), "both requests should be finished");
 }
 
@@ -93,8 +81,8 @@ fn test_chunked_prefill_integration() {
 }
 
 #[test]
-fn test_max_tokens_includes_prompt() {
-    // This test verifies the fix: max_tokens should represent total sequence length
+fn test_max_tokens_excludes_prompt() {
+    // max_tokens is the upper bound on *generated* tokens (prompt not included).
     let config = SchedulerConfig {
         max_num_seqs: 256,
         max_num_batched_tokens: 100,
@@ -112,13 +100,11 @@ fn test_max_tokens_includes_prompt() {
 
     let (tx, _rx) = mpsc::channel(64);
 
-    // Prompt: 3 tokens, max_new_tokens: 2
-    // Total should be: 3 + 2 = 5 tokens before finishing
+    // Prompt: 3 tokens, max_tokens=2 (generated) -> finishes after 2 decode steps
     let prompt = vec![10, 20, 30];
-    let max_new_tokens = 2;
-    let total_max = prompt.len() + max_new_tokens; // This is what the API should send
+    let max_tokens = 2;
 
-    engine.add_request(Request::new(1, prompt, total_max), tx);
+    engine.add_request(Request::new(1, prompt, max_tokens), tx);
 
     let mut steps = 0;
     while engine.has_pending() {
@@ -159,12 +145,11 @@ fn test_single_token_prefill_then_decode() {
 
     let (tx, mut rx) = mpsc::channel(64);
 
-    // Single token prompt
+    // Single token prompt, max_tokens=3 (generated)
     let prompt = vec![100];
-    let max_new_tokens = 3;
-    let total_max = prompt.len() + max_new_tokens;
+    let max_tokens = 3;
 
-    engine.add_request(Request::new(1, prompt, total_max), tx);
+    engine.add_request(Request::new(1, prompt, max_tokens), tx);
 
     // Step 1: Process prompt token
     engine.step().unwrap();
@@ -448,13 +433,13 @@ fn test_immediate_finish_after_prompt() {
     let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
 
     let (tx, _rx) = mpsc::channel(64);
-    engine.add_request(Request::new(1, vec![1, 2, 3], 3), tx);
+    engine.add_request(Request::new(1, vec![1, 2, 3], 0), tx);
 
     engine.step().unwrap();
 
     assert!(
         !engine.has_pending(),
-        "should finish when max_tokens equals prompt length"
+        "should finish when max_tokens is 0 (no generated tokens)"
     );
 }
 
@@ -576,8 +561,9 @@ fn test_request_cancellation() {
     let (tx1, _rx1) = mpsc::channel(64);
     let (tx2, rx2) = mpsc::channel(64);
 
-    engine.add_request(Request::new(1, vec![10, 20], 7), tx1); // total = 2 + 7 = 9 tokens
-    engine.add_request(Request::new(2, vec![30, 40], 7), tx2);
+    // max_tokens=3 means 3 generated tokens (prompt not included)
+    engine.add_request(Request::new(1, vec![10, 20], 3), tx1);
+    engine.add_request(Request::new(2, vec![30, 40], 3), tx2);
 
     engine.step().unwrap();
 
@@ -679,7 +665,7 @@ fn test_single_token_prompt() {
     let mut engine = TestFixtures::increment_engine_with(config, 4, 1024);
 
     let (tx, _rx) = mpsc::channel(64);
-    engine.add_request(Request::new(1, vec![42], 3), tx);
+    engine.add_request(Request::new(1, vec![42], 2), tx);
 
     let mut steps = 0;
     while engine.has_pending() && steps < 10 {
@@ -779,13 +765,13 @@ fn test_request_with_max_tokens_equals_prompt() {
 
     let (tx, _rx) = mpsc::channel(64);
     let prompt = vec![1, 2, 3];
-    engine.add_request(Request::new(1, prompt.clone(), prompt.len()), tx);
+    engine.add_request(Request::new(1, prompt.clone(), 0), tx);
 
     engine.step().unwrap();
 
     assert!(
         !engine.has_pending(),
-        "request should complete immediately when max_tokens == prompt_len"
+        "request should complete after prefill when max_tokens is 0"
     );
 }
 
