@@ -135,7 +135,7 @@ impl crate::engine::Engine {
     /// Send sampled tokens to each sequence's response channel and collect
     /// them into the return vec. Idempotent: if a channel is missing (e.g.
     /// the sequence was already finalized) the token is still returned.
-    fn send_and_collect_results(
+    pub(crate) fn send_and_collect_results(
         &self,
         seq_ids: &[SeqId],
         next_tokens: &[SampledToken],
@@ -153,7 +153,7 @@ impl crate::engine::Engine {
 
     /// Finalize stop-sequence and length-completed sequences, clear finished
     /// entries, and record batch metrics + latency.
-    fn finalize_and_record(
+    pub(crate) fn finalize_and_record(
         &mut self,
         batch: &vllm_traits::Batch,
         total_tokens: usize,

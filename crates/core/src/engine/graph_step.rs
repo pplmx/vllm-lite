@@ -19,9 +19,6 @@ use vllm_traits::TokenId;
 use vllm_traits::{SampledToken, SeqId};
 
 #[cfg(feature = "cuda-graph")]
-use tracing::trace;
-
-#[cfg(feature = "cuda-graph")]
 use vllm_traits::{BatchOutput, BatchPhase, FinishReason};
 
 impl Engine {
@@ -182,22 +179,9 @@ impl Engine {
             "process_output: received model output"
         );
 
-        let mut results = Vec::with_capacity(output.seq_ids.len());
-        for (seq_id, sampled) in output.seq_ids.iter().zip(output.next_tokens.iter()) {
-            trace!(
-                seq_id = %seq_id,
-                token_id = %sampled.token,
-                "Token generated"
-            );
-            tracing::debug!(seq_id = %seq_id, token = %sampled.token, "Sending token via channel");
-            if let Some(tx) = self.response_txs.get(seq_id) {
-                let _ = tx.try_send(sampled.clone());
-            }
-            results.push((*seq_id, sampled.clone()));
-        }
+        let results = self.send_and_collect_results(&output.seq_ids, &output.next_tokens);
 
-        let seq_ids: Vec<_> = results.iter().map(|(id, _)| *id).collect();
-        let sampled: Vec<_> = results.iter().map(|(_, s)| s.clone()).collect();
+        let (seq_ids, sampled): (Vec<_>, Vec<_>) = results.iter().cloned().unzip();
         self.scheduler.update(&seq_ids, &sampled, &input_counts);
 
         // P38 v0.3 wire-type engine wire-through: stop-sequence
@@ -217,20 +201,31 @@ impl Engine {
         }
         self.scheduler.clear_finished();
 
-        // Record metrics
-        if !results.is_empty() {
-            self.scheduler
-                .metrics
-                .record_tokens(u64::try_from(results.len()).unwrap_or(0));
-            self.scheduler.metrics.record_batch_size(results.len());
-            // invariant: elapsed millis fits in f64 mantissa (< 2^52 ms ≈ 142 years).
-            #[allow(clippy::cast_precision_loss)]
-            let elapsed = start.elapsed().as_millis() as f64;
-            if elapsed > 0.0 {
-                self.scheduler.metrics.record_latency(elapsed);
-            }
-        }
+        self.record_batch_metrics(&results, start);
 
         results
+    }
+
+    /// Record batch metrics (token count, batch size, latency) for the
+    /// CUDA-Graph step path. No-op when `results` is empty.
+    fn record_batch_metrics(
+        &self,
+        results: &[(vllm_traits::SeqId, SampledToken)],
+        start: std::time::Instant,
+    ) {
+        if results.is_empty() {
+            return;
+        }
+        let scheduler = &self.scheduler;
+        scheduler
+            .metrics
+            .record_tokens(u64::try_from(results.len()).unwrap_or(0));
+        scheduler.metrics.record_batch_size(results.len());
+        // invariant: elapsed millis fits in f64 mantissa (< 2^52 ms ≈ 142 years).
+        #[allow(clippy::cast_precision_loss)]
+        let elapsed = start.elapsed().as_millis() as f64;
+        if elapsed > 0.0 {
+            scheduler.metrics.record_latency(elapsed);
+        }
     }
 }
