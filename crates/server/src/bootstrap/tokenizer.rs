@@ -40,3 +40,49 @@ pub fn load_tokenizer(model_dir: &Path) -> Arc<Tokenizer> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_load_tokenizer_missing_file_returns_default() {
+        // A directory with no tokenizer.json should fall back to the default.
+        let dir = TempDir::new().unwrap();
+        let tokenizer = load_tokenizer(dir.path());
+        // Default tokenizer has model_name = None (no HF backend loaded).
+        assert_eq!(tokenizer.model_name(), None);
+    }
+
+    #[test]
+    fn test_load_tokenizer_invalid_json_returns_default() {
+        // A tokenizer.json with invalid content should fall back to default.
+        let dir = TempDir::new().unwrap();
+        let tokenizer_path = dir.path().join("tokenizer.json");
+        std::fs::write(&tokenizer_path, "not valid json").unwrap();
+        let tokenizer = load_tokenizer(dir.path());
+        assert_eq!(tokenizer.model_name(), None);
+    }
+
+    #[test]
+    fn test_load_tokenizer_empty_directory_returns_default() {
+        // An empty directory (no tokenizer.json) should return the default.
+        let dir = TempDir::new().unwrap();
+        let tokenizer = load_tokenizer(dir.path());
+        // The default tokenizer encodes by splitting on whitespace.
+        let encoded = tokenizer.encode("hello world");
+        assert_eq!(encoded.len(), 2);
+    }
+
+    #[test]
+    fn test_load_tokenizer_nonexistent_dir_returns_default() {
+        // A non-existent directory should also fall back to default
+        // (tokenizer.json won't exist there).
+        let dir = TempDir::new().unwrap();
+        let nonexistent = dir.path().join("nonexistent_subdir");
+        let tokenizer = load_tokenizer(&nonexistent);
+        assert_eq!(tokenizer.model_name(), None);
+    }
+}
