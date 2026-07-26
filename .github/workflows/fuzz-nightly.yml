@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [app_config_yaml, qwen3_config_json, safetensors_header]
+        target: [app_config_yaml, batch_json_input, completions_http_request, gguf_header, openai_http_request, qwen3_config_json, safetensors_header, tokenizer_decode]
 
     steps:
       - uses: actions/checkout@v7

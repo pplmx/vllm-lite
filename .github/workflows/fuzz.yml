@@ -1,7 +1,7 @@
 name: Fuzz Smoke
 
 # Run a short fuzz-smoke against every fuzz target on every PR.
-# Wall-clock budget: ~3-5 min total (4 targets × 10s + setup + build).
+# Wall-clock budget: ~5-7 min total (8 targets × 30s + setup + build).
 
 on:
   pull_request:
@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [app_config_yaml, qwen3_config_json, safetensors_header]
+        target: [app_config_yaml, batch_json_input, completions_http_request, gguf_header, openai_http_request, qwen3_config_json, safetensors_header, tokenizer_decode]
 
     steps:
       - uses: actions/checkout@v7
