@@ -3,10 +3,16 @@
 //! Wraps the [`AuthMiddleware`] which selects between API-key and JWT
 //! verification at startup based on `AppConfig.auth.method`. Mounted as
 //! an axum middleware before every request reaches the router.
+//!
+//! Rate limiting uses a **token bucket** algorithm (see `TokenBucket`).
+//! Each API key gets a bucket with `max_requests` capacity that refills
+//! at `max_requests / window_secs` tokens per second. This is more
+//! memory-efficient than a sliding window (`O(1)` per request vs
+//! `O(n)`) and provides precise `Retry-After` values for clients.
 #![allow(clippy::module_name_repetitions)]
 use axum::{
     extract::Request,
-    http::{HeaderMap, StatusCode, header::AUTHORIZATION},
+    http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header::AUTHORIZATION},
     middleware::Next,
     response::Response,
 };
@@ -15,45 +21,176 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
+/// Header name for rate-limit metadata sent on every response.
+const HEADER_RATE_LIMIT_REMAINING: HeaderName = HeaderName::from_static("x-ratelimit-remaining");
+const HEADER_RATE_LIMIT_LIMIT: HeaderName = HeaderName::from_static("x-ratelimit-limit");
+const HEADER_RETRY_AFTER: HeaderName = HeaderName::from_static("retry-after");
+
+/// A token bucket for one key.
+///
+/// Holds `tokens` (current count, up to `capacity`) and `last_refill`
+/// (when tokens were last replenished). Refill is lazy: we compute
+/// elapsed tokens on each `consume` call rather than spawning a task.
+#[derive(Debug)]
+pub(crate) struct TokenBucket {
+    /// Current token count (may be fractional due to partial refills).
+    tokens: f64,
+    /// Wall-clock time of the last refill.
+    last_refill: Instant,
+}
+
+impl TokenBucket {
+    /// Create a full bucket at capacity.
+    fn new(capacity: f64) -> Self {
+        Self {
+            tokens: capacity,
+            last_refill: Instant::now(),
+        }
+    }
+
+    /// Attempt to consume `cost` tokens after lazy refilling.
+    ///
+    /// Returns `Some(remaining)` if enough tokens were available (and
+    /// deducts them), or `None` if the bucket is depleted. When
+    /// `None`, the caller can use [`Self::wait_for`] to compute
+    /// how long to wait for enough tokens.
+    fn consume(&mut self, cost: f64, capacity: f64, refill_rate: f64) -> Option<f64> {
+        // Lazy refill: add tokens based on elapsed wall-clock time.
+        // When refill_rate is infinite (window_secs == 0) the bucket
+        // refills instantly — tokens snap to capacity.
+        if refill_rate.is_infinite() {
+            self.tokens = capacity;
+        } else {
+            let elapsed = self.last_refill.elapsed().as_secs_f64();
+            self.tokens = elapsed.mul_add(refill_rate, self.tokens).min(capacity);
+        }
+        self.last_refill = Instant::now();
+
+        if self.tokens >= cost {
+            self.tokens -= cost;
+            Some(self.tokens)
+        } else {
+            None
+        }
+    }
+
+    /// Compute how many seconds the caller must wait to accumulate
+    /// at least `cost` tokens.
+    #[must_use]
+    fn wait_for(&self, cost: f64, refill_rate: f64) -> Duration {
+        if refill_rate.is_infinite() || self.tokens >= cost {
+            return Duration::ZERO;
+        }
+        let needed = cost - self.tokens;
+        let secs = needed / refill_rate;
+        // Clamp to avoid absurdly tiny durations that round to 0s.
+        Duration::from_secs_f64(secs.max(0.0))
+    }
+}
+
+/// Result of a rate-limit check.
+#[derive(Debug)]
+pub(crate) struct RateLimitResult {
+    /// Whether the request was allowed.
+    pub allowed: bool,
+    /// Tokens remaining in the bucket after the check.
+    pub remaining: f64,
+    /// How long to wait before retrying (for `Retry-After` header).
+    pub retry_after: Option<Duration>,
+    /// The configured bucket capacity (limit).
+    pub limit: f64,
+}
+
+/// `RateLimiter`. See the type definition for fields and behavior.
+///
+/// Uses a token bucket per key. The bucket capacity is `max_requests`
+/// and refills at `max_requests / window_secs` tokens per second.
+#[derive(Debug)]
+pub(crate) struct RateLimiter {
+    buckets: HashMap<String, TokenBucket>,
+    capacity: f64,
+    /// Tokens per second. Infinite when `window_secs == 0`.
+    refill_rate: f64,
+}
+
+impl RateLimiter {
+    fn new(max_requests: usize, window_secs: u64) -> Self {
+        let capacity = f64::from(u32::try_from(max_requests).unwrap_or(u32::MAX));
+        let refill_rate = if window_secs == 0 {
+            f64::INFINITY
+        } else {
+            capacity / window_secs as f64
+        };
+        Self {
+            buckets: HashMap::new(),
+            capacity,
+            refill_rate,
+        }
+    }
+
+    /// Check whether `key` can proceed, deducting `cost` tokens.
+    ///
+    /// Returns a [`RateLimitResult`] with remaining tokens and (if
+    /// denied) the `retry_after` duration.
+    #[allow(clippy::unused_async)]
+    async fn check_and_consume(&mut self, key: &str, cost: f64) -> RateLimitResult {
+        let bucket = self
+            .buckets
+            .entry(key.to_string())
+            .or_insert_with(|| TokenBucket::new(self.capacity));
+
+        match bucket.consume(cost, self.capacity, self.refill_rate) {
+            Some(remaining) => RateLimitResult {
+                allowed: true,
+                remaining,
+                retry_after: None,
+                limit: self.capacity,
+            },
+            None => RateLimitResult {
+                allowed: false,
+                remaining: bucket.tokens,
+                retry_after: Some(bucket.wait_for(cost, self.refill_rate)),
+                limit: self.capacity,
+            },
+        }
+    }
+
+    /// Backward-compatible wrapper: check with a default cost of 1.0.
+    ///
+    /// Only used by tests; production code calls [`Self::check_and_consume`]
+    /// directly (via [`AuthMiddleware::verify_with_meta`]).
+    #[allow(clippy::unused_async, dead_code)]
+    async fn check_rate_limit(&mut self, key: &str) -> bool {
+        self.check_and_consume(key, 1.0).await.allowed
+    }
+}
+
+/// Error from [`AuthMiddleware::verify_with_meta`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AuthError {
+    /// No `Authorization: Bearer <key>` header present.
+    MissingHeader,
+    /// API key not in the configured list.
+    InvalidKey,
+    /// Rate limit exceeded. `retry_after_secs` is how long to wait.
+    RateLimited { retry_after_secs: u64 },
+}
+
+impl From<AuthError> for StatusCode {
+    fn from(err: AuthError) -> Self {
+        use AuthError::{InvalidKey, MissingHeader, RateLimited};
+        match err {
+            MissingHeader | InvalidKey => Self::UNAUTHORIZED,
+            RateLimited { .. } => Self::TOO_MANY_REQUESTS,
+        }
+    }
+}
+
 #[derive(Debug)]
 /// `AuthMiddleware`. See the type definition for fields and behavior.
 pub struct AuthMiddleware {
     api_keys: Arc<Vec<String>>,
     rate_limiter: Arc<RwLock<RateLimiter>>,
-}
-
-/// `RateLimiter`. See the type definition for fields and behavior.
-#[derive(Debug)]
-pub(crate) struct RateLimiter {
-    requests: HashMap<String, Vec<Instant>>,
-    max_requests: usize,
-    window_secs: u64,
-}
-
-impl RateLimiter {
-    fn new(max_requests: usize, window_secs: u64) -> Self {
-        Self {
-            requests: HashMap::new(),
-            max_requests,
-            window_secs,
-        }
-    }
-
-    #[allow(clippy::unused_async)]
-    async fn check_rate_limit(&mut self, key: &str) -> bool {
-        let now = Instant::now();
-        let window = Duration::from_secs(self.window_secs);
-
-        let times = self.requests.entry(key.to_string()).or_default();
-        times.retain(|t| now.duration_since(*t) < window);
-
-        if times.len() >= self.max_requests {
-            return false;
-        }
-
-        times.push(now);
-        true
-    }
 }
 
 impl AuthMiddleware {
@@ -80,28 +217,62 @@ impl AuthMiddleware {
         &self.api_keys
     }
 
-    /// Verify draft tokens against the target model logits.
+    /// Verify a request's API key and consume one rate-limit token.
+    ///
+    /// Returns the authenticated key on success, or a [`StatusCode`]
+    /// error (401 / 429).
+    ///
     /// # Errors
     ///
-    /// Returns `Err` if the operation fails.
+    /// Returns `Err(StatusCode::UNAUTHORIZED)` if the key is missing or
+    /// invalid, or `Err(StatusCode::TOO_MANY_REQUESTS)` if the rate
+    /// limit has been exceeded.
     pub async fn verify(&self, headers: &HeaderMap) -> Result<String, StatusCode> {
-        let auth_header = headers.get(AUTHORIZATION).and_then(|v| v.to_str().ok());
+        self.verify_with_meta(headers, 1.0)
+            .await
+            .map(|decision| decision.0)
+            .map_err(Into::into)
+    }
+
+    /// Verify a request's API key and consume `cost` rate-limit tokens.
+    ///
+    /// Returns the authenticated key and a [`RateLimitResult`] on
+    /// success, or an [`AuthError`] on failure.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(AuthError::MissingHeader)` if no `Authorization`
+    /// header is present, `Err(AuthError::InvalidKey)` if the key is
+    /// not configured, or `Err(AuthError::RateLimited)` if the bucket
+    /// is depleted.
+    pub(crate) async fn verify_with_meta(
+        &self,
+        headers: &HeaderMap,
+        cost: f64,
+    ) -> Result<(String, RateLimitResult), AuthError> {
+        let auth_header = headers
+            .get(AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .ok_or(AuthError::MissingHeader)?;
 
         let api_key = auth_header
-            .and_then(|h| h.strip_prefix("Bearer "))
-            .ok_or(StatusCode::UNAUTHORIZED)?;
+            .strip_prefix("Bearer ")
+            .ok_or(AuthError::MissingHeader)?;
 
         if !self.api_keys.is_empty() && !self.api_keys.contains(&api_key.to_string()) {
-            return Err(StatusCode::UNAUTHORIZED);
+            return Err(AuthError::InvalidKey);
         }
 
         let mut limiter = self.rate_limiter.write().await;
-        if !limiter.check_rate_limit(api_key).await {
-            return Err(StatusCode::TOO_MANY_REQUESTS);
-        }
+        let result = limiter.check_and_consume(api_key, cost).await;
         drop(limiter);
 
-        Ok(api_key.to_string())
+        if result.allowed {
+            Ok((api_key.to_string(), result))
+        } else {
+            let retry_after_secs = result.retry_after.map_or(1, |d| d.as_secs().max(1));
+            Err(AuthError::RateLimited { retry_after_secs })
+        }
     }
 }
 
@@ -136,11 +307,27 @@ pub(crate) fn user_id_from_key(api_key: &str) -> String {
 /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
 pub async fn auth_middleware(
     auth: axum::extract::State<Arc<AuthMiddleware>>,
-    mut request: Request,
+    request: Request,
     next: Next,
 ) -> Response {
-    match auth.verify(request.headers()).await {
-        Ok(api_key) => {
+    // Read the body to estimate token cost before rate limiting.
+    // The body is reconstructed so downstream handlers still see it.
+    let (parts, body) = request.into_parts();
+    let body_bytes = axum::body::to_bytes(body, 1 << 20)
+        .await
+        .unwrap_or_default();
+
+    let cost = if body_bytes.is_empty() {
+        1.0
+    } else {
+        let body_str = String::from_utf8_lossy(&body_bytes);
+        estimate_request_cost(&body_str)
+    };
+
+    let mut request = Request::from_parts(parts, axum::body::Body::from(body_bytes));
+
+    match auth.verify_with_meta(request.headers(), cost).await {
+        Ok((api_key, rate_result)) => {
             // Stamp the user id on the request so the audit
             // middleware (and any future per-user handler logic)
             // can read it from extensions without re-parsing the
@@ -148,13 +335,89 @@ pub async fn auth_middleware(
             request
                 .extensions_mut()
                 .insert(AuthenticatedUser(user_id_from_key(&api_key)));
-            next.run(request).await
+
+            // Add rate-limit headers to the downstream response.
+            let remaining = rate_result.remaining.round() as u64;
+            let limit = rate_result.limit.round() as u64;
+            let mut response = next.run(request).await;
+            response
+                .headers_mut()
+                .insert(HEADER_RATE_LIMIT_REMAINING, HeaderValue::from(remaining));
+            response
+                .headers_mut()
+                .insert(HEADER_RATE_LIMIT_LIMIT, HeaderValue::from(limit));
+            response
         }
-        Err(status) => {
-            // invariant: builder pattern with all required fields (status, body) set above.
-            Response::builder().status(status).body("".into()).unwrap()
+        Err(AuthError::RateLimited { retry_after_secs }) => {
+            // Rate-limited: include Retry-After + rate-limit headers.
+            Response::builder()
+                .status(StatusCode::TOO_MANY_REQUESTS)
+                .header(HEADER_RETRY_AFTER, HeaderValue::from(retry_after_secs))
+                .header(HEADER_RATE_LIMIT_REMAINING, HeaderValue::from(0))
+                .header(
+                    HEADER_RATE_LIMIT_LIMIT,
+                    HeaderValue::from(auth.rate_limiter.read().await.capacity.round() as u64),
+                )
+                .body("".into())
+                .unwrap()
+        }
+        Err(_) => {
+            // Unauthorized / missing header.
+            Response::builder()
+                .status(StatusCode::UNAUTHORIZED)
+                .body("".into())
+                .unwrap()
         }
     }
+}
+
+/// Estimate the token cost of an LLM inference request from its raw
+/// JSON body.
+///
+/// For completions, cost = `min(estimated_prompt_tokens + max_tokens, cap)`.
+/// For chat, cost = `min(estimated_prompt_tokens + max_tokens, cap)`.
+/// Prompt tokens are approximated by counting whitespace-separated words
+/// in the prompt / message contents (±3x error vs. a real BPE tokenizer —
+/// sufficient for rate-limiting purposes where exact counts are not
+/// required).
+///
+/// Unknown payload shapes or parse failures default to a cost of `1.0`
+/// so that unrecognised requests are not silently free.
+#[must_use]
+pub(crate) fn estimate_request_cost(body: &str) -> f64 {
+    use serde_json::Value;
+
+    let Ok(json) = serde_json::from_str::<Value>(body) else {
+        return 1.0;
+    };
+
+    // Only proceed if the body looks like a completions or chat request.
+    // Unknown shapes default to 1.0 cost.
+    let prompt_tokens = if let Some(messages) = json.get("messages").and_then(Value::as_array) {
+        // Chat: sum content lengths across all messages.
+        messages
+            .iter()
+            .filter_map(|m| m.get("content").and_then(Value::as_str))
+            .map(|s| s.split_whitespace().count() as f64)
+            .sum()
+    } else if let Some(prompt) = json.get("prompt") {
+        // Completions: prompt may be a string or array of token IDs.
+        match prompt {
+            Value::String(s) => s.split_whitespace().count() as f64,
+            Value::Array(arr) => arr.len() as f64,
+            _ => return 1.0,
+        }
+    } else {
+        return 1.0;
+    };
+
+    let max_tokens: f64 = json
+        .get("max_tokens")
+        .and_then(Value::as_i64)
+        .unwrap_or(100) as f64;
+
+    // Cost = prompt tokens + max_tokens, clamped to [1.0, 100_000].
+    (prompt_tokens + max_tokens).clamp(1.0, 100_000.0)
 }
 
 #[cfg(test)]
@@ -164,35 +427,153 @@ mod tests {
     use axum::http::header::AUTHORIZATION;
     use tokio::time::{Duration, sleep};
 
+    // ------------------------------------------------------------------
+    // TokenBucket unit tests
+    // ------------------------------------------------------------------
+
     #[tokio::test]
-    async fn test_rate_limiter_allows_within_limit() {
+    async fn test_token_bucket_full_at_start() {
         let mut limiter = RateLimiter::new(3, 60);
-        assert!(limiter.check_rate_limit("key1").await);
-        assert!(limiter.check_rate_limit("key1").await);
-        assert!(limiter.check_rate_limit("key1").await);
+        let result = limiter.check_and_consume("key1", 1.0).await;
+        assert!(result.allowed);
+        assert_eq!(result.remaining, 2.0);
     }
 
     #[tokio::test]
-    async fn test_rate_limiter_blocks_over_limit() {
+    async fn test_token_bucket_blocks_over_capacity() {
         let mut limiter = RateLimiter::new(2, 60);
         assert!(limiter.check_rate_limit("key1").await);
         assert!(limiter.check_rate_limit("key1").await);
+        let result = limiter.check_and_consume("key1", 1.0).await;
+        assert!(!result.allowed);
+        assert!(result.retry_after.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_token_bucket_separate_keys_independent() {
+        let mut limiter = RateLimiter::new(1, 60);
+        assert!(limiter.check_rate_limit("key1").await);
+        // key1 exhausted, but key2 should be fine
+        assert!(limiter.check_rate_limit("key2").await);
+        // key1 still blocked
         assert!(!limiter.check_rate_limit("key1").await);
     }
 
     #[tokio::test]
-    async fn test_rate_limiter_separate_keys() {
-        let mut limiter = RateLimiter::new(1, 60);
-        assert!(limiter.check_rate_limit("key1").await);
-        assert!(limiter.check_rate_limit("key2").await);
+    async fn test_token_bucket_cost_deducts_proportionally() {
+        let mut limiter = RateLimiter::new(10, 60);
+        // Consume 3 tokens in one call
+        let result = limiter.check_and_consume("key1", 3.0).await;
+        assert!(result.allowed);
+        assert!((result.remaining - 7.0).abs() < 1e-6);
+        // 7 tokens should still be enough for a cost-5 request
+        let result = limiter.check_and_consume("key1", 5.0).await;
+        assert!(result.allowed);
+        // Allow tiny floating-point drift from lazy refill between calls.
+        assert!((result.remaining - 2.0).abs() < 1e-3);
+        // 3 tokens should NOT be enough
+        let result = limiter.check_and_consume("key1", 3.0).await;
+        assert!(!result.allowed);
     }
 
     #[tokio::test]
-    async fn test_rate_limiter_window_expiry() {
+    async fn test_token_bucket_zero_window_refills_immediately() {
         let mut limiter = RateLimiter::new(1, 0);
         assert!(limiter.check_rate_limit("key1").await);
+        // With window_secs=0, refill_rate is infinite → bucket refills
         sleep(Duration::from_millis(10)).await;
         assert!(limiter.check_rate_limit("key1").await);
+    }
+
+    #[tokio::test]
+    async fn test_token_bucket_retry_after_is_deterministic() {
+        let mut limiter = RateLimiter::new(4, 60);
+        // Capacity = 4, refill_rate = 4/60 ≈ 0.0667 tokens/sec
+        assert!(limiter.check_and_consume("key1", 4.0).await.allowed);
+        // Bucket is now empty, cost=1
+        let result = limiter.check_and_consume("key1", 1.0).await;
+        assert!(!result.allowed);
+        // retry_after = 1 / (4/60) = 15s → we check it's Some and > 0
+        let retry = result.retry_after.expect("retry_after should be set");
+        assert!(retry >= Duration::from_secs(14));
+        assert!(retry <= Duration::from_secs(15));
+    }
+
+    #[tokio::test]
+    async fn test_token_bucket_result_includes_limit() {
+        let mut limiter = RateLimiter::new(100, 60);
+        let result = limiter.check_and_consume("key1", 5.0).await;
+        assert_eq!(result.limit, 100.0);
+    }
+
+    // ------------------------------------------------------------------
+    // RateLimitResult / AuthError tests
+    // ------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_auth_error_converts_to_status_code() {
+        assert_eq!(
+            StatusCode::from(AuthError::MissingHeader),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            StatusCode::from(AuthError::InvalidKey),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            StatusCode::from(AuthError::RateLimited {
+                retry_after_secs: 3
+            }),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // AuthMiddleware tests (backward-compatible verify + new verify_with_meta)
+    // ------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_verify_with_meta_returns_rate_result() {
+        let auth = AuthMiddleware::new(vec!["test_key".to_string()], 10, 60);
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer test_key".parse().unwrap());
+        let (key, result) = auth.verify_with_meta(&headers, 2.0).await.unwrap();
+        assert_eq!(key, "test_key");
+        assert!(result.allowed);
+        // 10 capacity - 2 cost = 8 remaining
+        assert_eq!(result.remaining, 8.0);
+    }
+
+    #[tokio::test]
+    async fn test_verify_with_meta_rate_limited_error() {
+        let auth = AuthMiddleware::new(vec!["test_key".to_string()], 2, 60);
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer test_key".parse().unwrap());
+
+        auth.verify(&headers).await.unwrap();
+        auth.verify(&headers).await.unwrap();
+        let err = auth.verify_with_meta(&headers, 1.0).await.unwrap_err();
+        assert!(matches!(
+            err,
+            AuthError::RateLimited { retry_after_secs } if retry_after_secs >= 1
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_verify_with_meta_missing_header() {
+        let auth = AuthMiddleware::new(vec!["test_key".to_string()], 10, 60);
+        let headers = HeaderMap::new();
+        let err = auth.verify_with_meta(&headers, 1.0).await.unwrap_err();
+        assert_eq!(err, AuthError::MissingHeader);
+    }
+
+    #[tokio::test]
+    async fn test_verify_with_meta_invalid_key() {
+        let auth = AuthMiddleware::new(vec!["test_key".to_string()], 10, 60);
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer wrong_key".parse().unwrap());
+        let err = auth.verify_with_meta(&headers, 1.0).await.unwrap_err();
+        assert_eq!(err, AuthError::InvalidKey);
     }
 
     #[tokio::test]
@@ -251,5 +632,62 @@ mod tests {
         headers.insert(AUTHORIZATION, "test_key".parse().unwrap());
         let result = auth.verify(&headers).await;
         assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
+
+    // ------------------------------------------------------------------
+    // estimate_request_cost tests
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn test_estimate_cost_completions_string_prompt() {
+        let body = r#"{"prompt": "hello world foo bar", "max_tokens": 50}"#;
+        let cost = estimate_request_cost(body);
+        // 4 words + 50 max_tokens = 54
+        assert_eq!(cost, 54.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_completions_default_max_tokens() {
+        let body = r#"{"prompt": "hello"}"#;
+        let cost = estimate_request_cost(body);
+        // 1 word + 100 (default) = 101
+        assert_eq!(cost, 101.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_completions_token_array() {
+        let body = r#"{"prompt": [1, 2, 3, 4, 5], "max_tokens": 10}"#;
+        let cost = estimate_request_cost(body);
+        // 5 tokens + 10 max_tokens = 15
+        assert_eq!(cost, 15.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_chat_messages() {
+        let body = r#"{"messages": [{"role": "user", "content": "hello world"}, {"role": "assistant", "content": "foo bar baz"}], "max_tokens": 20}"#;
+        let cost = estimate_request_cost(body);
+        // 2 + 3 + 20 = 25
+        assert_eq!(cost, 25.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_invalid_json_defaults_to_one() {
+        let cost = estimate_request_cost("not json");
+        assert_eq!(cost, 1.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_clamped_to_max() {
+        let prompt = "word ".repeat(60_000);
+        let body = format!(r#"{{"prompt": "{prompt}", "max_tokens": 50000}}"#);
+        let cost = estimate_request_cost(&body);
+        assert_eq!(cost, 100_000.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_unknown_shape_defaults_to_one() {
+        let body = r#"{"foo": "bar"}"#;
+        let cost = estimate_request_cost(body);
+        assert_eq!(cost, 1.0);
     }
 }
