@@ -272,38 +272,7 @@ async fn spawn_n_candidate(
     // `SamplingParams::stop_token_sequences`. The populator stays a
     // pure function (no `ApiState` dependency), so the caller
     // tokenizes first and passes the pre-tokenized result in.
-    let stop_token_sequences: Option<Vec<Vec<vllm_traits::TokenId>>> =
-        if let Some(stop) = req.stop.as_ref() {
-            if stop.is_empty() {
-                None
-            } else {
-                let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
-                    .iter()
-                    .map(|s| state.tokenizer.encode(s))
-                    .filter(|toks| !toks.is_empty())
-                    .collect();
-                if tokenized.is_empty() {
-                    // All stop strings tokenized to zero tokens. The
-                    // validator catches most cases but some BPE
-                    // tokenizers produce zero tokens for unusual
-                    // inputs; log a warning and skip stop
-                    // wire-through for this request rather than
-                    // fail it (best-effort degradation — the chat
-                    // path returns 400 instead because its inline
-                    // forwarding returns `Result`; the asymmetry is
-                    // intentional, see spec §4.3).
-                    tracing::warn!(
-                        stop_count = stop.len(),
-                        "All stop sequences tokenized to zero tokens; skipping stop wire-through"
-                    );
-                    None
-                } else {
-                    Some(tokenized)
-                }
-            }
-        } else {
-            None
-        };
+    let stop_token_sequences = tokenize_stop_sequences(&req.stop, &state.tokenizer);
 
     // P39: forward `candidate_index` so the populator derives the
     // per-candidate seed. For `best_of` callers this is `i in 0..best_of`;
@@ -364,6 +333,39 @@ async fn spawn_n_candidate(
 #[allow(clippy::single_option_map)]
 pub(super) fn per_candidate_seed(seed: Option<i64>, candidate_index: usize) -> Option<u64> {
     seed.map(|s| (s as u64).wrapping_add(candidate_index as u64))
+}
+
+/// Tokenize user-supplied `stop` strings into `Vec<Vec<TokenId>>`.
+///
+/// `None` / empty stop strings → `None` (engine skips stop-sequence
+/// matching entirely). Non-empty stop strings are tokenized, filtered
+/// for zero-length encodings, and warned if they all collapse to
+/// nothing (best-effort degradation — matches the P38 wire-through
+/// contract, spec §4.3). Shared by all three completion spawn paths
+/// (single-shot, `best_of`, and `n > 1`) to guarantee identical
+/// stop-sequence handling end-to-end.
+fn tokenize_stop_sequences(
+    stop: &Option<Vec<String>>,
+    tokenizer: &vllm_model::tokenizer::Tokenizer,
+) -> Option<Vec<Vec<vllm_traits::TokenId>>> {
+    let stop = stop.as_ref()?;
+    if stop.is_empty() {
+        return None;
+    }
+    let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
+        .iter()
+        .map(|s| tokenizer.encode(s))
+        .filter(|toks| !toks.is_empty())
+        .collect();
+    if tokenized.is_empty() {
+        tracing::warn!(
+            stop_count = stop.len(),
+            "All stop sequences tokenized to zero tokens; skipping stop wire-through"
+        );
+        None
+    } else {
+        Some(tokenized)
+    }
 }
 
 /// Run the `n > 1` path on the legacy `/v1/completions` endpoint
@@ -661,29 +663,7 @@ async fn spawn_n_streaming_candidate(
     // `SamplingParams::stop_token_sequences`. Identical to
     // `spawn_n_candidate`'s setup so every candidate honors the
     // user's stop set end-to-end.
-    let stop_token_sequences: Option<Vec<Vec<vllm_traits::TokenId>>> =
-        if let Some(stop) = req.stop.as_ref() {
-            if stop.is_empty() {
-                None
-            } else {
-                let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
-                    .iter()
-                    .map(|s| state.tokenizer.encode(s))
-                    .filter(|toks| !toks.is_empty())
-                    .collect();
-                if tokenized.is_empty() {
-                    tracing::warn!(
-                        stop_count = stop.len(),
-                        "All stop sequences tokenized to zero tokens; skipping stop wire-through"
-                    );
-                    None
-                } else {
-                    Some(tokenized)
-                }
-            }
-        } else {
-            None
-        };
+    let stop_token_sequences = tokenize_stop_sequences(&req.stop, &state.tokenizer);
 
     // P39: per-candidate seed derivation (identical to
     // `spawn_n_candidate`).
@@ -1539,38 +1519,7 @@ pub async fn completions(
     // pattern as `spawn_n_candidate` above so every candidate
     // (and every streaming/non-streaming path) honors the user's
     // stop set end-to-end.
-    let stop_token_sequences: Option<Vec<Vec<vllm_traits::TokenId>>> =
-        if let Some(stop) = req.stop.as_ref() {
-            if stop.is_empty() {
-                None
-            } else {
-                let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
-                    .iter()
-                    .map(|s| state.tokenizer.encode(s))
-                    .filter(|toks| !toks.is_empty())
-                    .collect();
-                if tokenized.is_empty() {
-                    // All stop strings tokenized to zero tokens. The
-                    // validator catches most cases but some BPE
-                    // tokenizers produce zero tokens for unusual
-                    // inputs; log a warning and skip stop
-                    // wire-through for this request rather than
-                    // fail it (best-effort degradation — the chat
-                    // path returns 400 instead because its inline
-                    // forwarding returns `Result`; the asymmetry is
-                    // intentional, see spec §4.3).
-                    tracing::warn!(
-                        stop_count = stop.len(),
-                        "All stop sequences tokenized to zero tokens; skipping stop wire-through"
-                    );
-                    None
-                } else {
-                    Some(tokenized)
-                }
-            }
-        } else {
-            None
-        };
+    let stop_token_sequences = tokenize_stop_sequences(&req.stop, &state.tokenizer);
 
     // Forward all sampling fields (P27/P28/P29/P30/P34/P36/P38 wire-through).
     // The `populate_completion_sampling_params` helper is the single
