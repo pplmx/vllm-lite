@@ -185,10 +185,10 @@ pub(crate) fn validate_chat_request(
     Ok(())
 }
 
-/// Forward OpenAI chat request fields into the engine's `SamplingParams`.
+/// Forward `OpenAI` chat request fields into the engine's `SamplingParams`.
 ///
 /// This is the chat-endpoint counterpart to `populate_completion_sampling_params`
-/// in `completions.rs` — the single authoritative point for the OpenAI →
+/// in `completions.rs` — the single authoritative point for the `OpenAI` →
 /// `SamplingParams` mapping on the `/v1/chat/completions` path. All three
 /// call sites (`handle_chat`, `spawn_chat_n_candidate`,
 /// `spawn_chat_n_streaming_candidate`) delegate here so the field set stays
@@ -568,7 +568,7 @@ async fn handle_chat(
 /// — the chat-endpoint counterpart to `populate_completion_sampling_params`
 /// in `completions.rs`. All three call sites (`handle_chat`,
 /// `spawn_chat_n_candidate`, `spawn_chat_n_streaming_candidate`)
-/// share this populator so the OpenAI → `SamplingParams` field set
+/// share this populator so the `OpenAI` → `SamplingParams` field set
 /// stays in sync.
 ///
 /// **Partial-failure semantics:** mirrors `spawn_n_candidate` — if
