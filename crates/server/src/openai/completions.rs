@@ -272,7 +272,7 @@ async fn spawn_n_candidate(
     // `SamplingParams::stop_token_sequences`. The populator stays a
     // pure function (no `ApiState` dependency), so the caller
     // tokenizes first and passes the pre-tokenized result in.
-    let stop_token_sequences = tokenize_stop_sequences(&req.stop, &state.tokenizer);
+    let stop_token_sequences = tokenize_stop_sequences(req.stop.as_deref(), &state.tokenizer);
 
     // P39: forward `candidate_index` so the populator derives the
     // per-candidate seed. For `best_of` callers this is `i in 0..best_of`;
@@ -345,10 +345,10 @@ pub(super) fn per_candidate_seed(seed: Option<i64>, candidate_index: usize) -> O
 /// (single-shot, `best_of`, and `n > 1`) to guarantee identical
 /// stop-sequence handling end-to-end.
 fn tokenize_stop_sequences(
-    stop: &Option<Vec<String>>,
+    stop: Option<&[String]>,
     tokenizer: &vllm_model::tokenizer::Tokenizer,
 ) -> Option<Vec<Vec<vllm_traits::TokenId>>> {
-    let stop = stop.as_ref()?;
+    let stop = stop?;
     if stop.is_empty() {
         return None;
     }
@@ -663,7 +663,7 @@ async fn spawn_n_streaming_candidate(
     // `SamplingParams::stop_token_sequences`. Identical to
     // `spawn_n_candidate`'s setup so every candidate honors the
     // user's stop set end-to-end.
-    let stop_token_sequences = tokenize_stop_sequences(&req.stop, &state.tokenizer);
+    let stop_token_sequences = tokenize_stop_sequences(req.stop.as_deref(), &state.tokenizer);
 
     // P39: per-candidate seed derivation (identical to
     // `spawn_n_candidate`).
@@ -1519,7 +1519,7 @@ pub async fn completions(
     // pattern as `spawn_n_candidate` above so every candidate
     // (and every streaming/non-streaming path) honors the user's
     // stop set end-to-end.
-    let stop_token_sequences = tokenize_stop_sequences(&req.stop, &state.tokenizer);
+    let stop_token_sequences = tokenize_stop_sequences(req.stop.as_deref(), &state.tokenizer);
 
     // Forward all sampling fields (P27/P28/P29/P30/P34/P36/P38 wire-through).
     // The `populate_completion_sampling_params` helper is the single
