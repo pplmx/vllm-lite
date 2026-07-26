@@ -35,32 +35,7 @@ impl SchedulerEngine {
         }
 
         // Check prefix cache for prompt reuse
-        let (tokens, kv_blocks, num_computed) =
-            if let Some(result) = self.prefix_cache.longest_prefix_match(&req.prompt) {
-                tracing::trace!(
-                    request_id = req.id,
-                    matched_tokens = result.matched_tokens,
-                    "Prefix cache hit"
-                );
-                // ARCH-01 (technical due diligence): when a prefix hit
-                // returns blocks, this sequence now *owns* them and is
-                // responsible for releasing them later (via
-                // `MemoryManager::release_blocks` on cancel/finish).
-                // The prefix cache also keeps its own reference via
-                // the RadixTree node, which will be released when the
-                // node is evicted. We increment the refcount by one
-                // here so the block stays alive until this sequence
-                // releases it.
-                self.memory.record_blocks(result.blocks.as_ref());
-                (
-                    req.prompt.clone(),
-                    result.blocks.clone(),
-                    result.matched_tokens,
-                )
-            } else {
-                tracing::trace!(request_id = req.id, "Prefix cache miss");
-                (req.prompt.clone(), Arc::new(vec![]), 0)
-            };
+        let (tokens, kv_blocks, num_computed) = self.resolve_prefix_tokens(&req);
 
         // Distributed prefix-cache lookup (OPS-05b3): even when the
         // local `RadixTree` misses, some peer node (post OPS-05c)
@@ -69,12 +44,7 @@ impl SchedulerEngine {
         // gRPC transfer protocol. We dispatch an observer event so
         // metrics collectors / tracing can report cross-node hit
         // rates.
-        #[cfg(feature = "multi-node")]
-        let distributed_matched_tokens = self
-            .lookup_distributed_prefix(&req.prompt)
-            .map_or(0, |m| m.matched_tokens);
-        #[cfg(not(feature = "multi-node"))]
-        let distributed_matched_tokens: usize = 0;
+        let distributed_matched_tokens = self.lookup_distributed_matched_tokens(&req);
         if distributed_matched_tokens > 0 {
             tracing::trace!(
                 request_id = req.id,
@@ -135,5 +105,50 @@ impl SchedulerEngine {
             "Request added"
         );
         req.id
+    }
+
+    /// Resolve prompt tokens, KV blocks, and computed-token count from
+    /// the prefix cache.
+    ///
+    /// On a cache hit, returns the full prompt tokens, the matched KV
+    /// blocks (refcounted), and the number of matched tokens. On a miss,
+    /// returns the prompt, empty blocks, and 0.
+    ///
+    /// ARCH-01: on a hit, the blocks are refcounted so this sequence
+    /// owns them and can release them on cancel/finish; the prefix
+    /// cache retains its own reference via the `RadixTree` node.
+    fn resolve_prefix_tokens(
+        &mut self,
+        req: &Request,
+    ) -> (Vec<u32>, Arc<Vec<vllm_traits::BlockId>>, usize) {
+        if let Some(result) = self.prefix_cache.longest_prefix_match(&req.prompt) {
+            tracing::trace!(
+                request_id = req.id,
+                matched_tokens = result.matched_tokens,
+                "Prefix cache hit"
+            );
+            self.memory.record_blocks(result.blocks.as_ref());
+            (
+                req.prompt.clone(),
+                result.blocks.clone(),
+                result.matched_tokens,
+            )
+        } else {
+            tracing::trace!(request_id = req.id, "Prefix cache miss");
+            (req.prompt.clone(), Arc::new(vec![]), 0)
+        }
+    }
+
+    /// Distributed prefix-cache lookup (multi-node only).
+    ///
+    /// Returns the number of matched tokens from peer nodes, or 0 in
+    /// single-node builds. The result is informational — actual block
+    /// reuse requires the gRPC transfer protocol.
+    fn lookup_distributed_matched_tokens(&self, req: &Request) -> usize {
+        #[cfg(feature = "multi-node")]
+        let result = self.lookup_distributed_prefix(&req.prompt);
+        #[cfg(not(feature = "multi-node"))]
+        let result: Option<_> = None;
+        result.map_or(0, |m| m.matched_tokens)
     }
 }
