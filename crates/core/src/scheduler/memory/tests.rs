@@ -65,11 +65,71 @@ fn test_memory_manager_allocate_free() {
 
 #[test]
 fn test_memory_manager_select_victims() {
-    let manager = MemoryManager::new(SchedulerConfig::default(), 10);
+    let mut manager = MemoryManager::new(SchedulerConfig::default(), 10);
 
     let seq = make_sequence(1, vec![1, 2], Status::Decoding);
+    // Record blocks so ref_count = 1 (eligible for eviction).
+    manager.record_blocks(&[1, 2]);
+
     let victims = manager.select_victims(&[seq], 1);
-    assert!(victims.is_empty() || victims.len() == 1);
+
+    assert_eq!(
+        victims.len(),
+        1,
+        "should select exactly 1 victim when 1 block is requested"
+    );
+    assert!(
+        victims[0] == 1 || victims[0] == 2,
+        "victim must be one of the sequence's blocks, got {}",
+        victims[0]
+    );
+}
+
+#[test]
+fn test_select_victims_skips_shared_blocks() {
+    let mut manager = MemoryManager::new(SchedulerConfig::default(), 10);
+
+    // Block 1 is shared (ref_count = 2) — should NOT be selected.
+    // Block 2 is owned by one sequence (ref_count = 1) — eligible.
+    manager.record_blocks(&[1]);
+    manager.record_blocks(&[1]); // second owner
+    manager.record_blocks(&[2]);
+
+    let seq_a = make_sequence(1, vec![1], Status::Decoding);
+    let seq_b = make_sequence(2, vec![2], Status::Decoding);
+
+    let victims = manager.select_victims(&[seq_a, seq_b], 2);
+
+    assert_eq!(
+        victims,
+        vec![2],
+        "shared block (ref_count > 1) must not be selected, got {victims:?}"
+    );
+}
+
+#[test]
+fn test_select_victims_prefers_new_decode() {
+    let mut manager = MemoryManager::new(SchedulerConfig::default(), 10);
+
+    // seq_a: consecutive_decode_rounds = 0 → priority 3 (new decode, evictable)
+    // seq_b: consecutive_decode_rounds = 50 → priority 1 (long-running, protected)
+    let mut seq_a = make_sequence(1, vec![10], Status::Decoding);
+    seq_a.consecutive_decode_rounds = 0;
+    let mut seq_b = make_sequence(2, vec![20], Status::Decoding);
+    seq_b.consecutive_decode_rounds = 50;
+
+    manager.record_blocks(&[10, 20]);
+
+    // Request 1 victim — should come from seq_a (priority 3, "new decode")
+    // since higher priority values are evicted first, protecting long-running
+    // sequences that have accumulated more compute.
+    let victims = manager.select_victims(&[seq_a, seq_b], 1);
+
+    assert_eq!(
+        victims,
+        vec![10],
+        "priority-3 block (new decode) should be evicted first, got {victims:?}"
+    );
 }
 
 #[test]
