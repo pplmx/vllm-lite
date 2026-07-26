@@ -1,6 +1,7 @@
 //! `AuthConfig` — API key resolution + per-key rate-limit settings.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Authentication and per-key rate-limiting configuration.
 ///
@@ -26,6 +27,13 @@ pub struct AuthConfig {
     /// Sliding window length (seconds) for the rate limiter.
     #[serde(default = "default_rate_limit_window")]
     pub rate_limit_window_secs: u64,
+    /// Per-key rate-limit overrides.
+    ///
+    /// Each entry maps an API key to its own `(max_requests, window_secs)`,
+    /// allowing privileged keys to bypass the global limit or have a
+    /// different window. Keys not present here use the global defaults.
+    #[serde(default)]
+    pub rate_limit_overrides: HashMap<String, RateLimitOverride>,
 }
 
 impl AuthConfig {
@@ -66,6 +74,19 @@ impl AuthConfig {
     }
 }
 
+/// Per-key rate-limit override.
+///
+/// Allows a specific API key to have its own request quota and window,
+/// different from the global `AuthConfig::rate_limit_requests` /
+/// `rate_limit_window_secs`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RateLimitOverride {
+    /// Per-key request quota within `rate_limit_window_secs`.
+    pub max_requests: usize,
+    /// Per-key sliding window length (seconds).
+    pub rate_limit_window_secs: u64,
+}
+
 impl Default for AuthConfig {
     fn default() -> Self {
         Self {
@@ -74,6 +95,7 @@ impl Default for AuthConfig {
             api_keys_file: None,
             rate_limit_requests: 100,
             rate_limit_window_secs: 60,
+            rate_limit_overrides: HashMap::new(),
         }
     }
 }

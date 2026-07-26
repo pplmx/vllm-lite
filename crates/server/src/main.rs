@@ -14,6 +14,7 @@ use axum::{
     routing::{get, post},
 };
 use clap::Parser;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::signal;
@@ -233,10 +234,18 @@ async fn main() -> Result<()> {
     let auth_middleware = if app_config.auth.api_keys.is_empty() {
         None
     } else {
-        Some(Arc::new(AuthMiddleware::new(
+        // Convert RateLimitOverride into (max_requests, window_secs) pairs.
+        let overrides: HashMap<String, (usize, u64)> = app_config
+            .auth
+            .rate_limit_overrides
+            .iter()
+            .map(|(k, v)| (k.clone(), (v.max_requests, v.rate_limit_window_secs)))
+            .collect();
+        Some(Arc::new(AuthMiddleware::new_with_overrides(
             app_config.auth.api_keys.clone(),
             app_config.auth.rate_limit_requests,
             app_config.auth.rate_limit_window_secs,
+            overrides,
         )))
     };
 

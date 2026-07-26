@@ -108,9 +108,13 @@ pub(crate) struct RateLimitResult {
 #[derive(Debug)]
 pub(crate) struct RateLimiter {
     buckets: HashMap<String, TokenBucket>,
+    /// Global default capacity (tokens).
     capacity: f64,
-    /// Tokens per second. Infinite when `window_secs == 0`.
+    /// Global default tokens per second. Infinite when `window_secs == 0`.
     refill_rate: f64,
+    /// Per-key overrides: `key → (capacity, refill_rate)`.
+    /// When a key is absent here, the global defaults are used.
+    per_key_limits: HashMap<String, (f64, f64)>,
 }
 
 impl RateLimiter {
@@ -125,6 +129,42 @@ impl RateLimiter {
             buckets: HashMap::new(),
             capacity,
             refill_rate,
+            per_key_limits: HashMap::new(),
+        }
+    }
+
+    /// Create a rate limiter with per-key overrides.
+    ///
+    /// `overrides` maps an API key to its own `(max_requests, window_secs)`.
+    /// Keys not in the map use the global defaults.
+    fn new_with_overrides(
+        max_requests: usize,
+        window_secs: u64,
+        overrides: HashMap<String, (usize, u64)>,
+    ) -> Self {
+        let capacity = f64::from(u32::try_from(max_requests).unwrap_or(u32::MAX));
+        let global_refill_rate = if window_secs == 0 {
+            f64::INFINITY
+        } else {
+            capacity / window_secs as f64
+        };
+        let per_key_limits = overrides
+            .into_iter()
+            .map(|(key, (max, win))| {
+                let cap = f64::from(u32::try_from(max).unwrap_or(u32::MAX));
+                let rate = if win == 0 {
+                    f64::INFINITY
+                } else {
+                    cap / win as f64
+                };
+                (key, (cap, rate))
+            })
+            .collect();
+        Self {
+            buckets: HashMap::new(),
+            capacity,
+            refill_rate: global_refill_rate,
+            per_key_limits,
         }
     }
 
@@ -134,12 +174,18 @@ impl RateLimiter {
     /// denied) the `retry_after` duration.
     #[allow(clippy::unused_async)]
     async fn check_and_consume(&mut self, key: &str, cost: f64) -> RateLimitResult {
+        let (bucket_capacity, bucket_refill_rate) = self
+            .per_key_limits
+            .get(key)
+            .copied()
+            .unwrap_or((self.capacity, self.refill_rate));
+
         let bucket = self
             .buckets
             .entry(key.to_string())
-            .or_insert_with(|| TokenBucket::new(self.capacity));
+            .or_insert_with(|| TokenBucket::new(bucket_capacity));
 
-        match bucket.consume(cost, self.capacity, self.refill_rate) {
+        match bucket.consume(cost, bucket_capacity, bucket_refill_rate) {
             Some(remaining) => RateLimitResult {
                 allowed: true,
                 remaining,
@@ -200,6 +246,28 @@ impl AuthMiddleware {
         Self {
             api_keys: Arc::new(api_keys),
             rate_limiter: Arc::new(RwLock::new(RateLimiter::new(max_requests, window_secs))),
+        }
+    }
+
+    /// Create an auth + rate-limiting middleware with per-key overrides.
+    ///
+    /// `overrides` maps an API key to its own `(max_requests, window_secs)`,
+    /// allowing privileged keys to have higher or lower limits than the
+    /// global default.
+    #[must_use]
+    pub fn new_with_overrides(
+        api_keys: Vec<String>,
+        max_requests: usize,
+        window_secs: u64,
+        overrides: HashMap<String, (usize, u64)>,
+    ) -> Self {
+        Self {
+            api_keys: Arc::new(api_keys),
+            rate_limiter: Arc::new(RwLock::new(RateLimiter::new_with_overrides(
+                max_requests,
+                window_secs,
+                overrides,
+            ))),
         }
     }
 
@@ -689,5 +757,95 @@ mod tests {
         let body = r#"{"foo": "bar"}"#;
         let cost = estimate_request_cost(body);
         assert_eq!(cost, 1.0);
+    }
+
+    // ------------------------------------------------------------------
+    // Per-key override tests
+    // ------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_per_key_override_allows_more_requests() {
+        let mut overrides = HashMap::new();
+        overrides.insert("premium".to_string(), (5, 60));
+
+        let auth = AuthMiddleware::new_with_overrides(
+            vec!["premium".to_string(), "standard".to_string()],
+            2, // global default: 2
+            60,
+            overrides,
+        );
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer premium".parse().unwrap());
+
+        // Premium key should get 5 requests (override)
+        for _ in 0..5 {
+            assert!(auth.verify(&headers).await.is_ok());
+        }
+        // 6th request should be rate-limited
+        assert_eq!(
+            auth.verify(&headers).await.unwrap_err(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+    }
+
+    #[tokio::test]
+    async fn test_per_key_override_standard_key_uses_global() {
+        let mut overrides = HashMap::new();
+        overrides.insert("premium".to_string(), (5, 60));
+
+        let auth = AuthMiddleware::new_with_overrides(
+            vec!["premium".to_string(), "standard".to_string()],
+            2, // global default: 2
+            60,
+            overrides,
+        );
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer standard".parse().unwrap());
+
+        // Standard key should only get 2 (global default)
+        assert!(auth.verify(&headers).await.is_ok());
+        assert!(auth.verify(&headers).await.is_ok());
+        assert_eq!(
+            auth.verify(&headers).await.unwrap_err(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+    }
+
+    #[tokio::test]
+    async fn test_per_key_override_lower_limit() {
+        let mut overrides = HashMap::new();
+        overrides.insert("restricted".to_string(), (1, 60));
+
+        let auth = AuthMiddleware::new_with_overrides(
+            vec!["restricted".to_string()],
+            10, // global default: 10
+            60,
+            overrides,
+        );
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer restricted".parse().unwrap());
+
+        // Restricted key should only get 1 (override is lower)
+        assert!(auth.verify(&headers).await.is_ok());
+        assert_eq!(
+            auth.verify(&headers).await.unwrap_err(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+    }
+
+    #[tokio::test]
+    async fn test_no_overrides_uses_global() {
+        let auth =
+            AuthMiddleware::new_with_overrides(vec!["key1".to_string()], 3, 60, HashMap::new());
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer key1".parse().unwrap());
+
+        for _ in 0..3 {
+            assert!(auth.verify(&headers).await.is_ok());
+        }
+        assert_eq!(
+            auth.verify(&headers).await.unwrap_err(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
     }
 }

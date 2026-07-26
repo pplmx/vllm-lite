@@ -94,7 +94,26 @@
 - 343 total lib tests pass
 - Clippy clean on auth.rs; docs build clean
 
-### Next Steps (Phase 3)
+## Iteration 3 — Per-Key Rate Limit Configuration
 
-- [ ] Per-key rate limit configuration in `AuthConfig`
+**Status:** ✅ Complete, CI green
+
+### Changes
+
+- `crates/server/src/auth.rs`: `RateLimiter` now supports per-key limits via
+  `new_with_overrides()`. `AuthMiddleware::new_with_overrides()` accepts a
+  `HashMap<String, (usize, u64)>` of per-key overrides.
+- `crates/server/src/config/auth.rs`: Added `RateLimitOverride` struct and
+  `rate_limit_overrides` field to `AuthConfig` (deserialized from YAML).
+- `crates/server/src/main.rs`: Wires `app_config.auth.rate_limit_overrides`
+  into `AuthMiddleware::new_with_overrides()`.
+
+### Tests
+
+- 29 unit tests + 6 integration tests, all pass
+- 347 total lib tests pass
+- Clippy clean; docs build clean
+
+### Next Steps (Phase 4)
+
 - [ ] Lock contention reduction (sharded locks)
