@@ -14,20 +14,26 @@ use std::path::Path;
 use std::sync::Arc;
 use vllm_model::tokenizer::Tokenizer;
 
+/// Construct a default (fallback) tokenizer with logging.
+fn default_tokenizer() -> Arc<Tokenizer> {
+    tracing::warn!("Using default tokenizer (fallback)");
+    Arc::new(Tokenizer::new())
+}
+
 /// Load the tokenizer from `<model_dir>/tokenizer.json`, or fall back to a
 /// default-constructed tokenizer. Returns the `Arc<Tokenizer>` ready for use.
 pub fn load_tokenizer(model_dir: &Path) -> Arc<Tokenizer> {
     let tokenizer_path = model_dir.join("tokenizer.json");
     if !tokenizer_path.exists() {
         tracing::warn!("No tokenizer.json found in model directory, using default tokenizer");
-        return Arc::new(Tokenizer::new());
+        return default_tokenizer();
     }
     let Some(path_str) = tokenizer_path.to_str() else {
         tracing::error!(
             path = ?tokenizer_path,
             "Tokenizer path is not valid UTF-8; falling back to default tokenizer"
         );
-        return Arc::new(Tokenizer::new());
+        return default_tokenizer();
     };
     match Tokenizer::from_file(path_str) {
         Ok(t) => {
@@ -36,7 +42,7 @@ pub fn load_tokenizer(model_dir: &Path) -> Arc<Tokenizer> {
         }
         Err(e) => {
             tracing::warn!(error = %e, "Failed to load tokenizer from file, using default");
-            Arc::new(Tokenizer::new())
+            default_tokenizer()
         }
     }
 }
@@ -44,7 +50,6 @@ pub fn load_tokenizer(model_dir: &Path) -> Arc<Tokenizer> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
     use tempfile::TempDir;
 
     #[test]
