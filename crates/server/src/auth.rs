@@ -16,10 +16,10 @@ use axum::{
     middleware::Next,
     response::Response,
 };
+use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::RwLock;
 
 /// Header name for rate-limit metadata sent on every response.
 const HEADER_RATE_LIMIT_REMAINING: HeaderName = HeaderName::from_static("x-ratelimit-remaining");
@@ -101,13 +101,25 @@ pub(crate) struct RateLimitResult {
     pub limit: f64,
 }
 
+/// Number of independent shards for the rate limiter.
+///
+/// Each shard has its own lock, so requests for different keys can
+/// be rate-limited concurrently without contention.
+const NUM_SHARDS: usize = 16;
+
 /// `RateLimiter`. See the type definition for fields and behavior.
 ///
 /// Uses a token bucket per key. The bucket capacity is `max_requests`
 /// and refills at `max_requests / window_secs` tokens per second.
+///
+/// **Sharded locking:** the bucket map is partitioned across
+/// [`NUM_SHARDS`] independent `parking_lot::RwLock` instances so that
+/// concurrent requests for *different* API keys don't contend on a
+/// single lock. The shared config (`capacity`, `refill_rate`,
+/// `per_key_limits`) is read-only after construction and needs no
+/// lock.
 #[derive(Debug)]
 pub(crate) struct RateLimiter {
-    buckets: HashMap<String, TokenBucket>,
     /// Global default capacity (tokens).
     capacity: f64,
     /// Global default tokens per second. Infinite when `window_secs == 0`.
@@ -115,6 +127,17 @@ pub(crate) struct RateLimiter {
     /// Per-key overrides: `key → (capacity, refill_rate)`.
     /// When a key is absent here, the global defaults are used.
     per_key_limits: HashMap<String, (f64, f64)>,
+    /// Sharded bucket maps — one lock per shard.
+    shards: Vec<RwLock<HashMap<String, TokenBucket>>>,
+}
+
+/// Hash a key to its shard index.
+fn shard_of(key: &str) -> usize {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    key.hash(&mut hasher);
+    (hasher.finish() as usize) % NUM_SHARDS
 }
 
 impl RateLimiter {
@@ -126,10 +149,12 @@ impl RateLimiter {
             capacity / window_secs as f64
         };
         Self {
-            buckets: HashMap::new(),
             capacity,
             refill_rate,
             per_key_limits: HashMap::new(),
+            shards: (0..NUM_SHARDS)
+                .map(|_| RwLock::new(HashMap::new()))
+                .collect(),
         }
     }
 
@@ -161,10 +186,12 @@ impl RateLimiter {
             })
             .collect();
         Self {
-            buckets: HashMap::new(),
             capacity,
             refill_rate: global_refill_rate,
             per_key_limits,
+            shards: (0..NUM_SHARDS)
+                .map(|_| RwLock::new(HashMap::new()))
+                .collect(),
         }
     }
 
@@ -172,16 +199,20 @@ impl RateLimiter {
     ///
     /// Returns a [`RateLimitResult`] with remaining tokens and (if
     /// denied) the `retry_after` duration.
-    #[allow(clippy::unused_async)]
-    async fn check_and_consume(&mut self, key: &str, cost: f64) -> RateLimitResult {
+    ///
+    /// Locks only the shard responsible for `key`, so concurrent checks
+    /// for different keys proceed without contention.
+    fn check_and_consume(&self, key: &str, cost: f64) -> RateLimitResult {
         let (bucket_capacity, bucket_refill_rate) = self
             .per_key_limits
             .get(key)
             .copied()
             .unwrap_or((self.capacity, self.refill_rate));
 
-        let bucket = self
-            .buckets
+        let shard_idx = shard_of(key);
+        let mut buckets = self.shards[shard_idx].write();
+
+        let bucket = buckets
             .entry(key.to_string())
             .or_insert_with(|| TokenBucket::new(bucket_capacity));
 
@@ -190,13 +221,13 @@ impl RateLimiter {
                 allowed: true,
                 remaining,
                 retry_after: None,
-                limit: self.capacity,
+                limit: bucket_capacity,
             },
             None => RateLimitResult {
                 allowed: false,
                 remaining: bucket.tokens,
-                retry_after: Some(bucket.wait_for(cost, self.refill_rate)),
-                limit: self.capacity,
+                retry_after: Some(bucket.wait_for(cost, bucket_refill_rate)),
+                limit: bucket_capacity,
             },
         }
     }
@@ -205,9 +236,15 @@ impl RateLimiter {
     ///
     /// Only used by tests; production code calls [`Self::check_and_consume`]
     /// directly (via [`AuthMiddleware::verify_with_meta`]).
-    #[allow(clippy::unused_async, dead_code)]
-    async fn check_rate_limit(&mut self, key: &str) -> bool {
-        self.check_and_consume(key, 1.0).await.allowed
+    #[allow(dead_code)]
+    fn check_rate_limit(&self, key: &str) -> bool {
+        self.check_and_consume(key, 1.0).allowed
+    }
+
+    /// The global default bucket capacity (for rate-limit headers).
+    #[must_use]
+    const fn capacity(&self) -> f64 {
+        self.capacity
     }
 }
 
@@ -236,7 +273,7 @@ impl From<AuthError> for StatusCode {
 /// `AuthMiddleware`. See the type definition for fields and behavior.
 pub struct AuthMiddleware {
     api_keys: Arc<Vec<String>>,
-    rate_limiter: Arc<RwLock<RateLimiter>>,
+    rate_limiter: Arc<RateLimiter>,
 }
 
 impl AuthMiddleware {
@@ -245,7 +282,7 @@ impl AuthMiddleware {
     pub fn new(api_keys: Vec<String>, max_requests: usize, window_secs: u64) -> Self {
         Self {
             api_keys: Arc::new(api_keys),
-            rate_limiter: Arc::new(RwLock::new(RateLimiter::new(max_requests, window_secs))),
+            rate_limiter: Arc::new(RateLimiter::new(max_requests, window_secs)),
         }
     }
 
@@ -263,11 +300,11 @@ impl AuthMiddleware {
     ) -> Self {
         Self {
             api_keys: Arc::new(api_keys),
-            rate_limiter: Arc::new(RwLock::new(RateLimiter::new_with_overrides(
+            rate_limiter: Arc::new(RateLimiter::new_with_overrides(
                 max_requests,
                 window_secs,
                 overrides,
-            ))),
+            )),
         }
     }
 
@@ -295,9 +332,8 @@ impl AuthMiddleware {
     /// Returns `Err(StatusCode::UNAUTHORIZED)` if the key is missing or
     /// invalid, or `Err(StatusCode::TOO_MANY_REQUESTS)` if the rate
     /// limit has been exceeded.
-    pub async fn verify(&self, headers: &HeaderMap) -> Result<String, StatusCode> {
+    pub fn verify(&self, headers: &HeaderMap) -> Result<String, StatusCode> {
         self.verify_with_meta(headers, 1.0)
-            .await
             .map(|decision| decision.0)
             .map_err(Into::into)
     }
@@ -313,7 +349,7 @@ impl AuthMiddleware {
     /// header is present, `Err(AuthError::InvalidKey)` if the key is
     /// not configured, or `Err(AuthError::RateLimited)` if the bucket
     /// is depleted.
-    pub(crate) async fn verify_with_meta(
+    pub(crate) fn verify_with_meta(
         &self,
         headers: &HeaderMap,
         cost: f64,
@@ -331,9 +367,8 @@ impl AuthMiddleware {
             return Err(AuthError::InvalidKey);
         }
 
-        let mut limiter = self.rate_limiter.write().await;
-        let result = limiter.check_and_consume(api_key, cost).await;
-        drop(limiter);
+        // Sharded rate limiter: locks only the shard for this key.
+        let result = self.rate_limiter.check_and_consume(api_key, cost);
 
         if result.allowed {
             Ok((api_key.to_string(), result))
@@ -394,7 +429,7 @@ pub async fn auth_middleware(
 
     let mut request = Request::from_parts(parts, axum::body::Body::from(body_bytes));
 
-    match auth.verify_with_meta(request.headers(), cost).await {
+    match auth.verify_with_meta(request.headers(), cost) {
         Ok((api_key, rate_result)) => {
             // Stamp the user id on the request so the audit
             // middleware (and any future per-user handler logic)
@@ -424,7 +459,7 @@ pub async fn auth_middleware(
                 .header(HEADER_RATE_LIMIT_REMAINING, HeaderValue::from(0))
                 .header(
                     HEADER_RATE_LIMIT_LIMIT,
-                    HeaderValue::from(auth.rate_limiter.read().await.capacity.round() as u64),
+                    HeaderValue::from(auth.rate_limiter.capacity().round() as u64),
                 )
                 .body("".into())
                 .unwrap()
@@ -499,67 +534,67 @@ mod tests {
     // TokenBucket unit tests
     // ------------------------------------------------------------------
 
-    #[tokio::test]
-    async fn test_token_bucket_full_at_start() {
-        let mut limiter = RateLimiter::new(3, 60);
-        let result = limiter.check_and_consume("key1", 1.0).await;
+    #[test]
+    fn test_token_bucket_full_at_start() {
+        let limiter = RateLimiter::new(3, 60);
+        let result = limiter.check_and_consume("key1", 1.0);
         assert!(result.allowed);
         assert_eq!(result.remaining, 2.0);
     }
 
-    #[tokio::test]
-    async fn test_token_bucket_blocks_over_capacity() {
-        let mut limiter = RateLimiter::new(2, 60);
-        assert!(limiter.check_rate_limit("key1").await);
-        assert!(limiter.check_rate_limit("key1").await);
-        let result = limiter.check_and_consume("key1", 1.0).await;
+    #[test]
+    fn test_token_bucket_blocks_over_capacity() {
+        let limiter = RateLimiter::new(2, 60);
+        assert!(limiter.check_rate_limit("key1"));
+        assert!(limiter.check_rate_limit("key1"));
+        let result = limiter.check_and_consume("key1", 1.0);
         assert!(!result.allowed);
         assert!(result.retry_after.is_some());
     }
 
-    #[tokio::test]
-    async fn test_token_bucket_separate_keys_independent() {
-        let mut limiter = RateLimiter::new(1, 60);
-        assert!(limiter.check_rate_limit("key1").await);
+    #[test]
+    fn test_token_bucket_separate_keys_independent() {
+        let limiter = RateLimiter::new(1, 60);
+        assert!(limiter.check_rate_limit("key1"));
         // key1 exhausted, but key2 should be fine
-        assert!(limiter.check_rate_limit("key2").await);
+        assert!(limiter.check_rate_limit("key2"));
         // key1 still blocked
-        assert!(!limiter.check_rate_limit("key1").await);
+        assert!(!limiter.check_rate_limit("key1"));
     }
 
-    #[tokio::test]
-    async fn test_token_bucket_cost_deducts_proportionally() {
-        let mut limiter = RateLimiter::new(10, 60);
+    #[test]
+    fn test_token_bucket_cost_deducts_proportionally() {
+        let limiter = RateLimiter::new(10, 60);
         // Consume 3 tokens in one call
-        let result = limiter.check_and_consume("key1", 3.0).await;
+        let result = limiter.check_and_consume("key1", 3.0);
         assert!(result.allowed);
         assert!((result.remaining - 7.0).abs() < 1e-6);
         // 7 tokens should still be enough for a cost-5 request
-        let result = limiter.check_and_consume("key1", 5.0).await;
+        let result = limiter.check_and_consume("key1", 5.0);
         assert!(result.allowed);
         // Allow tiny floating-point drift from lazy refill between calls.
         assert!((result.remaining - 2.0).abs() < 1e-3);
         // 3 tokens should NOT be enough
-        let result = limiter.check_and_consume("key1", 3.0).await;
+        let result = limiter.check_and_consume("key1", 3.0);
         assert!(!result.allowed);
     }
 
     #[tokio::test]
     async fn test_token_bucket_zero_window_refills_immediately() {
-        let mut limiter = RateLimiter::new(1, 0);
-        assert!(limiter.check_rate_limit("key1").await);
+        let limiter = RateLimiter::new(1, 0);
+        assert!(limiter.check_rate_limit("key1"));
         // With window_secs=0, refill_rate is infinite → bucket refills
         sleep(Duration::from_millis(10)).await;
-        assert!(limiter.check_rate_limit("key1").await);
+        assert!(limiter.check_rate_limit("key1"));
     }
 
-    #[tokio::test]
-    async fn test_token_bucket_retry_after_is_deterministic() {
-        let mut limiter = RateLimiter::new(4, 60);
+    #[test]
+    fn test_token_bucket_retry_after_is_deterministic() {
+        let limiter = RateLimiter::new(4, 60);
         // Capacity = 4, refill_rate = 4/60 ≈ 0.0667 tokens/sec
-        assert!(limiter.check_and_consume("key1", 4.0).await.allowed);
+        assert!(limiter.check_and_consume("key1", 4.0).allowed);
         // Bucket is now empty, cost=1
-        let result = limiter.check_and_consume("key1", 1.0).await;
+        let result = limiter.check_and_consume("key1", 1.0);
         assert!(!result.allowed);
         // retry_after = 1 / (4/60) = 15s → we check it's Some and > 0
         let retry = result.retry_after.expect("retry_after should be set");
@@ -567,19 +602,36 @@ mod tests {
         assert!(retry <= Duration::from_secs(15));
     }
 
-    #[tokio::test]
-    async fn test_token_bucket_result_includes_limit() {
-        let mut limiter = RateLimiter::new(100, 60);
-        let result = limiter.check_and_consume("key1", 5.0).await;
+    #[test]
+    fn test_token_bucket_result_includes_limit() {
+        let limiter = RateLimiter::new(100, 60);
+        let result = limiter.check_and_consume("key1", 5.0);
         assert_eq!(result.limit, 100.0);
+    }
+
+    #[test]
+    fn test_per_key_limit_reflects_override_capacity() {
+        let mut overrides = HashMap::new();
+        overrides.insert("premium".to_string(), (5, 60));
+        let mut limiter = RateLimiter::new_with_overrides(10, 60, overrides);
+
+        // The global default capacity is 10, but "premium" has an override of 5.
+        // The `limit` field in the result should reflect the per-key capacity.
+        let result = limiter.check_and_consume("premium", 1.0);
+        assert_eq!(result.limit, 5.0);
+        assert!(result.allowed);
+
+        // A key without an override should report the global default.
+        let result = limiter.check_and_consume("standard", 1.0);
+        assert_eq!(result.limit, 10.0);
     }
 
     // ------------------------------------------------------------------
     // RateLimitResult / AuthError tests
     // ------------------------------------------------------------------
 
-    #[tokio::test]
-    async fn test_auth_error_converts_to_status_code() {
+    #[test]
+    fn test_auth_error_converts_to_status_code() {
         assert_eq!(
             StatusCode::from(AuthError::MissingHeader),
             StatusCode::UNAUTHORIZED
@@ -600,105 +652,105 @@ mod tests {
     // AuthMiddleware tests (backward-compatible verify + new verify_with_meta)
     // ------------------------------------------------------------------
 
-    #[tokio::test]
-    async fn test_verify_with_meta_returns_rate_result() {
+    #[test]
+    fn test_verify_with_meta_returns_rate_result() {
         let auth = AuthMiddleware::new(vec!["test_key".to_string()], 10, 60);
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, "Bearer test_key".parse().unwrap());
-        let (key, result) = auth.verify_with_meta(&headers, 2.0).await.unwrap();
+        let (key, result) = auth.verify_with_meta(&headers, 2.0).unwrap();
         assert_eq!(key, "test_key");
         assert!(result.allowed);
         // 10 capacity - 2 cost = 8 remaining
         assert_eq!(result.remaining, 8.0);
     }
 
-    #[tokio::test]
-    async fn test_verify_with_meta_rate_limited_error() {
+    #[test]
+    fn test_verify_with_meta_rate_limited_error() {
         let auth = AuthMiddleware::new(vec!["test_key".to_string()], 2, 60);
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, "Bearer test_key".parse().unwrap());
 
-        auth.verify(&headers).await.unwrap();
-        auth.verify(&headers).await.unwrap();
-        let err = auth.verify_with_meta(&headers, 1.0).await.unwrap_err();
+        auth.verify(&headers).unwrap();
+        auth.verify(&headers).unwrap();
+        let err = auth.verify_with_meta(&headers, 1.0).unwrap_err();
         assert!(matches!(
             err,
             AuthError::RateLimited { retry_after_secs } if retry_after_secs >= 1
         ));
     }
 
-    #[tokio::test]
-    async fn test_verify_with_meta_missing_header() {
+    #[test]
+    fn test_verify_with_meta_missing_header() {
         let auth = AuthMiddleware::new(vec!["test_key".to_string()], 10, 60);
         let headers = HeaderMap::new();
-        let err = auth.verify_with_meta(&headers, 1.0).await.unwrap_err();
+        let err = auth.verify_with_meta(&headers, 1.0).unwrap_err();
         assert_eq!(err, AuthError::MissingHeader);
     }
 
-    #[tokio::test]
-    async fn test_verify_with_meta_invalid_key() {
+    #[test]
+    fn test_verify_with_meta_invalid_key() {
         let auth = AuthMiddleware::new(vec!["test_key".to_string()], 10, 60);
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, "Bearer wrong_key".parse().unwrap());
-        let err = auth.verify_with_meta(&headers, 1.0).await.unwrap_err();
+        let err = auth.verify_with_meta(&headers, 1.0).unwrap_err();
         assert_eq!(err, AuthError::InvalidKey);
     }
 
-    #[tokio::test]
-    async fn test_auth_middleware_valid_key() {
+    #[test]
+    fn test_auth_middleware_valid_key() {
         let auth = AuthMiddleware::new(vec!["test_key".to_string()], 10, 60);
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, "Bearer test_key".parse().unwrap());
-        let result = auth.verify(&headers).await;
+        let result = auth.verify(&headers);
         assert!(result.is_ok());
     }
 
-    #[tokio::test]
-    async fn test_auth_middleware_invalid_key() {
+    #[test]
+    fn test_auth_middleware_invalid_key() {
         let auth = AuthMiddleware::new(vec!["test_key".to_string()], 10, 60);
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, "Bearer wrong_key".parse().unwrap());
-        let result = auth.verify(&headers).await;
+        let result = auth.verify(&headers);
         assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
     }
 
-    #[tokio::test]
-    async fn test_auth_middleware_no_key() {
+    #[test]
+    fn test_auth_middleware_no_key() {
         let auth = AuthMiddleware::new(vec!["test_key".to_string()], 10, 60);
         let headers = HeaderMap::new();
-        let result = auth.verify(&headers).await;
+        let result = auth.verify(&headers);
         assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
     }
 
-    #[tokio::test]
-    async fn test_auth_middleware_no_keys_allow_all() {
+    #[test]
+    fn test_auth_middleware_no_keys_allow_all() {
         let auth = AuthMiddleware::new(vec![], 10, 60);
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, "Bearer any_key".parse().unwrap());
-        let result = auth.verify(&headers).await;
+        let result = auth.verify(&headers);
         assert!(result.is_ok());
     }
 
-    #[tokio::test]
-    async fn test_auth_middleware_rate_limit_exceeded() {
+    #[test]
+    fn test_auth_middleware_rate_limit_exceeded() {
         let auth = AuthMiddleware::new(vec!["test_key".to_string()], 2, 60);
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, "Bearer test_key".parse().unwrap());
 
-        assert!(auth.verify(&headers).await.is_ok());
-        assert!(auth.verify(&headers).await.is_ok());
+        assert!(auth.verify(&headers).is_ok());
+        assert!(auth.verify(&headers).is_ok());
         assert_eq!(
-            auth.verify(&headers).await.unwrap_err(),
+            auth.verify(&headers).unwrap_err(),
             StatusCode::TOO_MANY_REQUESTS
         );
     }
 
-    #[tokio::test]
-    async fn test_auth_middleware_missing_bearer_prefix() {
+    #[test]
+    fn test_auth_middleware_missing_bearer_prefix() {
         let auth = AuthMiddleware::new(vec!["test_key".to_string()], 10, 60);
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, "test_key".parse().unwrap());
-        let result = auth.verify(&headers).await;
+        let result = auth.verify(&headers);
         assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
     }
 
@@ -763,8 +815,8 @@ mod tests {
     // Per-key override tests
     // ------------------------------------------------------------------
 
-    #[tokio::test]
-    async fn test_per_key_override_allows_more_requests() {
+    #[test]
+    fn test_per_key_override_allows_more_requests() {
         let mut overrides = HashMap::new();
         overrides.insert("premium".to_string(), (5, 60));
 
@@ -779,17 +831,17 @@ mod tests {
 
         // Premium key should get 5 requests (override)
         for _ in 0..5 {
-            assert!(auth.verify(&headers).await.is_ok());
+            assert!(auth.verify(&headers).is_ok());
         }
         // 6th request should be rate-limited
         assert_eq!(
-            auth.verify(&headers).await.unwrap_err(),
+            auth.verify(&headers).unwrap_err(),
             StatusCode::TOO_MANY_REQUESTS
         );
     }
 
-    #[tokio::test]
-    async fn test_per_key_override_standard_key_uses_global() {
+    #[test]
+    fn test_per_key_override_standard_key_uses_global() {
         let mut overrides = HashMap::new();
         overrides.insert("premium".to_string(), (5, 60));
 
@@ -803,16 +855,16 @@ mod tests {
         headers.insert(AUTHORIZATION, "Bearer standard".parse().unwrap());
 
         // Standard key should only get 2 (global default)
-        assert!(auth.verify(&headers).await.is_ok());
-        assert!(auth.verify(&headers).await.is_ok());
+        assert!(auth.verify(&headers).is_ok());
+        assert!(auth.verify(&headers).is_ok());
         assert_eq!(
-            auth.verify(&headers).await.unwrap_err(),
+            auth.verify(&headers).unwrap_err(),
             StatusCode::TOO_MANY_REQUESTS
         );
     }
 
-    #[tokio::test]
-    async fn test_per_key_override_lower_limit() {
+    #[test]
+    fn test_per_key_override_lower_limit() {
         let mut overrides = HashMap::new();
         overrides.insert("restricted".to_string(), (1, 60));
 
@@ -826,25 +878,25 @@ mod tests {
         headers.insert(AUTHORIZATION, "Bearer restricted".parse().unwrap());
 
         // Restricted key should only get 1 (override is lower)
-        assert!(auth.verify(&headers).await.is_ok());
+        assert!(auth.verify(&headers).is_ok());
         assert_eq!(
-            auth.verify(&headers).await.unwrap_err(),
+            auth.verify(&headers).unwrap_err(),
             StatusCode::TOO_MANY_REQUESTS
         );
     }
 
-    #[tokio::test]
-    async fn test_no_overrides_uses_global() {
+    #[test]
+    fn test_no_overrides_uses_global() {
         let auth =
             AuthMiddleware::new_with_overrides(vec!["key1".to_string()], 3, 60, HashMap::new());
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, "Bearer key1".parse().unwrap());
 
         for _ in 0..3 {
-            assert!(auth.verify(&headers).await.is_ok());
+            assert!(auth.verify(&headers).is_ok());
         }
         assert_eq!(
-            auth.verify(&headers).await.unwrap_err(),
+            auth.verify(&headers).unwrap_err(),
             StatusCode::TOO_MANY_REQUESTS
         );
     }

@@ -3931,6 +3931,7 @@ dependencies = [
  "hyper",
  "jsonwebtoken",
  "opentelemetry-proto",
+ "parking_lot",
  "serde",
  "serde-saphyr",
  "serde_json",

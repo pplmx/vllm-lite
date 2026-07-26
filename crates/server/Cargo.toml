@@ -41,6 +41,7 @@ thiserror = { workspace = true }
 anyhow = "1"
 tokio-rustls = "0.26"
 jsonwebtoken = { version = "10", features = ["aws_lc_rs"] }
+parking_lot = { workspace = true }
 
 [dev-dependencies]
 axum = { version = "0.8", features = ["tokio", "macros"] }
