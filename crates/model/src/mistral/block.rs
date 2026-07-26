@@ -14,7 +14,7 @@ mod tests {
     #[test]
     fn test_mistral_block_forward() {
         let config = ModelConfig::test_tiny_for(crate::config::Architecture::Mistral);
-        let block = new_block(&config, 0, Device::Cpu).unwrap();
+        let block = new_block(&config, 0, &Device::Cpu).unwrap();
         let input = Tensor::ones(
             (1, 4, config.hidden_size),
             candle_core::DType::F32,
@@ -28,7 +28,7 @@ mod tests {
     #[test]
     fn test_mistral_block_sliding_window_config() {
         let config = ModelConfig::test_tiny_for(crate::config::Architecture::Mistral);
-        let _block = new_block(&config, 0, Device::Cpu).unwrap();
+        let _block = new_block(&config, 0, &Device::Cpu).unwrap();
         assert_eq!(config.sliding_window, Some(4096));
     }
 }

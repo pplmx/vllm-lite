@@ -10,18 +10,7 @@ use candle_core::{DType, Device};
 #[test]
 fn test_transformer_block_forward() -> Result<()> {
     let device = Device::Cpu;
-    let block = TransformerBlock::new(
-        256,
-        4,
-        2,
-        64,
-        512,
-        10000.0,
-        1e-6,
-        device.clone(),
-        None,
-        false,
-    )?;
+    let block = TransformerBlock::new(256, 4, 2, 64, 512, 10000.0, 1e-6, &device, None, false)?;
 
     let x = Tensor::ones((1, 2, 256), DType::F32, &device)?;
     let output = block.forward(&x)?;
@@ -33,18 +22,7 @@ fn test_transformer_block_forward() -> Result<()> {
 #[test]
 fn test_transformer_block_batch_forward() -> Result<()> {
     let device = Device::Cpu;
-    let block = TransformerBlock::new(
-        128,
-        4,
-        2,
-        32,
-        256,
-        10000.0,
-        1e-6,
-        device.clone(),
-        None,
-        false,
-    )?;
+    let block = TransformerBlock::new(128, 4, 2, 32, 256, 10000.0, 1e-6, &device, None, false)?;
 
     let x = Tensor::ones((4, 3, 128), DType::F32, &device)?;
     let output = block.forward(&x)?;
@@ -56,18 +34,7 @@ fn test_transformer_block_batch_forward() -> Result<()> {
 #[test]
 fn test_transformer_block_output_shape() -> Result<()> {
     let device = Device::Cpu;
-    let block = TransformerBlock::new(
-        128,
-        4,
-        2,
-        32,
-        256,
-        10000.0,
-        1e-6,
-        device.clone(),
-        None,
-        false,
-    )?;
+    let block = TransformerBlock::new(128, 4, 2, 32, 256, 10000.0, 1e-6, &device, None, false)?;
 
     let x = Tensor::zeros((2, 1, 128), DType::F32, &device)?;
     let output = block.forward(&x)?;
@@ -80,18 +47,7 @@ fn test_transformer_block_output_shape() -> Result<()> {
 fn test_transformer_block_with_qk_norm() -> Result<()> {
     // Qwen3-0.6B uses q_norm/k_norm
     let device = Device::Cpu;
-    let block = TransformerBlock::new(
-        128,
-        4,
-        2,
-        32,
-        256,
-        10000.0,
-        1e-6,
-        device.clone(),
-        None,
-        true,
-    )?;
+    let block = TransformerBlock::new(128, 4, 2, 32, 256, 10000.0, 1e-6, &device, None, true)?;
 
     let x = Tensor::ones((1, 2, 128), DType::F32, &device)?;
     let output = block.forward(&x)?;
@@ -106,18 +62,7 @@ fn test_transformer_block_with_custom_head_dim() -> Result<()> {
     // This test verifies custom head_dim works
     let device = Device::Cpu;
     // hidden=1024, heads=16, kv_heads=8, head_dim=128, intermediate=3072
-    let block = TransformerBlock::new(
-        1024,
-        16,
-        8,
-        128,
-        3072,
-        10000.0,
-        1e-6,
-        device.clone(),
-        None,
-        true,
-    )?;
+    let block = TransformerBlock::new(1024, 16, 8, 128, 3072, 10000.0, 1e-6, &device, None, true)?;
 
     let x = Tensor::ones((1, 4, 1024), DType::F32, &device)?;
     let output = block.forward(&x)?;
@@ -142,7 +87,7 @@ fn test_transformer_block_forward_decode_3d_output_shape() -> Result<()> {
         512,
         10000.0,
         1e-6,
-        device.clone(),
+        &device,
         None,
         false,
     )?;
@@ -178,7 +123,7 @@ fn test_transformer_block_forward_decode_with_qk_norm() -> Result<()> {
         3072,
         10000.0,
         1e-6,
-        device.clone(),
+        &device,
         None,
         true,
     )?;
@@ -211,7 +156,7 @@ fn test_transformer_block_decode_sequential_tokens() -> Result<()> {
         1024,
         10000.0,
         1e-6,
-        device.clone(),
+        &device,
         None,
         false,
     )?;
@@ -252,7 +197,7 @@ fn test_transformer_block_decode_with_multiple_kv_blocks() -> Result<()> {
         512,
         10000.0,
         1e-6,
-        device.clone(),
+        &device,
         None,
         false,
     )?;

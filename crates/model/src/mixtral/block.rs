@@ -26,7 +26,7 @@ impl MixtralBlock {
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
-    pub fn new(config: &ModelConfig, _layer_idx: usize, device: Device) -> Result<Self> {
+    pub fn new(config: &ModelConfig, _layer_idx: usize, device: &Device) -> Result<Self> {
         let hidden_size = config.hidden_size;
         let num_heads = config.num_heads;
         let num_kv_heads = config.num_kv_heads;

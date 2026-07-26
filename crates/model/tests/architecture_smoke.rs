@@ -23,12 +23,12 @@ fn block_forward_smoke(case: &ArchSmokeCase) {
 
     match case.architecture {
         Architecture::Llama => {
-            let block = llama_new_block(&config, 0, device).unwrap();
+            let block = llama_new_block(&config, 0, &device).unwrap();
             let out = block.forward(&input).unwrap();
             assert_eq!(out.dims(), &[1, 2, hidden]);
         }
         Architecture::Mistral => {
-            let block = mistral_new_block(&config, 0, device).unwrap();
+            let block = mistral_new_block(&config, 0, &device).unwrap();
             let out = block.forward(&input).unwrap();
             assert_eq!(out.dims(), &[1, 2, hidden]);
             assert_eq!(config.sliding_window, Some(4096));
@@ -42,7 +42,7 @@ fn block_forward_smoke(case: &ArchSmokeCase) {
                 config.intermediate_size,
                 config.rope_theta,
                 config.rms_norm_eps,
-                device,
+                &device,
                 None,
                 false,
             )
@@ -61,11 +61,11 @@ fn model_forward_smoke(case: &ArchSmokeCase) {
 
     match case.architecture {
         Architecture::Llama => {
-            let mut model = LlamaModel::new(config, device, 16).unwrap();
+            let mut model = LlamaModel::new(config, &device, 16).unwrap();
             assert_forward_smoke(&mut model, vocab);
         }
         Architecture::Mistral => {
-            let mut model = MistralModel::new(config, device, 16).unwrap();
+            let mut model = MistralModel::new(config, &device, 16).unwrap();
             assert_forward_smoke(&mut model, vocab);
         }
         _ => panic!("unsupported model smoke: {:?}", case.architecture),

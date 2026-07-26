@@ -33,7 +33,7 @@ impl TransformerBlock {
         intermediate_size: usize,
         theta: f32,
         rms_norm_eps: f64,
-        device: Device,
+        device: &Device,
         vb: Option<candle_nn::VarBuilder<'_>>,
         has_qk_norm: bool,
     ) -> Result<Self> {
@@ -73,7 +73,7 @@ impl TransformerBlock {
         rms_norm_eps: f64,
         max_position: usize,
         rope_scaling: Option<&RopeScaling>,
-        device: Device,
+        device: &Device,
         vb: Option<candle_nn::VarBuilder<'_>>,
         has_qk_norm: bool,
     ) -> Result<Self> {
@@ -127,7 +127,7 @@ impl TransformerBlock {
         intermediate_size: usize,
         theta: f32,
         rms_norm_eps: f64,
-        device: Device,
+        device: &Device,
         _tp_config: Option<TensorParallelConfig>,
         has_qk_norm: bool,
     ) -> Result<Self> {

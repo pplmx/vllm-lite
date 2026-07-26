@@ -135,7 +135,7 @@ mod tests {
     fn test_run_layers_matches_paged_decoder_block() {
         let config = ModelConfig::test_tiny();
         let device = Device::Cpu;
-        let layer = new_block(&config, 0, Device::Cpu).unwrap();
+        let layer = new_block(&config, 0, &Device::Cpu).unwrap();
         let layers = vec![layer];
         let mut kv_cache = PagedKvCache::new(
             1,
@@ -169,7 +169,7 @@ mod tests {
         use crate::qwen3::block::factory::new_block;
         let config = ModelConfig::test_tiny();
         let device = Device::Cpu;
-        let layer = new_block(&config, 0, device.clone()).unwrap();
+        let layer = new_block(&config, 0, &device).unwrap();
         let layers = vec![layer];
 
         let seq_len = 6usize;

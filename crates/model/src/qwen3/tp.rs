@@ -34,7 +34,7 @@ pub(crate) fn new_with_tp(
                 c.intermediate_size,
                 c.rope_theta,
                 c.rms_norm_eps,
-                device.clone(),
+                &device,
                 tp.clone(),
                 has_qk_norm,
             )
