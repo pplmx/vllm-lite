@@ -58,7 +58,7 @@ fn build_engine_multi_node(
     draft_model: Option<Box<dyn vllm_traits::ModelBackend>>,
     loader: &ModelLoader,
     app_config: &AppConfig,
-) -> Result<Engine> {
+) -> Engine {
     tracing::info!("Constructing Engine via EngineBuilder (multi-node path, Phase 41)");
     let mut builder = EngineBuilder::new(model);
     if let Some(d) = draft_model {
@@ -72,7 +72,7 @@ fn build_engine_multi_node(
     if let Some(cache) = loader.paged_kv_cache_clone() {
         builder = builder.with_paged_kv_cache(cache);
     }
-    Ok(builder.build())
+    builder.build()
 }
 
 /// Build the loader, model, optional draft model, and engine from CLI + config.
@@ -113,7 +113,7 @@ pub fn build_engine(
     // through the `EngineBuilder` so the engine wires the
     // `PagedKvCacheWrapper` through `Engine::set_paged_kv_cache`.
     let engine = if app_config.server.multi_node.enabled {
-        build_engine_multi_node(model, draft_model, &loader, app_config)?
+        build_engine_multi_node(model, draft_model, &loader, app_config)
     } else {
         build_engine_legacy(model, draft_model, app_config)?
     };
