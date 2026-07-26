@@ -529,18 +529,27 @@ pub(crate) fn estimate_request_cost(body: &str) -> f64 {
         .and_then(Value::as_i64)
         .unwrap_or(100) as f64;
 
-    // For completions with `n > 1`, each candidate generates `max_tokens`
-    // output tokens — multiply the cost so rate limits can't be bypassed by
-    // sending a single request with a large `n` value.
+    // For completions with `n > 1` or `best_of > 1`, each candidate generates
+    // `max_tokens` output tokens — multiply the cost so rate limits can't be
+    // bypassed by sending a single request with a large `n` or `best_of`
+    // value. The validator enforces `best_of` and `n` are not both > 1, so
+    // `max(n, best_of)` is the correct compute multiplier.
     let n: f64 = json
         .get("n")
         .and_then(Value::as_i64)
         .filter(|&n| n > 0)
         .map(|n| n as f64)
         .unwrap_or(1.0);
+    let best_of: f64 = json
+        .get("best_of")
+        .and_then(Value::as_i64)
+        .filter(|&b| b > 0)
+        .map(|b| b as f64)
+        .unwrap_or(1.0);
+    let multiplier = n.max(best_of);
 
-    // Cost = (prompt tokens + max_tokens) * n, clamped to [1.0, 100_000].
-    ((prompt_tokens + max_tokens) * n).clamp(1.0, 100_000.0)
+    // Cost = (prompt tokens + max_tokens) * multiplier, clamped to [1.0, 100_000].
+    ((prompt_tokens + max_tokens) * multiplier).clamp(1.0, 100_000.0)
 }
 
 #[cfg(test)]
@@ -880,6 +889,47 @@ mod tests {
         let body = format!(r#"{{"prompt": "{prompt}", "max_tokens": 50000, "n": 10}}"#);
         let cost = estimate_request_cost(&body);
         assert_eq!(cost, 100_000.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_best_of_multiplies_cost() {
+        // best_of=5 should multiply the cost: (4 words + 10) * 5 = 70
+        let body = r#"{"prompt": "hello world foo bar", "max_tokens": 10, "best_of": 5}"#;
+        let cost = estimate_request_cost(body);
+        assert_eq!(cost, 70.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_best_overrides_n() {
+        // When both n and best_of are set, the larger one is the multiplier.
+        // best_of=10 > n=2 → multiplier = 10 → (4 + 10) * 10 = 140
+        let body = r#"{"prompt": "hello world foo bar", "max_tokens": 10, "n": 2, "best_of": 10}"#;
+        let cost = estimate_request_cost(body);
+        assert_eq!(cost, 140.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_n_overrides_best() {
+        // n=10 > best_of=2 → multiplier = 10 → (4 + 10) * 10 = 140
+        let body = r#"{"prompt": "hello world foo bar", "max_tokens": 10, "n": 10, "best_of": 2}"#;
+        let cost = estimate_request_cost(body);
+        assert_eq!(cost, 140.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_best_of_defaults_to_one() {
+        // Without best_of, cost is 1x (same as n=1 default).
+        let body = r#"{"prompt": "hello", "max_tokens": 100}"#;
+        let cost = estimate_request_cost(body);
+        assert_eq!(cost, 101.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_best_of_zero_defaults_to_one() {
+        // best_of=0 is treated as 1 (filter excludes non-positive values).
+        let body = r#"{"prompt": "hello", "max_tokens": 100, "best_of": 0}"#;
+        let cost = estimate_request_cost(body);
+        assert_eq!(cost, 101.0);
     }
 
     // ------------------------------------------------------------------
