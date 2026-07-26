@@ -33,19 +33,19 @@ never disagree.
 
 `scripts/release-manifest.sh` emits:
 
-| Variable                | Meaning                                                    |
-| ----------------------- | ---------------------------------------------------------- |
-| `VLLM_VERSION`          | Workspace version (e.g. `0.1.0`)                           |
-| `VLLM_IS_PRERELEASE`    | `true` if `version` contains `-` (SemVer pre-release)      |
-| `VLLM_IMAGE_TAG`        | Docker image tag, bare version (e.g. `0.1.0`)              |
-| `VLLM_IMAGE_TAG_FULL`   | With registry prefix (set via `--registry REGISTRY`)       |
-| `VLLM_CHART_VERSION`    | Helm Chart.yaml `version` (same as workspace version)      |
-| `VLLM_CHART_APP_VERSION`| Helm Chart.yaml `appVersion` (same as workspace version)  |
-| `VLLM_GIT_SHA`          | Full git HEAD SHA                                          |
-| `VLLM_GIT_SHA_SHORT`    | First 8 chars of `VLLM_GIT_SHA`                            |
-| `VLLM_GIT_DESCRIBE`     | `git describe --always --tags --dirty`                     |
-| `VLLM_RUSTC_VERSION`    | `rustc -V` output                                          |
-| `VLLM_BUILD_TIMESTAMP`  | UTC ISO 8601 timestamp                                     |
+| Variable                 | Meaning                                                  |
+| ------------------------ | -------------------------------------------------------- |
+| `VLLM_VERSION`           | Workspace version (e.g. `0.1.0`)                         |
+| `VLLM_IS_PRERELEASE`     | `true` if `version` contains `-` (SemVer pre-release)    |
+| `VLLM_IMAGE_TAG`         | Docker image tag, bare version (e.g. `0.1.0`)            |
+| `VLLM_IMAGE_TAG_FULL`    | With registry prefix (set via `--registry REGISTRY`)     |
+| `VLLM_CHART_VERSION`     | Helm Chart.yaml `version` (same as workspace version)    |
+| `VLLM_CHART_APP_VERSION` | Helm Chart.yaml `appVersion` (same as workspace version) |
+| `VLLM_GIT_SHA`           | Full git HEAD SHA                                        |
+| `VLLM_GIT_SHA_SHORT`     | First 8 chars of `VLLM_GIT_SHA`                          |
+| `VLLM_GIT_DESCRIBE`      | `git describe --always --tags --dirty`                   |
+| `VLLM_RUSTC_VERSION`     | `rustc -V` output                                        |
+| `VLLM_BUILD_TIMESTAMP`   | UTC ISO 8601 timestamp                                   |
 
 ## Bumping the version
 
@@ -90,11 +90,21 @@ echo "$VLLM_VERSION"   # → 0.1.0
    creates the GitHub Release with the binary + SBOM +
    `SHA256SUMS` artifacts attached.
 
-Docker build/push and Helm Chart packaging are not yet wired into
-`release.yml` (the due-diligence report flagged these as P1 — see
-the roadmap for when they'll land). The Dockerfile and Chart.yaml
-already accept the manifest fields via build args / `helm --set`
-so the wiring is mechanical once the GHCR secret is configured.
+Docker image builds are emitted via the `Dockerfile` (multi-stage,
+MSRV 1.88, named `runtime` stage) but are NOT auto-pushed to a
+container registry by `release.yml` — container publishing is a
+separate operator responsibility (the registry credentials / GHCR
+secret are not committed). The Dockerfile threads the workspace
+version via build args (see GOV-01 release manifest), so building
+a matching image is mechanical once a repo is configured.
+
+Helm Chart packaging IS wired into `release.yml` via the `chart`
+job (see GOV-01, P7): it runs `scripts/sync-chart-version.sh` to
+substitute `version` / `appVersion` from the release manifest into
+`Chart.yaml`, packages the chart as `vllm-lite-$VERSION.tgz`, and
+attaches it as a GitHub Release artifact. `smoke-deployment.sh`
+auto-sources the manifest and asserts `Chart.yaml.{version,
+appVersion} == workspace.version` to catch version drift in CI.
 
 ## Software Bill of Materials
 
@@ -193,7 +203,7 @@ received.
   live? how is it rotated?) and a reproducible-build posture
   (the build environment itself isn't pinned to a specific
   image today, only the Rust toolchain via `rust-toolchain.toml`
-  + the `--locked` Cargo.lock). Closing both is non-trivial
+    - the `--locked` Cargo.lock). Closing both is non-trivial
   work that crosses into operations policy.
 - **Per-artifact sigstore signatures** — same blocker as above
   plus a sigstore-side key-management decision.
