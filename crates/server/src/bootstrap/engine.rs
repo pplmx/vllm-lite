@@ -29,11 +29,56 @@ use vllm_core::types::{AdaptiveDraftConfig, SchedulerConfig};
 use vllm_model::loader::ModelLoader;
 use vllm_server::{cli, config::AppConfig};
 
+/// Load the draft model when speculative decoding is enabled.
+///
+/// Returns `Some(model)` when `app_config.engine.max_draft_tokens > 0`,
+/// or `None` (with a log line) when speculative decoding is disabled.
+fn load_draft_model(
+    loader: &ModelLoader,
+    app_config: &AppConfig,
+) -> Result<Option<Box<dyn vllm_traits::ModelBackend>>> {
+    if app_config.engine.max_draft_tokens > 0 {
+        tracing::info!("Loading draft model (speculative decoding enabled)");
+        Ok(Some(
+            loader.load_model().context("failed to load draft model")?,
+        ))
+    } else {
+        tracing::info!("Skipping draft model (speculative decoding disabled)");
+        Ok(None)
+    }
+}
+
+/// Multi-node engine construction path (Phase 41).
+///
+/// Routes through `EngineBuilder` so the engine wires the
+/// `PagedKvCacheWrapper` through `Engine::set_paged_kv_cache`.
+/// Only active when `app_config.server.multi_node.enabled` is true.
+fn build_engine_multi_node(
+    model: Box<dyn vllm_traits::ModelBackend>,
+    draft_model: Option<Box<dyn vllm_traits::ModelBackend>>,
+    loader: &ModelLoader,
+    app_config: &AppConfig,
+) -> Result<Engine> {
+    tracing::info!("Constructing Engine via EngineBuilder (multi-node path, Phase 41)");
+    let mut builder = EngineBuilder::new(model);
+    if let Some(d) = draft_model {
+        builder = builder.with_draft_model(d);
+    }
+    builder = builder
+        .with_config(SchedulerConfig::default())
+        .with_num_kv_blocks(app_config.engine.num_kv_blocks)
+        .with_max_draft_tokens(app_config.engine.max_draft_tokens);
+    #[cfg(feature = "multi-node")]
+    if let Some(cache) = loader.paged_kv_cache_clone() {
+        builder = builder.with_paged_kv_cache(cache);
+    }
+    Ok(builder.build())
+}
+
 /// Build the loader, model, optional draft model, and engine from CLI + config.
 ///
 /// Returns the constructed engine and the model loader (the latter is retained
 /// because the engine stores a reference to its architecture for routing).
-#[allow(clippy::too_many_lines)]
 pub fn build_engine(
     app_config: &AppConfig,
     cli: &cli::CliArgs,
@@ -62,33 +107,13 @@ pub fn build_engine(
         "Model loaded"
     );
 
-    // Only load draft model if speculative decoding is enabled.
-    let draft_model = if app_config.engine.max_draft_tokens > 0 {
-        tracing::info!("Loading draft model (speculative decoding enabled)");
-        Some(loader.load_model().context("failed to load draft model")?)
-    } else {
-        tracing::info!("Skipping draft model (speculative decoding disabled)");
-        None
-    };
+    let draft_model = load_draft_model(&loader, app_config)?;
 
     // Phase 41 OPS-32a second-half: when multi-node is enabled, route
     // through the `EngineBuilder` so the engine wires the
     // `PagedKvCacheWrapper` through `Engine::set_paged_kv_cache`.
     let engine = if app_config.server.multi_node.enabled {
-        tracing::info!("Constructing Engine via EngineBuilder (multi-node path, Phase 41)");
-        let mut builder = EngineBuilder::new(model);
-        if let Some(d) = draft_model {
-            builder = builder.with_draft_model(d);
-        }
-        builder = builder
-            .with_config(SchedulerConfig::default())
-            .with_num_kv_blocks(app_config.engine.num_kv_blocks)
-            .with_max_draft_tokens(app_config.engine.max_draft_tokens);
-        #[cfg(feature = "multi-node")]
-        if let Some(cache) = loader.paged_kv_cache_clone() {
-            builder = builder.with_paged_kv_cache(cache);
-        }
-        builder.build()
+        build_engine_multi_node(model, draft_model, &loader, app_config)?
     } else {
         build_engine_legacy(model, draft_model, app_config)?
     };
