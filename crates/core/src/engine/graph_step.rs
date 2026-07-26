@@ -123,6 +123,10 @@ impl Engine {
                     &batch.is_prefill,
                 )?;
                 let vocab_size = model.vocab_size();
+                // Release the model lock immediately after the last use so
+                // sampling doesn't hold it needlessly (matches the regular
+                // step path in batch.rs).
+                drop(model);
                 (logits_list, vocab_size)
             };
             let per_seq: Vec<Vec<f32>> = logits_list

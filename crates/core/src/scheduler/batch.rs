@@ -68,6 +68,9 @@ impl crate::engine::Engine {
                 &batch.is_prefill,
             )?;
             let vocab_size = model.vocab_size();
+            // Release the model lock immediately after the last use so
+            // sampling and output construction don't hold it needlessly.
+            drop(model);
             (logits_list, vocab_size)
         };
         // forward_logits returns one Vec<f32> per sequence. For
