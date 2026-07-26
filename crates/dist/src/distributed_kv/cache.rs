@@ -438,29 +438,52 @@ impl DistributedKVCache {
                     continue;
                 }
             };
-            match result {
-                Ok(resp) if resp.chain_hash == expected_hash => return Some(resp.data),
-                Ok(resp) => {
-                    tracing::warn!(
-                        peer = %url,
-                        block_id,
-                        expected = expected_hash,
-                        actual = resp.chain_hash,
-                        "peer returned block bytes with mismatched chain_hash"
-                    );
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        peer = %url,
-                        block_id,
-                        error = %e,
-                        "peer fetch_block failed"
-                    );
-                }
+            if let Some(bytes) =
+                Self::handle_peer_fetch_result(&url, result, block_id, expected_hash)
+            {
+                return Some(bytes);
             }
         }
 
         None
+    }
+
+    /// Process a single peer fetch result: verify the `chain_hash` and
+    /// return the bytes only on a match.
+    ///
+    /// Mismatched hashes and transport errors are logged as warnings; the
+    /// caller continues to the next peer (`None` = keep looking). Returns
+    /// `Some(bytes)` only when the peer returned bytes whose `chain_hash`
+    /// equals `expected_hash`.
+    fn handle_peer_fetch_result(
+        url: &str,
+        result: Result<crate::grpc::TransferKvBlockResponse, tonic::Status>,
+        block_id: u64,
+        expected_hash: u64,
+    ) -> Option<Vec<u8>> {
+        let resp = match result {
+            Ok(resp) => resp,
+            Err(e) => {
+                tracing::warn!(
+                    peer = %url,
+                    block_id,
+                    error = %e,
+                    "peer fetch_block failed"
+                );
+                return None;
+            }
+        };
+        if resp.chain_hash != expected_hash {
+            tracing::warn!(
+                peer = %url,
+                block_id,
+                expected = expected_hash,
+                actual = resp.chain_hash,
+                "peer returned block bytes with mismatched chain_hash"
+            );
+            return None;
+        }
+        Some(resp.data)
     }
 
     /// Build the [`FetchError`] for a failed [`Self::fetch_block`] based on
