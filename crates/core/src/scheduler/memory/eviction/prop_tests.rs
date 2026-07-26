@@ -54,7 +54,84 @@ fn arb_sequence(id: u64) -> impl Strategy<Value = Sequence> {
         })
 }
 
+/// Build a sequence with a unique block id derived from the sequence id,
+/// so distinct sequences never share blocks (ref_count stays 1).
+fn make_seq(id: u64, decode_rounds: u32, status: Status) -> Sequence {
+    Sequence {
+        id,
+        tokens: vec![],
+        kv_blocks: Arc::new(vec![id as usize]),
+        num_computed_tokens: 0,
+        prompt_len: 0,
+        status,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: decode_rounds,
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    }
+}
+
 proptest! {
+    /// When sequences have blocks with different eviction priorities,
+    /// `select_victims` must return blocks from priority-3 sequences
+    /// ("new" decode, ≤5 rounds) before priority-1 blocks ("long-running"
+    /// decode, >5 rounds). Prefill (priority 2) falls between.
+    ///
+    /// We construct 1 sequence per priority tier, each owning a unique
+    /// block (ref_count = 1, so all are eviction-eligible), then request
+    /// 1 victim and verify it came from the highest-priority block.
+    #[test]
+    fn prop_eviction_prefers_higher_priority_blocks(
+        long_running_rounds in 6u32..100,
+        new_rounds in 0u32..5,
+    ) {
+        let mut policy = EvictionPolicy::new();
+
+        // 3 sequences, each with a unique block, in different priority tiers.
+        let long_seq = make_seq(1, long_running_rounds, Status::Decoding); // priority 1
+        let new_seq = make_seq(2, new_rounds, Status::Decoding);           // priority 3
+        let prefill_seq = make_seq(3, 0, Status::Prefilling);              // priority 2
+
+        // Record each block so ref_count = 1 (eligible for eviction).
+        policy.record_blocks(&[1]);
+        policy.record_blocks(&[2]);
+        policy.record_blocks(&[3]);
+
+        let running = vec![long_seq, new_seq, prefill_seq];
+
+        // Request 1 victim — should come from block 2 (priority 3, "new" decode).
+        let victims = policy.select_victims(&running, 1);
+        prop_assert_eq!(
+            victims.len(),
+            1,
+            "exactly one victim should be returned for num_blocks=1"
+        );
+        prop_assert_eq!(
+            victims[0], 2,
+            "priority-3 block (new decode, seq 2) should be evicted first, got block {}",
+            victims[0]
+        );
+
+        // Request 3 victims — should be sorted by priority descending.
+        // We need a fresh policy because the cache may hit on the
+        // second call with the same sequences.
+        let mut policy2 = EvictionPolicy::new();
+        policy2.record_blocks(&[1]);
+        policy2.record_blocks(&[2]);
+        policy2.record_blocks(&[3]);
+
+        let all_victims = policy2.select_victims(&running, 3);
+        prop_assert_eq!(all_victims.len(), 3, "should return all 3 eligible blocks");
+        // Order: priority 3 (block 2) → priority 2 (block 3) → priority 1 (block 1)
+        prop_assert!(
+            all_victims == vec![2, 3, 1],
+            "eviction order should be priority-3 → priority-2 → priority-1, got {:?}",
+            all_victims
+        );
+    }
+
     /// Refcount conservation: total_refs equals
     /// max(0, records - releases) across any sequence of operations.
     #[test]

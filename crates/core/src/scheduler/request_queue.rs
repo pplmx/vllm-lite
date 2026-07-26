@@ -32,10 +32,17 @@ impl PartialOrd for ScheduledSequence {
 
 impl Ord for ScheduledSequence {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // BinaryHeap is a max-heap: the "greatest" element is popped first.
+        // We want lower PriorityScore = higher scheduling priority = popped first,
+        // so we reverse the priority comparison.
+        //
+        // Tiebreak: earlier arrival_time should be popped first (FIFO). Since
+        // the heap pops the "greatest", we also reverse the arrival_time comparison
+        // so that an earlier `self` is treated as "greater" and surfaced first.
         self.priority
             .cmp(&other.priority)
             .reverse()
-            .then_with(|| self.arrival_time.cmp(&other.arrival_time))
+            .then_with(|| other.arrival_time.cmp(&self.arrival_time))
     }
 }
 
