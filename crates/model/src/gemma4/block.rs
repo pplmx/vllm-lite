@@ -337,7 +337,7 @@ impl PagedDecoderBlock for Gemma4Block {
 ///
 /// Returns `Err` if any required tensor allocation or weight loading fails.
 /// Build a zero-initialized Gemma4 block for `CausalLm::new_rms`.
-pub fn new_block(config: &ModelConfig, layer_idx: usize, device: Device) -> Result<Gemma4Block> {
+pub fn new_block(config: &ModelConfig, layer_idx: usize, device: &Device) -> Result<Gemma4Block> {
     let vb = candle_nn::VarBuilder::zeros(candle_core::DType::F32, &device);
     Gemma4Block::new(config, layer_idx, vb)
 }

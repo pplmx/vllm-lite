@@ -15,7 +15,7 @@
 //! use candle_core::Device;
 //!
 //! let config = ModelConfig::llama_7b();
-//! let model = vllm_model::llama::LlamaModel::new(config, Device::Cpu, 1024).unwrap();
+//! let model = vllm_model::llama::LlamaModel::new(config, &Device::Cpu, 1024).unwrap();
 //! ```
 
 pub mod arch;

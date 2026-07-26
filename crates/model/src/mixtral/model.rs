@@ -21,7 +21,7 @@ impl MixtralModel {
     /// Returns `Err` if any required tensor allocation or weight loading fails.
     pub fn new(
         config: ModelConfig,
-        device: Device,
+        device: &Device,
         num_kv_blocks: usize,
         kv_quantization: bool,
     ) -> CandleResult<Self> {
@@ -30,7 +30,7 @@ impl MixtralModel {
             device.clone(),
             num_kv_blocks,
             kv_quantization,
-            |c, idx| MixtralBlock::new(c, idx, device.clone()),
+            |c, idx| MixtralBlock::new(c, idx, device),
         )
     }
 
@@ -40,14 +40,14 @@ impl MixtralModel {
     /// Returns `Err` if reading or parsing the source fails.
     pub fn from_weights(
         config: ModelConfig,
-        device: Device,
+        device: &Device,
         weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
         kv_quantization: bool,
     ) -> CandleResult<Self> {
         Self::from_hf_weights_ln(
             config,
-            device,
+            device.clone(),
             weights,
             num_kv_blocks,
             kv_quantization,
@@ -91,7 +91,7 @@ mod tests {
     fn test_mixtral_model_forward_prefill_and_decode() {
         let config = tiny_config();
         let device = Device::Cpu;
-        let mut model = MixtralModel::new(config, device, 8, false).unwrap();
+        let mut model = MixtralModel::new(config, &device, 8, false).unwrap();
 
         let tokens = vec![1u32, 2, 3, 4];
         let positions: Vec<usize> = (0..tokens.len()).collect();

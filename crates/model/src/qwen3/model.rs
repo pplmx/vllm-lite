@@ -31,7 +31,7 @@ impl Qwen3Model {
             device.clone(),
             num_kv_blocks,
             false,
-            |c, idx| new_block(c, idx, device.clone()),
+            |c, idx| new_block(c, idx, &device),
         )
         .map(|m| m.with_embed_through_layers(true))
     }

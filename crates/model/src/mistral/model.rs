@@ -23,9 +23,9 @@ impl MistralModel {
     /// # Errors
     ///
     /// Returns `Err` if any required tensor allocation or weight loading fails.
-    pub fn new(config: ModelConfig, device: Device, num_kv_blocks: usize) -> CandleResult<Self> {
+    pub fn new(config: ModelConfig, device: &Device, num_kv_blocks: usize) -> CandleResult<Self> {
         Self::new_with_block_fn(config, device.clone(), num_kv_blocks, false, |c, idx| {
-            new_block(c, idx, device.clone())
+            new_block(c, idx, device)
         })
     }
 
@@ -35,14 +35,14 @@ impl MistralModel {
     /// Returns `Err` if reading or parsing the source fails.
     pub fn from_weights(
         config: ModelConfig,
-        device: Device,
+        device: &Device,
         weights: HashMap<String, Tensor>,
         num_kv_blocks: usize,
         kv_quantization: bool,
     ) -> CandleResult<Self> {
         Self::from_hf_weights_ln(
             config,
-            device,
+            device.clone(),
             weights,
             num_kv_blocks,
             kv_quantization,

@@ -28,7 +28,7 @@ use super::RopeGqaDecoderBlock;
 pub fn new_block(
     config: &ModelConfig,
     _layer_idx: usize,
-    device: Device,
+    device: &Device,
 ) -> Result<RopeGqaDecoderBlock> {
     let hidden_size = config.hidden_size;
     let num_heads = config.num_heads;
@@ -229,7 +229,7 @@ mod tests {
     #[test]
     fn new_block_accepts_yarn_rope_scaling() {
         let config = tiny_config(Some(yarn_scaling(4.0, Some(0.5))));
-        let _block = new_block(&config, 0, Device::Cpu).expect(
+        let _block = new_block(&config, 0, &Device::Cpu).expect(
             "decoder_block::factory::new_block must accept a ModelConfig with \
              rope_scaling=Some(...) (P20 wiring: forwards to \
              RopeGqaAttention::new_with_rope_scaling)",
@@ -245,7 +245,7 @@ mod tests {
         // invariant so callers can rely on no-scaling configs continuing to
         // work without surprises.
         let config = tiny_config(None);
-        let _block = new_block(&config, 0, Device::Cpu).expect(
+        let _block = new_block(&config, 0, &Device::Cpu).expect(
             "decoder_block::factory::new_block must continue to accept \
              rope_scaling=None (backward-compatible path)",
         );

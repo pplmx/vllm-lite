@@ -72,7 +72,7 @@ impl Architecture for LlamaArchitecture {
         kv_quantization: bool,
     ) -> Result<(Box<dyn ModelBackend>, Option<Arc<Mutex<PagedKvCache>>>)> {
         let model =
-            LlamaModel::from_weights(config, device, weights, num_kv_blocks, kv_quantization)?;
+            LlamaModel::from_weights(config, &device, weights, num_kv_blocks, kv_quantization)?;
         let kv_cache = model.paged_kv_cache();
         Ok((Box::new(model), Some(kv_cache)))
     }

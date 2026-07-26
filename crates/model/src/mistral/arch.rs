@@ -66,7 +66,7 @@ impl Architecture for MistralArchitecture {
         kv_quantization: bool,
     ) -> Result<(Box<dyn ModelBackend>, Option<Arc<Mutex<PagedKvCache>>>)> {
         let model =
-            MistralModel::from_weights(config, device, weights, num_kv_blocks, kv_quantization)?;
+            MistralModel::from_weights(config, &device, weights, num_kv_blocks, kv_quantization)?;
         let kv_cache = model.paged_kv_cache();
         Ok((Box::new(model), Some(kv_cache)))
     }
