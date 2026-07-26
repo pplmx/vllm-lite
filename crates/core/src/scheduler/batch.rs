@@ -7,6 +7,21 @@ use crate::sampling::sample_batch_with_params;
 use crate::sync::lock_mutex;
 use vllm_traits::{BatchOutput, FinishReason, SampledToken, SeqId, TokenId};
 
+/// Extract the last `vocab_size` logits per sequence (the "next" token position).
+///
+/// `forward_logits` returns one `Vec<f32>` per sequence; for decode each is
+/// `1 * vocab`, for prefill each is `num_prompt_tokens * vocab`. The next
+/// token always comes from the last position's logits.
+fn extract_per_seq_logits(logits_list: &[Vec<f32>], vocab_size: usize) -> Vec<Vec<f32>> {
+    logits_list
+        .iter()
+        .map(|seq_logits| {
+            let start = seq_logits.len().saturating_sub(vocab_size);
+            seq_logits[start..].to_vec()
+        })
+        .collect()
+}
+
 impl crate::engine::Engine {
     /// Regular (non-speculative) decode step.
     ///
@@ -73,21 +88,11 @@ impl crate::engine::Engine {
             drop(model);
             (logits_list, vocab_size)
         };
-        // forward_logits returns one Vec<f32> per sequence. For
-        // decode each is 1 * vocab; for prefill each is
-        // num_prompt_tokens * vocab. The "next" token always comes
-        // from the last position's logits.
-        let per_seq: Vec<Vec<f32>> = logits_list
-            .iter()
-            .map(|seq_logits| {
-                let start = seq_logits.len().saturating_sub(vocab_size);
-                seq_logits[start..].to_vec()
-            })
-            .collect();
-        // Gather seen tokens (already-generated portion of each
-        // sequence) so `repeat_penalty` can penalise them. Prefill
-        // yields an empty seen-set, which makes repeat-penalty a
-        // no-op as expected.
+        let per_seq: Vec<Vec<f32>> = extract_per_seq_logits(&logits_list, vocab_size);
+
+        // Gather seen tokens (already-generated portion of each sequence)
+        // so `repeat_penalty` can penalise them. Prefill yields an empty
+        // seen-set, which makes repeat-penalty a no-op as expected.
         let seen_tokens: Vec<Vec<TokenId>> = batch
             .seq_ids
             .iter()
@@ -117,21 +122,49 @@ impl crate::engine::Engine {
         self.scheduler
             .update(&batch.seq_ids, &output.next_tokens, &input_counts);
 
-        let mut results = Vec::new();
-        for (seq_id, sampled) in batch.seq_ids.iter().zip(output.next_tokens.iter()) {
+        let results = self.send_and_collect_results(&batch.seq_ids, &output.next_tokens);
+
+        // Keep `logits_per_seq` alive through this point for structural
+        // symmetry with the CUDA-Graph path (P36); it is not consumed.
+        let _ = logits_per_seq;
+        self.finalize_and_record(&batch, total_tokens, start);
+
+        Ok(results)
+    }
+
+    /// Send sampled tokens to each sequence's response channel and collect
+    /// them into the return vec. Idempotent: if a channel is missing (e.g.
+    /// the sequence was already finalized) the token is still returned.
+    fn send_and_collect_results(
+        &self,
+        seq_ids: &[SeqId],
+        next_tokens: &[SampledToken],
+    ) -> Vec<(SeqId, SampledToken)> {
+        let mut results = Vec::with_capacity(seq_ids.len());
+        for (seq_id, sampled) in seq_ids.iter().zip(next_tokens.iter()) {
             tracing::debug!(seq_id = %seq_id, token = %sampled.token, "Sending token to channel");
             if let Some(tx) = self.response_txs.get(seq_id) {
                 let _ = tx.try_send(sampled.clone());
             }
             results.push((*seq_id, sampled.clone()));
         }
+        results
+    }
 
+    /// Finalize stop-sequence and length-completed sequences, clear finished
+    /// entries, and record batch metrics + latency.
+    fn finalize_and_record(
+        &mut self,
+        batch: &vllm_traits::Batch,
+        total_tokens: usize,
+        start: std::time::Instant,
+    ) {
         // P38 v0.3 wire-type engine wire-through: stop-sequence
         // finalization. Runs after `scheduler.update` (so `seq.tokens`
         // includes the new token) and after the token-send loop above
         // (so the matched token reaches the client before the channel
         // is dropped). Matched sequences get `FinishReason::Stop`.
-        self.finalize_stop_sequences(&batch);
+        self.finalize_stop_sequences(batch);
 
         let finished = self.scheduler.finished_sequences();
         for seq in &finished {
@@ -164,9 +197,6 @@ impl crate::engine::Engine {
         // suppress unused-variable lint when sampling diagnostics are
         // stripped in release builds; keep the structure symmetric with
         // the CUDA-Graph path for future logging.
-        let _ = logits_per_seq;
-
-        Ok(results)
     }
 
     /// # Errors
