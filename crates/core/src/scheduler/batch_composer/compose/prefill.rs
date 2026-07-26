@@ -14,6 +14,7 @@ use crate::types::{SamplingParams, Sequence};
 use vllm_traits::{Batch, BatchPhase, BlockId, SeqId, TokenId};
 
 /// Outcome of classifying a single sequence for prefill inclusion.
+#[allow(clippy::large_enum_variant)]
 enum PrefillAction {
     /// No new tokens to process (skip silently).
     Skip,
@@ -78,7 +79,7 @@ impl BatchComposer {
             tracing::debug!(seq_id = seq.id, "compose_prefill: processing sequence");
 
             match self.classify_prefill_seq(seq, total_tokens) {
-                PrefillAction::Skip => continue,
+                PrefillAction::Skip => {}
                 PrefillAction::Break => break,
                 PrefillAction::Process {
                     seq_id,
@@ -132,7 +133,7 @@ impl BatchComposer {
     /// Classify a sequence for prefill inclusion: skip (no new tokens),
     /// break (would exceed token budget), or process (include in batch).
     ///
-    /// Extracts the per-sequence data (tokens, positions, kv_blocks, etc.)
+    /// Extracts the per-sequence data (tokens, positions, `kv_blocks`, etc.)
     /// on the `Process` path so the caller's loop body stays flat.
     /// Tracing calls live here rather than in the hot loop.
     fn classify_prefill_seq(&self, seq: Sequence, total_tokens: usize) -> PrefillAction {

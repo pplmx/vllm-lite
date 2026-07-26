@@ -41,7 +41,7 @@ impl Engine {
                         response_tx,
                         seq_id_tx,
                         finish_reason_tx,
-                        request_id,
+                        &request_id,
                     ),
                     EngineMessage::CancelRequest { seq_id } => {
                         // Production-readiness recommendation: when an
@@ -88,14 +88,14 @@ impl Engine {
     }
 
     /// Handle an `AddRequest` message: enter the request-id tracing span,
-    /// admit the request, and reply on the seq_id / finish_reason channels.
+    /// admit the request, and reply on the `seq_id` / `finish_reason` channels.
     fn handle_add_request(
         &mut self,
         request: crate::types::Request,
         response_tx: tokio::sync::mpsc::Sender<vllm_traits::SampledToken>,
         seq_id_tx: Option<tokio::sync::oneshot::Sender<vllm_traits::SeqId>>,
         finish_reason_tx: Option<tokio::sync::oneshot::Sender<vllm_traits::FinishReason>>,
-        request_id: Option<String>,
+        request_id: &Option<String>,
     ) {
         // Production-readiness §6 (日志与追踪): when an HTTP handler
         // forwards a `request_id`, enter a tracing::info_span! so every
