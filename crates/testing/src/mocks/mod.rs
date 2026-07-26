@@ -633,4 +633,177 @@ mod tests {
             ]
         );
     }
+
+    // ── forward_logits ────────────────────────────────────────────────
+
+    #[test]
+    fn test_stub_model_forward_logits() {
+        let mut model = StubModel::default(); // token = 1
+        let logits = model
+            .forward_logits(&[1], &[vec![10]], &[vec![0]], &[vec![0]], &[0], &[true])
+            .unwrap();
+        assert_eq!(logits.len(), 1);
+        let vs = model.vocab_size();
+        assert_eq!(logits[0].len(), vs);
+        // peak at self.token (1), value = 1.0f32
+        assert!((logits[0][1] - 1.0).abs() < f32::EPSILON);
+        // all other positions are -10.0
+        assert!((logits[0][0] + 10.0).abs() < f32::EPSILON);
+        assert!((logits[0][2] + 10.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_increment_model_forward_logits() {
+        let mut model = IncrementModel;
+        let logits = model
+            .forward_logits(
+                &[1, 2],
+                &[vec![5], vec![8]],
+                &[vec![0], vec![0]],
+                &[vec![0], vec![0]],
+                &[0, 0],
+                &[true, true],
+            )
+            .unwrap();
+        assert_eq!(logits.len(), 2);
+        let vs = model.vocab_size();
+        // first seq has 1 token → vs logits, peak at index 5
+        assert_eq!(logits[0].len(), vs);
+        assert!((logits[0][5] - 10.0).abs() < f32::EPSILON);
+        // second seq has 1 token → vs logits, peak at index 8
+        assert_eq!(logits[1].len(), vs);
+        assert!((logits[1][8] - 10.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_const_model_forward_logits() {
+        let mut model = ConstModel::new(42);
+        let logits = model
+            .forward_logits(&[1], &[vec![7]], &[vec![0]], &[vec![0]], &[0], &[true])
+            .unwrap();
+        assert_eq!(logits.len(), 1);
+        let vs = model.vocab_size();
+        assert_eq!(logits[0].len(), vs);
+        // forward_logits peaks at the *input* token (7), not return_token (42)
+        assert!((logits[0][7] - 10.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_fake_model_forward_logits() {
+        let mut model = FakeModel::new(100);
+        let logits = model
+            .forward_logits(&[1], &[vec![3]], &[vec![0]], &[vec![0]], &[0], &[true])
+            .unwrap();
+        assert_eq!(logits.len(), 1);
+        // FakeModel vocab_size is configurable
+        assert_eq!(logits[0].len(), 100);
+        assert!((logits[0][3] - 10.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_never_progress_model_forward_logits() {
+        let mut model = NeverProgressModel::new(777);
+        let logits = model
+            .forward_logits(&[1], &[vec![1]], &[vec![0]], &[vec![0]], &[0], &[true])
+            .unwrap();
+        assert_eq!(logits.len(), 1);
+        let vs = model.vocab_size();
+        assert_eq!(logits[0].len(), vs);
+        assert!((logits[0][777] - 10.0).abs() < f32::EPSILON);
+    }
+
+    // ── embed ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_stub_model_embed() {
+        let mut model = StubModel::default();
+        let embeddings = model.embed(&[vec![1, 2, 3]], &[vec![0, 1, 2]]).unwrap();
+        assert_eq!(embeddings.len(), 1);
+        assert_eq!(embeddings[0].len(), 3);
+        assert!(embeddings[0].iter().all(|&v| v == 0.0));
+    }
+
+    #[test]
+    fn test_increment_model_embed() {
+        let mut model = IncrementModel;
+        let embeddings = model
+            .embed(&[vec![1], vec![2]], &[vec![0], vec![0]])
+            .unwrap();
+        assert_eq!(embeddings.len(), 2);
+        assert_eq!(embeddings[0].len(), 1);
+        assert_eq!(embeddings[1].len(), 1);
+        assert!(embeddings[0].iter().all(|&v| v == 0.0));
+        assert!(embeddings[1].iter().all(|&v| v == 0.0));
+    }
+
+    #[test]
+    fn test_const_model_embed() {
+        let mut model = ConstModel::new(42);
+        let embeddings = model.embed(&[vec![5]], &[vec![0]]).unwrap();
+        assert_eq!(embeddings.len(), 1);
+        assert_eq!(embeddings[0].len(), 1);
+        assert!(embeddings[0].iter().all(|&v| v == 0.0));
+    }
+
+    #[test]
+    fn test_fake_model_embed() {
+        let mut model = FakeModel::new(100);
+        let embeddings = model
+            .embed(&[vec![1, 2, 3, 4, 5]], &[vec![0, 1, 2, 3, 4]])
+            .unwrap();
+        assert_eq!(embeddings.len(), 1);
+        assert_eq!(embeddings[0].len(), 5);
+        assert!(embeddings[0].iter().all(|&v| v == 0.0));
+    }
+
+    #[test]
+    fn test_never_progress_model_embed() {
+        let mut model = NeverProgressModel::new(777);
+        let embeddings = model.embed(&[vec![1]], &[vec![0]]).unwrap();
+        assert_eq!(embeddings.len(), 1);
+        assert_eq!(embeddings[0].len(), 1);
+        assert!(embeddings[0].iter().all(|&v| v == 0.0));
+    }
+
+    // ── trait metadata ────────────────────────────────────────────────
+
+    #[test]
+    fn test_stub_model_metadata() {
+        let model = StubModel::default();
+        assert_eq!(model.vocab_size(), 151_936);
+        assert_eq!(model.num_layers(), 32);
+        assert_eq!(model.num_heads(), 32);
+    }
+
+    #[test]
+    fn test_increment_model_metadata() {
+        let model = IncrementModel;
+        assert_eq!(model.vocab_size(), 151_936);
+        assert_eq!(model.num_layers(), 32);
+        assert_eq!(model.num_heads(), 32);
+    }
+
+    #[test]
+    fn test_const_model_metadata() {
+        let model = ConstModel::new(42);
+        assert_eq!(model.vocab_size(), 151_936);
+        assert_eq!(model.num_layers(), 32);
+        assert_eq!(model.num_heads(), 32);
+    }
+
+    #[test]
+    fn test_fake_model_metadata() {
+        let model = FakeModel::new(100);
+        assert_eq!(model.vocab_size(), 100);
+        assert_eq!(model.num_layers(), 32);
+        assert_eq!(model.num_heads(), 32);
+    }
+
+    #[test]
+    fn test_never_progress_model_metadata() {
+        let model = NeverProgressModel::new(777);
+        assert_eq!(model.vocab_size(), 151_936);
+        assert_eq!(model.num_layers(), 32);
+        assert_eq!(model.num_heads(), 32);
+    }
 }

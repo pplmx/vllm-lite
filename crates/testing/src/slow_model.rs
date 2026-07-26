@@ -98,9 +98,10 @@ impl ModelBackend for SlowModel {
         _is_prefill: &[bool],
     ) -> Result<Vec<Vec<f32>>> {
         thread::sleep(self.delay);
+        let vs = self.vocab_size();
         Ok(input_tokens
             .iter()
-            .map(|t| t.iter().map(|_| 0.0).collect())
+            .map(|tokens| vec![0.0f32; tokens.len() * vs])
             .collect())
     }
 
@@ -174,5 +175,92 @@ mod tests {
                 top_logprobs: Vec::new(),
             }]
         );
+    }
+
+    #[test]
+    fn test_slow_model_builder_chained() {
+        let model = SlowModel::new(Duration::from_millis(5))
+            .delay(Duration::from_millis(20))
+            .return_token(99);
+        assert_eq!(model.delay, Duration::from_millis(20));
+        assert_eq!(model.return_token, 99);
+    }
+
+    #[test]
+    fn test_slow_model_forward_logits() {
+        use std::time::Instant;
+        let mut model = SlowModel::new(Duration::from_millis(30));
+        let start = Instant::now();
+        let logits = model
+            .forward_logits(&[1], &[vec![1, 2]], &[vec![0]], &[vec![0]], &[0], &[true])
+            .unwrap();
+        let elapsed = start.elapsed();
+        assert!(elapsed >= Duration::from_millis(30));
+        // forward_logits returns all-zero logits (vocab_size entries per token)
+        assert_eq!(logits.len(), 1);
+        assert_eq!(logits[0].len(), 2 * model.vocab_size());
+        assert!(logits[0].iter().all(|&v| v == 0.0));
+    }
+
+    #[test]
+    fn test_slow_model_forward_logits_custom_token() {
+        let mut model = SlowModel::with_token(Duration::from_millis(0), 42);
+        let logits = model
+            .forward_logits(&[1], &[vec![1]], &[vec![0]], &[vec![0]], &[0], &[true])
+            .unwrap();
+        // forward_logits returns all zeros regardless of return_token
+        assert_eq!(logits.len(), 1);
+        assert!(logits[0].iter().all(|&v| v == 0.0));
+    }
+
+    #[test]
+    fn test_slow_model_embed() {
+        use std::time::Instant;
+        let mut model = SlowModel::new(Duration::from_millis(30));
+        let start = Instant::now();
+        let embeddings = model.embed(&[vec![1, 2, 3]], &[vec![0, 1, 2]]).unwrap();
+        let elapsed = start.elapsed();
+        assert!(elapsed >= Duration::from_millis(30));
+        assert_eq!(embeddings.len(), 1);
+        assert_eq!(embeddings[0].len(), 3);
+        assert!(embeddings[0].iter().all(|&v| v == 0.0));
+    }
+
+    #[test]
+    fn test_slow_model_forward_with_custom_token() {
+        let mut model = SlowModel::with_token(Duration::from_millis(0), 42);
+        let output = model
+            .forward(&[1], &[vec![1]], &[vec![0]], &[vec![0]], &[0], &[true])
+            .unwrap();
+        assert_eq!(
+            output.next_tokens,
+            vec![vllm_traits::SampledToken {
+                token: 42,
+                logprob: 0.0,
+                top_logprobs: Vec::new(),
+            }]
+        );
+    }
+
+    #[test]
+    fn test_slow_model_metadata() {
+        let model = SlowModel::new(Duration::from_millis(0));
+        assert_eq!(model.vocab_size(), 151_936);
+        assert_eq!(model.num_layers(), 32);
+        assert_eq!(model.num_heads(), 32);
+    }
+
+    #[test]
+    fn test_slow_model_delay_builder_returns_self() {
+        let model = SlowModel::new(Duration::from_millis(0));
+        let returned = model.delay(Duration::from_millis(42));
+        assert_eq!(returned.delay, Duration::from_millis(42));
+    }
+
+    #[test]
+    fn test_slow_model_return_token_builder() {
+        let model = SlowModel::new(Duration::from_millis(0));
+        let returned = model.return_token(123);
+        assert_eq!(returned.return_token, 123);
     }
 }
