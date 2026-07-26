@@ -796,10 +796,24 @@ finish_reason_txs + EngineMessage fields + CancelRequest),
   very-high complexity, blocked on a stable `KernelBackend` seam.
 - **CI-01** (sustained GPU / real-checkpoint CI) — deferred;
   needs a runner with a GPU and a checkpoint cache.
-- **OpenAI compat: top_p / seed wire types** — tracked in
-  `docs/reference/openai-compatibility.md` as a v0.2 follow-up
-  (requires engine honour + CHANGELOG entry; out of scope for
-  the v31.0 hardening batches).
+- **OpenAI compat: `tools` / `tool_choice` engine honoring** —
+  declared + validated in P33 but honoring requires a grammar-constrained
+  decoder (JSON-schema → grammar) + per-request tool schema cache.
+  Tracked as v32+ in `docs/reference/openai-compatibility.md`.
+- **OpenAI compat: `response_format` engine honoring** — declaration
+  + validation shipped in P22; honoring requires a constrained-decoding
+  hook for JSON-mode compliance. Tracked as v32+.
+- **Phase 31-F performance items** (`expand_kv` fused kernel,
+  PagedKV host round-trip elimination) — very-high complexity,
+  deferred to v32+ per the spec's scope-split rationale.
+
+> **Note**: `top_p` (P9), `seed` (P23+P34), `frequency_penalty` (P27+P29),
+> `presence_penalty` (P28), `logit_bias` (P30), `logprobs`/`top_logprobs`
+> (P31+P36), `echo`/`suffix`/`best_of` (P32+P35+P37) are ALL fully wired
+> end-to-end — closed by subsequent batches after the P6 write-up was
+> last updated. The 2-node KV block transfer integration tests in
+> `crates/dist/tests/kv_block_transfer.rs` (7 tests, all passing)
+> are also complete — Phase 31-D is closed.
 
 ## Technical Due Diligence — 2026-07-14 P8 follow-up batch
 
