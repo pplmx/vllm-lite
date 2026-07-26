@@ -196,7 +196,7 @@ fn test_sequence_finished_event() {
         .register_observer(Box::new(observer.clone()))
         .unwrap();
 
-    let seq_id = engine.add_request(Request::new(0, vec![1, 2], 2));
+    let seq_id = engine.add_request(Request::new(0, vec![1, 2], 1));
     let _ = engine.build_batch();
 
     engine.update(

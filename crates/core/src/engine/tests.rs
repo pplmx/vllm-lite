@@ -52,12 +52,19 @@ fn test_engine_streaming() {
 #[test]
 fn test_engine_multi_request() {
     let stub = StubModel::returning(10);
-    let mut engine = Engine::new(stub, None);
+    // Disable PD separation so every step processes both sequences,
+    // making the step count deterministic in tests.
+    let config = SchedulerConfig {
+        enable_pd_separation: false,
+        enable_dynamic_batching: false,
+        ..SchedulerConfig::default()
+    };
+    let mut engine = Engine::with_config(stub, None, config, 4, 1024);
     let (tx1, mut rx1) = mpsc::channel(64);
     let (tx2, mut rx2) = mpsc::channel(64);
 
-    engine.add_request(Request::new(1, vec![10], 3), tx1);
-    engine.add_request(Request::new(2, vec![20], 3), tx2);
+    engine.add_request(Request::new(1, vec![10], 2), tx1);
+    engine.add_request(Request::new(2, vec![20], 2), tx2);
 
     engine.step().unwrap();
     assert_eq!(rx1.try_recv().unwrap().token, 10);

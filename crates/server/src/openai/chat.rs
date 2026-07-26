@@ -396,7 +396,9 @@ async fn handle_chat(
         }
     }
 
-    let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
+    // `max_tokens` is the upper bound on *generated* tokens — pass it
+    // directly to the engine (no `prompt_tokens.len()` offset needed).
+    let mut request = vllm_core::types::Request::new(0, prompt_tokens, max_tokens);
 
     // P38 v0.3 wire-type engine wire-through: tokenize the user's
     // stop strings at the HTTP boundary. None and Some(empty) are
@@ -590,8 +592,9 @@ async fn spawn_chat_n_candidate(
     (Vec<vllm_traits::SampledToken>, vllm_traits::FinishReason),
     (axum::http::StatusCode, Json<ErrorResponse>),
 > {
-    let total_max = prompt_tokens.len() + max_tokens;
-    let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
+    // `max_tokens` is the upper bound on *generated* tokens — pass it
+    // directly to the engine (no `prompt_tokens.len()` offset needed).
+    let mut request = vllm_core::types::Request::new(0, prompt_tokens, max_tokens);
 
     // P38: tokenize stop sequences (same semantics as handle_chat).
     let stop_token_sequences = if let Some(stop) = req.stop.as_ref()
@@ -974,8 +977,9 @@ async fn spawn_chat_n_streaming_candidate(
     correlation_id: String,
     candidate_index: usize,
 ) -> Result<ChatStreamingCandidateChannels, (axum::http::StatusCode, Json<ErrorResponse>)> {
-    let total_max = prompt_tokens.len() + max_tokens;
-    let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
+    // `max_tokens` is the upper bound on *generated* tokens — pass it
+    // directly to the engine (no `prompt_tokens.len()` offset needed).
+    let mut request = vllm_core::types::Request::new(0, prompt_tokens, max_tokens);
 
     // P38: tokenize stop sequences (same semantics as handle_chat /
     // spawn_chat_n_candidate).

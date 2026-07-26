@@ -147,8 +147,12 @@ impl SchedulerEngine {
             }
         }
 
-        // Check completion
-        if seq.tokens.len() >= seq.max_tokens {
+        // Check completion — max_tokens is the upper bound on *generated*
+        // tokens (prompt not included), per the Request documentation and
+        // the OpenAI API spec. Subtract prompt_len so the sequence finishes
+        // after producing max_tokens output tokens rather than
+        // max_tokens total tokens.
+        if seq.tokens.len() - seq.prompt_len >= seq.max_tokens {
             seq.status = Status::Finished;
             // Add to prefix cache. ARCH-01: the prefix cache
             // now takes a reference to these blocks, so we

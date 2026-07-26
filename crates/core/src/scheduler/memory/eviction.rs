@@ -99,12 +99,33 @@ impl EvictionPolicy {
             .map(|(block_id, (seq, priority))| (block_id, seq.id, priority))
             .collect();
 
+        // Build a rank lookup from the LRU access-order deque: front (index 0)
+        // = most-recently-used, back (highest index) = least-recently-used.
+        // Blocks with a higher rank should be evicted first.
+        let lru_rank: HashMap<BlockId, usize> = self
+            .block_access_order
+            .iter()
+            .enumerate()
+            .map(|(i, &b)| (b, i))
+            .collect();
+
         sorted_blocks.sort_by(|a, b| {
+            // Higher priority evicts first.
             let cmp = b.2.cmp(&a.2);
             if cmp != std::cmp::Ordering::Equal {
                 return cmp;
             }
-            a.1.cmp(&b.1)
+            // Lower seq_id evicts first.
+            let cmp = a.1.cmp(&b.1);
+            if cmp != std::cmp::Ordering::Equal {
+                return cmp;
+            }
+            // Fall back to LRU: least-recently-used (higher rank) evicts first.
+            // Blocks absent from the deque (never recorded) get MAX rank so
+            // they are treated as most-evictable.
+            let a_rank = lru_rank.get(&a.0).copied().unwrap_or(usize::MAX);
+            let b_rank = lru_rank.get(&b.0).copied().unwrap_or(usize::MAX);
+            b_rank.cmp(&a_rank)
         });
 
         let available_refs: HashMap<BlockId, usize> = self
