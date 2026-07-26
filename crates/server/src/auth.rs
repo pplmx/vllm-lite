@@ -548,14 +548,12 @@ pub(crate) fn estimate_request_cost(body: &str) -> f64 {
         .get("n")
         .and_then(Value::as_i64)
         .filter(|&n| n > 0)
-        .map(|n| n as f64)
-        .unwrap_or(1.0);
+        .map_or(1.0, |n| n as f64);
     let best_of: f64 = json
         .get("best_of")
         .and_then(Value::as_i64)
         .filter(|&b| b > 0)
-        .map(|b| b as f64)
-        .unwrap_or(1.0);
+        .map_or(1.0, |b| b as f64);
     let multiplier = n.max(best_of);
 
     // Cost = (prompt tokens + max_tokens) * multiplier, clamped to [1.0, 100_000].
