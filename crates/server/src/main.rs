@@ -451,10 +451,8 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn shutdown_signal(
-    health_checker: Arc<std::sync::RwLock<HealthChecker>>,
-    drain_grace_secs: u64,
-) {
+/// Wait for a shutdown signal (Ctrl+C on all platforms, SIGTERM on Unix).
+async fn wait_for_shutdown_signal() {
     let ctrl_c = async {
         // invariant: signal handler installation only fails if the OS is in an unrecoverable
         // state; not recoverable from this process anyway.
@@ -482,9 +480,13 @@ async fn shutdown_signal(
         () = ctrl_c => {},
         () = terminate => {},
     }
+}
 
-    tracing::info!("Shutdown signal received");
-
+/// Mark the health checker as not-ready and wait for the drain grace period.
+async fn drain_gracefully(
+    health_checker: &std::sync::RwLock<HealthChecker>,
+    drain_grace_secs: u64,
+) {
     // Production-readiness §7 step 1: flip readiness=false BEFORE
     // returning from this future. axum's `with_graceful_shutdown`
     // closes the listener as soon as this future resolves, so we
@@ -515,4 +517,13 @@ async fn shutdown_signal(
     if drain_grace_secs > 0 {
         tokio::time::sleep(std::time::Duration::from_secs(drain_grace_secs)).await;
     }
+}
+
+async fn shutdown_signal(
+    health_checker: Arc<std::sync::RwLock<HealthChecker>>,
+    drain_grace_secs: u64,
+) {
+    wait_for_shutdown_signal().await;
+    tracing::info!("Shutdown signal received");
+    drain_gracefully(&health_checker, drain_grace_secs).await;
 }
