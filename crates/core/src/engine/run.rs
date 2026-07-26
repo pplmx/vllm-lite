@@ -36,48 +36,13 @@ impl Engine {
                         seq_id_tx,
                         finish_reason_tx,
                         request_id,
-                    } => {
-                        // Production-readiness §6 (日志与追踪): when an
-                        // HTTP handler forwards a `request_id`, enter a
-                        // `tracing::info_span!` so every engine-side
-                        // log line for this HTTP request carries the
-                        // same correlation id. The span is RAII-scoped
-                        // to the rest of this match arm — `add_request`
-                        // and its callees (scheduler admission, KV
-                        // allocation, prefix-cache lookup) all inherit
-                        // it. When `request_id` is `None` (test
-                        // fixtures, non-HTTP callers) the span still
-                        // enters with `request_id = None`, rendering
-                        // as `null` in the JSON span output.
-                        let _request_id_span = tracing::info_span!(
-                            "engine.add_request",
-                            request_id = request_id.as_deref(),
-                        );
-
-                        // Production-readiness recommendation: when an
-                        // HTTP handler sends an `seq_id_tx` oneshot,
-                        // reply with the assigned seq_id so the
-                        // handler can later send CancelRequest on
-                        // client disconnect. `add_request` returns 0
-                        // on rejection (e.g. empty prompt); the
-                        // caller treats 0 as "do not bother
-                        // cancelling".
-                        //
-                        // `finish_reason_tx` is parallel: when the
-                        // handler supplies one, the engine sends the
-                        // [`FinishReason`] (length, cancelled, …) before
-                        // dropping the token response channel, so the
-                        // HTTP layer can emit the OpenAI-correct
-                        // `finish_reason` instead of hardcoding `"stop"`.
-                        // P38: deref Box<Request> → Request (add_request public API still takes Request by value)
-                        let seq_id = self.add_request(*request, response_tx);
-                        if let Some(tx) = finish_reason_tx {
-                            self.finish_reason_txs.insert(seq_id, tx);
-                        }
-                        if let Some(tx) = seq_id_tx {
-                            let _ = tx.send(seq_id);
-                        }
-                    }
+                    } => self.handle_add_request(
+                        *request,
+                        response_tx,
+                        seq_id_tx,
+                        finish_reason_tx,
+                        request_id,
+                    ),
                     EngineMessage::CancelRequest { seq_id } => {
                         // Production-readiness recommendation: when an
                         // HTTP client disconnects mid-stream, the
@@ -91,28 +56,12 @@ impl Engine {
                     EngineMessage::GetMetrics { response_tx } => {
                         let (used, total) = self.scheduler.get_kv_cache_usage();
                         self.scheduler.metrics.record_kv_cache_usage(used, total);
-                        let snapshot = self.scheduler.metrics.snapshot();
-                        let _ = response_tx.send(snapshot);
+                        let _ = response_tx.send(self.scheduler.metrics.snapshot());
                     }
                     EngineMessage::GetEmbeddings {
                         input_tokens,
                         response_tx,
-                    } => {
-                        let positions: Vec<Vec<usize>> = input_tokens
-                            .iter()
-                            .map(|tokens| (0..tokens.len()).collect())
-                            .collect();
-                        match lock_mutex(&self.target_model).and_then(|mut model| {
-                            model.embed(&input_tokens, &positions).map_err(Into::into)
-                        }) {
-                            Ok(embeddings) => {
-                                let _ = response_tx.send(embeddings);
-                            }
-                            Err(e) => {
-                                error!(error = %e, "Embeddings error");
-                            }
-                        }
-                    }
+                    } => self.handle_get_embeddings(input_tokens, response_tx),
                     EngineMessage::Shutdown => return,
                 }
             }
@@ -131,9 +80,63 @@ impl Engine {
                 }
             }
 
-            let has_pending = self.scheduler.has_pending();
-            let interval = self.sleep_policy.next_interval(has_pending);
+            let interval = self
+                .sleep_policy
+                .next_interval(self.scheduler.has_pending());
             std::thread::sleep(std::time::Duration::from_millis(interval));
+        }
+    }
+
+    /// Handle an `AddRequest` message: enter the request-id tracing span,
+    /// admit the request, and reply on the seq_id / finish_reason channels.
+    fn handle_add_request(
+        &mut self,
+        request: crate::types::Request,
+        response_tx: tokio::sync::mpsc::Sender<vllm_traits::SampledToken>,
+        seq_id_tx: Option<tokio::sync::oneshot::Sender<vllm_traits::SeqId>>,
+        finish_reason_tx: Option<tokio::sync::oneshot::Sender<vllm_traits::FinishReason>>,
+        request_id: Option<String>,
+    ) {
+        // Production-readiness §6 (日志与追踪): when an HTTP handler
+        // forwards a `request_id`, enter a tracing::info_span! so every
+        // engine-side log line for this HTTP request carries the same
+        // correlation id. When `request_id` is `None` (test fixtures,
+        // non-HTTP callers) the span still enters, rendering as `null`.
+        let _request_id_span =
+            tracing::info_span!("engine.add_request", request_id = request_id.as_deref());
+
+        // P38: deref Box<Request> → Request (add_request public API
+        // still takes Request by value). The caller treats seq_id 0 as
+        // "do not bother cancelling" (rejection e.g. empty prompt).
+        let seq_id = self.add_request(request, response_tx);
+        if let Some(tx) = finish_reason_tx {
+            self.finish_reason_txs.insert(seq_id, tx);
+        }
+        if let Some(tx) = seq_id_tx {
+            let _ = tx.send(seq_id);
+        }
+    }
+
+    /// Handle a `GetEmbeddings` message: call `model.embed` and send the
+    /// result (or log the error).
+    fn handle_get_embeddings(
+        &mut self,
+        input_tokens: Vec<Vec<vllm_traits::TokenId>>,
+        response_tx: tokio::sync::mpsc::UnboundedSender<Vec<Vec<f32>>>,
+    ) {
+        let positions: Vec<Vec<usize>> = input_tokens
+            .iter()
+            .map(|tokens| (0..tokens.len()).collect())
+            .collect();
+        match lock_mutex(&self.target_model)
+            .and_then(|mut model| model.embed(&input_tokens, &positions).map_err(Into::into))
+        {
+            Ok(embeddings) => {
+                let _ = response_tx.send(embeddings);
+            }
+            Err(e) => {
+                error!(error = %e, "Embeddings error");
+            }
         }
     }
 
