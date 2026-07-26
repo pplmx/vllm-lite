@@ -78,14 +78,14 @@ impl TransformerBlock {
         has_qk_norm: bool,
     ) -> Result<Self> {
         let vb =
-            vb.unwrap_or_else(|| candle_nn::VarBuilder::zeros(candle_core::DType::F32, &device));
+            vb.unwrap_or_else(|| candle_nn::VarBuilder::zeros(candle_core::DType::F32, device));
 
-        let input_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
-        let input_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
+        let input_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, device)?;
+        let input_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, device)?;
         let input_layernorm = LnLayerNorm::new(input_ln_weight, input_ln_bias, rms_norm_eps);
 
-        let post_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
-        let post_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
+        let post_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, device)?;
+        let post_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, device)?;
         let post_attention_layernorm = LnLayerNorm::new(post_ln_weight, post_ln_bias, rms_norm_eps);
 
         let vb_attn = vb.pp("attn");
@@ -131,14 +131,14 @@ impl TransformerBlock {
         _tp_config: Option<TensorParallelConfig>,
         has_qk_norm: bool,
     ) -> Result<Self> {
-        let vb = candle_nn::VarBuilder::zeros(candle_core::DType::F32, &device);
+        let vb = candle_nn::VarBuilder::zeros(candle_core::DType::F32, device);
 
-        let input_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
-        let input_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
+        let input_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, device)?;
+        let input_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, device)?;
         let input_layernorm = LnLayerNorm::new(input_ln_weight, input_ln_bias, rms_norm_eps);
 
-        let post_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
-        let post_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
+        let post_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, device)?;
+        let post_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, device)?;
         let post_attention_layernorm = LnLayerNorm::new(post_ln_weight, post_ln_bias, rms_norm_eps);
 
         let vb_attn = vb.pp("attn");

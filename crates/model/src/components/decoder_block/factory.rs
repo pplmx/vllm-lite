@@ -37,12 +37,12 @@ pub fn new_block(
     let intermediate_size = config.intermediate_size;
     let rms_norm_eps = config.rms_norm_eps;
 
-    let input_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
-    let input_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
+    let input_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, device)?;
+    let input_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, device)?;
     let input_layernorm = LnLayerNorm::new(input_ln_weight, input_ln_bias, rms_norm_eps);
 
-    let post_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
-    let post_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
+    let post_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, device)?;
+    let post_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, device)?;
     let post_attention_layernorm = LnLayerNorm::new(post_ln_weight, post_ln_bias, rms_norm_eps);
 
     // Thread `rope_scaling` (YaRN / Linear / Dynamic / Su) and
