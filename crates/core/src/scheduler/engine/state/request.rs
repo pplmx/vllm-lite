@@ -146,9 +146,14 @@ impl SchedulerEngine {
     /// reuse requires the gRPC transfer protocol.
     fn lookup_distributed_matched_tokens(&self, req: &Request) -> usize {
         #[cfg(feature = "multi-node")]
-        let result = self.lookup_distributed_prefix(&req.prompt);
+        {
+            self.lookup_distributed_prefix(&req.prompt)
+                .map_or(0, |m| m.matched_tokens)
+        }
         #[cfg(not(feature = "multi-node"))]
-        let result: Option<_> = None;
-        result.map_or(0, |m| m.matched_tokens)
+        {
+            let _ = req;
+            0
+        }
     }
 }
