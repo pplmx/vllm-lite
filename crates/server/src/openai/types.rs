@@ -1008,3 +1008,207 @@ impl EmbeddingsResponse {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn usage_new_sums_prompt_and_completion() {
+        let usage = Usage::new(100, 50);
+        assert_eq!(usage.prompt_tokens, 100);
+        assert_eq!(usage.completion_tokens, 50);
+        assert_eq!(usage.total_tokens, 150);
+    }
+
+    #[test]
+    fn usage_new_zero_values() {
+        let usage = Usage::new(0, 0);
+        assert_eq!(usage.total_tokens, 0);
+    }
+
+    #[test]
+    fn error_response_new_has_no_code() {
+        let err = ErrorResponse::new("bad request", "invalid_request_error");
+        assert_eq!(err.error.message, "bad request");
+        assert_eq!(err.error.error_type, "invalid_request_error");
+        assert!(err.error.code.is_none());
+    }
+
+    #[test]
+    fn error_response_with_code_sets_code() {
+        let err = ErrorResponse::with_code("too long", "server_error", "context_length_exceeded");
+        assert_eq!(err.error.message, "too long");
+        assert_eq!(err.error.error_type, "server_error");
+        assert_eq!(err.error.code.as_deref(), Some("context_length_exceeded"));
+    }
+
+    #[test]
+    fn error_response_serializes_to_openai_format() {
+        let err = ErrorResponse::with_code(
+            "model not found",
+            "invalid_request_error",
+            "model_not_found",
+        );
+        let json = serde_json::to_string(&err).unwrap();
+        assert!(json.contains("\"error\""));
+        assert!(json.contains("\"model_not_found\""));
+        let rt: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(rt["error"]["type"], "invalid_request_error");
+        assert_eq!(rt["error"]["code"], "model_not_found");
+    }
+
+    #[test]
+    fn response_format_round_trip() {
+        let json = serde_json::to_string(&ResponseFormat::Text).unwrap();
+        assert_eq!(json, r#"{"type":"text"}"#);
+        let deserialized: ResponseFormat = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, ResponseFormat::Text);
+
+        let json = serde_json::to_string(&ResponseFormat::JsonObject).unwrap();
+        assert_eq!(json, r#"{"type":"json_object"}"#);
+        let deserialized: ResponseFormat = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, ResponseFormat::JsonObject);
+    }
+
+    #[test]
+    fn tool_choice_string_mode_round_trip() {
+        let json = r#""auto""#;
+        let tc: ToolChoice = serde_json::from_str(json).unwrap();
+        assert!(matches!(tc, ToolChoice::Mode(ToolChoiceMode::Auto)));
+
+        let json = r#""none""#;
+        let tc: ToolChoice = serde_json::from_str(json).unwrap();
+        assert!(matches!(tc, ToolChoice::Mode(ToolChoiceMode::None)));
+
+        let json = r#""required""#;
+        let tc: ToolChoice = serde_json::from_str(json).unwrap();
+        assert!(matches!(tc, ToolChoice::Mode(ToolChoiceMode::Required)));
+    }
+
+    #[test]
+    fn tool_choice_specific_round_trip() {
+        let json = r#"{"type":"function","function":{"name":"get_weather"}}"#;
+        let tc: ToolChoice = serde_json::from_str(json).unwrap();
+        match tc {
+            ToolChoice::Specific(specific) => {
+                assert_eq!(specific.function.name, "get_weather");
+            }
+            _ => panic!("expected Specific variant"),
+        }
+    }
+
+    #[test]
+    fn chat_request_deserializes_minimal() {
+        let json = r#"{
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "hello"}]
+        }"#;
+        let req: ChatRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.model, "gpt-4");
+        assert_eq!(req.messages.len(), 1);
+        assert_eq!(req.messages[0].content, "hello");
+        assert!(req.temperature.is_none());
+        assert!(req.tools.is_none());
+    }
+
+    #[test]
+    fn chat_request_deserializes_full() {
+        let json = r#"{
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "hi", "name": "test"}],
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "max_tokens": 100,
+            "stream": true,
+            "n": 2,
+            "stop": ["done", "end"],
+            "frequency_penalty": 0.5,
+            "presence_penalty": 0.3,
+            "logit_bias": {"123": -10.0},
+            "logprobs": true,
+            "top_logprobs": 5,
+            "response_format": {"type": "json_object"},
+            "tool_choice": "auto",
+            "tools": [{"type": "function", "function": {"name": "fn", "description": "desc"}}]
+        }"#;
+        let req: ChatRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.temperature, Some(0.7));
+        assert_eq!(req.top_p, Some(0.9));
+        assert_eq!(req.max_tokens, Some(100));
+        assert_eq!(req.stream, Some(true));
+        assert_eq!(req.n, Some(2));
+        assert_eq!(
+            req.stop.as_deref(),
+            Some(&[String::from("done"), String::from("end")] as &[String])
+        );
+        assert_eq!(req.frequency_penalty, Some(0.5));
+        assert_eq!(req.presence_penalty, Some(0.3));
+        assert_eq!(req.logprobs, Some(true));
+        assert_eq!(req.top_logprobs, Some(5));
+        assert_eq!(req.response_format, Some(ResponseFormat::JsonObject));
+        assert!(matches!(
+            req.tool_choice,
+            Some(ToolChoice::Mode(ToolChoiceMode::Auto))
+        ));
+        assert_eq!(req.tools.as_ref().unwrap().len(), 1);
+        assert_eq!(req.messages[0].name.as_deref(), Some("test"));
+    }
+
+    #[test]
+    fn completion_request_deserializes_minimal() {
+        let json = r#"{
+            "prompt": "hello"
+        }"#;
+        let req: CompletionRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.model.as_deref(), None);
+        assert_eq!(req.prompt, "hello");
+    }
+
+    #[test]
+    fn completion_request_deserializes_with_model() {
+        let json = r#"{
+            "model": "gpt-2",
+            "prompt": "hello world"
+        }"#;
+        let req: CompletionRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.model.as_deref(), Some("gpt-2"));
+        assert_eq!(req.prompt, "hello world");
+    }
+
+    #[test]
+    fn embeddings_response_new_constructs_correctly() {
+        let embeddings = vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]];
+        let resp = EmbeddingsResponse::new(embeddings, "test-model".to_string());
+        assert_eq!(resp.model, "test-model");
+        assert_eq!(resp.data.len(), 2);
+        assert_eq!(resp.data[0].embedding, vec![1.0, 2.0, 3.0]);
+        assert_eq!(resp.data[0].index, 0);
+        assert_eq!(resp.data[1].index, 1);
+        assert_eq!(resp.data[0].object, "embedding");
+        // 6 input values total
+        assert_eq!(resp.usage.prompt_tokens, 6);
+        assert_eq!(resp.usage.completion_tokens, 0);
+        assert_eq!(resp.usage.total_tokens, 6);
+    }
+
+    #[test]
+    fn embeddings_response_empty_input() {
+        let resp = EmbeddingsResponse::new(vec![], "test-model".to_string());
+        assert_eq!(resp.data.len(), 0);
+        assert_eq!(resp.usage.total_tokens, 0);
+    }
+
+    #[test]
+    fn embeddings_request_deserializes() {
+        let json = r#"{
+            "model": "text-embedding-ada-002",
+            "input": ["hello world", "second"]
+        }"#;
+        let req: EmbeddingsRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.model, "text-embedding-ada-002");
+        assert_eq!(req.input.len(), 2);
+        assert_eq!(req.input[0], "hello world");
+        assert_eq!(req.input[1], "second");
+    }
+}
