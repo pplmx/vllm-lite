@@ -366,6 +366,52 @@ async fn test_chat_accepts_n_equal_to_one() {
     );
 }
 
+/// P39 v0.x wire-through: `n = 2..=8` is accepted at the HTTP boundary
+/// (not rejected with 400) and the n>1 dispatch path returns one
+/// `choices` entry per candidate (indexed `0..n`). Uses the mock
+/// engine so the request completes end-to-end.
+#[tokio::test]
+async fn test_chat_accepts_n_in_valid_range_with_multiple_choices() {
+    let (state, _handle) = api_state_with_mock_engine(Architecture::Qwen3, vec![10]);
+
+    let body = serde_json::json!({
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "n": 2,
+        "max_tokens": 3,
+    })
+    .to_string();
+
+    let response = router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "n = 2 must be accepted (within MAX_N = 8)"
+    );
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    let choices = body["choices"]
+        .as_array()
+        .expect("choices should be an array");
+    assert_eq!(
+        choices.len(),
+        2,
+        "n = 2 must produce exactly 2 choice entries (indices 0 and 1)"
+    );
+    assert_eq!(choices[0]["index"].as_i64(), Some(0));
+    assert_eq!(choices[1]["index"].as_i64(), Some(1));
+}
+
 /// P38 v0.3 wire-type engine wire-through: `stop` sequences are
 /// now accepted by the chat handler (no longer 400). The validator
 /// passes them through (`validate_stop_sequences`: max 4 strings,
