@@ -185,6 +185,150 @@ pub(crate) fn validate_chat_request(
     Ok(())
 }
 
+/// Forward OpenAI chat request fields into the engine's `SamplingParams`.
+///
+/// This is the chat-endpoint counterpart to `populate_completion_sampling_params`
+/// in `completions.rs` — the single authoritative point for the OpenAI →
+/// `SamplingParams` mapping on the `/v1/chat/completions` path. All three
+/// call sites (`handle_chat`, `spawn_chat_n_candidate`,
+/// `spawn_chat_n_streaming_candidate`) delegate here so the field set stays
+/// in sync.
+///
+/// `stop_token_sequences` is pre-tokenized by the caller (needs
+/// `state.tokenizer`) — this keeps the populator pure and testable without
+/// a tokenizer dependency.
+fn populate_chat_sampling_params(
+    request: &mut vllm_core::types::Request,
+    req: &ChatRequest,
+    stop_token_sequences: Option<Vec<Vec<vllm_traits::TokenId>>>,
+    candidate_index: usize,
+) {
+    if let Some(temp) = req.temperature {
+        request.sampling_params.temperature = temp;
+    }
+    if let Some(top_p) = req.top_p {
+        request.sampling_params.top_p = top_p;
+    }
+    // frequency_penalty → repeat_penalty (sign-aware engine, P29).
+    // See handle_chat docs for the full rationale on the 1e-3 floor.
+    if let Some(fp) = req.frequency_penalty {
+        request.sampling_params.repeat_penalty = (1.0 + fp).max(1e-3);
+    }
+    if let Some(pp) = req.presence_penalty {
+        request.sampling_params.presence_penalty = pp;
+    }
+    if let Some(ref lb) = req.logit_bias {
+        request.sampling_params.logit_bias = Some(lb.clone());
+    }
+    // P39 per-candidate seed derivation. candidate_index = 0 is the
+    // identity, so the single-shot path gets the pre-P39 `seed as u64`
+    // behaviour.
+    request.sampling_params.seed =
+        super::completions::per_candidate_seed(req.seed, candidate_index);
+    request.sampling_params.top_logprobs = req.top_logprobs;
+    request.sampling_params.stop_token_sequences = stop_token_sequences;
+}
+
+#[cfg(test)]
+mod populate_tests {
+    use super::*;
+
+    fn base_chat_request() -> ChatRequest {
+        ChatRequest {
+            model: "test-model".to_string(),
+            messages: vec![],
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            stream: None,
+            n: None,
+            stop: None,
+            user: None,
+            response_format: None,
+            seed: None,
+            frequency_penalty: None,
+            presence_penalty: None,
+            logit_bias: None,
+            logprobs: None,
+            top_logprobs: None,
+            tools: None,
+            tool_choice: None,
+        }
+    }
+
+    #[test]
+    fn test_populate_chat_sampling_params_forwards_all_fields() {
+        let mut request = vllm_core::types::Request::new(0, vec![], 100);
+        let mut req = base_chat_request();
+        req.temperature = Some(0.7);
+        req.top_p = Some(0.9);
+        req.frequency_penalty = Some(0.5);
+        req.presence_penalty = Some(0.3);
+        req.logit_bias = Some(std::collections::HashMap::from([(1, 2.0)]));
+        req.seed = Some(42);
+        req.top_logprobs = Some(5);
+        let stop_seqs: Vec<Vec<vllm_traits::TokenId>> = vec![vec![1, 2, 3]];
+
+        populate_chat_sampling_params(&mut request, &req, Some(stop_seqs.clone()), 0);
+
+        assert_eq!(request.sampling_params.temperature, 0.7);
+        assert_eq!(request.sampling_params.top_p, 0.9);
+        assert_eq!(request.sampling_params.repeat_penalty, 1.5);
+        assert_eq!(request.sampling_params.presence_penalty, 0.3);
+        assert!(request.sampling_params.logit_bias.is_some());
+        assert_eq!(
+            request.sampling_params.logit_bias.as_ref().unwrap().len(),
+            1
+        );
+        assert_eq!(request.sampling_params.seed, Some(42));
+        assert_eq!(request.sampling_params.top_logprobs, Some(5));
+        assert_eq!(
+            request.sampling_params.stop_token_sequences,
+            Some(stop_seqs)
+        );
+    }
+
+    #[test]
+    fn test_populate_chat_sampling_params_none_overrides() {
+        // When fields are None, the request's defaults should be preserved
+        // (the populator uses `if let Some(...)` for each field).
+        let mut request = vllm_core::types::Request::new(0, vec![], 100);
+        let req = base_chat_request();
+
+        populate_chat_sampling_params(&mut request, &req, None, 0);
+
+        // Seed should be None (no override), and stop_token_sequences should be None.
+        assert_eq!(request.sampling_params.seed, None);
+        assert_eq!(request.sampling_params.stop_token_sequences, None);
+    }
+
+    #[test]
+    fn test_populate_chat_sampling_params_negative_frequency_penalty_floored() {
+        let mut request = vllm_core::types::Request::new(0, vec![], 100);
+        let mut req = base_chat_request();
+        req.frequency_penalty = Some(-2.0); // 1.0 + (-2.0) = -1.0, floored to 1e-3
+
+        populate_chat_sampling_params(&mut request, &req, None, 0);
+
+        assert!((request.sampling_params.repeat_penalty - 1e-3).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_populate_chat_sampling_params_per_candidate_seed() {
+        let mut request = vllm_core::types::Request::new(0, vec![], 100);
+        let mut req = base_chat_request();
+        req.seed = Some(100);
+
+        // candidate_index = 0 → seed is unchanged (identity for wrapping_add)
+        populate_chat_sampling_params(&mut request, &req, None, 0);
+        assert_eq!(request.sampling_params.seed, Some(100));
+
+        // candidate_index = 1 → seed = 100 + 1 = 101
+        populate_chat_sampling_params(&mut request, &req, None, 1);
+        assert_eq!(request.sampling_params.seed, Some(101));
+    }
+}
+
 async fn handle_chat(
     state: &ApiState,
     correlation_id: &str,
@@ -254,136 +398,15 @@ async fn handle_chat(
 
     let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
 
-    if let Some(temp) = req.temperature {
-        request.sampling_params.temperature = temp;
-    }
-
-    // Forward `top_p` to the engine. The engine's
-    // `sample_batch_with_params` honours `top_p` via nucleus sampling
-    // (see `vllm_core::sampling::top_p_sample`). The value is
-    // range-checked by `validate_chat_request_fields` earlier in
-    // this handler so we only need to copy the field here — out-of-
-    // range / NaN values were rejected with `400` before reaching
-    // this line.
-    if let Some(top_p) = req.top_p {
-        request.sampling_params.top_p = top_p;
-    }
-
-    // Forward `frequency_penalty` to the engine's existing
-    // `repeat_penalty` slot (P27 v0.3 wire-type follow-up; P29
-    // closes the boost-semantics carve-out via a sign-aware
-    // engine refactor). The engine's `apply_repeat_penalty`
-    // (P29 sign-aware) handles positive and negative logits
-    // symmetrically:
-    //   - logit >= 0: divide by `repeat_penalty`
-    //   - logit < 0: multiply by `repeat_penalty`
-    // This gives correct OpenAI-spec behaviour for both positive
-    // `frequency_penalty` (penalize repetition: divide positive
-    // logits by > 1, multiply negative logits by > 1 → both move
-    // AWAY from zero) and negative `frequency_penalty` (boost
-    // repetition: divide positive logits by < 1, multiply negative
-    // logits by < 1 → both move TOWARD zero). The mapping is
-    // `repeat_penalty = 1.0 + frequency_penalty` with a 1e-3
-    // floor to prevent divide-by-zero when the user requests
-    // extreme negative `frequency_penalty` (e.g. -1.0 → rp=0.0
-    // would divide positive logits by zero). The 1e-3 floor is
-    // the practical limit for boost semantic in the divisor
-    // formulation; values above the floor produce a legitimate
-    // boost via the sign-aware multiply path. Examples:
-    //   - frequency_penalty = 1.0 → repeat_penalty = 2.0 (penalize)
-    //   - frequency_penalty = 0.0 → repeat_penalty = 1.0 (no-op)
-    //   - frequency_penalty = -0.5 → repeat_penalty = 0.5 (boost)
-    //   - frequency_penalty = -1.0 → repeat_penalty = 0.001 (max boost; floored)
-    //   - frequency_penalty = -2.0 → repeat_penalty = 0.001 (also floored)
-    //
-    // P29 removes the P27-era `max(1.0, 1.0 + value)` clamp that
-    // silently degraded negative values to "no penalty" — the
-    // sign-aware engine can now handle them correctly.
-    if let Some(fp) = req.frequency_penalty {
-        request.sampling_params.repeat_penalty = (1.0 + fp).max(1e-3);
-    }
-
-    // Forward `presence_penalty` to the engine's new
-    // `SamplingParams::presence_penalty` slot (P28 v0.3 wire-type
-    // follow-up — engine wire-through). The engine's
-    // `apply_presence_penalty` subtracts the penalty from the logit
-    // of every *distinct* seen token regardless of occurrence count,
-    // matching OpenAI's "presence_penalty" semantic (positive =
-    // discourage repetition, negative = encourage repetition). Unlike
-    // `frequency_penalty` (which uses a clamped `max(1.0, ...)` map
-    // because of the `apply_repeat_penalty` logit-divide sign-flip
-    // bug for negative values), `presence_penalty` is an additive
-    // bias so the value can be forwarded verbatim — no clamping
-    // needed. The `apply_presence_penalty` helper skips when
-    // `penalty == 0.0`, so omitting the field is a no-op.
-    if let Some(pp) = req.presence_penalty {
-        request.sampling_params.presence_penalty = pp;
-    }
-
-    // Forward `logit_bias` to the engine's new
-    // `SamplingParams::logit_bias` slot (P30 v0.3 wire-type
-    // follow-up — engine wire-through). The engine's
-    // `apply_logit_bias` adds each map value to the logit at the
-    // corresponding token position before the temperature / top-k /
-    // top-p pipeline, matching OpenAI's "logit_bias" semantic
-    // (positive = increase probability, negative = decrease
-    // probability). Per OpenAI spec the values are constrained to
-    // the `[-100, 100]` range; the validator
-    // (`validate_chat_request_fields`) rejects NaN / ±infinity /
-    // out-of-range values with `400`, so we only need to forward
-    // the field here. Token IDs are *not* validated — any
-    // `TokenId` (which is a `u32`) is accepted, and out-of-vocab
-    // IDs are silently ignored at sampling time (matches OpenAI's
-    // server behaviour). The `apply_logit_bias` helper skips when
-    // the map is empty or `None`, so omitting the field is a no-op.
-    if let Some(ref lb) = req.logit_bias {
-        request.sampling_params.logit_bias = Some(lb.clone());
-    }
-
-    // Forward `seed` to the engine's new `SamplingParams::seed` slot
-    // (P34 v0.2 wire-type follow-up — engine wire-through). OpenAI's
-    // `seed` is `i64`; we cast to `u64` via `as` (wrapping negatives
-    // per Rust's `i64 as u64` semantics). This is safe per OpenAI
-    // spec because the seed is "best effort" and the engine only
-    // uses it to seed the RNG — wrapping produces a deterministic
-    // but distinct RNG state for each distinct i64 input, which is
-    // exactly the contract the user asked for. The validator on the
-    // HTTP layer accepts any `i64` (no range / sign check per OpenAI
-    // spec) so we only need to copy the field here. The engine's
-    // `sample_one_with_params` reads `params.seed` once per call
-    // and builds a fresh `StdRng::seed_from_u64` when `Some(_)`
-    // — giving the OpenAI-spec "same seed + same model + same prompt
-    // → same output" contract end-to-end. Greedy paths
-    // (`temperature = 0` / `top_p = 1.0`) bypass the RNG entirely
-    // so the seed has no observable effect in those modes (also
-    // matches OpenAI's spec — seed is only "best effort"
-    // determinism for sampling, not for greedy).
-    if let Some(seed) = req.seed {
-        request.sampling_params.seed = Some(seed as u64);
-    }
-
-    // Forward `top_logprobs` to the engine's new
-    // `SamplingParams::top_logprobs` slot (P36 v0.3 wire-type
-    // follow-up — engine wire-through). The chat endpoint's valid
-    // range is `0..=20`; validation lives on the HTTP layer
-    // (`validate_chat_logprobs`). The engine's `sample_one_with_params`
-    // checks `params.top_logprobs.is_some()` and runs a partial
-    // top-K selection on the post-filter logits only when the request
-    // asked for top-K — the default-path overhead stays at zero.
-    request.sampling_params.top_logprobs = req.top_logprobs;
-
     // P38 v0.3 wire-type engine wire-through: tokenize the user's
-    // stop strings at the HTTP boundary and forward as
-    // `SamplingParams::stop_token_sequences`. None and Some(empty)
-    // are both treated as "no stop check" (the engine skips the
+    // stop strings at the HTTP boundary. None and Some(empty) are
+    // both treated as "no stop check" (the engine skips the
     // matches_stop_sequences call entirely in that case).
     //
     // Tokenization errors: if all stop strings tokenize to zero
-    // tokens (e.g. user passed only whitespace-only strings that
-    // slipped past the validator in unusual tokenizer edge cases),
-    // reject with 400 so the caller gets a clear error instead of
-    // a silent no-op.
-    if let Some(stop) = req.stop.as_ref()
+    // tokens, reject with 400 so the caller gets a clear error
+    // instead of a silent no-op.
+    let stop_token_sequences = if let Some(stop) = req.stop.as_ref()
         && !stop.is_empty()
     {
         let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
@@ -400,8 +423,17 @@ async fn handle_chat(
                 )),
             ));
         }
-        request.sampling_params.stop_token_sequences = Some(tokenized);
-    }
+        Some(tokenized)
+    } else {
+        None
+    };
+
+    // Forward all sampling params via the shared populator. This is
+    // the single authoritative point for the OpenAI → SamplingParams
+    // mapping on the chat path (see `populate_chat_sampling_params`
+    // docs for field-level semantics, including the P29
+    // frequency_penalty → repeat_penalty mapping and the 1e-3 floor).
+    populate_chat_sampling_params(&mut request, &req, stop_token_sequences, 0);
 
     // Reject sampling parameters the engine cannot honour (currently
     // beam_width > 1) BEFORE enqueuing — see `sampling_validation`.
@@ -532,12 +564,12 @@ async fn handle_chat(
 /// into `SamplingParams`, plus the chat-only `per_candidate_seed`
 /// derivation).
 ///
-/// **Why chat does not share `populate_completion_sampling_params`:**
-/// the chat path already does inline forwarding in [`handle_chat`]
-/// for historical reasons (predates the P32 populator split). To
-/// keep the single-shot path unchanged (Task 6 says "no scope
-/// creep"), this helper duplicates the populator's chat-specific
-/// field set rather than refactoring `handle_chat` to share it.
+/// **Sampling params:** delegates to [`populate_chat_sampling_params`]
+/// — the chat-endpoint counterpart to `populate_completion_sampling_params`
+/// in `completions.rs`. All three call sites (`handle_chat`,
+/// `spawn_chat_n_candidate`, `spawn_chat_n_streaming_candidate`)
+/// share this populator so the OpenAI → `SamplingParams` field set
+/// stays in sync.
 ///
 /// **Partial-failure semantics:** mirrors `spawn_n_candidate` — if
 /// any candidate fails (engine error / overload / panic), the first
@@ -561,45 +593,8 @@ async fn spawn_chat_n_candidate(
     let total_max = prompt_tokens.len() + max_tokens;
     let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
 
-    // Chat inline forwarding of all sampling fields. Mirrors
-    // [`handle_chat`]'s populator block (lines 206-355) so every
-    // candidate honors the same field set the single-shot path
-    // does. The only P39-specific addition is `per_candidate_seed`
-    // for the seed field (candidate_index = 0 reduces to the
-    // pre-P39 `seed as u64` cast).
-    if let Some(temp) = req.temperature {
-        request.sampling_params.temperature = temp;
-    }
-    if let Some(top_p) = req.top_p {
-        request.sampling_params.top_p = top_p;
-    }
-    if let Some(fp) = req.frequency_penalty {
-        request.sampling_params.repeat_penalty = (1.0 + fp).max(1e-3);
-    }
-    if let Some(pp) = req.presence_penalty {
-        request.sampling_params.presence_penalty = pp;
-    }
-    if let Some(ref lb) = req.logit_bias {
-        request.sampling_params.logit_bias = Some(lb.clone());
-    }
-    // P39: per-candidate seed derivation (P34 per-sequence
-    // independence). Distinct seeds ⇒ distinct outputs even when
-    // the user submits one seed + n > 1.
-    request.sampling_params.seed =
-        super::completions::per_candidate_seed(req.seed, candidate_index);
-    request.sampling_params.top_logprobs = req.top_logprobs;
-
-    // P38 v0.3 wire-type engine wire-through: tokenize the user's
-    // stop strings at the HTTP boundary and forward as
-    // `SamplingParams::stop_token_sequences`. None and Some(empty)
-    // are both treated as "no stop check" (the engine skips the
-    // matches_stop_sequences call entirely in that case).
-    //
-    // Tokenization errors: if all stop strings tokenize to zero
-    // tokens, reject with 400 so the caller gets a clear error
-    // instead of a silent no-op. (Same semantics as the single-
-    // shot path in `handle_chat`.)
-    if let Some(stop) = req.stop.as_ref()
+    // P38: tokenize stop sequences (same semantics as handle_chat).
+    let stop_token_sequences = if let Some(stop) = req.stop.as_ref()
         && !stop.is_empty()
     {
         let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
@@ -616,8 +611,15 @@ async fn spawn_chat_n_candidate(
                 )),
             ));
         }
-        request.sampling_params.stop_token_sequences = Some(tokenized);
-    }
+        Some(tokenized)
+    } else {
+        None
+    };
+
+    // Forward all sampling params + per-candidate seed via the shared
+    // populator (P39 per-candidate seed derivation — candidate_index
+    // gives each candidate a distinct seed for independent outputs).
+    populate_chat_sampling_params(&mut request, &req, stop_token_sequences, candidate_index);
 
     validate_sampling_params(&request.sampling_params)?;
 
@@ -975,46 +977,9 @@ async fn spawn_chat_n_streaming_candidate(
     let total_max = prompt_tokens.len() + max_tokens;
     let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
 
-    // Chat inline forwarding of all sampling fields. Mirrors
-    // [`spawn_chat_n_candidate`]'s populator block so every
-    // candidate honors the same field set the single-shot path
-    // does. The only P39-specific addition is `per_candidate_seed`
-    // for the seed field (candidate_index = 0 reduces to the
-    // pre-P39 `seed as u64` cast).
-    if let Some(temp) = req.temperature {
-        request.sampling_params.temperature = temp;
-    }
-    if let Some(top_p) = req.top_p {
-        request.sampling_params.top_p = top_p;
-    }
-    if let Some(fp) = req.frequency_penalty {
-        request.sampling_params.repeat_penalty = (1.0 + fp).max(1e-3);
-    }
-    if let Some(pp) = req.presence_penalty {
-        request.sampling_params.presence_penalty = pp;
-    }
-    if let Some(ref lb) = req.logit_bias {
-        request.sampling_params.logit_bias = Some(lb.clone());
-    }
-    // P39: per-candidate seed derivation (P34 per-sequence
-    // independence). Distinct seeds ⇒ distinct outputs even when
-    // the user submits one seed + n > 1.
-    request.sampling_params.seed =
-        super::completions::per_candidate_seed(req.seed, candidate_index);
-    request.sampling_params.top_logprobs = req.top_logprobs;
-
-    // P38 v0.3 wire-type engine wire-through: tokenize the user's
-    // stop strings at the HTTP boundary and forward as
-    // `SamplingParams::stop_token_sequences`. None and Some(empty)
-    // are both treated as "no stop check" (the engine skips the
-    // matches_stop_sequences call entirely in that case).
-    //
-    // Tokenization errors: if all stop strings tokenize to zero
-    // tokens, reject with 400 so the caller gets a clear error
-    // instead of a silent no-op. (Same semantics as
-    // `spawn_chat_n_candidate` and the single-shot
-    // `stream_chat_completion` path.)
-    if let Some(stop) = req.stop.as_ref()
+    // P38: tokenize stop sequences (same semantics as handle_chat /
+    // spawn_chat_n_candidate).
+    let stop_token_sequences = if let Some(stop) = req.stop.as_ref()
         && !stop.is_empty()
     {
         let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
@@ -1031,8 +996,14 @@ async fn spawn_chat_n_streaming_candidate(
                 )),
             ));
         }
-        request.sampling_params.stop_token_sequences = Some(tokenized);
-    }
+        Some(tokenized)
+    } else {
+        None
+    };
+
+    // Forward all sampling params + per-candidate seed via the shared
+    // populator (P39 per-candidate seed derivation).
+    populate_chat_sampling_params(&mut request, &req, stop_token_sequences, candidate_index);
 
     validate_sampling_params(&request.sampling_params)?;
 
