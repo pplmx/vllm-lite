@@ -194,15 +194,18 @@ impl DraftResolver {
         }
 
         // Re-fetch from registry (now loaded)
-        if let Some(arc_backend) = self.registry.get_loaded_backend(id) {
-            self.metrics
-                .inc_draft_resolution(DraftResolutionKind::External);
-            ResolvedDraft::External(arc_backend)
-        } else {
-            // Shouldn't happen — attach succeeded but lookup failed
-            self.metrics.inc_draft_load_failure();
-            self.fallback_to_self_spec_or_none()
-        }
+        self.registry.get_loaded_backend(id).map_or_else(
+            || {
+                // Shouldn't happen — attach succeeded but lookup failed
+                self.metrics.inc_draft_load_failure();
+                self.fallback_to_self_spec_or_none()
+            },
+            |arc_backend| {
+                self.metrics
+                    .inc_draft_resolution(DraftResolutionKind::External);
+                ResolvedDraft::External(arc_backend)
+            },
+        )
     }
 
     fn fallback_to_self_spec_or_none(&self) -> ResolvedDraft {

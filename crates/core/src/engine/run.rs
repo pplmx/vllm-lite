@@ -61,7 +61,7 @@ impl Engine {
                     EngineMessage::GetEmbeddings {
                         input_tokens,
                         response_tx,
-                    } => self.handle_get_embeddings(input_tokens, response_tx),
+                    } => self.handle_get_embeddings(&input_tokens, &response_tx),
                     EngineMessage::Shutdown => return,
                 }
             }
@@ -102,8 +102,7 @@ impl Engine {
         // engine-side log line for this HTTP request carries the same
         // correlation id. When `request_id` is `None` (test fixtures,
         // non-HTTP callers) the span still enters, rendering as `null`.
-        let _request_id_span =
-            tracing::info_span!("engine.add_request", request_id = request_id.as_deref());
+        let _request_id_span = tracing::info_span!("engine.add_request", request_id = request_id);
 
         // P38: deref Box<Request> → Request (add_request public API
         // still takes Request by value). The caller treats seq_id 0 as
@@ -121,15 +120,15 @@ impl Engine {
     /// result (or log the error).
     fn handle_get_embeddings(
         &self,
-        input_tokens: Vec<Vec<vllm_traits::TokenId>>,
-        response_tx: tokio::sync::mpsc::UnboundedSender<Vec<Vec<f32>>>,
+        input_tokens: &[Vec<vllm_traits::TokenId>],
+        response_tx: &tokio::sync::mpsc::UnboundedSender<Vec<Vec<f32>>>,
     ) {
         let positions: Vec<Vec<usize>> = input_tokens
             .iter()
             .map(|tokens| (0..tokens.len()).collect())
             .collect();
         match lock_mutex(&self.target_model)
-            .and_then(|mut model| model.embed(&input_tokens, &positions).map_err(Into::into))
+            .and_then(|mut model| model.embed(input_tokens, &positions).map_err(Into::into))
         {
             Ok(embeddings) => {
                 let _ = response_tx.send(embeddings);

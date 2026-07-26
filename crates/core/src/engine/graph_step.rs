@@ -208,6 +208,7 @@ impl Engine {
 
     /// Record batch metrics (token count, batch size, latency) for the
     /// CUDA-Graph step path. No-op when `results` is empty.
+    #[cfg(feature = "cuda-graph")]
     fn record_batch_metrics(
         &self,
         results: &[(vllm_traits::SeqId, SampledToken)],

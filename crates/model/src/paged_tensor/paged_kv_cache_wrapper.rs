@@ -157,14 +157,16 @@ impl BlockSink for PagedKvCacheWrapper {
             // Pre-check the OOB case so the error variant is correct.
             // The cache's own bounds check returns a candle error
             // we'd otherwise map to InvalidBytes; the wrapper layer
-            // distinguishes "block can't fit" from "bytes are wrong
+            // distinguishes "block can't fit" from "bytes are wrong"
             // length" because they're different client-side mistakes.
             if block_id_us >= cache.num_blocks() {
                 return Err(WriteError::OutOfRange {
                     block_id: block_id_us as u64,
                 });
             }
-            write_block_bytes_inner(&mut cache, block_id_us, bytes)
+            let result = write_block_bytes_inner(&mut cache, block_id_us, bytes);
+            drop(cache);
+            result
         })
     }
 }
