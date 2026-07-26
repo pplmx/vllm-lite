@@ -228,4 +228,81 @@ mod tests {
         harness.add_test_request(vec![1, 2, 3], 10);
         assert!(harness.has_pending());
     }
+
+    #[test]
+    fn test_harness_scheduler_accessor() {
+        let harness = TestHarness::new();
+        // scheduler() returns a reference to the internal SchedulerEngine
+        let scheduler = harness.scheduler();
+        assert_eq!(scheduler.waiting_count(), 0);
+    }
+
+    #[test]
+    fn test_harness_scheduler_mut_accessor() {
+        let mut harness = TestHarness::new();
+        // scheduler_mut() returns a mutable reference that can drive the scheduler
+        let scheduler = harness.scheduler_mut();
+        let seq_id = scheduler.add_request(Request::new(0, vec![1, 2, 3], 10));
+        assert!(seq_id > 0);
+        assert_eq!(scheduler.waiting_count(), 1);
+    }
+
+    #[test]
+    fn test_harness_metrics_accessor() {
+        let harness = TestHarness::new();
+        let metrics = harness.metrics();
+        // metrics() returns the shared Arc<EnhancedMetricsCollector>
+        assert_eq!(Arc::strong_count(metrics), 2); // 1 owned by harness, 1 by this ref
+    }
+
+    #[test]
+    fn test_harness_running_count_empty() {
+        let harness = TestHarness::new();
+        // No requests → running_count is 0
+        assert_eq!(harness.running_count(), 0);
+    }
+
+    #[test]
+    fn test_harness_running_count_after_build_batch() {
+        let mut harness = TestHarness::new();
+        harness.add_test_request(vec![1, 2, 3], 10);
+        harness.build_test_batch();
+        // After building a batch, the request moves to running
+        assert_eq!(harness.running_count(), 1);
+    }
+
+    #[test]
+    fn test_harness_default_equals_new() {
+        let from_new = TestHarness::new();
+        let from_default = TestHarness::default();
+        assert_eq!(from_new.config.kv_blocks, from_default.config.kv_blocks);
+        assert_eq!(
+            from_new.config.max_batch_size,
+            from_default.config.max_batch_size
+        );
+    }
+
+    #[test]
+    fn test_config_enable_prefix_cache() {
+        let config = TestHarnessConfig::default().enable_prefix_cache(false);
+        assert!(!config.enable_prefix_cache);
+    }
+
+    #[test]
+    fn test_config_enable_dynamic_batching() {
+        let config = TestHarnessConfig::default().enable_dynamic_batching(true);
+        assert!(config.enable_dynamic_batching);
+    }
+
+    #[test]
+    fn test_config_into_scheduler_config() {
+        let config = TestHarnessConfig::default()
+            .kv_blocks(128)
+            .max_batch_size(8)
+            .enable_prefix_cache(true)
+            .enable_dynamic_batching(false);
+        let scheduler_config = config.into_scheduler_config();
+        assert_eq!(scheduler_config.max_num_seqs, 8);
+        assert_eq!(scheduler_config.max_batch_size, 8);
+    }
 }
