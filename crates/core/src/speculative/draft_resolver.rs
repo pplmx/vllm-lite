@@ -152,52 +152,59 @@ impl DraftResolver {
             return ResolvedDraft::External(backend);
         }
 
-        // Case 3: draft is registered but unloaded → try to load
+        // Case 3/4: registered (try load) or unknown → delegate
         if self.registry.contains(id) {
-            match self.loader.load(id) {
-                Ok(backend) => {
-                    // Try to attach via the budgeted path (no-op if unlimited)
-                    match self.registry.attach_loaded_budgeted(id, backend) {
-                        Ok(()) => {
-                            // Re-fetch from registry (now loaded)
-                            if let Some(arc_backend) = self.registry.get_loaded_backend(id) {
-                                self.metrics
-                                    .inc_draft_resolution(DraftResolutionKind::External);
-                                return ResolvedDraft::External(arc_backend);
-                            }
-                            // Shouldn't happen — attach succeeded but lookup failed
-                            self.metrics.inc_draft_load_failure();
-                            self.fallback_to_self_spec_or_none()
-                        }
-                        Err(e) => {
-                            tracing::warn!(
-                                draft_id = %id,
-                                error = %e,
-                                "draft attach failed; falling back to self-spec"
-                            );
-                            self.metrics.inc_draft_load_failure();
-                            self.fallback_to_self_spec_or_none()
-                        }
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        draft_id = %id,
-                        error = %e,
-                        "draft load failed; falling back to self-spec"
-                    );
-                    self.metrics.inc_draft_load_failure();
-                    self.fallback_to_self_spec_or_none()
-                }
-            }
+            self.load_and_attach_draft(id)
         } else {
-            // Case 4: unknown draft id
             tracing::warn!(
                 draft_id = %id,
                 "unknown draft id; falling back to self-spec"
             );
             self.metrics.inc_draft_load_failure();
             self.fallback_to_self_spec_or_none()
+        }
+    }
+
+    /// Case 3: draft is registered but unloaded → load and attach.
+    ///
+    /// On any failure (load error, attach error, or post-attach lookup
+    /// miss) falls back to self-spec and records a load failure metric.
+    fn load_and_attach_draft(&self, id: &DraftId) -> ResolvedDraft {
+        let backend = match self.loader.load(id) {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::warn!(
+                    draft_id = %id,
+                    error = %e,
+                    "draft load failed; falling back to self-spec"
+                );
+                self.metrics.inc_draft_load_failure();
+                return self.fallback_to_self_spec_or_none();
+            }
+        };
+
+        if let Err(e) = self.registry.attach_loaded_budgeted(id, backend) {
+            tracing::warn!(
+                draft_id = %id,
+                error = %e,
+                "draft attach failed; falling back to self-spec"
+            );
+            self.metrics.inc_draft_load_failure();
+            return self.fallback_to_self_spec_or_none();
+        }
+
+        // Re-fetch from registry (now loaded)
+        match self.registry.get_loaded_backend(id) {
+            Some(arc_backend) => {
+                self.metrics
+                    .inc_draft_resolution(DraftResolutionKind::External);
+                ResolvedDraft::External(arc_backend)
+            }
+            // Shouldn't happen — attach succeeded but lookup failed
+            None => {
+                self.metrics.inc_draft_load_failure();
+                self.fallback_to_self_spec_or_none()
+            }
         }
     }
 
