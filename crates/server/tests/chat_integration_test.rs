@@ -289,7 +289,7 @@ async fn test_chat_non_streaming_finish_reason_propagation() {
 /// `n > 8` (the scheduler-safe cap); `n = 2..=8` is honored
 /// end-to-end on the wire.
 #[tokio::test]
-async fn test_chat_rejects_n_greater_than_one_with_400() {
+async fn test_chat_rejects_n_above_max_with_400() {
     let state = vllm_server::test_fixtures::api_state(Architecture::Qwen3);
     let app = router(state);
 
