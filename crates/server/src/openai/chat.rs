@@ -1692,7 +1692,7 @@ async fn stream_chat_completion(
         .await;
     }
 
-    let mut request = vllm_core::types::Request::new(0, prompt_tokens, total_max);
+    let mut request = vllm_core::types::Request::new(0, prompt_tokens, max_tokens);
     if let Some(temp) = req.temperature {
         request.sampling_params.temperature = temp;
     }
