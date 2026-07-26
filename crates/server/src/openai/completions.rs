@@ -357,6 +357,11 @@ async fn spawn_n_candidate(
 /// (wraps negatives per `OpenAI`'s i64 contract); the `wrapping_add`
 /// then operates on u64 for overflow-safe candidate differentiation.
 /// Matches P34's per-sequence independence contract.
+// clippy::single_option_map would inline this to the caller, but we keep it
+// as a named utility because it encapsulates the P39 seed-derivation contract
+// (i64→u64 cast + wrapping_add for candidate differentiation) and is shared
+// across completions.rs and chat.rs with dedicated unit tests.
+#[allow(clippy::single_option_map)]
 pub(super) fn per_candidate_seed(seed: Option<i64>, candidate_index: usize) -> Option<u64> {
     seed.map(|s| (s as u64).wrapping_add(candidate_index as u64))
 }
