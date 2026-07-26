@@ -202,6 +202,7 @@ impl RateLimiter {
     ///
     /// Locks only the shard responsible for `key`, so concurrent checks
     /// for different keys proceed without contention.
+    #[allow(clippy::significant_drop_tightening)]
     fn check_and_consume(&self, key: &str, cost: f64) -> RateLimitResult {
         let (bucket_capacity, bucket_refill_rate) = self
             .per_key_limits
@@ -210,25 +211,31 @@ impl RateLimiter {
             .unwrap_or((self.capacity, self.refill_rate));
 
         let shard_idx = shard_of(key);
-        let mut buckets = self.shards[shard_idx].write();
+        // Acquire the shard write-lock only for the critical section — extract
+        // the result values (all Copy: f64 + Option<Duration>) before
+        // releasing so the lock isn't held during RateLimitResult
+        // construction, reducing contention across API keys on the same shard.
+        let (allowed, remaining, retry_after) = {
+            let mut buckets = self.shards[shard_idx].write();
+            let bucket = buckets
+                .entry(key.to_string())
+                .or_insert_with(|| TokenBucket::new(bucket_capacity));
 
-        let bucket = buckets
-            .entry(key.to_string())
-            .or_insert_with(|| TokenBucket::new(bucket_capacity));
+            match bucket.consume(cost, bucket_capacity, bucket_refill_rate) {
+                Some(remaining) => (true, remaining, None),
+                None => (
+                    false,
+                    bucket.tokens,
+                    Some(bucket.wait_for(cost, bucket_refill_rate)),
+                ),
+            }
+        };
 
-        match bucket.consume(cost, bucket_capacity, bucket_refill_rate) {
-            Some(remaining) => RateLimitResult {
-                allowed: true,
-                remaining,
-                retry_after: None,
-                limit: bucket_capacity,
-            },
-            None => RateLimitResult {
-                allowed: false,
-                remaining: bucket.tokens,
-                retry_after: Some(bucket.wait_for(cost, bucket_refill_rate)),
-                limit: bucket_capacity,
-            },
+        RateLimitResult {
+            allowed,
+            remaining,
+            retry_after,
+            limit: bucket_capacity,
         }
     }
 
