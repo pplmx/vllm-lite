@@ -296,4 +296,45 @@ mod tests {
 
         assert_eq!(request.id, 1);
     }
+
+    #[test]
+    fn test_request_factory_full_builder() {
+        let factory = RequestFactory::new()
+            .min_tokens(16)
+            .max_tokens(128)
+            .min_max_tokens(4)
+            .max_max_tokens(16)
+            .temperature(0.7);
+
+        assert_eq!(factory.config.min_tokens, 16);
+        assert_eq!(factory.config.max_tokens, 128);
+        assert_eq!(factory.config.min_max_tokens, 4);
+        assert_eq!(factory.config.max_max_tokens, 16);
+        assert_eq!(factory.config.temperature, 0.7);
+    }
+
+    #[test]
+    fn test_request_factory_from_config() {
+        let config = RequestConfig::default().min_tokens(10).max_tokens(100);
+
+        let factory = RequestFactory::from_config(config);
+        assert_eq!(factory.config.min_tokens, 10);
+        assert_eq!(factory.config.max_tokens, 100);
+    }
+
+    #[test]
+    fn test_rand_token_count_min_ge_max() {
+        // When min >= max, rand_token_count should return min directly
+        // (no random sampling — the range is empty or inverted).
+        assert_eq!(rand_token_count(50, 50), 50);
+        assert_eq!(rand_token_count(50, 30), 50);
+    }
+
+    #[test]
+    fn test_rand_token_count_in_range() {
+        // Verify the result falls within [min, max).
+        let result = rand_token_count(100, 200);
+        assert!(result >= 100);
+        assert!(result < 200);
+    }
 }
