@@ -86,11 +86,14 @@ impl HashRouter {
 
         let hash = Self::hash_key(key);
 
-        for _i in 0..nodes.len() {
-            // invariant: hash % nodes.len() fits in usize on all targets since
-            // the modulus is bounded by the node count.
-            #[allow(clippy::cast_possible_truncation)]
-            let idx = (hash % nodes.len() as u64) as usize;
+        // Start from the hashed index and probe subsequent nodes (wrapping)
+        // so a cache hit on any node is preferred over least-loaded fallback.
+        // invariant: hash % nodes.len() fits in usize on all targets since
+        // the modulus is bounded by the node count.
+        #[allow(clippy::cast_possible_truncation)]
+        let start_idx = (hash % nodes.len() as u64) as usize;
+        for offset in 0..nodes.len() {
+            let idx = (start_idx + offset) % nodes.len();
             let node = &nodes[idx];
 
             if node.has_cache {
@@ -204,5 +207,22 @@ mod tests {
         let route = router.route_by_prompt_hash(hash).await;
 
         assert!(route.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_route_prefers_cache_hit_on_any_node() {
+        let router = HashRouter::default();
+
+        router.add_node("node-0".to_string()).await;
+        router.add_node("node-1".to_string()).await;
+        router.add_node("node-2".to_string()).await;
+
+        // Mark node-1 as having a cache.
+        router.update_cache_status("node-1", true).await;
+
+        // Route any key — a cache hit should be returned, even if the
+        // hash maps to a different node.
+        let route = router.route("test-key").await;
+        assert_eq!(route, Some("node-1".to_string()));
     }
 }
