@@ -29,7 +29,7 @@ use crate::sync::lock_mutex;
 use vllm_traits::{Batch, SampledToken, SamplingParams, SeqId, TokenId};
 
 /// `(accepted_tokens, accepted_counts_per_sequence)` returned by
-/// [`Engine::verify_draft_tokens_logits`]. The first vec carries the
+/// `Engine::verify_draft_tokens_logits`. The first vec carries the
 /// `(SeqId, SampledToken)` pairs emitted for each accepted draft (plus any
 /// bonus token); the second vec gives the per-sequence accepted count so the
 /// caller can roll back rejected draft KV blocks.
