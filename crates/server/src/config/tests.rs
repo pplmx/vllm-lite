@@ -356,3 +356,74 @@ fn rate_limit_override_serialization() {
     assert_eq!(override_.max_requests, 500);
     assert_eq!(override_.rate_limit_window_secs, 30);
 }
+
+// ------------------------------------------------------------------
+// AppConfig::load tests
+// ------------------------------------------------------------------
+
+#[test]
+fn app_config_load_defaults_when_no_path() {
+    let config = AppConfig::load(None);
+    assert_eq!(config.server.port, 8000);
+}
+
+#[test]
+fn app_config_load_nonexistent_file_uses_defaults() {
+    let config = AppConfig::load(Some("/__nonexistent__/config.yml".into()));
+    assert_eq!(config.server.port, 8000);
+}
+
+#[test]
+fn app_config_load_from_file_with_env_override() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let file_path = dir.path().join("config.yml");
+    std::fs::write(&file_path, "server:\n  port: 9999\n  host: 0.0.0.0\n").expect("write file");
+
+    let env_path = dir.path().join("env_config.yml");
+    std::fs::write(&env_path, "server:\n  port: 7777\n").expect("write env file");
+
+    // 1. File loading without env var set: the file argument is used.
+    // SAFETY: clear any stale value from other tests (env vars are process-wide).
+    unsafe {
+        std::env::remove_var("VLLM_CONFIG_PATH");
+    }
+    let config = AppConfig::load(Some(file_path.clone()));
+    assert_eq!(config.server.port, 9999);
+
+    // 2. Env path takes precedence over the file argument.
+    // SAFETY: unique env var name; this test runs sequentially within itself.
+    unsafe {
+        std::env::set_var("VLLM_CONFIG_PATH", env_path.to_string_lossy().as_ref());
+    }
+    let config = AppConfig::load(Some(file_path));
+    assert_eq!(config.server.port, 7777);
+
+    // SAFETY: cleanup so this doesn't leak into other tests.
+    unsafe {
+        std::env::remove_var("VLLM_CONFIG_PATH");
+    }
+}
+
+// ------------------------------------------------------------------
+// is_loopback_address tests
+// ------------------------------------------------------------------
+
+#[test]
+fn is_loopback_address_detects_ipv4_loopback() {
+    assert!(is_loopback_address("127.0.0.1"));
+    assert!(is_loopback_address("127.0.0.2"));
+}
+
+#[test]
+fn is_loopback_address_detects_ipv6_loopback() {
+    assert!(is_loopback_address("::1"));
+}
+
+#[test]
+fn is_loopback_address_rejects_non_loopback() {
+    assert!(!is_loopback_address("0.0.0.0"));
+    assert!(!is_loopback_address("192.168.1.1"));
+    assert!(!is_loopback_address("10.0.0.1"));
+    assert!(!is_loopback_address("example.com"));
+    assert!(!is_loopback_address("invalid"));
+}
