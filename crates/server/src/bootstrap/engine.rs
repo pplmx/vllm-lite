@@ -56,7 +56,10 @@ fn load_draft_model(
 fn build_engine_multi_node(
     model: Box<dyn vllm_traits::ModelBackend>,
     draft_model: Option<Box<dyn vllm_traits::ModelBackend>>,
-    loader: &ModelLoader,
+    // `loader` is only referenced inside `#[cfg(feature = "multi-node")]`,
+    // so it is unused under the default feature set. Suppress the lint
+    // here rather than splitting the function or feature-gating the arg.
+    #[allow(unused_variables)] loader: &ModelLoader,
     app_config: &AppConfig,
 ) -> Engine {
     tracing::info!("Constructing Engine via EngineBuilder (multi-node path, Phase 41)");
