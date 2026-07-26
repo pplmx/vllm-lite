@@ -39,14 +39,14 @@ impl MixtralBlock {
             .unwrap_or(config.intermediate_size);
         let top_k = config.top_k_experts.unwrap_or(2);
 
-        let vb = VarBuilder::zeros(candle_core::DType::F32, &device);
+        let vb = VarBuilder::zeros(candle_core::DType::F32, device);
 
-        let input_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
-        let input_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
+        let input_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, device)?;
+        let input_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, device)?;
         let input_layernorm = LnLayerNorm::new(input_ln_weight, input_ln_bias, rms_norm_eps);
 
-        let post_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, &device)?;
-        let post_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, &device)?;
+        let post_ln_weight = Tensor::ones(hidden_size, candle_core::DType::F32, device)?;
+        let post_ln_bias = Tensor::zeros(hidden_size, candle_core::DType::F32, device)?;
         let post_attention_layernorm = LnLayerNorm::new(post_ln_weight, post_ln_bias, rms_norm_eps);
 
         // Thread `rope_scaling` (YaRN / Linear / Dynamic / Su) and
