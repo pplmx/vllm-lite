@@ -534,10 +534,16 @@ pub(crate) fn estimate_request_cost(body: &str) -> f64 {
         return 1.0;
     };
 
+    // `max_tokens` is not validated here (it's validated later by
+    // `validate_completion_request_fields` / `validate_chat_request_fields`),
+    // but negative or zero values would *reduce* the estimated cost and
+    // let an attacker under-pay their rate-limit budget. Filter to
+    // positive — consistent with how `n` / `best_of` are handled above.
     let max_tokens: f64 = json
         .get("max_tokens")
         .and_then(Value::as_i64)
-        .unwrap_or(100) as f64;
+        .filter(|&m| m > 0)
+        .map_or(100.0, |m| m as f64);
 
     // For completions with `n > 1` or `best_of > 1`, each candidate generates
     // `max_tokens` output tokens — multiply the cost so rate limits can't be
@@ -840,6 +846,26 @@ mod tests {
         let body = format!(r#"{{"prompt": "{prompt}", "max_tokens": 50000}}"#);
         let cost = estimate_request_cost(&body);
         assert_eq!(cost, 100_000.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_negative_max_tokens_defaults_to_100() {
+        // A negative max_tokens would reduce the estimated cost and
+        // let an attacker under-pay their rate-limit budget. It must
+        // fall back to the default (100) — same treatment as n=0 /
+        // best_of=0 above.
+        let body = r#"{"prompt": "hello world", "max_tokens": -1000}"#;
+        let cost = estimate_request_cost(body);
+        // 2 words + 100 (default) = 102
+        assert_eq!(cost, 102.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_zero_max_tokens_defaults_to_100() {
+        // max_tokens = 0 is also treated as 100 (filtered as non-positive).
+        let body = r#"{"prompt": "hello", "max_tokens": 0}"#;
+        let cost = estimate_request_cost(body);
+        assert_eq!(cost, 101.0);
     }
 
     #[test]
