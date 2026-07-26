@@ -10,8 +10,27 @@
 // included first when the token budget is tight (improves packing).
 
 use super::BatchComposer;
-use crate::types::Sequence;
-use vllm_traits::{Batch, BatchPhase, TokenId};
+use crate::types::{SamplingParams, Sequence};
+use vllm_traits::{Batch, BatchPhase, BlockId, SeqId, TokenId};
+
+/// Outcome of classifying a single sequence for prefill inclusion.
+enum PrefillAction {
+    /// No new tokens to process (skip silently).
+    Skip,
+    /// Would exceed the token budget (stop the loop).
+    Break,
+    /// Include this sequence in the batch.
+    Process {
+        seq_id: SeqId,
+        start: usize,
+        positions: Vec<usize>,
+        tokens: Vec<TokenId>,
+        token_count: usize,
+        kv_blocks: Vec<BlockId>,
+        is_prefill: bool,
+        sampling_params: SamplingParams,
+    },
+}
 
 impl BatchComposer {
     /// Compose a prefill batch with sequence packing optimization.
@@ -56,59 +75,43 @@ impl BatchComposer {
         );
 
         for seq in sequences.into_iter().take(self.config.max_batch_size) {
-            let start = seq.num_computed_tokens;
-            let seq_len = seq.tokens.len();
-            let tokens_to_process = seq_len.saturating_sub(start);
+            tracing::debug!(seq_id = seq.id, "compose_prefill: processing sequence");
 
-            tracing::debug!(
-                seq_id = seq.id,
-                start = start,
-                seq_len = seq_len,
-                tokens_to_process = tokens_to_process,
-                total_tokens = total_tokens,
-                "compose_prefill: processing sequence"
-            );
-
-            if tokens_to_process == 0 {
-                tracing::debug!("Skipping: tokens_to_process == 0");
-                continue;
+            match self.classify_prefill_seq(seq, total_tokens) {
+                PrefillAction::Skip => continue,
+                PrefillAction::Break => break,
+                PrefillAction::Process {
+                    seq_id,
+                    start,
+                    positions: pos,
+                    tokens,
+                    token_count,
+                    kv_blocks,
+                    is_prefill: pref,
+                    sampling_params: params,
+                } => {
+                    seq_ids.push(seq_id);
+                    positions.push(pos);
+                    total_tokens += token_count;
+                    max_seq_len = max_seq_len.max(token_count);
+                    input_tokens.push(tokens);
+                    kv_block_ids.push(kv_blocks);
+                    num_computed_tokens.push(start);
+                    // Only treat as prefill if this is the first chunk
+                    // of the sequence. If start > 0, this is a resume
+                    // from partial prefill, use decode mode.
+                    is_prefill.push(pref);
+                    // ARCH-02: thread per-sequence sampling params into
+                    // the batch so the engine applies them after
+                    // `forward_logits`.
+                    sampling_params.push(params);
+                }
             }
-
-            if total_tokens + tokens_to_process > self.config.max_token_budget {
-                tracing::debug!(
-                    "Breaking: total_tokens {} + tokens_to_process {} > max_token_budget {}",
-                    total_tokens,
-                    tokens_to_process,
-                    self.config.max_token_budget
-                );
-                break;
-            }
-
-            seq_ids.push(seq.id);
-
-            // Prefill: return all remaining tokens
-            let tokens: Vec<TokenId> = seq.tokens[start..].to_vec();
-            positions.push((start..seq_len).collect());
-            total_tokens += tokens.len();
-            max_seq_len = max_seq_len.max(tokens.len());
-            input_tokens.push(tokens);
-
-            kv_block_ids.push(seq.kv_blocks.as_ref().clone());
-            num_computed_tokens.push(start);
-            // Only treat as prefill if this is the first chunk of the sequence
-            // If start > 0, this is a resume from partial prefill, use decode mode
-            is_prefill.push(start == 0);
-            // ARCH-02: thread per-sequence sampling params into the
-            // batch so the engine applies them after `forward_logits`.
-            sampling_params.push(seq.sampling_params.clone());
         }
-
-        let total = total_tokens;
-        let max_len = max_seq_len;
 
         tracing::debug!(
             batch_seq_count = seq_ids.len(),
-            total_tokens = total,
+            total_tokens = total_tokens,
             "compose_prefill: batch built"
         );
 
@@ -121,8 +124,48 @@ impl BatchComposer {
             is_prefill,
             sampling_params,
             phase: BatchPhase::Prefill,
-            total_tokens: total,
-            max_seq_len: max_len,
+            total_tokens,
+            max_seq_len,
+        }
+    }
+
+    /// Classify a sequence for prefill inclusion: skip (no new tokens),
+    /// break (would exceed token budget), or process (include in batch).
+    ///
+    /// Extracts the per-sequence data (tokens, positions, kv_blocks, etc.)
+    /// on the `Process` path so the caller's loop body stays flat.
+    /// Tracing calls live here rather than in the hot loop.
+    fn classify_prefill_seq(&self, seq: Sequence, total_tokens: usize) -> PrefillAction {
+        let start = seq.num_computed_tokens;
+        let seq_len = seq.tokens.len();
+        let tokens_to_process = seq_len.saturating_sub(start);
+
+        if tokens_to_process == 0 {
+            tracing::debug!("Skipping: tokens_to_process == 0");
+            return PrefillAction::Skip;
+        }
+
+        if total_tokens + tokens_to_process > self.config.max_token_budget {
+            tracing::debug!(
+                "Breaking: total_tokens {} + tokens_to_process {} > max_token_budget {}",
+                total_tokens,
+                tokens_to_process,
+                self.config.max_token_budget
+            );
+            return PrefillAction::Break;
+        }
+
+        let tokens: Vec<TokenId> = seq.tokens[start..].to_vec();
+        let token_count = tokens.len();
+        PrefillAction::Process {
+            seq_id: seq.id,
+            start,
+            positions: (start..seq_len).collect(),
+            tokens,
+            token_count,
+            kv_blocks: seq.kv_blocks.as_ref().clone(),
+            is_prefill: start == 0,
+            sampling_params: seq.sampling_params,
         }
     }
 }
