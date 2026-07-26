@@ -397,10 +397,13 @@ impl OtlpExporter {
 
         loop {
             ticker.tick().await;
-            // Index by Prometheus name for O(1) lookups. Most metrics come
-            // from `get_counter` / `get_gauge`; the four draft_* counters
-            // come from `draft_metrics_snapshot`.
-            let mut by_name: HashMap<String, f64> = HashMap::with_capacity(SCHEMA_MAP.len());
+            // Index by Prometheus name for O(1) lookups. All metric sources
+            // (`get_counter`, `get_gauge`, `draft_metrics_snapshot`) return
+            // `u64`, so we keep the native integer type throughout and only
+            // cast to `f64` at the OTel API boundary for `Gauge`. This
+            // avoids the `u64 → f64 → u64` round-trip that lost precision
+            // for counters exceeding 2^53.
+            let mut by_name: HashMap<String, u64> = HashMap::with_capacity(SCHEMA_MAP.len());
 
             for prom_name in SCHEMA_MAP.iter().map(|(p, _, _, _)| *p) {
                 let value = self
@@ -408,7 +411,7 @@ impl OtlpExporter {
                     .collector
                     .get_counter(prom_name)
                     .max(self.inner.collector.get_gauge(prom_name));
-                by_name.insert(prom_name.to_string(), value as f64);
+                by_name.insert(prom_name.to_string(), value);
             }
 
             // Overlay the draft metrics snapshot (5 counters not in the
@@ -416,31 +419,43 @@ impl OtlpExporter {
             let draft = self.inner.collector.draft_metrics_snapshot();
             by_name.insert(
                 "draft_resolutions_external_total".into(),
-                draft.resolutions_external_total as f64,
+                draft.resolutions_external_total,
             );
             by_name.insert(
                 "draft_resolutions_self_spec_total".into(),
-                draft.resolutions_self_spec_total as f64,
+                draft.resolutions_self_spec_total,
             );
             by_name.insert(
                 "draft_resolutions_none_total".into(),
-                draft.resolutions_none_total as f64,
+                draft.resolutions_none_total,
             );
             by_name.insert(
                 "draft_load_failures_total".into(),
-                draft.load_failures_total as f64,
+                draft.load_failures_total,
             );
             by_name.insert(
                 "draft_runtime_errors_total".into(),
-                draft.runtime_errors_total as f64,
+                draft.runtime_errors_total,
             );
 
             for (prom_name, inst) in &instruments {
-                let value = by_name.get(*prom_name).copied().unwrap_or(0.0);
+                let value = by_name.get(*prom_name).copied().unwrap_or(0);
                 match inst {
-                    Instrument::Counter(c) => c.add(value as u64, &[]),
-                    Instrument::Gauge(g) => g.record(value, &[]),
-                    Instrument::UpDownCounter(u) => u.add(value as i64, &[]),
+                    // Counter takes u64 — pass directly, no cast.
+                    Instrument::Counter(c) => c.add(value, &[]),
+                    // Gauge's OTel API takes f64 — an unavoidable cast; integer
+                    // counters don't exceed 2^53 in practice for a single
+                    // reporting interval so precision loss is negligible here.
+                    Instrument::Gauge(g) => {
+                        #[allow(clippy::cast_precision_loss)]
+                        g.record(value as f64, &[]);
+                    }
+                    // UpDownCounter takes i64 — counters are non-negative and
+                    // i64::MAX is practically unreachable, so `try_from` with
+                    // a clamp avoids silent two's-complement wrap.
+                    Instrument::UpDownCounter(u) => {
+                        u.add(i64::try_from(value).unwrap_or(i64::MAX), &[]);
+                    }
                 }
             }
             // PeriodicReader auto-flushes on each tick; no explicit flush call.
