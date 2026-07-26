@@ -48,7 +48,7 @@ impl InMemoryMetricsExporter {
     pub fn record(&self, name: impl Into<String>, value: f64) {
         self.values
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(name.into(), value);
     }
 
@@ -60,7 +60,7 @@ impl InMemoryMetricsExporter {
     pub fn snapshot(&self) -> Vec<(String, f64)> {
         self.values
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
             .map(|(k, v)| (k.clone(), *v))
             .collect()

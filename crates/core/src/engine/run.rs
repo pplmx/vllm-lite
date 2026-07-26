@@ -41,7 +41,7 @@ impl Engine {
                         response_tx,
                         seq_id_tx,
                         finish_reason_tx,
-                        &request_id,
+                        request_id.as_ref(),
                     ),
                     EngineMessage::CancelRequest { seq_id } => {
                         // Production-readiness recommendation: when an
@@ -95,7 +95,7 @@ impl Engine {
         response_tx: tokio::sync::mpsc::Sender<vllm_traits::SampledToken>,
         seq_id_tx: Option<tokio::sync::oneshot::Sender<vllm_traits::SeqId>>,
         finish_reason_tx: Option<tokio::sync::oneshot::Sender<vllm_traits::FinishReason>>,
-        request_id: &Option<String>,
+        request_id: Option<&String>,
     ) {
         // Production-readiness §6 (日志与追踪): when an HTTP handler
         // forwards a `request_id`, enter a tracing::info_span! so every

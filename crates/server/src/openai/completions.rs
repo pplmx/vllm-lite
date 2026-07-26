@@ -348,18 +348,18 @@ fn tokenize_stop_sequences(
     stop: Option<&[String]>,
     tokenizer: &vllm_model::tokenizer::Tokenizer,
 ) -> Option<Vec<Vec<vllm_traits::TokenId>>> {
-    let stop = stop?;
-    if stop.is_empty() {
+    let stop_seqs = stop?;
+    if stop_seqs.is_empty() {
         return None;
     }
-    let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
+    let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop_seqs
         .iter()
         .map(|s| tokenizer.encode(s))
         .filter(|toks| !toks.is_empty())
         .collect();
     if tokenized.is_empty() {
         tracing::warn!(
-            stop_count = stop.len(),
+            stop_count = stop_seqs.len(),
             "All stop sequences tokenized to zero tokens; skipping stop wire-through"
         );
         None

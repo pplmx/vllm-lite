@@ -221,7 +221,9 @@ async fn fetch_block_works_above_default_message_limit() {
     // on server AND client: a 5 MiB block (above tonic's 4 MiB default)
     // transfers successfully end-to-end. Uses a fresh server with
     // that block pre-loaded.
-    let big_block: Vec<u8> = (0..5 * 1024 * 1024).map(|i| (i & 0xFF) as u8).collect();
+    let big_block: Vec<u8> = (0..5 * 1024 * 1024)
+        .map(|i| u8::try_from(i & 0xFF).expect("masked to 0xFF"))
+        .collect();
     let mut source_a_mut = MockBlockDataSource::new();
     source_a_mut.insert(7, big_block.clone());
     let source_a: Arc<MockBlockDataSource> = Arc::new(source_a_mut);
