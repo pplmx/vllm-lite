@@ -12,6 +12,7 @@
 //! - `prefix_cache`: expose the underlying `RadixTree` so callers
 //!   can inspect or prime prefix state.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -25,8 +26,87 @@ use crate::types::Status;
 use super::state::SchedulerEngine;
 
 impl SchedulerEngine {
-    /// Execute preemption to free up memory blocks
+    /// Execute preemption to free up memory blocks.
+    ///
+    /// First tries **block-level eviction** via the eviction policy
+    /// (`EvictionPolicy::select_victims`), which selects individual blocks
+    /// with ref-count ≤ 1 in priority order. Sequences that lose *some*
+    /// blocks but retain others keep running with a reduced KV cache.
+    /// Sequences that lose *all* their blocks are reset and re-queued.
+    ///
+    /// If the eviction policy can't free enough blocks (e.g. all blocks
+    /// are prefix-cache shared with ref-count > 1), falls back to
+    /// **sequence-level preemption** — the legacy behaviour that releases
+    /// every block from the most-decodable sequences.
     pub(super) fn execute_preemption(&mut self, blocks_needed: usize) {
+        // Phase 1: priority-weighted block-level eviction.
+        let victims = self.memory.select_victims(&self.running, blocks_needed);
+        let victim_set: HashSet<_> = victims.iter().copied().collect();
+
+        if !victim_set.is_empty() {
+            for seq in &mut self.running {
+                if seq.status != Status::Decoding && seq.status != Status::Prefilling {
+                    continue;
+                }
+
+                let seq_victims: Vec<_> = seq
+                    .kv_blocks
+                    .iter()
+                    .copied()
+                    .filter(|b| victim_set.contains(b))
+                    .collect();
+
+                if seq_victims.is_empty() {
+                    continue;
+                }
+
+                self.memory.release_blocks(&seq_victims);
+
+                // Remove evicted blocks from the sequence's kv_blocks.
+                let survivors: Vec<_> = seq
+                    .kv_blocks
+                    .iter()
+                    .copied()
+                    .filter(|b| !victim_set.contains(b))
+                    .collect();
+                seq.kv_blocks = Arc::new(survivors);
+
+                // If the sequence lost all its blocks, mark it for re-queue.
+                if seq.kv_blocks.is_empty() {
+                    seq.status = Status::Waiting;
+                    seq.num_computed_tokens = 0;
+                }
+            }
+
+            // Re-queue fully-preempted sequences (lost all blocks).
+            let to_requeue: Vec<_> = self
+                .running
+                .iter()
+                .filter(|s| s.status == Status::Waiting && s.kv_blocks.is_empty())
+                .map(|s| s.id)
+                .collect();
+
+            for seq_id in to_requeue {
+                if let Some(pos) = self.running.iter().position(|s| s.id == seq_id) {
+                    let seq = self.running.remove(pos);
+                    let ctx = SchedulingContext {
+                        current_time: Instant::now(),
+                        queue_length: self.request_queue.len(),
+                        running_count: self.running.len(),
+                        memory_pressure: self.get_memory_pressure(),
+                    };
+                    self.request_queue.enqueue(seq, self.policy.as_ref(), &ctx);
+                }
+            }
+
+            if victim_set.len() >= blocks_needed {
+                return;
+            }
+        }
+
+        // Phase 2: fallback — sequence-level preemption (release all blocks
+        // from the most-decodable sequences) when block-level eviction
+        // couldn't free enough blocks (e.g. all blocks are shared).
         let mut preemptable: Vec<_> = self
             .running
             .iter()
@@ -39,7 +119,7 @@ impl SchedulerEngine {
                 .cmp(&a.consecutive_decode_rounds)
         });
 
-        let mut blocks_freed = 0;
+        let mut blocks_freed = victim_set.len();
         for mut seq in preemptable {
             if blocks_freed >= blocks_needed {
                 break;

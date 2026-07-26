@@ -605,13 +605,13 @@ fn test_memory_manager_select_victims() {
     use vllm_core::types::{Priority, Sequence, Status};
 
     let config = SchedulerConfig::default();
-    let memory = MemoryManager::new(config, 100);
+    let mut memory = MemoryManager::new(config, 100);
 
     // Create sequences with different decode rounds
     let seq1 = Sequence {
         id: 1,
         tokens: vec![1, 2, 3],
-        kv_blocks: Arc::new(vec![]),
+        kv_blocks: Arc::new(vec![10, 11]),
         num_computed_tokens: 3,
         prompt_len: 3,
         status: Status::Decoding,
@@ -626,7 +626,7 @@ fn test_memory_manager_select_victims() {
     let seq2 = Sequence {
         id: 2,
         tokens: vec![4, 5, 6],
-        kv_blocks: Arc::new(vec![]),
+        kv_blocks: Arc::new(vec![20, 21]),
         num_computed_tokens: 3,
         prompt_len: 3,
         status: Status::Decoding,
@@ -638,12 +638,22 @@ fn test_memory_manager_select_victims() {
         draft_model_id: None,
     };
 
+    // Record blocks so the eviction policy has ref_count = 1 (eligible).
+    memory.record_blocks(&[10, 11, 20, 21]);
+
     let running = vec![seq1, seq2];
 
-    // Select victims
+    // Select victims — should return 1 block from the higher-priority (shorter decode) sequence.
     let victims = memory.select_victims(&running, 1);
-    // At least one victim should be selected (or empty if no victims needed)
-    assert!(running.len() >= victims.len());
+    assert_eq!(victims.len(), 1, "should select exactly 1 victim");
+    // seq1 (consecutive_decode_rounds=5) has priority 3 (new decode, evictable),
+    // seq2 (consecutive_decode_rounds=20) has priority 1 (long-running, protected).
+    // Higher priority values are evicted first, so seq1's blocks are selected.
+    assert!(
+        [10, 11].contains(&victims[0]),
+        "victim should come from seq1 (priority 3, new decode), got block {}",
+        victims[0],
+    );
 }
 
 #[test]
@@ -686,4 +696,67 @@ fn test_preemption_execution() {
     }
 
     // Test passes if we reach here without panicking
+}
+
+/// Verify that `MemoryManager::select_victims` (delegating to
+/// `EvictionPolicy::select_victims`) is wired into the preemption path.
+///
+/// Two sequences with different `consecutive_decode_rounds` values
+/// compete for eviction. The long-running decode sequence (priority 1)
+/// should have its blocks selected before the new decode sequence
+/// (priority 3).
+#[test]
+fn test_eviction_policy_wired_into_preemption() {
+    use std::sync::Arc;
+    use vllm_core::scheduler::memory::MemoryManager;
+    use vllm_core::types::Status;
+    use vllm_core::types::{Priority, SamplingParams, Sequence};
+
+    let config = SchedulerConfig::default();
+    let mut memory = MemoryManager::new(config, 100);
+
+    let new_decode = Sequence {
+        id: 1,
+        tokens: vec![],
+        kv_blocks: Arc::new(vec![10, 11]),
+        num_computed_tokens: 0,
+        prompt_len: 0,
+        status: Status::Decoding,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 0, // priority 3 (new decode)
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+
+    let long_running = Sequence {
+        id: 2,
+        tokens: vec![],
+        kv_blocks: Arc::new(vec![20, 21]),
+        num_computed_tokens: 0,
+        prompt_len: 0,
+        status: Status::Decoding,
+        max_tokens: 10,
+        sampling_params: SamplingParams::default(),
+        consecutive_decode_rounds: 50, // priority 1 (long-running)
+        priority: Priority::default(),
+        degraded_draft: false,
+        draft_model_id: None,
+    };
+
+    memory.record_blocks(&[10, 11, 20, 21]);
+
+    // Request 1 victim — eviction policy should pick from the new-decode
+    // sequence (priority 3) since higher priority values are evicted first.
+    // Long-running sequences (priority 1) are protected to preserve their
+    // accumulated compute.
+    let victims = memory.select_victims(&[new_decode, long_running], 1);
+
+    assert_eq!(victims.len(), 1);
+    assert!(
+        [10, 11].contains(&victims[0]),
+        "victim should come from new decode (priority 3), got block {}",
+        victims[0]
+    );
 }

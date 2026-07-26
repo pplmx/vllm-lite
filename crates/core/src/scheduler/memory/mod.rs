@@ -407,26 +407,21 @@ impl MemoryManager {
         self.allocator.free(&freed);
     }
 
-    /// Selects victim blocks from running sequences to free up the requested number of blocks.
+    /// Selects victim blocks from running sequences to free up the requested
+    /// number of blocks, delegating to the eviction policy (priority-weighted
+    /// LRU with prefix-cache awareness).
+    ///
+    /// Only blocks whose ref-count is ≤ 1 (no shared owners) are returned —
+    /// shared prefix-cache blocks are never selected so a sequence that
+    /// reuses a prefix can't be evicted by a co-owner's memory pressure.
     #[must_use]
     pub fn select_victims(
-        &self,
+        &mut self,
         running_sequences: &[Sequence],
         num_blocks: usize,
     ) -> Vec<BlockId> {
-        let mut result = Vec::new();
-        for seq in running_sequences
-            .iter()
-            .filter(|s| s.status == Status::Decoding)
-        {
-            for &block in seq.kv_blocks.iter() {
-                if result.len() >= num_blocks {
-                    return result;
-                }
-                result.push(block);
-            }
-        }
-        result
+        self.eviction_policy
+            .select_victims(running_sequences, num_blocks)
     }
 
     /// Records blocks for eviction policy tracking.
