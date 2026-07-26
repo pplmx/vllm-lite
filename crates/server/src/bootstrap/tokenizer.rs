@@ -20,22 +20,31 @@ fn default_tokenizer() -> Arc<Tokenizer> {
     Arc::new(Tokenizer::new())
 }
 
-/// Load the tokenizer from `<model_dir>/tokenizer.json`, or fall back to a
-/// default-constructed tokenizer. Returns the `Arc<Tokenizer>` ready for use.
-pub fn load_tokenizer(model_dir: &Path) -> Arc<Tokenizer> {
+/// Resolve the tokenizer path from `model_dir`, returning `None` with a
+/// warning if the file is missing or not valid UTF-8.
+fn resolve_tokenizer_path(model_dir: &Path) -> Option<String> {
     let tokenizer_path = model_dir.join("tokenizer.json");
     if !tokenizer_path.exists() {
         tracing::warn!("No tokenizer.json found in model directory, using default tokenizer");
-        return default_tokenizer();
+        return None;
     }
     let Some(path_str) = tokenizer_path.to_str() else {
         tracing::error!(
             path = ?tokenizer_path,
             "Tokenizer path is not valid UTF-8; falling back to default tokenizer"
         );
+        return None;
+    };
+    Some(path_str.to_string())
+}
+
+/// Load the tokenizer from `<model_dir>/tokenizer.json`, or fall back to a
+/// default-constructed tokenizer. Returns the `Arc<Tokenizer>` ready for use.
+pub fn load_tokenizer(model_dir: &Path) -> Arc<Tokenizer> {
+    let Some(path_str) = resolve_tokenizer_path(model_dir) else {
         return default_tokenizer();
     };
-    match Tokenizer::from_file(path_str) {
+    match Tokenizer::from_file(&path_str) {
         Ok(t) => {
             tracing::info!("Tokenizer loaded");
             Arc::new(t)
