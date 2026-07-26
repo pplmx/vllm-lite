@@ -144,6 +144,7 @@ impl SchedulerEngine {
     /// Returns the number of matched tokens from peer nodes, or 0 in
     /// single-node builds. The result is informational — actual block
     /// reuse requires the gRPC transfer protocol.
+    #[cfg_attr(not(feature = "multi-node"), allow(clippy::missing_const_for_fn))]
     fn lookup_distributed_matched_tokens(&self, req: &Request) -> usize {
         #[cfg(feature = "multi-node")]
         {
