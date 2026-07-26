@@ -445,8 +445,11 @@ pub async fn auth_middleware(
                 .insert(AuthenticatedUser(user_id_from_key(&api_key)));
 
             // Add rate-limit headers to the downstream response.
-            let remaining = rate_result.remaining.round() as u64;
-            let limit = rate_result.limit.round() as u64;
+            // `.max(0.0)` before the cast is defensive: `remaining`/`limit`
+            // are always ≥ 0 in practice, but a negative or NaN f64 would
+            // wrap to a huge u64 via `as`, producing a misleading header.
+            let remaining = rate_result.remaining.round().max(0.0) as u64;
+            let limit = rate_result.limit.round().max(0.0) as u64;
             let mut response = next.run(request).await;
             response
                 .headers_mut()
@@ -469,7 +472,7 @@ pub async fn auth_middleware(
                 .header(HEADER_RATE_LIMIT_REMAINING, HeaderValue::from(0))
                 .header(
                     HEADER_RATE_LIMIT_LIMIT,
-                    HeaderValue::from(limit.round() as u64),
+                    HeaderValue::from(limit.round().max(0.0) as u64),
                 )
                 .body("".into())
                 .unwrap()
