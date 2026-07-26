@@ -40,28 +40,27 @@ pub struct InMemoryMetricsExporter {
 }
 
 impl InMemoryMetricsExporter {
-    /// # Panics
-    ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// Records a single metric value, overwriting any prior entry for `name`.
+    ///
+    /// Recovers from a poisoned mutex (`unwrap_or_else(|e| e.into_inner)`)
+    /// rather than panicking — metrics are best-effort and a poison cascade
+    /// from a single critical-section panic should not take down the server.
     pub fn record(&self, name: impl Into<String>, value: f64) {
         self.values
             .lock()
-            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
-            .expect("metrics exporter mutex poisoned")
+            .unwrap_or_else(|e| e.into_inner())
             .insert(name.into(), value);
     }
 
-    /// # Panics
-    ///
-    /// Panics if a required invariant is violated (e.g. a `None` value is force-unwrapped or an out-of-bounds index is used).
     /// Returns the recorded values, in unspecified order.
+    ///
+    /// Recovers from a poisoned mutex (`unwrap_or_else(|e| e.into_inner)`)
+    /// rather than panicking — see [`record`](Self::record) for rationale.
     #[must_use]
     pub fn snapshot(&self) -> Vec<(String, f64)> {
         self.values
             .lock()
-            // invariant: lock is only held for sync field access; poisoning only happens on panic during a critical section.
-            .expect("metrics exporter mutex poisoned")
+            .unwrap_or_else(|e| e.into_inner())
             .iter()
             .map(|(k, v)| (k.clone(), *v))
             .collect()
