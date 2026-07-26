@@ -1094,7 +1094,7 @@ mod tests {
             ToolChoice::Specific(specific) => {
                 assert_eq!(specific.function.name, "get_weather");
             }
-            _ => panic!("expected Specific variant"),
+            ToolChoice::Mode(_) => panic!("expected Specific variant"),
         }
     }
 

@@ -335,7 +335,7 @@ pub fn validate_logit_bias<S: std::hash::BuildHasher>(
 /// Returns `Err((StatusCode::BAD_REQUEST, Json<ErrorResponse>))`
 /// when any check fires.
 pub fn validate_stop_sequences(
-    stop: &Option<Vec<String>>,
+    stop: Option<&[String]>,
 ) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
     if let Some(stops) = stop {
         if stops.len() > 4 {
@@ -780,7 +780,7 @@ pub fn validate_chat_request_fields(
     // inline sampling-params forwarding). Per-string validation
     // lives in `validate_stop_sequences` (max 4 strings, no empty
     // strings or pure-whitespace strings).
-    validate_stop_sequences(&req.stop)?;
+    validate_stop_sequences(req.stop.as_deref())?;
     Ok(())
 }
 
@@ -870,7 +870,7 @@ pub fn validate_completion_request_fields(
     // now accepted (tokenized + forwarded by populate_completion_sampling_params).
     // Per-string validation lives in `validate_stop_sequences` (max 4
     // strings, no empty/whitespace strings).
-    validate_stop_sequences(&req.stop)?;
+    validate_stop_sequences(req.stop.as_deref())?;
     Ok(())
 }
 
@@ -2825,7 +2825,7 @@ mod tests {
     fn test_stop_validation_none_passes() {
         // OpenAI spec: omitting `stop` entirely (None) is the default and
         // must always pass.
-        validate_stop_sequences(&None).expect("None must pass (default; P38)");
+        validate_stop_sequences(None).expect("None must pass (default; P38)");
     }
 
     #[test]
@@ -2834,13 +2834,13 @@ mod tests {
         // must pass. The HTTP wire-through normalizes this to `None` at
         // the populate layer.
         let stop: Option<Vec<String>> = Some(vec![]);
-        validate_stop_sequences(&stop).expect("empty vec must pass (P38)");
+        validate_stop_sequences(stop.as_deref()).expect("empty vec must pass (P38)");
     }
 
     #[test]
     fn test_stop_validation_single_string_passes() {
         let stop: Option<Vec<String>> = Some(vec!["\n\n".to_string()]);
-        validate_stop_sequences(&stop).expect("single-string stop must pass (P38)");
+        validate_stop_sequences(stop.as_deref()).expect("single-string stop must pass (P38)");
     }
 
     #[test]
@@ -2852,7 +2852,8 @@ mod tests {
             "c".to_string(),
             "d".to_string(),
         ]);
-        validate_stop_sequences(&stop).expect("4-stop vec must pass (OpenAI upper bound, P38)");
+        validate_stop_sequences(stop.as_deref())
+            .expect("4-stop vec must pass (OpenAI upper bound, P38)");
     }
 
     #[test]
@@ -2865,7 +2866,7 @@ mod tests {
             "d".to_string(),
             "e".to_string(),
         ]);
-        let err = validate_stop_sequences(&stop)
+        let err = validate_stop_sequences(stop.as_deref())
             .expect_err("5-stop vec must be rejected (>4 per OpenAI spec, P38)");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         assert!(err.1.0.error.message.contains("stop"));
@@ -2876,8 +2877,8 @@ mod tests {
         // An empty-string stop is semantically a no-op (would never match
         // any generated text) — reject to give the caller a clear error.
         let stop: Option<Vec<String>> = Some(vec![String::new()]);
-        let err =
-            validate_stop_sequences(&stop).expect_err("empty-string stop must be rejected (P38)");
+        let err = validate_stop_sequences(stop.as_deref())
+            .expect_err("empty-string stop must be rejected (P38)");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         assert!(err.1.0.error.message.contains("stop"));
     }
@@ -2888,7 +2889,7 @@ mod tests {
         // tokenizers (a no-op that would never match) — reject to give
         // the caller a clear error.
         let stop: Option<Vec<String>> = Some(vec!["   ".to_string()]);
-        let err = validate_stop_sequences(&stop)
+        let err = validate_stop_sequences(stop.as_deref())
             .expect_err("whitespace-only stop must be rejected (P38)");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         assert!(err.1.0.error.message.contains("stop"));

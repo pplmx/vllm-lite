@@ -120,7 +120,7 @@ impl Engine {
     /// Handle a `GetEmbeddings` message: call `model.embed` and send the
     /// result (or log the error).
     fn handle_get_embeddings(
-        &mut self,
+        &self,
         input_tokens: Vec<Vec<vllm_traits::TokenId>>,
         response_tx: tokio::sync::mpsc::UnboundedSender<Vec<Vec<f32>>>,
     ) {
