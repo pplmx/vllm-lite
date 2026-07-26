@@ -529,8 +529,18 @@ pub(crate) fn estimate_request_cost(body: &str) -> f64 {
         .and_then(Value::as_i64)
         .unwrap_or(100) as f64;
 
-    // Cost = prompt tokens + max_tokens, clamped to [1.0, 100_000].
-    (prompt_tokens + max_tokens).clamp(1.0, 100_000.0)
+    // For completions with `n > 1`, each candidate generates `max_tokens`
+    // output tokens — multiply the cost so rate limits can't be bypassed by
+    // sending a single request with a large `n` value.
+    let n: f64 = json
+        .get("n")
+        .and_then(Value::as_i64)
+        .filter(|&n| n > 0)
+        .map(|n| n as f64)
+        .unwrap_or(1.0);
+
+    // Cost = (prompt tokens + max_tokens) * n, clamped to [1.0, 100_000].
+    ((prompt_tokens + max_tokens) * n).clamp(1.0, 100_000.0)
 }
 
 #[cfg(test)]
@@ -820,6 +830,56 @@ mod tests {
         let body = r#"{"foo": "bar"}"#;
         let cost = estimate_request_cost(body);
         assert_eq!(cost, 1.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_n_multiplies_cost() {
+        // n=3 should triple the cost: (4 words + 10 max_tokens) * 3 = 42
+        let body = r#"{"prompt": "hello world foo bar", "max_tokens": 10, "n": 3}"#;
+        let cost = estimate_request_cost(body);
+        assert_eq!(cost, 42.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_n_defaults_to_one() {
+        // Without n, cost is just prompt tokens + max_tokens.
+        let body = r#"{"prompt": "hello", "max_tokens": 100}"#;
+        let cost = estimate_request_cost(body);
+        assert_eq!(cost, 101.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_n_zero_defaults_to_one() {
+        // n=0 is treated as n=1 (filter excludes non-positive values).
+        let body = r#"{"prompt": "hello", "max_tokens": 100, "n": 0}"#;
+        let cost = estimate_request_cost(body);
+        assert_eq!(cost, 101.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_n_negative_defaults_to_one() {
+        // n=-1 is treated as n=1 (filter excludes non-positive values).
+        let body = r#"{"prompt": "hello", "max_tokens": 100, "n": -1}"#;
+        let cost = estimate_request_cost(body);
+        assert_eq!(cost, 101.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_n_with_chat_messages() {
+        // Chat requests also accept n (for multiple candidates).
+        // (2 + 3 words + 20 max_tokens) * 2 = 50
+        let body = r#"{"messages": [{"role": "user", "content": "hello world"}, {"role": "assistant", "content": "foo bar baz"}], "max_tokens": 20, "n": 2}"#;
+        let cost = estimate_request_cost(body);
+        assert_eq!(cost, 50.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_n_clamped_to_max() {
+        // Large n * (prompt + max_tokens) should still be clamped to 100_000.
+        let prompt = "word ".repeat(60_000);
+        let body = format!(r#"{{"prompt": "{prompt}", "max_tokens": 50000, "n": 10}}"#);
+        let cost = estimate_request_cost(&body);
+        assert_eq!(cost, 100_000.0);
     }
 
     // ------------------------------------------------------------------
