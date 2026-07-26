@@ -76,8 +76,21 @@ impl EvictionPolicy {
 
             for &block_id in seq.kv_blocks.as_ref() {
                 let priority = Self::compute_priority(seq);
-                block_usage.entry(block_id).or_insert((seq, priority)).1 =
-                    priority.min(block_usage.get(&block_id).map_or(0, |(_, p)| *p));
+                // If multiple sequences share a block, use the most
+                // evictable priority (min) so shared blocks aren't
+                // inadvertently protected by a high-priority co-owner.
+                //
+                // Bug fix (v28.0 I-5): the previous one-liner
+                // `entry().or_insert(...).1 = priority.min(get().map_or(0, ...))`
+                // was broken because `get()` was evaluated on the RHS *before*
+                // the entry was inserted on the LHS — `get()` returned `None`,
+                // `map_or(0, ...)` yielded 0, and `priority.min(0)` set every
+                // block's priority to 0. This effectively disabled priority-
+                // based eviction entirely, falling back to seq_id tiebreak.
+                block_usage
+                    .entry(block_id)
+                    .and_modify(|(_, p): &mut (&Sequence, usize)| *p = (*p).min(priority))
+                    .or_insert((seq, priority));
             }
         }
 

@@ -324,6 +324,115 @@ fn test_priority_scheduling() {
     );
 }
 
+/// With `PriorityPolicy` installed and `max_num_seqs` limited to 1, the
+/// scheduler must select only the highest-priority request (lowest
+/// `Priority(n)` value). The prefill `BatchComposer` re-sorts by remaining
+/// token count, so this test uses sequences with identical prompt lengths to
+/// eliminate that secondary ordering — leaving priority as the sole differentiator.
+///
+/// This closes the gap where `test_priority_scheduling` only asserted that
+/// "some requests were selected" without verifying priority ordering.
+#[test]
+fn test_priority_scheduling_selects_highest_priority_under_limit() {
+    use vllm_core::scheduler::policy::PriorityPolicy;
+
+    let config = SchedulerConfig {
+        max_num_seqs: 1, // only one sequence per batch — priority decides
+        max_num_batched_tokens: 100,
+        max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
+        enable_priority_scheduling: true,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
+        ..Default::default()
+    };
+
+    let mut sched = create_test_engine(config, 1024);
+
+    // Install PriorityPolicy — the scheduler constructor defaults to FcfsPolicy.
+    sched.set_policy(Box::new(PriorityPolicy::default()));
+
+    // All prompts are length-1 so the prefill re-sort by remaining tokens
+    // is a no-op (ties are unstable but all equal). Priority determines the
+    // sort in build_batch, and compose_prefill_batch preserves the first
+    // element when only one is selected.
+    sched.add_request(Request::new(1, vec![1], 5).with_priority(Priority(100))); // lowest
+    sched.add_request(Request::new(2, vec![2], 5).with_priority(Priority(0))); // highest
+    sched.add_request(Request::new(3, vec![3], 5).with_priority(Priority(50))); // middle
+
+    let batch = sched.build_batch();
+
+    assert_eq!(
+        batch.seq_ids.len(),
+        1,
+        "max_num_seqs=1 should produce exactly one sequence in the batch"
+    );
+    assert_eq!(
+        batch.seq_ids[0], 2,
+        "Priority(0) on seq 2 must be selected when only one slot is available"
+    );
+}
+
+/// With `PriorityPolicy` installed and `max_num_seqs >= 3`, the batch's
+/// `seq_ids` must reflect priority ordering for decode-phase sequences.
+///
+/// Decode path (`compose_decode_batch`) preserves the sequence order from
+/// `build_batch`'s priority sort — unlike prefill which re-sorts by
+/// remaining-token count. This test promotes sequences to decode state
+/// (via `update`) and then verifies ordering.
+#[test]
+fn test_priority_scheduling_decode_batch_ordering() {
+    let config = SchedulerConfig {
+        max_num_seqs: 10,
+        max_num_batched_tokens: 100,
+        max_consecutive_decode: 10,
+        enable_pd_separation: false,
+        prefill_chunk_size: 512,
+        decode_preference_ratio: 0.7,
+        enable_priority_scheduling: true,
+        enable_dynamic_batching: false,
+        min_batch_size: 1,
+        max_batch_size: 256,
+        ..Default::default()
+    };
+
+    let mut sched = create_test_engine(config, 1024);
+    sched.set_policy(Box::new(
+        vllm_core::scheduler::policy::PriorityPolicy::default(),
+    ));
+
+    // Prefill + promote all three to decode state.
+    sched.add_request(Request::new(1, vec![1], 5).with_priority(Priority(100)));
+    sched.add_request(Request::new(2, vec![2], 5).with_priority(Priority(0)));
+    sched.add_request(Request::new(3, vec![3], 5).with_priority(Priority(50)));
+
+    // First batch: complete prefill for all three.
+    let batch1 = sched.build_batch();
+    let sampled: Vec<SampledToken> = (0..batch1.seq_ids.len())
+        .map(|_| SampledToken {
+            token: 1,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        })
+        .collect();
+    sched.update(&batch1.seq_ids, &sampled, &vec![1; batch1.seq_ids.len()]);
+
+    // Second batch: all three are now in decode phase, ordered by priority.
+    let batch2 = sched.build_batch();
+
+    // decode compose preserves the priority-sorted order from build_batch.
+    // Expected: seq 2 (Priority(0)) first, then seq 3 (Priority(50)), then seq 1 (Priority(100)).
+    assert_eq!(
+        batch2.seq_ids,
+        vec![2, 3, 1],
+        "decode batch seq_ids must follow priority ordering (Priority(0) → Priority(100)), got {:?}",
+        batch2.seq_ids
+    );
+}
+
 #[test]
 fn test_consecutive_decode_limit() {
     let config = SchedulerConfig {
