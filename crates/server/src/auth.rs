@@ -240,12 +240,6 @@ impl RateLimiter {
     fn check_rate_limit(&self, key: &str) -> bool {
         self.check_and_consume(key, 1.0).allowed
     }
-
-    /// The global default bucket capacity (for rate-limit headers).
-    #[must_use]
-    const fn capacity(&self) -> f64 {
-        self.capacity
-    }
 }
 
 /// Error from [`AuthMiddleware::verify_with_meta`].
