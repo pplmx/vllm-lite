@@ -249,14 +249,22 @@ impl RateLimiter {
 }
 
 /// Error from [`AuthMiddleware::verify_with_meta`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// NOTE: `Eq` is intentionally omitted — the `RateLimited { limit: f64 }`
+// variant means `AuthError` cannot satisfy `Eq`'s reflexivity guarantee
+// (f64::NAN != f64::NAN). `PartialEq` is sufficient for all current use
+// (pattern matching via `matches!`, not `==` equality).
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum AuthError {
     /// No `Authorization: Bearer <key>` header present.
     MissingHeader,
     /// API key not in the configured list.
     InvalidKey,
-    /// Rate limit exceeded. `retry_after_secs` is how long to wait.
-    RateLimited { retry_after_secs: u64 },
+    /// Rate limit exceeded.
+    ///
+    /// `retry_after_secs` is how long to wait; `limit` is the
+    /// per-key bucket capacity (may differ from the global default
+    /// when overrides are configured).
+    RateLimited { retry_after_secs: u64, limit: f64 },
 }
 
 impl From<AuthError> for StatusCode {
@@ -374,7 +382,10 @@ impl AuthMiddleware {
             Ok((api_key.to_string(), result))
         } else {
             let retry_after_secs = result.retry_after.map_or(1, |d| d.as_secs().max(1));
-            Err(AuthError::RateLimited { retry_after_secs })
+            Err(AuthError::RateLimited {
+                retry_after_secs,
+                limit: result.limit,
+            })
         }
     }
 }
@@ -451,15 +462,20 @@ pub async fn auth_middleware(
                 .insert(HEADER_RATE_LIMIT_LIMIT, HeaderValue::from(limit));
             response
         }
-        Err(AuthError::RateLimited { retry_after_secs }) => {
+        Err(AuthError::RateLimited {
+            retry_after_secs,
+            limit,
+        }) => {
             // Rate-limited: include Retry-After + rate-limit headers.
+            // The limit reflects the per-key bucket capacity (may differ
+            // from the global default when overrides are configured).
             Response::builder()
                 .status(StatusCode::TOO_MANY_REQUESTS)
                 .header(HEADER_RETRY_AFTER, HeaderValue::from(retry_after_secs))
                 .header(HEADER_RATE_LIMIT_REMAINING, HeaderValue::from(0))
                 .header(
                     HEADER_RATE_LIMIT_LIMIT,
-                    HeaderValue::from(auth.rate_limiter.capacity().round() as u64),
+                    HeaderValue::from(limit.round() as u64),
                 )
                 .body("".into())
                 .unwrap()
@@ -613,7 +629,7 @@ mod tests {
     fn test_per_key_limit_reflects_override_capacity() {
         let mut overrides = HashMap::new();
         overrides.insert("premium".to_string(), (5, 60));
-        let mut limiter = RateLimiter::new_with_overrides(10, 60, overrides);
+        let limiter = RateLimiter::new_with_overrides(10, 60, overrides);
 
         // The global default capacity is 10, but "premium" has an override of 5.
         // The `limit` field in the result should reflect the per-key capacity.
@@ -642,7 +658,8 @@ mod tests {
         );
         assert_eq!(
             StatusCode::from(AuthError::RateLimited {
-                retry_after_secs: 3
+                retry_after_secs: 3,
+                limit: 10.0,
             }),
             StatusCode::TOO_MANY_REQUESTS
         );
@@ -675,7 +692,7 @@ mod tests {
         let err = auth.verify_with_meta(&headers, 1.0).unwrap_err();
         assert!(matches!(
             err,
-            AuthError::RateLimited { retry_after_secs } if retry_after_secs >= 1
+            AuthError::RateLimited { retry_after_secs, .. } if retry_after_secs >= 1
         ));
     }
 
@@ -838,6 +855,53 @@ mod tests {
             auth.verify(&headers).unwrap_err(),
             StatusCode::TOO_MANY_REQUESTS
         );
+    }
+
+    #[test]
+    fn test_per_key_override_limit_in_error() {
+        let mut overrides = HashMap::new();
+        overrides.insert("premium".to_string(), (5, 60));
+
+        let auth = AuthMiddleware::new_with_overrides(
+            vec!["premium".to_string()],
+            10, // global default: 10
+            60,
+            overrides,
+        );
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer premium".parse().unwrap());
+
+        // Exhaust the premium override (capacity 5).
+        for _ in 0..5 {
+            assert!(auth.verify(&headers).is_ok());
+        }
+        // 6th request is rate-limited; the error should carry the override limit.
+        let err = auth.verify_with_meta(&headers, 1.0).unwrap_err();
+        match err {
+            AuthError::RateLimited { limit, .. } => {
+                assert_eq!(limit, 5.0, "per-key limit should be reported in the error");
+            }
+            _ => panic!("expected RateLimited, got {err:?}"),
+        }
+    }
+
+    #[test]
+    fn test_api_keys_returns_configured_keys_in_order() {
+        let auth = AuthMiddleware::new(vec!["alpha".to_string(), "beta".to_string()], 10, 60);
+        let keys = auth.api_keys();
+        assert_eq!(keys.len(), 2);
+        assert_eq!(keys[0], "alpha");
+        assert_eq!(keys[1], "beta");
+    }
+
+    #[test]
+    fn test_user_id_from_key_truncates_to_8_chars() {
+        // Keys longer than 8 chars → truncated prefix.
+        assert_eq!(user_id_from_key("sk-abcdefghijklmnop"), "key:sk-abcde");
+        // Keys shorter than 8 chars → full key.
+        assert_eq!(user_id_from_key("sk-short"), "key:sk-short");
+        // Empty key → empty prefix.
+        assert_eq!(user_id_from_key(""), "key:");
     }
 
     #[test]
