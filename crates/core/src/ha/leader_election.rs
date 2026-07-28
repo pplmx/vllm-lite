@@ -69,22 +69,24 @@ impl LeaderElection {
     }
 
     pub async fn on_leader_lost(&self, new_leader: Option<String>) {
-        // Lock ordering: is_leader → leader_id (consistent with
-        // become_leader/step_down which use state → is_leader → leader_id).
-        // Acquiring leader_id before is_leader here creates a lock-ordering
-        // inversion that can deadlock in multi-threaded runtimes.
+        // Lock ordering: state → is_leader → leader_id (consistent with
+        // become_leader/step_down). Acquiring leader_id before is_leader
+        // creates a lock-ordering inversion that can deadlock in
+        // multi-threaded runtimes.
+        let mut state = self.state.write().await;
         let mut is_leader = self.is_leader.write().await;
         let mut leader_id = self.leader_id.write().await;
 
+        *state = LeadershipState::Follower;
+        *is_leader = false;
         if let Some(id) = new_leader {
-            *is_leader = false;
             *leader_id = Some(id.clone());
             warn!(new_leader = %id, "Leadership transferred");
         } else {
-            *is_leader = false;
             *leader_id = None;
             warn!("Leader lost, no new leader elected yet");
         }
+        drop(state);
         drop(is_leader);
         drop(leader_id);
     }
@@ -162,5 +164,21 @@ mod tests {
 
         assert_eq!(election.get_leader_id().await, Some("node-2".to_string()));
         assert!(!election.is_leader().await);
+        // on_leader_lost must transition state to Follower, not just
+        // clear is_leader — otherwise get_state() reports Leader while
+        // is_leader is false (inconsistent state).
+        assert_eq!(election.get_state().await, LeadershipState::Follower);
+    }
+
+    #[tokio::test]
+    async fn test_leader_lost_no_new_leader() {
+        let election = LeaderElection::new();
+
+        election.become_leader("node-1".to_string()).await;
+        election.on_leader_lost(None).await;
+
+        assert_eq!(election.get_leader_id().await, None);
+        assert!(!election.is_leader().await);
+        assert_eq!(election.get_state().await, LeadershipState::Follower);
     }
 }
