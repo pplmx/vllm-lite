@@ -13,6 +13,30 @@
 
 use super::*;
 
+/// Set a process-wide environment variable from test code.
+///
+/// Wraps the `unsafe` `std::env::set_var` (unsafe since Rust 1.80 because it
+/// mutates process-wide state). Safe to call from single-threaded tests that
+/// use unique, test-specific variable names and clean up after themselves.
+#[allow(unsafe_code)]
+fn set_test_env(key: &str, value: &str) {
+    // SAFETY: `std::env::set_var` is unsafe since Rust 1.80 because env vars
+    // are process-wide and concurrent access is a data race. These helpers are
+    // only called from single-threaded test code with unique variable names,
+    // where no other thread reads or writes the same variable.
+    unsafe { std::env::set_var(key, value) };
+}
+
+/// Remove a process-wide environment variable from test code.
+///
+/// Wraps the `unsafe` `std::env::remove_var` (unsafe since Rust 1.80). See
+/// [`set_test_env`] for the safety rationale.
+#[allow(unsafe_code)]
+fn remove_test_env(key: &str) {
+    // SAFETY: Same rationale as `set_test_env`.
+    unsafe { std::env::remove_var(key) };
+}
+
 #[test]
 fn test_app_config_defaults() {
     let config = AppConfig::default();
@@ -262,13 +286,10 @@ fn resolve_api_keys_missing_env_var_ignored() {
 
 #[test]
 fn resolve_api_keys_from_env_var() {
-    // SAFETY: unique env var name; test is single-threaded for env access.
-    unsafe {
-        std::env::set_var(
-            "__VLLM_TEST_AUTH_ENV_KEYS__",
-            "env-key-1, env-key-2 , , env-key-3",
-        );
-    }
+    set_test_env(
+        "__VLLM_TEST_AUTH_ENV_KEYS__",
+        "env-key-1, env-key-2 , , env-key-3",
+    );
     let cfg = AuthConfig {
         api_keys_env: Some("__VLLM_TEST_AUTH_ENV_KEYS__".to_string()),
         ..Default::default()
@@ -276,10 +297,7 @@ fn resolve_api_keys_from_env_var() {
     let keys = cfg.resolve_api_keys();
     // Empty entries are filtered, whitespace is trimmed.
     assert_eq!(keys, vec!["env-key-1", "env-key-2", "env-key-3"]);
-    // SAFETY: cleanup after the test above.
-    unsafe {
-        std::env::remove_var("__VLLM_TEST_AUTH_ENV_KEYS__");
-    }
+    remove_test_env("__VLLM_TEST_AUTH_ENV_KEYS__");
 }
 
 #[test]
@@ -313,10 +331,7 @@ fn resolve_api_keys_missing_file_ignored() {
 
 #[test]
 fn resolve_api_keys_combined_sources() {
-    // SAFETY: unique env var name; test is single-threaded for env access.
-    unsafe {
-        std::env::set_var("__VLLM_TEST_AUTH_COMBINED_ENV__", "env-key");
-    }
+    set_test_env("__VLLM_TEST_AUTH_COMBINED_ENV__", "env-key");
     let dir = tempfile::tempdir().expect("temp dir");
     let file_path = dir.path().join("keys.txt");
     std::fs::write(&file_path, "file-key").expect("write file");
@@ -333,10 +348,7 @@ fn resolve_api_keys_combined_sources() {
         vec!["inline-key", "env-key", "file-key"]
     );
 
-    // SAFETY: cleanup after the test above.
-    unsafe {
-        std::env::remove_var("__VLLM_TEST_AUTH_COMBINED_ENV__");
-    }
+    remove_test_env("__VLLM_TEST_AUTH_COMBINED_ENV__");
 }
 
 #[test]
@@ -383,25 +395,17 @@ fn app_config_load_from_file_with_env_override() {
     std::fs::write(&env_path, "server:\n  port: 7777\n").expect("write env file");
 
     // 1. File loading without env var set: the file argument is used.
-    // SAFETY: clear any stale value from other tests (env vars are process-wide).
-    unsafe {
-        std::env::remove_var("VLLM_CONFIG_PATH");
-    }
+    remove_test_env("VLLM_CONFIG_PATH");
     let config = AppConfig::load(Some(file_path.clone()));
     assert_eq!(config.server.port, 9999);
 
     // 2. Env path takes precedence over the file argument.
-    // SAFETY: unique env var name; this test runs sequentially within itself.
-    unsafe {
-        std::env::set_var("VLLM_CONFIG_PATH", env_path.to_string_lossy().as_ref());
-    }
+    set_test_env("VLLM_CONFIG_PATH", env_path.to_string_lossy().as_ref());
     let config = AppConfig::load(Some(file_path));
     assert_eq!(config.server.port, 7777);
 
-    // SAFETY: cleanup so this doesn't leak into other tests.
-    unsafe {
-        std::env::remove_var("VLLM_CONFIG_PATH");
-    }
+    // Cleanup so this doesn't leak into other tests.
+    remove_test_env("VLLM_CONFIG_PATH");
 }
 
 // ------------------------------------------------------------------
