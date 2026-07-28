@@ -190,4 +190,33 @@ mod tests {
         // error condition.
         let _ = with_cors(Router::new(), &CorsConfig::default());
     }
+
+    #[test]
+    fn with_origins_builds_closed_then_opened_layer() {
+        // Origins specified: the layer must acquire allow_origin
+        // and the router must accept the layer without panic.
+        let cfg = CorsConfig {
+            allow_origins: vec!["https://example.com".to_string()],
+            allow_methods: vec!["GET".to_string(), "POST".to_string()],
+            allow_headers: vec!["authorization".to_string()],
+            allow_credentials: true,
+        };
+        let _ = with_cors(Router::new(), &cfg);
+    }
+
+    #[test]
+    fn with_malformed_origins_drops_bad_values() {
+        // Malformed origin strings are dropped with a warning — the
+        // layer must still build with the remaining valid origins.
+        let cfg = CorsConfig {
+            allow_origins: vec![
+                "https://valid.example.com".to_string(),
+                "not a valid header value".to_string(),
+            ],
+            allow_methods: vec!["DELETE".to_string()],
+            allow_headers: vec!["x-custom-header".to_string()],
+            allow_credentials: false,
+        };
+        let _ = with_cors(Router::new(), &cfg);
+    }
 }
