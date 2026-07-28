@@ -329,6 +329,95 @@ mod populate_tests {
     }
 }
 
+/// Tokenize `req.stop` sequences for the chat path.
+///
+/// Unlike the completions-path helper (`completions::tokenize_stop_sequences`),
+/// the chat path **rejects** the request with `400 Bad Request` when *all*
+/// stop sequences tokenize to zero tokens, rather than silently skipping the
+/// stop wire-through. This surfaces the user error explicitly.
+///
+/// Shared by `handle_chat`, `spawn_chat_n_candidate`, and
+/// `spawn_chat_n_streaming_candidate` to guarantee identical stop-sequence
+/// handling across all chat spawn paths.
+fn tokenize_chat_stop_sequences(
+    stop: Option<&Vec<String>>,
+    tokenizer: &vllm_model::tokenizer::Tokenizer,
+) -> Result<Option<Vec<Vec<vllm_traits::TokenId>>>, (axum::http::StatusCode, Json<ErrorResponse>)> {
+    let Some(stop) = stop else {
+        return Ok(None);
+    };
+    if stop.is_empty() {
+        return Ok(None);
+    }
+    let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
+        .iter()
+        .map(|s| tokenizer.encode(s))
+        .filter(|toks| !toks.is_empty())
+        .collect();
+    if tokenized.is_empty() {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "stop sequences tokenize to zero tokens (no tokenizable content)",
+                "invalid_request_error",
+            )),
+        ));
+    }
+    Ok(Some(tokenized))
+}
+
+/// Reject requests whose `prompt_tokens_len + max_tokens` exceeds the
+/// model's context length (`state.max_model_len`).
+///
+/// Emits the OpenAI-standard `context_length_exceeded` code so clients can
+/// detect the failure and split the request. Without this gate, an oversize
+/// prompt exhausts KV blocks before application-level validation runs.
+///
+/// Shared by all chat spawn paths to guarantee identical context-length
+/// enforcement.
+fn check_context_length(
+    prompt_tokens_len: usize,
+    max_tokens: usize,
+    max_model_len: Option<usize>,
+) -> Result<(), (axum::http::StatusCode, Json<ErrorResponse>)> {
+    let Some(max_model_len) = max_model_len else {
+        return Ok(());
+    };
+    let total_max = prompt_tokens_len + max_tokens;
+    if total_max > max_model_len {
+        let message = format!(
+            "prompt_tokens ({prompt_tokens_len}) + max_tokens ({max_tokens}) \
+             = {total_max} exceeds the model's context length ({max_model_len})"
+        );
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::with_code(
+                &message,
+                "invalid_request_error",
+                "context_length_exceeded",
+            )),
+        ));
+    }
+    Ok(())
+}
+
+/// Map an engine mailbox `TrySendError` to the appropriate
+/// `(StatusCode, Json<ErrorResponse>)` pair.
+///
+/// `Full` → `503 engine_overloaded` (mailbox saturated, fail fast).
+/// `Closed` → `503 engine_unavailable` (engine has shut down).
+///
+/// Shared by all chat spawn paths to guarantee identical error
+/// mapping without duplicating the match closure at each call site.
+fn map_engine_send_error(
+    e: tokio::sync::mpsc::error::TrySendError<vllm_core::types::EngineMessage>,
+) -> (axum::http::StatusCode, Json<ErrorResponse>) {
+    match e {
+        tokio::sync::mpsc::error::TrySendError::Full(_) => engine_overloaded_error(),
+        tokio::sync::mpsc::error::TrySendError::Closed(_) => engine_unavailable_error(),
+    }
+}
+
 async fn handle_chat(
     state: &ApiState,
     correlation_id: &str,
@@ -369,66 +458,18 @@ async fn handle_chat(
         "Request started"
     );
     let max_tokens = usize::try_from(req.max_tokens.unwrap_or(100)).unwrap_or(100);
-    let total_max = prompt_tokens_len + max_tokens;
 
-    // Production-readiness §4: reject requests whose
-    // prompt + max_tokens would exceed the model's context
-    // length. Without this gate a 10× oversize prompt
-    // exhausts KV blocks before any application-level
-    // validation runs. We emit the OpenAI-standard
-    // `context_length_exceeded` code so OpenAI-compatible
-    // clients can detect the failure mode and split the
-    // request.
-    if let Some(max_model_len) = state.max_model_len {
-        if total_max > max_model_len {
-            let message = format!(
-                "prompt_tokens ({prompt_tokens_len}) + max_tokens ({max_tokens}) \
-                 = {total_max} exceeds the model's context length ({max_model_len})"
-            );
-            return Err((
-                axum::http::StatusCode::BAD_REQUEST,
-                Json(ErrorResponse::with_code(
-                    &message,
-                    "invalid_request_error",
-                    "context_length_exceeded",
-                )),
-            ));
-        }
-    }
+    // Production-readiness §4: reject oversize prompts that would
+    // exhaust KV blocks before application-level validation runs.
+    check_context_length(prompt_tokens_len, max_tokens, state.max_model_len)?;
 
     // `max_tokens` is the upper bound on *generated* tokens — pass it
     // directly to the engine (no `prompt_tokens.len()` offset needed).
     let mut request = vllm_core::types::Request::new(0, prompt_tokens, max_tokens);
 
-    // P38 v0.3 wire-type engine wire-through: tokenize the user's
-    // stop strings at the HTTP boundary. None and Some(empty) are
-    // both treated as "no stop check" (the engine skips the
-    // matches_stop_sequences call entirely in that case).
-    //
-    // Tokenization errors: if all stop strings tokenize to zero
-    // tokens, reject with 400 so the caller gets a clear error
-    // instead of a silent no-op.
-    let stop_token_sequences = if let Some(stop) = req.stop.as_ref()
-        && !stop.is_empty()
-    {
-        let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
-            .iter()
-            .map(|s| state.tokenizer.encode(s))
-            .filter(|toks| !toks.is_empty())
-            .collect();
-        if tokenized.is_empty() {
-            return Err((
-                axum::http::StatusCode::BAD_REQUEST,
-                Json(ErrorResponse::new(
-                    "stop sequences tokenize to zero tokens (no tokenizable content)",
-                    "invalid_request_error",
-                )),
-            ));
-        }
-        Some(tokenized)
-    } else {
-        None
-    };
+    // P38: tokenize stop sequences at the HTTP boundary (shared helper —
+    // identical semantics across all chat spawn paths).
+    let stop_token_sequences = tokenize_chat_stop_sequences(req.stop.as_ref(), &state.tokenizer)?;
 
     // Forward all sampling params via the shared populator. This is
     // the single authoritative point for the OpenAI → SamplingParams
@@ -472,10 +513,7 @@ async fn handle_chat(
             // KV allocation, prefix-cache lookup).
             request_id: Some(correlation_id.to_string()),
         })
-        .map_err(|e| match e {
-            tokio::sync::mpsc::error::TrySendError::Full(_) => engine_overloaded_error(),
-            tokio::sync::mpsc::error::TrySendError::Closed(_) => engine_unavailable_error(),
-        })?;
+        .map_err(map_engine_send_error)?;
 
     let mut tokens = Vec::new();
     while let Some(sampled) = response_rx.recv().await {
@@ -597,27 +635,7 @@ async fn spawn_chat_n_candidate(
     let mut request = vllm_core::types::Request::new(0, prompt_tokens, max_tokens);
 
     // P38: tokenize stop sequences (same semantics as handle_chat).
-    let stop_token_sequences = if let Some(stop) = req.stop.as_ref()
-        && !stop.is_empty()
-    {
-        let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
-            .iter()
-            .map(|s| state.tokenizer.encode(s))
-            .filter(|toks| !toks.is_empty())
-            .collect();
-        if tokenized.is_empty() {
-            return Err((
-                axum::http::StatusCode::BAD_REQUEST,
-                Json(ErrorResponse::new(
-                    "stop sequences tokenize to zero tokens (no tokenizable content)",
-                    "invalid_request_error",
-                )),
-            ));
-        }
-        Some(tokenized)
-    } else {
-        None
-    };
+    let stop_token_sequences = tokenize_chat_stop_sequences(req.stop.as_ref(), &state.tokenizer)?;
 
     // Forward all sampling params + per-candidate seed via the shared
     // populator (P39 per-candidate seed derivation — candidate_index
@@ -639,10 +657,7 @@ async fn spawn_chat_n_candidate(
             finish_reason_tx: Some(finish_reason_tx),
             request_id: Some(correlation_id),
         })
-        .map_err(|e| match e {
-            tokio::sync::mpsc::error::TrySendError::Full(_) => engine_overloaded_error(),
-            tokio::sync::mpsc::error::TrySendError::Closed(_) => engine_unavailable_error(),
-        })?;
+        .map_err(map_engine_send_error)?;
 
     let mut tokens = Vec::new();
     while let Some(sampled) = response_rx.recv().await {
@@ -983,27 +998,7 @@ async fn spawn_chat_n_streaming_candidate(
 
     // P38: tokenize stop sequences (same semantics as handle_chat /
     // spawn_chat_n_candidate).
-    let stop_token_sequences = if let Some(stop) = req.stop.as_ref()
-        && !stop.is_empty()
-    {
-        let tokenized: Vec<Vec<vllm_traits::TokenId>> = stop
-            .iter()
-            .map(|s| state.tokenizer.encode(s))
-            .filter(|toks| !toks.is_empty())
-            .collect();
-        if tokenized.is_empty() {
-            return Err((
-                axum::http::StatusCode::BAD_REQUEST,
-                Json(ErrorResponse::new(
-                    "stop sequences tokenize to zero tokens (no tokenizable content)",
-                    "invalid_request_error",
-                )),
-            ));
-        }
-        Some(tokenized)
-    } else {
-        None
-    };
+    let stop_token_sequences = tokenize_chat_stop_sequences(req.stop.as_ref(), &state.tokenizer)?;
 
     // Forward all sampling params + per-candidate seed via the shared
     // populator (P39 per-candidate seed derivation).
@@ -1025,10 +1020,7 @@ async fn spawn_chat_n_streaming_candidate(
             finish_reason_tx: Some(finish_reason_tx),
             request_id: Some(correlation_id),
         })
-        .map_err(|e| match e {
-            tokio::sync::mpsc::error::TrySendError::Full(_) => engine_overloaded_error(),
-            tokio::sync::mpsc::error::TrySendError::Closed(_) => engine_unavailable_error(),
-        })?;
+        .map_err(map_engine_send_error)?;
 
     Ok(ChatStreamingCandidateChannels {
         index: candidate_index,
@@ -1628,30 +1620,9 @@ async fn stream_chat_completion(
     );
 
     let max_tokens = usize::try_from(req.max_tokens.unwrap_or(100)).unwrap_or(100);
-    let total_max = prompt_tokens.len() + max_tokens;
 
-    // Production-readiness §4: context-length gate (streaming
-    // variant). See non_stream_chat_completion for the full
-    // rationale; we apply the same check here so SSE clients
-    // get the same `400 context_length_exceeded` instead of a
-    // hung-up connection that opens, then dies on the first
-    // forward pass.
-    if let Some(max_model_len) = state.max_model_len {
-        if total_max > max_model_len {
-            let message = format!(
-                "prompt_tokens ({prompt_tokens_len}) + max_tokens ({max_tokens}) \
-                 = {total_max} exceeds the model's context length ({max_model_len})"
-            );
-            return Err((
-                axum::http::StatusCode::BAD_REQUEST,
-                Json(ErrorResponse::with_code(
-                    &message,
-                    "invalid_request_error",
-                    "context_length_exceeded",
-                )),
-            ));
-        }
-    }
+    // Production-readiness §4: context-length gate (streaming variant).
+    check_context_length(prompt_tokens_len, max_tokens, state.max_model_len)?;
 
     let model = req.model.clone();
 
@@ -1845,10 +1816,7 @@ async fn stream_chat_completion(
             // (same rationale as the non-streaming handler above).
             request_id: Some(correlation_id.to_string()),
         })
-        .map_err(|e| match e {
-            tokio::sync::mpsc::error::TrySendError::Full(_) => engine_overloaded_error(),
-            tokio::sync::mpsc::error::TrySendError::Closed(_) => engine_unavailable_error(),
-        })?;
+        .map_err(map_engine_send_error)?;
 
     // Block briefly until the engine assigns the seq_id. The
     // engine's run loop drains messages synchronously in the same
@@ -2142,29 +2110,10 @@ async fn non_stream_chat_completion(
         let prompt_tokens = state.tokenizer.encode(&prompt);
         let prompt_tokens_len = prompt_tokens.len();
         let max_tokens = usize::try_from(req.max_tokens.unwrap_or(100)).unwrap_or(100);
-        let total_max = prompt_tokens_len + max_tokens;
 
-        // Production-readiness §4: reject requests whose prompt +
-        // max_tokens would exceed the model's context length. Same
-        // gate `handle_chat` enforces on the single-shot path — we
-        // duplicate it here so `n > 1` gets a 400 (not a hung
-        // scheduler admission that dies on the first forward pass).
-        if let Some(max_model_len) = state.max_model_len {
-            if total_max > max_model_len {
-                let message = format!(
-                    "prompt_tokens ({prompt_tokens_len}) + max_tokens ({max_tokens}) \
-                     = {total_max} exceeds the model's context length ({max_model_len})"
-                );
-                return Err((
-                    axum::http::StatusCode::BAD_REQUEST,
-                    Json(ErrorResponse::with_code(
-                        &message,
-                        "invalid_request_error",
-                        "context_length_exceeded",
-                    )),
-                ));
-            }
-        }
+        // Production-readiness §4: same context-length gate as
+        // handle_chat — `n > 1` gets a 400, not a hung scheduler.
+        check_context_length(prompt_tokens_len, max_tokens, state.max_model_len)?;
 
         let response = run_n_parallel_chat(
             state,
