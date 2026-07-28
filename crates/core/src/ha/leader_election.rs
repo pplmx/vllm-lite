@@ -69,21 +69,23 @@ impl LeaderElection {
     }
 
     pub async fn on_leader_lost(&self, new_leader: Option<String>) {
+        // Lock ordering: is_leader → leader_id (consistent with
+        // become_leader/step_down which use state → is_leader → leader_id).
+        // Acquiring leader_id before is_leader here creates a lock-ordering
+        // inversion that can deadlock in multi-threaded runtimes.
+        let mut is_leader = self.is_leader.write().await;
         let mut leader_id = self.leader_id.write().await;
 
         if let Some(id) = new_leader {
-            let mut is_leader = self.is_leader.write().await;
             *is_leader = false;
             *leader_id = Some(id.clone());
             warn!(new_leader = %id, "Leadership transferred");
-            drop(is_leader);
         } else {
-            let mut is_leader = self.is_leader.write().await;
             *is_leader = false;
             *leader_id = None;
             warn!("Leader lost, no new leader elected yet");
-            drop(is_leader);
         }
+        drop(is_leader);
         drop(leader_id);
     }
 
