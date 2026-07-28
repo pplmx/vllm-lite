@@ -482,7 +482,7 @@ fn gpu_scheduler_prefix_cache_sharing() {
     let req2 = Request::new(
         2,
         {
-            let mut p = shared.clone();
+            let mut p = shared;
             p.push(6);
             p
         },

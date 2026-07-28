@@ -366,7 +366,7 @@ fn engine_e2e_prefix_cache_sharing() {
     }
 
     // Second request with the same prefix + additional tokens.
-    let mut prompt2 = shared.clone();
+    let mut prompt2 = shared;
     prompt2.push(6);
     let (tx, _rx) = tokio::sync::mpsc::channel::<SampledToken>(64);
     let seq2 = engine.add_request(Request::new(2, prompt2, 5), tx);
