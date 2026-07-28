@@ -145,7 +145,6 @@ curl -X POST http://localhost:8000/v1/completions \
 
 > 💡 **提示**: 需要先自行准备模型目录（含 `tokenizer.json` 与权重），
 > 并通过 `--model` 或 `VLLM_MODEL` 指向。vLLM-lite 不会自动下载。
-
 > 📘 **新手教程**: 第一次接触 vllm-lite？请按顺序阅读 [教程 1: 环境搭建与构建](./docs/tutorial/01-setup.md) 到 [教程 5: 生产部署](./docs/tutorial/05-production.md)。
 
 ---
@@ -164,11 +163,11 @@ curl -X POST http://localhost:8000/v1/completions \
 > 部署选型的依据。
 
 | 特性                    | 说明                           | 目标性能（受控基准，非当前实测） |
-| ----------------------- | ------------------------------ | --------------------------------- |
-| **Paged Attention**     | 分页 KV Cache，减少内存碎片    | 内存效率 ↑ 40%（目标）            |
-| **Continuous Batching** | 动态批处理，GPU 利用率最大化   | 吞吐量 ↑ 35%（目标）              |
-| **Prefix Caching**      | Radix Tree 前缀缓存，O(k) 查找 | TTFT ↓ 60%（目标）                |
-| **Flash Attention**     | 动态 Tile 大小 (64/128/256)    | 计算速度 ↑ 2x（目标）             |
+| ----------------------- | ------------------------------ | -------------------------------- |
+| **Paged Attention**     | 分页 KV Cache，减少内存碎片    | 内存效率 ↑ 40%（目标）           |
+| **Continuous Batching** | 动态批处理，GPU 利用率最大化   | 吞吐量 ↑ 35%（目标）             |
+| **Prefix Caching**      | Radix Tree 前缀缓存，O(k) 查找 | TTFT ↓ 60%（目标）               |
+| **Flash Attention**     | 动态 Tile 大小 (64/128/256)    | 计算速度 ↑ 2x（目标）            |
 
 ### 🎯 高级调度策略
 
@@ -253,14 +252,14 @@ cargo run -p vllm-server -- --log-dir ./logs
 
 <div align="center">
 
-| 指标                     | 数值（目标，非当前实测） | 说明                              |
-| ------------------------ | ------------------------ | --------------------------------- |
-| **吞吐量**               | ~2000 tokens/s（目标）   | Qwen2.5-0.5B, A100 GPU（参考）    |
-| **首 Token 延迟 (TTFT)** | < 50ms（目标）           | 1K token prompt（参考）           |
-| **P99 延迟**             | < 100ms（目标）          | end-to-end（参考）                |
-| **显存效率**             | +40%（目标）             | vs 传统 KV Cache（参考）          |
-| **测试数**               | `just nextest`           | 跑一次即得当前数；不要硬编码到文档 |
-| **Checkpoint 测试**      | `just nextest-checkpoint`| 需模型权重，默认 ignored          |
+| 指标                     | 数值（目标，非当前实测）  | 说明                               |
+| ------------------------ | ------------------------- | ---------------------------------- |
+| **吞吐量**               | ~2000 tokens/s（目标）    | Qwen2.5-0.5B, A100 GPU（参考）     |
+| **首 Token 延迟 (TTFT)** | < 50ms（目标）            | 1K token prompt（参考）            |
+| **P99 延迟**             | < 100ms（目标）           | end-to-end（参考）                 |
+| **显存效率**             | +40%（目标）              | vs 传统 KV Cache（参考）           |
+| **测试数**               | `just nextest`            | 跑一次即得当前数；不要硬编码到文档 |
+| **Checkpoint 测试**      | `just nextest-checkpoint` | 需模型权重，默认 ignored           |
 
 </div>
 
@@ -272,17 +271,17 @@ cargo run -p vllm-server -- --log-dir ./logs
 
 <div align="center">
 
-| 模型              | 架构                     |  状态   | 显存需求 |
-| ----------------- | ------------------------ | :-----: | -------: |
-| **Llama**         | GQA + RMSNorm            |   ✅    |   2-8 GB |
+| 模型              | 架构                     |        状态         | 显存需求 |
+| ----------------- | ------------------------ | :-----------------: | -------: |
+| **Llama**         | GQA + RMSNorm            |         ✅          |   2-8 GB |
 | **Llama 4**       | MoE + Hybrid Attention   | 🟡 StubArchitecture | 16-64 GB |
-| **Mistral**       | Sliding Window + GQA     |   ✅    |   2-8 GB |
+| **Mistral**       | Sliding Window + GQA     |         ✅          |   2-8 GB |
 | **Mistral Small** | Grouped Query + Sliding  | 🟡 StubArchitecture |   4-8 GB |
-| **Qwen3**         | GQA + MLA + RoPE         |   ✅    |   1-4 GB |
-| **Qwen3.5**       | Mamba SSM Hybrid         |   ✅    |   1-4 GB |
+| **Qwen3**         | GQA + MLA + RoPE         |         ✅          |   1-4 GB |
+| **Qwen3.5**       | Mamba SSM Hybrid         |         ✅          |   1-4 GB |
 | **Gemma3**        | GQA + GeLU               | 🟡 StubArchitecture |   2-4 GB |
-| **Gemma4**        | Hybrid Attention + GeGLU |   ✅    |   2-8 GB |
-| **Mixtral**       | Sparse MoE (8 experts)   |   ✅    |  8-16 GB |
+| **Gemma4**        | Hybrid Attention + GeGLU |         ✅          |   2-8 GB |
+| **Mixtral**       | Sparse MoE (8 experts)   |         ✅          |  8-16 GB |
 | **Phi-4**         | GQA + RoPE               | 🟡 StubArchitecture |   4-8 GB |
 
 </div>
@@ -352,6 +351,15 @@ auth:
   api_keys: []
   rate_limit_requests: 100
   rate_limit_window_secs: 60
+  # Optional: per-key overrides for request quota and window.
+  # Keys not listed here use the global rate_limit_requests /
+  # rate_limit_window_secs defaults above.
+  rate_limit_overrides:
+    # "premium-key" gets 500 requests per 30s instead of the
+    # global 100 requests per 60s default.
+    "premium-key":
+      max_requests: 500
+      rate_limit_window_secs: 30
 ```
 
 ### Scheduler 配置
@@ -557,15 +565,15 @@ vllm-lite/
 
 ### Feature Flags
 
-| Feature         | Crate              | 描述                                                |
-| --------------- | ------------------ | --------------------------------------------------- |
-| `cuda-graph`    | core, server       | CUDA Graph 捕获/回放（经 `CudaGraphExecutor` trait） |
-| `cuda`          | model              | Candle CUDA 支持                                    |
-| `gguf`          | model              | GGUF 模型加载                                       |
-| `multi-node`    | core, model, testing | 启用 `vllm-dist`（分布式 KV + gRPC）              |
-| `full`          | model              | `cuda` + `gguf`                                     |
-| `candle`        | traits             | 启用 Candle 核心类型                                |
-| `kernels`       | traits             | 启用 kernel trait 定义                              |
+| Feature      | Crate                | 描述                                                 |
+| ------------ | -------------------- | ---------------------------------------------------- |
+| `cuda-graph` | core, server         | CUDA Graph 捕获/回放（经 `CudaGraphExecutor` trait） |
+| `cuda`       | model                | Candle CUDA 支持                                     |
+| `gguf`       | model                | GGUF 模型加载                                        |
+| `multi-node` | core, model, testing | 启用 `vllm-dist`（分布式 KV + gRPC）                 |
+| `full`       | model                | `cuda` + `gguf`                                      |
+| `candle`     | traits               | 启用 Candle 核心类型                                 |
+| `kernels`    | traits               | 启用 kernel trait 定义                               |
 
 Note: Tokenizer (`tiktoken`, `tokenizers`) 始终启用。`vllm-dist` 非 default-member，需 `--features multi-node` 构建。
 
