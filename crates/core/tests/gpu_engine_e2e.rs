@@ -33,7 +33,7 @@ use std::time::Duration;
 use vllm_core::engine::Engine;
 use vllm_core::metrics::EnhancedMetricsCollector;
 use vllm_core::scheduler::SchedulerEngine;
-use vllm_core::types::{Request, SamplingParams, SchedulerConfig, Status};
+use vllm_core::types::{Request, SamplingParams, SchedulerConfig};
 use vllm_traits::{ModelBackend, SampledToken, SeqId, TokenId};
 
 // ─────────────────────────────────────────────────────────────────

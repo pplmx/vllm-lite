@@ -264,7 +264,6 @@ fn test_batch_processing() {
 /// - Tracks total elapsed time for performance regression observation.
 #[tokio::test]
 async fn test_high_concurrency_stress() {
-    let config = SchedulerConfig::default();
     let engine = ConcurrentEngine::from_config(
         TestHarnessConfig::default()
             .kv_blocks(4096)
