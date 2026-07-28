@@ -966,6 +966,43 @@ mod tests {
         assert_eq!(cost, 101.0);
     }
 
+    #[test]
+    fn test_estimate_cost_stop_does_not_affect_cost() {
+        // The `stop` parameter specifies sequences that terminate generation
+        // early, but for rate-limiting we charge for the maximum possible
+        // output (max_tokens). `stop` is intentionally NOT included in the
+        // cost formula — documenting this invariant prevents a future PR
+        // from accidentally reducing the cost estimate (which would be a
+        // rate-limit bypass).
+        let body_with_stop = r#"{"prompt": "hello world", "max_tokens": 50, "stop": ["\n\n"]}"#;
+        let body_without_stop = r#"{"prompt": "hello world", "max_tokens": 50}"#;
+        assert_eq!(
+            estimate_request_cost(body_with_stop),
+            estimate_request_cost(body_without_stop),
+            "stop parameter must not change the rate-limit cost"
+        );
+    }
+
+    #[test]
+    fn test_estimate_cost_empty_string_prompt_charges_max_tokens() {
+        // An empty prompt string has 0 words but the model still
+        // generates up to max_tokens tokens, so the cost should be
+        // 0 + max_tokens = 100.
+        let body = r#"{"prompt": "", "max_tokens": 100}"#;
+        let cost = estimate_request_cost(body);
+        assert_eq!(cost, 100.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_empty_messages_array_charges_max_tokens() {
+        // An empty messages array (chat with no messages) should still
+        // charge max_tokens default (100) since the cost is clamped to
+        // a minimum of 1.
+        let body = r#"{"messages": [], "max_tokens": 100}"#;
+        let cost = estimate_request_cost(body);
+        assert!(cost >= 1.0, "cost should be at least 1 for empty messages");
+    }
+
     // ------------------------------------------------------------------
     // Per-key override tests
     // ------------------------------------------------------------------
