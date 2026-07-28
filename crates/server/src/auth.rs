@@ -995,6 +995,7 @@ mod tests {
         assert_eq!(cost, 15.0);
     }
 
+    #[test]
     fn test_estimate_cost_stop_does_not_affect_cost() {
         // The `stop` parameter specifies sequences that terminate generation
         // early, but for rate-limiting we charge for the maximum possible
