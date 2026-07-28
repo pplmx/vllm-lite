@@ -45,3 +45,29 @@ async fn test_audit_log_overflow() {
     assert_eq!(events.len(), 3);
     assert_eq!(events[0].action, "action-2");
 }
+
+#[tokio::test]
+async fn test_audit_log_auth_failure() {
+    let logger = AuditLogger::new(10);
+
+    logger.log_auth_failure("missing api key", "req-456").await;
+
+    let events = logger.get_events().await;
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].action, "authenticate");
+    assert_eq!(events[0].result, "failure: missing api key");
+}
+
+#[tokio::test]
+async fn test_audit_clear() {
+    let logger = AuditLogger::new(10);
+
+    logger.log_auth_success("user1", "req-1").await;
+    assert_eq!(logger.get_events().await.len(), 1);
+
+    logger.clear().await;
+    assert!(
+        logger.get_events().await.is_empty(),
+        "clear() must empty the ring buffer"
+    );
+}
