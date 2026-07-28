@@ -765,7 +765,7 @@ fn test_request_with_max_tokens_equals_prompt() {
 
     let (tx, _rx) = mpsc::channel(64);
     let prompt = vec![1, 2, 3];
-    engine.add_request(Request::new(1, prompt.clone(), 0), tx);
+    engine.add_request(Request::new(1, prompt, 0), tx);
 
     engine.step().unwrap();
 
