@@ -369,6 +369,56 @@ fn rate_limit_override_serialization() {
     assert_eq!(override_.rate_limit_window_secs, 30);
 }
 
+#[test]
+fn rate_limit_overrides_deserialize_from_yaml() {
+    // Verify that the rate_limit_overrides map round-trips through the
+    // YAML config parser — a regression guard for the per-key override
+    // wiring in main.rs (see SHARED_TASK_NOTES.md, Iteration 3).
+    let yaml = r#"
+auth:
+  api_keys:
+    - "standard-key"
+    - "premium-key"
+  rate_limit_requests: 100
+  rate_limit_window_secs: 60
+  rate_limit_overrides:
+    "premium-key":
+      max_requests: 500
+      rate_limit_window_secs: 30
+"#;
+    let cfg: AppConfig = serde_saphyr::from_str(yaml).expect("yaml parses");
+
+    assert_eq!(cfg.auth.api_keys, vec!["standard-key", "premium-key"]);
+    assert_eq!(cfg.auth.rate_limit_requests, 100);
+    assert_eq!(cfg.auth.rate_limit_window_secs, 60);
+    assert_eq!(
+        cfg.auth.rate_limit_overrides.len(),
+        1,
+        "should have 1 override"
+    );
+
+    let premium = &cfg.auth.rate_limit_overrides["premium-key"];
+    assert_eq!(premium.max_requests, 500);
+    assert_eq!(premium.rate_limit_window_secs, 30);
+}
+
+#[test]
+fn rate_limit_overrides_default_to_empty_when_missing() {
+    // A config with an auth section but no overrides should still parse,
+    // defaulting rate_limit_overrides to an empty HashMap.
+    let yaml = r#"
+auth:
+  api_keys:
+    - "key1"
+  rate_limit_requests: 50
+  rate_limit_window_secs: 120
+"#;
+    let cfg: AppConfig = serde_saphyr::from_str(yaml).expect("yaml parses");
+    assert!(cfg.auth.rate_limit_overrides.is_empty());
+    assert_eq!(cfg.auth.rate_limit_requests, 50);
+    assert_eq!(cfg.auth.rate_limit_window_secs, 120);
+}
+
 // ------------------------------------------------------------------
 // AppConfig::load tests
 // ------------------------------------------------------------------
