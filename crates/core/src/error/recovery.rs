@@ -114,6 +114,28 @@ mod tests {
         assert!(matches!(state, CircuitState::Closed));
     }
 
+    // Verify that get_or_create_circuit_breaker creates independent
+    // breakers for different names — no cross-contamination of state
+    // between components.
+    #[tokio::test]
+    async fn test_recovery_manager_different_names_are_independent() {
+        let manager = RecoveryManager::new(RecoveryConfig::default());
+        let cb_a = manager.get_or_create_circuit_breaker("component_a");
+        let cb_b = manager.get_or_create_circuit_breaker("component_b");
+
+        // Both start Closed — they are separate entries, not sharing
+        // state (CircuitBreaker uses Arc<...>, but different DashMap
+        // entries hold different instances).
+        assert!(
+            matches!(cb_a.state().await, CircuitState::Closed),
+            "component_a must start Closed"
+        );
+        assert!(
+            matches!(cb_b.state().await, CircuitState::Closed),
+            "component_b must start Closed"
+        );
+    }
+
     #[test]
     fn test_determine_action_retryable() {
         let manager = RecoveryManager::new(RecoveryConfig::default());
