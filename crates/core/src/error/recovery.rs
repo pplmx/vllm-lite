@@ -143,5 +143,18 @@ mod tests {
             ErrorSeverity::CircuitBreaker
         );
         assert_eq!(ErrorSeverity::from_error("oom"), ErrorSeverity::Fatal);
+        // "memory" keyword also maps to Fatal — covers the `oom || memory`
+        // branch in from_error that the "oom" case alone doesn't fully
+        // exercise (short-circuit evaluation means "memory" is never
+        // reached when "oom" matches).
+        assert_eq!(
+            ErrorSeverity::from_error("out of memory"),
+            ErrorSeverity::Fatal
+        );
+        // Unrecognized error → Warning (default branch).
+        assert_eq!(
+            ErrorSeverity::from_error("something unexpected"),
+            ErrorSeverity::Warning
+        );
     }
 }
