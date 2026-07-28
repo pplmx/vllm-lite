@@ -297,10 +297,7 @@ async fn spawn_n_candidate(
             finish_reason_tx: Some(finish_reason_tx),
             request_id: Some(correlation_id),
         })
-        .map_err(|e| match e {
-            tokio::sync::mpsc::error::TrySendError::Full(_) => overload_response(),
-            tokio::sync::mpsc::error::TrySendError::Closed(_) => unavailable_response(),
-        })?;
+        .map_err(super::chat::map_engine_send_error)?;
 
     // Collect the candidate's full token stream.
     let mut tokens = Vec::new();
@@ -689,10 +686,7 @@ async fn spawn_n_streaming_candidate(
             finish_reason_tx: Some(finish_reason_tx),
             request_id: Some(correlation_id),
         })
-        .map_err(|e| match e {
-            tokio::sync::mpsc::error::TrySendError::Full(_) => overload_response(),
-            tokio::sync::mpsc::error::TrySendError::Closed(_) => unavailable_response(),
-        })?;
+        .map_err(super::chat::map_engine_send_error)?;
 
     Ok(StreamingCandidateChannels {
         index: candidate_index,
@@ -937,13 +931,13 @@ async fn stream_n_parallel_completions(
                 let admitted_ids: Vec<vllm_traits::SeqId> =
                     ids.iter().copied().filter(|&id| id != 0).collect();
                 drop(build_n_cancel_guards(&state, &admitted_ids));
-                return Err(unavailable_response());
+                return Err(super::chat::engine_unavailable_error());
             }
             ids
         }
         Err(_elapsed) => {
             // Shared timeout — see the fallback note above.
-            return Err(unavailable_response());
+            return Err(super::chat::engine_unavailable_error());
         }
     };
 
@@ -1408,27 +1402,9 @@ pub async fn completions(
     let prompt_tokens = state.tokenizer.encode(&prompt);
     let prompt_tokens_len = prompt_tokens.len();
     let max_tokens = usize::try_from(req.max_tokens.unwrap_or(100)).unwrap_or(100);
-    let total_max = prompt_tokens_len + max_tokens;
 
-    // Production-readiness §4: reject requests whose
-    // prompt + max_tokens would exceed the model's context
-    // length. See chat.rs for the full rationale.
-    if let Some(max_model_len) = state.max_model_len {
-        if total_max > max_model_len {
-            let message = format!(
-                "prompt_tokens ({prompt_tokens_len}) + max_tokens ({max_tokens}) \
-                 = {total_max} exceeds the model's context length ({max_model_len})"
-            );
-            return Err((
-                axum::http::StatusCode::BAD_REQUEST,
-                Json(ErrorResponse::with_code(
-                    &message,
-                    "invalid_request_error",
-                    "context_length_exceeded",
-                )),
-            ));
-        }
-    }
+    // Production-readiness §4: same context-length gate as the chat handler.
+    super::chat::check_context_length(prompt_tokens_len, max_tokens, state.max_model_len)?;
 
     // P37 v0.x wire-type follow-up — engine wire-through: `best_of`
     // dispatch. When `best_of > 1`, spawn N parallel candidates via
@@ -1578,10 +1554,7 @@ pub async fn completions(
             // line in add_request and its callees.
             request_id: Some(correlation_id.0.clone()),
         })
-        .map_err(|e| match e {
-            tokio::sync::mpsc::error::TrySendError::Full(_) => overload_response(),
-            tokio::sync::mpsc::error::TrySendError::Closed(_) => unavailable_response(),
-        })?;
+        .map_err(super::chat::map_engine_send_error)?;
 
     if is_streaming {
         // Block briefly until the engine assigns the seq_id (see
@@ -1593,7 +1566,7 @@ pub async fn completions(
         .await
         {
             Ok(Ok(id)) => id,
-            _ => return Err(unavailable_response()),
+            _ => return Err(super::chat::engine_unavailable_error()),
         };
 
         // Drop guard — see `chat::CancelOnDrop` for full rationale.
@@ -1794,36 +1767,6 @@ pub async fn completions(
     );
 
     Ok(Json(response).into_response())
-}
-
-/// REL-01: 503 response returned when the bounded engine mailbox is
-/// saturated (`mpsc::error::TrySendError::Full`). Distinct from
-/// `unavailable_response` so clients can implement smarter retry
-/// (backoff + jitter) for transient overload.
-fn overload_response() -> (axum::http::StatusCode, Json<ErrorResponse>) {
-    (
-        axum::http::StatusCode::SERVICE_UNAVAILABLE,
-        Json(ErrorResponse::with_code(
-            "Engine overloaded; retry with backoff",
-            "server_error",
-            "engine_overloaded",
-        )),
-    )
-}
-
-/// 503 response returned when the engine channel is closed
-/// (`mpsc::error::TrySendError::Closed`). Distinct from
-/// `overload_response` so clients know not to retry — the engine is
-/// gone.
-fn unavailable_response() -> (axum::http::StatusCode, Json<ErrorResponse>) {
-    (
-        axum::http::StatusCode::SERVICE_UNAVAILABLE,
-        Json(ErrorResponse::with_code(
-            "Engine unavailable",
-            "server_error",
-            "engine_unavailable",
-        )),
-    )
 }
 
 // Unit tests live in `tests.rs` (sibling) to keep this handler file

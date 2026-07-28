@@ -339,7 +339,7 @@ mod populate_tests {
 /// Shared by `handle_chat`, `spawn_chat_n_candidate`, and
 /// `spawn_chat_n_streaming_candidate` to guarantee identical stop-sequence
 /// handling across all chat spawn paths.
-fn tokenize_chat_stop_sequences(
+pub(crate) fn tokenize_chat_stop_sequences(
     stop: Option<&Vec<String>>,
     tokenizer: &vllm_model::tokenizer::Tokenizer,
 ) -> Result<Option<Vec<Vec<vllm_traits::TokenId>>>, (axum::http::StatusCode, Json<ErrorResponse>)> {
@@ -374,8 +374,8 @@ fn tokenize_chat_stop_sequences(
 /// prompt exhausts KV blocks before application-level validation runs.
 ///
 /// Shared by all chat spawn paths to guarantee identical context-length
-/// enforcement.
-fn check_context_length(
+/// enforcement. Also usable from `completions` (same gate, same error code).
+pub(crate) fn check_context_length(
     prompt_tokens_len: usize,
     max_tokens: usize,
     max_model_len: Option<usize>,
@@ -409,7 +409,7 @@ fn check_context_length(
 ///
 /// Shared by all chat spawn paths to guarantee identical error
 /// mapping without duplicating the match closure at each call site.
-fn map_engine_send_error(
+pub(crate) fn map_engine_send_error(
     e: tokio::sync::mpsc::error::TrySendError<vllm_core::types::EngineMessage>,
 ) -> (axum::http::StatusCode, Json<ErrorResponse>) {
     match e {
@@ -2133,7 +2133,7 @@ async fn non_stream_chat_completion(
 
 /// Build the standard `engine_unavailable` `(StatusCode, Json<ErrorResponse>)`
 /// pair returned when the engine channel is closed at request time.
-fn engine_unavailable_error() -> (axum::http::StatusCode, Json<ErrorResponse>) {
+pub(crate) fn engine_unavailable_error() -> (axum::http::StatusCode, Json<ErrorResponse>) {
     (
         axum::http::StatusCode::SERVICE_UNAVAILABLE,
         Json(ErrorResponse::with_code(
@@ -2148,7 +2148,7 @@ fn engine_unavailable_error() -> (axum::http::StatusCode, Json<ErrorResponse>) {
 /// the bounded engine mailbox is saturated. Clients should treat
 /// this as retryable with backoff (the message explicitly suggests
 /// `Retry-After`-style behavior).
-fn engine_overloaded_error() -> (axum::http::StatusCode, Json<ErrorResponse>) {
+pub(crate) fn engine_overloaded_error() -> (axum::http::StatusCode, Json<ErrorResponse>) {
     (
         axum::http::StatusCode::SERVICE_UNAVAILABLE,
         Json(ErrorResponse::with_code(
