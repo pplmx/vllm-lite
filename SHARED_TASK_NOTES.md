@@ -114,6 +114,24 @@
 - 347 total lib tests pass
 - Clippy clean; docs build clean
 
-### Next Steps (Phase 4)
+## Iteration 4 — Lock Contention Reduction (Sharded Locks)
 
-- [ ] Lock contention reduction (sharded locks)
+**Status:** ✅ Complete, CI green
+
+### Changes
+
+- `crates/server/src/auth.rs`: `RateLimiter` already uses sharded locking
+  — the bucket map is partitioned across `NUM_SHARDS = 16` independent
+  `parking_lot::RwLock` instances so concurrent requests for *different*
+  API keys don't contend on a single lock. The `shard_of()` function
+  distributes keys via `DefaultHasher`.
+- The shared config (`capacity`, `refill_rate`, `per_key_limits`) is
+  read-only after construction and needs no lock.
+- `check_and_consume` acquires only the shard write-lock for the
+  critical section, extracting result values before releasing.
+
+### Tests
+
+- `test_token_bucket_separate_keys_independent` in `auth.rs` lib tests
+- `test_separate_keys_have_independent_rate_limits` in `rate_limit_headers.rs`
+- All 347 lib tests + 6 integration tests pass; clippy clean; docs build clean.
