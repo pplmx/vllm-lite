@@ -524,10 +524,25 @@ pub(crate) fn estimate_request_cost(body: &str) -> f64 {
             .map(|s| s.split_whitespace().count() as f64)
             .sum()
     } else if let Some(prompt) = json.get("prompt") {
-        // Completions: prompt may be a string or array of token IDs.
+        // Completions: prompt may be a string, array of strings, or
+        // array of pre-tokenized integer IDs.
         match prompt {
             Value::String(s) => s.split_whitespace().count() as f64,
-            Value::Array(arr) => arr.len() as f64,
+            Value::Array(arr) => {
+                // If every element is a string, sum word counts across
+                // all strings (each is a separate prompt in batch mode).
+                // Otherwise (integers, arrays, mixed), fall back to
+                // `arr.len()` for pre-tokenized or opaque content.
+                let all_strings = arr.iter().all(serde_json::Value::is_string);
+                if all_strings {
+                    arr.iter()
+                        .filter_map(|e| e.as_str())
+                        .map(|s| s.split_whitespace().count() as f64)
+                        .sum()
+                } else {
+                    arr.len() as f64
+                }
+            }
             _ => return 1.0,
         }
     } else {
@@ -967,6 +982,19 @@ mod tests {
     }
 
     #[test]
+    fn test_estimate_cost_completions_string_array_prompt() {
+        // OpenAI completions accept `prompt` as an array of strings
+        // (batch prompts). Each string is a separate prompt; the cost
+        // must sum word counts across all strings, not just count
+        // array elements. Failing to do so is a rate-limit bypass: a
+        // single 10 000-word string in a 1-element array would be
+        // charged as 1 token instead of 10 000.
+        let body = r#"{"prompt": ["hello world", "foo bar baz"], "max_tokens": 10}"#;
+        let cost = estimate_request_cost(body);
+        // 2 + 3 + 10 = 15
+        assert_eq!(cost, 15.0);
+    }
+
     fn test_estimate_cost_stop_does_not_affect_cost() {
         // The `stop` parameter specifies sequences that terminate generation
         // early, but for rate-limiting we charge for the maximum possible
