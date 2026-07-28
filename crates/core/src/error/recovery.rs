@@ -129,6 +129,27 @@ mod tests {
     }
 
     #[test]
+    fn test_determine_action_warning() {
+        let manager = RecoveryManager::new(RecoveryConfig::default());
+        let action = manager.determine_action(ErrorSeverity::Warning, "model");
+        assert!(matches!(action, RecoveryAction::Propagate));
+    }
+
+    #[test]
+    fn test_determine_action_circuit_breaker() {
+        let manager = RecoveryManager::new(RecoveryConfig::default());
+        let action = manager.determine_action(ErrorSeverity::CircuitBreaker, "cuda");
+        assert!(matches!(action, RecoveryAction::OpenCircuit { .. }));
+    }
+
+    #[test]
+    fn test_determine_action_fatal() {
+        let manager = RecoveryManager::new(RecoveryConfig::default());
+        let action = manager.determine_action(ErrorSeverity::Fatal, "cuda");
+        assert!(matches!(action, RecoveryAction::Terminate));
+    }
+
+    #[test]
     fn test_error_severity_from_error() {
         assert_eq!(
             ErrorSeverity::from_error("timeout"),
