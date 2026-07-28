@@ -49,8 +49,8 @@ pub fn gpu_device() -> Device {
 /// returns an actual CUDA device instead.
 #[cfg(not(feature = "cuda"))]
 #[must_use]
-#[allow(clippy::module_name_repetitions)]
-pub fn gpu_device() -> Device {
+#[allow(clippy::module_name_repetitions, clippy::missing_const_for_fn)]
+pub const fn gpu_device() -> Device {
     Device::Cpu
 }
 
@@ -73,6 +73,7 @@ pub fn gpu_device() -> Device {
 /// let model = Qwen3Model::new(config, device, 1024).unwrap();
 /// ```
 #[must_use]
+#[cfg_attr(not(feature = "cuda"), allow(clippy::missing_const_for_fn))]
 pub fn gpu_or_cpu() -> Device {
     #[cfg(feature = "cuda")]
     {
@@ -90,6 +91,7 @@ pub fn gpu_or_cpu() -> Device {
 /// is detected. Used by tests that need to conditionally assert GPU
 /// behavior.
 #[must_use]
+#[cfg_attr(not(feature = "cuda"), allow(clippy::missing_const_for_fn))]
 pub fn cuda_available() -> bool {
     #[cfg(feature = "cuda")]
     {
