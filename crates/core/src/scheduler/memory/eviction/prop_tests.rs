@@ -1,3 +1,5 @@
+#![allow(clippy::doc_markdown)]
+
 //! Property-based tests (proptest) for the LRU + priority-weighted
 //! `EvictionPolicy`. Companion to `tests.rs`; both extracted from
 //! `eviction.rs` to keep the implementation file under the project's

@@ -87,7 +87,7 @@ pub async fn embeddings(
             input_tokens,
             response_tx,
         })
-        .map_err(super::chat::map_engine_send_error)?;
+        .map_err(|e| super::chat::map_engine_send_error(&e))?;
 
     let embeddings = rx.recv().await.ok_or_else(|| {
         (

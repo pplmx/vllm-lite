@@ -225,6 +225,7 @@ fn rand_token_count(min: usize, max: usize) -> usize {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
 

@@ -1,3 +1,11 @@
+// Lock guards are intentionally held until the end of each test function so
+// that borrowed references to mock-captured parameters remain valid. The
+// `significant_drop_tightening` nursery lint prefers earlier drops, but the
+// borrow pattern here requires the guard to outlive the assertion block.
+// `type_complexity` is suppressed because the mock engine tuple shapes are
+// inherent to the test infrastructure.
+#![allow(clippy::significant_drop_tightening, clippy::type_complexity)]
+
 //! HTTP-level chat handler tests with a mock inference engine.
 
 use std::sync::Arc;
@@ -691,8 +699,9 @@ async fn test_chat_rejects_top_p_above_one_with_400() {
     );
 
     // Validator must run BEFORE the engine is touched.
+    let captured = captured.lock().await;
     assert!(
-        captured.lock().await.is_none(),
+        captured.is_none(),
         "out-of-range top_p must be rejected at the HTTP boundary, \
          not reach the engine"
     );
@@ -723,8 +732,9 @@ async fn test_chat_rejects_top_p_zero_with_400() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let captured = captured.lock().await;
     assert!(
-        captured.lock().await.is_none(),
+        captured.is_none(),
         "top_p = 0 must be rejected at the HTTP boundary"
     );
 }

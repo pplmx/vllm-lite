@@ -224,4 +224,5 @@ impl Default for RequestQueue {
 #[cfg(test)]
 mod prop_tests;
 #[cfg(test)]
+#[allow(clippy::doc_markdown)]
 mod tests;

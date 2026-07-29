@@ -1,3 +1,5 @@
+#![allow(clippy::doc_markdown)]
+
 //! Multi-GPU distributed scheduler integration tests.
 //!
 //! GPU-First Policy: These tests prioritize GPU execution when CUDA is

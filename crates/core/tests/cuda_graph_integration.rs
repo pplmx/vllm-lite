@@ -170,7 +170,7 @@ fn test_end_to_end_engine_with_cuda_graph_config() {
 /// Test that `cuda_graph_enabled()` returns `false` when the `cuda-graph`
 /// feature is NOT enabled. This catches the mutation
 /// `replace Engine::cuda_graph_enabled -> bool with true`
-/// (in the `#[cfg(not(feature = "cuda-graph"))]` branch of cuda_graph.rs:39).
+/// (in the `#[cfg(not(feature = "cuda-graph"))]` branch of `cuda_graph.rs`:39).
 #[test]
 #[cfg(not(feature = "cuda-graph"))]
 fn test_cuda_graph_disabled_when_feature_off() {
@@ -221,7 +221,7 @@ fn test_cuda_graph_disabled_when_feature_off() {
         }
 
         fn vocab_size(&self) -> usize {
-            151936
+            151_936
         }
 
         fn num_layers(&self) -> usize {
