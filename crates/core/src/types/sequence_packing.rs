@@ -1,7 +1,8 @@
 //! Sequence-packing optimisation knobs.
 
 /// Configuration for sequence packing optimization
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+#[allow(clippy::derive_partial_eq_without_eq)]
 pub struct SequencePackingConfig {
     /// Enable sequence packing optimization
     pub enabled: bool,
@@ -68,6 +69,93 @@ impl SequencePackingConfigBuilder {
     #[must_use]
     pub const fn build(self) -> SequencePackingConfig {
         self.inner
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::float_cmp, clippy::undocumented_unsafe_blocks)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_values() {
+        let cfg = SequencePackingConfig::default();
+        assert!(cfg.enabled);
+        assert_eq!(cfg.target_batch_size, 32);
+        assert_eq!(cfg.max_batch_size, 256);
+        assert!((cfg.similarity_threshold - 0.2).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn builder_overrides() {
+        let cfg = SequencePackingConfig::builder()
+            .with_enabled(false)
+            .with_target_batch_size(16)
+            .with_max_batch_size(64)
+            .with_similarity_threshold(0.5)
+            .build();
+        assert!(!cfg.enabled);
+        assert_eq!(cfg.target_batch_size, 16);
+        assert_eq!(cfg.max_batch_size, 64);
+        assert!((cfg.similarity_threshold - 0.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn builder_defaults_match_struct_default() {
+        assert_eq!(
+            SequencePackingConfig::builder().build(),
+            SequencePackingConfig::default()
+        );
+    }
+
+    #[test]
+    fn from_env_uses_defaults_when_vars_unset() {
+        // Ensure env vars are not set.
+        unsafe {
+            std::env::remove_var("VLLM_SEQ_PACKING_ENABLED");
+            std::env::remove_var("VLLM_SEQ_PACKING_TARGET_BATCH");
+            std::env::remove_var("VLLM_SEQ_PACKING_MAX_BATCH");
+            std::env::remove_var("VLLM_SEQ_PACKING_THRESHOLD");
+        }
+        let cfg = SequencePackingConfig::from_env();
+        assert_eq!(cfg, SequencePackingConfig::default());
+    }
+
+    #[test]
+    fn from_env_reads_env_vars() {
+        unsafe {
+            std::env::set_var("VLLM_SEQ_PACKING_ENABLED", "false");
+            std::env::set_var("VLLM_SEQ_PACKING_TARGET_BATCH", "8");
+            std::env::set_var("VLLM_SEQ_PACKING_MAX_BATCH", "16");
+            std::env::set_var("VLLM_SEQ_PACKING_THRESHOLD", "0.35");
+        }
+        let cfg = SequencePackingConfig::from_env();
+        assert!(!cfg.enabled);
+        assert_eq!(cfg.target_batch_size, 8);
+        assert_eq!(cfg.max_batch_size, 16);
+        assert!((cfg.similarity_threshold - 0.35).abs() < f32::EPSILON);
+        // Clean up.
+        unsafe {
+            std::env::remove_var("VLLM_SEQ_PACKING_ENABLED");
+            std::env::remove_var("VLLM_SEQ_PACKING_TARGET_BATCH");
+            std::env::remove_var("VLLM_SEQ_PACKING_MAX_BATCH");
+            std::env::remove_var("VLLM_SEQ_PACKING_THRESHOLD");
+        }
+    }
+
+    #[test]
+    fn from_env_falls_back_on_parse_failure() {
+        unsafe {
+            std::env::set_var("VLLM_SEQ_PACKING_ENABLED", "not-a-bool");
+            std::env::set_var("VLLM_SEQ_PACKING_TARGET_BATCH", "not-a-number");
+        }
+        let cfg = SequencePackingConfig::from_env();
+        assert!(cfg.enabled); // default
+        assert_eq!(cfg.target_batch_size, 32); // default
+        unsafe {
+            std::env::remove_var("VLLM_SEQ_PACKING_ENABLED");
+            std::env::remove_var("VLLM_SEQ_PACKING_TARGET_BATCH");
+        }
     }
 }
 
