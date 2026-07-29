@@ -1,3 +1,5 @@
+#![allow(clippy::doc_markdown)]
+
 //! Multi-GPU tensor-parallel inference tests.
 //!
 //! GPU-First Policy: These tests prioritize CUDA GPU execution. They use

@@ -1,3 +1,5 @@
+#![allow(clippy::doc_markdown)]
+
 //! Unit tests for the `RequestQueue` priority-aware scheduling queue.
 //!
 //! Extracted from `request_queue.rs` to keep the implementation file

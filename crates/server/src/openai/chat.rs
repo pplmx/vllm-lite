@@ -230,6 +230,7 @@ fn populate_chat_sampling_params(
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod populate_tests {
     use super::*;
 
@@ -329,6 +330,11 @@ mod populate_tests {
     }
 }
 
+/// Result of tokenizing chat stop sequences — shared across all chat spawn
+/// paths to keep return types consistent and avoid `type_complexity` warnings.
+pub(crate) type TokenizedStopResult =
+    Result<Option<Vec<Vec<vllm_traits::TokenId>>>, (axum::http::StatusCode, Json<ErrorResponse>)>;
+
 /// Tokenize `req.stop` sequences for the chat path.
 ///
 /// Unlike the completions-path helper (`completions::tokenize_stop_sequences`),
@@ -342,7 +348,7 @@ mod populate_tests {
 pub(crate) fn tokenize_chat_stop_sequences(
     stop: Option<&Vec<String>>,
     tokenizer: &vllm_model::tokenizer::Tokenizer,
-) -> Result<Option<Vec<Vec<vllm_traits::TokenId>>>, (axum::http::StatusCode, Json<ErrorResponse>)> {
+) -> TokenizedStopResult {
     let Some(stop) = stop else {
         return Ok(None);
     };
@@ -410,7 +416,7 @@ pub(crate) fn check_context_length(
 /// Shared by all chat spawn paths to guarantee identical error
 /// mapping without duplicating the match closure at each call site.
 pub(crate) fn map_engine_send_error(
-    e: tokio::sync::mpsc::error::TrySendError<vllm_core::types::EngineMessage>,
+    e: &tokio::sync::mpsc::error::TrySendError<vllm_core::types::EngineMessage>,
 ) -> (axum::http::StatusCode, Json<ErrorResponse>) {
     match e {
         tokio::sync::mpsc::error::TrySendError::Full(_) => engine_overloaded_error(),
@@ -513,7 +519,7 @@ async fn handle_chat(
             // KV allocation, prefix-cache lookup).
             request_id: Some(correlation_id.to_string()),
         })
-        .map_err(map_engine_send_error)?;
+        .map_err(|e| map_engine_send_error(&e))?;
 
     let mut tokens = Vec::new();
     while let Some(sampled) = response_rx.recv().await {
@@ -531,7 +537,33 @@ async fn handle_chat(
         }
     };
 
-    let raw_decode = state.tokenizer.decode(&token_ids(&tokens));
+    Ok(assemble_chat_response(
+        state,
+        &req,
+        &request_id,
+        &tokens,
+        prompt_tokens_len,
+        start,
+        finish_reason,
+    ))
+}
+
+/// Assemble the final `ChatResponse` after the engine has completed a
+/// non-streaming chat request: decode tokens, emit the completion log,
+/// construct the `ChatChoice`, compute usage, and wrap in `ChatResponse`.
+///
+/// Extracted from `handle_chat` to keep the caller's cognitive complexity
+/// below the `pedantic` threshold.
+fn assemble_chat_response(
+    state: &ApiState,
+    req: &ChatRequest,
+    request_id: &str,
+    tokens: &[vllm_traits::SampledToken],
+    prompt_tokens_len: usize,
+    start: std::time::Instant,
+    finish_reason: String,
+) -> ChatResponse {
+    let raw_decode = state.tokenizer.decode(&token_ids(tokens));
 
     let completion_text = clean_completion_text(&state.tokenizer, &raw_decode);
 
@@ -552,6 +584,7 @@ async fn handle_chat(
         duration_ms = duration_ms,
         "Request completed"
     );
+
     let choice = ChatChoice {
         index: 0,
         message: ChatMessage {
@@ -568,20 +601,20 @@ async fn handle_chat(
         // request asked) from the engine's SampledToken stream.
         logprobs: build_chat_choice_logprobs(
             &state.tokenizer,
-            &tokens,
+            tokens,
             req.logprobs,
             req.top_logprobs,
         ),
     };
 
-    let usage = Usage::new(prompt_tokens_len, tokens.len());
+    let usage = Usage::new(prompt_tokens_len, output_tokens_len);
 
-    Ok(ChatResponse::new(
+    ChatResponse::new(
         format!("chatcmpl-{}", uuid::Uuid::new_v4()),
-        req.model,
+        req.model.clone(),
         vec![choice],
         usage,
-    ))
+    )
 }
 
 /// Spawn one of N parallel candidates for an `n > 1` chat request
@@ -657,7 +690,7 @@ async fn spawn_chat_n_candidate(
             finish_reason_tx: Some(finish_reason_tx),
             request_id: Some(correlation_id),
         })
-        .map_err(map_engine_send_error)?;
+        .map_err(|e| map_engine_send_error(&e))?;
 
     let mut tokens = Vec::new();
     while let Some(sampled) = response_rx.recv().await {
@@ -1020,7 +1053,7 @@ async fn spawn_chat_n_streaming_candidate(
             finish_reason_tx: Some(finish_reason_tx),
             request_id: Some(correlation_id),
         })
-        .map_err(map_engine_send_error)?;
+        .map_err(|e| map_engine_send_error(&e))?;
 
     Ok(ChatStreamingCandidateChannels {
         index: candidate_index,
@@ -1816,7 +1849,7 @@ async fn stream_chat_completion(
             // (same rationale as the non-streaming handler above).
             request_id: Some(correlation_id.to_string()),
         })
-        .map_err(map_engine_send_error)?;
+        .map_err(|e| map_engine_send_error(&e))?;
 
     // Block briefly until the engine assigns the seq_id. The
     // engine's run loop drains messages synchronously in the same
@@ -2164,4 +2197,5 @@ pub(crate) fn engine_overloaded_error() -> (axum::http::StatusCode, Json<ErrorRe
 // validation + prompt-rendering paths; handler-level integration
 // tests live under `tests/`.
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests;

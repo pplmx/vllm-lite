@@ -1,3 +1,5 @@
+#![allow(clippy::doc_markdown)]
+
 //! GPU-accelerated engine E2E integration tests.
 //!
 //! GPU-First Policy: These tests use real CUDA devices when available

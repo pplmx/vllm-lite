@@ -254,6 +254,7 @@ impl EvictionPolicy {
 // stats counters; plus proptest invariants for refcount conservation,
 // length bound, and cache-hit behavior).
 #[cfg(test)]
+#[allow(clippy::doc_markdown)]
 mod prop_tests;
 #[cfg(test)]
 mod tests;

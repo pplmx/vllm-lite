@@ -297,7 +297,7 @@ async fn spawn_n_candidate(
             finish_reason_tx: Some(finish_reason_tx),
             request_id: Some(correlation_id),
         })
-        .map_err(super::chat::map_engine_send_error)?;
+        .map_err(|e| super::chat::map_engine_send_error(&e))?;
 
     // Collect the candidate's full token stream.
     let mut tokens = Vec::new();
@@ -686,7 +686,7 @@ async fn spawn_n_streaming_candidate(
             finish_reason_tx: Some(finish_reason_tx),
             request_id: Some(correlation_id),
         })
-        .map_err(super::chat::map_engine_send_error)?;
+        .map_err(|e| super::chat::map_engine_send_error(&e))?;
 
     Ok(StreamingCandidateChannels {
         index: candidate_index,
@@ -1554,7 +1554,7 @@ pub async fn completions(
             // line in add_request and its callees.
             request_id: Some(correlation_id.0.clone()),
         })
-        .map_err(super::chat::map_engine_send_error)?;
+        .map_err(|e| super::chat::map_engine_send_error(&e))?;
 
     if is_streaming {
         // Block briefly until the engine assigns the seq_id (see

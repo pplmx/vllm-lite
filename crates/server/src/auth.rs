@@ -582,6 +582,7 @@ pub(crate) fn estimate_request_cost(body: &str) -> f64 {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
     use axum::http::HeaderMap;

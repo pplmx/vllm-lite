@@ -119,6 +119,7 @@ pub async fn spawn_multi_node_grpc_server(
 /// Always-`Ok("")` stub for non-`multi-node` builds. Allows the call
 /// site in `main.rs` to compile unchanged.
 #[cfg(not(feature = "multi-node"))]
+#[allow(clippy::unused_async)]
 pub async fn spawn_multi_node_grpc_server(
     _engine: &vllm_core::engine::Engine,
     _cfg: &vllm_server::config::MultiNodeConfig,
