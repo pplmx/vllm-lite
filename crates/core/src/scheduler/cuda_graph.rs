@@ -66,7 +66,7 @@ impl GraphPreparedBatch {
 }
 
 /// Configuration for CUDA Graph in scheduler
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SchedulerCudaGraphConfig {
     /// Enable CUDA Graph capture/replay for decode batches.
     pub enabled: bool,

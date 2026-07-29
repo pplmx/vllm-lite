@@ -74,3 +74,60 @@ impl Request {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_sets_fields_from_arguments() {
+        let req = Request::new(42, vec![1, 2, 3], 100);
+        assert_eq!(req.id, 42);
+        assert_eq!(req.prompt, vec![1, 2, 3]);
+        assert_eq!(req.max_tokens, 100);
+        // SamplingParams default has temperature = 0.0, top_p = 1.0 — verify
+        // the key fields rather than full equality (SamplingParams doesn't
+        // derive PartialEq since it comes from vllm_traits).
+        assert_eq!(req.sampling_params.temperature, 0.0);
+        assert_eq!(req.priority, Priority::default());
+        assert_eq!(req.draft_model_id, None);
+    }
+
+    #[test]
+    fn new_with_empty_prompt() {
+        let req = Request::new(1, vec![], 50);
+        assert!(req.prompt.is_empty());
+        assert_eq!(req.max_tokens, 50);
+    }
+
+    #[test]
+    fn with_priority_overrides_default() {
+        let req = Request::new(0, vec![], 10).with_priority(Priority(5));
+        assert_eq!(req.priority, Priority(5));
+    }
+
+    #[test]
+    fn with_draft_model_sets_some() {
+        let req = Request::new(0, vec![], 10).with_draft_model("draft-7b");
+        assert_eq!(req.draft_model_id, Some(DraftId::from("draft-7b")));
+    }
+
+    #[test]
+    fn builder_chain_compatible() {
+        let req = Request::new(7, vec![10, 20], 200)
+            .with_priority(Priority(3))
+            .with_draft_model("spec-v2");
+        assert_eq!(req.id, 7);
+        assert_eq!(req.prompt, vec![10, 20]);
+        assert_eq!(req.max_tokens, 200);
+        assert_eq!(req.priority, Priority(3));
+        assert_eq!(req.draft_model_id, Some(DraftId::from("spec-v2")));
+    }
+
+    #[test]
+    fn priority_ord_is_total() {
+        assert!(Priority(1) < Priority(2));
+        assert!(Priority(0) == Priority(0));
+        assert!(Priority(5) > Priority(4));
+    }
+}

@@ -6,7 +6,8 @@ use crate::types::sequence_packing::SequencePackingConfig;
 /// Configuration for the request scheduler.
 ///
 /// Controls batching behavior, prefill/decode separation, and priority handling.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+#[allow(clippy::derive_partial_eq_without_eq)]
 pub struct SchedulerConfig {
     /// Maximum number of sequences that can be scheduled in a single batch.
     pub max_num_seqs: usize,
@@ -210,5 +211,248 @@ impl SchedulerConfigBuilder {
     #[must_use]
     pub fn build(self) -> SchedulerConfig {
         self.inner
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::float_cmp, clippy::must_use_candidate)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_has_documented_values() {
+        let cfg = SchedulerConfig::default();
+        assert_eq!(cfg.max_num_seqs, 256);
+        assert_eq!(cfg.max_num_batched_tokens, 4096);
+        assert_eq!(cfg.max_consecutive_decode, 10);
+        assert!(cfg.enable_pd_separation);
+        assert_eq!(cfg.prefill_chunk_size, 512);
+        assert!((cfg.decode_preference_ratio - 0.7).abs() < f32::EPSILON);
+        assert!(!cfg.enable_priority_scheduling);
+        assert!(cfg.enable_dynamic_batching);
+        assert_eq!(cfg.min_batch_size, 1);
+        assert_eq!(cfg.max_batch_size, 256);
+    }
+
+    #[test]
+    fn new_valid_construction() {
+        let cfg = SchedulerConfig::new(
+            128,
+            2048,
+            5,
+            false,
+            256,
+            0.5,
+            true,
+            false,
+            1,
+            128,
+            SequencePackingConfig::default(),
+        );
+        assert_eq!(cfg.max_num_seqs, 128);
+        assert_eq!(cfg.max_num_batched_tokens, 2048);
+        assert_eq!(cfg.max_consecutive_decode, 5);
+        assert!(!cfg.enable_pd_separation);
+        assert_eq!(cfg.prefill_chunk_size, 256);
+        assert!((cfg.decode_preference_ratio - 0.5).abs() < f32::EPSILON);
+        assert!(cfg.enable_priority_scheduling);
+        assert!(!cfg.enable_dynamic_batching);
+        assert_eq!(cfg.min_batch_size, 1);
+        assert_eq!(cfg.max_batch_size, 128);
+    }
+
+    #[test]
+    #[should_panic(expected = "max_num_seqs must be > 0")]
+    fn new_panics_when_max_num_seqs_is_zero() {
+        let _ = SchedulerConfig::new(
+            0,
+            4096,
+            10,
+            true,
+            512,
+            0.7,
+            false,
+            true,
+            1,
+            256,
+            SequencePackingConfig::default(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "max_num_batched_tokens must be > 0")]
+    fn new_panics_when_max_num_batched_tokens_is_zero() {
+        let _ = SchedulerConfig::new(
+            256,
+            0,
+            10,
+            true,
+            512,
+            0.7,
+            false,
+            true,
+            1,
+            256,
+            SequencePackingConfig::default(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "prefill_chunk_size must be > 0")]
+    fn new_panics_when_prefill_chunk_size_is_zero() {
+        let _ = SchedulerConfig::new(
+            256,
+            4096,
+            10,
+            true,
+            0,
+            0.7,
+            false,
+            true,
+            1,
+            256,
+            SequencePackingConfig::default(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "decode_preference_ratio must be between 0.0 and 1.0")]
+    fn new_panics_when_decode_preference_ratio_is_below_zero() {
+        let _ = SchedulerConfig::new(
+            256,
+            4096,
+            10,
+            true,
+            512,
+            -0.1,
+            false,
+            true,
+            1,
+            256,
+            SequencePackingConfig::default(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "decode_preference_ratio must be between 0.0 and 1.0")]
+    fn new_panics_when_decode_preference_ratio_is_above_one() {
+        let _ = SchedulerConfig::new(
+            256,
+            4096,
+            10,
+            true,
+            512,
+            1.1,
+            false,
+            true,
+            1,
+            256,
+            SequencePackingConfig::default(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "min_batch_size must be > 0")]
+    fn new_panics_when_min_batch_size_is_zero() {
+        let _ = SchedulerConfig::new(
+            256,
+            4096,
+            10,
+            true,
+            512,
+            0.7,
+            false,
+            true,
+            0,
+            256,
+            SequencePackingConfig::default(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "max_batch_size must be >= min_batch_size")]
+    fn new_panics_when_max_batch_size_below_min() {
+        let _ = SchedulerConfig::new(
+            256,
+            4096,
+            10,
+            true,
+            512,
+            0.7,
+            false,
+            true,
+            10,
+            5,
+            SequencePackingConfig::default(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "max_num_batched_tokens must be >= max_batch_size")]
+    fn new_panics_when_batched_tokens_below_max_batch() {
+        let _ = SchedulerConfig::new(
+            256,
+            10,
+            10,
+            true,
+            512,
+            0.7,
+            false,
+            true,
+            1,
+            100,
+            SequencePackingConfig::default(),
+        );
+    }
+
+    #[test]
+    fn boundary_ratio_values_accepted() {
+        // 0.0 and 1.0 are the boundaries — they should be accepted.
+        let _ = SchedulerConfig::new(
+            256,
+            4096,
+            10,
+            true,
+            512,
+            0.0,
+            false,
+            true,
+            1,
+            256,
+            SequencePackingConfig::default(),
+        );
+        let _ = SchedulerConfig::new(
+            256,
+            4096,
+            10,
+            true,
+            512,
+            1.0,
+            false,
+            true,
+            1,
+            256,
+            SequencePackingConfig::default(),
+        );
+    }
+
+    #[test]
+    fn builder_produces_config_with_defaults() {
+        let cfg = SchedulerConfig::builder().build();
+        assert_eq!(cfg, SchedulerConfig::default());
+    }
+
+    #[test]
+    fn builder_overrides_individual_fields() {
+        let cfg = SchedulerConfig::builder()
+            .with_max_num_seqs(64)
+            .with_max_num_batched_tokens(512)
+            .with_enable_pd_separation(false)
+            .with_enable_priority_scheduling(true)
+            .build();
+        assert_eq!(cfg.max_num_seqs, 64);
+        assert_eq!(cfg.max_num_batched_tokens, 512);
+        assert!(!cfg.enable_pd_separation);
+        assert!(cfg.enable_priority_scheduling);
     }
 }
