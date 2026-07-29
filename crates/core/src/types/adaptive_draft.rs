@@ -107,3 +107,79 @@ impl AdaptiveDraftConfigBuilder {
         self.inner
     }
 }
+
+impl PartialEq for AdaptiveDraftConfig {
+    fn eq(&self, other: &Self) -> bool {
+        self.min_draft_tokens == other.min_draft_tokens
+            && self.max_draft_tokens == other.max_draft_tokens
+            && self.target_acceptance_rate.to_bits() == other.target_acceptance_rate.to_bits()
+            && self.accuracy_window_size == other.accuracy_window_size
+            && self.adjustment_step == other.adjustment_step
+            && self.cooldown_steps == other.cooldown_steps
+            && self.ewma_alpha.to_bits() == other.ewma_alpha.to_bits()
+            && self.deadband_threshold.to_bits() == other.deadband_threshold.to_bits()
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::float_cmp)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_values() {
+        let cfg = AdaptiveDraftConfig::default();
+        assert_eq!(cfg.min_draft_tokens, 2);
+        assert_eq!(cfg.max_draft_tokens, 8);
+        assert!((cfg.target_acceptance_rate - 0.7).abs() < f32::EPSILON);
+        assert_eq!(cfg.accuracy_window_size, 20);
+        assert_eq!(cfg.adjustment_step, 1);
+        assert_eq!(cfg.cooldown_steps, 5);
+        assert!((cfg.ewma_alpha - 0.1).abs() < f32::EPSILON);
+        assert!((cfg.deadband_threshold - 0.05).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn builder_overrides() {
+        let cfg = AdaptiveDraftConfig::builder()
+            .with_min_draft_tokens(1)
+            .with_max_draft_tokens(4)
+            .with_target_acceptance_rate(0.9)
+            .with_accuracy_window_size(10)
+            .with_adjustment_step(2)
+            .with_cooldown_steps(3)
+            .with_ewma_alpha(0.3)
+            .with_deadband_threshold(0.1)
+            .build();
+        assert_eq!(cfg.min_draft_tokens, 1);
+        assert_eq!(cfg.max_draft_tokens, 4);
+        assert!((cfg.target_acceptance_rate - 0.9).abs() < f32::EPSILON);
+        assert_eq!(cfg.accuracy_window_size, 10);
+        assert_eq!(cfg.adjustment_step, 2);
+        assert_eq!(cfg.cooldown_steps, 3);
+        assert!((cfg.ewma_alpha - 0.3).abs() < f32::EPSILON);
+        assert!((cfg.deadband_threshold - 0.1).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn builder_defaults_match_struct_default() {
+        assert_eq!(
+            AdaptiveDraftConfig::builder().build(),
+            AdaptiveDraftConfig::default()
+        );
+    }
+
+    #[test]
+    fn default_is_consistent() {
+        let cfg = AdaptiveDraftConfig::default();
+        assert!(cfg.min_draft_tokens <= cfg.max_draft_tokens);
+        assert!(
+            (0.0..=1.0).contains(&cfg.target_acceptance_rate),
+            "target_acceptance_rate must be in [0.0, 1.0]"
+        );
+        assert!(
+            (0.0..=1.0).contains(&cfg.ewma_alpha),
+            "ewma_alpha must be in [0.0, 1.0]"
+        );
+    }
+}
