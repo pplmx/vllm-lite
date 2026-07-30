@@ -38,7 +38,7 @@ impl Default for CudaGraphConfig {
 }
 
 /// Configuration for `ModelGraph`. Constructed via the `builder()` associated function or by deserializing from JSON / TOML. Pass-by-value to construction APIs.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModelGraphConfig {
     /// Maximum sequence length the captured graph supports.
     pub max_seq_len: usize,
@@ -146,4 +146,53 @@ pub trait CudaGraphExecutor: Send {
     /// on any of the configured batch sizes. Capture failure aborts the
     /// call early; later sizes are not attempted.
     fn capture_all_graphs(&mut self) -> Result<(), GraphExecutionError>;
+}
+
+#[cfg(all(test, feature = "kernels"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cuda_graph_config_default() {
+        let cfg = CudaGraphConfig::default();
+        assert!(!cfg.enabled);
+        assert_eq!(cfg.batch_sizes, vec![1, 4, 8, 16, 32, 64]);
+        assert_eq!(cfg.model_config, ModelGraphConfig::default());
+        assert_eq!(cfg.enable_graph_pooling, Some(true));
+    }
+
+    #[test]
+    fn model_graph_config_default() {
+        let cfg = ModelGraphConfig::default();
+        assert_eq!(cfg.max_seq_len, 8192);
+        assert_eq!(cfg.num_kv_blocks, 1024);
+        assert!(!cfg.capture_attention_separate);
+    }
+
+    #[test]
+    fn graph_execution_error_display() {
+        assert_eq!(
+            GraphExecutionError::GraphNotFound(42).to_string(),
+            "graph not found for batch size 42"
+        );
+        assert_eq!(
+            GraphExecutionError::GraphCaptureFailed("oom".into()).to_string(),
+            "graph capture failed: oom"
+        );
+        assert_eq!(
+            GraphExecutionError::GraphExecutionFailed("crash".into()).to_string(),
+            "graph execution failed: crash"
+        );
+        assert_eq!(
+            GraphExecutionError::CudaError("ECC error".into()).to_string(),
+            "CUDA error: ECC error"
+        );
+    }
+
+    #[test]
+    fn graph_execution_error_debug_and_clone() {
+        let err = GraphExecutionError::GraphNotFound(1);
+        let cloned = err.clone();
+        assert_eq!(format!("{err:?}"), format!("{cloned:?}"));
+    }
 }
