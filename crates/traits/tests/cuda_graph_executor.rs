@@ -1,4 +1,5 @@
 //! Compile-time and behaviour tests for the `CudaGraphExecutor` trait surface.
+#![cfg(feature = "kernels")]
 //!
 //! The trait is consumed by `vllm-core` via `Box<dyn CudaGraphExecutor + Send>`
 //! and implemented by `vllm_model::kernels::cuda_graph::BatchCudaGraphExecutor`.
