@@ -2,9 +2,19 @@
 //!
 //! This module provides unified file loading, tensor conversion utilities.
 
-// SAFETY: tensor_data is a raw byte slice from safetensors (always 4-byte
-// aligned because it comes from a Vec<u8>). Pointer casts to f32/u16 are
-// sound at the alignment level; the byte length is checked at the call site.
+// SAFETY: tensor_data is a raw byte slice from safetensors. The safetensors
+// format stores tensors at offsets that are multiples of 8 bytes from the
+// start of the data buffer (the `data_offsets` field uses `u64` offsets),
+// and the buffer itself is a `Vec<u8>` which is guaranteed to be aligned to
+// at least 16 bytes by the global allocator. Therefore the byte slice pointer
+// is at minimum 8-byte aligned, which covers the alignment requirements of
+// both u16 (2 bytes) and f32 (4 bytes). Pointer casts to f32/u16 are sound
+// at the alignment level; the byte length is checked at the call site.
+//
+// The `unsafe_code` allow is necessary for the `std::slice::from_raw_parts`
+// casts in `convert_tensor`. Each unsafe block documents its specific safety
+// invariants. The `cast_ptr_alignment` allow is necessary because clippy
+// cannot statically verify alignment through the pointer cast sequence.
 #![allow(clippy::cast_ptr_alignment, unsafe_code)]
 
 use candle_core::{Device, Result, Tensor};
@@ -31,6 +41,10 @@ fn load_mmap(path: &Path) -> Result<Mmap> {
     let file = std::fs::File::open(path)
         .map_err(|e| candle_core::Error::msg(format!("open failed: {e}")))?;
     // SAFETY: file is opened read-only and not modified for the lifetime of the mmap.
+    // External file truncation/deletion could cause SIGBUS, but the mmap is
+    // either immediately copied to a Vec<u8> (via load_file_mmap_or_read) or
+    // short-lived in the caller. For the copy path, the Vec allocates and reads
+    // synchronously so the mmap is dropped within this call stack.
     unsafe { Mmap::map(&file) }.map_err(|e| candle_core::Error::msg(format!("mmap failed: {e}")))
 }
 
@@ -79,8 +93,11 @@ pub(crate) fn convert_tensor(
     match dtype {
         Dtype::BF16 => {
             let n = tensor_data.len() / 2;
-            // SAFETY: tensor_data is a raw byte slice from safetensors; we reinterpret as u16
-            // (BF16 layout). The byte length is exactly 2*n and the slice is valid for `n` u16 reads.
+            // SAFETY: tensor_data is a raw byte slice from safetensors; its pointer
+            // is at minimum 8-byte aligned (see file-level SAFETY comment for
+            // justification). Reinterpreting as `&[u16]` (BF16 layout) requires
+            // only 2-byte alignment, which is satisfied. The byte length is
+            // exactly `2 * n`, so the slice is valid for `n` u16 reads.
             let data_bf16: &[u16] =
                 unsafe { std::slice::from_raw_parts(tensor_data.as_ptr().cast::<u16>(), n) };
             let data_f32: Vec<f32> = data_bf16
@@ -91,8 +108,11 @@ pub(crate) fn convert_tensor(
         }
         Dtype::F16 => {
             let n = tensor_data.len() / 2;
-            // SAFETY: tensor_data is a raw byte slice from safetensors; we reinterpret as u16
-            // (F16 layout). The byte length is exactly 2*n and the slice is valid for `n` u16 reads.
+            // SAFETY: tensor_data is a raw byte slice from safetensors; its pointer
+            // is at minimum 8-byte aligned (see file-level SAFETY comment for
+            // justification). Reinterpreting as `&[u16]` (F16 layout) requires
+            // only 2-byte alignment, which is satisfied. The byte length is
+            // exactly `2 * n`, so the slice is valid for `n` u16 reads.
             let data_f16: &[u16] =
                 unsafe { std::slice::from_raw_parts(tensor_data.as_ptr().cast::<u16>(), n) };
             let data_f32: Vec<f32> = data_f16
@@ -103,8 +123,11 @@ pub(crate) fn convert_tensor(
         }
         Dtype::F32 => {
             let n = tensor_data.len() / 4;
-            // SAFETY: tensor_data is a raw byte slice from safetensors; we reinterpret as f32.
-            // The byte length is exactly 4*n and the slice is valid for `n` f32 reads.
+            // SAFETY: tensor_data is a raw byte slice from safetensors; its pointer
+            // is at minimum 8-byte aligned (see file-level SAFETY comment for
+            // justification). Reinterpreting as `&[f32]` requires 4-byte
+            // alignment, which is satisfied. The byte length is exactly `4 * n`,
+            // so the slice is valid for `n` f32 reads.
             let data_f32: &[f32] =
                 unsafe { std::slice::from_raw_parts(tensor_data.as_ptr().cast::<f32>(), n) };
             candle_core::Tensor::from_slice(data_f32, shape, device)

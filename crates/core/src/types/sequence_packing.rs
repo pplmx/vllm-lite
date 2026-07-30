@@ -73,7 +73,7 @@ impl SequencePackingConfigBuilder {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp, clippy::undocumented_unsafe_blocks)]
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
 
@@ -111,6 +111,10 @@ mod tests {
     #[test]
     fn from_env_uses_defaults_when_vars_unset() {
         // Ensure env vars are not set.
+        // SAFETY: These env var names are unique to this test and won't race
+        // with other tests because no other test in the workspace writes to
+        // VLLM_SEQ_PACKING_* variables. Single-threaded test execution also
+        // prevents concurrent access.
         unsafe {
             std::env::remove_var("VLLM_SEQ_PACKING_ENABLED");
             std::env::remove_var("VLLM_SEQ_PACKING_TARGET_BATCH");
@@ -123,6 +127,9 @@ mod tests {
 
     #[test]
     fn from_env_reads_env_vars() {
+        // SAFETY: Same reasoning as from_env_uses_defaults_when_vars_unset — these
+        // env var names are unique to this test module and won't race with other
+        // tests that don't write to VLLM_SEQ_PACKING_* variables.
         unsafe {
             std::env::set_var("VLLM_SEQ_PACKING_ENABLED", "false");
             std::env::set_var("VLLM_SEQ_PACKING_TARGET_BATCH", "8");
@@ -135,6 +142,7 @@ mod tests {
         assert_eq!(cfg.max_batch_size, 16);
         assert!((cfg.similarity_threshold - 0.35).abs() < f32::EPSILON);
         // Clean up.
+        // SAFETY: Same reasoning as above — unique env var names ensure no races with other tests.
         unsafe {
             std::env::remove_var("VLLM_SEQ_PACKING_ENABLED");
             std::env::remove_var("VLLM_SEQ_PACKING_TARGET_BATCH");
@@ -145,6 +153,7 @@ mod tests {
 
     #[test]
     fn from_env_falls_back_on_parse_failure() {
+        // SAFETY: Same reasoning as above — unique env var names ensure no races with other tests.
         unsafe {
             std::env::set_var("VLLM_SEQ_PACKING_ENABLED", "not-a-bool");
             std::env::set_var("VLLM_SEQ_PACKING_TARGET_BATCH", "not-a-number");
@@ -152,6 +161,7 @@ mod tests {
         let cfg = SequencePackingConfig::from_env();
         assert!(cfg.enabled); // default
         assert_eq!(cfg.target_batch_size, 32); // default
+        // SAFETY: Same reasoning as above — unique env var names ensure no races with other tests.
         unsafe {
             std::env::remove_var("VLLM_SEQ_PACKING_ENABLED");
             std::env::remove_var("VLLM_SEQ_PACKING_TARGET_BATCH");

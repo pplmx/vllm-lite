@@ -52,3 +52,4 @@ vgcore.*
 # Canonical example: crates/core/proptest-regressions/scheduler/batch_composer/compose.txt
 # (3 seeds from the v28.0 'compose_decode_batch empty-tokens underflow' bug fix).
 # See: https://proptest-rs.github.io/proptest/proptest/tutorial.html
+lcov.info
