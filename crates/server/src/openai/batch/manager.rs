@@ -93,3 +93,162 @@ impl Default for BatchManager {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_creates_empty_manager() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let jobs = rt.block_on(mgr.get_all_jobs());
+        assert!(jobs.is_empty());
+    }
+
+    #[test]
+    fn create_job_returns_unique_id() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let id1 = rt.block_on(mgr.create_job(
+            BatchEndpoint::Chat,
+            vec!["hello".into()],
+            None,
+            None,
+            None,
+        ));
+        let id2 = rt.block_on(mgr.create_job(
+            BatchEndpoint::Completion,
+            vec!["world".into()],
+            Some("gpt-3".into()),
+            Some(100),
+            Some(0.7),
+        ));
+        assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn get_job_returns_none_for_missing() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let job = rt.block_on(mgr.get_job("nonexistent"));
+        assert!(job.is_none());
+    }
+
+    #[test]
+    fn create_and_get_job_round_trip() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let id = rt.block_on(mgr.create_job(
+            BatchEndpoint::Chat,
+            vec!["test prompt".into()],
+            None,
+            None,
+            None,
+        ));
+        let job = rt.block_on(mgr.get_job(&id)).unwrap();
+        assert_eq!(job.id, id);
+        assert_eq!(job.status, BatchStatus::Pending);
+    }
+
+    #[test]
+    fn get_all_jobs_returns_all() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let id1 =
+            rt.block_on(mgr.create_job(BatchEndpoint::Chat, vec!["a".into()], None, None, None));
+        let id2 = rt.block_on(mgr.create_job(
+            BatchEndpoint::Completion,
+            vec!["b".into()],
+            None,
+            None,
+            None,
+        ));
+        let all = rt.block_on(mgr.get_all_jobs());
+        assert_eq!(all.len(), 2);
+        let ids: Vec<&str> = all.iter().map(|j| j.id.as_str()).collect();
+        assert!(ids.contains(&id1.as_str()));
+        assert!(ids.contains(&id2.as_str()));
+    }
+
+    #[test]
+    fn update_job_modifies_existing() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let id = rt.block_on(mgr.create_job(
+            BatchEndpoint::Chat,
+            vec!["update me".into()],
+            None,
+            None,
+            None,
+        ));
+        let mut job = rt.block_on(mgr.get_job(&id)).unwrap();
+        job.status = BatchStatus::InProgress;
+        rt.block_on(mgr.update_job(job));
+        let updated = rt.block_on(mgr.get_job(&id)).unwrap();
+        assert_eq!(updated.status, BatchStatus::InProgress);
+    }
+
+    #[test]
+    fn add_result_appends_to_job() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let id = rt.block_on(mgr.create_job(
+            BatchEndpoint::Chat,
+            vec!["result test".into()],
+            None,
+            None,
+            None,
+        ));
+        let result = BatchResultItem {
+            index: 0,
+            status: "succeeded".to_string(),
+            content: Some("output".into()),
+            error: None,
+        };
+        rt.block_on(mgr.add_result(&id, result));
+        let job = rt.block_on(mgr.get_job(&id)).unwrap();
+        assert_eq!(job.results.len(), 1);
+        assert_eq!(job.results[0].index, 0);
+        assert_eq!(job.results[0].content.as_deref(), Some("output"));
+    }
+
+    #[test]
+    fn set_completed_updates_status_and_timestamp() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let id = rt.block_on(mgr.create_job(
+            BatchEndpoint::Chat,
+            vec!["complete".into()],
+            None,
+            None,
+            None,
+        ));
+        rt.block_on(mgr.set_completed(&id));
+        let job = rt.block_on(mgr.get_job(&id)).unwrap();
+        assert_eq!(job.status, BatchStatus::Completed);
+        assert!(job.completed_at.is_some());
+    }
+
+    #[test]
+    fn add_result_to_missing_job_is_noop() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = BatchResultItem {
+            index: 0,
+            status: "succeeded".to_string(),
+            content: None,
+            error: None,
+        };
+        // Should not panic
+        rt.block_on(mgr.add_result("nonexistent", result));
+    }
+
+    #[test]
+    fn set_completed_on_missing_job_is_noop() {
+        let mgr = BatchManager::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        // Should not panic
+        rt.block_on(mgr.set_completed("nonexistent"));
+    }
+}

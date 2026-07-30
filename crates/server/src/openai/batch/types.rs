@@ -142,7 +142,7 @@ pub struct BatchResultItem {
 }
 
 /// Status of an async batch job: pending, running, completed, failed, or cancelled. Transitions are monotonic.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BatchStatus {
     /// Queued, not yet picked up by a worker.
     Pending,
