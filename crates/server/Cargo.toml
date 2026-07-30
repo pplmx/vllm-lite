@@ -46,6 +46,7 @@ parking_lot = { workspace = true }
 [dev-dependencies]
 axum = { version = "0.8", features = ["tokio", "macros"] }
 tower = { version = "0.5", features = ["util"] }
+rcgen = "0.13"
 http-body-util = "0.1"
 hyper = "1"
 tempfile = "3"
