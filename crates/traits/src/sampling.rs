@@ -79,7 +79,7 @@ pub struct SampledToken {
 /// Defaults are tuned for deterministic greedy decoding
 /// (`temperature = 0`, `top_p = 1`, `repeat_penalty = 1`, `presence_penalty = 0`,
 /// `beam_width = 1`); raise `temperature`, lower `top_p`, etc. for sampling.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SamplingParams {
     /// Sampling temperature. `0.0` selects greedy argmax; `1.0` is the
     /// un-scaled softmax; values `<1` sharpen, `>1` flatten.
@@ -442,6 +442,8 @@ pub fn argmax_logits(logits: &[f32]) -> TokenId {
 mod tests {
     use super::*;
 
+    // ── argmax_logits ──
+
     #[test]
     fn argmax_logits_returns_index_of_max() {
         assert_eq!(argmax_logits(&[1.0, 2.0, 3.0, 2.0, 1.0]), 2);
@@ -465,5 +467,120 @@ mod tests {
     #[test]
     fn argmax_logits_single_element() {
         assert_eq!(argmax_logits(&[42.0]), 0);
+    }
+
+    // ── SampledToken ──
+
+    #[test]
+    fn sampled_token_default_fields() {
+        let t = SampledToken {
+            token: 42,
+            logprob: -0.5,
+            top_logprobs: vec![],
+        };
+        assert_eq!(t.token, 42);
+        assert_eq!(t.logprob, -0.5);
+        assert!(t.top_logprobs.is_empty());
+    }
+
+    #[test]
+    fn sampled_token_serialization_round_trip() {
+        let t = SampledToken {
+            token: 7,
+            logprob: -1.0,
+            top_logprobs: vec![(3, -2.0), (5, -3.0)],
+        };
+        let json = serde_json::to_string(&t).unwrap();
+        let back: SampledToken = serde_json::from_str(&json).unwrap();
+        assert_eq!(t, back);
+    }
+
+    #[test]
+    fn sampled_token_top_logprobs_empty_after_serde() {
+        let t = SampledToken {
+            token: 0,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        };
+        let json = serde_json::to_string(&t).unwrap();
+        let back: SampledToken = serde_json::from_str(&json).unwrap();
+        assert!(back.top_logprobs.is_empty());
+    }
+
+    // ── SamplingParams defaults ──
+
+    #[test]
+    fn sampling_params_default_values() {
+        let p = SamplingParams::default();
+        assert_eq!(p.temperature, 0.0);
+        assert_eq!(p.top_k, 0);
+        assert_eq!(p.top_p, 1.0);
+        assert_eq!(p.repeat_penalty, 1.0);
+        assert_eq!(p.presence_penalty, 0.0);
+        assert!(p.logit_bias.is_none());
+        assert_eq!(p.beam_width, 1);
+        assert_eq!(p.length_penalty, 0.6);
+        assert_eq!(p.max_retries, 0);
+        assert!(p.seed.is_none());
+        assert!(p.top_logprobs.is_none());
+        assert!(p.stop_token_sequences.is_none());
+    }
+
+    // ── SamplingParamsBuilder ──
+
+    #[test]
+    fn builder_defaults_match_struct_default() {
+        assert_eq!(SamplingParams::builder().build(), SamplingParams::default());
+    }
+
+    #[test]
+    fn builder_overrides_all_fields() {
+        let p = SamplingParams::builder()
+            .with_temperature(0.8)
+            .with_top_k(40)
+            .with_top_p(0.9)
+            .with_repeat_penalty(1.2)
+            .with_presence_penalty(0.1)
+            .with_logit_bias(Some(HashMap::from([(42, 1.0)])))
+            .with_beam_width(1)
+            .with_length_penalty(1.0)
+            .with_max_retries(3)
+            .with_seed(12345)
+            .with_top_logprobs(5)
+            .with_stop_token_sequences(vec![vec![1, 2, 3]])
+            .build();
+        assert_eq!(p.temperature, 0.8);
+        assert_eq!(p.top_k, 40);
+        assert!((p.top_p - 0.9).abs() < f32::EPSILON);
+        assert!((p.repeat_penalty - 1.2).abs() < f32::EPSILON);
+        assert!((p.presence_penalty - 0.1).abs() < f32::EPSILON);
+        assert_eq!(p.logit_bias, Some(HashMap::from([(42, 1.0)])));
+        assert_eq!(p.beam_width, 1);
+        assert!((p.length_penalty - 1.0).abs() < f32::EPSILON);
+        assert_eq!(p.max_retries, 3);
+        assert_eq!(p.seed, Some(12345));
+        assert_eq!(p.top_logprobs, Some(5));
+        assert_eq!(p.stop_token_sequences, Some(vec![vec![1, 2, 3]]));
+    }
+
+    #[test]
+    fn builder_clear_seed_and_top_logprobs() {
+        let p = SamplingParams::builder()
+            .with_seed(42)
+            .with_seed_none()
+            .with_top_logprobs(5)
+            .with_top_logprobs_none()
+            .build();
+        assert!(p.seed.is_none());
+        assert!(p.top_logprobs.is_none());
+    }
+
+    #[test]
+    fn builder_clear_stop_sequences() {
+        let p = SamplingParams::builder()
+            .with_stop_token_sequences(vec![vec![0]])
+            .with_stop_token_sequences_none()
+            .build();
+        assert!(p.stop_token_sequences.is_none());
     }
 }

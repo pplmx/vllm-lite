@@ -9,6 +9,9 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 candle-core = { workspace = true, optional = true }
 
+[dev-dependencies]
+serde_json = { workspace = true }
+
 [features]
 default = []
 candle = ["candle-core"]
