@@ -11,7 +11,45 @@
 //!    `TlsError` rather than panicking on `.unwrap()`. The test
 //!    wraps the call in `std::panic::catch_unwind` and
 //!    re-raises any panic as a regression.
+//! 4. **Full load with live certs**: `TlsConfig::load` succeeds
+//!    when given valid PEM certificate and key files (generated
+//!    at test time via `rcgen`), and fails with structured errors
+//!    for invalid/missing files.
+
 use super::*;
+use std::io::Write;
+
+/// Generate a self-signed X.509 certificate + private key PEM pair.
+/// Returns `(cert_pem, key_pem)` as strings.
+fn generate_self_signed_pair() -> (String, String) {
+    use rcgen::{BasicConstraints, CertificateParams, IsCa, KeyPair};
+
+    let key_pair = KeyPair::generate().unwrap();
+    let mut params = CertificateParams::new(vec!["localhost".to_string()]).unwrap();
+    params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+    params.key_usages = vec![
+        rcgen::KeyUsagePurpose::DigitalSignature,
+        rcgen::KeyUsagePurpose::KeyCertSign,
+        rcgen::KeyUsagePurpose::KeyEncipherment,
+    ];
+    let cert = params.self_signed(&key_pair).unwrap();
+    (cert.pem(), key_pair.serialize_pem())
+}
+
+/// Write PEM strings to temporary files and return their paths.
+fn write_pem_files(
+    dir: &tempfile::TempDir,
+    cert_pem: &str,
+    key_pem: &str,
+) -> (std::path::PathBuf, std::path::PathBuf) {
+    let cert_path = dir.path().join("cert.pem");
+    let key_path = dir.path().join("key.pem");
+    let mut f1 = std::fs::File::create(&cert_path).unwrap();
+    f1.write_all(cert_pem.as_bytes()).unwrap();
+    let mut f2 = std::fs::File::create(&key_path).unwrap();
+    f2.write_all(key_pem.as_bytes()).unwrap();
+    (cert_path, key_path)
+}
 
 #[test]
 fn test_tls_config_creation() {
@@ -54,12 +92,154 @@ fn test_tls_load_with_mtls_but_no_ca_path_returns_error() {
         Ok(Err(_)) => { /* structured error — pass */ }
         Ok(Ok(_)) => panic!("load() succeeded with invalid config"),
         Err(panic_payload) => {
-            // invariant: the panic payload type is determined by the code
-            // path that panicked; in this test, only `load()` can panic
-            // and it is an `String`/`&str` message — treat any panic as a
-            // SEC-06 regression. Re-raise with the original payload so
-            // the failure message is preserved.
             std::panic::resume_unwind(panic_payload);
         }
     }
+}
+
+// ── Full load tests with live certificates ──
+
+#[test]
+fn test_tls_load_with_valid_certs_succeeds() {
+    let (cert_pem, key_pem) = generate_self_signed_pair();
+    let dir = tempfile::TempDir::new().unwrap();
+    let (cert_path, key_path) = write_pem_files(&dir, &cert_pem, &key_pem);
+
+    let config = TlsConfig::new(cert_path.to_string_lossy(), key_path.to_string_lossy());
+    let result = config.load();
+    assert!(
+        result.is_ok(),
+        "load should succeed with valid PEM files: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn test_tls_load_with_nonexistent_cert_returns_error() {
+    let config = TlsConfig::new("/nonexistent/cert.pem", "/nonexistent/key.pem");
+    let result = config.load();
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        TlsError::CertificateRead(_) => { /* expected */ }
+        other => panic!("expected CertificateRead error, got: {other}"),
+    }
+}
+
+#[test]
+fn test_tls_load_with_invalid_cert_data_returns_error() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let (cert_path, key_path) = write_pem_files(&dir, "not-a-valid-cert", "not-a-valid-key");
+
+    let config = TlsConfig::new(cert_path.to_string_lossy(), key_path.to_string_lossy());
+    let result = config.load();
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        TlsError::InvalidConfig(msg) => {
+            assert!(
+                msg.contains("Invalid certificate") || msg.contains("Invalid key"),
+                "unexpected error message: {msg}"
+            );
+        }
+        other => panic!("expected InvalidConfig error, got: {other}"),
+    }
+}
+
+#[test]
+fn test_tls_load_with_invalid_key_returns_error() {
+    use rcgen::KeyPair;
+
+    let (cert_pem, _) = generate_self_signed_pair();
+    let dir = tempfile::TempDir::new().unwrap();
+
+    // Generate a *different* key pair — the cert won't match
+    let wrong_key = KeyPair::generate().unwrap();
+    let wrong_key_pem = wrong_key.serialize_pem();
+
+    let (cert_path, key_path) = write_pem_files(&dir, &cert_pem, &wrong_key_pem);
+
+    let config = TlsConfig::new(cert_path.to_string_lossy(), key_path.to_string_lossy());
+    let result = config.load();
+    assert!(result.is_err(), "load should reject cert/key mismatch");
+    // The error should be an InvalidConfig wrapping the underlying rustls error
+    match result.unwrap_err() {
+        TlsError::InvalidConfig(_) => { /* expected */ }
+        other => panic!("expected InvalidConfig error, got: {other}"),
+    }
+}
+
+#[test]
+fn test_tls_load_with_mtls_and_valid_ca_succeeds() {
+    // Generate a server cert + key and a CA cert
+    let (server_cert_pem, server_key_pem) = generate_self_signed_pair();
+    let (ca_cert_pem, _ca_key_pem) = generate_self_signed_pair();
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let (cert_path, key_path) = write_pem_files(&dir, &server_cert_pem, &server_key_pem);
+
+    // Write the CA cert
+    let ca_path = dir.path().join("ca.pem");
+    std::fs::write(&ca_path, ca_cert_pem).unwrap();
+
+    let config = TlsConfig::new(cert_path.to_string_lossy(), key_path.to_string_lossy())
+        .with_ca_cert(ca_path.to_string_lossy().to_string());
+
+    let result = config.load();
+    assert!(
+        result.is_ok(),
+        "mTLS load should succeed with valid CA: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn test_tls_load_with_mtls_and_missing_ca_file_returns_error() {
+    let (cert_pem, key_pem) = generate_self_signed_pair();
+    let dir = tempfile::TempDir::new().unwrap();
+    let (cert_path, key_path) = write_pem_files(&dir, &cert_pem, &key_pem);
+
+    let config = TlsConfig::new(cert_path.to_string_lossy(), key_path.to_string_lossy())
+        .with_ca_cert("/nonexistent/ca.pem");
+
+    let result = config.load();
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        TlsError::CertificateRead(_) => { /* expected — CA file not found */ }
+        other => panic!("expected CertificateRead error, got: {other}"),
+    }
+}
+
+#[test]
+fn test_tls_load_with_mtls_and_invalid_ca_returns_error() {
+    let (cert_pem, key_pem) = generate_self_signed_pair();
+    let dir = tempfile::TempDir::new().unwrap();
+    let (cert_path, key_path) = write_pem_files(&dir, &cert_pem, &key_pem);
+
+    // Write garbage as CA
+    let ca_path = dir.path().join("ca.pem");
+    std::fs::write(&ca_path, "not-a-valid-ca").unwrap();
+
+    let config = TlsConfig::new(cert_path.to_string_lossy(), key_path.to_string_lossy())
+        .with_ca_cert(ca_path.to_string_lossy().to_string());
+
+    let result = config.load();
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        TlsError::InvalidConfig(_) => { /* expected — rustls reports the invalid CA */ }
+        other => panic!("expected InvalidConfig error, got: {other}"),
+    }
+}
+
+#[test]
+fn test_tls_error_display() {
+    let err = TlsError::CertificateRead("permission denied".into());
+    assert!(err.to_string().contains("permission denied"));
+
+    let err = TlsError::KeyRead("file not found".into());
+    assert!(err.to_string().contains("file not found"));
+
+    let err = TlsError::InvalidConfig("bad PEM".into());
+    assert!(err.to_string().contains("bad PEM"));
+
+    let err = TlsError::HandshakeFailed("timeout".into());
+    assert!(err.to_string().contains("timeout"));
 }
