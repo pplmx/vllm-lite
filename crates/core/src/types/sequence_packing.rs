@@ -32,6 +32,33 @@ impl SequencePackingConfig {
     pub fn builder() -> SequencePackingConfigBuilder {
         SequencePackingConfigBuilder::default()
     }
+
+    /// Create config from environment variables
+    #[must_use]
+    pub fn from_env() -> Self {
+        let enabled = std::env::var("VLLM_SEQ_PACKING_ENABLED")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(true);
+        let target_batch_size = std::env::var("VLLM_SEQ_PACKING_TARGET_BATCH")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(32);
+        let max_batch_size = std::env::var("VLLM_SEQ_PACKING_MAX_BATCH")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(256);
+        let similarity_threshold = std::env::var("VLLM_SEQ_PACKING_THRESHOLD")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0.2);
+        Self {
+            enabled,
+            target_batch_size,
+            max_batch_size,
+            similarity_threshold,
+        }
+    }
 }
 
 /// Builder for [`SequencePackingConfig`].
@@ -165,35 +192,6 @@ mod tests {
         unsafe {
             std::env::remove_var("VLLM_SEQ_PACKING_ENABLED");
             std::env::remove_var("VLLM_SEQ_PACKING_TARGET_BATCH");
-        }
-    }
-}
-
-impl SequencePackingConfig {
-    /// Create config from environment variables
-    #[must_use]
-    pub fn from_env() -> Self {
-        let enabled = std::env::var("VLLM_SEQ_PACKING_ENABLED")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(true);
-        let target_batch_size = std::env::var("VLLM_SEQ_PACKING_TARGET_BATCH")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(32);
-        let max_batch_size = std::env::var("VLLM_SEQ_PACKING_MAX_BATCH")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(256);
-        let similarity_threshold = std::env::var("VLLM_SEQ_PACKING_THRESHOLD")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(0.2);
-        Self {
-            enabled,
-            target_batch_size,
-            max_batch_size,
-            similarity_threshold,
         }
     }
 }
