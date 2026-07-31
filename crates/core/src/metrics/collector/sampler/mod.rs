@@ -14,7 +14,7 @@
 // - `speculative` — speculative decoding + per-request acceptance
 // - `draft`       — v18.0 multi-model spec draft-resolution metrics
 
-use super::super::lock_free::LockFreeMetrics;
+use super::super::lock_free::{LockFreeMetrics, MetricsSnapshot};
 use dashmap::DashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use vllm_traits::SeqId;
@@ -122,6 +122,15 @@ impl EnhancedMetricsCollector {
             }
             _ => 0,
         }
+    }
+    /// Snapshot of the lock-free runtime metrics: token counts,
+    /// latency percentiles, KV-cache usage, throughput, and queue
+    /// depth. Exposed for the Prometheus exporter so `/metrics`
+    /// carries the core engine counters WITHOUT an engine
+    /// `GetMetrics` round-trip (which can stall mid model-step).
+    #[must_use]
+    pub fn runtime_snapshot(&self) -> MetricsSnapshot {
+        self.runtime.snapshot()
     }
 }
 

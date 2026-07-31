@@ -205,6 +205,86 @@ impl PrometheusExporter {
             self.collector.get_gauge("scheduler_queue_size")
         );
 
+        // ── Core engine metrics (lock-free runtime snapshot) ────────────
+        // These were previously only reachable via the unrouted
+        // `api::get_prometheus` (GetMetrics round-trip). Reading the
+        // collector's runtime snapshot directly keeps `/metrics`
+        // self-contained and avoids a blocking engine round-trip on
+        // every Prometheus scrape.
+        let snap = self.collector.runtime_snapshot();
+
+        output.push_str("# HELP tokens_total Total tokens generated\n");
+        output.push_str("# TYPE tokens_total counter\n");
+        let _ = write!(output, "tokens_total {}\n", snap.tokens_total);
+
+        output.push_str("# HELP avg_latency_ms Average inference latency (ms)\n");
+        output.push_str("# TYPE avg_latency_ms gauge\n");
+        let _ = write!(output, "avg_latency_ms {:.3}\n", snap.avg_latency_ms);
+
+        output.push_str("# HELP latency_p50_ms Inference latency p50 (ms)\n");
+        output.push_str("# TYPE latency_p50_ms gauge\n");
+        let _ = write!(output, "latency_p50_ms {:.3}\n", snap.p50_latency_ms);
+
+        output.push_str("# HELP latency_p90_ms Inference latency p90 (ms)\n");
+        output.push_str("# TYPE latency_p90_ms gauge\n");
+        let _ = write!(output, "latency_p90_ms {:.3}\n", snap.p90_latency_ms);
+
+        output.push_str("# HELP latency_p99_ms Inference latency p99 (ms)\n");
+        output.push_str("# TYPE latency_p99_ms gauge\n");
+        let _ = write!(output, "latency_p99_ms {:.3}\n", snap.p99_latency_ms);
+
+        output.push_str("# HELP kv_cache_usage_percent KV cache usage (0-100)\n");
+        output.push_str("# TYPE kv_cache_usage_percent gauge\n");
+        let _ = write!(
+            output,
+            "kv_cache_usage_percent {:.3}\n",
+            snap.kv_cache_usage_percent
+        );
+
+        output.push_str("# HELP prefix_cache_hit_rate Prefix cache hit rate (0-100)\n");
+        output.push_str("# TYPE prefix_cache_hit_rate gauge\n");
+        let _ = write!(
+            output,
+            "prefix_cache_hit_rate {:.3}\n",
+            snap.prefix_cache_hit_rate
+        );
+
+        output.push_str("# HELP prefill_throughput_tps Prefill throughput (tokens/sec)\n");
+        output.push_str("# TYPE prefill_throughput_tps gauge\n");
+        let _ = write!(
+            output,
+            "prefill_throughput_tps {:.3}\n",
+            snap.prefill_throughput
+        );
+
+        output.push_str("# HELP decode_throughput_tps Decode throughput (tokens/sec)\n");
+        output.push_str("# TYPE decode_throughput_tps gauge\n");
+        let _ = write!(
+            output,
+            "decode_throughput_tps {:.3}\n",
+            snap.decode_throughput
+        );
+
+        output.push_str("# HELP avg_batch_size Average batch size\n");
+        output.push_str("# TYPE avg_batch_size gauge\n");
+        let _ = write!(output, "avg_batch_size {:.3}\n", snap.avg_batch_size);
+
+        output.push_str("# HELP current_batch_size Current batch size\n");
+        output.push_str("# TYPE current_batch_size gauge\n");
+        let _ = write!(output, "current_batch_size {}\n", snap.current_batch_size);
+
+        output.push_str("# HELP requests_in_flight Currently in-flight requests\n");
+        output.push_str("# TYPE requests_in_flight gauge\n");
+        let _ = write!(output, "requests_in_flight {}\n", snap.requests_in_flight);
+
+        output.push_str("# HELP avg_scheduler_wait_time_ms Average scheduler wait (ms)\n");
+        output.push_str("# TYPE avg_scheduler_wait_time_ms gauge\n");
+        let _ = write!(
+            output,
+            "avg_scheduler_wait_time_ms {:.3}\n",
+            snap.avg_scheduler_wait_time_ms
+        );
+
         output
     }
 
@@ -218,5 +298,57 @@ impl PrometheusExporter {
 impl MetricsExporter for PrometheusExporter {
     async fn export(&self) -> Result<String, MetricsError> {
         Ok(self.export_to_string().await)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::metrics::EnhancedMetricsCollector;
+
+    #[tokio::test]
+    async fn export_includes_core_engine_metrics() {
+        let collector = EnhancedMetricsCollector::new();
+        collector.record_tokens(42);
+        collector.record_request();
+        collector.record_latency(12.5);
+        collector.record_kv_cache_usage(3, 8);
+
+        let exporter = PrometheusExporter::new(std::sync::Arc::new(collector), 9090);
+        let out = exporter.export_to_string().await;
+
+        assert!(
+            out.contains("tokens_total 42\n"),
+            "missing tokens_total: {out}"
+        );
+        assert!(
+            out.contains("avg_latency_ms 12.500\n"),
+            "missing latency: {out}"
+        );
+        assert!(
+            out.contains("kv_cache_usage_percent 37.500\n"),
+            "missing kv usage: {out}"
+        );
+        assert!(
+            out.contains("requests_in_flight 0\n"),
+            "missing in-flight: {out}"
+        );
+        assert!(
+            out.contains("current_batch_size 0\n"),
+            "missing batch size: {out}"
+        );
+    }
+
+    #[tokio::test]
+    async fn export_reports_zero_when_no_activity() {
+        let collector = EnhancedMetricsCollector::new();
+        let exporter = PrometheusExporter::new(std::sync::Arc::new(collector), 9090);
+        let out = exporter.export_to_string().await;
+        assert!(
+            out.contains("tokens_total 0\n"),
+            "zero tokens expected: {out}"
+        );
+        assert!(out.contains("avg_latency_ms 0.000\n"));
+        assert!(out.contains("kv_cache_usage_percent 0.000\n"));
     }
 }
