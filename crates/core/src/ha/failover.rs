@@ -110,7 +110,10 @@ impl FailoverManager {
     }
 
     pub async fn on_node_failure(&self, failed_node: &str) -> Vec<SeqId> {
-        let requests = self.inflight_requests.write().await;
+        // Read-only scan: a read lock keeps concurrent writers
+        // (track/complete/migrate) unblocked on the failure path,
+        // when many requests may be migrating at once.
+        let requests = self.inflight_requests.read().await;
 
         let to_migrate: Vec<SeqId> = requests
             .iter()
