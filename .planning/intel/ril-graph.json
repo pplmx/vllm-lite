@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_updated": "2026-07-31T14:52:18+00:00",
+  "last_updated": "2026-07-31T14:56:17+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -302,6 +302,68 @@
         "priority_score": 8.4,
         "detail": "category=security(10) x severity 0.7 x conf 1.0 / sqrt(effort 0.7) ~ 8.4. Root cause verified by probe; fix extracted+tested."
       }
+    },
+    {
+      "id": "issue-005",
+      "type": "issue",
+      "status": "resolved",
+      "created_at": "2026-07-31T14:56:17+00:00",
+      "updated_at": "2026-07-31T14:56:17+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "all-(-inf)/NaN logits poison temperature + top-p sampling",
+        "severity": 0.3,
+        "detail": "temperature_sample/top_p_sample: exp(v-max) over degenerate rows yields NaN probs; cumsum never crosses threshold; falls through to last vocab index. Sibling logprob helpers guard !max_val.is_finite(); samplers did not."
+      }
+    },
+    {
+      "id": "task-005",
+      "type": "task",
+      "status": "resolved",
+      "created_at": "2026-07-31T14:56:17+00:00",
+      "updated_at": "2026-07-31T14:56:17+00:00",
+      "confidence": 0.95,
+      "data": {
+        "title": "Fall back to greedy on non-finite max logit in samplers",
+        "priority_score": 4.6,
+        "detail": "Add !max_val.is_finite() guard to temperature_sample + top_p_sample returning greedy_sample; 4 regression tests. category=correctness(10) x severity 0.3 x conf 0.95 / sqrt(0.15) ~ 7.4."
+      }
+    },
+    {
+      "id": "evidence-009",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T14:56:17+00:00",
+      "updated_at": "2026-07-31T14:56:17+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "temp probe test (removed after run)",
+        "detail": "Pre-fix: top_p<1 all-inf returns token=31; temp>0 all-inf returns token=31; logprob=-inf. Post-fix: token=0."
+      }
+    },
+    {
+      "id": "evidence-010",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T14:56:17+00:00",
+      "updated_at": "2026-07-31T14:56:17+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "cargo test -p vllm-core --lib sampling / nextest vllm-core",
+        "detail": "79 sampling lib tests pass incl. 4 new; 647/647 vllm-core tests pass."
+      }
+    },
+    {
+      "id": "change-005",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T14:56:17+00:00",
+      "updated_at": "2026-07-31T14:56:17+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "sampler non-finite guard",
+        "detail": "sampling.rs: !max_val.is_finite() -> greedy_sample in temperature_sample + top_p_sample; 4 tests in sampling/tests.rs; CHANGELOG entry."
+      }
     }
   ],
   "edges": [
@@ -415,6 +477,26 @@
     {
       "from": "evidence-007",
       "to": "task-004",
+      "kind": "validates"
+    },
+    {
+      "from": "evidence-009",
+      "to": "issue-005",
+      "kind": "validates"
+    },
+    {
+      "from": "issue-005",
+      "to": "task-005",
+      "kind": "causes"
+    },
+    {
+      "from": "change-005",
+      "to": "task-005",
+      "kind": "resolves"
+    },
+    {
+      "from": "evidence-010",
+      "to": "task-005",
       "kind": "validates"
     }
   ]
