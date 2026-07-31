@@ -73,8 +73,13 @@ jobs:
         run: cargo nextest run --workspace --no-fail-fast
 
       - name: Public API baseline check
+        # cargo-public-api builds rustdoc JSON via nightly-only
+        # `-Z unstable-options`; install a minimal nightly toolchain and
+        # pin RUSTUP_TOOLCHAIN so the script's `cargo public-api` uses it.
         run: |
-          cargo install cargo-public-api --locked
+          rustup toolchain install nightly --profile minimal
+          cargo +nightly install cargo-public-api --locked
+          export RUSTUP_TOOLCHAIN=nightly
           bash .planning/phase-12e/check-public-api.sh
 
       - name: Doc coverage gate
