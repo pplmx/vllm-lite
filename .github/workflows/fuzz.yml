@@ -46,7 +46,10 @@ jobs:
         uses: taiki-e/install-action@just
 
       - name: Install cargo-fuzz
-        uses: taiki-e/install-action@cargo-fuzz
+        # cargo-fuzz must live in the nightly toolchain that `cargo +nightly
+        # fuzz` uses; install explicitly (taiki-e/install-action did not make
+        # the subcommand visible to the nightly toolchain).
+        run: cargo +nightly install cargo-fuzz --locked
 
       - name: Build fuzz targets
         run: just fuzz-build
