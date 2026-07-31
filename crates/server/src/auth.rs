@@ -481,6 +481,7 @@ pub async fn auth_middleware(
                     HEADER_RATE_LIMIT_LIMIT,
                     HeaderValue::from(limit.round().max(0.0) as u64),
                 )
+                // invariant: a `Response` with an empty body cannot fail to build.
                 .body("".into())
                 .unwrap()
         }
@@ -488,6 +489,7 @@ pub async fn auth_middleware(
             // Unauthorized / missing header.
             Response::builder()
                 .status(StatusCode::UNAUTHORIZED)
+                // invariant: a `Response` with an empty body cannot fail to build.
                 .body("".into())
                 .unwrap()
         }

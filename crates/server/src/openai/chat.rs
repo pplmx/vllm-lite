@@ -1278,6 +1278,8 @@ async fn stream_n_parallel_chat(
             let rx = ch
                 .seq_id_rx
                 .take()
+                // invariant: `CandidateChannel` is always constructed with
+                // `Some(seq_id_rx)` by `spawn_chat_n_streaming_candidate`.
                 .expect("seq_id_rx is set by spawn_chat_n_streaming_candidate");
             async move { (idx, rx.await) }
         })
@@ -1469,6 +1471,7 @@ async fn stream_n_parallel_chat(
                                 },
                             );
                             let sse_payload = serde_json::to_string(&chunk)
+                                // invariant: ChatChunk is a plain serde-derived struct with no failing serialize path.
                                 .expect("Failed to serialize chat chunk");
                             Some((Ok(Event::default().data(sse_payload)), state))
                         }
@@ -1563,6 +1566,7 @@ async fn stream_n_parallel_chat(
                                     },
                                 );
                                 let sse_payload = serde_json::to_string(&chunk)
+                                    // invariant: ChatChunk is a plain serde-derived struct with no failing serialize path.
                                     .expect("Failed to serialize chat chunk");
                                 Some((Ok(Event::default().data(sse_payload)), state))
                             }
@@ -1967,6 +1971,7 @@ async fn stream_chat_completion(
                                 },
                             );
                             let sse_payload = serde_json::to_string(&chunk)
+                                // invariant: ChatChunk is a plain serde-derived struct with no failing serialize path.
                                 .expect("Failed to serialize chat chunk");
                             Some((
                                 Ok(Event::default().data(sse_payload)),
@@ -2014,6 +2019,7 @@ async fn stream_chat_completion(
                                 },
                             );
                             let sse_payload = serde_json::to_string(&chunk)
+                                // invariant: ChatChunk is a plain serde-derived struct with no failing serialize path.
                                 .expect("Failed to serialize chat chunk");
                             tracing::info!(
                                 request_id = %request_id,

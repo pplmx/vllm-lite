@@ -405,23 +405,24 @@ mod tests {
         wrapper.write_block(1, &bytes).await.expect("write_block");
 
         // Read back via the same per-layer read API the sender uses.
-        // Scope the lock so it drops before verify_chain_hash below
-        // (parking_lot::Mutex isn't reentrant).
-        {
-            let cache_lock = wrapper.inner().lock();
-            for layer_idx in 0..num_layers {
-                let (k_out, v_out) = cache_lock
-                    .read_layer_block(layer_idx, 1)
-                    .expect("read_layer_block");
-                let offset = layer_idx * 2 * per_layer_f32s;
-                let k_in: &[f32] =
-                    bytemuck::cast_slice(&bytes[offset * 4..(offset + per_layer_f32s) * 4]);
-                let v_in: &[f32] = bytemuck::cast_slice(
-                    &bytes[(offset + per_layer_f32s) * 4..(offset + 2 * per_layer_f32s) * 4],
-                );
-                assert_eq!(k_out, k_in, "K round-trip bit-exact (layer {layer_idx})");
-                assert_eq!(v_out, v_in, "V round-trip bit-exact (layer {layer_idx})");
-            }
+        // The guard is acquired per iteration (read_layer_block returns
+        // owned Vecs, so the temporary guard can drop right after each
+        // call) and always drops before `verify_chain_hash` below
+        // re-locks the same parking_lot::Mutex (not reentrant).
+        for layer_idx in 0..num_layers {
+            let (k_out, v_out) = wrapper
+                .inner()
+                .lock()
+                .read_layer_block(layer_idx, 1)
+                .expect("read_layer_block");
+            let offset = layer_idx * 2 * per_layer_f32s;
+            let k_in: &[f32] =
+                bytemuck::cast_slice(&bytes[offset * 4..(offset + per_layer_f32s) * 4]);
+            let v_in: &[f32] = bytemuck::cast_slice(
+                &bytes[(offset + per_layer_f32s) * 4..(offset + 2 * per_layer_f32s) * 4],
+            );
+            assert_eq!(k_out, k_in, "K round-trip bit-exact (layer {layer_idx})");
+            assert_eq!(v_out, v_in, "V round-trip bit-exact (layer {layer_idx})");
         }
         // The K slice we serialized via the LCG matches what
         // `write_layer_block` recomputed the hash over — that's the

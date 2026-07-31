@@ -901,6 +901,8 @@ async fn stream_n_parallel_completions(
             let rx = ch
                 .seq_id_rx
                 .take()
+                // invariant: `CandidateChannel` is always constructed with
+                // `Some(seq_id_rx)` by `spawn_n_streaming_candidate`.
                 .expect("seq_id_rx is set by spawn_n_streaming_candidate");
             async move { (idx, rx.await) }
         })
@@ -1561,6 +1563,8 @@ pub async fn completions(
         // chat.rs for rationale on the 1 s cap).
         let seq_id: vllm_traits::SeqId = match tokio::time::timeout(
             std::time::Duration::from_secs(1),
+            // invariant: `run_n_completions` only takes the streaming
+            // branch when it constructed the channel with `Some(seq_id_rx)`.
             seq_id_rx.expect("seq_id_rx is set when is_streaming"),
         )
         .await

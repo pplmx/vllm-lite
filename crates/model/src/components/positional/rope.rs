@@ -333,6 +333,8 @@ pub fn apply_rope_with_scaling(
 /// `inv_freq[i] = theta ^ (-2i / d)` for `i in 0..head_dim/2`.
 /// This is the standard `RoPE` formula unchanged from `apply_rope`.
 fn compute_inv_freq_default(query: &Tensor, theta: f32) -> Vec<f32> {
+    // invariant: RoPE callers always pass a rank-4 query tensor
+    // (batch, seq_len, num_heads, head_dim) by construction.
     let (_batch, _seq_len, _num_heads, head_dim) = query.dims4().expect("dims4");
     compute_inv_freq_for_head_dim(head_dim, theta)
 }
@@ -343,6 +345,7 @@ fn compute_inv_freq_default(query: &Tensor, theta: f32) -> Vec<f32> {
 /// before multiplying by the frequency. Equivalently, divide the
 /// frequency by `scaling_factor`.
 fn compute_inv_freq_linear(query: &Tensor, theta: f32, scaling_factor: f32) -> Vec<f32> {
+    // invariant: RoPE callers always pass a rank-4 query tensor by construction.
     let (_batch, _seq_len, _num_heads, head_dim) = query.dims4().expect("dims4");
     let inv_freq = compute_inv_freq_for_head_dim(head_dim, theta);
     if (scaling_factor - 1.0).abs() < f32::EPSILON {
@@ -362,6 +365,7 @@ fn compute_inv_freq_linear(query: &Tensor, theta: f32, scaling_factor: f32) -> V
 /// half of `YaARN` (`attn_factor`) is **not** applied here; that lives in
 /// the attention kernel and is exposed via `RoPE::attn_factor()`.
 fn compute_inv_freq_yarn(query: &Tensor, theta: f32, scaling_factor: f32) -> Vec<f32> {
+    // invariant: RoPE callers always pass a rank-4 query tensor by construction.
     let (_, _, _, head_dim) = query.dims4().expect("dims4");
     if (scaling_factor - 1.0).abs() < f32::EPSILON {
         return compute_inv_freq_for_head_dim(head_dim, theta);
@@ -405,6 +409,7 @@ fn compute_inv_freq_dynamic(
     orig_max: Option<usize>,
     cur_seq_len: usize,
 ) -> Vec<f32> {
+    // invariant: RoPE callers always pass a rank-4 query tensor by construction.
     let (_, _, _, head_dim) = query.dims4().expect("dims4");
     let Some(orig_max) = orig_max else {
         // Without orig_max, Dynamic cannot decide. Default to Default.
@@ -438,6 +443,7 @@ fn compute_inv_freq_dynamic(
 ///
 /// Falls back to Default when `original_max_position` is None.
 fn compute_inv_freq_su(query: &Tensor, theta: f32, scaling: &RopeScalingContext) -> Vec<f32> {
+    // invariant: RoPE callers always pass a rank-4 query tensor by construction.
     let (_, _, _, head_dim) = query.dims4().expect("dims4");
     let half_dim = head_dim / 2;
 
