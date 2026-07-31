@@ -27,6 +27,11 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install protoc (vllm-dist build.rs)
+        # vllm-dist's build script compiles the gRPC proto; GitHub
+        # runners don't ship protobuf-compiler.
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
 
@@ -121,14 +126,14 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install CUDA toolkit (nvcc for candle-kernels)
-        # `--all-features` compiles candle-kernels, whose build script
-        # requires nvcc to build the CUDA kernels. Compiling CUDA needs
-        # only the toolkit (no GPU/driver), so apt's toolkit suffices.
+      - name: Install CUDA toolkit + protoc
+        # `--all-features` compiles candle-kernels (needs nvcc) and
+        # vllm-dist (needs protoc); GitHub runners ship neither.
         run: |
           sudo apt-get update
-          sudo apt-get install -y nvidia-cuda-toolkit
+          sudo apt-get install -y nvidia-cuda-toolkit protobuf-compiler
           nvcc --version
+          protoc --version
 
       - name: Cache cargo (Swatinem rust-cache — separate key from default job)
         uses: Swatinem/rust-cache@v2
@@ -193,6 +198,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.rust }}
+
+      - name: Install protoc (vllm-dist build.rs)
+        # vllm-dist's build script compiles the gRPC proto; GitHub
+        # runners don't ship protobuf-compiler.
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest

@@ -5,14 +5,14 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-vllm-traits = { path = "../traits", features = ["candle"] }
-vllm-core = { path = "../core" }
-vllm-dist = { path = "../dist", optional = true }
+vllm-traits = { path = "../traits", features = ["candle"], version = "0.1.0" }
+vllm-core = { path = "../core", version = "0.1.0" }
+vllm-dist = { path = "../dist", optional = true, version = "0.1.0" }
 rand = "0.10"
 candle-core = { workspace = true }
 
 [dev-dependencies]
-vllm-model = { path = "../model" }
+vllm-model = { path = "../model", version = "0.1.0" }
 criterion = "0.8"
 proptest = "1.11"
 

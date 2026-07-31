@@ -6,8 +6,8 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-vllm-traits = { path = "../traits", features = ["candle", "kernels"] }
-vllm-dist = { path = "../dist", optional = true }
+vllm-traits = { path = "../traits", features = ["candle", "kernels"], version = "0.1.0" }
+vllm-dist = { path = "../dist", optional = true, version = "0.1.0" }
 candle-core = { workspace = true }
 candle-nn = { workspace = true }
 thiserror = { workspace = true }
@@ -27,7 +27,7 @@ parking_lot = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"
-vllm-testing = { path = "../testing" }
+vllm-testing = { path = "../testing", version = "0.1.0" }
 criterion = "0.8"
 
 [[bench]]
