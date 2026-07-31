@@ -165,46 +165,6 @@ impl PrometheusExporter {
             self.collector.get_gauge("active_sequences")
         );
 
-        output.push_str("# HELP gpu_memory_used_bytes GPU memory usage in bytes\n");
-        output.push_str("# TYPE gpu_memory_used_bytes gauge\n");
-        let _ = write!(
-            output,
-            "gpu_memory_used_bytes {}\n",
-            self.collector.get_gauge("gpu_memory_used_bytes")
-        );
-
-        output.push_str("# HELP gpu_memory_total_bytes Total GPU memory\n");
-        output.push_str("# TYPE gpu_memory_total_bytes gauge\n");
-        let _ = write!(
-            output,
-            "gpu_memory_total_bytes {}\n",
-            self.collector.get_gauge("gpu_memory_total_bytes")
-        );
-
-        output.push_str("# HELP is_leader Whether this instance is the leader\n");
-        output.push_str("# TYPE is_leader gauge\n");
-        let _ = write!(
-            output,
-            "is_leader {}\n",
-            self.collector.get_gauge("is_leader")
-        );
-
-        output.push_str("# HELP inflight_requests Currently in-flight requests\n");
-        output.push_str("# TYPE inflight_requests gauge\n");
-        let _ = write!(
-            output,
-            "inflight_requests {}\n",
-            self.collector.get_gauge("inflight_requests")
-        );
-
-        output.push_str("# HELP scheduler_queue_size Pending scheduling queue\n");
-        output.push_str("# TYPE scheduler_queue_size gauge\n");
-        let _ = write!(
-            output,
-            "scheduler_queue_size {}\n",
-            self.collector.get_gauge("scheduler_queue_size")
-        );
-
         // ── Core engine metrics (lock-free runtime snapshot) ────────────
         // These were previously only reachable via the unrouted
         // `api::get_prometheus` (GetMetrics round-trip). Reading the
