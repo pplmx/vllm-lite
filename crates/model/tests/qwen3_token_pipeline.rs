@@ -488,7 +488,7 @@ mod tests {
     }
 
     #[test]
-
+    #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
     fn test_server_streaming_token_handling() {
         let tokenizer = support::tokenizer::qwen3_tokenizer();
 
@@ -621,7 +621,7 @@ mod tests {
     }
 
     #[test]
-
+    #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
     fn test_server_problematic_tokens() {
         let tokenizer = support::tokenizer::qwen3_tokenizer();
 
