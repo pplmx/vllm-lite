@@ -73,6 +73,19 @@ fn compute_topk_routing(
     Ok(routes_by_expert)
 }
 
+/// Reject invalid Mixtral routing configurations: `top_k` must be in
+/// `` `1..=num_experts` ``. A value of 0 would select no experts (and divide
+/// by a zero weight-sum); a value above `num_experts` would make the
+/// routing `narrow(1, 0, top_k)` panic.
+fn validate_top_k(top_k: usize, num_experts: usize) -> Result<()> {
+    if top_k == 0 || top_k > num_experts {
+        return Err(candle_core::Error::msg(format!(
+            "Invalid Mixtral MoE top_k {top_k}: must be in 1..={num_experts}"
+        )));
+    }
+    Ok(())
+}
+
 impl MixtralSparseMoe {
     /// Construct a new instance from the given configuration.
     /// # Errors
@@ -86,6 +99,10 @@ impl MixtralSparseMoe {
         top_k: usize,
         vb: candle_nn::VarBuilder<'_>,
     ) -> Result<Self> {
+        // Config guard: a top_k outside 1..=num_experts would make the
+        // routing `narrow(1, 0, top_k)` panic (or, at 0, divide by a
+        // zero weight-sum) instead of surfacing a typed error.
+        validate_top_k(top_k, num_experts)?;
         let mut experts = Vec::new();
         for i in 0..num_experts {
             let vb = vb.pp(format!("expert_{i}"));
@@ -131,6 +148,7 @@ impl MixtralSparseMoe {
                 expert_weights.len()
             )));
         }
+        validate_top_k(top_k, num_experts)?;
 
         let mut experts = Vec::new();
         for (gate_w, up_w, down_w) in expert_weights {

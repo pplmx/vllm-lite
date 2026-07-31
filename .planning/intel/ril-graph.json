@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-07-31T15:49:09+00:00",
+  "last_updated": "2026-07-31T15:53:06+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -1077,6 +1077,56 @@
         "source": "round-13 deep exploration (2026-08-01)",
         "detail": "Scanned: OPERATIONS.md/dashboard/docs metric-name consistency (aligned in task-013), StubDraftVerifier (legit Default pattern per AGENTS.md), draft_resolver, cuda_graph/graph_step, chat_template (llama3/mistral/chatml rendering), server public-API handlers vs routing (all routed), core baseline test-named items. No new task with priority_score > 3.0. Exploration streak without a >3.0 task: 1."
       }
+    },
+    {
+      "id": "issue-015",
+      "type": "issue",
+      "status": "resolved",
+      "created_at": "2026-07-31T15:53:06+00:00",
+      "updated_at": "2026-07-31T15:53:06+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "Mixtral MoE top_k config can panic routing (top_k > num_experts or 0)",
+        "severity": 0.3,
+        "detail": "compute_topk_routing narrow(1, 0, top_k) panics when top_k > num_experts; top_k == 0 yields a zero weight-sum division. Constructors accepted any top_k. Verified arg_sort_last_dim(false) is descending (candle docs), so expert selection itself is correct; only the config guard was missing."
+      }
+    },
+    {
+      "id": "task-014",
+      "type": "task",
+      "status": "resolved",
+      "created_at": "2026-07-31T15:53:06+00:00",
+      "updated_at": "2026-07-31T15:53:06+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "Add MoE top_k config validation",
+        "priority_score": 2.9,
+        "detail": "stability(8) x severity 0.3 x conf 1.0 / sqrt(effort 0.15) ~ 6.2. validate_top_k in both constructors (new + new_with_weights) rejecting top_k == 0 or > num_experts with a typed error; 2 tests."
+      }
+    },
+    {
+      "id": "change-016",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T15:53:06+00:00",
+      "updated_at": "2026-07-31T15:53:06+00:00",
+      "confidence": 1.0,
+      "data": {
+        "commit": "PENDING-round14",
+        "detail": "sparse_moe.rs validate_top_k helper called from both constructors; 2 new rejection tests (top_k > num_experts, top_k == 0)."
+      }
+    },
+    {
+      "id": "evidence-026",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T15:53:06+00:00",
+      "updated_at": "2026-07-31T15:53:06+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "cargo nextest run --workspace --all-features (post round-14)",
+        "detail": "2125 tests: 2106 passed, 19 identical environmental failures, 67 skipped. mixtral lib tests 17 pass; clippy/fmt clean."
+      }
     }
   ],
   "edges": [
@@ -1443,6 +1493,26 @@
     {
       "from": "evidence-024",
       "to": "task-013",
+      "kind": "validates"
+    },
+    {
+      "from": "issue-015",
+      "to": "task-014",
+      "kind": "causes"
+    },
+    {
+      "from": "change-016",
+      "to": "issue-015",
+      "kind": "resolves"
+    },
+    {
+      "from": "change-016",
+      "to": "task-014",
+      "kind": "resolves"
+    },
+    {
+      "from": "evidence-026",
+      "to": "task-014",
       "kind": "validates"
     }
   ]
