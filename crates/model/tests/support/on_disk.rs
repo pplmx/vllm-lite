@@ -116,8 +116,20 @@ impl OnDiskFixture {
     }
 
     pub fn loader(&self) -> CandleResult<ModelLoader> {
+        // Return a typed error instead of panicking when the checkpoint
+        // is absent: `loader()` is a fallible API and the
+        // `fixture_loader_errors_without_weights` test relies on that
+        // contract (weights may be absent in CI).
+        let dir = self.model_dir();
+        if !dir.join("config.json").is_file() {
+            return Err(candle_core::Error::msg(format!(
+                "checkpoint not found at {} (set {} to override)",
+                dir.display(),
+                self.env_var
+            )));
+        }
         ModelLoader::builder(self.device.clone())
-            .with_model_dir(self.require_weights().to_string_lossy().into_owned())
+            .with_model_dir(dir.to_string_lossy().into_owned())
             .with_kv_blocks(self.kv_blocks)
             .build()
     }
