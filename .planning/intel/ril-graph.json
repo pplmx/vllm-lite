@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-07-31T15:15:18+00:00",
+  "last_updated": "2026-07-31T15:16:12+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -666,6 +666,18 @@
       "data": {
         "source": "RIL consistency check (round 7)",
         "detail": "47 nodes, 45 edges: 0 orphans (non-evidence/decision), 0 cycles in depends_on/blocks, 0 active tasks. Stop-condition 5 satisfied."
+      }
+    },
+    {
+      "id": "evidence-014",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T15:16:12+00:00",
+      "updated_at": "2026-07-31T15:16:12+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "round-8 deep exploration (2026-07-31)",
+        "detail": "Scanned batch composer (decode/prefill/chunked + unit + prop tests), radix cache node/tree, eviction policy (documented bug-fix history, priority/seq_id/LRU tie-breaks), sampling guards: no new task with priority_score > 3.0. Deep-exploration streak without a >3.0 task: 1 (round 8)."
       }
     }
   ],
