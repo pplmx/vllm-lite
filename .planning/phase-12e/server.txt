@@ -65,14 +65,21 @@ impl core::clone::Clone for vllm_server::security::rbac::Role
 impl core::cmp::Eq for vllm_server::cli::LogLevel
 impl core::cmp::Eq for vllm_server::health::HealthStatus
 impl core::cmp::Eq for vllm_server::openai::batch::types::BatchEndpoint
+impl core::cmp::Eq for vllm_server::openai::batch::types::BatchStatus
 impl core::cmp::Eq for vllm_server::openai::chat_template::ChatTemplate
+impl core::cmp::Eq for vllm_server::openai::types::FunctionDefinition
 impl core::cmp::Eq for vllm_server::openai::types::ResponseFormat
+impl core::cmp::Eq for vllm_server::openai::types::Tool
+impl core::cmp::Eq for vllm_server::openai::types::ToolChoice
+impl core::cmp::Eq for vllm_server::openai::types::ToolChoiceFunctionRef
 impl core::cmp::Eq for vllm_server::openai::types::ToolChoiceMode
+impl core::cmp::Eq for vllm_server::openai::types::ToolChoiceSpecific
 impl core::cmp::Eq for vllm_server::openai::types::ToolType
 impl core::cmp::Eq for vllm_server::security::rbac::Role
 impl core::cmp::PartialEq for vllm_server::cli::LogLevel
 impl core::cmp::PartialEq for vllm_server::health::HealthStatus
 impl core::cmp::PartialEq for vllm_server::openai::batch::types::BatchEndpoint
+impl core::cmp::PartialEq for vllm_server::openai::batch::types::BatchStatus
 impl core::cmp::PartialEq for vllm_server::openai::chat_template::ChatTemplate
 impl core::cmp::PartialEq for vllm_server::openai::types::FunctionDefinition
 impl core::cmp::PartialEq for vllm_server::openai::types::ResponseFormat
@@ -347,6 +354,7 @@ impl core::marker::Send for vllm_server::security::tls::TlsError
 impl core::marker::StructuralPartialEq for vllm_server::cli::LogLevel
 impl core::marker::StructuralPartialEq for vllm_server::health::HealthStatus
 impl core::marker::StructuralPartialEq for vllm_server::openai::batch::types::BatchEndpoint
+impl core::marker::StructuralPartialEq for vllm_server::openai::batch::types::BatchStatus
 impl core::marker::StructuralPartialEq for vllm_server::openai::chat_template::ChatTemplate
 impl core::marker::StructuralPartialEq for vllm_server::openai::types::FunctionDefinition
 impl core::marker::StructuralPartialEq for vllm_server::openai::types::ResponseFormat
@@ -855,7 +863,6 @@ pub async fn vllm_server::api::get_prometheus(axum::extract::state::State<vllm_s
 pub async fn vllm_server::api::health_details(axum::extract::state::State<vllm_server::ApiState>) -> axum::json::Json<vllm_server::api::HealthDetailResponse>
 pub async fn vllm_server::api::shutdown(axum::extract::state::State<vllm_server::ApiState>, http::header::map::HeaderMap) -> axum_core::response::Response
 pub async fn vllm_server::auth::auth_middleware(axum::extract::state::State<alloc::sync::Arc<vllm_server::auth::AuthMiddleware>>, axum_core::extract::Request, axum::middleware::from_fn::Next) -> axum_core::response::Response
-pub async fn vllm_server::auth::AuthMiddleware::verify(&self, &http::header::map::HeaderMap) -> core::result::Result<alloc::string::String, http::status::StatusCode>
 pub async fn vllm_server::debug::audit_dump(axum::extract::state::State<vllm_server::ApiState>, http::header::map::HeaderMap) -> axum_core::response::Response
 pub async fn vllm_server::debug::kv_cache_dump(axum::extract::state::State<vllm_server::ApiState>, http::header::map::HeaderMap) -> axum_core::response::Response
 pub async fn vllm_server::debug::metrics_snapshot(axum::extract::state::State<vllm_server::ApiState>, http::header::map::HeaderMap) -> axum_core::response::Response
@@ -934,9 +941,12 @@ pub fn vllm_server::api::HealthResponse::fmt(&self, &mut core::fmt::Formatter<'_
 pub fn vllm_server::api::HealthResponse::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 pub fn vllm_server::ApiState::clone(&self) -> vllm_server::ApiState
 pub fn vllm_server::ApiState::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn vllm_server::app::build_app(vllm_server::ApiState, core::option::Option<alloc::sync::Arc<vllm_server::auth::AuthMiddleware>>, alloc::sync::Arc<vllm_server::security::audit::AuditLogger>, vllm_server::security::cors::CorsConfig) -> axum::routing::Router
 pub fn vllm_server::auth::AuthMiddleware::api_keys(&self) -> &[alloc::string::String]
 pub fn vllm_server::auth::AuthMiddleware::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::auth::AuthMiddleware::new(alloc::vec::Vec<alloc::string::String>, usize, u64) -> Self
+pub fn vllm_server::auth::AuthMiddleware::new_with_overrides(alloc::vec::Vec<alloc::string::String>, usize, u64, std::collections::hash::map::HashMap<alloc::string::String, (usize, u64)>) -> Self
+pub fn vllm_server::auth::AuthMiddleware::verify(&self, &http::header::map::HeaderMap) -> core::result::Result<alloc::string::String, http::status::StatusCode>
 pub fn vllm_server::AuthConfig::clone(&self) -> vllm_server::AuthConfig
 pub fn vllm_server::AuthConfig::default() -> Self
 pub fn vllm_server::AuthConfig::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
@@ -982,7 +992,7 @@ pub fn vllm_server::config::ConfigValidationError::clone(&self) -> vllm_server::
 pub fn vllm_server::config::ConfigValidationError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::config::ConfigValidationErrors::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::config::CorsConfigFile::clone(&self) -> vllm_server::config::CorsConfigFile
-pub fn vllm_server::config::CorsConfigFile::default() -> Self
+pub fn vllm_server::config::CorsConfigFile::default() -> vllm_server::config::CorsConfigFile
 pub fn vllm_server::config::CorsConfigFile::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 pub fn vllm_server::config::CorsConfigFile::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::config::CorsConfigFile::into_runtime(self) -> vllm_server::security::cors::CorsConfig
@@ -1050,6 +1060,7 @@ pub fn vllm_server::openai::batch::types::BatchResults::deserialize<__D>(__D) ->
 pub fn vllm_server::openai::batch::types::BatchResults::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::openai::batch::types::BatchResults::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 pub fn vllm_server::openai::batch::types::BatchStatus::clone(&self) -> vllm_server::openai::batch::types::BatchStatus
+pub fn vllm_server::openai::batch::types::BatchStatus::eq(&self, &vllm_server::openai::batch::types::BatchStatus) -> bool
 pub fn vllm_server::openai::batch::types::BatchStatus::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::openai::batch::types::RequestCounts::clone(&self) -> vllm_server::openai::batch::types::RequestCounts
 pub fn vllm_server::openai::batch::types::RequestCounts::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
@@ -1070,10 +1081,10 @@ pub fn vllm_server::openai::sampling_validation::validate_chat_tool_choice(core:
 pub fn vllm_server::openai::sampling_validation::validate_completion_logprobs(core::option::Option<u32>) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub fn vllm_server::openai::sampling_validation::validate_completion_meta(core::option::Option<bool>, core::option::Option<u32>) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub fn vllm_server::openai::sampling_validation::validate_completion_request_fields(&vllm_server::openai::types::CompletionRequest) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
-pub fn vllm_server::openai::sampling_validation::validate_logit_bias(core::option::Option<&std::collections::hash::map::HashMap<vllm_traits::types::TokenId, f32>>) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
+pub fn vllm_server::openai::sampling_validation::validate_logit_bias<S: core::hash::BuildHasher>(core::option::Option<&std::collections::hash::map::HashMap<vllm_traits::types::TokenId, f32, S>>) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub fn vllm_server::openai::sampling_validation::validate_penalty(core::option::Option<f32>, &str) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub fn vllm_server::openai::sampling_validation::validate_sampling_params(&vllm_traits::sampling::SamplingParams) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
-pub fn vllm_server::openai::sampling_validation::validate_stop_sequences(&core::option::Option<alloc::vec::Vec<alloc::string::String>>) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
+pub fn vllm_server::openai::sampling_validation::validate_stop_sequences(core::option::Option<&[alloc::string::String]>) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub fn vllm_server::openai::sampling_validation::validate_top_p(core::option::Option<f32>) -> core::result::Result<(), (http::status::StatusCode, axum::json::Json<vllm_server::openai::types::ErrorResponse>)>
 pub fn vllm_server::openai::types::ChatChoice::clone(&self) -> vllm_server::openai::types::ChatChoice
 pub fn vllm_server::openai::types::ChatChoice::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
@@ -1213,9 +1224,9 @@ pub fn vllm_server::security::correlation::CorrelationIdMiddleware::fmt(&self, &
 pub fn vllm_server::security::correlation::CorrelationIdMiddleware::generate_id(&self) -> alloc::string::String
 pub fn vllm_server::security::correlation::CorrelationIdMiddleware::new() -> Self
 pub fn vllm_server::security::cors::CorsConfig::clone(&self) -> vllm_server::security::cors::CorsConfig
-pub fn vllm_server::security::cors::CorsConfig::default() -> Self
+pub fn vllm_server::security::cors::CorsConfig::default() -> vllm_server::security::cors::CorsConfig
 pub fn vllm_server::security::cors::CorsConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub fn vllm_server::security::cors::with_cors(axum::routing::Router, vllm_server::security::cors::CorsConfig) -> axum::routing::Router
+pub fn vllm_server::security::cors::with_cors(axum::routing::Router, &vllm_server::security::cors::CorsConfig) -> axum::routing::Router
 pub fn vllm_server::security::jwt::Claims::clone(&self) -> vllm_server::security::jwt::Claims
 pub fn vllm_server::security::jwt::Claims::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 pub fn vllm_server::security::jwt::Claims::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -1245,12 +1256,13 @@ pub fn vllm_server::security::tls::TlsConfig::load(&self) -> core::result::Resul
 pub fn vllm_server::security::tls::TlsConfig::new(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn vllm_server::security::tls::TlsError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_server::security::with_body_size_limit(axum::routing::Router, usize) -> axum::routing::Router
-pub fn vllm_server::security::with_cors(axum::routing::Router, vllm_server::security::cors::CorsConfig) -> axum::routing::Router
+pub fn vllm_server::security::with_cors(axum::routing::Router, &vllm_server::security::cors::CorsConfig) -> axum::routing::Router
 pub fn vllm_server::security::with_default_body_limit(axum::routing::Router) -> axum::routing::Router
 pub fn vllm_server::util::time::unix_now_millis() -> i64
 pub fn vllm_server::util::time::unix_now_secs() -> i64
 pub mod vllm_server
 pub mod vllm_server::api
+pub mod vllm_server::app
 pub mod vllm_server::auth
 pub mod vllm_server::cli
 pub mod vllm_server::config
@@ -1359,7 +1371,6 @@ pub struct vllm_server::security::rbac::RbacMiddleware
 pub struct vllm_server::security::TlsConfig
 pub struct vllm_server::security::tls::TlsConfig
 pub type vllm_server::api::EngineHandle = tokio::sync::mpsc::bounded::Sender<vllm_core::types::messages::EngineMessage>
-pub type vllm_server::openai::types::EmbeddingData = vllm_server::openai::types::Embedding
 pub vllm_server::api::HealthDetailResponse::gpu_available: bool
 pub vllm_server::api::HealthDetailResponse::gpu_utilization: core::option::Option<f32>
 pub vllm_server::api::HealthDetailResponse::kv_cache_usage_percent: core::option::Option<f32>
@@ -1386,6 +1397,7 @@ pub vllm_server::AuditEvent::user_id: core::option::Option<alloc::string::String
 pub vllm_server::AuthConfig::api_keys: alloc::vec::Vec<alloc::string::String>
 pub vllm_server::AuthConfig::api_keys_env: core::option::Option<alloc::string::String>
 pub vllm_server::AuthConfig::api_keys_file: core::option::Option<alloc::string::String>
+pub vllm_server::AuthConfig::rate_limit_overrides: std::collections::hash::map::HashMap<alloc::string::String, vllm_server::config::auth::RateLimitOverride>
 pub vllm_server::AuthConfig::rate_limit_requests: usize
 pub vllm_server::AuthConfig::rate_limit_window_secs: u64
 pub vllm_server::BatchEndpoint::Chat
@@ -1420,6 +1432,7 @@ pub vllm_server::config::AppConfig::server: vllm_server::config::ServerConfig
 pub vllm_server::config::AuthConfig::api_keys: alloc::vec::Vec<alloc::string::String>
 pub vllm_server::config::AuthConfig::api_keys_env: core::option::Option<alloc::string::String>
 pub vllm_server::config::AuthConfig::api_keys_file: core::option::Option<alloc::string::String>
+pub vllm_server::config::AuthConfig::rate_limit_overrides: std::collections::hash::map::HashMap<alloc::string::String, vllm_server::config::auth::RateLimitOverride>
 pub vllm_server::config::AuthConfig::rate_limit_requests: usize
 pub vllm_server::config::AuthConfig::rate_limit_window_secs: u64
 pub vllm_server::config::ConfigValidationError::DuplicateDraftId(alloc::string::String)

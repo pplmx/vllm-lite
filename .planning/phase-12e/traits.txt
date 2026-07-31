@@ -12,9 +12,10 @@ impl core::clone::Clone for vllm_traits::types::TensorParallelError
 impl core::cmp::Eq for vllm_traits::types::BatchPhase
 impl core::cmp::Eq for vllm_traits::types::FinishReason
 impl core::cmp::PartialEq for vllm_traits::sampling::SampledToken
+impl core::cmp::PartialEq for vllm_traits::sampling::SamplingParams
 impl core::cmp::PartialEq for vllm_traits::types::BatchPhase
 impl core::cmp::PartialEq for vllm_traits::types::FinishReason
-impl core::convert::From<std::io::error::Error> for vllm_traits::model::ModelError
+impl core::convert::From<core::io::error::Error> for vllm_traits::model::ModelError
 impl core::default::Default for vllm_traits::distributed::IdentityHasher
 impl core::default::Default for vllm_traits::distributed::XorShiftHasher
 impl core::default::Default for vllm_traits::model::StubModelBackend
@@ -67,6 +68,7 @@ impl core::marker::Send for vllm_traits::types::BatchPhase
 impl core::marker::Send for vllm_traits::types::FinishReason
 impl core::marker::Send for vllm_traits::types::TensorParallelError
 impl core::marker::StructuralPartialEq for vllm_traits::sampling::SampledToken
+impl core::marker::StructuralPartialEq for vllm_traits::sampling::SamplingParams
 impl core::marker::StructuralPartialEq for vllm_traits::types::BatchPhase
 impl core::marker::StructuralPartialEq for vllm_traits::types::FinishReason
 impl core::marker::Sync for vllm_traits::distributed::IdentityHasher
@@ -205,7 +207,7 @@ pub fn vllm_traits::model::ModelBackend::forward_to_layer(&mut self, &[vllm_trai
 pub fn vllm_traits::model::ModelBackend::num_heads(&self) -> usize
 pub fn vllm_traits::model::ModelBackend::num_layers(&self) -> usize
 pub fn vllm_traits::model::ModelError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub fn vllm_traits::model::ModelError::from(std::io::error::Error) -> Self
+pub fn vllm_traits::model::ModelError::from(core::io::error::Error) -> Self
 pub fn vllm_traits::model::ModelError::new(impl core::convert::Into<alloc::string::String>) -> Self
 pub fn vllm_traits::model::ModelError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 pub fn vllm_traits::model::StubModelBackend::clone(&self) -> vllm_traits::model::StubModelBackend
@@ -234,6 +236,7 @@ pub fn vllm_traits::sampling::SamplingParamsBuilder::with_stop_token_sequences(s
 pub fn vllm_traits::sampling::SamplingParams::clone(&self) -> vllm_traits::sampling::SamplingParams
 pub fn vllm_traits::sampling::SamplingParams::default() -> Self
 pub fn vllm_traits::sampling::SamplingParams::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub fn vllm_traits::sampling::SamplingParams::eq(&self, &vllm_traits::sampling::SamplingParams) -> bool
 pub fn vllm_traits::sampling::SamplingParams::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_traits::sampling::SamplingParams::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 pub fn vllm_traits::types::Batch::clone(&self) -> vllm_traits::types::Batch
@@ -313,11 +316,11 @@ pub vllm_traits::FinishReason::Length
 pub vllm_traits::FinishReason::Stop
 pub vllm_traits::ModelError::Backend(alloc::string::String)
 pub vllm_traits::ModelError::Config(alloc::string::String)
-pub vllm_traits::ModelError::Io(std::io::error::Error)
+pub vllm_traits::ModelError::Io(core::io::error::Error)
 pub vllm_traits::ModelError::Message(alloc::string::String)
 pub vllm_traits::model::ModelError::Backend(alloc::string::String)
 pub vllm_traits::model::ModelError::Config(alloc::string::String)
-pub vllm_traits::model::ModelError::Io(std::io::error::Error)
+pub vllm_traits::model::ModelError::Io(core::io::error::Error)
 pub vllm_traits::model::ModelError::Message(alloc::string::String)
 pub vllm_traits::SampledToken::logprob: f32
 pub vllm_traits::SampledToken::token: vllm_traits::types::TokenId

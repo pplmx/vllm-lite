@@ -7,12 +7,12 @@
 //!
 //! # Honest naming
 //!
-//! The previous name [`NcclAllReduce`] was misleading: despite the
+//! The previous name `NcclAllReduce` was misleading: despite the
 //! `Nccl` prefix, the struct did **not** call NVIDIA NCCL and did
 //! **not** communicate across devices. It computed a local reduction
 //! over a single tensor using [`DeviceMesh::world_size`] only as the
-//! divisor for [`ReduceOp::Avg`]. The misleading name has been folded
-//! into a deprecated type alias for [`LocalSumAllReduce`] (see the
+//! divisor for [`ReduceOp::Avg`]. The misleading alias was removed in
+//! v0.1; this type is the honest name (see the
 //! v31.0 P4 follow-up batch + `docs/technical-due-diligence/architecture-performance.md`
 //! §6 "分布式"). A real cross-device NCCL backend is intentionally out
 //! of scope for v0.x — see `roadmap.md §6` ("暂缓事项").
@@ -51,29 +51,13 @@ pub trait AllReduce: Send + Sync + std::fmt::Debug {
 /// reduction over a local tensor, using `world_size` only as the
 /// divisor for [`ReduceOp::Avg`].
 ///
-/// This is the type new code should use. The misleading
-/// [`NcclAllReduce`] name is preserved as a deprecated alias for the
-/// v0.x transition window so existing callers do not break; the alias
-/// will be removed before 1.0.
+/// This is the type new code should use. (A previous misleading
+/// `NcclAllReduce` alias existed for the v0.x transition window and
+/// was removed once no internal callers remained.)
 #[derive(Debug)]
 pub struct LocalSumAllReduce {
     mesh: Arc<DeviceMesh>,
 }
-
-/// **Deprecated**: alias for [`LocalSumAllReduce`].
-///
-/// Misleadingly suggests an NCCL backend that does not exist in v0.x.
-/// This alias points at [`LocalSumAllReduce`], which is the honest name
-/// for the current single-process reducer. New code should use
-/// [`LocalSumAllReduce`] directly; existing callers will keep compiling
-/// but will see a `deprecated` lint.
-#[deprecated(
-    since = "0.1.0",
-    note = "NcclAllReduce was misleadingly named — it never called NCCL. \
-            Use LocalSumAllReduce instead. The alias will be removed before 1.0."
-)]
-pub type NcclAllReduce = LocalSumAllReduce;
-
 impl LocalSumAllReduce {
     /// Create a new all-reduce backed by the given device mesh.
     #[must_use]
@@ -257,20 +241,5 @@ mod tests {
         let result = ar.all_reduce(&input, ReduceOp::Sum)?;
         assert_eq!(result, input);
         Ok(())
-    }
-
-    /// Compile-only test: the deprecated `NcclAllReduce` alias still
-    /// resolves to `LocalSumAllReduce` so existing callers keep
-    /// compiling through the v0.x transition. The `#[allow(deprecated)]`
-    /// on the type declaration is needed because the alias itself
-    /// carries the deprecation lint.
-    #[test]
-    #[allow(deprecated)]
-    fn nccl_all_reduce_alias_resolves_to_local_sum() {
-        let mesh = DeviceMesh::new(2, 0, vec![0, 1]).unwrap();
-        let legacy: NcclAllReduce = NcclAllReduce::new(mesh.into());
-        // Same type — construction via the alias must produce a usable
-        // LocalSumAllReduce that implements AllReduce.
-        let _: &dyn AllReduce = &legacy;
     }
 }

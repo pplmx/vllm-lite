@@ -48,6 +48,7 @@ impl core::cmp::Eq for vllm_core::DraftResolutionKind
 impl core::cmp::Eq for vllm_core::DraftSpec
 impl core::cmp::Eq for vllm_core::metrics::types::MetricType
 impl core::cmp::Eq for vllm_core::Priority
+impl core::cmp::Eq for vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig
 impl core::cmp::Eq for vllm_core::scheduler::policy::trait_def::PriorityScore
 impl core::cmp::Eq for vllm_core::speculative::DraftId
 impl core::cmp::Eq for vllm_core::speculative::memory_budget::MemoryBudgetSnapshot
@@ -61,17 +62,21 @@ impl core::cmp::PartialEq for vllm_core::DraftResolutionKind
 impl core::cmp::PartialEq for vllm_core::DraftSpec
 impl core::cmp::PartialEq for vllm_core::metrics::types::MetricType
 impl core::cmp::PartialEq for vllm_core::Priority
+impl core::cmp::PartialEq for vllm_core::SchedulerConfig
+impl core::cmp::PartialEq for vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig
 impl core::cmp::PartialEq for vllm_core::scheduler::policy::trait_def::PriorityScore
 impl core::cmp::PartialEq for vllm_core::speculative::DraftId
 impl core::cmp::PartialEq for vllm_core::speculative::memory_budget::MemoryBudgetSnapshot
 impl core::cmp::PartialEq for vllm_core::speculative::strategy::RejectionStrategy
+impl core::cmp::PartialEq for vllm_core::types::AdaptiveDraftConfig
 impl core::cmp::PartialEq for vllm_core::types::Phase
+impl core::cmp::PartialEq for vllm_core::types::SequencePackingConfig
 impl core::cmp::PartialEq for vllm_core::types::Status
 impl core::cmp::PartialOrd for vllm_core::Priority
 impl core::cmp::PartialOrd for vllm_core::scheduler::policy::trait_def::PriorityScore
 impl core::cmp::PartialOrd for vllm_core::speculative::DraftId
 impl core::convert::From<alloc::string::String> for vllm_core::speculative::DraftId
-impl core::convert::From<std::io::error::Error> for vllm_core::speculative::DraftRegistryError
+impl core::convert::From<core::io::error::Error> for vllm_core::speculative::DraftRegistryError
 impl core::convert::From<&str> for vllm_core::speculative::DraftId
 impl core::convert::From<vllm_core::metrics::exporter::MetricsError> for vllm_core::error::EngineError
 impl core::convert::From<vllm_core::speculative::DraftRegistryError> for vllm_core::error::EngineError
@@ -399,11 +404,14 @@ impl core::marker::StructuralPartialEq for vllm_core::DraftResolutionKind
 impl core::marker::StructuralPartialEq for vllm_core::DraftSpec
 impl core::marker::StructuralPartialEq for vllm_core::metrics::types::MetricType
 impl core::marker::StructuralPartialEq for vllm_core::Priority
+impl core::marker::StructuralPartialEq for vllm_core::SchedulerConfig
+impl core::marker::StructuralPartialEq for vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig
 impl core::marker::StructuralPartialEq for vllm_core::scheduler::policy::trait_def::PriorityScore
 impl core::marker::StructuralPartialEq for vllm_core::speculative::DraftId
 impl core::marker::StructuralPartialEq for vllm_core::speculative::memory_budget::MemoryBudgetSnapshot
 impl core::marker::StructuralPartialEq for vllm_core::speculative::strategy::RejectionStrategy
 impl core::marker::StructuralPartialEq for vllm_core::types::Phase
+impl core::marker::StructuralPartialEq for vllm_core::types::SequencePackingConfig
 impl core::marker::StructuralPartialEq for vllm_core::types::Status
 impl core::marker::Sync for vllm_core::beam::BeamSequence
 impl core::marker::Sync for vllm_core::DraftResolutionKind
@@ -1196,7 +1204,7 @@ pub fn vllm_core::Request::clone(&self) -> vllm_core::Request
 pub fn vllm_core::Request::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_core::Request::new(vllm_traits::types::SeqId, alloc::vec::Vec<vllm_traits::types::TokenId>, usize) -> Self
 pub fn vllm_core::Request::with_draft_model(self, impl core::convert::Into<vllm_core::speculative::DraftId>) -> Self
-pub fn vllm_core::sampling::apply_logit_bias(&mut [f32], &std::collections::hash::map::HashMap<vllm_traits::types::TokenId, f32>)
+pub fn vllm_core::sampling::apply_logit_bias<S: core::hash::BuildHasher>(&mut [f32], &std::collections::hash::map::HashMap<vllm_traits::types::TokenId, f32, S>)
 pub fn vllm_core::sampling::apply_presence_penalty(&mut [f32], &[vllm_traits::types::TokenId], f32)
 pub fn vllm_core::sampling::apply_repeat_penalty(&mut [f32], &[vllm_traits::types::TokenId], f32)
 pub fn vllm_core::sampling::matches_stop_sequences(&[u32], &[alloc::vec::Vec<u32>]) -> bool
@@ -1227,6 +1235,7 @@ pub fn vllm_core::scheduler::BatchCompositionConfig::fmt(&self, &mut core::fmt::
 pub fn vllm_core::SchedulerConfig::builder() -> vllm_core::types::SchedulerConfigBuilder
 pub fn vllm_core::SchedulerConfig::clone(&self) -> vllm_core::SchedulerConfig
 pub fn vllm_core::SchedulerConfig::default() -> Self
+pub fn vllm_core::SchedulerConfig::eq(&self, &vllm_core::SchedulerConfig) -> bool
 pub fn vllm_core::SchedulerConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_core::SchedulerConfig::new(usize, usize, u32, bool, usize, f32, bool, bool, usize, usize, vllm_core::types::SequencePackingConfig) -> Self
 pub fn vllm_core::scheduler::cuda_graph::GraphBatch::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -1240,6 +1249,7 @@ pub fn vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfigBuilder::fmt(&s
 pub fn vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig::builder() -> vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfigBuilder
 pub fn vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig::clone(&self) -> vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig
 pub fn vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig::default() -> Self
+pub fn vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig::eq(&self, &vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig) -> bool
 pub fn vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_core::scheduler::cuda_graph::SchedulerCudaGraphConfig::supports_batch_size(&self, usize) -> bool
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::add_request(&mut self, vllm_core::Request) -> vllm_traits::types::SeqId
@@ -1249,6 +1259,7 @@ pub fn vllm_core::scheduler::engine::state::SchedulerEngine::cancel_request(&mut
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::clear_finished(&mut self)
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::default() -> Self
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::finished_sequences(&self) -> alloc::vec::Vec<vllm_core::types::Sequence>
+pub fn vllm_core::scheduler::engine::state::SchedulerEngine::finish_sequence(&mut self, vllm_traits::types::SeqId)
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::get_sequence_mut(&mut self, vllm_traits::types::SeqId) -> core::option::Option<&mut vllm_core::types::Sequence>
 pub fn vllm_core::scheduler::engine::state::SchedulerEngine::get_sequence(&self, vllm_traits::types::SeqId) -> core::option::Option<&vllm_core::types::Sequence>
@@ -1292,7 +1303,7 @@ pub fn vllm_core::scheduler::memory::MemoryManager::new(vllm_core::SchedulerConf
 pub fn vllm_core::scheduler::memory::MemoryManager::record_blocks(&mut self, &[vllm_traits::types::BlockId])
 pub fn vllm_core::scheduler::memory::MemoryManager::release_blocks(&mut self, &[vllm_traits::types::BlockId])
 pub fn vllm_core::scheduler::memory::MemoryManager::rollback(&mut self, &mut vllm_core::types::Sequence, usize)
-pub fn vllm_core::scheduler::memory::MemoryManager::select_victims(&self, &[vllm_core::types::Sequence], usize) -> alloc::vec::Vec<vllm_traits::types::BlockId>
+pub fn vllm_core::scheduler::memory::MemoryManager::select_victims(&mut self, &[vllm_core::types::Sequence], usize) -> alloc::vec::Vec<vllm_traits::types::BlockId>
 pub fn vllm_core::scheduler::memory::MemoryManager::should_preempt(&self, usize, usize, usize, usize) -> bool
 pub fn vllm_core::scheduler::memory::MemoryManager::touch_blocks(&mut self, &[vllm_traits::types::BlockId])
 pub fn vllm_core::scheduler::observer::NoopSchedulerObserver::clone(&self) -> vllm_core::scheduler::observer::NoopSchedulerObserver
@@ -1426,10 +1437,10 @@ pub fn vllm_core::speculative::DraftId::hash<__H: core::hash::Hasher>(&self, &mu
 pub fn vllm_core::speculative::DraftId::partial_cmp(&self, &vllm_core::speculative::DraftId) -> core::option::Option<core::cmp::Ordering>
 pub fn vllm_core::speculative::DraftLoader::load(&self, &vllm_core::speculative::DraftId) -> core::result::Result<alloc::boxed::Box<dyn vllm_traits::model::ModelBackend>, vllm_core::speculative::DraftRegistryError>
 pub fn vllm_core::speculative::DraftRegistryError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub fn vllm_core::speculative::DraftRegistryError::from(std::io::error::Error) -> Self
+pub fn vllm_core::speculative::DraftRegistryError::from(core::io::error::Error) -> Self
 pub fn vllm_core::speculative::DraftRegistryError::from(std::sync::poison::PoisonError<T>) -> Self
 pub fn vllm_core::speculative::DraftRegistryError::from(vllm_traits::model::ModelError) -> Self
-pub fn vllm_core::speculative::DraftRegistryError::io_load(vllm_core::speculative::DraftId, impl core::convert::Into<alloc::string::String>, std::io::error::Error) -> Self
+pub fn vllm_core::speculative::DraftRegistryError::io_load(vllm_core::speculative::DraftId, impl core::convert::Into<alloc::string::String>, core::io::error::Error) -> Self
 pub fn vllm_core::speculative::DraftRegistryError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 pub fn vllm_core::speculative::draft_resolver::DraftLoader::load(&self, &vllm_core::speculative::DraftId) -> core::result::Result<alloc::boxed::Box<dyn vllm_traits::model::ModelBackend>, vllm_core::speculative::DraftRegistryError>
 pub fn vllm_core::speculative::draft_resolver::DraftResolver::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -1511,6 +1522,7 @@ pub fn vllm_core::types::AdaptiveDraftConfigBuilder::fmt(&self, &mut core::fmt::
 pub fn vllm_core::types::AdaptiveDraftConfig::builder() -> vllm_core::types::AdaptiveDraftConfigBuilder
 pub fn vllm_core::types::AdaptiveDraftConfig::clone(&self) -> vllm_core::types::AdaptiveDraftConfig
 pub fn vllm_core::types::AdaptiveDraftConfig::default() -> Self
+pub fn vllm_core::types::AdaptiveDraftConfig::eq(&self, &Self) -> bool
 pub fn vllm_core::types::AdaptiveDraftConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_core::types::EngineMessage::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_core::types::Phase::clone(&self) -> vllm_core::types::Phase
@@ -1529,6 +1541,7 @@ pub fn vllm_core::types::SequencePackingConfigBuilder::fmt(&self, &mut core::fmt
 pub fn vllm_core::types::SequencePackingConfig::builder() -> vllm_core::types::SequencePackingConfigBuilder
 pub fn vllm_core::types::SequencePackingConfig::clone(&self) -> vllm_core::types::SequencePackingConfig
 pub fn vllm_core::types::SequencePackingConfig::default() -> Self
+pub fn vllm_core::types::SequencePackingConfig::eq(&self, &vllm_core::types::SequencePackingConfig) -> bool
 pub fn vllm_core::types::SequencePackingConfig::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_core::types::SequencePackingConfig::from_env() -> Self
 pub fn vllm_core::types::Status::clone(&self) -> vllm_core::types::Status
@@ -2058,7 +2071,7 @@ pub vllm_core::speculative::DraftRegistryError::InUse(usize)
 pub vllm_core::speculative::DraftRegistryError::IoLoad
 pub vllm_core::speculative::DraftRegistryError::IoLoad::draft_id: vllm_core::speculative::DraftId
 pub vllm_core::speculative::DraftRegistryError::IoLoad::path: alloc::string::String
-pub vllm_core::speculative::DraftRegistryError::IoLoad::source: std::io::error::Error
+pub vllm_core::speculative::DraftRegistryError::IoLoad::source: core::io::error::Error
 pub vllm_core::speculative::DraftRegistryError::LockPoisoned
 pub vllm_core::speculative::DraftRegistryError::MemoryBudgetExceeded(vllm_core::speculative::memory_budget::MemoryBudgetExceeded)
 pub vllm_core::speculative::DraftRegistryError::Model(vllm_core::speculative::DraftId, vllm_traits::model::ModelError)
@@ -2098,7 +2111,7 @@ pub vllm_core::speculative::registry::DraftRegistryError::InUse(usize)
 pub vllm_core::speculative::registry::DraftRegistryError::IoLoad
 pub vllm_core::speculative::registry::DraftRegistryError::IoLoad::draft_id: vllm_core::speculative::DraftId
 pub vllm_core::speculative::registry::DraftRegistryError::IoLoad::path: alloc::string::String
-pub vllm_core::speculative::registry::DraftRegistryError::IoLoad::source: std::io::error::Error
+pub vllm_core::speculative::registry::DraftRegistryError::IoLoad::source: core::io::error::Error
 pub vllm_core::speculative::registry::DraftRegistryError::LockPoisoned
 pub vllm_core::speculative::registry::DraftRegistryError::MemoryBudgetExceeded(vllm_core::speculative::memory_budget::MemoryBudgetExceeded)
 pub vllm_core::speculative::registry::DraftRegistryError::Model(vllm_core::speculative::DraftId, vllm_traits::model::ModelError)
