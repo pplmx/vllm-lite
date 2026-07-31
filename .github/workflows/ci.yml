@@ -64,6 +64,12 @@ jobs:
         run: cargo test --doc --workspace --no-fail-fast
 
       - name: Test
+        # GPU-backed tests (`#[cfg_attr(not(feature = "cuda"), ignore)]`)
+        # are compiled out of the default-features run; they require a
+        # CUDA GPU and CANNOT run on GitHub-hosted runners. GPU test
+        # execution is deferred to a self-hosted runner (Phase 31-E,
+        # "GPU nightly smoke (optional)"). `--all-features` jobs
+        # (ci-all-features, MSRV) are compile-only for the same reason.
         run: cargo nextest run --workspace --no-fail-fast
 
       - name: Public API baseline check
