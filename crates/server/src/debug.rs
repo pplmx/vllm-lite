@@ -211,7 +211,13 @@ pub async fn kv_cache_dump(
         .engine_tx
         .try_send(EngineMessage::GetMetrics { response_tx });
 
-    let metrics = response_rx.recv().await.unwrap_or_default();
+    // Bounded wait (same rationale as `health_details`): fall back to
+    // defaults if the engine is mid-step and can't answer promptly.
+    let metrics = tokio::time::timeout(crate::api::METRICS_RESPONSE_TIMEOUT, response_rx.recv())
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_default();
 
     let available_blocks = metrics.current_batch_size;
     let kv_cache_usage_percent = metrics.kv_cache_usage_percent;
