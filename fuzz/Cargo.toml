@@ -29,8 +29,14 @@ path = "../crates/model"
 [dependencies.serde_json]
 version = "1"
 
-[lints]
-workspace = true
+# `fuzz` is excluded from the root workspace (`exclude = ["fuzz"]` in
+# Cargo.toml), so `[lints] workspace = true` cannot resolve a workspace
+# root here — cargo errors with "failed to find a workspace root" and
+# every `cargo +nightly fuzz` invocation (including `just fuzz-build`
+# and the fuzz-nightly CI job) fails at manifest parse time. Fuzz
+# targets are libFuzzer harnesses built only via cargo-fuzz; they do
+# not need the workspace's clippy/rustc lint tiers, so no lint
+# inheritance is declared.
 
 # cargo-machete can't see usage from the generated fuzz target binaries
 # (each `[[bin]]` is a separate compilation unit and the references live
