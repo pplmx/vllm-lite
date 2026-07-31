@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_updated": "2026-07-31T14:56:17+00:00",
+  "last_updated": "2026-07-31T14:58:31+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -364,6 +364,69 @@
         "title": "sampler non-finite guard",
         "detail": "sampling.rs: !max_val.is_finite() -> greedy_sample in temperature_sample + top_p_sample; 4 tests in sampling/tests.rs; CHANGELOG entry."
       }
+    },
+    {
+      "id": "issue-005",
+      "type": "issue",
+      "status": "resolved",
+      "created_at": "2026-07-31T14:58:31+00:00",
+      "updated_at": "2026-07-31T14:58:31+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "circuit breaker nested lock acquisition (state.write while reading last_failure_time)",
+        "severity": 0.3,
+        "detail": "check_and_transition held state.write while acquiring last_failure_time.read; on_failure acquires last_failure_time then state. Not a live deadlock (on_failure's write guard is statement-scoped) but lock-order inconsistent and fragile. Restructured to read the timestamp first, then re-check under the write lock."
+      }
+    },
+    {
+      "id": "issue-006",
+      "type": "issue",
+      "status": "resolved",
+      "created_at": "2026-07-31T14:58:31+00:00",
+      "updated_at": "2026-07-31T14:58:31+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "failover on_node_failure takes write lock for read-only scan",
+        "severity": 0.2,
+        "detail": "Collecting seq_ids for migration is read-only but used write().await, blocking track/complete/migrate writers exactly when contention is highest (node failure). Changed to read()."
+      }
+    },
+    {
+      "id": "change-005",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T14:58:31+00:00",
+      "updated_at": "2026-07-31T14:58:31+00:00",
+      "confidence": 1.0,
+      "data": {
+        "commit": "PENDING-round3",
+        "detail": "breaker.rs check_and_transition lock-order restructure; failover.rs on_node_failure read lock. Existing tests cover both (16 breaker + 34 ha tests pass)."
+      }
+    },
+    {
+      "id": "task-005",
+      "type": "task",
+      "status": "resolved",
+      "created_at": "2026-07-31T14:58:31+00:00",
+      "updated_at": "2026-07-31T14:58:31+00:00",
+      "confidence": 0.9,
+      "data": {
+        "title": "HA concurrency hygiene (breaker lock order + failover read lock)",
+        "priority_score": 3.4,
+        "detail": "stability(8) x severity 0.3 x conf 0.9 / sqrt(effort 0.35) ~ 3.6. Coherent round on stability-critical concurrency components."
+      }
+    },
+    {
+      "id": "evidence-008",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T14:58:31+00:00",
+      "updated_at": "2026-07-31T14:58:31+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "cargo nextest run --workspace --all-features (post round-3)",
+        "detail": "2107 tests run: 2088 passed, 19 failed (identical environmental set), 67 skipped. Zero regressions. fmt + all-targets clippy green."
+      }
     }
   ],
   "edges": [
@@ -496,6 +559,36 @@
     },
     {
       "from": "evidence-010",
+      "to": "task-005",
+      "kind": "validates"
+    },
+    {
+      "from": "issue-005",
+      "to": "task-005",
+      "kind": "causes"
+    },
+    {
+      "from": "issue-006",
+      "to": "task-005",
+      "kind": "causes"
+    },
+    {
+      "from": "change-005",
+      "to": "issue-005",
+      "kind": "resolves"
+    },
+    {
+      "from": "change-005",
+      "to": "issue-006",
+      "kind": "resolves"
+    },
+    {
+      "from": "change-005",
+      "to": "task-005",
+      "kind": "resolves"
+    },
+    {
+      "from": "evidence-008",
       "to": "task-005",
       "kind": "validates"
     }

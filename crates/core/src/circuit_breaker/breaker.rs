@@ -163,18 +163,30 @@ impl CircuitBreaker {
             failure_count = failure_count,
             "Circuit breaker check"
         );
+        // Read the failure timestamp WITHOUT holding the `state` write
+        // lock. The lock acquisition order here (last_failure_time,
+        // then state) is consistent with `on_failure` and avoids the
+        // nested state->last_failure_time acquisition that could
+        // deadlock against `on_failure`'s write to last_failure_time.
+        if current_state != CircuitState::Open {
+            return;
+        }
+        let should_attempt = self
+            .last_failure_time
+            .read()
+            .await
+            .map(|t| t.elapsed() >= self.config.recovery_timeout)
+            .unwrap_or(false);
+        if !should_attempt {
+            return;
+        }
+        // Re-check under the write lock: another task may have
+        // transitioned while we were reading the timestamp.
         let mut state = self.state.write().await;
         if matches!(*state, CircuitState::Open) {
-            let should_attempt = {
-                let last = self.last_failure_time.read().await;
-                last.map(|t| t.elapsed() >= self.config.recovery_timeout)
-                    .unwrap_or(false)
-            };
-            if should_attempt {
-                trace!("Circuit breaker: Closed -> HalfOpen");
-                *state = CircuitState::HalfOpen;
-                self.half_open_calls.store(0, Ordering::Relaxed);
-            }
+            trace!("Circuit breaker: Closed -> HalfOpen");
+            *state = CircuitState::HalfOpen;
+            self.half_open_calls.store(0, Ordering::Relaxed);
         }
         drop(state);
     }
