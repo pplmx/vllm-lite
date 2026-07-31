@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-07-31T15:35:33+00:00",
+  "last_updated": "2026-07-31T15:38:36+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -839,7 +839,7 @@
       }
     },
     {
-      "id": "issue-009",
+      "id": "issue-011",
       "type": "issue",
       "status": "resolved",
       "created_at": "2026-07-31T15:35:33+00:00",
@@ -852,7 +852,7 @@
       }
     },
     {
-      "id": "task-009",
+      "id": "task-010",
       "type": "task",
       "status": "resolved",
       "created_at": "2026-07-31T15:35:33+00:00",
@@ -865,7 +865,7 @@
       }
     },
     {
-      "id": "evidence-014",
+      "id": "evidence-020",
       "type": "evidence",
       "status": "active",
       "created_at": "2026-07-31T15:35:33+00:00",
@@ -877,7 +877,7 @@
       }
     },
     {
-      "id": "evidence-015",
+      "id": "evidence-021",
       "type": "evidence",
       "status": "active",
       "created_at": "2026-07-31T15:35:33+00:00",
@@ -889,7 +889,7 @@
       }
     },
     {
-      "id": "change-008",
+      "id": "change-012",
       "type": "change",
       "status": "active",
       "created_at": "2026-07-31T15:35:33+00:00",
@@ -898,6 +898,22 @@
       "data": {
         "title": "prefix-cache eviction under pressure",
         "detail": "tree.rs drain_blocks + engine/memory.rs execute_preemption phase 0 + 2 unit tests + 1 integration test + CHANGELOG."
+      }
+    },
+    {
+      "id": "decision-006",
+      "type": "decision",
+      "status": "active",
+      "created_at": "2026-07-31T15:38:36+00:00",
+      "updated_at": "2026-07-31T15:38:36+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "De-duplicate graph ids from 795dabbe (prefix-cache eviction)",
+        "rationale": "The parallel agent's final commit created nodes colliding with existing ids (issue-009, task-009, change-008, evidence-014/015). Kept earlier copies, renamed the 15:35:33 copies (issue-011, task-010, change-012, evidence-020/021), and re-pointed its eviction edges. Code change itself reviewed and verified (drain_blocks + Phase 0 refcount release correct; tests pass; no regression).",
+        "alternatives_rejected": [
+          "leave duplicate ids (schema violation)",
+          "drop agent's copies (loses eviction evidence)"
+        ]
       }
     }
   ],
@@ -1133,9 +1149,9 @@
       "to": "task-008"
     },
     {
-      "from": "change-008",
+      "from": "change-012",
       "kind": "resolves",
-      "to": "issue-009"
+      "to": "issue-011"
     },
     {
       "from": "evidence-012",
@@ -1183,29 +1199,29 @@
       "to": "task-009"
     },
     {
-      "from": "evidence-014",
-      "to": "issue-009",
+      "from": "evidence-020",
+      "to": "issue-011",
       "kind": "validates"
     },
     {
-      "from": "issue-009",
-      "to": "task-009",
+      "from": "issue-011",
+      "to": "task-010",
       "kind": "causes"
     },
     {
-      "from": "change-008",
-      "to": "task-009",
+      "from": "change-012",
+      "to": "task-010",
       "kind": "resolves"
     },
     {
-      "from": "change-008",
-      "to": "issue-009",
-      "kind": "resolves"
-    },
-    {
-      "from": "evidence-015",
-      "to": "task-009",
+      "from": "evidence-021",
+      "to": "task-010",
       "kind": "validates"
+    },
+    {
+      "from": "change-008",
+      "kind": "resolves",
+      "to": "issue-009"
     }
   ]
 }
