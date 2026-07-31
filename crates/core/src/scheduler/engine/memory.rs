@@ -39,6 +39,20 @@ impl SchedulerEngine {
     /// **sequence-level preemption** — the legacy behaviour that releases
     /// every block from the most-decodable sequences.
     pub(super) fn execute_preemption(&mut self, blocks_needed: usize) {
+        // Phase 0: release blocks pinned by the prefix cache. Finished
+        // sequences insert their KV blocks into the cache and the cache
+        // holds a refcount on each — without eviction those blocks never
+        // return to the allocator, so a long-running server exhausts the
+        // block pool even with zero running sequences (verified: with a
+        // 16-block pool, 16 distinct finished prompts pin 16/16 blocks).
+        // Under memory pressure, clear the cache (dropping its refs) so
+        // the allocator can reuse the blocks. Sequences still running on
+        // a shared prefix keep their own refcount and are unaffected.
+        if self.memory.available_blocks() < blocks_needed {
+            for blocks in self.prefix_cache.drain_blocks() {
+                self.memory.release_blocks(&blocks);
+            }
+        }
         // Phase 1: priority-weighted block-level eviction.
         let victims = self.memory.select_victims(&self.running, blocks_needed);
         let victim_set: HashSet<_> = victims.iter().copied().collect();
