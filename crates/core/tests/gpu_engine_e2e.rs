@@ -232,6 +232,10 @@ fn engine_e2e_multiple_concurrent_requests() {
 
     let num_requests = 5;
     let mut seq_ids = Vec::new();
+    // Receivers are kept alive so the engine's senders never hit a
+    // closed channel; completion is verified via `running()` below, so
+    // the collection is intentionally never read.
+    #[allow(clippy::collection_is_never_read)]
     let mut rxs = Vec::new();
 
     for i in 0..num_requests {
@@ -501,7 +505,7 @@ fn gpu_engine_e2e_continuous_batching() {
         let prompt_len = 4 + (i % 4);
         let prompt: Vec<TokenId> = (0..prompt_len).map(|j| (i as TokenId * 100 + j)).collect();
         let (tx, _rx) = tokio::sync::mpsc::channel::<SampledToken>(64);
-        let sid = engine.add_request(Request::new(i as u64, prompt, 8), tx);
+        let sid = engine.add_request(Request::new(u64::from(i), prompt, 8), tx);
         seq_ids.push(sid);
     }
 

@@ -440,6 +440,12 @@ pub fn argmax_logits(logits: &[f32]) -> TokenId {
 
 #[cfg(test)]
 mod tests {
+    // Exact-literal equality on f32 config fields is intentional: the
+    // assertions compare against default/round-trip literals that are
+    // representable exactly in f32 (0.0, 0.8, 1.0, 1.2), so the strict
+    // comparison cannot fail on rounding. `assert_eq!` also gives the
+    // clearest failure output for these config defaults.
+    #![allow(clippy::float_cmp)]
     use super::*;
 
     // ── argmax_logits ──

@@ -77,6 +77,10 @@ impl Request {
 
 #[cfg(test)]
 mod tests {
+    // Exact-literal equality on f32 fields (0.0 / 1.0 defaults): the
+    // literals are representable exactly in f32, so strict comparison
+    // cannot fail on rounding.
+    #![allow(clippy::float_cmp)]
     use super::*;
 
     #[test]

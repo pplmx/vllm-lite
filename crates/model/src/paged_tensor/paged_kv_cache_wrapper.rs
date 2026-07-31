@@ -53,6 +53,9 @@ impl PagedKvCacheWrapper {
     /// can hold its own `Arc<Mutex<PagedKvCache>>` for diagnostics).
     #[must_use]
     pub fn new(inner: Arc<PagedKvCache>) -> Self {
+        // invariant: callers hand over a freshly constructed
+        // `Arc<PagedKvCache>` with no other strong references (see
+        // `# Panics` doc above); production uses `from_arc_mutex`.
         let cache = Arc::try_unwrap(inner)
             .expect("PagedKvCacheWrapper::new requires unique Arc<PagedKvCache> ownership");
         Self {
