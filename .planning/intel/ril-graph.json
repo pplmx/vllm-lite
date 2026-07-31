@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-07-31T15:11:24+00:00",
+  "last_updated": "2026-07-31T15:15:18+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -605,6 +605,68 @@
         "source": "cargo nextest run --workspace --all-features (post round-6)",
         "detail": "2117 tests: 2098 passed, 19 failed (identical environmental set), 67 skipped. Regression test fails pre-fix (accepted_counts [0]) and passes post-fix ([2])."
       }
+    },
+    {
+      "id": "issue-009",
+      "type": "issue",
+      "status": "resolved",
+      "created_at": "2026-07-31T15:15:18+00:00",
+      "updated_at": "2026-07-31T15:15:18+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "radix-tree matched_tokens overcounts when walking past a complete node",
+        "severity": 0.6,
+        "detail": "longest_prefix_match updated matched_len on every matched child but matched_blocks only on complete nodes. With complete entries [1,2] and [1,2,3,4] (node 3 incomplete), a query [1,2,3] returned matched_tokens=3 with blocks covering only 2 tokens. resolve_prefix_tokens uses matched_tokens as the computed-token count, so the scheduler would treat 3 tokens as KV-computed with only 2 tokens' blocks -> wrong KV reuse. Fixed: matched_len updates only on complete nodes."
+      }
+    },
+    {
+      "id": "change-008",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T15:15:18+00:00",
+      "updated_at": "2026-07-31T15:15:18+00:00",
+      "confidence": 1.0,
+      "data": {
+        "commit": "PENDING-round7",
+        "detail": "tree.rs longest_prefix_match keeps matched_tokens in lockstep with matched_blocks; regression test test_radix_tree_matched_tokens_tracks_complete_prefix (fails pre-fix: 3 vs 2)."
+      }
+    },
+    {
+      "id": "task-008",
+      "type": "task",
+      "status": "resolved",
+      "created_at": "2026-07-31T15:15:18+00:00",
+      "updated_at": "2026-07-31T15:15:18+00:00",
+      "confidence": 0.95,
+      "data": {
+        "title": "Fix radix-tree matched_tokens overcount",
+        "priority_score": 5.1,
+        "detail": "correctness(10) x severity 0.6 x conf 0.95 / sqrt(effort 0.25) ~ 11.4. Silent wrong KV reuse in prefix caching when an incomplete node extends past a complete prefix."
+      }
+    },
+    {
+      "id": "evidence-012",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T15:15:18+00:00",
+      "updated_at": "2026-07-31T15:15:18+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "cargo nextest run --workspace --all-features (post round-7)",
+        "detail": "2118 tests: 2099 passed, 19 failed (identical environmental set), 67 skipped. Regression test fails pre-fix (3 vs 2), passes post-fix."
+      }
+    },
+    {
+      "id": "evidence-013",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T15:15:18+00:00",
+      "updated_at": "2026-07-31T15:15:18+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "RIL consistency check (round 7)",
+        "detail": "47 nodes, 45 edges: 0 orphans (non-evidence/decision), 0 cycles in depends_on/blocks, 0 active tasks. Stop-condition 5 satisfied."
+      }
     }
   ],
   "edges": [
@@ -831,6 +893,26 @@
     {
       "from": "evidence-011",
       "to": "task-007",
+      "kind": "validates"
+    },
+    {
+      "from": "issue-009",
+      "to": "task-008",
+      "kind": "causes"
+    },
+    {
+      "from": "change-008",
+      "to": "issue-008",
+      "kind": "resolves"
+    },
+    {
+      "from": "change-008",
+      "to": "issue-009",
+      "kind": "resolves"
+    },
+    {
+      "from": "evidence-012",
+      "to": "task-008",
       "kind": "validates"
     }
   ]

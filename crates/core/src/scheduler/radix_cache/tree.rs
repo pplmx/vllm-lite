@@ -40,9 +40,14 @@ impl RadixTree {
 
         for (i, &token) in tokens.iter().enumerate() {
             if let Some(child) = node.children.get(&token) {
-                matched_len = i + 1;
                 node = child;
                 if node.is_complete {
+                    // Only a COMPLETE node contributes KV blocks; keep
+                    // matched_tokens in lockstep with matched_blocks so
+                    // callers never advance further than the returned
+                    // blocks cover (a longer incomplete path must not
+                    // inflate the computed-token count).
+                    matched_len = i + 1;
                     matched_blocks.clone_from(&node.blocks);
                 }
             } else {
@@ -148,6 +153,38 @@ mod tests {
         assert!(result.is_some());
         assert_eq!(result.unwrap().matched_tokens, 2);
     }
+}
+
+/// Regression: `matched_tokens` must reflect the longest COMPLETE
+/// prefix (whose blocks are returned), not the length of the walked
+/// path. Inserting `[1,2]` (complete) and then `[1,2,3,4]` (complete)
+/// leaves node 3 incomplete; a query for `[1,2,3]` walks to node 3 but
+/// the blocks belong to `[1,2]` — the old code reported
+/// `matched_tokens = 3` while returning 2 tokens' worth of blocks,
+/// which would make the scheduler treat 3 tokens as KV-computed.
+#[test]
+fn test_radix_tree_matched_tokens_tracks_complete_prefix() {
+    let mut tree = RadixTree::new();
+    tree.insert(&[1, 2], vec![10, 20]);
+    tree.insert(&[1, 2, 3, 4], vec![10, 20, 30, 40]);
+
+    let result = tree
+        .longest_prefix_match(&[1, 2, 3])
+        .expect("prefix exists");
+    assert_eq!(
+        result.matched_tokens, 2,
+        "matched_tokens must be the longest COMPLETE prefix length, \
+             not the walked path length"
+    );
+    assert_eq!(result.blocks.as_ref(), &vec![10, 20]);
+
+    // The longer complete entry is still returned when the query
+    // reaches it.
+    let result = tree
+        .longest_prefix_match(&[1, 2, 3, 4])
+        .expect("prefix exists");
+    assert_eq!(result.matched_tokens, 4);
+    assert_eq!(result.blocks.as_ref(), &vec![10, 20, 30, 40]);
 }
 
 #[cfg(test)]
