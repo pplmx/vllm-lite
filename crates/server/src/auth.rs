@@ -565,6 +565,28 @@ pub(crate) fn estimate_request_cost(body: &str) -> f64 {
             }
             _ => return 1.0,
         }
+    } else if let Some(input) = json.get("input") {
+        // Embeddings: `input` is a string or an array of strings, one
+        // per vector to encode. Compute scales with the input length
+        // (tokenized + encoded), so under-counting it would let a
+        // caller bypass cost-based rate limits with arbitrarily long
+        // inputs. Treat it like a prompt: sum word counts for strings,
+        // element count for pre-tokenized / opaque arrays.
+        match input {
+            Value::String(s) => s.split_whitespace().count() as f64,
+            Value::Array(arr) => {
+                let all_strings = arr.iter().all(serde_json::Value::is_string);
+                if all_strings {
+                    arr.iter()
+                        .filter_map(|e| e.as_str())
+                        .map(|s| s.split_whitespace().count() as f64)
+                        .sum()
+                } else {
+                    arr.len() as f64
+                }
+            }
+            _ => return 1.0,
+        }
     } else {
         return 1.0;
     };
@@ -909,6 +931,47 @@ mod tests {
         let body = r#"{"foo": "bar"}"#;
         let cost = estimate_request_cost(body);
         assert_eq!(cost, 1.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_embeddings_array_of_strings() {
+        // Embeddings compute scales with input length; the cost must
+        // reflect the words being encoded rather than a flat 1.0.
+        let body = r#"{"input": ["hello world", "foo bar baz"], "model": "m"}"#;
+        let cost = estimate_request_cost(body);
+        // 2 + 3 words + 100 (default max_tokens) = 105
+        assert_eq!(cost, 105.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_embeddings_single_string() {
+        let body = r#"{"input": "one two three", "model": "m"}"#;
+        let cost = estimate_request_cost(body);
+        // 3 words + 100 = 103
+        assert_eq!(cost, 103.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_embeddings_large_input_not_flat() {
+        // Regression: pre-fix, an embeddings body had no `prompt` /
+        // `messages` key so it fell through to the flat 1.0 default —
+        // a 100k-word input cost the same as a 1-word input, letting a
+        // caller under-pay the rate-limit budget on a compute-heavy
+        // endpoint. Post-fix the word count is charged.
+        let words = "word ".repeat(10_000);
+        let body = format!(r#"{{"input": ["{words}"], "model": "m"}}"#);
+        let cost = estimate_request_cost(&body);
+        assert_eq!(cost, 10_100.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_embeddings_token_array_elements() {
+        // Pre-tokenized / non-string inputs charge one per element
+        // (same convention as completions token arrays).
+        let body = r#"{"input": [1, 2, 3], "model": "m"}"#;
+        let cost = estimate_request_cost(body);
+        // 3 elements + 100 = 103
+        assert_eq!(cost, 103.0);
     }
 
     #[test]

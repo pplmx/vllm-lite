@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_updated": "2026-07-31T14:59:46+00:00",
+  "last_updated": "2026-07-31T15:01:08+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -439,6 +439,56 @@
         "source": "round-4 deep exploration (2026-07-31)",
         "detail": "Scanned batch API (501 no-op, no leak), OTLP exporter, hash_router, beam.rs, prometheus exporter, lock_free metrics, embeddings handler, metrics collector: no task with priority_score > 3.0 surfaced. Deep-exploration streak without a >3.0 task: 1 (stop condition 4 needs 2 consecutive)."
       }
+    },
+    {
+      "id": "issue-006",
+      "type": "issue",
+      "status": "resolved",
+      "created_at": "2026-07-31T15:01:08+00:00",
+      "updated_at": "2026-07-31T15:01:08+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "embeddings requests bypass cost-aware rate limiting",
+        "severity": 0.4,
+        "detail": "estimate_request_cost only counts messages/prompt; embeddings input falls to flat 1.0 \u2014 100k-word input costs same as 1-word on compute-proportional endpoint. API-key mode rate-limit under-payment."
+      }
+    },
+    {
+      "id": "task-006",
+      "type": "task",
+      "status": "resolved",
+      "created_at": "2026-07-31T15:01:08+00:00",
+      "updated_at": "2026-07-31T15:01:08+00:00",
+      "confidence": 0.95,
+      "data": {
+        "title": "Charge embeddings input length in estimate_request_cost",
+        "priority_score": 5.8,
+        "detail": "Add input branch mirroring prompt handling; 4 regression tests incl. 10k-word case. category=security(10) x severity 0.4 x conf 0.95 / sqrt(0.2) ~ 8.5."
+      }
+    },
+    {
+      "id": "evidence-011",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T15:01:08+00:00",
+      "updated_at": "2026-07-31T15:01:08+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "cargo test -p vllm-server --lib auth + nextest vllm-server",
+        "detail": "56 auth lib tests pass (incl. 4 new); server 647/650 (3 OTLP env-fail); clippy all-targets clean."
+      }
+    },
+    {
+      "id": "change-006",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T15:01:08+00:00",
+      "updated_at": "2026-07-31T15:01:08+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "embeddings cost estimation",
+        "detail": "auth.rs estimate_request_cost input branch + 4 tests; CHANGELOG entry."
+      }
     }
   ],
   "edges": [
@@ -603,6 +653,26 @@
       "from": "evidence-008",
       "to": "task-005",
       "kind": "validates"
+    },
+    {
+      "from": "evidence-011",
+      "to": "task-006",
+      "kind": "validates"
+    },
+    {
+      "from": "issue-006",
+      "to": "task-006",
+      "kind": "causes"
+    },
+    {
+      "from": "change-006",
+      "to": "task-006",
+      "kind": "resolves"
+    },
+    {
+      "from": "change-006",
+      "to": "issue-006",
+      "kind": "resolves"
     }
   ]
 }
