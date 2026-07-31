@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-07-31T15:44:44+00:00",
+  "last_updated": "2026-07-31T15:47:44+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -1015,6 +1015,56 @@
         "source": "cargo nextest run --workspace --all-features (post round-11)",
         "detail": "2123 tests: 2104 passed, 19 identical environmental failures, 67 skipped. prometheus export tests pass; fmt/clippy clean."
       }
+    },
+    {
+      "id": "issue-014",
+      "type": "issue",
+      "status": "resolved",
+      "created_at": "2026-07-31T15:47:44+00:00",
+      "updated_at": "2026-07-31T15:47:44+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "Grafana dashboard queries never-matched vllm_* metric names + dead get_prometheus",
+        "severity": 0.5,
+        "detail": "dashboard.json queried vllm_tokens_total / vllm_p50_latency_ms etc. \u2014 names only produced by api::get_prometheus, which was never routed, so every panel showed NoData. Meanwhile /metrics (PrometheusExporter) exposed the same data without the vllm_ prefix. get_prometheus was 72 lines of dead code whose output names existed nowhere on the wire."
+      }
+    },
+    {
+      "id": "task-013",
+      "type": "task",
+      "status": "resolved",
+      "created_at": "2026-07-31T15:47:44+00:00",
+      "updated_at": "2026-07-31T15:47:44+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "Align Grafana dashboard with real /metrics names; delete dead get_prometheus",
+        "priority_score": 4.0,
+        "detail": "observability(8) x severity 0.5 x conf 1.0 / sqrt(effort 0.3) ~ 7.3. Rewrite dashboard exprs to actual metric names (tokens_total, latency_p50_ms, ...); remove api::get_prometheus (dead) + its public-api baseline line; rework metrics_timeout test to hit routed /metrics."
+      }
+    },
+    {
+      "id": "change-015",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T15:47:44+00:00",
+      "updated_at": "2026-07-31T15:47:44+00:00",
+      "confidence": 1.0,
+      "data": {
+        "commit": "PENDING-round12",
+        "detail": "dashboard.json: 8 exprs vllm_* -> real names (valid JSON); api.rs: -72 lines get_prometheus; metrics_timeout.rs: replaced direct-call test with routed /metrics test; phase-12e/server.txt baseline line removed."
+      }
+    },
+    {
+      "id": "evidence-024",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T15:47:44+00:00",
+      "updated_at": "2026-07-31T15:47:44+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "cargo nextest run --workspace --all-features (post round-12)",
+        "detail": "2123 tests: 2104 passed, 19 identical environmental failures, 67 skipped. fmt/clippy clean; JSON valid; public-api baseline updated for the removal."
+      }
     }
   ],
   "edges": [
@@ -1361,6 +1411,26 @@
     {
       "from": "evidence-023",
       "to": "task-012",
+      "kind": "validates"
+    },
+    {
+      "from": "issue-014",
+      "to": "task-013",
+      "kind": "causes"
+    },
+    {
+      "from": "change-015",
+      "to": "issue-014",
+      "kind": "resolves"
+    },
+    {
+      "from": "change-015",
+      "to": "task-013",
+      "kind": "resolves"
+    },
+    {
+      "from": "evidence-024",
+      "to": "task-013",
       "kind": "validates"
     }
   ]

@@ -92,28 +92,15 @@ async fn debug_kv_cache_returns_defaults_when_engine_unresponsive() {
 }
 
 #[tokio::test]
-async fn prometheus_scrape_returns_defaults_when_engine_unresponsive() {
-    // The routed /metrics handler reads the local collector (no engine
-    // round-trip), so exercise `api::get_prometheus` directly — the
-    // function the bounded wait protects.
-    let mut state = api_state(vllm_model::config::Architecture::Qwen3);
-    let (engine_tx, _engine_rx) = tokio::sync::mpsc::channel(256);
-    state.engine_tx = engine_tx;
-    let app = axum::Router::new()
-        .route("/m", axum::routing::get(vllm_server::api::get_prometheus))
-        .with_state(state);
-    let req = Request::builder()
-        .method("GET")
-        .uri("/m")
-        .body(Body::empty())
-        .unwrap();
-    let resp = app.clone().oneshot(req).await.unwrap();
-    let (parts, body) = resp.into_parts();
-    let bytes = BodyExt::collect(body).await.unwrap().to_bytes();
-    let body = String::from_utf8_lossy(&bytes).to_string();
-    assert_eq!(parts.status, axum::http::StatusCode::OK);
+async fn metrics_endpoint_returns_promptly_when_engine_unresponsive() {
+    // The routed /metrics handler reads the local collector directly
+    // (no engine GetMetrics round-trip), so it must answer immediately
+    // even when the engine is busy/unresponsive.
+    let (app, _engine_rx) = app_with_dead_engine();
+    let (status, body) = collect(get(&app, "/metrics").await).await;
+    assert_eq!(status, axum::http::StatusCode::OK);
     assert!(
-        body.contains("vllm_tokens_total 0"),
-        "get_prometheus must return the zero snapshot instead of hanging: {body}"
+        body.contains("tokens_total 0"),
+        "/metrics must return the zero engine snapshot without an engine round-trip: {body}"
     );
 }

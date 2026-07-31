@@ -859,7 +859,6 @@ impl vllm_server::security::jwt::JwtValidator
 impl vllm_server::security::rbac::RbacMiddleware
 impl vllm_server::security::rbac::Role
 impl vllm_server::security::tls::TlsConfig
-pub async fn vllm_server::api::get_prometheus(axum::extract::state::State<vllm_server::ApiState>) -> alloc::string::String
 pub async fn vllm_server::api::health_details(axum::extract::state::State<vllm_server::ApiState>) -> axum::json::Json<vllm_server::api::HealthDetailResponse>
 pub async fn vllm_server::api::shutdown(axum::extract::state::State<vllm_server::ApiState>, http::header::map::HeaderMap) -> axum_core::response::Response
 pub async fn vllm_server::auth::auth_middleware(axum::extract::state::State<alloc::sync::Arc<vllm_server::auth::AuthMiddleware>>, axum_core::extract::Request, axum::middleware::from_fn::Next) -> axum_core::response::Response
