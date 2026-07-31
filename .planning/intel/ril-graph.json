@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-07-31T15:16:12+00:00",
+  "last_updated": "2026-07-31T15:19:04+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -678,6 +678,34 @@
       "data": {
         "source": "round-8 deep exploration (2026-07-31)",
         "detail": "Scanned batch composer (decode/prefill/chunked + unit + prop tests), radix cache node/tree, eviction policy (documented bug-fix history, priority/seq_id/LRU tie-breaks), sampling guards: no new task with priority_score > 3.0. Deep-exploration streak without a >3.0 task: 1 (round 8)."
+      }
+    },
+    {
+      "id": "evidence-015",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T15:19:04+00:00",
+      "updated_at": "2026-07-31T15:19:04+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "round-9 deep exploration + completion audit (2026-07-31)",
+        "detail": "Round 9 scanned model attention (gqa/mla/flash-v3/util/paged), rms_norm, quantization, mrope, adaptive spec decoder, JWT, sampling_validation, rbac, streaming completions, sync helpers, phase_scheduler: no task with priority_score > 3.0 (streak 2/2). Final VERIFY: fmt OK, build --all-features OK, clippy all-targets all-features -D warnings OK, 2099/2118 tests pass (19 identical environmental failures: 7 CUDA no-GPU, 12 socket-bind sandbox; 67 skipped)."
+      }
+    },
+    {
+      "id": "decision-003",
+      "type": "decision",
+      "status": "active",
+      "created_at": "2026-07-31T15:19:04+00:00",
+      "updated_at": "2026-07-31T15:19:04+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "Autonomous loop stop conditions satisfied \u2014 goal complete",
+        "rationale": "All 5 stop conditions met: (1) 0 active tasks > 3.0; (2) 0 active high-severity issues; (3) last VERIFY green (2099/2118, only environmental failures); (4) two consecutive exploration rounds (8,9) without a >3.0 task; (5) graph consistency checked (0 orphans, 0 cycles). 8 rounds completed: clippy gate, invariant audit, middleware ordering security fix, HA concurrency, metrics timeout bounds, speculative prefill verification fix, radix-tree matched_tokens fix, + 2 exploration rounds. Parallel agent shipped task-003 (deprecated shims), sampling greedy fallback, embeddings cost, fuzz manifest fix (in progress).",
+        "alternatives_rejected": [
+          "continue exploring further components (diminishing returns; all high-severity classes already closed)",
+          "wait for the parallel agent to finish fuzz edits (stop conditions do not depend on their in-progress work; their edits remain uncommitted and untouched by us)"
+        ]
       }
     }
   ],
