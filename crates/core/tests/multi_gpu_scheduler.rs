@@ -431,6 +431,8 @@ fn gpu_scheduler_completes_and_frees_blocks() {
 #[test]
 #[ignore = "requires CUDA GPU hardware"]
 fn gpu_scheduler_priority_scheduling() {
+    use vllm_core::types::Priority;
+
     let _device = vllm_testing::gpu_device();
 
     let config = SchedulerConfig {
@@ -440,8 +442,6 @@ fn gpu_scheduler_priority_scheduling() {
         ..Default::default()
     };
     let mut scheduler = make_scheduler(config, 256);
-
-    use vllm_core::types::Priority;
 
     // Add a low-priority request.
     let mut low = Request::new(1, vec![1, 2], 5);

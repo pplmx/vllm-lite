@@ -101,6 +101,11 @@ impl SequencePackingConfigBuilder {
 
 #[cfg(test)]
 #[allow(clippy::float_cmp)]
+// SAFETY: the test module mutates process-wide env vars
+// (VLLM_SEQ_PACKING_*) which is `unsafe` in the Rust 2024 edition.
+// The per-block SAFETY comments above each `unsafe` block document why
+// the specific env-var names cannot race with other tests.
+#[allow(unsafe_code)]
 mod tests {
     use super::*;
 

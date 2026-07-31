@@ -31,6 +31,11 @@ use vllm_server::config::MultiNodeConfig;
 ///   bootstrap didn't go through `EngineBuilder::with_paged_kv_cache`).
 /// - The TCP listener fails to bind to `cfg.bind_addr`.
 #[cfg(feature = "multi-node")]
+// The future captures `&Engine`, and `Engine` holds `Box<dyn
+// CudaGraphExecutor + Send>` (not `Sync`), so the future is not
+// `Send`. This is fine: the only call site (`server::main`) awaits it
+// directly on the main task and never spawns it on another thread.
+#[allow(clippy::future_not_send)]
 pub async fn spawn_multi_node_grpc_server(
     engine: &Engine,
     cfg: &MultiNodeConfig,
