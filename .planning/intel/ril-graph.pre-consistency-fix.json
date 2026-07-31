@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "last_updated": "2026-07-31T15:10:03+00:00",
+  "version": 1,
+  "last_updated": "2026-07-31T15:05:52+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -255,7 +255,7 @@
       }
     },
     {
-      "id": "evidence-006a",
+      "id": "evidence-006",
       "type": "evidence",
       "status": "active",
       "created_at": "2026-07-31T14:52:18+00:00",
@@ -267,7 +267,7 @@
       }
     },
     {
-      "id": "evidence-007a",
+      "id": "evidence-007",
       "type": "evidence",
       "status": "active",
       "created_at": "2026-07-31T14:52:18+00:00",
@@ -279,7 +279,7 @@
       }
     },
     {
-      "id": "change-004a",
+      "id": "change-004",
       "type": "change",
       "status": "active",
       "created_at": "2026-07-31T14:52:18+00:00",
@@ -366,7 +366,7 @@
       }
     },
     {
-      "id": "issue-005a",
+      "id": "issue-005",
       "type": "issue",
       "status": "resolved",
       "created_at": "2026-07-31T14:58:31+00:00",
@@ -392,7 +392,7 @@
       }
     },
     {
-      "id": "change-005a",
+      "id": "change-005",
       "type": "change",
       "status": "active",
       "created_at": "2026-07-31T14:58:31+00:00",
@@ -404,7 +404,7 @@
       }
     },
     {
-      "id": "task-005a",
+      "id": "task-005",
       "type": "task",
       "status": "resolved",
       "created_at": "2026-07-31T14:58:31+00:00",
@@ -417,7 +417,7 @@
       }
     },
     {
-      "id": "evidence-008a",
+      "id": "evidence-008",
       "type": "evidence",
       "status": "active",
       "created_at": "2026-07-31T14:58:31+00:00",
@@ -429,7 +429,7 @@
       }
     },
     {
-      "id": "evidence-009a",
+      "id": "evidence-009",
       "type": "evidence",
       "status": "active",
       "created_at": "2026-07-31T14:59:46+00:00",
@@ -441,7 +441,7 @@
       }
     },
     {
-      "id": "issue-006a",
+      "id": "issue-006",
       "type": "issue",
       "status": "resolved",
       "created_at": "2026-07-31T15:01:08+00:00",
@@ -504,7 +504,7 @@
       }
     },
     {
-      "id": "change-006a",
+      "id": "change-006",
       "type": "change",
       "status": "active",
       "created_at": "2026-07-31T15:05:52+00:00",
@@ -516,7 +516,7 @@
       }
     },
     {
-      "id": "task-006a",
+      "id": "task-006",
       "type": "task",
       "status": "resolved",
       "created_at": "2026-07-31T15:05:52+00:00",
@@ -529,7 +529,7 @@
       }
     },
     {
-      "id": "evidence-010a",
+      "id": "evidence-010",
       "type": "evidence",
       "status": "active",
       "created_at": "2026-07-31T15:05:52+00:00",
@@ -538,22 +538,6 @@
       "data": {
         "source": "cargo nextest run --workspace --all-features (post round-5)",
         "detail": "2114 tests: 2095 passed, 19 failed (identical environmental set), 67 skipped. metrics_timeout tests run in exactly 2.00s proving the timeout path."
-      }
-    },
-    {
-      "id": "decision-002",
-      "type": "decision",
-      "status": "active",
-      "created_at": "2026-07-31T15:10:03+00:00",
-      "updated_at": "2026-07-31T15:10:03+00:00",
-      "confidence": 1.0,
-      "data": {
-        "title": "RIL graph consistency fix (2026-07-31)",
-        "detail": "Two concurrent agent instances had reused the same node-ID sequences (task-005/task-006, issue-005/issue-006, evidence-006..010, change-004..006), making 12 IDs ambiguous. Rebuilt the graph with unique IDs (later occurrences get -a/-b suffixes) and disambiguated all 40 edges against commit history. Pre-fix graph preserved at .planning/intel/ril-graph.pre-consistency-fix.json (audit trail).",
-        "alternatives_rejected": [
-          "deleting duplicate nodes (loses audit trail)",
-          "leaving ambiguous IDs (breaks task lookup for future sessions)"
-        ]
       }
     }
   ],
@@ -581,7 +565,8 @@
     {
       "from": "evidence-001",
       "to": "issue-001",
-      "kind": "refutes"
+      "kind": "refutes",
+      "note": "CI gate (just clippy) is green; only all-targets strict gate fails"
     },
     {
       "from": "evidence-003",
@@ -616,7 +601,8 @@
     {
       "from": "decision-001",
       "to": "change-001",
-      "kind": "supersedes"
+      "kind": "supersedes",
+      "note": "documents attribution note"
     },
     {
       "from": "evidence-008",
@@ -644,7 +630,7 @@
       "kind": "validates"
     },
     {
-      "from": "evidence-006a",
+      "from": "evidence-006",
       "to": "issue-004",
       "kind": "validates"
     },
@@ -654,17 +640,17 @@
       "kind": "causes"
     },
     {
-      "from": "change-004a",
+      "from": "change-004",
       "to": "issue-004",
       "kind": "resolves"
     },
     {
-      "from": "change-004a",
+      "from": "change-004",
       "to": "task-004",
       "kind": "resolves"
     },
     {
-      "from": "evidence-007a",
+      "from": "evidence-007",
       "to": "task-004",
       "kind": "validates"
     },
@@ -689,33 +675,33 @@
       "kind": "validates"
     },
     {
-      "from": "issue-005a",
-      "to": "task-005a",
+      "from": "issue-005",
+      "to": "task-005",
       "kind": "causes"
     },
     {
       "from": "issue-006",
-      "to": "task-005a",
+      "to": "task-005",
       "kind": "causes"
     },
     {
-      "from": "change-005a",
-      "to": "issue-005a",
+      "from": "change-005",
+      "to": "issue-005",
       "kind": "resolves"
     },
     {
-      "from": "change-005a",
+      "from": "change-005",
       "to": "issue-006",
       "kind": "resolves"
     },
     {
-      "from": "change-005a",
-      "to": "task-005a",
+      "from": "change-005",
+      "to": "task-005",
       "kind": "resolves"
     },
     {
-      "from": "evidence-008a",
-      "to": "task-005a",
+      "from": "evidence-008",
+      "to": "task-005",
       "kind": "validates"
     },
     {
@@ -724,7 +710,7 @@
       "kind": "validates"
     },
     {
-      "from": "issue-006a",
+      "from": "issue-006",
       "to": "task-006",
       "kind": "causes"
     },
@@ -735,33 +721,28 @@
     },
     {
       "from": "change-006",
-      "to": "issue-006a",
+      "to": "issue-006",
       "kind": "resolves"
     },
     {
       "from": "issue-007",
-      "to": "task-006a",
+      "to": "task-006",
       "kind": "causes"
     },
     {
-      "from": "change-006a",
+      "from": "change-006",
       "to": "issue-007",
       "kind": "resolves"
     },
     {
-      "from": "change-006a",
-      "to": "task-006a",
+      "from": "change-006",
+      "to": "task-006",
       "kind": "resolves"
     },
     {
-      "from": "evidence-010a",
-      "to": "task-006a",
+      "from": "evidence-010",
+      "to": "task-006",
       "kind": "validates"
-    },
-    {
-      "from": "decision-002",
-      "to": "change-003",
-      "kind": "supersedes"
     }
   ]
 }
