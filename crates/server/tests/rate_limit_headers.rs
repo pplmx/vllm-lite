@@ -237,6 +237,64 @@ async fn test_cost_aware_rate_limiting_with_large_body() {
 }
 
 #[tokio::test]
+async fn test_cost_aware_rate_limiting_with_embeddings_input() {
+    // Embeddings bodies are charged for their input length: a 4-word
+    // input costs 4 tokens, a 2-word input costs 2. With capacity 10,
+    // two 4-word + one 2-word request succeed (4+4+2 = 10), and the
+    // next request is rate-limited. Pre-fix the body fell through to
+    // the flat 1.0 default, so all four would have succeeded.
+    let auth = Arc::new(AuthMiddleware::new(vec!["test_key".to_string()], 10, 60));
+    let app = app(auth);
+
+    let four_words = r#"{"input": ["hello world foo bar"], "model": "m"}"#;
+    let two_words = r#"{"input": ["a b"], "model": "m"}"#;
+
+    for _ in 0..2 {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/")
+                    .header(AUTHORIZATION, "Bearer test_key")
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(four_words))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .header(AUTHORIZATION, "Bearer test_key")
+                .header("content-type", "application/json")
+                .body(axum::body::Body::from(two_words))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Bucket is empty (4 + 4 + 2 = 10); any further request is 429.
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .header(AUTHORIZATION, "Bearer test_key")
+                .header("content-type", "application/json")
+                .body(axum::body::Body::from(two_words))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+}
+
+#[tokio::test]
 async fn test_small_body_costs_one_token() {
     // Empty body (GET-like) should cost 1 token.
     let auth = Arc::new(AuthMiddleware::new(vec!["test_key".to_string()], 3, 60));

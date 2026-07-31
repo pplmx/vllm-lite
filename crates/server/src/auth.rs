@@ -570,9 +570,11 @@ pub(crate) fn estimate_request_cost(body: &str) -> f64 {
         // per vector to encode. Compute scales with the input length
         // (tokenized + encoded), so under-counting it would let a
         // caller bypass cost-based rate limits with arbitrarily long
-        // inputs. Treat it like a prompt: sum word counts for strings,
-        // element count for pre-tokenized / opaque arrays.
-        match input {
+        // inputs. Charge the input length only — embeddings have no
+        // generation budget, so the `max_tokens` default must NOT be
+        // added here (doing so would over-count every embeddings
+        // request by 100 and starve legitimate users of the endpoint).
+        let words = match input {
             Value::String(s) => s.split_whitespace().count() as f64,
             Value::Array(arr) => {
                 let all_strings = arr.iter().all(serde_json::Value::is_string);
@@ -586,7 +588,8 @@ pub(crate) fn estimate_request_cost(body: &str) -> f64 {
                 }
             }
             _ => return 1.0,
-        }
+        };
+        return words.clamp(1.0, 100_000.0);
     } else {
         return 1.0;
     };
@@ -939,16 +942,16 @@ mod tests {
         // reflect the words being encoded rather than a flat 1.0.
         let body = r#"{"input": ["hello world", "foo bar baz"], "model": "m"}"#;
         let cost = estimate_request_cost(body);
-        // 2 + 3 words + 100 (default max_tokens) = 105
-        assert_eq!(cost, 105.0);
+        // 2 + 3 words; embeddings have no generation budget, so no
+        // max_tokens addend.
+        assert_eq!(cost, 5.0);
     }
 
     #[test]
     fn test_estimate_cost_embeddings_single_string() {
         let body = r#"{"input": "one two three", "model": "m"}"#;
         let cost = estimate_request_cost(body);
-        // 3 words + 100 = 103
-        assert_eq!(cost, 103.0);
+        assert_eq!(cost, 3.0);
     }
 
     #[test]
@@ -961,7 +964,7 @@ mod tests {
         let words = "word ".repeat(10_000);
         let body = format!(r#"{{"input": ["{words}"], "model": "m"}}"#);
         let cost = estimate_request_cost(&body);
-        assert_eq!(cost, 10_100.0);
+        assert_eq!(cost, 10_000.0);
     }
 
     #[test]
@@ -970,8 +973,16 @@ mod tests {
         // (same convention as completions token arrays).
         let body = r#"{"input": [1, 2, 3], "model": "m"}"#;
         let cost = estimate_request_cost(body);
-        // 3 elements + 100 = 103
-        assert_eq!(cost, 103.0);
+        assert_eq!(cost, 3.0);
+    }
+
+    #[test]
+    fn test_estimate_cost_embeddings_empty_input_costs_one() {
+        // An empty string still costs the 1.0 floor (not 0), so a
+        // zero-cost request can never slip through for free.
+        let body = r#"{"input": [""], "model": "m"}"#;
+        let cost = estimate_request_cost(body);
+        assert_eq!(cost, 1.0);
     }
 
     #[test]
