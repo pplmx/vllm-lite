@@ -42,6 +42,13 @@ pub struct HealthDetailResponse {
     pub kv_cache_usage_percent: Option<f32>,
 }
 
+/// How long `/health/details`, `/metrics`, and `/debug/kv-cache`
+/// wait for the engine's `GetMetrics` reply before falling back to
+/// defaults. The engine answers between model steps; a step can take
+/// far longer than this on a large batch, and ops endpoints must not
+/// hang while it runs.
+pub(crate) const METRICS_RESPONSE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
 /// `/health/details` handler. Returns a richer status payload including
 /// live metrics from the engine (prefill throughput, KV-cache utilization).
 ///
@@ -57,7 +64,16 @@ pub async fn health_details(State(state): State<ApiState>) -> Json<HealthDetailR
         .engine_tx
         .try_send(EngineMessage::GetMetrics { response_tx });
 
-    let metrics = response_rx.recv().await.unwrap_or_default();
+    // Bounded wait: the engine only answers GetMetrics between model
+    // steps, which can take seconds to minutes on a large batch. An
+    // unbounded `recv().await` would hang this ops endpoint (and the
+    // Prometheus scrape of /metrics) for the whole step, so fall back
+    // to defaults after METRICS_RESPONSE_TIMEOUT instead.
+    let metrics = tokio::time::timeout(METRICS_RESPONSE_TIMEOUT, response_rx.recv())
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_default();
 
     let gpu_utilization = metrics.prefill_throughput as f32;
     let kv_cache_usage_percent = metrics.kv_cache_usage_percent as f32;
@@ -155,22 +171,29 @@ pub async fn get_prometheus(State(state): State<ApiState>) -> String {
     let _ = state
         .engine_tx
         .try_send(EngineMessage::GetMetrics { response_tx });
-    let m = response_rx.recv().await.unwrap_or(MetricsSnapshot {
-        tokens_total: 0,
-        requests_total: 0,
-        avg_latency_ms: 0.0,
-        p50_latency_ms: 0.0,
-        p90_latency_ms: 0.0,
-        p99_latency_ms: 0.0,
-        avg_batch_size: 0.0,
-        current_batch_size: 0,
-        requests_in_flight: 0,
-        kv_cache_usage_percent: 0.0,
-        prefix_cache_hit_rate: 0.0,
-        prefill_throughput: 0.0,
-        decode_throughput: 0.0,
-        avg_scheduler_wait_time_ms: 0.0,
-    });
+    // invariant: same bounded-wait rationale as `health_details` — the
+    // engine may be mid-step; return the zero snapshot rather than
+    // hanging the Prometheus scrape.
+    let m = tokio::time::timeout(METRICS_RESPONSE_TIMEOUT, response_rx.recv())
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or(MetricsSnapshot {
+            tokens_total: 0,
+            requests_total: 0,
+            avg_latency_ms: 0.0,
+            p50_latency_ms: 0.0,
+            p90_latency_ms: 0.0,
+            p99_latency_ms: 0.0,
+            avg_batch_size: 0.0,
+            current_batch_size: 0,
+            requests_in_flight: 0,
+            kv_cache_usage_percent: 0.0,
+            prefix_cache_hit_rate: 0.0,
+            prefill_throughput: 0.0,
+            decode_throughput: 0.0,
+            avg_scheduler_wait_time_ms: 0.0,
+        });
     format!(
         "vllm_tokens_total {}\n\
          vllm_requests_total {}\n\
