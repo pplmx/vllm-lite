@@ -113,3 +113,34 @@ fn test_sparse_moe_decode_vectorized_matches_naive() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn test_sparse_moe_rejects_top_k_above_expert_count() {
+    // top_k > num_experts would make the routing narrow() panic; the
+    // constructor must surface a typed error instead.
+    let device = candle_core::Device::Cpu;
+    let err = MixtralSparseMoe::new(
+        256,
+        4,
+        512,
+        5, // > num_experts = 4
+        candle_nn::VarBuilder::zeros(DType::F32, &device),
+    )
+    .expect_err("top_k > num_experts must be rejected");
+    let msg = err.to_string();
+    assert!(msg.contains("top_k"), "error should name top_k: {msg}");
+}
+
+#[test]
+fn test_sparse_moe_rejects_zero_top_k() {
+    let device = candle_core::Device::Cpu;
+    let err = MixtralSparseMoe::new(
+        256,
+        4,
+        512,
+        0, // no experts selected -> zero weight-sum division
+        candle_nn::VarBuilder::zeros(DType::F32, &device),
+    )
+    .expect_err("top_k = 0 must be rejected");
+    assert!(err.to_string().contains("top_k"));
+}
