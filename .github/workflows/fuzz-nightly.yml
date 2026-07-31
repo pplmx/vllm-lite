@@ -55,9 +55,12 @@ jobs:
 
       - name: Install cargo-fuzz
         # cargo-fuzz must live in the nightly toolchain that `cargo +nightly
-        # fuzz` uses; install explicitly (taiki-e/install-action did not make
-        # the subcommand visible to the nightly toolchain).
-        run: cargo +nightly install cargo-fuzz --locked
+        # fuzz` uses. The cargo cache may already restore the binary, so
+        # skip installation when the subcommand is available.
+        run: |
+          if ! cargo +nightly fuzz --help >/dev/null 2>&1; then
+            cargo +nightly install cargo-fuzz --locked
+          fi
 
       - name: Build fuzz targets
         run: just fuzz-build
