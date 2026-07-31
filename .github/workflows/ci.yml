@@ -236,5 +236,6 @@ jobs:
           RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --workspace
           cargo test --doc --workspace --no-fail-fast
           cargo nextest run --workspace --no-fail-fast
-          cargo install cargo-public-api --locked
-          bash .planning/phase-12e/check-public-api.sh
+          rustup toolchain install nightly --profile minimal
+          cargo +nightly install cargo-public-api --locked
+          RUSTUP_TOOLCHAIN=nightly bash .planning/phase-12e/check-public-api.sh
