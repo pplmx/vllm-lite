@@ -36,7 +36,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "vllm_tokens_total",
+          "expr": "tokens_total",
           "legendFormat": "Total Tokens",
           "refId": "A"
         }
@@ -61,7 +61,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "vllm_requests_total",
+          "expr": "requests_total",
           "legendFormat": "Total Requests",
           "refId": "A"
         }
@@ -87,22 +87,22 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "vllm_avg_latency_ms",
+          "expr": "avg_latency_ms",
           "legendFormat": "Avg Latency",
           "refId": "A"
         },
         {
-          "expr": "vllm_p50_latency_ms",
+          "expr": "latency_p50_ms",
           "legendFormat": "P50 Latency",
           "refId": "B"
         },
         {
-          "expr": "vllm_p90_latency_ms",
+          "expr": "latency_p90_ms",
           "legendFormat": "P90 Latency",
           "refId": "C"
         },
         {
-          "expr": "vllm_p99_latency_ms",
+          "expr": "latency_p99_ms",
           "legendFormat": "P99 Latency",
           "refId": "D"
         }
@@ -127,12 +127,12 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "vllm_current_batch_size",
+          "expr": "current_batch_size",
           "legendFormat": "Current Batch",
           "refId": "A"
         },
         {
-          "expr": "vllm_avg_batch_size",
+          "expr": "avg_batch_size",
           "legendFormat": "Avg Batch",
           "refId": "B"
         }
