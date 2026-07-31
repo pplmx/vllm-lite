@@ -7,7 +7,7 @@ mod tests {
     use super::support;
 
     #[test]
-
+    #[ignore = "requires on-disk Qwen3 tokenizer checkpoint (run: just nextest-checkpoint)"]
     fn test_tokenizer_decode_model_output() {
         let tokenizer = support::tokenizer::qwen3_tokenizer();
 
@@ -36,7 +36,7 @@ mod tests {
     }
 
     #[test]
-
+    #[ignore = "requires on-disk Qwen3 tokenizer checkpoint (run: just nextest-checkpoint)"]
     fn test_tokenizer_decode_top_k_tokens() {
         let tokenizer = support::tokenizer::qwen3_tokenizer();
 
@@ -89,7 +89,7 @@ mod tests {
     }
 
     #[test]
-
+    #[ignore = "requires on-disk Qwen3 tokenizer checkpoint (run: just nextest-checkpoint)"]
     fn test_tokenizer_roundtrip_vocab() {
         let tokenizer = support::tokenizer::qwen3_tokenizer();
 
@@ -134,7 +134,7 @@ mod tests {
     }
 
     #[test]
-
+    #[ignore = "requires on-disk Qwen3 tokenizer checkpoint (run: just nextest-checkpoint)"]
     fn test_qwen3_special_tokens() {
         let tokenizer = support::tokenizer::qwen3_tokenizer();
 
@@ -165,7 +165,7 @@ mod tests {
     }
 
     #[test]
-
+    #[ignore = "requires on-disk Qwen3 tokenizer checkpoint (run: just nextest-checkpoint)"]
     fn test_tokenizer_decode_out_of_range_tokens() {
         let tokenizer = support::tokenizer::qwen3_tokenizer();
 
@@ -195,7 +195,7 @@ mod tests {
     }
 
     #[test]
-
+    #[ignore = "requires on-disk Qwen3 tokenizer checkpoint (run: just nextest-checkpoint)"]
     fn test_qwen3_eos_handling_in_decode() {
         let tokenizer = support::tokenizer::qwen3_tokenizer();
 
