@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-07-31T15:53:06+00:00",
+  "last_updated": "2026-07-31T16:12:12+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -1127,6 +1127,56 @@
         "source": "cargo nextest run --workspace --all-features (post round-14)",
         "detail": "2125 tests: 2106 passed, 19 identical environmental failures, 67 skipped. mixtral lib tests 17 pass; clippy/fmt clean."
       }
+    },
+    {
+      "id": "issue-016",
+      "type": "issue",
+      "status": "resolved",
+      "created_at": "2026-07-31T16:12:12+00:00",
+      "updated_at": "2026-07-31T16:12:12+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "GitHub Actions CI red across workflows (5 root causes)",
+        "severity": 0.8,
+        "detail": "(1) husky-rs dev-dep build script panics when .pre-commit-config.yaml exists without prek installed (unused dep; removed). (2) deny.toml used non-SPDX license name Boost-1.0 (should be BSL-1.0). (3) --all-features builds compile cudarc whose build.rs probes nvcc; GitHub runners lack CUDA toolkit (fix: CUDARC_CUDA_VERSION=12090 env). (4) fuzz workflows call `just fuzz-build`/`cargo +nightly fuzz` without installing just/cargo-fuzz. (5) mutation-nightly cache step missing id: cargo-mutants-cache so the conditional install always ran and failed 'binary already exists'."
+      }
+    },
+    {
+      "id": "task-015",
+      "type": "task",
+      "status": "resolved",
+      "created_at": "2026-07-31T16:12:12+00:00",
+      "updated_at": "2026-07-31T16:12:12+00:00",
+      "confidence": 0.97,
+      "data": {
+        "title": "Repair GitHub Actions CI",
+        "priority_score": 8.0,
+        "detail": "CI(8) x severity 0.8 x conf 0.97 / sqrt(effort 1.0) ~ 6.2. Fix all 5 root causes across 6 workflow files + manifests + deny.toml; verify by local simulation of the CI commands."
+      }
+    },
+    {
+      "id": "change-017",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T16:12:12+00:00",
+      "updated_at": "2026-07-31T16:12:12+00:00",
+      "confidence": 1.0,
+      "data": {
+        "commit": "PENDING-ci-fix",
+        "detail": "Remove husky-rs (root + server dev-deps + lock); deny.toml BSL-1.0; CUDARC_CUDA_VERSION=12090 in ci/msrv/fuzz/fuzz-nightly/mutation-nightly/benchmark workflows; install just+cargo-fuzz in fuzz workflows; add id to cargo-mutants cache step."
+      }
+    },
+    {
+      "id": "evidence-027",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T16:12:12+00:00",
+      "updated_at": "2026-07-31T16:12:12+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "local CI simulation (nvcc removed from PATH)",
+        "detail": "With CUDARC_CUDA_VERSION=12090 and no nvcc: cargo check --workspace --all-features --all-targets OK; cargo build -p vllm-model --features cuda OK (links); cargo test --doc --workspace --all-features OK. husky-rs gone from Cargo.lock. deny.toml parses."
+      }
     }
   ],
   "edges": [
@@ -1513,6 +1563,26 @@
     {
       "from": "evidence-026",
       "to": "task-014",
+      "kind": "validates"
+    },
+    {
+      "from": "issue-016",
+      "to": "task-015",
+      "kind": "causes"
+    },
+    {
+      "from": "change-017",
+      "to": "issue-016",
+      "kind": "resolves"
+    },
+    {
+      "from": "change-017",
+      "to": "task-015",
+      "kind": "resolves"
+    },
+    {
+      "from": "evidence-027",
+      "to": "task-015",
       "kind": "validates"
     }
   ]

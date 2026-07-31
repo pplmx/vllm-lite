@@ -12,6 +12,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  CUDARC_CUDA_VERSION: '12090'
 
 jobs:
   fuzz-long:
@@ -48,6 +49,12 @@ jobs:
           key: fuzz-corpus-nightly-${{ matrix.target }}-${{ github.sha }}
           restore-keys: |
             fuzz-corpus-nightly-${{ matrix.target }}-
+
+      - name: Install just
+        uses: taiki-e/install-action@just
+
+      - name: Install cargo-fuzz
+        uses: taiki-e/install-action@cargo-fuzz
 
       - name: Build fuzz targets
         run: just fuzz-build
