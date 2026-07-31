@@ -65,7 +65,7 @@ impl core::cmp::PartialEq for vllm_dist::grpc::PutKvCacheResponse
 impl core::cmp::PartialEq for vllm_dist::grpc::TransferKvBlockRequest
 impl core::cmp::PartialEq for vllm_dist::grpc::TransferKvBlockResponse
 impl core::cmp::PartialEq for vllm_dist::tensor_parallel::all_reduce::ReduceOp
-impl core::convert::From<std::io::error::Error> for vllm_dist::error::GrpcError
+impl core::convert::From<core::io::error::Error> for vllm_dist::error::GrpcError
 impl core::convert::From<tonic::status::Status> for vllm_dist::distributed_kv::block_data_source::FetchError
 impl core::convert::From<tonic::transport::error::Error> for vllm_dist::error::GrpcError
 impl core::default::Default for vllm_dist::distributed_kv::block_data_source::MockBlockDataSource
@@ -663,7 +663,7 @@ pub fn vllm_dist::distributed_kv::protocol::NodeId::eq(&self, &vllm_dist::distri
 pub fn vllm_dist::distributed_kv::protocol::NodeId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_dist::distributed_kv::protocol::NodeId::hash<__H: core::hash::Hasher>(&self, &mut __H)
 pub fn vllm_dist::error::GrpcError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub fn vllm_dist::error::GrpcError::from(std::io::error::Error) -> Self
+pub fn vllm_dist::error::GrpcError::from(core::io::error::Error) -> Self
 pub fn vllm_dist::error::GrpcError::from(tonic::transport::error::Error) -> Self
 pub fn vllm_dist::error::GrpcError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 pub fn vllm_dist::grpc::AllReduceRequest::clear(&mut self)
@@ -966,11 +966,8 @@ pub trait vllm_dist::tensor_parallel::AllReduce: core::marker::Send + core::mark
 pub type vllm_dist::grpc::node_service_server::NodeServiceServer<T>::Error = core::convert::Infallible
 pub type vllm_dist::grpc::node_service_server::NodeServiceServer<T>::Future = core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<<vllm_dist::grpc::node_service_server::NodeServiceServer<T> as tower_service::Service<http::request::Request<B>>>::Response, <vllm_dist::grpc::node_service_server::NodeServiceServer<T> as tower_service::Service<http::request::Request<B>>>::Error>> + core::marker::Send)>>
 pub type vllm_dist::grpc::node_service_server::NodeServiceServer<T>::Response = http::response::Response<tonic::body::Body>
-pub type vllm_dist::NcclAllReduce = vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce
 pub type vllm_dist::pipeline::Result<T> = core::result::Result<T, vllm_dist::pipeline::PipelineError>
 pub type vllm_dist::Result<T> = core::result::Result<T, vllm_dist::pipeline::PipelineError>
-pub type vllm_dist::tensor_parallel::all_reduce::NcclAllReduce = vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce
-pub type vllm_dist::tensor_parallel::NcclAllReduce = vllm_dist::tensor_parallel::all_reduce::LocalSumAllReduce
 pub use vllm_dist::error::TensorParallelError
 pub use vllm_dist::TensorParallelError
 pub vllm_dist::CacheConfig::coherence_protocol: vllm_dist::distributed_kv::CoherenceProtocol
@@ -1084,7 +1081,7 @@ pub vllm_dist::distributed_kv::WriteError::InvalidBytes::expected: usize
 pub vllm_dist::distributed_kv::WriteError::OutOfRange
 pub vllm_dist::distributed_kv::WriteError::OutOfRange::block_id: u64
 pub vllm_dist::distributed_kv::WriteError::SinkUnavailable
-pub vllm_dist::error::GrpcError::Bind(std::io::error::Error)
+pub vllm_dist::error::GrpcError::Bind(core::io::error::Error)
 pub vllm_dist::error::GrpcError::Transport(tonic::transport::error::Error)
 pub vllm_dist::error::PipelineError::DeviceError(alloc::string::String)
 pub vllm_dist::error::PipelineError::ForwardFailed(alloc::string::String)
@@ -1107,7 +1104,7 @@ pub vllm_dist::grpc::AllReduceRequest::op: alloc::string::String
 pub vllm_dist::grpc::AllReduceRequest::root: u32
 pub vllm_dist::grpc::AllReduceResponse::result: alloc::vec::Vec<u8>
 pub vllm_dist::grpc::AllReduceResponse::success: bool
-pub vllm_dist::GrpcError::Bind(std::io::error::Error)
+pub vllm_dist::GrpcError::Bind(core::io::error::Error)
 pub vllm_dist::GrpcError::Transport(tonic::transport::error::Error)
 pub vllm_dist::grpc::GetKvCacheRequest::block_hash: alloc::string::String
 pub vllm_dist::grpc::GetKvCacheResponse::data: alloc::vec::Vec<u8>

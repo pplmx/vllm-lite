@@ -960,11 +960,6 @@ pub struct Embedding {
     pub index: i32,
 }
 
-/// Deprecated alias for [`Embedding`]. Retained for backward
-/// compatibility with clients written against the 0.19.x wire format.
-#[deprecated(since = "0.20.0", note = "use Embedding instead")]
-pub type EmbeddingData = Embedding;
-
 /// Response from embeddings endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingsResponse {

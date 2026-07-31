@@ -126,6 +126,8 @@ impl vllm_traits::model::ModelBackend for vllm_testing::slow_model::SlowModel
 pub const fn vllm_testing::builders::BatchBuilder::new() -> Self
 pub const fn vllm_testing::builders::RequestBuilder::new(vllm_traits::types::SeqId) -> Self
 pub const fn vllm_testing::builders::RequestBuilder::with_max_tokens(self, usize) -> Self
+pub const fn vllm_testing::device::gpu_device() -> candle_core::device::Device
+pub const fn vllm_testing::gpu_device() -> candle_core::device::Device
 pub const fn vllm_testing::harness::TestHarnessConfig::enable_dynamic_batching(self, bool) -> Self
 pub const fn vllm_testing::harness::TestHarnessConfig::enable_prefix_cache(self, bool) -> Self
 pub const fn vllm_testing::harness::TestHarnessConfig::kv_blocks(self, usize) -> Self
@@ -160,6 +162,9 @@ pub fn vllm_testing::builders::BatchBuilder::fmt(&self, &mut core::fmt::Formatte
 pub fn vllm_testing::builders::RequestBuilder::build(self) -> (vllm_traits::types::SeqId, alloc::vec::Vec<vllm_traits::types::TokenId>, usize)
 pub fn vllm_testing::builders::RequestBuilder::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_testing::builders::RequestBuilder::with_prompt(self, alloc::vec::Vec<vllm_traits::types::TokenId>) -> Self
+pub fn vllm_testing::cuda_available() -> bool
+pub fn vllm_testing::device::cuda_available() -> bool
+pub fn vllm_testing::device::gpu_or_cpu() -> candle_core::device::Device
 pub fn vllm_testing::fixtures::TestFixtures::default_scheduler_config() -> vllm_core::types::scheduler_config::SchedulerConfig
 pub fn vllm_testing::fixtures::TestFixtures::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_testing::fixtures::TestFixtures::increment_engine(usize) -> vllm_core::engine::Engine
@@ -168,6 +173,7 @@ pub fn vllm_testing::fixtures::TestFixtures::increment_speculative_engine(usize)
 pub fn vllm_testing::fixtures::TestFixtures::increment_speculative_engine_with(vllm_core::types::scheduler_config::SchedulerConfig, usize, usize) -> vllm_core::engine::Engine
 pub fn vllm_testing::fixtures::TestFixtures::oom_scenario_config() -> vllm_core::types::scheduler_config::SchedulerConfig
 pub fn vllm_testing::fixtures::TestFixtures::small_batch_config() -> vllm_core::types::scheduler_config::SchedulerConfig
+pub fn vllm_testing::gpu_or_cpu() -> candle_core::device::Device
 pub fn vllm_testing::harness::TestHarness::add_test_request(&mut self, alloc::vec::Vec<u32>, usize) -> u64
 pub fn vllm_testing::harness::TestHarness::build_test_batch(&mut self) -> vllm_traits::types::Batch
 pub fn vllm_testing::harness::TestHarnessConfig::clone(&self) -> vllm_testing::harness::TestHarnessConfig
@@ -232,6 +238,7 @@ pub fn vllm_testing::slow_model::SlowModel::num_layers(&self) -> usize
 pub fn vllm_testing::slow_model::SlowModel::vocab_size(&self) -> usize
 pub mod vllm_testing
 pub mod vllm_testing::builders
+pub mod vllm_testing::device
 pub mod vllm_testing::fixtures
 pub mod vllm_testing::harness
 pub mod vllm_testing::mocks

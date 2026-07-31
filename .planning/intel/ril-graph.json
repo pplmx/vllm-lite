@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_updated": "2026-07-31T14:37:48+00:00",
+  "last_updated": "2026-07-31T14:48:01+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -31,9 +31,9 @@
     {
       "id": "issue-003",
       "type": "issue",
-      "status": "active",
+      "status": "resolved",
       "created_at": "2026-07-31T14:30:32+00:00",
-      "updated_at": "2026-07-31T14:30:32+00:00",
+      "updated_at": "2026-07-31T14:48:01+00:00",
       "confidence": 1.0,
       "data": {
         "title": "deprecated shims have zero internal callers",
@@ -94,9 +94,9 @@
     {
       "id": "task-003",
       "type": "task",
-      "status": "active",
+      "status": "resolved",
       "created_at": "2026-07-31T14:30:32+00:00",
-      "updated_at": "2026-07-31T14:30:32+00:00",
+      "updated_at": "2026-07-31T14:48:01+00:00",
       "confidence": 0.8,
       "data": {
         "title": "Remove deprecated shims + refresh public-api baseline",
@@ -138,6 +138,107 @@
       "data": {
         "source": "python rescan of production unwrap/expect sites",
         "detail": "All production unwrap/expect now preceded by // invariant: comments; remaining flagged sites (gemma4) verified to already have the comment (scanner false positive)."
+      }
+    },
+    {
+      "id": "change-001",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T14:41:02+00:00",
+      "updated_at": "2026-07-31T14:41:02+00:00",
+      "confidence": 1.0,
+      "data": {
+        "commit": "33c9285d",
+        "detail": "restore all-targets clippy gate: 7 files, 30+/3- (float_cmp/unsafe_code allows, use-move, u64::from, future_not_send allow, guard-per-iteration test rewrite)"
+      }
+    },
+    {
+      "id": "change-002",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T14:41:02+00:00",
+      "updated_at": "2026-07-31T14:41:02+00:00",
+      "confidence": 1.0,
+      "data": {
+        "commit": "a58ae6f9",
+        "detail": "invariant comments at 16 production unwrap/expect sites across 7 files"
+      }
+    },
+    {
+      "id": "change-003",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T14:41:02+00:00",
+      "updated_at": "2026-07-31T14:41:02+00:00",
+      "confidence": 1.0,
+      "data": {
+        "commit": "ec9f5a58",
+        "detail": "CHANGELOG [Unreleased] entries + initial RIL graph"
+      }
+    },
+    {
+      "id": "decision-001",
+      "type": "decision",
+      "status": "active",
+      "created_at": "2026-07-31T14:41:02+00:00",
+      "updated_at": "2026-07-31T14:41:02+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "Keep wrapper.rs hunk attribution swap",
+        "rationale": "git add -p answered hunks in order (invariant hunk staged into clippy commit, test hunk into docs commit). Final tree state is correct and fully verified; rewriting main history (rebase) risks conflicts with parallel agent work and force-push implications on shared main.",
+        "alternatives_rejected": [
+          "interactive rebase to swap hunks (history rewrite on main)",
+          "single combined commit (already had two clean commits)"
+        ],
+        "note": "cosmetic only \u2014 both commits are part of the same round and reference task-001/task-002"
+      }
+    },
+    {
+      "id": "evidence-006",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T14:48:01+00:00",
+      "updated_at": "2026-07-31T14:48:01+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "cargo clippy --workspace --all-targets --all-features -- -D warnings (committed ec9f5a58)",
+        "detail": "0 errors \u2014 gate green."
+      }
+    },
+    {
+      "id": "evidence-007",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T14:48:01+00:00",
+      "updated_at": "2026-07-31T14:48:01+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "cargo nextest run --workspace --all-features (2026-07-31)",
+        "detail": "2079 passed / 19 failed (identical environmental set: CUDA no-GPU + socket-bind sandbox) / 67 skipped \u2014 zero regression."
+      }
+    },
+    {
+      "id": "evidence-008",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T14:48:01+00:00",
+      "updated_at": "2026-07-31T14:48:01+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "bash .planning/phase-12e/check-public-api.sh (escalated, rustup-blocked in sandbox)",
+        "detail": "OK \u2014 baselines refreshed; NcclAllReduce x3 + EmbeddingData x1 removed; check green."
+      }
+    },
+    {
+      "id": "change-004",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T14:48:01+00:00",
+      "updated_at": "2026-07-31T14:48:01+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "remove deprecated shims",
+        "detail": "draft_registry.rs orphan deleted; NcclAllReduce alias + re-exports removed; EmbeddingData alias removed; all_reduce.rs docs + alias compile-test updated; public-api baselines refreshed; CHANGELOG entry."
       }
     }
   ],
@@ -185,6 +286,47 @@
     },
     {
       "from": "evidence-005",
+      "to": "task-001",
+      "kind": "validates"
+    },
+    {
+      "from": "change-001",
+      "to": "task-002",
+      "kind": "resolves"
+    },
+    {
+      "from": "change-002",
+      "to": "task-001",
+      "kind": "resolves"
+    },
+    {
+      "from": "decision-001",
+      "to": "change-001",
+      "kind": "supersedes",
+      "note": "documents attribution note"
+    },
+    {
+      "from": "evidence-008",
+      "to": "task-003",
+      "kind": "validates"
+    },
+    {
+      "from": "change-004",
+      "to": "task-003",
+      "kind": "resolves"
+    },
+    {
+      "from": "change-004",
+      "to": "issue-003",
+      "kind": "resolves"
+    },
+    {
+      "from": "evidence-006",
+      "to": "task-002",
+      "kind": "validates"
+    },
+    {
+      "from": "evidence-007",
       "to": "task-001",
       "kind": "validates"
     }

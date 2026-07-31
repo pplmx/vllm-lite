@@ -1120,7 +1120,7 @@ pub fn L::forward_decode(&self, &candle_core::tensor::Tensor, &mut vllm_model::c
 pub fn L::forward_prefill(&self, &candle_core::tensor::Tensor, &mut vllm_model::causal_lm::LayerCtx<'_>, usize) -> core::result::Result<candle_core::tensor::Tensor, candle_core::error::Error>
 pub fn vllm_model::arch::Architecture::capabilities(&self) -> vllm_model::arch::capabilities::ArchCapabilities
 pub fn vllm_model::arch::Architecture::create_block(&self, &vllm_model::config::model_config::ModelConfig, usize, &std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>, &candle_core::device::Device) -> candle_core::error::Result<alloc::boxed::Box<dyn vllm_model::components::block::TransformerBlock>>
-pub fn vllm_model::arch::Architecture::create_model(&self, vllm_model::config::model_config::ModelConfig, candle_core::device::Device, std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>, usize, bool) -> candle_core::error::Result<(alloc::boxed::Box<dyn vllm_traits::model::ModelBackend>, core::option::Option<alloc::sync::Arc<parking_lot::mutex::Mutex<vllm_model::paged_tensor::tensor_store::PagedKvCache>>>)>
+pub fn vllm_model::arch::Architecture::create_model(&self, vllm_model::config::model_config::ModelConfig, candle_core::device::Device, std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>, usize, bool) -> vllm_model::arch::ModelAndKv
 pub fn vllm_model::arch::Architecture::detect(&self, &serde_json::value::Value) -> bool
 pub fn vllm_model::arch::Architecture::name(&self) -> &'static str
 pub fn vllm_model::arch::Architecture::remap_weights(&self, std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>) -> std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>
@@ -1129,7 +1129,7 @@ pub fn vllm_model::arch::capabilities::ArchCapabilities::eq(&self, &vllm_model::
 pub fn vllm_model::arch::capabilities::ArchCapabilities::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_model::Architecture::capabilities(&self) -> vllm_model::arch::capabilities::ArchCapabilities
 pub fn vllm_model::Architecture::create_block(&self, &vllm_model::config::model_config::ModelConfig, usize, &std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>, &candle_core::device::Device) -> candle_core::error::Result<alloc::boxed::Box<dyn vllm_model::components::block::TransformerBlock>>
-pub fn vllm_model::Architecture::create_model(&self, vllm_model::config::model_config::ModelConfig, candle_core::device::Device, std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>, usize, bool) -> candle_core::error::Result<(alloc::boxed::Box<dyn vllm_traits::model::ModelBackend>, core::option::Option<alloc::sync::Arc<parking_lot::mutex::Mutex<vllm_model::paged_tensor::tensor_store::PagedKvCache>>>)>
+pub fn vllm_model::Architecture::create_model(&self, vllm_model::config::model_config::ModelConfig, candle_core::device::Device, std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>, usize, bool) -> vllm_model::arch::ModelAndKv
 pub fn vllm_model::Architecture::detect(&self, &serde_json::value::Value) -> bool
 pub fn vllm_model::Architecture::name(&self) -> &'static str
 pub fn vllm_model::Architecture::remap_weights(&self, std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>) -> std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>
@@ -1198,14 +1198,14 @@ pub fn vllm_model::causal_lm::LayerAuxMut<'a>::fmt(&self, &mut core::fmt::Format
 pub fn vllm_model::causal_lm::LayerCtx<'a>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_model::causal_lm::run_layers<L: vllm_model::causal_lm::DecoderLayer>(&[L], candle_core::tensor::Tensor, &mut vllm_model::causal_lm::LayerCtx<'_>) -> vllm_traits::model::Result<candle_core::tensor::Tensor>
 pub fn vllm_model::causal_lm::run_layers_upto<L: vllm_model::causal_lm::DecoderLayer>(&[L], candle_core::tensor::Tensor, &mut vllm_model::causal_lm::LayerCtx<'_>, usize) -> vllm_traits::model::Result<candle_core::tensor::Tensor>
-pub fn vllm_model::CausalLm<vllm_model::components::decoder_block::RopeGqaDecoderBlock, vllm_model::components::norm::layer_norm::LnLayerNorm, candle_nn::linear::Linear>::from_weights(vllm_model::config::model_config::ModelConfig, candle_core::device::Device, std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>, usize, bool) -> candle_core::error::Result<Self>
-pub fn vllm_model::CausalLm<vllm_model::components::decoder_block::RopeGqaDecoderBlock, vllm_model::components::norm::layer_norm::LnLayerNorm, candle_nn::linear::Linear>::new(vllm_model::config::model_config::ModelConfig, candle_core::device::Device, usize) -> candle_core::error::Result<Self>
-pub fn vllm_model::CausalLm<vllm_model::components::decoder_block::RopeGqaDecoderBlock, vllm_model::components::norm::rms_norm::RmsNorm, candle_nn::linear::Linear>::from_weights(vllm_model::config::model_config::ModelConfig, candle_core::device::Device, std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>, usize, bool) -> candle_core::error::Result<Self>
-pub fn vllm_model::CausalLm<vllm_model::components::decoder_block::RopeGqaDecoderBlock, vllm_model::components::norm::rms_norm::RmsNorm, candle_nn::linear::Linear>::new(vllm_model::config::model_config::ModelConfig, candle_core::device::Device, usize) -> candle_core::error::Result<Self>
-pub fn vllm_model::CausalLm<vllm_model::gemma4::block::Gemma4Block, vllm_model::components::norm::rms_norm::RmsNorm, candle_nn::linear::Linear>::from_weights(vllm_model::config::model_config::ModelConfig, candle_core::device::Device, std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>, usize, bool) -> candle_core::error::Result<Self>
-pub fn vllm_model::CausalLm<vllm_model::gemma4::block::Gemma4Block, vllm_model::components::norm::rms_norm::RmsNorm, candle_nn::linear::Linear>::new(vllm_model::config::model_config::ModelConfig, candle_core::device::Device, usize, bool) -> candle_core::error::Result<Self>
-pub fn vllm_model::CausalLm<vllm_model::mixtral::block::MixtralBlock, vllm_model::components::norm::layer_norm::LnLayerNorm, candle_nn::linear::Linear>::from_weights(vllm_model::config::model_config::ModelConfig, candle_core::device::Device, std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>, usize, bool) -> candle_core::error::Result<Self>
-pub fn vllm_model::CausalLm<vllm_model::mixtral::block::MixtralBlock, vllm_model::components::norm::layer_norm::LnLayerNorm, candle_nn::linear::Linear>::new(vllm_model::config::model_config::ModelConfig, candle_core::device::Device, usize, bool) -> candle_core::error::Result<Self>
+pub fn vllm_model::CausalLm<vllm_model::components::decoder_block::RopeGqaDecoderBlock, vllm_model::components::norm::layer_norm::LnLayerNorm, candle_nn::linear::Linear>::from_weights(vllm_model::config::model_config::ModelConfig, &candle_core::device::Device, std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>, usize, bool) -> candle_core::error::Result<Self>
+pub fn vllm_model::CausalLm<vllm_model::components::decoder_block::RopeGqaDecoderBlock, vllm_model::components::norm::layer_norm::LnLayerNorm, candle_nn::linear::Linear>::new(vllm_model::config::model_config::ModelConfig, &candle_core::device::Device, usize) -> candle_core::error::Result<Self>
+pub fn vllm_model::CausalLm<vllm_model::components::decoder_block::RopeGqaDecoderBlock, vllm_model::components::norm::rms_norm::RmsNorm, candle_nn::linear::Linear>::from_weights(vllm_model::config::model_config::ModelConfig, &candle_core::device::Device, std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>, usize, bool) -> candle_core::error::Result<Self>
+pub fn vllm_model::CausalLm<vllm_model::components::decoder_block::RopeGqaDecoderBlock, vllm_model::components::norm::rms_norm::RmsNorm, candle_nn::linear::Linear>::new(vllm_model::config::model_config::ModelConfig, &candle_core::device::Device, usize) -> candle_core::error::Result<Self>
+pub fn vllm_model::CausalLm<vllm_model::gemma4::block::Gemma4Block, vllm_model::components::norm::rms_norm::RmsNorm, candle_nn::linear::Linear>::from_weights(vllm_model::config::model_config::ModelConfig, &candle_core::device::Device, std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>, usize, bool) -> candle_core::error::Result<Self>
+pub fn vllm_model::CausalLm<vllm_model::gemma4::block::Gemma4Block, vllm_model::components::norm::rms_norm::RmsNorm, candle_nn::linear::Linear>::new(vllm_model::config::model_config::ModelConfig, &candle_core::device::Device, usize, bool) -> candle_core::error::Result<Self>
+pub fn vllm_model::CausalLm<vllm_model::mixtral::block::MixtralBlock, vllm_model::components::norm::layer_norm::LnLayerNorm, candle_nn::linear::Linear>::from_weights(vllm_model::config::model_config::ModelConfig, &candle_core::device::Device, std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>, usize, bool) -> candle_core::error::Result<Self>
+pub fn vllm_model::CausalLm<vllm_model::mixtral::block::MixtralBlock, vllm_model::components::norm::layer_norm::LnLayerNorm, candle_nn::linear::Linear>::new(vllm_model::config::model_config::ModelConfig, &candle_core::device::Device, usize, bool) -> candle_core::error::Result<Self>
 pub fn vllm_model::CausalLm<vllm_model::qwen3::block::TransformerBlock, vllm_model::components::norm::layer_norm::LnLayerNorm, candle_nn::linear::Linear>::from_weights(vllm_model::qwen3::Qwen3Config, candle_core::device::Device, std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>, usize, bool) -> candle_core::error::Result<Self>
 pub fn vllm_model::CausalLm<vllm_model::qwen3::block::TransformerBlock, vllm_model::components::norm::layer_norm::LnLayerNorm, candle_nn::linear::Linear>::new(vllm_model::qwen3::Qwen3Config, candle_core::device::Device, usize) -> candle_core::error::Result<Self>
 pub fn vllm_model::components::apply_rope(&candle_core::tensor::Tensor, &[i64], f32) -> candle_core::error::Result<candle_core::tensor::Tensor>
@@ -1282,8 +1282,8 @@ pub fn vllm_model::components::causal_mask_tile(usize, usize, usize, usize, &can
 pub fn vllm_model::components::causal_mask(usize, &candle_core::device::Device) -> candle_core::error::Result<candle_core::tensor::Tensor>
 pub fn vllm_model::components::decoder_block::block_from_weights(&vllm_model::config::model_config::ModelConfig, usize, &std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>) -> candle_core::error::Result<vllm_model::components::decoder_block::RopeGqaDecoderBlock>
 pub fn vllm_model::components::decoder_block::factory::block_from_weights(&vllm_model::config::model_config::ModelConfig, usize, &std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>) -> candle_core::error::Result<vllm_model::components::decoder_block::RopeGqaDecoderBlock>
-pub fn vllm_model::components::decoder_block::factory::new_block(&vllm_model::config::model_config::ModelConfig, usize) -> candle_core::error::Result<vllm_model::components::decoder_block::RopeGqaDecoderBlock>
-pub fn vllm_model::components::decoder_block::new_block(&vllm_model::config::model_config::ModelConfig, usize) -> candle_core::error::Result<vllm_model::components::decoder_block::RopeGqaDecoderBlock>
+pub fn vllm_model::components::decoder_block::factory::new_block(&vllm_model::config::model_config::ModelConfig, usize, &candle_core::device::Device) -> candle_core::error::Result<vllm_model::components::decoder_block::RopeGqaDecoderBlock>
+pub fn vllm_model::components::decoder_block::new_block(&vllm_model::config::model_config::ModelConfig, usize, &candle_core::device::Device) -> candle_core::error::Result<vllm_model::components::decoder_block::RopeGqaDecoderBlock>
 pub fn vllm_model::components::decoder_block::PagedDecoderBlock::forward_decode(&self, &candle_core::tensor::Tensor, &mut vllm_model::paged_tensor::tensor_store::PagedKvCache, usize, &[usize], usize, &[usize]) -> candle_core::error::Result<candle_core::tensor::Tensor>
 pub fn vllm_model::components::decoder_block::PagedDecoderBlock::forward_prefill_continue(&self, &candle_core::tensor::Tensor, &mut vllm_model::paged_tensor::tensor_store::PagedKvCache, usize, &[usize], &[usize], usize) -> candle_core::error::Result<candle_core::tensor::Tensor>
 pub fn vllm_model::components::decoder_block::PagedDecoderBlock::forward_prefill(&self, &candle_core::tensor::Tensor, &mut vllm_model::paged_tensor::tensor_store::PagedKvCache, usize, &[usize], &[usize]) -> candle_core::error::Result<candle_core::tensor::Tensor>
@@ -1343,7 +1343,7 @@ pub fn vllm_model::components::positional::mrope::MRoPE::fmt(&self, &mut core::f
 pub fn vllm_model::components::positional::mrope::MRoPE::from_config(&vllm_model::qwen3::Qwen3Config) -> Self
 pub fn vllm_model::components::positional::precompute_rope_cache(usize, usize, f32) -> alloc::vec::Vec<(f32, f32)>
 pub fn vllm_model::components::positional::rope::apply_rope(&candle_core::tensor::Tensor, &[i64], f32) -> candle_core::error::Result<candle_core::tensor::Tensor>
-pub fn vllm_model::components::positional::rope::apply_rope_with_scaling(&candle_core::tensor::Tensor, &[i64], f32, vllm_model::components::positional::rope::RopeScalingContext) -> candle_core::error::Result<candle_core::tensor::Tensor>
+pub fn vllm_model::components::positional::rope::apply_rope_with_scaling(&candle_core::tensor::Tensor, &[i64], f32, &vllm_model::components::positional::rope::RopeScalingContext) -> candle_core::error::Result<candle_core::tensor::Tensor>
 pub fn vllm_model::components::positional::rope::precompute_rope_cache(usize, usize, f32) -> alloc::vec::Vec<(f32, f32)>
 pub fn vllm_model::components::positional::rope::RoPE::apply(&self, &candle_core::tensor::Tensor, &[i64]) -> candle_core::error::Result<candle_core::tensor::Tensor>
 pub fn vllm_model::components::positional::rope::RoPE::apply_with_scaling(&self, &candle_core::tensor::Tensor, &[i64]) -> candle_core::error::Result<candle_core::tensor::Tensor>
@@ -1352,7 +1352,7 @@ pub fn vllm_model::components::positional::rope::RoPE::fmt(&self, &mut core::fmt
 pub fn vllm_model::components::positional::rope::RoPE::forward(&self, &candle_core::tensor::Tensor, &candle_core::tensor::Tensor, i64) -> candle_core::error::Result<(candle_core::tensor::Tensor, candle_core::tensor::Tensor)>
 pub fn vllm_model::components::positional::rope::RoPE::forward_with_scaling(&self, &candle_core::tensor::Tensor, &candle_core::tensor::Tensor, i64) -> candle_core::error::Result<(candle_core::tensor::Tensor, candle_core::tensor::Tensor)>
 pub fn vllm_model::components::positional::rope::RoPE::new(usize, usize, f32, &candle_core::device::Device) -> Self
-pub fn vllm_model::components::positional::rope::RoPE::new_with_scaling(usize, usize, f32, &candle_core::device::Device, vllm_model::components::positional::rope::RopeScalingContext) -> Self
+pub fn vllm_model::components::positional::rope::RoPE::new_with_scaling(usize, usize, f32, &candle_core::device::Device, &vllm_model::components::positional::rope::RopeScalingContext) -> Self
 pub fn vllm_model::components::positional::rope::RopeScalingContext::clone(&self) -> vllm_model::components::positional::rope::RopeScalingContext
 pub fn vllm_model::components::positional::rope::RopeScalingContext::default() -> Self
 pub fn vllm_model::components::positional::rope::RopeScalingContext::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -1463,7 +1463,7 @@ pub fn vllm_model::gemma4::block::Gemma4Block::forward_prefill(&self, &candle_co
 pub fn vllm_model::gemma4::block::Gemma4Block::forward(&self, &candle_core::tensor::Tensor, &[usize]) -> candle_core::error::Result<candle_core::tensor::Tensor>
 pub fn vllm_model::gemma4::block::Gemma4Block::from_weights(&vllm_model::config::model_config::ModelConfig, usize, &std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>) -> candle_core::error::Result<Self>
 pub fn vllm_model::gemma4::block::Gemma4Block::new(&vllm_model::config::model_config::ModelConfig, usize, candle_nn::var_builder::VarBuilder<'_>) -> candle_core::error::Result<Self>
-pub fn vllm_model::gemma4::block::new_block(&vllm_model::config::model_config::ModelConfig, usize) -> candle_core::error::Result<vllm_model::gemma4::block::Gemma4Block>
+pub fn vllm_model::gemma4::block::new_block(&vllm_model::config::model_config::ModelConfig, usize, &candle_core::device::Device) -> candle_core::error::Result<vllm_model::gemma4::block::Gemma4Block>
 pub fn vllm_model::gemma4::register::register(&vllm_model::arch::registry::ArchitectureRegistry)
 pub fn vllm_model::kernels::cuda_graph::CudaGraph::add_node(&mut self, alloc::sync::Arc<dyn vllm_model::kernels::cuda_graph::CudaGraphNode>, alloc::vec::Vec<usize>, alloc::vec::Vec<usize>)
 pub fn vllm_model::kernels::cuda_graph::CudaGraph::default() -> Self
@@ -1524,7 +1524,7 @@ pub fn vllm_model::llama::arch::LlamaArchitecture::fmt(&self, &mut core::fmt::Fo
 pub fn vllm_model::llama::arch::LlamaArchitecture::name(&self) -> &'static str
 pub fn vllm_model::llama::arch::LlamaArchitecture::remap_weights(&self, std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>) -> std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>
 pub fn vllm_model::llama::block::block_from_weights(&vllm_model::config::model_config::ModelConfig, usize, &std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>) -> candle_core::error::Result<vllm_model::components::decoder_block::RopeGqaDecoderBlock>
-pub fn vllm_model::llama::block::new_block(&vllm_model::config::model_config::ModelConfig, usize) -> candle_core::error::Result<vllm_model::components::decoder_block::RopeGqaDecoderBlock>
+pub fn vllm_model::llama::block::new_block(&vllm_model::config::model_config::ModelConfig, usize, &candle_core::device::Device) -> candle_core::error::Result<vllm_model::components::decoder_block::RopeGqaDecoderBlock>
 pub fn vllm_model::llama::register::register(&vllm_model::arch::registry::ArchitectureRegistry)
 pub fn vllm_model::loader::builder::ModelLoader::architecture(&self) -> vllm_model::config::architecture::Architecture
 pub fn vllm_model::loader::builder::ModelLoaderBuilder::build(self) -> candle_core::error::Result<vllm_model::loader::builder::ModelLoader>
@@ -1550,7 +1550,7 @@ pub fn vllm_model::loader::format::SafetensorsLoader::fmt(&self, &mut core::fmt:
 pub fn vllm_model::loader::format::SafetensorsLoader::load(&std::path::Path, &candle_core::device::Device) -> candle_core::error::Result<std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>> where Self: core::marker::Sized
 pub fn vllm_model::loader::load_checkpoint(&std::path::Path, &candle_core::device::Device) -> candle_core::error::Result<std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>>
 pub fn vllm_model::mistral::block::block_from_weights(&vllm_model::config::model_config::ModelConfig, usize, &std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>) -> candle_core::error::Result<vllm_model::components::decoder_block::RopeGqaDecoderBlock>
-pub fn vllm_model::mistral::block::new_block(&vllm_model::config::model_config::ModelConfig, usize) -> candle_core::error::Result<vllm_model::components::decoder_block::RopeGqaDecoderBlock>
+pub fn vllm_model::mistral::block::new_block(&vllm_model::config::model_config::ModelConfig, usize, &candle_core::device::Device) -> candle_core::error::Result<vllm_model::components::decoder_block::RopeGqaDecoderBlock>
 pub fn vllm_model::mistral::register::register(&vllm_model::arch::registry::ArchitectureRegistry)
 pub fn vllm_model::mixtral::arch::MixtralArchitecture::capabilities(&self) -> vllm_model::arch::capabilities::ArchCapabilities
 pub fn vllm_model::mixtral::arch::MixtralArchitecture::create_block(&self, &vllm_model::config::model_config::ModelConfig, usize, &std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>, &candle_core::device::Device) -> candle_core::error::Result<alloc::boxed::Box<dyn vllm_model::components::block::TransformerBlock>>
@@ -1566,7 +1566,7 @@ pub fn vllm_model::mixtral::block::MixtralBlock::forward_prefill_continue(&self,
 pub fn vllm_model::mixtral::block::MixtralBlock::forward_prefill(&self, &candle_core::tensor::Tensor, &mut vllm_model::paged_tensor::tensor_store::PagedKvCache, usize, &[usize], &[usize]) -> candle_core::error::Result<candle_core::tensor::Tensor>
 pub fn vllm_model::mixtral::block::MixtralBlock::forward(&self, &candle_core::tensor::Tensor, &[usize]) -> candle_core::error::Result<candle_core::tensor::Tensor>
 pub fn vllm_model::mixtral::block::MixtralBlock::from_weights(&vllm_model::config::model_config::ModelConfig, usize, &std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>) -> candle_core::error::Result<Self>
-pub fn vllm_model::mixtral::block::MixtralBlock::new(&vllm_model::config::model_config::ModelConfig, usize) -> candle_core::error::Result<Self>
+pub fn vllm_model::mixtral::block::MixtralBlock::new(&vllm_model::config::model_config::ModelConfig, usize, &candle_core::device::Device) -> candle_core::error::Result<Self>
 pub fn vllm_model::mixtral::register::register(&vllm_model::arch::registry::ArchitectureRegistry)
 pub fn vllm_model::mixtral::sparse_moe::MixtralSparseMoe::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn vllm_model::mixtral::sparse_moe::MixtralSparseMoe::forward(&self, &candle_core::tensor::Tensor) -> candle_core::error::Result<candle_core::tensor::Tensor>
@@ -1660,8 +1660,8 @@ pub fn vllm_model::qwen3::block::TransformerBlock::forward_decode(&self, &candle
 pub fn vllm_model::qwen3::block::TransformerBlock::forward_prefill_continue(&self, &candle_core::tensor::Tensor, &mut vllm_model::paged_tensor::tensor_store::PagedKvCache, usize, &[usize], &[usize], usize) -> candle_core::error::Result<candle_core::tensor::Tensor>
 pub fn vllm_model::qwen3::block::TransformerBlock::forward_prefill(&self, &candle_core::tensor::Tensor, &mut vllm_model::paged_tensor::tensor_store::PagedKvCache, usize, &[usize], &[usize]) -> candle_core::error::Result<candle_core::tensor::Tensor>
 pub fn vllm_model::qwen3::block::TransformerBlock::from_weights(&vllm_model::config::model_config::ModelConfig, usize, &std::collections::hash::map::HashMap<alloc::string::String, candle_core::tensor::Tensor>) -> candle_core::error::Result<Self>
-pub fn vllm_model::qwen3::block::TransformerBlock::new(usize, usize, usize, usize, usize, f32, f64, core::option::Option<candle_nn::var_builder::VarBuilder<'_>>, bool) -> candle_core::error::Result<Self>
-pub fn vllm_model::qwen3::block::TransformerBlock::new_with_rope_scaling(usize, usize, usize, usize, usize, f32, f64, usize, core::option::Option<&vllm_model::qwen3::RopeScaling>, core::option::Option<candle_nn::var_builder::VarBuilder<'_>>, bool) -> candle_core::error::Result<Self>
+pub fn vllm_model::qwen3::block::TransformerBlock::new(usize, usize, usize, usize, usize, f32, f64, &candle_core::device::Device, core::option::Option<candle_nn::var_builder::VarBuilder<'_>>, bool) -> candle_core::error::Result<Self>
+pub fn vllm_model::qwen3::block::TransformerBlock::new_with_rope_scaling(usize, usize, usize, usize, usize, f32, f64, usize, core::option::Option<&vllm_model::qwen3::RopeScaling>, &candle_core::device::Device, core::option::Option<candle_nn::var_builder::VarBuilder<'_>>, bool) -> candle_core::error::Result<Self>
 pub fn vllm_model::qwen3::block::TransformerBlock::new_with_weights_rope_scaling(usize, usize, usize, usize, usize, f32, f64, usize, core::option::Option<&vllm_model::qwen3::RopeScaling>, bool, core::option::Option<(core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>)>) -> candle_core::error::Result<Self>
 pub fn vllm_model::qwen3::block::TransformerBlock::new_with_weights(usize, usize, usize, usize, usize, f32, f64, bool, core::option::Option<(core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>, core::option::Option<candle_core::tensor::Tensor>)>) -> candle_core::error::Result<Self>
 pub fn vllm_model::qwen3::config::AttentionType::clone(&self) -> vllm_model::qwen3::config::AttentionType
@@ -2029,6 +2029,7 @@ pub trait vllm_model::kernels::flash_attention::FlashAttention: core::marker::Se
 pub trait vllm_model::loader::format::FormatLoader
 pub trait vllm_model::loader::FormatLoader
 pub trait vllm_model::paged_tensor::quant::Quantization: core::marker::Send + core::marker::Sync
+pub type vllm_model::arch::ModelAndKv = candle_core::error::Result<(alloc::boxed::Box<dyn vllm_traits::model::ModelBackend>, core::option::Option<alloc::sync::Arc<parking_lot::mutex::Mutex<vllm_model::paged_tensor::tensor_store::PagedKvCache>>>)>
 pub type vllm_model::arch::stub::StubDetectFn = fn(&serde_json::value::Value) -> bool
 pub type vllm_model::config::ConfigResult<T> = core::result::Result<T, vllm_model::config::errors::ConfigError>
 pub type vllm_model::config::errors::ConfigResult<T> = core::result::Result<T, vllm_model::config::errors::ConfigError>
@@ -2185,7 +2186,7 @@ pub vllm_model::config::ConfigError::InvalidField::field: alloc::string::String
 pub vllm_model::config::ConfigError::InvalidField::message: alloc::string::String
 pub vllm_model::config::ConfigError::Io
 pub vllm_model::config::ConfigError::Io::path: alloc::string::String
-pub vllm_model::config::ConfigError::Io::source: std::io::error::Error
+pub vllm_model::config::ConfigError::Io::source: core::io::error::Error
 pub vllm_model::config::ConfigError::Json(serde_json::error::Error)
 pub vllm_model::config::ConfigError::MissingField(&'static str)
 pub vllm_model::config::ConfigError::UnknownArchitecture(alloc::string::String)
@@ -2194,7 +2195,7 @@ pub vllm_model::config::errors::ConfigError::InvalidField::field: alloc::string:
 pub vllm_model::config::errors::ConfigError::InvalidField::message: alloc::string::String
 pub vllm_model::config::errors::ConfigError::Io
 pub vllm_model::config::errors::ConfigError::Io::path: alloc::string::String
-pub vllm_model::config::errors::ConfigError::Io::source: std::io::error::Error
+pub vllm_model::config::errors::ConfigError::Io::source: core::io::error::Error
 pub vllm_model::config::errors::ConfigError::Json(serde_json::error::Error)
 pub vllm_model::config::errors::ConfigError::MissingField(&'static str)
 pub vllm_model::config::errors::ConfigError::UnknownArchitecture(alloc::string::String)
