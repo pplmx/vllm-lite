@@ -37,6 +37,9 @@ pub mod security;
 /// Shared HTTP and serialization utilities.
 pub mod util;
 
+/// Production router assembly (routes + middleware stack).
+pub mod app;
+
 /// HTTP handlers for liveness/readiness/metrics probes.
 ///
 /// Extracted from `main.rs` so integration tests can mount the

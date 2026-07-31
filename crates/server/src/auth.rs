@@ -11,6 +11,7 @@
 //! `O(n)`) and provides precise `Retry-After` values for clients.
 #![allow(clippy::module_name_repetitions)]
 use axum::{
+    body::Body,
     extract::Request,
     http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header::AUTHORIZATION},
     middleware::Next,
@@ -428,9 +429,26 @@ pub async fn auth_middleware(
     // Read the body to estimate token cost before rate limiting.
     // The body is reconstructed so downstream handlers still see it.
     let (parts, body) = request.into_parts();
-    let body_bytes = axum::body::to_bytes(body, 1 << 20)
-        .await
-        .unwrap_or_default();
+    // invariant: the body-size limit layer in `app::build_app` sits
+    // ABOVE this middleware, so the body stream is bounded to
+    // `DEFAULT_BODY_LIMIT_BYTES` before it reaches us (the
+    // `http_body_util::Limited` wrapper errors once the limit is
+    // crossed). Reading the whole body here is therefore
+    // memory-bounded, and an overflow surfaces as a read error we
+    // translate into the same 413 the size-limit layer would produce.
+    let Ok(body_bytes) = axum::body::to_bytes(body, usize::MAX).await else {
+        // Body stream errored (the size-limit layer above tripped):
+        // translate into the same 413 the limit layer would produce
+        // rather than continuing with a silently-truncated body.
+        return Response::builder()
+            .status(StatusCode::PAYLOAD_TOO_LARGE)
+            .header(axum::http::header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                "{\"error\":\"request body exceeds the server limit\"}",
+            ))
+            // invariant: a `Response` with a static string body cannot fail to build.
+            .unwrap();
+    };
 
     let cost = if body_bytes.is_empty() {
         1.0

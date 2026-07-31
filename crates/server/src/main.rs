@@ -9,10 +9,6 @@
 mod bootstrap;
 
 use anyhow::{Context, Result};
-use axum::{
-    Router,
-    routing::{get, post},
-};
 use clap::Parser;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -22,15 +18,7 @@ use tokio::sync::mpsc;
 use vllm_core::types::EngineMessage;
 use vllm_server::auth::AuthMiddleware;
 use vllm_server::openai::batch::BatchManager;
-use vllm_server::openai::batch::handler::{
-    create_batch, get_batch, get_batch_results, list_batches,
-};
-use vllm_server::openai::chat::chat_completions;
-use vllm_server::openai::completions::completions as openai_completions;
-use vllm_server::openai::embeddings::embeddings;
-use vllm_server::openai::models::models_handler;
-use vllm_server::security::correlation::correlation_id_middleware;
-use vllm_server::{ApiState, api, auth, cli, debug, health::HealthChecker, logging};
+use vllm_server::{ApiState, cli, health::HealthChecker, logging};
 
 #[tokio::main]
 #[allow(clippy::too_many_lines)] // server bootstrap: linear startup sequence with no natural decomposition
@@ -297,98 +285,13 @@ async fn main() -> Result<()> {
         arch_capabilities,
     };
 
-    let mut app: axum::Router<()> = Router::new()
-        // OpenAI API
-        .route("/v1/models", get(models_handler))
-        .route("/v1/chat/completions", post(chat_completions))
-        .route("/v1/completions", post(openai_completions))
-        .route("/v1/embeddings", post(embeddings))
-        // Batch API
-        .route("/v1/batches", post(create_batch))
-        .route("/v1/batches", get(list_batches))
-        .route("/v1/batches/{id}", get(get_batch))
-        .route("/v1/batches/{id}/results", get(get_batch_results))
-        // Health, readiness, and metrics endpoints (K8s-compatible paths)
-        .route(
-            "/health/live",
-            get(vllm_server::health_handlers::health_handler),
-        )
-        .route(
-            "/health/ready",
-            get(vllm_server::health_handlers::ready_handler),
-        )
-        .route("/health", get(vllm_server::health_handlers::health_handler))
-        .route("/ready", get(vllm_server::health_handlers::ready_handler))
-        .route(
-            "/metrics",
-            get(vllm_server::health_handlers::metrics_handler),
-        )
-        .route("/health/details", get(api::health_details))
-        // Debug endpoints
-        .route("/debug/metrics", get(debug::metrics_snapshot))
-        .route("/debug/kv-cache", get(debug::kv_cache_dump))
-        .route("/debug/trace", get(debug::trace_status))
-        .route("/debug/audit", get(debug::audit_dump))
-        // Shutdown
-        .route("/shutdown", get(api::shutdown))
-        .with_state(state);
-
-    // Mount correlation_id_middleware as the OUTERMOST layer: it must
-    // see every request (auth-gated or not) and stamp an `X-Request-ID`
-    // header before auth/size-limit/audit run, so even rejected
-    // requests get a stable ID in the response and logs.
-    //
-    // Production-readiness recommendation 6: thread a single
-    // correlation ID through HTTP → scheduler → token stream so
-    // operators can trace a request across the whole pipeline.
-    app = app.layer(axum::middleware::from_fn(correlation_id_middleware));
-
-    // Production-readiness recommendation (audit trail): record
-    // every request — authenticated OR not, success OR
-    // failure — in the in-memory audit ring buffer (exportable
-    // via `/debug/audit`) and the structured `tracing` stream.
-    // Sits BELOW correlation_id so even requests that never
-    // reach a handler carry a `request_id` in the audit row,
-    // and ABOVE body-limit/auth so 413s and 401s are captured
-    // (we want a record of who tried what, including rejections).
-    app = app.layer(axum::middleware::from_fn_with_state(
-        audit_logger.clone(),
-        vllm_server::security::audit_middleware::audit_middleware,
-    ));
-
-    // Production-readiness recommendation (input boundary protection):
-    // cap the inbound JSON body at `DEFAULT_BODY_LIMIT_BYTES` (1 MiB)
-    // before auth/handlers can be reached. This blocks trivial JSON
-    // allocation attacks where a multi-MiB prompt exhausts memory
-    // before any application-level validation runs. Larger limits can
-    // be configured via the `with_body_size_limit` helper if a
-    // deployment legitimately needs them; the default keeps a known
-    // upper bound on memory pressure per request.
-    //
-    // Body limit lives BELOW correlation_id so a 413 response still
-    // carries an `X-Request-ID` header (operators need it to trace
-    // the rejected request), and ABOVE auth so unauthenticated
-    // clients can't waste server memory on oversized bodies either.
-    app = vllm_server::security::size_limit::with_default_body_limit(app);
-
-    if let Some(auth) = auth_middleware {
-        app = app.layer(axum::middleware::from_fn_with_state(
-            auth,
-            auth::auth_middleware,
-        ));
-    }
-
-    // Production-readiness recommendation §9: CORS layer.
-    //
-    // Mounted AFTER auth so a 401 response carries
-    // `Access-Control-Allow-Origin` if the operator opted in
-    // (browser-direct callers need it on the failure path too).
-    // The layer is closed by default — no `Access-Control-Allow-Origin`
-    // is emitted unless the operator set `cors.allow_origins` in
-    // the YAML config. The default keeps server-to-server SDKs
-    // unaffected while forcing browser-direct callers to list
-    // exact origins (no `*` + credentials anti-pattern).
-    app = vllm_server::security::cors::with_cors(app, &app_config.cors.into_runtime());
+    // Production router: routes + middleware stack. The ordering
+    // invariants (correlation outermost of the security stack, body
+    // limit above auth, audit above both) live in `app::build_app` and
+    // are covered by `crates/server/tests/middleware_wiring.rs`.
+    let cors_config = app_config.cors.into_runtime();
+    let app =
+        vllm_server::app::build_app(state, auth_middleware, audit_logger.clone(), &cors_config);
 
     let addr = format!("{}:{}", app_config.server.host, app_config.server.port);
     let listener = tokio::net::TcpListener::bind(&addr)
