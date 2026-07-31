@@ -129,7 +129,7 @@ impl EnhancedMetricsCollector {
     /// carries the core engine counters WITHOUT an engine
     /// `GetMetrics` round-trip (which can stall mid model-step).
     #[must_use]
-    pub fn runtime_snapshot(&self) -> MetricsSnapshot {
+    pub(crate) fn runtime_snapshot(&self) -> MetricsSnapshot {
         self.runtime.snapshot()
     }
 }
