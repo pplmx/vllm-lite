@@ -60,6 +60,12 @@ parking_lot = "0.12"
 async-trait = "0.1"
 crossbeam = "0.8"
 
+# Git hooks (dev tool — author's own project, pplmx/husky-rs). Its build
+# script auto-installs hooks when the host has prek on PATH; CI sets
+# NO_HUSKY_HOOKS=1 (see .github/workflows) so the hard-fail path for a
+# missing prek never triggers in CI. See pplmx/husky-rs#20.
+husky-rs = "0.4"
+
 
 # Profiling (dev-only; v27.0 H-7)
 # Note: pprof 0.15's `criterion` feature pins criterion 0.5, which conflicts

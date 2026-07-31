@@ -14,6 +14,9 @@ env:
   RUST_BACKTRACE: 1
   CUDARC_CUDA_VERSION: '12090'
 
+  # husky-rs dev-dep auto-installs hooks; CI has no prek (see pplmx/husky-rs#20)
+  NO_HUSKY_HOOKS: '1'
+
 jobs:
   fuzz-smoke:
     name: Fuzz smoke (${{ matrix.target }})

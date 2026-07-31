@@ -18,6 +18,9 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+  # husky-rs dev-dep auto-installs hooks; CI has no prek (see pplmx/husky-rs#20)
+  NO_HUSKY_HOOKS: '1'
+
 jobs:
   deny:
     name: cargo-deny

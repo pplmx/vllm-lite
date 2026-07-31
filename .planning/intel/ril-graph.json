@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-07-31T16:43:19+00:00",
+  "last_updated": "2026-07-31T23:57:29+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -1201,6 +1201,47 @@
         "source": "GitHub Actions CI after rounds 1-4 of fixes",
         "detail": "cargo-deny, Benchmarks, MSRV now green. Remaining CI failures were single-root-cause: fixture_loader_errors_without_weights expected loader() to Err on missing weights but it panicked via require_weights assert; fixed loader() to return a typed error. Go operator deps (x/net, x/oauth2) have 5 alerts; go get blocked by unresolvable kube-openapi pseudo-version in sandbox."
       }
+    },
+    {
+      "id": "issue-017",
+      "type": "issue",
+      "status": "resolved",
+      "created_at": "2026-07-31T23:57:29+00:00",
+      "updated_at": "2026-07-31T23:57:29+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "husky-rs build script hard-fails on missing/failing prek (external issue #20)",
+        "severity": 0.5,
+        "detail": "husky-rs 0.4.0 (author's own project, pplmx/husky-rs) build.rs hard-fails the build when a prek config exists but prek is missing or any prek command fails \u2014 even as an unused dev-dependency. Minimal repro written and filed upstream: https://github.com/pplmx/husky-rs/issues/20. Locally also reproduced a second failure mode (prek validate-config fails when prek.log dir is unwritable) confirming 'any prek failure -> build fails'."
+      }
+    },
+    {
+      "id": "decision-007",
+      "type": "decision",
+      "status": "active",
+      "created_at": "2026-07-31T23:57:29+00:00",
+      "updated_at": "2026-07-31T23:57:29+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "Restore husky-rs dev-dep with CI NO_HUSKY_HOOKS=1",
+        "rationale": "User's project is husky-rs; keep it usable in vllm-lite as a dev-dependency (auto hook install on dev machines with prek) while all CI workflows set NO_HUSKY_HOOKS=1 so the missing-prek hard-fail never triggers. Pending upstream fix (issue #20) that would make prek-missing a warning instead of an error.",
+        "alternatives_rejected": [
+          "keep husky-rs removed (loses dogfooding/auto-hook DX)",
+          "rely on upstream fix first (unreleased)"
+        ]
+      }
+    },
+    {
+      "id": "change-018",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T23:57:29+00:00",
+      "updated_at": "2026-07-31T23:57:29+00:00",
+      "confidence": 1.0,
+      "data": {
+        "commit": "PENDING-husky-restore",
+        "detail": "Root + server dev-deps restore husky-rs 0.4; all CI workflows set NO_HUSKY_HOOKS=1; CHANGELOG/RIL updated. Upstream issue filed: pplmx/husky-rs#20."
+      }
     }
   ],
   "edges": [
@@ -1608,6 +1649,16 @@
       "from": "evidence-027",
       "to": "task-015",
       "kind": "validates"
+    },
+    {
+      "from": "issue-017",
+      "to": "decision-007",
+      "kind": "causes"
+    },
+    {
+      "from": "change-018",
+      "to": "issue-017",
+      "kind": "resolves"
     }
   ]
 }

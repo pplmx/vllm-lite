@@ -26,6 +26,9 @@ env:
   # CUDA cannot be cross-compiled in CI; CUDA features are only enabled
   # for the linux-amd64 native build.
 
+  # husky-rs dev-dep auto-installs hooks; CI has no prek (see pplmx/husky-rs#20)
+  NO_HUSKY_HOOKS: '1'
+
 jobs:
   # 1. Compute the version + verify CHANGELOG was bumped for this tag.
   #
