@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-07-31T16:12:12+00:00",
+  "last_updated": "2026-07-31T16:19:23+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -1176,6 +1176,18 @@
       "data": {
         "source": "local CI simulation (nvcc removed from PATH)",
         "detail": "With CUDARC_CUDA_VERSION=12090 and no nvcc: cargo check --workspace --all-features --all-targets OK; cargo build -p vllm-model --features cuda OK (links); cargo test --doc --workspace --all-features OK. husky-rs gone from Cargo.lock. deny.toml parses."
+      }
+    },
+    {
+      "id": "evidence-028",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T16:19:23+00:00",
+      "updated_at": "2026-07-31T16:19:23+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "GitHub Actions re-run after first CI fix batch (2026-07-31 16:17 UTC)",
+        "detail": "First fix batch took effect (cudarc no longer panics; deny.toml parses) but exposed next layer: (a) candle-kernels build requires nvcc -> install CUDA toolkit on MSRV + ci-all-features; (b) cargo-deny: 5 workspace crates missing license.workspace=true inheritance -> added; (c) cargo-fuzz not visible to nightly toolchain -> install via cargo +nightly install."
       }
     }
   ],

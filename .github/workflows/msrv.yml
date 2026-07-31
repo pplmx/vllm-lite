@@ -33,6 +33,15 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
 
+      - name: Install CUDA toolkit (nvcc for candle-kernels)
+        # `--all-features` compiles candle-kernels, whose build script
+        # requires nvcc to build the CUDA kernels. Compiling CUDA needs
+        # only the toolkit (no GPU/driver), so apt's toolkit suffices.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nvidia-cuda-toolkit
+          nvcc --version
+
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
