@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_updated": "2026-07-31T14:48:01+00:00",
+  "last_updated": "2026-07-31T14:52:18+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -240,6 +240,68 @@
         "title": "remove deprecated shims",
         "detail": "draft_registry.rs orphan deleted; NcclAllReduce alias + re-exports removed; EmbeddingData alias removed; all_reduce.rs docs + alias compile-test updated; public-api baselines refreshed; CHANGELOG entry."
       }
+    },
+    {
+      "id": "issue-004",
+      "type": "issue",
+      "status": "resolved",
+      "created_at": "2026-07-31T14:52:18+00:00",
+      "updated_at": "2026-07-31T14:52:18+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "production middleware stack mounted in reverse order (auth outside size limit)",
+        "severity": 0.7,
+        "detail": "main.rs applied correlation->audit->size_limit->auth; axum Router::layer makes the LAST-applied layer outermost, so actual order was auth->size_limit->audit->correlation. With API keys enabled: oversized bodies silently truncated by auth's 1 MiB to_bytes cap -> 400/200 instead of 413; 401/429 bypass correlation (no X-Request-ID). Empirically reproduced (probe: 2 MiB body -> 200 with main.rs order)."
+      }
+    },
+    {
+      "id": "evidence-006",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T14:52:18+00:00",
+      "updated_at": "2026-07-31T14:52:18+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "probe test replicating main.rs layer sequence",
+        "detail": "2 MiB body returned 200 (auth truncated to empty, size limit bypassed). Proves auth ran outside size_limit."
+      }
+    },
+    {
+      "id": "evidence-007",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T14:52:18+00:00",
+      "updated_at": "2026-07-31T14:52:18+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "cargo nextest run --workspace --all-features (post-fix)",
+        "detail": "2104 tests run: 2085 passed (+6 new middleware_wiring), 19 failed (identical environmental set), 67 skipped. Zero regressions."
+      }
+    },
+    {
+      "id": "change-004",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T14:52:18+00:00",
+      "updated_at": "2026-07-31T14:52:18+00:00",
+      "confidence": 1.0,
+      "data": {
+        "commit": "PENDING-round2",
+        "detail": "app.rs build_app extraction + corrected middleware order (cors->correlation->audit->size_limit->auth); auth.rs 413-on-overflow instead of silent truncation; main.rs delegates to build_app; 6 integration tests in middleware_wiring.rs."
+      }
+    },
+    {
+      "id": "task-004",
+      "type": "task",
+      "status": "resolved",
+      "created_at": "2026-07-31T14:52:18+00:00",
+      "updated_at": "2026-07-31T14:52:18+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "Fix production middleware ordering + auth truncation",
+        "priority_score": 8.4,
+        "detail": "category=security(10) x severity 0.7 x conf 1.0 / sqrt(effort 0.7) ~ 8.4. Root cause verified by probe; fix extracted+tested."
+      }
     }
   ],
   "edges": [
@@ -328,6 +390,31 @@
     {
       "from": "evidence-007",
       "to": "task-001",
+      "kind": "validates"
+    },
+    {
+      "from": "evidence-006",
+      "to": "issue-004",
+      "kind": "validates"
+    },
+    {
+      "from": "issue-004",
+      "to": "task-004",
+      "kind": "causes"
+    },
+    {
+      "from": "change-004",
+      "to": "issue-004",
+      "kind": "resolves"
+    },
+    {
+      "from": "change-004",
+      "to": "task-004",
+      "kind": "resolves"
+    },
+    {
+      "from": "evidence-007",
+      "to": "task-004",
       "kind": "validates"
     }
   ]
