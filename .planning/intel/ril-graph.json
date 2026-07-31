@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-07-31T15:10:03+00:00",
+  "last_updated": "2026-07-31T15:11:24+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -555,6 +555,56 @@
           "leaving ambiguous IDs (breaks task lookup for future sessions)"
         ]
       }
+    },
+    {
+      "id": "issue-008",
+      "type": "issue",
+      "status": "resolved",
+      "created_at": "2026-07-31T15:11:24+00:00",
+      "updated_at": "2026-07-31T15:11:24+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "speculative verify uses wrong logits offset for prefill batches",
+        "severity": 0.8,
+        "detail": "verify_draft_tokens_logits compared draft j against logits offset j*vocab (position j) instead of (input_len-1+j)*vocab (position after the prompt). Correct for decode batches (input_len==1) but wrong for prefill batches (first speculative step of a new request, multi-token prompt): correct drafts were compared against input-token predictions and rejected, corrupting the output distribution. Bonus-token path had the same off-by-(L-1). Reproduced with a next-token-predicting model (accepted_counts [0] instead of [2]); fixed + regression test."
+      }
+    },
+    {
+      "id": "change-007",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T15:11:24+00:00",
+      "updated_at": "2026-07-31T15:11:24+00:00",
+      "confidence": 1.0,
+      "data": {
+        "commit": "PENDING-round6",
+        "detail": "verify.rs: draft offsets = (input_len-1+j)*vocab, bonus offset = (input_len-1+accepted)*vocab; regression test verifier_prefill_accepts_drafts_at_position_after_prompt (fails pre-fix, passes post-fix)."
+      }
+    },
+    {
+      "id": "task-007",
+      "type": "task",
+      "status": "resolved",
+      "created_at": "2026-07-31T15:11:24+00:00",
+      "updated_at": "2026-07-31T15:11:24+00:00",
+      "confidence": 0.95,
+      "data": {
+        "title": "Fix speculative verification offsets for prefill batches",
+        "priority_score": 7.6,
+        "detail": "correctness(10) x severity 0.8 x conf 0.95 / sqrt(effort 0.35) ~ 12.8. Silent output-distribution corruption in speculative decoding for new-request prefill steps."
+      }
+    },
+    {
+      "id": "evidence-011",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T15:11:24+00:00",
+      "updated_at": "2026-07-31T15:11:24+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "cargo nextest run --workspace --all-features (post round-6)",
+        "detail": "2117 tests: 2098 passed, 19 failed (identical environmental set), 67 skipped. Regression test fails pre-fix (accepted_counts [0]) and passes post-fix ([2])."
+      }
     }
   ],
   "edges": [
@@ -762,6 +812,26 @@
       "from": "decision-002",
       "to": "change-003",
       "kind": "supersedes"
+    },
+    {
+      "from": "issue-008",
+      "to": "task-007",
+      "kind": "causes"
+    },
+    {
+      "from": "change-007",
+      "to": "issue-008",
+      "kind": "resolves"
+    },
+    {
+      "from": "change-007",
+      "to": "task-007",
+      "kind": "resolves"
+    },
+    {
+      "from": "evidence-011",
+      "to": "task-007",
+      "kind": "validates"
     }
   ]
 }

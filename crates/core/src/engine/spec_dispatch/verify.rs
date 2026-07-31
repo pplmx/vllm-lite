@@ -115,8 +115,17 @@ impl crate::engine::Engine {
 
             let mut accepted = 0usize;
 
+            // Draft d_j sits at verify position `input_len + j` (after
+            // the input tokens); the target's prediction for it is the
+            // logits at the PRECEDING position, `input_len - 1 + j`.
+            // For decode batches `input_len == 1`, so this reduces to
+            // `j * vocab` — the historical offset. For prefill batches
+            // (first speculative step of a new request, input_len > 1)
+            // the old math compared drafts against input-token
+            // predictions, silently corrupting the accepted set.
+            let input_len = batch.input_tokens[i].len();
             for (j, &draft_token) in drafts.iter().enumerate() {
-                let offset = j * vocab_size;
+                let offset = (input_len - 1 + j) * vocab_size;
                 if offset + vocab_size > logits.len() {
                     break;
                 }
@@ -139,9 +148,12 @@ impl crate::engine::Engine {
                 }
             }
 
-            // Add a bonus token if all drafts were accepted
+            // Add a bonus token if all drafts were accepted. The bonus
+            // is sampled from the position AFTER the last draft
+            // (`input_len - 1 + accepted`); the old `accepted * vocab`
+            // offset was only correct for decode batches (input_len 1).
             if accepted == drafts.len() {
-                let bonus_offset = accepted * vocab_size;
+                let bonus_offset = (input_len - 1 + accepted) * vocab_size;
                 if bonus_offset + vocab_size <= logits.len() {
                     let bonus_logits = &logits[bonus_offset..bonus_offset + vocab_size];
                     let bonus_sampled = sample_or_argmax(bonus_logits, &params);
