@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-07-31T23:57:29+00:00",
+  "last_updated": "2026-07-31T23:58:44+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -1207,12 +1207,12 @@
       "type": "issue",
       "status": "resolved",
       "created_at": "2026-07-31T23:57:29+00:00",
-      "updated_at": "2026-07-31T23:57:29+00:00",
+      "updated_at": "2026-07-31T23:58:44+00:00",
       "confidence": 1.0,
       "data": {
-        "title": "husky-rs build script hard-fails on missing/failing prek (external issue #20)",
-        "severity": 0.5,
-        "detail": "husky-rs 0.4.0 (author's own project, pplmx/husky-rs) build.rs hard-fails the build when a prek config exists but prek is missing or any prek command fails \u2014 even as an unused dev-dependency. Minimal repro written and filed upstream: https://github.com/pplmx/husky-rs/issues/20. Locally also reproduced a second failure mode (prek validate-config fails when prek.log dir is unwritable) confirming 'any prek failure -> build fails'."
+        "title": "husky-rs fail-fast on missing prek is documented expected behavior (issue closed)",
+        "severity": 0.2,
+        "detail": "Re-analysis: husky-rs README documents \"hooks configure on cargo build/test; if prek is unavailable ... the build fails\". Fail-fast is a deliberate contract; NO_HUSKY_HOOKS is the documented opt-out. vllm-lite violated the contract by declaring the dev-dep without prek on CI (now fixed with NO_HUSKY_HOOKS=1). Upstream issue #20 closed as not-a-bug. Also reproduced locally: any prek failure (e.g. unwritable prek.log) hard-fails the build, consistent with the contract."
       }
     },
     {
@@ -1653,7 +1653,7 @@
     {
       "from": "issue-017",
       "to": "decision-007",
-      "kind": "causes"
+      "kind": "validates"
     },
     {
       "from": "change-018",

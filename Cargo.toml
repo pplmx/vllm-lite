@@ -61,9 +61,10 @@ async-trait = "0.1"
 crossbeam = "0.8"
 
 # Git hooks (dev tool — author's own project, pplmx/husky-rs). Its build
-# script auto-installs hooks when the host has prek on PATH; CI sets
-# NO_HUSKY_HOOKS=1 (see .github/workflows) so the hard-fail path for a
-# missing prek never triggers in CI. See pplmx/husky-rs#20.
+# script auto-installs hooks when the host has prek on PATH, and fails
+# fast when prek is unavailable (documented contract). CI sets
+# NO_HUSKY_HOOKS=1 (see .github/workflows) to opt out of hook
+# installation on runners without prek.
 husky-rs = "0.4"
 
 
