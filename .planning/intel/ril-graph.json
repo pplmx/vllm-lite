@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-07-31T15:29:56+00:00",
+  "last_updated": "2026-07-31T15:33:46+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -595,7 +595,7 @@
       }
     },
     {
-      "id": "evidence-011",
+      "id": "evidence-017",
       "type": "evidence",
       "status": "active",
       "created_at": "2026-07-31T15:11:24+00:00",
@@ -709,7 +709,7 @@
       }
     },
     {
-      "id": "issue-008",
+      "id": "issue-010",
       "type": "issue",
       "status": "resolved",
       "created_at": "2026-07-31T15:29:55+00:00",
@@ -722,7 +722,7 @@
       }
     },
     {
-      "id": "task-008",
+      "id": "task-009",
       "type": "task",
       "status": "resolved",
       "created_at": "2026-07-31T15:29:55+00:00",
@@ -735,7 +735,7 @@
       }
     },
     {
-      "id": "evidence-012",
+      "id": "evidence-018",
       "type": "evidence",
       "status": "active",
       "created_at": "2026-07-31T15:29:55+00:00",
@@ -747,7 +747,7 @@
       }
     },
     {
-      "id": "evidence-013",
+      "id": "evidence-019",
       "type": "evidence",
       "status": "active",
       "created_at": "2026-07-31T15:29:55+00:00",
@@ -759,7 +759,7 @@
       }
     },
     {
-      "id": "change-007",
+      "id": "change-011",
       "type": "change",
       "status": "active",
       "created_at": "2026-07-31T15:29:55+00:00",
@@ -821,278 +821,304 @@
           "commit while the parallel agent was mid-write (raced: their files flickered between checks; the first attempt silently staged nothing)"
         ]
       }
+    },
+    {
+      "id": "decision-005",
+      "type": "decision",
+      "status": "active",
+      "created_at": "2026-07-31T15:33:46+00:00",
+      "updated_at": "2026-07-31T15:33:46+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "De-duplicate RIL graph node ids after parallel-agent id collision",
+        "rationale": "Two agent instances independently created nodes with the same ids (issue-008, task-008, change-007, evidence-011/012/013). Kept the earlier-created copy under the original id and renamed the later copy to a fresh id (issue-010, task-009, change-011, evidence-017/018/019); re-pointed the later copy's edges to the renamed ids. Also fixed a round-7 edge bug (change-008 resolved issue-008 instead of task-008) and linked the actual fuzz commits (change-009) to the parallel agent's fuzz issue/task.",
+        "alternatives_rejected": [
+          "leave duplicate ids (violates the graph schema; breaks id-uniqueness queries)",
+          "drop one copy (loses evidence content)"
+        ]
+      }
     }
   ],
   "edges": [
     {
       "from": "evidence-002",
-      "to": "issue-001",
-      "kind": "validates"
+      "kind": "validates",
+      "to": "issue-001"
     },
     {
       "from": "issue-001",
-      "to": "task-002",
-      "kind": "causes"
+      "kind": "causes",
+      "to": "task-002"
     },
     {
       "from": "issue-002",
-      "to": "task-001",
-      "kind": "causes"
+      "kind": "causes",
+      "to": "task-001"
     },
     {
       "from": "issue-003",
-      "to": "task-003",
-      "kind": "causes"
+      "kind": "causes",
+      "to": "task-003"
     },
     {
       "from": "evidence-001",
-      "to": "issue-001",
-      "kind": "refutes"
+      "kind": "refutes",
+      "to": "issue-001"
     },
     {
       "from": "evidence-003",
-      "to": "issue-001",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "issue-001"
     },
     {
       "from": "evidence-004",
-      "to": "issue-001",
-      "kind": "validates"
+      "kind": "validates",
+      "to": "issue-001"
     },
     {
       "from": "evidence-005",
-      "to": "issue-002",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "issue-002"
     },
     {
       "from": "evidence-005",
-      "to": "task-001",
-      "kind": "validates"
+      "kind": "validates",
+      "to": "task-001"
     },
     {
       "from": "change-001",
-      "to": "task-002",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "task-002"
     },
     {
       "from": "change-002",
-      "to": "task-001",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "task-001"
     },
     {
       "from": "decision-001",
-      "to": "change-001",
-      "kind": "supersedes"
+      "kind": "supersedes",
+      "to": "change-001"
     },
     {
       "from": "evidence-008",
-      "to": "task-003",
-      "kind": "validates"
+      "kind": "validates",
+      "to": "task-003"
     },
     {
       "from": "change-004",
-      "to": "task-003",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "task-003"
     },
     {
       "from": "change-004",
-      "to": "issue-003",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "issue-003"
     },
     {
       "from": "evidence-006",
-      "to": "task-002",
-      "kind": "validates"
+      "kind": "validates",
+      "to": "task-002"
     },
     {
       "from": "evidence-007",
-      "to": "task-001",
-      "kind": "validates"
+      "kind": "validates",
+      "to": "task-001"
     },
     {
       "from": "evidence-006a",
-      "to": "issue-004",
-      "kind": "validates"
+      "kind": "validates",
+      "to": "issue-004"
     },
     {
       "from": "issue-004",
-      "to": "task-004",
-      "kind": "causes"
+      "kind": "causes",
+      "to": "task-004"
     },
     {
       "from": "change-004a",
-      "to": "issue-004",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "issue-004"
     },
     {
       "from": "change-004a",
-      "to": "task-004",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "task-004"
     },
     {
       "from": "evidence-007a",
-      "to": "task-004",
-      "kind": "validates"
+      "kind": "validates",
+      "to": "task-004"
     },
     {
       "from": "evidence-009",
-      "to": "issue-005",
-      "kind": "validates"
+      "kind": "validates",
+      "to": "issue-005"
     },
     {
       "from": "issue-005",
-      "to": "task-005",
-      "kind": "causes"
+      "kind": "causes",
+      "to": "task-005"
     },
     {
       "from": "change-005",
-      "to": "task-005",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "task-005"
     },
     {
       "from": "evidence-010",
-      "to": "task-005",
-      "kind": "validates"
+      "kind": "validates",
+      "to": "task-005"
     },
     {
       "from": "issue-005a",
-      "to": "task-005a",
-      "kind": "causes"
+      "kind": "causes",
+      "to": "task-005a"
     },
     {
       "from": "issue-006",
-      "to": "task-005a",
-      "kind": "causes"
+      "kind": "causes",
+      "to": "task-005a"
     },
     {
       "from": "change-005a",
-      "to": "issue-005a",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "issue-005a"
     },
     {
       "from": "change-005a",
-      "to": "issue-006",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "issue-006"
     },
     {
       "from": "change-005a",
-      "to": "task-005a",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "task-005a"
     },
     {
       "from": "evidence-008a",
-      "to": "task-005a",
-      "kind": "validates"
+      "kind": "validates",
+      "to": "task-005a"
     },
     {
       "from": "evidence-011",
-      "to": "task-006",
-      "kind": "validates"
+      "kind": "validates",
+      "to": "task-006"
     },
     {
       "from": "issue-006a",
-      "to": "task-006",
-      "kind": "causes"
+      "kind": "causes",
+      "to": "task-006"
     },
     {
       "from": "change-006",
-      "to": "task-006",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "task-006"
     },
     {
       "from": "change-006",
-      "to": "issue-006a",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "issue-006a"
     },
     {
       "from": "issue-007",
-      "to": "task-006a",
-      "kind": "causes"
+      "kind": "causes",
+      "to": "task-006a"
     },
     {
       "from": "change-006a",
-      "to": "issue-007",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "issue-007"
     },
     {
       "from": "change-006a",
-      "to": "task-006a",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "task-006a"
     },
     {
       "from": "evidence-010a",
-      "to": "task-006a",
-      "kind": "validates"
+      "kind": "validates",
+      "to": "task-006a"
     },
     {
       "from": "decision-002",
-      "to": "change-003",
-      "kind": "supersedes"
+      "kind": "supersedes",
+      "to": "change-003"
     },
     {
       "from": "issue-008",
-      "to": "task-007",
-      "kind": "causes"
+      "kind": "causes",
+      "to": "task-007"
     },
     {
       "from": "change-007",
-      "to": "issue-008",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "issue-008"
     },
     {
       "from": "change-007",
-      "to": "task-007",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "task-007"
     },
     {
-      "from": "evidence-011",
-      "to": "task-007",
-      "kind": "validates"
+      "from": "evidence-017",
+      "kind": "validates",
+      "to": "task-007"
     },
     {
       "from": "issue-009",
-      "to": "task-008",
-      "kind": "causes"
+      "kind": "causes",
+      "to": "task-008"
     },
     {
       "from": "change-008",
-      "to": "issue-008",
-      "kind": "resolves"
-    },
-    {
-      "from": "change-008",
-      "to": "issue-009",
-      "kind": "resolves"
+      "kind": "resolves",
+      "to": "issue-009"
     },
     {
       "from": "evidence-012",
-      "to": "task-008",
-      "kind": "validates"
+      "kind": "validates",
+      "to": "task-008"
     },
     {
       "from": "evidence-013",
-      "to": "task-008",
-      "kind": "validates"
+      "kind": "validates",
+      "to": "task-008"
     },
     {
-      "from": "evidence-012",
-      "to": "task-008",
-      "kind": "validates"
+      "from": "evidence-018",
+      "kind": "validates",
+      "to": "task-009"
     },
     {
-      "from": "issue-008",
-      "to": "task-008",
-      "kind": "causes"
+      "from": "issue-010",
+      "kind": "causes",
+      "to": "task-009"
     },
     {
-      "from": "change-007",
-      "to": "task-008",
-      "kind": "resolves"
+      "from": "change-011",
+      "kind": "resolves",
+      "to": "task-009"
     },
     {
-      "from": "change-007",
-      "to": "issue-008",
-      "kind": "resolves"
+      "from": "change-011",
+      "kind": "resolves",
+      "to": "issue-010"
+    },
+    {
+      "from": "change-008",
+      "kind": "resolves",
+      "to": "task-008"
+    },
+    {
+      "from": "change-009",
+      "kind": "resolves",
+      "to": "issue-010"
+    },
+    {
+      "from": "change-009",
+      "kind": "resolves",
+      "to": "task-009"
     }
   ]
 }
