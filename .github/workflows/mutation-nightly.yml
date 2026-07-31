@@ -45,6 +45,9 @@ env:
   CUDARC_CUDA_VERSION: '12090'
   CARGO_NET_RETRY: 10
 
+  # husky-rs dev-dep auto-installs hooks; CI has no prek (see pplmx/husky-rs#20)
+  NO_HUSKY_HOOKS: '1'
+
 jobs:
   mutation:
     name: Mutation scan (${{ matrix.module }})

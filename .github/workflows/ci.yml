@@ -21,6 +21,9 @@ env:
   # kernels compile (no GPU needed at build time).
   CUDA_COMPUTE_CAP: '90'
 
+  # husky-rs dev-dep auto-installs hooks; CI has no prek (see pplmx/husky-rs#20)
+  NO_HUSKY_HOOKS: '1'
+
 jobs:
   ci:
     name: CI

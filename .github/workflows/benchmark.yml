@@ -31,6 +31,8 @@ jobs:
       # runners have no GPU. Pin a generic compute capability so CUDA
       # kernels compile (no GPU needed at build time).
       CUDA_COMPUTE_CAP: '90'
+      # husky-rs dev-dep auto-installs hooks; CI has no prek.
+      NO_HUSKY_HOOKS: '1'
     timeout-minutes: 60
     strategy:
       fail-fast: false
