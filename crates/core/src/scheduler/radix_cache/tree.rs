@@ -97,6 +97,32 @@ impl RadixTree {
         self.root.children.clear();
         self.entry_count = 0;
     }
+
+    /// Collect the block list of every complete entry and clear the
+    /// tree.
+    ///
+    /// Used by memory-pressure eviction: the caller releases each
+    /// returned block list (dropping the cache's refcount on those
+    /// blocks) so the allocator can reuse them. The tree is fully
+    /// reset afterwards — entries are forgotten and subsequent lookups
+    /// miss, which is correct because the cached KV is gone.
+    #[must_use]
+    pub fn drain_blocks(&mut self) -> Vec<Vec<BlockId>> {
+        fn collect(node: &mut RadixNode, out: &mut Vec<Vec<BlockId>>) {
+            if node.is_complete {
+                if let Some(blocks) = node.blocks.take() {
+                    out.push(blocks.as_ref().clone());
+                }
+            }
+            for child in node.children.values_mut() {
+                collect(child, out);
+            }
+        }
+        let mut out = Vec::new();
+        collect(&mut self.root, &mut out);
+        self.clear();
+        out
+    }
 }
 
 impl Default for RadixTree {
@@ -119,6 +145,35 @@ mod tests {
         let result = result.unwrap();
         assert_eq!(result.matched_tokens, 3);
         assert_eq!(result.blocks.as_ref(), &vec![10, 20, 30]);
+    }
+
+    #[test]
+    fn test_radix_tree_drain_blocks_returns_all_and_clears() {
+        let mut tree = RadixTree::new();
+        tree.insert(&[1, 2], vec![10, 20]);
+        tree.insert(&[3, 4, 5], vec![30, 40, 50]);
+        tree.insert(&[6], vec![60]);
+
+        let drained = tree.drain_blocks();
+        // All three entries' block lists are returned, in tree order.
+        assert_eq!(drained.len(), 3);
+        assert!(drained.contains(&vec![10, 20]));
+        assert!(drained.contains(&vec![30, 40, 50]));
+        assert!(drained.contains(&vec![60]));
+
+        // The tree is fully reset: no entries remain and lookups miss.
+        assert!(tree.is_empty());
+        assert_eq!(tree.len(), 0);
+        assert!(tree.longest_prefix_match(&[1, 2]).is_none());
+        assert!(tree.longest_prefix_match(&[3, 4, 5]).is_none());
+        assert!(tree.longest_prefix_match(&[6]).is_none());
+    }
+
+    #[test]
+    fn test_radix_tree_drain_blocks_empty_tree() {
+        let mut tree = RadixTree::new();
+        assert!(tree.drain_blocks().is_empty());
+        assert!(tree.is_empty());
     }
 
     #[test]

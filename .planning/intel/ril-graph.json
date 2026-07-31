@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-07-31T15:33:46+00:00",
+  "last_updated": "2026-07-31T15:35:33+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -837,6 +837,68 @@
           "drop one copy (loses evidence content)"
         ]
       }
+    },
+    {
+      "id": "issue-009",
+      "type": "issue",
+      "status": "resolved",
+      "created_at": "2026-07-31T15:35:33+00:00",
+      "updated_at": "2026-07-31T15:35:33+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "prefix cache pins finished KV blocks forever (pool exhaustion)",
+        "severity": 0.6,
+        "detail": "RadixTree cache holds refcounts on finished sequences' blocks with no eviction path; verified 16/16 blocks pinned after 16 finished prompts; new requests run KV-less. Long-running server OOM-degrades."
+      }
+    },
+    {
+      "id": "task-009",
+      "type": "task",
+      "status": "resolved",
+      "created_at": "2026-07-31T15:35:33+00:00",
+      "updated_at": "2026-07-31T15:35:33+00:00",
+      "confidence": 0.97,
+      "data": {
+        "title": "Evict prefix-cache entries under memory pressure",
+        "priority_score": 6.8,
+        "detail": "Add RadixTree::drain_blocks + eviction phase 0 in execute_preemption; regression tests. category=stability(8) x severity 0.6 x conf 0.97 / sqrt(0.4) ~ 7.4."
+      }
+    },
+    {
+      "id": "evidence-014",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T15:35:33+00:00",
+      "updated_at": "2026-07-31T15:35:33+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "probe test (removed after fix)",
+        "detail": "Pre-fix: usage 16/16 after 16 finished prompts; new request completed KV-less. Post-fix: 1/16 after finished, new request completes with 2/16."
+      }
+    },
+    {
+      "id": "evidence-015",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T15:35:33+00:00",
+      "updated_at": "2026-07-31T15:35:33+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "cargo test prefix_cache* + clippy + fmt",
+        "detail": "prefix_cache_eviction + prefix_cache + prefix_cache_refcount pass; radix lib tests 10 pass; clippy all-targets clean."
+      }
+    },
+    {
+      "id": "change-008",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T15:35:33+00:00",
+      "updated_at": "2026-07-31T15:35:33+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "prefix-cache eviction under pressure",
+        "detail": "tree.rs drain_blocks + engine/memory.rs execute_preemption phase 0 + 2 unit tests + 1 integration test + CHANGELOG."
+      }
     }
   ],
   "edges": [
@@ -1119,6 +1181,31 @@
       "from": "change-009",
       "kind": "resolves",
       "to": "task-009"
+    },
+    {
+      "from": "evidence-014",
+      "to": "issue-009",
+      "kind": "validates"
+    },
+    {
+      "from": "issue-009",
+      "to": "task-009",
+      "kind": "causes"
+    },
+    {
+      "from": "change-008",
+      "to": "task-009",
+      "kind": "resolves"
+    },
+    {
+      "from": "change-008",
+      "to": "issue-009",
+      "kind": "resolves"
+    },
+    {
+      "from": "evidence-015",
+      "to": "task-009",
+      "kind": "validates"
     }
   ]
 }
