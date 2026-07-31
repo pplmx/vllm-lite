@@ -1,0 +1,192 @@
+{
+  "version": 1,
+  "last_updated": "2026-07-31T14:37:48+00:00",
+  "nodes": [
+    {
+      "id": "issue-001",
+      "type": "issue",
+      "status": "resolved",
+      "created_at": "2026-07-31T14:30:32+00:00",
+      "updated_at": "2026-07-31T14:37:48+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "clippy --all-targets --all-features -D warnings fails",
+        "severity": 0.3,
+        "detail": "7 float_cmp errors in crates/traits/src/sampling.rs tests (assert_eq! on f32 fields). CI's `just clippy` only lints lib targets, so CI is green; AGENTS.md requires the all-targets command."
+      }
+    },
+    {
+      "id": "issue-002",
+      "type": "issue",
+      "status": "resolved",
+      "created_at": "2026-07-31T14:30:32+00:00",
+      "updated_at": "2026-07-31T14:37:48+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "production unwrap/expect missing // invariant: comments",
+        "severity": 0.25,
+        "detail": "AGENTS.md: production .unwrap()/.expect() must be preceded by // invariant: comment. Sites: rope.rs x5 (dims4), auth.rs x2 (Response builder), health_handlers.rs x1 (RwLock), chat.rs x5 (serialize/seq_id_rx), completions.rs x2, paged_kv_cache_wrapper.rs x1 (doc rationale only), testing/device.rs x1."
+      }
+    },
+    {
+      "id": "issue-003",
+      "type": "issue",
+      "status": "active",
+      "created_at": "2026-07-31T14:30:32+00:00",
+      "updated_at": "2026-07-31T14:30:32+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "deprecated shims have zero internal callers",
+        "severity": 0.15,
+        "detail": "draft_registry module, NcclAllReduce alias, EmbeddingData alias are unused internally; 31-C 'Migrate deprecated import paths' is effectively done except removal decision."
+      }
+    },
+    {
+      "id": "evidence-001",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T14:30:32+00:00",
+      "updated_at": "2026-07-31T14:30:32+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "cargo nextest run --workspace --all-features (2026-07-31, sandbox)",
+        "detail": "2079 passed / 19 failed / 67 skipped. All 19 failures environmental: 7 CUDA (no GPU), 12 socket-bind (sandbox network restriction). Baseline commit c63e13e0."
+      }
+    },
+    {
+      "id": "evidence-002",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T14:30:32+00:00",
+      "updated_at": "2026-07-31T14:30:32+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+        "detail": "7 errors, all clippy::float_cmp in crates/traits/src/sampling.rs test module (lines 515-552). Introduced by fbe26431."
+      }
+    },
+    {
+      "id": "task-001",
+      "type": "task",
+      "status": "resolved",
+      "created_at": "2026-07-31T14:30:32+00:00",
+      "updated_at": "2026-07-31T14:37:48+00:00",
+      "confidence": 0.95,
+      "data": {
+        "title": "Add invariant comments to production unwrap/expect sites",
+        "priority_score": 4.1,
+        "detail": "Add // invariant: comments at 13 sites across rope.rs, auth.rs, health_handlers.rs, chat.rs, completions.rs, paged_kv_cache_wrapper.rs, testing/device.rs. No behavior change. category=correctness(10) x severity 0.25 x conf 0.95 / sqrt(effort 0.3) ~ 4.3."
+      }
+    },
+    {
+      "id": "task-002",
+      "type": "task",
+      "status": "resolved",
+      "created_at": "2026-07-31T14:30:32+00:00",
+      "updated_at": "2026-07-31T14:37:48+00:00",
+      "confidence": 0.95,
+      "data": {
+        "title": "Fix all-targets clippy float_cmp in vllm-traits tests",
+        "priority_score": 4.2,
+        "detail": "Add #[allow(clippy::float_cmp)] with rationale to sampling.rs test module (exact-literal equality on f32 config fields). category=testing(4) x severity 0.4 x conf 0.95 / sqrt(effort 0.08) ~ 5.3."
+      }
+    },
+    {
+      "id": "task-003",
+      "type": "task",
+      "status": "active",
+      "created_at": "2026-07-31T14:30:32+00:00",
+      "updated_at": "2026-07-31T14:30:32+00:00",
+      "confidence": 0.8,
+      "data": {
+        "title": "Remove deprecated shims + refresh public-api baseline",
+        "priority_score": 1.4,
+        "detail": "Remove draft_registry module, NcclAllReduce alias, EmbeddingData alias; regen public-api baselines; CHANGELOG. Decision needed on version window. category=maintainability(3) x severity 0.3 x conf 0.8 / sqrt(effort 1.2) ~ 0.7."
+      }
+    },
+    {
+      "id": "evidence-003",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T14:37:48+00:00",
+      "updated_at": "2026-07-31T14:37:48+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "cargo clippy --workspace --all-targets --all-features -- -D warnings (post-fix)",
+        "detail": "0 errors \u2014 gate green."
+      }
+    },
+    {
+      "id": "evidence-004",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T14:37:48+00:00",
+      "updated_at": "2026-07-31T14:37:48+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "cargo nextest run --workspace --all-features (post-fix)",
+        "detail": "2079 passed / 19 failed (identical environmental set: 7 CUDA no-GPU, 12 socket-bind sandbox) / 67 skipped. Zero regressions."
+      }
+    },
+    {
+      "id": "evidence-005",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T14:37:48+00:00",
+      "updated_at": "2026-07-31T14:37:48+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "python rescan of production unwrap/expect sites",
+        "detail": "All production unwrap/expect now preceded by // invariant: comments; remaining flagged sites (gemma4) verified to already have the comment (scanner false positive)."
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "evidence-002",
+      "to": "issue-001",
+      "kind": "validates"
+    },
+    {
+      "from": "issue-001",
+      "to": "task-002",
+      "kind": "causes"
+    },
+    {
+      "from": "issue-002",
+      "to": "task-001",
+      "kind": "causes"
+    },
+    {
+      "from": "issue-003",
+      "to": "task-003",
+      "kind": "causes"
+    },
+    {
+      "from": "evidence-001",
+      "to": "issue-001",
+      "kind": "refutes",
+      "note": "CI gate (just clippy) is green; only all-targets strict gate fails"
+    },
+    {
+      "from": "evidence-003",
+      "to": "issue-001",
+      "kind": "resolves"
+    },
+    {
+      "from": "evidence-004",
+      "to": "issue-001",
+      "kind": "validates"
+    },
+    {
+      "from": "evidence-005",
+      "to": "issue-002",
+      "kind": "resolves"
+    },
+    {
+      "from": "evidence-005",
+      "to": "task-001",
+      "kind": "validates"
+    }
+  ]
+}
