@@ -58,9 +58,9 @@ exceptions = [
     { name = "aws-lc-sys", allow = ["OpenSSL", "ISC"] },
     # rustls-pemfile historically had ISC; keep both options open.
     { name = "rustls-pemfile", allow = ["ISC", "Apache-2.0", "MIT"] },
-    # cpp_demangle: Boost-1.0 (not in allowlist but is permissive).
+    # cpp_demangle: BSL-1.0 (Boost Software License 1.0; not in allowlist but permissive).
     # Pin to specific version to avoid drift.
-    { name = "cpp_demangle", version = "=0.5.1", allow = ["Boost-1.0"] },
+    { name = "cpp_demangle", version = "=0.5.1", allow = ["BSL-1.0"] },
 ]
 
 [bans]

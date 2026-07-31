@@ -11,6 +11,11 @@ env:
   RUST_BACKTRACE: 1
   # Disable CUDA in CI (GitHub runners don't have GPU)
   CANDLE_NATIVE_BACKEND: 1
+  # cudarc's build script probes `nvcc --version` unless
+  # CUDARC_CUDA_VERSION is pinned; GitHub runners have no CUDA
+  # toolkit, so --all-features builds (doctest, ci-all-features)
+  # must pin the version for compile-only resolution.
+  CUDARC_CUDA_VERSION: '12090'
 
 jobs:
   ci:

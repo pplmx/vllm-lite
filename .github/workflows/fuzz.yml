@@ -12,6 +12,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  CUDARC_CUDA_VERSION: '12090'
 
 jobs:
   fuzz-smoke:
@@ -40,6 +41,12 @@ jobs:
           key: ${{ runner.os }}-fuzz-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-fuzz-cargo-
+
+      - name: Install just
+        uses: taiki-e/install-action@just
+
+      - name: Install cargo-fuzz
+        uses: taiki-e/install-action@cargo-fuzz
 
       - name: Build fuzz targets
         run: just fuzz-build

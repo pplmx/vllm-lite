@@ -25,6 +25,8 @@ jobs:
   benchmark:
     name: Criterion Benchmarks (${{ matrix.crate }})
     runs-on: ubuntu-latest
+    env:
+      CUDARC_CUDA_VERSION: '12090'
     timeout-minutes: 60
     strategy:
       fail-fast: false
