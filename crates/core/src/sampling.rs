@@ -158,6 +158,13 @@ pub(crate) fn temperature_sample(
 
     let scaled: Vec<f32> = logits.iter().map(|x| x / temperature).collect();
     let max_val = scaled.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    // Degenerate input (all `-inf`, or `NaN`): there is no valid
+    // distribution to sample from. Fall back to greedy argmax —
+    // mirrors `log_softmax` / `renormalized_top_p_logprobs`, which
+    // also guard on `!max_val.is_finite()`.
+    if !max_val.is_finite() {
+        return greedy_sample(logits);
+    }
     let exp: Vec<f32> = scaled.iter().map(|x| (x - max_val).exp()).collect();
     let sum: f32 = exp.iter().sum();
     let probs: Vec<f32> = exp.iter().map(|x| x / sum).collect();
@@ -185,6 +192,12 @@ pub(crate) fn top_p_sample(logits: &[f32], top_p: f32, random_threshold: f32) ->
     });
 
     let max_val = indexed[0].1;
+    // Degenerate input (all `-inf`, or `NaN`): there is no valid
+    // distribution to sample from. Fall back to greedy argmax —
+    // mirrors `log_softmax` / `renormalized_top_p_logprobs`.
+    if !max_val.is_finite() {
+        return greedy_sample(logits);
+    }
     let exp: Vec<f32> = indexed.iter().map(|(_, v)| (v - max_val).exp()).collect();
     let sum: f32 = exp.iter().sum();
     let mut probs: Vec<f32> = exp.iter().map(|x| x / sum).collect();

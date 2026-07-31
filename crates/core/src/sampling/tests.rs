@@ -75,6 +75,63 @@ fn test_temperature_one_unchanged() {
 }
 
 #[test]
+fn test_temperature_all_neg_inf_falls_back_to_greedy() {
+    // Degenerate model output: every logit is `-inf`. There is no
+    // valid distribution; the sampler must fall back to greedy
+    // argmax (deterministic first index) instead of producing NaN
+    // probabilities and returning an arbitrary tail index.
+    let logits = vec![f32::NEG_INFINITY; 32];
+    assert_eq!(temperature_sample(&logits, 0.8, 0.5), 0);
+    // A NaN logit is also non-finite and must not poison the result.
+    let nan_logits = vec![f32::NAN; 32];
+    assert_eq!(temperature_sample(&nan_logits, 0.8, 0.5), 0);
+}
+
+#[test]
+fn test_top_p_all_neg_inf_falls_back_to_greedy() {
+    let logits = vec![f32::NEG_INFINITY; 32];
+    assert_eq!(top_p_sample(&logits, 0.9, 0.5), 0);
+    let nan_logits = vec![f32::NAN; 32];
+    assert_eq!(top_p_sample(&nan_logits, 0.9, 0.5), 0);
+}
+
+#[test]
+fn test_top_k_all_neg_inf_falls_back_to_greedy() {
+    // top-k masking of a fully-degenerate row leaves every logit at
+    // `-inf`; the downstream temperature/top-p samplers must degrade
+    // to greedy rather than NaN math.
+    let logits = vec![f32::NEG_INFINITY; 32];
+    assert_eq!(top_k_sample(&logits, 5, 0.5), 0);
+}
+
+#[test]
+fn test_sample_batch_with_params_all_neg_inf_degenerates_safely() {
+    // Public-surface regression: all-`-inf` logits must yield the
+    // deterministic first token with `-inf` logprob (not an arbitrary
+    // tail index from NaN math), for both nucleus and temperature
+    // sampling paths.
+    let logits = vec![f32::NEG_INFINITY; 32];
+    for params in [
+        SamplingParams::builder().with_top_p(0.9).build(),
+        SamplingParams::builder().with_temperature(0.8).build(),
+        SamplingParams::builder()
+            .with_top_k(5)
+            .with_temperature(0.8)
+            .build(),
+    ] {
+        let out = sample_batch_with_params(&[logits.clone()], &[params], &[vec![]]);
+        assert_eq!(
+            out[0].token, 0,
+            "all-(-inf) logits must pick the first token"
+        );
+        assert!(
+            !out[0].logprob.is_finite(),
+            "degenerate distribution has no finite logprob"
+        );
+    }
+}
+
+#[test]
 fn test_temperature_zero_reverts_to_greedy() {
     let logits = &[0.1, 0.9, 0.3];
     let result = temperature_sample(logits, 0.0, 0.5);
