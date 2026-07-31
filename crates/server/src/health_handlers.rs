@@ -77,6 +77,8 @@ pub async fn health_handler(State(state): State<ApiState>) -> Response {
 /// body contains no `.await` points (all work is synchronous).
 #[allow(clippy::unused_async)]
 pub async fn ready_handler(State(state): State<ApiState>) -> Response {
+    // invariant: the health RwLock is only held for synchronous field
+    // access, so it cannot be poisoned (see also `health_handler`).
     let static_status = state.health.read().unwrap().check_readiness();
 
     let max_capacity = state.engine_tx.max_capacity();

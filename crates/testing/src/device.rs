@@ -39,6 +39,8 @@ use candle_core::Device;
 #[must_use]
 #[allow(clippy::module_name_repetitions)]
 pub fn gpu_device() -> Device {
+    // invariant: `gpu_device()` is a test-only helper and the caller has
+    // already verified CUDA availability before invoking it.
     Device::cuda_if_available(0).expect("CUDA device must be available for gpu_device() tests")
 }
 
