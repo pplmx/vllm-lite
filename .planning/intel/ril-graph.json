@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-07-31T15:42:35+00:00",
+  "last_updated": "2026-07-31T15:44:44+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -965,6 +965,56 @@
         "source": "cargo nextest run --workspace --all-features (post round-10)",
         "detail": "2123 tests: 2104 passed, 19 failed (identical environmental set), 67 skipped. New prometheus export tests pass (tokens_total/latency/kv values correct)."
       }
+    },
+    {
+      "id": "issue-013",
+      "type": "issue",
+      "status": "resolved",
+      "created_at": "2026-07-31T15:44:44+00:00",
+      "updated_at": "2026-07-31T15:44:44+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "Prometheus /metrics exported always-zero fake gauges",
+        "severity": 0.3,
+        "detail": "gpu_memory_used_bytes, gpu_memory_total_bytes, is_leader, inflight_requests, scheduler_queue_size printed literal 0 forever \u2014 get_gauge returns 0 for unsupported names (no backing data in EnhancedMetricsCollector). Constant-zero metrics mislead dashboards/alerting. Removed them; inflight_requests superseded by the real requests_in_flight (from the lock-free snapshot)."
+      }
+    },
+    {
+      "id": "task-012",
+      "type": "task",
+      "status": "resolved",
+      "created_at": "2026-07-31T15:44:44+00:00",
+      "updated_at": "2026-07-31T15:44:44+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "Remove always-zero fake gauges from /metrics",
+        "priority_score": 3.1,
+        "detail": "observability(8) x severity 0.3 x conf 1.0 / sqrt(effort 0.1) ~ 7.6. Delete 5 fake metric blocks from PrometheusExporter."
+      }
+    },
+    {
+      "id": "change-014",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T15:44:44+00:00",
+      "updated_at": "2026-07-31T15:44:44+00:00",
+      "confidence": 1.0,
+      "data": {
+        "commit": "PENDING-round11",
+        "detail": "prometheus.rs: removed gpu_memory_used_bytes, gpu_memory_total_bytes, is_leader, inflight_requests, scheduler_queue_size (all constant 0); real requests_in_flight retained from snapshot."
+      }
+    },
+    {
+      "id": "evidence-023",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T15:44:44+00:00",
+      "updated_at": "2026-07-31T15:44:44+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "cargo nextest run --workspace --all-features (post round-11)",
+        "detail": "2123 tests: 2104 passed, 19 identical environmental failures, 67 skipped. prometheus export tests pass; fmt/clippy clean."
+      }
     }
   ],
   "edges": [
@@ -1291,6 +1341,26 @@
     {
       "from": "evidence-022",
       "to": "task-011",
+      "kind": "validates"
+    },
+    {
+      "from": "issue-013",
+      "to": "task-012",
+      "kind": "causes"
+    },
+    {
+      "from": "change-014",
+      "to": "issue-013",
+      "kind": "resolves"
+    },
+    {
+      "from": "change-014",
+      "to": "task-012",
+      "kind": "resolves"
+    },
+    {
+      "from": "evidence-023",
+      "to": "task-012",
       "kind": "validates"
     }
   ]
