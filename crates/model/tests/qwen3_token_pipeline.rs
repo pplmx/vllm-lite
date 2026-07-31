@@ -591,7 +591,7 @@ mod tests {
     }
 
     #[test]
-
+    #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
     fn test_server_token_stream_decode() {
         let tokenizer = support::tokenizer::qwen3_tokenizer();
 
@@ -657,7 +657,7 @@ mod tests {
     }
 
     #[test]
-
+    #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
     fn test_special_token_filtering() {
         let tokenizer = support::tokenizer::qwen3_tokenizer();
 
@@ -1020,7 +1020,7 @@ mod tests {
     }
 
     #[test]
-
+    #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
     fn test_special_token_filtering_logic() {
         const SPECIAL_TOKENS_TO_SKIP: &[&str] = &["<|endoftext|>", "<|im_end|>", "<|im_start|>"];
 
@@ -1084,7 +1084,7 @@ mod tests {
     }
 
     #[test]
-
+    #[ignore = "slow: on-disk checkpoint pipeline (run: just nextest-checkpoint)"]
     fn test_streaming_with_special_token_filtering() {
         const SPECIAL_TOKENS_TO_SKIP: &[&str] = &["<|endoftext|>", "<|im_end|>", "<|im_start|>"];
 
