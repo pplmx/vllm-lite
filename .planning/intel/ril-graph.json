@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-07-31T15:47:44+00:00",
+  "last_updated": "2026-07-31T15:49:09+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -1064,6 +1064,18 @@
       "data": {
         "source": "cargo nextest run --workspace --all-features (post round-12)",
         "detail": "2123 tests: 2104 passed, 19 identical environmental failures, 67 skipped. fmt/clippy clean; JSON valid; public-api baseline updated for the removal."
+      }
+    },
+    {
+      "id": "evidence-025",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T15:49:09+00:00",
+      "updated_at": "2026-07-31T15:49:09+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "round-13 deep exploration (2026-08-01)",
+        "detail": "Scanned: OPERATIONS.md/dashboard/docs metric-name consistency (aligned in task-013), StubDraftVerifier (legit Default pattern per AGENTS.md), draft_resolver, cuda_graph/graph_step, chat_template (llama3/mistral/chatml rendering), server public-API handlers vs routing (all routed), core baseline test-named items. No new task with priority_score > 3.0. Exploration streak without a >3.0 task: 1."
       }
     }
   ],
