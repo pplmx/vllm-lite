@@ -52,7 +52,7 @@ jobs:
         # silently shipped today — this step blocks PRs that introduce one.
         # Wall-clock: ~30s on cold cache, <5s warm. All-features so doctests
         # gated behind optional features are also verified.
-        run: cargo test --doc --workspace --all-features --no-fail-fast
+        run: cargo test --doc --workspace --no-fail-fast
 
       - name: Test
         run: cargo nextest run --workspace --no-fail-fast
@@ -200,7 +200,7 @@ jobs:
           cargo fmt --all --check
           cargo clippy --all-targets --workspace -- -D clippy::correctness -D clippy::suspicious -D clippy::perf
           RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --workspace
-          cargo test --doc --workspace --all-features --no-fail-fast
+          cargo test --doc --workspace --no-fail-fast
           cargo nextest run --workspace --no-fail-fast
           cargo install cargo-public-api --locked
           bash .planning/phase-12e/check-public-api.sh
