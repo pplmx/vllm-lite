@@ -18,10 +18,10 @@ name = "vllm"
 path = "src/bin/vllm.rs"
 
 [dependencies]
-vllm-core = { path = "../core", default-features = false }
-vllm-traits = { path = "../traits", features = ["candle"] }
-vllm-model = { path = "../model" }
-vllm-dist = { path = "../dist", optional = true }
+vllm-core = { path = "../core", default-features = false, version = "0.1.0" }
+vllm-traits = { path = "../traits", features = ["candle"], version = "0.1.0" }
+vllm-model = { path = "../model", version = "0.1.0" }
+vllm-dist = { path = "../dist", optional = true, version = "0.1.0" }
 candle-core = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "time", "io-util", "fs", "net", "signal"] }
 axum = { version = "0.8", features = ["tokio", "macros"] }

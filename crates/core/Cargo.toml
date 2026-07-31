@@ -6,7 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-vllm-traits = { path = "../traits", features = ["candle", "kernels"] }
+vllm-traits = { path = "../traits", features = ["candle", "kernels"], version = "0.1.0" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 async-trait = { workspace = true }
@@ -39,17 +39,19 @@ opentelemetry = [
 
 [dependencies.vllm-model]
 path = "../model"
+version = "0.1.0"
 optional = true
 
 [dependencies.vllm-dist]
 path = "../dist"
+version = "0.1.0"
 optional = true
 
 [dev-dependencies]
 candle-core = { workspace = true }
 criterion = "0.8"
 proptest = { workspace = true }
-vllm-testing = { path = "../testing" }
+vllm-testing = { path = "../testing", version = "0.1.0" }
 
 [[bench]]
 name = "radix_cache"
