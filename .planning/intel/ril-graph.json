@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-07-31T15:19:04+00:00",
+  "last_updated": "2026-07-31T15:29:55+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -707,6 +707,68 @@
           "wait for the parallel agent to finish fuzz edits (stop conditions do not depend on their in-progress work; their edits remain uncommitted and untouched by us)"
         ]
       }
+    },
+    {
+      "id": "issue-008",
+      "type": "issue",
+      "status": "resolved",
+      "created_at": "2026-07-31T15:29:55+00:00",
+      "updated_at": "2026-07-31T15:29:55+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "cargo-fuzz broken: fuzz workspace manifest fails to parse",
+        "severity": 0.4,
+        "detail": "fuzz/Cargo.toml has [lints] workspace=true but fuzz is excluded from root workspace \u2192 'failed to find a workspace root' on every cargo +nightly fuzz invocation; just fuzz-build / fuzz-smoke / fuzz-nightly CI all red."
+      }
+    },
+    {
+      "id": "task-008",
+      "type": "task",
+      "status": "resolved",
+      "created_at": "2026-07-31T15:29:55+00:00",
+      "updated_at": "2026-07-31T15:29:55+00:00",
+      "confidence": 0.98,
+      "data": {
+        "title": "Fix fuzz workspace manifest so cargo-fuzz runs again",
+        "priority_score": 5.0,
+        "detail": "Remove invalid [lints] workspace=true; verify build + run smoke fuzz campaigns. category=DX(2) x severity 0.5 x conf 0.98 / sqrt(0.2) ~ 2.2, but unlock_factor high: restores the entire fuzz pipeline (CI + local)."
+      }
+    },
+    {
+      "id": "evidence-012",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T15:29:55+00:00",
+      "updated_at": "2026-07-31T15:29:55+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "cargo +nightly fuzz run (2026-07-31, escalated)",
+        "detail": "~58M total executions across 6 targets, zero crashes/panics/timeouts. app_config_yaml 1.0M, openai_http_request 12.2M, qwen3_config_json 14.8M, batch_json_input 12.0M, completions_http_request 12.0M, tokenizer_decode 6.0M."
+      }
+    },
+    {
+      "id": "evidence-013",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T15:29:55+00:00",
+      "updated_at": "2026-07-31T15:29:55+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "cargo +nightly fuzz build app_config_yaml",
+        "detail": "release build finished in 2m42s \u2014 tooling restored."
+      }
+    },
+    {
+      "id": "change-007",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T15:29:55+00:00",
+      "updated_at": "2026-07-31T15:29:55+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "remove invalid lint inheritance from fuzz/Cargo.toml",
+        "detail": "fuzz/Cargo.toml: dropped [lints] workspace=true + rationale comment; fuzz/Cargo.lock refreshed; CHANGELOG entry."
+      }
     }
   ],
   "edges": [
@@ -954,6 +1016,31 @@
       "from": "evidence-012",
       "to": "task-008",
       "kind": "validates"
+    },
+    {
+      "from": "evidence-013",
+      "to": "task-008",
+      "kind": "validates"
+    },
+    {
+      "from": "evidence-012",
+      "to": "task-008",
+      "kind": "validates"
+    },
+    {
+      "from": "issue-008",
+      "to": "task-008",
+      "kind": "causes"
+    },
+    {
+      "from": "change-007",
+      "to": "task-008",
+      "kind": "resolves"
+    },
+    {
+      "from": "change-007",
+      "to": "issue-008",
+      "kind": "resolves"
     }
   ]
 }
