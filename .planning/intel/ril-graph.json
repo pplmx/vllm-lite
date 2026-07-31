@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-07-31T15:29:55+00:00",
+  "last_updated": "2026-07-31T15:29:56+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -768,6 +768,58 @@
       "data": {
         "title": "remove invalid lint inheritance from fuzz/Cargo.toml",
         "detail": "fuzz/Cargo.toml: dropped [lints] workspace=true + rationale comment; fuzz/Cargo.lock refreshed; CHANGELOG entry."
+      }
+    },
+    {
+      "id": "evidence-016",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-07-31T15:29:56+00:00",
+      "updated_at": "2026-07-31T15:29:56+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "empirical verification (2026-07-31 23:2x)",
+        "detail": "Temporarily restored `[lints] workspace = true` in fuzz/Cargo.toml: `cargo metadata` fails at manifest parse ('error inheriting `lints` from workspace root manifest'), while the fixed manifest parses (fails only on sandbox network). New fuzz/Cargo.lock pins candle-core 0.11.0 matching root workspace Cargo.lock (old lock was stale at 0.10.2). Full fuzz build requires network/CI (sandbox-limited)."
+      }
+    },
+    {
+      "id": "change-009",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T15:29:56+00:00",
+      "updated_at": "2026-07-31T15:29:56+00:00",
+      "confidence": 1.0,
+      "data": {
+        "commit": "63f218c5",
+        "detail": "fix(fuzz): drop unresolvable workspace lints inheritance (fuzz/Cargo.toml)"
+      }
+    },
+    {
+      "id": "change-010",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-07-31T15:29:56+00:00",
+      "updated_at": "2026-07-31T15:29:56+00:00",
+      "confidence": 1.0,
+      "data": {
+        "commit": "6eaacaa0",
+        "detail": "chore(fuzz): refresh stale lockfile against workspace deps (fuzz/Cargo.lock, 181+/367-)"
+      }
+    },
+    {
+      "id": "decision-004",
+      "type": "decision",
+      "status": "active",
+      "created_at": "2026-07-31T15:29:56+00:00",
+      "updated_at": "2026-07-31T15:29:56+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "Land parallel agent's verified fuzz fixes as two clean commits",
+        "rationale": "Both changes were empirically verified (manifest parse fix + lock consistency with root workspace). Split into two semantically-independent commits instead of one mixed batch. Waited for the parallel agent's file state to settle (mtimes stable 45s+) before committing.",
+        "alternatives_rejected": [
+          "single combined commit (mixed concerns)",
+          "commit while the parallel agent was mid-write (raced: their files flickered between checks; the first attempt silently staged nothing)"
+        ]
       }
     }
   ],
