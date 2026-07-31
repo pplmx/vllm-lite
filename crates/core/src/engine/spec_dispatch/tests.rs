@@ -651,3 +651,137 @@ fn verifier_uses_argmax_when_temperature_is_zero() {
     // argmax contract under temperature == 0.
     assert_eq!(target_token.token, 0);
 }
+
+/// Regression: speculative verification must compare each draft against
+/// the target's prediction at the position AFTER the input prompt, not
+/// at the start of the verify sequence. With a prefill batch (input
+/// length > 1) and a target that predicts the next token exactly, all
+/// correct drafts must be accepted. The old offset math (`j * vocab`)
+/// compared draft j against position j's logits, which predict an
+/// *input* token when the prompt has more than one token — rejecting
+/// correct drafts and changing the output distribution.
+#[test]
+fn verifier_prefill_accepts_drafts_at_position_after_prompt() {
+    #[derive(Clone)]
+    struct NextTokenModel {
+        vocab_size: usize,
+    }
+
+    impl ModelBackend for NextTokenModel {
+        fn forward(
+            &mut self,
+            seq_ids: &[SeqId],
+            _input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
+        ) -> ModelResult<BatchOutput> {
+            Ok(BatchOutput {
+                seq_ids: seq_ids.to_vec(),
+                next_tokens: seq_ids
+                    .iter()
+                    .map(|_| SampledToken {
+                        token: 0,
+                        logprob: 0.0,
+                        top_logprobs: vec![],
+                    })
+                    .collect(),
+            })
+        }
+
+        fn forward_logits(
+            &mut self,
+            _seq_ids: &[SeqId],
+            input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+            _kv_block_ids: &[Vec<usize>],
+            _num_computed_tokens: &[usize],
+            _is_prefill: &[bool],
+        ) -> ModelResult<Vec<Vec<f32>>> {
+            // Position p's logits argmax to the token that follows
+            // input_tokens[p] (i.e. input_tokens[p+1]); the final
+            // position predicts token 0.
+            let vocab = self.vocab_size;
+            Ok(input_tokens
+                .iter()
+                .map(|tokens| {
+                    tokens
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(p, _)| {
+                            let mut logits = vec![-100.0_f32; vocab];
+                            let next = tokens.get(p + 1).copied().unwrap_or(0);
+                            logits[next as usize % vocab] = 0.0;
+                            logits
+                        })
+                        .collect()
+                })
+                .collect())
+        }
+
+        fn embed(
+            &mut self,
+            input_tokens: &[Vec<TokenId>],
+            _positions: &[Vec<usize>],
+        ) -> ModelResult<Vec<Vec<f32>>> {
+            Ok(input_tokens
+                .iter()
+                .map(|tokens| vec![0.0; tokens.len()])
+                .collect())
+        }
+
+        fn vocab_size(&self) -> usize {
+            self.vocab_size
+        }
+
+        fn num_layers(&self) -> usize {
+            1
+        }
+
+        fn num_heads(&self) -> usize {
+            1
+        }
+    }
+
+    let mut engine = EngineBuilder::new(Box::new(NextTokenModel { vocab_size: 64 }))
+        .with_num_kv_blocks(64)
+        .build();
+    engine.enable_speculative();
+
+    // Prefill batch: 3 input tokens [10, 20, 30]; the correct
+    // continuation is [40, 50] (target predicts 40 after 30, then 50
+    // after 40). Greedy params -> argmax acceptance check.
+    let batch = vllm_traits::types::Batch {
+        seq_ids: vec![1],
+        input_tokens: vec![vec![10, 20, 30]],
+        positions: vec![vec![0, 1, 2]],
+        kv_block_ids: vec![vec![0]],
+        num_computed_tokens: vec![0],
+        is_prefill: vec![true],
+        sampling_params: vec![vllm_traits::SamplingParams::default()],
+        phase: vllm_traits::BatchPhase::Prefill,
+        total_tokens: 3,
+        max_seq_len: 10,
+    };
+    let drafts: Vec<Vec<TokenId>> = vec![vec![40, 50]];
+
+    let (verified, accepted_counts) = engine
+        .verify_draft_tokens_logits(&batch, &drafts)
+        .expect("verify should succeed");
+    assert_eq!(
+        accepted_counts,
+        vec![2],
+        "both correct drafts must be accepted at the post-prompt positions"
+    );
+    // Results: 2 accepted-draft placeholders + 1 bonus token sampled
+    // from the position after the last draft (which the model
+    // predicts as 0).
+    assert_eq!(verified.len(), 3);
+    assert_eq!(verified[0].1.token, 40);
+    assert_eq!(verified[1].1.token, 50);
+    assert_eq!(
+        verified[2].1.token, 0,
+        "bonus token must come from the post-draft position"
+    );
+}
