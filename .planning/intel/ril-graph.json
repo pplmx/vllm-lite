@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-08-01T00:07:26+00:00",
+  "last_updated": "2026-08-01T03:11:06+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -1265,6 +1265,22 @@
       "data": {
         "source": "design + config review",
         "detail": "vllm-lite .pre-commit-config.yaml is standard pre-commit framework format (builtin hygiene + commitizen + rumdl + local cargo hooks). pre-commit run --all-files in CI runs the pre-commit-stage hooks (file hygiene, markdown lint, cargo fmt check); commit-msg/pre-push hooks covered by existing CI steps. Local prek validation blocked in sandbox by read-only /root/.cache (sandbox-only)."
+      }
+    },
+    {
+      "id": "decision-008",
+      "type": "decision",
+      "status": "active",
+      "created_at": "2026-08-01T03:11:06+00:00",
+      "updated_at": "2026-08-01T03:11:06+00:00",
+      "confidence": 1.0,
+      "data": {
+        "title": "Remove k8s/operator (vLLM-scaffold residue, unused, sole source of Go vulns)",
+        "rationale": "k8s/operator is a kubebuilder scaffold + one reconciler referencing ghcr.io/vllm/vllm:latest (the upstream vLLM image, not vllm-lite). vllm-lite's K8s needs are fully covered by the self-contained Helm chart + manifests (k8s/deployment.yaml uses vllm-lite:latest). No tests, no CI build, no doc references. It was the sole source of the 5 Go dependabot alerts (x/net, x/oauth2). Deleted (612 lines).",
+        "alternatives_rejected": [
+          "keep and repurpose into a real vllm-lite operator (no current need; Helm+HPA cover deployment)",
+          "fix Go vulns and keep (still dead code with no consumers)"
+        ]
       }
     }
   ],
