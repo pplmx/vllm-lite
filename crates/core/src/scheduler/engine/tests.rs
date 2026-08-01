@@ -174,6 +174,59 @@ fn test_engine_prefix_cache_hit() {
 }
 
 #[test]
+fn test_engine_prefix_cache_stores_only_prompt_blocks() {
+    // A finished sequence's DECODE blocks must not be pinned in the
+    // prefix cache: the entry is keyed by prompt tokens, and on a hit
+    // only the prompt-covering blocks are valid. Previously the whole
+    // kv_blocks list (prompt + generated) was stored, so one long
+    // response pinned every block it ever touched — a few such
+    // requests could pin the entire pool for zero-running-server
+    // state, amplifying memory pressure for every cached prompt.
+    let config = SchedulerConfig::default();
+    let mut engine = create_test_engine(config, 64);
+
+    // Prompt = 16 tokens (1 block); max_tokens = 48 → the sequence
+    // grows to 64 tokens (4 blocks) before finishing.
+    let prompt: Vec<u32> = (0..16).collect();
+    let id = engine.add_request(Request::new(0, prompt.clone(), 48));
+    let _batch = engine.build_batch();
+    engine.update(
+        &[id],
+        &[SampledToken {
+            token: 200,
+            logprob: 0.0,
+            top_logprobs: vec![],
+        }],
+        &[16],
+    );
+    for i in 0..47 {
+        engine.update(
+            &[id],
+            &[SampledToken {
+                token: 200 + i as u32,
+                logprob: 0.0,
+                top_logprobs: vec![],
+            }],
+            &[0],
+        );
+    }
+    assert_eq!(engine.running_count(), 0, "sequence finished");
+
+    // The cache entry must cover exactly the prompt's block count.
+    let hit = engine
+        .prefix_cache()
+        .longest_prefix_match(&prompt)
+        .expect("finished prompt must be cached");
+    assert_eq!(hit.matched_tokens, 16);
+    assert_eq!(
+        hit.blocks.len(),
+        1,
+        "cache must not pin decode blocks (got {} blocks for a 16-token prompt)",
+        hit.blocks.len()
+    );
+}
+
+#[test]
 fn test_engine_metrics_tracking() {
     let config = SchedulerConfig::default();
     let metrics = Arc::new(EnhancedMetricsCollector::new());

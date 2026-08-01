@@ -162,7 +162,16 @@ impl SchedulerEngine {
             // subsequent release drops it to 1 (cache only),
             // keeping the block alive for the next prefix hit.
             let prompt_tokens = &seq.tokens[..seq.prompt_len];
-            let blocks: Vec<BlockId> = seq.kv_blocks.as_ref().clone();
+            // Only the prompt-covering blocks are cached: decode blocks
+            // hold this sequence's generated KV and are stale (they
+            // would only ever be overwritten before read). Pinning them
+            // previously inflated per-entry memory pressure — a few
+            // long responses could pin the entire block pool.
+            let prompt_blocks = seq
+                .kv_blocks
+                .len()
+                .min(prompt_tokens.len().div_ceil(vllm_traits::BLOCK_SIZE));
+            let blocks: Vec<BlockId> = seq.kv_blocks[..prompt_blocks].to_vec();
             self.memory.record_blocks(&blocks);
             self.prefix_cache.insert(prompt_tokens, blocks);
         }
