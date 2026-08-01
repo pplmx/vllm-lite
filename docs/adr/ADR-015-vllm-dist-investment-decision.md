@@ -45,11 +45,11 @@ Rationale:
    reactivate without a major refactor.
 5. **Wire-up risk is high.** Wiring `vllm-dist` into the serving stack
    now would require:
-   - Server-side multi-node routing logic
-   - Distributed KV cache consistency protocols
-   - Cross-node health checks and leader election (already partially
-     present in `vllm-core::ha`)
-   - Operational tooling (deployment, monitoring)
+    - Server-side multi-node routing logic
+    - Distributed KV cache consistency protocols
+    - Cross-node health checks and leader election (already partially
+   present in `vllm-core::ha`)
+    - Operational tooling (deployment, monitoring)
    This is multi-month work and would compete with single-node optimization
    priorities.
 

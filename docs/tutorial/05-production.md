@@ -82,7 +82,7 @@ instance.
 > (the v30.0 dependency-cleanup pass removed the corresponding
 > `#[cfg(feature = "opentelemetry")]` gates). Adding a real OTel
 > exporter is tracked as a v32+ item; see
-> [ROADMAP §3](../technical-due-diligence/roadmap.md#3-短期演进1-2-个月).
+> [ROADMAP §3](../technical-due-diligence/roadmap.md).
 > In the meantime, the structured `tracing` JSON log stream covers
 > the same observability needs without the OTel infrastructure.
 
@@ -105,7 +105,7 @@ detailed tuning. Quick wins:
 - Enable prefix caching for workloads with repeated prompts
 - Use the `--features cuda-graph` build for GPU acceleration
   (requires CUDA 11.8+; only meaningful on the linux-amd64
-  release build — see [ROADMAP §4](../technical-due-diligence/roadmap.md#4-中期架构演进3-6-个月))
+  release build — see [ROADMAP §4](../technical-due-diligence/roadmap.md))
 - Set `--release` profile for production builds
 
 ## Rollback Strategy

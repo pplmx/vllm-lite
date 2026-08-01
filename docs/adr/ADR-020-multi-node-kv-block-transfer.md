@@ -134,7 +134,7 @@ Both server and client bump `max_decoding_message_size` and
 
 The wiring that closes the loop end-to-end:
 
-```
+```text
 PagedKvCache ─► PagedKvCacheWrapper: BlockDataSource
        │
        ▼
@@ -168,6 +168,7 @@ lands in a dedicated cleanup phase before 1.0.
 ## Consequences
 
 **Positive:**
+
 - The protocol layer is complete and tested. Future work is mechanical
   (engine wiring) rather than architectural.
 - The `BlockDataSource` seam is small, async, and object-safe — a
@@ -178,6 +179,7 @@ lands in a dedicated cleanup phase before 1.0.
   embedders building custom gRPC clients/servers.
 
 **Negative / known limitations (v32+ candidates):**
+
 - **MESI / Directory coherence** — the protocol enum exists but the
   active implementation is `None` (eventual consistency only).
   Switching to `MESI` or `Directory` currently returns `unimplemented!()`.

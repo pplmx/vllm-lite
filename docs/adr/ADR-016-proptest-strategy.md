@@ -30,12 +30,14 @@ test as a `#[cfg(test)] mod tests {}` block embedded in the source file
 under test. Default 100 cases per run (`PROPTEST_CASES=100`).
 
 Coverage scope:
+
 - `crates/core/src/scheduler/radix_cache/tree.rs` (RadixTree)
 - `crates/core/src/scheduler/memory/allocator.rs` (BlockAllocator)
 - `crates/core/src/scheduler/request_queue.rs` (RequestQueue)
 - `crates/core/src/scheduler/batch_composer/compose.rs` (BatchComposer)
 
 Generator conventions:
+
 - Custom `Arbitrary` impls on internal types (`Sequence`, `BatchCompositionConfig`)
   produce realistic-but-extreme inputs (empty lists, max sizes, off-by-one).
 - Shrinking is enabled by default; failing cases shrink to a minimal
@@ -47,6 +49,7 @@ Generator conventions:
 ## Consequences
 
 Easier:
+
 - Edge-case bugs (v28.0 found one) surface automatically without exhaustive
   hand-written tests.
 - New components can be covered cheaply by adding 5-10 lines of `proptest!`
@@ -54,6 +57,7 @@ Easier:
 - Regression seeds form a permanent, deterministic bug-replay record.
 
 Harder / new risks:
+
 - Generator maintenance: `Arbitrary` impls must stay in sync with the
   type they generate. When a field is added, generators break loudly
   (good) but require updates (cost).

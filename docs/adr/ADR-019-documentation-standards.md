@@ -14,13 +14,13 @@ and missing `// invariant:` comments on production unwraps reduce maintainabilit
 
 ### Documentation Tiers
 
-| Tier | Location | Requirement |
-|------|----------|-------------|
-| Architecture | `docs/architecture.md` | Single source of truth; Mermaid diagrams |
-| User-facing | `README.md`, `OPERATIONS.md` | Accurate numbers; no aspirational claims |
-| API | `///` on all public items | Required before `pub` promotion |
-| ADR | `docs/adr/` | One per significant design choice |
-| Tutorial | `docs/tutorial/` | Must match real `Engine::run` + `EngineMessage` API |
+| Tier         | Location                     | Requirement                                         |
+| ------------ | ---------------------------- | --------------------------------------------------- |
+| Architecture | `docs/architecture.md`       | Single source of truth; Mermaid diagrams            |
+| User-facing  | `README.md`, `OPERATIONS.md` | Accurate numbers; no aspirational claims            |
+| API          | `///` on all public items    | Required before `pub` promotion                     |
+| ADR          | `docs/adr/`                  | One per significant design choice                   |
+| Tutorial     | `docs/tutorial/`             | Must match real `Engine::run` + `EngineMessage` API |
 
 ### Comment Rules
 
@@ -32,21 +32,21 @@ and missing `// invariant:` comments on production unwraps reduce maintainabilit
 
 ### Verb Prefixes (AGENTS.md)
 
-| Prefix | Semantics |
-|--------|-----------|
-| `get_*` | Sync in-memory accessor |
-| `load_*` | File/IO acquisition |
-| `read_*` | Streamed I/O with cursor |
-| `build_*` | Builder finalization |
+| Prefix    | Semantics                   |
+| --------- | --------------------------- |
+| `get_*`   | Sync in-memory accessor     |
+| `load_*`  | File/IO acquisition         |
+| `read_*`  | Streamed I/O with cursor    |
+| `build_*` | Builder finalization        |
 | `forward` | ML forward pass (no prefix) |
 
 ### Coverage Targets
 
 | Milestone | Real coverage target |
-|-----------|---------------------|
-| v31.0 | 65% |
-| v32.0 | 80% |
-| v33.0 | 90% |
+| --------- | -------------------- |
+| v31.0     | 65%                  |
+| v32.0     | 80%                  |
+| v33.0     | 90%                  |
 
 Measured via `scripts/doc_coverage.sh --real`.
 

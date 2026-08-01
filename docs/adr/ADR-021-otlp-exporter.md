@@ -56,12 +56,14 @@ observability:
 ## Consequences
 
 **Positive:**
+
 - Operators can stream telemetry to any OTLP-compatible collector.
 - Distributed tracing works across multi-node peers.
 - `otlp` module is fully `#[cfg]`-gated — zero impact on single-node builds.
 - 5 new unit tests + 5 integration tests + stub collector for CI.
 
 **Negative / trade-offs:**
+
 - 5 additional dependencies (`opentelemetry`, `opentelemetry_sdk`,
   `opentelemetry-otlp`, `opentelemetry-semantic-conventions`,
   `tracing-opentelemetry`, `opentelemetry-proto` in tests).

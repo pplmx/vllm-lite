@@ -30,7 +30,8 @@ let draft_layer_count = config
     .unwrap_or_else(|| (total_layers as f32 * 0.125).max(1.0) as usize);
 ```
 
-Layer sharing: the draft model holds an `Arc<M>` reference to the **same** target model instance. It calls `ModelBackend::forward_to_layer(...)` with the computed `draft_layer_count` to terminate early after the first N transformer blocks (see `crates/core/src/speculative/self_spec.rs:103-114`). No weights are copied; only the layer count parameter changes. KV cache for the draft is tracked separately in `draft_kv_block_ids: HashMap<SeqId, Vec<usize>>` so the draft's partial forward can write into the target's block pool without colliding with full-sequence KV state.
+Layer sharing: the draft model holds an `Arc<M>` reference to the **same** target model instance. It calls `ModelBackend::forward_to_layer(...)` with the computed `draft_layer_count` to terminate early after the first N transformer blocks (see `crates/core/src/speculative/self_spec.rs:103-114`). No weights are copied; only the layer count parameter changes. KV cache for the draft is tracked separately in `draft_kv_block_ids: HashMap<SeqId, Vec<usize>>` so the draft's partial forward can write
+into the target's block pool without colliding with full-sequence KV state.
 
 ## Rationale
 

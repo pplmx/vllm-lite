@@ -28,10 +28,10 @@ println!("Loaded model: {:?}", model.architecture());
 
 ## Key Concepts
 
-| Argument | Purpose |
-|----------|---------|
-| `device` | `Device::Cpu` for testing; `Device::Cuda(0)` for GPU |
-| `model_dir` | Path to checkpoint directory (must contain `config.json`) |
+| Argument    | Purpose                                                     |
+| ----------- | ----------------------------------------------------------- |
+| `device`    | `Device::Cpu` for testing; `Device::Cuda(0)` for GPU        |
+| `model_dir` | Path to checkpoint directory (must contain `config.json`)   |
 | `kv_blocks` | Number of KV cache blocks (more = more concurrent requests) |
 
 ## Supported Formats

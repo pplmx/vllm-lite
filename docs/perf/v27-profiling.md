@@ -122,11 +122,11 @@ For vllm-lite, look for:
 
 ## Sub-phase order (H-8 to H-10)
 
-| Phase | Target                          | Output                                                    |
-|-------|---------------------------------|-----------------------------------------------------------|
-| H-8   | GQA forward                     | docs/perf/v27-profile-gqa.md                              |
-| H-9   | MLA + FlashAttn                 | docs/perf/v27-profile-mla.md, docs/perf/v27-profile-flash.md |
-| H-10  | PagedKV + BatchComposer         | docs/perf/v27-profile-pkv.md, docs/perf/v27-profile-batch.md |
+| Phase | Target                  | Output                                                       |
+| ----- | ----------------------- | ------------------------------------------------------------ |
+| H-8   | GQA forward             | docs/perf/v27-profile-gqa.md                                 |
+| H-9   | MLA + FlashAttn         | docs/perf/v27-profile-mla.md, docs/perf/v27-profile-flash.md |
+| H-10  | PagedKV + BatchComposer | docs/perf/v27-profile-pkv.md, docs/perf/v27-profile-batch.md |
 
 Each sub-phase should:
 

@@ -118,12 +118,12 @@ PR 可在 CI 通过、却在维护者本地失败；`multi-node`、`cuda-graph`�
 
 逐项核对四条 Feature 问题，结论是 **3 项已实质关闭 + 1 项半关闭**，均不阻塞 v31.0 alpha：
 
-| # | 原问题 | 当前状态 | 关闭依据 |
-|---|--------|----------|----------|
-| 1 | `traits` 的 `kernels` 是空 feature | ✅ 已关闭（误判） | `kernels = []` 是 Cargo 的"feature 存在但不引入新依赖"语法；`crates/traits/src/lib.rs:25-26` 的 `#[cfg(feature = "kernels")]` 实际门控 `kernels` 模块（`CudaGraphConfig` / `CudaGraphExecutor` / `GraphExecutionError` / `ModelGraphConfig`）。Feature 既是 cfg 门又有真实代码，闭合。 |
-| 2 | `server` 硬编码启用 core 的 `cuda-graph` | ✅ 已关闭 | `crates/server/Cargo.toml` 显式 `vllm-core = { path = "../core", default-features = false }`，且 `cuda-graph = ["vllm-core/cuda-graph"]` 是**非默认** feature。最小部署开箱即用，不引入 cuda-graph。 |
-| 3 | `dist` 不在 default-members | ✅ 已关闭 | `Cargo.toml` workspace 段：`default-members = ["crates/core", "crates/model", "crates/server", "crates/traits", "crates/dist", "crates/testing"]` —— 6 个 crate 全部在 default-members。注意：ADR-008 的内容曾建议 `dist` **不**在 default-members（与早期 v19.x 状态一致），但 v31.0 期间的多节点投资决策（ADR-015 / Phase 31-D OPS-31d）将其提升回 default-members，因为现在 `dist` 有真实消费方。 |
-| 4 | 各 crate 的 `cuda`、`full`、`multi-node` 传播缺少统一用户模型 | 🟡 半关闭 | `docs/architecture.md` §"Feature Flags" 给出了当前合法组合的总结；但完整的"feature matrix 文档"（明确 CPU reference / CUDA / GGUF / distributed 的合法组合）尚未写。当前 `ARCHITECTURE.md` 是事实来源。建议保留为 v0.2 / 32+ 的"feature matrix doc" 工作项。 |
+| #   | 原问题                                                        | 当前状态          | 关闭依据                                                                                                                                                                                                                                                                                                                                                                                             |
+| --- | ------------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `traits` 的 `kernels` 是空 feature                            | ✅ 已关闭（误判） | `kernels = []` 是 Cargo 的"feature 存在但不引入新依赖"语法；`crates/traits/src/lib.rs:25-26` 的 `#[cfg(feature = "kernels")]` 实际门控 `kernels` 模块（`CudaGraphConfig` / `CudaGraphExecutor` / `GraphExecutionError` / `ModelGraphConfig`）。Feature 既是 cfg 门又有真实代码，闭合。                                                                                                               |
+| 2   | `server` 硬编码启用 core 的 `cuda-graph`                      | ✅ 已关闭         | `crates/server/Cargo.toml` 显式 `vllm-core = { path = "../core", default-features = false }`，且 `cuda-graph = ["vllm-core/cuda-graph"]` 是**非默认** feature。最小部署开箱即用，不引入 cuda-graph。                                                                                                                                                                                                 |
+| 3   | `dist` 不在 default-members                                   | ✅ 已关闭         | `Cargo.toml` workspace 段：`default-members = ["crates/core", "crates/model", "crates/server", "crates/traits", "crates/dist", "crates/testing"]` —— 6 个 crate 全部在 default-members。注意：ADR-008 的内容曾建议 `dist` **不**在 default-members（与早期 v19.x 状态一致），但 v31.0 期间的多节点投资决策（ADR-015 / Phase 31-D OPS-31d）将其提升回 default-members，因为现在 `dist` 有真实消费方。 |
+| 4   | 各 crate 的 `cuda`、`full`、`multi-node` 传播缺少统一用户模型 | 🟡 半关闭         | `docs/architecture.md` §"Feature Flags" 给出了当前合法组合的总结；但完整的"feature matrix 文档"（明确 CPU reference / CUDA / GGUF / distributed 的合法组合）尚未写。当前 `ARCHITECTURE.md` 是事实来源。建议保留为 v0.2 / 32+ 的"feature matrix doc" 工作项。                                                                                                                                         |
 
 **净结论：** 第 1-3 项是 due diligence 撰写时（v19.x 阶段）与 v31.0 workspace 实际状态脱节的 stale 关注点。第 4 项是真实的 follow-up，已通过 `docs/architecture.md` 部分覆盖，但完整 feature matrix 仍是 v0.2/32+ 工作。
 
@@ -162,14 +162,14 @@ PR 可在 CI 通过、却在维护者本地失败；`multi-node`、`cuda-graph`�
 
 逐项核对四条证据 + 四条建议，结论是 **4 项全部关闭**（DEP-01 / P11 / P13），仅第 4 条的"checksums + provenance"半边仍 tracked：
 
-| # | 原问题 / 建议 | 关闭依据 | 关闭批次 |
-|---|--------------|----------|----------|
-| 1 | 统一 workspace、fuzz、Docker、教程和 CI 到 1.88 | 实际：根 `Cargo.toml` `rust-version = "1.88"` + `rust-toolchain.toml` `channel = "1.88"` + `fuzz/Cargo.toml` `rust-version = "1.88"` + `Dockerfile` `FROM rust:1.88-bookworm` + CI `dtolnay/rust-toolchain@1.88` | DEP-01 |
-| 2 | 添加 `rust-toolchain.toml`，明确 components | `rust-toolchain.toml` 文件存在，`channel = "1.88"` 明确 | DEP-01 |
-| 3 | 所有 release/container build 使用 `--locked` | `release.yml` build job `cargo build --release ... --locked`；Dockerfile 使用 `--locked`（DEP-01 关闭） | DEP-01 |
-| 4a | release 生成 SBOM | `.github/workflows/release.yml` 的 `anchore/sbom-action@v0` 步骤，每 target 输出 cyclonedx-json SBOM | P11 |
-| 4b | release 生成校验和 | **未关闭** —— 仍 tracked 为 v32+ candidate；见 STATE.md "Remaining open items (after P14) — engineering-quality §7 checksums + provenance" | (P12+) |
-| 4c | release 生成构建 provenance (SLSA / in-toto) | **未关闭** —— 与 4b 同组；需要签名密钥故事 + 可复现构建姿态，超出单 CI step 范围 | (P12+) |
+| #   | 原问题 / 建议                                   | 关闭依据                                                                                                                                                                                                         | 关闭批次 |
+| --- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| 1   | 统一 workspace、fuzz、Docker、教程和 CI 到 1.88 | 实际：根 `Cargo.toml` `rust-version = "1.88"` + `rust-toolchain.toml` `channel = "1.88"` + `fuzz/Cargo.toml` `rust-version = "1.88"` + `Dockerfile` `FROM rust:1.88-bookworm` + CI `dtolnay/rust-toolchain@1.88` | DEP-01   |
+| 2   | 添加 `rust-toolchain.toml`，明确 components     | `rust-toolchain.toml` 文件存在，`channel = "1.88"` 明确                                                                                                                                                          | DEP-01   |
+| 3   | 所有 release/container build 使用 `--locked`    | `release.yml` build job `cargo build --release ... --locked`；Dockerfile 使用 `--locked`（DEP-01 关闭）                                                                                                          | DEP-01   |
+| 4a  | release 生成 SBOM                               | `.github/workflows/release.yml` 的 `anchore/sbom-action@v0` 步骤，每 target 输出 cyclonedx-json SBOM                                                                                                             | P11      |
+| 4b  | release 生成校验和                              | **未关闭** —— 仍 tracked 为 v32+ candidate；见 STATE.md "Remaining open items (after P14) — engineering-quality §7 checksums + provenance"                                                                       | (P12+)   |
+| 4c  | release 生成构建 provenance (SLSA / in-toto)    | **未关闭** —— 与 4b 同组；需要签名密钥故事 + 可复现构建姿态，超出单 CI step 范围                                                                                                                                 | (P12+)   |
 
 **净结论：** §7 的 4 条建议中 3 条实质关闭、1 条半关闭。SBOM（P11）已 ship；checksums + provenance 是 v32+ 候选。本节不阻塞 v31.0 alpha。
 

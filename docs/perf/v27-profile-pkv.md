@@ -23,12 +23,12 @@ See `docs/perf/v27-profile-gqa.md` for the full environment note.
 
 ## Baseline (from H-5 + `docs/perf/v27-baseline.md` line 196)
 
-| Path | Config | ns/iter (median) | Source |
-|------|--------|------------------|--------|
-| `paged_kv_cache_smoke/cpu_smoke` | l1_blocks4_h2_d32 | **23,281 ns (~23.3 µs)** | H-5 baseline, line 196 |
-| `paged_kv_cache/read_write` | blocks64_h2_d64 | TBD | H-5 line 202 (GPU required) |
-| `paged_kv_cache/read_write` | blocks256_h2_d64 | TBD | H-5 line 203 |
-| `paged_kv_cache/read_write` | blocks1024_h2_d64 | TBD | H-5 line 204 |
+| Path                             | Config            | ns/iter (median)         | Source                      |
+| -------------------------------- | ----------------- | ------------------------ | --------------------------- |
+| `paged_kv_cache_smoke/cpu_smoke` | l1_blocks4_h2_d32 | **23,281 ns (~23.3 µs)** | H-5 baseline, line 196      |
+| `paged_kv_cache/read_write`      | blocks64_h2_d64   | TBD                      | H-5 line 202 (GPU required) |
+| `paged_kv_cache/read_write`      | blocks256_h2_d64  | TBD                      | H-5 line 203                |
+| `paged_kv_cache/read_write`      | blocks1024_h2_d64 | TBD                      | H-5 line 204                |
 
 The CPU smoke covers one `write_kv` + one `read_kv` cycle per iteration at
 very small scale (`num_blocks=4`, `num_heads=2`, `head_dim=32`). At
@@ -50,16 +50,16 @@ mod.rs        (73 lines)  Facade; declares PagedKvCache struct + new()
                            (separate from the tensor store)
 ```
 
-| File:line | Symbol | Purpose |
-|-----------|--------|---------|
-| `mod.rs:20-31` | `struct PagedKvCache` | Holds `key_cache: Vec<Tensor>`, `value_cache: Vec<Tensor>` (one tensor per layer), `block_hashes: Vec<HashMap<u64,usize>>` for prefix-cache lookup |
-| `mod.rs:33-72` | `PagedKvCache::new` | Allocates `num_layers * 2` zero tensors of shape `(num_blocks, num_heads, BLOCK_SIZE, head_dim)`; one `HashMap` per layer for hash→block_id |
-| `buffer.rs:15-83` | `write_kv_batch` | Bulk variant — splits a `(B, T, H, D)` k/v into per-token `write_kv` calls; **a token-at-a-time loop on the outer hot path** |
-| `buffer.rs:89-239` | `write_kv` | Per-token write — slice→materialize→copy→rebuild-block→cat→rehash |
-| `buffer.rs:245-310` | `read_kv` | Per-call multi-block read — narrow per block → cat along token axis → transpose → optional dequant |
-| `layout.rs:11-13` | `num_blocks` | O(1) accessor (first tensor's shape) |
-| `layout.rs:37-47` | `compute_block_hash` | `to_vec1::<f32>` (full block to host) then fold-multiply hash over all elements |
-| `layout.rs:50-60` | `find_matching_blocks` | O(n) scan of layer's `HashMap`; could be O(1) via direct `get` |
+| File:line           | Symbol                 | Purpose                                                                                                                                            |
+| ------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mod.rs:20-31`      | `struct PagedKvCache`  | Holds `key_cache: Vec<Tensor>`, `value_cache: Vec<Tensor>` (one tensor per layer), `block_hashes: Vec<HashMap<u64,usize>>` for prefix-cache lookup |
+| `mod.rs:33-72`      | `PagedKvCache::new`    | Allocates `num_layers * 2` zero tensors of shape `(num_blocks, num_heads, BLOCK_SIZE, head_dim)`; one `HashMap` per layer for hash→block_id        |
+| `buffer.rs:15-83`   | `write_kv_batch`       | Bulk variant — splits a `(B, T, H, D)` k/v into per-token `write_kv` calls; **a token-at-a-time loop on the outer hot path**                       |
+| `buffer.rs:89-239`  | `write_kv`             | Per-token write — slice→materialize→copy→rebuild-block→cat→rehash                                                                                  |
+| `buffer.rs:245-310` | `read_kv`              | Per-call multi-block read — narrow per block → cat along token axis → transpose → optional dequant                                                 |
+| `layout.rs:11-13`   | `num_blocks`           | O(1) accessor (first tensor's shape)                                                                                                               |
+| `layout.rs:37-47`   | `compute_block_hash`   | `to_vec1::<f32>` (full block to host) then fold-multiply hash over all elements                                                                    |
+| `layout.rs:50-60`   | `find_matching_blocks` | O(n) scan of layer's `HashMap`; could be O(1) via direct `get`                                                                                     |
 
 Storage layout per layer: `Tensor` of shape `(num_blocks, num_heads, BLOCK_SIZE, head_dim)`.
 For qwen3-7B-class (`num_blocks=1024, num_heads=2, BLOCK_SIZE=16, head_dim=64`),
@@ -114,19 +114,19 @@ write_kv(layer_idx, block_id, token_offset, k, v)   @ buffer.rs:89
 For a single `write_kv` call on qwen3-7B-class (num_blocks=1024,
 num_heads=2, BLOCK_SIZE=16, head_dim=64):
 
-| Materialization | Size (f32) | Count |
-|-----------------|------------|-------|
-| `key_block.to_vec3()` (full block: 2·16·64=2048 elems) | 2048 × 4B = 8 KB | 1 (K) |
-| `value_block.to_vec3()` | 8 KB | 1 (V) |
-| `k_squeezed.narrow(...).to_vec1()` per head (2 heads) | 64 × 4B = 256 B each | num_heads |
-| `k_flat` re-flatten of full block | 8 KB | 1 (K) |
-| `v_flat` re-flatten of full block | 8 KB | 1 (V) |
-| `updated_key_block` upload via `Tensor::from_slice` | 8 KB | 1 (K) |
-| `updated_value_block` upload via `Tensor::from_slice` | 8 KB | 1 (V) |
-| `narrow+unsqueeze` per non-target block (1023 blocks) | 8 KB each | **num_blocks - 1** |
-| `Tensor::cat` (full layer) | `num_blocks · num_heads · BLOCK_SIZE · head_dim · 4B` ≈ 8 MB | 2 (K, V) |
-| `compute_block_hash` `to_vec1::<f32>()` (full block) | 8 KB | 1 |
-| `block_hashes[layer_idx].insert` | O(1) | 1 |
+| Materialization                                        | Size (f32)                                                   | Count              |
+| ------------------------------------------------------ | ------------------------------------------------------------ | ------------------ |
+| `key_block.to_vec3()` (full block: 2·16·64=2048 elems) | 2048 × 4B = 8 KB                                             | 1 (K)              |
+| `value_block.to_vec3()`                                | 8 KB                                                         | 1 (V)              |
+| `k_squeezed.narrow(...).to_vec1()` per head (2 heads)  | 64 × 4B = 256 B each                                         | num_heads          |
+| `k_flat` re-flatten of full block                      | 8 KB                                                         | 1 (K)              |
+| `v_flat` re-flatten of full block                      | 8 KB                                                         | 1 (V)              |
+| `updated_key_block` upload via `Tensor::from_slice`    | 8 KB                                                         | 1 (K)              |
+| `updated_value_block` upload via `Tensor::from_slice`  | 8 KB                                                         | 1 (V)              |
+| `narrow+unsqueeze` per non-target block (1023 blocks)  | 8 KB each                                                    | **num_blocks - 1** |
+| `Tensor::cat` (full layer)                             | `num_blocks · num_heads · BLOCK_SIZE · head_dim · 4B` ≈ 8 MB | 2 (K, V)           |
+| `compute_block_hash` `to_vec1::<f32>()` (full block)   | 8 KB                                                         | 1                  |
+| `block_hashes[layer_idx].insert`                       | O(1)                                                         | 1                  |
 
 **Bottleneck summary for `write_kv`:**
 
@@ -198,11 +198,13 @@ read_kv(layer_idx, block_ids, seq_len) @ buffer.rs:245
 ```
 
 For a decode read at `seq_len=1, block_ids=[b]`:
+
 - 4 narrow ops (K) + 4 narrow ops (V) — all views, but 8 device dispatch calls
 - `Tensor::cat(&[single_tensor], 1)` allocates an output tensor of shape `(H, block_size, D)` then immediately transposes — **the cat here is pointless; we should narrow directly to `block_len=1` and skip the cat+transpose**
 - `transpose(0,1)` after cat forces a contiguous copy (strided → contiguous is mandatory before many downstream ops)
 
 For a multi-block prefill read (e.g., `seq_len=2048, block_ids` of length 128):
+
 - 128 iterations of the narrow loop, each producing 8 narrow calls
 - Final `cat` concatenates 128 blocks of `(H, block_size, D)` into `(H, 2048, D)`, then transposes to `(2048, H, D)`
 - The cat+transpose is a single ~512 KB allocation+copy (at head_dim=64)
@@ -218,6 +220,7 @@ For a multi-block prefill read (e.g., `seq_len=2048, block_ids` of length 128):
 ## compute_block_hash and find_matching_blocks (`layout.rs:37-60`)
 
 `compute_block_hash` (called at `buffer.rs:235` per write):
+
 ```rust
 if let Ok(data) = block.to_vec1::<f32>() {       // *** full-block host round-trip ***
     let hash: u64 = data.iter()
@@ -234,6 +237,7 @@ This is on top of the two `to_vec3` materializations already done in
 write, one for the hash).
 
 `find_matching_blocks` (used by prefix-cache):
+
 ```rust
 for (&hash, &block_id) in hash_map {           // *** O(n) scan ***
     if prompt_hash == hash { matches.push(block_id); }
@@ -257,12 +261,14 @@ block (including 1023 unmodified ones), unsqueezes, pushes into
 layer-sized tensor.
 
 **Why it's slow:**
+
 - For decode, every single token write incurs a full-layer K + V rebuild
 - At qwen3-7B-class scale (num_blocks=1024, num_heads=2, BLOCK_SIZE=16, head_dim=64), each rebuild is `~8 MB` of allocation+copy per K and per V
 - Per-decode-step cost at 28 layers: **~448 MB of redundant memcpy**
 - For prefill (T=2048), `write_kv_batch` calls `write_kv` 2048 times → ~8 GB per layer per prefill
 
 **Optimization candidates:**
+
 - **(A) In-place slot update on the layer tensor:** Keep `key_cache[layer_idx]` as a single tensor with shape `(num_blocks, num_heads, BLOCK_SIZE, head_dim)`. Use `Tensor::slice_assign` (candle exposes `index_write` / similar) to update a single slot `(block_id, h, token_offset, :)` without rebuilding. This is the standard vLLM-paged approach.
 - **(B) Pre-allocated scratch buffer:** Maintain a `Vec<f32>` host-side shadow of each layer's K and V (8 MB at qwen3-7B scale). `write_kv` mutates the shadow directly; upload only the touched block via `Tensor::from_slice`. Reduces the device-side cat to a single `from_slice` upload.
 - **(C) Block-pool swap:** Track a `Vec<Tensor>` of per-block tensors (one per `block_id`) instead of one big layer tensor. `write_kv` mutates only the touched block tensor; no rebuild needed. Memory layout is the same; the metadata becomes per-block instead of per-layer.
@@ -271,6 +277,7 @@ layer-sized tensor.
 
 **Pattern:** `write_kv` does four full-block host materializations and one
 re-upload per call:
+
 - `key_block.to_vec3()` → `Vec<Vec<Vec<f32>>>` (host)
 - `value_block.to_vec3()` → `Vec<Vec<Vec<f32>>>` (host)
 - `k_block_3d[h][token_offset][..head_dim].copy_from_slice(&k_head)` (host)
@@ -285,6 +292,7 @@ qwen3-7B-class). For the in-block mutation, only `head_dim=64` floats
 block is unchanged.
 
 **Optimization candidates:**
+
 - **(A) Tensor-side slot write:** Use `index_write` / `slice_assign` to mutate a single slot directly on device. Skip the to_vec3 + from_slice round-trip entirely.
 - **(B) Cache the host-side shadow:** After the first write, keep the `Vec<Vec<Vec<f32>>>` resident and mutate incrementally. Only re-upload the touched block.
 - **(C) Defer hash recomputation:** Compute hashes in a background task or on the read path. Hashes are only consulted by prefix-cache lookup, not by the forward pass.
@@ -292,6 +300,7 @@ block is unchanged.
 ### 3. **[HIGH] `write_kv_batch` calls `write_kv` per-token** — `buffer.rs:68-80`
 
 **Pattern:**
+
 ```rust
 for i in 0..num_tokens {
     let k_slice = k_batch.narrow(1, i, 1)?.squeeze(1)?;
@@ -311,6 +320,7 @@ for prefill — a block-at-a-time write would be O(num_blocks_in_batch)
 rather than O(num_tokens).
 
 **Optimization candidates:**
+
 - **(A) Block-at-a-time write path:** When the tokens for one block are available (i.e., they all fit in a single block's `BLOCK_SIZE` slots), call `write_kv_block(layer_idx, block_id, k, v)` with a `(num_heads, BLOCK_SIZE, head_dim)` tensor. After hotspot #1's in-place write is implemented, this would be a single `index_write` call per block.
 - **(B) Bulk layer tensor `cat`:** When the contiguous range of tokens for one block is fully available, build the new block tensor once and `Tensor::cat` with the unmodified blocks (still O(num_blocks) but amortized over `BLOCK_SIZE=16` writes instead of 1).
 
@@ -320,18 +330,21 @@ rather than O(num_tokens).
 the function still iterates and concatenates with itself, then transposes.
 
 **Why it's slow:** For a decode read at seq_len=1, `block_ids=[b]`:
+
 - `k_parts` has one element: `(num_heads, block_size, head_dim) = (H, 16, D)`
 - `k = Tensor::cat(&[k_block], 1)?` → `(H, block_size, D) = (H, 16, D)` (cat of one tensor is a clone; the alloc is unnecessary)
 - `.transpose(0, 1)?` → `(block_size, H, D) = (16, H, D)` (strided view)
 - Downstream consumers then typically materialize this via `.contiguous()` to `(seq_len, H, D)`
 
 **Optimization candidates:**
+
 - **(A) Fast path for single-block reads:** When `block_ids.len() == 1` and `block_len == block_size`, narrow directly to `(1, H, D)` (skipping the cat) and reshape. Eliminates the cat allocation entirely.
 - **(B) Narrow to actual `block_len` instead of full `BLOCK_SIZE`:** Currently narrows to `self.block_size` then concats — for decode the relevant slice is `block_len=1`. Narrowing earlier reduces the cat output by 16×.
 
 ### 5. **[MEDIUM] `find_matching_blocks` is O(n) when O(1) is trivial** — `layout.rs:50-60`
 
 **Pattern:**
+
 ```rust
 for (&hash, &block_id) in hash_map {
     if prompt_hash == hash { matches.push(block_id); }
@@ -343,6 +356,7 @@ already knows the exact hash it's looking for. For 1024 stored hashes,
 this is 1024 comparisons per lookup.
 
 **Optimization candidates:**
+
 - **(A) `hash_map.get(&prompt_hash).map(|&id| vec![id])`:** Direct O(1) lookup. Return the `Option<&usize>` or a `Vec<usize>` of length 0 or 1. The current API allows multiple matches; check whether that's a real requirement or a leftover from the scan pattern.
 
 ### 6. **[MEDIUM] `compute_block_hash` re-materializes the block on host** — `layout.rs:37-47`
@@ -355,6 +369,7 @@ folds a polynomial hash over all elements.
 forward pass never consumes it.
 
 **Optimization candidates:**
+
 - **(A) Skip hash on the hot write path:** Make hash computation opt-in or move it to a background task. The forward pass does not need the hash; only prefix-cache lookups do.
 - **(B) Device-side hash:** Implement the hash as a tiny GPU kernel that reads only the touched block and returns a u64. Avoids the host round-trip.
 - **(C) Quantize-then-hash:** Hash only the quantized representation (if `quantized=true`), which is already on host in `k_final` / `v_final` (lines 174-181). Reuse that allocation instead of materializing a separate copy.
@@ -373,6 +388,7 @@ ops. But it's worth noting that the validation is duplicated in both
 so each token triggers both validation paths).
 
 **Optimization candidates:**
+
 - **(A) `debug_assert!` for invariants:** Move the bounds checks into `debug_assert!` for the common case. Real production code wraps these behind a `cfg(debug_assertions)` flag. The error returns become panic-on-bug instead of error-on-bad-input.
 - **(B) Single combined validator:** Extract a `validate_write_args(...)` helper that's `#[inline]` and returns `Result<(), WriteKArgsError>`. Call once per `write_kv`; skip in `write_kv_batch` (or only call once at the top before the loop).
 
@@ -388,6 +404,7 @@ calls per write. Even at ~100 ns per dispatch, that's ~100 µs of pure
 dispatch overhead — significant for a per-token write.
 
 **Optimization candidates:**
+
 - **(A) Single `chunk`/`split` call:** Use `tensor.chunk(num_blocks, 0)?` to slice the layer into per-block views in one call. This reduces 1024 dispatch calls to 1.
 - **(B) Replace with in-place write (see hotspot #1-A):** If the in-place write approach is taken, this loop goes away entirely.
 
@@ -398,11 +415,11 @@ dispatch overhead — significant for a per-token write.
 Per the H-13 scope ("3 hotspot optimizations (from H-8~H-10 profiles)"
 per plan line 625), the top candidates from PagedKV are:
 
-| Rank | Target | File:line | Estimated speedup | Risk | Notes |
-|------|--------|-----------|-------------------|------|-------|
-| **1 (Primary)** | Replace `Tensor::cat` layer-rebuild with in-place `index_write` (or block-pool swap) | `buffer.rs:211-230` | **10-100× on per-token write at qwen3-7B scale** (eliminates O(num_blocks) memcpy per write) | Medium-High | Largest perf win but touches the storage layout. Requires a `slice_assign` equivalent in candle. Need to add a `test_write_kv_index_write_matches_cat` parity test, plus benchmark against the existing `paged_kv_cache_smoke` baseline. |
-| **2 (Secondary)** | `write_kv_batch` block-at-a-time path | `buffer.rs:68-80` | **~16× on prefill** (BLOCK_SIZE=16 reduction in per-token write calls) | Low | After #1 lands, a `write_kv_block(layer_idx, block_id, &k_block, &v_block)` API does a single in-place write for one full block. Pure additive change. |
-| **3 (Tertiary)** | `read_kv` single-block fast path + narrow to `block_len` | `buffer.rs:273-290` | **~50% on decode read** (skip cat for single-block) | Low | Pure refactor; correctness verifiable via existing read_kv tests. |
+| Rank              | Target                                                                               | File:line           | Estimated speedup                                                                            | Risk        | Notes                                                                                                                                                                                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------ | ------------------- | -------------------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1 (Primary)**   | Replace `Tensor::cat` layer-rebuild with in-place `index_write` (or block-pool swap) | `buffer.rs:211-230` | **10-100× on per-token write at qwen3-7B scale** (eliminates O(num_blocks) memcpy per write) | Medium-High | Largest perf win but touches the storage layout. Requires a `slice_assign` equivalent in candle. Need to add a `test_write_kv_index_write_matches_cat` parity test, plus benchmark against the existing `paged_kv_cache_smoke` baseline. |
+| **2 (Secondary)** | `write_kv_batch` block-at-a-time path                                                | `buffer.rs:68-80`   | **~16× on prefill** (BLOCK_SIZE=16 reduction in per-token write calls)                       | Low         | After #1 lands, a `write_kv_block(layer_idx, block_id, &k_block, &v_block)` API does a single in-place write for one full block. Pure additive change.                                                                                   |
+| **3 (Tertiary)**  | `read_kv` single-block fast path + narrow to `block_len`                             | `buffer.rs:273-290` | **~50% on decode read** (skip cat for single-block)                                          | Low         | Pure refactor; correctness verifiable via existing read_kv tests.                                                                                                                                                                        |
 
 **Suggested order:** do #1 first (highest impact, sets up the in-place
 write primitive), then #2 (uses #1's primitive), then #3 (independent
@@ -411,6 +428,7 @@ bench-model-one paged_kv_cache` and run `just nextest` to confirm no
 regressions.
 
 **Out of scope for H-13 (consider separate tasks):**
+
 - `find_matching_blocks` O(1) rewrite (#5) — small win but trivial
 - `compute_block_hash` device-side hashing (#6) — needs a custom kernel; defer to kernel-tier work
 - Validation overhead (#7) — micro-optimization, low ROI

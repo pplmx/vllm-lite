@@ -2,15 +2,15 @@
 
 ## Start Here
 
-| Document | Audience | Description |
-|----------|----------|-------------|
-| [architecture.md](./architecture.md) | All | System design with Mermaid diagrams |
-| [tutorial/01-setup.md](./tutorial/01-setup.md) | New users | Clone → build → serve |
-| [reference/openai-compatibility.md](./reference/openai-compatibility.md) | API users | What `/v1/chat/completions` actually honours vs silently drops |
-| [reference/feature-matrix.md](./reference/feature-matrix.md) | Contributors + Operators | Per-crate Cargo features, cross-crate propagation, recommended deployment combinations |
-| [adr/](./adr/) | Contributors | 20 Architecture Decision Records |
-| [OPERATIONS.md](../OPERATIONS.md) | Operators | Deploy, monitor, troubleshoot |
-| [technical-due-diligence/](./technical-due-diligence/) | Maintainers | 2026-07 holistic architecture and engineering assessment |
+| Document                                                                 | Audience                 | Description                                                                            |
+| ------------------------------------------------------------------------ | ------------------------ | -------------------------------------------------------------------------------------- |
+| [architecture.md](./architecture.md)                                     | All                      | System design with Mermaid diagrams                                                    |
+| [tutorial/01-setup.md](./tutorial/01-setup.md)                           | New users                | Clone → build → serve                                                                  |
+| [reference/openai-compatibility.md](./reference/openai-compatibility.md) | API users                | What `/v1/chat/completions` actually honours vs silently drops                         |
+| [reference/feature-matrix.md](./reference/feature-matrix.md)             | Contributors + Operators | Per-crate Cargo features, cross-crate propagation, recommended deployment combinations |
+| [adr/](./adr/)                                                           | Contributors             | 20 Architecture Decision Records                                                       |
+| [OPERATIONS.md](../OPERATIONS.md)                                        | Operators                | Deploy, monitor, troubleshoot                                                          |
+| [technical-due-diligence/](./technical-due-diligence/)                   | Maintainers              | 2026-07 holistic architecture and engineering assessment                               |
 
 ## Directory Structure
 
@@ -31,14 +31,14 @@ Integration tests live in `crates/*/tests/`.
 
 ## Crate Map
 
-| Crate | Responsibility |
-|-------|----------------|
-| `traits` | `ModelBackend`, `Batch`, kernel traits |
-| `core` | Engine, Scheduler, prefix cache, speculative decoding |
-| `model` | Architectures, components, kernels, weight loading |
-| `server` | OpenAI-compatible HTTP API |
-| `dist` | Multi-node primitives (feature-gated) |
-| `testing` | Test harness and stubs |
+| Crate     | Responsibility                                        |
+| --------- | ----------------------------------------------------- |
+| `traits`  | `ModelBackend`, `Batch`, kernel traits                |
+| `core`    | Engine, Scheduler, prefix cache, speculative decoding |
+| `model`   | Architectures, components, kernels, weight loading    |
+| `server`  | OpenAI-compatible HTTP API                            |
+| `dist`    | Multi-node primitives (feature-gated)                 |
+| `testing` | Test harness and stubs                                |
 
 ## Adding Features
 

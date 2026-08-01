@@ -66,11 +66,11 @@ cargo run -p vllm-server
    ```
 
    CI has two parallel jobs:
-   - **`ci`** — default features (CPU-only; matches `just quick` without
-     `--all-features`).
-   - **`ci-all-features`** — `--all-features` clippy + doc-check build
-     (matches `just ci` / `just clippy` exactly). Catches feature-conditional
-     regressions that the default-features job would miss (CI-01).
+    - **`ci`** — default features (CPU-only; matches `just quick` without
+   `--all-features`).
+    - **`ci-all-features`** — `--all-features` clippy + doc-check build
+   (matches `just ci` / `just clippy` exactly). Catches feature-conditional
+   regressions that the default-features job would miss (CI-01).
 
    Or run individual steps:
 

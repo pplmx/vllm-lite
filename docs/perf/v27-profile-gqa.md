@@ -14,12 +14,12 @@
 `cargo-flamegraph` was installed (`cargo install flamegraph` succeeded at v0.6.13),
 but **CPU sampling is infeasible in this sandbox**:
 
-| Tool | Status | Reason |
-|------|--------|--------|
-| `cargo-flamegraph` | installed | `~/.cargo/bin/cargo-flamegraph` |
-| `perf` (Linux profiler) | **missing** | `command not found: perf` |
-| `perf_event_paranoid` | **4** (most restrictive) | `/proc/sys/kernel/perf_event_paranoid` |
-| `dtrace` | not installed | N/A |
+| Tool                    | Status                   | Reason                                 |
+| ----------------------- | ------------------------ | -------------------------------------- |
+| `cargo-flamegraph`      | installed                | `~/.cargo/bin/cargo-flamegraph`        |
+| `perf` (Linux profiler) | **missing**              | `command not found: perf`              |
+| `perf_event_paranoid`   | **4** (most restrictive) | `/proc/sys/kernel/perf_event_paranoid` |
+| `dtrace`                | not installed            | N/A                                    |
 
 When invoked, `cargo flamegraph` errors with: `Error: perf is not installed or not
 present in $PATH`. Even with `perf` present, `perf_event_paranoid=4` blocks all
@@ -64,10 +64,10 @@ forward(x: (B, S, H_hidden)) @ gqa.rs:132
 
 **Two public attention pathways:**
 
-| Helper | Causal mask? | Where called |
-|--------|--------------|--------------|
-| `forward()` (direct) | **NO** in both `use_fused` (causal hardcoded false @ gqa.rs:160) and "standard" (no mask added @ gqa.rs:177-181) | The H-2 bench exercises this |
-| `paged_attention_fn` / `tiled_attention_fn` / `flash_attention_fn` / `run_attention_fn` | **YES** (paged_attention adds mask @ util.rs:150; flash sets causal=true @ gqa.rs:236) | External call sites |
+| Helper                                                                                  | Causal mask?                                                                                                     | Where called                 |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `forward()` (direct)                                                                    | **NO** in both `use_fused` (causal hardcoded false @ gqa.rs:160) and "standard" (no mask added @ gqa.rs:177-181) | The H-2 bench exercises this |
+| `paged_attention_fn` / `tiled_attention_fn` / `flash_attention_fn` / `run_attention_fn` | **YES** (paged_attention adds mask @ util.rs:150; flash sets causal=true @ gqa.rs:236)                           | External call sites          |
 
 The discrepancy between `forward()` (no mask) and the helpers (with mask) is a
 **correctness concern** but not a perf hotspot. See "Limitations" below.
@@ -79,11 +79,11 @@ The discrepancy between `forward()` (no mask) and the helpers (with mask) is a
 Criterion `--bench gqa_forward --bench gqa_forward_smoke/cpu_smoke --sample-size 10`
 (Run output: `/tmp/v27_h8_gqa_baseline.txt`)
 
-| Path | seq_len | Dims | ns/iter (median) | Source |
-|------|---------|------|------------------|--------|
-| `gqa_forward_smoke/cpu_smoke` | 16 | hidden=64, h=2, h_kv=1, d=32 | **39,530 ns (~39.5 µs)** | this run |
-| `gqa_forward_smoke/cpu_smoke` | 16 | (H-2 recorded) | 38,445 ns | `docs/perf/v27-baseline.md` |
-| `gqa_forward/standard` | 128/512/2048 | hidden=896, h=14, h_kv=2, d=64 | TBD (GPU required) | `docs/perf/v27-baseline.md` |
+| Path                          | seq_len      | Dims                           | ns/iter (median)         | Source                      |
+| ----------------------------- | ------------ | ------------------------------ | ------------------------ | --------------------------- |
+| `gqa_forward_smoke/cpu_smoke` | 16           | hidden=64, h=2, h_kv=1, d=32   | **39,530 ns (~39.5 µs)** | this run                    |
+| `gqa_forward_smoke/cpu_smoke` | 16           | (H-2 recorded)                 | 38,445 ns                | `docs/perf/v27-baseline.md` |
+| `gqa_forward/standard`        | 128/512/2048 | hidden=896, h=14, h_kv=2, d=64 | TBD (GPU required)       | `docs/perf/v27-baseline.md` |
 
 **CPU smoke is for path-correctness only**, not for measuring realistic
 qwen3-7B perf. Numbers are within 3% of H-2 baseline (no regression in master).
@@ -95,6 +95,7 @@ qwen3-7B perf. Numbers are within 3% of H-2 baseline (no regression in master).
 ### 1. **[HIGH] `expand_kv` called twice on K AND V** — `gqa.rs:170-171`, helper at `util.rs:59-90`
 
 **Pattern:**
+
 ```rust
 let k = self.expand_kv(&k, self.num_heads, self.num_kv_heads)?;  // gqa.rs:170
 let v = self.expand_kv(&v, self.num_heads, self.num_kv_heads)?;  // gqa.rs:171
@@ -105,6 +106,7 @@ repeat_factor, 1])`. For qwen3-7B (`num_heads=14, num_kv_heads=2`), each call
 allocates a tensor **7× the size of the input K/V** (and again for V).
 
 **Why it's slow:**
+
 - Full-tensor materialization of replicated data — wastes memory bandwidth
 - For a typical prefill at `seq_len=2048, batch=4, head_dim=64`, each expansion
   is `4 × 2048 × 14 × 64 × 4B = 28 MB`. K+V expansions = **56 MB** of redundant
@@ -113,6 +115,7 @@ allocates a tensor **7× the size of the input K/V** (and again for V).
   where `expand_kv(k)` and `expand_kv(v)` similarly materialize.
 
 **Optimization candidates:**
+
 - **(A) Lazy broadcast:** Replace `repeat` with a `view + broadcast` matmul
   (`Tensor::matmul` on strided tensors). Same output, no materialization.
 - **(B) Fuse QKV projection:** Project QKV into one matmul (already done in
@@ -124,6 +127,7 @@ allocates a tensor **7× the size of the input K/V** (and again for V).
 ### 2. **[HIGH] `Tensor::new(&[scale], ...)` re-allocated every forward** — `gqa.rs:180`, `util.rs:155`, `util.rs:203`, `flash_attention_v3.rs:262`
 
 **Pattern:**
+
 ```rust
 let scale = 1.0 / (self.head_dim as f32).sqrt();
 let qk = qk.mul(&Tensor::new(&[scale], q.device())?.broadcast_as(qk.dims())?)?;  // gqa.rs:179-180
@@ -135,12 +139,14 @@ full qk shape, on every forward call. For `tiled_attention`
 (`util.rs:202-204`), this happens **per tile**.
 
 **Why it's slow:**
+
 - Two allocations (the scalar tensor + the broadcast view) per call
 - The full-sized broadcast tensor dominates: O(B × H × S × S) float copies
 - For a tiled forward with 8 tiles at `seq_len=2048, head_dim=64`, this happens
   8× per forward
 
 **Optimization candidates:**
+
 - **(A) Cache `scale` as `OnceLock<Tensor>` or struct field** initialized in
   `new()`. Eliminates per-call allocation.
 - **(B) Use `Tensor::affine(scale, 0.0)`** instead of `mul(broadcast(scale))` —
@@ -151,22 +157,23 @@ full qk shape, on every forward call. For `tiled_attention`
 
 **Pattern (counted from the file):**
 
-| Line | Operation | Allocates? |
-|------|-----------|------------|
-| 154 | `q.transpose(1,2)?.contiguous()?` | YES |
-| 157 | `k.transpose(1,2)?.contiguous()?` (fused) | YES |
-| 158 | `v.transpose(1,2)?.contiguous()?` (fused) | YES |
-| 162 | `attn_output.transpose(1,2)?` (fused) | view only |
-| 173 | `k.transpose(1,2)?` | view only |
-| 174 | `v.transpose(1,2)?` | view only |
-| 176 | `k.transpose(2,3)?.contiguous()?` | YES (k_t) |
-| 183 | `v.contiguous()?` | YES |
-| 185 | `attn_output.transpose(1,2)?` | view only |
+| Line | Operation                                 | Allocates? |
+| ---- | ----------------------------------------- | ---------- |
+| 154  | `q.transpose(1,2)?.contiguous()?`         | YES        |
+| 157  | `k.transpose(1,2)?.contiguous()?` (fused) | YES        |
+| 158  | `v.transpose(1,2)?.contiguous()?` (fused) | YES        |
+| 162  | `attn_output.transpose(1,2)?` (fused)     | view only  |
+| 173  | `k.transpose(1,2)?`                       | view only  |
+| 174  | `v.transpose(1,2)?`                       | view only  |
+| 176  | `k.transpose(2,3)?.contiguous()?`         | YES (k_t)  |
+| 183  | `v.contiguous()?`                         | YES        |
+| 185  | `attn_output.transpose(1,2)?`             | view only  |
 
 **Six forced `.contiguous()` materializations** per forward in the standard
 path (4 in the fused path). Each is a full-tensor O(B·S·H·D) copy.
 
 **Why it's slow:**
+
 - Memory bandwidth bound: each copy reads + writes the full tensor
 - For seq_len=2048, hidden=896, F32: each contiguous copy is ~7 MB; 6 copies =
   ~42 MB of redundant traffic per forward
@@ -175,6 +182,7 @@ path (4 in the fused path). Each is a full-tensor O(B·S·H·D) copy.
   softmax needs `attn_weights.contiguous()`)
 
 **Optimization candidates:**
+
 - **(A) Keep tensors in `(B, H, S, D)` layout from projection onward** —
   reshape projections directly into `(B, S, n_heads, head_dim).transpose(1,2)`
   and rely on candle's strided matmul. Eliminates 2-3 contiguous calls.
@@ -188,6 +196,7 @@ path (4 in the fused path). Each is a full-tensor O(B·S·H·D) copy.
 ### 4. **[MEDIUM] `tiled_attention` Vec::push + Tensor::cat pattern** — `util.rs:182, 208, 211`
 
 **Pattern:**
+
 ```rust
 let mut output_parts = Vec::new();
 for tile_idx in 0..num_tiles {
@@ -199,6 +208,7 @@ let attn_output = Tensor::cat(&output_parts, 2)?;            // util.rs:211
 ```
 
 **Why it's slow:**
+
 - `Vec::push` grows the vec (amortized reallocations)
 - `Tensor::cat` allocates a new output tensor and copies all parts in
 - For a 2048-token sequence with tile_size=16, that's 128 Vec pushes + 1 cat
@@ -207,6 +217,7 @@ let attn_output = Tensor::cat(&output_parts, 2)?;            // util.rs:211
   (`util.rs:119-130`), scale tensor re-allocated per tile (`util.rs:202-203`)
 
 **Optimization candidates:**
+
 - **(A) Pre-allocate output buffer** of full seq_len shape; narrow+write each
   tile directly. Eliminates `cat` and Vec.
 - **(B) Cache `causal_mask_tile` outputs** per (start, tile_len) — these are
@@ -221,6 +232,7 @@ For `tiled_attention`, called PER TILE (so `num_tiles` times).
 **Why it's slow:** O(seq_len^2) allocation; per-tile invocation in tiled path.
 
 **Optimization candidates:**
+
 - **(A) Cache masks** in `AttentionConfig` or a `MaskCache` struct keyed by
   seq_len, shared via `Arc<Tensor>`.
 - **(B) Skip mask when seq_len == 1** (decode path, no causal structure
@@ -230,6 +242,7 @@ For `tiled_attention`, called PER TILE (so `num_tiles` times).
 ### 6. **[MEDIUM] `apply_q_norm`/`apply_k_norm` redundant transpose pairs** — `gqa.rs:262-288`
 
 **Pattern:**
+
 ```rust
 fn apply_q_norm(&self, q, batch_size, seq_len) -> Result<Tensor> {
     if let Some(ref q_norm) = self.q_norm {
@@ -249,11 +262,13 @@ fn apply_q_norm(&self, q, batch_size, seq_len) -> Result<Tensor> {
 transposes but is not called in the hot `forward()` path.
 
 **Why it's slow:**
+
 - T1 breaks contiguity → R1 may force a copy → LN reads non-contiguous → R2
   may force another copy → T2 view.
 - Total: up to 3 forced copies per LN call, when only LN is needed
 
 **Optimization candidates:**
+
 - **(A) Use `apply_q_norm_impl` (or a no-transpose variant)** in the hot path —
   apply LN on the `(B, S, H, D)` layout directly; reshape to `(B*S*H, D)` only.
 - **(B) Fuse QK-norm with the projection matmul** as a custom kernel (used in
@@ -277,17 +292,20 @@ compounds with hotspot #3.
 
 ## Recommended H-11 optimization targets
 
-| Rank | Target | File:line | Estimated speedup | Risk | Notes |
-|------|--------|-----------|-------------------|------|-------|
-| **1 (Primary)** | Cache `scale` tensor; use `affine` instead of `mul(broadcast(scale))` | gqa.rs:179-180, util.rs:155,203, flash_attention_v3.rs:262 | **2-5% on standard path; up to 15% on tiled path** (per-tile) | Low | Pure refactor; correctness trivial to verify (existing test `test_gqa_attention_fused_matches_standard` already covers numerical parity) |
-| **2 (Secondary)** | Eliminate one `.contiguous()` after softmax; restructure to keep tensors in `(B, H, S, D)` layout from projection | gqa.rs:154, 157-158, 176, 181, 183 | **5-10% on standard path; ~3% on fused path** | Medium | Requires reshaping projections to `(B, S, H, D).transpose(1,2)` and verifying matmul accepts strided. Use `test_gqa_attention_fused_matches_standard` to validate. |
-| **3 (Stretch)** | Lazy `expand_kv` via broadcast view, or fused QKV projection | gqa.rs:170-171, util.rs:59-90, flash_attention_v3.rs:249-258 | **5-15% on prefill (memory-bandwidth-bound); higher on long sequences** | Medium-High | Largest perf win but touches shape semantics; need `test_gqa_attention_expand_kv_correct` and a numerical-parity test against the materialized version |
+| Rank              | Target                                                                                                            | File:line                                                    | Estimated speedup                                                       | Risk        | Notes                                                                                                                                                              |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **1 (Primary)**   | Cache `scale` tensor; use `affine` instead of `mul(broadcast(scale))`                                             | gqa.rs:179-180, util.rs:155,203, flash_attention_v3.rs:262   | **2-5% on standard path; up to 15% on tiled path** (per-tile)           | Low         | Pure refactor; correctness trivial to verify (existing test `test_gqa_attention_fused_matches_standard` already covers numerical parity)                           |
+| **2 (Secondary)** | Eliminate one `.contiguous()` after softmax; restructure to keep tensors in `(B, H, S, D)` layout from projection | gqa.rs:154, 157-158, 176, 181, 183                           | **5-10% on standard path; ~3% on fused path**                           | Medium      | Requires reshaping projections to `(B, S, H, D).transpose(1,2)` and verifying matmul accepts strided. Use `test_gqa_attention_fused_matches_standard` to validate. |
+| **3 (Stretch)**   | Lazy `expand_kv` via broadcast view, or fused QKV projection                                                      | gqa.rs:170-171, util.rs:59-90, flash_attention_v3.rs:249-258 | **5-15% on prefill (memory-bandwidth-bound); higher on long sequences** | Medium-High | Largest perf win but touches shape semantics; need `test_gqa_attention_expand_kv_correct` and a numerical-parity test against the materialized version             |
 
 **Suggested order:** do #1 first (lowest risk, easy to validate), then #2, then
-#3. Each step should re-bench with `just bench-model-one gqa_forward` and run
+
+# 3. Each step should re-bench with `just bench-model-one gqa_forward` and run
+
 `just nextest` to confirm no regressions.
 
 **Out of scope for H-11 (consider H-12/H-13 or a separate task):**
+
 - `tiled_attention` Vec::push + Tensor::cat rewrite (#4) — touches `util.rs`
   helpers, affects paged/tiled decode paths
 - `causal_mask` caching (#5) — needs API change to share masks across instances
