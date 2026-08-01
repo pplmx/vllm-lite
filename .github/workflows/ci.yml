@@ -86,7 +86,11 @@ jobs:
         # markdown lint + cargo fmt); commit-msg/pre-push hooks are
         # covered by their own CI steps.
         run: |
-          cargo install prek --locked
+          # prek's MSRV (1.95+) is newer than the project's pinned
+          # toolchain (1.88 via rust-toolchain.toml), so compile it with
+          # the stable toolchain that `dtolnay/rust-toolchain@stable`
+          # installed; the prek binary itself is toolchain-independent.
+          rustup run stable cargo install prek --locked
           prek run --all-files
 
       - name: Public API baseline check
