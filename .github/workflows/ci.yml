@@ -79,12 +79,15 @@ jobs:
         # Enforcement loop closure: the team's hooks (husky-rs forces
         # them onto every dev machine; `.pre-commit-config.yaml`) are
         # also run here on all files so CI is the last line of
-        # enforcement, not just local machines. Runs the pre-commit
-        # stage hooks (file hygiene + markdown lint + cargo fmt);
-        # commit-msg/pre-push hooks are covered by their own CI steps.
+        # enforcement, not just local machines. The config uses prek's
+        # `repo: builtin` extension, so CI runs `prek` (same tool as the
+        # local husky-rs -> prek flow), not the Python pre-commit
+        # framework. Runs the pre-commit-stage hooks (file hygiene +
+        # markdown lint + cargo fmt); commit-msg/pre-push hooks are
+        # covered by their own CI steps.
         run: |
-          pip install --quiet pre-commit
-          pre-commit run --all-files
+          cargo install prek --locked
+          prek run --all-files
 
       - name: Public API baseline check
         # cargo-public-api builds rustdoc JSON via nightly-only
