@@ -78,4 +78,3 @@ phase. Specific guidance per requirement:
   `docs/benchmark-results/`.
 
 </decisions>
-
