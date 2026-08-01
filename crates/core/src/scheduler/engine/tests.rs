@@ -114,6 +114,22 @@ fn test_engine_memory_pressure() {
 }
 
 #[test]
+fn test_engine_memory_pressure_zero_blocks() {
+    // Degenerate config: zero KV blocks. Must not divide by zero;
+    // reports maximum pressure so the scheduler triggers preemption
+    // instead of computing a NaN ratio.
+    let config = SchedulerConfig::default();
+    let engine = create_test_engine(config, 0);
+
+    // KV usage snapshot stays well-formed under the same config.
+    assert_eq!(engine.get_kv_cache_usage(), (0, 0));
+
+    let pressure = engine.get_memory_pressure();
+    assert!(pressure.is_finite());
+    assert!((pressure - 1.0).abs() < 1e-6);
+}
+
+#[test]
 fn test_engine_prefix_cache_hit() {
     let config = SchedulerConfig::default();
     let mut engine = create_test_engine(config, 1024);

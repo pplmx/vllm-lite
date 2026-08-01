@@ -1131,17 +1131,16 @@ fn test_temperature_applied_once_not_twice() {
             count_token_0 += 1;
         }
     }
-    let empirical_p0 = count_token_0 as f64 / n_trials as f64;
-    let expected_p0 = single_scale_p0 as f64;
-    let buggy_p0 = double_scale_p0 as f64;
+    let empirical_p0 = f64::from(count_token_0) / n_trials as f64;
+    let expected_p0 = f64::from(single_scale_p0);
+    let buggy_p0 = f64::from(double_scale_p0);
 
     // The empirical rate should be within 0.08 of the correct value
     // (generous margin for 500 trials) and far from the buggy value.
     assert!(
         (empirical_p0 - expected_p0).abs() < 0.08,
         "empirical P(token=0) = {empirical_p0:.4}, expected ≈ {expected_p0:.4} (single-scale), \
-         buggy would be ≈ {buggy_p0:.4}; got {} hits of token 0 in {n_trials} trials",
-        count_token_0,
+         buggy would be ≈ {buggy_p0:.4}; got {count_token_0} hits of token 0 in {n_trials} trials",
     );
     // Sanity: the gap between correct and buggy is large enough to detect.
     assert!(

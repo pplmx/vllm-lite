@@ -165,9 +165,14 @@ impl SchedulerEngine {
     // loss is acceptable for the pressure ratio (always 0..=1).
     #[allow(clippy::cast_precision_loss)]
     pub(super) fn get_memory_pressure(&self) -> f32 {
-        let total = self.memory.total_blocks() as f32;
+        let total = self.memory.total_blocks();
+        if total == 0 {
+            // Degenerate config (zero blocks): report maximum pressure so
+            // the scheduler triggers preemption rather than dividing by zero.
+            return 1.0;
+        }
         let available = self.memory.available_blocks() as f32;
-        1.0 - (available / total)
+        1.0 - (available / total as f32)
     }
 
     /// Rollback KV cache for rejected draft tokens (Plan 17.1-D).
