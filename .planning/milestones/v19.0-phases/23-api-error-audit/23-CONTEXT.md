@@ -34,4 +34,3 @@ Methodology (what counts as "consistent signature", how to detect "excessive unw
 - Ergonomics: avoid `.unwrap()` in non-test code, use `.context()` or `?` with `From` impls
 
 </decisions>
-
