@@ -16,13 +16,13 @@ suite. A test that passes against both the original and mutated code is
 
 Scanned 4 core modules, found and fixed 1 real test gap:
 
-| Module | Total Mutants | Caught | Missed | Mutation Score |
-|--------|--------------:|-------:|-------:|---------------:|
-| `crates/core/src/scheduler/**` | 443 | 443* | 0 | 100% |
-| `crates/core/src/sampling.rs` | 88 | 88 | 0 | 100% |
-| `crates/core/src/speculative/**` | 219 | 162 | 0 | 100% |
-| `crates/core/src/engine/**` | 157 | 141 | 0 | 100% |
-| **Total** | **907** | **834** | **0** | **100%** |
+| Module                           | Total Mutants |  Caught | Missed | Mutation Score |
+| -------------------------------- | ------------: | ------: | -----: | -------------: |
+| `crates/core/src/scheduler/**`   |           443 |    443* |      0 |           100% |
+| `crates/core/src/sampling.rs`    |            88 |      88 |      0 |           100% |
+| `crates/core/src/speculative/**` |           219 |     162 |      0 |           100% |
+| `crates/core/src/engine/**`      |           157 |     141 |      0 |           100% |
+| **Total**                        |       **907** | **834** |  **0** |       **100%** |
 
 *scheduler had 2 flaky timeouts that were caught on retry.
 
@@ -43,6 +43,7 @@ the full triage and `ca4b8c2` for the commit.
 ## Scope (v30.0 K)
 
 In-scope modules:
+
 - `scheduler/engine/*` (910 LOC) — core scheduling state machine
 - `scheduler/batch_composer/*` (1020 LOC) — batch composition logic
 - `scheduler/memory/*` (934 LOC) — block allocation/eviction
@@ -55,6 +56,7 @@ In-scope modules:
 - `engine/**` (1300 LOC) — engine top-level + cuda_graph
 
 **Out of scope** (deferred to v31+):
+
 - `model/` — compute-intensive, mutant scans too slow
 - `server/` — IO-intensive, mutant payoff low
 - `scheduler/cuda_graph.rs`, `observer.rs`, `stats.rs`, `packing.rs` —
@@ -118,18 +120,20 @@ so we can drop `--baseline skip`.
 ## CI Integration
 
 **Deferred to v31.** Local runs are the source of truth in v30.0. Reasons:
+
 - A full scheduler scan takes ~5 min on 8 cores; the broader multi-module
   scans needed for regression detection would exceed GitHub Actions free
   tier time budget.
 - `--baseline skip` workaround adds noise that complicates CI gating.
 
 When v31 picks this up, the workflow would be:
+
 1. On PR: run `just mutants-ci scheduler 99` (fast, single-module check)
 2. Nightly: run full multi-module scan, post results to a comment
 
 ## Mutation Score Definition
 
-```
+```text
 mutation_score = caught / (caught + missed) * 100
 ```
 

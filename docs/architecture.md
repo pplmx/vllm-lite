@@ -55,14 +55,14 @@ flowchart TB
 
 ## Crate Responsibilities
 
-| Crate | Role | Key Types |
-|-------|------|-----------|
-| `vllm-traits` | Zero-dep interfaces | `ModelBackend`, `Batch`, `CudaGraphExecutor` |
-| `vllm-core` | Engine + scheduler | `Engine`, `SchedulerEngine`, `RadixTree` |
-| `vllm-model` | ML implementations | `CausalLm`, `GqaAttention`, `PagedKvCache` |
-| `vllm-server` | HTTP layer | `ApiState`, OpenAI handlers |
-| `vllm-dist` | Multi-node (feature-gated) | `DistributedKVCache`, gRPC |
-| `vllm-testing` | Test harness | `FakeModel`, `BatchBuilder` |
+| Crate          | Role                       | Key Types                                    |
+| -------------- | -------------------------- | -------------------------------------------- |
+| `vllm-traits`  | Zero-dep interfaces        | `ModelBackend`, `Batch`, `CudaGraphExecutor` |
+| `vllm-core`    | Engine + scheduler         | `Engine`, `SchedulerEngine`, `RadixTree`     |
+| `vllm-model`   | ML implementations         | `CausalLm`, `GqaAttention`, `PagedKvCache`   |
+| `vllm-server`  | HTTP layer                 | `ApiState`, OpenAI handlers                  |
+| `vllm-dist`    | Multi-node (feature-gated) | `DistributedKVCache`, gRPC                   |
+| `vllm-testing` | Test harness               | `FakeModel`, `BatchBuilder`                  |
 
 ## Request Lifecycle
 
@@ -104,12 +104,12 @@ writes new tokens at global positions, applies rectangular causal mask).
 
 ## KV Cache Layers
 
-| Layer | Location | Responsibility |
-|-------|----------|----------------|
-| Logical | `core/scheduler/memory/` | Block allocation, LRU eviction |
-| Prefix | `core/scheduler/radix_cache/` | O(k) longest-prefix match |
-| Physical | `model/paged_tensor/` | Tensor storage, FP8 quant |
-| Distributed | `dist/distributed_kv/` | Cross-node hash metadata (multi-node) |
+| Layer       | Location                      | Responsibility                        |
+| ----------- | ----------------------------- | ------------------------------------- |
+| Logical     | `core/scheduler/memory/`      | Block allocation, LRU eviction        |
+| Prefix      | `core/scheduler/radix_cache/` | O(k) longest-prefix match             |
+| Physical    | `model/paged_tensor/`         | Tensor storage, FP8 quant             |
+| Distributed | `dist/distributed_kv/`        | Cross-node hash metadata (multi-node) |
 
 ## Feature Flags
 
@@ -121,15 +121,15 @@ the single source of truth for the workspace's feature model. The
 matrix doc complements this section and must be updated together
 with it when a feature changes.
 
-| Flag | Crate | Description |
-|------|-------|-------------|
-| `cuda` | model | Candle CUDA backend |
-| `gguf` | model | GGUF weight loading |
-| `cuda-graph` | core, server | CUDA Graph capture/replay |
-| `multi-node` | core, model, testing | Enable `vllm-dist` |
-| `full` | model | `cuda` + `gguf` |
-| `candle` | traits | Expose `candle-core` `Tensor` to `ModelBackend` (always-on via core/model/server dep) |
-| `kernels` | traits | Gate the CUDA-graph kernel module (always-on via core/model dep) |
+| Flag         | Crate                | Description                                                                           |
+| ------------ | -------------------- | ------------------------------------------------------------------------------------- |
+| `cuda`       | model                | Candle CUDA backend                                                                   |
+| `gguf`       | model                | GGUF weight loading                                                                   |
+| `cuda-graph` | core, server         | CUDA Graph capture/replay                                                             |
+| `multi-node` | core, model, testing | Enable `vllm-dist`                                                                    |
+| `full`       | model                | `cuda` + `gguf`                                                                       |
+| `candle`     | traits               | Expose `candle-core` `Tensor` to `ModelBackend` (always-on via core/model/server dep) |
+| `kernels`    | traits               | Gate the CUDA-graph kernel module (always-on via core/model dep)                      |
 
 `vllm-dist` exposes **no Cargo features** itself — see
 [`ADR-008`](./adr/ADR-008-vllm-dist-feature-gated.md) for the
@@ -150,13 +150,13 @@ Stub architectures (Gemma3, Llama4, Phi4, Mistral Small) share
 
 ## Testing Strategy
 
-| Tier | Command | Scope |
-|------|---------|-------|
-| Fast | `just nextest` | Unit + integration (skips `#[ignore]`) |
-| Checkpoint | `just nextest-checkpoint` | Real weight tests |
-| Full | `just nextest-all` | All tests including slow |
-| Fuzz | `just fuzz-smoke` | 7 fuzz targets |
-| Mutation | `just mutants MODULE` | cargo-mutants (907 mutants, 100%) |
+| Tier       | Command                   | Scope                                  |
+| ---------- | ------------------------- | -------------------------------------- |
+| Fast       | `just nextest`            | Unit + integration (skips `#[ignore]`) |
+| Checkpoint | `just nextest-checkpoint` | Real weight tests                      |
+| Full       | `just nextest-all`        | All tests including slow               |
+| Fuzz       | `just fuzz-smoke`         | 7 fuzz targets                         |
+| Mutation   | `just mutants MODULE`     | cargo-mutants (907 mutants, 100%)      |
 
 ## Related Documents
 

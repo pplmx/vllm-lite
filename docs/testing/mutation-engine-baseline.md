@@ -11,7 +11,7 @@
 > contains `cuda_graph.rs`, `lifecycle.rs`, `run.rs`, and `spec_dispatch/`
 > (dispatch, drafts, verify, warmup). `cargo mutants` was passed the
 > directory, so all 12 files were scanned.
-
+>
 > **Note on `--baseline skip`:** The `just mutants` recipe uses
 > `--baseline skip` as a documented workaround for a pre-existing
 > baseline-test failure at `crates/core/tests/cuda_graph_integration.rs:148`
@@ -24,13 +24,13 @@
 
 ## Summary
 
-| Status              | Count |
-|---------------------|-------|
-| Caught              | 141   |
-| Missed (survived)   | 0     |
-| Timeout             | 0     |
-| Unviable            | 16    |
-| **Total**           | **157** |
+| Status            | Count   |
+| ----------------- | ------- |
+| Caught            | 141     |
+| Missed (survived) | 0       |
+| Timeout           | 0       |
+| Unviable          | 16      |
+| **Total**         | **157** |
 
 ## Mutation Score
 
@@ -47,21 +47,21 @@ See "Resolution (K-2.3)" below for the fix that closed the prior gap.
 
 ## Per-File Breakdown
 
-| File                                              | Total | Caught | Missed | Unviable | Score |
-|---------------------------------------------------|------:|-------:|-------:|---------:|------:|
-| `crates/core/src/engine/mod.rs`                   |    10 |     10 |      0 |        0 | 100%  |
-| `crates/core/src/engine/ctor.rs`                  |    18 |      4 |      0 |       14 | 100%  |
-| `crates/core/src/engine/graph_step.rs`            |    12 |     12 |      0 |        0 | 100%  |
-| `crates/core/src/engine/draft_management.rs`      |    17 |     17 |      0 |        0 | 100%  |
-| `crates/core/src/engine/beam.rs`                  |    17 |     15 |      0 |        2 | 100%  |
-| `crates/core/src/engine/cuda_graph.rs`            |     5 |      5 |      0 |        0 | 100%  |
-| `crates/core/src/engine/lifecycle.rs`             |    11 |     11 |      0 |        0 | 100%  |
-| `crates/core/src/engine/run.rs`                   |     9 |      9 |      0 |        0 | 100%  |
-| `crates/core/src/engine/spec_dispatch/dispatch.rs`|    20 |     20 |      0 |        0 | 100%  |
-| `crates/core/src/engine/spec_dispatch/drafts.rs`  |    10 |     10 |      0 |        0 | 100%  |
-| `crates/core/src/engine/spec_dispatch/verify.rs`  |    26 |     26 |      0 |        0 | 100%  |
-| `crates/core/src/engine/spec_dispatch/warmup.rs`  |     2 |      2 |      0 |        0 | 100%  |
-| **Total**                                         | **157** | **141** | **0** | **16** | **100.00%** |
+| File                                               |   Total |  Caught | Missed | Unviable |       Score |
+| -------------------------------------------------- | ------: | ------: | -----: | -------: | ----------: |
+| `crates/core/src/engine/mod.rs`                    |      10 |      10 |      0 |        0 |        100% |
+| `crates/core/src/engine/ctor.rs`                   |      18 |       4 |      0 |       14 |        100% |
+| `crates/core/src/engine/graph_step.rs`             |      12 |      12 |      0 |        0 |        100% |
+| `crates/core/src/engine/draft_management.rs`       |      17 |      17 |      0 |        0 |        100% |
+| `crates/core/src/engine/beam.rs`                   |      17 |      15 |      0 |        2 |        100% |
+| `crates/core/src/engine/cuda_graph.rs`             |       5 |       5 |      0 |        0 |        100% |
+| `crates/core/src/engine/lifecycle.rs`              |      11 |      11 |      0 |        0 |        100% |
+| `crates/core/src/engine/run.rs`                    |       9 |       9 |      0 |        0 |        100% |
+| `crates/core/src/engine/spec_dispatch/dispatch.rs` |      20 |      20 |      0 |        0 |        100% |
+| `crates/core/src/engine/spec_dispatch/drafts.rs`   |      10 |      10 |      0 |        0 |        100% |
+| `crates/core/src/engine/spec_dispatch/verify.rs`   |      26 |      26 |      0 |        0 |        100% |
+| `crates/core/src/engine/spec_dispatch/warmup.rs`   |       2 |       2 |      0 |        0 |        100% |
+| **Total**                                          | **157** | **141** |  **0** |   **16** | **100.00%** |
 
 (`ctor.rs` and `beam.rs` carry a high unviable count because their
 mutations often produce bodies that won't compile against the trait
@@ -127,6 +127,7 @@ fn test_cuda_graph_disabled_when_feature_off() {
 ```
 
 This test:
+
 - Passes on the unmutated baseline (because `cuda_graph_enabled()` does
   return `false` without the feature), so it does NOT contribute to the
   pre-existing baseline-failure that requires `--baseline skip`.
@@ -148,10 +149,10 @@ None. `.mutants-out/mutants.out/timeout.txt` is empty.
 
 16 mutants failed to compile under mutation. Distribution:
 
-| File                                | Unviable |
-|-------------------------------------|---------:|
-| `crates/core/src/engine/ctor.rs`    |       14 |
-| `crates/core/src/engine/beam.rs`    |        2 |
+| File                             | Unviable |
+| -------------------------------- | -------: |
+| `crates/core/src/engine/ctor.rs` |       14 |
+| `crates/core/src/engine/beam.rs` |        2 |
 
 `ctor.rs` carries the bulk (14/16). The dominant pattern is
 `FnValue` mutations replacing a constructor body with a scalar /
@@ -191,6 +192,7 @@ The `just mutants` recipe handles the directory-vs-file glob, applies
 `.mutants-out/`.
 
 Artifacts:
+
 - `.mutants-out/mutants.out/mutants.json` — full mutation definitions
 - `.mutants-out/mutants.out/outcomes.json` — per-mutant run summary
 - `.mutants-out/mutants.out/caught.txt` — 141 caught mutations

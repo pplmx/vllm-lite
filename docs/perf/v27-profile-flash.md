@@ -53,11 +53,11 @@ Three backend implementations:
 
 **Public API:**
 
-| Entry point | Variant | Notes |
-|-------------|---------|-------|
-| `FlashAttentionKernel::forward` | Standard / Flash / FlashV2 / Tiled | Dispatched by `AttentionVariant` enum (`config.rs:8`) |
-| `FlashAttentionKernel::forward_sliding_window` | any | Used when `use_sliding_window` is set |
-| `ScaledDotProductAttention::forward` / `compute_tiled` / `compute_sliding_window` | n/a | Direct entry, no dispatch |
+| Entry point                                                                       | Variant                            | Notes                                                 |
+| --------------------------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------- |
+| `FlashAttentionKernel::forward`                                                   | Standard / Flash / FlashV2 / Tiled | Dispatched by `AttentionVariant` enum (`config.rs:8`) |
+| `FlashAttentionKernel::forward_sliding_window`                                    | any                                | Used when `use_sliding_window` is set                 |
+| `ScaledDotProductAttention::forward` / `compute_tiled` / `compute_sliding_window` | n/a                                | Direct entry, no dispatch                             |
 
 ---
 
@@ -67,12 +67,12 @@ Criterion `--bench flash_attention_smoke/cpu_smoke --sample-size 10`
 (Run output: `/tmp/v27_h4_baseline.txt`, recorded in
 `docs/perf/v27-baseline.md` line 174)
 
-| Path | Config | ns/iter (median) | Source |
-|------|--------|------------------|--------|
-| `flash_attention_smoke/cpu_smoke` | b1_h2_s16_d32 | **11,285 ns (~11 µs)** | H-4 baseline |
-| `flash_attention/standard` | b1_h14_s512_d64 | TBD (GPU required) | `docs/perf/v27-baseline.md` |
-| `flash_attention/standard` | b1_h14_s2048_d64 | TBD | `docs/perf/v27-baseline.md` |
-| `flash_attention/standard` | b4_h14_s512_d64 | TBD | `docs/perf/v27-baseline.md` |
+| Path                              | Config           | ns/iter (median)       | Source                      |
+| --------------------------------- | ---------------- | ---------------------- | --------------------------- |
+| `flash_attention_smoke/cpu_smoke` | b1_h2_s16_d32    | **11,285 ns (~11 µs)** | H-4 baseline                |
+| `flash_attention/standard`        | b1_h14_s512_d64  | TBD (GPU required)     | `docs/perf/v27-baseline.md` |
+| `flash_attention/standard`        | b1_h14_s2048_d64 | TBD                    | `docs/perf/v27-baseline.md` |
+| `flash_attention/standard`        | b4_h14_s512_d64  | TBD                    | `docs/perf/v27-baseline.md` |
 
 **CPU smoke is for path-correctness only.** At seq_len=16, head_dim=32 the
 implementation overhead (tensor dispatch, scale broadcast) dominates the
@@ -106,6 +106,7 @@ final_output = scaled_output.broadcast_add(&block_out)?;     // alloc #11
 For `B=4, H=14`: **~4,480 tensor allocations** in one forward pass.
 
 **Why it's slow (this is the central algorithmic hotspot):**
+
 - This implementation **materializes the full QK block per iteration**,
   contrary to the original FlashAttention 2 design which keeps QK in
   registers/SRAM and never writes it to HBM
@@ -120,6 +121,7 @@ For `B=4, H=14`: **~4,480 tensor allocations** in one forward pass.
   memory savings)
 
 **Optimization candidates:**
+
 - **(A) Move to `candle_nn::ops::softmax_last_dim`** and pre-allocate
   output buffers to reduce per-block allocation count from 11 → ~4.
 - **(B) Fuse online softmax into a single kernel** (true FlashAttention 2
@@ -133,6 +135,7 @@ For `B=4, H=14`: **~4,480 tensor allocations** in one forward pass.
 ### 2. **[HIGH] `create_causal_mask` builds mask via Vec<f32> push loop** — `kernel.rs:285-308`
 
 **Pattern (called per block in `compute_flash_attention_causal`):**
+
 ```rust
 fn create_causal_mask(&self, dims: &[usize], start_k: usize, device) -> Result<Tensor> {
     let (seq_len_q, block_size) = (dims[0], dims[1]);
@@ -156,6 +159,7 @@ blocks per forward = ~4.2M pushes** to build a mask that's
 **deterministic** given `(seq_len_q, block_size, start_k)`.
 
 **Why it's slow:**
+
 - Vec push loop: 131k allocations worth of writes per block (though
   amortized via `with_capacity`)
 - `Tensor::from_slice` then allocates a fresh `(seq_len_q, block_size)`
@@ -165,7 +169,9 @@ blocks per forward = ~4.2M pushes** to build a mask that's
 - The mask structure is **purely positional** — no data dependency
 
 **Optimization candidates:**
+
 - **(A) Replace with broadcast comparison** (the standard pattern):
+
   ```rust
   let q_idx = Tensor::arange_step(0, seq_len_q, 1, device)?;
   let k_idx = Tensor::arange_step(start_k, start_k + block_size, 1, device)?;
@@ -174,6 +180,7 @@ blocks per forward = ~4.2M pushes** to build a mask that's
                        .mul(&Tensor::new(f32::NEG_INFINITY, device)?)?
                        .broadcast_as((seq_len_q, block_size))?;
   ```
+
   Same result, no Vec, no per-element push loop. Or use the
   `causal_mask` helper already in `components/attention/util.rs:96-106`
   (the same pattern GQA uses).
@@ -185,6 +192,7 @@ blocks per forward = ~4.2M pushes** to build a mask that's
 ### 3. **[HIGH] `forward_flash_v2` and `forward_flash_v2_with_causal` triple-nested loops** — `kernel.rs:99-122, 200-223`
 
 **Pattern:**
+
 ```rust
 let mut outputs = Vec::with_capacity(batch_size);                  // Vec alloc #1
 for b in 0..batch_size {
@@ -214,6 +222,7 @@ calls + 4 `Tensor::stack` operations + 56 `compute_flash_attention_block`
 calls**.
 
 **Why it's slow:**
+
 - Per (batch, head) call to `compute_flash_attention_block` re-builds the
   scale_tensor (cached locally at l.131 but `running_m` / `final_output`
   are re-allocated per call) — these allocations can be hoisted
@@ -222,6 +231,7 @@ calls**.
   overhead but adds up)
 
 **Optimization candidates:**
+
 - **(A) Batch across heads:** `flash_attention_v2` does the same
   computation per head independently — fuse into a single matmul over
   `(B, H, S, D)` tensors. Eliminates the per-head squeeze+stack.
@@ -234,6 +244,7 @@ calls**.
 ### 4. **[HIGH] `compute_tiled` Vec::push + Tensor::cat** — `kernel.rs:359-417`
 
 **Pattern:**
+
 ```rust
 let mut all_outputs: Vec<Tensor> = Vec::with_capacity(batch_size);  // Vec alloc
 for _b in 0..batch_size {
@@ -270,6 +281,7 @@ For `B=4, H=14, seq_len=2048, tile_size=64`: **4 × 14 × 32 = 1,792 tile
 iterations + 56 cat/stack allocations** per forward.
 
 **Why it's slow:**
+
 - **Identical pattern to GQA tiled_attention (H-8 hotspot #4)**: `Vec::push`
   grows + `Tensor::cat` allocates and copies all tiles
 - The inner loop runs `seq_len / tile_size` times and creates 4 tensors
@@ -279,6 +291,7 @@ iterations + 56 cat/stack allocations** per forward.
   the `Tiled` variant name's implied causal structure
 
 **Optimization candidates:**
+
 - **(A) Pre-allocate output buffer** of shape `(seq_q, head_dim)` for each
   head. Write each tile via narrow+copy. Eliminates the `Tensor::cat`.
 - **(B) Fuse softmax into matmul via online softmax** (see hotspot #1).
@@ -288,6 +301,7 @@ iterations + 56 cat/stack allocations** per forward.
 ### 5. **[MEDIUM] `Tensor::new(self.scale, q.device())?` per-call re-allocation** — `kernel.rs:88, 131, 232, 376, 446`
 
 **Pattern (5 occurrences):**
+
 ```rust
 let scale_tensor = Tensor::new(self.scale, q.device())?;          // l.88 (forward_standard)
 let scale_tensor = Tensor::new(self.scale, q.device())?;          // l.131 (compute_flash_attention_block)
@@ -307,13 +321,16 @@ allocation is just one scalar tensor (4 bytes payload). The cost is the
 allocation + dispatch overhead, not memory bandwidth.
 
 **Why it's still slow (minor):**
+
 - One 0-D Tensor allocation per forward call (5 call sites, but only one
   is hit per variant)
 - The 0-D tensor is then used as `broadcast_mul` argument — could use
   in-place affine or scalar mul
 
 **Optimization candidates:**
+
 - **(A) Cache `scale_tensor` as a struct field** initialized in `new()`:
+
   ```rust
   pub struct FlashAttentionV2 {
       scale: f32,
@@ -321,6 +338,7 @@ allocation + dispatch overhead, not memory bandwidth.
       ...
   }
   ```
+
 - **(B) Use `Tensor::affine(scale, 0.0)`** instead of
   `tensor.broadcast_mul(&scale_tensor)?` — fuses scaling into the
   next op without materializing the scalar tensor.
@@ -329,6 +347,7 @@ allocation + dispatch overhead, not memory bandwidth.
 ### 6. **[MEDIUM] `softmax_last_dim` allocates 4 intermediate tensors** — `kernel.rs` (util.rs:32-38)
 
 **Pattern:**
+
 ```rust
 pub fn softmax_last_dim(t: &Tensor) -> Result<Tensor> {
     let max_vals = t.max_keepdim(shape.len() - 1)?;       // alloc #1
@@ -344,11 +363,13 @@ pub fn softmax_last_dim(t: &Tensor) -> Result<Tensor> {
 `FlashAttentionV2::forward_standard` l.90, per-block in v2).
 
 **Why it's slow:**
+
 - Per-softmax overhead in the hot loop
 - For tiled SDPA: 32 softmax calls per head = **160 allocations per head**
   just for softmax
 
 **Optimization candidates:**
+
 - **(A) Use `candle_nn::ops::softmax`** (already in the dependency tree).
   Same math, possibly better-fused.
 - **(B) Fuse softmax with the prior matmul** via online softmax (see
@@ -359,6 +380,7 @@ pub fn softmax_last_dim(t: &Tensor) -> Result<Tensor> {
 ### 7. **[MEDIUM] Per-iteration `narrow + squeeze` × 6** — `kernel.rs:102-104, 109-111, 203-205, 210-212, 383-385`
 
 **Pattern:**
+
 ```rust
 let q_b = q.narrow(0, b, 1)?.squeeze(0)?;
 let k_b = k.narrow(0, b, 1)?.squeeze(0)?;
@@ -374,11 +396,13 @@ forward**. Each is a view, not a copy, but each adds dispatch overhead
 and tensor metadata tracking.
 
 **Why it's slow:**
+
 - View ops are cheap individually but compound at scale
 - The `(h % num_heads_k)` modulo implies GQA — but if `num_heads_k ==
   num_heads_q` the modulo is a no-op (this is the MHA case)
 
 **Optimization candidates:**
+
 - **(A) Skip the outer batch loop entirely:** flatten `(B, H, S, D)` into
   `(B*H, S, D)` once at the top, run the per-head logic over the
   flattened batch, reshape at the end. Eliminates 3 narrow+squeeze ops
@@ -389,6 +413,7 @@ and tensor metadata tracking.
 ### 8. **[LOW] `forward_standard` returns a non-contiguous output** — `kernel.rs:86-92`
 
 **Pattern:**
+
 ```rust
 fn forward_standard(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
     let qk = q.matmul(&k.t()?)?;                          // alloc
@@ -405,12 +430,14 @@ forced copy downstream. (Note: candle matmul generally returns
 contiguous output, so this is a latent concern, not a confirmed hit.)
 
 **Why it's slow (latent):**
+
 - If a caller downstream does `.contiguous()?` on the result, that's an
   unexpected full-tensor copy
 - Adding an explicit `.contiguous()?` at the end of `forward_standard`
   makes the contract clear (but adds an unconditional copy cost)
 
 **Optimization candidates:**
+
 - **(A) Document the contiguity contract** in the doc comment; rely on
   callers to handle it.
 - **(B) Add `.contiguous()?`** at the end if downstream callers always
@@ -426,6 +453,7 @@ SDPA** — it materializes the full QK block per iteration rather than
 keeping QK in registers/SRAM as in the original FlashAttention 2 paper.
 
 This means:
+
 - **Memory bandwidth wins (the main FA-2 advantage) are NOT realized**
   on GPU hardware
 - The implementation will show **~similar perf to a tiled SDPA** on GPU,
@@ -457,23 +485,23 @@ the API.
 
 **Recurring hotspots — same root cause across all three:**
 
-| Hotspot | GQA | MLA | FlashAttn | Shared fix |
-|---------|-----|-----|-----------|------------|
-| `Tensor::new(scale, device).broadcast_*` per call | `gqa.rs:179-180` (HIGH) | `mla.rs:210` (HIGH) | `kernel.rs:88, 131, 232, 376, 446` (MED) | Cache `scale_tensor` as struct field |
-| `softmax().contiguous()` redundant | `gqa.rs:181` (LOW) | `mla.rs:213` (LOW) | n/a (no .contiguous() in flash) | Drop the .contiguous()? |
-| Vec::push + Tensor::cat in tiled paths | `util.rs:208, 211` (MED) | n/a (no tiled path) | `kernel.rs:404, 407` (HIGH) | Pre-allocate output buffer |
-| Multiple `.contiguous()` after transpose+reshape | `gqa.rs:154, 176` (HIGH) | `mla.rs:111, 121, 131, 192, 205, 206` (HIGH) | n/a | Layout refactor |
-| Causal mask built via Vec<f32> + from_slice | `util.rs:96-106` (MED, uses arange pattern) | n/a | `kernel.rs:285-308` (HIGH, uses Vec push) | Use arange + broadcast_lt |
-| Per-iteration narrow+squeeze loops | `util.rs:108-114` (MED) | n/a | `kernel.rs:102-104, 109-111, 203-205, 210-212` (MED) | Flatten (B,H) once |
+| Hotspot                                           | GQA                                         | MLA                                          | FlashAttn                                            | Shared fix                           |
+| ------------------------------------------------- | ------------------------------------------- | -------------------------------------------- | ---------------------------------------------------- | ------------------------------------ |
+| `Tensor::new(scale, device).broadcast_*` per call | `gqa.rs:179-180` (HIGH)                     | `mla.rs:210` (HIGH)                          | `kernel.rs:88, 131, 232, 376, 446` (MED)             | Cache `scale_tensor` as struct field |
+| `softmax().contiguous()` redundant                | `gqa.rs:181` (LOW)                          | `mla.rs:213` (LOW)                           | n/a (no .contiguous() in flash)                      | Drop the .contiguous()?              |
+| Vec::push + Tensor::cat in tiled paths            | `util.rs:208, 211` (MED)                    | n/a (no tiled path)                          | `kernel.rs:404, 407` (HIGH)                          | Pre-allocate output buffer           |
+| Multiple `.contiguous()` after transpose+reshape  | `gqa.rs:154, 176` (HIGH)                    | `mla.rs:111, 121, 131, 192, 205, 206` (HIGH) | n/a                                                  | Layout refactor                      |
+| Causal mask built via Vec<f32> + from_slice       | `util.rs:96-106` (MED, uses arange pattern) | n/a                                          | `kernel.rs:285-308` (HIGH, uses Vec push)            | Use arange + broadcast_lt            |
+| Per-iteration narrow+squeeze loops                | `util.rs:108-114` (MED)                     | n/a                                          | `kernel.rs:102-104, 109-111, 203-205, 210-212` (MED) | Flatten (B,H) once                   |
 
 **Key differences:**
 
-| Area | GQA | MLA | FlashAttn |
-|------|-----|-----|-----------|
-| `expand_kv` repeat | HIGH | n/a | n/a |
-| QK-norm transpose pair | MED (Qwen3+) | n/a | n/a |
-| Online softmax (per-block) | n/a (FlashV3 path only) | n/a | **HIGH** (FlashV2 path) |
-| Per-block softmax tensor explosion | n/a | n/a | **HIGH** (~10 alloc/block) |
+| Area                               | GQA                     | MLA | FlashAttn                  |
+| ---------------------------------- | ----------------------- | --- | -------------------------- |
+| `expand_kv` repeat                 | HIGH                    | n/a | n/a                        |
+| QK-norm transpose pair             | MED (Qwen3+)            | n/a | n/a                        |
+| Online softmax (per-block)         | n/a (FlashV3 path only) | n/a | **HIGH** (FlashV2 path)    |
+| Per-block softmax tensor explosion | n/a                     | n/a | **HIGH** (~10 alloc/block) |
 
 **Key takeaway:** The flash attention kernel shares the **scale-tensor
 allocation pattern** and **tiled Vec::push+cat pattern** with GQA, but has
@@ -484,23 +512,25 @@ avoid. Flash attention is the most allocation-heavy of the three.
 
 ## Recommended H-12 optimization targets
 
-| Rank | Target | File:line | Estimated speedup | Risk | Notes |
-|------|--------|-----------|-------------------|------|-------|
-| **1 (Primary)** | Replace `create_causal_mask` Vec<f32> push loop with arange+broadcast_lt (mirror GQA's `causal_mask` helper at `util.rs:96-106`) | kernel.rs:285-308 | **5-15% on causal FlashV2 path; 20-40% on long sequences** | Low | Same pattern as the existing GQA causal_mask helper; could share the helper directly. Correctness trivial to verify (existing tests cover numerical parity). |
-| **2 (Secondary)** | Cache `scale_tensor` as struct field on `FlashAttentionV2` and `ScaledDotProductAttention`; use `Tensor::affine` instead of `broadcast_mul(scale_tensor)` | kernel.rs:88, 131, 232, 376, 446 | **2-5% on smoke; up to 10% on long sequences** (per-call allocation reduction) | Low | Pure refactor; same fix as GQA #1 and MLA #1. Could be a single shared helper. |
-| **3 (Stretch)** | Fuse per-block online softmax allocations in `compute_flash_attention_block` — reduce 11 tensors/block → ~4 by reusing buffers across blocks | kernel.rs:124-179, 225-283 | **10-30% on FlashV2 path; depends heavily on seq_len** | Medium | Largest perf win but touches kernel-internal buffer management; needs careful numerical validation against `test_flash_attention_v2_consistency_with_sdpa` (l.741). |
+| Rank              | Target                                                                                                                                                    | File:line                        | Estimated speedup                                                              | Risk   | Notes                                                                                                                                                               |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1 (Primary)**   | Replace `create_causal_mask` Vec<f32> push loop with arange+broadcast_lt (mirror GQA's `causal_mask` helper at `util.rs:96-106`)                          | kernel.rs:285-308                | **5-15% on causal FlashV2 path; 20-40% on long sequences**                     | Low    | Same pattern as the existing GQA causal_mask helper; could share the helper directly. Correctness trivial to verify (existing tests cover numerical parity).        |
+| **2 (Secondary)** | Cache `scale_tensor` as struct field on `FlashAttentionV2` and `ScaledDotProductAttention`; use `Tensor::affine` instead of `broadcast_mul(scale_tensor)` | kernel.rs:88, 131, 232, 376, 446 | **2-5% on smoke; up to 10% on long sequences** (per-call allocation reduction) | Low    | Pure refactor; same fix as GQA #1 and MLA #1. Could be a single shared helper.                                                                                      |
+| **3 (Stretch)**   | Fuse per-block online softmax allocations in `compute_flash_attention_block` — reduce 11 tensors/block → ~4 by reusing buffers across blocks              | kernel.rs:124-179, 225-283       | **10-30% on FlashV2 path; depends heavily on seq_len**                         | Medium | Largest perf win but touches kernel-internal buffer management; needs careful numerical validation against `test_flash_attention_v2_consistency_with_sdpa` (l.741). |
 
 **Suggested order:** #1 first (lowest risk, mirrors existing pattern,
 biggest single-fix win on causal path), then #2 (mechanical caching),
 then #3 (largest win but needs buffer-management care).
 
 **Out of scope for H-12 (consider H-13+ or a separate kernel task):**
+
 - True FlashAttention 2 GPU kernel via shared-memory tiling (the
   architectural gap noted above) — requires custom CUDA kernel work via
   `kernels/cuda.rs` integration
 - Fusion of `forward_flash_v2` outer loops into a single batched matmul
   (hotspot #3) — touches kernel-internal layout
 - Replacing `softmax_last_dim` with `candle_nn::ops::softmax` (hotspot
+
   #6) — depends on whether candle's softmax is materially better-fused
   on CPU/GPU
 

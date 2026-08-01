@@ -53,31 +53,32 @@ Both branches omit causal masking. Confirmed by reading the file end-to-end.
 
 ### Helpers that DO apply causal masking
 
-| Helper                                      | Location                          | Causal handling                          |
-|---------------------------------------------|-----------------------------------|------------------------------------------|
-| `paged_attention(q,k,v,num_h,head_d)`       | `components/attention/util.rs:139` | Adds `causal_mask` before softmax (l.150) |
-| `tiled_attention(q,k,v,num_h,tile)`         | `components/attention/util.rs:171` | Adds `causal_mask_tile` per tile (l.198)  |
-| `flash_attention_fn(q,k,v)`                 | `gqa.rs:235-244`                   | Sets `causal=true` on `GqaFlashAttention` (l.236) |
-| `FlashAttentionV3::forward`                 | `components/attention/flash_attention_v3.rs:43` | Applies mask when `self.causal` (l.59-62) |
-| `GqaFlashAttention::forward`                | `flash_attention_v3.rs:245`        | Applies mask when `self.causal` (l.264-267) |
-| `MqaFlashAttention::forward`                | `flash_attention_v3.rs:174`        | Applies mask when `self.causal` (l.185-188) |
-| `compute_gqa_attention(q,k,v,head_d,mask)`  | `components/attention/paged_gqa.rs:108` | Applies mask if `Some` (l.116-118)     |
+| Helper                                     | Location                                        | Causal handling                                   |
+| ------------------------------------------ | ----------------------------------------------- | ------------------------------------------------- |
+| `paged_attention(q,k,v,num_h,head_d)`      | `components/attention/util.rs:139`              | Adds `causal_mask` before softmax (l.150)         |
+| `tiled_attention(q,k,v,num_h,tile)`        | `components/attention/util.rs:171`              | Adds `causal_mask_tile` per tile (l.198)          |
+| `flash_attention_fn(q,k,v)`                | `gqa.rs:235-244`                                | Sets `causal=true` on `GqaFlashAttention` (l.236) |
+| `FlashAttentionV3::forward`                | `components/attention/flash_attention_v3.rs:43` | Applies mask when `self.causal` (l.59-62)         |
+| `GqaFlashAttention::forward`               | `flash_attention_v3.rs:245`                     | Applies mask when `self.causal` (l.264-267)       |
+| `MqaFlashAttention::forward`               | `flash_attention_v3.rs:174`                     | Applies mask when `self.causal` (l.185-188)       |
+| `compute_gqa_attention(q,k,v,head_d,mask)` | `components/attention/paged_gqa.rs:108`         | Applies mask if `Some` (l.116-118)                |
 
 ### Higher-level call sites (the actual production paths)
 
 `grep -n 'forward' crates/model/src/{llama,mistral,qwen3,gemma4,qwen3_5,mixtral}/`
-+ `causal_lm/layer_loop.rs` shows that production goes through
+
+- `causal_lm/layer_loop.rs` shows that production goes through
 `causal_lm::layer_loop::run_layers` (`crates/model/src/causal_lm/layer_loop.rs:107-109`),
 which dispatches to `forward_prefill` and `forward_decode` on the
 `PagedDecoderBlock` trait.
 
-| Production path                                                  | Routes through                                                                                              | Causal applied? |
-|------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------|-----------------|
-| `RopeGqaDecoderBlock::forward_prefill` (decoder_block/mod.rs:64) | `RopeGqaAttention::forward_prefill` (rope_gqa.rs:128) → `self.inner.run_attention_fn` (rope_gqa.rs:170)     | **YES** (via `paged_attention` / `tiled_attention` / `flash_attention_fn`) |
-| `RopeGqaDecoderBlock::forward_decode` (decoder_block/mod.rs:89)  | `RopeGqaAttention::forward_decode` (rope_gqa.rs:177) → `self.inner.run_attention_fn` (rope_gqa.rs:220)      | **YES**                                                                  |
-| `Qwen3.5` `Attention35WithRoPE::forward_prefill/decode` (qwen3_5/attention35.rs:117,152) | `compute_paged_attention` → `compute_gqa_attention(..., mask)` (l.237,258)        | **YES** (`prefill_causal_mask` at l.257) |
-| `Gemma4Attention::forward_prefill/decode` (gemma4/attention.rs:145,180) | `compute_paged_attention` → `compute_gqa_attention(..., mask)` (l.235)              | **YES** (sliding or full causal mask) |
-| `RopeGqaDecoderBlock::forward` (decoder_block/mod.rs:48)         | `self.attention.forward(...)` → `RopeGqaAttention::forward` (rope_gqa.rs:84) → `self.inner.forward(...)`    | **NO** (this is the broken path — tests + H-2 bench only) |
+| Production path                                                                          | Routes through                                                                                           | Causal applied?                                                            |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `RopeGqaDecoderBlock::forward_prefill` (decoder_block/mod.rs:64)                         | `RopeGqaAttention::forward_prefill` (rope_gqa.rs:128) → `self.inner.run_attention_fn` (rope_gqa.rs:170)  | **YES** (via `paged_attention` / `tiled_attention` / `flash_attention_fn`) |
+| `RopeGqaDecoderBlock::forward_decode` (decoder_block/mod.rs:89)                          | `RopeGqaAttention::forward_decode` (rope_gqa.rs:177) → `self.inner.run_attention_fn` (rope_gqa.rs:220)   | **YES**                                                                    |
+| `Qwen3.5` `Attention35WithRoPE::forward_prefill/decode` (qwen3_5/attention35.rs:117,152) | `compute_paged_attention` → `compute_gqa_attention(..., mask)` (l.237,258)                               | **YES** (`prefill_causal_mask` at l.257)                                   |
+| `Gemma4Attention::forward_prefill/decode` (gemma4/attention.rs:145,180)                  | `compute_paged_attention` → `compute_gqa_attention(..., mask)` (l.235)                                   | **YES** (sliding or full causal mask)                                      |
+| `RopeGqaDecoderBlock::forward` (decoder_block/mod.rs:48)                                 | `self.attention.forward(...)` → `RopeGqaAttention::forward` (rope_gqa.rs:84) → `self.inner.forward(...)` | **NO** (this is the broken path — tests + H-2 bench only)                  |
 
 ### MlaAttention (same pattern)
 
@@ -98,16 +99,16 @@ also lacks causal masking in its internal `attention_with_compressed_kv`
 
 ### Test coverage
 
-| Test file                                                | What it verifies                                                    | Causal correctness? |
-|----------------------------------------------------------|---------------------------------------------------------------------|---------------------|
-| `gqa.rs::tests` (18 tests, l.402-887)                    | Shape, finiteness, determinism, fused-vs-standard numerical parity  | **No** — only shape |
-| `mla.rs::tests`                                          | Shape, finiteness, determinism                                      | **No**              |
-| `flash_attention_v3.rs::tests::test_gqa_flash_attention_causal_changes_output` (l.587) | Verifies `causal=true` vs `causal=false` produce different outputs  | **Yes** (kernel-level) |
-| `paged_gqa.rs::tests::test_compute_gqa_attention_with_causal_mask` (l.187) | Verifies mask parameter is honored                                  | **Yes** (helper-level) |
-| `util.rs::tests::test_causal_mask_causality` (l.409)     | Verifies mask values are correct                                    | **Yes**             |
-| `gemma4/attention.rs::tests::test_sliding_mask_matches_paged_path` (l.448) | Sliding-window parity                                              | **Yes** (architectural-level) |
-| `architecture_smoke.rs::test_decoder_block_forward_all_architectures` | Calls `block.forward(...)` — the unmasked path. Only checks shape. | **No** (uses unmasked path on purpose) |
-| `gqa_forward.rs` benchmark (H-2)                         | Times `attn.forward(...)` — the unmasked path                       | **N/A** (perf only) |
+| Test file                                                                              | What it verifies                                                   | Causal correctness?                    |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------- |
+| `gqa.rs::tests` (18 tests, l.402-887)                                                  | Shape, finiteness, determinism, fused-vs-standard numerical parity | **No** — only shape                    |
+| `mla.rs::tests`                                                                        | Shape, finiteness, determinism                                     | **No**                                 |
+| `flash_attention_v3.rs::tests::test_gqa_flash_attention_causal_changes_output` (l.587) | Verifies `causal=true` vs `causal=false` produce different outputs | **Yes** (kernel-level)                 |
+| `paged_gqa.rs::tests::test_compute_gqa_attention_with_causal_mask` (l.187)             | Verifies mask parameter is honored                                 | **Yes** (helper-level)                 |
+| `util.rs::tests::test_causal_mask_causality` (l.409)                                   | Verifies mask values are correct                                   | **Yes**                                |
+| `gemma4/attention.rs::tests::test_sliding_mask_matches_paged_path` (l.448)             | Sliding-window parity                                              | **Yes** (architectural-level)          |
+| `architecture_smoke.rs::test_decoder_block_forward_all_architectures`                  | Calls `block.forward(...)` — the unmasked path. Only checks shape. | **No** (uses unmasked path on purpose) |
+| `gqa_forward.rs` benchmark (H-2)                                                       | Times `attn.forward(...)` — the unmasked path                      | **N/A** (perf only)                    |
 
 **The H-2 benchmark and the architecture-smoke tests exercise the
 unmasked `forward()` path, so the absence of causal masking does not
@@ -117,7 +118,7 @@ affect them.**
 
 `git log --all --oneline -- crates/model/src/components/attention/gqa.rs | head -10`:
 
-```
+```text
 fe5d0e0 style: cargo fmt whitespace fixes after module_name_repetitions allow additions
 5bb158c refactor(model): allow module_name_repetitions for legitimate patterns
 3367095 docs: add # Errors sections to public Result-returning functions
@@ -166,13 +167,13 @@ production-correct output will get uncauasal attention.
 
 **Option B (by-design) — apply documentation hardening, no behavior change.**
 
-| Item | Location | Action |
-|------|----------|--------|
-| Doc `GqaAttention::forward` contract | `components/attention/gqa.rs:128-131` | Add `# Caution` doc block: "Does NOT apply causal masking. Use `run_attention_fn` or the `forward_prefill` / `forward_decode` helpers on `RopeGqaAttention` for production paths." |
-| Doc fused-path `causal=false` hardcode | `gqa.rs:160` | Add `// invariant: causal masking is the caller's responsibility; production paths apply masks in `forward_prefill`/`forward_decode`.` |
-| Doc `MlaAttention::forward` contract | `components/attention/mla.rs:147` | Same `# Caution` block. |
-| Doc `FlashAttentionV3::forward` contract | `flash_attention_v3.rs:43` | Document that `causal=true` must be set for causal attention. |
-| Add a regression test | `gqa.rs::tests` | A test that exercises the masked production path (`run_attention_fn` with `use_fused=true`) and checks that the output differs from the unmasked `forward()` path. Mirrors `test_gqa_flash_attention_causal_changes_output` for the bare `GqaAttention`. |
+| Item                                     | Location                              | Action                                                                                                                                                                                                                                                   |
+| ---------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Doc `GqaAttention::forward` contract     | `components/attention/gqa.rs:128-131` | Add `# Caution` doc block: "Does NOT apply causal masking. Use `run_attention_fn` or the `forward_prefill` / `forward_decode` helpers on `RopeGqaAttention` for production paths."                                                                       |
+| Doc fused-path `causal=false` hardcode   | `gqa.rs:160`                          | Add `// invariant: causal masking is the caller's responsibility; production paths apply masks in `forward_prefill`/`forward_decode`.`                                                                                                                   |
+| Doc `MlaAttention::forward` contract     | `components/attention/mla.rs:147`     | Same `# Caution` block.                                                                                                                                                                                                                                  |
+| Doc `FlashAttentionV3::forward` contract | `flash_attention_v3.rs:43`            | Document that `causal=true` must be set for causal attention.                                                                                                                                                                                            |
+| Add a regression test                    | `gqa.rs::tests`                       | A test that exercises the masked production path (`run_attention_fn` with `use_fused=true`) and checks that the output differs from the unmasked `forward()` path. Mirrors `test_gqa_flash_attention_causal_changes_output` for the bare `GqaAttention`. |
 
 Optionally, also add an `expect`/panic if a caller calls `forward()` in a
 context that suggests production use — but that's a behavior change and
@@ -182,24 +183,24 @@ needs wider design discussion.
 
 ## Same check needed for
 
-| Component | Causal handling | Status |
-|-----------|-----------------|--------|
-| `GqaAttention::forward` (standard path) | **NO** | Correct in context; doc-only fix |
-| `GqaAttention::forward` (fused path) | `causal=false` hardcoded | Correct in context; doc-only fix |
-| `paged_attention` (util.rs:139) | YES | OK |
-| `tiled_attention` (util.rs:171) | YES | OK |
-| `flash_attention_fn` (gqa.rs:235) | YES (sets causal=true) | OK |
-| `FlashAttentionV3::forward` (flash_attention_v3.rs:43) | YES if `causal=true` | OK |
-| `GqaFlashAttention::forward` (flash_attention_v3.rs:245) | YES if `causal=true` | OK |
-| `MqaFlashAttention::forward` (flash_attention_v3.rs:174) | YES if `causal=true` | OK |
-| `compute_gqa_attention` (paged_gqa.rs:108) | Optional via `mask` param | OK |
-| `prefill_causal_mask` (paged_gqa.rs:94) | YES (square prefill only) | OK |
-| `MlaAttention::forward` (mla.rs:147) | **NO** | Correct in context; doc-only fix |
-| `Qwen3MlaAttention::forward` (qwen3/mla_attention.rs:49) | **NO** (passthrough) | Doc-only fix; no production caller |
-| `Attention35WithRoPE::forward` (qwen3_5/attention35.rs:105) | YES (`compute_attention(..., true)`) | OK |
-| `Gemma4Attention::forward` (gemma4/attention.rs:246) | **NO** for FullAttention, YES for SlidingAttention | Confirm whether full-attention layers in Gemma4 use the paged path (`forward_prefill/forward_decode`) or this bare `forward`. If paged, OK. |
-| `Gemma4Attention::forward_full` (gemma4/attention.rs:262) | **NO** | Same — used only when `LayerType::FullAttention`, which Gemma4 may invoke via paged path in production. |
-| `causal_lm::layer_loop::run_layers` (layer_loop.rs:107-109) | Dispatcher (no attention logic) | OK |
+| Component                                                   | Causal handling                                    | Status                                                                                                                                      |
+| ----------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GqaAttention::forward` (standard path)                     | **NO**                                             | Correct in context; doc-only fix                                                                                                            |
+| `GqaAttention::forward` (fused path)                        | `causal=false` hardcoded                           | Correct in context; doc-only fix                                                                                                            |
+| `paged_attention` (util.rs:139)                             | YES                                                | OK                                                                                                                                          |
+| `tiled_attention` (util.rs:171)                             | YES                                                | OK                                                                                                                                          |
+| `flash_attention_fn` (gqa.rs:235)                           | YES (sets causal=true)                             | OK                                                                                                                                          |
+| `FlashAttentionV3::forward` (flash_attention_v3.rs:43)      | YES if `causal=true`                               | OK                                                                                                                                          |
+| `GqaFlashAttention::forward` (flash_attention_v3.rs:245)    | YES if `causal=true`                               | OK                                                                                                                                          |
+| `MqaFlashAttention::forward` (flash_attention_v3.rs:174)    | YES if `causal=true`                               | OK                                                                                                                                          |
+| `compute_gqa_attention` (paged_gqa.rs:108)                  | Optional via `mask` param                          | OK                                                                                                                                          |
+| `prefill_causal_mask` (paged_gqa.rs:94)                     | YES (square prefill only)                          | OK                                                                                                                                          |
+| `MlaAttention::forward` (mla.rs:147)                        | **NO**                                             | Correct in context; doc-only fix                                                                                                            |
+| `Qwen3MlaAttention::forward` (qwen3/mla_attention.rs:49)    | **NO** (passthrough)                               | Doc-only fix; no production caller                                                                                                          |
+| `Attention35WithRoPE::forward` (qwen3_5/attention35.rs:105) | YES (`compute_attention(..., true)`)               | OK                                                                                                                                          |
+| `Gemma4Attention::forward` (gemma4/attention.rs:246)        | **NO** for FullAttention, YES for SlidingAttention | Confirm whether full-attention layers in Gemma4 use the paged path (`forward_prefill/forward_decode`) or this bare `forward`. If paged, OK. |
+| `Gemma4Attention::forward_full` (gemma4/attention.rs:262)   | **NO**                                             | Same — used only when `LayerType::FullAttention`, which Gemma4 may invoke via paged path in production.                                     |
+| `causal_lm::layer_loop::run_layers` (layer_loop.rs:107-109) | Dispatcher (no attention logic)                    | OK                                                                                                                                          |
 
 ### Open question for Gemma4
 

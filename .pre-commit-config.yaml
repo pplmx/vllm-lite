@@ -14,6 +14,10 @@ repos:
             exclude: \.md$
           - id: check-toml
           - id: check-yaml
+            # Helm chart templates embed Go template syntax (`{{ ... }}`)
+            # which is not parseable as plain YAML; check the rendered
+            # output instead (helm template in CI / `just` recipes).
+            exclude: ^k8s/charts/.*/templates/.*\.ya?ml$
           - id: check-merge-conflict
           - id: mixed-line-ending
             args: ["--fix=lf"]

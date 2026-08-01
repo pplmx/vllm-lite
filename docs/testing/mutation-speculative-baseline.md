@@ -11,13 +11,13 @@
 
 ## Summary
 
-| Status              | Count |
-|---------------------|-------|
-| Caught              | 162   |
-| Missed (survived)   | 0     |
-| Timeout             | 0     |
-| Unviable            | 57    |
-| **Total**           | **219** |
+| Status            | Count   |
+| ----------------- | ------- |
+| Caught            | 162     |
+| Missed (survived) | 0       |
+| Timeout           | 0       |
+| Unviable          | 57      |
+| **Total**         | **219** |
 
 ## Mutation Score
 
@@ -37,24 +37,24 @@ for this module.
 
 ## Per-File Breakdown
 
-| File                                       | Caught | Unviable | Total |
-|--------------------------------------------|--------|----------|-------|
-| speculative/adaptive.rs                    | 46     | 2        | 48    |
-| speculative/registry/lifecycle.rs          | 35     | 4        | 39    |
-| speculative/self_spec.rs                   | 9      | 20       | 29    |
-| speculative/memory_budget.rs               | 22     | 1        | 23    |
-| speculative/registry/types.rs              | 9      | 7        | 16    |
-| speculative/draft_resolver.rs              | 8      | 6        | 14    |
-| speculative/config.rs                      | 5      | 7        | 12    |
-| speculative/verifier.rs                    | 8      | 3        | 11    |
-| speculative/strategy.rs                    | 10     | 1        | 11    |
-| speculative/model.rs                       | 6      | 5        | 11    |
-| speculative/registry/loader.rs             | 3      | 0        | 3     |
-| speculative/registry/mod.rs                | 1      | 0        | 1     |
-| speculative/registry/errors.rs             | 0      | 1        | 1     |
-| speculative/mod.rs                         | 0      | 0        | 0     |
-| speculative/draft_registry.rs              | 0      | 0        | 0     |
-| **Total**                                  | **162** | **57**  | **219** |
+| File                              | Caught  | Unviable | Total   |
+| --------------------------------- | ------- | -------- | ------- |
+| speculative/adaptive.rs           | 46      | 2        | 48      |
+| speculative/registry/lifecycle.rs | 35      | 4        | 39      |
+| speculative/self_spec.rs          | 9       | 20       | 29      |
+| speculative/memory_budget.rs      | 22      | 1        | 23      |
+| speculative/registry/types.rs     | 9       | 7        | 16      |
+| speculative/draft_resolver.rs     | 8       | 6        | 14      |
+| speculative/config.rs             | 5       | 7        | 12      |
+| speculative/verifier.rs           | 8       | 3        | 11      |
+| speculative/strategy.rs           | 10      | 1        | 11      |
+| speculative/model.rs              | 6       | 5        | 11      |
+| speculative/registry/loader.rs    | 3       | 0        | 3       |
+| speculative/registry/mod.rs       | 1       | 0        | 1       |
+| speculative/registry/errors.rs    | 0       | 1        | 1       |
+| speculative/mod.rs                | 0       | 0        | 0       |
+| speculative/draft_registry.rs     | 0       | 0        | 0       |
+| **Total**                         | **162** | **57**   | **219** |
 
 **Missed per file:** 0 across all files.
 
@@ -118,6 +118,7 @@ just mutants speculative
 ```
 
 Artifacts:
+
 - `.mutants-out/mutants.out/mutants.json` — full mutation definitions (219)
 - `.mutants-out/mutants.out/outcomes.json` — outcomes (caught/missed/timeout/unviable)
 - `.mutants-out/mutants.out/caught.txt` — 162 caught mutations

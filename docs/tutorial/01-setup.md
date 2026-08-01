@@ -8,9 +8,11 @@ working build.
 - **Rust 1.88+** (we use edition 2024 — matches `rust-version` in
   the root `Cargo.toml` and the `rust-toolchain.toml` pinned by the
   repo). Install via [rustup](https://rustup.rs/):
+
   ```bash
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
   ```
+
 - **Git** — for cloning and version control
 - **~5 GB disk** — for Rust toolchain, dependencies, and build artifacts
 - **(Optional) CUDA 11.8+** — only needed for GPU inference (Qwen3, Llama

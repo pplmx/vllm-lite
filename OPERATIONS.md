@@ -17,12 +17,12 @@ docker compose up -d
 
 ## Health Checks
 
-| Endpoint | Purpose | Expected |
-|----------|---------|----------|
-| `GET /health` | Liveness | `200 OK` |
-| `GET /ready` | Readiness (model loaded) | `200 OK` when ready |
-| `GET /health/details` | Structured status | JSON with engine state |
-| `GET /metrics` | Prometheus scrape | Text exposition format |
+| Endpoint              | Purpose                  | Expected               |
+| --------------------- | ------------------------ | ---------------------- |
+| `GET /health`         | Liveness                 | `200 OK`               |
+| `GET /ready`          | Readiness (model loaded) | `200 OK` when ready    |
+| `GET /health/details` | Structured status        | JSON with engine state |
+| `GET /metrics`        | Prometheus scrape        | Text exposition format |
 
 ## Logging
 
@@ -101,33 +101,35 @@ docker run -d --name honeycomb \
 1. Start a collector (e.g. Jaeger all-in-one).
 2. Start the server with `--features opentelemetry -- --otlp-endpoint http://localhost:4317`.
 3. Send a request:
+
    ```bash
    curl -X POST http://localhost:8000/v1/chat/completions \
      -H "Content-Type: application/json" \
      -d '{"model":"test","messages":[{"role":"user","content":"Hello"}]}'
    ```
+
 4. Open `http://localhost:16686` → see the trace.
 
 **Troubleshooting:**
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| No metrics in collector | `observability.otlp.enabled: false` | Enable OTLP or use `--otlp-endpoint` |
-| No traces | `tracing-subscriber` already initialised | OTLP init races with `logging::init_logging` — ensure no prior subscriber call |
-| `Connection refused` | Collector not running or wrong endpoint | Check `observability.otlp.endpoint` and firewall |
-| High cardinality warnings | `trace_sampling_ratio: 1.0` in production | Lower sampling ratio or use head-based sampling |
-| `log_dir` not working | OTLP replaces `logging::init_logging` | v32 follow-up: OTLP + JSON file logging bridge |
+| Symptom                   | Cause                                     | Fix                                                                            |
+| ------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------ |
+| No metrics in collector   | `observability.otlp.enabled: false`       | Enable OTLP or use `--otlp-endpoint`                                           |
+| No traces                 | `tracing-subscriber` already initialised  | OTLP init races with `logging::init_logging` — ensure no prior subscriber call |
+| `Connection refused`      | Collector not running or wrong endpoint   | Check `observability.otlp.endpoint` and firewall                               |
+| High cardinality warnings | `trace_sampling_ratio: 1.0` in production | Lower sampling ratio or use head-based sampling                                |
+| `log_dir` not working     | OTLP replaces `logging::init_logging`     | v32 follow-up: OTLP + JSON file logging bridge                                 |
 
 ## Configuration
 
 Priority order: CLI flags > environment variables > YAML config file.
 
-| Variable | Default | Notes |
-|----------|---------|-------|
-| `VLLM_HOST` | `0.0.0.0` | Bind address |
-| `VLLM_PORT` | `8000` | API port |
-| `VLLM_KV_BLOCKS` | `1024` | GPU memory sizing |
-| `VLLM_API_KEY` | — | Bearer token auth |
+| Variable         | Default   | Notes             |
+| ---------------- | --------- | ----------------- |
+| `VLLM_HOST`      | `0.0.0.0` | Bind address      |
+| `VLLM_PORT`      | `8000`    | API port          |
+| `VLLM_KV_BLOCKS` | `1024`    | GPU memory sizing |
+| `VLLM_API_KEY`   | —         | Bearer token auth |
 
 See [README.md](./README.md) for full scheduler and engine config.
 

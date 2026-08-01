@@ -26,6 +26,7 @@ each fuzz target as a separate `[[bin]]` in a workspace-excluded
 `fuzz/` crate.
 
 Targets (v29.0):
+
 - `fuzz/fuzz_targets/app_config_yaml.rs` —
   `serde_saphyr::from_str::<AppConfig>(arbitrary_bytes)`
 - `fuzz/fuzz_targets/safetensors_header.rs` —
@@ -34,11 +35,13 @@ Targets (v29.0):
   `serde_json::from_slice::<Qwen3Config>(arbitrary_bytes)`
 
 Selection criteria for new targets:
+
 - Surface consumes arbitrary external bytes (config, checkpoint, request)
 - Parser is reachable from production code paths
 - Existing tests don't already achieve coverage via fuzz (avoid duplication)
 
 Operational conventions:
+
 - Local: `just fuzz-smoke` (10s × N targets) or `just fuzz TARGET`
   (60s single target)
 - Coverage-guided fuzzing requires nightly Rust; CI may use stable
@@ -50,6 +53,7 @@ Operational conventions:
 ## Consequences
 
 Easier:
+
 - Parser panics in user-input surfaces get caught before merge (with
   Phase L CI integration).
 - 60s smoke runs are fast enough for local development loops.
@@ -57,6 +61,7 @@ Easier:
   (v29.0: ~17.6M executions across 3 targets in ~3 min wall time).
 
 Harder / new risks:
+
 - `fuzz/` crate is workspace-excluded (doesn't share dependencies
   cleanly with main crates); minor duplication of types.
 - Nightly toolchain pulls add ~500MB to dev images; cached in CI.

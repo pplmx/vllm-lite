@@ -27,6 +27,7 @@ Use `cargo-mutants` 25.x+ (current 27.1.0) as the mutation engine.
 Run locally via `just mutants MODULE`; gate PRs via `just mutants-ci`.
 
 Scope (v30.0 K):
+
 - `crates/core/src/scheduler/**` — engine, batch_composer, memory,
   policy, radix_cache, request_queue, phase_scheduler
 - `crates/core/src/sampling.rs`
@@ -34,12 +35,14 @@ Scope (v30.0 K):
 - `crates/core/src/engine/**`
 
 Out of scope (deferred to v31+):
+
 - `crates/model/` — compute-intensive, scan time too long
 - `crates/server/` — IO-intensive, low mutation payoff
 - `scheduler/cuda_graph.rs`, `observer.rs`, `stats.rs`, `packing.rs` —
   excluded for simplicity
 
 Workflow:
+
 - Local development: `just mutants MODULE` for a fast (~1-5 min) scan
 - PR-time check: `just mutants-ci MODULE BASELINE_PCT` fails if mutation
   score regresses below baseline
@@ -54,11 +57,13 @@ test fix added in K-2.3, but the OTHER broken test
 non-cuda-graph baseline). Repair tracked as v31 follow-up.
 
 Mutation score formula:
-```
+
+```text
 score = caught / (caught + missed) * 100
 ```
 
 Targets:
+
 - Core modules (in-scope): **≥99% mutation score** (v30.0 baseline: 100%
   strict across 907 mutants in 4 modules)
 - Equivalent mutants (logical tautologies) are explicitly triaged, not
@@ -67,6 +72,7 @@ Targets:
 ## Consequences
 
 Easier:
+
 - Test gaps surface automatically; v30.0 K caught 1 real bug
   (`cuda_graph_enabled` mutation).
 - Mutation score is a quantifiable test-quality metric (vs test coverage
@@ -75,6 +81,7 @@ Easier:
   weak-test mutants (test gap) from real-bug mutants (code bug).
 
 Harder / new risks:
+
 - `--baseline skip` workaround masks real test failures; v31 must
   repair the underlying broken test.
 - Scan time grows with module size; a full multi-module scan is ~10-30

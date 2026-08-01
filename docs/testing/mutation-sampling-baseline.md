@@ -14,13 +14,13 @@
 
 ## Summary
 
-| Status              | Count |
-|---------------------|-------|
-| Caught              | 88    |
-| Missed (survived)   | 0     |
-| Timeout             | 0     |
-| Unviable            | 0     |
-| **Total**           | **88** |
+| Status            | Count  |
+| ----------------- | ------ |
+| Caught            | 88     |
+| Missed (survived) | 0      |
+| Timeout           | 0      |
+| Unviable          | 0      |
+| **Total**         | **88** |
 
 ## Mutation Score
 
@@ -38,15 +38,15 @@ caught by the existing test suite. K-2.2 (triage) and K-2.3 (add tests) are
 
 ## Per-Function Breakdown
 
-| Function              | Mutants |
-|-----------------------|---------|
-| `sample_batch`        | 26      |
-| `top_p_sample`        | 20      |
-| `temperature_sample`  | 13      |
-| `apply_repeat_penalty`| 9       |
-| `top_k_sample`        | 7       |
-| `greedy_sample`       | 3       |
-| **Total**             | **88**  |
+| Function               | Mutants |
+| ---------------------- | ------- |
+| `sample_batch`         | 26      |
+| `top_p_sample`         | 20      |
+| `temperature_sample`   | 13      |
+| `apply_repeat_penalty` | 9       |
+| `top_k_sample`         | 7       |
+| `greedy_sample`        | 3       |
+| **Total**              | **88**  |
 
 (Note: `sample_batch` includes inline mutations against the helper
 `apply_repeat_penalty` and the per-row `top_k_sample` / `top_p_sample` /
@@ -55,14 +55,14 @@ function by `cargo-mutants`.)
 
 ## Mutation Categories (caught)
 
-| Category                  | Count |
-|---------------------------|-------|
-| Arithmetic operator swap  | 41    |
-| Comparison operator swap  | 38    |
-| Logical operator swap     | 13    |
-| Statement/return replace  | 6     |
-| Function body deletion    | 1     |
-| **Total**                 | **88**|
+| Category                 | Count  |
+| ------------------------ | ------ |
+| Arithmetic operator swap | 41     |
+| Comparison operator swap | 38     |
+| Logical operator swap    | 13     |
+| Statement/return replace | 6      |
+| Function body deletion   | 1      |
+| **Total**                | **88** |
 
 (Top categories only — full list in `.mutants-out/mutants.out/caught.txt`.)
 
@@ -102,6 +102,7 @@ cargo mutants \
 ```
 
 Artifacts:
+
 - `.mutants-out/mutants.out/mutants.json` — full mutation definitions
 - `.mutants-out/mutants.out/caught.txt` — 88 caught mutations
 - `.mutants-out/mutants.out/missed.txt` — 0 missed mutations
