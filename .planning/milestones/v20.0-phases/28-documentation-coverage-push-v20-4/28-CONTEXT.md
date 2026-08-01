@@ -46,4 +46,3 @@ Plans generated for Phase 28:
 - **28-10**: Reconcile AGENTS.md Architecture section (DOC-07)
 
 </decisions>
-

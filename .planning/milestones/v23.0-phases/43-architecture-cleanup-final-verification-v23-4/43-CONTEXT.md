@@ -75,4 +75,3 @@ Specific guidance per requirement:
   `config::Architecture` enum — pick one or merge.
 
 </decisions>
-

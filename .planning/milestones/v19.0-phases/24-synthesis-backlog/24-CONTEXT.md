@@ -40,4 +40,3 @@ Synthesis methodology (how to correlate findings, threshold for grouping into ph
 - Estimate effort in hours based on file count and complexity
 
 </decisions>
-
