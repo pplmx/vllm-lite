@@ -313,7 +313,8 @@ pub fn sample_batch(
             if top_p < 1.0 {
                 top_p_sample(&logits, top_p, random_f32())
             } else if temperature > 0.0 {
-                temperature_sample(&logits, temperature, random_f32())
+                // Logits are already temperature-scaled above; pass 1.0 to avoid double-scaling.
+                temperature_sample(&logits, 1.0, random_f32())
             } else {
                 greedy_sample(&logits)
             }
@@ -442,7 +443,8 @@ pub fn sample_one_with_params(
     let token = if params.top_p < 1.0 {
         top_p_sample(&logits, params.top_p, random_threshold)
     } else if params.temperature > 0.0 {
-        temperature_sample(&logits, params.temperature, random_threshold)
+        // Logits are already temperature-scaled above; pass 1.0 to avoid double-scaling.
+        temperature_sample(&logits, 1.0, random_threshold)
     } else {
         greedy_sample(&logits)
     };

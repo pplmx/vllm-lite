@@ -1085,3 +1085,67 @@ fn test_matches_stop_sequences_empty_generated_returns_false() {
     assert!(!matches_stop_sequences(&[], &stops_nonempty));
     assert!(!matches_stop_sequences(&[], &stops_empty));
 }
+
+/// Regression: temperature must be applied exactly once in the
+/// `sample_one_with_params` pipeline. Pre-fix, the logits were divided
+/// by temperature in the pre-scaling step AND again inside
+/// `temperature_sample`, producing an effective temperature of T².
+///
+/// Strategy: with a fixed seed the random threshold is deterministic.
+/// We pick logits and a temperature where single-scaling and
+/// double-scaling disagree on the sampled token, then assert the
+/// correct (single-scaled) outcome.
+#[test]
+fn test_temperature_applied_once_not_twice() {
+    // logits = [0.0, 1.0], temperature = 0.5
+    // Single-scale: [0.0, 2.0] → softmax ≈ [0.119, 0.881]
+    // Double-scale: [0.0, 4.0] → softmax ≈ [0.018, 0.982]
+    //
+    // We need a seed whose random threshold falls in (0.018, 0.119)
+    // so single-scaling picks token 0 but double-scaling picks token 1.
+    // Brute-force a few seeds to find one that works.
+    let logits = vec![0.0_f32, 1.0];
+
+    // Compute the single-scaled softmax CDF at index 0:
+    // exp(0)/(exp(0)+exp(2)) = 1/(1+e²) ≈ 0.1192
+    let single_scale_p0 = 1.0 / (1.0 + 2.0_f32.exp());
+    // Double-scaled CDF at index 0:
+    // exp(0)/(exp(0)+exp(4)) = 1/(1+e⁴) ≈ 0.0180
+    let double_scale_p0 = 1.0 / (1.0 + 4.0_f32.exp());
+
+    // Alternative approach: verify statistically over many seeds.
+    // With correct single-scaling, P(token=0) ≈ 0.119.
+    // With double-scaling, P(token=0) ≈ 0.018.
+    // Over 500 seeds, the count of token=0 should be closer to 0.119*500≈60
+    // than to 0.018*500≈9.
+    let n_trials = 500;
+    let mut count_token_0 = 0;
+    for seed in 0..n_trials {
+        let params = SamplingParams::builder()
+            .with_temperature(0.5)
+            .with_top_p(1.0)
+            .with_seed(seed)
+            .build();
+        let result = sample_one_with_params(&logits, &params, &[]);
+        if result.token == 0 {
+            count_token_0 += 1;
+        }
+    }
+    let empirical_p0 = count_token_0 as f64 / n_trials as f64;
+    let expected_p0 = single_scale_p0 as f64;
+    let buggy_p0 = double_scale_p0 as f64;
+
+    // The empirical rate should be within 0.08 of the correct value
+    // (generous margin for 500 trials) and far from the buggy value.
+    assert!(
+        (empirical_p0 - expected_p0).abs() < 0.08,
+        "empirical P(token=0) = {empirical_p0:.4}, expected ≈ {expected_p0:.4} (single-scale), \
+         buggy would be ≈ {buggy_p0:.4}; got {} hits of token 0 in {n_trials} trials",
+        count_token_0,
+    );
+    // Sanity: the gap between correct and buggy is large enough to detect.
+    assert!(
+        (expected_p0 - buggy_p0).abs() > 0.05,
+        "test design: gap between correct and buggy must be detectable"
+    );
+}
