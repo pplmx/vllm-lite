@@ -41,7 +41,7 @@ base64 = "0.22"
 thiserror = { workspace = true }
 anyhow = "1"
 tokio-rustls = "0.26"
-jsonwebtoken = { version = "10", features = ["aws_lc_rs"] }
+jsonwebtoken = { version = "11", features = ["aws_lc_rs"] }
 parking_lot = { workspace = true }
 
 [dev-dependencies]
