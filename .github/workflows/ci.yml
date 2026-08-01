@@ -82,16 +82,12 @@ jobs:
         # enforcement, not just local machines. The config uses prek's
         # `repo: builtin` extension, so CI runs `prek` (same tool as the
         # local husky-rs -> prek flow), not the Python pre-commit
-        # framework. Runs the pre-commit-stage hooks (file hygiene +
-        # markdown lint + cargo fmt); commit-msg/pre-push hooks are
-        # covered by their own CI steps.
-        run: |
-          # prek's MSRV (1.95+) is newer than the project's pinned
-          # toolchain (1.88 via rust-toolchain.toml), so compile it with
-          # the stable toolchain that `dtolnay/rust-toolchain@stable`
-          # installed; the prek binary itself is toolchain-independent.
-          rustup run stable cargo install prek --locked
-          prek run --all-files
+        # framework. Uses prek's official GitHub Action (j178/prek-action)
+        # which ships a prebuilt binary — avoids compiling prek under the
+        # project's pinned MSRV (1.88, prek needs 1.95+). Runs the
+        # pre-commit-stage hooks (file hygiene + markdown lint + cargo
+        # fmt); commit-msg/pre-push hooks are covered by their own steps.
+        uses: j178/prek-action@v2
 
       - name: Public API baseline check
         # cargo-public-api builds rustdoc JSON via nightly-only
