@@ -13,7 +13,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tonic_prost_build::configure()
         .build_server(true)
         .build_client(true)
-        .fmt(true) // run rustfmt over generated code so rebuilds are fmt-stable
         .out_dir(&out_dir)
         .file_descriptor_set_path(out_dir.join("vllm_descriptor.bin"))
         .compile_protos(&[&proto_file], &[&proto_include])?;
