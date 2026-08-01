@@ -192,11 +192,15 @@ impl CircuitBreaker {
     }
 
     async fn on_success(&self) {
+        // Reset the consecutive-failure counter on ANY success. A success
+        // in Closed state must zero the counter so earlier failures don't
+        // accumulate across unrelated requests (the breaker tracks
+        // *consecutive* failures, not lifetime totals).
+        self.failure_count.store(0, Ordering::Relaxed);
         let mut state = self.state.write().await;
         if matches!(*state, CircuitState::HalfOpen) {
             trace!("Circuit breaker: HalfOpen -> Closed");
             *state = CircuitState::Closed;
-            self.failure_count.store(0, Ordering::Relaxed);
         }
         drop(state);
     }
@@ -305,5 +309,56 @@ mod tests {
         assert!(matches!(breaker.state().await, CircuitState::Open));
         let _ = breaker.call(|| async { Ok::<_, TestError>(42) }).await;
         assert!(matches!(breaker.state().await, CircuitState::Closed));
+    }
+
+    /// Regression: a success in Closed state must reset the consecutive
+    /// failure counter. Pre-fix, only HalfOpen→Closed transitions reset
+    /// the counter, so failures accumulated across unrelated requests
+    /// could trip the breaker even though they weren't consecutive.
+    #[tokio::test]
+    async fn test_success_in_closed_resets_failure_count() {
+        let config = CircuitBreakerConfig {
+            failure_threshold: 3,
+            recovery_timeout: Duration::from_secs(60),
+            half_open_max_calls: 1,
+        };
+        let breaker = CircuitBreaker::new(config);
+
+        // 2 failures (threshold is 3 — not yet open)
+        let _ = breaker
+            .call(|| async { Err::<i32, TestError>(TestError("fail")) })
+            .await;
+        let _ = breaker
+            .call(|| async { Err::<i32, TestError>(TestError("fail")) })
+            .await;
+        assert!(matches!(breaker.state().await, CircuitState::Closed));
+
+        // 1 success — must reset the counter to 0
+        let _ = breaker.call(|| async { Ok::<_, TestError>(42) }).await;
+        assert!(matches!(breaker.state().await, CircuitState::Closed));
+
+        // 2 more failures — if the counter wasn't reset, this would be
+        // failure #4 (≥ threshold 3) and the breaker would open. With
+        // the fix, the counter was reset by the success, so these are
+        // only failures #1 and #2 — breaker stays Closed.
+        let _ = breaker
+            .call(|| async { Err::<i32, TestError>(TestError("fail")) })
+            .await;
+        let _ = breaker
+            .call(|| async { Err::<i32, TestError>(TestError("fail")) })
+            .await;
+        assert!(
+            matches!(breaker.state().await, CircuitState::Closed),
+            "breaker must stay Closed: success reset the consecutive failure count"
+        );
+
+        // A 3rd consecutive failure (no success in between) DOES open it.
+        let _ = breaker
+            .call(|| async { Err::<i32, TestError>(TestError("fail")) })
+            .await;
+        assert!(
+            matches!(breaker.state().await, CircuitState::Open),
+            "3 consecutive failures after the reset must open the breaker"
+        );
     }
 }
