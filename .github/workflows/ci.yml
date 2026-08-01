@@ -75,6 +75,17 @@ jobs:
         # (ci-all-features, MSRV) are compile-only for the same reason.
         run: cargo nextest run --workspace --no-fail-fast
 
+      - name: Pre-commit hooks check (enforced)
+        # Enforcement loop closure: the team's hooks (husky-rs forces
+        # them onto every dev machine; `.pre-commit-config.yaml`) are
+        # also run here on all files so CI is the last line of
+        # enforcement, not just local machines. Runs the pre-commit
+        # stage hooks (file hygiene + markdown lint + cargo fmt);
+        # commit-msg/pre-push hooks are covered by their own CI steps.
+        run: |
+          pip install --quiet pre-commit
+          pre-commit run --all-files
+
       - name: Public API baseline check
         # cargo-public-api builds rustdoc JSON via nightly-only
         # `-Z unstable-options`; install a minimal nightly toolchain and
