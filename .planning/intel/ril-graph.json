@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-07-31T23:58:44+00:00",
+  "last_updated": "2026-08-01T00:03:15+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -1220,14 +1220,14 @@
       "type": "decision",
       "status": "active",
       "created_at": "2026-07-31T23:57:29+00:00",
-      "updated_at": "2026-07-31T23:57:29+00:00",
+      "updated_at": "2026-08-01T00:03:15+00:00",
       "confidence": 1.0,
       "data": {
         "title": "Restore husky-rs dev-dep with CI NO_HUSKY_HOOKS=1",
-        "rationale": "User's project is husky-rs; keep it usable in vllm-lite as a dev-dependency (auto hook install on dev machines with prek) while all CI workflows set NO_HUSKY_HOOKS=1 so the missing-prek hard-fail never triggers. Pending upstream fix (issue #20) that would make prek-missing a warning instead of an error.",
+        "rationale": "User's intent for husky-rs is ENFORCED hook installation: every developer running cargo commands must have the team's hooks (custom or prek) installed. fail-fast on missing/failing prek is the enforcement mechanism, not a bug (issue #20 closed as not-a-bug). vllm-lite is a dogfooding consumer: dev machines get forced hook install via the dev-dep; CI sets NO_HUSKY_HOOKS=1 because CI quality gates (fmt/clippy/test/doc) are a separate layer. Optional future hardening: a CI step that installs prek and runs `pre-commit run --all-files` to close the enforcement loop end-to-end.",
         "alternatives_rejected": [
-          "keep husky-rs removed (loses dogfooding/auto-hook DX)",
-          "rely on upstream fix first (unreleased)"
+          "keep husky-rs removed (loses forced hook install for team members)",
+          "make prek-missing a warning upstream (would weaken the enforcement mechanism; rejected by design intent)"
         ]
       }
     },
