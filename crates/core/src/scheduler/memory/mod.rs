@@ -494,7 +494,12 @@ impl MemoryManager {
 
             let seq = &running[idx];
             let block_count = seq.kv_blocks.len();
-            self.free(seq.kv_blocks.as_ref());
+            // ARCH-01 contract: the sequence's blocks were recorded on
+            // allocation, so preemption must release (decrement) rather
+            // than `free` outright — otherwise the eviction refcount
+            // never reaches zero for the next owner and the block
+            // leaks from the pool.
+            self.release_blocks(seq.kv_blocks.as_ref());
             preempted_indices.push(idx);
             blocks_freed += block_count;
         }
