@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_updated": "2026-08-01T00:03:15+00:00",
+  "last_updated": "2026-08-01T00:07:26+00:00",
   "nodes": [
     {
       "id": "issue-001",
@@ -1242,6 +1242,30 @@
         "commit": "PENDING-husky-restore",
         "detail": "Root + server dev-deps restore husky-rs 0.4; all CI workflows set NO_HUSKY_HOOKS=1; CHANGELOG/RIL updated. Upstream issue filed: pplmx/husky-rs#20."
       }
+    },
+    {
+      "id": "change-019",
+      "type": "change",
+      "status": "active",
+      "created_at": "2026-08-01T00:07:26+00:00",
+      "updated_at": "2026-08-01T00:07:26+00:00",
+      "confidence": 1.0,
+      "data": {
+        "commit": "PENDING-precommit-ci",
+        "detail": "ci.yml ci job: add 'Pre-commit hooks check (enforced)' step \u2014 pip install pre-commit + pre-commit run --all-files. Closes the enforcement loop (husky-rs forces hooks locally; CI runs the same .pre-commit-config.yaml hooks on all files)."
+      }
+    },
+    {
+      "id": "evidence-030",
+      "type": "evidence",
+      "status": "active",
+      "created_at": "2026-08-01T00:07:26+00:00",
+      "updated_at": "2026-08-01T00:07:26+00:00",
+      "confidence": 1.0,
+      "data": {
+        "source": "design + config review",
+        "detail": "vllm-lite .pre-commit-config.yaml is standard pre-commit framework format (builtin hygiene + commitizen + rumdl + local cargo hooks). pre-commit run --all-files in CI runs the pre-commit-stage hooks (file hygiene, markdown lint, cargo fmt check); commit-msg/pre-push hooks covered by existing CI steps. Local prek validation blocked in sandbox by read-only /root/.cache (sandbox-only)."
+      }
     }
   ],
   "edges": [
@@ -1658,6 +1682,11 @@
     {
       "from": "change-018",
       "to": "issue-017",
+      "kind": "resolves"
+    },
+    {
+      "from": "change-019",
+      "to": "task-015",
       "kind": "resolves"
     }
   ]
