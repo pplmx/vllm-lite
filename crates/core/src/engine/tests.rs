@@ -414,3 +414,52 @@ fn engine_without_with_paged_kv_cache_has_no_wrapper() {
     assert!(engine.paged_kv_cache().is_none());
     assert!(engine.scheduler.memory_mut().block_data_source().is_none());
 }
+
+#[test]
+fn test_finalize_stop_sequences_tolerates_missing_params() {
+    // Synthetic batches may carry an empty `sampling_params` (the
+    // Batch docs call this "equivalent to greedy decoding"). The
+    // stop-sequence pass must not panic on the seq/params index
+    // mismatch — mirroring the defensive `.get(i)` used by the
+    // spec-verifier path.
+    let stub = StubModel::returning(42);
+    let mut engine = Engine::new(stub, None);
+    let batch = vllm_traits::Batch {
+        seq_ids: vec![1, 2],
+        sampling_params: vec![],
+        ..vllm_traits::Batch::empty()
+    };
+    let stopped = engine.finalize_stop_sequences(&batch);
+    assert!(stopped.is_empty());
+}
+
+#[test]
+fn test_finalize_stop_sequences_matches_and_releases() {
+    // Positive control: with params present and a matching stop
+    // sequence, the sequence is finished (KV blocks released) even
+    // though it is nowhere near max_tokens.
+    let stub = StubModel::returning(42);
+    let mut engine = Engine::new(stub, None);
+    let params = vllm_traits::SamplingParams::builder()
+        .with_stop_token_sequences(vec![vec![42]])
+        .build();
+    let req = Request {
+        id: 1,
+        prompt: vec![10, 20],
+        max_tokens: 100,
+        sampling_params: params,
+        priority: crate::types::Priority::default(),
+        draft_model_id: None,
+    };
+    let (tx, _rx) = mpsc::channel(64);
+    engine.add_request(req, tx);
+
+    // One step: prefill + first token (42) → matches the stop seq.
+    let out = engine.step().unwrap();
+    assert!(!out.is_empty());
+    assert!(
+        !engine.has_pending(),
+        "stop-match must finish the sequence long before max_tokens"
+    );
+    assert_eq!(engine.scheduler.running_count(), 0);
+}

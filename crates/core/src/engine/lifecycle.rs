@@ -55,7 +55,15 @@ impl Engine {
     pub(crate) fn finalize_stop_sequences(&mut self, batch: &Batch) -> Vec<SeqId> {
         let mut newly_stopped: Vec<SeqId> = Vec::new();
         for (i, seq_id) in batch.seq_ids.iter().enumerate() {
-            let stops = match batch.sampling_params[i].stop_token_sequences.as_ref() {
+            // Defensive `.get`: synthetic batches may carry an empty
+            // `sampling_params` (the Batch docs call that "equivalent
+            // to greedy decoding") — mirror the verifier path so a
+            // seq/params length mismatch degrades instead of panicking.
+            let stops = match batch
+                .sampling_params
+                .get(i)
+                .and_then(|p| p.stop_token_sequences.as_ref())
+            {
                 Some(s) if !s.is_empty() => s,
                 _ => continue,
             };
