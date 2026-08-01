@@ -531,7 +531,14 @@ impl MemoryManager {
 
         if blocks_after < blocks_before {
             let blocks_to_free: Vec<BlockId> = seq.kv_blocks[blocks_after..blocks_before].to_vec();
-            self.free(&blocks_to_free);
+            // ARCH-01 contract: the sequence recorded these blocks on
+            // allocation, so a rollback must release (decrement the
+            // eviction refcount) rather than `free` outright. `free`
+            // would leave a stale refcount that never reaches zero on
+            // the next owner's `release_blocks`, leaking the block
+            // from the pool — and would free a shared block from
+            // underneath a prefix-cache co-owner.
+            self.release_blocks(&blocks_to_free);
             let mut new_blocks = (*seq.kv_blocks).clone();
             new_blocks.truncate(blocks_after);
             seq.kv_blocks = std::sync::Arc::new(new_blocks);

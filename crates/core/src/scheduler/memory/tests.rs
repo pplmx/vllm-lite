@@ -133,6 +133,56 @@ fn test_select_victims_prefers_new_decode() {
 }
 
 #[test]
+fn test_rollback_releases_eviction_refcount() {
+    // ARCH-01 pairing contract: every `record_blocks` MUST be paired
+    // with exactly one `release_blocks`. `rollback` previously called
+    // `free` (bypassing the eviction policy), leaving a stale refcount
+    // on the rolled-back block. The stale refcount then made the block
+    // unreleasable forever: after re-allocation, a `release_blocks`
+    // decremented it to 1 instead of 0, so the allocator never got the
+    // block back — a silent, accumulating KV-block leak.
+    let mut manager = MemoryManager::new(SchedulerConfig::default(), 4);
+
+    // Seq owns 2 full blocks (32 computed tokens at BLOCK_SIZE = 16).
+    let blocks = manager.allocate(2).unwrap();
+    manager.record_blocks(&blocks);
+    let mut seq = make_sequence(1, blocks.clone(), Status::Decoding);
+    seq.num_computed_tokens = 32;
+
+    // Reject 16 tokens → block index 1 is rolled back.
+    manager.rollback(&mut seq, 16);
+    assert_eq!(seq.num_computed_tokens, 16);
+    assert_eq!(seq.kv_blocks.as_ref().len(), 1);
+    assert_eq!(manager.available_blocks(), 3);
+
+    // The rolled-back block must have no live owner anymore.
+    assert_eq!(
+        manager.eviction_policy.get_block_ref_count(blocks[1]),
+        0,
+        "rollback must release the eviction refcount"
+    );
+
+    // Re-allocate the same block to a new owner and release it: with a
+    // stale refcount it would never return to the free pool. Block 0
+    // stays held by `seq`, so the pool must be back to 3 available
+    // (4 total − block 0).
+    let reuse = manager.allocate(1).unwrap();
+    assert_eq!(
+        reuse,
+        vec![blocks[1]],
+        "free-list reuses the rolled-back block"
+    );
+    assert_eq!(manager.available_blocks(), 2, "re-allocation takes block 1");
+    manager.record_blocks(&reuse);
+    manager.release_blocks(&reuse);
+    assert_eq!(
+        manager.available_blocks(),
+        3,
+        "released block must return to the pool"
+    );
+}
+
+#[test]
 fn test_memory_manager_oom() {
     let mut manager = MemoryManager::new(SchedulerConfig::default(), 2);
     manager.allocate(2).unwrap();
