@@ -581,6 +581,40 @@ fn test_sample_one_with_params_empty_seen_is_no_op() {
     assert_eq!(token.token, 1);
 }
 
+#[test]
+fn test_sample_one_with_params_empty_logits_with_top_k_no_panic() {
+    // Empty logits + top_k > 0 must not panic: the top-k mask block
+    // is skipped and the pipeline degrades to greedy (token 0).
+    let params = SamplingParams::builder().with_top_k(5).build();
+    let sampled = sample_one_with_params(&[], &params, &[]);
+    assert_eq!(sampled.token, 0);
+}
+
+#[test]
+fn test_sample_one_with_params_empty_logits_with_top_logprobs_no_panic() {
+    // Empty logits + top_logprobs > 0 must not panic: with no
+    // distribution to rank, `top_logprobs` is empty, `logprob` is
+    // `-inf`, and the token degrades to greedy (token 0).
+    let params = SamplingParams::builder().with_top_logprobs(3).build();
+    let sampled = sample_one_with_params(&[], &params, &[]);
+    assert_eq!(sampled.token, 0);
+    assert!(sampled.top_logprobs.is_empty());
+    assert!(
+        sampled.logprob.is_infinite() && sampled.logprob.is_sign_negative(),
+        "empty logits must yield logprob = -inf"
+    );
+}
+
+#[test]
+fn test_sample_batch_empty_logits_row_with_top_k_no_panic() {
+    // A short/empty logits row (e.g. malformed model output) plus
+    // top_k > 0 must not panic; the row degrades to greedy (token 0).
+    let logits = vec![vec![]];
+    let seen = vec![vec![]];
+    let result = sample_batch(&logits, 0.8, 1.0, 5, 1.0, &seen);
+    assert_eq!(result, vec![0]);
+}
+
 // `apply_logit_bias` tests (P30 v0.3 wire-type follow-up —
 // `logit_bias` engine wire-through).
 //

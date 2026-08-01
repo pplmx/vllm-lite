@@ -294,7 +294,10 @@ pub fn sample_batch(
                 }
             }
 
-            if top_k > 0 {
+            // Empty logits: skip the mask block (select_nth_unstable_by
+            // would panic on an empty slice); the downstream samplers
+            // all degrade to greedy, mirroring `top_k_sample`.
+            if top_k > 0 && !logits.is_empty() {
                 let top_k_limit = top_k.min(logits.len());
                 let mut indexed: Vec<(usize, f32)> =
                     logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
@@ -416,7 +419,10 @@ pub fn sample_one_with_params(
         }
     }
 
-    if params.top_k > 0 {
+    // Empty logits: skip the mask block (select_nth_unstable_by
+    // would panic on an empty slice); the downstream samplers
+    // all degrade to greedy, mirroring `top_k_sample`.
+    if params.top_k > 0 && !logits.is_empty() {
         let top_k_limit = params.top_k.min(logits.len());
         let mut indexed: Vec<(usize, f32)> =
             logits.iter().enumerate().map(|(i, &v)| (i, v)).collect();
@@ -477,23 +483,30 @@ pub fn sample_one_with_params(
             // guaranteed consistency between top_logprobs and the
             // sampled token's own logprob).
             let n_usize = (n as usize).min(sampling_logprobs.len());
-            let mut indexed: Vec<(usize, f32)> = sampling_logprobs
-                .iter()
-                .enumerate()
-                .map(|(i, &lp)| (i, lp))
-                .collect();
-            indexed.select_nth_unstable_by(n_usize - 1, |a, b| {
-                b.1.partial_cmp(&a.1)
-                    .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
-            });
-            indexed[..n_usize].sort_by(|a, b| {
-                b.1.partial_cmp(&a.1)
-                    .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
-            });
-            indexed[..n_usize]
-                .iter()
-                .map(|(i, lp)| (TokenId::try_from(*i).unwrap_or(0), *lp))
-                .collect()
+            if n_usize == 0 {
+                // Empty logits → empty distribution; nothing to rank
+                // (select_nth_unstable_by would panic on an empty
+                // slice).
+                Vec::new()
+            } else {
+                let mut indexed: Vec<(usize, f32)> = sampling_logprobs
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &lp)| (i, lp))
+                    .collect();
+                indexed.select_nth_unstable_by(n_usize - 1, |a, b| {
+                    b.1.partial_cmp(&a.1)
+                        .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
+                });
+                indexed[..n_usize].sort_by(|a, b| {
+                    b.1.partial_cmp(&a.1)
+                        .unwrap_or_else(|| a.1.is_nan().cmp(&b.1.is_nan()))
+                });
+                indexed[..n_usize]
+                    .iter()
+                    .map(|(i, lp)| (TokenId::try_from(*i).unwrap_or(0), *lp))
+                    .collect()
+            }
         }
         _ => Vec::new(),
     };
