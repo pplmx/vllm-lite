@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 21,
+  "round": 22,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T21:01:05+00:00",
+  "updated_at": "2026-08-02T21:12:35+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -22,7 +22,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 21,
+      "touched_round": 22,
       "title": "vllm-core",
       "role": "engine, scheduler, KV cache, sampling, metrics"
     },
@@ -1582,6 +1582,56 @@
         "logits-equivalence GQA-vs-MHA test (degenerate, passes for wrong grouping)",
         "larger attention weights to make attention dominate (hacky, brittle)"
       ]
+    },
+    "ISS-023": {
+      "id": "ISS-023",
+      "type": "issue",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T21:11:13+00:00",
+      "updated_at": "2026-08-02T21:11:13+00:00",
+      "touched_round": 22,
+      "title": "Speculative-decoding verification is broken for real models: verify forward passes is_prefill=batch.is_prefill (false for decode) so embed_sequence embeds ONLY the last verify_token, and forward_logits returns ONLY the last position's logits. The acceptance loop then compares draft d_0 against the bonus-position logits and breaks for j>=1 — drafts are not actually verified. Latent: StubModel embeds arbitrarily and the tests use it.",
+      "severity": 0.85,
+      "category": "correctness"
+    },
+    "HYP-005": {
+      "id": "HYP-005",
+      "type": "hypothesis",
+      "status": "resolved",
+      "version": 4,
+      "created_at": "2026-08-02T21:11:13+00:00",
+      "updated_at": "2026-08-02T21:12:35+00:00",
+      "touched_round": 22,
+      "title": "Speculative verify needs is_prefill=true (embed all verify_tokens) AND all-positions logits (forward_with_cache), not forward_logits last-position-only",
+      "confidence": 0.85
+    },
+    "DEC-011": {
+      "id": "DEC-011",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T21:11:13+00:00",
+      "updated_at": "2026-08-02T21:11:13+00:00",
+      "touched_round": 22,
+      "title": "ISS-023 fix approach: verify forward must call forward_with_cache (full [1,verify_len,vocab] logits) with is_prefill=true, then index logits at position (input_len-1+j) for each draft d_j; requires implementing forward_with_cache on StubModel (default trait impl errors). Deferred: experimental feature + model-API change + StubModel update => moderate risk; recorded for careful future work.",
+      "rationale": "forward_logits reduces to the last position via logits_to_vector; embed_sequence(is_prefill=false) embeds only tokens.last(). Both make multi-draft verification use the wrong logits. forward_with_cache returns the full logits Tensor and is the right primitive.",
+      "alternatives_rejected": [
+        "call forward_logits per draft position incrementally (defeats parallel verification, complex KV bookkeeping)",
+        "keep is_prefill=false (embeds only last token, fundamentally wrong)"
+      ]
+    },
+    "EV-035": {
+      "id": "EV-035",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T21:12:35+00:00",
+      "updated_at": "2026-08-02T21:12:35+00:00",
+      "touched_round": 22,
+      "source": "code analysis: embed_sequence(is_prefill=false) embeds only tokens.last(); forward_logits->logits_to_vector reduces to last position; forward_with_cache returns full [1,seq,vocab] Tensor (CausalLm implements it; StubModel uses default error impl). Confirms verify needs is_prefill=true + forward_with_cache.",
+      "title": "Code analysis confirms ISS-023 mechanism and HYP-005 fix approach",
+      "confidence": 0.9
     }
   },
   "edges": [
@@ -2202,6 +2252,24 @@
       "to": "COMP-002",
       "type": "governs",
       "created_at": "2026-08-02T21:01:05+00:00"
+    },
+    {
+      "from": "ISS-023",
+      "to": "COMP-002",
+      "type": "located_in",
+      "created_at": "2026-08-02T21:11:13+00:00"
+    },
+    {
+      "from": "DEC-011",
+      "to": "COMP-002",
+      "type": "governs",
+      "created_at": "2026-08-02T21:12:01+00:00"
+    },
+    {
+      "from": "EV-035",
+      "to": "HYP-005",
+      "type": "validates",
+      "created_at": "2026-08-02T21:12:35+00:00"
     }
   ]
 }
