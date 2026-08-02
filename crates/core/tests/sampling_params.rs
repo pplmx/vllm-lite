@@ -486,30 +486,50 @@ fn arch_02_seed_determinism_end_to_end() {
 }
 
 /// P34 end-to-end: per-sequence independence at the batch level.
-/// Two sequences in the SAME batch with DIFFERENT seeds must
-/// produce DIFFERENT tokens (for a non-degenerate logit
-/// distribution). This pins the contract that the engine doesn't
-/// share RNG state across sequences.
+/// Sequences in the SAME batch with DIFFERENT seeds must draw from
+/// independent RNG streams — the engine must not share RNG state
+/// across sequences.
+///
+/// Pinned robustly (RIL ISS-007): a flat 256-token distribution makes
+/// the sampled token a near-injective function of the random threshold
+/// (token ≈ threshold × 256), so independent streams yield varied
+/// tokens. If RNG state were shared, every sequence would draw the SAME
+/// threshold and thus the SAME token; asserting the batch is NOT
+/// all-identical catches shared-state regressions without relying on a
+/// fragile two-draw inequality on a peaked distribution (the previous
+/// form broke when the per-step stream shifted the deterministic draws).
 #[test]
 fn arch_02_seed_per_sequence_divergence_in_batch() {
-    let logits_list = vec![vec![1.0, 2.0, 3.0, 4.0, 5.0]; 2];
-    let seen_tokens = vec![vec![]; 2];
-    let params_list = vec![
-        SamplingParams::builder()
-            .with_temperature(1.0)
-            .with_seed(42)
-            .build(),
-        SamplingParams::builder()
-            .with_temperature(1.0)
-            .with_seed(99)
-            .build(),
-    ];
+    // Flat distribution: softmax is uniform, so the sampled token is a
+    // near-deterministic function of the per-sequence threshold.
+    let flat = vec![1.0_f32; 256];
+    let logits_list = vec![flat; 8];
+    let seen_tokens = vec![vec![]; 8];
+    // Eight distinct seeds → eight independent streams.
+    let params_list: Vec<SamplingParams> = (1..=8u64)
+        .map(|seed| {
+            SamplingParams::builder()
+                .with_temperature(1.0)
+                .with_seed(seed)
+                .build()
+        })
+        .collect();
     let tokens = sample_batch_with_params(&logits_list, &params_list, &seen_tokens);
-    assert_ne!(
-        tokens[0], tokens[1],
-        "sequences with different seeds in the same batch must \
-         produce different tokens (got {0:?} for both — RNG state \
-         is shared across sequences)",
-        tokens[0]
+    assert_eq!(tokens.len(), 8);
+
+    let distinct: std::collections::HashSet<TokenId> = tokens.iter().map(|t| t.token).collect();
+    assert!(
+        distinct.len() > 1,
+        "8 distinct seeds must draw varied tokens (independent streams); \
+         got a single token for all {tokens:?} — RNG state is shared \
+         across sequences"
+    );
+
+    // Reproducibility still holds at the batch boundary: re-running the
+    // identical batch yields identical tokens.
+    let tokens_again = sample_batch_with_params(&logits_list, &params_list, &seen_tokens);
+    assert_eq!(
+        tokens, tokens_again,
+        "same seeds + same logits must reproduce the same batch output"
     );
 }

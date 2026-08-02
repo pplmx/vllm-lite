@@ -12,11 +12,13 @@
 //! `random_threshold: f32` parameter so the caller (today:
 //! `sample_one_with_params`, tomorrow: any per-step orchestration
 //! that wants per-sequence RNG independence) controls RNG selection.
-//! `sample_one_with_params` reads `params.seed`: `Some(s)` builds a
-//! fresh `StdRng::seed_from_u64(s)` and draws one `f32`; `None` reads
-//! from the thread-local default RNG. Greedy paths bypass the RNG
-//! entirely so `seed` has no observable effect when `temperature = 0`
-//! or `top_p = 1.0`.
+//! `sample_one_with_params` reads `params.seed`: `Some(s)` draws the
+//! decode-step's value from a deterministic per-step stream derived
+//! from `(s, step)` (so the same seed reproduces the same stream, but
+//! each step gets a fresh, independent draw — see `random_f32_seeded`);
+//! `None` reads from the thread-local default RNG. Greedy paths bypass
+//! the RNG entirely so `seed` has no observable effect when
+//! `temperature = 0` or `top_p = 1.0`.
 
 use crate::types::TokenId;
 use tracing::trace;
@@ -28,26 +30,53 @@ fn random_f32() -> f32 {
     rand::random::<f32>()
 }
 
-/// Read one `f32` from a freshly-seeded `StdRng` (`OpenAI` `seed`
-/// semantic — P34 v0.2 wire-type follow-up engine wire-through).
+/// `SplitMix64` finalizer — a fixed, stable bijection on `u64`. Used to
+/// spread the small per-step counter across the full word before it is
+/// combined with the request seed, so consecutive steps derive
+/// well-separated per-step seeds. Hard-coded (not a `Hasher`) so the
+/// seeded stream is reproducible across runs and platforms.
+const fn splitmix64(mut x: u64) -> u64 {
+    x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    x = (x ^ (x >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    x ^ (x >> 31)
+}
+
+/// Read one `f32` from the per-step position of a seeded stream
+/// (`OpenAI` `seed` semantic — P34 v0.2 wire-type follow-up engine
+/// wire-through).
+///
+/// A seeded request must draw a *stream*, not a constant: re-seeding a
+/// fresh `StdRng` with the bare request seed on every decode step and
+/// reading its first value would return the *same* threshold at every
+/// step (per-step quantile lock), freezing the nucleus / temperature
+/// cutoff and collapsing cross-step independence (RIL ISS-007). Instead
+/// the step index is mixed into the seed so step `n` draws a distinct,
+/// deterministic position of the stream: same seed + same step ⇒ same
+/// draw (reproducibility), distinct steps ⇒ distinct draws
+/// (independence).
 ///
 /// `StdRng` is the same CSPRNG-quality generator `rand::random()`
 /// uses internally under the default `rand` 0.10 feature set, so
 /// the seeded and unseeded paths produce statistically-equivalent
 /// random sequences — only the seed source differs.
-fn random_f32_seeded(seed: u64) -> f32 {
+fn random_f32_seeded(seed: u64, step: usize) -> f32 {
     use rand::RngExt;
     use rand::SeedableRng;
-    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+    #[allow(clippy::cast_possible_truncation)]
+    let step_seed = splitmix64(step as u64);
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed ^ step_seed);
     rng.random::<f32>()
 }
 
 /// Decide which RNG to use based on `params.seed` and return one
-/// `f32` random threshold. This is the single point at which the
-/// sampler touches an RNG, so adding a new RNG source in the future
-/// only requires changing this helper.
-fn sample_random_threshold(seed: Option<u64>) -> f32 {
-    seed.map_or_else(random_f32, random_f32_seeded)
+/// `f32` random threshold for decode step `step`. This is the single
+/// point at which the sampler touches an RNG, so adding a new RNG
+/// source in the future only requires changing this helper. The
+/// unseeded path ignores `step` (the thread-local RNG already
+/// advances on every draw).
+fn sample_random_threshold(seed: Option<u64>, step: usize) -> f32 {
+    seed.map_or_else(random_f32, |s| random_f32_seeded(s, step))
 }
 
 /// Compute log-softmax of `logits` element-wise, returning one
@@ -337,17 +366,18 @@ pub fn sample_batch(
 /// layer accepted `temperature` / `top_p` / `top_k` and the model
 /// layer always chose argmax, so the params silently had no effect.
 ///
-/// **Per-sequence RNG independence (P34 v0.2 wire-type follow-up
-/// engine wire-through):** each call to [`sample_one_with_params`]
-/// reads ONE random threshold from either a fresh
-/// `StdRng::seed_from_u64(params.seed)` (when `params.seed.is_some()`)
-/// or the thread-local default RNG (when `params.seed.is_none()`).
-/// Two sequences that share the same `params.seed` therefore draw the
-/// SAME random threshold for the SAME logits — this is the correct
-/// behaviour for `OpenAI`'s per-request determinism contract (same
-/// seed ⇒ same draws ⇒ same sampled token). The fresh-RNG-per-call
-/// pattern ensures per-sequence independence for sequences with
-/// DIFFERENT seeds: they don't share state.
+/// **Per-step seeded stream (P34 v0.2 wire-type follow-up engine
+/// wire-through; per-step fix RIL ISS-007):** each call to
+/// [`sample_one_with_params`] reads ONE random threshold from either a
+/// deterministic per-step stream derived from
+/// `(params.seed, seen.len())` (when `params.seed.is_some()`) or the
+/// thread-local default RNG (when `params.seed.is_none()`). The step
+/// index advances the stream, so a seeded generation draws a fresh,
+/// independent threshold at every decode step while remaining fully
+/// reproducible: same seed + same prompt ⇒ same seen-set at each step
+/// ⇒ same stream ⇒ same output (`OpenAI`'s per-request determinism
+/// contract). Sequences with DIFFERENT seeds derive different streams,
+/// so they remain independent.
 ///
 /// `params_list`, `seen_tokens`, and `logits_list` must have the same
 /// length. The returned `Vec<SampledToken>` has length
@@ -379,12 +409,15 @@ pub fn sample_batch_with_params(
 /// Public for tests; production callers should use
 /// [`sample_batch_with_params`].
 ///
-/// **RNG selection (P34 v0.2 wire-type follow-up engine wire-through):**
-/// `params.seed` is consulted exactly once per call. `Some(s)` reads
-/// from a fresh `StdRng::seed_from_u64(s)`; `None` reads from the
-/// thread-local default RNG. Greedy paths (`temperature = 0`,
-/// `top_p = 1.0`, `top_k = 0`) bypass the RNG entirely — `seed` has
-/// no observable effect in those modes.
+/// **RNG selection (P34 v0.2 wire-type follow-up engine wire-through;
+/// per-step fix RIL ISS-007):** `params.seed` is consulted exactly
+/// once per call. `Some(s)` reads the decode-step's value from a
+/// deterministic stream derived from `(s, seen.len())` — the seen-set
+/// length is the step index, so the stream advances each step while
+/// staying reproducible; `None` reads from the thread-local default
+/// RNG. Greedy paths (`temperature = 0`, `top_p = 1.0`, `top_k = 0`)
+/// bypass the RNG entirely — `seed` has no observable effect in those
+/// modes.
 ///
 /// **Return type (P36 v0.3 wire-type follow-up engine wire-through):**
 /// returns a [`SampledToken`] carrying the sampled `token` alongside
@@ -444,7 +477,15 @@ pub fn sample_one_with_params(
     // means the seed determinism guarantee holds even when the user
     // toggles sampling params between calls (the RNG state never
     // changes based on temperature / top_p / top_k values).
-    let random_threshold = sample_random_threshold(params.seed);
+    //
+    // The decode-step index is the already-generated seen-set length:
+    // it advances by one each step and is deterministic for a given
+    // seed + prompt, so it drives the per-step seeded stream (RIL
+    // ISS-007). On the CUDA-Graph fallback path the seen-set is empty
+    // (step 0) — the same best-effort degradation as that path's
+    // repeat-penalty no-op.
+    let step = seen.len();
+    let random_threshold = sample_random_threshold(params.seed, step);
 
     let token = if params.top_p < 1.0 {
         top_p_sample(&logits, params.top_p, random_threshold)

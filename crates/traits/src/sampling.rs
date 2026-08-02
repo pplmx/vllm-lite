@@ -145,11 +145,12 @@ pub struct SamplingParams {
     pub max_retries: u32,
     /// Random seed for the sampling RNG (`OpenAI` `seed` semantic,
     /// P34 v0.2 wire-type follow-up engine wire-through). When
-    /// `Some(seed)`, the sampler constructs a `StdRng::seed_from_u64`
-    /// for each sampling step so the same seed + same model + same
-    /// prompt produces the same output. When `None`, the sampler
-    /// reads from the thread-local default RNG (the pre-P34
-    /// behaviour).
+    /// `Some(seed)`, the sampler draws each decode step's random
+    /// threshold from a deterministic per-step stream derived from
+    /// `(seed, step)`, so the same seed + same model + same prompt
+    /// reproduces the same output while each step still gets a fresh,
+    /// independent draw (RIL ISS-007). When `None`, the sampler reads
+    /// from the thread-local default RNG (the pre-P34 behaviour).
     ///
     /// **Honouring is greedy-agnostic:** `temperature = 0` and
     /// `top_p = 1.0` paths bypass the RNG entirely (deterministic
@@ -157,13 +158,15 @@ pub struct SamplingParams {
     /// — same argmax regardless of seed. `seed = Some(0)` is a valid
     /// seed (NOT conflated with `None`).
     ///
-    /// **Per-sequence independence:** `sample_batch_with_params`
-    /// builds a fresh `StdRng` per call to `sample_one_with_params`,
-    /// so each sequence's RNG state is independent even when they
-    /// share the same `seed` (they each re-seed from the same u64,
-    /// producing the same draws for the same logits — this is the
-    /// correct behaviour for `OpenAI`'s per-request determinism
-    /// contract).
+    /// **Per-step stream, not a constant:** the step index (the
+    /// already-generated token count) is mixed into the seed, so a
+    /// seeded generation draws a *different* threshold at every decode
+    /// step rather than freezing one value for the whole run (per-step
+    /// quantile lock). Reproducibility still holds: same seed + same
+    /// prompt ⇒ same seen-set at each step ⇒ same stream ⇒ same output
+    /// (`OpenAI`'s per-request determinism contract). Sequences with
+    /// different seeds derive different streams, so they stay
+    /// independent.
     ///
     /// `OpenAI`'s `seed` field is `i64`; the HTTP layer does an
     /// `as u64` cast (wrapping negatives) so any i64 is accepted
@@ -327,12 +330,14 @@ impl SamplingParamsBuilder {
     }
     /// Set [`SamplingParams::seed`] to `Some(seed)`.
     ///
-    /// When set, the sampler builds a `StdRng::seed_from_u64` for
-    /// each sampling step so the same seed + same model + same
-    /// prompt produces the same output (`OpenAI` `seed` semantic —
-    /// P34 v0.2 wire-type follow-up engine wire-through). See the
-    /// field doc-comment on [`SamplingParams::seed`] for the
-    /// greedy-bypass + per-sequence independence guarantees.
+    /// When set, the sampler draws each decode step's threshold from a
+    /// deterministic per-step stream derived from `(seed, step)`, so
+    /// the same seed + same model + same prompt reproduces the same
+    /// output while each step gets a fresh draw (`OpenAI` `seed`
+    /// semantic — P34 v0.2 wire-type follow-up engine wire-through;
+    /// per-step fix RIL ISS-007). See the field doc-comment on
+    /// [`SamplingParams::seed`] for the greedy-bypass + per-step
+    /// stream guarantees.
     #[must_use]
     pub const fn with_seed(mut self, seed: u64) -> Self {
         self.inner.seed = Some(seed);

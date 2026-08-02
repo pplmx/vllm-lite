@@ -916,29 +916,38 @@ fn test_seed_none_falls_back_to_thread_rng() {
 #[test]
 fn test_seed_different_seeds_diverge_in_distribution() {
     // With the same logits + temperature + seen but different seeds,
-    // the sampler must draw different random thresholds (because
-    // each seed derives a fresh RNG state). We assert the two
-    // tokens are different — for SEED_TEST_LOGITS with T=1.0, the
-    // softmax is moderately peaked so two random draws almost
-    // certainly land on different tokens. If the seeded RNG is
-    // broken (e.g. reused across calls), this test catches it.
+    // the sampler must draw INDEPENDENT random thresholds (each seed
+    // derives its own stream). The load-bearing guarantee is at the
+    // threshold level: distinct seeds ⇒ distinct draws. Asserting
+    // distinct *tokens* instead is fragile — SEED_TEST_LOGITS at T=1.0
+    // is peaked toward token 4, so two independent draws can both land
+    // on it (RIL ISS-007: this test previously asserted token inequality
+    // and broke when the per-step stream shifted the deterministic
+    // draws). If the seeded RNG were broken (shared across seeds), the
+    // thresholds below would coincide and this would catch it.
+    let threshold_a = sample_random_threshold(Some(42), 0);
+    let threshold_b = sample_random_threshold(Some(99), 0);
+    assert_ne!(
+        threshold_a.to_bits(),
+        threshold_b.to_bits(),
+        "different seeds must draw independent thresholds (got {threshold_a} \
+         for both — RNG is not being seeded correctly)"
+    );
+
+    // The sampled tokens are still valid vocab indices and each seed is
+    // reproducible call-to-call.
     let logits = SEED_TEST_LOGITS;
     let seen: &[TokenId] = &[];
     let params_a = SamplingParams::builder()
         .with_temperature(1.0)
         .with_seed(42)
         .build();
-    let params_b = SamplingParams::builder()
-        .with_temperature(1.0)
-        .with_seed(99)
-        .build();
     let token_a = sample_one_with_params(logits, &params_a, seen);
-    let token_b = sample_one_with_params(logits, &params_b, seen);
-    assert_ne!(
-        token_a, token_b,
-        "different seeds must produce different sampled tokens for \
-         SEED_TEST_LOGITS at T=1.0 (got {token_a:?} for both — RNG is \
-         not being seeded correctly)"
+    assert!(token_a.token < logits.len() as TokenId);
+    assert_eq!(
+        token_a,
+        sample_one_with_params(logits, &params_a, seen),
+        "seed 42 must be reproducible"
     );
 }
 
@@ -992,21 +1001,23 @@ fn test_seed_per_sequence_independence_in_batch() {
     ];
     let tokens = sample_batch_with_params(&logits_list, &params_list, &seen_list);
     assert_eq!(tokens.len(), 3);
-    // Sequence 0 and 1 share the same seed → must produce the same
-    // token. Sequence 2 has a different seed → must produce a
-    // different token from sequence 0/1.
+    // Sequences 0 and 1 share the same seed → must produce the same
+    // token (reproducibility; deterministic).
     assert_eq!(
         tokens[0], tokens[1],
         "sequences with the same seed must produce the same token \
          (got {0:?} vs {1:?})",
         tokens[0], tokens[1]
     );
+    // Independence is pinned at the threshold level: seed 42 and seed
+    // 99 draw different thresholds, so their streams are independent.
+    // Asserting different *tokens* would be fragile on the peaked
+    // SEED_TEST_LOGITS distribution (RIL ISS-007).
     assert_ne!(
-        tokens[0], tokens[2],
-        "sequences with different seeds must produce different \
-         tokens (got {0:?} for both — RNG state is shared across \
-         sequences)",
-        tokens[0]
+        sample_random_threshold(Some(42), 0).to_bits(),
+        sample_random_threshold(Some(99), 0).to_bits(),
+        "sequences with different seeds must draw independent thresholds \
+         (RNG state is shared across sequences)"
     );
 }
 
@@ -1033,6 +1044,113 @@ fn test_seed_top_p_path_uses_seeded_rng() {
         token_a, token_b,
         "top_p path must honour seed deterministically \
          (got {token_a:?} vs {token_b:?})"
+    );
+}
+
+// =============================================================================
+// RIL ISS-007 / TASK-007 — per-step seeded stream regression tests.
+//
+// Pre-fix, `random_f32_seeded` re-seeded a fresh `StdRng` with the bare
+// request seed on EVERY decode step and read its first value, so a
+// seeded generation drew the SAME threshold at every step (per-step
+// quantile lock): the nucleus / temperature cutoff froze and cross-step
+// independence collapsed. The fix derives a per-step seed from
+// `(seed, step)`, so the stream advances each step while staying
+// reproducible. These tests pin both halves of that contract directly
+// against the (private) threshold helpers, which the child-module
+// `use super::*` brings into scope.
+// =============================================================================
+
+#[test]
+fn test_seeded_stream_advances_across_steps() {
+    // THE regression: distinct decode steps must draw distinct
+    // thresholds for the same seed. Pre-fix every step returned the
+    // identical value (the first draw of `seed_from_u64(seed)`).
+    let thresholds: Vec<f32> = (0..8).map(|step| random_f32_seeded(42, step)).collect();
+    let distinct: std::collections::HashSet<u32> = thresholds.iter().map(|t| t.to_bits()).collect();
+    assert!(
+        distinct.len() > 1,
+        "a seeded stream must draw different thresholds per step; got a          frozen value {thresholds:?} (per-step quantile lock, RIL ISS-007)"
+    );
+    // The values are deterministic constants (fixed seed + fixed mixer),
+    // so this stronger assertion is stable: a good mixer yields 8
+    // distinct draws for 8 consecutive steps.
+    assert_eq!(
+        distinct.len(),
+        8,
+        "8 consecutive seeded steps should yield 8 distinct thresholds; got {thresholds:?}"
+    );
+}
+
+#[test]
+fn test_seeded_stream_is_reproducible_per_step() {
+    // Reproducibility half of the contract: the same (seed, step)
+    // always draws the same threshold, across independent calls.
+    for step in 0..4 {
+        assert_eq!(
+            random_f32_seeded(42, step).to_bits(),
+            random_f32_seeded(42, step).to_bits(),
+            "step {step} must be deterministic for a fixed seed"
+        );
+    }
+}
+
+#[test]
+fn test_seeded_stream_is_sensitive_to_seed_at_fixed_step() {
+    // Different seeds must derive different streams at the same step
+    // (per-sequence independence is preserved by the per-step mix).
+    assert_ne!(
+        random_f32_seeded(42, 3).to_bits(),
+        random_f32_seeded(99, 3).to_bits(),
+        "different seeds must diverge at the same step"
+    );
+}
+
+#[test]
+fn test_seeded_threshold_in_unit_interval_across_steps() {
+    // Every per-step draw must be a valid `[0, 1)` threshold (the
+    // top-p / temperature samplers assume this).
+    for step in 0..16 {
+        let t = random_f32_seeded(7, step);
+        assert!(
+            (0.0..1.0).contains(&t),
+            "step {step} threshold {t} out of [0,1)"
+        );
+    }
+}
+
+#[test]
+fn test_sample_random_threshold_step_drives_seeded_draw() {
+    // The dispatch helper must thread `step` into the seeded path.
+    assert_ne!(
+        sample_random_threshold(Some(42), 0).to_bits(),
+        sample_random_threshold(Some(42), 5).to_bits(),
+        "seeded threshold must vary with the step index"
+    );
+    assert_eq!(
+        sample_random_threshold(Some(42), 5).to_bits(),
+        sample_random_threshold(Some(42), 5).to_bits(),
+        "seeded threshold must be reproducible at a fixed step"
+    );
+}
+
+#[test]
+fn test_seeded_multistep_reproducible_via_public_api() {
+    // End-to-end at the public sampler: a seeded draw at a NON-zero
+    // step (non-empty seen-set) is reproducible call-to-call — the
+    // step > 0 analogue of `test_seed_determinism_same_seed_same_result`,
+    // proving the per-step derivation did not break determinism.
+    let logits = SEED_TEST_LOGITS;
+    let seen: &[TokenId] = &[10, 20, 30]; // step = 3
+    let params = SamplingParams::builder()
+        .with_temperature(1.0)
+        .with_seed(42)
+        .build();
+    let a = sample_one_with_params(logits, &params, seen);
+    let b = sample_one_with_params(logits, &params, seen);
+    assert_eq!(
+        a, b,
+        "seeded sampling at step > 0 must be reproducible (got {a:?} vs {b:?})"
     );
 }
 
