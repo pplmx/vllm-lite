@@ -1,8 +1,8 @@
 {
   "ril_version": 1,
-  "round": 2,
+  "round": 3,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T15:07:03+00:00",
+  "updated_at": "2026-08-02T17:15:30+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -99,7 +99,7 @@
       "version": 1,
       "created_at": "2026-08-02T14:19:20+00:00",
       "updated_at": "2026-08-02T14:19:20+00:00",
-      "touched_round": 2,
+      "touched_round": 3,
       "title": "core/sampling",
       "role": "sampler pipeline, temperature/top-p/top-k, stop sequences"
     },
@@ -508,11 +508,11 @@
     "TASK-007": {
       "id": "TASK-007",
       "type": "task",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-02T15:01:40+00:00",
-      "updated_at": "2026-08-02T15:01:40+00:00",
-      "touched_round": 2,
+      "updated_at": "2026-08-02T17:15:30+00:00",
+      "touched_round": 3,
       "title": "sampling: seeded RNG should draw a per-step stream, not a constant threshold",
       "category": "correctness",
       "severity": 0.35,
@@ -538,11 +538,11 @@
     "ISS-007": {
       "id": "ISS-007",
       "type": "issue",
-      "status": "active",
-      "version": 1,
+      "status": "resolved",
+      "version": 2,
       "created_at": "2026-08-02T15:01:59+00:00",
-      "updated_at": "2026-08-02T15:01:59+00:00",
-      "touched_round": 2,
+      "updated_at": "2026-08-02T17:15:30+00:00",
+      "touched_round": 3,
       "title": "seeded sampling draws a constant per-request threshold (per-step quantile lock) instead of an RNG stream",
       "severity": 0.35,
       "category": "correctness"
@@ -596,6 +596,45 @@
       "touched_round": 2,
       "source": "cargo test -p vllm-server --lib test_zero_quota_denies_without_panic on guard-removed auth.rs: panic at core/src/time.rs:930 (Duration::from_secs_f64 non-finite); with guard: 3/3 pass; server suite 646/646",
       "title": "ISS-009 validated: zero-quota rate limit panicked in wait_for via needed/0.0=inf; fix returns Duration::MAX for non-positive/non-finite refill rates; zero-window+zero-quota denies with ZERO wait; per-key revoke config no longer aborts requests",
+      "confidence": 0.95
+    },
+    "CHG-001": {
+      "id": "CHG-001",
+      "type": "change",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T17:15:30+00:00",
+      "updated_at": "2026-08-02T17:15:30+00:00",
+      "touched_round": 3,
+      "commit": "a0e4ca9d",
+      "title": "fix(core): seeded sampling draws a per-step stream (splitmix64-mixed per-step seed) instead of re-seeding a constant"
+    },
+    "DEC-005": {
+      "id": "DEC-005",
+      "type": "decision",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T17:15:30+00:00",
+      "updated_at": "2026-08-02T17:15:30+00:00",
+      "touched_round": 3,
+      "title": "Seeded sampling: derive a per-step stream from (seed, step) statelessly via seen.len() as the step index",
+      "rationale": "A seeded request must draw a per-step STREAM (reproducible yet cross-step independent), not a frozen constant. Deriving the per-step seed from (seed, step) with a fixed SplitMix64 mix is stateless (no public-API change), reproducible (same seed+prompt => same seen.len() at each step => same stream), and restores independence. step = seen.len() (already-generated tokens) is the natural deterministic counter on the primary batch.rs path.",
+      "alternatives_rejected": [
+        "status quo fresh-StdRng-per-call (per-step quantile lock; collapses cross-step independence)",
+        "stateful per-sequence StdRng threaded through engine/batch (fully correct but breaks the public sample_one_with_params/sample_batch_with_params signature used across ~10 test files + server)",
+        "if step==0 use bare seed else mix (discontinuous special case, code smell)"
+      ]
+    },
+    "EV-015": {
+      "id": "EV-015",
+      "type": "evidence",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T17:15:30+00:00",
+      "updated_at": "2026-08-02T17:15:30+00:00",
+      "touched_round": 3,
+      "source": "cargo test -p vllm-core/-traits/-server/-model/-testing @ a0e4ca9d: 1930 pass / 0 fail; clippy --all-targets -D warnings green; fmt clean",
+      "title": "VERIFY TASK-007: 6 new per-step-stream regression tests pass; 2 fragile seed tests + 1 integration test hardened to deterministic threshold-level assertions; only the 10 environmental vllm-dist port-bind failures remain",
       "confidence": 0.95
     }
   },
@@ -761,6 +800,24 @@
       "to": "ISS-009",
       "type": "addresses",
       "created_at": "2026-08-02T15:04:30+00:00"
+    },
+    {
+      "from": "CHG-001",
+      "to": "ISS-007",
+      "type": "resolves",
+      "created_at": "2026-08-02T17:15:30+00:00"
+    },
+    {
+      "from": "CHG-001",
+      "to": "TASK-007",
+      "type": "implements",
+      "created_at": "2026-08-02T17:15:30+00:00"
+    },
+    {
+      "from": "DEC-005",
+      "to": "COMP-009",
+      "type": "governs",
+      "created_at": "2026-08-02T17:15:30+00:00"
     }
   ]
 }
