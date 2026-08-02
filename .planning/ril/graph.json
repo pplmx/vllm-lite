@@ -2,7 +2,7 @@
   "ril_version": 1,
   "round": 22,
   "created_at": "2026-08-02T14:18:46+00:00",
-  "updated_at": "2026-08-02T21:12:35+00:00",
+  "updated_at": "2026-08-02T21:30:02+00:00",
   "nodes": {
     "COMP-001": {
       "id": "COMP-001",
@@ -1632,6 +1632,21 @@
       "source": "code analysis: embed_sequence(is_prefill=false) embeds only tokens.last(); forward_logits->logits_to_vector reduces to last position; forward_with_cache returns full [1,seq,vocab] Tensor (CausalLm implements it; StubModel uses default error impl). Confirms verify needs is_prefill=true + forward_with_cache.",
       "title": "Code analysis confirms ISS-023 mechanism and HYP-005 fix approach",
       "confidence": 0.9
+    },
+    "TASK-027": {
+      "id": "TASK-027",
+      "type": "task",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-08-02T21:30:02+00:00",
+      "updated_at": "2026-08-02T21:30:02+00:00",
+      "touched_round": 22,
+      "title": "ISS-023 fix (Option A, verified safe for all callers): change CausalLm.forward_logits to return all-positions logits (flatten full logits Tensor instead of logits_to_vector last-position); update logits_to_vector + its tests; verify forward then gets all positions so multi-draft verification works with real models. All forward_logits callers (step_regular, graph_step via extract_per_seq_logits last-vocab; verify forward wants all) confirmed compatible.",
+      "category": "correctness",
+      "severity": 0.85,
+      "confidence": 0.9,
+      "effort": 3,
+      "unlock_factor": 1
     }
   },
   "edges": [
@@ -2270,6 +2285,12 @@
       "to": "HYP-005",
       "type": "validates",
       "created_at": "2026-08-02T21:12:35+00:00"
+    },
+    {
+      "from": "TASK-027",
+      "to": "ISS-023",
+      "type": "addresses",
+      "created_at": "2026-08-02T21:30:02+00:00"
     }
   ]
 }
