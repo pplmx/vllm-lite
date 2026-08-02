@@ -199,7 +199,10 @@ fn test_logits_to_vector_prefill_squeeze_noop_rank3() {
     )
     .unwrap();
     let vec = logits_to_vector(&logits, true).unwrap();
-    assert_eq!(vec.len(), 4);
-    // Last position (pos 2): [0.3, 0.3, 0.3, 0.9]
-    assert!((vec[3] - 0.9).abs() < 1e-6);
+    // RIL ISS-023: logits_to_vector returns ALL positions (3 positions x
+    // 4 vocab = 12 elements) so the speculative verifier can check each
+    // draft; callers wanting only the last position take the last vocab_size.
+    assert_eq!(vec.len(), 12);
+    // Last position (pos 2): [0.3, 0.3, 0.3, 0.9] at indices 8..12.
+    assert!((vec[11] - 0.9).abs() < 1e-6);
 }

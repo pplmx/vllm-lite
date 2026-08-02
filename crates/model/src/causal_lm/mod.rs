@@ -70,24 +70,13 @@ pub(crate) fn greedy_sample_token(logits: &Tensor, is_prefill: bool) -> Result<T
     Ok(argmax_logits(&logits_vec))
 }
 
-pub(crate) fn logits_to_vector(logits: &Tensor, is_prefill: bool) -> Result<Vec<f32>> {
-    let logits = if is_prefill {
-        let seq_len = logits.dims()[1];
-        map_candle(logits.narrow(1, seq_len - 1, 1))?
-            .squeeze(1)
-            .map_err(ModelError::from)?
-    } else {
-        map_candle(logits.squeeze(0))?
-            .squeeze(0)
-            .map_err(ModelError::from)?
-    };
-
-    // Use flatten_all() before to_vec1() to guarantee rank-1 regardless of
-    // how many squeeze calls above actually reduced the rank. Candle's
-    // squeeze(dim) on a dimension with size > 1 is a no-op (returns the same
-    // tensor), so chained squeezes may leave a residual rank-2 tensor like
-    // [1, vocab_size] that to_vec1() rejects with "unexpected rank".
-    // Since each call processes exactly one sequence, elem_count == vocab_size.
+pub(crate) fn logits_to_vector(logits: &Tensor, _is_prefill: bool) -> Result<Vec<f32>> {
+    // RIL ISS-023 / TASK-027: return the logits for ALL positions (flattened
+    // [seq * vocab]), not just the last position. The speculative-decoding
+    // verifier needs per-position logits to verify each draft; callers that
+    // want only the last position (step_regular / graph_step) take the last
+    // vocab_size via extract_per_seq_logits. Pre-fix this narrowed to the
+    // last position, so the verifier could only see one position's logits.
     map_candle(logits.flatten_all())?
         .to_vec1()
         .map_err(ModelError::from)

@@ -111,14 +111,19 @@ impl crate::engine::Engine {
             let base = batch.positions[i].first().copied().unwrap_or(0);
             let verify_positions: Vec<usize> = (base..base + verify_tokens.len()).collect();
 
-            // Get logits from target model for all positions
+            // Get logits from target model for all positions.
+            // RIL ISS-023 / TASK-027: pass is_prefill=true so the model
+            // embeds and processes ALL verify_tokens (not just the last,
+            // which embed_sequence(is_prefill=false) would do). The verifier
+            // needs logits for every verify position to check each draft.
+            let prefill_true = true;
             let logits = lock_mutex(&self.target_model)?.forward_logits(
                 &[*seq_id],
                 std::slice::from_ref(&verify_tokens),
                 std::slice::from_ref(&verify_positions),
                 std::slice::from_ref(&batch.kv_block_ids[i]),
                 std::slice::from_ref(&batch.num_computed_tokens[i]),
-                std::slice::from_ref(&batch.is_prefill[i]),
+                std::slice::from_ref(&prefill_true),
             )?;
 
             let logits: &[f32] = logits.first().map_or(&[], std::vec::Vec::as_slice);
